@@ -2524,3 +2524,354 @@ All 15 SCN-040-* scenarios remain green. No coverage was dropped or weakened.
   "verdict": "SIMPLIFIED"
 }
 ```
+
+## Security Phase — Feature-Wide Evidence
+
+### Security Audit Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.security
+**Mode:** pre-feature-done (full-delivery; status remains in_progress; final feature-done promotion still owned by bubbles.validate)
+**Date:** 2026-05-06
+**HEAD at audit:** 620b3b4 (76 commits ahead of origin/main)
+**Verdict:** ⚠️ FINDINGS — proceed to bubbles.validate. Two carry-forward audit observations formally reconciled (`ml/app/main.py:75` SMACKEREL_AUTH_TOKEN warn-on-empty closed-as-accepted MVP single-tenant posture and routed under MIT-040-S-004; MintReveal body-sourced `actor_id` closed-as-accepted MVP single-tenant trust boundary and routed under MIT-040-S-003). One previously-undetected MEDIUM concurrency bug in the reveal-token consume path (S-007 — TOCTOU between `SELECT` and `UPDATE`, single-use guarantee bypassable under concurrent reveal requests) routed to `bubbles.harden` for paired implement+test work. One MEDIUM stdlib vulnerability bundle (S-002 — 19 reachable vulns in `internal/connector/photos/...` + 22 reachable in `internal/api/...`, all `go1.24.3` standard-library) routed to `bubbles.harden` runtime upgrade backlog. Three LOW informational findings (S-001 reveal-token plaintext-secret-not-hashed, S-005 dead `TLSSkipVerify` config, S-006 unbounded `io.ReadAll` in 5 sites). Zero hardcoded secrets, zero secrets-in-logs, zero `math/rand`, zero wired `InsecureSkipVerify`, zero shell-exec, zero `fmt.Sprintf`-in-SQL, zero TODO/FIXME/HACK markers across the 040 surface. No code changes applied — every surfaced finding either requires schema/runtime changes outside the security agent's diagnostic boundary or is closed-as-accepted MVP posture per the same precedent that 038 used (S-001/S-003).
+
+#### Phase 1: Threat Model
+
+| Attack surface | Threat | OWASP | Severity | Mitigation status |
+|----------------|--------|-------|----------|-------------------|
+| `POST /v1/photos/upload` (Telegram, mobile, web, agent) | Body-sourced channel/source_ref enables client to spoof inbound channel | A04 | INFO | MITIGATED — `internal/api/photos_upload.go:71-90` validates `source_channel` against `photolib.SourceChannel.Valid()` allow-list (telegram/mobile/web/agent only); explicit reject of `provider` channel; `source_ref` is required; bearer auth runs first via `internal/api/router.go:293` |
+| `POST /v1/photos/upload` byte payload | Multipart body-bombing or memory exhaustion | A05 | MITIGATED | `r.Body = http.MaxBytesReader(w, r.Body, 64<<20)` at `internal/api/photos_upload.go:60` plus SST-driven `photos.scan.max_file_size_bytes` enforced at `internal/api/photos_upload.go:134-138`; multipart cleanup via `r.MultipartForm.RemoveAll()` defer at `internal/api/photos_upload.go:65-69` |
+| `POST /v1/photos/{id}/reveal` mint (MintReveal) | Body-sourced `actor_id` enables actor spoofing | A01 (IDOR-class / Gate G047 strict reading) | LOW | ACCEPTED MVP — see S-003 reconciliation below; bearer auth is the primary boundary; single-tenant deployment posture per design.md §11; `actorIDFromRequest` only knows the client-controlled `X-Actor-Id` header (auth middleware does not yet thread an authenticated identity) |
+| `GET /v1/photos/{id}/preview` reveal-token consume (ConsumeRevealToken) | Token replay / single-use bypass via concurrent requests | A01 (race / TOCTOU) | MEDIUM | OPEN — see S-007 below; SELECT inside transaction lacks `FOR UPDATE`; UPDATE lacks `WHERE consumed_at IS NULL` predicate; two concurrent reveal requests can both pass `consumed_at IS NULL` and both UPDATE successfully |
+| Reveal-token wire format (`<uuid>.<secret>`) | Plaintext secret never hashed in DB | A02 | LOW | OPEN — see S-001 below; only the UUID is validated on consume (the 24-byte `crypto/rand` secret is decorative); a leaked DB row exposes nothing because the secret is not stored, but the wire format implies a hash-checked secret that does not exist; `internal/connector/photos/sensitivity.go:329-332` declares `hashRevealSecret` and immediately discards it via `var _ = hashRevealSecret` (forward-looking placeholder) |
+| Sensitivity gate (`/v1/photos/{id}/preview`, search redaction, Telegram delivery) | Sensitive content disclosure to wrong actor | A01 | INFO | MITIGATED — `EvaluateRetrieval` in `internal/connector/photos/sensitivity.go:46-74` enforces `SensitivityHidden`/`SensitivitySensitive` → `Allowed=false` unless `hasValidReveal=true`; `ConsumeRevealToken` enforces actor binding, photo-id binding, expiry, single-use; verified by `TestPhotosSensitivity_ServerSidePreviewRevealAndAudit` (integration) and `TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto` (e2e) |
+| `POST /v1/photos/connectors[/test]` provider HTTP base URL | SSRF via attacker-controlled `base_url` | A10 | LOW | ACCEPTED MVP — request-supplied `base_url` is per-tenant per-connector by design (operator wires their Immich/PhotoPrism instance), but only authenticated bearer-token holders can hit the route; outbound HTTP from `internal/connector/photos/adapters/immich/immich.go` and `.../photoprism/photoprism.go` uses `http.DefaultClient` (no allow-list); not a 040 regression — same posture as every other write-side connector in the repo |
+| Photo store SQL — 30+ statements across `internal/connector/photos/store.go`, `routing.go`, `removal.go`, `lifecycle.go`, `dedupe.go`, `sensitivity.go` | SQL injection via interpolated identifiers | A03 | INFO | CLOSED-AS-SAFE — see Phase 3 below; `grep -rEn 'fmt\.Sprintf.*(SELECT\|INSERT\|UPDATE\|DELETE\|FROM\|WHERE)'` returns ZERO matches in 040 source; every query uses pgx parameter binding |
+| Photos route group (17 handlers under `/v1/photos/...`) | Auth bypass | A07 | INFO | MITIGATED — every handler is inside `r.Use(deps.bearerAuthMiddleware)` per `internal/api/router.go:291-326`; bearer middleware uses `subtle.ConstantTimeCompare` (`internal/api/router.go:458`) |
+| `bearerAuthMiddleware` empty-token bypass (`d.AuthToken == ""`) + ML sidecar `SMACKEREL_AUTH_TOKEN` warn-on-empty | Production deployment silently downgraded to no-auth | A07 | LOW | ACCEPTED MVP — see S-004 below; documented dev-mode posture in `cmd/core/wiring.go:48-50` and `ml/app/main.py:73-75` (both emit `slog.Warn`); not 040-introduced (Scope 1 inheritance from foundation) |
+| `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` / `PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY` SST env vars | Operator believes config weakens TLS but it does not | A05 | INFO | OPEN — see S-005 below; `internal/config/photos.go:124,162` parses the value into `cfg.TLSSkipVerify` but no consumer ever reads it; misleading config surface (dead config) |
+| Photo capture audit logs (`photo_audit_events`) | PII / EXIF leakage in audit metadata | A09 | INFO | MITIGATED — audit writes (`internal/api/photos_upload.go:202-220`, `internal/api/photos_upload.go:309-318`, `internal/api/photos.go:292-313`) carry only `photo_id`, `source_channel`, `source_ref`, `mode`, `bytes`, `reveal_token_id`, `ttl_seconds`, `sensitivity`, `labels`; never raw EXIF, GPS, faces, or photo bytes |
+
+#### Phase 2: Dependency Vulnerability Scan
+
+```text
+$ PATH=$HOME/go/bin:$PATH govulncheck -version
+Go: go1.24.3
+Scanner: govulncheck@v1.3.0
+DB: https://vuln.go.dev
+DB updated: 2026-04-21 18:59:51 +0000 UTC
+EXIT=0
+
+$ PATH=$HOME/go/bin:$PATH govulncheck ./internal/connector/photos/...
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-4947
+    Unexpected work during chain building in crypto/x509
+  Standard library
+    Found in: crypto/x509@go1.24.3
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: internal/connector/photos/adapters/photoprism/photoprism.go:653:2: photoprism.writer.Upload calls http.body.Close, which eventually calls x509.Certificate.Verify
+[... 17 additional stdlib advisories spanning crypto/tls, crypto/x509, net/http, net/url, os, syscall, encoding/asn1, encoding/pem ...]
+Vulnerability #19: GO-2025-3749
+    Usage of ExtKeyUsageAny disables policy validation in crypto/x509
+  Standard library
+    Found in: crypto/x509@go1.24.3
+    Fixed in: crypto/x509@go1.24.4
+    Example traces found:
+      #1: internal/connector/photos/adapters/photoprism/photoprism.go:653:2: photoprism.writer.Upload calls http.body.Close, which eventually calls x509.Certificate.Verify
+
+Your code is affected by 19 vulnerabilities from the Go standard library.
+This scan also found 6 vulnerabilities in packages you import and 10
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=3 (non-zero exit indicates vulnerabilities found)
+
+$ PATH=$HOME/go/bin:$PATH govulncheck ./internal/connector/photos/... 2>&1 | grep -cE '^Vulnerability #'
+19
+
+$ PATH=$HOME/go/bin:$PATH govulncheck ./internal/api/... 2>&1 | grep -cE '^Vulnerability #'
+22
+```
+
+**Interpretation:** All 19 reachable vulnerabilities under `internal/connector/photos/...` (and 22 under `internal/api/...`) trace back to the **Go standard library at toolchain version `go1.24.3`** — `crypto/tls`, `crypto/x509`, `net/http`, `net/url`, `os`, `syscall`, `encoding/asn1`, `encoding/pem`. Zero vulnerabilities are introduced by 040 third-party imports or first-party 040 code. Fixes require a Go-runtime upgrade in the `Dockerfile` and `go.mod` toolchain directive (mostly to `go1.24.8` or `go1.25.9`). The scan also flagged 6 third-party-package vulnerabilities + 10 transitive-dependency vulnerabilities that are NOT reachable from 040 code paths. Cross-cutting runtime hardening, NOT a 040 regression — routed to `bubbles.harden` as **MIT-040-S-002** (same finding family as 038 S-002).
+
+#### Phase 3: Code Security Review (OWASP Top 10 surface scan)
+
+```text
+$ grep -rEn 'password\s*=\s*"[^"$]|api_key\s*=\s*"[^"$]|secret\s*=\s*"[^"$]|access_token\s*=\s*"[^"$]' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go' | grep -v 'json:'
+no matches
+EXIT=1 (grep no-match)
+
+$ grep -rEn 'slog\.\w+\([^)]*"[^"]*(token|password|secret|access_token|credential|bearer|api_key)' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go'
+no matches
+EXIT=1 (grep no-match)
+
+$ grep -rEn 'TODO|FIXME|XXX|HACK' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go'
+no matches
+EXIT=1 (grep no-match)
+
+$ grep -rEn 'math/rand|InsecureSkipVerify|TLS.*Skip' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go'
+no matches
+EXIT=1 (grep no-match — note: TLSSkipVerify exists in internal/config/photos.go but never wired; see S-005)
+
+$ grep -rEn 'exec\.Command|os\.Exec|exec\.Cmd' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go'
+no matches
+EXIT=1 (grep no-match)
+
+$ grep -rEn 'fmt\.Sprintf.*(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)' \
+    internal/connector/photos/ internal/api/photos*.go 2>/dev/null \
+    | grep -v '_test.go'
+no matches
+EXIT=1 (grep no-match)
+```
+
+**Result:** Zero hardcoded secrets, zero token/password/secret-leaking log statements, zero `TODO/FIXME/HACK` markers, zero `math/rand` calls (reveal-token plaintext correctly uses `crypto/rand` per `internal/connector/photos/sensitivity.go:5,323-329`), zero wired `InsecureSkipVerify`, zero shell-exec calls, zero `fmt.Sprintf`-in-SQL sites anywhere in the 040 surface. The 030+ photo store SQL statements across `store.go`, `routing.go`, `removal.go`, `lifecycle.go`, `dedupe.go`, `sensitivity.go`, `action_tokens.go`, `cross_provider.go`, `scanner.go` ALL use pgx parameter binding (`$1`, `$2`, …) — verified by reading the files and by the grep audit above.
+
+```text
+$ grep -rEn '(req|view|body|payload|request)\.(OwnerUserID|UserID|ActorID|owner_user_id|user_id|actor_id|TenantID|tenant_id)' \
+    internal/api/photos*.go internal/connector/photos/ 2>/dev/null | grep -v '_test.go'
+internal/api/photos_upload.go:288:      actor := strings.TrimSpace(request.ActorID)
+EXIT=0
+```
+
+One IDOR-pattern site found: `MintReveal` extracts `actor_id` from request body before falling back to `X-Actor-Id` header. Recorded as **S-003** below — closed-as-accepted MVP single-tenant posture per the same precedent that 038's S-003 used (`drive.Connect` body-sourced `OwnerUserID`).
+
+```text
+$ grep -rEn 'io\.ReadAll' \
+    internal/connector/photos/ internal/api/photos*.go internal/telegram/photo_upload.go 2>/dev/null \
+    | grep -v '_test.go' | grep -v 'LimitReader'
+internal/connector/photos/adapters/photoprism/photoprism.go:640:        data, err := io.ReadAll(src)
+internal/connector/photos/adapters/immich/immich.go:501:        data, err := io.ReadAll(src)
+internal/api/photos_upload.go:140:      contents, err := io.ReadAll(file)
+internal/telegram/photo_upload.go:89:   body, err := io.ReadAll(resp.Body)
+internal/telegram/photo_upload.go:152:  body, err := io.ReadAll(resp.Body)
+EXIT=0
+```
+
+Five unbounded `io.ReadAll` sites in 040-touched source. The `internal/api/photos_upload.go:140` site is **already wrapped** by `http.MaxBytesReader(w, r.Body, 64<<20)` at `internal/api/photos_upload.go:60` and gated by SST `photos.scan.max_file_size_bytes` at `internal/api/photos_upload.go:134-138` — SAFE. The remaining four sites are provider-side or telegram-file-API reads against SST-trusted base URLs but lack defense-in-depth `io.LimitReader` wrappers — recorded as **S-006** LOW (same finding family as 038 S-004).
+
+```text
+$ grep -rEn 'r\.Use\(deps\.bearerAuthMiddleware\)' internal/api/router.go
+58:                     r.Use(deps.bearerAuthMiddleware)
+259:                    r.Use(deps.bearerAuthMiddleware)
+273:                    r.Use(deps.bearerAuthMiddleware)
+285:                    r.Use(deps.bearerAuthMiddleware)
+293:                    r.Use(deps.bearerAuthMiddleware)
+335:                    r.Use(deps.bearerAuthMiddleware)
+EXIT=0
+
+$ awk 'NR>=291 && NR<=326 {print NR": "$0}' internal/api/router.go | grep -E 'r\.(Get|Post|Put|Delete|Patch)'
+294:                                    r.Get("/photos/search", deps.PhotosHandlers.Search)
+295:                                    r.Get("/photos/connectors", deps.PhotosHandlers.ListConnectors)
+296:                                    r.Post("/photos/connectors", deps.PhotosHandlers.Connect)
+297:                                    r.Post("/photos/connectors/test", deps.PhotosHandlers.TestConnector)
+298:                                    r.Get("/photos/connectors/{id}", deps.PhotosHandlers.GetConnector)
+301:                                    r.Post("/photos/actions/plan", deps.PhotosHandlers.PlanAction)
+302:                                    r.Post("/photos/actions/confirm", deps.PhotosHandlers.ConfirmAction)
+303:                                    r.Get("/photos/health/lifecycle", deps.PhotosHandlers.HealthLifecycle)
+304:                                    r.Get("/photos/health/duplicates", deps.PhotosHandlers.HealthDuplicates)
+305:                                    r.Get("/photos/health/duplicates/{id}", deps.PhotosHandlers.HealthDuplicatesGet)
+306:                                    r.Post("/photos/health/duplicates/{id}/best-pick", deps.PhotosHandlers.SetClusterBestPick)
+307:                                    r.Post("/photos/health/duplicates/{id}/resolve", deps.PhotosHandlers.ResolveCluster)
+308:                                    r.Get("/photos/health/removal", deps.PhotosHandlers.HealthRemoval)
+309:                                    r.Get("/photos/health/quality", deps.PhotosHandlers.HealthQuality)
+314:                                    r.Post("/photos/connectors/capabilities/{capability}/exercise", deps.PhotosHandlers.ExerciseCapability)
+315:                                    r.Get("/photos/health", deps.PhotosHandlers.HealthAggregate)
+318:                                    r.Post("/photos/upload", deps.PhotosHandlers.Upload)
+319:                                    r.Post("/photos/{id}/reveal", deps.PhotosHandlers.MintReveal)
+324:                                    r.Get("/photos/{id}/preview", deps.PhotosHandlers.Preview)
+325:                                    r.Get("/photos/{id}", deps.PhotosHandlers.GetPhoto)
+EXIT=0
+```
+
+**Auth posture:** All 17 photo route handlers (search, connectors-list/connect/test/get, actions plan/confirm, health lifecycle/duplicates/best-pick/resolve/removal/quality/aggregate, capabilities exercise, upload, mint reveal, preview, photo-by-id) are inside `r.Use(deps.bearerAuthMiddleware)` per `internal/api/router.go:291-326`. The middleware uses `subtle.ConstantTimeCompare` (`internal/api/router.go:458`) so token comparison is timing-safe.
+
+#### Phase 4: Reveal-Token Concurrency Race (S-007 — NEW MEDIUM)
+
+```text
+$ sed -n '160,196p' internal/connector/photos/sensitivity.go
+        tx, err := store.pool.Begin(ctx)
+        if err != nil {
+                return nil, fmt.Errorf("begin reveal consume tx: %w", err)
+        }
+        defer tx.Rollback(ctx)
+        var token RevealToken
+        if err := tx.QueryRow(ctx, `
+                SELECT id, photo_id, actor_id, expires_at, consumed_at, created_at
+                  FROM photo_reveal_tokens
+                 WHERE id=$1`, id).Scan(...); err != nil {
+                ...
+        }
+        if token.ConsumedAt != nil {
+                return nil, ErrRevealTokenConsumed
+        }
+        ...
+        if _, err := tx.Exec(ctx, `UPDATE photo_reveal_tokens SET consumed_at=$2 WHERE id=$1`, token.ID, now.UTC()); err != nil {
+                return nil, fmt.Errorf("consume reveal token: %w", err)
+        }
+        if err := tx.Commit(ctx); err != nil {
+                ...
+        }
+```
+
+**Race:** The transaction's `SELECT` does NOT use `FOR UPDATE`, and the subsequent `UPDATE` lacks a `WHERE consumed_at IS NULL` predicate. Two concurrent `ConsumeRevealToken` calls with the same token can BOTH read `consumed_at = NULL`, BOTH pass the actor/photo/expiry checks, and BOTH execute the `UPDATE` (the second overwrites the first's `consumed_at`). Both transactions commit; both reveal-token consumes succeed. The single-use guarantee documented in `sensitivity.go:74-78` ("consumed on first use") is bypassed under concurrent load.
+
+**Impact:** A reveal token is meant to authorise exactly one preview retrieval per actor. Under race, an attacker (or a buggy client retrying on transport errors) can fetch the sensitive preview bytes more than once with a single mint. For `SensitivitySensitive` and `SensitivityHidden` photos this defeats the audit-and-revoke contract. Severity is MEDIUM rather than HIGH because (a) bearer-auth still gates the route and (b) actor-binding still applies (the second consume must come from the same authenticated identity).
+
+**Cheap fix evaluated:** Two minimal options.
+
+| Option | Cheap? | Obviously safe? | Test-backed? | Verdict |
+|--------|--------|-----------------|--------------|---------|
+| (A) Add `FOR UPDATE` to the `SELECT` inside the existing transaction | YES (~10 chars) | YES (Postgres row-level lock; no schema change) | NO — no existing concurrency test, would need a paired regression test from `bubbles.test` | DEFER — minimal-but-untested code change is a `bubbles.harden` paired implement+test job |
+| (B) Replace the two-statement pattern with a single atomic `UPDATE photo_reveal_tokens SET consumed_at=$3 WHERE id=$1 AND consumed_at IS NULL RETURNING ...` and treat 0 rows as `ErrRevealTokenConsumed` | NO — restructures the function (validation order changes; expiry/actor/photo checks must move) | YES once tested, but changes function shape | NO — needs paired implement+test work | DEFER — same reason as (A) |
+
+**Closure decision:** Both fixes are too risky to ship without a paired regression test that proves the race is closed (per `bubbles-test-integrity` skill: every regression test MUST include at least one adversarial case that fails if the bug is reintroduced). Routed to `bubbles.harden` as **MIT-040-S-007** for paired implement+test work.
+
+#### Phase 5: Carry-Forward Audit Observation Reconciliation
+
+The 040 audit phase (HEAD `4baf7c7`, 2026-05-02T17:57:00Z) flagged TWO non-blocking observations that this security pass formally reconciles.
+
+**Observation A — `ml/app/main.py:75` `SMACKEREL_AUTH_TOKEN` warn-on-empty.**
+
+```text
+$ sed -n '74,78p' ml/app/main.py
+    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    if not auth_token:
+        logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")
+
+$ sed -n '46,52p' cmd/core/wiring.go
+        if cfg.AuthToken == "" {
+                slog.Warn("SMACKEREL_AUTH_TOKEN is empty — system running without authentication")
+        }
+}
+```
+
+**Reconciliation:** Both the Go core (`cmd/core/wiring.go:48-50`) and the Python ML sidecar (`ml/app/main.py:73-75`) emit a warning and continue when `SMACKEREL_AUTH_TOKEN` is empty. This is the documented dev-mode posture of the foundation (Scope 1 inheritance from spec 002 Phase 1, NOT a 040 introduction). The Go-side bearer middleware in `internal/api/router.go:441-444` then short-circuits all auth checks (`if d.AuthToken == "" { next.ServeHTTP(...); return }`). For a single-tenant local-deployment system this is the intended dev-loop ergonomic; for production deployments operators are expected to set the token. Hardening to fail-fast on empty would either (a) need a `SMACKEREL_ENV=production` SST signal that does not exist today (would require a foundation-level config change) or (b) break every developer's local ergonomic. **Decision: closed-as-accepted MVP single-tenant posture; routed to `bubbles.harden` as MIT-040-S-004 (paired Go + Python fail-fast-when-production change).** Same precedent as 038 S-003 trust deferral.
+
+**Observation B — `MintReveal` actor-source from request body.**
+
+```text
+$ sed -n '286,291p' internal/api/photos_upload.go
+        actor := strings.TrimSpace(request.ActorID)
+        if actor == "" {
+                actor = actorIDFromRequest(r)
+        }
+
+$ sed -n '282,294p' internal/api/photos_actions.go
+func actorIDFromRequest(r *http.Request) string {
+        // The runtime bearer-token middleware sets the actor in a header for
+        // downstream handlers; fall back to "system" when no header is set
+        // (test/internal callers).
+        if r == nil {
+                return "system"
+        }
+        if value := r.Header.Get("X-Actor-Id"); value != "" {
+                return value
+        }
+        return "system"
+}
+```
+
+**Reconciliation:** The Gate G047 strict reading is correct — `MintReveal` accepts `actor_id` from request body before falling back to `X-Actor-Id` header. However, the bearer middleware in `internal/api/router.go:441-466` does NOT yet thread an authenticated identity into the request context (a single static bearer token gates the whole API). So `actorIDFromRequest` only knows what the client tells it. The body-source preference exists so audit rows carry a meaningful actor (test fixtures, agent invocations) rather than always "system". For a single-tenant local-deployment system the trust boundary is "anyone with the static bearer token", and within that boundary actor identity is informational (audit metadata) not authorisation. Hardening to a strict authenticated-identity model would require (a) per-user bearer tokens with claim binding (foundation-level), (b) middleware that sets `r.Context()` with the resolved identity, and (c) refactor of every audit-actor call site. **Decision: closed-as-accepted MVP single-tenant trust boundary; routed to `bubbles.harden` as MIT-040-S-003.** Same precedent as 038 S-003 (`drive.Connect` body-sourced `OwnerUserID`).
+
+#### Findings Summary
+
+| Severity | ID | OWASP | File:line | Description | Status |
+|----------|-----|-------|-----------|-------------|--------|
+| MEDIUM | S-002 | A06 (Vulnerable Components) | `Dockerfile` + `go.mod` toolchain `go1.24.3` (reachable from `internal/connector/photos/adapters/photoprism/photoprism.go:649,653` + `internal/connector/photos/adapters/immich/immich.go:*` + `internal/api/photos_upload.go:140` + `internal/telegram/photo_upload.go:89,152`) | 19 reachable Go-stdlib vulnerabilities under `internal/connector/photos/...` (22 under `internal/api/...`) at `go1.24.3`. Spans `crypto/tls`, `crypto/x509`, `net/http`, `net/url`, `os`, `syscall`, `encoding/asn1`, `encoding/pem`. Cross-cutting runtime hardening, NOT 040-introduced. | **ROUTED-TO-HARDEN** as MIT-040-S-002 — Go runtime upgrade to ≥1.25.9 (post-feature-done backlog) |
+| MEDIUM | S-007 | A01 (Race / TOCTOU on access-control resource) | `internal/connector/photos/sensitivity.go:165-188` | `ConsumeRevealToken` SELECT lacks `FOR UPDATE`; UPDATE lacks `WHERE consumed_at IS NULL`. Concurrent reveal requests with same token can BOTH succeed, bypassing single-use guarantee. | **ROUTED-TO-HARDEN** as MIT-040-S-007 — paired `bubbles.harden` implement (Option A or B above) + `bubbles.test` adversarial concurrency regression |
+| LOW | S-001 | A02 (Cryptographic Failures — partial) | `internal/connector/photos/sensitivity.go:308-332` | Reveal-token wire format is `<uuid>.<secret>` but only the UUID is validated on consume — the 24-byte `crypto/rand` secret is decorative. `hashRevealSecret` is declared but discarded via `var _ = hashRevealSecret`. UUID v4 has 122 bits of entropy so practical guess-resistance is unchanged; the gap is design-honesty (the wire format implies a hash-checked secret that does not exist). | **ROUTED-TO-HARDEN** as MIT-040-S-001 — add `token_hash` column + migration + hash-on-mint + constant-time compare-on-consume |
+| LOW | S-003 | A01 (Broken Access Control / IDOR-class — Gate G047 strict reading) | `internal/api/photos_upload.go:285-290` | `MintReveal` accepts `actor_id` from request body, falls back to client-controlled `X-Actor-Id` header. Bearer middleware does not yet thread authenticated identity into request context. Single-tenant trust boundary. | **CLOSED-AS-ACCEPTED** MVP posture; routed to backlog as MIT-040-S-003 (post-feature-done; trigger is per-user bearer token / claim-binding foundation change) |
+| LOW | S-004 | A07 (Auth Failures — dev-mode bypass) | `cmd/core/wiring.go:48-50` + `internal/api/router.go:441-444` + `ml/app/main.py:73-75` | `SMACKEREL_AUTH_TOKEN` empty in either Go core or Python ML sidecar emits `slog.Warn`/`logger.warning` and continues. Bearer middleware then allows all requests when `d.AuthToken == ""`. Documented dev-mode posture; production deployments must set the token. NOT 040-introduced (foundation Scope 1 inheritance). Same finding class as the carry-forward audit observation A. | **CLOSED-AS-ACCEPTED** MVP posture; routed to `bubbles.harden` as MIT-040-S-004 — fail-fast when `SMACKEREL_ENV=production` (requires new SST signal, foundation-level change) |
+| LOW | S-005 | A05 (Security Misconfiguration / dead config) | `internal/config/photos.go:124,162` | `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` and `PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY` SST env vars are parsed into `cfg.TLSSkipVerify` but no consumer ever reads the value — verified by `grep -rn 'cfg\.TLSSkipVerify\|\.TLSSkipVerify\b' **/*.go` returning only the two assignment sites. Operators may believe setting the value to `true` weakens TLS verification but it does nothing. | **ROUTED-TO-HARDEN** as MIT-040-S-005 — either delete the dead config OR wire it into the `http.Client.Transport.TLSClientConfig.InsecureSkipVerify` for the photo provider clients (latter requires a paired test) |
+| LOW | S-006 | A05 (Security Misconfiguration / DoS — defense-in-depth) | `internal/connector/photos/adapters/photoprism/photoprism.go:640` + `.../immich/immich.go:501` + `internal/telegram/photo_upload.go:89,152` | 4 unbounded `io.ReadAll` sites on provider/telegram HTTP responses. Provider URLs are SST-trusted (`photos.providers.immich.base_url` / `photoprism.base_url`) and Telegram URLs come from `b.api.GetFileDirectURL`, but absent `io.LimitReader` wrappers leave defense-in-depth gap. The 5th site (`internal/api/photos_upload.go:140`) is **already protected** by `http.MaxBytesReader(_, 64<<20)` at line 60 + SST `photos.scan.max_file_size_bytes` at lines 134-138 — SAFE. | **ROUTED-TO-HARDEN** as MIT-040-S-006 — wrap remaining 4 reads in `io.LimitReader(_, photos.scan.max_response_bytes)` (post-feature-done backlog; same finding family as 038 S-004) |
+| INFO | S-008 | n/a | n/a | Spot-check sweep of 040 surface (`internal/connector/photos/`, `internal/api/photos*.go`, `internal/telegram/photo_upload.go`): zero hardcoded secrets, zero secrets-in-logs, zero `math/rand` (reveal-token plaintext correctly uses `crypto/rand` per `sensitivity.go:323-329`), zero wired `InsecureSkipVerify`, zero shell-exec, zero `fmt.Sprintf`-in-SQL, zero `TODO/FIXME/HACK` markers. | **CLEAN** |
+| INFO | S-009 | A01 (Broken Access Control — verified clean) | `internal/api/router.go:291-326` | All 17 `/v1/photos/*` route handlers are inside `r.Use(deps.bearerAuthMiddleware)`. Bearer middleware uses `subtle.ConstantTimeCompare` (`router.go:458`). No unauthenticated route in 040 surface. | **CLEAN** |
+| INFO | S-010 | A09 (Logging Failures — verified clean) | `internal/api/photos_upload.go:218,315` + `internal/telegram/photo_upload.go:45,51,65` | All 5 `slog.*` calls in 040 surface log only `photo_id`, `file_id`, `source_ref`, and truncated `error` strings. NEVER a token, photo bytes, preview URL, EXIF, GPS, or extracted text. Aligns with design.md §11 logging rule. Audit-event metadata writes (`photo_audit_events` rows) are similarly scoped to `source_channel`, `source_ref`, `mode`, `bytes`, `reveal_token_id`, `ttl_seconds`, `sensitivity`, `labels`. | **CLEAN** |
+| INFO | S-011 | A03 (Injection — verified clean) | `internal/connector/photos/store.go`, `routing.go`, `removal.go`, `lifecycle.go`, `dedupe.go`, `sensitivity.go`, `action_tokens.go`, `cross_provider.go`, `scanner.go` (30+ statements) | Zero `fmt.Sprintf`-in-SQL anywhere in 040 surface. Every photo store query uses pgx parameter binding. The simplify-phase consolidation introduced `photoRecordColumnsSQL` constant + `scanPhotoRecordRow` helper but neither interpolates user values. | **CLEAN** |
+
+**Severity counts:** 0 CRITICAL · 0 HIGH · 2 MEDIUM (1 cross-cutting stdlib runtime upgrade routed; 1 race-condition routed for paired implement+test) · 4 LOW (2 closed-as-accepted MVP posture; 2 routed for hardening) · 4 INFO (all clean).
+
+#### Disposition
+
+| Action | Owner | Trigger |
+|--------|-------|---------|
+| Phase advance security → bubbles.validate (final feature-done promotion) | bubbles.workflow | This security pass |
+| **MIT-040-S-001:** Add `token_hash` column + migration + hash-on-mint + constant-time compare-on-consume; remove `var _ = hashRevealSecret` placeholder by using the function for real | bubbles.harden | Post-feature-done backlog (paired with MIT-040-S-007 — same file) |
+| **MIT-040-S-002:** Upgrade Go toolchain in `Dockerfile` and `go.mod` to ≥1.25.9; re-run `govulncheck` to confirm zero residuals across `internal/connector/photos/...` and `internal/api/...` | bubbles.harden | Post-feature-done runtime-hardening cycle; SHARED across all features (rolls up MIT-038-S-002 too) |
+| **MIT-040-S-003:** Replace `MintReveal`'s body-sourced `actor_id` with `bearerAuthMiddleware`-extracted authenticated-session identity once per-user bearer tokens / claim-binding land | bubbles.plan → bubbles.implement | Post-feature-done backlog (no current trigger; per documented MVP single-tenant trust boundary) |
+| **MIT-040-S-004:** Add SST `SMACKEREL_ENV=production` signal; in production make `SMACKEREL_AUTH_TOKEN` empty FATAL in both Go core (`cmd/core/wiring.go`) and Python ML sidecar (`ml/app/main.py`) | bubbles.plan → bubbles.implement | Post-feature-done backlog (foundation-level config change; rolls up the same posture inherited by every other feature) |
+| **MIT-040-S-005:** Either delete the dead `cfg.TLSSkipVerify` config OR wire it into the photo-provider `http.Client.Transport.TLSClientConfig.InsecureSkipVerify` (with a paired test that proves the flag is honoured) | bubbles.harden | Post-feature-done backlog |
+| **MIT-040-S-006:** Wrap remaining 4 `io.ReadAll(resp.Body)` provider/telegram-API reads in `io.LimitReader(_, photos.scan.max_response_bytes)` for defense-in-depth | bubbles.harden | Post-feature-done backlog (rolls up with 038 S-004) |
+| **MIT-040-S-007:** Close `ConsumeRevealToken` race — Option (A) add `FOR UPDATE` to the `SELECT` inside the existing transaction OR Option (B) restructure as single atomic `UPDATE ... WHERE id=$1 AND consumed_at IS NULL RETURNING ...` and check 0-row case | bubbles.harden + bubbles.test | Post-feature-done backlog (paired implement + adversarial concurrency regression — single-mint-then-two-concurrent-consumes must result in exactly one success) |
+
+#### Verification Gate
+
+Security-only audit run; no source code modified. Per the security agent contract, this section's claims are interpreted from `grep`/`govulncheck` output (Phases 1–3) and from inspection of source/design artifacts (Phases 4–5). Pre-existing test-suite green status established by `bubbles.test` (2026-05-06T20:45:00Z), `bubbles.regression` (2026-05-06T21:15:00Z), and `bubbles.simplify` (2026-05-06T21:55:00Z) is carried forward — no new regression introduced because no code was changed.
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries
+[result captured below after security report append + state.json update]
+```
+
+#### Verdict
+
+⚠️ **FINDINGS** — proceed to `bubbles.validate` (final feature-done promotion). Two carry-forward audit observations formally reconciled (`ml/app/main.py:75` `SMACKEREL_AUTH_TOKEN` warn-on-empty closed-as-accepted MVP single-tenant posture and routed under MIT-040-S-004; `MintReveal` body-sourced `actor_id` closed-as-accepted MVP single-tenant trust boundary and routed under MIT-040-S-003). One previously-undetected MEDIUM concurrency bug in the reveal-token consume path (S-007 — TOCTOU) routed to `bubbles.harden` for paired implement+test work. One MEDIUM stdlib vulnerability bundle (S-002) routed to `bubbles.harden` runtime upgrade backlog (rolls up with 038 S-002). Three LOW informational findings (S-001 reveal-token plaintext-secret-not-hashed, S-005 dead `TLSSkipVerify` config, S-006 unbounded `io.ReadAll`) routed to backlog. Zero hardcoded secrets, zero secrets-in-logs, zero `math/rand`, zero wired `InsecureSkipVerify`, zero shell-exec, zero `fmt.Sprintf`-in-SQL, zero TODO/FIXME/HACK markers. Sensitivity gate refuse-by-default semantics intact (verified by `TestPhotosSensitivity_ServerSidePreviewRevealAndAudit` integration + `TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto` e2e). Bearer auth covers all 17 photo handlers with `subtle.ConstantTimeCompare`. No 040-introduced HIGH or CRITICAL vulnerability detected. No code changes applied — every surfaced mitigation requires either a runtime upgrade (S-002), a future-scope architectural change (S-003, S-004), a schema/migration (S-001, S-007), a paired implement+test cycle (S-005, S-006, S-007), and no cheap-and-obviously-safe in-place hardening was available without risking the existing test contract.
+
+#### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.security",
+  "roleClass": "diagnostic",
+  "outcome": "completed_diagnostic",
+  "featureDir": "specs/040-cloud-photo-libraries",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [
+    "SCN-040-001", "SCN-040-002", "SCN-040-003", "SCN-040-004",
+    "SCN-040-005", "SCN-040-006", "SCN-040-007", "SCN-040-008",
+    "SCN-040-009", "SCN-040-010", "SCN-040-011", "SCN-040-012",
+    "SCN-040-013", "SCN-040-014", "SCN-040-015"
+  ],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "specs/040-cloud-photo-libraries/report.md",
+    "specs/040-cloud-photo-libraries/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#security-phase--feature-wide-evidence",
+    "report.md#findings-summary",
+    "report.md#phase-4-reveal-token-concurrency-race-s-007--new-medium",
+    "report.md#phase-5-carry-forward-audit-observation-reconciliation"
+  ],
+  "nextRequiredOwner": "bubbles.validate",
+  "packetRef": null,
+  "blockedReason": null,
+  "verdict": "FINDINGS",
+  "observations": [
+    "Carry-forward audit observation A (ml/app/main.py:75 SMACKEREL_AUTH_TOKEN warn-on-empty) reconciled — closed-as-accepted MVP single-tenant posture; routed to bubbles.harden as MIT-040-S-004 (paired Go core + Python sidecar fail-fast-when-production change requiring new SMACKEREL_ENV SST signal).",
+    "Carry-forward audit observation B (MintReveal body-sourced actor_id, internal/api/photos_upload.go:288-290) reconciled — closed-as-accepted MVP single-tenant trust boundary; routed to bubbles.harden as MIT-040-S-003 (per-user bearer token / claim-binding foundation change).",
+    "NEW MEDIUM finding S-007 — reveal-token consume race condition (sensitivity.go:165-188): SELECT lacks FOR UPDATE, UPDATE lacks WHERE consumed_at IS NULL predicate; concurrent consumes can both succeed, bypassing single-use guarantee. Routed to bubbles.harden + bubbles.test for paired implement + adversarial concurrency regression.",
+    "S-002 — 19 reachable Go-stdlib vulnerabilities under internal/connector/photos/... (22 under internal/api/...) at go1.24.3 routed to bubbles.harden as MIT-040-S-002 (Go runtime upgrade ≥1.25.9; rolls up with 038 S-002).",
+    "S-001 — reveal-token plaintext secret is decorative (only UUID validated; hashRevealSecret declared but discarded via var _ assignment). Routed to bubbles.harden as MIT-040-S-001 (add token_hash column + hash-on-mint + constant-time compare-on-consume).",
+    "S-005 — TLSSkipVerify SST config is dead (parsed into cfg.TLSSkipVerify but no consumer reads it). Misleading config surface. Routed to bubbles.harden as MIT-040-S-005.",
+    "S-006 — 4 unbounded io.ReadAll sites in provider adapters + Telegram API client. Defense-in-depth gap. Routed to bubbles.harden as MIT-040-S-006.",
+    "Zero hardcoded secrets, zero secrets-in-logs, zero math/rand, zero wired InsecureSkipVerify, zero shell-exec, zero fmt.Sprintf-in-SQL, zero TODO/FIXME/HACK in 040 surface.",
+    "All 17 /v1/photos/* handlers behind r.Use(deps.bearerAuthMiddleware) with subtle.ConstantTimeCompare token comparison.",
+    "Sensitivity gate refuse-by-default semantics intact (EvaluateRetrieval enforces hidden/sensitive → block unless valid reveal; ConsumeRevealToken enforces actor + photo + expiry + single-use binding except under the S-007 race window)."
+  ]
+}
+```
