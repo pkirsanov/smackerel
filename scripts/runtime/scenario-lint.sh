@@ -3,7 +3,7 @@
 #
 # Runs the scenario-lint binary against AGENT_SCENARIO_DIR (sourced from
 # the generated env file) and exits non-zero on any rejection. Called
-# from inside the Go tooling docker container (golang:1.24.3-bookworm)
+# from inside the Go tooling docker container (golang:1.25.10-bookworm)
 # by smackerel.sh check, so `go` is available and the workspace is
 # mounted at /workspace.
 #
