@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "specId": "041",
+  "featureDir": "specs/041-qf-companion-connector",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-07T02:05:06Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-SM-041-001",
+      "name": "Connector Starts With Explicit Configuration",
+      "scope": "01-connector-configuration-and-qf-client-contract",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "function": "TestQFDecisionsConnectorHealthAppearsInLiveAPI"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-e2e-api-evidence",
+        "report.md#scope-1-broader-e2e-rerun-2026-05-07"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-001 qf-decisions is registered as a passive connector with explicit configuration",
+        "Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-002",
+      "name": "Connector Rejects Missing Or Incompatible QF Contract",
+      "scope": "01-connector-configuration-and-qf-client-contract",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "function": "TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-e2e-api-evidence",
+        "report.md#scope-1-broader-e2e-rerun-2026-05-07"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-002 connector marks schema mismatch degraded/error and publishes no trusted artifacts",
+        "Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass"
+      ]
+    }
+  ]
+}
