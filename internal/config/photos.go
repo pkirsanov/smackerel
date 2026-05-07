@@ -54,7 +54,6 @@ type PhotosImmichProviderConfig struct {
 	BaseURL              string
 	APIKey               string
 	PollIntervalSeconds  int
-	TLSSkipVerify        bool
 	SupportedAPIVersions []string
 }
 
@@ -66,7 +65,6 @@ type PhotosPhotoprismProviderConfig struct {
 	BaseURL              string
 	APIToken             string
 	PollIntervalSeconds  int
-	TLSSkipVerify        bool
 	SupportedAPIVersions []string
 }
 
@@ -121,7 +119,6 @@ func loadImmichPhotosProviderConfig(errs []string) (PhotosImmichProviderConfig, 
 		cfg.APIKey = apiKey
 	}
 	cfg.PollIntervalSeconds, errs = parsePositiveInt("PHOTOS_PROVIDER_IMMICH_POLL_INTERVAL_SECONDS", errs)
-	cfg.TLSSkipVerify, errs = requiredBool("PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY", errs)
 	cfg.SupportedAPIVersions, errs = requiredStringList("PHOTOS_PROVIDER_IMMICH_SUPPORTED_API_VERSIONS", errs)
 
 	if cfg.Enabled {
@@ -159,7 +156,6 @@ func loadPhotoprismPhotosProviderConfig(errs []string) (PhotosPhotoprismProvider
 		cfg.APIToken = apiToken
 	}
 	cfg.PollIntervalSeconds, errs = parsePositiveInt("PHOTOS_PROVIDER_PHOTOPRISM_POLL_INTERVAL_SECONDS", errs)
-	cfg.TLSSkipVerify, errs = requiredBool("PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY", errs)
 	cfg.SupportedAPIVersions, errs = requiredStringList("PHOTOS_PROVIDER_PHOTOPRISM_SUPPORTED_API_VERSIONS", errs)
 
 	if cfg.Enabled {
