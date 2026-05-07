@@ -10,6 +10,7 @@ type PhotosConfig struct {
 	Enabled      bool
 	Scan         PhotosScanConfig
 	Monitor      PhotosMonitorConfig
+	IOLimits     PhotosIOLimitsConfig
 	Policy       PhotosPolicyConfig
 	Intelligence PhotosIntelligenceConfig
 	Providers    PhotosProvidersConfig
@@ -23,6 +24,16 @@ type PhotosScanConfig struct {
 
 type PhotosMonitorConfig struct {
 	CursorInvalidationRescanMaxItems int
+}
+
+// PhotosIOLimitsConfig holds the SST byte caps applied around
+// `io.ReadAll` calls on HTTP boundaries (MIT-040-S-006). Values come
+// from the `photos.io_limits.*` SST keys; missing or non-positive
+// values are a fail-loud config error.
+type PhotosIOLimitsConfig struct {
+	ProviderMetadataMaxBytes int64
+	PhotoBinaryMaxBytes      int64
+	TelegramResponseMaxBytes int64
 }
 
 type PhotosPolicyConfig struct {
@@ -77,6 +88,10 @@ func loadPhotosConfig() (PhotosConfig, error) {
 	cfg.Scan.BatchSize, errs = parsePositiveInt("PHOTOS_SCAN_BATCH_SIZE", errs)
 	cfg.Scan.MaxFileSizeBytes, errs = parsePositiveInt64("PHOTOS_SCAN_MAX_FILE_SIZE_BYTES", errs)
 	cfg.Monitor.CursorInvalidationRescanMaxItems, errs = parsePositiveInt("PHOTOS_MONITOR_CURSOR_INVALIDATION_RESCAN_MAX_ITEMS", errs)
+
+	cfg.IOLimits.ProviderMetadataMaxBytes, errs = parsePositiveInt64("PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES", errs)
+	cfg.IOLimits.PhotoBinaryMaxBytes, errs = parsePositiveInt64("PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES", errs)
+	cfg.IOLimits.TelegramResponseMaxBytes, errs = parsePositiveInt64("PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES", errs)
 
 	cfg.Policy.LifecycleConfirmationThreshold, errs = parseUnitFloat("PHOTOS_POLICY_LIFECYCLE_CONFIRMATION_THRESHOLD", errs)
 	cfg.Policy.DuplicateConfirmationThreshold, errs = parseUnitFloat("PHOTOS_POLICY_DUPLICATE_CONFIRMATION_THRESHOLD", errs)

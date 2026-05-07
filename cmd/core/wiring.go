@@ -206,6 +206,9 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		DisambiguationTimeoutSeconds: cfg.TelegramDisambiguationTimeoutSeconds,
 		CookSessionTimeoutMinutes:    cfg.TelegramCookSessionTimeoutMinutes,
 		CookSessionMaxPerChat:        cfg.TelegramCookSessionMaxPerChat,
+		// MIT-040-S-006 — SST byte caps for the photo upload path.
+		PhotoDownloadMaxBytes:  cfg.Photos.IOLimits.TelegramResponseMaxBytes,
+		UploadResponseMaxBytes: cfg.Photos.IOLimits.ProviderMetadataMaxBytes,
 	})
 	if err != nil {
 		slog.Warn("telegram bot initialization failed", "error", err)

@@ -1,7 +1,12 @@
 package immich
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -125,5 +130,74 @@ func fixtureAsset(id string, album string, caption string) Asset {
 			Confidence:      0.93,
 			Rationale:       "fixture multimodal model classified the image content",
 		},
+	}
+}
+
+// TestImmichUpload_LimitReaderTruncatesOversizedSource is the
+// adversarial regression for MIT-040-S-006 on the immich Upload path.
+//
+// The test sets `uploadMaxBytes = 1024` and feeds the writer a 16 KiB
+// `io.Reader`. With the LimitReader wrap in place, the JSON body sent
+// to the server contains exactly 1024 bytes in the `bytes` field
+// (LimitReader silently truncates after `max` bytes). Without the
+// wrap, the body would contain all 16 KiB.
+//
+// If the LimitReader call inside (writer).Upload is removed, this
+// test fails with `body bytes = 16384, want 1024`.
+func TestImmichUpload_LimitReaderTruncatesOversizedSource(t *testing.T) {
+	const cap = int64(1024)
+	const sourceLen = 16 * 1024
+
+	var capturedBytes []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/server/version":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "v1.120.0", "major": 1})
+			return
+		case "/api/assets":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read upload body: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var parsed struct {
+				Bytes []byte `json:"bytes"`
+			}
+			if err := json.Unmarshal(body, &parsed); err != nil {
+				t.Errorf("decode upload body: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			capturedBytes = parsed.Bytes
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "asset-test"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewClient(server.Client())
+	client.SetUploadMaxBytes(cap)
+	if err := client.Connect(context.Background(), connector.ConnectorConfig{
+		AuthType:     "api_key",
+		Credentials:  map[string]string{"api_key": "test"},
+		SourceConfig: map[string]any{"base_url": server.URL},
+	}); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	src := bytes.NewReader(make([]byte, sourceLen))
+	if _, err := client.Writer().Upload(context.Background(), src, photolib.UploadMeta{
+		Filename: "test.jpg",
+		MIMEType: "image/jpeg",
+	}); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	if int64(len(capturedBytes)) != cap {
+		t.Fatalf("body bytes = %d, want %d (LimitReader truncation not honored)", len(capturedBytes), cap)
 	}
 }

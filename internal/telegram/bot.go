@@ -45,6 +45,13 @@ type Bot struct {
 	defaultChatID       int64                           // spec 039 Scope 4 — chat used to deliver scheduler-fired watch alerts
 	driveSaveBridge     *DriveSaveBridge                // spec 038 Scope 5 — drive write-back bridge for receipt captures
 	driveRetrieveBridge *DriveRetrieveBridge            // spec 038 Scope 7 — drive retrieval bridge for "send me X" prompts
+
+	// MIT-040-S-006 — SST-injected byte caps wrapping io.ReadAll on the
+	// Telegram photo download path and the internal upload-API JSON
+	// response. 0 means unlimited; production wiring sets both fields
+	// from PhotosConfig.IOLimits.
+	photoDownloadMaxBytes  int64 // bytes downloaded via Telegram bot file API
+	uploadResponseMaxBytes int64 // bytes read from internal /v1/photos/upload JSON response
 }
 
 // Config holds Telegram bot configuration.
@@ -59,6 +66,12 @@ type Config struct {
 	DisambiguationTimeoutSeconds int // disambiguation prompt TTL (default: 120)
 	CookSessionTimeoutMinutes    int // cook mode session inactivity timeout
 	CookSessionMaxPerChat        int // max concurrent cook sessions per chat
+
+	// MIT-040-S-006 — SST byte caps for the Telegram photo upload path.
+	// Production wiring threads PhotosConfig.IOLimits values here.
+	// Zero = unlimited (test paths only).
+	PhotoDownloadMaxBytes  int64 // PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES
+	UploadResponseMaxBytes int64 // PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES
 }
 
 // NewBot creates and initializes a Telegram bot.
@@ -107,6 +120,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		cookSessions:    NewCookSessionStore(cfg.CookSessionTimeoutMinutes),
 		expenseStates:   newExpenseStateStore(120),
 		done:            make(chan struct{}),
+
+		// MIT-040-S-006 — SST byte caps for io.ReadAll on the photo path.
+		photoDownloadMaxBytes:  cfg.PhotoDownloadMaxBytes,
+		uploadResponseMaxBytes: cfg.UploadResponseMaxBytes,
 	}
 
 	// Start cook session cleanup goroutine

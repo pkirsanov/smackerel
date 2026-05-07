@@ -533,6 +533,14 @@ photos:
     max_file_size_bytes: 52428800
   monitor:
     cursor_invalidation_rescan_max_items: 2500
+  io_limits:
+    # Defense-in-depth byte caps wrapping io.ReadAll on HTTP boundaries
+    # (MIT-040-S-006). Provider metadata = JSON responses; photo binary =
+    # uploaded image bytes; telegram response = bytes downloaded via the
+    # Telegram bot file API.
+    provider_metadata_max_bytes: 10485760 # 10 MiB
+    photo_binary_max_bytes: 104857600 # 100 MiB
+    telegram_response_max_bytes: 26214400 # 25 MiB
   policy:
     lifecycle_confirmation_threshold: 0.8
     duplicate_confirmation_threshold: 0.92

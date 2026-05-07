@@ -364,7 +364,10 @@ func (h *PhotosHandlers) immichClientFromRequest(request photoConnectorRequest) 
 		},
 		Enabled: true,
 	}
-	return immich.NewClient(http.DefaultClient), config, nil
+	client := immich.NewClient(http.DefaultClient)
+	// MIT-040-S-006 — SST-injected upload-body cap.
+	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+	return client, config, nil
 }
 
 func decodePhotoConnectorRequest(w http.ResponseWriter, r *http.Request) (photoConnectorRequest, bool) {
