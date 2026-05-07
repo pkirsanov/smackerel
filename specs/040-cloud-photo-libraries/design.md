@@ -948,7 +948,6 @@ photos:
             base_url: ""
             api_key: ""
             poll_interval_seconds: 600
-            tls_skip_verify: false
             supported_api_versions: []
         gphotos:
             enabled: false
