@@ -177,7 +177,9 @@ func TestConnectAuthFailureSetsError(t *testing.T) {
 }
 
 func TestConnectSchemaMismatchSetsDegraded(t *testing.T) {
+	requestCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(BridgeErrorResponse{Code: "invalid_query_parameter", Message: "packet_version 99 is unsupported"})
@@ -194,6 +196,12 @@ func TestConnectSchemaMismatchSetsDegraded(t *testing.T) {
 	}
 	if c.Health(context.Background()) != connector.HealthDegraded {
 		t.Fatalf("health = %s, want %s", c.Health(context.Background()), connector.HealthDegraded)
+	}
+	if _, _, syncErr := c.Sync(context.Background(), ""); syncErr == nil {
+		t.Fatal("expected sync to retry QF validation and return schema compatibility error")
+	}
+	if requestCount < 2 {
+		t.Fatalf("request count = %d, want at least 2 for connect plus supervisor retry", requestCount)
 	}
 }
 

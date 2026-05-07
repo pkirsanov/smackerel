@@ -340,8 +340,26 @@ OLLAMA_VISION_MODEL="$(required_value llm.ollama_vision_model)"
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 # Auto-generate a disposable test token when the SST value is empty and TARGET_ENV=test.
 # Dev/prod environments still require manual configuration (fail-loud at service startup).
+#
+# Reuse the existing token from the previously-generated env file when present so the
+# token stays stable across multiple `./smackerel.sh config generate` calls within the
+# same session. Test orchestration (e.g. the `test e2e` Go block, `test integration`,
+# and `test stress`) reads SMACKEREL_AUTH_TOKEN from the env file once and then calls
+# `./smackerel.sh up`, which regenerates the env file before bringing the stack up.
+# Without reuse, the regen produces a fresh random token, the running stack is configured
+# with the new token, and the previously-captured token used by the Go test container
+# returns 401 UNAUTHORIZED on every API call.
 if [[ "$TARGET_ENV" == "test" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
-  SMACKEREL_AUTH_TOKEN="$(openssl rand -hex 24 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(24))')"
+  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_TOKEN=""
+  if [[ -f "$EXISTING_ENV_FILE" ]]; then
+    EXISTING_TOKEN="$(awk -F= '/^SMACKEREL_AUTH_TOKEN=/ { sub(/^SMACKEREL_AUTH_TOKEN=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -n "$EXISTING_TOKEN" ]]; then
+    SMACKEREL_AUTH_TOKEN="$EXISTING_TOKEN"
+  else
+    SMACKEREL_AUTH_TOKEN="$(openssl rand -hex 24 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(24))')"
+  fi
 fi
 HOST_BIND_ADDRESS="$(required_value runtime.host_bind_address)"
 COMPOSE_WAIT_TIMEOUT_S="$(required_value runtime.compose_wait_timeout_s)"
@@ -556,12 +574,12 @@ GUESTHOST_SYNC_SCHEDULE="$(yaml_get connectors.guesthost.sync_schedule 2>/dev/nu
 GUESTHOST_EVENT_TYPES="$(yaml_get connectors.guesthost.event_types 2>/dev/null)" || GUESTHOST_EVENT_TYPES=""
 
 # QF decisions connector
-QF_DECISIONS_ENABLED="$(required_value connectors.qf-decisions.enabled)"
-QF_DECISIONS_BASE_URL="$(required_value connectors.qf-decisions.base_url)"
-QF_DECISIONS_CREDENTIAL_REF="$(required_value connectors.qf-decisions.credential_ref)"
-QF_DECISIONS_SYNC_SCHEDULE="$(required_value connectors.qf-decisions.sync_schedule)"
-QF_DECISIONS_PACKET_VERSION="$(required_value connectors.qf-decisions.packet_version)"
-QF_DECISIONS_PAGE_SIZE="$(required_value connectors.qf-decisions.page_size)"
+QF_DECISIONS_ENABLED="$(env_override_value qf_decisions_enabled connectors.qf-decisions.enabled)"
+QF_DECISIONS_BASE_URL="$(env_override_value qf_decisions_base_url connectors.qf-decisions.base_url)"
+QF_DECISIONS_CREDENTIAL_REF="$(env_override_value qf_decisions_credential_ref connectors.qf-decisions.credential_ref)"
+QF_DECISIONS_SYNC_SCHEDULE="$(env_override_value qf_decisions_sync_schedule connectors.qf-decisions.sync_schedule)"
+QF_DECISIONS_PACKET_VERSION="$(env_override_value qf_decisions_packet_version connectors.qf-decisions.packet_version)"
+QF_DECISIONS_PAGE_SIZE="$(env_override_value qf_decisions_page_size connectors.qf-decisions.page_size)"
 
 # Hospitable connector
 HOSPITABLE_ENABLED="$(yaml_get connectors.hospitable.enabled 2>/dev/null)" || HOSPITABLE_ENABLED="false"

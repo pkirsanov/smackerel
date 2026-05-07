@@ -51,21 +51,17 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 	}
 
 	client := NewClient(parsed.BaseURL, parsed.CredentialRef, parsed.PacketVersion, parsed.PageSize)
-	if err := client.Validate(ctx); err != nil {
-		health := connector.HealthError
-		var schemaErr SchemaCompatibilityError
-		if errors.As(err, &schemaErr) {
-			health = connector.HealthDegraded
-		}
-		c.setHealth(health)
-		return fmt.Errorf("validate QF bridge contract: %w", err)
-	}
-
 	c.mu.Lock()
 	c.client = client
 	c.cfg = parsed
-	c.health = connector.HealthHealthy
 	c.mu.Unlock()
+
+	if err := client.Validate(ctx); err != nil {
+		c.setHealth(healthForBridgeError(err))
+		return fmt.Errorf("validate QF bridge contract: %w", err)
+	}
+
+	c.setHealth(connector.HealthHealthy)
 	return nil
 }
 
@@ -78,12 +74,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 		return nil, cursor, fmt.Errorf("qf-decisions connector is not connected")
 	}
 	if err := client.Validate(ctx); err != nil {
-		health := connector.HealthError
-		var schemaErr SchemaCompatibilityError
-		if errors.As(err, &schemaErr) {
-			health = connector.HealthDegraded
-		}
-		c.setHealth(health)
+		c.setHealth(healthForBridgeError(err))
 		return nil, cursor, fmt.Errorf("validate QF bridge contract during sync: %w", err)
 	}
 	c.setHealth(connector.HealthHealthy)
@@ -108,6 +99,14 @@ func (c *Connector) setHealth(health connector.HealthStatus) {
 	c.mu.Lock()
 	c.health = health
 	c.mu.Unlock()
+}
+
+func healthForBridgeError(err error) connector.HealthStatus {
+	var schemaErr SchemaCompatibilityError
+	if errors.As(err, &schemaErr) {
+		return connector.HealthDegraded
+	}
+	return connector.HealthError
 }
 
 func parseConfig(cfg connector.ConnectorConfig) (QFConfig, error) {

@@ -121,7 +121,47 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked until Scopes 2-4 are implemented."
+        "notes": "Parked behind completed Scopes 2-4."
+      },
+      {
+        "scope": 6,
+        "name": "Packet Engagement Signal Exporter",
+        "status": "Not Started",
+        "dependsOn": [3],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked behind Scope 3 trust-rendering surface readiness."
+      },
+      {
+        "scope": 7,
+        "name": "Personal Context Read API Host",
+        "status": "Not Started",
+        "dependsOn": [3],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked behind Scope 3 trust-rendering surface readiness and consent-token issuance."
+      },
+      {
+        "scope": 8,
+        "name": "Signed Callback Protocol",
+        "status": "Not Started",
+        "dependsOn": [3],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked behind Scope 3 action-eligible packet rendering readiness; QF rejects callbacks during pre-MVP."
+      },
+      {
+        "scope": 9,
+        "name": "Watch Signal Proposal Endpoint",
+        "status": "Not Started",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked behind Scope 1 capability-handshake readiness; QF rejects proposal writes during pre-MVP."
       }
     ],
     "lockdownState": {
@@ -264,12 +304,24 @@
       "runStartedAt": "2026-05-07T03:00:00Z",
       "runFinishedAt": "2026-05-07T04:15:00Z",
       "summary": "Devops stabilization pass on the disposable test-stack lifecycle. Added flock-based serialization (smackerel_with_stack_lock + smackerel_stack_lock_file) for test-env up/down/clean smart and PGID + SMACKEREL_E2E_CHILD_RUN_ID-based child cleanup (e2e_terminate_child_process_group, e2e_terminate_marked_children, e2e_child_marker_pids) in smackerel.sh. Resolved the documented disposable-test-stack NATS startup race blocker recorded in the Scope 1 scopeProgress notes. Scope 1 scenario-specific Go E2E regressions and the full Go E2E suite PASS. Broader shell E2E suite still has 8 failing tests outside Scope 1 Change Boundary and outside the bubbles.devops operational surface; routed to bubbles.implement / bubbles.test. Scope 2 implementation work preserved verbatim on parking branch parking/041-scope-2-qf-decisions-sync-pending-qf-063 (HEAD c8d42f2) and reverted from main per the Scope 1 Change Boundary. No Scope 1 DoD checkbox ticked, no scope status promoted to Done, no certification claim made."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap",
+        "plan-repair"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-07T04:56:29Z",
+      "runFinishedAt": "2026-05-07T04:56:29Z",
+      "summary": "Repaired spec 041 planning/state shape after validation: Scope 2-9 status lines are canonical while dependency gates preserve the parked queue, G040-triggering rejection-code wording was rephrased in scopes.md/report.md, and certification.scopeProgress now tracks Scopes 1-9 without marking any scope complete. Runtime DoD remains unchecked until fresh green evidence exists."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-07T04:15:00Z",
+  "lastUpdatedAt": "2026-05-07T04:56:29Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {

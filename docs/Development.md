@@ -46,12 +46,12 @@ Implemented runtime capabilities:
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
 
-Planned pre-MVP integration work:
+QF companion connector status (`specs/041-qf-companion-connector/`):
 
-- QF companion connector (`qf-decisions`) from `specs/041-qf-companion-connector/`
-- Read-only ingestion of QF `DecisionPacket` envelopes with QF-owned trust metadata preserved
-- Web, Telegram, digest, and search surfacing for QF packets without local financial advice or execution authority
-- `PersonalEvidenceBundle` export back to QF with source, sensitivity, consent, and provenance metadata
+- Current Scope 1 implementation: `qf-decisions` config/env wiring, connector registration, explicit QF bridge contract validation, read-only `GET` client calls to the QF private Smackerel surface, and health mapping where schema compatibility errors are degraded while other bridge validation errors are error health.
+- Current Scope 1 boundary: `Sync()` validates the QF read contract and returns zero artifacts, so it does not publish QF packets, search cards, digest items, Telegram cards, or evidence bundles.
+- Certification state: Scope 1 is implemented but not certified complete because fresh uncontended live integration and E2E evidence is still required.
+- Later-scope contract: read-only ingestion of QF `DecisionPacket` envelopes, QF trust metadata preservation, web/Telegram/digest/search surfacing, and `PersonalEvidenceBundle` export back to QF remain tied to the later scopes in spec 041 and the QF 063 read/outbox readiness gate.
 
 Do not bypass `./smackerel.sh` with ad-hoc `go`, `python`, `pytest`, or `docker compose` commands as the normal repo workflow.
 
@@ -215,7 +215,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
 | `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
-| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |
+| `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `qfdecisions/` (Scope 1 QF bridge validation only; no artifact publication yet), `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |
 | `internal/drive/` | Spec 038 cloud-drives surface — `DriveProvider` interface, `google/` provider implementation (OAuth `BeginConnect`/`FinalizeConnect`, plaintext bearer in `drive_connections.credentials_ref` per design.md §2.3 + decision-log A1), `scan/` + `monitor/` loops on the `DRIVE` NATS stream, `extract/` content extraction, `rules/` Save Rules engine, `save/` Save Service, `confirm/` low-confidence confirmation handler, `policy/` sensitivity policy enforcement, `retrieve/` retrieval service, `tools/` agent tool registrations, `health/` cursor durability and bounded rescan, `consumers/` NATS consumer wiring, `memprovider/` in-memory test provider |
 | `internal/db/` | PostgreSQL connection pool wrapper, migration runner (embed.FS), artifact CRUD, export with cursor pagination, guest/property repos |
 | `internal/digest/` | Daily digest assembly (action items, overnight artifacts, hot topics, hospitality context, knowledge health, expense digest section (summary, needs-review, suggestions, missing receipts, word limit enforcement)), LLM generation via NATS, Telegram delivery with retry |

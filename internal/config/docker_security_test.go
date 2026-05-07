@@ -35,10 +35,28 @@ func readRepoFile(t *testing.T, relPath string) string {
 func TestDockerCompose_AllPortsBindLocalhost(t *testing.T) {
 	content := readRepoFile(t, "docker-compose.yml")
 
-	// Match all port mapping lines (YAML list items under ports:).
-	// Valid format: - "127.0.0.1:${...}:${...}"
-	portLine := regexp.MustCompile(`(?m)^\s+-\s+"([^"]+)"`)
-	matches := portLine.FindAllStringSubmatch(content, -1)
+	portLine := regexp.MustCompile(`^\s*-\s+"([^"]+)"`)
+	var matches [][]string
+	inPortsBlock := false
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "ports:" {
+			inPortsBlock = true
+			continue
+		}
+		if !inPortsBlock {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") {
+			if match := portLine.FindStringSubmatch(trimmed); match != nil {
+				matches = append(matches, match)
+			}
+			continue
+		}
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			inPortsBlock = false
+		}
+	}
 
 	if len(matches) == 0 {
 		t.Fatal("no port mappings found in docker-compose.yml")

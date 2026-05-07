@@ -23,21 +23,24 @@ How to build and integrate a new passive data connector into Smackerel.
 | Cloud Drives — Google Drive | `internal/drive/google` | OAuth2 (Google) | Google Drive REST API v3 | `038-cloud-drives-integration` |
 | Cloud Photos — Immich | `internal/connector/photos/adapters/immich` | API key | Immich REST API | `040-cloud-photo-libraries` |
 | Cloud Photos — PhotoPrism | `internal/connector/photos/adapters/photoprism` | API key | PhotoPrism REST API | `040-cloud-photo-libraries` |
-| QF Decisions | `internal/connector/qfdecisions` | QF token / service credential | QuantitativeFinance decision-packet read surface | `041-qf-companion-connector` |
+| QF Decisions | `internal/connector/qfdecisions` | QF token / service credential | Scope 1 QF bridge validation read surface; no artifact publication yet | `041-qf-companion-connector` |
 
 ## QF Decisions Connector Boundary
 
-The QF Decisions connector is a companion connector, not a markets connector and not a recommendation engine. Its job is to ingest QF-owned decision artifacts and preserve their authority boundary inside Smackerel.
+The QF Decisions connector is a companion connector, not a markets connector and not a recommendation engine. The active Scope 1 implementation establishes the connector ID, configuration contract, read-only QF HTTP client, and health behavior; it does not yet ingest or publish QF-owned decision artifacts.
+
+Current Scope 1 state (2026-05-07): implemented but not certified complete. Runtime certification still needs fresh uncontended live integration and E2E evidence. Later ingestion, surfacing, evidence export, and replay work remains gated by the later spec 041 scopes and QF 063 read/outbox readiness.
 
 | Concern | Requirement |
 |---------|-------------|
 | Connector ID | Use `qf-decisions` for the default connector instance |
-| Artifact type | Emit QF packets as source-qualified artifacts such as `qf/decision-packet`, not as Smackerel-local recommendations |
-| Required metadata | Preserve QF `packet_id`, `intent_id`, `scenario_id`, `trace_id`, `approval_state`, deep link, `CalibrationBadge`, and `DataProvenanceBadge` |
+| Scope 1 behavior | Validate explicit config, call the QF private read contract with `GET`, and surface connector health only |
+| Artifact type | Later scopes emit QF packets as source-qualified artifacts such as `qf/decision-packet`, not as Smackerel-local recommendations |
+| Required metadata | Later scopes preserve QF `packet_id`, `intent_id`, `scenario_id`, `trace_id`, `approval_state`, deep link, `CalibrationBadge`, and `DataProvenanceBadge` |
 | Trust metadata | Never synthesize, upgrade, rewrite, or hide QF-provided trust badges |
-| Actions | Pre-MVP connector exposes read-only packet surfacing and `PersonalEvidenceBundle` export only |
-| Evidence bundle export | Include source artifact IDs, user consent, sensitivity classification, and provenance when exporting context back to QF |
-| Failure behavior | If required packet IDs, trace IDs, or badges are missing, mark the artifact degraded and avoid action prompts |
+| Actions | Later pre-MVP scopes expose read-only packet surfacing and `PersonalEvidenceBundle` export only |
+| Evidence bundle export | Later scopes include source artifact IDs, user consent, sensitivity classification, and provenance when exporting context back to QF |
+| Failure behavior | Scope 1 marks schema incompatibility degraded and other bridge validation errors as error health; later artifact validation marks malformed packets degraded and avoids action prompts |
 
 ## Cloud Drives Connector Boundary (Spec 038)
 

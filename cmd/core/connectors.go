@@ -215,13 +215,13 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 				"page_size":      cfg.QFDecisionsPageSize,
 			},
 		}
+		svc.supervisor.SetConfig("qf-decisions", qfCfg)
 		if err := qfDecisionsConn.Connect(ctx, qfCfg); err == nil {
-			svc.supervisor.SetConfig("qf-decisions", qfCfg)
-			svc.supervisor.StartConnector(ctx, "qf-decisions")
 			slog.Info("qf-decisions connector started", "packet_version", cfg.QFDecisionsPacketVersion)
 		} else {
 			slog.Warn("qf-decisions connector failed contract validation", "error", err)
 		}
+		svc.supervisor.StartConnector(ctx, "qf-decisions")
 	}
 
 	// Auto-start Discord connector (token-based)

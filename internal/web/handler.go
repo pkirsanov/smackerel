@@ -516,7 +516,7 @@ func (h *Handler) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.Supervisor != nil {
-		h.Supervisor.TriggerSync(r.Context(), id)
+		h.Supervisor.TriggerSync(context.WithoutCancel(r.Context()), id)
 		slog.Info("manual sync triggered", "connector", id)
 	} else {
 		slog.Warn("sync trigger unavailable — no supervisor configured", "connector", id)

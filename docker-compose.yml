@@ -77,6 +77,8 @@ services:
       - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     env_file:
       - ${SMACKEREL_ENV_FILE:-config/generated/dev.env}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Override host paths with container-internal mount paths.
       # The env_file provides the host path; these overrides point to the

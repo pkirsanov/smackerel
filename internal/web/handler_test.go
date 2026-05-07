@@ -252,10 +252,12 @@ func containsString(s, substr string) bool {
 // mockSyncTrigger records TriggerSync calls.
 type mockSyncTrigger struct {
 	triggered []string
+	ctxErr    error
 }
 
-func (m *mockSyncTrigger) TriggerSync(_ context.Context, id string) {
+func (m *mockSyncTrigger) TriggerSync(ctx context.Context, id string) {
 	m.triggered = append(m.triggered, id)
+	m.ctxErr = ctx.Err()
 }
 
 // SCN-003-029: Manual sync trigger — handler redirects and calls TriggerSync
@@ -279,6 +281,31 @@ func TestSyncConnectorHandler_Triggers(t *testing.T) {
 	}
 	if len(mock.triggered) != 1 || mock.triggered[0] != "imap" {
 		t.Errorf("expected TriggerSync('imap'), got %v", mock.triggered)
+	}
+}
+
+func TestSyncConnectorHandler_DetachesTriggerFromRequestCancellation(t *testing.T) {
+	mock := &mockSyncTrigger{}
+	h := NewHandler(nil, nil, time.Now())
+	h.Supervisor = mock
+
+	r := chi.NewRouter()
+	r.Post("/settings/connectors/{id}/sync", h.SyncConnectorHandler)
+
+	requestCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodPost, "/settings/connectors/qf-decisions/sync", nil).WithContext(requestCtx)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", rec.Code)
+	}
+	if len(mock.triggered) != 1 || mock.triggered[0] != "qf-decisions" {
+		t.Errorf("expected TriggerSync('qf-decisions'), got %v", mock.triggered)
+	}
+	if mock.ctxErr != nil {
+		t.Fatalf("manual sync trigger inherited canceled request context: %v", mock.ctxErr)
 	}
 }
 
