@@ -1,6 +1,12 @@
-"""Tests for ML sidecar startup auth warning (SCN-020-017, SCN-020-018).
+"""Tests for ML sidecar startup auth token validation (SCN-020-017, SCN-020-018, MIT-040-S-004).
 
-These tests exercise the warning branch inside the lifespan function.
+MIT-040-S-004 (spec 040 SST hardening) elevated the prior warn-on-empty behavior
+to fail-loud: an empty or missing SMACKEREL_AUTH_TOKEN now causes the ML sidecar
+to sys.exit(1) at startup via _check_required_config(), instead of logging a
+WARNING and continuing in dev-mode-pass-through. The tests below pin both:
+- empty token → SystemExit (no warning ever reached)
+- valid token → lifespan completes without the legacy auth warning
+
 We drive the async context manager via asyncio.run() to avoid requiring
 pytest-asyncio as a dependency.
 """
@@ -8,7 +14,23 @@ pytest-asyncio as a dependency.
 import asyncio
 import logging
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+class FakeNATSClient:
+    def __init__(self):
+        self.is_connected = True
+
+    async def connect(self):
+        self.is_connected = True
+
+    async def subscribe_all(self):
+        return None
+
+    async def close(self):
+        self.is_connected = False
 
 
 def _run_lifespan(auth_token: str, caplog) -> list[logging.LogRecord]:
@@ -21,8 +43,7 @@ def _run_lifespan(auth_token: str, caplog) -> list[logging.LogRecord]:
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED": "false",
         "SMACKEREL_AUTH_TOKEN": auth_token,
     }
-    nats_mock = AsyncMock()
-    nats_mock.is_connected = True
+    nats_mock = FakeNATSClient()
 
     with patch.dict(os.environ, env, clear=False):
         import importlib
@@ -49,15 +70,27 @@ def _run_lifespan(auth_token: str, caplog) -> list[logging.LogRecord]:
     return list(caplog.records)
 
 
-class TestMLStartupWarningEmptyToken:
-    """SCN-020-017: ML sidecar logs WARNING when SMACKEREL_AUTH_TOKEN is empty."""
+class TestMLStartupFailLoudEmptyToken:
+    """SCN-020-017 / MIT-040-S-004: ML sidecar fails loud (sys.exit) when SMACKEREL_AUTH_TOKEN is empty.
 
-    def test_warns_when_token_empty(self, caplog):
-        """When SMACKEREL_AUTH_TOKEN is empty, lifespan emits a WARNING."""
-        records = _run_lifespan("", caplog)
+    Behavior was hardened from warn-on-empty (spec 020) to fail-loud (spec 040
+    MIT-040-S-004) per the SST zero-defaults policy in
+    .github/copilot-instructions.md and .github/instructions/bubbles-config-sst.instructions.md.
+    """
 
-        assert any("SMACKEREL_AUTH_TOKEN is empty" in r.message for r in records), (
-            f"Expected auth warning in log, got: {[r.message for r in records]}"
+    def test_exits_when_token_empty(self, caplog):
+        """When SMACKEREL_AUTH_TOKEN is empty, lifespan exits via _check_required_config()."""
+        with pytest.raises(SystemExit) as exc_info:
+            _run_lifespan("", caplog)
+
+        assert exc_info.value.code == 1, (
+            f"Expected sys.exit(1) on empty SMACKEREL_AUTH_TOKEN, got code={exc_info.value.code!r}"
+        )
+
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("SMACKEREL_AUTH_TOKEN" in r.message for r in error_records), (
+            "Expected an ERROR log naming SMACKEREL_AUTH_TOKEN among missing required config, "
+            f"got: {[(r.levelname, r.message) for r in caplog.records]}"
         )
 
 

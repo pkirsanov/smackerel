@@ -328,8 +328,9 @@ class TestConnect:
         client = NATSClient("nats://localhost:4222")
 
         mock_connect = AsyncMock()
-        mock_nc = AsyncMock()
-        mock_nc.jetstream.return_value = AsyncMock()
+        mock_nc = MagicMock()
+        mock_nc.is_connected = True
+        mock_nc.jetstream.return_value = object()
         mock_connect.return_value = mock_nc
 
         with patch("app.nats_client.nats.connect", mock_connect):
@@ -344,8 +345,9 @@ class TestConnect:
         client = NATSClient("nats://localhost:4222")
 
         mock_connect = AsyncMock()
-        mock_nc = AsyncMock()
-        mock_nc.jetstream.return_value = AsyncMock()
+        mock_nc = MagicMock()
+        mock_nc.is_connected = True
+        mock_nc.jetstream.return_value = object()
         mock_connect.return_value = mock_nc
 
         with patch("app.nats_client.nats.connect", mock_connect):

@@ -28,6 +28,7 @@ def clear_required_env(monkeypatch):
         "LLM_API_KEY",
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
+        "SMACKEREL_AUTH_TOKEN",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -46,12 +47,14 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("LLM_MODEL", "llama3.2")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
 
     config = _check_required_config()
 
     assert config["LLM_PROVIDER"] == "ollama"
 
     assert config["LLM_MODEL"] == "llama3.2"
+    assert config["SMACKEREL_AUTH_TOKEN"] == "unit-test-auth-token"
 
 
 def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatch):
@@ -60,6 +63,33 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("LLM_MODEL", "llama3.2")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "sometimes")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+# MIT-040-S-004: SMACKEREL_AUTH_TOKEN is a required config — fail-loud when missing.
+def test_check_required_config_requires_auth_token_when_missing(monkeypatch):
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    # SMACKEREL_AUTH_TOKEN intentionally not set — clear_required_env removed it.
+
+    with pytest.raises(SystemExit):
+        _check_required_config()
+
+
+# MIT-040-S-004: Empty SMACKEREL_AUTH_TOKEN must fail-loud (no warn-and-continue).
+def test_check_required_config_requires_auth_token_rejects_empty_value(monkeypatch):
+    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.2")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
+    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "")
 
     with pytest.raises(SystemExit):
         _check_required_config()
