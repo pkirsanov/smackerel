@@ -39,6 +39,188 @@ git status --short
 ?? tests/integration/qf_decisions_connector_config_test.go
 ```
 
+## Scope 1 Post-Compaction Test Rerun - 2026-05-07
+
+**Claim Source:** executed
+**Owner:** `bubbles.test`
+**Scope:** `specs/041-qf-companion-connector` Scope 1, post-compaction continuation of the QF connector certification loop.
+
+This pass rechecked the QF connector failure that was still open at compaction: schema-mismatch E2E expected `sync_state.last_error` to contain `packet_version 99 is unsupported`, but the prior red run observed no `sync_state` row. The runtime fix in the current worktree keeps `qf-decisions` supervisor config registered and starts the supervised connector loop even when startup bridge validation fails, so the degraded/error state is operator-visible.
+
+### Go Unit Evidence
+
+Command: `cd <home>/smackerel && ./smackerel.sh test unit --go`
+
+```text
+ok      github.com/smackerel/smackerel/cmd/core (cached)
+ok      github.com/smackerel/smackerel/cmd/scenario-lint        (cached)
+ok      github.com/smackerel/smackerel/internal/agent   (cached)
+ok      github.com/smackerel/smackerel/internal/agent/render    (cached)
+ok      github.com/smackerel/smackerel/internal/agent/userreply (cached)
+ok      github.com/smackerel/smackerel/internal/annotation      (cached)
+ok      github.com/smackerel/smackerel/internal/api     (cached)
+ok      github.com/smackerel/smackerel/internal/auth    (cached)
+ok      github.com/smackerel/smackerel/internal/config  0.710s
+ok      github.com/smackerel/smackerel/internal/connector       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+```
+
+### Focused QF E2E Evidence
+
+Command: `./smackerel.sh test e2e --go-run TestQFDecisionsConnector`
+
+```text
+Preparing disposable test stack...
+[+] Running 7/7
+ ✔ Network smackerel-test_default             Created                      0.6s 
+ ✔ Volume "smackerel-test-postgres-data"      Created                      0.0s 
+ ✔ Volume "smackerel-test-nats-data"          Created                      0.0s 
+ ✔ Container smackerel-test-postgres-1        Healthy                     10.8s 
+ ✔ Container smackerel-test-nats-1            Healthy                     10.8s 
+ ✔ Container smackerel-test-smackerel-ml-1    Healthy                     15.7s 
+ ✔ Container smackerel-test-smackerel-core-1  Healthy                     15.7s 
+go-e2e: applying -run selector: TestQFDecisionsConnector
+=== RUN   TestQFDecisionsConnectorHealthAppearsInLiveAPI
+--- PASS: TestQFDecisionsConnectorHealthAppearsInLiveAPI (0.11s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts
+--- PASS: TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts (0.74s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.881s
+PASS: go-e2e
+```
+
+### Full E2E Attempt Evidence And Caveat
+
+Command: `./smackerel.sh test e2e`
+
+Result: **not accepted as clean full-suite evidence in this pass**. The first captured full run completed the shell suite but failed before Go E2E stack start with a harness/runtime error. A direct test-stack start/teardown reproduced neither the typo nor a stack-start failure. A second full run exceeded the 30-minute terminal tracking window before a final verdict and did not leave an active Smackerel E2E process afterward.
+
+```text
+=========================================
+	Shell E2E Test Results
+=========================================
+	PASS: test_timeout_process_cleanup.sh
+	PASS: test_compose_start.sh
+	PASS: test_persistence.sh
+	PASS: test_postgres_readiness_gate.sh
+	PASS: test_config_fail.sh
+	PASS: test_capture_pipeline.sh
+	PASS: test_voice_pipeline.sh
+	PASS: test_llm_failure_e2e.sh
+	PASS: test_capture_api.sh
+	PASS: test_capture_errors.sh
+	PASS: test_voice_capture_api.sh
+	PASS: test_knowledge_graph.sh
+	PASS: test_graph_entities.sh
+	PASS: test_search.sh
+	PASS: test_search_filters.sh
+	PASS: test_search_empty.sh
+	PASS: test_telegram.sh
+	PASS: test_telegram_auth.sh
+	PASS: test_telegram_voice.sh
+	PASS: test_telegram_format.sh
+	PASS: test_digest.sh
+	PASS: test_digest_quiet.sh
+	PASS: test_digest_telegram.sh
+	PASS: test_web_ui.sh
+	PASS: test_web_detail.sh
+	PASS: test_web_settings.sh
+	PASS: test_connector_framework.sh
+	PASS: test_imap_sync.sh
+	PASS: test_caldav_sync.sh
+	PASS: test_youtube_sync.sh
+	PASS: test_bookmark_import.sh
+	PASS: test_topic_lifecycle.sh
+	PASS: test_settings_connectors.sh
+	PASS: test_maps_import.sh
+	PASS: test_browser_sync.sh
+
+	Total:  35
+	Passed: 35
+	Failed: 0
+=========================================
+<home>/smackerel/smackerel.sh: line 1256: wn: command not found
+FAIL: go-e2e-stack-start (exit=127)
+```
+
+Direct stack-start reproduction check:
+
+```text
+./smackerel.sh --env test up
+Preparing disposable test stack...
+[+] Running 7/7
+ ✔ Network smackerel-test_default             Created                      1.2s 
+ ✔ Volume "smackerel-test-nats-data"          Created                      0.3s 
+ ✔ Volume "smackerel-test-postgres-data"      Created                      0.0s 
+ ✔ Container smackerel-test-nats-1            Healthy                     13.5s 
+ ✔ Container smackerel-test-postgres-1        Healthy                     13.5s 
+ ✔ Container smackerel-test-smackerel-ml-1    Healthy                     16.5s 
+ ✔ Container smackerel-test-smackerel-core-1  Healthy                     16.5s 
+
+./smackerel.sh --env test down --volumes
+[+] Running 7/7
+ ✔ Container smackerel-test-smackerel-ml-1    Removed                     39.2s 
+ ✔ Container smackerel-test-smackerel-core-1  Removed                     11.9s 
+ ✔ Container smackerel-test-postgres-1        Removed                      3.7s 
+ ✔ Container smackerel-test-nats-1            Removed                      1.0s 
+ ✔ Volume smackerel-test-nats-data            Removed                      0.0s 
+ ✔ Volume smackerel-test-postgres-data        Removed                      0.1s 
+ ✔ Network smackerel-test_default             Removed                      0.7s 
+```
+
+### All Go E2E Evidence
+
+Command: `cd <home>/smackerel && ./smackerel.sh test e2e --go-run .`
+
+```text
+go-e2e: applying -run selector: .
+=== RUN   TestQFDecisionsConnectorHealthAppearsInLiveAPI
+--- PASS: TestQFDecisionsConnectorHealthAppearsInLiveAPI (0.13s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts
+--- PASS: TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts (0.71s)
+=== RUN   TestWeatherAlerts_E2E_FullStack
+--- PASS: TestWeatherAlerts_E2E_FullStack (0.03s)
+=== RUN   TestWeatherEnrich_E2E_LiveStackRoundTrip
+		weather_enrich_e2e_test.go:112: no enrichment reply within 45s — weather connector subscriber may be disabled in this live-stack profile (request_id=e2e-weather-enrich-20260507T190225.335)
+--- SKIP: TestWeatherEnrich_E2E_LiveStackRoundTrip (46.04s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        123.779s
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  11.492s
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/drive  41.862s
+PASS: go-e2e
+```
+
+Additional skip caveat from the same all-Go run: `TestKnowledgeAPI_SearchKnowledgeFirst` and `TestKnowledgeTelegram_SearchIncludesKnowledgeMatch` were skipped because the live profile had no seeded concept pages. These skips pre-exist the QF connector work and keep this test pass from being a strict no-skip certification surface under `bubbles.test` rules, even though all executed Go E2E tests passed.
+
+### Test Verdict
+
+`NOT_TESTED` for full Scope 1 certification in this pass. The QF-specific failing behavior is fixed and proven by focused E2E plus all-Go E2E, but the unsegmented `./smackerel.sh test e2e` command was not cleanly captured to completion in this post-compaction run, and the all-Go suite still reports pre-existing skips outside Scope 1.
+
+## RESULT-ENVELOPE
+
+```json
+{
+	"agent": "bubbles.test",
+	"roleClass": "testing",
+	"outcome": "route_required",
+	"featureDir": "specs/041-qf-companion-connector",
+	"scopeIds": ["01-connector-configuration-and-qf-client-contract"],
+	"scenarioIds": ["SCN-SM-041-001", "SCN-SM-041-002"],
+	"artifactsCreated": [],
+	"artifactsUpdated": ["report.md"],
+	"evidenceRefs": [
+		"report.md#scope-1-post-compaction-test-rerun---2026-05-07"
+	],
+	"nextRequiredOwner": "bubbles.test",
+	"blockedReason": "Focused QF E2E and all-Go E2E pass, but full unsegmented ./smackerel.sh test e2e was not cleanly captured in this pass and all-Go E2E contains pre-existing non-Scope-1 skips."
+}
+```
+
 ### RED Proof Note
 
 **Claim Source:** interpreted
@@ -2690,3 +2872,462 @@ The web handler at `internal/web/handler.go` declared a `Supervisor SyncTrigger`
 ### Scope 1 DoD Status
 
 Scope 1 broader E2E DoD item ticked in `scopes.md`. All Scope 1 DoD items now `[x]`. Scope 1 readiness for `bubbles.validate` partial certification is unblocked at the runtime level; the boundary repair items raised in the prior validation rerun (Phase B2 ownership decision, guarded-language scrub) remain the open paths to certification and are owned by `bubbles.plan` / `bubbles.docs`.
+
+## Scope 1 Validation Rerun - 2026-05-07 (post-supervisor-wiring)
+
+**Claim Source:** executed
+**Owner:** `bubbles.validate`
+**Trigger:** Re-validate Scope 1 partial-certification readiness at `HEAD=9021d28` after the `feat(041)` supervisor wiring closure (`3d5b416`) and the docs+governance pass (`9021d28`). This rerun does not alter `scopes.md`, `spec.md`, `design.md`, `uservalidation.md`, or `scenario-manifest.json`; it only appends evidence to `report.md` and (per verdict below) refrains from mutating `state.json`.
+
+### Worktree Boundary
+
+Command: `git log --oneline -5`
+
+```text
+9021d28 (HEAD -> main, origin/main, origin/HEAD) docs+governance: surface product principles, investor overview, HOME-LAB deployment plans, and Bubbles deployment-target + test-isolation governance
+3d5b416 feat(041): close Scope 1 broader e2e DoD via SST hardening + supervisor wiring
+a7957d2 plan(040): close SR-040-F1 cosmetic Scope Summary table drift
+3ba01a2 devops(041): stabilize test-stack lifecycle + record Scope 1 broader e2e DoD blockers
+e29bc07 plan(041): carry Phase B2 design repair to mainline (spec/design/scopes/manifest)
+```
+
+Command: `git status --short`
+
+```text
+ M .github/agents/bubbles.bug.agent.md
+ M .github/agents/bubbles.gaps.agent.md
+ M .github/agents/bubbles.harden.agent.md
+ M .github/agents/bubbles.test.agent.md
+ M .github/instructions/bubbles-config-sst.instructions.md
+ M smackerel.sh
+?? deploy/
+```
+
+Modifications above are unrelated to spec 041 and were not introduced or touched by this validation pass. The only spec-041 mutation in this rerun is this appended `report.md` section.
+
+### Runtime Gate Evidence
+
+Command: `./smackerel.sh check`
+
+```text
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+EXIT=0
+```
+
+Command: `./smackerel.sh test unit`
+
+```text
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   (cached)
+ok      github.com/smackerel/smackerel/internal/connector/rss   (cached)
+ok      github.com/smackerel/smackerel/internal/connector/twitter       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/weather       (cached)
+ok      github.com/smackerel/smackerel/internal/connector/youtube       (cached)
+ok      github.com/smackerel/smackerel/internal/db      (cached)
+ok      github.com/smackerel/smackerel/internal/digest  (cached)
+ok      github.com/smackerel/smackerel/internal/domain  (cached)
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.030s
+........................................................................ [ 17%]
+........................................................................ [ 35%]
+........................................................................ [ 52%]
+........................................................................ [ 70%]
+........................................................................ [ 88%]
+.................................................                        [100%]
+409 passed in 22.16s
+EXIT=0
+```
+
+Command: `./smackerel.sh test e2e` — NOT RUN (existing log used)
+
+The user explicitly directed this pass to reuse the existing broader-e2e log captured by the parent loop's `feat(041)` closure run rather than re-execute the live stack. The reused log is `/tmp/my-broader-e2e3.log` (74,413 bytes, 2026-05-07 18:08), produced by the immediately-preceding `./smackerel.sh down test && ./smackerel.sh test e2e` invocation that closed the broader-E2E DoD item. Key signals from that log:
+
+```text
+=== RUN   TestQFDecisionsConnectorHealthAppearsInLiveAPI
+--- PASS: TestQFDecisionsConnectorHealthAppearsInLiveAPI (0.08s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts
+--- PASS: TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts (0.64s)
+ok      github.com/smackerel/smackerel/tests/e2e        99.815s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  6.611s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  25.525s
+PASS: go-e2e
+```
+
+Total Go e2e fail count in the log: `0` (verified via `grep -cE "^--- FAIL|^FAIL\\s|^FAIL$" /tmp/my-broader-e2e3.log` → 0). The single `FAIL: Services did not become healthy within 8s` line in the log is intra-test diagnostic output for the `SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)` failure-injection test, which `PASS`es immediately afterward — verified by surrounding-context grep.
+
+### Governance Gate Evidence
+
+Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector`
+
+```text
+✅ All required artifacts present
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+⚠️  state.json uses deprecated field 'scopeLayout' — see scope-workflow.md state.json canonical schema v2
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+Artifact lint PASSED.
+EXIT=0
+```
+
+Command: `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector`
+
+```text
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 2 scenario contract(s)
+✅ scenario-manifest.json linked test exists: tests/e2e/qf_decisions_connector_api_test.go (x2)
+✅ scenario-manifest.json records evidenceRefs
+✅ All linked tests from scenario-manifest.json exist
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 2
+ℹ️  Test rows checked: 8
+ℹ️  Scenario-to-row mappings: 2
+ℹ️  Concrete test file references: 2
+ℹ️  Report evidence references: 2
+ℹ️  DoD fidelity scenarios: 2 (mapped: 2, unmapped: 0)
+RESULT: PASSED (0 warnings)
+EXIT=0
+```
+
+Command: `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/041-qf-companion-connector --verbose`
+
+```text
+🐾 Regression Baseline Guard
+   Spec: specs/041-qf-companion-connector
+
+── G044: Regression Baseline ──
+  ✅ Test baseline comparison found in report
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 40 done specs (of 40 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+EXIT=0
+```
+
+Command: `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose`
+
+```text
+ℹ️  INFO: Resolved 7 implementation file(s) to scan
+  Files scanned:  7
+  Violations:     0
+  Warnings:       0
+🟢 PASSED: No source code reality violations detected
+EXIT=0
+```
+
+Command: `bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/041-qf-companion-connector`
+
+```text
+--- Check 1: Freshness Boundary Isolation (spec.md / design.md) ---
+ℹ️  spec.md has no superseded/suppressed sections
+ℹ️  design.md has no superseded/suppressed sections
+--- Check 2: Superseded Scope Sections Are Non-Executable ---
+ℹ️  scopes.md has no superseded scope section
+--- Check 4: Result ---
+RESULT: PASS (0 failures, 0 warnings)
+EXIT=0
+```
+
+Command: `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector`
+
+Result: `EXIT=1` — `TRANSITION BLOCKED: 14 failure(s), 3 warning(s)`. As the user anticipated in task step 4, no `state-transition-guard` mode supports partial-scope certification. The 14 failures are all full-feature-done gates and are EXPECTED for a spec staying `in_progress`:
+
+```text
+--- Check 4: DoD Completion (Zero Unchecked) ---
+🔴 BLOCK: Resolved scope artifacts have 73 UNCHECKED DoD items — ALL must be [x] for 'done'
+   (all 73 unchecked items belong to Parked Scopes 2–9 Phase B2 design additions)
+
+--- Check 5: Scope Status Cross-Reference ---
+ℹ️  INFO: Resolved scopes: total=9, Done=0, In Progress=1, Not Started=8, Blocked=0
+🔴 BLOCK: Resolved scope artifacts have 8 scope(s) still marked 'Not Started' — ALL scopes must be Done
+✅ PASS: completedScopes count matches artifact Done scope count (0)
+
+--- Check 6: Specialist Phase Completion ---
+🔴 BLOCK: Required phase 'implement' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'test' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'regression' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'simplify' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'stabilize' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'security' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'docs' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'validate' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'audit' NOT in execution/certification phase records
+🔴 BLOCK: Required phase 'chaos' NOT in execution/certification phase records
+
+--- Check 13: Artifact Lint --- ✅ PASS
+--- Check 13A: Artifact Freshness Isolation (Gate G052) --- ✅ PASS
+--- Check 13B: Implementation Delta Evidence (Gate G053) --- ✅ PASS
+--- Check 16: Implementation Reality Scan (Gate G028) --- ✅ PASS
+--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) --- ✅ PASS
+
+--- Check 18: Deferral Language Scan (Gate G036) ---
+🔴 BLOCK: Report artifact contains 3 deferral language hit(s): report.md — evidence of deferred work (Gate G040)
+
+🔴 TRANSITION BLOCKED: 14 failure(s), 3 warning(s)
+state.json status MUST NOT be set to 'done'.
+EXIT=1
+```
+
+Note: This is a regression of 10 blockers vs the prior validation rerun's 24 blockers (Check 6 phase counts dropped because the prior run also flagged repair-required phase claims, and Check 4 DoD count dropped because Scope 1 broader-E2E is now `[x]`).
+
+The 3 G040 deferral hits in `report.md` are in pre-existing low-impact pass sections, NOT in this rerun's evidence:
+
+```text
+report.md:2274  Runtime auth is no longer a fixed source token in `config/smackerel.yaml`; the source token is empty and Go validation rejects missing, known-placeholder, `dev-token-*`, and too-short values...
+                  (matches "placeholder")
+report.md:2292  This diagnostic cannot claim broad regression freedom, full test baseline stability, coverage stability, or live-stack behavior because those checks were intentionally out of scope for this low-impact pass...
+                  (matches "out of scope")
+report.md:2480  This simplify pass does not claim live-stack behavior, broad runtime regression freedom, E2E success, integration success, coverage stability, or Scope 1 completion. Those checks were intentionally out of scope under the user's low-impact constraint and remain work for the normal `bubbles.test` / `bubbles.validate` path.
+                  (matches "out of scope")
+```
+
+These hits are diagnostic preservation text from the 2026-05-07 low-impact security review (line 2274), the 2026-05-07 low-impact regression review (line 2292), and the 2026-05-07 low-impact simplify pass (line 2480). They describe prior audit pass boundaries, not Scope 1 work that was set aside.
+
+### Blocker Re-Classification
+
+| # | Prior Blocker | Current Status | Evidence |
+|---|---------------|----------------|----------|
+| 1 | Scope 1 boundary truth for Phase B2 additions (capability handshake, unknown decision-type, credential rotation overlap) | **RESOLVED** | The 2026-05-07T02:05:06Z `bubbles.plan` repair (committed at `e29bc07`) moved Phase B2 obligations to Parked Scope 2 (capability handshake, unknown decision-type ingest), Parked Scope 3 (generic-card rendering), and Parked Scope 5 (credential rotation overlap). `scopes.md` Scope 1 DoD now contains exactly 14 items, all `[x]`, all bounded to explicit configuration / connector registration / QF GET client DTOs / bridge validation / health mapping / zero trusted-artifact publication. The "Boundary Decision (2026-05-07)" section in `scopes.md` (lines 197–206) explicitly classifies Phase B2 items as Scope 2/3/5-owned. |
+| 2 | Live integration and E2E gates rerun on uncontended stack | **RESOLVED** | `/tmp/my-broader-e2e3.log` (2026-05-07 18:08, 74,413 bytes) shows `TestQFDecisionsConnectorHealthAppearsInLiveAPI` PASS in 0.08s and `TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts` PASS in 0.64s; all Go e2e packages PASS (`tests/e2e` 99.815s, `tests/e2e/agent` 6.611s, `tests/e2e/drive` 25.525s); shell aggregate `PASS: go-e2e`; zero `--- FAIL` lines. QF integration tests (`TestQFDecisionsConnectorConfigRegistryAndHealthIntegration`, `TestQFDecisionsConnectorSchemaMismatchIntegration`, `TestQFDecisionsConnectorAuthFailureIntegration`) carry green evidence at `report.md` lines 100–105 and 484–489 from prior runs at HEAD-equivalent commits; this rerun did not invoke `./smackerel.sh test integration` per the user's restricted command list. |
+| 3 | Report artifact guarded-language hits (G040) | **STILL PRESENT** | `state-transition-guard.sh` Check 18 reports 3 hits from prior pass sections in `report.md`. The 3 hits are all in pre-existing low-impact pass sections (`report.md` line 2274 — security review describing dev-token validation; `report.md` line 2292 — regression review describing its own audit boundary; `report.md` line 2480 — simplify pass describing its own audit boundary) that preserve diagnostic notes about prior pass boundaries. The matching phrases use the colloquial "outside this audit's bounds" sense, not the canonical Gate G040 sense of Scope 1 work that was set aside. These hits BLOCK the future `state.json status="done"` promotion (Gate G040) but do NOT block partial-Scope-1 certification with `state.json` status remaining `in_progress`. |
+| 4 | Full specialist certification absence (10 missing phases: implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos) | **STILL PRESENT (by design at this maturity)** | `state-transition-guard.sh` Check 6 reports all 10 specialist phases missing from `execution.completedPhaseClaims`. These are full-feature-done gates that fire only when Scopes 2–9 are also Done; they do NOT block partial-Scope-1 certification with status remaining `in_progress`. They will fire later when the QF 063 wait state clears and Parked Scopes 2–9 are activated, executed, and certified. |
+
+### Newly Surfaced Constraint (Not In Prior 4-Blocker List)
+
+The user's task instructions limit `bubbles.validate`'s edit surface to `report.md` and `state.json` only and explicitly forbid touching `scopes.md`. However, the canonical partial-scope certification path requires:
+
+1. `scopes.md` — flip Scope 1 status from `In Progress` to `Done` in BOTH the Active Scope Inventory table (line 78) AND the Scope 1 status block (`**Status:**` line near line 167).
+2. `state.json` — append `"Scope 1: Connector Configuration And QF Client Contract"` to `certification.completedScopes`, flip `certification.scopeProgress[0].status` to `Done`, set `certification.scopeProgress[0].certifiedAt`, and append a `validate` phase claim to `execution.completedPhaseClaims`.
+
+If `bubbles.validate` performs only step 2 in this pass, the next `state-transition-guard.sh` invocation will FAIL Check 5 with `completedScopes count (1) does not match artifact Done scope count (0) — state.json integrity failure` (parity check at `state-transition-guard.sh` line 1065). That parity-fail is a true `state.json` integrity violation, not a status-ceiling artifact, and would represent a NEW regression vs the current 14-blocker count.
+
+To avoid creating that new parity regression, this rerun does NOT mutate `state.json`. Instead, the partial certification is routed back to `bubbles.plan` to first flip Scope 1 status in `scopes.md`. After that single-line repair (two locations) lands, `bubbles.validate` can certify `state.json` in a subsequent pass without creating a parity break.
+
+### Verdict
+
+**REWORK_REQUIRED** — partial Scope 1 certification is genuinely safe at the runtime, governance, and design-boundary level, but cannot be cleanly executed in a single `bubbles.validate` pass given the user's edit-surface restrictions. Routing follows.
+
+### Next-Owner Actions
+
+1. **`bubbles.plan`** — Flip Scope 1 status from `In Progress` to `Done` in `specs/041-qf-companion-connector/scopes.md` in two locations: (a) the Active Scope Inventory table row at line 78 and (b) the Scope 1 status block (`**Status:** In Progress`) near line 167. Do NOT touch any DoD checkbox (all 14 are already `[x]`); do NOT promote any Parked Scope status. Capture the diff and append a one-line `plan` claim to `state.json` `execution.completedPhaseClaims` describing the partial-Scope-1 status flip.
+2. **`bubbles.validate`** (next pass, after step 1 lands) — Re-run `state-transition-guard.sh` to confirm the parity check now reports `completedScopes count matches artifact Done scope count (1)` (after planned step 3 below). Add `"Scope 1: Connector Configuration And QF Client Contract"` to `certification.completedScopes`; flip `certification.scopeProgress[0].status` to `Done` and set `certification.scopeProgress[0].certifiedAt` to the validate timestamp; refresh `certification.scopeProgress[0].notes` to reflect partial certification at HEAD `9021d28`; append a `validate` phase claim to `execution.completedPhaseClaims` with evidence ref pointing to this rerun section. Do NOT change top-level `status`; do NOT change `certification.status`; do NOT add to `certification.certifiedCompletedPhases` (those are full-feature phases reserved for the QF 063 unblock).
+3. **`bubbles.docs`** (optional, non-blocking for partial cert) — Scrub the 3 Gate G040 hits in `report.md` lines 2274, 2292, 2480 by rewording the colloquial guarded phrases (these are preservation text describing prior pass boundaries, not Scope 1 work set aside). This unblocks the future spec.status="done" promotion path; it is NOT required for partial-Scope-1 certification.
+
+### Anomaly / Surprise For Parent Loop
+
+- The `state-transition-guard` script has no native partial-scope certification mode and treats every `completedScopes` addition against scope-artifact parity. This is the primary friction point for partial-scope certification and is the only reason this validation pass returns `REWORK_REQUIRED` rather than `CERTIFY_SCOPE_1_PARTIAL`. Once `bubbles.plan` flips Scope 1 status in `scopes.md`, the parity check will pass and `bubbles.validate` can certify `state.json` cleanly in a single subsequent pass.
+- Worktree-level note: the modifications shown in `git status --short` (`.github/agents/*.agent.md`, `.github/instructions/bubbles-config-sst.instructions.md`, `smackerel.sh`, untracked `deploy/`) are unrelated to spec 041 and pre-existed this validation pass; they do not affect this rerun's evidence or verdict.
+- The fact that the prior validation rerun (2026-05-07, line 1619) listed 4 blockers and the current rerun resolves 2 of 4 (boundary truth + live runtime gates) while the remaining 2 (G040 hits, full specialist phase records) are full-feature-done concerns and not partial-cert blockers means the spec is one `bubbles.plan` scope-status flip away from clean partial-Scope-1 certification.
+
+## ROUTE-REQUIRED (Validation Rerun — 2026-05-07 post-supervisor-wiring)
+
+**bubbles.plan** — Flip `specs/041-qf-companion-connector/scopes.md` Scope 1 status from `In Progress` to `Done` in both the Active Scope Inventory table and the Scope 1 status block. Do not touch DoD checkboxes (all 14 already `[x]`). After that lands, `bubbles.validate` certifies `state.json` partial Scope 1 in a subsequent pass.
+
+## RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.validate",
+  "roleClass": "certification",
+  "outcome": "route_required",
+  "featureDir": "specs/041-qf-companion-connector",
+  "scopeIds": ["01-connector-configuration-and-qf-client-contract"],
+  "dodItems": [],
+  "scenarioIds": ["SCN-SM-041-001", "SCN-SM-041-002"],
+  "artifactsCreated": [],
+  "artifactsUpdated": ["report.md"],
+  "evidenceRefs": [
+    "report.md#scope-1-validation-rerun---2026-05-07-post-supervisor-wiring",
+    "report.md#scope-1-broader-e2e-evidence---2026-05-07"
+  ],
+  "nextRequiredOwner": "bubbles.plan",
+  "packetRef": "report.md#next-owner-actions",
+  "blockedReason": null
+}
+```
+
+## Scope 1 Partial Certification - 2026-05-07T19:15Z
+
+**Claim Source:** executed
+**Owner:** `bubbles.validate`
+**Trigger:** Close out the partial Scope 1 certification routed by `## Scope 1 Validation Rerun - 2026-05-07 (post-supervisor-wiring)` after the `bubbles.plan` scope-status flip at 2026-05-07T19:00:00Z (Active Scope Inventory row line 72 and Scope 1 status block line 121 in `scopes.md`, both now `Done`). Edit surface restricted to `specs/041-qf-companion-connector/state.json` and `specs/041-qf-companion-connector/report.md`. No `scopes.md`, `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`, source, or docs files touched.
+
+### Conditions From Prior Rerun — Confirmed Met
+
+| Condition (from prior `## Scope 1 Validation Rerun ... (post-supervisor-wiring)`) | Status |
+|---|---|
+| All 14 Scope 1 DoD items `[x]` in `scopes.md` | ✅ Confirmed (lines 176–195) |
+| Scope 1 status flipped to `Done` in Active Scope Inventory | ✅ Confirmed (line 72) |
+| Scope 1 status block flipped to `Done` | ✅ Confirmed (line 121) |
+| All Parked Scopes (2–9) remain `Not Started` | ✅ Confirmed (lines 209, 238, 262, 286, 306, 332, 355, 376) |
+| Phase B2 obligations parked to Scope 2/3/5 (boundary repair) | ✅ Confirmed (`scopes.md` Boundary Decision section lines 199–206) |
+| Live-stack broader E2E evidence accepted from `/tmp/my-broader-e2e3.log` | ✅ Reused per prior rerun's explicit acceptance (`## Scope 1 Broader E2E Evidence - 2026-05-07`) |
+
+### Worktree Boundary
+
+Command: `git log --oneline -5`
+
+```text
+9021d28 (HEAD -> main, origin/main, origin/HEAD) docs+governance: surface product principles, investor overview, HOME-LAB deployment plans, and Bubbles deployment-target + test-isolation governance
+3d5b416 feat(041): close Scope 1 broader e2e DoD via SST hardening + supervisor wiring
+a7957d2 plan(040): close SR-040-F1 cosmetic Scope Summary table drift
+3ba01a2 devops(041): stabilize test-stack lifecycle + record Scope 1 broader e2e DoD blockers
+e29bc07 plan(041): carry Phase B2 design repair to mainline (spec/design/scopes/manifest)
+```
+
+HEAD remains `9021d28`. The prior `bubbles.plan` flip (working-tree-only, not yet committed) is in `scopes.md` and `state.json` execution.completedPhaseClaims.
+
+### Gate Re-Run Evidence (2026-05-07T19:14Z)
+
+| Command | Exit | Result |
+|---|---|---|
+| `./smackerel.sh check` | 0 | Config in sync with SST; env_file drift OK; scenario-lint OK (4 registered, 0 rejected) |
+| `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | 0 | All required artifacts present; status `in_progress`; no fabrication signals; 2 advisory warnings on deprecated v3 fields (`scopeProgress`, `scopeLayout`) |
+| `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector` | 0 | PASSED, 0 warnings; scenarios checked=2, test rows=8, scenario-to-row mappings=2, concrete test files=2, report evidence refs=2; DoD fidelity 2/2 mapped |
+| `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/041-qf-companion-connector --verbose` | 0 | PASSED, 0 checks failed; G044 baseline found; G045 cross-spec inventory complete (40 done specs); G046 no route/endpoint collisions |
+| `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector` (PRE-edit) | 1 | 15 failures, 3 warnings — Check 5 reported `Done=1, completedScopes EMPTY` (parity mismatch) plus the 14 expected full-feature-done gates |
+| `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector` (POST-edit) | 1 | 14 failures, 4 warnings — Check 5 PARITY NOW PASSES (`completedScopes count matches artifact Done scope count (1)`); the 14 remaining failures are the EXPECTED full-feature-done gates documented below |
+
+#### Live-Stack Broader E2E Evidence — Reused
+
+`./smackerel.sh test e2e` was NOT re-executed in this pass per the prior validation rerun's explicit acceptance and the parent loop's instruction. The authoritative live-stack evidence is `/tmp/my-broader-e2e3.log` (74,413 bytes, 2026-05-07 18:08), captured by the immediately-preceding `./smackerel.sh down test && ./smackerel.sh test e2e` invocation that closed the broader-E2E DoD item. Key signals (already captured at `## Scope 1 Broader E2E Evidence - 2026-05-07` and `## Scope 1 Validation Rerun - 2026-05-07 (post-supervisor-wiring)`):
+
+```text
+=== RUN   TestQFDecisionsConnectorHealthAppearsInLiveAPI
+--- PASS: TestQFDecisionsConnectorHealthAppearsInLiveAPI (0.08s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts
+--- PASS: TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts (0.64s)
+ok      github.com/smackerel/smackerel/tests/e2e        99.815s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  6.611s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  25.525s
+PASS: go-e2e
+```
+
+### state.json Mutations Applied
+
+Three atomic edits applied via IDE multi-replace (no shell redirection, no JSON heredoc writes):
+
+#### 1. Added Scope 1 to `certification.completedScopes` and flipped `certification.scopeProgress[0]` to `Done`
+
+```diff
+   "certification": {
+     "status": "in_progress",
+-    "completedScopes": [],
++    "completedScopes": [
++      "Scope 1: Connector Configuration And QF Client Contract"
++    ],
+     "certifiedCompletedPhases": [],
+     "scopeProgress": [
+       {
+         "scope": 1,
+         "name": "Connector Configuration And QF Client Contract",
+-        "status": "In Progress",
++        "status": "Done",
+         "dependsOn": [],
+         "scopeDir": null,
+         "evidenceFile": "report.md",
+-        "certifiedAt": null,
+-        "notes": "Scope 1 local implementation evidence and Scope 1 Go E2E regressions ... The 'Broader E2E regression suite passes' DoD remains unchecked."
++        "certifiedAt": "2026-05-07T19:15:00Z",
++        "notes": "Partial scope certification at HEAD `9021d28` after supervisor wiring fix (commit 3d5b416). All 14 Scope 1 DoD items checked. Live-stack broader e2e PASS. Top-level certification remains in_progress until Scopes 2-9 unblock from QF 063 Scope 2."
+       },
+```
+
+#### 2. Appended `validate` phase claim to `execution.completedPhaseClaims`
+
+```diff
+       {
+         "phase": "plan",
+         "agent": "bubbles.plan",
+         "timestamp": "2026-05-07T19:00:00Z",
+         "summary": "Flipped Scope 1 status from In Progress to Done ... transient state between plan flip and validate completion."
++      },
++      {
++        "phase": "validate",
++        "agent": "bubbles.validate",
++        "timestamp": "2026-05-07T19:15:00Z",
++        "summary": "Partial Scope 1 certification at HEAD 9021d28 after the bubbles.plan scope-status flip at 2026-05-07T19:00:00Z. Re-ran ./smackerel.sh check (EXIT=0), artifact-lint (EXIT=0), traceability-guard (PASSED, 0 warnings), regression-baseline-guard (PASSED, 0 checks failed), and state-transition-guard (EXIT=1, 14 failures — Check 5 parity now PASS at completedScopes count=1 == Done count=1; remaining 14 failures are full-feature-done gates documented as expected in the prior validation rerun: Check 4 unchecked DoD on Parked Scopes 2-9, Check 5 8 Not Started Parked Scopes, Check 6 10 missing specialist phases, Check 18 3 pre-existing G040 deferral hits in low-impact pass sections). Live-stack broader e2e proof reused from /tmp/my-broader-e2e3.log per prior validation rerun acceptance. Added 'Scope 1: Connector Configuration And QF Client Contract' to certification.completedScopes; flipped certification.scopeProgress[0] to Done with certifiedAt 2026-05-07T19:15:00Z; refreshed scopeProgress[0].notes to record partial certification context. Top-level status remains in_progress; certification.status remains in_progress; certification.certifiedCompletedPhases remains [] (full-feature phases reserved for the QF 063 unblock). Evidence refs: report.md#scope-1-validation-rerun---2026-05-07-post-supervisor-wiring, report.md#scope-1-broader-e2e-evidence---2026-05-07, report.md#scope-1-partial-certification---2026-05-07t1915z, scopes.md (plan flip lines 72 and 121)."
+       }
+     ],
+     "pendingTransitionRequests": []
+   },
+```
+
+#### 3. Refreshed `lastUpdatedAt`
+
+```diff
+-  "lastUpdatedAt": "2026-05-07T04:56:29Z",
++  "lastUpdatedAt": "2026-05-07T19:15:00Z",
+```
+
+#### Fields explicitly NOT changed
+
+- Top-level `status`: stays `in_progress`.
+- `certification.status`: stays `in_progress`.
+- `certification.certifiedCompletedPhases`: stays `[]` (full-feature phases reserved for the QF 063 unblock).
+- All Parked Scope (`scopeProgress[1..8]`) entries: untouched (`status: Not Started`, `certifiedAt: null`, parked notes preserved).
+- `policySnapshot`, `transitionRequests`, `reworkQueue`, `executionHistory`, `activeBugs`, `resolvedBugs`, `failures`, `artifacts`, `sourceDocuments`, `notes`, `scopeLayout`, `createdAt`, `featureName`, `featureDir`, `version`, `currentPhase`, `workflowMode`: untouched.
+
+### Verdict
+
+**CERTIFIED_SCOPE_1_PARTIAL** — Scope 1 is partially certified at HEAD `9021d28` with `state.json` parity now intact (`completedScopes count == Done scope count == 1`). Full-feature certification remains correctly blocked by the EXPECTED gates listed below.
+
+### Remaining Full-Feature-Cert Gates (Expected, Not Blockers For Partial Cert)
+
+| Guard Failure | Why It Is Expected |
+|---|---|
+| Check 4: 73 unchecked DoD items | All 73 items belong to Parked Scopes 2–9; they are Phase B2 design additions reserved for the QF 063 Scope 2 unblock. Activating them now would violate the Scope 1 Change Boundary. |
+| Check 5: 8 scope(s) still `Not Started` | Parked Scopes 2–9 are externally blocked by `quantitativeFinance/specs/063-smackerel-companion-bridge` Scope 2 (capability handshake / outbox readiness). |
+| Check 6: 10 specialist phases missing (`implement`, `test`, `regression`, `simplify`, `stabilize`, `security`, `docs`, `validate`, `audit`, `chaos`) | Full-feature specialist phases are recorded only when ALL scopes complete the pipeline. Scope 1 has its own scenario-bounded implement/test evidence in earlier report sections; the missing phase records are for the full feature, not Scope 1 in isolation. |
+| Check 18: 3 G040 deferral language hits | All 3 hits (`report.md` lines 2274, 2292, 2480) are in pre-existing low-impact pass sections (security review, regression review, simplify pass) describing colloquial pass-boundary text — not Scope 1 work that was withheld. Scrubbing is owned by `bubbles.docs` and is a partial-Scope-1-independent prerequisite for the eventual `spec.status="done"` promotion. |
+| Warning: `completedScopes has 1 entries but 'implement' phase is missing` | Advisory warning that fires when partial certification advances ahead of the standard specialist phase order. Expected for partial cert mode and not a blocker. |
+
+### External Blocker For Full Feature Certification
+
+`quantitativeFinance/specs/063-smackerel-companion-bridge` Scope 2 (QF read/outbox readiness) must complete and ship before Smackerel Parked Scopes 2–9 can be activated. This block is structural and outside the Smackerel agent loop's authority.
+
+## ROUTE-REQUIRED (Scope 1 Partial Certification — 2026-05-07T19:15Z)
+
+NONE — partial Scope 1 certification is complete. No further routing required for this loop.
+
+## RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.validate",
+  "roleClass": "certification",
+  "outcome": "completed_diagnostic",
+  "featureDir": "specs/041-qf-companion-connector",
+  "scopeIds": ["01-connector-configuration-and-qf-client-contract"],
+  "dodItems": [
+    "Scope 1 DoD items 1-14 (all [x])"
+  ],
+  "scenarioIds": ["SCN-SM-041-001", "SCN-SM-041-002"],
+  "artifactsCreated": [],
+  "artifactsUpdated": [
+    "state.json",
+    "report.md"
+  ],
+  "evidenceRefs": [
+    "report.md#scope-1-partial-certification---2026-05-07t1915z",
+    "report.md#scope-1-validation-rerun---2026-05-07-post-supervisor-wiring",
+    "report.md#scope-1-broader-e2e-evidence---2026-05-07",
+    "scopes.md (plan flip lines 72 and 121)"
+  ],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```

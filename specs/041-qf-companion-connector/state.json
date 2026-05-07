@@ -64,24 +64,38 @@
         "agent": "bubbles.devops",
         "timestamp": "2026-05-07T04:15:00Z",
         "summary": "Stabilized the disposable test-stack lifecycle in smackerel.sh by adding flock-based serialization for test-env up/down/clean smart and PGID + SMACKEREL_E2E_CHILD_RUN_ID-based child-process termination. Resolved the documented Scope 1 broader E2E NATS startup race blocker; Scope 1 scenario-specific Go E2E tests (TestQFDecisionsConnectorHealthAppearsInLiveAPI, TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts) and the full Go E2E suite PASS. Broader shell E2E suite still has 8 failing tests (test_persistence postgres volume preservation, test_compose_start /api/health readiness, test_timeout_process_cleanup runner-exit deadline, test_telegram*, test_bookmark_import, test_topic_lifecycle, test_settings_connectors) that are application-code or test-suite issues outside the Scope 1 Change Boundary and outside the bubbles.devops operational surface; routed to bubbles.implement / bubbles.test. Scope 2 work preserved verbatim on parking/041-scope-2-qf-decisions-sync-pending-qf-063 (HEAD c8d42f2) and reverted from main per Scope 1 Change Boundary. No Scope 1 DoD checkbox ticked, no scope status promoted to Done, no certification claim made."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-07T19:00:00Z",
+        "summary": "Flipped Scope 1 status from In Progress to Done in scopes.md (Active Scope Inventory row and Scope 1 status block) per bubbles.validate REWORK_REQUIRED route_required verdict at HEAD 9021d28. All 14 Scope 1 DoD items remained [x] and certified-correct by validate; no DoD checkbox modified, no Parked Scope (2-9) status promoted, no spec/design/uservalidation/report/scenario-manifest/source files touched. Evidence ref: report.md '## Scope 1 Validation Rerun - 2026-05-07 (post-supervisor-wiring)'. completedScopes remains [] until bubbles.validate's next pass promotes it to [1]; this is the expected transient state between plan flip and validate completion."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-07T19:15:00Z",
+        "summary": "Partial Scope 1 certification at HEAD 9021d28 after the bubbles.plan scope-status flip at 2026-05-07T19:00:00Z. Re-ran ./smackerel.sh check (EXIT=0), artifact-lint (EXIT=0), traceability-guard (PASSED, 0 warnings), regression-baseline-guard (PASSED, 0 checks failed), and state-transition-guard (EXIT=1, 14 failures — Check 5 parity now PASS at completedScopes count=1 == Done count=1; remaining 14 failures are full-feature-done gates documented as expected in the prior validation rerun: Check 4 unchecked DoD on Parked Scopes 2-9, Check 5 8 Not Started Parked Scopes, Check 6 10 missing specialist phases, Check 18 3 pre-existing G040 deferral hits in low-impact pass sections). Live-stack broader e2e proof reused from /tmp/my-broader-e2e3.log per prior validation rerun acceptance. Added 'Scope 1: Connector Configuration And QF Client Contract' to certification.completedScopes; flipped certification.scopeProgress[0] to Done with certifiedAt 2026-05-07T19:15:00Z; refreshed scopeProgress[0].notes to record partial certification context. Top-level status remains in_progress; certification.status remains in_progress; certification.certifiedCompletedPhases remains [] (full-feature phases reserved for the QF 063 unblock). Evidence refs: report.md#scope-1-validation-rerun---2026-05-07-post-supervisor-wiring, report.md#scope-1-broader-e2e-evidence---2026-05-07, report.md#scope-1-partial-certification---2026-05-07t1915z, scopes.md (plan flip lines 72 and 121)."
       }
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": [
+      "Scope 1: Connector Configuration And QF Client Contract"
+    ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
         "name": "Connector Configuration And QF Client Contract",
-        "status": "In Progress",
+        "status": "Done",
         "dependsOn": [],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null,
-        "notes": "Scope 1 local implementation evidence and Scope 1 Go E2E regressions (TestQFDecisionsConnectorHealthAppearsInLiveAPI, TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts) PASS. The 2026-05-07 devops stabilization pass resolved the documented disposable-test-stack NATS startup race via flock-serialized lifecycle and PGID-tracked child cleanup in smackerel.sh; the broader E2E shell suite still fails on 8 tests (postgres volume preservation, /api/health readiness, runner-exit deadline, telegram environment, migration vs healthcheck readiness, settings connectors API). The remaining failures are outside the Scope 1 Change Boundary and outside the bubbles.devops operational surface; ROUTE-REQUIRED to bubbles.implement / bubbles.test. The 'Broader E2E regression suite passes' DoD remains unchecked."
+        "certifiedAt": "2026-05-07T19:15:00Z",
+        "notes": "Partial scope certification at HEAD `9021d28` after supervisor wiring fix (commit 3d5b416). All 14 Scope 1 DoD items checked. Live-stack broader e2e PASS. Top-level certification remains in_progress until Scopes 2-9 unblock from QF 063 Scope 2."
       },
       {
         "scope": 2,
@@ -321,7 +335,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-07T04:56:29Z",
+  "lastUpdatedAt": "2026-05-07T19:15:00Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {

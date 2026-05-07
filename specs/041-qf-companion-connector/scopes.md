@@ -69,7 +69,7 @@ Capabilities requiring QF-owned approval, watch, tenant, voice, EmergencyStop, p
 
 | Scope | Name | Surfaces | Required Tests | DoD Summary | Status |
 |-------|------|----------|----------------|-------------|--------|
-| 1 | Connector configuration and QF client contract | Config generation, connector registry, QF client DTOs | Unit, integration, scenario-specific Regression E2E, broader E2E, artifact lint | Connector starts only with explicit config and compatible QF contract | In Progress |
+| 1 | Connector configuration and QF client contract | Config generation, connector registry, QF client DTOs | Unit, integration, scenario-specific Regression E2E, broader E2E, artifact lint | Connector starts only with explicit config and compatible QF contract | Done |
 
 ## Parked Scope Queue
 
@@ -118,7 +118,7 @@ These scopes preserve the product intent and dependency order but are not part o
 
 ## Scope 1: Connector Configuration And QF Client Contract
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
