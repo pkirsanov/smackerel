@@ -56,6 +56,8 @@ The spec is an authoritative source of truth for design decisions, FRs, scenario
 
 **Recommendation:** Sync 3 status cells before feature-done strict promotion. Trivial single-cell edits. Owner: `bubbles.plan` or any phase agent that updates scopes.md next.
 
+**Status:** ✅ CLOSED 2026-05-07 — Scope Summary table cells for scopes 3, 4, 5 synced to "Done" inline.
+
 **Behavior impact:** None.
 
 ---

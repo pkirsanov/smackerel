@@ -49,9 +49,9 @@ This is a single-file scope plan with five sequential, vertical scopes. Scope 1 
 |---|---|---|---|---|---|
 | 1 | Photo platform foundation | DB, config, NATS, Go contracts, ML schemas, privacy fixtures | unit, integration, e2e-api, Regression E2E | Provider-neutral contract, schema, NATS, SST, and ML boundary ready | Done |
 | 2 | Immich connect, scan, and search | Immich adapter, connector API, scan pipeline, PWA connectors/search/detail | unit, integration, e2e-api, e2e-ui, Regression E2E | Immich scoped scan produces searchable classified photos and visible skips | Done |
-| 3 | Lifecycle, duplicates, and removal review | Lifecycle/dedupe/removal APIs, ML decisions, PWA health/review, confirmation token | unit, integration, e2e-api, e2e-ui, Regression E2E | RAW lifecycle, duplicate clusters, removal rationale, no mutation before confirm | Not Started |
-| 4 | Capture, Telegram, and cross-feature routing | Upload API, mobile doc scan, Telegram, expenses, recipes, knowledge, sensitivity | unit, integration, e2e-api, e2e-ui, Regression E2E | Photos route across channels safely and sensitive retrieval is blocked | Not Started |
-| 5 | Multi-provider capability governance and operations | Second provider, capability matrix, cross-provider search/dedupe, health, observability, stress | unit, integration, e2e-api, e2e-ui, stress, Regression E2E | Provider limits are visible, cross-provider results unify, operations meet health/stress gates | Not Started |
+| 3 | Lifecycle, duplicates, and removal review | Lifecycle/dedupe/removal APIs, ML decisions, PWA health/review, confirmation token | unit, integration, e2e-api, e2e-ui, Regression E2E | RAW lifecycle, duplicate clusters, removal rationale, no mutation before confirm | Done |
+| 4 | Capture, Telegram, and cross-feature routing | Upload API, mobile doc scan, Telegram, expenses, recipes, knowledge, sensitivity | unit, integration, e2e-api, e2e-ui, Regression E2E | Photos route across channels safely and sensitive retrieval is blocked | Done |
+| 5 | Multi-provider capability governance and operations | Second provider, capability matrix, cross-provider search/dedupe, health, observability, stress | unit, integration, e2e-api, e2e-ui, stress, Regression E2E | Provider limits are visible, cross-provider results unify, operations meet health/stress gates | Done |
 
 ---
 
