@@ -224,7 +224,10 @@ func (h *PhotosHandlers) immichClientFromExerciseRequest(request PhotoCapability
 	if baseURL == "" || apiKey == "" {
 		return nil, connector.ConnectorConfig{}, fmt.Errorf("immich requires base_url + api_key")
 	}
-	return immich.NewClient(http.DefaultClient), connector.ConnectorConfig{
+	client := immich.NewClient(http.DefaultClient)
+	// MIT-040-S-006 — SST-injected upload-body cap.
+	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+	return client, connector.ConnectorConfig{
 		AuthType:     "api_key",
 		Credentials:  map[string]string{"api_key": apiKey},
 		SourceConfig: map[string]any{"base_url": baseURL},
@@ -244,7 +247,10 @@ func (h *PhotosHandlers) photoprismClientFromExerciseRequest(request PhotoCapabi
 	if baseURL == "" || apiToken == "" {
 		return nil, connector.ConnectorConfig{}, fmt.Errorf("photoprism requires base_url + api_token")
 	}
-	return photoprism.NewClient(http.DefaultClient), connector.ConnectorConfig{
+	client := photoprism.NewClient(http.DefaultClient)
+	// MIT-040-S-006 — SST-injected upload-body cap.
+	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+	return client, connector.ConnectorConfig{
 		AuthType:     "api_token",
 		Credentials:  map[string]string{"api_token": apiToken},
 		SourceConfig: map[string]any{"base_url": baseURL},

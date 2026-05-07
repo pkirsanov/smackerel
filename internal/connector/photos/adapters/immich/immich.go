@@ -18,12 +18,13 @@ import (
 )
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	apiKey     string
-	capability photolib.CapabilityReport
-	skipsMu    sync.Mutex
-	skips      []photolib.SkipEntry
+	httpClient     *http.Client
+	baseURL        string
+	apiKey         string
+	capability     photolib.CapabilityReport
+	skipsMu        sync.Mutex
+	skips          []photolib.SkipEntry
+	uploadMaxBytes int64 // SST-injected via SetUploadMaxBytes; 0 = unlimited (test paths only)
 }
 
 type Asset struct {
@@ -70,6 +71,13 @@ func NewClient(client *http.Client) *Client {
 		client = http.DefaultClient
 	}
 	return &Client{httpClient: client}
+}
+
+// SetUploadMaxBytes injects the SST-derived upload-body cap (MIT-040-S-006).
+// Production wiring MUST set this from PhotosConfig.IOLimits.PhotoBinaryMaxBytes.
+// Passing a value of 0 disables the cap and is intended for test paths only.
+func (client *Client) SetUploadMaxBytes(max int64) {
+	client.uploadMaxBytes = max
 }
 
 func (client *Client) ID() string { return "immich" }
@@ -498,7 +506,16 @@ func (writer writer) Delete(ctx context.Context, photo string) error {
 }
 
 func (writer writer) Upload(ctx context.Context, src io.Reader, meta photolib.UploadMeta) (string, error) {
-	data, err := io.ReadAll(src)
+	// MIT-040-S-006: cap the upload body to the SST-configured photo
+	// binary max (defense-in-depth against attacker-controlled io.Reader
+	// returning unbounded data). Production wiring sets the cap from
+	// `PhotosConfig.IOLimits.PhotoBinaryMaxBytes`; tests that do not set
+	// the limit retain the historical unbounded behavior.
+	var reader io.Reader = src
+	if writer.client.uploadMaxBytes > 0 {
+		reader = io.LimitReader(src, writer.client.uploadMaxBytes)
+	}
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}

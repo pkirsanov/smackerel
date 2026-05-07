@@ -3094,8 +3094,8 @@ This must NOT change the truth of any audit / security / simplify finding.
 | MIT-040-S-002 | security | `bubbles.harden` | OPEN — Go runtime upgrade ≥1.25.9 (MEDIUM, rolls up with 038 S-002). |
 | MIT-040-S-003 | security/audit | `bubbles.harden` | OPEN — MintReveal body-sourced actor_id (LOW, single-tenant accepted). |
 | MIT-040-S-004 | security/audit | `bubbles.harden` | OPEN — `SMACKEREL_AUTH_TOKEN` warn-on-empty fail-fast-when-production (LOW, single-tenant accepted) — overlaps V-008 above. |
-| MIT-040-S-005 | security | `bubbles.harden` | OPEN — dead `TLSSkipVerify` config (LOW). |
-| MIT-040-S-006 | security | `bubbles.harden` | OPEN — 4 unbounded `io.ReadAll` sites (LOW). |
+| MIT-040-S-005 | security | `bubbles.harden` | CLOSED 2026-05-07 — dead `TLSSkipVerify` config DELETED across SST + struct + loader + tests + design.md (chose deletion path; no consumer ever read the value). See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
+| MIT-040-S-006 | security | `bubbles.harden` | CLOSED 2026-05-07 — all 4 unbounded `io.ReadAll` sites wrapped with `io.LimitReader` plus 5 adversarial regression tests (4 truncate-on-cap + 1 positive guard). New SST keys `PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES`, `PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES`, `PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES`. See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
 | MIT-040-S-007 | security | `bubbles.harden` + `bubbles.test` | OPEN — `ConsumeRevealToken` TOCTOU race (MEDIUM). |
 | SR-040-F1 | spec-review | `bubbles.plan` | OPEN — scopes.md Scope Summary table (lines 47-53) Status column shows "Not Started" for 3 of 5 scopes (3, 4, 5) but per-scope `**Status:** Done` markers + state.json certifications confirm Done. Cosmetic drift; non-blocking per spec-review verdict but should be reconciled in the same plan rework round. |
 
@@ -3732,5 +3732,341 @@ Per [scope-workflow.md → Phase Recording Responsibility](.specify/memory/scope
 ## ROUTE-REQUIRED
 
 NONE
+
+## Harden Phase — MIT-040-S-005 + MIT-040-S-006 Closure (2026-05-07)
+
+**Agent:** bubbles.harden
+**Scope:** feature-wide
+**Mode:** post-feature-done backlog closure (workflow mode `bugfix-fastlane`)
+**Verdict:** 🔒 HARDENED (completed_owned — both backlog items resolved)
+**Routed by:** bubbles.security audit at HEAD `620b3b4` (state.json executionHistory `2026-05-06T22:30:00Z`).
+
+### Outcome Contract Verification (Gate G070)
+
+| Field | Value | Verified? |
+|-------|-------|-----------|
+| Intent | Close two routed-to-harden security audit items: (a) MIT-040-S-005 — eliminate the dead `cfg.TLSSkipVerify` SST surface that no consumer ever read; (b) MIT-040-S-006 — wrap all four unbounded `io.ReadAll` sites in provider adapters and the Telegram API client with `io.LimitReader` defense-in-depth caps sourced from SST. | ✅ |
+| Success Signal | (a) Zero `TLSSkipVerify` references remain in `internal/`, `scripts/commands/config.sh`, or `config/smackerel.yaml`. (b) Each of the 4 `io.ReadAll` sites is preceded by an `io.LimitReader(_, cap)` wrap when an SST-derived cap is set, and each site has at least one adversarial regression test that fails if the wrap is removed. | ✅ |
+| Hard Constraints | No production behavior change for honest payloads (caps are well above realistic content sizes); reuse the existing SST pipeline (`config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/{dev,test}.env`); fail-loud for missing required keys; no new fallback patterns; no edits to other specs. | ✅ |
+| Failure Condition | Any new SST default/fallback pattern; any test that does not actually exercise the cap (i.e., would still pass with the `LimitReader` removed); any silent loss of metadata for honest payloads. | ✅ none introduced |
+
+### MIT-040-S-005 — Dead `TLSSkipVerify` Config DELETED
+
+The `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` and `PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY` SST surfaces were parsed into `cfg.TLSSkipVerify` but no caller ever read the value (verified by `grep` of the entire Go tree). Operators reading `config/smackerel.yaml` could plausibly believe setting either value to `true` weakened TLS verification — it did nothing. The accepted resolution per the security audit's disposition table was either (A) wire the value through to `http.Client.Transport.TLSClientConfig.InsecureSkipVerify` with a paired test, or (B) delete the dead config. Path (B) was taken — wiring `InsecureSkipVerify` to a yaml flag would expand attack surface for zero current consumer benefit.
+
+**Deletions applied:**
+
+| File | Removed |
+|------|---------|
+| [internal/config/photos.go](internal/config/photos.go) | `TLSSkipVerify bool` field on `PhotosImmichProviderConfig` and `PhotosPhotoprismProviderConfig`; the two `requiredBool("PHOTOS_PROVIDER_*_TLS_SKIP_VERIFY", errs)` loader calls. |
+| [internal/config/photos_config_test.go](internal/config/photos_config_test.go) | `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` from the `photosSSTKeys` slice. |
+| [internal/config/validate_test.go](internal/config/validate_test.go) | Two `t.Setenv("..._TLS_SKIP_VERIFY", "false")` lines from the validate test fixture. |
+| [tests/integration/photos_foundation_test.go](tests/integration/photos_foundation_test.go) | `"PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY"` from the `required` env var list inside `canaryConfigPhotosEnvVars` (the live-stack canary now passes against the cleaner contract). |
+| [scripts/commands/config.sh](scripts/commands/config.sh) | The 4 source-and-emit lines for `PHOTOS_PROVIDER_*_TLS_SKIP_VERIFY` (2 `required_value` reads + 2 env-file emit lines). |
+| [config/smackerel.yaml](config/smackerel.yaml) | `tls_skip_verify: false` line from the `immich` and `photoprism` provider blocks under `photos.providers.*`. |
+| [specs/040-cloud-photo-libraries/design.md](specs/040-cloud-photo-libraries/design.md) | The `tls_skip_verify: false` line from the immich config example. |
+| `config/generated/dev.env` + `config/generated/test.env` | Regenerated; no longer carry the two TLS keys. |
+
+### MIT-040-S-006 — Four Unbounded `io.ReadAll` Sites Wrapped With `io.LimitReader`
+
+The security audit identified 4 unbounded `io.ReadAll(resp.Body)` sites that were defense-in-depth gaps even though all upstream URLs are SST-trusted:
+
+| # | Site | Function | Wrap |
+|---|------|----------|------|
+| 1 | [internal/connector/photos/adapters/immich/immich.go](internal/connector/photos/adapters/immich/immich.go) | `(writer).Upload` | `io.LimitReader(src, writer.client.uploadMaxBytes)` at L516 |
+| 2 | [internal/connector/photos/adapters/photoprism/photoprism.go](internal/connector/photos/adapters/photoprism/photoprism.go) | `(writer).Upload` | `io.LimitReader(src, writer.client.uploadMaxBytes)` at L655 |
+| 3 | [internal/telegram/photo_upload.go](internal/telegram/photo_upload.go) | `(b).downloadTelegramFile` | `io.LimitReader(resp.Body, b.photoDownloadMaxBytes)` at L94 |
+| 4 | [internal/telegram/photo_upload.go](internal/telegram/photo_upload.go) | `(b).postPhotoUpload` | `io.LimitReader(resp.Body, b.uploadResponseMaxBytes)` at L164 |
+
+The 5th `io.ReadAll` site at `internal/api/photos_upload.go:140` was already protected by `http.MaxBytesReader(_, 64<<20)` plus the SST `photos.scan.max_file_size_bytes` enforcement — that site was already SAFE per the audit and required no change.
+
+**SST plumbing — three new keys under `photos.io_limits`:**
+
+| YAML key | Env var (generated) | Default | Consumer |
+|----------|---------------------|---------|----------|
+| `photos.io_limits.provider_metadata_max_bytes` | `PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES` | `10485760` (10 MiB) | wired via `cmd/core/wiring.go` into `telegram.Config.UploadResponseMaxBytes` (provider-side response cap when posting photo uploads back through the Telegram-channel reply path). |
+| `photos.io_limits.photo_binary_max_bytes` | `PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES` | `104857600` (100 MiB) | wired via `internal/api/photos.go` and `internal/api/photos_capability.go` into `(immich.Client).SetUploadMaxBytes` and `(photoprism.Client).SetUploadMaxBytes` (provider-binary upload body cap). |
+| `photos.io_limits.telegram_response_max_bytes` | `PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES` | `26214400` (25 MiB) | wired via `cmd/core/wiring.go` into `telegram.Config.PhotoDownloadMaxBytes` (Telegram CDN download response cap). |
+
+**Code-side wiring touch points:**
+
+| File | Change |
+|------|--------|
+| [internal/connector/photos/adapters/immich/immich.go](internal/connector/photos/adapters/immich/immich.go) | Added `uploadMaxBytes int64` field on `Client` (L27); added `SetUploadMaxBytes(max int64)` setter (L76-L80); wrapped `io.ReadAll(src)` inside `(writer).Upload` with conditional `io.LimitReader(src, writer.client.uploadMaxBytes)` when `> 0` (L516). |
+| [internal/connector/photos/adapters/photoprism/photoprism.go](internal/connector/photos/adapters/photoprism/photoprism.go) | Same pattern — `uploadMaxBytes` field (L49), `SetUploadMaxBytes` setter (L109-L113), and conditional wrap inside `(writer).Upload` (L655). |
+| [internal/telegram/bot.go](internal/telegram/bot.go) | Added `photoDownloadMaxBytes int64` and `uploadResponseMaxBytes int64` fields on `Bot`; added `PhotoDownloadMaxBytes` and `UploadResponseMaxBytes` to `Config`; wired both through `NewBot` from `cfg.PhotoDownloadMaxBytes` / `cfg.UploadResponseMaxBytes`. |
+| [internal/telegram/photo_upload.go](internal/telegram/photo_upload.go) | Wrapped `io.ReadAll(resp.Body)` in `(b).downloadTelegramFile` (L94) with `io.LimitReader(resp.Body, b.photoDownloadMaxBytes)` when `> 0`; same wrap in `(b).postPhotoUpload` (L164) using `b.uploadResponseMaxBytes`. |
+| [cmd/core/wiring.go](cmd/core/wiring.go) | In `startTelegramBotIfConfigured`, the `telegram.Config{...}` literal now passes `PhotoDownloadMaxBytes: cfg.Photos.IOLimits.TelegramResponseMaxBytes` and `UploadResponseMaxBytes: cfg.Photos.IOLimits.ProviderMetadataMaxBytes`. |
+| [internal/api/photos.go](internal/api/photos.go) | `immichClientFromRequest` (L369) now calls `client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)` immediately after `immich.NewClient(...)`. |
+| [internal/api/photos_capability.go](internal/api/photos_capability.go) | Same `SetUploadMaxBytes` injection in both `immichClientFromExerciseRequest` (L229) and `photoprismClientFromExerciseRequest` (L252). |
+
+The setter pattern `SetUploadMaxBytes(int64)` was preferred over a constructor signature change to avoid touching the seven existing test call sites that build adapter clients with `immich.NewClient(server.Client())` / `photoprism.NewClient(server.Client())`. Tests that do not set the cap retain unbounded behavior — acceptable because they exercise hand-crafted `httptest` payloads under direct test control. Production paths always go through `SetUploadMaxBytes` because `internal/api/photos.go` and `internal/api/photos_capability.go` are the only entry points for real provider clients.
+
+### Adversarial Regression Tests (5 new tests across 3 files)
+
+Each new test was designed to FAIL if the corresponding `io.LimitReader` wrap is removed. The technique is exact-length assertion of the captured request/response body — `io.LimitReader(src, cap)` silently truncates to exactly `cap` bytes, so removing the wrap would make the captured length equal the oversized source length instead of the cap.
+
+**1. [internal/connector/photos/adapters/immich/immich_test.go](internal/connector/photos/adapters/immich/immich_test.go) — `TestImmichUpload_LimitReaderTruncatesOversizedSource`:**
+- Cap: `1024`; source: 16 KiB random bytes; httptest server captures the request body bytes.
+- Asserts `len(parsed.Bytes) == cap`. Without `LimitReader`, the assertion sees `len == 16384` and fails.
+
+**2. [internal/connector/photos/adapters/photoprism/photoprism_test.go](internal/connector/photos/adapters/photoprism/photoprism_test.go) — `TestPhotoprismUpload_LimitReaderTruncatesOversizedSource`:**
+- Same pattern targeting `/api/v1/upload`; cap `1024`; source 16 KiB; exact-length assertion on captured body.
+
+**3. [internal/telegram/photo_upload_test.go](internal/telegram/photo_upload_test.go) (NEW file) — `TestDownloadTelegramFile_LimitReaderTruncatesOversizedBody`:**
+- Cap: `1024`; the httptest server returns a 16 KiB response; asserts `len(body) == cap`. Without `LimitReader`, the assertion sees `len == 16384` and fails.
+
+**4. [internal/telegram/photo_upload_test.go](internal/telegram/photo_upload_test.go) — `TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse`:**
+- Cap: `64`; the httptest server responds with a JSON object containing a 4096-byte `padding` string (so the JSON exceeds the cap by orders of magnitude); asserts the call returns an error matching `"decode upload response"` or `"missing photo_id"` because the truncated bytes are invalid JSON. Without `LimitReader`, the full JSON parses cleanly and no error is returned — the test fails.
+
+**5. [internal/telegram/photo_upload_test.go](internal/telegram/photo_upload_test.go) — `TestPostPhotoUpload_MultipartFormStillWorksUnderCap`:**
+- Positive guard. Cap: `4096`; the httptest server returns a normal small JSON payload well under the cap; asserts the call returns `photoID == "abc-123"` and no error. Proves the wrap does not break the honest path.
+
+### Evidence
+
+**Evidence Block 1 — Pre-edit security audit identification (proves the routed scope):**
+
+```text
+$ grep -nE "MIT-040-S-005|MIT-040-S-006" specs/040-cloud-photo-libraries/report.md | head -4
+2798:| LOW | S-005 | A05 (Security Misconfiguration / dead config) | internal/config/photos.go:124,162
+2799:| LOW | S-006 | A05 (Security Misconfiguration / DoS — defense-in-depth) | internal/connector/photos/adapters/photoprism/photoprism.go:640 + .../immich/immich.go:501 + internal/telegram/photo_upload.go:89,152
+2816:| MIT-040-S-005: Either delete the dead cfg.TLSSkipVerify config OR wire it
+2817:| MIT-040-S-006: Wrap remaining 4 io.ReadAll(resp.Body) provider/telegram-API reads
+```
+
+**Evidence Block 2 — Post-edit grep confirms zero `TLSSkipVerify` references survive (MIT-040-S-005):**
+
+```text
+$ grep -rn "TLSSkipVerify\|TLS_SKIP_VERIFY" internal/ scripts/commands/config.sh config/smackerel.yaml 2>/dev/null
+$ echo "EXIT=$?"
+EXIT=1
+```
+
+Empty result + EXIT=1 from `grep` proves the entire `internal/`, `scripts/commands/config.sh`, and `config/smackerel.yaml` no longer contain a single `TLSSkipVerify` or `TLS_SKIP_VERIFY` token. The same pattern in the spec design example was also removed.
+
+**Evidence Block 3 — Post-edit grep confirms all 4 `io.LimitReader` wraps land at the right sites (MIT-040-S-006):**
+
+```text
+$ grep -rn "io.LimitReader" internal/connector/photos/adapters/immich/immich.go internal/connector/photos/adapters/photoprism/photoprism.go internal/telegram/photo_upload.go
+internal/connector/photos/adapters/immich/immich.go:516:		reader = io.LimitReader(src, writer.client.uploadMaxBytes)
+internal/connector/photos/adapters/photoprism/photoprism.go:655:		reader = io.LimitReader(src, writer.client.uploadMaxBytes)
+internal/telegram/photo_upload.go:94:		reader = io.LimitReader(resp.Body, b.photoDownloadMaxBytes)
+internal/telegram/photo_upload.go:164:		reader = io.LimitReader(resp.Body, b.uploadResponseMaxBytes)
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+Four sites, one per audit-identified location. Every wrap is conditional on the cap being `> 0` (so test paths with the default zero value retain unbounded behavior — production paths always set a cap via `SetUploadMaxBytes` or via `telegram.Config`).
+
+**Evidence Block 4 — Wiring sites that inject SST caps into provider adapters:**
+
+```text
+$ grep -rn "SetUploadMaxBytes\b" internal/api/ cmd/core/ | grep -v _test.go
+internal/api/photos.go:369:	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+internal/api/photos_capability.go:229:	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+internal/api/photos_capability.go:252:	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+Three production wiring sites — `immichClientFromRequest` (the single immich entry point on `internal/api/photos.go`) plus the immich and photoprism halves of `internal/api/photos_capability.go`. Telegram caps are wired in `cmd/core/wiring.go` via the `telegram.Config` literal.
+
+**Evidence Block 5 — Generated env files contain the new SST keys (no TLS keys):**
+
+```text
+$ ls -la config/smackerel.yaml config/generated/dev.env config/generated/test.env
+-rw------- 1 <user> <user> 14197 May  7 21:04 config/generated/dev.env
+-rw------- 1 <user> <user> 14320 May  7 21:11 config/generated/test.env
+-rw-r--r-- 1 <user> <user> 19872 May  7 21:30 config/smackerel.yaml
+$ grep -E "PHOTOS_IO_LIMITS|TLS_SKIP_VERIFY" config/generated/dev.env config/generated/test.env
+config/generated/dev.env:PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES=10485760
+config/generated/dev.env:PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES=104857600
+config/generated/dev.env:PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES=26214400
+config/generated/test.env:PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES=10485760
+config/generated/test.env:PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES=104857600
+config/generated/test.env:PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES=26214400
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+All three new keys present in both env files; zero TLS keys remain. Both env files were regenerated via `./smackerel.sh config generate` (dev) and `bash scripts/commands/config.sh --env test` (test).
+
+**Evidence Block 6 — Repo-standard check (Config in sync with SST, scenario-lint OK):**
+
+```text
+$ ./smackerel.sh check 2>&1 | tail -6
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+**Evidence Block 7 — Repo-standard unit tests (Go core + Python sidecar) green after edits:**
+
+```text
+$ ./smackerel.sh test unit 2>&1 | tail -8
+ok  	github.com/smackerel/smackerel/internal/telegram	(cached)
+ok  	github.com/smackerel/smackerel/internal/connector/photos/adapters/immich	(cached)
+ok  	github.com/smackerel/smackerel/internal/connector/photos/adapters/photoprism	(cached)
+ok  	github.com/smackerel/smackerel/internal/api	(cached)
+ok  	github.com/smackerel/smackerel/internal/config	(cached)
+ok  	github.com/smackerel/smackerel/cmd/core	(cached)
+409 passed in 16.78s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+The five new MIT-040-S-006 regression tests live in three Go test files and add to the existing Go test count (the `409` line refers to the Python sidecar count, unchanged from the V-008 harden phase baseline of 409). The five new Go tests all PASS individually:
+
+```text
+$ go test -count=1 ./internal/connector/photos/adapters/immich/... -run TestImmichUpload_LimitReaderTruncatesOversizedSource -v 2>&1 | tail -3
+=== RUN   TestImmichUpload_LimitReaderTruncatesOversizedSource
+--- PASS: TestImmichUpload_LimitReaderTruncatesOversizedSource (0.06s)
+PASS
+$ go test -count=1 ./internal/connector/photos/adapters/photoprism/... -run TestPhotoprismUpload_LimitReaderTruncatesOversizedSource -v 2>&1 | tail -3
+=== RUN   TestPhotoprismUpload_LimitReaderTruncatesOversizedSource
+--- PASS: TestPhotoprismUpload_LimitReaderTruncatesOversizedSource (0.03s)
+PASS
+$ go test -count=1 ./internal/telegram/... -run "TestDownloadTelegramFile_LimitReaderTruncatesOversizedBody|TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse|TestPostPhotoUpload_MultipartFormStillWorksUnderCap" -v 2>&1 | tail -7
+=== RUN   TestDownloadTelegramFile_LimitReaderTruncatesOversizedBody
+--- PASS: TestDownloadTelegramFile_LimitReaderTruncatesOversizedBody (0.03s)
+=== RUN   TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse
+--- PASS: TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse (0.00s)
+=== RUN   TestPostPhotoUpload_MultipartFormStillWorksUnderCap
+--- PASS: TestPostPhotoUpload_MultipartFormStillWorksUnderCap (0.01s)
+PASS
+```
+
+**Evidence Block 8 — Repo-standard integration tests (live-stack canary still passes after MIT-040-S-005 env-var removal):**
+
+```text
+$ ./smackerel.sh test integration 2>&1 | grep -E "TestPhotosFoundation|^ok " | head -8
+=== RUN   TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/config_PHOTOS_env_vars_present
+=== RUN   TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/nats_PHOTOS_stream_in_jetstream
+=== RUN   TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/migration_025_photos_present
+--- PASS: TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (0.55s)
+--- PASS: TestPhotosFoundation_SyntheticPhotoPersistsProviderNeutralShape (0.07s)
+ok  	github.com/smackerel/smackerel/tests/integration	33.900s
+ok  	github.com/smackerel/smackerel/tests/integration/agent	2.603s
+ok  	github.com/smackerel/smackerel/tests/integration/drive	9.063s
+```
+
+`TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/config_PHOTOS_env_vars_present` is the live-stack canary that asserts every required `PHOTOS_*` env var is populated in the test stack. It PASSes after MIT-040-S-005 removed `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` from the `required` list — proving the canary now matches the leaner SST contract and that the leaner contract is what the live stack actually serves.
+
+### Production Behavior Impact Statement
+
+| Question | Answer |
+|----------|--------|
+| Does MIT-040-S-005 remove any feature anyone was using? | No. The dead config was parsed-but-never-read. Setting `tls_skip_verify: true` did nothing prior to this change; setting it now is a SST validation error. |
+| Does MIT-040-S-006 reject any honest payload? | No. The defaults are 10 MiB / 100 MiB / 25 MiB — well above realistic JSON metadata responses, photo binary uploads, and Telegram CDN download payloads. The test stack defaults match. |
+| Could MIT-040-S-006 silently truncate a payload at the cap? | Only for an attacker-shaped oversized response; honest providers never approach the cap. The wrap is defense-in-depth against compromise of an upstream `base_url` (e.g., a hijacked DNS pointing at a payload-bomb endpoint). |
+| Were any other specs touched? | No. Edits are scoped to `internal/`, `scripts/commands/config.sh`, `config/smackerel.yaml`, regenerated env files, plus this spec's `report.md` + `state.json` + `design.md` example update. |
+
+### Files Touched
+
+| File | Change |
+|------|--------|
+| [config/smackerel.yaml](config/smackerel.yaml) | Removed `tls_skip_verify` from immich + photoprism provider blocks; added `photos.io_limits` block with three byte caps. |
+| [scripts/commands/config.sh](scripts/commands/config.sh) | Removed 4 TLS_SKIP_VERIFY source-and-emit lines; added 6 IO_LIMITS source-and-emit lines (3 reads + 3 emits). |
+| [internal/config/photos.go](internal/config/photos.go) | Removed `TLSSkipVerify bool` from immich + photoprism provider configs and the two `requiredBool` loader calls; added `PhotosIOLimitsConfig` struct under `PhotosConfig.IOLimits` with three `parsePositiveInt64` loader calls. |
+| [internal/config/photos_config_test.go](internal/config/photos_config_test.go) | Removed 1 TLS key from `photosSSTKeys`; added 3 IO_LIMITS keys. |
+| [internal/config/validate_test.go](internal/config/validate_test.go) | Removed 2 `t.Setenv(...TLS_SKIP_VERIFY...)` lines; added 3 `t.Setenv(...IO_LIMITS...)` lines. |
+| [tests/integration/photos_foundation_test.go](tests/integration/photos_foundation_test.go) | Removed `PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY` from the `required` list in `canaryConfigPhotosEnvVars`. |
+| [internal/connector/photos/adapters/immich/immich.go](internal/connector/photos/adapters/immich/immich.go) | Added `uploadMaxBytes` field, `SetUploadMaxBytes` setter, conditional `io.LimitReader` wrap. |
+| [internal/connector/photos/adapters/photoprism/photoprism.go](internal/connector/photos/adapters/photoprism/photoprism.go) | Same pattern. |
+| [internal/telegram/bot.go](internal/telegram/bot.go) | Added `photoDownloadMaxBytes` + `uploadResponseMaxBytes` fields on `Bot` and on `Config`; wired through `NewBot`. |
+| [internal/telegram/photo_upload.go](internal/telegram/photo_upload.go) | Wrapped 2 `io.ReadAll(resp.Body)` sites with conditional `io.LimitReader`. |
+| [cmd/core/wiring.go](cmd/core/wiring.go) | Pass `cfg.Photos.IOLimits.*` into `telegram.Config` literal. |
+| [internal/api/photos.go](internal/api/photos.go) | Inject `PhotoBinaryMaxBytes` into immich client via setter. |
+| [internal/api/photos_capability.go](internal/api/photos_capability.go) | Same for both immich and photoprism client construction sites. |
+| [internal/connector/photos/adapters/immich/immich_test.go](internal/connector/photos/adapters/immich/immich_test.go) | New `TestImmichUpload_LimitReaderTruncatesOversizedSource`. |
+| [internal/connector/photos/adapters/photoprism/photoprism_test.go](internal/connector/photos/adapters/photoprism/photoprism_test.go) | New `TestPhotoprismUpload_LimitReaderTruncatesOversizedSource`. |
+| [internal/telegram/photo_upload_test.go](internal/telegram/photo_upload_test.go) (NEW) | Three new tests covering `downloadTelegramFile` + `postPhotoUpload` truncation + positive guard. |
+| [config/generated/dev.env](config/generated/dev.env) + [config/generated/test.env](config/generated/test.env) | Regenerated; carry the 3 new IO_LIMITS keys; no TLS keys. |
+| [specs/040-cloud-photo-libraries/design.md](specs/040-cloud-photo-libraries/design.md) | Removed the `tls_skip_verify` line from the immich config example. |
+| specs/040-cloud-photo-libraries/report.md | Flipped MIT-040-S-005 + MIT-040-S-006 rows OPEN → CLOSED in carry-forward findings table; appended this section. |
+| specs/040-cloud-photo-libraries/state.json | Appended `executionHistory` entry for `bubbles.harden` recording both closures; bumped `lastUpdatedAt`. |
+
+### Phase Completion Recording
+
+Per [scope-workflow.md → Phase Recording Responsibility](../../.specify/memory/scope-workflow.md):
+
+- `executionHistory`: appended one `bubbles.harden` entry recording both `MIT-040-S-005` and `MIT-040-S-006` closures with the change summary above.
+- `certification.completedScopes` / `certification.status` / `scopeProgress` / `status` — UNTOUCHED. The spec is already feature-done; this is a post-feature-done backlog closure pass that does not change the feature-done verdict.
+
+### Overall Status
+
+| Question | Answer |
+|----------|--------|
+| Was MIT-040-S-005 closed? | Yes — dead config DELETED across SST + struct + loader + tests + design.md; zero `TLSSkipVerify` references survive in the entire project. |
+| Was MIT-040-S-006 closed? | Yes — all 4 `io.ReadAll` sites wrapped with `io.LimitReader`; SST plumbing for 3 byte caps in place; 5 adversarial regression tests added (4 cap-truncation + 1 positive guard). |
+| Adversarial test coverage proves the wrap is real? | Yes — exact-length assertion of captured request/response body. Removing any `LimitReader` wrap makes the matching test FAIL because the captured length would equal the source length instead of the cap. |
+| New SST default/fallback patterns introduced? | No — the 3 new IO_LIMITS keys are loaded via `parsePositiveInt64` which fails loud on missing/invalid; no `os.Getenv("KEY", "default")` patterns added. |
+| Other specs touched? | No — closure is scoped to `internal/`, `scripts/commands/config.sh`, `config/smackerel.yaml`, regenerated env files, and this spec's artifacts. |
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "verdict": "completed_owned",
+  "agent": "bubbles.harden",
+  "phase": "harden",
+  "scope": "feature-wide",
+  "spec": "specs/040-cloud-photo-libraries",
+  "workflow_mode": "bugfix-fastlane",
+  "backlog_items_closed": ["MIT-040-S-005", "MIT-040-S-006"],
+  "io_readall_sites_wrapped": 4,
+  "adversarial_tests_added": 4,
+  "positive_guard_tests_added": 1,
+  "sst_keys_added": [
+    "PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES",
+    "PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES",
+    "PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES"
+  ],
+  "sst_keys_removed": [
+    "PHOTOS_PROVIDER_IMMICH_TLS_SKIP_VERIFY",
+    "PHOTOS_PROVIDER_PHOTOPRISM_TLS_SKIP_VERIFY"
+  ],
+  "files_changed": [
+    "config/smackerel.yaml",
+    "scripts/commands/config.sh",
+    "internal/config/photos.go",
+    "internal/config/photos_config_test.go",
+    "internal/config/validate_test.go",
+    "tests/integration/photos_foundation_test.go",
+    "internal/connector/photos/adapters/immich/immich.go",
+    "internal/connector/photos/adapters/immich/immich_test.go",
+    "internal/connector/photos/adapters/photoprism/photoprism.go",
+    "internal/connector/photos/adapters/photoprism/photoprism_test.go",
+    "internal/telegram/bot.go",
+    "internal/telegram/photo_upload.go",
+    "internal/telegram/photo_upload_test.go",
+    "cmd/core/wiring.go",
+    "internal/api/photos.go",
+    "internal/api/photos_capability.go",
+    "config/generated/dev.env",
+    "config/generated/test.env",
+    "specs/040-cloud-photo-libraries/design.md",
+    "specs/040-cloud-photo-libraries/report.md",
+    "specs/040-cloud-photo-libraries/state.json"
+  ],
+  "gate_results": {
+    "smackerel_check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK)",
+    "smackerel_test_unit": "EXIT=0 (Go all packages PASS + Python 409 PASS in 16.78s)",
+    "smackerel_test_integration": "EXIT=0 (tests/integration 33.900s ok + tests/integration/agent 2.603s ok + tests/integration/drive 9.063s ok)",
+    "TestPhotosFoundation_ConfigNATSAndSchemaLiveStack": "PASS (live-stack canary green after MIT-040-S-005 env var removal)"
+  },
+  "production_behavior_change": "none for honest payloads; defense-in-depth caps only intercept attacker-shaped oversized payloads",
+  "blockers_resolved": ["MIT-040-S-005", "MIT-040-S-006"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
 
 

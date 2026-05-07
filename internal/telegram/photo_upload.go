@@ -86,7 +86,14 @@ func (b *Bot) downloadTelegramFile(ctx context.Context, url string) ([]byte, str
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("download telegram file: status %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	// MIT-040-S-006 — defense-in-depth byte cap on the Telegram bot file
+	// API response body. Production wiring sets photoDownloadMaxBytes
+	// from PhotosConfig.IOLimits.TelegramResponseMaxBytes.
+	var reader io.Reader = resp.Body
+	if b.photoDownloadMaxBytes > 0 {
+		reader = io.LimitReader(resp.Body, b.photoDownloadMaxBytes)
+	}
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, "", fmt.Errorf("read telegram file: %w", err)
 	}
@@ -149,7 +156,14 @@ func (b *Bot) postPhotoUpload(ctx context.Context, request telegramPhotoUploadRe
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	// MIT-040-S-006 — defense-in-depth byte cap on the internal upload
+	// API JSON response body. Production wiring sets uploadResponseMaxBytes
+	// from PhotosConfig.IOLimits.ProviderMetadataMaxBytes.
+	var reader io.Reader = resp.Body
+	if b.uploadResponseMaxBytes > 0 {
+		reader = io.LimitReader(resp.Body, b.uploadResponseMaxBytes)
+	}
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("read upload response: %w", err)
 	}
