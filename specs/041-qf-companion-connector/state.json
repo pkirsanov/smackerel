@@ -3,11 +3,11 @@
   "featureDir": "specs/041-qf-companion-connector",
   "featureName": "QF Companion Connector",
   "status": "in_progress",
-  "currentPhase": "design",
+  "currentPhase": "plan",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "design",
+    "currentPhase": "plan",
     "currentScope": null,
     "runStartedAt": null,
     "completedPhaseClaims": [
@@ -52,6 +52,18 @@
         "agent": "bubbles.plan",
         "timestamp": "2026-05-03T01:30:00Z",
         "summary": "Final plan review pass after the prior reconciliation. Tightened scopes.md evidence-bundle shorthand in Validation Checkpoints, Scope 1 DTO contract, Scope 4 scenarios, Scope 4 test titles, and Scope 4 DoD so the canonical PersonalEvidenceBundle required fields, optional source_refs semantics, and source_artifact_ids terminology are consistent throughout planning. No scope status, DoD checkbox, runtime source, spec, design, uservalidation, or certification field changed."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-07T02:05:06Z",
+        "summary": "Repaired planning artifact shape for Scope 1 partial validation: scopes.md now exposes only Scope 1 as the active executable scope, parks Scope 2+ behind the QF wait state, adds guard-recognized Gherkin and Regression E2E planning, and registers scenario-manifest.json. No final feature completion claimed."
+      },
+      {
+        "phase": "devops",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-07T04:15:00Z",
+        "summary": "Stabilized the disposable test-stack lifecycle in smackerel.sh by adding flock-based serialization for test-env up/down/clean smart and PGID + SMACKEREL_E2E_CHILD_RUN_ID-based child-process termination. Resolved the documented Scope 1 broader E2E NATS startup race blocker; Scope 1 scenario-specific Go E2E tests (TestQFDecisionsConnectorHealthAppearsInLiveAPI, TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts) and the full Go E2E suite PASS. Broader shell E2E suite still has 8 failing tests (test_persistence postgres volume preservation, test_compose_start /api/health readiness, test_timeout_process_cleanup runner-exit deadline, test_telegram*, test_bookmark_import, test_topic_lifecycle, test_settings_connectors) that are application-code or test-suite issues outside the Scope 1 Change Boundary and outside the bubbles.devops operational surface; routed to bubbles.implement / bubbles.test. Scope 2 work preserved verbatim on parking/041-scope-2-qf-decisions-sync-pending-qf-063 (HEAD c8d42f2) and reverted from main per Scope 1 Change Boundary. No Scope 1 DoD checkbox ticked, no scope status promoted to Done, no certification claim made."
       }
     ],
     "pendingTransitionRequests": []
@@ -60,6 +72,58 @@
     "status": "in_progress",
     "completedScopes": [],
     "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Connector Configuration And QF Client Contract",
+        "status": "In Progress",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Scope 1 local implementation evidence and Scope 1 Go E2E regressions (TestQFDecisionsConnectorHealthAppearsInLiveAPI, TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts) PASS. The 2026-05-07 devops stabilization pass resolved the documented disposable-test-stack NATS startup race via flock-serialized lifecycle and PGID-tracked child cleanup in smackerel.sh; the broader E2E shell suite still fails on 8 tests (postgres volume preservation, /api/health readiness, runner-exit deadline, telegram environment, migration vs healthcheck readiness, settings connectors API). The remaining failures are outside the Scope 1 Change Boundary and outside the bubbles.devops operational surface; ROUTE-REQUIRED to bubbles.implement / bubbles.test. The 'Broader E2E regression suite passes' DoD remains unchecked."
+      },
+      {
+        "scope": 2,
+        "name": "Cursor Sync Normalization And Storage",
+        "status": "Not Started",
+        "dependsOn": [1],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked on QF 063 Scope 2 read/outbox readiness."
+      },
+      {
+        "scope": 3,
+        "name": "Web Telegram Digest And Search Surfacing",
+        "status": "Not Started",
+        "dependsOn": [2],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked until Scope 2 source-qualified QF artifacts exist."
+      },
+      {
+        "scope": 4,
+        "name": "Personal Evidence Bundle Export",
+        "status": "Not Started",
+        "dependsOn": [3],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked until Scope 3 read-only packet surfacing exists."
+      },
+      {
+        "scope": 5,
+        "name": "Safety Boundaries Observability Documentation And Tests",
+        "status": "Not Started",
+        "dependsOn": [4],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null,
+        "notes": "Parked until Scopes 2-4 are implemented."
+      }
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -169,6 +233,18 @@
       "agent": "bubbles.plan",
       "phasesExecuted": [
         "bootstrap",
+        "plan"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-07T02:05:06Z",
+      "runFinishedAt": "2026-05-07T02:05:06Z",
+      "summary": "Repaired Scope 1 planning shape for partial validation. scopes.md now has canonical Scope 1 status syntax, guard-recognized Gherkin, direct Scope 1 implementation file references, scenario-specific Regression E2E rows using existing QF test files, and a parked queue for Scope 2+. scenario-manifest.json was created. The broad E2E DoD remains open after a fresh E2E run failed during disposable NATS startup."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap",
         "plan-review"
       ],
       "statusBefore": "in_progress",
@@ -176,19 +252,33 @@
       "runStartedAt": "2026-05-03T01:30:00Z",
       "runFinishedAt": "2026-05-03T01:30:00Z",
       "summary": "Final plan review pass after the prior reconciliation. Tightened scopes.md evidence-bundle shorthand in Validation Checkpoints, Scope 1 DTO contract, Scope 4 scenarios, Scope 4 test titles, and Scope 4 DoD so the canonical PersonalEvidenceBundle required fields, optional source_refs semantics, and source_artifact_ids terminology are consistent throughout planning. All scope statuses remain Not Started; no runtime source, spec, design, or uservalidation fields changed; no certification claim made."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": [
+        "bootstrap",
+        "devops"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-07T03:00:00Z",
+      "runFinishedAt": "2026-05-07T04:15:00Z",
+      "summary": "Devops stabilization pass on the disposable test-stack lifecycle. Added flock-based serialization (smackerel_with_stack_lock + smackerel_stack_lock_file) for test-env up/down/clean smart and PGID + SMACKEREL_E2E_CHILD_RUN_ID-based child cleanup (e2e_terminate_child_process_group, e2e_terminate_marked_children, e2e_child_marker_pids) in smackerel.sh. Resolved the documented disposable-test-stack NATS startup race blocker recorded in the Scope 1 scopeProgress notes. Scope 1 scenario-specific Go E2E regressions and the full Go E2E suite PASS. Broader shell E2E suite still has 8 failing tests outside Scope 1 Change Boundary and outside the bubbles.devops operational surface; routed to bubbles.implement / bubbles.test. Scope 2 implementation work preserved verbatim on parking branch parking/041-scope-2-qf-decisions-sync-pending-qf-063 (HEAD c8d42f2) and reverted from main per the Scope 1 Change Boundary. No Scope 1 DoD checkbox ticked, no scope status promoted to Done, no certification claim made."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-03T01:30:00Z",
+  "lastUpdatedAt": "2026-05-07T04:15:00Z",
+  "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
     "scopes": "scopes.md",
     "report": "report.md",
-    "uservalidation": "uservalidation.md"
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
   },
   "sourceDocuments": [
     "spec.md",
@@ -198,5 +288,5 @@
     "<home>/quantitativeFinance/docs/releases/pre-mvp/features.md",
     "<home>/quantitativeFinance/docs/releases/pre-mvp/actions.md"
   ],
-  "notes": "Initial planning/state scaffold only. Pre-MVP connector is read-only for QF decisions. Smackerel does not provide financial advice, approval, mandate changes, execution, or QF trust metadata reconstruction."
+  "notes": "Scope 1 is the only active executable planning section after the 2026-05-07 repair. Scope 2+ is parked on QF 063 Scope 2 read/outbox readiness. Overall feature remains in_progress; no final feature completion or validate-owned certification is claimed."
 }
