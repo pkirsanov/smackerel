@@ -391,6 +391,98 @@ smackerel_prepare_test_stack_for_up() {
   smackerel_assert_host_ports_free "$env_file"
 }
 
+smackerel_stack_lock_file() {
+  local target_env="$1"
+  local user_id
+
+  user_id="$(id -u)"
+  printf '/tmp/smackerel-%s-%s-stack.lock\n' "$user_id" "$target_env"
+}
+
+smackerel_e2e_suite_lock_file() {
+  local target_env="$1"
+  local user_id
+
+  user_id="$(id -u)"
+  printf '/tmp/smackerel-%s-%s-e2e-suite.lock\n' "$user_id" "$target_env"
+}
+
+smackerel_acquire_e2e_suite_lock() {
+  local target_env="$1"
+  local lock_file
+
+  if [[ "${SMACKEREL_E2E_SUITE_LOCK_HELD:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "ERROR: flock is required for serialized Smackerel E2E suite operations" >&2
+    exit 1
+  fi
+
+  lock_file="$(smackerel_e2e_suite_lock_file "$target_env")"
+  exec {SMACKEREL_E2E_SUITE_LOCK_FD}>"$lock_file"
+  if ! flock -n "$SMACKEREL_E2E_SUITE_LOCK_FD"; then
+    echo "ERROR: another Smackerel ${target_env} E2E suite is already running; wait for it to finish or stop the stale runner before starting a new suite" >&2
+    exit 73
+  fi
+
+  export SMACKEREL_E2E_SUITE_LOCK_HELD=1
+}
+
+smackerel_with_stack_lock() {
+  local target_env="$1"
+  local lock_file
+  shift
+
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "ERROR: flock is required for serialized Smackerel stack lifecycle operations" >&2
+    exit 1
+  fi
+
+  lock_file="$(smackerel_stack_lock_file "$target_env")"
+  (
+    flock -x 9
+    "$@"
+  ) 9>"$lock_file"
+}
+
+smackerel_run_up() {
+  local target_env="$1"
+  local env_file="$2"
+  local compose_wait_timeout_s="$3"
+  local up_status
+
+  if [[ "$target_env" == "test" ]]; then
+    smackerel_prepare_test_stack_for_up "$env_file"
+    set +e
+    smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
+    up_status=$?
+    set -e
+    if [[ "$up_status" -eq 0 ]]; then
+      return 0
+    fi
+
+    echo "Test stack start failed once (exit ${up_status}); retrying after project-scoped teardown..." >&2
+    smackerel_compose "$target_env" down --timeout 60 --remove-orphans
+    smackerel_assert_host_ports_free "$env_file"
+    smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
+    return $?
+  fi
+  smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
+}
+
+smackerel_run_down() {
+  local target_env="$1"
+  local down_volumes="$2"
+
+  if [[ "$down_volumes" == true ]]; then
+    smackerel_compose "$target_env" down --timeout 30 -v --remove-orphans
+  else
+    smackerel_compose "$target_env" down --timeout 30 --remove-orphans
+  fi
+}
+
 COMMAND="${1:-help}"
 shift || true
 
@@ -613,33 +705,119 @@ case "$COMMAND" in
           exit 1
         fi
 
+        smackerel_acquire_e2e_suite_lock test
+
         e2e_child_pid=""
+        e2e_child_pgid=""
+        e2e_child_run_id=""
         e2e_cleanup_ran=0
         # Docker network removal can legitimately run past 60s on busy hosts;
         # keep the wrapper bounded while allowing slow successful teardown.
         E2E_STACK_DOWN_TIMEOUT_S=180
         E2E_STACK_DOWN_SLOW_WARN_S=60
 
-        e2e_stop_child() {
-          if [[ -n "${e2e_child_pid:-}" ]] && kill -0 "$e2e_child_pid" 2>/dev/null; then
-            local child_pid="$e2e_child_pid"
-            local attempt
+        e2e_process_group_has_members() {
+          local process_group_id="$1"
+          local group_members
 
-            kill -TERM "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+          group_members="$(ps -o pid= -g "$process_group_id" 2>/dev/null || true)"
+          [[ -n "${group_members//[[:space:]]/}" ]]
+        }
+
+        e2e_terminate_child_process_group() {
+          local process_group_id="$1"
+          local child_pid="${2:-}"
+          local attempt
+
+          if [[ -n "$process_group_id" ]]; then
+            if ! e2e_process_group_has_members "$process_group_id"; then
+              return 0
+            fi
+
+            kill -TERM "-$process_group_id" 2>/dev/null || true
             for attempt in {1..20}; do
-              if ! kill -0 "$child_pid" 2>/dev/null; then
-                break
+              if ! e2e_process_group_has_members "$process_group_id"; then
+                return 0
               fi
               sleep 0.1
             done
-            if kill -0 "$child_pid" 2>/dev/null; then
-              kill -KILL "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
-            else
-              kill -KILL "-$child_pid" 2>/dev/null || true
+            kill -KILL "-$process_group_id" 2>/dev/null || true
+            return 0
+          fi
+
+          if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+            kill -TERM "$child_pid" 2>/dev/null || true
+            for attempt in {1..20}; do
+              if ! kill -0 "$child_pid" 2>/dev/null; then
+                return 0
+              fi
+              sleep 0.1
+            done
+            kill -KILL "$child_pid" 2>/dev/null || true
+          fi
+        }
+
+        e2e_child_marker_pids() {
+          local run_id="$1"
+          local process_dir
+          local process_id
+          local process_env
+
+          if [[ -z "$run_id" ]]; then
+            return 0
+          fi
+
+          for process_dir in /proc/[0-9]*; do
+            process_id="${process_dir##*/}"
+            if [[ "$process_id" == "$$" || "$process_id" == "$BASHPID" ]]; then
+              continue
             fi
+            process_env="$({ tr '\0' '\n' <"$process_dir/environ"; } 2>/dev/null || true)"
+            if [[ "$process_env" == *"SMACKEREL_E2E_CHILD_RUN_ID=$run_id"* ]]; then
+              printf '%s\n' "$process_id"
+            fi
+          done
+        }
+
+        e2e_terminate_marked_children() {
+          local run_id="$1"
+          local marked_pids=()
+          local attempt
+
+          if [[ -z "$run_id" ]]; then
+            return 0
+          fi
+
+          mapfile -t marked_pids < <(e2e_child_marker_pids "$run_id")
+          if [[ ${#marked_pids[@]} -eq 0 ]]; then
+            return 0
+          fi
+
+          kill -TERM "${marked_pids[@]}" 2>/dev/null || true
+          for attempt in {1..20}; do
+            mapfile -t marked_pids < <(e2e_child_marker_pids "$run_id")
+            if [[ ${#marked_pids[@]} -eq 0 ]]; then
+              return 0
+            fi
+            sleep 0.1
+          done
+
+          kill -KILL "${marked_pids[@]}" 2>/dev/null || true
+        }
+
+        e2e_stop_child() {
+          local child_pid="${e2e_child_pid:-}"
+          local process_group_id="${e2e_child_pgid:-}"
+          local run_id="${e2e_child_run_id:-}"
+
+          e2e_terminate_child_process_group "$process_group_id" "$child_pid"
+          e2e_terminate_marked_children "$run_id"
+          if [[ -n "$child_pid" ]]; then
             wait "$child_pid" 2>/dev/null || true
           fi
           e2e_child_pid=""
+          e2e_child_pgid=""
+          e2e_child_run_id=""
         }
 
         e2e_validate_shell_test_target() {
@@ -698,16 +876,22 @@ case "$COMMAND" in
         trap 'e2e_cleanup || true; exit 143' INT TERM
 
         e2e_run_child() {
+          e2e_child_run_id="smackerel-e2e-child-$$-$BASHPID-$(date +%s%N)"
           if command -v setsid >/dev/null 2>&1; then
-            setsid --wait "$@" &
+            setsid --wait env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
           else
-            "$@" &
+            env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
           fi
           e2e_child_pid=$!
+          e2e_child_pgid="$e2e_child_pid"
           set +e
           wait "$e2e_child_pid"
           local status=$?
+          e2e_terminate_child_process_group "$e2e_child_pgid" "$e2e_child_pid"
+          e2e_terminate_marked_children "$e2e_child_run_id"
           e2e_child_pid=""
+          e2e_child_pgid=""
+          e2e_child_run_id=""
           return "$status"
         }
 
@@ -991,23 +1175,24 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     env_file="$(smackerel_require_env_file "$TARGET_ENV")"
-    if [[ "$TARGET_ENV" == "test" ]]; then
-      smackerel_prepare_test_stack_for_up "$env_file"
-    fi
     compose_wait_timeout_s="$(smackerel_env_value "$env_file" "COMPOSE_WAIT_TIMEOUT_S")"
     if [[ -z "$compose_wait_timeout_s" ]]; then
       echo "ERROR: COMPOSE_WAIT_TIMEOUT_S missing from generated config" >&2
       exit 1
     fi
-    smackerel_compose "$TARGET_ENV" up -d --wait --wait-timeout "$compose_wait_timeout_s"
+    if [[ "$TARGET_ENV" == "test" ]]; then
+      smackerel_with_stack_lock "$TARGET_ENV" smackerel_run_up "$TARGET_ENV" "$env_file" "$compose_wait_timeout_s"
+    else
+      smackerel_run_up "$TARGET_ENV" "$env_file" "$compose_wait_timeout_s"
+    fi
     ;;
   down)
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
-    if [[ "$DOWN_VOLUMES" == true ]]; then
-      smackerel_compose "$TARGET_ENV" down --timeout 30 -v --remove-orphans
+    if [[ "$TARGET_ENV" == "test" ]]; then
+      smackerel_with_stack_lock "$TARGET_ENV" smackerel_run_down "$TARGET_ENV" "$DOWN_VOLUMES"
     else
-      smackerel_compose "$TARGET_ENV" down --timeout 30 --remove-orphans
+      smackerel_run_down "$TARGET_ENV" "$DOWN_VOLUMES"
     fi
     ;;
   status)
@@ -1039,10 +1224,18 @@ case "$COMMAND" in
         docker system df
         ;;
       smart)
-        smackerel_compose "$TARGET_ENV" down --timeout 30 --remove-orphans
+        if [[ "$TARGET_ENV" == "test" ]]; then
+          smackerel_with_stack_lock "$TARGET_ENV" smackerel_run_down "$TARGET_ENV" false
+        else
+          smackerel_run_down "$TARGET_ENV" false
+        fi
         ;;
       full)
-        smackerel_compose "$TARGET_ENV" down --timeout 30 -v --remove-orphans
+        if [[ "$TARGET_ENV" == "test" ]]; then
+          smackerel_with_stack_lock "$TARGET_ENV" smackerel_run_down "$TARGET_ENV" true
+        else
+          smackerel_run_down "$TARGET_ENV" true
+        fi
         ;;
       *)
         usage
