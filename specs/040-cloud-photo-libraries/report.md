@@ -4331,4 +4331,198 @@ No behavior change for honest production traffic; six attacker-shaped or misconf
 }
 ```
 
+## MIT-040-S-002 Closure — 2026-05-07
+
+**Status:** CLOSED — Go runtime upgraded to 1.25.10 across all pin sites; govulncheck reports 0 reachable Go-stdlib vulnerabilities under `internal/connector/photos/...` and `internal/api/...` (down from 19 + 22 at go1.24.3).
+
+**Workflow mode:** `bugfix-fastlane` (post-feature-done backlog closure; `certification.status` / `scopeProgress` / top-level `status` UNTOUCHED).
+
+**Rollup:** This single upgrade also closes **MIT-038-S-002** (22 reachable stdlib vulnerabilities under `internal/drive/...` + `internal/api/...` at go1.24.3). See `specs/038-cloud-drives-integration/report.md#mit-038-s-002-closure---2026-05-07`.
+
+### Outcome Contract Verification
+
+| Field | Status | Evidence |
+|---|---|---|
+| Intent | ✅ Met | Clear 19 + 22 reachable Go-stdlib vulnerabilities by upgrading the Go runtime to ≥1.25.9 across `go.mod`, `Dockerfile`, CI workflow, and `smackerel.sh` Go-tooling docker invocations. |
+| Success Signal | ✅ Met | `govulncheck ./internal/connector/photos/...` reports `Your code is affected by 0 vulnerabilities` (was 19); `govulncheck ./internal/api/...` reports `Your code is affected by 0 vulnerabilities` (was 22). |
+| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/home-lab/manifest.yaml` + `deploy/home-lab/params.yaml` left intact. |
+| Failure Condition | ✅ Avoided | All gates green on the new runtime: `go mod tidy` (EXIT=0), `./smackerel.sh build` (EXIT=0, fresh `golang:1.25.10-alpine` builder + `golang:1.25.10-bookworm` tooling), `./smackerel.sh check` (EXIT=0), `./smackerel.sh test unit` (EXIT=0), `./smackerel.sh test integration` (EXIT=0). |
+
+### Versions Before / After
+
+| Surface | Before | After |
+|---|---|---|
+| `go.mod` line 3 (`go` directive) | `go 1.24.0` | `go 1.25.10` |
+| `go.mod` line 5 (`toolchain` directive) | `toolchain go1.24.3` | (removed by `go mod tidy` — toolchain inferred from `go 1.25.10`) |
+| `Dockerfile` line 4 (builder image) | `FROM golang:1.24.3-alpine AS builder` | `FROM golang:1.25.10-alpine AS builder` |
+| `smackerel.sh` lines 59 + 654 + 1123 + 1174 (Go-tooling docker image) | `golang:1.24.3-bookworm` (×4) | `golang:1.25.10-bookworm` (×4) |
+| `.github/workflows/ci.yml` lines 24 + 114 (`actions/setup-go` `go-version`) | `'1.24'` (×2) | `'1.25'` (×2) |
+| `scripts/runtime/scenario-lint.sh` line 6 (header comment) | `# (golang:1.24.3-bookworm)` | `# (golang:1.25.10-bookworm)` |
+
+Patch level chosen: **1.25.10** — the highest stable release on https://go.dev/dl/ at 2026-05-07 (above the ≥1.25.9 floor required by the audit's GO-2026-4947 / GO-2026-4946 / GO-2026-4870 / GO-2026-4865 stdlib fixes).
+
+### Local Toolchain Note
+
+The host's pre-existing `go` binary was `go1.24.3 linux/amd64`. The new toolchain was installed via `go install golang.org/dl/go1.25.10@latest && ~/go/bin/go1.25.10 download` (toolchain bundle landed at `<home>/sdk/go1.25.10/`). All local commands ran via `GOTOOLCHAIN=go1.25.10` so the `go 1.25.10` directive in `go.mod` was honored. Container-side commands inside `./smackerel.sh build` and `./smackerel.sh check` automatically pulled the new `golang:1.25.10-alpine` and `golang:1.25.10-bookworm` images on first use.
+
+### govulncheck Before / After (Reachable Stdlib Findings)
+
+```text
+$ PATH=$HOME/go/bin:$PATH GOTOOLCHAIN=go1.25.10 govulncheck ./internal/connector/photos/...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 2 vulnerabilities in packages you import and 3
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=0
+```
+
+```text
+$ PATH=$HOME/go/bin:$PATH GOTOOLCHAIN=go1.25.10 govulncheck ./internal/api/...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 4 vulnerabilities in packages you import and 4
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=0
+```
+
+| Package | Reachable Stdlib Vulns at go1.24.3 (audit baseline 2026-04-21) | Reachable Stdlib Vulns at go1.25.10 (this pass 2026-05-07) | Delta |
+|---|---|---|---|
+| `./internal/connector/photos/...` | 19 | **0** | −19 |
+| `./internal/api/...` | 22 | **0** | −22 |
+| `./internal/drive/...` (rollup with 038) | 22 | **0** | −22 |
+
+Residual non-reachable findings (unchanged by this pass; documented for transparency, not a regression): photos pkg shows 2 third-party imports + 3 transitive modules with non-reachable vulns; api pkg shows 4 + 4; drive pkg shows 2 + 3. None are reachable from running first-party code per govulncheck's symbol analysis.
+
+### Test Results
+
+```text
+$ GOTOOLCHAIN=go1.25.10 go mod tidy
+EXIT=0
+$ grep -E '^(go |toolchain )' ./go.mod
+go 1.25.10
+```
+
+```text
+$ ./smackerel.sh build
+... (full build log: golang:1.25.10-alpine pulled, smackerel-core compiled in 53.2s, smackerel-ml unchanged) ...
+#37 writing image sha256:257bc088901226353e62ff62b228f09de0c7e3b12ae899f09f6d9475c3d58bf6 done
+ smackerel-core  Built
+ smackerel-ml  Built
+real    1m34.572s
+BUILD_EXIT=0
+```
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+... (golang:1.25.10-bookworm pulled for first time) ...
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit
+... (Go all packages PASS on the new runtime) ...
+409 passed in 14.73s
+real    2m8.913s
+UNIT_EXIT=0
+```
+
+```text
+$ COMPOSE_PROGRESS=plain ./smackerel.sh test integration
+... (full live-stack run on the new runtime) ...
+ok      github.com/smackerel/smackerel/tests/integration        32.589s
+ok      github.com/smackerel/smackerel/tests/integration/agent  2.608s
+ok      github.com/smackerel/smackerel/tests/integration/drive  9.362s
+real    2m55.521s
+INTEG_EXIT=0
+```
+
+### Files Touched
+
+| File | Change |
+|---|---|
+| `go.mod` | `go 1.24.0` → `go 1.25.10`; removed `toolchain go1.24.3` (now inferred); `go mod tidy` reformatted `require` block (no dep version changes) |
+| `Dockerfile` | builder stage `golang:1.24.3-alpine` → `golang:1.25.10-alpine` |
+| `smackerel.sh` | 4× `golang:1.24.3-bookworm` → `golang:1.25.10-bookworm` (Go-tooling helper, integration runner, e2e runner, stress runner) |
+| `.github/workflows/ci.yml` | 2× `go-version: '1.24'` → `go-version: '1.25'` (lint-and-test job + integration job) |
+| `scripts/runtime/scenario-lint.sh` | comment-only update on line 6 |
+| `specs/040-cloud-photo-libraries/report.md` | this section appended |
+| `specs/040-cloud-photo-libraries/state.json` | bubbles.harden closure entry appended; `lastUpdatedAt` bumped |
+| `specs/038-cloud-drives-integration/report.md` | rollup closure section appended |
+| `specs/038-cloud-drives-integration/state.json` | bubbles.harden closure entry appended; `MIT-038-S-002` flagged CLOSED in `backlogItemsRouted`; `lastUpdatedAt` bumped |
+
+Files NOT touched (per task constraints): `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` (uncommitted user WIP); `ml/Dockerfile` (Python sidecar — no Go reference).
+
+### Phase Completion Recording
+
+`certification.completedScopes` / `certification.status` / `scopeProgress` / top-level `status` UNTOUCHED — spec 040 is already feature-done; this is a post-feature-done backlog closure pass owned by `bubbles.workflow` (mode: `bugfix-fastlane`). `certification.certifiedCompletedPhases` and `execution.completedPhaseClaims` already carry the prior `harden` entries from MIT-040-S-004/S-005/S-006 + chaos C-001..C-006 — no new specialist phase is added by this pass.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.workflow",
+  "mode": "bugfix-fastlane",
+  "outcome": "completed_owned",
+  "scope": "post-feature-done backlog closure",
+  "closed_findings": ["MIT-040-S-002", "MIT-038-S-002"],
+  "old_go_version": {
+    "go.mod_directive": "go 1.24.0",
+    "go.mod_toolchain": "toolchain go1.24.3",
+    "Dockerfile_builder": "golang:1.24.3-alpine",
+    "smackerel.sh_tooling": "golang:1.24.3-bookworm (4 sites)",
+    "ci.yml_setup_go": "'1.24' (2 sites)"
+  },
+  "new_go_version": {
+    "go.mod_directive": "go 1.25.10",
+    "go.mod_toolchain": "(inferred from go directive)",
+    "Dockerfile_builder": "golang:1.25.10-alpine",
+    "smackerel.sh_tooling": "golang:1.25.10-bookworm (4 sites)",
+    "ci.yml_setup_go": "'1.25' (2 sites)"
+  },
+  "files_updated": [
+    "go.mod",
+    "Dockerfile",
+    "smackerel.sh",
+    ".github/workflows/ci.yml",
+    "scripts/runtime/scenario-lint.sh"
+  ],
+  "govulncheck_before": {
+    "internal/connector/photos/...": 19,
+    "internal/api/...": 22,
+    "internal/drive/...": 22
+  },
+  "govulncheck_after": {
+    "internal/connector/photos/...": 0,
+    "internal/api/...": 0,
+    "internal/drive/...": 0
+  },
+  "test_results": {
+    "go_mod_tidy": "EXIT=0",
+    "smackerel_build": "EXIT=0 (1m34s, fresh golang:1.25.10-alpine pulled, smackerel-core sha256:257bc08890... built)",
+    "smackerel_check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK)",
+    "smackerel_test_unit": "EXIT=0 (Go all packages PASS, Python 409 passed in 14.73s)",
+    "smackerel_test_integration": "EXIT=0 (tests/integration 32.589s ok + tests/integration/agent 2.608s ok + tests/integration/drive 9.362s ok)"
+  },
+  "production_behavior_change": "stdlib semantics differences between go1.24.3 and go1.25.10 inside the runtime container only; no first-party API or behavior change",
+  "blockers_resolved": ["MIT-040-S-002", "MIT-038-S-002 (rollup)"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
 

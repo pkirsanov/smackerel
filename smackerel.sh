@@ -56,7 +56,7 @@ run_go_tooling() {
     -v smackerel-gomod-cache:/go/pkg/mod \
     -v smackerel-gobuild-cache:/root/.cache/go-build \
     -w /workspace \
-    golang:1.24.3-bookworm bash "$script_path" "$@"
+    golang:1.25.10-bookworm bash "$script_path" "$@"
 }
 
 run_python_tooling() {
@@ -651,7 +651,7 @@ case "$COMMAND" in
           -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
           -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
-          golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-integration.sh
+          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh
         ;;
       e2e)
         GO_E2E_RUN_SELECTOR=""
@@ -1120,7 +1120,7 @@ case "$COMMAND" in
             -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
             -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
             -e "QF_DECISIONS_BASE_URL=${qf_decisions_base_url}" \
-            golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-e2e.sh "${go_e2e_args[@]}"
+            golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-e2e.sh "${go_e2e_args[@]}"
           e2e_go_status=$?
           set -e
           if [[ "$e2e_go_status" -eq 0 ]]; then
@@ -1171,7 +1171,7 @@ case "$COMMAND" in
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           -e "DATABASE_URL=${database_url}" \
           -e "NATS_URL=${nats_url}" \
-          golang:1.24.3-bookworm bash /workspace/scripts/runtime/go-stress.sh
+          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-stress.sh
         ;;
       *)
         usage

@@ -4849,3 +4849,124 @@ $ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integrati
 }
 ```
 
+## MIT-038-S-002 Closure — 2026-05-07
+
+**Status:** CLOSED — Go runtime upgraded to 1.25.10 across all pin sites; govulncheck reports 0 reachable Go-stdlib vulnerabilities under `internal/drive/...` and `internal/api/...` (down from 22 + 22 at go1.24.3).
+
+**Workflow mode:** `bugfix-fastlane` (post-feature-done backlog closure; `certification.status` / `scopeProgress` / top-level `status` UNTOUCHED).
+
+**Rollup:** Closed jointly with **MIT-040-S-002** under a single Go runtime upgrade pass. The primary closure record (full versions table, govulncheck before/after, full test evidence, files-touched table, RESULT-ENVELOPE) lives in `specs/040-cloud-photo-libraries/report.md#mit-040-s-002-closure---2026-05-07`. This section anchors the closure into spec 038's history.
+
+### Outcome Contract Verification
+
+| Field | Status | Evidence |
+|---|---|---|
+| Intent | ✅ Met | Clear 22 + 22 reachable Go-stdlib vulnerabilities in 038's primary surfaces (`internal/drive/...`, `internal/api/...`) by upgrading the Go runtime to ≥1.25.9. |
+| Success Signal | ✅ Met | `govulncheck ./internal/drive/...` and `govulncheck ./internal/api/...` both report `Your code is affected by 0 vulnerabilities` on go1.25.10 (was 22 + 22 on go1.24.3). |
+| Hard Constraints | ✅ Met | No source code modified. No spec status / certification fields touched. No third-party dependencies bumped. User WIP in `.github/workflows/build.yml` + `deploy/contract.yaml` + `deploy/home-lab/manifest.yaml` + `deploy/home-lab/params.yaml` left intact. |
+| Failure Condition | ✅ Avoided | `./smackerel.sh build` (EXIT=0), `./smackerel.sh check` (EXIT=0), `./smackerel.sh test unit` (EXIT=0), `./smackerel.sh test integration` (EXIT=0 — including `tests/integration/drive 9.362s ok`). |
+
+### Versions
+
+- **Before:** `go.mod` `go 1.24.0` + `toolchain go1.24.3`; `Dockerfile` `golang:1.24.3-alpine`; `smackerel.sh` 4× `golang:1.24.3-bookworm`; `.github/workflows/ci.yml` 2× `go-version: '1.24'`.
+- **After:** `go.mod` `go 1.25.10` (toolchain inferred); `Dockerfile` `golang:1.25.10-alpine`; `smackerel.sh` 4× `golang:1.25.10-bookworm`; `.github/workflows/ci.yml` 2× `go-version: '1.25'`.
+- **Patch level:** `1.25.10` — highest stable on https://go.dev/dl/ at 2026-05-07; above the audit's ≥1.25.9 floor.
+
+### govulncheck Before / After (Reachable Stdlib Findings — 038 surfaces)
+
+```text
+$ PATH=$HOME/go/bin:$PATH GOTOOLCHAIN=go1.25.10 govulncheck ./internal/drive/...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 2 vulnerabilities in packages you import and 3
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=0
+```
+
+```text
+$ PATH=$HOME/go/bin:$PATH GOTOOLCHAIN=go1.25.10 govulncheck ./internal/api/...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 4 vulnerabilities in packages you import and 4
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+EXIT=0
+```
+
+| Package (038-relevant) | Reachable Stdlib Vulns at go1.24.3 (audit baseline 2026-04-21) | Reachable Stdlib Vulns at go1.25.10 (this pass 2026-05-07) | Delta |
+|---|---|---|---|
+| `./internal/drive/...` | 22 | **0** | −22 |
+| `./internal/api/...` | 22 | **0** | −22 |
+
+Residual non-reachable findings (unchanged by this pass; documented for transparency): drive pkg shows 2 third-party imports + 3 transitive modules with non-reachable vulns; api pkg shows 4 + 4. None are reachable from running first-party code per govulncheck's symbol analysis.
+
+### Test Results (038-relevant)
+
+```text
+$ COMPOSE_PROGRESS=plain ./smackerel.sh test integration
+... (full live-stack run on the new runtime) ...
+ok      github.com/smackerel/smackerel/tests/integration/drive  9.362s
+INTEG_EXIT=0
+```
+
+Drive integration tests (Connect, Disconnect, Sync, Save Confirmation, Sensitivity Policy) all PASS on the new runtime. Unit suite (Python 409 PASS in 14.73s + Go all packages) also clean.
+
+### Files Touched
+
+Same as `specs/040-cloud-photo-libraries/report.md#files-touched`. Primary edits live in 040's report; this section is an inbound rollup anchor for 038's history.
+
+### Phase Completion Recording
+
+`certification.completedScopes` / `certification.status` / `scopeProgress` / top-level `status` UNTOUCHED — spec 038 is already feature-done; this is a post-feature-done backlog closure pass owned by `bubbles.workflow` (mode: `bugfix-fastlane`). MIT-038-S-002 is now flagged CLOSED in `state.json.executionHistory[].backlogItemsRouted`.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.workflow",
+  "mode": "bugfix-fastlane",
+  "outcome": "completed_owned",
+  "scope": "post-feature-done backlog closure (rollup with spec 040)",
+  "closed_findings": ["MIT-038-S-002"],
+  "rollup_with": ["specs/040-cloud-photo-libraries/MIT-040-S-002"],
+  "primary_closure_record": "specs/040-cloud-photo-libraries/report.md#mit-040-s-002-closure---2026-05-07",
+  "old_go_version": "go.mod:1.24.0 + toolchain go1.24.3 / Dockerfile:1.24.3-alpine / smackerel.sh:1.24.3-bookworm (4×) / ci.yml:'1.24' (2×)",
+  "new_go_version": "go.mod:1.25.10 (toolchain inferred) / Dockerfile:1.25.10-alpine / smackerel.sh:1.25.10-bookworm (4×) / ci.yml:'1.25' (2×)",
+  "files_updated": [
+    "go.mod",
+    "Dockerfile",
+    "smackerel.sh",
+    ".github/workflows/ci.yml",
+    "scripts/runtime/scenario-lint.sh"
+  ],
+  "govulncheck_before": {
+    "internal/drive/...": 22,
+    "internal/api/...": 22
+  },
+  "govulncheck_after": {
+    "internal/drive/...": 0,
+    "internal/api/...": 0
+  },
+  "test_results": {
+    "smackerel_build": "EXIT=0 (1m34s)",
+    "smackerel_check": "EXIT=0",
+    "smackerel_test_unit": "EXIT=0 (Go all packages PASS, Python 409 passed in 14.73s)",
+    "smackerel_test_integration_drive": "EXIT=0 (tests/integration/drive 9.362s ok)"
+  },
+  "blockers_resolved": ["MIT-038-S-002"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+
