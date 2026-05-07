@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/connector/photos/adapters/immich"
+	"github.com/smackerel/smackerel/internal/connector/photos/adapters/photoprism"
 )
 
 type PhotosHandlers struct {
@@ -156,8 +158,12 @@ func (h *PhotosHandlers) TestConnector(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	client, config, err := h.immichClientFromRequest(request)
+	client, config, err := h.photoLibraryFromRequest(request)
 	if err != nil {
+		// Spec 040 chaos C-001 — local config-validation errors MUST
+		// surface as 400 INVALID_REQUEST. The request never reached an
+		// upstream so 502 BAD_GATEWAY would be misleading. Adapter
+		// network/upstream errors below still map to 502.
 		writeError(w, http.StatusBadRequest, "invalid_photo_connector", err.Error())
 		return
 	}
@@ -178,8 +184,10 @@ func (h *PhotosHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	client, config, err := h.immichClientFromRequest(request)
+	client, config, err := h.photoLibraryFromRequest(request)
 	if err != nil {
+		// Spec 040 chaos C-001 — see TestConnector. Local validation
+		// failures MUST be 400, not 502.
 		writeError(w, http.StatusBadRequest, "invalid_photo_connector", err.Error())
 		return
 	}
@@ -189,7 +197,7 @@ func (h *PhotosHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	connectorID := request.ConnectorID
 	if strings.TrimSpace(connectorID) == "" {
-		connectorID = "photos-immich-" + uuid.NewString()
+		connectorID = "photos-" + request.Provider + "-" + uuid.NewString()
 	}
 	result, err := h.scanner.Scan(r.Context(), client, connectorID, request.Scope)
 	if err != nil {
@@ -218,11 +226,22 @@ func (h *PhotosHandlers) GetConnector(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PhotosHandlers) Search(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	// Spec 040 chaos C-005 — control characters in `q` previously
+	// reached the store and produced a 500 photo_search_failed. Reject
+	// at the handler boundary with 400 INVALID_REQUEST so noisy/abusive
+	// queries never trigger an internal-error response. Validation runs
+	// BEFORE the store-availability check so malformed input is always
+	// classified as a client error, regardless of whether the store
+	// happens to be wired.
+	if err := validateSearchQuery(query); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_search_query", err.Error())
+		return
+	}
 	if h.store == nil {
 		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
 		return
 	}
-	query := r.URL.Query().Get("q")
 	limit := parsePhotoLimit(r.URL.Query().Get("limit"))
 	results, err := h.store.Search(r.Context(), query, limit)
 	if err != nil {
@@ -344,30 +363,105 @@ func (h *PhotosHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *PhotosHandlers) immichClientFromRequest(request photoConnectorRequest) (*immich.Client, connector.ConnectorConfig, error) {
-	if request.Provider != "" && request.Provider != "immich" {
-		return nil, connector.ConnectorConfig{}, fmt.Errorf("only immich photo connectors are supported in this scope")
+// photoLibraryFromRequest dispatches connector requests to the matching
+// provider adapter (Spec 040 chaos C-003 — wire up PhotoPrism so the
+// list/connect contract is consistent). Local config-validation
+// failures (missing/empty base_url, api_key, api_token) are returned as
+// errors so the handler can map them to 400 INVALID_REQUEST instead of
+// the misleading 502 BAD_GATEWAY that the adapter would otherwise emit
+// (Spec 040 chaos C-001).
+func (h *PhotosHandlers) photoLibraryFromRequest(request photoConnectorRequest) (photolib.PhotoLibrary, connector.ConnectorConfig, error) {
+	switch request.Provider {
+	case "", "immich":
+		return h.immichLibraryFromRequest(request)
+	case "photoprism":
+		return h.photoprismLibraryFromRequest(request)
+	default:
+		return nil, connector.ConnectorConfig{}, fmt.Errorf("unsupported provider %q", request.Provider)
 	}
-	baseURL := request.Config["base_url"]
-	apiKey := request.Config["api_key"]
-	if strings.TrimSpace(baseURL) == "" {
-		baseURL = h.config.Providers.Immich.BaseURL
+}
+
+// immichLibraryFromRequest validates the Immich connector request
+// against the SST-derived defaults and constructs the adapter. Empty
+// base_url or api_key is returned as a local-validation error so the
+// handler maps it to 400 (Spec 040 chaos C-001).
+func (h *PhotosHandlers) immichLibraryFromRequest(request photoConnectorRequest) (photolib.PhotoLibrary, connector.ConnectorConfig, error) {
+	baseURL := strings.TrimSpace(request.Config["base_url"])
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(h.config.Providers.Immich.BaseURL)
 	}
-	if strings.TrimSpace(apiKey) == "" {
-		apiKey = h.config.Providers.Immich.APIKey
+	apiKey := strings.TrimSpace(request.Config["api_key"])
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(h.config.Providers.Immich.APIKey)
 	}
-	config := connector.ConnectorConfig{
-		AuthType:    "api_key",
-		Credentials: map[string]string{"api_key": apiKey},
-		SourceConfig: map[string]any{
-			"base_url": baseURL,
-		},
-		Enabled: true,
+	if baseURL == "" {
+		return nil, connector.ConnectorConfig{}, fmt.Errorf("base_url is required")
+	}
+	if apiKey == "" {
+		return nil, connector.ConnectorConfig{}, fmt.Errorf("api_key is required")
+	}
+	cfg := connector.ConnectorConfig{
+		AuthType:     "api_key",
+		Credentials:  map[string]string{"api_key": apiKey},
+		SourceConfig: map[string]any{"base_url": baseURL},
+		Enabled:      true,
 	}
 	client := immich.NewClient(http.DefaultClient)
 	// MIT-040-S-006 — SST-injected upload-body cap.
 	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
-	return client, config, nil
+	return client, cfg, nil
+}
+
+// photoprismLibraryFromRequest mirrors the Immich validator/constructor
+// for the second provider adapter. The PhotoPrism API uses an
+// `api_token` credential (not `api_key`); the handler accepts both
+// names so existing PWA affordances that pass `api_key` keep working
+// (Spec 040 chaos C-003).
+func (h *PhotosHandlers) photoprismLibraryFromRequest(request photoConnectorRequest) (photolib.PhotoLibrary, connector.ConnectorConfig, error) {
+	baseURL := strings.TrimSpace(request.Config["base_url"])
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(h.config.Providers.Photoprism.BaseURL)
+	}
+	apiToken := strings.TrimSpace(request.Config["api_token"])
+	if apiToken == "" {
+		apiToken = strings.TrimSpace(request.Config["api_key"])
+	}
+	if apiToken == "" {
+		apiToken = strings.TrimSpace(h.config.Providers.Photoprism.APIToken)
+	}
+	if baseURL == "" {
+		return nil, connector.ConnectorConfig{}, fmt.Errorf("base_url is required")
+	}
+	if apiToken == "" {
+		return nil, connector.ConnectorConfig{}, fmt.Errorf("api_token is required")
+	}
+	cfg := connector.ConnectorConfig{
+		AuthType:     "api_token",
+		Credentials:  map[string]string{"api_token": apiToken},
+		SourceConfig: map[string]any{"base_url": baseURL},
+		Enabled:      true,
+	}
+	client := photoprism.NewClient(http.DefaultClient)
+	client.SetUploadMaxBytes(h.config.IOLimits.PhotoBinaryMaxBytes)
+	return client, cfg, nil
+}
+
+// validateSearchQuery rejects /v1/photos/search inputs containing ASCII
+// or unicode control characters (Spec 040 chaos C-005). Whitespace
+// runes (\t \n \r space) are explicitly allowed because they are common
+// in user-typed queries; everything else with `unicode.IsControl` is
+// refused at the handler boundary instead of letting the store fail
+// with a 500.
+func validateSearchQuery(q string) error {
+	for i, r := range q {
+		if r == '\t' || r == '\n' || r == '\r' || r == ' ' {
+			continue
+		}
+		if unicode.IsControl(r) {
+			return fmt.Errorf("control characters are not permitted in search queries (offset=%d)", i)
+		}
+	}
+	return nil
 }
 
 func decodePhotoConnectorRequest(w http.ResponseWriter, r *http.Request) (photoConnectorRequest, bool) {

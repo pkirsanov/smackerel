@@ -22,6 +22,7 @@ var photosSSTKeys = []string{
 	"PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS",
 	"PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS",
 	"PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES",
+	"PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE",
 	"PHOTOS_INTELLIGENCE_CLASSIFY_MODEL",
 	"PHOTOS_INTELLIGENCE_EMBED_MODEL",
 	"PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL",
@@ -127,6 +128,10 @@ func TestPhotosConfigPopulatesEveryField(t *testing.T) {
 	}
 	if p.Policy.SensitivityRevealTTLSeconds != 600 || p.Policy.ArchiveActionTokenTTLSeconds != 86400 || p.Policy.DeleteActionTokenTTLSeconds != 86400 {
 		t.Fatalf("Photos.Policy TTLs = %+v", p.Policy)
+	}
+	if p.Policy.ActionsMaxScopeSize != 50 {
+		// Spec 040 chaos C-006 — the SST cap MUST flow into config.
+		t.Fatalf("Photos.Policy.ActionsMaxScopeSize = %d, want 50", p.Policy.ActionsMaxScopeSize)
 	}
 	if p.Intelligence.ClassifyModel == "" || p.Intelligence.EmbedModel == "" || p.Intelligence.OCRModel == "" {
 		t.Fatalf("Photos.Intelligence missing model fields: %+v", p.Intelligence)

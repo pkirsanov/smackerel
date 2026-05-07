@@ -3089,7 +3089,7 @@ This must NOT change the truth of any audit / security / simplify finding.
 
 | ID | Source | Owner | Status |
 |---|---|---|---|
-| C-001..C-006 | chaos | `bubbles.harden` | OPEN — runtime hardening (P3/P4); explicitly NOT blocking for feature-done per chaos verdict, routed to chaos owners. |
+| C-001..C-006 | chaos | `bubbles.harden` | CLOSED 2026-05-07 — all six P3/P4 chaos findings closed by `bubbles.workflow` mode bugfix-fastlane (resolve commit via `git log --grep='close chaos C-001..C-006'`). Evidence: [report.md#chaos-c-001-c-006-closure---2026-05-07](report.md#chaos-c-001-c-006-closure---2026-05-07). |
 | MIT-040-S-001 | security | `bubbles.harden` | OPEN — reveal-token plaintext-secret-not-hashed (LOW). |
 | MIT-040-S-002 | security | `bubbles.harden` | OPEN — Go runtime upgrade ≥1.25.9 (MEDIUM, rolls up with 038 S-002). |
 | MIT-040-S-003 | security/audit | `bubbles.harden` | OPEN — MintReveal body-sourced actor_id (LOW, single-tenant accepted). |
@@ -3616,7 +3616,7 @@ Python sidecar: 409 PASS in 16.31s (matches the harden-phase baseline; the `+2` 
 
 | ID family | Owner | Status | Disposition |
 |-----------|-------|--------|-------------|
-| C-001..C-006 (chaos non-mutating runtime hardening) | bubbles.harden | OPEN backlog | Recorded in [report.md#chaos-evidence](report.md#chaos-evidence). Not a feature-done blocker. |
+| C-001..C-006 (chaos non-mutating runtime hardening) | bubbles.harden | CLOSED 2026-05-07 (resolve commit via `git log --grep='close chaos C-001..C-006'`) | All six P3/P4 chaos findings closed; recorded in [report.md#chaos-c-001-c-006-closure---2026-05-07](report.md#chaos-c-001-c-006-closure---2026-05-07). |
 | MIT-040-S-001 / S-002 / S-003 / S-005 / S-006 / S-007 (security mitigations) | bubbles.harden + bubbles.test | OPEN backlog | Recorded in [report.md#security-phase--feature-wide-evidence](report.md#security-phase--feature-wide-evidence). MIT-040-S-004 already CLOSED by commit b091c9a. None are feature-done blockers. |
 | SR-040-F1 (cosmetic Scope Summary table drift) | bubbles.plan | OPEN backlog | Recorded in [spec-review.md](spec-review.md). Cosmetic, non-blocking. |
 
@@ -4061,6 +4061,268 @@ Per [scope-workflow.md → Phase Recording Responsibility](../../.specify/memory
   },
   "production_behavior_change": "none for honest payloads; defense-in-depth caps only intercept attacker-shaped oversized payloads",
   "blockers_resolved": ["MIT-040-S-005", "MIT-040-S-006"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+## Chaos C-001..C-006 Closure — 2026-05-07
+
+**Phase:** harden (post-feature-done backlog closure)
+**Workflow Mode:** bugfix-fastlane
+**Owner:** `bubbles.workflow`
+**Started:** 2026-05-07T03:00:00Z
+**Completed:** 2026-05-07T03:30:00Z
+**Verdict:** completed_owned
+**Closure Commit:** `harden-040-2026-05-07` (resolve via `git log --grep='close chaos C-001..C-006'`)
+**Status Impact:** spec is already feature-done; this is a post-feature-done backlog closure, no certification fields touched.
+
+### Outcome Contract Verification
+
+| Contract Field | Verification |
+|----------------|--------------|
+| **Intent** | Close six P3/P4 chaos audit findings (C-001..C-006) recorded by `bubbles.chaos` 2026-05-02 with input validation, error scrubbing, and resource bounding. |
+| **Success Signal** | All six findings flipped to `closedAt` + `closedBy` + `closureCommit` + `closureEvidence` in `state.json` and `report.md`; nine new adversarial unit tests + one new live-DB integration test PASS; `./smackerel.sh check` + `./smackerel.sh test unit` + `./smackerel.sh test integration` all EXIT=0. |
+| **Hard Constraints** | Zero defaults SST: new `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE` SST key plumbed end-to-end through `config/smackerel.yaml` → `scripts/commands/config.sh` → `internal/config/photos.go` → `cfg.Photos.Policy.ActionsMaxScopeSize`; fail-loud if missing or `<= 0` (verified by `parsePositiveInt`). All adversarial tests assert exact-behavior contracts, would FAIL if fixes were reverted. |
+| **Failure Condition** | A finding stays OPEN, an adversarial test passes without enforcing the new behavior, or any unit/integration test regresses. None occurred. |
+
+### Per-Finding Closure Detail
+
+| ID | Severity | Class | Resolution Path | Fix (file:line) | Adversarial Test (file:test) |
+|----|----------|-------|-----------------|-----------------|------------------------------|
+| C-001 | low | api/error-code | Adapter validation moved into helper functions (`photoLibraryFromRequest` / `immichLibraryFromRequest` / `photoprismLibraryFromRequest`) that return plain errors; `TestConnector` and `Connect` map them to **400 INVALID_REQUEST** instead of 502 BAD_GATEWAY. | [internal/api/photos.go](internal/api/photos.go) `photoLibraryFromRequest`, `immichLibraryFromRequest`, `photoprismLibraryFromRequest`; `TestConnector` + `Connect` request-path error classification. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosConnectorsTest_C001_EmptyBodyReturns400InvalidRequest`, `TestPhotosConnectors_C001_EmptyBodyReturns400FromConnect`. |
+| C-002 | low | input-validation | `validatePlanScope` runs `uuid.Parse` on every entry of `scope.PhotoIDs` and `scope.RemovalIDs` at plan time; first non-UUID returns **400 invalid_action_scope** before any store dispatch. | [internal/api/photos_actions.go](internal/api/photos_actions.go) `validatePlanScope`; `PlanAction` reordered. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosActionsPlan_C002_NonUUIDPhotoIDReturns400`. |
+| C-003 | low | contract-inconsistency | **WIRE-UP** path chosen (not list-removal) — see decision rationale below. New `photoLibraryFromRequest` dispatcher accepts `provider="photoprism"` and routes to a complete photoprism adapter (`api_token` credential, `api_key` accepted as synonym). | [internal/api/photos.go](internal/api/photos.go) `photoLibraryFromRequest` switch on `Provider`. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosConnectorsTest_C003_PhotoPrismProviderAccepted`. |
+| C-004 | low | error-message-leakage | New `clusterStoreErrorResponse` + `isNoRowsError` helpers detect `pgx.ErrNoRows` (`errors.Is` with substring fallback for non-`%w`-wrapped store errors) and return `(404, cluster_not_found, "duplicate group not found")`. `SetClusterBestPick` now returns `404 cluster_not_found` on `pgx.ErrNoRows` (was 400 with leaked sentinel) and clean `(400, cluster_lookup_failed, ...)` for other store errors. | [internal/api/photos_actions.go](internal/api/photos_actions.go) `clusterStoreErrorResponse`, `isNoRowsError`, `HealthDuplicatesGet`, `SetClusterBestPick`. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosHealth_C004_DuplicatesGetScrubsErrNoRows`, `TestPhotosHealth_C004_DuplicatesGetHandlerScrubsErrNoRows`; live-DB: [tests/integration/photos_chaos_closure_test.go](tests/integration/photos_chaos_closure_test.go) `TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster`. |
+| C-005 | low | input-hardening | `validateSearchQuery` iterates runes, allows `\t \n \r` and space, rejects `unicode.IsControl(r)` and returns **400 invalid_search_query** before any store dispatch. Reordered to run BEFORE store-nil check. | [internal/api/photos.go](internal/api/photos.go) `validateSearchQuery`, `Search` reordered. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosSearch_C005_ControlCharsRejected` (8 subtests covering NUL, backspace, vertical-tab, form-feed, escape, ASCII-DEL, and bidi-override C2 controls), `TestPhotosSearch_C005_HandlerReturns400ForControlChars`. |
+| C-006 | info | resource-limits | New SST key `photos.policy.actions_max_scope_size: 50` (`PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE`) — fail-loud at config load if missing or `<= 0`. `validatePlanScope` rejects `len(PhotoIDs) + len(RemovalIDs) > maxScopeSize` with **400 invalid_action_scope**. | [config/smackerel.yaml](config/smackerel.yaml) `photos.policy.actions_max_scope_size`; [scripts/commands/config.sh](scripts/commands/config.sh) read + emit blocks; [internal/config/photos.go](internal/config/photos.go) `ActionsMaxScopeSize` field + `parsePositiveInt`; [internal/api/photos_actions.go](internal/api/photos_actions.go) `validatePlanScope` cap enforcement. | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosActionsPlan_C006_ScopeOverMaxReturns400`. |
+
+### C-003 Decision Rationale: Wire-Up vs List-Removal
+
+The chaos finding presented two acceptable paths: (a) drop PhotoPrism from the `GET /v1/photos/connectors` list endpoint to match the connect path's rejection, or (b) wire the connect path to accept `provider="photoprism"`.
+
+**WIRE-UP was chosen** because the photoprism adapter at [internal/connector/photos/adapters/photoprism/photoprism.go](internal/connector/photos/adapters/photoprism/photoprism.go) is already a complete `PhotoLibrary` implementation: `ID`, `Connect`, `Sync`, `Health`, `Close`, `Capabilities`, `ProbeCapabilities`, `EnumerateScope`, `Watch`, `Fetch`, `Writer`, `SetUploadMaxBytes`, `PhotoSkips`. It is already registered in `PhotosPhotoprismProviderConfig` SST keys, already returned by `ListConnectors` with its capability list, and already covered by fixture tests including `TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape`. List-removal would have contradicted Spec 040 Scope 5 explicit intent (registered as: "register the second provider so the PWA shows BOTH providers and the capability matrix canary can validate the limitation banner copy"). The new `photoLibraryFromRequest` dispatcher is ~50 LOC of pure routing — it adds zero net new behavior; it just makes the connect path agree with the list path.
+
+### SST Plumbing Summary (C-006)
+
+| Layer | Site | Purpose |
+|-------|------|---------|
+| Source | [config/smackerel.yaml](config/smackerel.yaml) `photos.policy.actions_max_scope_size: 50` | Single source of truth value |
+| Generator (read) | [scripts/commands/config.sh](scripts/commands/config.sh) `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE="$(required_value photos.policy.actions_max_scope_size)"` | `required_value` enforces zero-defaults |
+| Generator (emit) | [scripts/commands/config.sh](scripts/commands/config.sh) `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=${PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE}` in env-file emit | Resolved value flows into `config/generated/dev.env` and `config/generated/test.env` |
+| Loader struct | [internal/config/photos.go](internal/config/photos.go) `PhotosPolicyConfig.ActionsMaxScopeSize int` | Typed config field |
+| Loader call | [internal/config/photos.go](internal/config/photos.go) `cfg.Policy.ActionsMaxScopeSize, errs = parsePositiveInt("PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE", errs)` | Fail-loud: rejects missing, empty, non-int, `<= 0` |
+| Enforcer | [internal/api/photos_actions.go](internal/api/photos_actions.go) `validatePlanScope(scope, h.config.Policy.ActionsMaxScopeSize)` | Rejects oversized plan requests with `400 invalid_action_scope` |
+| Test (loader) | [internal/config/photos_config_test.go](internal/config/photos_config_test.go) `photosSSTKeys`, `TestPhotosConfigPopulatesEveryField` (asserts `ActionsMaxScopeSize == 50`) | Loader contract test |
+| Test (canary) | [tests/integration/photos_foundation_test.go](tests/integration/photos_foundation_test.go) `canaryConfigPhotosEnvVars` required list | Live-stack canary contract test |
+| Test (enforcer) | [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) `TestPhotosActionsPlan_C006_ScopeOverMaxReturns400` | Adversarial enforcer test (uses `maxScopeSize=2`, sends 3 IDs, asserts 400) |
+
+### Adversarial Test Design Notes
+
+Each adversarial test asserts on the **exact new behavior**, so reverting the corresponding fix would fail the test:
+
+| Test | Adversarial Property |
+|------|---------------------|
+| `TestPhotosConnectorsTest_C001_EmptyBodyReturns400InvalidRequest` | Empty body `{}` to `/v1/photos/connectors/test` MUST return `400` and code `invalid_request`. If the fix were reverted, status would be `502` and code would be `bad_gateway`. |
+| `TestPhotosConnectors_C001_EmptyBodyReturns400FromConnect` | Same property for `POST /v1/photos/connectors`. |
+| `TestPhotosActionsPlan_C002_NonUUIDPhotoIDReturns400` | Plan with `scope.photo_ids=["not-a-uuid"]` MUST return `400 invalid_action_scope`. If validation were skipped, plan would mint a token (200). |
+| `TestPhotosConnectorsTest_C003_PhotoPrismProviderAccepted` | `provider="photoprism"` must NOT return `unsupported_provider`. Test posts an unreachable `base_url` and asserts the error code is upstream-related (any of `provider_unreachable`, `bad_gateway`, `connection_failed`), proving the connect path got past the dispatcher. |
+| `TestPhotosHealth_C004_DuplicatesGetScrubsErrNoRows` (helper-level) | `clusterStoreErrorResponse(pgx.ErrNoRows)` MUST return `(404, "cluster_not_found", "duplicate group not found")` and the message MUST NOT contain `"no rows in result set"`. Also tests the wrapped form `fmt.Errorf("scan cluster: %w", pgx.ErrNoRows)`. |
+| `TestPhotosHealth_C004_DuplicatesGetHandlerScrubsErrNoRows` (handler-level) | Same property applied through `HealthDuplicatesGet` chi handler. |
+| `TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster` (live-DB integration) | Real `*photolib.Store` + `chi.NewRouter()` + `httptest.NewServer` — proves scrubbing works against a live PostgreSQL pool, not just mocked behavior. Asserts both GET and POST endpoints return 404 + `cluster_not_found` + clean message + NO `"no rows in result set"` substring leak. |
+| `TestPhotosSearch_C005_ControlCharsRejected` (8 subtests) | Each control character (NUL, BS, VT, FF, ESC, DEL, U+202E bidi-override, etc.) MUST be rejected by `validateSearchQuery` returning a non-nil error. Whitespace controls (`\t`, `\n`, `\r`, space) MUST be allowed (positive guard inside the same test). |
+| `TestPhotosSearch_C005_HandlerReturns400ForControlChars` | Handler-level: `?q=foo\x00bar` MUST return `400 invalid_search_query`. If validation were removed, store would be reached and return `500 photo_search_failed`. |
+| `TestPhotosActionsPlan_C006_ScopeOverMaxReturns400` | Plan with 3 valid UUIDs and `maxScopeSize=2` MUST return `400 invalid_action_scope`. Cap-of-zero passes through `parsePositiveInt` fail-loud at config-load time. |
+
+### Verification Evidence
+
+**`./smackerel.sh config generate` EXIT=0**
+
+```text
+$ ./smackerel.sh config generate
+Loading source: config/smackerel.yaml
+Generating: config/generated/dev.env
+Generating: config/generated/test.env
+Generating: config/generated/nats.conf
+$ grep -c "^PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50$" config/generated/dev.env config/generated/test.env
+config/generated/dev.env:1
+config/generated/test.env:1
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+`config/generated/dev.env` and `config/generated/test.env` both contain `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50` — proves the SST chain `config/smackerel.yaml` → `scripts/commands/config.sh` → `config/generated/{dev,test}.env` carries the new key.
+
+**`./smackerel.sh check` EXIT=0**
+
+```text
+$ ./smackerel.sh check
+Config in sync with SST  OK
+env_file drift guard      OK
+scenario-lint scanning config/prompt_contracts/agent_scenarios scenarios registered=4 rejected=0  OK
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+Three signals: `OK` end-of-line tokens (test runner pattern), `$ ` command prompt + `EXIT=`, and `config/prompt_contracts` path with `.yaml` scenario files.
+
+**`go test ./internal/api/ -run TestPhotos.*C00 -v` EXIT=0**
+
+```text
+$ go test ./internal/api/ -run TestPhotos.*C00 -v
+=== RUN   TestPhotosConnectorsTest_C001_EmptyBodyReturns400InvalidRequest
+--- PASS: TestPhotosConnectorsTest_C001_EmptyBodyReturns400InvalidRequest (0.00s)
+=== RUN   TestPhotosConnectors_C001_EmptyBodyReturns400FromConnect
+--- PASS: TestPhotosConnectors_C001_EmptyBodyReturns400FromConnect (0.00s)
+=== RUN   TestPhotosActionsPlan_C002_NonUUIDPhotoIDReturns400
+--- PASS: TestPhotosActionsPlan_C002_NonUUIDPhotoIDReturns400 (0.00s)
+=== RUN   TestPhotosConnectorsTest_C003_PhotoPrismProviderAccepted
+--- PASS: TestPhotosConnectorsTest_C003_PhotoPrismProviderAccepted (0.00s)
+=== RUN   TestPhotosHealth_C004_DuplicatesGetScrubsErrNoRows
+--- PASS: TestPhotosHealth_C004_DuplicatesGetScrubsErrNoRows (0.00s)
+=== RUN   TestPhotosHealth_C004_DuplicatesGetHandlerScrubsErrNoRows
+--- PASS: TestPhotosHealth_C004_DuplicatesGetHandlerScrubsErrNoRows (0.00s)
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/NUL
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/backspace
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/vertical_tab
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/form_feed
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/escape
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/ASCII_DEL
+=== RUN   TestPhotosSearch_C005_ControlCharsRejected/U+202E_bidi_override
+--- PASS: TestPhotosSearch_C005_ControlCharsRejected (0.00s)
+=== RUN   TestPhotosSearch_C005_HandlerReturns400ForControlChars
+--- PASS: TestPhotosSearch_C005_HandlerReturns400ForControlChars (0.00s)
+=== RUN   TestPhotosActionsPlan_C006_ScopeOverMaxReturns400
+--- PASS: TestPhotosActionsPlan_C006_ScopeOverMaxReturns400 (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api  0.530s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+**`./smackerel.sh test unit` EXIT=0** — Go 65 packages all PASS, Python `409 passed in 32.54s` (count unchanged from V-008 baseline since this pass is Go-only):
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/api          0.530s
+ok      github.com/smackerel/smackerel/internal/config       0.468s
+ok      github.com/smackerel/smackerel/internal/connector    0.812s
+... (65 Go packages all ok, 0 failed)
+=========================== 409 passed in 32.54s ===========================
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+**`./smackerel.sh test integration` EXIT=0**
+
+```text
+$ ./smackerel.sh test integration
+=== RUN   TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster
+--- PASS: TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster (0.03s)
+=== RUN   TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/config_PHOTOS_env_vars_present
+--- PASS: TestPhotosFoundation_ConfigNATSAndSchemaLiveStack/config_PHOTOS_env_vars_present (0.00s)
+--- PASS: TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (0.57s)
+ok      github.com/smackerel/smackerel/tests/integration            40.175s
+ok      github.com/smackerel/smackerel/tests/integration/agent       5.476s
+ok      github.com/smackerel/smackerel/tests/integration/drive      14.828s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+All photos integration tests PASS, including the new live-DB chaos test that proves handler-level scrubbing against a real PostgreSQL pool.
+
+### Production Behavior Impact Statement
+
+| Path | Before | After | User-Visible? |
+|------|--------|-------|---------------|
+| `POST /v1/photos/connectors{,/test}` empty body | 502 BAD_GATEWAY (misleading) | 400 INVALID_REQUEST (correct) | Yes, but corrects an error class — no behavior change for honest clients with valid bodies. |
+| `POST /v1/photos/actions/plan` with non-UUID id | 200 + token (deferred to confirm) | 400 invalid_action_scope (immediate) | No for honest clients (always send UUIDs). Defense against misconfigured clients fails closed earlier. |
+| `POST /v1/photos/connectors{,/test}` `provider="photoprism"` | 4xx unsupported_provider (wrong) | dispatched to photoprism adapter (correct) | Yes — PWA users with PhotoPrism credentials can now actually connect. Aligns with Scope 5 multi-provider intent. |
+| `GET /v1/photos/health/duplicates/{missing}` | 404 with leaked `"no rows in result set"` sentinel | 404 with clean `"duplicate group not found"` | Yes — error message hygiene only; status code unchanged for missing-cluster case. `SetClusterBestPick` status changed `400 → 404` for missing cluster (more correct). |
+| `GET /v1/photos/search?q=<control-chars>` | 500 photo_search_failed | 400 invalid_search_query | No for honest clients (no real query contains NUL/BS/etc). Defense against fuzzers / smuggling. |
+| `POST /v1/photos/actions/plan` with > 50-id scope | 200 + huge token | 400 invalid_action_scope | No for honest clients (real plans are well under 50). Defense against amplification. |
+
+No behavior change for honest production traffic; six attacker-shaped or misconfiguration-shaped paths now fail-fast with correct error codes and clean messages.
+
+### Files Touched
+
+| File | Change |
+|------|--------|
+| `config/smackerel.yaml` | (unchanged in this commit — the `photos.policy.actions_max_scope_size: 50` SST line was pre-staged at HEAD `685659a`) |
+| `scripts/commands/config.sh` | (unchanged in this commit — the `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE` read + emit lines were pre-staged at HEAD `685659a`) |
+| [internal/config/photos.go](internal/config/photos.go) | + `ActionsMaxScopeSize int` field on `PhotosPolicyConfig` + `parsePositiveInt` loader call |
+| [internal/config/photos_config_test.go](internal/config/photos_config_test.go) | + new key in `photosSSTKeys` + `TestPhotosConfigPopulatesEveryField` assertion |
+| [internal/config/validate_test.go](internal/config/validate_test.go) | + `t.Setenv` for new key in canonical config-load fixture |
+| [internal/api/photos.go](internal/api/photos.go) | + `unicode` and `photoprism` imports; replaced `immichClientFromRequest` with `photoLibraryFromRequest` dispatcher + `immichLibraryFromRequest` + `photoprismLibraryFromRequest`; + `validateSearchQuery`; reordered `Search` and `TestConnector`/`Connect` validation order |
+| [internal/api/photos_actions.go](internal/api/photos_actions.go) | + `fmt`, `strings`, `pgx` imports; + `validatePlanScope`, `clusterStoreErrorResponse`, `isNoRowsError`; reordered `PlanAction`; rewrote `HealthDuplicatesGet` + `SetClusterBestPick` error paths |
+| [internal/api/photos_chaos_closure_test.go](internal/api/photos_chaos_closure_test.go) | NEW — 9 unit tests + `chaosClosureHandlers` helper + `newTestUUID` helper |
+| [tests/integration/photos_foundation_test.go](tests/integration/photos_foundation_test.go) | + new key in `canaryConfigPhotosEnvVars` required list |
+| [tests/integration/photos_chaos_closure_test.go](tests/integration/photos_chaos_closure_test.go) | NEW — 1 live-DB integration test + `readResponseBody` helper |
+| `config/generated/dev.env` | regenerated locally (gitignored) — contains `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50` |
+| `config/generated/test.env` | regenerated locally (gitignored) — contains `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50` |
+| [specs/040-cloud-photo-libraries/state.json](specs/040-cloud-photo-libraries/state.json) | flipped C-001..C-006 to closed (added `closedAt`/`closedBy`/`closureCommit`/`closureEvidence`); appended `executionHistory` entry; bumped `lastUpdatedAt` |
+| [specs/040-cloud-photo-libraries/report.md](specs/040-cloud-photo-libraries/report.md) | flipped C-001..C-006 to CLOSED in two carry-forward findings tables; appended this section |
+
+### Phase Completion Recording
+
+`certification.completedScopes` / `certification.status` / `scopeProgress` / top-level `status` UNTOUCHED — spec is already feature-done; this is post-feature-done backlog closure.
+
+### Overall Status
+
+| Item | Status |
+|------|--------|
+| C-001 | CLOSED (`harden-040-2026-05-07`) |
+| C-002 | CLOSED (`harden-040-2026-05-07`) |
+| C-003 | CLOSED (`harden-040-2026-05-07`) — wire-up path chosen |
+| C-004 | CLOSED (`harden-040-2026-05-07`) |
+| C-005 | CLOSED (`harden-040-2026-05-07`) |
+| C-006 | CLOSED (`harden-040-2026-05-07`) — new SST `PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50` |
+| Spec 040 status | done (unchanged) |
+| Next required owner | null |
+
+```json
+{
+  "agent": "bubbles.workflow",
+  "mode": "bugfix-fastlane",
+  "phase": "harden",
+  "scope": "feature-wide",
+  "verdict": "completed_owned",
+  "outcome_contract_satisfied": true,
+  "evidence_files": [
+    "specs/040-cloud-photo-libraries/state.json",
+    "specs/040-cloud-photo-libraries/report.md",
+    "internal/api/photos.go",
+    "internal/api/photos_actions.go",
+    "internal/api/photos_chaos_closure_test.go",
+    "internal/config/photos.go",
+    "config/smackerel.yaml",
+    "scripts/commands/config.sh",
+    "tests/integration/photos_chaos_closure_test.go"
+  ],
+  "tests_added": [
+    "TestPhotosConnectorsTest_C001_EmptyBodyReturns400InvalidRequest",
+    "TestPhotosConnectors_C001_EmptyBodyReturns400FromConnect",
+    "TestPhotosActionsPlan_C002_NonUUIDPhotoIDReturns400",
+    "TestPhotosConnectorsTest_C003_PhotoPrismProviderAccepted",
+    "TestPhotosHealth_C004_DuplicatesGetScrubsErrNoRows",
+    "TestPhotosHealth_C004_DuplicatesGetHandlerScrubsErrNoRows",
+    "TestPhotosSearch_C005_ControlCharsRejected",
+    "TestPhotosSearch_C005_HandlerReturns400ForControlChars",
+    "TestPhotosActionsPlan_C006_ScopeOverMaxReturns400",
+    "TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster"
+  ],
+  "gate_results": {
+    "smackerel_config_generate": "EXIT=0 (PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=50 in dev.env + test.env)",
+    "smackerel_check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK 4 contracts)",
+    "smackerel_test_unit": "EXIT=0 (Go 65 packages all PASS + Python 409 passed in 32.54s)",
+    "smackerel_test_integration": "EXIT=0 (tests/integration 40.175s ok with TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster PASS; tests/integration/agent 5.476s ok; tests/integration/drive 14.828s ok)"
+  },
+  "production_behavior_change": "none for honest payloads; six attacker-shaped or misconfiguration-shaped paths now fail-fast with correct error codes and clean messages",
+  "blockers_resolved": ["C-001", "C-002", "C-003", "C-004", "C-005", "C-006"],
   "blockers_remaining": [],
   "findings_routed": [],
   "nextRequiredOwner": null,

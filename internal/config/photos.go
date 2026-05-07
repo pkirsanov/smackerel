@@ -44,6 +44,12 @@ type PhotosPolicyConfig struct {
 	ArchiveActionTokenTTLSeconds   int
 	DeleteActionTokenTTLSeconds    int
 	TelegramMaxInlineSizeBytes     int64
+	// ActionsMaxScopeSize bounds scope.photo_ids and scope.removal_ids
+	// at action-plan mint time (Spec 040 chaos C-006). Plan requests
+	// exceeding this cap MUST be rejected with 400 INVALID_REQUEST so
+	// the action token never grows large enough to amplify confirm-time
+	// resource usage. Sourced from `photos.policy.actions_max_scope_size`.
+	ActionsMaxScopeSize int
 }
 
 type PhotosIntelligenceConfig struct {
@@ -100,6 +106,7 @@ func loadPhotosConfig() (PhotosConfig, error) {
 	cfg.Policy.ArchiveActionTokenTTLSeconds, errs = parsePositiveInt("PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS", errs)
 	cfg.Policy.DeleteActionTokenTTLSeconds, errs = parsePositiveInt("PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS", errs)
 	cfg.Policy.TelegramMaxInlineSizeBytes, errs = parsePositiveInt64("PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES", errs)
+	cfg.Policy.ActionsMaxScopeSize, errs = parsePositiveInt("PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE", errs)
 
 	cfg.Intelligence.ClassifyModel, errs = requiredNonEmptyString("PHOTOS_INTELLIGENCE_CLASSIFY_MODEL", errs)
 	cfg.Intelligence.EmbedModel, errs = requiredNonEmptyString("PHOTOS_INTELLIGENCE_EMBED_MODEL", errs)
