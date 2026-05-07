@@ -103,7 +103,7 @@ This prompt is for **testing-first hardening**.
 - **E2E tests (`e2e-api` and/or `e2e-ui`) are MANDATORY** for every scope/bug — they run against a LIVE system with NO mocks.
 - **Every feature/fix/change MUST have persistent scenario-specific E2E regression coverage** — add or update at least one regression E2E test tied to each new/changed/fixed behavior, then run the broader regression suite as well.
 - **Renames/removals MUST have consumer-facing regression coverage** — validate affected navigation links, breadcrumbs, redirects, API clients, and stale-reference scans instead of only the renamed producer surface.
-- **Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral/temporary storage or clean up test data after. No residual test data.
+- **Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral storage; cleanup-based isolation is forbidden (see `instructions/bubbles-test-environment-isolation.instructions.md`). No residual test data.
 - **Follow ALL repository policies** from `.github/copilot-instructions.md`.
 - **If UI behavior changes exist:** require a UI scenario matrix, e2e-ui tests per scenario, user-visible assertions, and cache/bundle freshness evidence.
 - **Docker Bundle Freshness (UI scopes):** Before running e2e-ui tests after a Docker rebuild, verify the served bundle contains expected feature code (Gate 9 in `agent-common.md`). If stale → rebuild with `--no-cache` before testing.
@@ -168,7 +168,7 @@ User may scope test types explicitly, e.g.:
 Rules:
 - If the user scopes test types, ONLY those types are required — but within those types, **no skips and all must pass**.
 - **E2E tests (`e2e-api`/`e2e-ui`) are MANDATORY unless explicitly excluded by user** — every scope/bug MUST have E2E coverage.
-- **Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral storage or clean up test data. No residual test data.
+- **Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral storage; cleanup-based isolation is forbidden (see `instructions/bubbles-test-environment-isolation.instructions.md`). No residual test data.
 
 ### C) Coverage Target / Gap Analysis
 

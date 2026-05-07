@@ -138,7 +138,7 @@ Core requirements:
    - Every bug fix MUST include regression coverage across all applicable test types (see `agent-common.md` → Canonical Test Taxonomy).
    - Tests MUST fail before fix, pass after, and validate the specific failure scenario.
    - Regression tests for bug fixes MUST include at least one adversarial case that would fail if the bug were reintroduced. Tautological tests that only use data already accepted by the broken code path are invalid.
-   - Live system tests MUST use ephemeral storage or clean up test data after (no residual data).
+   - Live system tests MUST use ephemeral storage; cleanup-based isolation is forbidden (see `instructions/bubbles-test-environment-isolation.instructions.md`).
    - E2E tests are MANDATORY for every bug fix; include UI scenario matrix + user-visible assertions when UI is affected.
    - Test commands and coverage thresholds come from `copilot-instructions.md`.
 

@@ -197,7 +197,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
+- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|release-planning-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
 - `socratic: true|false` (default: false)

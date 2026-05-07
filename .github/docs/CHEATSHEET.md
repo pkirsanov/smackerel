@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **36 Agents · 65 Gates · 33 Workflow Modes · 25 Phases**
+> **37 Agents · 65 Gates · 34 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -21,7 +21,7 @@
 |:----:|-------|-------|------|-------|
 | <img src="../icons/jacob-hardhat.svg" width="28"> | `bubbles.iterate` | Jacob | Single-iteration work picker. Chooses the next executable slice and runs the right specialist chain. Also accepts plain English via `super` delegation. | *"I'll do whatever you need, Julian."* |
 | <img src="../icons/tyrone-chain.svg" width="28"> | `bubbles.goal` | Tyrone | Autonomous single-goal executor. Give him a goal and he handles everything — spec, design, implement, test, E2E, chaos, validate, audit — looping until convergence. Never stops on fixable obstacles. | *"I handle things, that's what I do."* |
-| <img src="../icons/donna-whistle.svg" width="28"> | `bubbles.sprint` | Donna | Multi-goal sprint controller. Give her goals and a time budget. She prioritizes, executes each via the convergence loop, manages the clock, and delivers a sprint report. | *"We're on a schedule, people. Next!"* |
+| <img src="../icons/erica-doublestack.svg" width="28"> | `bubbles.sprint` | Erica | Multi-goal sprint controller. Trevor's mom — runs Liquor Inside / Liquor Outside, two flows at once. Give her goals and a time budget; she keeps everything moving and reorders on the fly. | *"Inside and outside, both at once. Don't fall behind."* |
 | <img src="../icons/cory-cap.svg" width="28"> | `bubbles.bug` | Cory | Bug orchestrator. Reproduces the issue, packets the work, dispatches the right owners, and keeps going until the bug is actually closed. | *"I didn't wanna find it, but... there it is."* |
 
 ## <img src="../icons/julian-glass.svg" width="32"> Owners & Executors
@@ -39,6 +39,7 @@
 | <img src="../icons/donny-ducttape.svg" width="28"> | `bubbles.simplify` | Donny | Reduces needless complexity without weakening the behavior contract. | *"Just tape it up and move on."* |
 | <img src="../icons/tommy-rack.svg" width="28"> | `bubbles.devops` | Tommy Bean | Owns CI/CD, build, deployment, monitoring, and observability execution once operational work is identified. | *"Get the rack humming and keep the park online."* |
 | <img src="../icons/sebastian-guitar.svg" width="28"> | `bubbles.cinematic-designer` | Sebastian Bach | Premium UI implementation when the surface needs flagship treatment, not default sludge. | *"I was in Skid Row!"* |
+| <img src="../icons/sonny-ledger.svg" width="28"> | `bubbles.releases` | Sonny "Iron Lung" Smith | Phase release packets, carry-forward enforcement, cross-product release coordination, Product Direction Surfaces guardian. | *"Plans within plans, boys. Phase one is just the introduction."* |
 
 ## <img src="../icons/ted-badge.svg" width="32"> Diagnostic & Certification Routing
 
@@ -66,6 +67,18 @@
 | `scopes.md` / planning structure | `bubbles.plan` | Gherkin, Test Plan, DoD, `uservalidation.md`, `scenario-manifest.json` |
 | `state.json.certification.*` | `bubbles.validate` | Validate-owned authority only |
 | Route-required findings | owning specialist | Diagnostic and certification agents packetize; they do not self-author foreign artifacts |
+
+### Persona Convention: Contextual Variants
+
+Some TPB characters carry different agent roles when their narrative context legitimately differs. These are not duplicates — they are visually-distinct variants of the same character expressing different operating modes:
+
+| Character | Sober / Solo Variant | Reflective / Paired Variant | Why The Split Is Real |
+|-----------|---------------------|------------------------------|----------------------|
+| **Mr. Lahey** | `bubbles.super` (lahey-badge) — supervisor giving live advice | `bubbles.retro` (lahey-bottle) — drunk introspective monologue | Sober Lahey enforces and advises; drunk Lahey reflects on the park's failures over a bottle. Both are canonical TPB modes. |
+| **Camera Crew** | `bubbles.status` (camera-crew, silent observer) | `bubbles.recap` (camera-crew, "Talking Head" interview cut) | Mockumentary device with two modes: silent footage vs. interview segment. Both are canonical mockumentary beats. |
+| **Cory & Trevor** | `bubbles.bug` (Cory solo, cory-cap) + `bubbles.handoff` (Trevor solo, trevor-handoff) | `bubbles.setup` (Cory & Trevor paired, cory-trevor-smokes) | Solo characters do focused single-task work; the pair does errand-running setup. Visually distinct icons make the split unambiguous. |
+
+**Rule:** New agents MUST NOT casually reuse an existing persona. A contextual variant is allowed only when (a) the character's own narrative supports the second mode, (b) the icons visually differentiate the variants, and (c) this table documents the split.
 
 ## <img src="../icons/camera-crew.svg" width="32"> Utilities
 
@@ -109,6 +122,8 @@
 | `sunnyvale laser-eyes` | `bubbles.spec-review` | *"Gary can see right through it, boys. That spec expired three refactors ago."* |
 | `sunnyvale have-a-good-one` | `bubbles.handoff` | *"Here, take this. I gotta go."* |
 | `sunnyvale skid-row` | `bubbles.cinematic-designer` | *"I was in Skid Row!"* |
+| `sunnyvale plans-within-plans` | `bubbles.releases` | *"Plans within plans, boys. Phase one is just the introduction."* |
+| `sunnyvale iron-lung-says` | `bubbles.releases` | *"Iron Lung's got the ledger, boys."* |
 | `sunnyvale the-super` | `bubbles.super` | *"I'm the trailer park supervisor."* |
 | `sunnyvale parts-unknown` | `bubbles.code-review` | *"From parts unknown!"* |
 | `sunnyvale keep-the-park-online` | `bubbles.devops` | *"Get the rack humming and keep the park online."* |
@@ -119,8 +134,8 @@
 | `sunnyvale nice-kitty` | `bubbles.bug` | *"That's a nice f\*\*\*ing kitty right there."* |
 | `sunnyvale i-handle-things` | `bubbles.goal` | *"I handle things, that's what I do."* |
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
-| `sunnyvale on-the-clock` | `bubbles.sprint` | *"We're on a schedule, people. Next!"* |
-| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done. What's next on the board?"* |
+| `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
+| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
 | `sunnyvale just-fixes` | `bubbles.stabilize` | *"..." (Bill spots the problem and points at it)* |
 | `sunnyvale used-to-be-a-vet` | `bubbles.create-skill` | *"I used to be a vet, you know."* |
 | `sunnyvale true` | `bubbles.commands` | *"True."* |
@@ -175,6 +190,7 @@
 | `retro-to-harden` | liquor-then-harden | Data-driven hardening — retro finds bug magnets, then harden targets them |
 | `retro-quality-sweep` | liquor-then-sweep | Retro finds hotspots, then the deterministic quality crew cleans them up |
 | `retro-to-review` | liquor-then-look | Data-driven review — retro finds risks, then code-review diagnoses them |
+| `release-planning-to-doc` | plans-within-plans | Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination |
 
 **Optional execution tags:** `grillMode`, `tdd` (inner-loop red→green only), `backlogExport` (off|tasks|issues), `specReview` (off|once-before-implement), `socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit` (off|scope|dod), `maxScopeMinutes`, `maxDodMinutes`, `microFixes`, `crossModelReview` (off|codex|terminal)
 
@@ -224,6 +240,14 @@
 | `slop tax` | Rework signal measured by `bubbles.retro`: retries, reversions, reopened scopes, and fix-on-fix churn versus forward progress. |
 | `instruction budget` | Prompt-size budget for agent surfaces. If the prompt gets too bloated, adherence gets worse; audit it with `bubbles lint-budget`. |
 | `read the code` | Use the short planning artifacts to steer early, then read the implementation and evidence instead of trusting giant plans blindly. |
+| `Liquor Inside / Liquor Outside` | Erica's two-location hustle. In Bubbles, this is `bubbles.sprint`: keep multiple goal streams moving under one time budget without dropping either side. |
+| `contextual persona variant` | A documented, visually distinct reuse of the same TPB character when the character has a genuinely different narrative mode. Only the variants listed in the persona convention table are allowed. |
+| `product direction surfaces trio` | The three canonical product-direction docs every product repo must carry: `docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`. `bubbles.setup` enforces presence; `bubbles.releases` refuses to plan without it. |
+| `release packet` | The 8-doc bundle Sonny "Iron Lung" Smith produces per phase: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`. |
+| `carry-forward table` | Mandatory section in every multi-phase repo's `features.md` — captures capabilities inherited from prior phases so nothing gets quietly dropped. |
+| `vision restatement` | Every phase's `vision.md` MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline. |
+| `cross-product coordination` | When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule. |
+| `surfaced principle` | A product principle drafted from existing repo evidence by the `bubbles-product-principle-discovery` skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not. |
 
 ---
 

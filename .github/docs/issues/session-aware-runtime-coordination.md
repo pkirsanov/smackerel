@@ -96,7 +96,7 @@ Each lease record should include fields like:
 ```json
 {
   "leaseId": "rls_20260401_abc123",
-  "repo": "guestHost",
+  "repo": "example-app",
   "sessionId": "chat_...",
   "agent": "bubbles.validate",
   "worktree": "/path/to/worktree",

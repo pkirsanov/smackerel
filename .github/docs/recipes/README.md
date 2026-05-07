@@ -108,6 +108,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [Grill an Idea](grill-an-idea.md) | "I want hard questions before we commit to this direction" |
 | [TDD First Execution](tdd-first-execution.md) | "I want the workflow to stay red-green-first instead of drifting into implementation-first" |
 | [Outcome-First Specs](outcome-first-specs.md) | "I want to define what 'done' means (Intent, Success Signal, Hard Constraints) before getting into implementation details" |
+| [Release Planning](release-planning.md) | "I need to produce or refresh a release packet for a phase, with carry-forward and cross-product coordination" |
 
 ## Performance & Parallelism
 

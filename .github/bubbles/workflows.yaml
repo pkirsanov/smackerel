@@ -631,6 +631,9 @@ phases:
   code-review:
     owner: bubbles.code-review
     requiredGates: []
+  releases:
+    owner: bubbles.releases
+    requiredGates: []
   bug-discovery:
     owner: bubbles.bug
     requiredGates: [ G001 ]
@@ -1653,6 +1656,24 @@ modes:
       sequentialSpecCompletion: false
       antiFabricationDetection: true
 
+  release-planning-to-doc:
+    description: "Phase release packet planning. Owned by bubbles.releases (Sonny Iron Lung Smith). Reads the Product Direction Surfaces trio (docs/INVESTOR_OVERVIEW.md, docs/Product-Principles.md, .github/instructions/product-principles.instructions.md), reconciles current product capabilities, then produces or refreshes a phase release packet (vision, features, actions, business-plan, deployment, marketing, monetization, ops-scalability) under docs/plans/<phase>/ and docs/releases/<phase>.md, plus updates the Phase Overview table in docs/INVESTOR_OVERVIEW.md. Refuses to run on a repo missing the trio — routes to bubbles.setup first. Supports modes: bootstrap, refresh, extend, cross-product."
+    statusCeiling: docs_updated
+    phaseOrder: [ select, releases, docs, finalize ]
+    requiredGates: [ G001, G010, G011, G012 ]
+    constraints:
+      requireExistingImplementation: false
+      readOnlyAudit: false
+      noCodeChanges: true
+      requireProductDirectionTrio: true
+      requireCarryForwardTable: true
+      requireInlineVisionRestatement: true
+      noFabricatedPrinciples: true
+      noFabricatedCapabilities: true
+      noFabricatedCompetitors: true
+      sequentialSpecCompletion: false
+      antiFabricationDetection: true
+
   retro-quality-sweep:
     description: "Data-driven quality sweep: run retro analysis first to identify the noisiest hotspots, then simplify those areas before hardening, gap-closing, fixing, and finishing with the full quality chain."
     statusCeiling: done
@@ -1782,6 +1803,7 @@ modes:
       - retro-to-harden
       - retro-quality-sweep
       - retro-to-review
+      - release-planning-to-doc
       - product-to-delivery
       # Default iterations (overridable via iterations user option)
       defaultIterations: 1

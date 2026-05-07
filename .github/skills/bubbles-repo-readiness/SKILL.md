@@ -37,6 +37,13 @@ This is a portable governance skill. Keep it project-agnostic and advisory by de
 - Minimal architecture or entrypoint documentation
 - Presence of at least one repo-health or framework-health CI check
 - Whether repo-specific agent guidance is compact and navigable
+- **Product Direction Surfaces trio presence** (product repos only):
+  - `docs/INVESTOR_OVERVIEW.md` exists and is non-stub
+  - `docs/Product-Principles.md` exists and is non-stub
+  - `.github/instructions/product-principles.instructions.md` exists and is non-stub
+  - Surfaced principles in `Product-Principles.md` are flagged "Surfaced for owner approval — not yet ratified" (NO fabrication)
+  - See `docs/guides/PRODUCT_DIRECTION_SURFACES.md` for the convention
+  - Skip this check for the Bubbles source repo and pure infrastructure repos
 
 ## What Not To Check
 - Spec or scope completion status
@@ -58,5 +65,7 @@ A repo-readiness pass is useful when:
 
 ## References
 - `docs/guides/CONTROL_PLANE_DESIGN.md`
+- `docs/guides/PRODUCT_DIRECTION_SURFACES.md`
 - `docs/recipes/framework-ops.md`
 - `skills/bubbles-skill-authoring/SKILL.md`
+- `skills/bubbles-product-principle-discovery/SKILL.md`

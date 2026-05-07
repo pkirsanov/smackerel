@@ -1,7 +1,7 @@
 # <img src="../../icons/tyrone-chain.svg" width="28"> Autonomous Execution Guide
 
 > *"I handle things, that's what I do."* — Tyrone
-> *"We're on a schedule, people. Next!"* — Donna
+> *"Inside and outside, both at once. Don't fall behind."* — Erica
 
 ---
 
@@ -12,7 +12,7 @@ Bubbles provides two autonomous execution modes that run full development cycles
 | Mode | Agent | Character | Use Case |
 |------|-------|-----------|----------|
 | `autonomous-goal` | `bubbles.goal` | Tyrone | Single goal → full convergence loop |
-| `autonomous-sprint` | `bubbles.sprint` | Donna | Multiple goals + time budget |
+| `autonomous-sprint` | `bubbles.sprint` | Erica | Multiple goals + time budget |
 
 Both modes build on the existing Bubbles infrastructure — phases, gates, specialist agents, and anti-fabrication policies — adding outer convergence loops and time management.
 
@@ -89,7 +89,7 @@ Tyrone doesn't stop for fixable problems:
 
 ### What It Does
 
-Give Donna a list of goals and a time budget. She runs the show:
+Give Erica a list of goals and a time budget. She runs the show:
 
 1. **Sprint Planning** — Parse goals, estimate effort (small/medium/large), sort by priority
 2. **Execute Goals** — For each goal in priority order:
@@ -146,7 +146,7 @@ goals:
 
 ### Sprint Report
 
-At wrap-up, Donna produces:
+At wrap-up, Erica produces:
 
 ```yaml
 sprint_report:
@@ -185,7 +185,7 @@ sprint_report:
 ```
 ┌──────────────────────────────────────────────────────┐
 │                  bubbles.sprint                       │
-│  (Donna: multi-goal, time-bounded)                   │
+│  (Erica: multi-goal, time-bounded)                   │
 │                                                      │
 │  ┌──────────────────────────────────────────────┐   │
 │  │              bubbles.goal                     │   │
@@ -238,8 +238,8 @@ If the active top-level runtime does not expose the subagent tool, the correct r
 |-------|-------|-------|
 | `sunnyvale i-handle-things` | `bubbles.goal` | *"I handle things, that's what I do."* |
 | `sunnyvale tyrone-got-this` | `bubbles.goal` | *"Peace. Tyrone got this."* |
-| `sunnyvale on-the-clock` | `bubbles.sprint` | *"We're on a schedule, people. Next!"* |
-| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done. What's next on the board?"* |
+| `sunnyvale on-the-clock` | `bubbles.sprint` | *"Inside and outside, both at once. Don't fall behind."* |
+| `sunnyvale next-on-the-board` | `bubbles.sprint` | *"That one's done — keep both flows moving."* |
 
 ---
 

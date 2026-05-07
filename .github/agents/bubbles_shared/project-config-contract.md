@@ -5,6 +5,8 @@
 >
 > **Companion docs:** Use repository-specific setup guidance if present; see [agent-common.md](agent-common.md) for universal governance and [scope-workflow.md](scope-workflow.md) for workflow templates.
 
+> ⛔ **Framework Scope Reminder (NON-NEGOTIABLE):** The Bubbles repository (`agents/`, `bubbles/`, `docs/`, `instructions/`, `prompts/`, `recipes/`, `skills/`, `templates/`) is **generic and repo-agnostic**. This contract document tells downstream installations *what* to provide; it MUST NOT itself name any specific downstream installation, product, machine, IP, port, subnet, or operator. See [`docs/SCOPE_POLICY.md`](../../docs/SCOPE_POLICY.md) for the full scope rule and self-audit checklist.
+
 ---
 
 ## Purpose

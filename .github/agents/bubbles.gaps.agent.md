@@ -312,7 +312,7 @@ Create a prioritized plan:
    - **E2E UI tests (`e2e-ui`)** for new/changed UI — LIVE system, NO mocks.
    - **E2E regression tests** — proving existing workflows still work.
    - **E2E Substance Check:** See agent-common.md → Gate 7. Shallow E2E tests (status-code-only, page-loads-without-crash) are 🟡 **PARTIAL** — rewrite to assert user-visible outcomes and data persistence.
-   - **Live system tests** MUST use ephemeral storage or clean up test data.
+   - **Live system tests** MUST use ephemeral storage; cleanup-based isolation is forbidden (see `instructions/bubbles-test-environment-isolation.instructions.md`).
 3. **Update Docs**: Synchronize `spec.md`, `design.md`, `API.md`.
 4. **Validate**: Run validation commands defined in Phase 0 (e.g., `[PRE_PUSH_COMMAND]`).
 5. **Apply 3-Part Validation** per agent-common.md → Scope Completion Requirements (implementation + behavior + evidence for each fix).
