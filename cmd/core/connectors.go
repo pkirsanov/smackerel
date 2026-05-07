@@ -18,6 +18,7 @@ import (
 	keepConnector "github.com/smackerel/smackerel/internal/connector/keep"
 	mapsConnector "github.com/smackerel/smackerel/internal/connector/maps"
 	marketsConnector "github.com/smackerel/smackerel/internal/connector/markets"
+	qfDecisionsConnector "github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	rssConnector "github.com/smackerel/smackerel/internal/connector/rss"
 	twitterConnector "github.com/smackerel/smackerel/internal/connector/twitter"
 	weatherConnector "github.com/smackerel/smackerel/internal/connector/weather"
@@ -44,10 +45,11 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	weatherConn := weatherConnector.New("weather")
 	alertsConn := alertsConnector.New("gov-alerts")
 	marketsConn := marketsConnector.New("financial-markets")
+	qfDecisionsConn := qfDecisionsConnector.New("qf-decisions")
 	for _, c := range []connector.Connector{
 		imapConn, caldavConn, ytConn, rssConn, keepConn,
 		bmConn, browserHistConn, mapsConn, hospitableConn, guesthostConn,
-		discordConn, twitterConn, weatherConn, alertsConn, marketsConn,
+		discordConn, twitterConn, weatherConn, alertsConn, marketsConn, qfDecisionsConn,
 	} {
 		if err := svc.registry.Register(c); err != nil {
 			return fmt.Errorf("register connector %q: %w", c.ID(), err)
@@ -198,6 +200,27 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			slog.Info("guesthost connector started")
 		} else {
 			slog.Warn("guesthost connector failed to start", "error", err)
+		}
+	}
+
+	if cfg.QFDecisionsEnabled {
+		qfCfg := connector.ConnectorConfig{
+			AuthType:     "token",
+			Credentials:  map[string]string{"credential_ref": cfg.QFDecisionsCredentialRef},
+			Enabled:      true,
+			SyncSchedule: cfg.QFDecisionsSyncSchedule,
+			SourceConfig: map[string]interface{}{
+				"base_url":       cfg.QFDecisionsBaseURL,
+				"packet_version": cfg.QFDecisionsPacketVersion,
+				"page_size":      cfg.QFDecisionsPageSize,
+			},
+		}
+		if err := qfDecisionsConn.Connect(ctx, qfCfg); err == nil {
+			svc.supervisor.SetConfig("qf-decisions", qfCfg)
+			svc.supervisor.StartConnector(ctx, "qf-decisions")
+			slog.Info("qf-decisions connector started", "packet_version", cfg.QFDecisionsPacketVersion)
+		} else {
+			slog.Warn("qf-decisions connector failed contract validation", "error", err)
 		}
 	}
 

@@ -120,6 +120,96 @@ func TestValidate_TelegramChatIDs(t *testing.T) {
 	}
 }
 
+func TestValidate_QFDecisionsDisabledAllowsEmptyValues(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("QF_DECISIONS_ENABLED", "false")
+	t.Setenv("QF_DECISIONS_BASE_URL", "")
+	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "")
+	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "")
+	t.Setenv("QF_DECISIONS_PACKET_VERSION", "")
+	t.Setenv("QF_DECISIONS_PAGE_SIZE", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.QFDecisionsEnabled {
+		t.Fatal("QFDecisionsEnabled should be false")
+	}
+}
+
+func TestValidate_QFDecisionsEnabledRequiresExplicitValues(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("QF_DECISIONS_ENABLED", "true")
+	t.Setenv("QF_DECISIONS_BASE_URL", "")
+	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "")
+	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "")
+	t.Setenv("QF_DECISIONS_PACKET_VERSION", "")
+	t.Setenv("QF_DECISIONS_PAGE_SIZE", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected qf-decisions config error")
+	}
+	for _, key := range []string{
+		"QF_DECISIONS_BASE_URL",
+		"QF_DECISIONS_CREDENTIAL_REF",
+		"QF_DECISIONS_SYNC_SCHEDULE",
+		"QF_DECISIONS_PACKET_VERSION",
+		"QF_DECISIONS_PAGE_SIZE",
+	} {
+		if !strings.Contains(err.Error(), key) {
+			t.Fatalf("error should include %s: %v", key, err)
+		}
+	}
+}
+
+func TestValidate_QFDecisionsEnabledAcceptsValidValues(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("QF_DECISIONS_ENABLED", "true")
+	t.Setenv("QF_DECISIONS_BASE_URL", "https://qf.example.test")
+	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "qf-service-token")
+	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "*/5 * * * *")
+	t.Setenv("QF_DECISIONS_PACKET_VERSION", "1")
+	t.Setenv("QF_DECISIONS_PAGE_SIZE", "25")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.QFDecisionsBaseURL != "https://qf.example.test" {
+		t.Fatalf("QFDecisionsBaseURL = %q", cfg.QFDecisionsBaseURL)
+	}
+	if cfg.QFDecisionsPacketVersion != 1 || cfg.QFDecisionsPageSize != 25 {
+		t.Fatalf("packet/page config = %d/%d", cfg.QFDecisionsPacketVersion, cfg.QFDecisionsPageSize)
+	}
+}
+
+func TestValidate_QFDecisionsEnabledRejectsInvalidValues(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("QF_DECISIONS_ENABLED", "true")
+	t.Setenv("QF_DECISIONS_BASE_URL", "qf.example.test")
+	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "qf-service-token")
+	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "every five minutes")
+	t.Setenv("QF_DECISIONS_PACKET_VERSION", "0")
+	t.Setenv("QF_DECISIONS_PAGE_SIZE", "101")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected qf-decisions validation error")
+	}
+	for _, key := range []string{
+		"QF_DECISIONS_BASE_URL",
+		"QF_DECISIONS_SYNC_SCHEDULE",
+		"QF_DECISIONS_PACKET_VERSION",
+		"QF_DECISIONS_PAGE_SIZE",
+	} {
+		if !strings.Contains(err.Error(), key) {
+			t.Fatalf("error should include %s: %v", key, err)
+		}
+	}
+}
+
 func TestValidate_PlaceholderAuthTokenRejected(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("SMACKEREL_AUTH_TOKEN", "development-change-me")

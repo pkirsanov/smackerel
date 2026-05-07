@@ -555,6 +555,14 @@ GUESTHOST_API_KEY="$(yaml_get connectors.guesthost.api_key 2>/dev/null)" || GUES
 GUESTHOST_SYNC_SCHEDULE="$(yaml_get connectors.guesthost.sync_schedule 2>/dev/null)" || GUESTHOST_SYNC_SCHEDULE=""
 GUESTHOST_EVENT_TYPES="$(yaml_get connectors.guesthost.event_types 2>/dev/null)" || GUESTHOST_EVENT_TYPES=""
 
+# QF decisions connector
+QF_DECISIONS_ENABLED="$(required_value connectors.qf-decisions.enabled)"
+QF_DECISIONS_BASE_URL="$(required_value connectors.qf-decisions.base_url)"
+QF_DECISIONS_CREDENTIAL_REF="$(required_value connectors.qf-decisions.credential_ref)"
+QF_DECISIONS_SYNC_SCHEDULE="$(required_value connectors.qf-decisions.sync_schedule)"
+QF_DECISIONS_PACKET_VERSION="$(required_value connectors.qf-decisions.packet_version)"
+QF_DECISIONS_PAGE_SIZE="$(required_value connectors.qf-decisions.page_size)"
+
 # Hospitable connector
 HOSPITABLE_ENABLED="$(yaml_get connectors.hospitable.enabled 2>/dev/null)" || HOSPITABLE_ENABLED="false"
 HOSPITABLE_ACCESS_TOKEN="$(yaml_get connectors.hospitable.access_token 2>/dev/null)" || HOSPITABLE_ACCESS_TOKEN=""
@@ -919,6 +927,12 @@ GUESTHOST_BASE_URL=${GUESTHOST_BASE_URL}
 GUESTHOST_API_KEY=${GUESTHOST_API_KEY}
 GUESTHOST_SYNC_SCHEDULE=${GUESTHOST_SYNC_SCHEDULE}
 GUESTHOST_EVENT_TYPES=${GUESTHOST_EVENT_TYPES}
+QF_DECISIONS_ENABLED=${QF_DECISIONS_ENABLED}
+QF_DECISIONS_BASE_URL=${QF_DECISIONS_BASE_URL}
+QF_DECISIONS_CREDENTIAL_REF=${QF_DECISIONS_CREDENTIAL_REF}
+QF_DECISIONS_SYNC_SCHEDULE=${QF_DECISIONS_SYNC_SCHEDULE}
+QF_DECISIONS_PACKET_VERSION=${QF_DECISIONS_PACKET_VERSION}
+QF_DECISIONS_PAGE_SIZE=${QF_DECISIONS_PAGE_SIZE}
 HOSPITABLE_ENABLED=${HOSPITABLE_ENABLED}
 HOSPITABLE_ACCESS_TOKEN=${HOSPITABLE_ACCESS_TOKEN}
 HOSPITABLE_BASE_URL=${HOSPITABLE_BASE_URL}

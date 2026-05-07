@@ -261,6 +261,14 @@ connectors:
     sync_schedule: "*/5 * * * *"
     event_types: "booking.created,booking.updated,booking.cancelled,guest.created,guest.updated,review.received,message.received,task.created,task.completed,expense.created,property.updated"
 
+  qf-decisions:
+    enabled: false
+    base_url: ""
+    credential_ref: ""
+    sync_schedule: "*/5 * * * *"
+    packet_version: 1
+    page_size: 25
+
   discord:
     enabled: false
     bot_token: "" # REQUIRED when enabled: Discord bot token from Developer Portal
