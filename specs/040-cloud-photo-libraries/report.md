@@ -3206,3 +3206,263 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-l
 ```
 
 The remaining single blocker is V-008 (SST DEFAULT_FALLBACK at `ml/app/main.py:75`) routed to bubbles.harden via MIT-040-S-004. V-002 (G022 specialist-phase string-fallback gap) is fully resolved.
+
+## Harden Phase — V-008 SST Resolution (MIT-040-S-004)
+
+**Agent:** bubbles.harden
+**Scope:** feature-wide
+**Mode:** post-feature-done remediation (final unblock for bubbles.validate feature-done promotion)
+**Verdict:** 🔒 HARDENED (completed_diagnostic — owned remediation applied)
+**Baseline commit:** 7dd835e (workflow(040): append string fallback entries to certifiedCompletedPhases)
+**Routed by:** bubbles.validate (state.json executionHistory at 2026-05-06T22:35:00Z) routed V-008 to bubbles.implement-or-harden via MIT-040-S-004 (Gate G028 / Check 16 of state-transition-guard).
+
+### Outcome Contract Verification (Gate G070)
+
+| Field | Value | Verified? |
+|-------|-------|-----------|
+| Intent | Eliminate the single remaining V-008 SST DEFAULT_FALLBACK violation at [ml/app/main.py](ml/app/main.py#L75) so spec 040 final feature-done promotion is unblocked. | ✅ |
+| Success Signal | `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/040-cloud-photo-libraries` reports 0 violations AND `bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries` reports 0 blockers. | ✅ |
+| Hard Constraints | Reuse the existing fail-loud helper `_check_required_config()`; do not introduce new fallback patterns; do not edit auto-generated env files; do not touch other specs; preserve dev/test env tokens. | ✅ |
+| Failure Condition | Any new SST default/fallback pattern, or any test that exercises the legacy warn-on-empty path without sys.exit(1). | ✅ none introduced |
+
+### Change Summary — `ml/app/main.py:75`
+
+**Before** (commit 7dd835e):
+
+```python
+def _check_required_config() -> dict[str, str]:
+    """Validate required environment variables. Fail loudly if missing."""
+    keys = [
+        "NATS_URL",
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "OLLAMA_URL",
+        "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
+    ]
+    # ...
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: connect to NATS on startup, disconnect on shutdown."""
+    global nats_client
+
+    config = _check_required_config()
+
+    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    if not auth_token:
+        logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")
+
+    nats_url = config["NATS_URL"]
+```
+
+**After** (this harden phase):
+
+```python
+def _check_required_config() -> dict[str, str]:
+    """Validate required environment variables. Fail loudly if missing."""
+    keys = [
+        "NATS_URL",
+        "LLM_PROVIDER",
+        "LLM_MODEL",
+        "OLLAMA_URL",
+        "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
+        "SMACKEREL_AUTH_TOKEN",
+    ]
+    # ...
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: connect to NATS on startup, disconnect on shutdown."""
+    global nats_client
+
+    config = _check_required_config()
+
+    nats_url = config["NATS_URL"]
+```
+
+The fix reuses the canonical fail-loud loop already in `_check_required_config()` — when `SMACKEREL_AUTH_TOKEN` is missing or empty, the loop appends it to `missing` and the function logs `"Missing required configuration: SMACKEREL_AUTH_TOKEN"` then `sys.exit(1)`. The lifespan no longer reads `os.environ.get("SMACKEREL_AUTH_TOKEN", "")` — that line was the V-008 trigger pattern. The SST policy table in [.github/copilot-instructions.md](.github/copilot-instructions.md) explicitly forbids the `os.getenv("KEY", "default")` pattern for auth secrets and requires `os.environ["KEY"]`-style access that fails loud at startup.
+
+### Test Updates
+
+Two test files were updated to reflect the elevated fail-loud contract:
+
+**1. [ml/tests/test_main.py](ml/tests/test_main.py)** — three changes:
+- Added `SMACKEREL_AUTH_TOKEN` to the `clear_required_env` fixture's keys list so the autouse fixture deletes it cleanly across tests.
+- Set `SMACKEREL_AUTH_TOKEN=unit-test-auth-token` in the two existing positive-path tests (`test_check_required_config_allows_ollama_without_api_key`, `test_check_required_config_rejects_invalid_degraded_fallback_flag`) so they continue to PASS under the new required-key list.
+- Added two new MIT-040-S-004 fail-loud regression tests:
+  - `test_check_required_config_requires_auth_token_when_missing` — asserts `pytest.raises(SystemExit)` when the key is unset.
+  - `test_check_required_config_requires_auth_token_rejects_empty_value` — asserts `pytest.raises(SystemExit)` when the key is set to `""`.
+
+**2. [ml/tests/test_startup_warning.py](ml/tests/test_startup_warning.py)** — module-level rewrite:
+- Renamed `TestMLStartupWarningEmptyToken` → `TestMLStartupFailLoudEmptyToken` and inverted `test_warns_when_token_empty` → `test_exits_when_token_empty`. The new test wraps `_run_lifespan("", caplog)` in `pytest.raises(SystemExit)`, asserts `exc_info.value.code == 1`, and verifies an ERROR-level log mentioning `SMACKEREL_AUTH_TOKEN` is present (proving the validator named the missing key).
+- Preserved `TestMLStartupNoWarningWithToken::test_no_warning_when_token_set` — it still PASSes because lifespan with a non-empty token never enters the (now-deleted) warn branch.
+- Module docstring records the SCN-020-017 → MIT-040-S-004 elevation rationale so future readers see why the spec 020 warn-contract was hardened.
+
+### Evidence
+
+**Evidence Block 1 — Pre-fix scan output (proves V-008 was the trigger):**
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/040-cloud-photo-libraries --verbose 2>&1 | grep -A2 -E "DEFAULT_FALLBACK|main\.py|V-008|VERDICT"
+🔴 VIOLATION [DEFAULT_FALLBACK] ml/app/main.py:75
+   Context:     auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+```
+
+**Evidence Block 2 — Post-fix implementation-reality-scan (Gate G028):**
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/040-cloud-photo-libraries 2>&1 | tail -15
+============================================================
+  IMPLEMENTATION REALITY SCAN RESULT
+============================================================
+
+  Files scanned:  41
+  Violations:     0
+  Warnings:       1
+
+🟡 PASSED with 1 warning(s) — manual review advised
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+The only remaining warning is the pre-existing `INFO: Scopes yielded 0 files — falling back to design.md for file discovery` notice (cosmetic, present in every prior phase scan, untouched by this harden phase).
+
+**Evidence Block 3 — Post-fix state-transition-guard (target: 0 blockers):**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries 2>&1 | tail -10
+
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🟡 TRANSITION PERMITTED with 1 warning(s)
+
+state.json status may be set to 'done'.
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/040-cloud-photo-libraries 2>&1 | grep -cE "^🔴 BLOCK"
+0
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+Blocker count: 8 (after validate) → 1 (after plan + workflow) → **0 (after this harden phase)**. Final feature-done promotion is now unblocked.
+
+**Evidence Block 4 — Post-fix artifact-lint (Gate G014/G016):**
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries 2>&1 | tail -10
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+The pre-existing deprecated `scopeProgress` field warning is unchanged — owned by a separate state.json schema-v2 → schema-v3 migration backlog item, not by this harden phase.
+
+**Evidence Block 5 — Repo-standard check (Go core, SST sync, scenario-lint):**
+
+```text
+$ ./smackerel.sh check 2>&1 | tail -5
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+**Evidence Block 6 — Repo-standard unit tests (Go + Python sidecar incl. 3 new MIT-040-S-004 fail-loud tests):**
+
+```text
+$ ./smackerel.sh test unit 2>&1 | tail -8
+........................................................................ [ 17%]
+........................................................................ [ 35%]
+........................................................................ [ 52%]
+........................................................................ [ 70%]
+........................................................................ [ 88%]
+.................................................                        [100%]
+409 passed in 19.61s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+The Python sidecar test count rose from 407 (security-phase baseline) → 409, accounting for the two new `test_check_required_config_requires_auth_token_*` tests in `test_main.py`. The flipped `test_exits_when_token_empty` in `test_startup_warning.py` replaced the prior `test_warns_when_token_empty` (1 test for 1 test, no count change). Go-side coverage unchanged — the V-008 fix is Python-sidecar-only.
+
+**Evidence Block 7 — Generated env files already contain the validated token (no regen required):**
+
+```text
+$ grep '^SMACKEREL_AUTH_TOKEN=' config/generated/dev.env config/generated/test.env
+config/generated/dev.env:SMACKEREL_AUTH_TOKEN=3d8b160ea6440c30d8b38485aed71e4b6e95a280b659f48a
+config/generated/test.env:SMACKEREL_AUTH_TOKEN=3d8b160ea6440c30d8b38485aed71e4b6e95a280b659f48a
+```
+
+Both env files were generated at 2026-05-06T23:30:30Z (dev) and 2026-05-06T23:40:12Z (test) by the prior workflow phase — both have a 48-character random token populated. The newly-required `_check_required_config()` validation will succeed in dev and test out of the box; production deployments must populate `SMACKEREL_AUTH_TOKEN` (via inline `config/smackerel.yaml` or environment override before `./smackerel.sh config generate`) per the Secrets Management contract in [.github/copilot-instructions.md](.github/copilot-instructions.md).
+
+### Auth.py Module-Level Read — Excluded From V-008 Scan Surface
+
+The implementation-reality-scan flagged exactly one V-008 violation at `ml/app/main.py:75`. The functionally-similar pattern at `ml/app/auth.py:11` (`_AUTH_TOKEN = os.environ.get("SMACKEREL_AUTH_TOKEN", "")`) was NOT flagged by the scan because spec 040 does not enumerate `auth.py` in its impl-files set. That module-level read happens at import time, BEFORE `lifespan()` runs — but the new `_check_required_config()` validation guarantees the FastAPI server cannot start without a populated token, so the auth module's captured value is guaranteed non-empty by the time any request handler runs. The auth.py defense-in-depth tightening is therefore a downstream hardening backlog item for whichever spec next touches auth.py, not a V-008 closure prerequisite.
+
+### Files Touched
+
+| File | Change |
+|------|--------|
+| [ml/app/main.py](ml/app/main.py) | Added `SMACKEREL_AUTH_TOKEN` to `_check_required_config()` keys; deleted the warn-on-empty branch in `lifespan()` (lines 75-77 in the pre-fix file). |
+| [ml/tests/test_main.py](ml/tests/test_main.py) | Added `SMACKEREL_AUTH_TOKEN` to `clear_required_env` fixture; populated token in two existing positive-path tests; added two new `test_check_required_config_requires_auth_token_*` fail-loud tests. |
+| [ml/tests/test_startup_warning.py](ml/tests/test_startup_warning.py) | Module-level rewrite: flipped warn-on-empty assertion to fail-loud `pytest.raises(SystemExit)` assertion; renamed test class; preserved no-warning-when-set test; updated module docstring to record the SCN-020-017 → MIT-040-S-004 elevation. |
+| [specs/040-cloud-photo-libraries/report.md](specs/040-cloud-photo-libraries/report.md) | Appended this `## Harden Phase — V-008 SST Resolution` section. |
+| [specs/040-cloud-photo-libraries/state.json](specs/040-cloud-photo-libraries/state.json) | Appended `executionHistory` entry for `bubbles.harden`; appended `execution.completedPhaseClaims` dict + `"harden"` string fallback; appended `certification.certifiedCompletedPhases` dict + `"harden"` string fallback; advanced `lastUpdatedAt`. |
+
+### Phase Completion Recording
+
+Per [scope-workflow.md → Phase Recording Responsibility](.specify/memory/scope-workflow.md):
+
+- `execution.completedPhaseClaims`: appended dict `{phase:"harden", agent:"bubbles.harden", scope:"feature-wide", timestamp:"2026-05-06T23:55:00Z", summary:...}` plus bare-string `"harden"` fallback (the state-transition-guard Check 6 / Gate G022 walk requires the bare-string fallback alongside dict entries — same pattern bubbles.workflow used for V-002 at commit 7dd835e).
+- `certification.certifiedCompletedPhases`: appended dict `{phase:"harden", agent:"bubbles.harden", scope:"feature-wide", certifiedAt:"2026-05-06T23:55:00Z", mode:"post-feature-done", verdict:"completed_diagnostic", evidenceFile:"report.md#harden-phase--v-008-sst-resolution-mit-040-s-004"}` plus bare-string `"harden"` fallback.
+- `certification.completedScopes` / `certification.status` / `scopeProgress` / `status` UNTOUCHED — final feature-done promotion remains owned by bubbles.validate.
+
+### Overall Status
+
+| Question | Answer |
+|----------|--------|
+| Was V-008 the only remaining state-transition-guard blocker? | Yes — confirmed by the prior bubbles.workflow run (commit 7dd835e). |
+| Did this harden phase eliminate V-008? | Yes — implementation-reality-scan now reports 0 violations and state-transition-guard reports 0 blockers. |
+| Any new violations introduced? | No — Python lint clean (ruff via `./smackerel.sh test unit`), 409 tests PASS, scan clean. |
+| Any other specs touched? | No — only spec 040 artifacts plus `ml/app/main.py` + 2 test files; the qf-companion spec 041 work-in-progress files in the working tree were intentionally NOT swept into this commit. |
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "verdict": "completed_diagnostic",
+  "agent": "bubbles.harden",
+  "phase": "harden",
+  "scope": "feature-wide",
+  "spec": "specs/040-cloud-photo-libraries",
+  "blocker_resolved": "V-008",
+  "mitigation_id": "MIT-040-S-004",
+  "files_changed": [
+    "ml/app/main.py",
+    "ml/tests/test_main.py",
+    "ml/tests/test_startup_warning.py",
+    "specs/040-cloud-photo-libraries/report.md",
+    "specs/040-cloud-photo-libraries/state.json"
+  ],
+  "scan_results": {
+    "implementation_reality_scan": "0 violations (was 1)",
+    "state_transition_guard_blockers": "0 (was 1)",
+    "artifact_lint": "PASSED",
+    "smackerel_check": "PASSED",
+    "smackerel_test_unit": "409 passed in 19.61s"
+  },
+  "next_required_owner": "bubbles.validate",
+  "next_action": "Re-invoke bubbles.validate for final feature-done promotion. All 8 prior validate blockers (V-001 through V-008) are now resolved; expect status_promotion=in_progress→done."
+}
+```
+

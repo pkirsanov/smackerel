@@ -25,6 +25,7 @@ def _check_required_config() -> dict[str, str]:
         "LLM_MODEL",
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
+        "SMACKEREL_AUTH_TOKEN",
     ]
     required: dict[str, str] = {}
     missing: list[str] = []
@@ -71,10 +72,6 @@ async def lifespan(app: FastAPI):
     global nats_client
 
     config = _check_required_config()
-
-    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
-    if not auth_token:
-        logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")
 
     nats_url = config["NATS_URL"]
     validate_runtime_streams_on_startup()
