@@ -33,6 +33,11 @@ Commands:
   clean measure               Show docker disk usage
   clean smart                 Stop the current stack without deleting persistent volumes
   clean full                  Stop the current stack and remove project-scoped volumes
+  deploy-target <target> <action> [args]
+                              Run a deployment-target adapter action.
+                              Targets: home-lab (see deploy/<target>/README.md)
+                              Actions: preconditions | bootstrap | apply | rollback |
+                                       verify | teardown | status | manifest | params
 EOF
 }
 
@@ -489,9 +494,10 @@ shift || true
 case "$COMMAND" in
   config)
     SUBCOMMAND="${1:-}"
+    shift || true
     case "$SUBCOMMAND" in
       generate)
-        smackerel_generate_config "$TARGET_ENV"
+        smackerel_generate_config "$TARGET_ENV" "$@"
         ;;
       *)
         usage
@@ -1247,6 +1253,9 @@ case "$COMMAND" in
     ;;
   help)
     usage
+    ;;
+  deploy-target)
+    bash "$SCRIPT_DIR/scripts/commands/deploy_target.sh" "$@"
     ;;
   *)
     usage

@@ -92,3 +92,27 @@ Blocked patterns:
 - Commits containing source code changes under a planning-only mode (detected as warnings on last commit)
 
 Enforced by: `state-transition-guard.sh` (Check 3B), agent-common.md (Mode Ceiling Pre-Flight), bubbles.implement (Mode Ceiling Pre-Flight behavioral rule), bubbles.bug (Phase 5 Mode Ceiling Gate).
+
+## Build-Once Deploy-Many Integrity Gate (G074)
+
+**Status in framework:** Advisory. Becomes BLOCKING when a downstream product repo opts in via its own `copilot-instructions.md`.
+
+When a project ships images to multiple environments (dev, staging, prod, home-lab, cloud), the build-once-deploy-many invariant MUST hold: a single git SHA produces one immutable application image and a per-environment family of immutable config bundles. The same image digest is then deployed to every target by pairing it with the matching environment's bundle.
+
+Blocked patterns:
+- Any deployment manifest (`deploy/<target>/manifest.yaml`, runtime Compose file, runtime Kubernetes spec, systemd unit ExecStart) referencing an image by mutable tag (`:latest`, `:staging-latest`, `:prod-latest`, `:main`, branch names) instead of by `sha256:<digest>`
+- CI workflow that performs `apply`, `deploy`, `ssh`, or any host mutation after image publish
+- CI workflow that does NOT publish a `build-manifest-<sourceSha>.yaml` listing image digest(s), bundle hashes, and attestation refs
+- Adapter `apply.sh` that invokes `docker build`, `docker buildx build`, `cargo build`, `npm run build`, or any compile step
+- Adapter `apply.sh` that falls back to local build if registry pull fails
+- Adapter `apply.sh` that does NOT verify the image's cosign signature against a transparency log before container start
+- Adapter `apply.sh` that does NOT verify the config bundle hash before extraction
+- Adapter `rollback.sh` that rebuilds anything (rollback MUST be a pure pointer-swap on `previousManifest`)
+- Config bundle generated on the deploy target instead of in CI
+- Config bundle that embeds plaintext secrets instead of secret references
+- Config bundle that is non-deterministic (timestamps, random ordering, varying uid/gid produce different hashes for the same SST + sourceSha)
+- Two targets sharing the same `manifest.yaml` (each adapter MUST own its own manifest)
+
+Enforced by: `bubbles-deployment-target-adapter` skill (Build-Once Deploy-Many Pattern, CI ↔ Adapter Handshake, Anti-Patterns table), `bubbles-deployment-target.instructions.md` (Build-Once Deploy-Many section), `bubbles-config-sst` skill (Config Bundle Artifact section).
+
+Downstream enforcement (when a product repo declares G074 BLOCKING in its `copilot-instructions.md`): pre-push hook scans for mutable-tag patterns in deployment manifests; CI workflow lint scans for build/deploy fusion; adapter `apply.sh` audit confirms cosign verification call site exists.

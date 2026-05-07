@@ -66,6 +66,88 @@ Docker   → reads Compose file + .env
 Tests    → reads test-specific env from generated test config
 ```
 
+## Config Bundle Artifact (Build-Once Deploy-Many)
+
+In a build-once-deploy-many pipeline, the SST generator MUST also emit a **config bundle artifact** for each target environment. The bundle is the immutable, hash-identified package that pairs with an immutable application image at deploy time.
+
+### Bundle Generator Surface
+
+```
+./<project>.sh config generate --env <env> --bundle [--output-dir <dir>]
+```
+
+- `--bundle` flag instructs the generator to emit a tar.gz alongside loose env files
+- `--output-dir` defaults to `dist/config-bundles/`
+- Output filename: `config-bundle-<env>-<sourceSha>.tar.gz`
+- Bundle MUST contain ALL generated config artifacts for that environment (`.env` files, generated YAML/JSON configs, runtime Compose overlays)
+- Bundle MUST be deterministic: same SST + same env + same sourceSha → byte-identical bundle (sort entries, fix mtimes, fix uid/gid)
+
+### Bundle Hash Naming
+
+```
+bundle name:  config-bundle-<env>-<sourceSha>.tar.gz
+bundle hash:  <env>-<sourceSha>          # short identifier consumed by `apply`
+sha256 hash:  <full sha256 digest>       # used for adapter-side verification
+```
+
+The `<env>-<sourceSha>` identifier MUST appear in:
+- The build manifest CI publishes (`build-manifest-<sourceSha>.yaml`)
+- The deployment manifest the adapter writes (`deploy/<target>/manifest.yaml`)
+- The CI workflow output (visible to operators)
+
+### CI Pipeline Step
+
+```yaml
+# Excerpt from .github/workflows/build.yml
+- name: Generate config bundles for all environments
+  run: |
+    for env in dev staging prod; do
+      ./<project>.sh config generate --env "$env" --bundle
+    done
+
+- name: Verify bundle determinism
+  run: |
+    for env in dev staging prod; do
+      ./<project>.sh config generate --env "$env" --bundle --output-dir /tmp/verify
+      diff <(sha256sum dist/config-bundles/config-bundle-$env-$GITHUB_SHA.tar.gz) \
+           <(sha256sum /tmp/verify/config-bundle-$env-$GITHUB_SHA.tar.gz)
+    done
+
+- name: Publish bundles to artifact registry
+  run: |
+    for env in dev staging prod; do
+      <publish-tool> push dist/config-bundles/config-bundle-$env-$GITHUB_SHA.tar.gz
+    done
+```
+
+### Adapter-Side Consumption
+
+The deployment adapter `apply.sh` MUST:
+1. Pull the bundle by hash from the artifact registry
+2. Verify the sha256 matches the build manifest entry
+3. Extract bundle to a target-local mount path (e.g. `/var/lib/<project>/<target>/config/<bundle-hash>/`)
+4. Reference the extracted path from the runtime Compose file (read-only mount)
+5. Record the bundle hash in `deploy/<target>/manifest.yaml`
+
+### Bundle Drift Rules
+
+| Scenario | Required Behavior |
+|----------|-------------------|
+| Same `<sourceSha>` rebuilt twice | Bundle hash MUST match (determinism) |
+| `<sourceSha>` changes but no SST change | Bundle hash changes (sourceSha is part of identity) |
+| SST changes without `<sourceSha>` change | Impossible by construction; sourceSha is git SHA at build |
+| Operator hand-edits a bundle on the target | Detected by hash mismatch on next `apply` or `verify`; treated as drift |
+
+### Anti-Patterns (Bundle-Specific)
+
+| Anti-Pattern | Fix |
+|--------------|-----|
+| Bundle generated on the deploy target | Bundle is a CI artifact; adapter consumes it as-is |
+| Bundle includes secrets in plaintext | Secrets are referenced (env var names, secret manager refs); never embedded |
+| Bundle is non-deterministic (timestamps, random ordering) | Sort entries; pin mtimes; pin uid/gid |
+| Bundle depends on host-side SST file | Bundle is self-contained; no runtime SST lookup on target |
+| Adapter regenerates bundle on rollback | Rollback re-points to the prior bundle hash; never regenerates |
+
 ## Classification Rules
 
 ### SST-Managed (MUST be in SST file)

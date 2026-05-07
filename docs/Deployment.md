@@ -1,6 +1,130 @@
 # Smackerel Production Deployment Guide
 
-This guide covers production deployment concerns: TLS termination, auth token management, Docker Compose overrides, and HTTPS requirements for webhooks and OAuth.
+> **Architecture:** Build-Once Deploy-Many — bubbles framework gate **G074**.
+> The same `git SHA` produces immutable artifacts that any environment can consume.
+> **CI builds and signs. CI does NOT deploy.** Deploy runs on a different trust
+> boundary, invoked by an operator (or a separate workflow with adapter-only credentials).
+
+This document is operator-facing. For framework rationale see
+[`.github/instructions/bubbles-deployment-target.instructions.md`](../.github/instructions/bubbles-deployment-target.instructions.md)
+and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](../.github/skills/bubbles-deployment-target-adapter/SKILL.md).
+
+---
+
+## Three artifacts produced per source SHA
+
+| Artifact | Identifier | Mutable? | Producer |
+|----------|-----------|----------|----------|
+| Application image (`smackerel-core`) | `ghcr.io/pkirsanov/smackerel-core@sha256:<digest>` | No (immutable) | `.github/workflows/build.yml` |
+| Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` |
+| Config bundle (per env)              | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No (immutable, deterministic) | `./smackerel.sh config generate --env <env> --bundle` |
+| Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | CI workflow artifact |
+| Deployment manifest (per target)     | `deploy/<target>/manifest.yaml`                    | **Yes** (pointer)              | `deploy/<target>/apply.sh` |
+
+Image tags like `:latest`, `:main`, `:staging-latest` MUST NOT be used in any
+deployment manifest. Adapters consume images by digest only.
+
+---
+
+## CI pipeline (`.github/workflows/build.yml`)
+
+```text
+git push (main / tag) → tests → buildx → cosign keyless sign (Sigstore + Rekor)
+                              → syft SBOM attestation
+                              → SLSA provenance attestation
+                              → for env in (dev, test, home-lab):
+                                    ./smackerel.sh config generate --env $env --bundle
+                                    determinism check (regenerate, compare sha256)
+                                    oras push bundle → registry
+                              → publish build-manifest-<sourceSha>.yaml
+                              → END (no deploy)
+```
+
+The CI workflow has **no SSH key**, **no host credentials**, **no `apply` invocation**.
+It cannot mutate any deploy target.
+
+---
+
+## Operator workflow
+
+```bash
+# 1) Pick a release: locate the build-manifest.yaml from the CI run on the desired commit
+gh run download <run-id> --name build-manifest-<sourceSha> --dir /tmp/sm-release
+
+# 2) Promote to a target (resolves digests + bundle ref from the manifest, calls apply)
+bash scripts/deploy/promote.sh --target home-lab --build-manifest /tmp/sm-release/build-manifest.yaml
+
+# 2b) Or apply directly with explicit digests
+./smackerel.sh deploy-target home-lab apply \
+    --image-core=sha256:abc123... \
+    --image-ml=sha256:def456... \
+    --config-bundle=home-lab-9f8a7b6c
+
+# 3) Verify
+./smackerel.sh deploy-target home-lab verify
+
+# 4) On regression, pure pointer-swap rollback (NEVER rebuilds)
+./smackerel.sh deploy-target home-lab rollback
+```
+
+---
+
+## Adapter contract (per bubbles G074)
+
+Each `deploy/<target>/apply.sh` MUST:
+
+1. Reject any image reference not of form `<repo>@sha256:<digest>`
+2. Pull both images by digest
+3. Verify cosign signature + transparency-log entry against the configured
+   identity/issuer (`signing.cosignIdentity`, `signing.cosignIssuer` in `params.yaml`)
+4. Pull the config bundle by `<env>-<sourceSha>` tag and verify its sha256
+5. Write the new pointer into `manifest.yaml` (preserving the prior pointer in
+   `previousManifest`) BEFORE starting any container
+6. Run the rollout strategy declared in `params.yaml` (`recreate` for home-lab today;
+   `blue-green` available)
+7. On verify failure, invoke `rollback.sh` (pointer-swap, no rebuild)
+
+Each `deploy/<target>/rollback.sh` MUST:
+
+- Restore the `previousManifest` pointer (atomic swap)
+- NEVER invoke any build step
+- Fail explicitly if `previousManifest` is null (no prior release to roll back to)
+
+---
+
+## Adding a new deploy target
+
+1. `cp -R deploy/home-lab deploy/<new-target>`
+2. Edit `deploy/<new-target>/params.yaml` with target-specific knobs (rollout
+   strategy, hostnames, replica counts, host paths)
+3. Edit each script for target-specific differences (e.g., k8s vs docker compose)
+4. Add the env name to `deploy/contract.yaml` `configBundles.environments` and to
+   the matrix in `.github/workflows/build.yml`
+5. The CLI auto-discovers the new target on the next `./smackerel.sh deploy-target` run
+
+---
+
+## Forbidden patterns (G074)
+
+| Pattern | Why it's blocked |
+|---------|------------------|
+| Mutable image tag in `manifest.yaml` (`:latest`, `:main`, branch names) | Defeats reproducibility + rollback |
+| CI workflow performing `apply`/`deploy`/`ssh` | Wrong trust boundary |
+| Adapter `apply.sh` invoking `docker build`, `cargo build`, `npm run build` | Defeats build-once |
+| Adapter falling back to local build on registry pull failure | Defeats build-once |
+| Missing cosign verification before container start | Allows unsigned/tampered images |
+| Missing bundle hash verification | Allows tampered config |
+| `rollback.sh` rebuilding instead of pointer-swap | Defeats fast rollback |
+| Target-side bundle generation | Defeats reproducibility |
+| Plaintext secrets in bundle | Use injected env vars / sealed secrets |
+| Non-deterministic bundle | Two CI runs on same SHA produce different bundles |
+| Two targets sharing one `manifest.yaml` | Each target owns its own pointer |
+
+---
+
+# Reverse-proxy and operational concerns
+
+The remainder of this guide covers production deployment concerns: TLS termination, auth token management, Docker Compose overrides, and HTTPS requirements for webhooks and OAuth.
 
 ## Reverse Proxy Setup for TLS
 
