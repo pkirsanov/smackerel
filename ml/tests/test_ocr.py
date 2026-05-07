@@ -14,7 +14,7 @@ import base64
 import hashlib
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -129,7 +129,10 @@ class TestAutoHashGeneration:
         expected_hash = hashlib.sha256(image_bytes).hexdigest()
         b64_data = base64.b64encode(image_bytes).decode()
 
-        with patch("app.ocr.extract_text_tesseract", return_value="extracted text from image"):
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "extracted text from image"
+
+        with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
             result = asyncio.run(handle_ocr_request({"image_hash": "", "image_data": b64_data}))
 
         assert result["image_hash"] == expected_hash
@@ -149,13 +152,23 @@ class TestTesseractSufficient:
         sufficient_text = "A" * (MIN_TESSERACT_CHARS + 5)
         b64_data = base64.b64encode(b"image bytes").decode()
 
-        with patch("app.ocr.extract_text_tesseract", return_value=sufficient_text):
-            with patch("app.ocr.extract_text_ollama") as mock_ollama:
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return sufficient_text
+
+        ollama_called = False
+
+        def fake_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
+            nonlocal ollama_called
+            ollama_called = True
+            return "unexpected ollama text"
+
+        with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+            with patch("app.ocr.extract_text_ollama", new=fake_ollama):
                 result = asyncio.run(handle_ocr_request({"image_hash": "sufficient-test", "image_data": b64_data}))
 
         assert result["ocr_engine"] == "tesseract"
         assert result["text"] == sufficient_text
-        mock_ollama.assert_not_called()
+        assert not ollama_called
 
 
 # ---------------------------------------------------------------------------
@@ -219,15 +232,20 @@ class TestExtractTextOllama:
         """When ollama_url is empty, reads from OLLAMA_URL env var."""
         from app.ocr import extract_text_ollama
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"response": "extracted text"}
-        mock_resp.raise_for_status = MagicMock()
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
 
-        mock_requests = MagicMock()
-        mock_requests.post.return_value = mock_resp
+            def json(self):
+                return {"response": "extracted text"}
+
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                return FakeResponse()
 
         with patch.dict(os.environ, {"OLLAMA_URL": "http://localhost:11434", "OLLAMA_VISION_MODEL": "llava"}):
-            with patch.dict(sys.modules, {"requests": mock_requests}):
+            with patch.dict(sys.modules, {"requests": FakeRequests}):
                 result = extract_text_ollama(b"fake image")
 
         assert result == "extracted text"
@@ -236,11 +254,13 @@ class TestExtractTextOllama:
         """Connection failure returns empty string."""
         from app.ocr import extract_text_ollama
 
-        mock_requests = MagicMock()
-        mock_requests.post.side_effect = ConnectionError("down")
+        class FakeRequests:
+            @staticmethod
+            def post(url, json, timeout):
+                raise ConnectionError("down")
 
         with patch.dict(os.environ, {"OLLAMA_VISION_MODEL": "llava"}):
-            with patch.dict(sys.modules, {"requests": mock_requests}):
+            with patch.dict(sys.modules, {"requests": FakeRequests}):
                 result = extract_text_ollama(b"fake image", "http://localhost:11434")
 
         assert result == ""
@@ -283,7 +303,10 @@ class TestCachePoisoningPrevention:
         b64_data = base64.b64encode(image_bytes).decode()
         fake_hash = "attacker-controlled-hash-value"
 
-        with patch("app.ocr.extract_text_tesseract", return_value="extracted text from image"):
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "extracted text from image"
+
+        with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
             result = asyncio.run(handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data}))
 
         assert result["image_hash"] == computed_hash
@@ -297,7 +320,10 @@ class TestCachePoisoningPrevention:
         b64_data = base64.b64encode(image_bytes).decode()
         fake_hash = "should-not-be-cache-key"
 
-        with patch("app.ocr.extract_text_tesseract", return_value="OCR result text here"):
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "OCR result text here"
+
+        with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
             asyncio.run(handle_ocr_request({"image_hash": fake_hash, "image_data": b64_data}))
 
         # The result should be cached under the computed hash

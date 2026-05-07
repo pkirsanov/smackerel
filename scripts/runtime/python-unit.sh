@@ -2,5 +2,5 @@
 set -euo pipefail
 
 cd /workspace
-python -m pip install --no-cache-dir -e ./ml[dev]
+PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore python -m pip install --no-cache-dir -e ./ml[dev]
 pytest ml/tests -q
