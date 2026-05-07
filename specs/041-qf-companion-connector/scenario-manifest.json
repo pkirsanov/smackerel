@@ -24,7 +24,8 @@
       "evidenceRefs": [
         "report.md#scope-1-e2e-api-evidence",
         "report.md#scope-1-broader-e2e-rerun-2026-05-07",
-        "report.md#scope-1-post-compaction-test-rerun---2026-05-07"
+        "report.md#scope-1-post-compaction-test-rerun---2026-05-07",
+        "report.md#scope-1-current-session-validation-refresh---2026-05-07t201245z"
       ],
       "linkedDoD": [
         "SCN-SM-041-001 qf-decisions is registered as a passive connector with explicit configuration",
@@ -50,7 +51,8 @@
       "evidenceRefs": [
         "report.md#scope-1-e2e-api-evidence",
         "report.md#scope-1-broader-e2e-rerun-2026-05-07",
-        "report.md#scope-1-post-compaction-test-rerun---2026-05-07"
+        "report.md#scope-1-post-compaction-test-rerun---2026-05-07",
+        "report.md#scope-1-current-session-validation-refresh---2026-05-07t201245z"
       ],
       "linkedDoD": [
         "SCN-SM-041-002 connector marks schema mismatch degraded/error and publishes no trusted artifacts",

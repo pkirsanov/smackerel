@@ -76,6 +76,12 @@
         "agent": "bubbles.validate",
         "timestamp": "2026-05-07T19:15:00Z",
         "summary": "Partial Scope 1 certification at HEAD 9021d28 after the bubbles.plan scope-status flip at 2026-05-07T19:00:00Z. Re-ran ./smackerel.sh check (EXIT=0), artifact-lint (EXIT=0), traceability-guard (PASSED, 0 warnings), regression-baseline-guard (PASSED, 0 checks failed), and state-transition-guard (EXIT=1, 14 failures — Check 5 parity now PASS at completedScopes count=1 == Done count=1; remaining 14 failures are full-feature-done gates documented as expected in the prior validation rerun: Check 4 unchecked DoD on Parked Scopes 2-9, Check 5 8 Not Started Parked Scopes, Check 6 10 missing specialist phases, Check 18 3 pre-existing G040 deferral hits in low-impact pass sections). Live-stack broader e2e proof reused from /tmp/my-broader-e2e3.log per prior validation rerun acceptance. Added 'Scope 1: Connector Configuration And QF Client Contract' to certification.completedScopes; flipped certification.scopeProgress[0] to Done with certifiedAt 2026-05-07T19:15:00Z; refreshed scopeProgress[0].notes to record partial certification context. Top-level status remains in_progress; certification.status remains in_progress; certification.certifiedCompletedPhases remains [] (full-feature phases reserved for the QF 063 unblock). Evidence refs: report.md#scope-1-validation-rerun---2026-05-07-post-supervisor-wiring, report.md#scope-1-broader-e2e-evidence---2026-05-07, report.md#scope-1-partial-certification---2026-05-07t1915z, scopes.md (plan flip lines 72 and 121)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-07T20:12:45Z",
+        "summary": "Current-session Scope 1 certification refresh. Re-read state.json, scopes.md, report.md, scenario-manifest.json, and git status; re-ran ./smackerel.sh test e2e to completion (shell suite 35/35 PASS, go-e2e PASS, tests/e2e QF connector tests PASS, echo $? = 0); ran artifact-lint PASS, traceability-guard PASS with 0 warnings, implementation-reality-scan PASS with 0 violations, artifact-freshness-guard PASS, changed-spec done audit PASS/skipped done gates because feature remains in_progress, regression-quality-guard PASS, and regression-baseline-guard PASS. state-transition-guard remains blocked only for whole-feature promotion: Parked Scopes 2-9 unchecked/not started, missing full-feature specialist phases, and pre-existing deferral-language hits in report sections; Check 5 completedScopes parity passes for Scope 1. Scope 1 remains the only certified scope; top-level status and certification.status remain in_progress; certification.certifiedCompletedPhases remains [] and Scope 2+ remain parked behind QF 063 Scope 2 read/outbox readiness. Evidence ref: report.md#scope-1-current-session-validation-refresh---2026-05-07t201245z."
       }
     ],
     "pendingTransitionRequests": []
@@ -94,8 +100,8 @@
         "dependsOn": [],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": "2026-05-07T19:15:00Z",
-        "notes": "Partial scope certification at HEAD `9021d28` after supervisor wiring fix (commit 3d5b416). All 14 Scope 1 DoD items checked. Live-stack broader e2e PASS. Top-level certification remains in_progress until Scopes 2-9 unblock from QF 063 Scope 2."
+        "certifiedAt": "2026-05-07T20:12:45Z",
+        "notes": "Partial scope certification refreshed at HEAD `9021d28` with current-session `./smackerel.sh test e2e` PASS (shell suite 35/35, go-e2e PASS, QF connector E2E tests PASS) and current governance guard evidence. All 14 Scope 1 DoD items remain checked. Top-level certification remains in_progress until Scopes 2-9 unblock from QF 063 Scope 2."
       },
       {
         "scope": 2,
@@ -335,7 +341,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-07T19:15:00Z",
+  "lastUpdatedAt": "2026-05-07T20:12:45Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
@@ -354,5 +360,5 @@
     "<home>/quantitativeFinance/docs/releases/pre-mvp/features.md",
     "<home>/quantitativeFinance/docs/releases/pre-mvp/actions.md"
   ],
-  "notes": "Scope 1 is the only active executable planning section after the 2026-05-07 repair. Scope 2+ is parked on QF 063 Scope 2 read/outbox readiness. Overall feature remains in_progress; no final feature completion or validate-owned certification is claimed."
+  "notes": "Scope 1 is partially certified and remains the only active executable planning section after the 2026-05-07 repair. Scope 2+ is parked on QF 063 Scope 2 read/outbox readiness. Overall feature remains in_progress; no final feature completion is claimed."
 }

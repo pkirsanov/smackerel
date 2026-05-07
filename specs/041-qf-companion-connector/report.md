@@ -39,6 +39,327 @@ git status --short
 ?? tests/integration/qf_decisions_connector_config_test.go
 ```
 
+## Scope 1 Current-Session Validation Refresh - 2026-05-07T20:12:45Z
+
+**Claim Source:** executed
+**Owner:** `bubbles.validate`
+**Scope:** Scope 1 only: `Connector Configuration And QF Client Contract`
+
+This refresh re-ran the broad Smackerel E2E command and the required Bubbles governance scripts in the current validation session. It does not activate or certify Scope 2+. The whole feature remains `in_progress` because Parked Scopes 2-9 are still behind QF 063 Scope 2 read/outbox readiness.
+
+### Workspace State Recheck
+
+Command: `cd <home>/smackerel && git status --short`
+
+```text
+ M .github/instructions/bubbles-deployment-target.instructions.md
+ M .github/skills/bubbles-deployment-target-adapter/SKILL.md
+ M docs/Docker_Best_Practices.md
+ D docs/Home_Lab_Deployment_Plan.md
+ D docs/Home_Lab_Master_Deployment_Plan.md
+?? docs/Maturity_Plan.md
+```
+
+The listed dirty files are outside `specs/041-qf-companion-connector` and were not reverted or stashed.
+
+### Broad E2E Evidence
+
+Command: `cd <home>/smackerel && ./smackerel.sh test e2e`
+
+```text
+=========================================
+	Shell E2E Test Results
+=========================================
+	PASS: test_timeout_process_cleanup.sh
+	PASS: test_compose_start.sh
+	PASS: test_persistence.sh
+	PASS: test_postgres_readiness_gate.sh
+	PASS: test_config_fail.sh
+	PASS: test_capture_pipeline.sh
+	PASS: test_voice_pipeline.sh
+	PASS: test_llm_failure_e2e.sh
+	PASS: test_capture_api.sh
+	PASS: test_capture_errors.sh
+	PASS: test_voice_capture_api.sh
+	PASS: test_knowledge_graph.sh
+	PASS: test_graph_entities.sh
+	PASS: test_search.sh
+	PASS: test_search_filters.sh
+	PASS: test_search_empty.sh
+	PASS: test_telegram.sh
+	PASS: test_telegram_auth.sh
+	PASS: test_telegram_voice.sh
+	PASS: test_telegram_format.sh
+	PASS: test_digest.sh
+	PASS: test_digest_quiet.sh
+	PASS: test_digest_telegram.sh
+	PASS: test_web_ui.sh
+	PASS: test_web_detail.sh
+	PASS: test_web_settings.sh
+	PASS: test_connector_framework.sh
+	PASS: test_imap_sync.sh
+	PASS: test_caldav_sync.sh
+	PASS: test_youtube_sync.sh
+	PASS: test_bookmark_import.sh
+	PASS: test_topic_lifecycle.sh
+	PASS: test_settings_connectors.sh
+	PASS: test_maps_import.sh
+	PASS: test_browser_sync.sh
+
+	Total:  35
+	Passed: 35
+	Failed: 0
+=========================================
+```
+
+QF connector Go E2E evidence from the same broad run:
+
+```text
+=== RUN   TestQFDecisionsConnectorHealthAppearsInLiveAPI
+--- PASS: TestQFDecisionsConnectorHealthAppearsInLiveAPI (0.09s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts
+--- PASS: TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts (0.14s)
+=== RUN   TestWeatherAlerts_E2E_FullStack
+2026/05/07 20:07:12 INFO connected to NATS url=nats://267808600c1e56786db4231d51d657a4666d25420dbe9e94@127.0.0.1:47002
+2026/05/07 20:07:12 INFO weather connector connected id=weather-alerts-e2e locations=1
+2026/05/07 20:07:12 INFO weather sync complete id=weather-alerts-e2e locations=1 artifacts=3 failures=0 duration=17.189141ms
+--- PASS: TestWeatherAlerts_E2E_FullStack (0.04s)
+=== RUN   TestWeatherEnrich_E2E_LiveStackRoundTrip
+2026/05/07 20:07:12 WARN NATS disconnected error=<nil>
+		weather_enrich_e2e_test.go:112: no enrichment reply within 45s — weather connector subscriber may be disabled in this live-stack profile (request_id=e2e-weather-enrich-20260507T200712.862)
+--- SKIP: TestWeatherEnrich_E2E_LiveStackRoundTrip (46.03s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        109.749s
+PASS: go-e2e
+```
+
+Additional Go E2E package completion evidence from the same command:
+
+```text
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  7.930s
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/drive  31.214s
+PASS: go-e2e
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+[+] Running 7/7
+ ✔ Container smackerel-test-smackerel-ml-1    Removed                     31.3s
+ ✔ Container smackerel-test-smackerel-core-1  Removed                      7.9s
+ ✔ Container smackerel-test-postgres-1        Removed                      1.5s
+ ✔ Container smackerel-test-nats-1            Removed                      1.6s
+ ✔ Volume smackerel-test-nats-data            Removed                      0.0s
+ ✔ Network smackerel-test_default             Removed                      1.0s
+ ✔ Volume smackerel-test-postgres-data        Removed                      0.1s
+```
+
+Exit status check sent to the same terminal after the E2E command returned to the shell prompt:
+
+```text
+<user>@CPC-phili-O8HGZ:~/smackerel$ echo $?
+0
+<user>@CPC-phili-O8HGZ:~/smackerel$
+```
+
+### Governance Script Evidence
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector`
+
+```text
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+✅ Found Checklist section in uservalidation.md
+✅ uservalidation checklist contains checkbox entries
+✅ uservalidation checklist has checked-by-default entries
+✅ All checklist bullet items use checkbox syntax
+✅ Top-level status matches certification.status
+Artifact lint PASSED.
+```
+
+Command: `cd <home>/smackerel && timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector`
+
+```text
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 2 scenario contract(s)
+✅ scenario-manifest.json linked test exists: tests/e2e/qf_decisions_connector_api_test.go
+✅ scenario-manifest.json linked test exists: tests/e2e/qf_decisions_connector_api_test.go
+✅ scenario-manifest.json records evidenceRefs
+✅ All linked tests from scenario-manifest.json exist
+ℹ️  Checking traceability for Scope 1: Connector Configuration And QF Client Contract
+✅ Scope 1: Connector Configuration And QF Client Contract scenario mapped to Test Plan row: SCN-SM-041-001 Connector Starts With Explicit Configuration
+✅ Scope 1: Connector Configuration And QF Client Contract scenario maps to concrete test file: tests/e2e/qf_decisions_connector_api_test.go
+✅ Scope 1: Connector Configuration And QF Client Contract report references concrete test evidence: tests/e2e/qf_decisions_connector_api_test.go
+✅ Scope 1: Connector Configuration And QF Client Contract scenario mapped to Test Plan row: SCN-SM-041-002 Connector Rejects Missing Or Incompatible QF Contract
+✅ Scope 1: Connector Configuration And QF Client Contract scenario maps to concrete test file: tests/e2e/qf_decisions_connector_api_test.go
+✅ Scope 1: Connector Configuration And QF Client Contract report references concrete test evidence: tests/e2e/qf_decisions_connector_api_test.go
+RESULT: PASSED (0 warnings)
+```
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose`
+
+```text
+ℹ️  INFO: Resolved 7 implementation file(s) to scan
+--- Scan 1: Gateway/Backend Stub Patterns ---
+--- Scan 1B: Handler / Endpoint Execution Depth ---
+--- Scan 1C: Endpoint Not-Implemented / Placeholder Responses ---
+--- Scan 1D: External Integration Authenticity ---
+--- Scan 2: Frontend Hardcoded Data Patterns ---
+--- Scan 2B: Sensitive Client Storage ---
+--- Scan 3: Frontend API Call Absence ---
+--- Scan 4: Prohibited Simulation Helpers in Production ---
+--- Scan 5: Default/Fallback Value Patterns ---
+--- Scan 6: Live-System Test Interception ---
+--- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---
+--- Scan 8: Silent Decode Failure Detection (Gate G048) ---
+	Files scanned:  7
+	Violations:     0
+	Warnings:       0
+🟢 PASSED: No source code reality violations detected
+```
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/041-qf-companion-connector`
+
+```text
+============================================================
+	BUBBLES ARTIFACT FRESHNESS GUARD
+	Feature: specs/041-qf-companion-connector
+	Timestamp: 2026-05-07T20:09:51Z
+============================================================
+--- Check 1: Freshness Boundary Isolation (spec.md / design.md) ---
+ℹ️  spec.md has no superseded/suppressed sections
+ℹ️  design.md has no superseded/suppressed sections
+ℹ️  No spec/design freshness boundaries detected
+--- Check 2: Superseded Scope Sections Are Non-Executable ---
+ℹ️  scopes.md has no superseded scope section
+ℹ️  No superseded scope sections detected
+--- Check 4: Result ---
+RESULT: PASS (0 failures, 0 warnings)
+```
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector`
+
+```text
+--- Check 4: DoD Completion (Zero Unchecked) ---
+ℹ️  INFO: DoD items total: 87 (checked: 14, unchecked: 73)
+🔴 BLOCK: Resolved scope artifacts have 73 UNCHECKED DoD items — ALL must be [x] for 'done'
+--- Check 5: Scope Status Cross-Reference ---
+ℹ️  INFO: Resolved scopes: total=9, Done=1, In Progress=0, Not Started=8, Blocked=0
+🔴 BLOCK: Resolved scope artifacts have 8 scope(s) still marked 'Not Started' — ALL scopes must be Done
+✅ PASS: completedScopes count matches artifact Done scope count (1)
+--- Check 6: Specialist Phase Completion ---
+🔴 BLOCK: Required phase 'implement' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'test' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'regression' NOT in execution/certification phase records (Gate G022 violation)
+🔴 BLOCK: Required phase 'validate' NOT in execution/certification phase records (Gate G022 violation)
+--- Check 16: Implementation Reality Scan (Gate G028) ---
+✅ PASS: Implementation reality scan passed — no stub/fake/hardcoded data patterns detected
+--- Check 18: Deferral Language Scan (Gate G036) ---
+🔴 BLOCK: Report artifact contains 3 deferral language hit(s): report.md — evidence of deferred work (Gate G040)
+🔴 TRANSITION BLOCKED: 14 failure(s), 4 warning(s)
+state.json status MUST NOT be set to 'done'.
+```
+
+The state-transition guard blocks only whole-feature promotion. It also confirms Scope 1 parity: `completedScopes count matches artifact Done scope count (1)`. The blocked items are expected for this partial certification because Scopes 2-9 remain parked and must not be activated in this pass.
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/done-spec-audit.sh --profile changed specs/041-qf-companion-connector`
+
+```text
+Done-spec audit
+- profile: changed
+- selection: explicit
+- posture: prospective blocking audit for changed/reopened/newly promoted specs
+=== Auditing spec: specs/041-qf-companion-connector (status=in_progress, profile=changed) ===
+--- Running artifact lint ---
+Lint: PASS
+Completion gates: SKIPPED (spec is not status=done)
+Done-spec audit summary
+- specs scanned: 1
+- done specs scanned: 0
+- artifact lint passed: 1
+- artifact lint failed: 0
+- done completion checks passed: 0
+- done completion checks failed: 0
+- reopened (--reopen-failing): 0
+```
+
+Command: `cd <home>/smackerel && bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/qf_decisions_connector_api_test.go`
+
+```text
+============================================================
+	BUBBLES REGRESSION QUALITY GUARD
+	Repo: <home>/smackerel
+	Timestamp: 2026-05-07T20:11:31Z
+	Bugfix mode: false
+============================================================
+ℹ️  Scanning tests/e2e/qf_decisions_connector_api_test.go
+============================================================
+	REGRESSION QUALITY RESULT: 0 violation(s), 0 warning(s)
+	Files scanned: 1
+============================================================
+```
+
+Command: `cd <home>/smackerel && timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/041-qf-companion-connector --verbose`
+
+```text
+🐾 Regression Baseline Guard
+	 Spec: specs/041-qf-companion-connector
+── G044: Regression Baseline ──
+	✅ Test baseline comparison found in report
+── G045: Cross-Spec Regression ──
+	ℹ️  Found 40 done specs (of 40 total) that need cross-spec regression verification
+	✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+	✅ No route/endpoint collisions detected across specs
+── Summary ──
+🐾 Regression baseline guard: PASSED
+	 All 0 checks passed.
+```
+
+### Certification Refresh Applied
+
+Updated validate-owned artifacts only:
+
+- `state.json`: refreshed Scope 1 `certifiedAt`, Scope 1 certification notes, `lastUpdatedAt`, top-level notes, and appended this validation phase claim. Kept top-level `status` and `certification.status` as `in_progress`; kept `certification.certifiedCompletedPhases` as `[]`; did not certify Scope 2+.
+- `scenario-manifest.json`: added this report section as evidence for `SCN-SM-041-001` and `SCN-SM-041-002`.
+- `report.md`: appended this current-session validation refresh section.
+
+### Current-Session Verdict
+
+**CERTIFIED_SCOPE_1_PARTIAL_REFRESHED** — Scope 1 remains safely certified with current-session broad E2E and governance evidence. Whole-feature `done` remains blocked and must remain blocked until Scope 2+ are unparked and completed.
+
+## ROUTE-REQUIRED (Scope 1 Current-Session Validation Refresh - 2026-05-07T20:12:45Z)
+
+NONE for Scope 1 partial certification. Full-feature continuation remains structurally blocked by QF 063 Scope 2 read/outbox readiness before Smackerel Scope 2+ can be activated.
+
+## RESULT-ENVELOPE
+
+```json
+{
+	"agent": "bubbles.validate",
+	"roleClass": "certification",
+	"outcome": "completed_diagnostic",
+	"featureDir": "specs/041-qf-companion-connector",
+	"scopeIds": ["01-connector-configuration-and-qf-client-contract"],
+	"dodItems": ["Scope 1 DoD items 1-14 (all [x])"],
+	"scenarioIds": ["SCN-SM-041-001", "SCN-SM-041-002"],
+	"artifactsCreated": [],
+	"artifactsUpdated": ["state.json", "report.md", "scenario-manifest.json"],
+	"evidenceRefs": [
+		"report.md#scope-1-current-session-validation-refresh---2026-05-07t201245z"
+	],
+	"nextRequiredOwner": null,
+	"packetRef": null,
+	"blockedReason": null
+}
+```
+
 ## Scope 1 Post-Compaction Test Rerun - 2026-05-07
 
 **Claim Source:** executed
