@@ -152,15 +152,16 @@ curl -X POST -H "Authorization: Bearer <token>" \
 
 ### QF Decisions Connector Operations
 
-The `qf-decisions` connector is governed as a companion read surface for QuantitativeFinance.
+The `qf-decisions` connector is governed as a companion read surface for QuantitativeFinance. Current Scope 1 is implemented but not certified complete, and it is limited to explicit configuration, QF bridge read-contract validation, and connector health reporting. It does not yet publish QF artifacts, reset replay cursors, render QF packets, or export `PersonalEvidenceBundle`s.
 
 | Operation | Requirement |
 |-----------|-------------|
-| Credential rotation | Rotate the QF service credential from `config/smackerel.yaml`, regenerate config, and restart the stack |
-| Connector health | Treat missing QF packet IDs, trace IDs, calibration badges, or provenance badges as degraded health until corrected upstream |
-| Cursor reset | Reset only the `qf-decisions` cursor when replaying QF packets; deduplication must keep packet IDs stable |
-| Evidence export | Export `PersonalEvidenceBundle`s only with explicit user consent, source artifact references, sensitivity labels, and provenance metadata |
-| Incident response | If Smackerel displays QF packets without required trust metadata or shows action controls, disable the connector before resuming sync |
+| Enablement | Keep `connectors.qf-decisions.enabled: false` unless a QF private read endpoint and credential are available and Scope 1 validation is being exercised |
+| Required config when enabled | `base_url`, `credential_ref`, `sync_schedule`, `packet_version`, and `page_size` are mandatory; missing or invalid values fail validation |
+| Connector health | Schema compatibility failures map to degraded health; authorization, reachability, and other bridge validation failures map to error health |
+| Manual sync | A manual sync revalidates the QF read contract and publishes zero artifacts in current Scope 1 |
+| Credential rotation | Rotate the QF service credential from `config/smackerel.yaml`, regenerate config, and restart the stack; cursor-preserving overlap behavior belongs to a later spec 041 scope |
+| Later-scope operations | Cursor replay, artifact deduplication, packet surfacing, degraded packet rendering, and evidence export must not be treated as operationally available until their corresponding scopes are active and certified |
 
 Smackerel operators must not use this connector to approve trades, alter QF mandates, submit execution requests, or rewrite QF-provided decision content.
 

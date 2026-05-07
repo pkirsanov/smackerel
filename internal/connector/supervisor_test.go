@@ -266,6 +266,34 @@ func TestTriggerSync_RestartsRunning(t *testing.T) {
 	sup.StopAll()
 }
 
+func TestTriggerSync_StartsNonRunningConnector(t *testing.T) {
+	reg := NewRegistry()
+	synced := make(chan struct{}, 1)
+	conn := &supervisorMockConnector{
+		id: "c1",
+		syncFunc: func(ctx context.Context, cursor string) ([]RawArtifact, string, error) {
+			synced <- struct{}{}
+			<-ctx.Done()
+			return nil, cursor, ctx.Err()
+		},
+	}
+	reg.Register(conn)
+
+	sup := NewSupervisor(reg, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup.TriggerSync(ctx, "c1")
+	select {
+	case <-synced:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("TriggerSync did not start a non-running connector")
+	}
+
+	cancel()
+	sup.StopAll()
+}
+
 // ---------------------------------------------------------------------------
 // StopAll
 // ---------------------------------------------------------------------------

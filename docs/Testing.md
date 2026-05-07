@@ -145,15 +145,23 @@ Required adversarial cases:
 
 ### QF Companion Connector Test Surface (Spec 041)
 
-Spec 041 adds a pre-MVP connector and companion-surface contract. Tests must prove the connector preserves QF authority rather than turning packets into Smackerel recommendations.
+Spec 041 adds a pre-MVP connector and companion-surface contract. Current Scope 1 is implemented but not certified complete: the active tests cover connector configuration, read-contract validation, schema-mismatch degradation, health reporting, and the guarantee that Scope 1 publishes no QF artifacts. Later scopes expand the matrix to packet ingest, search/detail surfacing, UI rendering, evidence export, and replay/cursor behavior.
+
+Current Scope 1 coverage:
+
+| Test type | Current Scope 1 coverage |
+|-----------|--------------------------|
+| unit | Config parsing requires explicit fields; QF client uses read-only `GET` requests; schema mismatch maps to degraded health; auth failures map to error health; DTO JSON names mirror the QF contract |
+| integration | Connector registry/health integration, QF read-contract validation, auth failure, schema mismatch, and zero QF artifact publication |
+| e2e-api | Live API health includes `connector:qf-decisions`; schema-mismatch sync through `/settings/connectors/qf-decisions/sync` records the bridge error and publishes no trusted artifacts |
 
 | Test type | Required coverage |
 |-----------|-------------------|
-| unit | Connector config validation, cursor parsing, packet normalization, required ID/badge validation, evidence-bundle serialization |
-| integration | Sync against a QF-compatible test read surface, preserve packet IDs, badges, trace IDs, approval state, and degraded-state behavior |
-| e2e-api | Ingest a QF packet, retrieve it through search/recent/detail APIs, and export a consent-scoped `PersonalEvidenceBundle` |
-| e2e-ui | Web and Telegram/digest surfaces show QF packet content as read-only with QF source, trust badges, trace/deep links, and no execution controls |
-| stress | Connector sync cycles remain bounded under repeated packet updates and do not duplicate artifacts or lose cursor state |
+| unit | Later-scope cursor parsing, packet normalization, required ID/badge validation, and evidence-bundle serialization |
+| integration | Later-scope sync against a QF-compatible test read surface, preserving packet IDs, badges, trace IDs, approval state, and degraded-state behavior |
+| e2e-api | Later-scope ingest of a QF packet, retrieval through search/recent/detail APIs, and consent-scoped `PersonalEvidenceBundle` export |
+| e2e-ui | Later-scope web and Telegram/digest surfaces show QF packet content as read-only with QF source, trust badges, trace/deep links, and no execution controls |
+| stress | Later-scope connector sync cycles remain bounded under repeated packet updates and do not duplicate artifacts or lose cursor state |
 
 Required adversarial cases:
 

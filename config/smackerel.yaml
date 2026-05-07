@@ -16,7 +16,7 @@ project:
 
 runtime:
   log_level: info
-  auth_token: "3d8b160ea6440c30d8b38485aed71e4b6e95a280b659f48a" # dev token (48 hex). Override per environment.
+  auth_token: "" # REQUIRED before runtime start. Test config generation creates a disposable token.
   host_bind_address: "127.0.0.1"
   compose_wait_timeout_s: 180
   digest_cron: "0 7 * * *"
@@ -613,3 +613,7 @@ environments:
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
     ml_processing_degraded_fallback_enabled: true
+    qf_decisions_enabled: true
+    qf_decisions_base_url: "http://host.docker.internal:45003"
+    qf_decisions_credential_ref: "qf-e2e-credential-ref"
+    qf_decisions_packet_version: 99

@@ -199,6 +199,7 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	svc.recommendationRegistry = recprovider.RuntimeRegistry()
 	svc.webHandler = web.NewHandler(svc.pg.Pool, svc.nc, time.Now())
 	svc.webHandler.KnowledgeStore = svc.knowledgeStore
+	svc.webHandler.Supervisor = svc.supervisor
 	svc.webHandler.RecommendationsEnabled = cfg.Recommendations.Enabled
 	svc.webHandler.RecommendationProviders = recprovider.DefaultRegistry
 	svc.webHandler.RecommendationStore = svc.recommendationStore
