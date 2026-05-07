@@ -70,6 +70,7 @@ templates/terminal-discipline.instructions.md.tmpl
 .specify/runtime/.gitignore
 docs/CATALOG.md
 docs/CHEATSHEET.md
+docs/SCOPE_POLICY.md
 docs/examples/README.md
 docs/examples/bug-fix.example.md
 docs/examples/rest-api-endpoint.example.md
@@ -85,10 +86,10 @@ docs/guides/CONTROL_PLANE_ADOPTION.md
 docs/guides/CONTROL_PLANE_DESIGN.md
 docs/guides/CONTROL_PLANE_ROLLOUT.md
 docs/guides/CONTROL_PLANE_SCHEMAS.md
-docs/guides/DOCKER_VERSION_CONSOLIDATION.md
 docs/guides/FRAMEWORK_CONCEPTS.md
 docs/guides/INSTALLATION.md
 docs/guides/INTEROP_MIGRATION.md
+docs/guides/PRODUCT_DIRECTION_SURFACES.md
 docs/guides/WORKFLOW_MODES.md
 docs/issues/G068-word-overlap-threshold.md
 docs/issues/session-aware-runtime-coordination.md
@@ -120,6 +121,7 @@ docs/recipes/post-impl-hardening.md
 docs/recipes/quality-sweep.md
 docs/recipes/reconcile-redesign-existing-feature.md
 docs/recipes/regression-check.md
+docs/recipes/release-planning.md
 docs/recipes/resume-work.md
 docs/recipes/retro-driven-harden.md
 docs/recipes/retro-driven-review.md
@@ -172,6 +174,7 @@ agents/bubbles.iterate.agent.md
 agents/bubbles.plan.agent.md
 agents/bubbles.recap.agent.md
 agents/bubbles.regression.agent.md
+agents/bubbles.releases.agent.md
 agents/bubbles.retro.agent.md
 agents/bubbles.security.agent.md
 agents/bubbles.setup.agent.md
@@ -252,6 +255,7 @@ prompts/bubbles.iterate.prompt.md
 prompts/bubbles.plan.prompt.md
 prompts/bubbles.recap.prompt.md
 prompts/bubbles.regression.prompt.md
+prompts/bubbles.releases.prompt.md
 prompts/bubbles.retro.prompt.md
 prompts/bubbles.security.prompt.md
 prompts/bubbles.setup.prompt.md
@@ -268,12 +272,17 @@ prompts/bubbles.validate.prompt.md
 prompts/bubbles.workflow.prompt.md
 instructions/bubbles-agents.instructions.md
 instructions/bubbles-config-sst.instructions.md
+instructions/bubbles-deployment-target.instructions.md
 instructions/bubbles-docker-lifecycle-governance.instructions.md
 instructions/bubbles-skills.instructions.md
+instructions/bubbles-test-environment-isolation.instructions.md
 skills/bubbles-config-sst/SKILL.md
+skills/bubbles-deployment-target-adapter/SKILL.md
 skills/bubbles-docker-lifecycle-governance/SKILL.md
 skills/bubbles-docker-port-standards/SKILL.md
+skills/bubbles-product-principle-discovery/SKILL.md
 skills/bubbles-repo-readiness/SKILL.md
 skills/bubbles-skill-authoring/SKILL.md
 skills/bubbles-spec-template-bdd/SKILL.md
+skills/bubbles-test-environment-isolation/SKILL.md
 skills/bubbles-test-integrity/SKILL.md

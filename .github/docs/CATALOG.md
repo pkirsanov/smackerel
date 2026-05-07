@@ -54,6 +54,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 42 | [Outcome-First Specs](recipes/outcome-first-specs.md) | `bubbles.analyst` | Define what 'done' means before how to get there |
 | 43 | [Autonomous Goal](recipes/autonomous-goal.md) | `autonomous-goal` | Give a goal, agent does everything until done |
 | 44 | [Autonomous Sprint](recipes/autonomous-sprint.md) | `autonomous-sprint` | Multiple goals + time budget, fully autonomous |
+| 45 | [Release Planning](recipes/release-planning.md) | `bubbles.releases` | Phase release packets + cross-product coordination (Sonny "Iron Lung" Smith) |
 
 ---
 

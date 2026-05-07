@@ -307,6 +307,20 @@ docs
 
 **Use when:** Pure documentation work.
 
+### <img src="../../icons/sonny-ledger.svg" width="20"> release-planning-to-doc
+
+```
+read-direction → reconcile-capabilities → produce-release-packet → update-investor-overview → docs
+```
+
+**Use when:** Producing or refreshing a phase release packet (vision, features, actions, business-plan, deployment, marketing, monetization, ops-scalability). Owned by `bubbles.releases` ("Sonny Iron Lung Smith"). Refuses to run on a repo missing the Product Direction Surfaces trio (`docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`) — routes to `bubbles.setup` first.
+
+**Subtypes:**
+- `mode: bootstrap` — Fresh phase, no prior packet
+- `mode: refresh` — Reconcile existing packet against current capability state
+- `mode: extend` — Add new plan to existing phase's `docs/plans/<phase>/`
+- `mode: cross-product` — Coordinated plan across two repos with `paired_repo: <path>`
+
 ### <img src="../../icons/randy-cheeseburger.svg" width="20"> validate-only
 
 ```
@@ -470,6 +484,7 @@ analyze → ux
 | `retro-to-simplify` | Retro hotspots → simplify worst | Data-driven simplification |
 | `retro-to-harden` | Retro bug magnets → harden targets | Data-driven hardening |
 | `retro-to-review` | Retro risks → code review | Data-driven review |
+| `release-planning-to-doc` | Read direction → reconcile capabilities → produce 8-doc release packet → update Phase Overview → docs sync | Phase release planning, carry-forward, cross-product coordination |
 | `stochastic-quality-sweep` | Random quality | Maintenance |
 | `test-to-doc` | Test → docs | Test/doc focus |
 | `validate-to-doc` | Validate → audit → docs | Validation + docs |
@@ -509,7 +524,7 @@ Full-cycle autonomous execution without human intervention until convergence or 
 /bubbles.goal  Fix the broken E2E tests and make all chaos scenarios pass
 ```
 
-### <img src="../../icons/donna-whistle.svg" width="20"> autonomous-sprint
+### <img src="../../icons/erica-doublestack.svg" width="20"> autonomous-sprint
 
 ```
 [SPRINT: plan goals → FOR EACH goal: time-check → autonomous-goal loop → next] → sprint report

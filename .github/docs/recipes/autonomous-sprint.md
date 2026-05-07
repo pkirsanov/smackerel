@@ -1,6 +1,6 @@
-# <img src="../../icons/donna-whistle.svg" width="28"> Recipe: Autonomous Sprint
+# <img src="../../icons/erica-doublestack.svg" width="28"> Recipe: Autonomous Sprint
 
-> *"We're on a schedule, people. Next!"* — Donna
+> *"Inside and outside, both at once. Don't fall behind."* — Erica
 
 ## Situation
 
@@ -80,7 +80,7 @@ You have multiple goals and a fixed time window. Those goals can mix features, b
 
 ## What Happens
 
-1. Donna parses all goals, estimates effort (small/medium/large), sorts by priority
+1. Erica parses all goals, estimates effort (small/medium/large), sorts by priority
 2. For each goal (in priority order):
    - Checks the clock — enough time?
    - If yes: executes via `bubbles.goal` convergence loop
@@ -92,7 +92,7 @@ You have multiple goals and a fixed time window. Those goals can mix features, b
 
 - Clock checked before each goal AND each scope
 - Current scope always finished completely (never broken state)
-- If a large goal won't fit but a small one will, Donna reorders
+- If a large goal won't fit but a small one will, Erica reorders
 - Last 15 minutes reserved for wrap-up and docs
 
 ## Resume After Interruption
@@ -116,4 +116,4 @@ You have multiple goals and a fixed time window. Those goals can mix features, b
 
 ---
 
-*"That one's done. What's next on the board?"*
+*"That one's done — keep both flows moving."*

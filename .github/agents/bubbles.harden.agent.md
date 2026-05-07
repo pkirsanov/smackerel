@@ -510,7 +510,7 @@ Run ALL applicable test types per Canonical Test Taxonomy (`agent-common.md`):
 [LOAD_TEST_COMMAND]
 ```
 
-**Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral storage or clean up test data. No residual test data.
+**Live system tests** (integration, e2e-api, e2e-ui, stress, load) MUST use ephemeral storage; cleanup-based isolation is forbidden (see `instructions/bubbles-test-environment-isolation.instructions.md`). No residual test data.
 
 #### 3.6 Test Verification Summary — 3-Part Validation (implementation + behavior + evidence)
 

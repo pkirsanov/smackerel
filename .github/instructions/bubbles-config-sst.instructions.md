@@ -88,6 +88,34 @@ There is NO third option. Hardcoding a value that exists in the SST is a blockin
 | **Vite** | `import.meta.env.X ?? 'default'` | `import.meta.env.X` + throw if not set |
 | **Docker** | Hardcoded ports in `EXPOSE` | Ports from generated Compose |
 
+## Deployment Target Boundary
+
+The SST is **target-agnostic**. Target-specific values MUST live in the per-target adapter, not in the SST.
+
+| Value Type | Lives In | Forbidden In |
+|------------|----------|--------------|
+| Service list, internal ports, internal DNS names, env key NAMES, health endpoints, persistent volume names, image names | SST (`config/<project>.yaml`) | per-target params |
+| Target FQDN, target host IP, Tailscale machine name, target user/group, target storage paths, target TLS cert directory, cloud account/region/project IDs | per-target params (`deploy/<target>/params.yaml`) | SST |
+| Public host port assignments | SST per-environment overlay (test/dev/prod blocks) | per-target params |
+| Secret VALUES | external secret manager OR encrypted secrets file | SST + per-target params |
+
+The SST generator MUST also produce `deploy/contract.yaml` — a target-agnostic, machine-readable contract derived from the SST that per-target adapters consume. The contract describes WHAT to deploy (services, ports, volumes, env keys, health endpoints, host singletons). The adapter describes WHERE and HOW.
+
+```
+SST (config/<project>.yaml)
+        │
+        ▼
+config generate
+        │
+        ├──► .env files, Compose files, frontend config (existing)
+        └──► deploy/contract.yaml (target-agnostic deployment contract)
+                       │
+                       ▼
+        deploy/<target>/params.yaml + bootstrap.sh + ...
+```
+
+Cross-reference: [bubbles-deployment-target.instructions.md](bubbles-deployment-target.instructions.md).
+
 ## Generated File Header Convention
 
 All generated files SHOULD contain a header indicating they are machine-generated:
@@ -117,3 +145,5 @@ git diff config/generated/
 - `../agents/bubbles_shared/project-config-contract.md`
 - `../skills/bubbles-config-sst/SKILL.md`
 - `../agents/bubbles_shared/agent-common.md`
+- `bubbles-deployment-target.instructions.md`
+- `bubbles-test-environment-isolation.instructions.md`

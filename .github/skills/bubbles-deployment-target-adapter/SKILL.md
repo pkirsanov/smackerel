@@ -1,6 +1,6 @@
 ---
 name: bubbles-deployment-target-adapter
-description: Enforce per-target deployment adapters that consume an SST-derived contract and own ALL target-specific knowledge. Use when adding or changing how a project is deployed to a real machine, cluster, cloud, or home lab; when authoring `deploy/<target>/` scripts; when reviewing changes that touch host singletons (Caddy, Docker daemon, ufw, systemd, Tailscale, mDNS); when designing CLI surfaces for `deploy <target> <action>`. Triggers include new deployment target proposals, HOME-LAB / cloud / staging deployment work, host-config changes, idempotency reviews, and `docs/Deployment*.md` edits.
+description: Enforce per-target deployment adapters that consume an SST-derived contract and own ALL target-specific knowledge. Use when adding or changing how a project is deployed to a real machine, cluster, cloud, or home lab; when authoring `deploy/<target>/` scripts; when reviewing changes that touch host singletons (Caddy, Docker daemon, ufw, systemd, Tailscale, mDNS); when designing CLI surfaces for `deploy <target> <action>`. Triggers include new deployment target proposals, home-lab / cloud / staging deployment work, host-config changes, idempotency reviews, and `docs/Deployment*.md` edits.
 ---
 
 # Bubbles Deployment Target Adapter
@@ -13,7 +13,7 @@ The pattern is: **SST → generated contract → per-target adapter**. The contr
 
 ## Use This Skill When
 
-- Adding a new deployment target (HOME-LAB, AWS, Fly.io, GCP, staging VPS, on-prem K8s).
+- Adding a new deployment target (home-lab, AWS, Fly.io, GCP, staging VPS, on-prem K8s).
 - Modifying any file under `deploy/`.
 - Modifying anything that mutates host state (Caddy, `/etc/docker/daemon.json`, ufw, systemd units, hostnames, Tailscale ACLs).
 - Editing or reviewing `docs/Deployment*.md`.
@@ -200,7 +200,7 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 
 | Anti-Pattern | Why It's Wrong | Fix |
 |--------------|---------------|-----|
-| Hardcoded HOME-LAB IP `<host-tailnet-ip>` in SST | Target leakage | Move to `deploy/home-lab/params.yaml` |
+| Hardcoded host IP (e.g. `<a real Tailscale or LAN IP>`) in SST | Target leakage | Move to `deploy/<target>/params.yaml` |
 | `bootstrap.sh` writes `/etc/caddy/Caddyfile` | Destroys peer adapters | Drop file in `conf.d/`, assert main file imports it |
 | Container named `gateway` (no namespace) | Collides with peer adapter for another target | `${PROJECT}-${TARGET}-gateway` |
 | `teardown.sh` runs `docker system prune -af` | Destroys peer adapters' images | Remove only this adapter's labelled resources |

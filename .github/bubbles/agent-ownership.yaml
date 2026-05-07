@@ -125,6 +125,26 @@ artifacts:
   retro-reports:
     owner:
     - bubbles.retro
+  release-packets:
+    owner:
+    - bubbles.releases
+    description: |
+      The 8-doc release packet under docs/releases/<phase>.md and supporting docs/plans/<phase>/.
+      Owned only by bubbles.releases. Other agents MUST NOT mutate the canonical release packet
+      sections (vision, features, actions, business-plan, deployment, marketing, monetization,
+      ops-scalability) or the carry-forward table.
+  plan-packets:
+    owner:
+    - bubbles.releases
+    description: |
+      Phase-scoped supporting docs/plans/<phase>/ files. Owned only by bubbles.releases.
+  investor-overview-phase-table:
+    owner:
+    - bubbles.releases
+    description: |
+      Only the Phase Overview table inside docs/INVESTOR_OVERVIEW.md is owned by bubbles.releases.
+      The rest of INVESTOR_OVERVIEW.md remains under product-direction ownership and bubbles.releases
+      MUST NOT mutate non-table sections.
 
 diagnosticAgents:
 - bubbles.validate
@@ -147,3 +167,7 @@ routingRules:
   lockedBehaviorChangeApproval: bubbles.grill
   protectedRegressionContractChange: bubbles.validate
   missingPlanningArtifacts: bubbles.plan
+  missingReleasePacket: bubbles.releases
+  missingProductDirectionTrio: bubbles.setup
+  carryForwardTableMissing: bubbles.releases
+  inlineVisionRestatementMissing: bubbles.releases

@@ -16,7 +16,7 @@ You have a single goal — a feature to implement, a bug to fix, an ops or stabi
 
 ### Feature Implementation
 ```
-/bubbles.goal  Implement the security deposit hold/release feature for guestHost
+/bubbles.goal  Implement the security deposit hold/release feature for the booking service
 
 /bubbles.goal  Add webhook notification system to the booking flow
 

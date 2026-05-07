@@ -110,6 +110,33 @@ Refresh requirements:
 
 If no drift is detected, report `No refresh changes required` and stop.
 
+### Product Direction Surfaces Trio Check (MANDATORY for product repos)
+
+When the target repo is a product repo (NOT the Bubbles source repo or a pure infrastructure repo), `/bubbles.setup` MUST verify the Product Direction Surfaces trio is present:
+
+```bash
+test -f docs/INVESTOR_OVERVIEW.md && \
+test -f docs/Product-Principles.md && \
+test -f .github/instructions/product-principles.instructions.md
+```
+
+If any trio member is missing:
+
+1. Surface the gap in the proposal phase as `Add: docs/INVESTOR_OVERVIEW.md` (etc.) with rationale "Product Direction Surfaces convention requires the canonical trio".
+2. Do NOT auto-generate trio content. The trio MUST be created via owner-consult flow because:
+   - `INVESTOR_OVERVIEW.md` requires owner judgment on phase model + capability claims
+   - `Product-Principles.md` requires sourcing from existing repo evidence with no fabrication
+   - `product-principles.instructions.md` requires per-principle enforcement decisions
+3. If the user wants the trio bootstrapped, route to a separate owner-led session and produce a checklist of source documents to consult (constitution, design docs, capability ledger, README).
+
+The convention is documented in [`docs/guides/PRODUCT_DIRECTION_SURFACES.md`](../docs/guides/PRODUCT_DIRECTION_SURFACES.md). All trio creation MUST follow that convention's rules: no fabricated principles, all surfaced principles flagged "Surfaced for owner approval — not yet ratified" until ratification.
+
+Repo-type heuristic for "is this a product repo":
+- Has `docs/releases/` OR `docs/plans/` OR `Capability_Ledger.md` → product repo (apply trio check)
+- Is the Bubbles source repo (`bubbles/` at root) → skip trio check
+- Is a pure infrastructure/library repo with no product surface → skip trio check
+- When ambiguous, ASK the user before applying.
+
 ---
 
 ## External Source Review (from registry)
