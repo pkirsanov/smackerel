@@ -3,11 +3,14 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 )
@@ -53,12 +56,23 @@ type PhotoActionsConfirmResponse struct {
 // non-mutating (FR-020): it only mints an action token. The confirm
 // endpoint is the sole mutation entry point.
 func (h *PhotosHandlers) PlanAction(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
-		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
-		return
-	}
 	var request PhotoActionsPlanRequest
 	if !decodeJSONBody(w, r, &request, "invalid_action_plan", "request body must be JSON") {
+		return
+	}
+	// Spec 040 chaos C-002 + C-006 — validate UUID format AND scope
+	// size at plan time. Previously, non-UUID photo_ids slipped through
+	// (caught later only at confirm) and unbounded scopes minted
+	// arbitrarily large action tokens. Both are local-input failures
+	// that MUST surface as 400 INVALID_REQUEST before the token is
+	// persisted. Validation runs BEFORE the store-availability check
+	// so malformed requests are always rejected with the right code.
+	if err := validatePlanScope(request.Scope, h.config.Policy.ActionsMaxScopeSize); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_action_scope", err.Error())
+		return
+	}
+	if h.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
 		return
 	}
 	action := photolib.ActionKind(request.Action)
@@ -292,6 +306,61 @@ func actorIDFromRequest(r *http.Request) string {
 	return "system"
 }
 
+// validatePlanScope enforces UUID format on photo_ids/removal_ids and
+// caps the total scope size at the SST-derived
+// PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE (Spec 040 chaos C-002 + C-006).
+// Returning an error here makes the plan endpoint reject malformed or
+// oversized scopes BEFORE persisting an action token. maxScopeSize <=
+// 0 means "no SST cap configured" — treated as a fail-loud error so
+// missing config never silently disables the cap.
+func validatePlanScope(scope photolib.ActionScope, maxScopeSize int) error {
+	if maxScopeSize <= 0 {
+		return fmt.Errorf("photos.policy.actions_max_scope_size is not configured")
+	}
+	for i, raw := range scope.PhotoIDs {
+		if _, err := uuid.Parse(raw); err != nil {
+			return fmt.Errorf("scope.photo_ids[%d] is not a valid UUID: %s", i, raw)
+		}
+	}
+	for i, raw := range scope.RemovalIDs {
+		if _, err := uuid.Parse(raw); err != nil {
+			return fmt.Errorf("scope.removal_ids[%d] is not a valid UUID: %s", i, raw)
+		}
+	}
+	if total := len(scope.PhotoIDs) + len(scope.RemovalIDs); total > maxScopeSize {
+		return fmt.Errorf("scope exceeds maximum of %d photos (got %d)", maxScopeSize, total)
+	}
+	return nil
+}
+
+// clusterStoreErrorResponse maps a cluster-store error onto the
+// public-facing (status, code, message) triple. pgx.ErrNoRows is
+// scrubbed to a clean 404 NOT_FOUND (Spec 040 chaos C-004) so the
+// raw lib/pq sentinel "no rows in result set" never reaches clients.
+// Other errors fall through to a generic message; the original error
+// is returned to the caller for server-side logging only.
+func clusterStoreErrorResponse(err error) (status int, code string, message string) {
+	if err == nil {
+		return http.StatusOK, "", ""
+	}
+	if errors.Is(err, pgx.ErrNoRows) || isNoRowsError(err) {
+		return http.StatusNotFound, "cluster_not_found", "duplicate group not found"
+	}
+	return http.StatusInternalServerError, "cluster_lookup_failed", "failed to look up duplicate group"
+}
+
+// isNoRowsError matches the pgx.ErrNoRows sentinel even when the store
+// has wrapped it with `fmt.Errorf("...: %w", err)`. We also defensively
+// match the legacy lib/pq sentinel string in case any code path still
+// surfaces it. The match is substring-based to survive plain-string
+// wraps; errors.Is alone misses %s/Sprintf-style wraps.
+func isNoRowsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "no rows in result set")
+}
+
 // SetClusterBestPick handles `POST /v1/photos/health/duplicates/{id}/best-pick`.
 type clusterBestPickRequest struct {
 	PhotoID  string `json:"photo_id"`
@@ -323,7 +392,20 @@ func (h *PhotosHandlers) SetClusterBestPick(w http.ResponseWriter, r *http.Reque
 	}
 	cluster, err := h.store.SetBestPick(r.Context(), clusterID, photoID, pickedBy, actorIDFromRequest(r))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "set_best_pick_failed", err.Error())
+		// Spec 040 chaos C-004 — the previous response leaked the
+		// raw lib/pq "no rows in result set" sentinel as a 400. A
+		// missing cluster (or a photo_id that is not a member) is
+		// genuinely "not found", so map it to 404 with a clean
+		// public message.
+		status, code, message := clusterStoreErrorResponse(err)
+		if status == http.StatusInternalServerError {
+			// Preserve the historical 400 for non-not-found
+			// failures so existing clients that distinguish
+			// validation errors keep the same shape.
+			writeError(w, http.StatusBadRequest, "set_best_pick_failed", "failed to set duplicate group best pick")
+			return
+		}
+		writeError(w, status, code, message)
 		return
 	}
 	writeJSON(w, http.StatusOK, cluster)
@@ -422,7 +504,11 @@ func (h *PhotosHandlers) HealthDuplicatesGet(w http.ResponseWriter, r *http.Requ
 	}
 	cluster, err := h.store.GetCluster(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "cluster_not_found", err.Error())
+		// Spec 040 chaos C-004 — scrub the lib/pq sentinel "no rows
+		// in result set" before it reaches the client. Map missing
+		// clusters to a clean 404 NOT_FOUND.
+		status, code, message := clusterStoreErrorResponse(err)
+		writeError(w, status, code, message)
 		return
 	}
 	writeJSON(w, http.StatusOK, cluster)
