@@ -245,7 +245,9 @@ Command: `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-co
 ✅ PASS: Implementation reality scan passed — no stub/fake/hardcoded data patterns detected
 --- Check 18: Deferral Language Scan (Gate G036) ---
 🔴 BLOCK: Scope artifact contains 7 deferral language hit(s): scopes.md — SPEC CANNOT BE DONE WITH DEFERRED WORK (Gate G040)
-TRANSITION BLOCKED: 38 failure(s), 2 warning(s)
+--- Check 19: Test Environment Dependency Detection (Gate G051) ---
+✅ PASS: No env-dependent test failures detected in evidence (Gate G051)
+TRANSITION BLOCKED: 37 failure(s), 2 warning(s)
 state.json status MUST NOT be set to 'done'.
 ```
 
