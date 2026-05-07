@@ -1,8 +1,8 @@
 {
   "installedVersion": "3.7.0",
-  "installMode": "remote-ref",
+  "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "2b05aca7075d7cf08abaf2c9040e93fbb31b6259",
+  "sourceGitSha": "34203c347b996a2e2d021ace2170c125cbd7d396",
   "sourceDirty": false,
-  "installedAt": "2026-05-07T20:35:32Z"
+  "installedAt": "2026-05-07T21:53:30Z"
 }

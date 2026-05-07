@@ -1,0 +1,53 @@
+# Build/Deploy Contract (SST-derived)
+#
+# This file is the contract the build pipeline produces and the deploy adapter consumes.
+# Adapter scripts MUST NOT read repo source files; they only read this contract +
+# their own `<target>/params.yaml` + the published config bundle for the target environment.
+#
+# This contract describes WHAT (which images, which schema version, what env names exist)
+# without prescribing target-specific knobs (which are owned by `<target>/params.yaml`).
+contractVersion: 1
+
+project: smackerel
+
+# Application images this project builds. Each image is pulled by digest only.
+images:
+  - name: smackerel-core
+    description: Go runtime (HTTP API, NATS bridge, scheduler, graph)
+    registry: ghcr.io/pkirsanov/smackerel-core
+  - name: smackerel-ml
+    description: Python ML sidecar (embeddings, LLM gateway, transcript)
+    registry: ghcr.io/pkirsanov/smackerel-ml
+
+# Third-party images pinned for reproducibility. NOT built by this project.
+externalImages:
+  - name: postgres
+    image: pgvector/pgvector:pg16
+  - name: nats
+    image: nats:2.10-alpine
+  - name: ollama
+    image: ollama/ollama:0.6
+
+# Config bundle environments. CI emits one bundle per env, identified by <env>-<sourceSha>.
+configBundles:
+  registry: ghcr.io/pkirsanov/smackerel-config-bundles
+  environments:
+    - dev
+    - test
+    - home-lab
+
+# Signing requirements — adapter `apply` MUST verify these before container start.
+signing:
+  enabled: true
+  scheme: cosign-keyless
+  transparencyLog: rekor
+  attestations:
+    - sbom        # syft-generated SPDX SBOM
+    - provenance  # SLSA provenance
+
+# Rollout strategies the project supports. Each adapter declares its strategy in params.yaml.
+rolloutStrategies:
+  - name: recreate
+    description: Stop old, start new — brief downtime acceptable
+  - name: blue-green
+    description: Run new alongside old, switch traffic when healthy

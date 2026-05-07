@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIG_FILE="$REPO_ROOT/config/smackerel.yaml"
 TARGET_ENV="dev"
+EMIT_BUNDLE=false
+BUNDLE_OUTPUT_DIR=""
+BUNDLE_SOURCE_SHA=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -24,12 +27,43 @@ while [[ $# -gt 0 ]]; do
       CONFIG_FILE="${1#*=}"
       shift
       ;;
+    --bundle)
+      EMIT_BUNDLE=true
+      shift
+      ;;
+    --output-dir)
+      BUNDLE_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --output-dir=*)
+      BUNDLE_OUTPUT_DIR="${1#*=}"
+      shift
+      ;;
+    --source-sha)
+      BUNDLE_SOURCE_SHA="$2"
+      shift 2
+      ;;
+    --source-sha=*)
+      BUNDLE_SOURCE_SHA="${1#*=}"
+      shift
+      ;;
     *)
       echo "Unknown option: $1" >&2
       exit 1
       ;;
   esac
 done
+
+if [[ "$EMIT_BUNDLE" == "true" ]]; then
+  [[ -n "$BUNDLE_OUTPUT_DIR" ]] || BUNDLE_OUTPUT_DIR="$REPO_ROOT/dist/config-bundles"
+  if [[ -z "$BUNDLE_SOURCE_SHA" ]]; then
+    BUNDLE_SOURCE_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+  fi
+  [[ -n "$BUNDLE_SOURCE_SHA" ]] || {
+    echo "ERROR: --bundle requires --source-sha=<sha> (or a git checkout to derive HEAD)" >&2
+    exit 1
+  }
+fi
 
 [[ -f "$CONFIG_FILE" ]] || {
   echo "Missing config file: $CONFIG_FILE" >&2
@@ -306,7 +340,7 @@ PYEOF
 }
 
 case "$TARGET_ENV" in
-  dev|test)
+  dev|test|home-lab)
     ;;
   *)
     echo "Unsupported environment: $TARGET_ENV" >&2
@@ -419,6 +453,7 @@ PHOTOS_POLICY_SENSITIVITY_REVEAL_TTL_SECONDS="$(required_value photos.policy.sen
 PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.archive_action_token_ttl_seconds)"
 PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS="$(required_value photos.policy.delete_action_token_ttl_seconds)"
 PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES="$(required_value photos.policy.telegram_max_inline_size_bytes)"
+PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE="$(required_value photos.policy.actions_max_scope_size)"
 PHOTOS_INTELLIGENCE_CLASSIFY_MODEL="$(required_value photos.intelligence.classify_model)"
 PHOTOS_INTELLIGENCE_EMBED_MODEL="$(required_value photos.intelligence.embed_model)"
 PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL="$(required_value photos.intelligence.sensitivity_model)"
@@ -804,6 +839,7 @@ PHOTOS_POLICY_SENSITIVITY_REVEAL_TTL_SECONDS=${PHOTOS_POLICY_SENSITIVITY_REVEAL_
 PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS=${PHOTOS_POLICY_ARCHIVE_ACTION_TOKEN_TTL_SECONDS}
 PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS=${PHOTOS_POLICY_DELETE_ACTION_TOKEN_TTL_SECONDS}
 PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES=${PHOTOS_POLICY_TELEGRAM_MAX_INLINE_SIZE_BYTES}
+PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE=${PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE}
 PHOTOS_INTELLIGENCE_CLASSIFY_MODEL=${PHOTOS_INTELLIGENCE_CLASSIFY_MODEL}
 PHOTOS_INTELLIGENCE_EMBED_MODEL=${PHOTOS_INTELLIGENCE_EMBED_MODEL}
 PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL=${PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL}
@@ -1077,3 +1113,58 @@ printf '%s\n' "$NATS_CONF_CONTENT" > "$NATS_CONF_FILE"
 chmod 0600 "$NATS_CONF_FILE"
 
 echo "Generated $NATS_CONF_FILE"
+
+# ─────────────────────────────────────────────────────────────────────
+# Build-Once Deploy-Many: emit deterministic config bundle (per bubbles G074)
+#
+# When --bundle is set, package the generated env file + nats.conf into a
+# deterministic tar.gz at <output-dir>/config-bundle-<env>-<sourceSha>.tar.gz.
+# Determinism: same (sourceSha, env, smackerel.yaml content) MUST produce the
+# same bundle bytes (and therefore the same sha256). Volatile content (the
+# `Generated:` timestamp comment in the env file) is stripped from the bundle
+# copy.
+# ─────────────────────────────────────────────────────────────────────
+if [[ "$EMIT_BUNDLE" == "true" ]]; then
+  mkdir -p "$BUNDLE_OUTPUT_DIR"
+
+  STAGE_DIR="$(mktemp -d)"
+  trap 'rm -rf "$STAGE_DIR"' EXIT
+
+  # Strip the volatile `Generated:` line so the bundle is reproducible.
+  grep -v '^# Generated: ' "$OUTPUT_FILE" > "$STAGE_DIR/${TARGET_ENV}.env"
+  cp "$NATS_CONF_FILE" "$STAGE_DIR/nats.conf"
+  chmod 0644 "$STAGE_DIR/${TARGET_ENV}.env" "$STAGE_DIR/nats.conf"
+
+  cat > "$STAGE_DIR/bundle-manifest.yaml" <<EOF
+bundleVersion: 1
+sourceSha: ${BUNDLE_SOURCE_SHA}
+environment: ${TARGET_ENV}
+files:
+  - ${TARGET_ENV}.env
+  - nats.conf
+EOF
+  chmod 0644 "$STAGE_DIR/bundle-manifest.yaml"
+
+  BUNDLE_FILE="$BUNDLE_OUTPUT_DIR/config-bundle-${TARGET_ENV}-${BUNDLE_SOURCE_SHA}.tar.gz"
+
+  # Deterministic tar: sorted entries, fixed owner/group, fixed mtime, no extended attrs.
+  tar \
+    --sort=name \
+    --owner=0 \
+    --group=0 \
+    --numeric-owner \
+    --mtime='1970-01-01 00:00:00 UTC' \
+    --format=ustar \
+    -C "$STAGE_DIR" \
+    -cf - \
+    "${TARGET_ENV}.env" "nats.conf" "bundle-manifest.yaml" \
+    | gzip -n -9 > "$BUNDLE_FILE"
+
+  chmod 0644 "$BUNDLE_FILE"
+  BUNDLE_SHA="$(sha256sum "$BUNDLE_FILE" | awk '{print $1}')"
+
+  echo "Generated $BUNDLE_FILE"
+  echo "  sha256: $BUNDLE_SHA"
+  echo "  sourceSha: $BUNDLE_SOURCE_SHA"
+  echo "  environment: $TARGET_ENV"
+fi

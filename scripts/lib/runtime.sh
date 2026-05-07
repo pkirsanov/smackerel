@@ -13,7 +13,9 @@ smackerel_env_file() {
 }
 
 smackerel_generate_config() {
-  bash "$SMACKEREL_REPO_ROOT/scripts/commands/config.sh" --env "$1"
+  local target_env="$1"
+  shift || true
+  bash "$SMACKEREL_REPO_ROOT/scripts/commands/config.sh" --env "$target_env" "$@"
 }
 
 smackerel_require_env_file() {

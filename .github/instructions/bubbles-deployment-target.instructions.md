@@ -37,13 +37,38 @@ Where `<target>` is a kebab-case, stable identifier (e.g., `home-lab`, `aws-prod
 
 ## Required Behavior
 
-- The project's CLI (e.g., `./<project>.sh`) MUST expose a single deployment surface: `deploy <target> <action>`. Actions: `preconditions`, `bootstrap`, `verify`, `teardown`, `status`, `params`.
+- The project's CLI (e.g., `./<project>.sh`) MUST expose a single deployment surface: `deploy <target> <action>`. Actions: `preconditions`, `bootstrap`, `apply`, `rollback`, `verify`, `teardown`, `status`, `manifest`, `params`.
 - `deploy/contract.yaml` MUST be regenerated from SST at the start of any deploy action. Drift between contract and SST is a blocking error.
 - Adapters MUST read `deploy/contract.yaml` for what to deploy and `deploy/<target>/params.yaml` for where/how to deploy it.
+- The `apply` action MUST consume an immutable image digest and a CI-published config bundle hash. No build, no tag-resolution, no fallback.
+- The `rollback` action MUST be a pure pointer-swap on `deploy/<target>/manifest.yaml` — no rebuild.
 - Bootstrap MUST be idempotent: re-running with no input changes MUST produce zero diffs and exit 0.
 - Bootstrap MUST be non-destructive to other adapters' state on the same host (use drop-in directories, namespaced rules, project-prefixed identifiers).
 - Teardown MUST be precise: it removes only resources tagged with this adapter's namespace. It MUST NOT touch host singletons that other adapters or the operator depend on.
 - Every adapter MUST declare its host singletons usage policy (see "Host Singletons" below).
+- Every adapter MUST declare its rollout strategy (`recreate`, `blue-green`, `canary`, `flag-gated`) in `params.yaml`.
+
+## Build-Once Deploy-Many (NON-NEGOTIABLE)
+
+The same git SHA MUST produce one immutable application image. The same image digest is then deployed to every target by pairing it with the matching environment's CI-published config bundle.
+
+**CI workflow MUST:**
+- Build a content-addressed image (`sha256:<digest>`) and publish to a registry
+- Sign with cosign keyless (Sigstore + Rekor transparency log)
+- Attach SBOM attestation (syft or equivalent)
+- Attach SLSA provenance attestation
+- Generate one config bundle per target environment via the SST pipeline (e.g., `./<project>.sh config generate --env <env> --bundle`) and publish each bundle as an immutable artifact identified by `<env>-<sourceSha>`
+- Publish a `build-manifest-<sourceSha>.yaml` listing image digest(s), bundle hashes, and attestation refs
+- Stop after publishing — CI MUST NOT SSH to a target, MUST NOT run `apply`, MUST NOT mutate any host state
+
+**Adapter `apply` MUST:**
+- Pull image by digest only (no tag resolution at deploy time)
+- Verify cosign signature against Rekor before container start
+- Verify SBOM and provenance attestations exist
+- Pull the config bundle by hash and verify the hash
+- Write `deploy/<target>/manifest.yaml` with the new pointer pair before starting any container
+- Run the rollout strategy declared in `params.yaml`
+- On verify failure: invoke `rollback` (pointer-swap to `previousManifest`)
 
 ## Do Not Do
 
@@ -53,6 +78,12 @@ Where `<target>` is a kebab-case, stable identifier (e.g., `home-lab`, `aws-prod
 - Reuse the same volume names, container names, network names, or systemd unit names across adapters without a target-specific suffix or namespace.
 - Embed deployment-target content into the project's main `docs/Deployment.md`. Main deployment doc explains the contract; per-target docs live under `deploy/<target>/README.md`.
 - Create a "primary" target whose presence is required for other targets to work. All adapters must be peers.
+- **Use mutable image tags (`:latest`, `:staging-latest`, `:prod-latest`) in any deployment manifest, Compose file, or runtime spec.** Tags are informational; only digests are deployable.
+- **Run a build step inside the deploy adapter.** `apply.sh` MUST NOT invoke `docker build`, `docker buildx build`, `cargo build`, `npm run build`, or any compile/bundle step. The build is CI's job.
+- **Generate config bundles at deploy time on the target host.** The bundle is a CI artifact consumed by `apply`.
+- **Allow CI to deploy.** CI ends at registry push. Deploy is downstream of CI on a different trust boundary.
+- **Permit `apply` to fall back to building locally if registry pull fails.** Fail-fast.
+- **Rebuild on rollback.** `rollback` is a pointer-swap; no rebuild allowed.
 
 ## Host Singletons Policy
 
@@ -108,6 +139,13 @@ Every adapter MUST satisfy:
 | `docs/Deployment.md` describes one specific target step-by-step | New targets force doc rewrite | Main doc describes contract; targets live in `deploy/<target>/README.md` |
 | `bootstrap.sh` requires manual prompts | Not idempotent in CI | All inputs from `params.yaml` and contract |
 | Adapter assumes only one deployment per host | Blocks multi-target operation | Namespace every host resource |
+| **CI workflow runs `./<project>.sh deploy`** | Fuses build with deploy; loses build-once invariant | CI publishes artifacts only; deploy is downstream |
+| **Compose / runtime spec uses `image: name:latest`** | Mutable; breaks digest-pinning | `image: name@sha256:<digest>` |
+| **`apply.sh` runs `docker build`** | Build is CI's job | `apply.sh` only pulls + verifies + runs |
+| **`rollback` rebuilds from prior SHA** | Slow; risks divergence | Pointer-swap to `previousManifest`; no rebuild |
+| **`apply` falls back to local build on registry failure** | Defeats build-once invariant | Fail-fast with clear error |
+| **CI has SSH credentials to a target host** | Trust boundary violation | CI ends at registry push |
+| **Image tag promotion (re-tagging staging → prod)** | Tag-swap loses traceability | Pin by digest in manifest; tags informational only |
 
 ## Spec / Plan Authoring Rule
 
@@ -116,8 +154,11 @@ Any feature spec that has a deployment side-effect (a new service, a new backgro
 1. Which **contract entries** in `deploy/contract.yaml` change.
 2. Which **target adapters** need updates and what kind (params change, bootstrap step added, new precondition, etc.).
 3. Whether the change requires a **new host singleton** assertion.
+4. Whether the change introduces a **new image** that needs build-pipeline coverage (CI build job, signature, SBOM, provenance).
+5. Whether the change adds a **new config bundle environment** that the build pipeline must emit.
 
 Specs that introduce target-specific behavior outside `deploy/<target>/` MUST be rejected.
+Specs that introduce a new image without updating the build pipeline MUST be rejected.
 
 ## References
 

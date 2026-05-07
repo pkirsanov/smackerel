@@ -53,6 +53,11 @@ Use `./smackerel.sh` for runtime work and the committed Bubbles commands for fra
 | Status | `./smackerel.sh status` | 2 min |
 | Logs | `./smackerel.sh logs` | 5 min |
 | Clean smart | `./smackerel.sh clean smart` | 3 min |
+| Config bundle | `./smackerel.sh config generate --env <env> --bundle --source-sha <sha>` | 1 min |
+| Deploy target apply | `./smackerel.sh deploy-target <target> apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=<env>-<sha>` | 5 min |
+| Deploy target rollback | `./smackerel.sh deploy-target <target> rollback` | 1 min |
+| Deploy target verify | `./smackerel.sh deploy-target <target> verify` | 1 min |
+| Promote build manifest | `bash scripts/deploy/promote.sh --target <target> --build-manifest <path>` | 5 min |
 | Bootstrap doctor | `bash .github/bubbles/scripts/cli.sh doctor` | 2 min |
 | Framework validate | `timeout 1200 bash .github/bubbles/scripts/cli.sh framework-validate` | 20 min |
 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/<feature>` | 5 min |
@@ -125,6 +130,61 @@ Regenerate all config: `./smackerel.sh config generate`
 - Preserve persistent volumes by default.
 - Prove build freshness through image identity metadata, not timestamps or `latest` tags.
 - Use Compose project names, profiles, and labels for grouping and lifecycle control.
+
+### Build-Once Deploy-Many (BLOCKING — bubbles G074)
+
+Smackerel deployments follow the Build-Once Deploy-Many architecture. The same git
+SHA produces immutable artifacts that any environment consumes:
+
+| Artifact | Identifier | Mutable? |
+|----------|-----------|----------|
+| `smackerel-core` image | `ghcr.io/pkirsanov/smackerel-core@sha256:<digest>` | No |
+| `smackerel-ml` image   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No |
+| Config bundle (per env) | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No, deterministic |
+| Build manifest         | `build-manifest-<sourceSha>.yaml` (CI artifact)    | No |
+| Deployment manifest    | `deploy/<target>/manifest.yaml` (pointer)          | Yes (operator-controlled) |
+
+**Producers vs deployers:**
+
+- `.github/workflows/build.yml` — builds, signs (cosign keyless + Rekor), attests
+  (SBOM + SLSA provenance), generates per-env config bundles, publishes to ghcr,
+  writes `build-manifest-<sourceSha>.yaml`. **STOPS at registry push. NO SSH. NO apply.**
+- `deploy/<target>/` — adapter scripts that pull by digest, verify signatures,
+  swap manifest pointer, restart. Owns ALL target-specific knowledge.
+- `scripts/deploy/promote.sh` — operator entrypoint: reads `build-manifest.yaml`,
+  resolves digests + bundle ref for the target's environment, calls
+  `./smackerel.sh deploy-target <target> apply ...`.
+- `scripts/deploy/rollback.sh` — operator entrypoint: pure pointer-swap rollback.
+
+**Forbidden in any deployment surface:**
+
+- Mutable image tags in manifest (`:latest`, `:main`, branch names) — digests only
+- CI workflow performing `apply`/`deploy`/`ssh` — wrong trust boundary
+- Adapter `apply.sh` invoking `docker build` / `cargo build` / `npm run build`
+- Adapter falling back to local build on registry pull failure
+- Missing cosign verification before container start
+- Missing bundle hash verification
+- `rollback.sh` rebuilding instead of pointer-swap
+- Target-side bundle generation (bundle is a build artifact, not a deploy artifact)
+- Plaintext secrets in bundle (use injected env vars / sealed secrets)
+- Non-deterministic bundle (two CI runs on same SHA producing different bundles)
+- Two targets sharing one `manifest.yaml` (each target owns its own pointer)
+
+**Operator commands:**
+
+```bash
+./smackerel.sh deploy-target home-lab apply \
+    --image-core=sha256:<digest> --image-ml=sha256:<digest> \
+    --config-bundle=home-lab-<sourceSha>
+./smackerel.sh deploy-target home-lab verify
+./smackerel.sh deploy-target home-lab rollback
+bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>
+```
+
+See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,
+[`.github/instructions/bubbles-deployment-target.instructions.md`](instructions/bubbles-deployment-target.instructions.md)
+and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](skills/bubbles-deployment-target-adapter/SKILL.md)
+for framework rationale.
 
 ---
 

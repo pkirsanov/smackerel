@@ -1,0 +1,28 @@
+# Home-Lab Adapter — Target Parameters
+#
+# This file owns ALL home-lab-specific knowledge. Bubbles framework files MUST NOT
+# reference these values. Other targets MUST NOT read this file.
+paramsVersion: 1
+
+target: home-lab
+environment: home-lab     # selects which config bundle to consume (home-lab-<sourceSha>)
+rolloutStrategy: recreate # one of: recreate, blue-green (declared in deploy/contract.yaml)
+
+# Where stack state lives on the host
+host:
+  installRoot: /var/lib/smackerel       # bundle extraction root
+  manifestDir: /var/lib/smackerel/manifests
+  composeDir: /var/lib/smackerel/compose
+  systemdUnit: smackerel.service
+
+# Image registries (must match contract.yaml)
+registry:
+  core: ghcr.io/pkirsanov/smackerel-core
+  ml: ghcr.io/pkirsanov/smackerel-ml
+  configBundles: ghcr.io/pkirsanov/smackerel-config-bundles
+
+# Signature verification — adapter `apply` MUST honor these
+signing:
+  cosignIdentity: https://github.com/pkirsanov/smackerel/.github/workflows/build.yml@refs/heads/main
+  cosignIssuer: https://token.actions.githubusercontent.com
+  rekorUrl: https://rekor.sigstore.dev

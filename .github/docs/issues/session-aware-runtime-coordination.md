@@ -103,7 +103,7 @@ Each lease record should include fields like:
   "branch": "feature/foo",
   "purpose": "validation",
   "environment": "dev",
-  "composeProject": "guesthost-val-abc123",
+  "composeProject": "example-app-val-abc123",
   "stackGroup": "validation",
   "shareMode": "exclusive",
   "compatibilityFingerprint": "sha256:...",
@@ -193,8 +193,8 @@ Standardize a lease-derived Compose project naming pattern, for example:
 
 Examples:
 
-- `guesthost-dev-validation-rlsabc123`
-- `quantfinance-dev-fullstack-cmp9f84d2`
+- `example-app-dev-validation-rlsabc123`
+- `example-app-dev-fullstack-cmp9f84d2`
 
 This keeps current Compose-grouping guidance, but makes it deterministic and session-safe.
 

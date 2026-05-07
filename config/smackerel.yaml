@@ -549,6 +549,11 @@ photos:
     archive_action_token_ttl_seconds: 86400
     delete_action_token_ttl_seconds: 86400
     telegram_max_inline_size_bytes: 8388608
+    # Spec 040 chaos C-006 — bound action plan scope size at mint time
+    # to prevent very-large-token resource amplification (token payload
+    # grows linearly with scope, and confirm-time loops scale with
+    # count). Applies to scope.photo_ids; removal_ids share the same cap.
+    actions_max_scope_size: 50
   intelligence:
     classify_model: gemma4:26b
     embed_model: nomic-embed-text
@@ -623,3 +628,18 @@ environments:
     qf_decisions_base_url: "http://host.docker.internal:45003"
     qf_decisions_credential_ref: "qf-e2e-credential-ref"
     qf_decisions_packet_version: 99
+  home-lab:
+    # Self-hosted target on the operator's home-lab machine. Builds are produced
+    # by .github/workflows/build.yml and applied via deploy/home-lab/apply.sh.
+    # Port assignments live inside the Smackerel block (40000-49999) and do not
+    # collide with `dev` or `test` so the same machine could host all three.
+    compose_project: smackerel-home-lab
+    postgres_host_port: 43001
+    nats_client_host_port: 43002
+    nats_monitor_host_port: 43003
+    core_host_port: 41001
+    ml_host_port: 41002
+    ollama_host_port: 43004
+    postgres_volume_name: smackerel-home-lab-postgres-data
+    nats_volume_name: smackerel-home-lab-nats-data
+    ollama_volume_name: smackerel-home-lab-ollama-data
