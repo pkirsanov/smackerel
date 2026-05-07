@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -219,6 +220,14 @@ type Config struct {
 	GuestHostSyncSchedule string
 	GuestHostEventTypes   string
 
+	// QF decisions connector (SST-compliant — from smackerel.yaml via config generate)
+	QFDecisionsEnabled       bool
+	QFDecisionsBaseURL       string
+	QFDecisionsCredentialRef string
+	QFDecisionsSyncSchedule  string
+	QFDecisionsPacketVersion int
+	QFDecisionsPageSize      int
+
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 
@@ -342,6 +351,14 @@ func Load() (*Config, error) {
 		GuestHostSyncSchedule: os.Getenv("GUESTHOST_SYNC_SCHEDULE"),
 		GuestHostEventTypes:   os.Getenv("GUESTHOST_EVENT_TYPES"),
 
+		// QF decisions connector
+		QFDecisionsEnabled:       os.Getenv("QF_DECISIONS_ENABLED") == "true",
+		QFDecisionsBaseURL:       os.Getenv("QF_DECISIONS_BASE_URL"),
+		QFDecisionsCredentialRef: os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
+		QFDecisionsSyncSchedule:  os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
+		QFDecisionsPacketVersion: parseIntEnv("QF_DECISIONS_PACKET_VERSION", 0),
+		QFDecisionsPageSize:      parseIntEnv("QF_DECISIONS_PAGE_SIZE", 0),
+
 		// Hospitable connector
 		HospitableEnabled:             os.Getenv("HOSPITABLE_ENABLED") == "true",
 		HospitableAccessToken:         os.Getenv("HOSPITABLE_ACCESS_TOKEN"),
@@ -460,6 +477,12 @@ func Load() (*Config, error) {
 		}
 		if cfg.HospitablePageSize < 1 {
 			return nil, fmt.Errorf("HOSPITABLE_PAGE_SIZE must be a positive integer when Hospitable is enabled")
+		}
+	}
+
+	if cfg.QFDecisionsEnabled {
+		if err := cfg.validateQFDecisionsConfig(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -925,6 +948,33 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+func (c *Config) validateQFDecisionsConfig() error {
+	var configErrors []string
+	if strings.TrimSpace(c.QFDecisionsBaseURL) == "" {
+		configErrors = append(configErrors, "QF_DECISIONS_BASE_URL")
+	} else if parsed, err := url.Parse(c.QFDecisionsBaseURL); err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		configErrors = append(configErrors, "QF_DECISIONS_BASE_URL (must be an absolute http or https URL)")
+	}
+	if strings.TrimSpace(c.QFDecisionsCredentialRef) == "" {
+		configErrors = append(configErrors, "QF_DECISIONS_CREDENTIAL_REF")
+	}
+	if strings.TrimSpace(c.QFDecisionsSyncSchedule) == "" {
+		configErrors = append(configErrors, "QF_DECISIONS_SYNC_SCHEDULE")
+	} else if !isValidCronExpr(c.QFDecisionsSyncSchedule) {
+		configErrors = append(configErrors, "QF_DECISIONS_SYNC_SCHEDULE (not a valid cron expression)")
+	}
+	if c.QFDecisionsPacketVersion < 1 {
+		configErrors = append(configErrors, "QF_DECISIONS_PACKET_VERSION (must be a positive integer)")
+	}
+	if c.QFDecisionsPageSize < 1 || c.QFDecisionsPageSize > 100 {
+		configErrors = append(configErrors, "QF_DECISIONS_PAGE_SIZE (must be an integer in range [1, 100])")
+	}
+	if len(configErrors) > 0 {
+		return fmt.Errorf("missing or invalid QF decisions connector configuration: %s", strings.Join(configErrors, ", "))
+	}
 	return nil
 }
 

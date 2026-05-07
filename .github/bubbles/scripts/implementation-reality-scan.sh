@@ -505,7 +505,7 @@ echo ""
 echo "--- Scan 1D: External Integration Authenticity ---"
 
 INTEGRATION_FILE_PATTERNS='provider|providers|adapter|adapters|integration|integrations|connector|connectors|client|clients'
-INTEGRATION_EXTERNAL_CALL_PATTERNS='fetch\(|axios\.|requests\.|httpClient|apiClient|client\.|send\(|post\(|get\(|put\(|delete\(|patch\(|request\(|invoke\(|grpc|sdk|smtp|webhook|oauth|mail|email|sms'
+INTEGRATION_EXTERNAL_CALL_PATTERNS='fetch\(|axios\.|requests\.|httpClient|apiClient|client\.|send\(|post\(|get\(|put\(|delete\(|patch\(|request\(|invoke\(|grpc|sdk|smtp|webhook|oauth|mail|email|sms|QueryRow\(|Exec\(|Query\('
 INTEGRATION_SUSPICIOUS_PATTERNS=(
   'Math\.random'
   'randomUUID'

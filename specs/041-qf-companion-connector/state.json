@@ -1,0 +1,202 @@
+{
+  "version": 3,
+  "featureDir": "specs/041-qf-companion-connector",
+  "featureName": "QF Companion Connector",
+  "status": "in_progress",
+  "currentPhase": "design",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "design",
+    "currentScope": null,
+    "runStartedAt": null,
+    "completedPhaseClaims": [
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-02T00:00:00Z",
+        "summary": "Created planning and state scaffolding from existing spec/design. No implementation, runtime tests, artifact lint, validation, or certification executed."
+      },
+      {
+        "phase": "ux",
+        "agent": "bubbles.ux",
+        "timestamp": "2026-05-02T20:32:46Z",
+        "summary": "Added inline UI Wireframes and User Flows sections to spec.md for connector health, QF packet rendering, evidence bundle export, Telegram summary, action boundary, and schema-mismatch scenarios. No runtime code or certification fields changed."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-02T22:55:55Z",
+        "summary": "Reconciled design.md with UX wireframes and user flows for connector status, packet search/digest/detail cards, PersonalEvidenceBundle builder, Telegram summary, schema mismatch, action boundary, accessibility/responsive behavior, authorization, and scenario-to-test mapping. No runtime source code, scopes, report, uservalidation, or certification fields changed."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-02T23:33:27Z",
+        "summary": "Performed an additional design-only reconciliation pass after inline UX sections were reviewed. Added an explicit UX contract reconciliation matrix tying connector status, packet search/digest/detail, evidence bundle builder, Telegram summary, sync/rendering, export, schema mismatch, and action-boundary flows to active design. No runtime source, scopes, report, uservalidation, docs, or certification fields changed."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-03T00:00:00Z",
+        "summary": "Cross-repo design reconciliation pass against quantitativeFinance/specs/063-smackerel-companion-bridge/design.md. Added target_context (required) and source_refs (optional) to PersonalEvidenceBundle Bundle Fields table; added analysis_note -> qf/decision-packet+subtype mapping to content-type table; added explicit Reserved Schemas (Not Implemented Pre-MVP) subsection naming QFApprovalAction and QFWatchSignal with pre-MVP handling rules. Added Reconciliation Notes (2026-05-03) section. No spec, scopes, report, uservalidation, runtime source, or certification fields modified."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-03T01:00:00Z",
+        "summary": "Plan reconciliation pass (mode: reconcile) folding the 2026-05-03 cross-repo design deltas into scopes.md only. Scope 2 makes the response-level next_cursor canonical (persisted in sync_state.sync_cursor), demotes per-event QFDecisionEvent.cursor to diagnostic-only, and binds QF decision_type to Smackerel content type per the Decision Type To Smackerel Content Type Mapping table (analysis_note preserved as qf/decision-packet + Metadata.decision_subtype). Scope 4 tightens the PersonalEvidenceBundle required field set, marks source_refs optional, and adds field-set parity with QF spec 063 import validation. Scope 5 adds explicit reserved-schema handling per the design's Reserved Schemas (Not Implemented Pre-MVP) subsection (QFApprovalAction normalized as qf/approval-request diagnostic-only with Metadata.reserved=true; QFWatchSignal recorded as diagnostic log only). All scope statuses remain Not Started; no runtime source, spec, design, or uservalidation fields changed; no certification claim made."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-03T01:30:00Z",
+        "summary": "Final plan review pass after the prior reconciliation. Tightened scopes.md evidence-bundle shorthand in Validation Checkpoints, Scope 1 DTO contract, Scope 4 scenarios, Scope 4 test titles, and Scope 4 DoD so the canonical PersonalEvidenceBundle required fields, optional source_refs semantics, and source_artifact_ids terminology are consistent throughout planning. No scope status, DoD checkbox, runtime source, spec, design, uservalidation, or certification field changed."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "on",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap",
+        "plan"
+      ],
+      "statusBefore": "missing_state",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-02T00:00:00Z",
+      "runFinishedAt": "2026-05-02T00:00:00Z",
+      "summary": "Created scopes.md, report.md, uservalidation.md, and state.json for the pre-MVP Smackerel QF Companion Connector. No source code changed and no validation commands run."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": [
+        "analyze"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-02T20:32:46Z",
+      "runFinishedAt": "2026-05-02T20:32:46Z",
+      "summary": "Added UX screen inventory, ASCII wireframes, responsive/accessibility states, and mermaid user flows inline in spec.md. No implementation, runtime tests, or certification promotion performed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": [
+        "bootstrap",
+        "design-reconcile"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-02T22:53:42Z",
+      "runFinishedAt": "2026-05-02T22:55:55Z",
+      "summary": "Updated design.md to align active technical design with the current spec.md UX truth: connector health, QF packet cards/detail, evidence builder, Telegram summary, degraded/schema mismatch behavior, action boundaries, access matrix, and precise scenario-to-test mapping. No source implementation or certification state changed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": [
+        "bootstrap",
+        "design-reconcile"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-02T23:33:27Z",
+      "runFinishedAt": "2026-05-02T23:33:27Z",
+      "summary": "Reviewed spec.md UX contracts against design.md and scopes.md, then added a UX contract reconciliation matrix to design.md. Active design remains read-only for QF decisions, consent-scoped for evidence export, diagnostic-only for schema mismatches, and non-mutating for approval/execution/mandate/watch/EmergencyStop boundaries."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": [
+        "bootstrap",
+        "design-reconcile"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-03T00:00:00Z",
+      "runFinishedAt": "2026-05-03T00:00:00Z",
+      "summary": "Cross-repo design reconciliation pass against quantitativeFinance/specs/063-smackerel-companion-bridge/design.md. Added target_context (required) and source_refs (optional) to PersonalEvidenceBundle Bundle Fields table; added analysis_note -> qf/decision-packet+subtype mapping to content-type table; added explicit Reserved Schemas (Not Implemented Pre-MVP) subsection naming QFApprovalAction and QFWatchSignal with pre-MVP handling. Added Reconciliation Notes (2026-05-03) section. Artifact lint passed. No spec, scopes, report, uservalidation, runtime source, or certification fields changed."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap",
+        "plan"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-03T01:00:00Z",
+      "runFinishedAt": "2026-05-03T01:00:00Z",
+      "summary": "Plan reconciliation pass (mode: reconcile) folding the 2026-05-03 cross-repo design deltas into scopes.md only. Scope 2 promotes response-level next_cursor to canonical advancement and demotes per-event cursor to diagnostic-only; analysis_note variants normalize to qf/decision-packet with Metadata.decision_subtype preserved. Scope 4 tightens the PersonalEvidenceBundle required field set with source_refs optional and adds QF spec 063 field-set parity. Scope 5 adds explicit reserved-schema handling for QFApprovalAction (normalize to qf/approval-request diagnostic with Metadata.reserved=true) and QFWatchSignal (diagnostic log only). All scope statuses remain Not Started; no runtime source, spec, design, or uservalidation fields changed; no certification claim made."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "bootstrap",
+        "plan-review"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-03T01:30:00Z",
+      "runFinishedAt": "2026-05-03T01:30:00Z",
+      "summary": "Final plan review pass after the prior reconciliation. Tightened scopes.md evidence-bundle shorthand in Validation Checkpoints, Scope 1 DTO contract, Scope 4 scenarios, Scope 4 test titles, and Scope 4 DoD so the canonical PersonalEvidenceBundle required fields, optional source_refs semantics, and source_artifact_ids terminology are consistent throughout planning. All scope statuses remain Not Started; no runtime source, spec, design, or uservalidation fields changed; no certification claim made."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-05-03T01:30:00Z",
+  "createdAt": "2026-05-02T00:00:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md"
+  },
+  "sourceDocuments": [
+    "spec.md",
+    "design.md",
+    "<home>/quantitativeFinance/specs/063-smackerel-companion-bridge/spec.md",
+    "<home>/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md",
+    "<home>/quantitativeFinance/docs/releases/pre-mvp/features.md",
+    "<home>/quantitativeFinance/docs/releases/pre-mvp/actions.md"
+  ],
+  "notes": "Initial planning/state scaffold only. Pre-MVP connector is read-only for QF decisions. Smackerel does not provide financial advice, approval, mandate changes, execution, or QF trust metadata reconstruction."
+}
