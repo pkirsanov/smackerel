@@ -23,7 +23,9 @@ RUN if [ -n "${GO_BUILD_TAGS}" ]; then \
 		fi
 
 # --- Runtime stage ---
-FROM alpine:3.20
+# Named "core" so build.yml can target it with `--target core`.
+# This is the deployable image consumed by deploy/<target>/apply.sh per G074.
+FROM alpine:3.20 AS core
 
 ARG VERSION=dev
 ARG COMMIT_HASH=unknown
