@@ -322,7 +322,15 @@ func (p *Provider) exchangeCodeForToken(ctx context.Context, code string) (googl
 		return googleTokenResponse{}, fmt.Errorf("google: token exchange: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the OAuth token-exchange
+	// response body. Production wiring sets the cap from
+	// drive.io_limits.oauth_response_max_bytes; tests that do not set the
+	// limit retain the historical unbounded behavior.
+	var tokenReader io.Reader = resp.Body
+	if p.cfg.IOLimits.OAuthResponseMaxBytes > 0 {
+		tokenReader = io.LimitReader(resp.Body, p.cfg.IOLimits.OAuthResponseMaxBytes)
+	}
+	body, _ := io.ReadAll(tokenReader)
 	if resp.StatusCode != http.StatusOK {
 		return googleTokenResponse{}, fmt.Errorf("google: token exchange status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -353,7 +361,13 @@ func (p *Provider) fetchAccountEmail(ctx context.Context, accessToken string) (s
 		return "", fmt.Errorf("google: drive about call: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the about endpoint
+	// JSON response. Cap sourced from drive.io_limits.provider_response_max_bytes.
+	var aboutReader io.Reader = resp.Body
+	if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+		aboutReader = io.LimitReader(resp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+	}
+	body, _ := io.ReadAll(aboutReader)
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("google: drive about status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -452,7 +466,13 @@ func (p *Provider) ListFolder(ctx context.Context, connectionID string, folderID
 		return nil, "", fmt.Errorf("google: list folder: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the files-list JSON
+	// response. Cap sourced from drive.io_limits.provider_response_max_bytes.
+	var listReader io.Reader = resp.Body
+	if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+		listReader = io.LimitReader(resp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+	}
+	body, _ := io.ReadAll(listReader)
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("google: list folder status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -491,7 +511,13 @@ func (p *Provider) GetFile(ctx context.Context, connectionID string, providerFil
 		return drive.FileBytes{}, fmt.Errorf("google: get file: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		// MIT-038-S-004 — defense-in-depth byte cap on the error response
+		// body. Cap sourced from drive.io_limits.provider_response_max_bytes.
+		var errReader io.Reader = resp.Body
+		if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+			errReader = io.LimitReader(resp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+		}
+		body, _ := io.ReadAll(errReader)
 		resp.Body.Close()
 		return drive.FileBytes{}, fmt.Errorf("google: get file status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -527,7 +553,7 @@ func (p *Provider) PutFile(ctx context.Context, connectionID string, folderID st
 			_ = body.Reader.Close()
 		}
 	}()
-	data, err := io.ReadAll(body.Reader)
+	data, err := p.readUploadBody(body.Reader)
 	if err != nil {
 		return "", fmt.Errorf("google: PutFile: read bytes: %w", err)
 	}
@@ -553,7 +579,13 @@ func (p *Provider) PutFile(ctx context.Context, connectionID string, folderID st
 		return "", fmt.Errorf("google: PutFile: do request: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the PutFile JSON
+	// response body. Cap sourced from drive.io_limits.provider_response_max_bytes.
+	var putRespReader io.Reader = resp.Body
+	if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+		putRespReader = io.LimitReader(resp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+	}
+	respBody, _ := io.ReadAll(putRespReader)
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("google: PutFile status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
@@ -612,7 +644,14 @@ func (p *Provider) EnsureFolder(ctx context.Context, connectionID string, folder
 			return parsed.ID, nil
 		}
 	} else if getResp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(getResp.Body)
+		// MIT-038-S-004 — defense-in-depth byte cap on the EnsureFolder
+		// GET error response body. Cap sourced from
+		// drive.io_limits.provider_response_max_bytes.
+		var getErrReader io.Reader = getResp.Body
+		if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+			getErrReader = io.LimitReader(getResp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+		}
+		body, _ := io.ReadAll(getErrReader)
 		getResp.Body.Close()
 		return "", fmt.Errorf("google: EnsureFolder: GET status %d: %s", getResp.StatusCode, strings.TrimSpace(string(body)))
 	} else {
@@ -635,7 +674,14 @@ func (p *Provider) EnsureFolder(ctx context.Context, connectionID string, folder
 		return "", fmt.Errorf("google: EnsureFolder: POST: %w", err)
 	}
 	defer postResp.Body.Close()
-	postBody, _ := io.ReadAll(postResp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the EnsureFolder
+	// POST JSON response body. Cap sourced from
+	// drive.io_limits.provider_response_max_bytes.
+	var postRespReader io.Reader = postResp.Body
+	if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+		postRespReader = io.LimitReader(postResp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+	}
+	postBody, _ := io.ReadAll(postRespReader)
 	if postResp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("google: EnsureFolder: POST status %d: %s", postResp.StatusCode, strings.TrimSpace(string(postBody)))
 	}
@@ -676,7 +722,13 @@ func (p *Provider) Changes(ctx context.Context, connectionID string, cursor stri
 		return nil, "", fmt.Errorf("google: changes: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	// MIT-038-S-004 — defense-in-depth byte cap on the changes JSON
+	// response body. Cap sourced from drive.io_limits.provider_response_max_bytes.
+	var changesReader io.Reader = resp.Body
+	if p.cfg.IOLimits.ProviderResponseMaxBytes > 0 {
+		changesReader = io.LimitReader(resp.Body, p.cfg.IOLimits.ProviderResponseMaxBytes)
+	}
+	body, _ := io.ReadAll(changesReader)
 	if resp.StatusCode == http.StatusGone {
 		return []drive.Change{{Kind: drive.ChangeCursorInv}}, "", nil
 	}
@@ -825,6 +877,25 @@ func (p *Provider) accessToken(ctx context.Context, connectionID string) (string
 		return "", fmt.Errorf("google: credentials_ref unsupported format")
 	}
 	return strings.TrimPrefix(credsRef, "bearer:"), nil
+}
+
+// readUploadBody applies the MIT-038-S-004 binary upload cap and reads the
+// upload-source bytes. The cap (drive.io_limits.provider_binary_max_bytes)
+// is defense-in-depth on top of the primary upstream enforcement at
+// drive.limits.max_file_size_bytes (applied in internal/drive/extract/
+// service.go). Extracted as a method so the cap behavior is unit-testable
+// without standing up a database pool (PutFile's accessToken lookup
+// requires *pgxpool.Pool, which is not available in unit-package tests).
+//
+// When ProviderBinaryMaxBytes is zero (the test default before
+// ConfigureRuntime injects SST values), the read is unbounded, preserving
+// the historical behavior of legacy test wiring.
+func (p *Provider) readUploadBody(reader io.Reader) ([]byte, error) {
+	var capped io.Reader = reader
+	if p.cfg.IOLimits.ProviderBinaryMaxBytes > 0 {
+		capped = io.LimitReader(reader, p.cfg.IOLimits.ProviderBinaryMaxBytes)
+	}
+	return io.ReadAll(capped)
 }
 
 func parseGoogleSize(raw json.RawMessage) int64 {

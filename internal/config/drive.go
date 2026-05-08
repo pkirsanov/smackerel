@@ -20,6 +20,7 @@ type DriveConfig struct {
 	Policy         DrivePolicyConfig
 	Telegram       DriveTelegramConfig
 	Limits         DriveLimitsConfig
+	IOLimits       DriveIOLimitsConfig
 	RateLimits     DriveRateLimitsConfig
 	Save           DriveSaveConfig
 	Providers      DriveProvidersConfig
@@ -64,6 +65,24 @@ type DriveLimitsConfig struct {
 	MaxFileSizeBytes int64
 }
 
+// DriveIOLimitsConfig holds the SST byte caps applied around `io.ReadAll`
+// calls on HTTP boundaries in the Google Drive provider (MIT-038-S-004).
+// Values come from the `drive.io_limits.*` SST keys; missing or non-positive
+// values are a fail-loud config error. The caps are defense-in-depth on
+// top of the existing `drive.limits.max_file_size_bytes` enforcement at
+// the bytes-processing path in internal/drive/extract/service.go:255.
+//
+//	ProviderResponseMaxBytes — JSON metadata responses (Drive list, about,
+//	  changes, file-metadata error bodies, EnsureFolder, PutFile response).
+//	ProviderBinaryMaxBytes   — binary file content read in PutFile (where
+//	  body.Reader is the uploaded content).
+//	OAuthResponseMaxBytes    — OAuth token-exchange response body.
+type DriveIOLimitsConfig struct {
+	ProviderResponseMaxBytes int64
+	ProviderBinaryMaxBytes   int64
+	OAuthResponseMaxBytes    int64
+}
+
 type DriveRateLimitsConfig struct {
 	RequestsPerMinute int
 }
@@ -87,6 +106,11 @@ type DriveGoogleProviderConfig struct {
 	OAuthBaseURL      string
 	APIBaseURL        string
 	ScopeDefaults     []string
+	// IOLimits carries the SST-resolved drive.io_limits.* caps so the
+	// Google provider can wrap io.ReadAll(resp.Body) sites with
+	// io.LimitReader without depending on the top-level config package
+	// (MIT-038-S-004). Populated by loadDriveConfig from cfg.IOLimits.
+	IOLimits DriveIOLimitsConfig
 }
 
 // validSensitivityTiers enumerates the policy.sensitivity_default options.
@@ -183,6 +207,12 @@ func loadDriveConfig() (DriveConfig, error) {
 	// limits
 	cfg.Limits.MaxFileSizeBytes, errs = parsePositiveInt64("DRIVE_LIMITS_MAX_FILE_SIZE_BYTES", errs)
 
+	// io_limits (MIT-038-S-004 — defense-in-depth byte caps on Google
+	// provider HTTP boundaries; fail-loud on missing or non-positive values).
+	cfg.IOLimits.ProviderResponseMaxBytes, errs = parsePositiveInt64("DRIVE_IO_LIMITS_PROVIDER_RESPONSE_MAX_BYTES", errs)
+	cfg.IOLimits.ProviderBinaryMaxBytes, errs = parsePositiveInt64("DRIVE_IO_LIMITS_PROVIDER_BINARY_MAX_BYTES", errs)
+	cfg.IOLimits.OAuthResponseMaxBytes, errs = parsePositiveInt64("DRIVE_IO_LIMITS_OAUTH_RESPONSE_MAX_BYTES", errs)
+
 	// rate_limits
 	cfg.RateLimits.RequestsPerMinute, errs = parsePositiveInt("DRIVE_RATE_LIMITS_REQUESTS_PER_MINUTE", errs)
 
@@ -237,6 +267,13 @@ func loadDriveConfig() (DriveConfig, error) {
 			errs = append(errs, "DRIVE_PROVIDER_GOOGLE_OAUTH_CLIENT_SECRET (required when drive.enabled=true)")
 		}
 	}
+
+	// MIT-038-S-004 — propagate the SST-resolved drive.io_limits.* caps
+	// into the per-provider config so the Google provider's wiring path
+	// (cmd/core/wiring.go calls ConfigureRuntime with this struct) carries
+	// the caps down to internal/drive/google without that package importing
+	// the top-level DriveConfig.
+	cfg.Providers.Google.IOLimits = cfg.IOLimits
 
 	if len(errs) > 0 {
 		return DriveConfig{}, fmt.Errorf("missing or invalid required drive configuration: %s", strings.Join(errs, ", "))

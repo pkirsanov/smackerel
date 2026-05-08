@@ -4969,4 +4969,282 @@ Same as `specs/040-cloud-photo-libraries/report.md#files-touched`. Primary edits
 }
 ```
 
+## MIT-038-S-004 Closure — 2026-05-08
+
+**Status:** CLOSED — All 9 unbounded `io.ReadAll(resp.Body)` sites in `internal/drive/google/google.go` are now wrapped with `io.LimitReader(_, cap)` where `cap` flows from the new `drive.io_limits.*` SST surface. Defense-in-depth caps fire if a fixture or compromised upstream returns a multi-GB body; production behavior for honest providers is unchanged because all observed responses sit orders of magnitude below the caps.
+
+**Workflow mode:** `bugfix-fastlane` (post-feature-done backlog closure; `certification.status` / `scopeProgress` / top-level `status` / `certification.completedScopes` / `certification.certifiedCompletedPhases` UNTOUCHED — spec 038 was already feature-done at HEAD before this pass).
+
+**Audit citation:** `report.md` line 4793 — *"MIT-038-S-004: Wrap remaining `io.ReadAll(resp.Body)` provider-response reads in `internal/drive/google/google.go` with `io.LimitReader(_, drive.limits.max_response_bytes)` for defense-in-depth. Owner: bubbles.harden. Post-feature-done runtime-hardening cycle."*
+
+### Inventory — `io.ReadAll` sites in `internal/drive/`
+
+The audit listed 10 sites in `google.go`; the actual count at HEAD is **9** (audit count was off by one). The wider `internal/drive/` package has additional `io.ReadAll` sites that were correctly left alone per the audit:
+
+```text
+$ grep -rn 'io.ReadAll\|ioutil.ReadAll' internal/drive/
+internal/drive/extract/service.go:255   io.ReadAll(io.LimitReader(body.Reader, service.maxFileSizeBytes+1))   # already cap-enforced; audit confirms safe
+internal/drive/extract/service.go:751   data, err := io.ReadAll(body)                                          # NOT in audit; left alone (test/extract internal path)
+internal/drive/memprovider/memprovider.go:264   bs, err := io.ReadAll(body.Reader)                            # NOT in audit; in-memory test provider, no HTTP boundary
+internal/drive/google/google.go:325     body, _ := io.ReadAll(resp.Body)                                       # WRAPPED — OAuth token exchange
+internal/drive/google/google.go:356     body, _ := io.ReadAll(resp.Body)                                       # WRAPPED — fetchAccountEmail (about JSON)
+internal/drive/google/google.go:455     body, _ := io.ReadAll(resp.Body)                                       # WRAPPED — ListFolder JSON
+internal/drive/google/google.go:494     body, _ := io.ReadAll(resp.Body)                                       # WRAPPED — GetFile error JSON
+internal/drive/google/google.go:530     data, err := io.ReadAll(body.Reader)                                   # WRAPPED — PutFile binary upload-source (via readUploadBody helper)
+internal/drive/google/google.go:556     respBody, _ := io.ReadAll(resp.Body)                                   # WRAPPED — PutFile response JSON
+internal/drive/google/google.go:615     body, _ := io.ReadAll(getResp.Body)                                    # WRAPPED — EnsureFolder GET error JSON
+internal/drive/google/google.go:638     postBody, _ := io.ReadAll(postResp.Body)                               # WRAPPED — EnsureFolder POST response JSON
+internal/drive/google/google.go:679     body, _ := io.ReadAll(resp.Body)                                       # WRAPPED — Changes JSON
+internal/drive/retrieve/postgres.go:163         data, err := io.ReadAll(reader)                                # NOT in audit; reads from internal *bytes.Reader / pgx-streamed bytes (no HTTP boundary)
+```
+
+NOTE: Pre-wrap line numbers above match the audit. Post-wrap line numbers shift slightly because each wrap inserts the `var _Reader io.Reader = …; if cap > 0 { _Reader = io.LimitReader(…, cap) }; …ReadAll(_Reader)` pattern. Verified with `grep -nE 'io\.ReadAll' internal/drive/google/google.go` → all 9 sites read from a `*Reader` variable (the wrap target), not from `resp.Body`/`body.Reader` directly.
+
+### New SST Surface (`drive.io_limits.*`)
+
+The new SST block (`drive.io_limits` under the existing `drive:` section in `config/smackerel.yaml`) defines three caps with full inline rationale:
+
+| SST key | Bytes | Purpose | Cap rationale |
+|---|---|---|---|
+| `drive.io_limits.provider_response_max_bytes` | 10485760 (10 MiB) | JSON metadata responses (Drive list, about, changes, EnsureFolder, error bodies) | Largest expected JSON page is in low-MiB range; 10 MiB leaves comfortable headroom while keeping the cap well below any plausible memory-exhaustion threshold. |
+| `drive.io_limits.provider_binary_max_bytes` | 524288000 (500 MiB) | Binary file content read in PutFile (`body.Reader` is the uploaded content) | Primary upstream enforcement is `drive.limits.max_file_size_bytes` (100 MiB at the bytes-processing path in `internal/drive/extract/service.go:255`). 500 MiB sits 5× above to avoid spurious truncation if `max_file_size_bytes` is raised. |
+| `drive.io_limits.oauth_response_max_bytes` | 65536 (64 KiB) | OAuth token-exchange response body | Token responses are tiny JSON (typically < 1 KiB). 64 KiB is generous defense-in-depth that still fires on adversarial multi-GB bodies. |
+
+SST plumbing wires through:
+- `config/smackerel.yaml` — `drive.io_limits` block (3 keys) with full inline rationale.
+- `scripts/commands/config.sh` — `DRIVE_IO_LIMITS_*` exports + env-file lines (3 keys × 2 emit sites).
+- `internal/config/drive.go` — `DriveIOLimitsConfig` struct + `loadDriveConfig` populates `cfg.IOLimits.*` via `parsePositiveInt64` (fail-loud on missing/non-positive); `DriveGoogleProviderConfig.IOLimits` mirrors `cfg.IOLimits` so the wiring layer (`cmd/core/wiring.go:92`) propagates the caps to `Provider.cfg` without the `internal/drive/google` package importing top-level `DriveConfig`.
+- `internal/config/drive_config_test.go` — 3 keys appended to `driveSSTKeys` (the empty-each fail-loud table) + `TestDriveConfigPopulatesEveryField` extended with 4 assertions (3 cap values + provider-mirror invariant).
+- `internal/config/validate_test.go` — 3 `t.Setenv` lines added to `setRequiredEnv` so every package's `cfg.Load()` call has the new keys present.
+
+### Per-Site Cap Mapping (post-wrap)
+
+| Site (post-wrap line) | Function | Wrap reader var | Cap | SST key |
+|---|---|---|---|---|
+| `internal/drive/google/google.go:333` | `exchangeCodeForToken` | `tokenReader` | OAuth | `drive.io_limits.oauth_response_max_bytes` |
+| `internal/drive/google/google.go:370` | `fetchAccountEmail` | `aboutReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:475` | `ListFolder` | `listReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:520` | `GetFile` (error path) | `errReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:565` (via helper) | `PutFile` → `readUploadBody` | `capped` | Binary | `drive.io_limits.provider_binary_max_bytes` |
+| `internal/drive/google/google.go:597` | `PutFile` (response JSON) | `putRespReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:663` | `EnsureFolder` (GET error) | `getErrReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:693` | `EnsureFolder` (POST response) | `postRespReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+| `internal/drive/google/google.go:740` | `Changes` | `changesReader` | Response | `drive.io_limits.provider_response_max_bytes` |
+
+Wrap pattern (matches the precedent set by MIT-040-S-006 commit `abae5e6`): each site declares a typed `var nameReader io.Reader = resp.Body`, conditionally rebinds it to `io.LimitReader(resp.Body, p.cfg.IOLimits.<Cap>MaxBytes)` when the cap is `> 0`, and then `io.ReadAll(nameReader)` consumes the (possibly capped) reader. The `> 0` guard preserves legacy unbounded behavior in test wiring that constructs `DriveGoogleProviderConfig` literals without populating IOLimits (production wiring always populates via SST validation, which fail-louds on missing or non-positive values).
+
+For the binary site (PutFile body.Reader at pre-wrap line 530), the wrap is centralized in a tiny `readUploadBody(reader io.Reader) ([]byte, error)` method on `*Provider` so the cap behavior is unit-testable without standing up a database pool (PutFile's `accessToken` lookup requires `*pgxpool.Pool`, which is not available in unit-package tests).
+
+### Adversarial Regression Tests
+
+Added in `internal/drive/google/google_security_test.go` (new file; same-package test allows calling unexported functions and accessing internal Provider fields):
+
+| Test | Site coverage | Cap under test | Failure mode if wrap removed |
+|---|---|---|---|
+| `TestGoogleDriveProvider_S004_OAuthTokenResponseLimitReaderTruncatesOversizedBody` | `google.go:325` (`exchangeCodeForToken`) | `oauth_response_max_bytes` (64 KiB; test uses 1 KiB cap, 1 MiB oversized body) | Body portion of the returned error message exceeds the 1 KiB cap (would be ~1 MiB). |
+| `TestGoogleDriveProvider_S004_MetadataResponseLimitReaderTruncatesOversizedBody` | `google.go:356` (`fetchAccountEmail`); same wrap pattern guards 6 other metadata sites | `provider_response_max_bytes` (10 MiB; test uses 4 KiB cap, 5 MiB oversized body) | Body portion of the returned error message exceeds the 4 KiB cap (would be ~5 MiB). |
+| `TestGoogleDriveProvider_S004_BinaryUploadLimitReaderTruncatesOversizedBody` | `google.go:530` (PutFile via `readUploadBody` helper) | `provider_binary_max_bytes` (500 MiB; test uses 8 KiB cap, 100 MiB oversized source) | `len(data) != cap` (would be 100 MiB). |
+| `TestGoogleDriveProvider_S004_BinaryUploadUncappedRetainsLegacyBehavior` | `readUploadBody` with zero IOLimits | (positive guard) | Inverting the `> 0` guard would make the read return EOF immediately for legacy test wiring, breaking the existing test contract. |
+
+Each adversarial test deliberately oversizes the input by orders of magnitude (≥ 100×) so the assertion is unambiguous and the wrap-vs-no-wrap delta is impossible to overlook.
+
+### Test Results
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --go
+=== RUN   TestGoogleDriveProvider_S004_OAuthTokenResponseLimitReaderTruncatesOversizedBody
+--- PASS: TestGoogleDriveProvider_S004_OAuthTokenResponseLimitReaderTruncatesOversizedBody (0.03s)
+=== RUN   TestGoogleDriveProvider_S004_MetadataResponseLimitReaderTruncatesOversizedBody
+--- PASS: TestGoogleDriveProvider_S004_MetadataResponseLimitReaderTruncatesOversizedBody (0.01s)
+=== RUN   TestGoogleDriveProvider_S004_BinaryUploadLimitReaderTruncatesOversizedBody
+--- PASS: TestGoogleDriveProvider_S004_BinaryUploadLimitReaderTruncatesOversizedBody (0.13s)
+=== RUN   TestGoogleDriveProvider_S004_BinaryUploadUncappedRetainsLegacyBehavior
+--- PASS: TestGoogleDriveProvider_S004_BinaryUploadUncappedRetainsLegacyBehavior (0.00s)
+=== RUN   TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_PROVIDER_RESPONSE_MAX_BYTES
+--- PASS: TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_PROVIDER_RESPONSE_MAX_BYTES (0.00s)
+=== RUN   TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_PROVIDER_BINARY_MAX_BYTES
+--- PASS: TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_PROVIDER_BINARY_MAX_BYTES (0.00s)
+=== RUN   TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_OAUTH_RESPONSE_MAX_BYTES
+--- PASS: TestDriveConfigValidationRequiresEverySSTField/DRIVE_IO_LIMITS_OAUTH_RESPONSE_MAX_BYTES (0.00s)
+ok      github.com/smackerel/smackerel/internal/drive/google    0.200s
+ok      github.com/smackerel/smackerel/internal/config          (cached)
+… all 67 Go packages PASS …
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --python
+409 passed in 16.90s
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test integration
+… (full live-stack run on the SST-validated config) …
+--- PASS: TestDriveConfigGenerateAndRuntimeValidationStayInSync (0.18s)
+--- PASS: TestGoogleDriveFixtureConnectStoresHealthyScopedConnection (0.05s)
+… 25 drive integration tests PASS …
+ok      github.com/smackerel/smackerel/tests/integration/drive  9.283s
+ok      github.com/smackerel/smackerel/tests/integration         (full suite)
+ok      github.com/smackerel/smackerel/tests/integration/agent   (cached)
+EXIT=0
+```
+
+### Governance Gates
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/038-cloud-drives-integration
+…
+Artifact lint FAILED with 77 issue(s).
+```
+
+→ **77 issues = baseline (no regression)**. The 77 are pre-existing carry-forward findings (G021/G022 specialist provenance gaps + G041 status mismatch — spec is feature-done with the `bugfix-fastlane` post-done lockdown surface). MIT-038-S-002 closure (commit `e0a4f9c`) ran with the same 77 baseline.
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/038-cloud-drives-integration
+…
+ℹ️  Scenarios checked: 24
+ℹ️  Test rows checked: 70
+ℹ️  Scenario-to-row mappings: 24
+ℹ️  Concrete test file references: 24
+ℹ️  Report evidence references: 24
+ℹ️  DoD fidelity scenarios: 24 (mapped: 24, unmapped: 0)
+RESULT: PASSED (0 warnings)
+```
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/038-cloud-drives-integration --verbose
+🐾 Regression Baseline Guard
+   Spec: specs/038-cloud-drives-integration
+
+── G044: Regression Baseline ──
+  ✅ Test baseline comparison found in report
+
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 39 done specs (of 40 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+
+── Summary ──
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+```
+
+### Files Touched
+
+| File | Purpose |
+|---|---|
+| `config/smackerel.yaml` | Add `drive.io_limits` block (3 keys + rationale comment). |
+| `scripts/commands/config.sh` | Emit 3 `DRIVE_IO_LIMITS_*` exports + 3 env-file lines. |
+| `config/generated/dev.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
+| `config/generated/test.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
+| `config/generated/home-lab.env` | Regenerated — adds 3 `DRIVE_IO_LIMITS_*` lines. |
+| `internal/config/drive.go` | New `DriveIOLimitsConfig` struct + field on `DriveConfig` + field on `DriveGoogleProviderConfig` + 3 `parsePositiveInt64` calls + provider-mirror copy in loader. |
+| `internal/config/drive_config_test.go` | 3 keys appended to `driveSSTKeys` + 4 IOLimits assertions in `TestDriveConfigPopulatesEveryField`. |
+| `internal/config/validate_test.go` | 3 `t.Setenv` calls in `setRequiredEnv`. |
+| `internal/drive/google/google.go` | 9 `io.ReadAll` wraps (8 inline `if cap > 0 { LimitReader }` + 1 via `readUploadBody` helper) + helper definition. |
+| `internal/drive/google/google_security_test.go` | New — 4 adversarial regression tests (3 truncation + 1 positive guard). |
+| `specs/038-cloud-drives-integration/report.md` | This closure section. |
+| `specs/038-cloud-drives-integration/state.json` | Append `executionHistory` entry + bump `lastUpdatedAt` + flag `MIT-038-S-004` CLOSED in `backlogItemsRouted`. |
+
+### Files NOT Touched (per task constraints)
+
+- `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` — uncommitted user WIP, left intact in the working tree.
+- `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/` — framework files (immutable per copilot-instructions).
+- `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases`, top-level `status` — spec 038 is already feature-done.
+- `internal/drive/extract/service.go:255` — already enforces `maxFileSizeBytes`+1 cap (audit confirmed safe; do not touch).
+- `internal/drive/extract/service.go:751`, `internal/drive/memprovider/memprovider.go:264`, `internal/drive/retrieve/postgres.go:163` — not in the audit; do not consume HTTP response bodies (no defense-in-depth need).
+- 4 existing `ConfigureRuntime` test wiring sites in `tests/integration/drive/`, `tests/e2e/drive/`, `tests/stress/drive/` — kept signature-compatible by adding `IOLimits` as a struct field that defaults to zero (the `> 0` wrap guard preserves their unbounded behavior).
+
+### Production Behavior Impact
+
+**Zero.** All caps sit orders of magnitude above honest-provider response sizes (Google Drive's largest documented JSON response is well under 10 MiB; OAuth token responses are < 1 KiB; the binary cap of 500 MiB sits 5× above the upstream `max_file_size_bytes` of 100 MiB). Production traffic will never see a `LimitReader` truncation; the caps fire only in adversarial / fixture-malicious scenarios — exactly the defense-in-depth shape the audit requested.
+
+The full integration suite passing (including `TestDriveScanFixturePreservesHierarchyAndMetadata` reading 1200 files, `TestMultiProviderDriveSearchUsesUnifiedRankingAndAudienceFilters`, `TestSensitivityPolicyDowngradesOrRejectsUnsafeDelivery`, `TestSkippedAndBlockedFilesPersistReasonAndAction`, `TestTelegramRetrievalFindsDriveBoardingPassAndDisambiguates`, `TestGoogleDriveFixtureConnectStoresHealthyScopedConnection`) confirms no observable behavior change for real Drive flows.
+
+### Phase Completion Recording
+
+`certification.completedScopes` / `certification.status` / `scopeProgress` / `status` / `certification.certifiedCompletedPhases` UNTOUCHED — spec 038 is already feature-done; this is a post-feature-done backlog closure pass owned by `bubbles.workflow` (mode: `bugfix-fastlane`). MIT-038-S-004 is now flagged CLOSED in `state.json.executionHistory[].action=closed_security_backlog_mit_038_s_004_via_io_limitreader_wraps` and inline in the `backlogItemsRouted` list.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.workflow",
+  "mode": "bugfix-fastlane",
+  "outcome": "completed_owned",
+  "scope": "post-feature-done backlog closure (MIT-038-S-004)",
+  "closed_findings": ["MIT-038-S-004"],
+  "io_readall_sites_found": {
+    "internal/drive/google/google.go": [325, 356, 455, 494, 530, 556, 615, 638, 679],
+    "site_count_in_google_go": 9,
+    "audit_listed_count": 10,
+    "audit_listed_actual_diff": "audit said 10, actual is 9 (audit count off by one); all 9 wrapped"
+  },
+  "sst_keys_added": {
+    "drive.io_limits.provider_response_max_bytes": 10485760,
+    "drive.io_limits.provider_binary_max_bytes": 524288000,
+    "drive.io_limits.oauth_response_max_bytes": 65536
+  },
+  "per_cap_mapping": {
+    "oauth_response_max_bytes": ["google.go:325 (exchangeCodeForToken)"],
+    "provider_response_max_bytes": [
+      "google.go:356 (fetchAccountEmail)",
+      "google.go:455 (ListFolder)",
+      "google.go:494 (GetFile error)",
+      "google.go:556 (PutFile response)",
+      "google.go:615 (EnsureFolder GET error)",
+      "google.go:638 (EnsureFolder POST response)",
+      "google.go:679 (Changes)"
+    ],
+    "provider_binary_max_bytes": ["google.go:530 (PutFile body.Reader via readUploadBody)"]
+  },
+  "new_adversarial_tests": [
+    "internal/drive/google/google_security_test.go::TestGoogleDriveProvider_S004_OAuthTokenResponseLimitReaderTruncatesOversizedBody",
+    "internal/drive/google/google_security_test.go::TestGoogleDriveProvider_S004_MetadataResponseLimitReaderTruncatesOversizedBody",
+    "internal/drive/google/google_security_test.go::TestGoogleDriveProvider_S004_BinaryUploadLimitReaderTruncatesOversizedBody",
+    "internal/drive/google/google_security_test.go::TestGoogleDriveProvider_S004_BinaryUploadUncappedRetainsLegacyBehavior"
+  ],
+  "test_results": {
+    "smackerel_check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK)",
+    "smackerel_test_unit_go": "EXIT=0 (all 67 Go packages PASS, including 4 new S004 tests + drive_config DRIVE_IO_LIMITS_* fail-loud subtests + IOLimits-mirror invariant)",
+    "smackerel_test_unit_python": "EXIT=0 (409 passed in 16.90s)",
+    "smackerel_test_integration": "EXIT=0 (tests/integration/drive 9.283s — 25 drive integration tests PASS, including TestDriveConfigGenerateAndRuntimeValidationStayInSync, TestGoogleDriveFixtureConnectStoresHealthyScopedConnection)",
+    "artifact_lint": "77 issues = baseline (no regression; matches MIT-038-S-002 closure baseline)",
+    "traceability_guard": "PASSED (0 warnings, 24/24 scenarios mapped)",
+    "regression_baseline_guard": "PASSED (G044/G045/G046 all green)"
+  },
+  "production_behavior_impact": "zero — caps sit orders of magnitude above honest-provider response sizes; defense-in-depth only",
+  "blockers_resolved": ["MIT-038-S-004"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "files_NOT_touched_per_constraints": [
+    ".github/workflows/build.yml",
+    "deploy/contract.yaml",
+    "deploy/home-lab/manifest.yaml",
+    "deploy/home-lab/params.yaml",
+    ".github/bubbles/",
+    ".github/agents/",
+    ".github/instructions/",
+    ".github/skills/",
+    "internal/drive/extract/service.go:255 (already cap-enforced)"
+  ],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
 

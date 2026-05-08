@@ -28,6 +28,9 @@ var driveSSTKeys = []string{
 	"DRIVE_TELEGRAM_MAX_INLINE_SIZE_BYTES",
 	"DRIVE_TELEGRAM_MAX_LINK_FILES_PER_REPLY",
 	"DRIVE_LIMITS_MAX_FILE_SIZE_BYTES",
+	"DRIVE_IO_LIMITS_PROVIDER_RESPONSE_MAX_BYTES",
+	"DRIVE_IO_LIMITS_PROVIDER_BINARY_MAX_BYTES",
+	"DRIVE_IO_LIMITS_OAUTH_RESPONSE_MAX_BYTES",
 	"DRIVE_RATE_LIMITS_REQUESTS_PER_MINUTE",
 	"DRIVE_SAVE_PROVIDER_URL_PREFIX",
 	"DRIVE_PROVIDER_GOOGLE_OAUTH_REDIRECT_URL",
@@ -130,6 +133,22 @@ func TestDriveConfigPopulatesEveryField(t *testing.T) {
 	}
 	if d.Limits.MaxFileSizeBytes != 104857600 {
 		t.Errorf("MaxFileSizeBytes = %d", d.Limits.MaxFileSizeBytes)
+	}
+	if d.IOLimits.ProviderResponseMaxBytes != 10485760 {
+		t.Errorf("IOLimits.ProviderResponseMaxBytes = %d, want 10485760", d.IOLimits.ProviderResponseMaxBytes)
+	}
+	if d.IOLimits.ProviderBinaryMaxBytes != 524288000 {
+		t.Errorf("IOLimits.ProviderBinaryMaxBytes = %d, want 524288000", d.IOLimits.ProviderBinaryMaxBytes)
+	}
+	if d.IOLimits.OAuthResponseMaxBytes != 65536 {
+		t.Errorf("IOLimits.OAuthResponseMaxBytes = %d, want 65536", d.IOLimits.OAuthResponseMaxBytes)
+	}
+	// MIT-038-S-004 — the loader must propagate the SST-resolved
+	// drive.io_limits.* caps into the per-provider config so the Google
+	// provider's wiring path carries the caps without importing the
+	// top-level DriveConfig.
+	if d.Providers.Google.IOLimits != d.IOLimits {
+		t.Errorf("Providers.Google.IOLimits = %+v, want %+v (must mirror cfg.IOLimits)", d.Providers.Google.IOLimits, d.IOLimits)
 	}
 	if d.RateLimits.RequestsPerMinute != 600 {
 		t.Errorf("RequestsPerMinute = %d", d.RateLimits.RequestsPerMinute)
