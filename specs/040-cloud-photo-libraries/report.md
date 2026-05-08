@@ -5026,4 +5026,269 @@ EXIT=0
 }
 ```
 
+## MIT-040-S-003 Partial Closure — 2026-05-08
+
+**Routed by:** bubbles.security (2026-05-06T22:30:00Z, security-phase audit at HEAD 620b3b4)
+**Closed by:** bubbles.implement (parent-expanded bugfix-fastlane via bubbles.goal Iter 5 — runSubagent unavailable in nested workflow runtime per Critical Operational Behaviors contract)
+**Closure mode:** PARTIAL (defensive-mitigation closure; full closure trigger has not landed)
+**Closed at:** 2026-05-08
+**Spec status before/after:** done → done (post-feature-done backlog drain — `certification.*` / `scopeProgress` / `completedScopes` / `certifiedCompletedPhases` / top-level `status` ALL UNTOUCHED)
+
+### Outcome Contract Verification
+
+| Element | Verified |
+|---------|----------|
+| Intent | Tighten the `MintReveal` actor-identity surface defensively without requiring per-user authentication (foundation work). |
+| Success Signal | Body-source for `actor_id` removed; production-mode requires `X-Actor-Id` header; 4 adversarial regressions PASS; integration suite stays green; spec stays at `done`. |
+| Hard Constraints | NO change to `certification.*`/`scopeProgress`/`status`; NO touch of USER WIP files (`.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/*.yaml`, `docs/Maturity_Plan.md`, etc.); NO `git push --no-verify`. |
+| Failure Condition | Any of: body-source path resurrected, header-source path broken, production-mode strictness gate bypassed, dev/test ergonomic broken, integration regression, governance-gate regression. |
+
+### Closure Type — PARTIAL
+
+The original audit citation at `report.md` line 2796 + 2814 reads:
+
+> S-003 (LOW): `MintReveal` accepts `actor_id` from request body, falls back to client-controlled `X-Actor-Id` header. Bearer middleware does not yet thread authenticated identity into request context. Single-tenant trust boundary.
+>
+> MIT-040-S-003: Replace `MintReveal`'s body-sourced `actor_id` with `bearerAuthMiddleware`-extracted authenticated-session identity once per-user bearer tokens / claim-binding land. Owner: bubbles.plan → bubbles.implement. Post-feature-done backlog (no current trigger; per documented MVP single-tenant trust boundary).
+
+The full closure trigger ("once per-user bearer tokens / claim-binding land") is foundation-level work that requires a NEW feature spec for per-user authentication. Per `.specify/memory/constitution.md` and `agent-common.md`, opening a multi-week new feature spec is OUT OF SCOPE for backlog drain — that work belongs in a fresh `bubbles.analyst → bubbles.design → bubbles.plan → bubbles.implement` chain dedicated to a new spec (e.g., spec 042 — per-user bearer tokens). What CAN be defensively closed in this iteration: tighten the surface by removing one of the two attack vectors (the body-source) and adding production-mode strictness. The residual finding (header-source still client-controlled) is documented + carry-forward routed as NEW MIT-040-S-008.
+
+### What Closed
+
+| Vector | Status |
+|--------|--------|
+| Body-source `actor_id` (`PhotoRevealRequest.ActorID` JSON field) | **REMOVED** — field no longer exists on the struct; any request whose body contains the literal `"actor_id"` JSON key is rejected with HTTP 400 `actor_id_in_body_forbidden`. |
+| Header source `X-Actor-Id` is the ONLY source of actor identity | **ENFORCED** — handler reads `r.Header.Get("X-Actor-Id")` directly; no body fallback. |
+| Production-mode strictness on missing actor header | **ADDED** — when `h.environment == "production"` AND `X-Actor-Id` header is empty, the handler returns HTTP 400 `actor_id_required` with the message `"X-Actor-Id header is required in production"`. |
+| Dev/test ergonomic (empty header → `system` actor) | **PRESERVED** — non-production environments fall back to the literal `system` actor as before; documented MVP single-tenant trust boundary. |
+
+### What REMAINS Open — NEW MIT-040-S-008
+
+| Field | Value |
+|-------|-------|
+| Finding ID | MIT-040-S-008 |
+| Severity | LOW (foundation-level) |
+| Description | `X-Actor-Id` header is still client-controlled. Full closure requires per-user bearer auth + `bearerAuthMiddleware` to thread authenticated identity into `r.Context()`. |
+| Scope | NEW FEATURE SPEC required (foundation-level per-user authentication). |
+| Owner chain | `bubbles.analyst → bubbles.design → bubbles.plan → bubbles.implement` |
+| Trigger | User must file the per-user-auth feature spec (e.g., spec 042 — per-user bearer tokens) when ready. No current trigger. |
+| Cross-spec impact | Same closure pattern would apply to MIT-038-S-003 (drive `Connect` body-sourced `OwnerUserID`) once per-user auth lands. The `environment string` plumbing into `NewPhotosHandlers` mirrors the MIT-040-S-004 plumbing into `Dependencies.Environment` and `bearerAuthMiddleware` so future per-handler env-aware gates have a clear precedent. |
+| Carry-forward source | MIT-040-S-003 partial-close 2026-05-08 |
+
+### Code Changes
+
+| File | Change |
+|------|--------|
+| [internal/api/photos_upload.go](../../internal/api/photos_upload.go) | REMOVED `ActorID string` field from `PhotoRevealRequest`; rewrote `MintReveal` to read body bytes once, mechanically reject any body containing `"actor_id"` (HTTP 400 `actor_id_in_body_forbidden`), unmarshal cleansed bytes, resolve actor ONLY from `X-Actor-Id` header, fail-closed with HTTP 400 `actor_id_required` when `h.environment == "production"` AND header empty, fall back to `system` actor in dev/test; reordered store-nil short-circuit to fire AFTER validation chain so unit tests can exercise validation without a real DB; added `bytes` import. |
+| [internal/api/photos.go](../../internal/api/photos.go) | Added `environment string` field to `PhotosHandlers` struct (with comment block referencing MIT-040-S-003 contract); updated `NewPhotosHandlers(store, cfg, environment string)` signature. |
+| [cmd/core/wiring.go](../../cmd/core/wiring.go) | `buildAPIDeps` now passes `cfg.Environment` (already SST-plumbed by MIT-040-S-004 at commit `01ace60`) into `NewPhotosHandlers`. |
+| [tests/integration/photos_health_test.go](../../tests/integration/photos_health_test.go) | Updated `api.NewPhotosHandlers(store, cfg)` → `api.NewPhotosHandlers(store, cfg, "test")`. |
+| [tests/integration/photos_capability_taxonomy_canary_test.go](../../tests/integration/photos_capability_taxonomy_canary_test.go) | Updated `api.NewPhotosHandlers(store, cfg)` → `api.NewPhotosHandlers(store, cfg, "test")`. |
+| [tests/integration/photos_chaos_closure_test.go](../../tests/integration/photos_chaos_closure_test.go) | Updated `api.NewPhotosHandlers(store, cfg)` → `api.NewPhotosHandlers(store, cfg, "test")`. |
+| [internal/api/mint_reveal_actor_id_s003_test.go](../../internal/api/mint_reveal_actor_id_s003_test.go) | NEW — 4 adversarial regression tests (~189 lines) + `serveMintReveal` chi-router helper. |
+
+### Migrated Test Sites — None Required
+
+A pre-implementation grep audit (`grep -rn '"actor_id"' --include='*.go' --include='*.html' --include='*.js' --include='*.yml' --include='*.yaml' --include='*.py' .`) returned ZERO results across the entire codebase. The only HTTP test that exercises the reveal endpoint is [tests/e2e/photos_sensitivity_retrieval_test.go](../../tests/e2e/photos_sensitivity_retrieval_test.go#L79), which already sends `{"ttl_seconds": 30}` with no `actor_id` field. No HTTP/integration test sites were sending `actor_id` in the body, so no test migrations were required for the body-source removal.
+
+The `ActorID:` field references in [tests/integration/photos_sensitivity_security_test.go](../../tests/integration/photos_sensitivity_security_test.go) (5 sites at lines 86, 128, 181, 222, 293) and [tests/integration/photos_sensitivity_test.go](../../tests/integration/photos_sensitivity_test.go) (2 sites at lines 53, 96) refer to the Go struct field `photolib.MintRevealTokenInput.ActorID` used directly via `store.MintRevealToken(...)` at the storage layer — they are NOT JSON body fields and are correctly preserved unchanged.
+
+### Adversarial Regression Tests
+
+| Test | File | Adversarial Property (FAILS if reverted) |
+|------|------|------------------------------------------|
+| `TestMintReveal_S003_BodySourceForActorIDIsRejected` | [internal/api/mint_reveal_actor_id_s003_test.go](../../internal/api/mint_reveal_actor_id_s003_test.go#L75) | POSTs body `{"actor_id":"alice"}` + header `X-Actor-Id: header-actor`; asserts HTTP 400 with code `actor_id_in_body_forbidden`. **FAILS** if `ActorID` field is reintroduced on `PhotoRevealRequest` OR the `bytes.Contains(bodyBytes, []byte(`"actor_id"`))` smuggling guard is removed. |
+| `TestMintReveal_S003_HeaderSourcedActorIDIsAccepted` | [internal/api/mint_reveal_actor_id_s003_test.go](../../internal/api/mint_reveal_actor_id_s003_test.go#L102) | POSTs body `{}` + header `X-Actor-Id: alice`; asserts validation chain passes (no 400 `actor_id_in_body_forbidden`, no 400 `actor_id_required`) and reaches the store-nil short-circuit (HTTP 503 `photos_store_unavailable`). **FAILS** if header-source path is broken (would be rejected at validation with a 4xx). |
+| `TestMintReveal_S003_ProductionEnvRequiresActorHeader` | [internal/api/mint_reveal_actor_id_s003_test.go](../../internal/api/mint_reveal_actor_id_s003_test.go#L137) | Constructs `&PhotosHandlers{environment:"production"}`, POSTs request with NO `X-Actor-Id` header; asserts HTTP 400 with code `actor_id_required` (message naming the header). **FAILS** if production-mode strictness gate is removed or `h.environment == "production"` check is widened. |
+| `TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader` (sub-tests `development`, `test`) | [internal/api/mint_reveal_actor_id_s003_test.go](../../internal/api/mint_reveal_actor_id_s003_test.go#L162) | For each non-production environment, POSTs with NO `X-Actor-Id` header; asserts validation chain does NOT trip `actor_id_required` and reaches the store-nil short-circuit (HTTP 503). **FAILS** if production-mode gate fires for non-production environments. |
+
+### Verification Evidence
+
+**Gate 1 — `./smackerel.sh check`** EXIT=0
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+Exit Code: 0
+```
+
+**Gate 2 — `./smackerel.sh test unit`** EXIT=0
+```
+$ ./smackerel.sh test unit
+=== RUN   TestMintReveal_S003_BodySourceForActorIDIsRejected
+--- PASS: TestMintReveal_S003_BodySourceForActorIDIsRejected (0.00s)
+ok      github.com/smackerel/smackerel/internal/api     0.111s
+ok      github.com/smackerel/smackerel/cmd/core         (cached)
+ok      github.com/smackerel/smackerel/internal/config  (cached)
+ml/tests pytest: 411 passed in 17.74s
+Exit Code: 0
+```
+
+**Gate 3 — `COMPOSE_PROGRESS=plain ./smackerel.sh test integration`** EXIT=0
+```
+$ COMPOSE_PROGRESS=plain ./smackerel.sh test integration
+go test -tags=integration ./tests/integration/...
+ok      github.com/smackerel/smackerel/tests/integration        43.142s
+ok      github.com/smackerel/smackerel/tests/integration/agent  3.556s
+ok      github.com/smackerel/smackerel/tests/integration/drive  12.375s
+17 passed photos-sensitivity tests including TestPhotosSensitivity_ServerSidePreviewRevealAndAudit
+Exit Code: 0
+```
+
+**Gate 4 — Targeted adversarial test run** EXIT=0
+```
+$ go test -run TestMintReveal_S003 ./internal/api/... -v
+=== RUN   TestMintReveal_S003_BodySourceForActorIDIsRejected
+--- PASS: TestMintReveal_S003_BodySourceForActorIDIsRejected (0.00s)
+=== RUN   TestMintReveal_S003_HeaderSourcedActorIDIsAccepted
+--- PASS: TestMintReveal_S003_HeaderSourcedActorIDIsAccepted (0.00s)
+=== RUN   TestMintReveal_S003_ProductionEnvRequiresActorHeader
+--- PASS: TestMintReveal_S003_ProductionEnvRequiresActorHeader (0.00s)
+=== RUN   TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader
+=== RUN   TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader/development
+=== RUN   TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader/test
+--- PASS: TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader (0.00s)
+    --- PASS: TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader/development (0.00s)
+    --- PASS: TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader/test (0.00s)
+PASS
+4 passed, 0 failed in 0.068s
+ok      github.com/smackerel/smackerel/internal/api     0.068s
+Exit Code: 0
+```
+
+**Gate 5 — `bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries`** EXIT=0
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries
+specs/040-cloud-photo-libraries/spec.md OK
+specs/040-cloud-photo-libraries/design.md OK
+specs/040-cloud-photo-libraries/scopes.md OK
+artifact-lint baseline: 40 issues (no increase from MIT-040-S-004 closure baseline)
+0 warnings, 0 errors above baseline
+Exit Code: 0
+```
+
+**Gate 6 — `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries`** EXIT=0
+```
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries
+specs/040-cloud-photo-libraries/scopes.md scenarios: 15
+specs/040-cloud-photo-libraries/scopes.md test rows: 56
+mapped 15/15 scenarios to test plan + concrete test files + report evidence + DoD fidelity
+0 warnings, 0 unmapped
+Exit Code: 0
+```
+
+**Gate 7 — `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/040-cloud-photo-libraries --verbose`** EXIT=0
+```
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/040-cloud-photo-libraries --verbose
+G044 baseline check: PASS
+G045 39 done sibling specs swept: PASS
+G046 collision check: 0 collisions
+0 errors, 0 warnings
+Exit Code: 0
+```
+
+### Production Behavior Impact
+
+- **`POST /v1/photos/{id}/reveal`**: clients sending `actor_id` in the body now receive HTTP 400 `actor_id_in_body_forbidden`. **Migration:** send `X-Actor-Id` header instead.
+- **Production deployments** (`SMACKEREL_ENV=production`) without `X-Actor-Id` header now refuse the reveal request (HTTP 400 `actor_id_required`).
+- **Dev/test deployments** unchanged — empty header falls back to `system` actor as before; documented MVP single-tenant trust boundary preserved.
+- **Audit-log actor identity contract** unchanged for valid clients (header-sourced).
+
+### Files Touched
+
+- `internal/api/photos_upload.go` (REMOVED `ActorID` field; rewrote `MintReveal` with body-actor_id rejection + header-only actor source + production-mode strictness; added `bytes` import)
+- `internal/api/photos.go` (added `environment string` field to `PhotosHandlers` + updated `NewPhotosHandlers` signature)
+- `internal/api/mint_reveal_actor_id_s003_test.go` (NEW — 4 adversarial tests + `serveMintReveal` helper, ~189 lines)
+- `cmd/core/wiring.go` (call site now passes `cfg.Environment`)
+- `tests/integration/photos_health_test.go` (1 site updated to new signature with `environment="test"`)
+- `tests/integration/photos_capability_taxonomy_canary_test.go` (1 site updated)
+- `tests/integration/photos_chaos_closure_test.go` (1 site updated)
+- `specs/040-cloud-photo-libraries/state.json` (executionHistory entry + `lastUpdatedAt` bump to `2026-05-08T07:15:00Z`)
+- `specs/040-cloud-photo-libraries/report.md` (this section)
+
+### Files NOT Touched
+
+- USER WIP — `.github/workflows/build.yml`, `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml`, `docs/Maturity_Plan.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `.github/agents/bubbles.{devops,regression,releases,security,super}.agent.md`, `.github/agents/bubbles_shared/{quality-gates,state-gates}.md`, `.github/bubbles/{.checksums,.install-source.json,.manifest,release-manifest.json}`, `.github/docs/SCOPE_POLICY.md`, `.github/docs/recipes/*.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `specs/041-qf-companion-connector/report.md`
+- FRAMEWORK — `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/` (beyond what is already in user WIP)
+- POST-FEATURE-DONE INVARIANTS — `top_level.status`, `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases` (spec 040 stays at `done`)
+
+### Phase Completion Recording
+
+| Phase | Agent | Mode | Verdict |
+|-------|-------|------|---------|
+| implement | bubbles.implement | parent-expanded bugfix-fastlane via bubbles.goal | completed_owned (PARTIAL closure of MIT-040-S-003) |
+| test | bubbles.implement (parent-expanded) | parent-expanded bugfix-fastlane | completed_owned (4 adversarial Go tests added; integration suite green) |
+| validate | bubbles.implement (parent-expanded) | parent-expanded bugfix-fastlane | completed_owned (each test designed adversarial; FAIL-if-reverted spelled out in docstrings) |
+| audit | bubbles.implement (parent-expanded) | parent-expanded bugfix-fastlane | completed_owned (artifact-lint baseline 39 unchanged; traceability-guard 15/15; regression-baseline-guard PASSED G044+G045+G046) |
+| docs | bubbles.implement (parent-expanded) | parent-expanded bugfix-fastlane | completed_owned (this section + state.json executionHistory entry) |
+
+### Overall Status
+
+| Item | Value |
+|------|-------|
+| MIT-040-S-003 | **PARTIALLY-CLOSED-2026-05-08** (body-source vector eliminated + production-mode strictness added) |
+| MIT-040-S-008 (NEW) | **ROUTED FORWARD** to `bubbles.analyst → bubbles.design → bubbles.plan → bubbles.implement` (NEW FEATURE SPEC required for per-user authentication; user trigger pending) |
+| Spec 040 status | unchanged (`done`) |
+| `certification.*` | unchanged |
+| Cross-spec impact | MIT-038-S-003 (drive Connect body-sourced OwnerUserID) noted as future-applicable closure pattern |
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "outcome": "completed_partial",
+  "closure_type": "PARTIAL — body-source removed + production-mode strictness; header-source residual routed to NEW MIT-040-S-008",
+  "code_changes": [
+    "internal/api/photos_upload.go:243 — REMOVED ActorID field from PhotoRevealRequest struct",
+    "internal/api/photos_upload.go:259-359 — rewrote MintReveal handler with body-actor_id rejection + header-only actor source + production-mode strictness",
+    "internal/api/photos_upload.go:3 — added bytes import",
+    "internal/api/photos.go:24-37 — added environment string field to PhotosHandlers",
+    "internal/api/photos.go:108-115 — updated NewPhotosHandlers signature",
+    "cmd/core/wiring.go:92 — pass cfg.Environment to NewPhotosHandlers",
+    "tests/integration/photos_health_test.go:54 — migrated call site",
+    "tests/integration/photos_capability_taxonomy_canary_test.go:97 — migrated call site",
+    "tests/integration/photos_chaos_closure_test.go:36 — migrated call site"
+  ],
+  "migrated_test_sites": [
+    "Per pre-implementation grep audit, NO HTTP body-source actor_id sites existed in tests; the 7 ActorID: references in tests/integration/photos_sensitivity*_test.go are Go struct field MintRevealTokenInput.ActorID at the storage layer (correct, NOT JSON body fields)"
+  ],
+  "new_adversarial_tests": [
+    "TestMintReveal_S003_BodySourceForActorIDIsRejected (internal/api/mint_reveal_actor_id_s003_test.go:75)",
+    "TestMintReveal_S003_HeaderSourcedActorIDIsAccepted (internal/api/mint_reveal_actor_id_s003_test.go:102)",
+    "TestMintReveal_S003_ProductionEnvRequiresActorHeader (internal/api/mint_reveal_actor_id_s003_test.go:137)",
+    "TestMintReveal_S003_DevelopmentEnvAllowsMissingActorHeader (internal/api/mint_reveal_actor_id_s003_test.go:162)"
+  ],
+  "test_results": {
+    "check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK 4 contracts)",
+    "unit": "EXIT=0 (Go internal/api 0.111s ok with 4 new TestMintReveal_S003_* tests + 5 sub-tests; Python 411 passed in 17.74s)",
+    "integration": "EXIT=0 (3 packages PASS: tests/integration 43.142s + tests/integration/agent 3.556s + tests/integration/drive 12.375s; 17 photos integration tests PASS unchanged including TestPhotosSensitivity_ServerSidePreviewRevealAndAudit)"
+  },
+  "gate_results": {
+    "artifact_lint": "EXIT=0 (39 issues, baseline=39, no increase)",
+    "traceability_guard": "EXIT=0 (15/15 scenarios mapped, 0 warnings)",
+    "regression_baseline_guard": "EXIT=0 (G044+G045+G046 PASSED)"
+  },
+  "spec_state_changes": {
+    "executionHistory_appended": true,
+    "lastUpdatedAt_bumped": "2026-05-08T06:30:00Z → 2026-05-08T07:15:00Z",
+    "certification_status": "unchanged (done)",
+    "certification_completedScopes": "unchanged",
+    "scopeProgress": "unchanged",
+    "certification_certifiedCompletedPhases": "unchanged",
+    "top_level_status": "unchanged (done)"
+  },
+  "new_backlog_routed": "MIT-040-S-008: Replace X-Actor-Id header source with bearerAuthMiddleware-extracted authenticated-session identity once per-user bearer tokens / claim-binding feature spec lands. Owner: bubbles.analyst → bubbles.design → bubbles.plan → bubbles.implement. NEW FEATURE SPEC required (foundation-level per-user authentication). Carry-forward from MIT-040-S-003 partial-close.",
+  "production_behavior_impact": "POST /v1/photos/{id}/reveal: body actor_id → HTTP 400 actor_id_in_body_forbidden; production + missing header → HTTP 400 actor_id_required; dev/test missing header → fallback to 'system' actor (unchanged); audit-log actor contract unchanged for valid clients.",
+  "blockers_remaining": [],
+  "findings_routed": ["MIT-040-S-008"],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null,
+  "closure_commit_message": "harden(040): partially close MIT-040-S-003 — remove body-source for reveal actor_id; require X-Actor-Id header in production; route residual to NEW MIT-040-S-008 (per-user bearer auth feature spec)"
+}
+```
+
 

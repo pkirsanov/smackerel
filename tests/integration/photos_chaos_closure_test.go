@@ -33,7 +33,7 @@ func TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster(t *testing.T)
 	cfg := config.PhotosConfig{Enabled: true}
 	cfg.Policy.ActionsMaxScopeSize = 50
 	cfg.IOLimits.PhotoBinaryMaxBytes = 104857600
-	handlers := api.NewPhotosHandlers(store, cfg)
+	handlers := api.NewPhotosHandlers(store, cfg, "test")
 
 	router := chi.NewRouter()
 	router.Get("/v1/photos/health/duplicates/{id}", handlers.HealthDuplicatesGet)

@@ -25,6 +25,14 @@ type PhotosHandlers struct {
 	store   *photolib.Store
 	config  config.PhotosConfig
 	scanner *photolib.Scanner
+	// environment is the deployment environment string (allowed:
+	// development | test | production). Sourced from
+	// runtime.environment in smackerel.yaml via SMACKEREL_ENV.
+	// MIT-040-S-003 partial closure — when "production", MintReveal
+	// fails fast on missing X-Actor-Id header so production
+	// deployments cannot mint reveal tokens with an empty actor
+	// identity; dev/test ergonomics are preserved.
+	environment string
 }
 
 type photoConnectorResponse struct {
@@ -102,11 +110,12 @@ type photoDetail struct {
 	RequiresReveal    bool                   `json:"requires_reveal"`
 }
 
-func NewPhotosHandlers(store *photolib.Store, cfg config.PhotosConfig) *PhotosHandlers {
+func NewPhotosHandlers(store *photolib.Store, cfg config.PhotosConfig, environment string) *PhotosHandlers {
 	return &PhotosHandlers{
-		store:   store,
-		config:  cfg,
-		scanner: photolib.NewScanner(store, photolib.ScannerConfig{MaxFileSizeBytes: cfg.Scan.MaxFileSizeBytes}),
+		store:       store,
+		config:      cfg,
+		scanner:     photolib.NewScanner(store, photolib.ScannerConfig{MaxFileSizeBytes: cfg.Scan.MaxFileSizeBytes}),
+		environment: environment,
 	}
 }
 

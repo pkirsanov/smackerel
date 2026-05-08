@@ -51,7 +51,7 @@ func TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI(t *testing.T
 			LifecycleConfirmationThreshold: 0.65,
 		},
 	}
-	handlers := api.NewPhotosHandlers(store, cfg)
+	handlers := api.NewPhotosHandlers(store, cfg, "test")
 
 	server := httptest.NewServer(http.HandlerFunc(handlers.HealthAggregate))
 	t.Cleanup(server.Close)

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -241,9 +242,15 @@ func (h *PhotosHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // PhotoRevealRequest is the optional body for `POST /v1/photos/{id}/reveal`.
+//
+// MIT-040-S-003 partial closure (2026-05-08) — `actor_id` is no
+// longer accepted in the request body. The handler reads the actor
+// identity ONLY from the `X-Actor-Id` request header so callers
+// cannot smuggle a forged actor through the JSON payload. Requests
+// whose body still contains an `actor_id` JSON key are rejected with
+// HTTP 400 `actor_id_in_body_forbidden`.
 type PhotoRevealRequest struct {
-	TTLSeconds int    `json:"ttl_seconds,omitempty"`
-	ActorID    string `json:"actor_id,omitempty"`
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
 }
 
 // PhotoRevealResponse is the response shape mint endpoint returns.
@@ -259,22 +266,69 @@ type PhotoRevealResponse struct {
 // specified photo so retrieval surfaces (preview bytes, Telegram
 // delivery) can authorise a single subsequent fetch. Audit rows are
 // written for both mint and consume to satisfy SCN-040-012.
+//
+// MIT-040-S-003 partial closure (2026-05-08): actor identity is now
+// header-only (`X-Actor-Id`). Requests whose body smuggles an
+// `actor_id` key are rejected with 400 `actor_id_in_body_forbidden`.
+// In `production` deployments the header is required — when missing
+// the handler returns 400 `actor_id_required`. The dev/test ergonomic
+// (fall back to `system` actor when the header is absent) is
+// preserved for `development` and `test` environments. Residual:
+// `X-Actor-Id` is still client-controlled; full closure (NEW
+// MIT-040-S-008) requires per-user bearer auth that threads
+// authenticated identity into `r.Context()` via
+// `bearerAuthMiddleware`.
 func (h *PhotosHandlers) MintReveal(w http.ResponseWriter, r *http.Request) {
-	if h == nil || h.store == nil {
-		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
-		return
-	}
 	id, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_photo_id", "photo id must be a UUID")
 		return
 	}
-	var request PhotoRevealRequest
+
+	// MIT-040-S-003 partial closure — read the body once so we can
+	// reject `actor_id` smuggling before any further parsing. The
+	// 16 KiB cap matches the previous decoder limit.
+	var bodyBytes []byte
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		bodyBytes, err = io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<14))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_reveal_payload", "request body could not be read")
+			return
+		}
+	}
+	if bytes.Contains(bodyBytes, []byte(`"actor_id"`)) {
+		writeError(w, http.StatusBadRequest, "actor_id_in_body_forbidden",
+			"actor_id in request body is forbidden; use the X-Actor-Id header instead")
+		return
+	}
+
+	var request PhotoRevealRequest
+	if len(bytes.TrimSpace(bodyBytes)) > 0 {
+		if err := json.Unmarshal(bodyBytes, &request); err != nil && !errors.Is(err, io.EOF) {
 			writeError(w, http.StatusBadRequest, "invalid_reveal_payload", "request body must be JSON")
 			return
 		}
+	}
+
+	// MIT-040-S-003 partial closure — header is the ONLY source of
+	// truth for the requesting actor. We read it directly here (rather
+	// than via actorIDFromRequest, which falls back to "system") so the
+	// production-mode strictness check below sees the raw value and
+	// can fail closed when the header is absent.
+	headerActor := strings.TrimSpace(r.Header.Get("X-Actor-Id"))
+	if h.environment == "production" && headerActor == "" {
+		writeError(w, http.StatusBadRequest, "actor_id_required",
+			"X-Actor-Id header is required in production")
+		return
+	}
+	actor := headerActor
+	if actor == "" {
+		actor = "system"
+	}
+
+	if h == nil || h.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "photos_store_unavailable", "photo store is unavailable")
+		return
 	}
 	record, err := h.store.GetByID(r.Context(), id)
 	if err != nil {
@@ -284,10 +338,6 @@ func (h *PhotosHandlers) MintReveal(w http.ResponseWriter, r *http.Request) {
 	if record.Sensitivity == photolib.SensitivityNone {
 		writeError(w, http.StatusConflict, "reveal_not_required", "photo is not sensitivity-gated")
 		return
-	}
-	actor := strings.TrimSpace(request.ActorID)
-	if actor == "" {
-		actor = actorIDFromRequest(r)
 	}
 	ttl := time.Duration(request.TTLSeconds) * time.Second
 	if ttl <= 0 {
