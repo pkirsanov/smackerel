@@ -162,12 +162,21 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runEndedAt": "2026-04-23T00:30:00Z",
       "summary": "Manual cross-check verifying implementation files exist and tests pass. ls internal/scheduler/ shows jobs.go, jobs_test.go, scheduler.go, scheduler_test.go (Apr 22 timestamps). wc -l: scheduler.go 213, nats/client.go 217, db/postgres.go 270, capture.go 364, search.go 929, cmd/core/shutdown.go 153, cmd/core/main.go 290, scripts/commands/backup.sh 101 (2537 total). find internal/scheduler internal/nats internal/db internal/pipeline -name '*.go' = 42 files. grep TODO/FIXME/HACK/STUB across spec-022 paths: 0 findings. Go tests: ok internal/scheduler (5.023s), ok internal/nats (4.014s), ok internal/db (0.032s), ok internal/pipeline (0.258s). All implementation present and trustworthy."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["trace-cleanup-diagnosis"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runEndedAt": "2026-05-08T00:00:00Z",
+      "summary": "Iter 10 trace-guard inventory only (no fixes applied). MIT-022-TRACE-001: Close 21 trace-guard failures via Test Plan path additions + DoD-trace-prefixes. Owner: bubbles.implement (parent-expanded bugfix-fastlane future iteration). Trigger: Next bubbles.goal session OR dedicated trace-cleanup sprint. Estimated effort: medium (~2-3h). Failure breakdown: Type A (Gherkin scenario without faithful DoD): 8 — SCN-022-01..04 (Scope 1 backup/SST), SCN-022-06 (Scope 2 capture), SCN-022-11 (Scope 3 cron), SCN-022-12 / SCN-022-14 (Scope 4 shutdown/dead-letter); Type C (no_path: Test Plan rows literally missing file path column): 12 — SCN-022-03/04 (Scope 1), SCN-022-05/06/07/08 (Scope 2), SCN-022-09/10/11 (Scope 3), SCN-022-12/13/14 (Scope 4). Root cause: Test Plan rows in scopes.md were authored with prose-only Assertion column and never received concrete file paths — implementation tests exist (internal/scheduler/jobs_test.go, internal/scheduler/scheduler_test.go, internal/nats/client_test.go, internal/db/postgres_test.go, internal/api/capture_test.go, internal/api/search_test.go, cmd/core/shutdown_test.go, scripts/commands/backup.sh tested via integration) but were never wired into the Test Plan rows. Closure strategy: per-row, identify the matching test file from the spec-review evidence (already documented in this state.json's spec-review entry) and add it to the row's Location column; for Type A scenarios, add `Scenario SCN-022-NN (name): ` prefix to the most relevant existing DoD bullet. Sample fix: scopes.md Scope 1 Test Plan row T-22-3 currently '| T-22-3 | DB pool size flows from SST config | unit | (no path) | ... | SCN-022-03 |' → '| T-22-3 | TestDBPool_SSTConfigPropagation | unit | `internal/db/postgres_test.go` | ... | SCN-022-03 |'; Scope 1 DoD '`postgres.go` reads pool size from config' → 'Scenario SCN-022-03 (DB pool size flows from SST config): `postgres.go` reads pool size from `config.smackerel.yaml` SST config, fail-loud if missing'. Status / certification fields untouched."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-23T00:30:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

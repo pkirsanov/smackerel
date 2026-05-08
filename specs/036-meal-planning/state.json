@@ -146,12 +146,21 @@
       "runStartedAt": "2026-04-24T03:10:00Z",
       "runCompletedAt": "2026-04-24T03:15:00Z",
       "summary": "Inserted evidence blocks under all [x] DoD items in scopes 01-08 (57 blocks added, each unique, each referencing real on-disk content captured this session). Built report.md sections: Summary, Completion Statement, Test Evidence, Validation Evidence (Executed/Command/Phase Agent markers), Audit Evidence, Chaos Evidence. Promoted state.json to status=done with certifiedCompletedPhases populated."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["trace-cleanup-diagnosis"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runCompletedAt": "2026-05-08T00:00:00Z",
+      "summary": "Iter 10 trace-guard inventory only (no fixes applied). MIT-036-TRACE-001: Close 31 trace-guard failures via planning-owned scope reclassification (Scopes 09-15 deferred to spec 037). Owner: bubbles.plan (NOT bubbles.implement — failures are 100%% Type C path-missing for Scopes 10-15 which are aspirational LLM-scenario-layer scopes already deferred to spec 037 per `notes` field on this state.json). Trigger: Next bubbles.goal session OR dedicated planning-owned spec-architecture cleanup. Estimated effort: small (~1h, single-spec planning routing). Failure breakdown: Type A: 0; Type C (path-missing, all in Scopes 10-15): 31 — SCN-036-068 through SCN-036-089 (Scopes 10 Shopping-List Tool Suite, 11 Mealplan Scenario Foundation, 12 Intent Routing Cutover BS-014/IP-005, 13 Suggest-A-Week BS-015/016, 14 Intelligent Shopping-List Scenarios BS-017/018, 15 Adversarial Coverage BS-019..BS-023). All 31 mapped Test Plan rows reference test files that DO NOT EXIST because the underlying implementation was deferred to spec 037 (LLM agent tools / scenario layer). Type D: 0; Type E: 0. Root cause: Scopes 09-15 were authored as part of the original spec 036 mealplan vision but the LLM scenario layer (BS-014..BS-023) was reframed and deferred to spec 037 per the architecture note documented at top of scopes.md and in this state.json's `notes` field. The Test Plan rows still point to never-implemented test paths like `internal/mealplan/scenario_test.go`, `internal/mealplan/intent_router_test.go`, `internal/agent/tools/shopping_list_*_test.go`. Closure strategy: ROUTE TO bubbles.plan to either (a) reclassify Scopes 09-15 from `Done` to `Deferred-To-Spec-037` and remove their failing Test Plan rows from the trace-guard scope (or move to a `## Deferred Scopes` section that the trace-guard ignores), OR (b) repoint the 31 Test Plan rows to corresponding spec 037 implementation files like `internal/agent/tools/*_test.go` and `internal/agent/intent/*_test.go` if those tests now exist. Option (a) is cleaner and matches the architecture reframe already documented. Sample fix (option a): scopes.md Scope 10 heading '## Scope 10: Shopping-List Tool Suite (Status: Done)' → '## Scope 10: Shopping-List Tool Suite (Status: Deferred — see spec 037)' and move all Test Plan rows to a `## Deferred Test Coverage (Spec 037)` appendix that trace-guard skips. Status / certification fields untouched."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T03:15:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

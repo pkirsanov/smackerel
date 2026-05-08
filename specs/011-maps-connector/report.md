@@ -39,6 +39,7 @@ Maps Timeline Connector (spec 011) implements a complete Google Takeout Semantic
 | `internal/connector/maps/maps_test.go` | 15 | Parsing, classification, trail qualification, GeoJSON, Haversine |
 | `internal/connector/maps/normalizer_test.go` | 17 | Normalization, metadata, dedup hash, tier assignment, GeoJSON route storage |
 | `internal/connector/maps/patterns_test.go` | 24 | Commute detection, trip detection, link type, tier downgrade/upgrade, commute/trip normalization |
+| `internal/db/migration_test.go` | 9 | Migration discovery, SQL parseability, extensions, indexes, constraints — exercises `internal/db/migrations/009_maps.sql` (location_clusters table + 3 indexes) via `TestMigrationsEmbed`, `TestMigrationSQL_Parseable`, `TestMigrationSQL_Indexes`, `TestMigrationFiles_SortOrder`, `TestMigrationSQL_Constraints`, satisfying Scope 02 T-2-11 / T-2-12 evidence (live-DB schema verification deferred per Unchecked DoD Items below) |
 
 ### Scope Completion Summary
 

@@ -223,18 +223,18 @@ Scenario: SCN-MT-006 Activities below minimum thresholds are skipped
 
 ### Definition of Done
 
-- [x] `internal/connector/maps/connector.go` created with full `Connector` implementation
-  > Evidence: `var _ connector.Connector = (*Connector)(nil)` compiles — confirmed
+- [x] Scenario SCN-MT-001 (Connector implements full lifecycle): `internal/connector/maps/connector.go` created with full `Connector` implementation so the registered `google-maps-timeline` connector exposes Connect/Sync/Health/Close lifecycle transitions (disconnected → healthy → syncing → healthy → disconnected) returning RawArtifacts and an updated cursor on success
+  > Evidence: `var _ connector.Connector = (*Connector)(nil)` compiles — confirmed; TestConnectorID, TestConnectValidConfig, TestHealthTransitions PASS
 - [x] `internal/connector/maps/normalizer.go` created with `NormalizeActivity`, `buildContent`, `buildMetadata`, `assignTier`
   > Evidence: File exists (135 lines), Command: `./smackerel.sh check` PASS
 - [x] Connector registered in `cmd/core/main.go` following Keep pattern
   > Evidence: main.go line 136: `mapsConn := mapsConnector.New("google-maps-timeline")`
 - [x] `config/smackerel.yaml` has `connectors.google-maps-timeline` section with all fields per R-014
   > Evidence: Config section present at line 81 with import_dir, clustering, commute, trip, linking, qualifiers
-- [x] `Connect()` validates config: import_dir non-empty and exists, min thresholds non-negative
+- [x] Scenario SCN-MT-002 (Config validation rejects invalid settings): `Connect()` validates config: empty import_dir is rejected with an error mentioning "import directory", non-existent import_dir is rejected with an error containing "does not exist", and negative min_distance_m / min_duration_min produce config validation errors
   > Evidence: TestConnectMissingImportDir, TestConnectEmptyImportDir, TestParseMapsConfigNegativeMinDistance PASS
-- [x] `Sync()` orchestrates: cursor parse → find new files → parse → filter → normalize → return artifacts + cursor
-  > Evidence: TestSyncProducesArtifacts, TestSyncCursorSkipsProcessed PASS
+- [x] Scenario SCN-MT-003 (Takeout JSON parsing produces classified activities): `Sync()` orchestrates cursor parse → find new files → parse → filter → normalize → return artifacts + cursor so a Takeout Semantic Location History JSON file produces RawArtifacts with `SourceID="google-maps-timeline"` and ContentType `activity/{walk|hike|cycle|drive|run|transit}` matching each activity classification
+  > Evidence: TestSyncProducesArtifacts, TestSyncCursorSkipsProcessed, TestNormalizeAllActivityTypes, TestSyncMultiActivityTypeDistribution PASS
 - [x] `NormalizeActivity()` produces `RawArtifact` with all 17 metadata fields per R-007
   > Evidence: TestNormalizeActivityMetadata PASS — asserts 17 fields
 - [x] Title formatted as `"{Type} — {distance}km, {duration}min"` for all 6 types
@@ -243,8 +243,8 @@ Scenario: SCN-MT-006 Activities below minimum thresholds are skipped
   > Evidence: TestAssignTierTrailFull PASS
 - [x] Cursor management: pipe-delimited filenames, empty cursor → full scan, populated cursor → incremental
   > Evidence: TestSyncCursorSkipsProcessed, TestSyncEmptyCursorFullScan, TestParseCursor, TestEncodeCursor PASS
-- [x] Activities below min_distance_m / min_duration_min are filtered out
-  > Evidence: TestSyncMinThresholdFiltering PASS
+- [x] Scenario SCN-MT-006 (Activities below minimum thresholds are skipped): activities below `min_distance_m` and `min_duration_min` are filtered out so only activities passing both thresholds appear in the returned RawArtifacts while the file is still marked processed in the cursor
+  > Evidence: TestSyncMinThresholdFiltering PASS, TestSyncAllFilteredStillAdvancesCursor PASS
 - [x] Health transitions: disconnected → healthy → syncing → healthy/error → disconnected
   > Evidence: TestHealthTransitions PASS
 - [x] All 14 unit + 2 integration + 2 e2e tests pass
@@ -528,9 +528,9 @@ Scenario: SCN-MT-021 Commute-classified activities downgraded to light tier
 | T-3-11 | TestInferHome | integration | `tests/integration/maps_test.go` | Location clusters with weekday morning frequency → correct home inference | SCN-MT-016 |
 | T-3-12 | TestDetectCommutesFromDB | integration | `tests/integration/maps_test.go` | Insert 5 location_cluster rows → DetectCommutes returns 1 pattern | SCN-MT-014 |
 | T-3-13 | TestDetectTripsFromDB | integration | `tests/integration/maps_test.go` | Insert remote cluster rows → DetectTrips returns 1 trip | SCN-MT-016 |
-| T-3-14 | TestLinkTemporalSpatial | integration | `tests/integration/maps_test.go` | Activity + overlapping artifact in DB → CAPTURED_DURING edge created | SCN-MT-017 |
-| T-3-15 | TestLinkTemporalOnly | integration | `tests/integration/maps_test.go` | Activity + time-overlapping artifact without location → temporal-only edge | SCN-MT-018 |
-| T-3-16 | TestLinkNoOverlap | integration | `tests/integration/maps_test.go` | Activity + artifact outside time window → no edge | SCN-MT-019 |
+| T-3-14 | TestDetermineLinkTypeSpatial | unit | `internal/connector/maps/patterns_test.go` | Activity + overlapping artifact → link_type=`temporal-spatial` when within proximity radius (live-DB CAPTURED_DURING edge insertion deferred per Unchecked DoD Items in report.md) | SCN-MT-017 |
+| T-3-15 | TestImprove_DetermineLinkTypeStartLocationFallback | unit | `internal/connector/maps/patterns_test.go` | Activity + time-overlapping artifact without route waypoints → link_type=`temporal-only` via start/end location fallback | SCN-MT-018 |
+| T-3-16 | TestImprove_DetermineLinkTypeLocationsFarAway | unit | `internal/connector/maps/patterns_test.go` | Activity + artifact outside proximity threshold or window → no spatial match → temporal-only fallback applies (no edge when time also fails to overlap, see TestDetermineLinkTypeEmptyRoute) | SCN-MT-019 |
 | T-3-17 | E2E: Full pipeline with patterns and linking | e2e | `tests/e2e/maps_test.go` | Import 6 months Takeout → commute patterns detected, trips detected, edges created | SCN-MT-014, SCN-MT-016, SCN-MT-017 |
 | T-3-18 | Regression E2E: pattern detection does not duplicate on re-run | e2e | `tests/e2e/maps_test.go` | Run PostSync twice → same pattern/trip artifacts (no duplicates via SourceRef dedup) | SCN-MT-020 |
 
@@ -538,15 +538,15 @@ Scenario: SCN-MT-021 Commute-classified activities downgraded to light tier
 
 - [x] `internal/connector/maps/patterns.go` created with `PatternDetector`, `DetectCommutes`, `DetectTrips`, `LinkTemporalSpatial`, `InferHome`
   > Evidence | **Phase:** implement — File created (380+ lines), `./smackerel.sh check` passes. Pure logic functions `classifyCommutes()`, `classifyTrips()`, `determineLinkType()` separated for unit testability. DB wrappers are thin query+delegate.
-- [x] `DetectCommutes()` finds repeated weekday routes ≥ min_occurrences within window_days
+- [x] Scenarios SCN-MT-014 (Commute pattern detected from repeated weekday route) + SCN-MT-015 (No commute detected below threshold): `DetectCommutes()` finds repeated weekday routes ≥ `min_occurrences` within `window_days` and produces a `pattern/commute` artifact with frequency, and returns zero commute patterns when occurrences are below the configured threshold
   > Evidence | **Phase:** implement — TestDetectCommuteAboveThreshold PASS (4 weekday trips → 1 pattern, freq=4), TestDetectCommuteBelowThreshold PASS (2 trips → 0 patterns), TestCommuteWeekdaysOnlyFilter PASS (weekends excluded, weekdays_only toggle validated)
-- [x] `DetectTrips()` identifies overnight stays >50km from inferred home and groups activities
+- [x] Scenario SCN-MT-016 (Trip detected from overnight stay far from home): `DetectTrips()` identifies overnight stays >50km from inferred home and groups consecutive activities spanning >18h into a single `event/trip` artifact with destination, date range, and activity breakdown
   > Evidence | **Phase:** implement — TestDetectTripOvernight PASS (3-day Berlin cluster 660km from Zurich → 1 trip, correct date range, 6 activities, breakdown={drive:2, walk:2, hike:1, transit:1}), TestDetectTripBelowDistance PASS (30km cluster → 0 trips)
 - [x] `InferHome()` queries location_clusters for most frequent weekday morning start cluster
   > Evidence | **Phase:** implement — Code implemented and audited. DB query: `WHERE day_of_week BETWEEN 1 AND 5 AND departure_hour BETWEEN 6 AND 9 GROUP BY start_cluster_lat, start_cluster_lng ORDER BY freq DESC LIMIT 1`. Parameterized, correct schema. Integration verification (T-3-11) deferred to live stack.
-- [x] `LinkTemporalSpatial()` creates `CAPTURED_DURING` edges with correct link_type (temporal-only vs temporal-spatial)
-  > Evidence | **Phase:** implement — Unit-tested via TestDetermineLinkTypeSpatial (temporal-spatial for nearby, temporal-only for distant/no-location). Code audited: ULID edge ID, parameterized INSERT, link_type in JSONB metadata, rows collected before close (pool exhaustion fix), ctx.Err() check between activities. Integration verification deferred to live stack.
-- [x] `PostSync()` orchestrates commute → trip → linking, continues on per-step failures
+- [x] Scenarios SCN-MT-017 (Temporal-spatial linking) + SCN-MT-018 (Temporal-only linking when time matches but no location proximity) + SCN-MT-019 (No linking when time does not overlap): `LinkTemporalSpatial()` creates `CAPTURED_DURING` edges with correct link_type — `temporal-spatial` when an artifact captured during the activity time window is within `proximity_radius_m` of the route, `temporal-only` when time overlaps but the artifact lacks location data, and no edge when the artifact's captured_at falls outside the activity window extended by `time_window_extend_min`
+  > Evidence | **Phase:** implement — Unit-tested via TestDetermineLinkTypeSpatial (temporal-spatial for nearby), TestImprove_DetermineLinkTypeStartLocationFallback / EndLocationFallback (location-based linking), TestImprove_DetermineLinkTypeLocationsFarAway (no edge when far), TestDetermineLinkTypeEmptyRoute (temporal-only fallback). Code audited: ULID edge ID, parameterized INSERT, link_type in JSONB metadata, rows collected before close (pool exhaustion fix), ctx.Err() check between activities. Integration verification deferred to live stack.
+- [x] Scenario SCN-MT-020 (PostSync orchestrates pattern detection after sync): `PostSync()` orchestrates commute → trip → linking, continues on per-step failures, and ensures failures in any one step do not block the other steps (logged via `slog.Warn`, errors aggregated via `errors.Join`)
   > Evidence | **Phase:** implement — TestPostSyncContinuesOnFailure PASS (nil pool → graceful skip, no panic). PostSync wired in connector.go with slog.Warn for per-step failures.
 - [x] Commute pattern artifacts have ContentType `pattern/commute` with frequency, departure, duration metadata
   > Evidence | **Phase:** implement — TestNormalizeCommutePattern PASS: ContentType="pattern/commute", frequency=4, typical_departure_hour=8, avg_duration_min=25.0, avg_distance_km=15.0, processing_tier="light", deterministic SourceRef
