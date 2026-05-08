@@ -55,9 +55,9 @@ The pattern is: **SST → generated contract → per-target adapter**. The contr
 ## Required Layout
 
 ```
-deploy/
+<adapter-root>/                ← Resolved by CLI: out-of-tree (DEPLOY_TARGETS_ROOT) OR in-tree (./deploy/)
 ├── README.md                  ← Index of adapters + contract overview
-├── contract.yaml              ← Generated from SST; DO NOT EDIT
+├── contract.yaml              ← Generated from SST; ALWAYS in-tree at <repo>/deploy/contract.yaml; DO NOT EDIT
 └── <target>/                  ← Per-target adapter directory
     ├── params.yaml            ← Target-specific values
     ├── manifest.yaml          ← Current deployment pointer (image digest, bundle hash); written by `apply`
@@ -71,6 +71,81 @@ deploy/
 ```
 
 `manifest.yaml` is **mutable and target-local** (records the current image digest + config bundle hash deployed to that target). It is the only adapter file the `apply` action edits. `params.yaml` is target-stable.
+
+`contract.yaml` is **always in-tree** under the project repo's `deploy/contract.yaml` (it is generated from SST and is target-agnostic). Per-target adapter directories MAY live in-tree or out-of-tree per the rule below.
+
+## Adapter Locality (Public Repos & Operator Privacy)
+
+Per-target adapters carry **operator-coupled topology** — real FQDNs, real VPN identity, real reverse-proxy paths, host singletons, cross-project coexistence notes. When a project repo is or will be **public**, that topology MUST NOT live inside the public repo, even with placeholder values, because:
+
+1. Placeholders silently collect real values via copy-paste regressions and stay in git history forever.
+2. The mere presence of a `deploy/<my-host>/` directory in a public repo discloses topology-pattern reconnaissance (which proxy, which VPN, which port block).
+3. Cross-project coexistence notes (e.g., "this host also runs project X, project Y, project Z") cross-correlate the operator's other public repos.
+4. A generic OSS adopter cannot deploy to the maintainer's specific target anyway — they will author their own.
+
+### Two Locality Modes
+
+| Mode | Adapter Root | Purpose |
+|------|-------------|---------|
+| **In-tree** (default) | `<repo>/deploy/<target>/` | Generic / shareable targets: `_example` skeleton, `local-dev`, vendor templates (`fly-staging.template`, `aws-skeleton`). Safe for public repos. |
+| **Out-of-tree** (operator-private) | `${DEPLOY_TARGETS_ROOT}/<project>/<target>/` | Operator-owned targets that name a real host, real VPN, real reverse proxy, or expose cross-project workspace topology. REQUIRED when the project repo is or will be public. |
+
+A single operator may keep all of their projects' out-of-tree adapters under one private repo:
+
+```
+~/operator-targets/                       ← private git repo, sole operator
+├── <project-A>/home-lab/...
+├── <project-B>/home-lab/...
+├── <project-C>/home-lab/...
+└── shared/                               ← cross-project host-singleton coordination
+    ├── caddy-port-allocations.md         (which project owns which 4xxxx port)
+    ├── ufw-tag-registry.md               (which `# project=...` tags exist)
+    └── systemd-unit-namespaces.md        (which `<project>-<target>-<purpose>` units exist)
+```
+
+### CLI Resolution Rule (STRICT — no silent fallback)
+
+The project CLI MUST resolve `<adapter-root>/<target>/` by branching on whether `DEPLOY_TARGETS_ROOT` is set. Setting `DEPLOY_TARGETS_ROOT` is an explicit operator opt-in: "all my adapters live out-of-tree now." The CLI MUST honor that opt-in strictly.
+
+1. **If `DEPLOY_TARGETS_ROOT` is set:**
+   - If `${DEPLOY_TARGETS_ROOT}/<project>/<target>/params.yaml` exists → use that directory.
+   - Else → FAIL with a clear error listing the attempted out-of-tree path AND the in-tree path the CLI deliberately did NOT consult, plus a hint to either populate the out-of-tree path or unset `DEPLOY_TARGETS_ROOT`.
+2. **Else (`DEPLOY_TARGETS_ROOT` unset — in-tree-only mode):**
+   - If `<repo>/deploy/<target>/params.yaml` exists → use it.
+   - Else → FAIL with a clear error listing the attempted in-tree path AND a hint to copy `<repo>/deploy/_example/<target-skeleton>/` as a starting point or set `DEPLOY_TARGETS_ROOT`.
+
+**The CLI MUST NEVER silently fall back from out-of-tree to in-tree.** Falling back to an in-tree leftover after the operator believed they had migrated risks deploying stale state and disclosing previously-private topology that the operator thought was scrubbed. Fail fast.
+
+### What Each Repo Should Contain
+
+| Repo | What MUST exist | What MUST NOT exist (if public) |
+|------|----------------|---------------------------------|
+| Public product repo | `deploy/contract.yaml`, `deploy/README.md`, `deploy/_example/<target-skeleton>/` (generic), optional in-tree `deploy/local-dev/` (safe), optional vendor templates | Operator-coupled `deploy/home-lab/`, `deploy/<my-host>/`, anything naming a real FQDN/VPN/host |
+| Operator-private adapter repo | One subdirectory per project the operator deploys, each containing the full adapter (`params.yaml` + scripts), plus a `shared/` directory for cross-project host-singleton coordination | n/a (private) |
+
+### Public-Repo Safety Checklist
+
+Before publishing a project repo (or merging a change that turns a private repo public):
+
+```bash
+# 1. No operator-coupled adapter in tree
+test -z "$(find deploy -mindepth 2 -name params.yaml ! -path 'deploy/_example/*' ! -path 'deploy/local-dev/*')"
+
+# 2. No real LAN/VPN IPs anywhere under deploy/
+! grep -rE '100\.[0-9]+\.[0-9]+\.[0-9]+|192\.168\.|10\.[0-9]+\.[0-9]+\.[0-9]+' deploy/
+
+# 3. No real tailnet names, real hostnames, real proxy site names
+! grep -rE '[a-z0-9-]+\.ts\.net' deploy/
+! grep -rE '<a-real-host>' deploy/   # replace pattern with operator's known host suffixes
+
+# 4. README documents in-tree vs out-of-tree resolution
+grep -q "DEPLOY_TARGETS_ROOT" deploy/README.md
+
+# 5. Git history audited
+git log --all -p -- deploy/ | grep -E '<known-operator-pattern>' || echo "OK: no historical leak"
+```
+
+If any check fails, the change is BLOCKED until the operator-coupled content is moved out-of-tree (and, if previously committed, the history is scrubbed before publication).
 
 ## CLI Surface
 
@@ -92,6 +167,13 @@ Actions:
   contract         Regenerate deploy/contract.yaml from SST and exit
 ```
 
+The CLI MUST resolve the per-target adapter directory using the strict rule in Adapter Locality:
+
+1. **If `DEPLOY_TARGETS_ROOT` is set** → look ONLY under `${DEPLOY_TARGETS_ROOT}/<project>/<target>/`. If `params.yaml` is missing, FAIL (no silent fallback to in-tree).
+2. **Else (`DEPLOY_TARGETS_ROOT` unset)** → look ONLY under `<repo>/deploy/<target>/`. If `params.yaml` is missing, FAIL.
+
+The CLI MUST NEVER silently fall back from out-of-tree to in-tree when `DEPLOY_TARGETS_ROOT` is set.
+
 The CLI MUST refuse to run any action other than `preconditions`, `params`, `contract`, `manifest`, or `rollback` if `deploy/contract.yaml` is stale relative to the SST (drift check first).
 
 The `apply` and `rollback` actions MUST be idempotent: re-running with the same digest+bundle hash MUST be a no-op.
@@ -100,16 +182,17 @@ The `apply` and `rollback` actions MUST be idempotent: re-running with the same 
 
 | Value Type | Lives In |
 |------------|----------|
-| Service list, ports, internal DNS names, env key names, health endpoints, persistent volumes | `deploy/contract.yaml` (generated from SST) |
-| Target FQDN, target host IP, Tailscale machine name, target-specific TLS cert dir, target user/group, target storage paths | `deploy/<target>/params.yaml` |
-| Caddy site config for target | `deploy/<target>/conf.d/<project>-<target>.caddy` (dropped in by bootstrap) |
+| Service list, ports, internal DNS names, env key names, health endpoints, persistent volumes | `deploy/contract.yaml` (generated from SST, in-tree) |
+| Target FQDN, target host IP, Tailscale machine name, target-specific TLS cert dir, target user/group, target storage paths | `<adapter-root>/<target>/params.yaml` (in-tree for generic targets, out-of-tree for operator-owned targets — see Adapter Locality) |
+| Caddy site config for target | `<adapter-root>/<target>/conf.d/<project>-<target>.caddy` (dropped in by bootstrap) |
 | ufw rule set for target | bootstrap script, tagged with `# project=<name> target=<target>` |
 | systemd unit names | `<project>-<target>-<purpose>.service` |
 | Container names | `${PROJECT}-${TARGET}-${SERVICE}` |
 | Network names | `${PROJECT}_${TARGET}_default` |
 | Volume names | `${PROJECT}_${TARGET}_${VOLUME}` |
+| Cross-project host-singleton coordination (port allocations across projects on a shared host, ufw tag registry) | Operator's private out-of-tree `shared/` directory; NEVER any project repo |
 
-Any value in `deploy/<target>/params.yaml` MUST NOT also live in the SST. Any value in the SST MUST NOT also live in `params.yaml`.
+Any value in `<adapter-root>/<target>/params.yaml` MUST NOT also live in the SST. Any value in the SST MUST NOT also live in `params.yaml`. Operator-coupled values (real FQDN, real VPN IP, real reverse-proxy site name, cross-project workspace notes) MUST live in an out-of-tree adapter when the project repo is or will be public.
 
 ## Host Singleton Pattern
 
@@ -428,6 +511,9 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 | **`rollback` rebuilds from a prior git SHA** | Slow; risks rebuild divergence | Rollback is pure pointer-swap to `previousManifest`; no rebuild |
 | **CI workflow needs SSH credentials to a target host** | Trust boundary leak; CI compromise → target compromise | CI ends at registry push; deploy is downstream of CI |
 | **Same Compose file used for build and deploy** | Build context bloats deploy spec; image rebuilds on every deploy | Separate `docker-compose.build.yml` (CI only) and `docker-compose.runtime.yml` (deploy) |
+| **Operator-coupled adapter (`deploy/<my-host>/`) committed to a public project repo, even with placeholder values** | Topology + identity reconnaissance; placeholders silently collect real values via copy-paste; cross-correlates the operator's other public repos via shared host-singleton notes | Move adapter to `${DEPLOY_TARGETS_ROOT}/<project>/<target>/` (operator-private repo). In-tree `deploy/<target>/` is reserved for generic / shareable targets only (`_example`, `local-dev`, vendor templates) |
+| **CLI silently falls back from out-of-tree to in-tree adapter when `DEPLOY_TARGETS_ROOT` is set but the requested target is missing under it** | Operator may have migrated and deleted the in-tree leftover; silent fallback risks deploying a stale adapter | Fail-fast with both attempted paths in the error message |
+| **Cross-project host-singleton coordination notes (port allocations, ufw tag registry, systemd unit namespaces) committed to any project repo** | Cross-correlates the operator's projects publicly; encourages tight coupling between project repos | Lives only under operator-private `${DEPLOY_TARGETS_ROOT}/shared/` |
 
 ## Integration With Bubbles Governance
 

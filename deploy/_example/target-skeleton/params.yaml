@@ -1,0 +1,55 @@
+# SKELETON — copy this directory, rename to your real target, then replace
+# every <placeholder>. This file is consumed by every *.sh script in this
+# directory.
+#
+# See the canonical contract in:
+#   .github/instructions/bubbles-deployment-target.instructions.md
+
+apiVersion: bubbles.deploy/v1
+kind: DeployTargetParams
+
+metadata:
+  # Stable kebab-case identifier for THIS target. Examples: home-lab, aws-prod,
+  # fly-staging, local-dev. Must match the directory name.
+  name: <target-name>
+  # The project this adapter belongs to (matches the project's CLI / repo name).
+  project: <project-name>
+
+# Operator-owned host identity. Consumed by bootstrap/apply/verify.
+host:
+  fqdn: <host.example.com>
+  internalAddress: <10.0.0.1>          # LAN/VPN address adapter uses to reach host
+  sshUser: <user>                      # Omit if apply runs locally on the host
+  sshKeyPath: <~/.ssh/your-deploy-key> # Omit if apply runs locally on the host
+
+# Reverse proxy and TLS. Operator chooses whichever they run; the adapter
+# MUST write a drop-in file (never overwrite the proxy's main config).
+reverseProxy:
+  kind: <caddy|nginx|traefik|none>
+  dropInDir: </etc/yourproxy/conf.d>   # Where this adapter writes its drop-in
+  tlsMode: <le-http01|le-dns01|own-cert|none>
+  certDir: </etc/yourproxy/certs>      # Only required when tlsMode=own-cert
+
+# Container runtime conventions for THIS adapter only. Every name MUST include
+# both the project AND the target so peer adapters can coexist on the same
+# host without collision.
+runtime:
+  composeProject: <project>-<target>
+  network: <project>-<target>-net
+  volumePrefix: <project>-<target>-
+  systemdUnitPrefix: <project>-<target>-
+
+# Rollout strategy. The adapter MUST implement what it declares here.
+rollout:
+  strategy: <recreate|blue-green|canary|flag-gated>
+
+# Registry where CI publishes the immutable image(s) and config bundle(s).
+# The adapter pulls by digest only — never by tag.
+registry:
+  imageRoot: <ghcr.io/your-org/your-project>
+  bundleRoot: <ghcr.io/your-org/your-project-config-bundles>
+
+# Firewall rules added by this adapter MUST carry this tag so teardown.sh
+# can remove ONLY them and not touch other adapters' rules.
+firewall:
+  ruleTag: project=<project> target=<target>

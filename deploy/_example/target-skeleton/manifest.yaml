@@ -1,0 +1,24 @@
+# DO NOT EDIT BY HAND.
+#
+# This pointer is written by `apply.sh` and read by `rollback.sh`.
+# A skeleton starts with empty `current` and null `previousManifest`; the first
+# successful apply populates `current`; every subsequent apply rotates the
+# prior `current` into `previousManifest`.
+#
+# See the canonical contract in:
+#   .github/instructions/bubbles-deployment-target.instructions.md
+
+apiVersion: bubbles.deploy/v1
+kind: DeployManifest
+
+metadata:
+  target: <target-name>
+  project: <project-name>
+
+current:
+  sourceSha: ""              # git SHA the build came from
+  images: {}                 # serviceName -> sha256:<digest>
+  configBundle: ""           # immutable bundle ref (e.g. <env>-<sourceSha>)
+  appliedAt: ""              # ISO-8601 timestamp written by apply.sh
+
+previousManifest: null       # last known-good `current` block before this apply
