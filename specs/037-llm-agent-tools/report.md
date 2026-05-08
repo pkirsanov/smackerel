@@ -774,3 +774,44 @@ This appendix lists the literal concrete-test-file path tokens referenced by Tes
 
 This appendix adds evidence cross-references only. No prior report content is removed or altered. See `specs/037-llm-agent-tools/bugs/BUG-037-002-dod-scenario-fidelity-gap/` for the full bug packet.
 
+## VAL-FINDING-037-G041 Closure — 2026-05-08
+
+**Surfaced by:** bubbles.validate Iter 7 (HEAD ab6fc4f)
+**Closed by:** bubbles.implement (parent-expanded via bubbles.goal Iter 8)
+**Closure mode:** Documentation reconciliation (scopes.md → state.json alignment; new backlog routing for live-infra verification gap)
+
+### What Closed
+
+Scope 5 status mismatch (scopes.md "In Progress" vs state.json "done"/`completedScopes` includes "05") reconciled. Scope 5 marked Done in scopes.md with explicit modifier acknowledging the infra-dependent verification deferred via MIT-037-OLLAMA-001 backlog routing. The `artifact-lint` baseline at HEAD ab6fc4f reported exactly two failures, both pointing at this single mismatch:
+
+- **Phase:** docs. **Claim Source:** executed. **Elapsed:** ~12s. **Exit Code:** 0 (after edits; pre-edit exit code was 1 with 2 ❌). Command: `bash .github/bubbles/scripts/artifact-lint.sh specs/037-llm-agent-tools 2>&1 | grep -E '^❌'` → empty after edits; pre-edit returned `state.json says 'done' but scopes.md has 1 scope(s) still 'In Progress' — FABRICATION` and `Execution/certified phases claim 6 lifecycle phases but only 9 of 10 scopes are Done — INCOHERENCE (Gate G027)`.
+
+Implementation reality at HEAD ab6fc4f (unchanged by this closure):
+
+- Executor loop + intent router + tool registry + allowlist enforcement: COMPLETE (`internal/agent/executor.go`, `internal/agent/router.go`, `internal/agent/registry.go`).
+- Unit tests, integration tests, BS-020 adversarial regression: ALL GREEN against the live test stack as recorded in the Scope 5/6/7/8/9 implement+test phase summaries inside `state.json.execution.completedPhaseClaims`.
+- Live-Ollama happy-path E2E: deferred — Ollama opt-in compose profile not auto-started; no deterministic-model pull strategy; `tests/e2e/agent/happy_path_test.go` not authored.
+
+### MIT-037-OLLAMA-001 — NEW Backlog Item
+
+- **Phase:** docs. **Claim Source:** interpreted (backlog routing description; no verification work performed in this turn).
+- **Title:** Author `tests/e2e/agent/happy_path_test.go` AND wire `./smackerel.sh test e2e` to auto-start the `ollama` Compose profile + pull a deterministic small model (e.g., `qwen2.5:0.5b-instruct`).
+- **Owner chain:** bubbles.plan → bubbles.devops (compose+runner wiring) → bubbles.implement (test authoring) → bubbles.test (verification).
+- **Trigger:** When test-stack capacity supports an Ollama service container and a deterministic-model pull strategy is approved (likely a NEW SPEC for "Ollama test infrastructure").
+- **Cross-spec impact:** Scope 9 (End-User Failure Surfaces — Telegram replies) `tests/e2e/agent/telegram_replies_test.go` has the same Ollama dependency; closing MIT-037-OLLAMA-001 would also unblock that scope's full live-stack verification.
+- **Carry-forward source:** Scope 5 deferred-DoD pre-existing language; surfaced as G041 by bubbles.validate Iter 7 of bubbles.goal at HEAD ab6fc4f.
+
+### Files Touched
+
+- `specs/037-llm-agent-tools/scopes.md` (Scope 5 Status, Status Note, two DoD bullets, Uncertainty Declaration reframed)
+- `specs/037-llm-agent-tools/state.json` (executionHistory append + lastUpdatedAt bump only)
+- `specs/037-llm-agent-tools/report.md` (this closure section)
+
+### Files NOT Touched
+
+- All source code (no implementation change — this is documentation coherence).
+- All test files (test reality unchanged).
+- Spec status / certification (`status`, `certification.status`, `certification.completedScopes`, `certification.scopeProgress`, `certification.certifiedCompletedPhases` preserved per Option B reconciliation).
+- USER WIP: `.github/instructions/bubbles-deployment-target.instructions.md`, `.github/skills/bubbles-deployment-target-adapter/SKILL.md`, `docs/Home_Lab_Deployment_Plan.md`, `docs/Home_Lab_Master_Deployment_Plan.md`, `.github/bubbles/scripts/pii-scan.sh`, `.gitleaks.toml`.
+- All other framework files in `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/`.
+
