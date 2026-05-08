@@ -30,7 +30,7 @@
           "testId": "TestStressReadinessCanary_Live"
         }
       ],
-      "evidenceRefs": ["report.md#classification-evidence"],
+      "evidenceRefs": ["report.md#classification-evidence", "report.md#validate-phase--re-verification-at-head-8ce40b4--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -55,7 +55,7 @@
           "testId": "TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests"
         }
       ],
-      "evidenceRefs": ["report.md#classification-evidence"],
+      "evidenceRefs": ["report.md#classification-evidence", "report.md#validate-phase--re-verification-at-head-8ce40b4--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -80,7 +80,7 @@
           "testId": "timeout/deadline observation accounting regression"
         }
       ],
-      "evidenceRefs": ["report.md#classification-evidence"],
+      "evidenceRefs": ["report.md#classification-evidence", "report.md#validate-phase--re-verification-at-head-8ce40b4--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     }
