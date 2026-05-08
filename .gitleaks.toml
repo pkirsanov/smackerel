@@ -1,0 +1,166 @@
+# Bubbles — PII & Secret Prevention Config
+#
+# This file contains ZERO actual PII tokens. All rules describe generic
+# CATEGORIES of forbidden content. Owner-specific tokens (real hostname,
+# real personal name, etc.) live in a machine-local file:
+#   ~/.config/bubbles/pii-tokens.txt   (gitignored, never committed)
+#
+# The pre-commit/pre-push hook runs BOTH gitleaks (this config) AND a plain
+# grep against the machine-local token file. See scripts/pii-scan.sh.
+#
+# Policy doc: .github/SECURITY-PII-POLICY.md
+
+title = "Bubbles PII & Secret Prevention"
+
+[extend]
+useDefault = true   # Pull in gitleaks' built-in 200+ secret patterns
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Generic PII patterns — describe forbidden CATEGORIES, never specific values.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[rules]]
+id    = "personal-email-public-provider"
+description = "Personal email on public mail provider — use noreply@example.test or work email instead"
+regex = '''(?i)\b[a-z0-9._%+-]+@(gmail|yahoo|hotmail|outlook|icloud|live|aol|protonmail|gmx|mail|qq|163|yandex)\.[a-z]{2,6}\b'''
+tags  = ["pii", "email"]
+[[rules.allowlists]]
+description = "Common example/placeholder local-parts in docs and tests"
+regexes = [
+  '''(?i)\b(john|jane|alice|bob|carol|dave|eve|mallory|trent|user|users?|test|testuser|tester|example|demo|sample|foo|bar|baz|admin|noreply|no-reply|donotreply|support|help|info|hello|contact|webmaster|postmaster|abuse)[0-9]*@(gmail|yahoo|hotmail|outlook|icloud|live|aol|protonmail|gmx|mail|qq|163|yandex)\.[a-z]{2,6}\b''',
+]
+
+[[rules]]
+id    = "corporate-email-leak"
+description = "Corporate email on a major employer domain — remove before commit"
+regex = '''(?i)\b[a-z0-9._%+-]+@(microsoft|google|apple|amazon|meta|facebook|netflix|oracle|ibm|salesforce|adobe|intel|nvidia|cisco|vmware)\.com\b'''
+tags  = ["pii", "email", "corporate"]
+
+[[rules]]
+id    = "tailscale-cgnat-ip"
+description = "Tailscale CGNAT device IP (100.64.0.0/10) — replace with placeholder or env var"
+regex = '''\b100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.\d{1,3}\.\d{1,3}\b'''
+tags  = ["pii", "ip", "tailscale"]
+
+[[rules]]
+id    = "tailscale-machine-handle"
+description = "Tailscale-style machine identifier (tail######) — replace with placeholder"
+regex = '''(?i)\btail[0-9a-f]{4,10}\b'''
+tags  = ["pii", "tailscale", "hostname"]
+
+[[rules]]
+id    = "yyyymmdd-dob-shape"
+description = "8-digit YYYYMMDD that looks like a DOB (1900-2010) — verify intent"
+# Narrow to 1900-2010 so modern release dates / AI model version strings
+# (e.g. claude-sonnet-4-20250514) don't trigger.
+regex = '''\b(19[0-9]{2}|200[0-9]|2010)(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b'''
+tags  = ["pii", "dob"]
+[[rules.allowlists]]
+description = "AI model versions and release tags often look date-shaped"
+regexes = [
+  '''-(19[0-9]{2}|20[0-9]{2})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b''',
+  '''(?i)(model|version|release|build|commit|tag)[-:_= ]*[\w-]*(19[0-9]{2}|20[0-9]{2})(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])\b''',
+]
+
+[[rules]]
+id    = "url-inline-password"
+description = "Inline credentials in URL (proto://user:password@host) — use env var / secret manager"
+regex = '''(?i)\b(?:https?|ftp|postgres(?:ql)?|mysql|mongodb|redis|amqp|rabbitmq|ssh|sftp|smb)://[^\s:/@]+:[^\s@/]{4,}@[^\s/]+'''
+tags  = ["secret", "credential", "url"]
+[[rules.allowlists]]
+description = "Env-var templates and obvious placeholder credentials are not real secrets"
+regexes = [
+  # Env-var template: postgres://user:${PASSWORD}@host  or  $PASSWORD  or  {{password}}
+  '''://[^:/@]+:(?:\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|\{\{[^}]+\}\}|<[^>]+>)@''',
+  # Common placeholder words used as the password component
+  '''(?i)://[^:/@]+:(?:fake|password|passwd|pass|secret|test|testpass|dummy|example|placeholder|changeme|xxx+|todo|none|null|empty|sample)@''',
+  # docker-compose YAML interpolation: postgres://user:${POSTGRES_PASSWORD:-}@host
+  '''://[^:/@]+:\$\{[^}]*\}@''',
+]
+
+[[rules]]
+id    = "private-key-block"
+description = "PEM-encoded private key block (any kind) committed in source"
+regex = '''-----BEGIN ((RSA|DSA|EC|OPENSSH|PGP|ENCRYPTED) )?PRIVATE KEY( BLOCK)?-----'''
+tags  = ["secret", "private-key"]
+
+[[rules]]
+id    = "linux-home-username-leak"
+description = "Absolute Linux home path (/home/<username>/) leaks the local username — use ~ or $HOME"
+regex = '''(?:^|[^A-Za-z0-9_])/home/[a-z][a-z0-9_-]{1,32}/'''
+tags  = ["pii", "username", "path"]
+[[rules.allowlists]]
+description = "Generic CI/container usernames are not personal identifiers"
+regexes = [
+  '''(?i)/home/(runner|ubuntu|vscode|root|vagrant|dev|user|users|ec2-user|codespace|builder|jenkins|github|gitlab|app|node|pi|admin|nobody|appuser|service|deploy|docker|test|tester|example|sample|nonexistent)/''',
+]
+
+[[rules]]
+id    = "shell-prompt-host-leak"
+description = "Shell prompt of the form 'user@HOSTNAME' (uppercase host) leaks local username and machine name"
+regex = '''\b[a-z][a-z0-9_-]{2,32}@[A-Z][A-Za-z0-9_-]{3,40}\b'''
+tags  = ["pii", "username", "hostname", "shell-prompt"]
+[[rules.allowlists]]
+description = "Common build/CI hostnames and well-known service identifiers are not personal"
+regexes = [
+  '''(?i)\b(root|runner|ubuntu|vscode|builder|github|gitlab|ci|cd|build|test|tester|deploy|user|users|admin|service|nobody|app|node|docker|jenkins|maven|gradle|npm)@[A-Z][A-Za-z0-9_-]+\b''',
+  '''(?i)\b[a-z0-9_-]+@(LOCALHOST|HOST|HOSTNAME|MACHINE|SERVER|EXAMPLE|UNKNOWN|NONE|TODO|YOUR-?HOST|YOUR-?MACHINE)\b''',
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Allowlists — applied globally to ALL rules (including PII rules above).
+# We accept that test fixtures get a pass; the local-tokens grep + post-cleanup
+# baseline + corporate-email rule provide defense in depth.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[allowlists]]
+description = "Test fixtures and example/template files commonly contain placeholder secrets"
+paths = [
+  '''(?i)(?:^|/)tests?/''',
+  '''(?i)(?:^|/)__tests__/''',
+  '''(?i)(?:^|/)testdata/''',
+  '''(?i)(?:^|/)fixtures?/''',
+  '''(?i)(?:^|/)examples?/''',
+  '''(?i)(?:^|/)docs/examples?/''',
+  '''(?i)(?:^|/)mocks?/''',
+  '''(?i)(?:^|/)\.venv[^/]*/''',
+  '''(?i)(?:^|/)node_modules/''',
+  '''(?i)(?:^|/)target/''',
+  '''(?i)(?:^|/)dist/''',
+  '''(?i)(?:^|/)build/''',
+  '''(?i)\.example$''',
+  '''(?i)\.template$''',
+  '''(?i)\.sample$''',
+  '''(?i)\.test\.[a-z]+$''',
+  '''(?i)_test\.[a-z]+$''',
+  '''(?i)\.spec\.[a-z]+$''',
+]
+
+[[allowlists]]
+description = "Files that catalog forbidden patterns must be allowed to mention them"
+paths = [
+  '''^\.gitleaks\.toml$''',
+  '''^\.gitleaksignore$''',
+  '''^\.github/SECURITY-PII-POLICY\.md$''',
+  '''^\.github/workflows/pii-scan\.yml$''',
+  '''^\.github/workflows/pii-weekly-audit\.yml$''',
+  '''^\.github/workflows/secret-detection\.yml$''',
+  '''(?:^|/)\.githooks/''',
+  '''(?:^|/)infrastructure/git-hooks/''',
+  '''^scripts/pii-scan\.sh$''',
+  '''^scripts/install-git-hooks\.sh$''',
+]
+
+[[allowlists]]
+description = "Framework runtime state (gitignored) — never committed, but working-tree scans must skip it"
+paths = [
+  '''(?:^|/)\.specify/runtime/''',
+  '''(?:^|/)\.specify/memory/bubbles\.session\.json$''',
+  '''(?:^|/)\.git/''',
+  '''(?:^|/)logs/''',
+  '''(?:^|/)\.pre-push-validated/''',
+  '''(?:^|/)tmp/''',
+  '''(?:^|/)\.tmp/''',
+  '''(?:^|/)coverage/''',
+  '''(?:^|/)\.coverage/''',
+]
