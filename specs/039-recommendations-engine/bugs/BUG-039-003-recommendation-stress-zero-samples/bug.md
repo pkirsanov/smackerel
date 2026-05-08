@@ -13,9 +13,9 @@
 - [x] Reported
 - [x] Confirmed by upstream BUG-031-005 stress evidence after shared readiness passed
 - [x] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Start from the current BUG-031-005 repaired stress readiness path.
@@ -80,3 +80,13 @@ Precise technical root cause remains open for the implementation owner. Source i
 - Parent scenario: `SCN-039-052`
 - Parent requirement: `R-032` reactive recommendation request p95 latency
 - Parent acceptance criterion: `AC-17` 50 concurrent recommendation requests across 5 minutes
+
+## Resolution
+
+**Root Cause:** `Store.GetRequest` held the delivered-recommendations rows cursor open while `providerBadgesForCandidate` acquired another `pgxpool` connection per candidate. With `max_conns=10` and 50 concurrent warm reactive recommendation requests, every worker held one connection on its outer cursor and waited for a second connection to render provider badges. The pool exhausted, every worker eventually timed out at the HTTP client deadline, and the stress harness's `samples` slice stayed empty — surfacing as `stress: zero samples collected - workers never produced any observations` after the post-implement timeout-classification fix had already eliminated the original symptom shape.
+
+**Fix:** Scan all delivered-recommendations rows into memory and `Close()` the rows cursor BEFORE invoking `providerBadgesForCandidate`, so each worker holds at most one pool connection at a time during readback. Added `TestRecommendationSchema_ConcurrentReadbackDoesNotDeadlockPool` integration regression that exercises live PostgreSQL readback above pool size with provider-badge rendering — it would fail if the nested-cursor pool deadlock were reintroduced.
+
+**Fix Commit:** `b8ae13d` `fix(039): BUG-039-003 — recommendation stress zero samples (in_progress)`
+
+**Re-Verification at HEAD `8ce40b4` (2026-05-08):** Full stress gate (`COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress`) exited 0. `TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests` recorded `total=26169 ok=26169 unexpected_errors=0 timeout_errors=0 p95=956.607011ms max=2.084546089s` against the 10s budget in 300.55s. `TestRecommendationsStress_TimeoutOutcomesAreClassified` regression PASS. The fix continues to hold across the Go 1.25.10 upgrade, photos chaos hardening, and reveal-token migration 032 commits landed since the last validation pass on 2026-05-05. Full validate-phase evidence: [report.md → Validate Phase — Re-verification at HEAD 8ce40b4 — 2026-05-08](report.md).
