@@ -79,7 +79,7 @@ Scenario: SCN-024-03 System architecture section is verified unchanged
 | Grep | `grep -n "OpenClaw" docs/smackerel.md \| grep -v "SUPERSEDED" \| grep -v "## 4\."` → 0 hits | No unmarked OpenClaw refs | SCN-024-01 |
 | Grep | `grep -n "SQLite" docs/smackerel.md \| grep -v "SUPERSEDED"` → 0 hits | No unmarked SQLite refs | SCN-024-02 |
 | Grep | `grep -n "LanceDB" docs/smackerel.md \| grep -v "SUPERSEDED"` → 0 hits | No unmarked LanceDB refs | SCN-024-02 |
-| Manual | §3 mermaid diagrams unchanged | Architecture accuracy | SCN-024-03 |
+| Manual | `docs/smackerel.md` § 3 mermaid diagrams unchanged | Architecture accuracy | SCN-024-03 |
 | Manual | §14 DDL uses JSONB, TIMESTAMPTZ, vector(384) | PostgreSQL type accuracy | SCN-024-02 |
 | Validation | `git diff --stat` shows only `docs/smackerel.md` | No code files modified (AC-8) | SCN-024-01, SCN-024-02 |
 
@@ -111,7 +111,7 @@ Scenario: SCN-024-03 System architecture section is verified unchanged
   $ grep -nE 'go-readability|PostgreSQL via pgvector' docs/smackerel.md | head -5
   893:- Store in PostgreSQL via pgvector extension
   ```
-- [x] §8 storage diagram shows PostgreSQL + pgvector, not SQLite + LanceDB
+- [x] Scenario SCN-024-02 (Storage references match implementation): §8 storage diagram shows PostgreSQL + pgvector, not SQLite + LanceDB
   Evidence: `docs/smackerel.md:933` — mermaid subgraph "PostgreSQL + pgvector"
   ```
   $ grep -nE 'PostgreSQL \+ pgvector' docs/smackerel.md | head -5
@@ -143,7 +143,7 @@ Scenario: SCN-024-03 System architecture section is verified unchanged
   ```
   $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /SQLite|LanceDB/{print NR": "$0}' docs/smackerel.md | head -3
   ```
-- [x] §3 mermaid diagrams unchanged (verified no regressions)
+- [x] Scenario SCN-024-03 (System architecture section is verified unchanged): §3 mermaid diagrams unchanged (verified no regressions)
   Evidence: `docs/smackerel.md:140-415` — §3 architecture diagrams reference Go core + Python sidecar + PostgreSQL + NATS
   ```
   $ grep -nE 'Go core|Python sidecar|NATS' docs/smackerel.md | head -5
@@ -202,9 +202,9 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Manual | Each ✅ in §21.3 verified against committed code directories | Honest competitive claims | SCN-024-04 |
-| Manual | §19 phase tasks reference correct technology | Accurate phased plan | SCN-024-05 |
-| Count | 15 committed connectors represented in §22 | Connector accuracy | SCN-024-06 |
+| Manual | `docs/smackerel.md` § 21.3: each ✅ verified against committed code directories | Honest competitive claims | SCN-024-04 |
+| Manual | `docs/smackerel.md` § 19 phase tasks reference correct technology | Accurate phased plan | SCN-024-05 |
+| Count | `docs/smackerel.md` § 22: 15 committed connectors represented | Connector accuracy | SCN-024-06 |
 | Grep | `grep -c "✅ Committed" docs/smackerel.md` for connector table entries | Connector status markers | SCN-024-06 |
 | Grep | `grep -n "Notion\|Obsidian" docs/smackerel.md` → all marked as planned | No false committed claims | SCN-024-06 |
 | Validation | `git diff --stat` shows only `docs/smackerel.md` | No code files modified (AC-8) | All |
@@ -232,7 +232,7 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
   207:        WEEKLY[Weekly Synthesis]
   1209:### 12.2 Weekly Synthesis (Sunday)
   ```
-- [x] §19 Gantt chart and Phase 1 table reference Docker Compose + PostgreSQL + pgvector
+- [x] Scenario SCN-024-05 (Phased plan reflects actual technology and delivery state): §19 Gantt chart and Phase 1 table reference Docker Compose + PostgreSQL + pgvector
   Evidence: `docs/smackerel.md` — §19 Phase 1 references actual stack
   ```
   $ grep -nE 'Docker Compose|PostgreSQL \+ pgvector setup|NATS JetStream' docs/smackerel.md | head -5
@@ -242,7 +242,7 @@ Scenario: SCN-024-06 Connector ecosystem accurately lists all 15 connectors
   ```
   $ awk '/^## 19\./{s=1} /^## 20\./{s=0} s' docs/smackerel.md | grep -cE 'Delivered|In Progress'
   ```
-- [x] §22 accounts for all 15 committed connectors by name
+- [x] Scenario SCN-024-06 (Connector ecosystem accurately lists all 15 connectors): §22 accounts for all 15 committed connectors by name
   Evidence: `internal/connector/` contains 15 committed packages
   ```
   $ ls internal/connector/ | grep -vE '^(_|README|.*_test.go)' | head -20

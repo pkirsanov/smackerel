@@ -255,8 +255,17 @@
       "statusAfter": "in_progress",
       "startedAt": "2026-04-22T16:00:00Z",
       "completedAt": "2026-04-22T16:30:00Z",
-      "summary": "Stochastic quality sweep devops-to-doc trigger. Found and fixed 3 DevOps findings: DEV-010-D1 (High) 12+ processing config values in smackerel.yaml were dead config — SST pipeline only extracted 3 of 15 browser-history values. Added all extraction paths to config.sh, config.go, connectors.go. Flattened dwell_time_thresholds YAML nesting for flatten_yaml compatibility. DEV-010-D2 (Medium) Enabled flag bypass — connector started without checking BROWSER_HISTORY_ENABLED. Fixed guard to match bookmarks pattern. DEV-010-D3 (Medium) Sync schedule not wired — added BrowserHistorySyncSchedule field and passthrough. All 15 BROWSER_HISTORY_* env vars now flow from SST. Build passes, all 41 Go + 257 Python tests pass, check + lint clean."
-    }
+      "summary": "Stochastic quality sweep devops-to-doc trigger. Found and fixed 3 DevOps findings: DEV-010-D1 (High) 12+ processing config values in smackerel.yaml were dead config — SST pipeline only extracted 3 of 15 browser-history values. Added all extraction paths to config.sh, config.go, connectors.go. Flattened dwell_time_thresholds YAML nesting for flatten_yaml compatibility. DEV-010-D2 (Medium) Enabled flag bypass — connector started without checking BROWSER_HISTORY_ENABLED. Fixed guard to match bookmarks pattern. DEV-010-D3 (Medium) Sync schedule not wired — added BrowserHistorySyncSchedule field and passthrough. All 15 BROWSER_HISTORY_* env vars now flow from SST. Build passes, all 41 Go + 257 Python tests pass, check + lint clean."    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-08T00:00:00Z",
+      "completedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Added 'Scenario SCN-BH-001/002/003/004 (title):' prefixes to 4 DoD bullets in Scope 01 and 'Scenario SCN-BH-008' prefix in Scope 02 to satisfy DoD content-fidelity check. trace-guard PASSED (0 warnings)."    }
   ],
   "policySnapshot": {
     "grill": { "mode": "off", "source": "repo-default" },
@@ -269,7 +278,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T00:00:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "certification": {
     "status": "done",
     "completedScopes": ["1", "2"],

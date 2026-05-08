@@ -475,6 +475,21 @@
         {"type": "source", "location": "ml/app/ocr.py::handle_ocr_request"}
       ],
       "linkedDoD": ["OCR timeout handled gracefully — note processed without OCR, flagged for retry"]
+    },
+    {
+      "scenarioId": "SCN-007-030",
+      "name": "Recently-archived note gets light tier despite recency",
+      "scope": "03-tiered-processing-integration",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/keep/qualifiers_test.go", "function": "TestQualifierRecentArchivedGetsLight"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/keep/qualifiers_test.go::TestQualifierRecentArchivedGetsLight"},
+        {"type": "source", "location": "internal/connector/keep/normalizer.go::assignTier"}
+      ],
+      "linkedDoD": ["Recently-modified archived note evaluates to light tier (archived overrides recent per R-008)"]
     }
   ]
 }

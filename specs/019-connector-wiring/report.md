@@ -202,9 +202,9 @@ Scope 1 implementation is complete. All 15 connectors are imported, instantiated
 |----------|-------------------------------|-------------------|-------------------|
 | SCN-019-001 (All connectors registered) | `cmd/core/main_test.go` — registry count | **MISSING** — only helper tests existed | **ADDED** — `TestAllConnectorsRegistered` |
 | SCN-019-002 (Discord operational) | `internal/connector/discord/discord_test.go` | ✅ Covered by `TestConnect_ValidConfig` | ✅ No change needed |
-| SCN-019-003 (Missing creds → error) | Individual connector `*_test.go` files | ✅ Covered (`TestConnect_Missing*`) | ✅ No change needed |
+| SCN-019-003 (Missing creds → error) | Individual connector `*_test.go` files (`internal/connector/discord/discord_test.go`, `internal/connector/twitter/twitter_test.go`, `internal/connector/weather/weather_test.go`, `internal/connector/alerts/alerts_test.go`, `internal/connector/markets/markets_test.go`) | ✅ Covered (`TestConnect_Missing*`) | ✅ No change needed |
 | SCN-019-004 (Config entries exist) | `tests/integration/connector_wiring_test.go` | **MISSING** — file never created | **ADDED** — `test_connector_wiring.sh` (32 assertions) |
-| SCN-019-005 (Health shows connectors) | `tests/e2e/health_connectors_test.go` | Partial — mocked in `health_test.go` | Partial — E2E requires live stack |
+| SCN-019-005 (Health shows connectors) | `tests/e2e/health_connectors_test.go` | Partial — mocked in `internal/api/health_test.go` (`TestHealthHandler_ConnectorHealth`) | Partial — E2E requires live stack |
 | SCN-019-006 (Existing unaffected) | Regression via existing tests | ✅ All existing tests pass | **ADDED** — `TestDuplicateRegistrationRejected` |
 
 ### Findings

@@ -1801,6 +1801,7 @@ Scenario: SCN-002-080 Image OCR graceful fallback on failure
 | # | Test | Type | File | Scenario |
 |---|------|------|------|----------|
 | 1 | Image handler code path exists | Code review | ml/app/nats_client.py | SCN-002-079 |
+| 2 | OCR failure fallback path | Code review | `ml/app/nats_client.py` | SCN-002-080 |
 
 ### Definition of Done
 - [x] Image content type handled in `_handle_artifact_process` with OCR extraction

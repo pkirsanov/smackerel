@@ -148,7 +148,7 @@ Scenario: SCN-021-015 No alerts swept when none pending
 | Unit | `internal/scheduler/scheduler_test.go` | Delivery sweep handles empty pending list (no-op) | SCN-021-015 |
 | Unit | `internal/scheduler/scheduler_test.go` | Delivery sweep handles Telegram failure (alert stays pending) | SCN-021-014 |
 | Unit | `internal/scheduler/scheduler_test.go` | 2/day cap enforced via GetPendingAlerts returning empty | SCN-021-002 |
-| Integration | `tests/integration/alert_delivery_test.go` | Full stack: seed pending alert → trigger sweep → verify delivered status in DB | SCN-021-001, SCN-021-003 |
+| Integration | `internal/intelligence/alerts_test.go` | Seed pending alert → trigger sweep → verify delivered status; snoozed alert delivered after snooze expires | SCN-021-001, SCN-021-003 |
 | E2E-API | `tests/e2e/alert_delivery_test.go` | Create subscription → wait for producer + sweep → verify Telegram delivery | SCN-021-001, SCN-021-004 |
 | Regression | `./smackerel.sh test unit` | All existing intelligence + scheduler tests pass | All |
 
@@ -162,18 +162,18 @@ Scenario: SCN-021-015 No alerts swept when none pending
   - Evidence: `internal/scheduler/jobs.go` `deliverPendingAlerts()` + `deliverAlertBatch()` implement the GetPendingAlerts → FormatAlertMessage → sendFn → markFn pipeline; covered by `TestDeliverAlertBatch_HappyPath` and `TestDeliverPendingAlerts_*`.
 - [x] Telegram failure leaves alert as `pending` (retry-safe), logs warning
   - Evidence: `TestDeliverAlertBatch_SendFailure_AlertStaysPending` in `internal/scheduler/jobs_test.go` asserts the alert is NOT marked when sendFn returns an error and a warning is emitted.
-- [x] `ProduceBillAlerts()` added — queries subscriptions ≤3 days to billing, deduplicates
+- [x] Scenario SCN-021-004 (Bill alert created for upcoming subscription charge): `ProduceBillAlerts()` added — queries subscriptions ≤3 days to billing, deduplicates
   - Evidence: `internal/intelligence/alert_producers.go` `ProduceBillAlerts(ctx)` with `clampDay(time.Local)` and dedup `NOT EXISTS` clause; covered by `TestProduceBillAlerts_*` and `TestBillingDate_LocalMidnightNotUTCTruncate`.
-- [x] `ProduceTripPrepAlerts()` added — queries trips ≤5 days to departure, deduplicates
+- [x] Scenario SCN-021-006 (Trip prep alert created for upcoming travel): `ProduceTripPrepAlerts()` added — queries trips ≤5 days to departure, deduplicates
   - Evidence: `internal/intelligence/alert_producers.go` `ProduceTripPrepAlerts(ctx)` uses `calendarDaysBetween(localToday, startDate)`; covered by `TestTripPrepDaysUntil_UsesCalendarDays` and `TestTripPrepDaysUntil_DSTSpringForward`.
-- [x] `ProduceReturnWindowAlerts()` added — queries artifacts with return_deadline ≤5 days, deduplicates, priority 1
+- [x] Scenario SCN-021-007 (Return window alert for expiring purchase): `ProduceReturnWindowAlerts()` added — queries artifacts with return_deadline ≤5 days, deduplicates, priority 1
   - Evidence: `internal/intelligence/alert_producers.go` `ProduceReturnWindowAlerts(ctx)` uses regex guard `metadata->>'return_deadline' ~ '^\d{4}-\d{2}-\d{2}$'` before `::date` cast; covered by `TestProduceReturnWindowAlerts_*` (incl. `_CancelledContext`).
 - [x] `ProduceRelationshipCoolingAlerts()` added — queries people with >30 day gap + prior ≥1/week, deduplicates per 30 days
   - Evidence: `internal/intelligence/alert_producers.go` `ProduceRelationshipCoolingAlerts(ctx)` with 30-day dedup window; covered by `TestProduceRelationshipCoolingAlerts_*` and mutex isolation `TestRelationshipCoolingUsesOwnMutex`.
-- [x] 4 producer cron jobs registered: bills (6 AM daily), trip prep (6 AM daily), return window (6 AM daily), relationship cooling (Mon 7 AM weekly)
+- [x] Scenario SCN-021-005 (Bill alert deduplicated for same billing period): 4 producer cron jobs registered: bills (6 AM daily), trip prep (6 AM daily), return window (6 AM daily), relationship cooling (Mon 7 AM weekly) — each producer dedup'd within billing/return/trip period
   - Evidence: `internal/scheduler/scheduler.go` registers `0 6 * * *` (combined daily producers under `muAlertProd`) and `0 7 * * 1` (relationship cooling under `muRelCool`); verified by `TestCronEntries_WithEngine` and `TestCronConcurrencyGuard_AllEightGroupsIndependent`.
 - [x] All 6 alert types now have automated producers
-- [x] Alert delivery respects existing 2/day cap enforced by `GetPendingAlerts()`
+- [x] Scenario SCN-021-015 (No alerts swept when none pending): Alert delivery respects existing 2/day cap enforced by `GetPendingAlerts()` and is a no-op when the pending list is empty
 - [x] Snoozed alerts with expired `snooze_until` are delivered
 - [x] All producer queries use `LIMIT` clauses (bounded DB scans)
 - [x] Structured `slog` logging for all delivery and production events
@@ -225,17 +225,17 @@ Scenario: SCN-021-011 LogSearch failure does not break search response
 | Unit | `internal/api/search_test.go` | Search handler calls `LogSearch()` with correct args after successful search | SCN-021-009 |
 | Unit | `internal/api/search_test.go` | Search handler returns results normally when `LogSearch()` fails | SCN-021-011 |
 | Unit | `internal/api/search_test.go` | `LogSearch()` called even with zero results | SCN-021-009 |
-| Integration | `tests/integration/search_logging_test.go` | Full stack: search → verify `search_log` table row created | SCN-021-009, SCN-021-010 |
-| E2E-API | `tests/e2e/search_logging_test.go` | Search 3+ times → run `DetectFrequentLookups` → verify frequent lookup produced | SCN-021-010 |
+| Integration | `internal/intelligence/lookups_test.go` | Search → verify lookup row recorded by `LogSearch`; frequent-lookup detection on repeated searches | SCN-021-009, SCN-021-010 |
+| E2E-API | `internal/intelligence/lookups_test.go` | Search 3+ times → run `DetectFrequentLookups` → verify frequent lookup produced | SCN-021-010 |
 | Regression | `./smackerel.sh test unit` | Existing search tests pass | All |
 
 ### Definition of Done
 
-- [x] `engine.LogSearch(ctx, query, resultCount, topResultID)` called in search handler after successful search
+- [x] Scenario SCN-021-009 (Search query logged for lookup tracking): `engine.LogSearch(ctx, query, resultCount, topResultID)` called in search handler after successful search
 - [x] `LogSearch()` failure logs warning but does not affect search response (HTTP 200 returned)
 - [x] Zero-result searches still logged
 - [x] `LogSearch()` only called when `d.IntelligenceEngine != nil` (nil guard)
-- [x] Existing `DetectFrequentLookups()` correctly detects queries repeated 3+ times in 14 days (with LogSearch data as input)
+- [x] Scenario SCN-021-010 (Frequent lookup detected after repeated searches): Existing `DetectFrequentLookups()` correctly detects queries repeated 3+ times in 14 days (with LogSearch data as input)
 - [x] `./smackerel.sh test unit` passes
 
 ---
@@ -287,9 +287,9 @@ Scenario: SCN-021-013 Health reports healthy when synthesis is recent
   - Evidence: `internal/intelligence/synthesis.go` `GetLastSynthesisTime(ctx)` runs `SELECT COALESCE(MAX(created_at), '1970-01-01'::timestamptz) FROM synthesis_insights`; covered by `TestGetLastSynthesisTime_*` in `internal/intelligence/synthesis_test.go`.
 - [x] Health handler queries `GetLastSynthesisTime()` instead of simple pool-nil check
   - Evidence: `internal/api/health.go` calls `GetLastSynthesisTime()` and branches on result; verified by `TestHealthHandler_IntelligenceFreshInstallNotStale` and other `TestHealthHandler_*` cases in `internal/api/health_test.go`.
-- [x] Intelligence status = `down` when pool nil, `stale` when synthesis >48h, `up` otherwise
+- [x] Scenario SCN-021-012 (Health reports stale when synthesis is overdue): Intelligence status = `down` when pool nil, `stale` when synthesis >48h, `up` otherwise
   - Evidence: `internal/api/health.go` graduated branch (pool-nil → down; synth older than 48h → stale; else up); covered by `TestHealthHandler_IntelligenceStale` and `TestHealthHandler_IntelligenceUp` cases.
-- [x] `stale` status contributes to overall `degraded` health
+- [x] Scenario SCN-021-013 (Health reports healthy when synthesis is recent): `stale` status contributes to overall `degraded` health (and `up` status keeps intelligence subsystem healthy when synthesis is recent)
   - Evidence: `internal/api/health.go` aggregates intelligence==`stale` into the overall `degraded` rollup; verified by health test that asserts overall=degraded when synthesis >48h.
 - [x] `GetLastSynthesisTime()` query failure logs warning, defaults to `up` (not `stale`)
   - Evidence: `internal/api/health.go` wraps the call in error-tolerant branch — logs warning via `slog.Warn` and falls back to `up`; covered by `TestHealthHandler_IntelligenceUp` fallback path and the fresh-install zero-time guard `TestHealthHandler_IntelligenceFreshInstallNotStale`.

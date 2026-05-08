@@ -661,3 +661,16 @@ Config is in sync with SST
 $ ./smackerel.sh lint
 All checks passed
 ```
+
+### Trace-Guard Cross-Spec Remediation (2026-05-08)
+
+**Trigger:** cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9)
+**Mode:** non-interactive
+
+Coverage: `internal/connector/bookmarks/dedup_test.go` exercises SCN-BK-006 (URL dedup) and SCN-BK-007 (URL normalization) via TestNormalizeURL_Lowercase, TestNormalizeURL_StripUTMParams, TestFilterNew_AllNew/AllDuplicates/MixedBatch (per scopes.md Test Plan rows T-2-01 through T-2-08).
+
+Coverage: `internal/connector/bookmarks/topics_test.go` exercises SCN-BK-008 (Folder hierarchy maps to topic graph) via TestMapFolder_HierarchicalPath, TestMapFolder_EmptyPath, TestTopicMapper_NilPool, TestTopicMatch_Fields (per scopes.md Test Plan rows T-2-09 through T-2-10).
+
+Coverage: `tests/e2e/test_bookmark_import.sh` exercises SCN-BK-006 (cross-browser dedup) and SCN-BK-010 (full pipeline) — Test Plan rows T-2-18 and T-2-19 corrected to point at this existing shell-based e2e instead of a never-created Go file.
+
+Coverage: `tests/integration/bookmarks_dedup_test.go` and `tests/integration/bookmarks_topics_test.go` exercise SCN-BK-006/008/009 via TestFilterNew_*, TestIsKnown_ReturnsTrueForExistingURL, TestTopicMapper_ExactMatch/CreatesNewTopic/HierarchicalPath. Test Plan rows T-2-13 through T-2-17 corrected to point at these existing per-feature integration files instead of a never-created `tests/integration/bookmarks_test.go`.

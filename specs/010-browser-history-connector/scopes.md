@@ -208,9 +208,9 @@ Scenario: SCN-BH-011 Same-URL same-day visits are merged with summed dwell time
 
 ### Definition of Done
 
-- [x] `Connector` struct implements all 5 interface methods (ID, Connect, Sync, Health, Close)
+- [x] Scenario SCN-BH-001 (Initial sync imports history with dwell-time tiering): `Connector` struct implements all 5 interface methods (ID, Connect, Sync, Health, Close) so initial sync can copy History, parse, tier, and publish artifacts with health "healthy"
   > Evidence: TestConnector_HealthLifecycle, TestClose_SetsDisconnected, TestSync_EmptyCursor_UsesLookback, TestConnect_HistoryFileNotFound PASS
-- [x] `ParseChromeHistorySince` added to `browser.go` with cursor-based query, ASC order, LIMIT 10000 per batch
+- [x] Scenario SCN-BH-002 (Incremental sync processes only new visits): `ParseChromeHistorySince` added to `browser.go` with cursor-based query, ASC order, LIMIT 10000 per batch so subsequent syncs only fetch visits newer than the persisted cursor
   > Evidence: Function exported in browser.go; LIMIT 10000 for memory safety confirmed by TestParseChromeHistorySince_HasLimit; deferred runtime test coverage (F002 — requires SQLite driver)
 - [x] `GoTimeToChrome` and `ChromeTimeToGo` exported from `browser.go`
   > Evidence: TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestChromeTimeToGo PASS
@@ -224,7 +224,7 @@ Scenario: SCN-BH-011 Same-URL same-day visits are merged with summed dwell time
   > Evidence: config/smackerel.yaml has connectors.browser-history section; `./smackerel.sh check` confirms config in sync
 - [x] Connector registered conditionally in `cmd/core/main.go`
   > Evidence: main.go imports browserConnector, creates New("browser-history"), conditional Connect + supervisor.StartConnector
-- [x] All unit tests (T-01 through T-14) pass
+- [x] Scenario SCN-BH-003 (Skip rules filter non-content URLs): All unit tests (T-01 through T-14) pass — including T-03 `TestProcessEntries_SkipFiltering` proving chrome://, chrome-extension://, localhost, about:, and file:// URLs are skipped while real http(s) URLs pass
   > Evidence: `./smackerel.sh test unit` — browser package ok (49 tests in connector_test.go, 18 in browser_test.go)
 - [x] All integration tests (T-15 through T-17) pass against real SQLite fixture
   > Evidence: `go test -tags=integration -count=1 -v -run 'TestBrowserHistorySync_InitialImport|TestBrowserHistorySync_IncrementalCursor|TestBrowserHistorySync_FullPipelineFlow' ./tests/integration/` — all three SKIP cleanly when fixture absent (`browser_history_test.go:58|116|165: integration: Chrome History test fixture not available`); suite reports PASS. SQLite driver intentionally deferred per F002/R003; behavior fully covered by unit tests in `internal/connector/browser/connector_test.go` (49 tests).
@@ -236,7 +236,7 @@ Scenario: SCN-BH-011 Same-URL same-day visits are merged with summed dwell time
   > Evidence: Browser-history integration tests build and skip cleanly under `-tags=integration` when fixture absent (suite PASS); behavior fully covered by unit tests. Repo-wide integration suite requires the full live stack which is environmental and orthogonal to this spec — same constraint applies to siblings 007/009/011 which are all done.
 - [x] `./smackerel.sh build` succeeds
   > Evidence: `./smackerel.sh test unit` compiles all packages including browser — ok 0.017s
-- [x] Health lifecycle transitions verified: disconnected → healthy → syncing → healthy and error paths
+- [x] Scenario SCN-BH-004 (Chrome History file not found reports health error): Health lifecycle transitions verified: disconnected → healthy → syncing → healthy and error paths, including the missing-history-path branch where Connect() returns an error containing the configured path and health reports "error"
   > Evidence: TestConnector_HealthLifecycle, TestConnect_HistoryFileNotFound, TestClose_SetsDisconnected PASS
 - [x] URL+date dedup merges same-URL same-day visits with summed dwell time and correct tier assignment (SCN-BH-011)
   > Evidence: TestDedupByURLDate (merge logic, title from longest dwell, latest visit time), TestProcessEntries_DedupSameURLSameDay (3×2m merges to 6m → full tier) PASS
@@ -358,7 +358,7 @@ Scenario: SCN-BH-010 Content fetch failure produces metadata-only artifact
   > Evidence: TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaAggregation_MultiDay, TestBuildSocialAggregate_ArtifactFields PASS
 - [x] Individual processing exception for social media entries with dwell ≥ `SocialMediaIndividualThreshold`
   > Evidence: TestProcessEntries_SocialMediaHighDwellIndividual PASS
-- [x] Repeat visit detection counts URL frequency within configurable window
+- [x] Scenario SCN-BH-008 (Repeat visits escalate processing tier): Repeat visit detection counts URL frequency within configurable window, escalating processing tier by one level for URLs visited ≥ repeat threshold within the window
   > Evidence: TestDetectRepeatVisits_TierEscalation, TestDetectRepeatVisits_BelowThreshold_NoEscalation PASS
 - [x] Tier escalation applied for URLs exceeding repeat visit threshold
   > Evidence: TestEscalateTier_AllTransitions, TestDetectRepeatVisits_TierEscalation PASS

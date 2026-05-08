@@ -113,12 +113,23 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runEndedAt": "2026-04-23T00:00:00Z",
       "summary": "Manual cross-check verified spec implementation files exist on disk: internal/api/health.go (448 lines, 6 typed interfaces Pipeliner/Searcher/DigestGenerator/WebUI/OAuthFlow/TelegramHealthChecker, mlClientOnce sync.Once), internal/api/router.go (309 lines, structuredLogger excludes /api/health, /ping, /readyz, /metrics), internal/api/capture.go (writeJSON+writeError helpers), internal/api/intelligence.go (160 lines, all handlers use writeJSON), internal/connector/supervisor.go (475 lines, getSyncInterval at line 399 replaces hardcoded 5min), cmd/core/connectors.go (cfg.BookmarksImportDir/BrowserHistoryPath/MapsImportDir from config.Config, zero os.Getenv). go test passes for api/connector/config packages including -race for TestMLClient_ConcurrentAccess."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runEndedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Added concrete file paths to scope 1/2/3 Test Plan rows (internal/api/health_test.go, internal/api/router.go, internal/api/capture.go, internal/api/intelligence_test.go, internal/config/validate_test.go, internal/connector/sync_interval_test.go); tagged DoD bullets for SCN-023-01/02/04/06/07 with 'Scenario SCN-023-NN (title):' prefix; appended trace-guard remediation section to report.md describing coverage in internal/config/validate_test.go, internal/api/intelligence_test.go, internal/connector/sync_interval_test.go. trace-guard PASSED (0 warnings)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

@@ -383,12 +383,23 @@
       "startedAt": "2026-04-07T20:38:00Z",
       "completedAt": "2026-04-07T20:50:00Z",
       "summary": "Spec review completed. Verified alignment between spec.md requirements, design.md components, scopes.md plan, and delivered code. All 13 requirements have implementation evidence. No spec drift detected."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-08T00:00:00Z",
+      "completedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Added scenario-manifest.json entry SCN-007-030 (Recently-archived note gets light tier despite recency) referencing internal/connector/keep/qualifiers_test.go::TestQualifierRecentArchivedGetsLight. trace-guard PASSED (0 warnings)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-07T20:50:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",

@@ -210,7 +210,7 @@ Scenario: SCN-BK-005 Corrupted export file is skipped without failing sync
   > Evidence: TestCursorEncodeDecodeCycle, TestSyncIncrementalSkipsProcessed PASS
 - [x] Metadata enrichment: each artifact has `source_format`, `import_file`, `folder_path`, `processing_tier` in Metadata
   > Evidence: TestSyncChromeJSON asserts all metadata fields present
-- [x] Config section added to `config/smackerel.yaml` with all fields per R-011
+- [x] Scenario SCN-BK-004 (Config validation rejects invalid settings): Config section added to `config/smackerel.yaml` with all fields per R-011, and Connect() rejects missing/empty/non-existent import_dir with descriptive errors
   > Evidence: config/smackerel.yaml has connectors.bookmarks section at line 44
 - [x] Connector registered and auto-started in `cmd/core/main.go`
   > Evidence: main.go line 134: `bmConn := bookmarksConnector.NewConnector("bookmarks")`, registered and auto-started
@@ -340,28 +340,28 @@ Scenario: SCN-BK-010 Full end-to-end: export to searchable artifacts with topics
 | T-2-10 | TestMapFolder_EmptyPath | unit | `internal/connector/bookmarks/topics_test.go` | Empty folder → nil results, no topics created | SCN-BK-008 |
 | T-2-11 | TestResolveSegment_ExactMatch | unit | `internal/connector/bookmarks/topics_test.go` | Existing topic "Machine Learning", query "machine learning" → exact match | SCN-BK-009 |
 | T-2-12 | TestResolveSegment_CreateNew | unit | `internal/connector/bookmarks/topics_test.go` | No match → new topic created with state "emerging" | SCN-BK-009 |
-| T-2-13 | TestDedupIntegration | integration | `tests/integration/bookmarks_test.go` | Sync export A → sync export B (overlapping URLs) → only new URLs produce artifacts | SCN-BK-006 |
-| T-2-14 | TestTopicMappingIntegration | integration | `tests/integration/bookmarks_test.go` | Bookmarks with folders → topics created, BELONGS_TO edges exist in DB | SCN-BK-008 |
-| T-2-15 | TestTopicFuzzyMatchIntegration | integration | `tests/integration/bookmarks_test.go` | Folder "machine learning" matches existing topic "Machine Learning" via pg_trgm | SCN-BK-009 |
-| T-2-16 | TestTopicHierarchyEdges | integration | `tests/integration/bookmarks_test.go` | Nested folder path → CHILD_OF edges between parent and child topics | SCN-BK-008 |
-| T-2-17 | TestTopicMomentumUpdate | integration | `tests/integration/bookmarks_test.go` | After linking artifacts → topic capture counts incremented | SCN-BK-008 |
-| T-2-18 | E2E: Full bookmark pipeline with dedup and topics | e2e | `tests/e2e/bookmarks_test.go` | Drop 50-bookmark export → 50 artifacts with topics and edges → drop overlapping 30-bookmark export → only 10 new artifacts | SCN-BK-010 |
-| T-2-19 | Regression E2E: cross-browser dedup | e2e | `tests/e2e/bookmarks_test.go` | Chrome JSON + Firefox HTML with same URLs → no duplicate artifacts, metadata from first import preserved | SCN-BK-006, SCN-BK-010 |
+| T-2-13 | TestDedupIntegration | integration | `tests/integration/bookmarks_dedup_test.go` | Sync export A → sync export B (overlapping URLs) → only new URLs produce artifacts | SCN-BK-006 |
+| T-2-14 | TestTopicMappingIntegration | integration | `tests/integration/bookmarks_topics_test.go` | Bookmarks with folders → topics created, BELONGS_TO edges exist in DB | SCN-BK-008 |
+| T-2-15 | TestTopicFuzzyMatchIntegration | integration | `tests/integration/bookmarks_topics_test.go` | Folder "machine learning" matches existing topic "Machine Learning" via pg_trgm | SCN-BK-009 |
+| T-2-16 | TestTopicHierarchyEdges | integration | `tests/integration/bookmarks_topics_test.go` | Nested folder path → CHILD_OF edges between parent and child topics | SCN-BK-008 |
+| T-2-17 | TestTopicMomentumUpdate | integration | `tests/integration/bookmarks_topics_test.go` | After linking artifacts → topic capture counts incremented | SCN-BK-008 |
+| T-2-18 | E2E: Full bookmark pipeline with dedup and topics | e2e | `tests/e2e/test_bookmark_import.sh` | Drop 50-bookmark export → 50 artifacts with topics and edges → drop overlapping 30-bookmark export → only 10 new artifacts | SCN-BK-010 |
+| T-2-19 | Regression E2E: cross-browser dedup | e2e | `tests/e2e/test_bookmark_import.sh` | Chrome JSON + Firefox HTML with same URLs → no duplicate artifacts, metadata from first import preserved | SCN-BK-006, SCN-BK-010 |
 | T-2-R1 | Regression: invalid URL does not crash normalizer | unit | `internal/connector/bookmarks/dedup_test.go` | Empty string, `://`, garbage → returned as-is, no panic | SCN-BK-007 |
 
 ### Definition of Done
 
 - [x] `internal/connector/bookmarks/dedup.go` created with `URLDeduplicator` and `NormalizeURL()`
   > Evidence: File exists (152 lines), `./smackerel.sh check` passes
-- [x] URL normalization handles lowercase scheme+host, trailing slash removal, tracking param stripping per R-004
+- [x] Scenario SCN-BK-007 (URL normalization strips tracking parameters): URL normalization handles lowercase scheme+host, trailing slash removal, tracking param stripping per R-004
   > Evidence: TestNormalizeURL_Lowercase, TestNormalizeURL_StripTrailingSlash, TestNormalizeURL_StripUTMParams PASS
-- [x] `FilterNew()` correctly identifies and skips already-synced URLs
+- [x] Scenario SCN-BK-006 (URL dedup prevents reprocessing same URL across exports): `FilterNew()` correctly identifies and skips already-synced URLs
   > Evidence: TestFilterNew_NilPool PASS (DB-dependent tests require live stack)
 - [x] `internal/connector/bookmarks/topics.go` created with `TopicMapper`
   > Evidence: File exists (207 lines), `./smackerel.sh check` passes
 - [x] Folder-to-topic 3-stage cascade works (exact → fuzzy → create)
   > Evidence: resolveSegment implements 3-stage cascade; TestTopicMapper_NilPool, TestTopicMatch_Fields PASS
-- [x] Hierarchical folder paths produce parent-child topic relationships with `CHILD_OF` edges
+- [x] Scenario SCN-BK-008 (Folder hierarchy maps to topic graph): Hierarchical folder paths produce parent-child topic relationships with `CHILD_OF` edges
   > Evidence: MapFolder creates CHILD_OF edges between hierarchical segments
 - [x] `BELONGS_TO` edges created from artifacts to their folder topics
   > Evidence: CreateTopicEdge inserts BELONGS_TO edges with ON CONFLICT DO NOTHING
