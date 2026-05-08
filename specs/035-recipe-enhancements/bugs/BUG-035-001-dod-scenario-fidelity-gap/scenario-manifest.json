@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "featureDir": "specs/035-recipe-enhancements/bugs/BUG-035-001-dod-scenario-fidelity-gap",
+  "generatedBy": "bubbles.bug:BUG-035-001",
+  "generatedAt": "2026-05-08T19:00:00Z",
+  "notes": "Scenario contract registry for BUG-035-001 (artifact-only governance bug, full traceability-guard close-out). The 7 scenarios below match the Gherkin Scenarios section of scopes.md. The 'regression test' for an artifact-only governance bug is the trace-guard / artifact-lint / regression-baseline-guard / repo CLI check chain itself, which is recorded as evidenceRefs against report.md. No production code paths are exercised; no separate live-stack test files are linked because the contract is purely about spec-folder governance.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-035-BUG001-001",
+      "name": "Active Scope 01 Test Plan rows reference test files that exist on disk",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "testId": "active-scope path_exists check"}
+      ],
+      "evidenceRefs": [
+        {"type": "trace-guard-run", "location": "report.md#a-trace-guard"},
+        {"type": "implementation-diff", "location": "report.md#a-active-scope-01-test-plan-path-correction"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-002",
+      "name": "Phase B aspirational scopes are parked, not analysed by the trace guard",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "testId": "build_scope_analysis_units active-scope regex"}
+      ],
+      "evidenceRefs": [
+        {"type": "trace-guard-run", "location": "report.md#a-trace-guard"},
+        {"type": "implementation-diff", "location": "report.md#c-phase-b-scope-nn--parked-scope-nn-renames"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-003",
+      "name": "Active Scope Inventory + Parked Scope Queue tables document the new state",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "specs/035-recipe-enhancements/scopes.md", "testId": "Active Scope Inventory + Parked Scope Queue + Parked Scope Contract Notes sections present"}
+      ],
+      "evidenceRefs": [
+        {"type": "implementation-diff", "location": "report.md#b-active-scope-inventory--parked-scope-queue--parked-scope-contract-notes-insertion"},
+        {"type": "spec-pattern-reference", "location": "specs/041-qf-companion-connector/scopes.md"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-004",
+      "name": "Shared Planning Expectations terminator separates active inventory from parked bodies",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "testId": "build_scope_analysis_units Shared Planning Expectations terminator"}
+      ],
+      "evidenceRefs": [
+        {"type": "implementation-diff", "location": "report.md#d-shared-planning-expectations-terminator"},
+        {"type": "trace-guard-run", "location": "report.md#a-trace-guard"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-005",
+      "name": "Bug folder has the canonical 6-artifact shape",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/artifact-lint.sh", "testId": "Required artifact exists check for bug folder"}
+      ],
+      "evidenceRefs": [
+        {"type": "artifact-lint-run", "location": "report.md#e-bug-folder-artifact-lint"},
+        {"type": "implementation-diff", "location": "report.md#e-bug-folder-canonical-6-artifact-shape"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-006",
+      "name": "Trace guard returns PASSED for spec 035",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/traceability-guard.sh", "testId": "spec 035 RESULT: PASSED end-to-end"}
+      ],
+      "evidenceRefs": [
+        {"type": "trace-guard-run", "location": "report.md#a-trace-guard"},
+        {"type": "failure-decomposition", "location": "report.md#failure-decomposition-final-state"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-035-BUG001-007",
+      "name": "Parent regression baseline guard still passes",
+      "scope": "scope-1",
+      "status": "delivered",
+      "behaviorClass": "governance",
+      "changeType": "bugfix",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/regression-baseline-guard.sh", "testId": "G044 + G045 + G046 all pass for spec 035"}
+      ],
+      "evidenceRefs": [
+        {"type": "regression-baseline-guard-run", "location": "report.md#c-regression-baseline-guard"}
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
