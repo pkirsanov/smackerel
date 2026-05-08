@@ -1156,22 +1156,70 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   STAGE_DIR="$(mktemp -d)"
   trap 'rm -rf "$STAGE_DIR"' EXIT
 
-  # Strip the volatile `Generated:` line so the bundle is reproducible.
-  grep -v '^# Generated: ' "$OUTPUT_FILE" > "$STAGE_DIR/${TARGET_ENV}.env"
-  cp "$NATS_CONF_FILE" "$STAGE_DIR/nats.conf"
-  chmod 0644 "$STAGE_DIR/${TARGET_ENV}.env" "$STAGE_DIR/nats.conf"
+  # Bundle layout (extracted by adapter `apply.sh` into <composeDir>/):
+  #   ./app.env                    — generated env file (renamed from <env>.env)
+  #   ./nats.conf                  — NATS server config
+  #   ./docker-compose.yml         — deployment compose (no `build:` blocks)
+  #   ./nats_contract.json         — schema registry consumed by ML sidecar
+  #   ./prompt_contracts/*.yaml    — prompt YAMLs mounted into core + ml
+  #   ./bundle-manifest.yaml       — manifest of files in this bundle
+  #
+  # Determinism: same (sourceSha, env, smackerel.yaml content,
+  # deploy/compose.deploy.yml, config/prompt_contracts/, config/nats_contract.json)
+  # MUST produce the same bundle bytes (and therefore the same sha256). Volatile
+  # content (the `Generated:` timestamp comment in the env file) is stripped
+  # from the bundle copy.
+  COMPOSE_TEMPLATE="$REPO_ROOT/deploy/compose.deploy.yml"
+  NATS_CONTRACT_FILE="$REPO_ROOT/config/nats_contract.json"
+  PROMPT_CONTRACTS_DIR="$REPO_ROOT/config/prompt_contracts"
 
-  cat > "$STAGE_DIR/bundle-manifest.yaml" <<EOF
-bundleVersion: 1
-sourceSha: ${BUNDLE_SOURCE_SHA}
-environment: ${TARGET_ENV}
-files:
-  - ${TARGET_ENV}.env
-  - nats.conf
-EOF
+  [[ -f "$COMPOSE_TEMPLATE" ]] || { echo "ERROR: deploy compose template not found: $COMPOSE_TEMPLATE" >&2; exit 1; }
+  [[ -f "$NATS_CONTRACT_FILE" ]] || { echo "ERROR: nats contract not found: $NATS_CONTRACT_FILE" >&2; exit 1; }
+  [[ -d "$PROMPT_CONTRACTS_DIR" ]] || { echo "ERROR: prompt contracts dir not found: $PROMPT_CONTRACTS_DIR" >&2; exit 1; }
+
+  # Strip the volatile `Generated:` line so the bundle is reproducible.
+  # Renamed to app.env so the deploy compose can reference it generically.
+  grep -v '^# Generated: ' "$OUTPUT_FILE" > "$STAGE_DIR/app.env"
+  cp "$NATS_CONF_FILE" "$STAGE_DIR/nats.conf"
+  cp "$COMPOSE_TEMPLATE" "$STAGE_DIR/docker-compose.yml"
+  cp "$NATS_CONTRACT_FILE" "$STAGE_DIR/nats_contract.json"
+  mkdir -p "$STAGE_DIR/prompt_contracts"
+  cp "$PROMPT_CONTRACTS_DIR"/*.yaml "$STAGE_DIR/prompt_contracts/"
+  chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/nats.conf" \
+    "$STAGE_DIR/docker-compose.yml" "$STAGE_DIR/nats_contract.json" \
+    "$STAGE_DIR/prompt_contracts"/*.yaml
+
+  # Deterministic file list for bundle-manifest.yaml (sorted).
+  PROMPT_FILES_LIST="$(cd "$STAGE_DIR" && find prompt_contracts -maxdepth 1 -type f -name '*.yaml' | LC_ALL=C sort)"
+
+  {
+    echo "bundleVersion: 1"
+    echo "sourceSha: ${BUNDLE_SOURCE_SHA}"
+    echo "environment: ${TARGET_ENV}"
+    echo "files:"
+    echo "  - app.env"
+    echo "  - nats.conf"
+    echo "  - docker-compose.yml"
+    echo "  - nats_contract.json"
+    while IFS= read -r f; do
+      echo "  - $f"
+    done <<< "$PROMPT_FILES_LIST"
+  } > "$STAGE_DIR/bundle-manifest.yaml"
   chmod 0644 "$STAGE_DIR/bundle-manifest.yaml"
 
   BUNDLE_FILE="$BUNDLE_OUTPUT_DIR/config-bundle-${TARGET_ENV}-${BUNDLE_SOURCE_SHA}.tar.gz"
+
+  # Build deterministic file list. tar's --sort=name will recurse into the
+  # prompt_contracts directory automatically, so we only list it once. Top-level
+  # files are listed in LC_ALL=C name order to make the argv deterministic too.
+  TAR_FILES=(
+    "app.env"
+    "bundle-manifest.yaml"
+    "docker-compose.yml"
+    "nats.conf"
+    "nats_contract.json"
+    "prompt_contracts"
+  )
 
   # Deterministic tar: sorted entries, fixed owner/group, fixed mtime, no extended attrs.
   tar \
@@ -1183,7 +1231,7 @@ EOF
     --format=ustar \
     -C "$STAGE_DIR" \
     -cf - \
-    "${TARGET_ENV}.env" "nats.conf" "bundle-manifest.yaml" \
+    "${TAR_FILES[@]}" \
     | gzip -n -9 > "$BUNDLE_FILE"
 
   chmod 0644 "$BUNDLE_FILE"

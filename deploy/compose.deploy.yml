@@ -1,0 +1,210 @@
+# Smackerel deployment compose (Build-Once Deploy-Many — bubbles G074)
+#
+# This file is the ONLY compose surface adapter `apply.sh` is allowed to invoke.
+# It is shipped INSIDE every config bundle (config-bundle-<env>-<sourceSha>.tar.gz)
+# and extracted into the operator host's `composeDir` before container start.
+#
+# Contract (NON-NEGOTIABLE):
+#   - Container images come from the registry by digest only. SMACKEREL_CORE_IMAGE
+#     and SMACKEREL_ML_IMAGE are EXPORTED by apply.sh from --image-core/--image-ml.
+#     There are NO `:-` fallback defaults: if either is unset, compose fails loud.
+#   - There are NO `build:` blocks. The adapter MUST NOT compile anything.
+#   - All file references are relative to this compose file's own directory
+#     (i.e. <composeDir>/), populated from the extracted bundle.
+#   - Bound host ports come from the extracted env file (./app.env).
+#   - All ports bind to 127.0.0.1 only. External exposure is owned by the host
+#     reverse proxy (Caddy) running outside this stack.
+#   - Volume names embed the project (env) suffix, e.g. smackerel-home-lab-postgres-data.
+#     They are declared in app.env via POSTGRES_VOLUME_NAME etc. so the bundle
+#     environment owns the persistence boundary.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" pg_isready -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -h 127.0.0.1 -p ${POSTGRES_CONTAINER_PORT} -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atqc 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    labels:
+      com.smackerel.component: postgres
+      com.smackerel.lifecycle: persistent
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  nats:
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+    command: ["--config", "/etc/nats/nats.conf"]
+    ports:
+      - "127.0.0.1:${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
+      - "127.0.0.1:${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
+    volumes:
+      - nats-data:/data
+      - ./nats.conf:/etc/nats/nats.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${NATS_MONITOR_PORT}/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      com.smackerel.component: nats
+      com.smackerel.lifecycle: ephemeral
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  smackerel-core:
+    image: ${SMACKEREL_CORE_IMAGE}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+    env_file:
+      - ./app.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: ${CORE_CONTAINER_PORT}
+      LOG_LEVEL: info
+      AGENT_SCENARIO_DIR: /app/prompt_contracts
+      PROMPT_CONTRACTS_DIR: /app/prompt_contracts
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    volumes:
+      - ./prompt_contracts:/app/prompt_contracts:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    labels:
+      com.smackerel.component: core
+      com.smackerel.lifecycle: ephemeral
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  smackerel-ml:
+    image: ${SMACKEREL_ML_IMAGE}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+    env_file:
+      - ./app.env
+    environment:
+      PROMPT_CONTRACTS_DIR: /app/prompt_contracts
+    volumes:
+      - ./prompt_contracts:/app/prompt_contracts:ro
+      - ./nats_contract.json:/config/nats_contract.json:ro
+    stop_grace_period: 15s
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${ML_CONTAINER_PORT}/health')"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    labels:
+      com.smackerel.component: ml
+      com.smackerel.lifecycle: ephemeral
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  ollama:
+    image: ollama/ollama:0.6
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+    volumes:
+      - ollama-data:/root/.ollama
+    profiles:
+      - ollama
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${OLLAMA_CONTAINER_PORT}/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    labels:
+      com.smackerel.component: ollama
+      com.smackerel.lifecycle: persistent
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  postgres-data:
+    name: ${POSTGRES_VOLUME_NAME}
+  nats-data:
+    name: ${NATS_VOLUME_NAME}
+  ollama-data:
+    name: ${OLLAMA_VOLUME_NAME}
