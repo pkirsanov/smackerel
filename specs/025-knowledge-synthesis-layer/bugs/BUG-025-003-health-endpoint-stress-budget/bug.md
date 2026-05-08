@@ -13,9 +13,9 @@
 - [x] Reported
 - [x] Confirmed by upstream BUG-039 test-phase stress evidence
 - [x] In Progress
-- [ ] Fixed
-- [ ] Verified
-- [ ] Closed
+- [x] Fixed
+- [x] Verified
+- [x] Closed
 
 ## Reproduction Steps
 1. Start from the current repaired shared stress readiness path and the current BUG-039 recommendation stress fix.
@@ -82,3 +82,13 @@ Precise technical root cause remains open for the implementation owner. The next
 - Parent scenario: `SCN-025-23` Health endpoint includes knowledge stats
 - Routed from: `specs/039-recommendations-engine/bugs/BUG-039-003-recommendation-stress-zero-samples/` test phase residual
 - Sibling bugs: `BUG-025-001-knowledge-stats-empty-store`, `BUG-025-002-knowledge-e2e-external-url`
+
+## Resolution
+
+**Root Cause:** The authenticated `/api/health` knowledge-section path allowed optional ML/Ollama probes to consume the full strict 2 second stress budget, and knowledge health stats refresh could add cold or expired-cache work on top of the auxiliary probe fan-out before the response completed. Under the stress test's 25 rapid authenticated calls, this pushed individual `/api/health` responses to 2.004s–2.027s, just over the strict `< 2s` per-call assertion in `tests/stress/knowledge_stress_test.go::TestKnowledge_HealthEndpointIncludesKnowledgeSection`. The protected stress budget was correct; the handler's auxiliary work budget was not.
+
+**Fix:** Added a 1.5 second `healthAuxiliaryProbeTimeout` ceiling to bound `checkMLSidecar`, `checkOllama`, and `mlClient` health probes; started authenticated knowledge health stats refresh concurrently with the existing probe fan-out (rather than serially after); and made `getCachedKnowledgeHealth` return the stale knowledge cache when refresh fails or exceeds the bounded context. Added two adversarial unit regressions in `internal/api/health_test.go`: `TestHealthKnowledgeStressBudgetWithSlowProbesAndColdStats` (slow optional probes plus cold stats must not push the response past the budget) and `TestHealthKnowledgeReturnsStaleCacheWhenRefreshTimesOut` (expired stale cache plus slow refresh must not block the response).
+
+**Fix Commit:** `9276735` `fix(025): BUG-025-003 — health endpoint stress budget (bug blocked, evidence captured)`
+
+**Re-Verification at HEAD `ca2c843` (2026-05-08):** Full stress gate (`COMPOSE_PROGRESS=plain timeout 1800 ./smackerel.sh test stress`) exited 0. `TestKnowledge_HealthEndpointIncludesKnowledgeSection` passed in 4.11s with all 25 rapid authenticated `/api/health` calls satisfying the strict `< 2s` per-call assertion (the prior failing run measured 2.004s–2.027s; the fix continues to hold). The first response's knowledge section was parsed and logged: `Knowledge stats: concepts=0, entities=0, pending=1100`. `TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests` remained green with `total=27146 ok=27146 unexpected_errors=0 timeout_errors=0 p95=1.006768166s max=1.884646563s` against the 10s budget. Go unit suite exit 0, including `internal/api` health regressions. The fix continues to hold across the Go 1.25.10 upgrade, photos chaos hardening, BUG-031-005 stress readiness fix, BUG-039-003 pgxpool deadlock fix, and BUG-040 hash-reveal hardening commits landed since the last validation pass on 2026-05-05. Full validate-phase evidence: [report.md → Validate Phase — Re-verification at HEAD ca2c843 — 2026-05-08](report.md).

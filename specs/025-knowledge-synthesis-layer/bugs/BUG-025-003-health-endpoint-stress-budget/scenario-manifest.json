@@ -30,7 +30,7 @@
           "testId": "TestStressReadinessCanary_Live"
         }
       ],
-      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z", "report.md#validate-phase--re-verification-at-head-ca2c843--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -67,7 +67,7 @@
           "testId": "TestKnowledgeHealth_ExistingFieldsPreserved"
         }
       ],
-      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z", "report.md#validate-phase--re-verification-at-head-ca2c843--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     },
@@ -96,7 +96,7 @@
           "testId": "TestKnowledge_HealthEndpointIncludesKnowledgeSection"
         }
       ],
-      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z"],
+      "evidenceRefs": ["report.md#final-validate-certification-attempt---2026-05-05t161800z", "report.md#validate-phase--re-verification-at-head-ca2c843--2026-05-08"],
       "replacedBy": null,
       "invalidatedBy": null
     }
