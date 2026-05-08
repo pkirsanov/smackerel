@@ -204,12 +204,21 @@
       "runStartedAt": "2026-04-24T00:15:00Z",
       "runEndedAt": "2026-04-24T00:16:00Z",
       "summary": "Manual cross-check: spec.md/design.md/scopes.md aligned with implementation. All 9 scopes Done with verified file:line evidence. Domain extraction path matches spec intent (universal extraction → domain dispatch → ML structured extraction → DB JSONB storage → search/Telegram surfacing)."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["trace-cleanup-diagnosis"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runEndedAt": "2026-05-08T00:00:00Z",
+      "summary": "Iter 10 trace-guard inventory only (no fixes applied). MIT-026-TRACE-001: Close 42 trace-guard failures via DoD-trace-prefix + report.md evidence references + Test Plan row additions. Owner: bubbles.implement (parent-expanded bugfix-fastlane future iteration). Trigger: Next bubbles.goal session OR dedicated trace-cleanup sprint. Estimated effort: medium (~3-4h). Failure breakdown: Type A (Gherkin scenario without faithful DoD): 17 — Scopes 4 (ML sidecar handler, 3 scenarios), 5 (recipe extraction, 1), 6 (product extraction, 1), 7 (pipeline integration, 2), 8 (search extension, 2), 9 (Telegram display, 1), and other scattered scenarios; Type C (path-missing): 3 — Scope 7 'Content below minimum length is skipped', Scope 8 'Search falls back to semantic when no domain results' (test files internal/pipeline/subscriber_test.go and internal/api/search_test.go DO exist but row paths point to non-existent files); Type D (report missing evidence reference): 14 — internal/api/search_test.go (×6, Scope 8), internal/pipeline/subscriber_test.go (×5 Scope 7 + ×3 Scope 3); Type E (no traceable Test Plan row): 7 — Scope 3 publisher row missing, Scope 4 ML sidecar 3 scenarios, Scope 8 SearchResult includes domain_data. Root cause: spec was completed in pre-traceability-guard era and the matrix between Gherkin scenarios, Test Plan rows, DoD bullets, and report.md evidence references was never populated to current G068 standards. The implementation tests EXIST and the implementation itself is correct (per spec-review entry above). Closure strategy: (1) Add `Scenario <ID>` prefix to 17 DoD bullets to map Gherkin → DoD; (2) Add 7 missing Test Plan rows pointing to existing `internal/{api,ml,pipeline,telegram}/*_test.go` files; (3) Add 14 evidence references in report.md citing internal/api/search_test.go and internal/pipeline/subscriber_test.go test functions; (4) Repoint 3 paths to actual existing test files. Sample fix: scopes.md Scope 5 DoD '`recipe-v1.json` schema enforced for recipe extraction' → 'Scenario \"Recipe extraction produces valid structured data (BS-001)\": `recipe-v1.json` schema enforced for recipe extraction'. Status / certification fields untouched."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-19T00:05:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
