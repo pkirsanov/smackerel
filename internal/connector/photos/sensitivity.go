@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -129,12 +130,16 @@ func (store *Store) MintRevealToken(ctx context.Context, input MintRevealTokenIn
 	if err != nil {
 		return nil, err
 	}
+	// MIT-040-S-001: hash the random secret and persist the digest so
+	// a leaked DB row cannot replay reveals; the wire blob still carries
+	// the plaintext secret to the caller exactly once.
+	secretHash := hashRevealSecret(plaintext)
 	id := uuid.New()
 	expiresAt := now.UTC().Add(ttl)
 	createdAt := now.UTC()
 	if _, err := store.pool.Exec(ctx, `
-		INSERT INTO photo_reveal_tokens (id, photo_id, actor_id, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5)`, id, input.PhotoID, actor, expiresAt, createdAt); err != nil {
+		INSERT INTO photo_reveal_tokens (id, photo_id, actor_id, expires_at, created_at, secret_hash)
+		VALUES ($1, $2, $3, $4, $5, $6)`, id, input.PhotoID, actor, expiresAt, createdAt, secretHash); err != nil {
 		return nil, fmt.Errorf("persist reveal token: %w", err)
 	}
 	return &RevealToken{
@@ -150,11 +155,20 @@ func (store *Store) MintRevealToken(ctx context.Context, input MintRevealTokenIn
 // ConsumeRevealToken validates a presented token. On success the row is
 // marked consumed and the function returns the persisted record so the
 // caller can audit the reveal.
+//
+// MIT-040-S-007 (TOCTOU): the SELECT uses FOR UPDATE so concurrent
+// consumers serialize on the row lock, and the UPDATE carries an
+// explicit `WHERE consumed_at IS NULL` predicate plus a RowsAffected
+// check so a race-loser cannot succeed even if the FOR UPDATE is later
+// removed. MIT-040-S-001: the presented secret half of the token is
+// SHA-256'd and constant-time compared against `secret_hash`; a
+// mismatch collapses to ErrRevealTokenNotFound so the caller cannot
+// distinguish "wrong secret" from "token does not exist".
 func (store *Store) ConsumeRevealToken(ctx context.Context, photoID uuid.UUID, actorID string, raw string, now time.Time) (*RevealToken, error) {
 	if store == nil || store.pool == nil {
 		return nil, fmt.Errorf("photos: store pool is nil")
 	}
-	id, _, err := decodeRevealToken(raw)
+	id, presentedSecret, err := decodeRevealToken(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -164,10 +178,12 @@ func (store *Store) ConsumeRevealToken(ctx context.Context, photoID uuid.UUID, a
 	}
 	defer tx.Rollback(ctx)
 	var token RevealToken
+	var storedHash []byte
 	if err := tx.QueryRow(ctx, `
-		SELECT id, photo_id, actor_id, expires_at, consumed_at, created_at
+		SELECT id, photo_id, actor_id, expires_at, consumed_at, created_at, secret_hash
 		  FROM photo_reveal_tokens
-		 WHERE id=$1`, id).Scan(&token.ID, &token.PhotoID, &token.ActorID, &token.ExpiresAt, &token.ConsumedAt, &token.CreatedAt); err != nil {
+		 WHERE id=$1
+		 FOR UPDATE`, id).Scan(&token.ID, &token.PhotoID, &token.ActorID, &token.ExpiresAt, &token.ConsumedAt, &token.CreatedAt, &storedHash); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRevealTokenNotFound
 		}
@@ -185,8 +201,26 @@ func (store *Store) ConsumeRevealToken(ctx context.Context, photoID uuid.UUID, a
 	if !strings.EqualFold(strings.TrimSpace(actorID), strings.TrimSpace(token.ActorID)) {
 		return nil, ErrRevealTokenActorMismatch
 	}
-	if _, err := tx.Exec(ctx, `UPDATE photo_reveal_tokens SET consumed_at=$2 WHERE id=$1`, token.ID, now.UTC()); err != nil {
+	presentedHash := hashRevealSecret(presentedSecret)
+	if subtle.ConstantTimeCompare(presentedHash, storedHash) != 1 {
+		// MIT-040-S-001: collapse to generic not-found so a wrong
+		// secret cannot be distinguished from a missing token id.
+		return nil, ErrRevealTokenNotFound
+	}
+	res, err := tx.Exec(ctx, `
+		UPDATE photo_reveal_tokens
+		   SET consumed_at=$2
+		 WHERE id=$1 AND consumed_at IS NULL`, token.ID, now.UTC())
+	if err != nil {
 		return nil, fmt.Errorf("consume reveal token: %w", err)
+	}
+	if res.RowsAffected() != 1 {
+		// MIT-040-S-007: a concurrent consumer raced past the FOR UPDATE
+		// boundary (or FOR UPDATE was removed in a future regression)
+		// and consumed the token between our SELECT and UPDATE. Collapse
+		// to generic not-found so the loser cannot distinguish race-loss
+		// from never-existed.
+		return nil, ErrRevealTokenNotFound
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit reveal consume: %w", err)
@@ -198,7 +232,9 @@ func (store *Store) ConsumeRevealToken(ctx context.Context, photoID uuid.UUID, a
 
 // CheckRevealToken validates a presented token without consuming it.
 // Used by EvaluateRetrieval helpers that want to surface a non-binding
-// preview state alongside the consumable preview endpoint.
+// preview state alongside the consumable preview endpoint. MIT-040-S-001:
+// the secret half is SHA-256'd and constant-time compared against the
+// stored digest, with a mismatch collapsing to ErrRevealTokenNotFound.
 func (store *Store) CheckRevealToken(ctx context.Context, photoID uuid.UUID, actorID string, raw string, now time.Time) error {
 	if strings.TrimSpace(raw) == "" {
 		return ErrRevealTokenNotFound
@@ -206,15 +242,16 @@ func (store *Store) CheckRevealToken(ctx context.Context, photoID uuid.UUID, act
 	if store == nil || store.pool == nil {
 		return fmt.Errorf("photos: store pool is nil")
 	}
-	id, _, err := decodeRevealToken(raw)
+	id, presentedSecret, err := decodeRevealToken(raw)
 	if err != nil {
 		return err
 	}
 	var token RevealToken
+	var storedHash []byte
 	if err := store.pool.QueryRow(ctx, `
-		SELECT id, photo_id, actor_id, expires_at, consumed_at, created_at
+		SELECT id, photo_id, actor_id, expires_at, consumed_at, created_at, secret_hash
 		  FROM photo_reveal_tokens
-		 WHERE id=$1`, id).Scan(&token.ID, &token.PhotoID, &token.ActorID, &token.ExpiresAt, &token.ConsumedAt, &token.CreatedAt); err != nil {
+		 WHERE id=$1`, id).Scan(&token.ID, &token.PhotoID, &token.ActorID, &token.ExpiresAt, &token.ConsumedAt, &token.CreatedAt, &storedHash); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrRevealTokenNotFound
 		}
@@ -231,6 +268,10 @@ func (store *Store) CheckRevealToken(ctx context.Context, photoID uuid.UUID, act
 	}
 	if !strings.EqualFold(strings.TrimSpace(actorID), strings.TrimSpace(token.ActorID)) {
 		return ErrRevealTokenActorMismatch
+	}
+	presentedHash := hashRevealSecret(presentedSecret)
+	if subtle.ConstantTimeCompare(presentedHash, storedHash) != 1 {
+		return ErrRevealTokenNotFound
 	}
 	return nil
 }
@@ -267,13 +308,13 @@ func decodeRevealToken(raw string) (uuid.UUID, string, error) {
 	return id, secret, nil
 }
 
-// hashRevealSecret is a forward-looking helper that lets us migrate to
-// digest-only storage without breaking the wire format. Reserved for a
-// later hardening pass; kept here so the import surface stays internal
-// to the package.
-func hashRevealSecret(secret string) string {
+// hashRevealSecret returns the SHA-256 digest of the random secret half
+// of a reveal token blob. MintRevealToken stores the digest in
+// `photo_reveal_tokens.secret_hash`; ConsumeRevealToken / CheckRevealToken
+// constant-time compare the presented secret's digest against it
+// (MIT-040-S-001). The wire format remains `<uuid>.<secret>` — only the
+// server-side validation changed.
+func hashRevealSecret(secret string) []byte {
 	sum := sha256.Sum256([]byte(secret))
-	return hex.EncodeToString(sum[:])
+	return sum[:]
 }
-
-var _ = hashRevealSecret

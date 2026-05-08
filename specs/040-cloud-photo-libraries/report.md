@@ -3090,13 +3090,13 @@ This must NOT change the truth of any audit / security / simplify finding.
 | ID | Source | Owner | Status |
 |---|---|---|---|
 | C-001..C-006 | chaos | `bubbles.harden` | CLOSED 2026-05-07 — all six P3/P4 chaos findings closed by `bubbles.workflow` mode bugfix-fastlane (resolve commit via `git log --grep='close chaos C-001..C-006'`). Evidence: [report.md#chaos-c-001-c-006-closure---2026-05-07](report.md#chaos-c-001-c-006-closure---2026-05-07). |
-| MIT-040-S-001 | security | `bubbles.harden` | OPEN — reveal-token plaintext-secret-not-hashed (LOW). |
+| MIT-040-S-001 | security | `bubbles.harden` | CLOSED 2026-05-07 — reveal-token plaintext-secret-not-hashed (LOW) closed by `bubbles.workflow` mode bugfix-fastlane (paired with MIT-040-S-007 in one atomic commit). Migration 032 added `secret_hash bytea` + partial unique index; `MintRevealToken` now persists `sha256(secret)`; `ConsumeRevealToken` + `CheckRevealToken` constant-time compare via `crypto/subtle`; `var _ = hashRevealSecret` discard removed. 3 adversarial regression tests added. Evidence: [report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07](report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07). |
 | MIT-040-S-002 | security | `bubbles.harden` | OPEN — Go runtime upgrade ≥1.25.9 (MEDIUM, rolls up with 038 S-002). |
 | MIT-040-S-003 | security/audit | `bubbles.harden` | OPEN — MintReveal body-sourced actor_id (LOW, single-tenant accepted). |
 | MIT-040-S-004 | security/audit | `bubbles.harden` | OPEN — `SMACKEREL_AUTH_TOKEN` warn-on-empty fail-fast-when-production (LOW, single-tenant accepted) — overlaps V-008 above. |
 | MIT-040-S-005 | security | `bubbles.harden` | CLOSED 2026-05-07 — dead `TLSSkipVerify` config DELETED across SST + struct + loader + tests + design.md (chose deletion path; no consumer ever read the value). See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
 | MIT-040-S-006 | security | `bubbles.harden` | CLOSED 2026-05-07 — all 4 unbounded `io.ReadAll` sites wrapped with `io.LimitReader` plus 5 adversarial regression tests (4 truncate-on-cap + 1 positive guard). New SST keys `PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES`, `PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES`, `PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES`. See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
-| MIT-040-S-007 | security | `bubbles.harden` + `bubbles.test` | OPEN — `ConsumeRevealToken` TOCTOU race (MEDIUM). |
+| MIT-040-S-007 | security | `bubbles.harden` + `bubbles.test` | CLOSED 2026-05-07 — `ConsumeRevealToken` TOCTOU race (MEDIUM) closed by `bubbles.workflow` mode bugfix-fastlane (paired with MIT-040-S-001 in one atomic commit). `SELECT … FOR UPDATE` added; `UPDATE` now carries `WHERE id=$1 AND consumed_at IS NULL` predicate with `RowsAffected()==1` check; race-loser collapses to generic `ErrRevealTokenNotFound`. 2 adversarial regression tests added (concurrent N=10 race + sequential second-consume). Evidence: [report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07](report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07). |
 | SR-040-F1 | spec-review | `bubbles.plan` | OPEN — scopes.md Scope Summary table (lines 47-53) Status column shows "Not Started" for 3 of 5 scopes (3, 4, 5) but per-scope `**Status:** Done` markers + state.json certifications confirm Done. Cosmetic drift; non-blocking per spec-review verdict but should be reconciled in the same plan rework round. |
 
 ### Evidence Quality Warnings (non-blocking)
@@ -3617,7 +3617,7 @@ Python sidecar: 409 PASS in 16.31s (matches the harden-phase baseline; the `+2` 
 | ID family | Owner | Status | Disposition |
 |-----------|-------|--------|-------------|
 | C-001..C-006 (chaos non-mutating runtime hardening) | bubbles.harden | CLOSED 2026-05-07 (resolve commit via `git log --grep='close chaos C-001..C-006'`) | All six P3/P4 chaos findings closed; recorded in [report.md#chaos-c-001-c-006-closure---2026-05-07](report.md#chaos-c-001-c-006-closure---2026-05-07). |
-| MIT-040-S-001 / S-002 / S-003 / S-005 / S-006 / S-007 (security mitigations) | bubbles.harden + bubbles.test | OPEN backlog | Recorded in [report.md#security-phase--feature-wide-evidence](report.md#security-phase--feature-wide-evidence). MIT-040-S-004 already CLOSED by commit b091c9a. None are feature-done blockers. |
+| MIT-040-S-001 / S-002 / S-003 / S-005 / S-006 / S-007 (security mitigations) | bubbles.harden + bubbles.test | PARTIALLY CLOSED — MIT-040-S-001 + S-005 + S-006 + S-007 CLOSED 2026-05-07; MIT-040-S-002 + S-003 + S-004 still OPEN | Recorded in [report.md#security-phase--feature-wide-evidence](report.md#security-phase--feature-wide-evidence). MIT-040-S-001 + MIT-040-S-007 closed in one atomic harden commit (paired — both touch `photo_reveal_tokens` schema). MIT-040-S-004 already CLOSED by commit b091c9a; MIT-040-S-005 + S-006 CLOSED 2026-05-07 (post-feature-done backlog pass). None are feature-done blockers. |
 | SR-040-F1 (cosmetic Scope Summary table drift) | bubbles.plan | OPEN backlog | Recorded in [spec-review.md](spec-review.md). Cosmetic, non-blocking. |
 
 **Zero new blockers introduced by this validate run.**
@@ -4518,6 +4518,208 @@ Files NOT touched (per task constraints): `.github/workflows/build.yml`, `deploy
   },
   "production_behavior_change": "stdlib semantics differences between go1.24.3 and go1.25.10 inside the runtime container only; no first-party API or behavior change",
   "blockers_resolved": ["MIT-040-S-002", "MIT-038-S-002 (rollup)"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+## MIT-040-S-001 + MIT-040-S-007 Closure — 2026-05-07
+
+Post-feature-done backlog closure pass for the two paired security audit items routed by `bubbles.security` at HEAD `620b3b4` (state.json executionHistory `2026-05-06T22:30:00Z`). Both touch `internal/connector/photos/sensitivity.go` and the `photo_reveal_tokens` table, so they ship in one atomic commit per the security audit's explicit "post-feature-done backlog (paired)" routing in the disposition table at `report.md` L2812 + L2818. Workflow mode `bugfix-fastlane`. **VERDICT: completed_owned. Both items CLOSED.**
+
+### Outcome Contract Verification
+
+| Field | Spec Source | Closure Evidence |
+|-------|------------|------------------|
+| Intent | `spec.md` L49 — sensitivity gate refuse-by-default; reveal token MUST be a hash-checked secret | `internal/connector/photos/sensitivity.go` lines 110-148 (Mint persists `secret_hash`); 150-217 (Consume hashes presented secret + `subtle.ConstantTimeCompare` against stored digest); 222-269 (Check parallels Consume) |
+| Success Signal | "Photo reveal_tokens.secret_hash holds SHA-256 of the random secret; concurrent reveal requests cannot both succeed" | New tests `TestMintRevealToken_S001_StoresHashNotPlaintext`, `TestConsumeRevealToken_S001_RejectsWrongSecret`, `TestConsumeRevealToken_S001_AcceptsCorrectSecret`, `TestConsumeRevealToken_S007_PreventsConcurrentDoubleConsume`, `TestConsumeRevealToken_S007_RejectsAlreadyConsumed` — all PASS |
+| Hard Constraints | Single atomic commit; no wire-shape break for honest callers; no spec status / certification / scopeProgress mutation | One commit landing the migration + Go fix + tests; wire blob still `<uuid>.<secret>`; e2e `TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto` still PASS unchanged; `certification.completedScopes` / `scopeProgress` / `status` UNTOUCHED |
+| Failure Condition | Concurrent double-consume; secret-mismatch leak; reveal still consumable after wrong-secret attempt | All 5 adversarial tests fail closed if their respective fix is reverted (concurrency test asserts exactly 1 success out of N=10; tampered-secret test asserts `ErrRevealTokenNotFound` not `ErrRevealToken*Mismatch` — no leak; original token must still be consumable after a tampered attempt — the failed compare MUST NOT burn the row) |
+
+### MIT-040-S-001 — Hash-On-Mint + Constant-Time-Compare-On-Consume
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| `photo_reveal_tokens` schema | `id, photo_id, actor_id, expires_at, consumed_at, created_at` (no secret material) | `+ secret_hash bytea NOT NULL` plus `CREATE UNIQUE INDEX uq_photo_reveal_tokens_secret_hash ON photo_reveal_tokens (secret_hash) WHERE secret_hash <> ''::bytea` |
+| `MintRevealToken` | Generates `plaintext` via `newRevealPlaintext`, stores nothing about it; returns `RevealToken{Plaintext: encodeRevealToken(id, plaintext)}` | Generates `plaintext`, computes `secretHash := hashRevealSecret(plaintext)` via `sha256.Sum256`, stores `secretHash` in `secret_hash` column; same wire blob returned to caller |
+| `ConsumeRevealToken` | `decodeRevealToken(raw) → id, _ (secret discarded)`; SELECT by id only; UPDATE without predicate | `decodeRevealToken(raw) → id, presentedSecret`; `SELECT … FOR UPDATE` fetches `secret_hash`; `subtle.ConstantTimeCompare(hashRevealSecret(presentedSecret), storedHash)`; mismatch → `ErrRevealTokenNotFound` (generic — no "wrong secret" leak) |
+| `CheckRevealToken` | Same UUID-only validation as Consume (also missed the secret) | Same constant-time hash compare as Consume (defense in depth so non-binding preview matches consume contract) |
+| `hashRevealSecret` helper | Returned `string` (hex) but discarded via `var _ = hashRevealSecret` | Returns `[]byte` (32-byte SHA-256 digest); `var _ =` discard line removed |
+
+### MIT-040-S-007 — Close ConsumeRevealToken TOCTOU Race
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| Transactional `SELECT` | `SELECT … FROM photo_reveal_tokens WHERE id=$1` (no row lock) | `SELECT … FROM photo_reveal_tokens WHERE id=$1 FOR UPDATE` — concurrent consumers serialize on the row lock |
+| Conditional `UPDATE` | `UPDATE photo_reveal_tokens SET consumed_at=$2 WHERE id=$1` (always 1 row affected) | `UPDATE photo_reveal_tokens SET consumed_at=$2 WHERE id=$1 AND consumed_at IS NULL` plus `RowsAffected()==1` check; on `RowsAffected()==0` the function returns `ErrRevealTokenNotFound` so the race-loser cannot distinguish race-loss from never-existed |
+| Defense in depth | Single safeguard (Go-layer `consumed_at != nil` check after SELECT) — bypassed by concurrent SELECT | Two safeguards (Postgres-layer `FOR UPDATE` lock + Postgres-layer `WHERE consumed_at IS NULL` predicate) — either alone is sufficient; both together close the race even if one is removed in a future regression |
+
+### Files Touched
+
+| File | Purpose |
+|------|---------|
+| `internal/db/migrations/032_photo_reveal_tokens_secret_hash_and_toctou.sql` | NEW — adds `secret_hash bytea NOT NULL DEFAULT ''` then `DROP DEFAULT` so existing rows survive the ALTER but future inserts MUST supply it; adds `uq_photo_reveal_tokens_secret_hash` partial unique index gating on `secret_hash <> ''::bytea` |
+| `internal/connector/photos/sensitivity.go` | `MintRevealToken` persists `secret_hash`; `ConsumeRevealToken` adds `FOR UPDATE` + `WHERE consumed_at IS NULL` + `subtle.ConstantTimeCompare`; `CheckRevealToken` mirrors Consume; `hashRevealSecret` returns `[]byte`; `var _ = hashRevealSecret` removed; `crypto/subtle` imported |
+| `tests/integration/photos_sensitivity_security_test.go` | NEW — 5 adversarial regression tests (`TestMintRevealToken_S001_StoresHashNotPlaintext`, `TestConsumeRevealToken_S001_RejectsWrongSecret`, `TestConsumeRevealToken_S001_AcceptsCorrectSecret`, `TestConsumeRevealToken_S007_PreventsConcurrentDoubleConsume`, `TestConsumeRevealToken_S007_RejectsAlreadyConsumed`) plus `mintSensitivePhotoForReveal`, `splitTokenBlob`, `flipLastHexChar` helpers |
+| `specs/040-cloud-photo-libraries/report.md` | Flipped MIT-040-S-001 + MIT-040-S-007 OPEN→CLOSED in two carry-forward findings tables; appended this section |
+| `specs/040-cloud-photo-libraries/state.json` | Appended this `executionHistory` entry; bumped `lastUpdatedAt` |
+| `specs/040-cloud-photo-libraries/design.md` | Reveal-token flow already described in tech-agnostic terms; reflected the digest-storage truth in the persistence section so design.md stays consistent with the new schema |
+
+### Wire-Shape Note (Important)
+
+The `bubbles.security` audit predicted that closing MIT-040-S-001 would force a wire-shape break (`{token_id: uuid, secret: "<base64url>"}` instead of one opaque blob). On re-reading the existing code that turned out to be unnecessary: `MintRevealToken` already returned `RevealToken{Plaintext: encodeRevealToken(id, plaintext)}` where `encodeRevealToken` produces `<uuid>.<secret>`, and `ConsumeRevealToken` already called `decodeRevealToken(raw)` to split the two halves — but then discarded the secret half with `id, _, err := decodeRevealToken(raw)` and validated only `id`. The bug was server-side validation, not wire format. The HTTP wire shape `{reveal_token: "<uuid>.<secret>"}` (mint response + `?reveal_token=…` query param on preview) is preserved exactly. No client / e2e / web caller needed updating. The existing e2e `TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto` still PASS with zero edits, which is the most direct evidence that no honest caller was broken.
+
+### Adversarial Regression Tests
+
+All 5 tests live in `tests/integration/photos_sensitivity_security_test.go` and run under the `integration` build tag against a real PostgreSQL pool from `testPool(t)`. Each is designed to FAIL if its respective fix is reverted.
+
+| Test | File:Line | Finding | Adversarial Property |
+|------|-----------|---------|---------------------|
+| `TestMintRevealToken_S001_StoresHashNotPlaintext` | `tests/integration/photos_sensitivity_security_test.go:73` | MIT-040-S-001 | Mints a token, queries `photo_reveal_tokens.secret_hash` directly, asserts (a) column non-empty, (b) NOT equal to plaintext bytes, (c) equal to `sha256.Sum256(plaintext)[:]`. Fails if column is missing, if the value is the raw secret, or if the digest algorithm changes. |
+| `TestConsumeRevealToken_S001_RejectsWrongSecret` | `tests/integration/photos_sensitivity_security_test.go:107` | MIT-040-S-001 | Tampers the last hex char of the secret half, attempts consume, asserts `errors.Is(err, ErrRevealTokenNotFound)`. Then verifies the ORIGINAL token is still consumable (failed compare must not burn the row). Fails if Consume accepts a tampered secret OR returns a leak-y error code. |
+| `TestConsumeRevealToken_S001_AcceptsCorrectSecret` | `tests/integration/photos_sensitivity_security_test.go:152` | MIT-040-S-001 | Positive control — mints and consumes the exact returned blob; asserts `consumed_at != nil` and `consumed.ID == token.ID`. Catches "always-reject" regressions (inverted compare, wrong digest algorithm). |
+| `TestConsumeRevealToken_S007_PreventsConcurrentDoubleConsume` | `tests/integration/photos_sensitivity_security_test.go:188` | MIT-040-S-007 | N=10 goroutines released by a `start := make(chan struct{})` barrier all call `ConsumeRevealToken` with the same id+secret; asserts exactly 1 success and N-1 failures (each failure must be `ErrRevealTokenConsumed` or `ErrRevealTokenNotFound`). The `start` channel barrier is deterministic — no `time.Sleep` or timing assumptions; the race window is at the DB layer where the test is most authentic. Belt-and-suspenders: a follow-up consume after the race round must also fail. Fails when both `FOR UPDATE` AND the `WHERE consumed_at IS NULL` predicate are removed — the original buggy state. |
+| `TestConsumeRevealToken_S007_RejectsAlreadyConsumed` | `tests/integration/photos_sensitivity_security_test.go:243` | MIT-040-S-007 | Sequential single-use floor — consumes once, attempts a second consume, asserts `ErrRevealTokenConsumed` or `ErrRevealTokenNotFound`. Anchors the concurrency test above. |
+
+### Verification Evidence
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh lint
+[Go lint]   OK (all packages, vet clean)
+[Python lint]   ruff: All checks passed!
+[Web validate]   OK: web/pwa/manifest.json, web/extension/manifest.json, web/extension/manifest.firefox.json, all JS files OK, extension versions match
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test unit --go
+ok      github.com/smackerel/smackerel/internal/connector/photos        (cached)
+ok      github.com/smackerel/smackerel/internal/api    (cached)
+ok      github.com/smackerel/smackerel/internal/auth   (cached)
+ok      github.com/smackerel/smackerel/internal/config (cached)
+… 60+ packages compiled and tested OK …
+ok      github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test integration | grep -E '^---\s*PASS:\s*Test(Mint|Consume|Photos)|^ok\s'
+--- PASS: TestMintRevealToken_S001_StoresHashNotPlaintext (0.14s)
+--- PASS: TestConsumeRevealToken_S001_RejectsWrongSecret (0.25s)
+--- PASS: TestConsumeRevealToken_S001_AcceptsCorrectSecret (0.25s)
+--- PASS: TestConsumeRevealToken_S007_PreventsConcurrentDoubleConsume (0.19s)
+--- PASS: TestConsumeRevealToken_S007_RejectsAlreadyConsumed (0.13s)
+--- PASS: TestPhotosSensitivity_ServerSidePreviewRevealAndAudit (0.27s)
+ok      github.com/smackerel/smackerel/tests/integration        41.643s
+ok      github.com/smackerel/smackerel/tests/integration/agent  5.049s
+ok      github.com/smackerel/smackerel/tests/integration/drive  10.954s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+```text
+$ ./smackerel.sh test e2e | grep -E '^---\s*PASS:\s*TestPhotos|^ok\s'
+--- PASS: TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks (0.06s)
+--- PASS: TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce (0.05s)
+--- PASS: TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI (0.09s)
+--- PASS: TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates (0.05s)
+--- PASS: TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI (0.05s)
+--- PASS: TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI (0.05s)
+--- PASS: TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm (0.07s)
+--- PASS: TestPhotosRouting_E2E_ReceiptRecipeDocumentCreateDownstreamArtifacts (0.14s)
+--- PASS: TestPhotosSearch_E2E_ImmichWhiteboardOCRResult (0.09s)
+--- PASS: TestPhotosSearch_E2E_CrossProviderUnifiedRanking (0.11s)
+--- PASS: TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto (0.11s)
+--- PASS: TestPhotosSync_E2E_AlbumMoveDoesNotReclassify (0.12s)
+--- PASS: TestPhotosTelegram_E2E_UploadClassifySearchAndRetrieve (0.12s)
+ok      github.com/smackerel/smackerel/tests/e2e        106.545s
+ok      github.com/smackerel/smackerel/tests/e2e/agent  6.350s
+ok      github.com/smackerel/smackerel/tests/e2e/drive  26.751s
+$ echo "EXIT=$?"
+EXIT=0
+```
+
+### Production Behavior Impact Statement
+
+Honest callers see no change: the wire blob shape, mint endpoint, preview endpoint, mint TTL, and audit-event records are identical. The only change for honest callers is correctness: a presented secret is now actually validated against the stored digest, and concurrent consumers no longer produce two successful reveals. Adversarial callers presenting a tampered secret half (or racing two simultaneous consumes) now hit `ErrRevealTokenNotFound` deterministically.
+
+### Phase Completion Recording
+
+| Field | Value |
+|-------|-------|
+| Phase | harden |
+| Agent | `bubbles.workflow` (mode: bugfix-fastlane; parent-expanded — `runSubagent` tool unavailable in this runtime, all phase work executed in the workflow runtime per the tool-availability escalation contract) |
+| Scope | feature-wide |
+| Verdict | completed_owned |
+| `closedAt` | 2026-05-07 |
+| `closedBy` | `bubbles.workflow (mode: bugfix-fastlane)` |
+| `closureCommit` | `harden(040): close MIT-040-S-001 + MIT-040-S-007 — hash reveal secrets + fix TOCTOU race` (resolve via `git log --grep='MIT-040-S-001 + MIT-040-S-007'`) |
+| `closureEvidence` | `report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07` |
+| Status mutations | None — `certification.status` / `certification.completedScopes` / `scopeProgress` / top-level `status` UNTOUCHED |
+
+### Overall Status
+
+| Item | Status |
+|------|--------|
+| MIT-040-S-001 | CLOSED 2026-05-07 |
+| MIT-040-S-007 | CLOSED 2026-05-07 |
+| Spec 040 | feature-done (unchanged) |
+| Outstanding security backlog | MIT-040-S-002 (Go runtime upgrade — already CLOSED in narrative summary at 2026-05-07T22:55:00Z), MIT-040-S-003, MIT-040-S-004 |
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "outcome": "completed_owned",
+  "agent": "bubbles.workflow",
+  "mode": "bugfix-fastlane",
+  "spec": "specs/040-cloud-photo-libraries",
+  "phase": "harden",
+  "scope": "feature-wide",
+  "items_closed": ["MIT-040-S-001", "MIT-040-S-007"],
+  "migration_added": "internal/db/migrations/032_photo_reveal_tokens_secret_hash_and_toctou.sql",
+  "wire_shape_change": "NONE — opaque blob `<uuid>.<secret>` preserved; the audit's wire-break prediction was based on a misread of existing code (Plaintext field already returned the combined blob)",
+  "files_modified": [
+    "internal/db/migrations/032_photo_reveal_tokens_secret_hash_and_toctou.sql (NEW)",
+    "internal/connector/photos/sensitivity.go",
+    "tests/integration/photos_sensitivity_security_test.go (NEW)",
+    "specs/040-cloud-photo-libraries/report.md",
+    "specs/040-cloud-photo-libraries/state.json",
+    "specs/040-cloud-photo-libraries/design.md"
+  ],
+  "callers_updated": [],
+  "new_adversarial_tests": [
+    {"name": "TestMintRevealToken_S001_StoresHashNotPlaintext", "file": "tests/integration/photos_sensitivity_security_test.go:73", "covers": "MIT-040-S-001"},
+    {"name": "TestConsumeRevealToken_S001_RejectsWrongSecret", "file": "tests/integration/photos_sensitivity_security_test.go:107", "covers": "MIT-040-S-001"},
+    {"name": "TestConsumeRevealToken_S001_AcceptsCorrectSecret", "file": "tests/integration/photos_sensitivity_security_test.go:152", "covers": "MIT-040-S-001"},
+    {"name": "TestConsumeRevealToken_S007_PreventsConcurrentDoubleConsume", "file": "tests/integration/photos_sensitivity_security_test.go:188", "covers": "MIT-040-S-007"},
+    {"name": "TestConsumeRevealToken_S007_RejectsAlreadyConsumed", "file": "tests/integration/photos_sensitivity_security_test.go:243", "covers": "MIT-040-S-007"}
+  ],
+  "test_results": {
+    "smackerel_check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK 4 contracts)",
+    "smackerel_lint": "EXIT=0 (Go lint OK + Python ruff OK + web validate OK)",
+    "smackerel_test_unit": "EXIT=0 (Go all packages PASS, Python 409 PASS in 20.20s)",
+    "smackerel_test_integration": "EXIT=0 (tests/integration 41.643s ok with all 5 new adversarial tests + TestPhotosSensitivity_ServerSidePreviewRevealAndAudit PASS; tests/integration/agent 5.049s ok; tests/integration/drive 10.954s ok)",
+    "smackerel_test_e2e": "EXIT=0 (tests/e2e 106.545s ok with all 13 photos e2e tests PASS including TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto unchanged; tests/e2e/agent 6.350s ok; tests/e2e/drive 26.751s ok)"
+  },
+  "production_behavior_change": "Adversarial callers (tampered secret half, concurrent double-consume) now hit ErrRevealTokenNotFound deterministically. Honest callers: zero behavior change.",
+  "blockers_resolved": ["MIT-040-S-001", "MIT-040-S-007"],
   "blockers_remaining": [],
   "findings_routed": [],
   "nextRequiredOwner": null,
