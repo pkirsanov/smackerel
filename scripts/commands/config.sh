@@ -400,6 +400,25 @@ COMPOSE_WAIT_TIMEOUT_S="$(required_value runtime.compose_wait_timeout_s)"
 DIGEST_CRON="$(required_value runtime.digest_cron)"
 EMBEDDING_MODEL="$(required_value runtime.embedding_model)"
 LOG_LEVEL="$(required_value runtime.log_level)"
+
+# MIT-040-S-004 — SMACKEREL_ENV is a fail-loud SST signal consumed by the Go
+# core (cmd/core/wiring.go + internal/api/router.go bearer middleware) and the
+# Python ML sidecar (ml/app/main.py lifespan). Allowed values:
+# development | test | production. When TARGET_ENV=test, the resolved value is
+# overridden to "test" so integration/e2e/stress runs preserve the dev-mode
+# warn-and-continue ergonomic for empty auth_token even when smackerel.yaml is
+# configured for production.
+SMACKEREL_ENV="$(required_value runtime.environment)"
+case "$SMACKEREL_ENV" in
+  development|test|production) ;;
+  *)
+    echo "Error: runtime.environment must be one of development|test|production, got '$SMACKEREL_ENV'" >&2
+    exit 1
+    ;;
+esac
+if [[ "$TARGET_ENV" == "test" ]]; then
+  SMACKEREL_ENV="test"
+fi
 TELEGRAM_BOT_TOKEN="$(required_value telegram.bot_token)"
 TELEGRAM_CHAT_IDS="$(required_value telegram.chat_ids)"
 TELEGRAM_ASSEMBLY_WINDOW_SECONDS="$(yaml_get telegram.assembly_window_seconds 2>/dev/null)" || TELEGRAM_ASSEMBLY_WINDOW_SECONDS="10"
@@ -782,6 +801,7 @@ LLM_PROVIDER=${LLM_PROVIDER}
 LLM_MODEL=${LLM_MODEL}
 LLM_API_KEY=${LLM_API_KEY}
 SMACKEREL_AUTH_TOKEN=${SMACKEREL_AUTH_TOKEN}
+SMACKEREL_ENV=${SMACKEREL_ENV}
 HOST_BIND_ADDRESS=${HOST_BIND_ADDRESS}
 COMPOSE_WAIT_TIMEOUT_S=${COMPOSE_WAIT_TIMEOUT_S}
 OLLAMA_URL=${OLLAMA_URL}

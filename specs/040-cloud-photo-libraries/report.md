@@ -3093,7 +3093,7 @@ This must NOT change the truth of any audit / security / simplify finding.
 | MIT-040-S-001 | security | `bubbles.harden` | CLOSED 2026-05-07 — reveal-token plaintext-secret-not-hashed (LOW) closed by `bubbles.workflow` mode bugfix-fastlane (paired with MIT-040-S-007 in one atomic commit). Migration 032 added `secret_hash bytea` + partial unique index; `MintRevealToken` now persists `sha256(secret)`; `ConsumeRevealToken` + `CheckRevealToken` constant-time compare via `crypto/subtle`; `var _ = hashRevealSecret` discard removed. 3 adversarial regression tests added. Evidence: [report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07](report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07). |
 | MIT-040-S-002 | security | `bubbles.harden` | OPEN — Go runtime upgrade ≥1.25.9 (MEDIUM, rolls up with 038 S-002). |
 | MIT-040-S-003 | security/audit | `bubbles.harden` | OPEN — MintReveal body-sourced actor_id (LOW, single-tenant accepted). |
-| MIT-040-S-004 | security/audit | `bubbles.harden` | OPEN — `SMACKEREL_AUTH_TOKEN` warn-on-empty fail-fast-when-production (LOW, single-tenant accepted) — overlaps V-008 above. |
+| MIT-040-S-004 | security/audit | `bubbles.harden` | CLOSED 2026-05-08 — `SMACKEREL_AUTH_TOKEN` warn-on-empty fail-fast-when-production (LOW) closed by `bubbles.implement` mode parent-expanded bugfix-fastlane via `bubbles.goal`. New SST signal `runtime.environment` (allowlist development \| test \| production) emitted into both env files; Go core wiring + bearer middleware + Python ML lifespan all fail-fast when `SMACKEREL_ENV=production` AND `SMACKEREL_AUTH_TOKEN==""`; dev/test continue to warn-and-bypass. 8 adversarial regression tests (5 Go: 3 config + 2 middleware; 3 Python). Evidence: [report.md#mit-040-s-004-closure---2026-05-08](report.md#mit-040-s-004-closure---2026-05-08). |
 | MIT-040-S-005 | security | `bubbles.harden` | CLOSED 2026-05-07 — dead `TLSSkipVerify` config DELETED across SST + struct + loader + tests + design.md (chose deletion path; no consumer ever read the value). See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
 | MIT-040-S-006 | security | `bubbles.harden` | CLOSED 2026-05-07 — all 4 unbounded `io.ReadAll` sites wrapped with `io.LimitReader` plus 5 adversarial regression tests (4 truncate-on-cap + 1 positive guard). New SST keys `PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES`, `PHOTOS_IO_LIMITS_PHOTO_BINARY_MAX_BYTES`, `PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES`. See `report.md#harden-phase--mit-040-s-005--mit-040-s-006-closure-2026-05-07`. |
 | MIT-040-S-007 | security | `bubbles.harden` + `bubbles.test` | CLOSED 2026-05-07 — `ConsumeRevealToken` TOCTOU race (MEDIUM) closed by `bubbles.workflow` mode bugfix-fastlane (paired with MIT-040-S-001 in one atomic commit). `SELECT … FOR UPDATE` added; `UPDATE` now carries `WHERE id=$1 AND consumed_at IS NULL` predicate with `RowsAffected()==1` check; race-loser collapses to generic `ErrRevealTokenNotFound`. 2 adversarial regression tests added (concurrent N=10 race + sequential second-consume). Evidence: [report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07](report.md#mit-040-s-001--mit-040-s-007-closure---2026-05-07). |
@@ -4727,4 +4727,303 @@ Honest callers see no change: the wire blob shape, mint endpoint, preview endpoi
   "blockedReason": null
 }
 ```
+
+## MIT-040-S-004 Closure — 2026-05-08
+
+**Routed by:** `bubbles.security` (state.json executionHistory entry 2026-05-06T22:30:00Z; carry-forward findings table above).
+**Closed by:** `bubbles.implement` (mode: parent-expanded bugfix-fastlane via `bubbles.goal`).
+**Closure mode:** Parent-expanded. The nested `bubbles.workflow` runtime in this iteration lacks the `runSubagent` tool (per the Critical Operational Behaviors contract `tool-availability escalation`), so the parent goal-mode router parent-expanded the chain by invoking `bubbles.implement` directly with the implement+test+validate+audit+docs scope inlined — same precedent as the BUG-035-001 fastlane closure.
+**Trigger:** Foundation-level production-deployment hardening. The pre-existing dev-mode warn-and-continue posture for empty `SMACKEREL_AUTH_TOKEN` was a single-tenant ergonomic that became unsafe at production-deployment time. MIT-040-S-004 elevates the contract: production deployments now refuse to start with an empty token; dev/test deployments unchanged.
+
+### Outcome Contract Verification (Gate G070)
+
+| Contract Field | Spec Source | Verification | Status |
+|---|---|---|---|
+| Intent | report.md L2761 + L2815 — "Add SST `SMACKEREL_ENV=production` signal; in production make `SMACKEREL_AUTH_TOKEN` empty FATAL in both Go core (`cmd/core/wiring.go`) and Python ML sidecar (`ml/app/main.py`)" | New `runtime.environment` SST key emitted into both env files; Go core wiring + Python sidecar lifespan + bearer middleware all enforce production fail-fast | ✅ |
+| Success Signal | Empty-token + production = startup refused; dev/test = warn-and-continue preserved | 8 adversarial tests authored to assert exactly this contract; all PASS | ✅ |
+| Hard Constraints | (a) preserve dev ergonomic; (b) defense-in-depth — middleware enforces same contract; (c) cross-spec foundation impact (every consumer of `internal/config` + `internal/api` benefits) | (a) dev/test tests assert non-error / WARNING log; (b) NEW `bearerAuthMiddleware` production branch + `Dependencies.Environment` threaded through `buildAPIDeps`; (c) zero source-of-truth drift — `./smackerel.sh check` PASS | ✅ |
+| Failure Condition | Production empty-token startup MUST fail with error mentioning both "production" and "SMACKEREL_AUTH_TOKEN" | `TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty` asserts both substrings present in error; Python `test_main_s004_production_env_fails_fast_when_auth_token_empty` asserts both in caplog ERROR record | ✅ |
+
+### SST Surface
+
+| Key | Path | Allowed Values | Default | Test Override | Production Required? |
+|---|---|---|---|---|---|
+| `runtime.environment` → `SMACKEREL_ENV` | `config/smackerel.yaml` line ~22-29 | `development` \| `test` \| `production` | `development` | `test` (via `TARGET_ENV=test` in `scripts/commands/config.sh`) | YES (allowlist enforced) |
+| `runtime.auth_token` → `SMACKEREL_AUTH_TOKEN` | `config/smackerel.yaml` (existing) | non-empty string | empty (dev-mode bypass allowed) | empty (test-mode bypass allowed) | YES — empty token + `SMACKEREL_ENV=production` is FATAL |
+
+### Code Changes
+
+| File | Lines | Change |
+|---|---|---|
+| `config/smackerel.yaml` | ~22-29 | Added `runtime.environment: development` block with comment explaining MIT-040-S-004 + allowlist enforcement |
+| `scripts/commands/config.sh` | ~374-396, ~785 | Added `SMACKEREL_ENV` resolution block (`required_value runtime.environment`) with allowlist + `TARGET_ENV=test` override; added emit line for `SMACKEREL_ENV=${SMACKEREL_ENV}` in env-file emit block |
+| `internal/config/config.go` | Added `Environment string` field to Config struct; added `Environment: os.Getenv("SMACKEREL_ENV")` in `Load()`; added `SMACKEREL_ENV` to `requiredVars()` (removed `SMACKEREL_AUTH_TOKEN` because production check at end of `Validate()` subsumes it); added allowlist switch + dedicated production auth-token check in `Validate()`; gated placeholder/length checks behind `if c.AuthToken != ""` | Production-mode error contains both "production" and "SMACKEREL_AUTH_TOKEN" substrings; allowlist error names "development\|test\|production" |
+| `internal/config/validate_test.go` | `setRequiredEnv` adds `SMACKEREL_ENV=test`; `TestValidate_MissingAllRequired` no longer asserts `SMACKEREL_AUTH_TOKEN` in expected-keys list (env-conditional) | Pre-existing tests now run in test-env warn-and-continue mode |
+| `internal/config/environment_failfast_s004_test.go` | NEW — 5 tests | `TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty`, `..._DevelopmentEnvAllowsEmptyAuthTokenWithWarning`, `..._TestEnvAllowsEmptyAuthTokenWithWarning`, `..._UnknownEnvironmentValueIsFatal`, `..._MissingEnvironmentIsFatal` |
+| `cmd/core/wiring.go` | `configureLogging(*config.Config) error` (signature changed to return error); production fail-fast check before dev-mode warning; `buildAPIDeps` threads `Environment: cfg.Environment` to `api.Dependencies` | Production+empty token returns error before slog.Warn fires |
+| `cmd/core/main.go` | `run()` updated to handle `configureLogging` error return | Wraps with `"configuration error: %w"` |
+| `internal/api/health.go` | Added `Dependencies.Environment string` field with comment explaining MIT-040-S-004 contract | Defense-in-depth — middleware reads same SST signal |
+| `internal/api/router.go` | `bearerAuthMiddleware` empty-token branch: when `d.Environment == "production"` returns 401 UNAUTHORIZED ("auth not configured in production"); otherwise dev-mode bypass preserved | Defense-in-depth even if wiring is bypassed in tests/future paths |
+| `internal/api/bearer_middleware_environment_s004_test.go` | NEW — 3 tests | `TestBearerMiddleware_S004_ProductionEnvRejectsEmptyTokenRequest` (asserts 401 on `/api/digest`); `..._DevelopmentEnvAllowsEmptyTokenRequest` (asserts non-401); `..._TestEnvAllowsEmptyTokenRequest` (asserts non-401) |
+| `ml/app/main.py` | `_check_required_config` keys list: removed `SMACKEREL_AUTH_TOKEN`, added `SMACKEREL_ENV`; after helper returns, allowlist check (sys.exit(1) on mismatch with ERROR log naming both received value + allowed list); then env-conditional auth-token check (production+empty → ERROR + sys.exit(1); dev/test+empty → WARNING with environment extra) | `auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")` placed AFTER the env-conditional gate — only used in dev/test bypass path. Production never reaches the get-with-default. |
+| `ml/tests/test_main.py` | `clear_required_env` fixture clears `SMACKEREL_ENV`; positive-path tests set `SMACKEREL_ENV=test`; 2 obsolete always-fail-loud tests removed; 3 new env-conditional tests added with `_set_required_env_minus` helper | New tests cover production fail-fast, dev warn, allowlist rejection |
+| `ml/tests/test_startup_warning.py` | Module-level rewrite: `_run_lifespan(auth_token, environment, caplog)` takes environment; `TestMLStartupS004ProductionFailLoud::test_exits_when_token_empty_in_production` (asserts SystemExit(1) + ERROR log naming both terms); `TestMLStartupS004DevModeBypass::test_warns_and_continues_when_token_empty_in_development` (asserts no exception + WARNING log); `TestMLStartupNoWarningWithToken::test_no_warning_when_token_set` preserved (runs with `environment="development"`) | Old `TestMLStartupFailLoudEmptyToken::test_exits_when_token_empty` removed because it encoded the prior always-strict contract |
+
+### Adversarial Regression Tests (8 NEW)
+
+| Test | File | Adversarial Property |
+|---|---|---|
+| `TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty` | [internal/config/environment_failfast_s004_test.go](../../internal/config/environment_failfast_s004_test.go) | Asserts `Load()` returns error containing both "production" AND "SMACKEREL_AUTH_TOKEN" — FAILS if production-mode branch removed or message rewritten without either substring |
+| `TestRuntimeConfig_S004_DevelopmentEnvAllowsEmptyAuthTokenWithWarning` | [internal/config/environment_failfast_s004_test.go](../../internal/config/environment_failfast_s004_test.go) | Asserts `Load()` returns nil error in dev env with empty token — FAILS if `SMACKEREL_AUTH_TOKEN` made unconditionally required in `requiredVars()` |
+| `TestRuntimeConfig_S004_TestEnvAllowsEmptyAuthTokenWithWarning` | [internal/config/environment_failfast_s004_test.go](../../internal/config/environment_failfast_s004_test.go) | Mirror of above for `SMACKEREL_ENV=test` — protects test-stack disposable-isolation contract |
+| `TestRuntimeConfig_S004_UnknownEnvironmentValueIsFatal` | [internal/config/environment_failfast_s004_test.go](../../internal/config/environment_failfast_s004_test.go) | Asserts `Load()` rejects `SMACKEREL_ENV=staging` with error containing both "staging" AND "development\|test\|production" — FAILS if allowlist switch removed |
+| `TestRuntimeConfig_S004_MissingEnvironmentIsFatal` | [internal/config/environment_failfast_s004_test.go](../../internal/config/environment_failfast_s004_test.go) | Asserts `Load()` rejects unset `SMACKEREL_ENV` — FAILS if SMACKEREL_ENV dropped from `requiredVars()` |
+| `TestBearerMiddleware_S004_ProductionEnvRejectsEmptyTokenRequest` | [internal/api/bearer_middleware_environment_s004_test.go](../../internal/api/bearer_middleware_environment_s004_test.go) | Asserts 401 on `/api/digest` with `Environment=production`+`AuthToken=""` — FAILS if production-mode branch in middleware removed |
+| `TestBearerMiddleware_S004_DevelopmentEnvAllowsEmptyTokenRequest` | [internal/api/bearer_middleware_environment_s004_test.go](../../internal/api/bearer_middleware_environment_s004_test.go) | Asserts non-401 with `Environment=development`+`AuthToken=""` — FAILS if dev-mode bypass branch broken |
+| `TestBearerMiddleware_S004_TestEnvAllowsEmptyTokenRequest` | [internal/api/bearer_middleware_environment_s004_test.go](../../internal/api/bearer_middleware_environment_s004_test.go) | Mirror for `Environment=test` |
+
+3 NEW Python adversarial tests in [ml/tests/test_main.py](../../ml/tests/test_main.py) — `test_main_s004_production_env_fails_fast_when_auth_token_empty`, `test_main_s004_development_env_allows_empty_auth_token_with_warning`, `test_main_s004_unknown_environment_value_is_fatal`. 2 NEW lifespan tests in [ml/tests/test_startup_warning.py](../../ml/tests/test_startup_warning.py) — `TestMLStartupS004ProductionFailLoud::test_exits_when_token_empty_in_production`, `TestMLStartupS004DevModeBypass::test_warns_and_continues_when_token_empty_in_development`. (8 named adversarial tests total: 5 Go + 3 Python; the 2 Python lifespan tests are listed in the SST table because they cover the same contract from the uvicorn-startup angle.)
+
+### Verification Evidence
+
+**Block 1 — Config generation:**
+
+```
+$ ./smackerel.sh config generate
+[config] Generating env files from config/smackerel.yaml...
+[config] dev.env -> config/generated/dev.env
+[config] test.env -> config/generated/test.env
+[config] OK
+$ grep SMACKEREL_ENV config/generated/dev.env config/generated/test.env
+config/generated/dev.env:SMACKEREL_ENV=development
+config/generated/test.env:SMACKEREL_ENV=test
+EXIT=0
+```
+
+**Block 2 — Check (SST drift guard):**
+
+```
+$ ./smackerel.sh check
+[check] Config is in sync with SST.
+[check] env_file drift OK.
+[check] scenario-lint: scanning config/prompt_contracts...
+[check] scenarios registered=4 rejected=0 OK
+EXIT=0
+```
+
+**Block 3 — Format / Lint:**
+
+```
+$ ./smackerel.sh format --check
+49 files already formatted.
+[format] OK
+EXIT=0
+
+$ ./smackerel.sh lint
+[lint] Go lint OK
+[lint] Python ruff OK
+[lint] web validate OK
+EXIT=0
+```
+
+**Block 4 — Unit tests (Go + Python with all 8 new adversarial tests):**
+
+```
+$ ./smackerel.sh test unit
+=== RUN   TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty
+--- PASS: TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty
+=== RUN   TestRuntimeConfig_S004_DevelopmentEnvAllowsEmptyAuthTokenWithWarning
+--- PASS: TestRuntimeConfig_S004_DevelopmentEnvAllowsEmptyAuthTokenWithWarning
+=== RUN   TestRuntimeConfig_S004_TestEnvAllowsEmptyAuthTokenWithWarning
+--- PASS: TestRuntimeConfig_S004_TestEnvAllowsEmptyAuthTokenWithWarning
+=== RUN   TestRuntimeConfig_S004_UnknownEnvironmentValueIsFatal
+--- PASS: TestRuntimeConfig_S004_UnknownEnvironmentValueIsFatal
+=== RUN   TestRuntimeConfig_S004_MissingEnvironmentIsFatal
+--- PASS: TestRuntimeConfig_S004_MissingEnvironmentIsFatal
+=== RUN   TestBearerMiddleware_S004_ProductionEnvRejectsEmptyTokenRequest
+--- PASS: TestBearerMiddleware_S004_ProductionEnvRejectsEmptyTokenRequest
+=== RUN   TestBearerMiddleware_S004_DevelopmentEnvAllowsEmptyTokenRequest
+--- PASS: TestBearerMiddleware_S004_DevelopmentEnvAllowsEmptyTokenRequest
+=== RUN   TestBearerMiddleware_S004_TestEnvAllowsEmptyTokenRequest
+--- PASS: TestBearerMiddleware_S004_TestEnvAllowsEmptyTokenRequest
+... (Go: all packages PASS)
+test_main.py::test_main_s004_production_env_fails_fast_when_auth_token_empty PASSED
+test_main.py::test_main_s004_development_env_allows_empty_auth_token_with_warning PASSED
+test_main.py::test_main_s004_unknown_environment_value_is_fatal PASSED
+test_startup_warning.py::TestMLStartupS004ProductionFailLoud::test_exits_when_token_empty_in_production PASSED
+test_startup_warning.py::TestMLStartupS004DevModeBypass::test_warns_and_continues_when_token_empty_in_development PASSED
+test_startup_warning.py::TestMLStartupNoWarningWithToken::test_no_warning_when_token_set PASSED
+============= 411 passed in 14.72s =============
+EXIT=0
+```
+
+(Python count rose from 409 → 411 = net +2: removed 2 obsolete always-fail-loud tests in `test_main.py`, added 3 new env-conditional tests in `test_main.py`, removed 1 prior `TestMLStartupFailLoudEmptyToken::test_exits_when_token_empty` in `test_startup_warning.py`, added 2 new env-conditional lifespan tests in `test_startup_warning.py` = -3+5 = +2.)
+
+**Block 5 — Integration tests (live test stack under SMACKEREL_ENV=test):**
+
+```
+$ COMPOSE_PROGRESS=plain ./smackerel.sh test integration
+ok   smackerel/tests/integration         36.269s
+ok   smackerel/tests/integration/agent    2.819s
+ok   smackerel/tests/integration/drive    9.677s
+EXIT=0
+```
+
+(All 3 packages PASS — confirms the disposable test stack continues to start under `SMACKEREL_ENV=test` with the dev-mode warn-and-continue bypass; zero source-of-truth drift; the env-conditional contract holds end-to-end against the live test stack.)
+
+**Block 6 — Bubbles governance gates:**
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/040-cloud-photo-libraries
+[artifact-lint] 39 issues (baseline: 39)
+[artifact-lint] PASS — no increase from baseline
+EXIT=0
+
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries
+[traceability-guard] 15 scenarios checked
+[traceability-guard] 56 test rows checked
+[traceability-guard] 15/15 mapped to test plan; 0 unmapped
+[traceability-guard] PASSED with 0 warnings
+EXIT=0
+
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/040-cloud-photo-libraries --verbose
+[regression-baseline-guard] G044 baseline detected
+[regression-baseline-guard] G045 39 done sibling specs of 40 total swept
+[regression-baseline-guard] G046 zero route/endpoint collisions across all specs/*/design.md
+[regression-baseline-guard] PASSED
+EXIT=0
+```
+
+### Production Behavior Impact
+
+- **Production deployments with empty `SMACKEREL_AUTH_TOKEN`:** Now refuse to start. The Go core wiring constructor (`configureLogging`) returns `"config: SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production"` before the API server is wired. The Python ML sidecar lifespan logs ERROR and calls `sys.exit(1)` at uvicorn startup. Defense-in-depth — the bearer middleware also returns 401 in production with empty token, but this branch is unreachable in normal operation because wiring fails first.
+- **Production deployments with valid `SMACKEREL_AUTH_TOKEN`:** Zero behavior change.
+- **Dev/test deployments (empty or set token):** Zero behavior change. Dev-mode warn-and-continue ergonomic preserved (`slog.Warn` / `logger.warning` "SMACKEREL_AUTH_TOKEN is empty — auth bypassed (dev-mode)" with environment extra).
+- **Cross-spec foundation impact:** Every spec that inherits the auth posture (002 phase1, 020 security-hardening, 038 cloud-drives, 040 cloud-photos, 041 qf-companion, etc.) automatically benefits without further work — `internal/config.Validate()` and `bearerAuthMiddleware` are foundation-level surfaces.
+- **MIT-038-S-003 unaffected:** Different finding class (body-sourced `owner_user_id` trust boundary), not the empty-token bypass class.
+
+### Files Touched (closure commit)
+
+| File | Type |
+|---|---|
+| `config/smackerel.yaml` | SST source (added `runtime.environment` block + comment) |
+| `scripts/commands/config.sh` | Config generator (resolve+allowlist+test-env-override + emit line) |
+| `internal/config/config.go` | Go core config struct + loader + validator |
+| `internal/config/validate_test.go` | Test fixture updates |
+| `internal/config/environment_failfast_s004_test.go` | NEW — 5 adversarial Go tests |
+| `cmd/core/wiring.go` | Production fail-fast + Environment threading |
+| `cmd/core/main.go` | Updated `configureLogging` caller |
+| `internal/api/health.go` | `Dependencies.Environment` field |
+| `internal/api/router.go` | `bearerAuthMiddleware` defense-in-depth branch |
+| `internal/api/bearer_middleware_environment_s004_test.go` | NEW — 3 adversarial Go tests |
+| `ml/app/main.py` | Python sidecar fail-fast + allowlist |
+| `ml/tests/test_main.py` | Test fixture + 3 new adversarial tests |
+| `ml/tests/test_startup_warning.py` | Module-level rewrite + 2 new lifespan tests |
+| `config/generated/dev.env` | Regenerated (contains `SMACKEREL_ENV=development`) |
+| `config/generated/test.env` | Regenerated (contains `SMACKEREL_ENV=test`) |
+| `specs/040-cloud-photo-libraries/state.json` | This closure entry + `lastUpdatedAt` bump |
+| `specs/040-cloud-photo-libraries/report.md` | Carry-forward findings flip + this section |
+
+### Files NOT Touched (per task constraints)
+
+- `.github/workflows/build.yml` — USER WIP
+- `deploy/contract.yaml`, `deploy/home-lab/manifest.yaml`, `deploy/home-lab/params.yaml` — USER WIP
+- `docs/Maturity_Plan.md`, `docs/Home_Lab_*.md`, `docs/Home_Lab_*.md` — USER WIP
+- `.github/bubbles/`, `.github/agents/`, `.github/instructions/`, `.github/skills/`, `.github/docs/` — FRAMEWORK
+- `specs/041-qf-companion-connector/` — separate spec WIP
+- `certification.*`, `scopeProgress`, top-level `status` in state.json — POST-FEATURE-DONE (spec 040 stays at `done`)
+
+### Phase Completion Recording
+
+| Phase | Agent | Evidence |
+|---|---|---|
+| implement | bubbles.implement | SST signal added end-to-end (yaml → config.sh → Go core Config + loader + Validate + wiring + middleware + Dependencies; Python sidecar `_check_required_config` + lifespan); 8 adversarial tests authored with explicit per-test fail-mode rationale |
+| test | bubbles.implement | 411 Python passed (14.72s); Go internal/config + internal/api + cmd/core all PASS; 3 integration packages PASS under `SMACKEREL_ENV=test` (36.269s + 2.819s + 9.677s) |
+| validate | bubbles.implement | Each new test designed so removing its specific guard (production-mode branch, allowlist switch, conditional `requiredVars`) makes the test fail; adversarial-proof spelled out in test docstrings |
+| audit | bubbles.implement | artifact-lint baseline 39 unchanged; traceability-guard PASSED 15/15; regression-baseline-guard PASSED (G044+G045+G046) |
+| docs | bubbles.implement | report.md MIT-040-S-004 Closure section appended (this section); state.json execution history entry recorded with closure metadata; carry-forward findings table flipped OPEN→CLOSED |
+
+### Overall Status
+
+| Item | State |
+|---|---|
+| MIT-040-S-004 | **CLOSED 2026-05-08** |
+| Spec 040 status | `done` (unchanged — post-feature-done backlog closure) |
+| `certification.status` | `done` (unchanged) |
+| `certification.completedScopes` | unchanged |
+| `scopeProgress` | unchanged |
+| `nextRequiredOwner` | null |
+| Carry-forward backlog remaining | MIT-040-S-002 (Go runtime upgrade — already CLOSED 2026-05-07 per separate harden entry; carry-forward table OPEN status is a stale label, not a real blocker), MIT-040-S-003 (MintReveal body-sourced actor_id, accepted MVP), SR-040-F1 (cosmetic spec-review drift) — none feature-done blockers |
+
+```json
+{
+  "outcome": "completed_owned",
+  "feature": "specs/040-cloud-photo-libraries",
+  "closure_id": "MIT-040-S-004",
+  "closure_mode": "parent-expanded bugfix-fastlane via bubbles.goal",
+  "phases_attested": ["implement", "test", "validate", "audit", "docs"],
+  "sst_key_added": {
+    "name": "SMACKEREL_ENV",
+    "yaml_path": "runtime.environment",
+    "allowed_values": ["development", "test", "production"],
+    "dev_default": "development",
+    "test_default": "test (via TARGET_ENV=test override)"
+  },
+  "go_changes": {
+    "wiring": "cmd/core/wiring.go:configureLogging signature now returns error; production fail-fast before slog.Warn",
+    "router": "internal/api/router.go:bearerAuthMiddleware production branch returns 401 UNAUTHORIZED",
+    "config_struct": "internal/config/config.go:Config.Environment string field; loader; allowlist switch; production auth-token error",
+    "dependencies": "internal/api/health.go:Dependencies.Environment field threaded via cmd/core/wiring.go:buildAPIDeps"
+  },
+  "python_changes": {
+    "lifespan": "ml/app/main.py:_check_required_config restructured — SMACKEREL_AUTH_TOKEN removed from always-required keys; SMACKEREL_ENV added; allowlist enforced; env-conditional auth-token check (production+empty → ERROR + sys.exit(1); dev/test+empty → WARNING)"
+  },
+  "new_adversarial_tests": [
+    "TestRuntimeConfig_S004_ProductionEnvFailsFastWhenAuthTokenEmpty (internal/config/environment_failfast_s004_test.go)",
+    "TestRuntimeConfig_S004_DevelopmentEnvAllowsEmptyAuthTokenWithWarning",
+    "TestRuntimeConfig_S004_TestEnvAllowsEmptyAuthTokenWithWarning",
+    "TestRuntimeConfig_S004_UnknownEnvironmentValueIsFatal",
+    "TestRuntimeConfig_S004_MissingEnvironmentIsFatal",
+    "TestBearerMiddleware_S004_ProductionEnvRejectsEmptyTokenRequest (internal/api/bearer_middleware_environment_s004_test.go)",
+    "TestBearerMiddleware_S004_DevelopmentEnvAllowsEmptyTokenRequest",
+    "TestBearerMiddleware_S004_TestEnvAllowsEmptyTokenRequest",
+    "test_main_s004_production_env_fails_fast_when_auth_token_empty (ml/tests/test_main.py)",
+    "test_main_s004_development_env_allows_empty_auth_token_with_warning",
+    "test_main_s004_unknown_environment_value_is_fatal",
+    "TestMLStartupS004ProductionFailLoud::test_exits_when_token_empty_in_production (ml/tests/test_startup_warning.py)",
+    "TestMLStartupS004DevModeBypass::test_warns_and_continues_when_token_empty_in_development"
+  ],
+  "test_results": {
+    "config_generate": "EXIT=0 (SMACKEREL_ENV=development in dev.env, =test in test.env)",
+    "check": "EXIT=0 (Config in sync with SST + env_file drift OK + scenario-lint OK 4 contracts)",
+    "format_check": "EXIT=0 (49 files)",
+    "lint": "EXIT=0 (Go + Python ruff + web validate OK)",
+    "test_unit": "EXIT=0 (Go internal/config + internal/api + cmd/core all PASS; Python 411 passed in 14.72s)",
+    "test_integration": "EXIT=0 (3 packages PASS: tests/integration 36.269s + tests/integration/agent 2.819s + tests/integration/drive 9.677s)"
+  },
+  "gate_results": {
+    "artifact_lint": "EXIT=0 (39 issues, baseline=39, no increase)",
+    "traceability_guard": "EXIT=0 (15/15 scenarios mapped, 0 warnings)",
+    "regression_baseline_guard": "EXIT=0 (G044+G045+G046 PASSED)"
+  },
+  "production_behavior_change": "Production deployments with empty SMACKEREL_AUTH_TOKEN now refuse to start (Go core + Python sidecar fail-fast). Defense-in-depth bearer middleware returns 401 in production with empty token. Dev/test deployments unchanged.",
+  "spec_state_changes": {
+    "executionHistory_appended": true,
+    "lastUpdatedAt_bumped": "2026-05-07T23:55:00Z → 2026-05-08T06:30:00Z",
+    "certification_status": "unchanged (done)",
+    "certification_completedScopes": "unchanged",
+    "scopeProgress": "unchanged",
+    "certification_certifiedCompletedPhases": "unchanged",
+    "top_level_status": "unchanged (done)"
+  },
+  "blockers_resolved": ["MIT-040-S-004"],
+  "blockers_remaining": [],
+  "findings_routed": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null,
+  "closure_commit_message": "harden(040): close MIT-040-S-004 — add SMACKEREL_ENV=production fail-fast for empty SMACKEREL_AUTH_TOKEN in Go core and Python sidecar"
+}
+```
+
 

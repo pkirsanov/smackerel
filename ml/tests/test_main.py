@@ -29,6 +29,7 @@ def clear_required_env(monkeypatch):
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
         "SMACKEREL_AUTH_TOKEN",
+        "SMACKEREL_ENV",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -48,6 +49,7 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
 
     config = _check_required_config()
 
@@ -64,35 +66,103 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "sometimes")
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setenv("SMACKEREL_ENV", "test")
 
     with pytest.raises(SystemExit):
         _check_required_config()
 
 
-# MIT-040-S-004: SMACKEREL_AUTH_TOKEN is a required config — fail-loud when missing.
-def test_check_required_config_requires_auth_token_when_missing(monkeypatch):
+# MIT-040-S-004 (spec 040 SST hardening) — Adversarial regression tests.
+#
+# Behavior contract: SMACKEREL_AUTH_TOKEN is required only when
+# SMACKEREL_ENV=production. In development/test, an empty token logs a
+# warning and the sidecar continues in dev-mode bypass. SMACKEREL_ENV
+# itself is always required and must be one of development|test|production.
+#
+# Each test below MUST FAIL if its specific guard is removed from
+# ml/app/main.py::_check_required_config().
+
+
+def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | None) -> None:
+    """Helper — set every required env var except SMACKEREL_AUTH_TOKEN, then
+    optionally set the auth token to the given value (or leave it unset)."""
     monkeypatch.setenv("NATS_URL", "nats://nats:4222")
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "llama3.2")
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
-    # SMACKEREL_AUTH_TOKEN intentionally not set — clear_required_env removed it.
+    monkeypatch.setenv("SMACKEREL_ENV", environment)
+    if auth_token is None:
+        monkeypatch.delenv("SMACKEREL_AUTH_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", auth_token)
 
-    with pytest.raises(SystemExit):
-        _check_required_config()
+
+def test_main_s004_production_env_fails_fast_when_auth_token_empty(monkeypatch, caplog):
+    """SMACKEREL_ENV=production + empty SMACKEREL_AUTH_TOKEN → sys.exit(1).
+
+    Adversarial proof: removing the production-mode auth_token branch in
+    _check_required_config() makes this test fail (no SystemExit raised).
+    """
+    import logging
+
+    _set_required_env_minus(monkeypatch, "production", auth_token=None)
+
+    with caplog.at_level(logging.ERROR, logger="smackerel-ml"):
+        with pytest.raises(SystemExit) as exc_info:
+            _check_required_config()
+
+    assert exc_info.value.code == 1
+    error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
+    joined = " ".join(error_messages)
+    assert "production" in joined, f"expected ERROR log naming production, got: {error_messages}"
+    assert "SMACKEREL_AUTH_TOKEN" in joined, f"expected ERROR log naming SMACKEREL_AUTH_TOKEN, got: {error_messages}"
 
 
-# MIT-040-S-004: Empty SMACKEREL_AUTH_TOKEN must fail-loud (no warn-and-continue).
-def test_check_required_config_requires_auth_token_rejects_empty_value(monkeypatch):
-    monkeypatch.setenv("NATS_URL", "nats://nats:4222")
-    monkeypatch.setenv("LLM_PROVIDER", "ollama")
-    monkeypatch.setenv("LLM_MODEL", "llama3.2")
-    monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
-    monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
-    monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "")
+def test_main_s004_development_env_allows_empty_auth_token_with_warning(monkeypatch, caplog):
+    """SMACKEREL_ENV=development + empty SMACKEREL_AUTH_TOKEN → no exception, warning logged.
 
-    with pytest.raises(SystemExit):
-        _check_required_config()
+    Adversarial proof: making AUTH_TOKEN unconditionally required (i.e.
+    leaving SMACKEREL_AUTH_TOKEN in the keys list) makes this test fail
+    because _check_required_config() raises SystemExit.
+    """
+    import logging
+
+    _set_required_env_minus(monkeypatch, "development", auth_token="")
+
+    with caplog.at_level(logging.WARNING, logger="smackerel-ml"):
+        config = _check_required_config()
+
+    assert config["SMACKEREL_ENV"] == "development"
+    assert config["SMACKEREL_AUTH_TOKEN"] == ""
+    warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("SMACKEREL_AUTH_TOKEN is empty" in m for m in warning_messages), (
+        f"expected dev-mode bypass warning, got: {warning_messages}"
+    )
+
+
+def test_main_s004_unknown_environment_value_is_fatal(monkeypatch, caplog):
+    """SMACKEREL_ENV=staging → sys.exit(1) with allowlist error.
+
+    Adversarial proof: removing the SMACKEREL_ENV allowlist check in
+    _check_required_config() makes this test fail (no SystemExit raised
+    for the disallowed value).
+    """
+    import logging
+
+    _set_required_env_minus(monkeypatch, "staging", auth_token="unit-test-auth-token")
+
+    with caplog.at_level(logging.ERROR, logger="smackerel-ml"):
+        with pytest.raises(SystemExit) as exc_info:
+            _check_required_config()
+
+    assert exc_info.value.code == 1
+    error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
+    joined = " ".join(error_messages)
+    assert "staging" in joined, f"expected ERROR log naming the offending value 'staging', got: {error_messages}"
+    assert "development|test|production" in joined, (
+        f"expected ERROR log naming allowlist 'development|test|production', got: {error_messages}"
+    )
 
 
 def test_health_endpoint_reports_disconnected_without_nats_client():

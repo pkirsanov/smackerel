@@ -17,6 +17,13 @@ project:
 runtime:
   log_level: info
   auth_token: "" # REQUIRED before runtime start. Test config generation creates a disposable token.
+  # Deployment environment (allowed values: development | test | production).
+  # MIT-040-S-004 — when set to "production", services fail-loud on startup if
+  # auth_token is empty (Go core wiring + Python ML sidecar lifespan + bearer
+  # middleware defense-in-depth). When set to "development" or "test", an empty
+  # auth_token logs a warning and continues (single-tenant dev ergonomics).
+  # Test config generation overrides to "test" automatically.
+  environment: development
   host_bind_address: "127.0.0.1"
   compose_wait_timeout_s: 180
   digest_cron: "0 7 * * *"
