@@ -72,12 +72,12 @@
 | Device | IP | OS | Status |
 |--------|----|----|--------|
 | home-lab | <host-tailnet-ip> | Linux | Online |
-| cpc-phili-o8hgz (Devbox / WSL) | 100.109.46.66 | Linux | Online |
-| gl-be9300 (Router) | 100.98.196.80 | Linux | Online |
-| pihole | 100.93.69.2 | Linux | Online |
-| iphone172 | 100.121.254.27 | iOS | Online |
-| philippes-macbook-pro | 100.79.158.19 | macOS | Offline |
-| samsung-sm-x810 | 100.82.195.158 | Android | Offline |
+| devbox-wsl (Devbox / WSL) | <devbox-tailnet-ip> | Linux | Online |
+| router | <router-tailnet-ip> | Linux | Online |
+| pihole | <pihole-tailnet-ip> | Linux | Online |
+| iphone | <iphone-tailnet-ip> | iOS | Online |
+| macbook-pro | <macbook-tailnet-ip> | macOS | Offline |
+| android-tablet | <tablet-tailnet-ip> | Android | Offline |
 
 ### SSH access
 ```

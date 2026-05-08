@@ -53,7 +53,7 @@ These are **blocking for "start using"** in the longer run, but the Master plan 
 
 | Proposed spec | Purpose | Blocking for |
 |---------------|---------|--------------|
-| `_ops/OPS-HOMELAB-101-evox2-deploy-mode` | Add a Smackerel "evox2" or "prod" mode to `./smackerel.sh up` (named project, `restart: unless-stopped`, host port block `40000–49999`, custom bridge `172.31.0.0/16`, persistent-volume label policy that survives `clean smart`/`clean full`) | Friday deploy |
+| `_ops/OPS-HOMELAB-101-homelab-deploy-mode` | Add a Smackerel "homelab" or "prod" mode to `./smackerel.sh up` (named project, `restart: unless-stopped`, host port block `40000–49999`, custom bridge `172.31.0.0/16`, persistent-volume label policy that survives `clean smart`/`clean full`) | Friday deploy |
 | `_ops/OPS-HOMELAB-102-secrets-management` | Define how `auth_token`, `llm.api_key`, `telegram.bot_token`, connector `access_token` flow into home-lab without manual file editing; fail-loud on empty | Friday deploy |
 | `_ops/OPS-HOMELAB-103-connector-volume-protection` | Pin `postgres-data`, `nats-data`, and connector input dirs (`data/bookmarks-import`, `data/maps-import`, `data/twitter-archive`, `data/browser-history`) under explicit named volumes / bind mounts; document recovery; integrate with backup target | Friday deploy — **directly addresses the user requirement "do not lose connectors after setup"** |
 | `_ops/OPS-HOMELAB-104-tls-and-reverse-proxy` | Front Smackerel via host Caddy; no in-stack TLS; plus internal-bind-only `127.0.0.1` checks | Public exposure (post-Friday) |
@@ -104,7 +104,7 @@ Current state: `internal/db/migrations/` has 15 active SQL files (`001_initial_s
 ## 6. Worktree freeze and release commit
 
 - The earlier weekend audit showed e2e was passing on the latest test run.
-- Before Friday: pick deploy commit on `main`, create branch `release/evox2-2026-05-08`, push.
+- Before Friday: pick deploy commit on `main`, create branch `release/homelab-2026-05-08`, push.
 - Verify with: `./smackerel.sh check`, `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e` — all must be clean on the deploy commit.
 
 ---
@@ -114,7 +114,7 @@ Current state: `internal/db/migrations/` has 15 active SQL files (`001_initial_s
 1. ✅ Apply Master plan §3 Tailscale ↔ Docker bridge mitigation (host-side, before any container starts on home-lab).
 2. ✅ Provision `/home/homelab/backups/smackerel/` and `/home/homelab/smackerel/data/` for connector inputs.
 3. ✅ Land OPS-HOMELAB-101 + OPS-HOMELAB-102 + OPS-HOMELAB-103 (minimum viable subset).
-4. ✅ `./smackerel.sh config generate` for the evox2 env.
+4. ✅ `./smackerel.sh config generate` for the homelab env.
 5. ✅ `./smackerel.sh build` on the deploy commit.
 6. ✅ Copy resolved env to home-lab via OPS-HOMELAB-102 mechanism.
 7. ✅ `./smackerel.sh up` on home-lab.

@@ -31,8 +31,34 @@ done
 [[ -n "$MANIFEST" ]] || { echo "ERROR: --build-manifest required" >&2; exit 1; }
 [[ -f "$MANIFEST" ]] || { echo "ERROR: build manifest not found: $MANIFEST" >&2; exit 1; }
 
-TARGET_PARAMS="$REPO_ROOT/deploy/$TARGET/params.yaml"
-[[ -f "$TARGET_PARAMS" ]] || { echo "ERROR: $TARGET_PARAMS missing" >&2; exit 1; }
+# Strict adapter resolution per .github/instructions/bubbles-deployment-target.instructions.md.
+# Honors DEPLOY_TARGETS_ROOT as an explicit operator opt-in to out-of-tree adapters;
+# refuses to silently fall back to in-tree when that env var is set.
+IN_TREE_PARAMS="$REPO_ROOT/deploy/$TARGET/params.yaml"
+if [[ -n "${DEPLOY_TARGETS_ROOT:-}" ]]; then
+  OUT_OF_TREE_PARAMS="${DEPLOY_TARGETS_ROOT%/}/smackerel/${TARGET}/params.yaml"
+  if [[ -f "$OUT_OF_TREE_PARAMS" ]]; then
+    TARGET_PARAMS="$OUT_OF_TREE_PARAMS"
+  else
+    cat >&2 <<EOF
+ERROR: deploy-target adapter not found for '${TARGET}'.
+  DEPLOY_TARGETS_ROOT is set to: ${DEPLOY_TARGETS_ROOT}
+  Tried (out-of-tree):           ${OUT_OF_TREE_PARAMS}  [missing]
+  NOT consulted (in-tree):       ${IN_TREE_PARAMS}
+  Setting DEPLOY_TARGETS_ROOT is an explicit opt-in to out-of-tree adapters.
+  promote.sh refuses to silently fall back to the in-tree adapter.
+  Either populate the out-of-tree path or unset DEPLOY_TARGETS_ROOT.
+EOF
+    exit 1
+  fi
+else
+  if [[ -f "$IN_TREE_PARAMS" ]]; then
+    TARGET_PARAMS="$IN_TREE_PARAMS"
+  else
+    echo "ERROR: $IN_TREE_PARAMS missing (and DEPLOY_TARGETS_ROOT unset)" >&2
+    exit 1
+  fi
+fi
 
 # Read target environment from params.yaml
 TARGET_ENV="$(awk '/^environment:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); print; exit }' "$TARGET_PARAMS")"
