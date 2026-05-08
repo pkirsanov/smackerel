@@ -120,9 +120,16 @@ type Dependencies struct {
 	BookmarkPub        BookmarkPublisher
 	OllamaURL          string
 	AuthToken          string
-	Version            string
-	CommitHash         string
-	BuildTime          string
+	// Environment is the deployment environment value (allowed: development |
+	// test | production) sourced from runtime.environment in smackerel.yaml
+	// via SMACKEREL_ENV. MIT-040-S-004 — bearerAuthMiddleware uses this to
+	// reject empty-token requests when Environment == "production"
+	// (defense-in-depth; the wiring constructor already fails fast in
+	// production with an empty token).
+	Environment string
+	Version     string
+	CommitHash  string
+	BuildTime   string
 
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).

@@ -25,7 +25,7 @@ def _check_required_config() -> dict[str, str]:
         "LLM_MODEL",
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
-        "SMACKEREL_AUTH_TOKEN",
+        "SMACKEREL_ENV",
     ]
     required: dict[str, str] = {}
     missing: list[str] = []
@@ -59,6 +59,33 @@ def _check_required_config() -> dict[str, str]:
             required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"],
         )
         sys.exit(1)
+
+    # MIT-040-S-004 — SMACKEREL_ENV allowlist enforcement (development | test
+    # | production). Any other value is a configuration error and the sidecar
+    # exits with sys.exit(1) so uvicorn returns a non-zero exit code.
+    environment = required["SMACKEREL_ENV"]
+    if environment not in {"development", "test", "production"}:
+        logger.error(
+            "SMACKEREL_ENV must be one of development|test|production, got %r",
+            environment,
+        )
+        sys.exit(1)
+
+    # MIT-040-S-004 — production-mode auth-token fail-fast. SMACKEREL_AUTH_TOKEN
+    # is required only when SMACKEREL_ENV=production. In development/test, an
+    # empty token logs a warning and the sidecar continues in dev-mode
+    # bypass (auth.py allows all requests through verify_auth when the
+    # module-level _AUTH_TOKEN is empty).
+    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    if not auth_token and environment == "production":
+        logger.error("SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
+        sys.exit(1)
+    if not auth_token:
+        logger.warning(
+            "SMACKEREL_AUTH_TOKEN is empty — auth bypassed (dev-mode)",
+            extra={"environment": environment},
+        )
+    required["SMACKEREL_AUTH_TOKEN"] = auth_token
 
     return required
 

@@ -437,9 +437,18 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 
 // bearerAuthMiddleware checks Bearer token authentication for API routes.
 // If no AuthToken is configured, all requests are allowed (dev mode).
+// MIT-040-S-004 — when Environment == "production" an empty AuthToken is
+// rejected with 401 as defense-in-depth (the wiring constructor already
+// fails fast in production, so this branch should be unreachable in
+// normal operation, but enforce it here too).
 func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if d.AuthToken == "" {
+			if d.Environment == "production" {
+				slog.Warn("bearer auth blocked", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", "auth not configured in production")
+				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "auth not configured in production")
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}

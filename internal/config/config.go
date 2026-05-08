@@ -19,12 +19,18 @@ type ExpenseCategory struct {
 
 // Config holds all configuration values for smackerel-core.
 type Config struct {
-	DatabaseURL      string
-	NATSURL          string
-	LLMProvider      string
-	LLMModel         string
-	LLMAPIKey        string
-	AuthToken        string
+	DatabaseURL string
+	NATSURL     string
+	LLMProvider string
+	LLMModel    string
+	LLMAPIKey   string
+	AuthToken   string
+	// Environment is the deployment environment (allowed: development | test |
+	// production). Sourced from runtime.environment in smackerel.yaml via
+	// SMACKEREL_ENV. MIT-040-S-004 — when "production", services fail-loud on
+	// empty AuthToken at startup; in "development" or "test" the empty-token
+	// dev-mode warn-and-continue is preserved.
+	Environment      string
 	TelegramBotToken string
 	TelegramChatIDs  []string
 	OllamaURL        string
@@ -247,6 +253,7 @@ func Load() (*Config, error) {
 		LLMModel:         os.Getenv("LLM_MODEL"),
 		LLMAPIKey:        os.Getenv("LLM_API_KEY"),
 		AuthToken:        os.Getenv("SMACKEREL_AUTH_TOKEN"),
+		Environment:      os.Getenv("SMACKEREL_ENV"),
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		OllamaURL:        os.Getenv("OLLAMA_URL"),
 		OllamaModel:      os.Getenv("OLLAMA_MODEL"),
@@ -865,7 +872,7 @@ func (c *Config) requiredVars() []struct {
 		{"NATS_URL", c.NATSURL},
 		{"LLM_PROVIDER", c.LLMProvider},
 		{"LLM_MODEL", c.LLMModel},
-		{"SMACKEREL_AUTH_TOKEN", c.AuthToken},
+		{"SMACKEREL_ENV", c.Environment},
 		{"EMBEDDING_MODEL", c.EmbeddingModel},
 		{"DIGEST_CRON", c.DigestCron},
 		{"LOG_LEVEL", c.LogLevel},
@@ -873,6 +880,13 @@ func (c *Config) requiredVars() []struct {
 		{"ML_SIDECAR_URL", c.MLSidecarURL},
 		{"CORE_API_URL", c.CoreAPIURL},
 	}
+	// MIT-040-S-004 — SMACKEREL_AUTH_TOKEN is NOT in requiredVars(): it is
+	// required only when SMACKEREL_ENV=production, and the dedicated
+	// production-mode check in Validate() emits a single error that names
+	// both the production constraint and the variable name. In
+	// development/test, an empty token is allowed at the loader layer; the
+	// runtime warn-and-continue is logged by configureLogging() and the
+	// bearer middleware enforces 401 in production as defense-in-depth.
 	// Ollama vars are only required when using Ollama as the LLM provider
 	if strings.EqualFold(c.LLMProvider, "ollama") {
 		vars = append(vars,
@@ -900,27 +914,49 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 	}
 
-	// Reject known placeholder auth tokens — these are guessable defaults
-	placeholders := []string{
-		"development-change-me",
-		"changeme",
-		"change-me",
-		"placeholder",
-		"test-token",
-		"default",
-		"dev-token-smackerel-2026",
+	// MIT-040-S-004 — enforce SMACKEREL_ENV allowlist (development | test |
+	// production). Any other value is a configuration error.
+	switch c.Environment {
+	case "development", "test", "production":
+		// allowed
+	default:
+		return fmt.Errorf("SMACKEREL_ENV must be one of development|test|production, got %q", c.Environment)
 	}
-	for _, p := range placeholders {
-		if strings.EqualFold(c.AuthToken, p) {
-			return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token: openssl rand -hex 24", c.AuthToken)
+
+	// MIT-040-S-004 — explicit production-mode auth-token error. The
+	// missing-required path above already names SMACKEREL_AUTH_TOKEN when
+	// the env is production, but the next message bundles the production
+	// constraint with the variable name so operators see both terms in a
+	// single error and tests can assert the production mode by message.
+	if c.Environment == "production" && c.AuthToken == "" {
+		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
+	}
+
+	// AUTH_TOKEN format checks only apply when a token is set. In
+	// development/test with an empty token, the dev-mode bypass governs.
+	if c.AuthToken != "" {
+		// Reject known placeholder auth tokens — these are guessable defaults
+		placeholders := []string{
+			"development-change-me",
+			"changeme",
+			"change-me",
+			"placeholder",
+			"test-token",
+			"default",
+			"dev-token-smackerel-2026",
 		}
-	}
-	// Reject any token starting with "dev-token-" — these are development-only patterns
-	if strings.HasPrefix(strings.ToLower(c.AuthToken), "dev-token-") {
-		return fmt.Errorf("SMACKEREL_AUTH_TOKEN starts with 'dev-token-' which is a development placeholder pattern — generate a secure random token: openssl rand -hex 24")
-	}
-	if len(c.AuthToken) < 16 {
-		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be at least 16 characters (got %d)", len(c.AuthToken))
+		for _, p := range placeholders {
+			if strings.EqualFold(c.AuthToken, p) {
+				return fmt.Errorf("SMACKEREL_AUTH_TOKEN is set to a known placeholder value %q — generate a secure random token: openssl rand -hex 24", c.AuthToken)
+			}
+		}
+		// Reject any token starting with "dev-token-" — these are development-only patterns
+		if strings.HasPrefix(strings.ToLower(c.AuthToken), "dev-token-") {
+			return fmt.Errorf("SMACKEREL_AUTH_TOKEN starts with 'dev-token-' which is a development placeholder pattern — generate a secure random token: openssl rand -hex 24")
+		}
+		if len(c.AuthToken) < 16 {
+			return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be at least 16 characters (got %d)", len(c.AuthToken))
+		}
 	}
 
 	// Semantic validation: PORT must be a valid TCP port number

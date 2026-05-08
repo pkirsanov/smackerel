@@ -45,10 +45,14 @@ func TestValidate_MissingMultiple(t *testing.T) {
 }
 
 func TestValidate_MissingAllRequired(t *testing.T) {
-	// Clear all required vars (with no LLM_PROVIDER set, Ollama vars are NOT required)
+	// Clear all required vars (with no LLM_PROVIDER set, Ollama vars are NOT required).
+	// MIT-040-S-004: SMACKEREL_AUTH_TOKEN is removed from the always-required
+	// set — it is required only when SMACKEREL_ENV=production. The
+	// production-mode requirement is covered by the dedicated
+	// TestRuntimeConfig_S004_* tests.
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
-		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
+		"LLM_MODEL", "LLM_API_KEY",
 		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 		"CORE_API_URL",
@@ -61,7 +65,7 @@ func TestValidate_MissingAllRequired(t *testing.T) {
 	}
 	for _, key := range []string{
 		"DATABASE_URL", "NATS_URL", "LLM_PROVIDER",
-		"LLM_MODEL", "LLM_API_KEY", "SMACKEREL_AUTH_TOKEN",
+		"LLM_MODEL", "LLM_API_KEY",
 		"EMBEDDING_MODEL",
 		"DIGEST_CRON", "LOG_LEVEL", "PORT", "ML_SIDECAR_URL",
 		"CORE_API_URL",
@@ -452,6 +456,10 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("LLM_MODEL", "gpt-4o-mini")
 	t.Setenv("LLM_API_KEY", "sk-test-key")
 	t.Setenv("SMACKEREL_AUTH_TOKEN", "a-secure-test-token-for-unit-tests")
+	// MIT-040-S-004 — SMACKEREL_ENV is a fail-loud SST signal. Default tests
+	// run as the test environment so the empty-token dev-mode bypass is in
+	// effect when individual cases override SMACKEREL_AUTH_TOKEN to "".
+	t.Setenv("SMACKEREL_ENV", "test")
 	t.Setenv("OLLAMA_URL", "http://ollama:11434")
 	t.Setenv("OLLAMA_MODEL", "llama3.2")
 	t.Setenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")

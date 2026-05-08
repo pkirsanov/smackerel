@@ -31,7 +31,12 @@ import (
 )
 
 // configureLogging sets up the global slog handler based on cfg.LogLevel.
-func configureLogging(cfg *config.Config) {
+// MIT-040-S-004 — also enforces the SMACKEREL_ENV-conditional auth-token
+// contract: in the production environment an empty SMACKEREL_AUTH_TOKEN is
+// fatal (returns a non-nil error so main.go exits with a non-zero code);
+// in development/test it is logged at WARN level and the runtime continues
+// in dev-mode bypass.
+func configureLogging(cfg *config.Config) error {
 	var logLevel slog.Level
 	switch cfg.LogLevel {
 	case "debug":
@@ -46,8 +51,12 @@ func configureLogging(cfg *config.Config) {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})))
 
 	if cfg.AuthToken == "" {
-		slog.Warn("SMACKEREL_AUTH_TOKEN is empty — system running without authentication")
+		if cfg.Environment == "production" {
+			return fmt.Errorf("config: SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
+		}
+		slog.Warn("SMACKEREL_AUTH_TOKEN is empty — auth bypassed (dev-mode)", "environment", cfg.Environment)
 	}
+	return nil
 }
 
 // buildAPIDeps assembles the api.Dependencies struct including annotation and
@@ -69,6 +78,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		ArtifactStore:                   svc.pg,
 		OllamaURL:                       cfg.OllamaURL,
 		AuthToken:                       cfg.AuthToken,
+		Environment:                     cfg.Environment,
 		ConnectorRegistry:               svc.registry,
 		Version:                         version,
 		CommitHash:                      commitHash,

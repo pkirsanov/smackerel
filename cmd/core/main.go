@@ -47,7 +47,9 @@ func run() error {
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	configureLogging(cfg)
+	if err := configureLogging(cfg); err != nil {
+		return fmt.Errorf("configuration error: %w", err)
+	}
 	slog.Info("starting smackerel-core", "port", cfg.Port, "version", version, "commit", commitHash, "build_time", buildTime)
 
 	// Build core services (DB, NATS, pipeline, knowledge, etc.)
