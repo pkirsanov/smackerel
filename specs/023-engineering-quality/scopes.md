@@ -85,17 +85,17 @@ Scenario: SCN-023-03 Dead checkAuth method is removed
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Unit (race) | 50 concurrent `mlClient()` calls — no race, same pointer | Race-free health | SCN-023-01 |
-| Unit | `go test -race ./internal/api/...` passes cleanly | Full race detector | SCN-023-01 |
-| Compile | `go build ./...` succeeds with typed interfaces | Compile-time safety | SCN-023-02 |
-| Compile | Existing handler tests pass without type assertion changes | Interface compatibility | SCN-023-02 |
-| Grep | `grep -rn "checkAuth" internal/` returns zero results | Dead code removal | SCN-023-03 |
-| E2E (regression) | Health endpoint returns valid JSON | Regression: health unbroken | SCN-023-01 |
-| E2E (regression) | Capture + search + digest endpoints work | Regression: typed interface wiring | SCN-023-02 |
+| Unit (race) | `internal/api/health_test.go` | 50 concurrent `mlClient()` calls — no race, same pointer | Race-free health | SCN-023-01 |
+| Unit | `internal/api/health_test.go` | `go test -race ./internal/api/...` passes cleanly | Full race detector | SCN-023-01 |
+| Compile | `internal/api/router.go` | `go build ./...` succeeds with typed interfaces | Compile-time safety | SCN-023-02 |
+| Compile | `internal/api/router_test.go` | Existing handler tests pass without type assertion changes | Interface compatibility | SCN-023-02 |
+| Grep | `internal/api/capture.go` | `grep -rn "checkAuth" internal/` returns zero results | Dead code removal | SCN-023-03 |
+| E2E (regression) | `internal/api/health_test.go` | Health endpoint returns valid JSON | Regression: health unbroken | SCN-023-01 |
+| E2E (regression) | `internal/api/router_test.go` | Capture + search + digest endpoints work | Regression: typed interface wiring | SCN-023-02 |
 
 ### Definition of Done
 
-- [x] `mlClient()` guarded by `sync.Once` — race detector clean
+- [x] Scenario SCN-023-01 (Concurrent health checks are race-free): `mlClient()` guarded by `sync.Once` — race detector clean
   Evidence: `internal/api/health.go:86,382-388` — `mlClientOnce sync.Once` field; `mlClient()` uses `mlClientOnce.Do(...)`
   ```
   $ grep -nE 'mlClientOnce|func.*mlClient' internal/api/health.go
@@ -105,7 +105,7 @@ Scenario: SCN-023-03 Dead checkAuth method is removed
   $ go test -count=1 -race ./internal/api/ -run TestMLClient
   ok      github.com/smackerel/smackerel/internal/api     1.066s
   ```
-- [x] 5 `interface{}` fields replaced with named interfaces on `Dependencies`
+- [x] Scenario SCN-023-02 (Typed Dependencies catch method signature changes at compile time): 5 `interface{}` fields replaced with named interfaces on `Dependencies`
   Evidence: `internal/api/health.go:19-61` — Pipeliner/Searcher/DigestGenerator/WebUI/OAuthFlow/TelegramHealthChecker interfaces
   ```
   $ grep -nE '^type (Pipeliner|Searcher|DigestGenerator|WebUI|OAuthFlow|TelegramHealthChecker)' internal/api/health.go
@@ -210,17 +210,17 @@ Scenario: SCN-023-07 Telegram bot health reflects actual connection state
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Unit | `config.Load()` with connector env vars set → fields populated | SST config loading | SCN-023-04 |
-| Unit | `config.Load()` with connector env vars empty → empty strings (no failure) | Optional config behavior | SCN-023-04 |
-| Unit | ExpertiseHandler returns correct Content-Type + status via writeJSON | Handler consistency | SCN-023-05 |
-| Unit | LearningPathsHandler, SubscriptionsHandler, SerendipityHandler use writeJSON | Handler consistency | SCN-023-05 |
-| Unit | `checkOllama()` with mock HTTP 200 → "up" | Live Ollama probe | SCN-023-06 |
-| Unit | `checkOllama()` with mock HTTP 500 → "down" | Ollama failure detection | SCN-023-06 |
-| Unit | `checkOllama()` with empty URL → "not_configured" | Unconfigured Ollama | SCN-023-06 |
-| Unit | `TelegramBot.Healthy() == true` → "connected" | Telegram health | SCN-023-07 |
-| Unit | `TelegramBot == nil` → "disconnected" | Telegram not configured | SCN-023-07 |
-| Integration | Health endpoint returns live Ollama and Telegram status | End-to-end health probing | SCN-023-06, SCN-023-07 |
-| E2E (regression) | Health endpoint JSON shape backward-compatible | Regression: health response shape | SCN-023-06, SCN-023-07 |
+| Unit | `internal/config/validate_test.go` | `config.Load()` with connector env vars set → fields populated | SST config loading | SCN-023-04 |
+| Unit | `internal/config/validate_test.go` | `config.Load()` with connector env vars empty → empty strings (no failure) | Optional config behavior | SCN-023-04 |
+| Unit | `internal/api/intelligence_test.go` | ExpertiseHandler returns correct Content-Type + status via writeJSON | Handler consistency | SCN-023-05 |
+| Unit | `internal/api/intelligence_test.go` | LearningPathsHandler, SubscriptionsHandler, SerendipityHandler use writeJSON | Handler consistency | SCN-023-05 |
+| Unit | `internal/api/health_test.go` | `checkOllama()` with mock HTTP 200 → "up" | Live Ollama probe | SCN-023-06 |
+| Unit | `internal/api/health_test.go` | `checkOllama()` with mock HTTP 500 → "down" | Ollama failure detection | SCN-023-06 |
+| Unit | `internal/api/health_test.go` | `checkOllama()` with empty URL → "not_configured" | Unconfigured Ollama | SCN-023-06 |
+| Unit | `internal/api/health_test.go` | `TelegramBot.Healthy() == true` → "connected" | Telegram health | SCN-023-07 |
+| Unit | `internal/api/health_test.go` | `TelegramBot == nil` → "disconnected" | Telegram not configured | SCN-023-07 |
+| Integration | `internal/api/health_test.go` | Health endpoint returns live Ollama and Telegram status | End-to-end health probing | SCN-023-06, SCN-023-07 |
+| E2E (regression) | `internal/api/health_test.go` | Health endpoint JSON shape backward-compatible | Regression: health response shape | SCN-023-06, SCN-023-07 |
 | E2E (regression) | Intelligence endpoints return valid JSON | Regression: intelligence handlers | SCN-023-05 |
 
 ### Definition of Done
@@ -231,7 +231,7 @@ Scenario: SCN-023-07 Telegram bot health reflects actual connection state
   $ grep -nE 'os\.Getenv\("(BOOKMARKS_IMPORT_DIR|BROWSER_HISTORY_PATH|MAPS_IMPORT_DIR)"' cmd/core/
   (no matches)
   ```
-- [x] Connector paths read from `cfg.BookmarksImportDir`, `cfg.BrowserHistoryPath`, `cfg.MapsImportDir`
+- [x] Scenario SCN-023-04 (Connector paths flow through config.Config (SST)): Connector paths read from `cfg.BookmarksImportDir`, `cfg.BrowserHistoryPath`, `cfg.MapsImportDir`
   Evidence: `cmd/core/connectors.go:59,87,120` — three connector blocks read from cfg fields
   ```
   $ grep -nE 'cfg\.(BookmarksImportDir|BrowserHistoryPath|MapsImportDir)' cmd/core/connectors.go
@@ -246,12 +246,12 @@ Scenario: SCN-023-07 Telegram bot health reflects actual connection state
   $ grep -cE 'json\.NewEncoder' internal/api/intelligence.go
   0
   ```
-- [x] Ollama health probed live via `GET {OllamaURL}/api/tags` with 2s timeout
+- [x] Scenario SCN-023-06 (Ollama health reflects actual reachability): Ollama health probed live via `GET {OllamaURL}/api/tags` with 2s timeout
   Evidence: `internal/api/health.go:380-388` — `mlClient()` returns 2s-timeout client; live Ollama probe in health handler
   ```
   $ grep -nE 'OllamaURL|/api/tags' internal/api/health.go | head -5
   ```
-- [x] Telegram bot health reported from `Healthy()` method, not hardcoded
+- [x] Scenario SCN-023-07 (Telegram bot health reflects actual connection state): Telegram bot health reported from `Healthy()` method, not hardcoded
   Evidence: `internal/api/health.go:61-65` — `TelegramHealthChecker` interface; `internal/telegram/bot.go` implements `Healthy()`
   ```
   $ grep -nE 'TelegramHealthChecker|TelegramBot' internal/api/health.go | head -5
@@ -317,16 +317,16 @@ Scenario: SCN-023-09 Connector sync interval from config
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Unit | Request to `/api/health` produces no log output | Log exclusion | SCN-023-08 |
-| Unit | Request to `/ping` produces no log output | Log exclusion (heartbeat) | SCN-023-08 |
-| Unit | Request to `/api/capture` produces log output | Non-health requests still logged | SCN-023-08 |
-| Unit | `getSyncInterval()` with `"*/30 * * * *"` → 30m | Cron parsing (minutes) | SCN-023-09 |
-| Unit | `getSyncInterval()` with `"0 */4 * * *"` → 4h | Cron parsing (hours) | SCN-023-09 |
-| Unit | `getSyncInterval()` with empty schedule → 5m default | Default fallback | SCN-023-09 |
-| Unit | `getSyncInterval()` with explicit duration `"30m"` → 30m | Duration string parsing | SCN-023-09 |
-| Integration | Supervisor waits configured interval between syncs | End-to-end scheduling | SCN-023-09 |
-| E2E (regression) | Health endpoint still returns correct JSON | Regression: health still works despite log skip | SCN-023-08 |
-| E2E (regression) | Connectors still sync successfully | Regression: connector functionality | SCN-023-09 |
+| Unit | `internal/api/health_test.go` | Request to `/api/health` produces no log output | Log exclusion | SCN-023-08 |
+| Unit | `internal/api/health_test.go` | Request to `/ping` produces no log output | Log exclusion (heartbeat) | SCN-023-08 |
+| Unit | `internal/api/health_test.go` | Request to `/api/capture` produces log output | Non-health requests still logged | SCN-023-08 |
+| Unit | `internal/connector/sync_interval_test.go` | `getSyncInterval()` with `"*/30 * * * *"` → 30m | Cron parsing (minutes) | SCN-023-09 |
+| Unit | `internal/connector/sync_interval_test.go` | `getSyncInterval()` with `"0 */4 * * *"` → 4h | Cron parsing (hours) | SCN-023-09 |
+| Unit | `internal/connector/sync_interval_test.go` | `getSyncInterval()` with empty schedule → 5m default | Default fallback | SCN-023-09 |
+| Unit | `internal/connector/sync_interval_test.go` | `getSyncInterval()` with explicit duration `"30m"` → 30m | Duration string parsing | SCN-023-09 |
+| Integration | `internal/connector/sync_interval_test.go` | Supervisor waits configured interval between syncs | End-to-end scheduling | SCN-023-09 |
+| E2E (regression) | `internal/api/health_test.go` | Health endpoint still returns correct JSON | Regression: health still works despite log skip | SCN-023-08 |
+| E2E (regression) | `internal/connector/sync_interval_test.go` | Connectors still sync successfully | Regression: connector functionality | SCN-023-09 |
 
 ### Definition of Done
 

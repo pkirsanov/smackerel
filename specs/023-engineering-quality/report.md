@@ -772,3 +772,16 @@ Multiple commits touched spec 023 files since the last security scan. All change
 ### Verdict
 
 ✅ CLEAN — No security findings. Repeat scan confirms spec 023 security posture is maintained.
+
+---
+
+## Trace-Guard Cross-Spec Remediation (2026-05-08)
+
+**Trigger:** cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9)
+**Mode:** non-interactive
+
+Coverage: `internal/config/validate_test.go` exercises Scope 2 SCN-023-04 (Connector paths flow through `config.Config` SST) by asserting `cfg.BookmarksImportDir`, `cfg.BrowserHistoryPath`, and `cfg.MapsImportDir` are populated from env and remain empty (no failure) when env vars are unset. Test Plan rows in scope 2 reference this path.
+
+Coverage: `internal/api/intelligence_test.go` exercises Scope 2 SCN-023-05 (Intelligence handlers use `writeJSON` for consistent responses) by asserting handler routes return correct Content-Type/status via `writeJSON`. Test Plan rows in scope 2 reference this path.
+
+Coverage: `internal/connector/sync_interval_test.go` exercises Scope 3 SCN-023-09 (Connector sync interval from config) via `TestGetSyncInterval_FromConfig`, `TestGetSyncInterval_FromSourceConfig`, `TestGetSyncInterval_Default`, `TestGetSyncInterval_EmptySchedule`, `TestGetSyncInterval_OAuthConnectorSchedules`. Test Plan rows in scope 3 reference this path.

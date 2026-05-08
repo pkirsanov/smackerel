@@ -270,6 +270,17 @@
       "startedAt": "2026-04-22T00:00:00Z",
       "completedAt": "2026-04-22T00:30:00Z",
       "summary": "Gaps R2 sweep (stochastic-quality-sweep child). Revisited deferred GAP-004 from prior sweep. Found and fixed 3 findings: GAP-R2-001 (Health() never re-validates import dir existence post-Connect \u2014 added active os.Stat check), GAP-R2-002 (pendingFiles field missing from struct \u2014 added field and populated in findNewFiles), GAP-R2-003 (content_fetched metadata missing \u2014 added initial false value per R-006). Added 5 adversarial regression tests. All Go packages pass, 257 Python tests pass. Lint/check clean."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-08T00:00:00Z",
+      "completedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Repointed Test Plan rows T-2-13..T-2-17 to tests/integration/bookmarks_dedup_test.go and tests/integration/bookmarks_topics_test.go; T-2-18..T-2-19 to tests/e2e/test_bookmark_import.sh; tagged DoD bullets for SCN-BK-004/006/007/008 with 'Scenario SCN-BK-NNN (title):' prefix; appended trace-guard remediation section to report.md. trace-guard PASSED (0 warnings)."
     }
   ],
   "policySnapshot": {
@@ -301,7 +312,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-09T02:05:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "certification": {
     "status": "done",
     "completedScopes": [

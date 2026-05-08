@@ -708,6 +708,516 @@
         {"type": "e2e-script", "location": "tests/e2e/test_config_fail.sh"}
       ],
       "linkedDoD": ["Missing required config variables fail startup with explicit error (no hidden defaults)"]
+    },
+    {
+      "scenarioId": "SCN-002-045",
+      "name": "Source ID constants accessible without importing processor",
+      "scope": "09-extract-shared-pipeline-constants",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/constants.go"}
+      ],
+      "linkedDoD": ["Source ID constants live in shared pipeline package and can be referenced without importing processor"]
+    },
+    {
+      "scenarioId": "SCN-002-046",
+      "name": "Processing status constants available as typed values",
+      "scope": "09-extract-shared-pipeline-constants",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/constants.go"}
+      ],
+      "linkedDoD": ["Processing status constants exposed as typed values from shared pipeline package"]
+    },
+    {
+      "scenarioId": "SCN-002-047",
+      "name": "Content extraction dispatches by type independently",
+      "scope": "10-decompose-process-into-pipeline-stages",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/processor.go"}
+      ],
+      "linkedDoD": ["Content extraction dispatches by content type via independent stage functions"]
+    },
+    {
+      "scenarioId": "SCN-002-048",
+      "name": "Dedup check handles delta re-processing (R-011)",
+      "scope": "10-decompose-process-into-pipeline-stages",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/processor.go"}
+      ],
+      "linkedDoD": ["Dedup check correctly handles delta re-processing per R-011"]
+    },
+    {
+      "scenarioId": "SCN-002-049",
+      "name": "Submit stage handles NATS publish failure with cleanup",
+      "scope": "10-decompose-process-into-pipeline-stages",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/processor.go"}
+      ],
+      "linkedDoD": ["Submit stage handles NATS publish failure with cleanup of partial state"]
+    },
+    {
+      "scenarioId": "SCN-002-050",
+      "name": "Image URL creates stub and sends to ML sidecar (R-003)",
+      "scope": "10-decompose-process-into-pipeline-stages",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/processor.go"}
+      ],
+      "linkedDoD": ["Image URL creates stub artifact and dispatches to ML sidecar per R-003"]
+    },
+    {
+      "scenarioId": "SCN-002-051",
+      "name": "PDF URL creates stub and sends to ML sidecar (R-003)",
+      "scope": "10-decompose-process-into-pipeline-stages",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/pipeline/processor.go"}
+      ],
+      "linkedDoD": ["PDF URL creates stub artifact and dispatches to ML sidecar per R-003"]
+    },
+    {
+      "scenarioId": "SCN-002-052",
+      "name": "Go validates outgoing NATS process payload",
+      "scope": "11-nats-payload-contract-validation",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/contract_test.go"}
+      ],
+      "linkedDoD": ["Go publisher validates outgoing process payload against shared contract before publish"]
+    },
+    {
+      "scenarioId": "SCN-002-053",
+      "name": "Go validates incoming ML result payload",
+      "scope": "11-nats-payload-contract-validation",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/contract_test.go"}
+      ],
+      "linkedDoD": ["Go subscriber validates incoming ML result payload against shared contract"]
+    },
+    {
+      "scenarioId": "SCN-002-054",
+      "name": "Go NATS subject constants match shared contract",
+      "scope": "12-cross-language-nats-subject-contract",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/nats/contract_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/contract_test.go"}
+      ],
+      "linkedDoD": ["Go NATS subject constants match the shared cross-language contract"]
+    },
+    {
+      "scenarioId": "SCN-002-055",
+      "name": "Python NATS subjects match shared contract",
+      "scope": "12-cross-language-nats-subject-contract",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_nats_contract.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_nats_contract.py"}
+      ],
+      "linkedDoD": ["Python NATS subject constants match the shared cross-language contract"]
+    },
+    {
+      "scenarioId": "SCN-002-056",
+      "name": "Python validates incoming process payload fields",
+      "scope": "13-python-side-nats-payload-validation",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_validation.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_validation.py"}
+      ],
+      "linkedDoD": ["Python sidecar validates incoming process payload fields against contract"]
+    },
+    {
+      "scenarioId": "SCN-002-057",
+      "name": "Python validates outgoing processed result fields",
+      "scope": "13-python-side-nats-payload-validation",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_validation.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_validation.py"}
+      ],
+      "linkedDoD": ["Python sidecar validates outgoing processed result fields against contract"]
+    },
+    {
+      "scenarioId": "SCN-002-058",
+      "name": "Scheduler digest retry fields are thread-safe",
+      "scope": "14-scheduler-data-race-fix",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler digest retry fields guarded against concurrent access (race-detector clean)"]
+    },
+    {
+      "scenarioId": "SCN-002-059",
+      "name": "Scheduler retry clears state on successful delivery",
+      "scope": "14-scheduler-data-race-fix",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler retry state is cleared after successful digest delivery"]
+    },
+    {
+      "scenarioId": "SCN-002-060",
+      "name": "Scheduler cron registers expected number of entries",
+      "scope": "15-scheduler-test-coverage",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler registers the expected number of cron entries on startup"]
+    },
+    {
+      "scenarioId": "SCN-002-061",
+      "name": "Scheduler nil digestGen guard prevents panic",
+      "scope": "15-scheduler-test-coverage",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler guards against nil digestGen and does not panic"]
+    },
+    {
+      "scenarioId": "SCN-002-062",
+      "name": "Scheduler concurrent retry field access under race detector",
+      "scope": "15-scheduler-test-coverage",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler retry field concurrent access is race-detector clean"]
+    },
+    {
+      "scenarioId": "SCN-002-063",
+      "name": "Scheduler retry fields set on timeout and cleared on success",
+      "scope": "15-scheduler-test-coverage",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/scheduler/scheduler_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/scheduler/scheduler_test.go"}
+      ],
+      "linkedDoD": ["Scheduler retry fields are set on timeout and cleared on successful delivery"]
+    },
+    {
+      "scenarioId": "SCN-002-064",
+      "name": "API routes reject requests without Bearer token when AuthToken configured",
+      "scope": "16-api-auth-middleware",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go"},
+        {"type": "source", "location": "internal/api/router.go"}
+      ],
+      "linkedDoD": ["API routes reject unauthenticated requests when AuthToken is configured"]
+    },
+    {
+      "scenarioId": "SCN-002-065",
+      "name": "API routes accept requests with valid Bearer token",
+      "scope": "16-api-auth-middleware",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/router_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/router_test.go"},
+        {"type": "source", "location": "internal/api/router.go"}
+      ],
+      "linkedDoD": ["API routes accept requests with valid Bearer token"]
+    },
+    {
+      "scenarioId": "SCN-002-066",
+      "name": "Health endpoint remains accessible without auth",
+      "scope": "16-api-auth-middleware",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/health_test.go"},
+        {"type": "source", "location": "internal/api/router.go"}
+      ],
+      "linkedDoD": ["Health endpoint remains accessible without Bearer token"]
+    },
+    {
+      "scenarioId": "SCN-002-067",
+      "name": "API auth middleware is no-op when AuthToken is empty",
+      "scope": "16-api-auth-middleware",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/api/bearer_middleware_environment_s004_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/api/bearer_middleware_environment_s004_test.go"},
+        {"type": "source", "location": "internal/api/router.go"}
+      ],
+      "linkedDoD": ["Bearer auth middleware is a no-op when AuthToken is empty (dev mode)"]
+    },
+    {
+      "scenarioId": "SCN-002-068",
+      "name": "ExportArtifacts logs scan errors instead of silently skipping",
+      "scope": "17-export-scan-error-logging",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/api/router.go"}
+      ],
+      "linkedDoD": ["ExportArtifacts logs row scan errors instead of silently skipping rows"]
+    },
+    {
+      "scenarioId": "SCN-002-069",
+      "name": "Auth decrypt logs warning on base64 decode failure",
+      "scope": "18-auth-decryption-fallback-logging",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go"},
+        {"type": "source", "location": "internal/auth/oauth.go"}
+      ],
+      "linkedDoD": ["Auth decrypt path logs a warning on base64 decode failure before fallback"]
+    },
+    {
+      "scenarioId": "SCN-002-070",
+      "name": "Auth decrypt logs warning on short data",
+      "scope": "18-auth-decryption-fallback-logging",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go"},
+        {"type": "source", "location": "internal/auth/oauth.go"}
+      ],
+      "linkedDoD": ["Auth decrypt path logs a warning on too-short ciphertext before fallback"]
+    },
+    {
+      "scenarioId": "SCN-002-071",
+      "name": "Auth decrypt logs warning on GCM open failure",
+      "scope": "18-auth-decryption-fallback-logging",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/auth/oauth_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/auth/oauth_test.go"},
+        {"type": "source", "location": "internal/auth/oauth.go"}
+      ],
+      "linkedDoD": ["Auth decrypt path logs a warning on GCM open failure before fallback"]
+    },
+    {
+      "scenarioId": "SCN-002-072",
+      "name": "Supervisor panic recovery respects context cancellation during sleep",
+      "scope": "19-supervisor-sleep-context-cancellation",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/supervisor_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/supervisor_test.go"},
+        {"type": "source", "location": "internal/connector/supervisor.go"}
+      ],
+      "linkedDoD": ["Supervisor panic-recovery sleep is interruptible via context cancellation"]
+    },
+    {
+      "scenarioId": "SCN-002-073",
+      "name": "SYNTHESIS stream removed from NATS configuration",
+      "scope": "20-remove-dead-synthesis-stream",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/nats/client.go"}
+      ],
+      "linkedDoD": ["Dead SYNTHESIS NATS stream removed from runtime configuration"]
+    },
+    {
+      "scenarioId": "SCN-002-074",
+      "name": "CoreAPIURL read from config instead of hardcoded",
+      "scope": "21-coreapiurl-config-sst-compliance",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/config/config.go"}
+      ],
+      "linkedDoD": ["CoreAPIURL is read from config (SST), no hardcoded fallback"]
+    },
+    {
+      "scenarioId": "SCN-002-075",
+      "name": "CoreAPIURL missing causes startup failure",
+      "scope": "21-coreapiurl-config-sst-compliance",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/config/config.go"}
+      ],
+      "linkedDoD": ["Missing CoreAPIURL config causes startup failure (no silent default)"]
+    },
+    {
+      "scenarioId": "SCN-002-076",
+      "name": "Digest generated payload unmarshalled to typed struct",
+      "scope": "22-digest-nats-typed-payload",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go"},
+        {"type": "source", "location": "internal/digest/generator.go"}
+      ],
+      "linkedDoD": ["Digest generated NATS payload is unmarshalled into a typed struct (no map[string]any)"]
+    },
+    {
+      "scenarioId": "SCN-002-077",
+      "name": "Invalid digest payload rejected with validation error",
+      "scope": "22-digest-nats-typed-payload",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/digest/generator_test.go"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/digest/generator_test.go"},
+        {"type": "source", "location": "internal/digest/generator.go"}
+      ],
+      "linkedDoD": ["Invalid digest payload is rejected with a validation error before processing"]
+    },
+    {
+      "scenarioId": "SCN-002-078",
+      "name": "Entity linking upserts people without error",
+      "scope": "23-people-name-unique-constraint",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "evidenceRefs": [
+        {"type": "source", "location": "internal/db/migrations/archive/012_people_name_unique.sql"}
+      ],
+      "linkedDoD": ["Entity-linking upsert path tolerates the people.name unique constraint without error"]
+    },
+    {
+      "scenarioId": "SCN-002-079",
+      "name": "Image URL processed through OCR in capture pipeline",
+      "scope": "24-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_ocr.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_ocr.py"},
+        {"type": "source", "location": "ml/app/nats_client.py"}
+      ],
+      "linkedDoD": ["Image URLs in the capture pipeline get OCR processing in the ML sidecar"]
+    },
+    {
+      "scenarioId": "SCN-002-080",
+      "name": "Image OCR graceful fallback on failure",
+      "scope": "24-image-ocr-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_ocr.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_ocr.py"},
+        {"type": "source", "location": "ml/app/nats_client.py"}
+      ],
+      "linkedDoD": ["Image OCR failure falls back gracefully to URL-only text without marking artifact failed"]
+    },
+    {
+      "scenarioId": "SCN-002-081",
+      "name": "PDF URL text extracted in capture pipeline",
+      "scope": "25-pdf-extract-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_pdf_extract.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_pdf_extract.py"},
+        {"type": "source", "location": "ml/app/nats_client.py"}
+      ],
+      "linkedDoD": ["PDF URLs in the capture pipeline get text extraction in the ML sidecar"]
+    },
+    {
+      "scenarioId": "SCN-002-082",
+      "name": "PDF extraction graceful fallback on failure",
+      "scope": "25-pdf-extract-pipeline",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "ml/tests/test_pdf_extract.py"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_pdf_extract.py"},
+        {"type": "source", "location": "ml/app/nats_client.py"}
+      ],
+      "linkedDoD": ["PDF extraction failure falls back gracefully to URL-only text without marking artifact failed"]
     }
   ]
 }

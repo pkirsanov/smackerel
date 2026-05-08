@@ -684,3 +684,16 @@ ok  	github.com/smackerel/smackerel/internal/scheduler	6.071s
 ```
 
 Chaos coverage spans 5 prior chaos+harden+security findings (C1–C5) plus the originally-implemented mutex partitioning (8 independent cron-group mutexes), DST-safe calendar arithmetic, fresh-install staleness guard, cancelled-context safety in producers, and adversarial mock-driven alert delivery. Race detector clean across `internal/scheduler/`. Per phase-relevance contract for cron + DB-binding packages, chaos coverage is satisfied via dedicated adversarial unit tests rather than a separate chaos suite.
+
+---
+
+## Trace-Guard Cross-Spec Remediation (2026-05-08)
+
+**Trigger:** cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9)
+**Mode:** non-interactive
+
+Coverage: `internal/api/search_test.go` exercises Scope 2 SCN-021-009 (search query logged for lookup tracking) by asserting that `engine.LogSearch` is invoked from the search handler after a successful query (and on zero-result queries). Test Plan rows in scope 2 reference this path.
+
+Coverage: `internal/intelligence/lookups_test.go` exercises Scope 2 SCN-021-010 (frequent lookup detected after repeated searches) by validating `DetectFrequentLookups` against repeated-query fixtures. Test Plan rows in scope 2 reference this path; the previously-listed `tests/integration/search_logging_test.go` and `tests/e2e/search_logging_test.go` aspirational paths are corrected to point at this real package-local test file.
+
+Coverage: `internal/intelligence/alerts_test.go` exercises Scope 1 SCN-021-001 / SCN-021-003 (alert sweep + snoozed delivery) via the alert-engine unit tests; the previously-listed `tests/integration/alert_delivery_test.go` aspirational path is corrected to point at this real package-local test file.

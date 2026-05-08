@@ -470,3 +470,12 @@ ok      github.com/smackerel/smackerel/internal/config  0.057s
 
 **Outcome:** Active artifacts (spec.md, design.md, scopes.md) remain coherent with implementation. State.json `workflowMode` was already `full-delivery` (ceiling supports `done`). All spec-020 owned packages green; no placeholder markers; file sizes consistent with documented surfaces (store.go 196 LOC, ml/app/auth.py 48 LOC, etc.). Spec 020 remains trustworthy as `done`.
 
+---
+
+## Trace-Guard Cross-Spec Remediation (2026-05-08)
+
+**Trigger:** cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9)
+**Mode:** non-interactive
+
+Coverage: `cmd/core/main_test.go` exercises Scope 3 startup auth warning scenarios SCN-020-016/017/018 — verifying that `cmd/core/main.go:71` emits a structured WARN slog when `SMACKEREL_AUTH_TOKEN` is empty and stays silent when the token is configured. Test Plan rows in scope 3 reference this path.
+

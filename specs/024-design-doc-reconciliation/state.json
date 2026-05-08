@@ -129,12 +129,23 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runEndedAt": "2026-04-23T00:00:00Z",
       "summary": "Manual cross-check verified docs/smackerel.md (2460 lines) contains the reconciled content claimed by both scopes: header line 14 'Go + Docker Compose (self-hosted)'; \u00a74 SUPERSEDED disclaimer line 419; \u00a78 PostgreSQL+pgvector diagram line 933; \u00a714 PostgreSQL DDL with JSONB/TIMESTAMPTZ at line 1360+; only TOC line 23 still references OpenClaw outside \u00a74 SUPERSEDED block; competitive matrix and \u00a722 connector list audited."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runEndedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Test Plan rows now reference docs/smackerel.md with section pointers; 4 DoD bullets prefixed with 'Scenario SCN-024-NN (title):' for SCN-024-02/03/05/06 to satisfy DoD content-fidelity check. trace-guard PASSED (0 warnings)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-10T12:00:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

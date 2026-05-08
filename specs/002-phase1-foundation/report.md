@@ -967,3 +967,16 @@ $ ./smackerel.sh test unit
 33 Go packages: ok (all pass)
 53 Python tests passed, 1 skipped (pypdf not in dev env)
 ```
+
+---
+
+## Trace-Guard Cross-Spec Remediation (2026-05-08)
+
+**Trigger:** cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9)
+**Mode:** non-interactive
+
+Coverage: `internal/scheduler/scheduler_test.go` exercises Scope 14 (Scheduler Data Race Fix) and Scope 15 (Scheduler Test Coverage) scenarios via TestScheduler_* and TestSupervisorRecovery_* — Test Plan rows in scopes 14 and 15 reference this path.
+
+Coverage: `internal/auth/oauth_test.go` exercises Scope 18 (Auth Decryption Fallback Logging) scenarios via TestDecryptAccessToken_* and TestRetrieveTokens_* fallback warning assertions — Test Plan rows in scope 18 reference this path.
+
+Coverage: `internal/connector/supervisor_test.go` exercises Scope 19 (Supervisor Sleep Context Cancellation) scenarios via TestSupervisor_StopCancelsScheduledSleep — Test Plan row in scope 19 references this path.

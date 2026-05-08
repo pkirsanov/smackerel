@@ -75,6 +75,16 @@
         "statusAfter": "in-progress",
         "timestamp": "2026-04-23T00:00:00Z",
         "summary": "Manual cross-check verified spec implementation files exist on disk: cmd/core/connectors.go (378 lines, 15 connector imports/registrations/auto-start blocks), cmd/core/helpers.go (parseJSONArray/parseJSONObject/parseFloatEnv), config/smackerel.yaml (5 connector blocks: discord/twitter/weather/gov-alerts/financial-markets), scripts/commands/config.sh (yaml_get_json helper + env extractions for all 5). go test passes for discord/twitter/weather/alerts/markets packages."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "timestamp": "2026-05-08T00:00:00Z",
+        "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Replaced 5 wildcard *_test.go paths with concrete files (internal/connector/discord/discord_test.go, twitter/twitter_test.go, weather/weather_test.go, alerts/alerts_test.go, markets/markets_test.go) in scopes.md Test Plan; tagged DoD bullets for SCN-019-002, SCN-019-003 with 'Scenario SCN-019-NNN (title):' prefix; added concrete-path mentions in report.md scenario-coverage table. trace-guard PASSED (0 warnings)."
       }
     ]
   },

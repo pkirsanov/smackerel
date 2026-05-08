@@ -205,12 +205,23 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runEndedAt": "2026-04-23T00:30:00Z",
       "summary": "Spec-review pass: confirmed spec.md / design.md / scopes.md remain coherent with implementation across internal/intelligence (~31k LOC across 4 packages, 856 passing tests), internal/scheduler, internal/digest, internal/api. WorkflowMode migrated from validate-to-doc to full-delivery to align ceiling with done status. No drift between active artifacts and implementation."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-08T00:00:00Z",
+      "runEndedAt": "2026-05-08T00:00:00Z",
+      "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Repointed Test Plan rows to internal/intelligence/alerts_test.go (alert delivery) and internal/intelligence/lookups_test.go (search logging integration + e2e); tagged 9 DoD bullets for SCN-021-004/005/006/007/009/010/012/013/015 with 'Scenario SCN-021-NNN (title):' prefix; appended trace-guard remediation section to report.md mentioning internal/api/search_test.go. trace-guard PASSED (0 warnings)."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-15T18:00:00Z",
+  "lastUpdatedAt": "2026-05-08T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
