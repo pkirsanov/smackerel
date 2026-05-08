@@ -94,7 +94,7 @@ func TestPhotosCapabilityTaxonomyCanary_GoRegistryMatchesPWALimitationCodes(t *t
 			LifecycleConfirmationThreshold: 0.65,
 		},
 	}
-	handlers := api.NewPhotosHandlers(store, cfg)
+	handlers := api.NewPhotosHandlers(store, cfg, "test")
 
 	fixture := newIntegrationPhotoprismFixture(t, []photoprism.Photo{
 		integrationPhotoprismPhoto("vacation-001", "Vacation", "vacation-content"),

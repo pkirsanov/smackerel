@@ -89,7 +89,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
 		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool),
-		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos),
+		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
 	}
