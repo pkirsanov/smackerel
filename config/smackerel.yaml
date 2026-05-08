@@ -505,6 +505,28 @@ drive:
     max_link_files_per_reply: 10
   limits:
     max_file_size_bytes: 104857600
+  io_limits:
+    # MIT-038-S-004 — defense-in-depth byte caps wrapping io.ReadAll on
+    # provider HTTP boundaries in internal/drive/google. Provider URLs are
+    # SST-trusted (drive.providers.google.api_base_url / oauth_base_url),
+    # but absent caps leave a defense-in-depth gap if a fixture or
+    # compromised upstream returned a multi-GB body. The bytes-processing
+    # path in internal/drive/extract/service.go:255 separately enforces
+    # max_file_size_bytes; these caps wrap the remaining JSON metadata,
+    # binary download, and OAuth token-exchange reads.
+    #
+    #   provider_response_max_bytes — JSON metadata responses (Drive list,
+    #     about, changes, file-metadata error bodies, EnsureFolder, PutFile
+    #     response). 10 MiB is well above the largest expected JSON page.
+    #   provider_binary_max_bytes   — binary file content read in PutFile
+    #     (body.Reader is the uploaded content). Set to 500 MiB so it sits
+    #     comfortably above drive.limits.max_file_size_bytes (100 MiB),
+    #     which is the primary upstream enforcement; this cap is a backstop.
+    #   oauth_response_max_bytes    — OAuth token-exchange response. Token
+    #     responses are tiny JSON; 64 KiB is generous defense-in-depth.
+    provider_response_max_bytes: 10485760 # 10 MiB
+    provider_binary_max_bytes: 524288000 # 500 MiB
+    oauth_response_max_bytes: 65536 # 64 KiB
   rate_limits:
     requests_per_minute: 600
   save:
