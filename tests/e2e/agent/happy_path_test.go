@@ -52,10 +52,10 @@ const ollamaSmokeScenarioID = "e2e_ollama_smoke"
 // self-contained and to make the wire contract visible at the test
 // site (so a contract drift surfaces here, not in a hidden import).
 type invokeRequestBody struct {
-	Source            string          `json:"source"`
-	RawInput          string          `json:"raw_input"`
-	ScenarioIDExplicit string         `json:"scenario_id,omitempty"`
-	StructuredContext json.RawMessage `json:"structured_context,omitempty"`
+	Source             string          `json:"source"`
+	RawInput           string          `json:"raw_input"`
+	ScenarioIDExplicit string          `json:"scenario_id,omitempty"`
+	StructuredContext  json.RawMessage `json:"structured_context,omitempty"`
 }
 
 type invokeResponseBody struct {
