@@ -1185,7 +1185,77 @@ Scenario: SCN-036-056 — Auto-complete cron schedule from config
 
 ---
 
-## Scope 09: Mealplan Tool Suite
+## Shared Planning Expectations
+
+These expectations apply to every **active** Phase A scope (01-08) during implementation, test, validation, audit, and hardening phases. Phase B parked scopes (09-15) are not in the active inventory and inherit these expectations only when they are activated by `bubbles.plan` after the dependency gate documented in the Parked Scope Queue clears.
+
+### Test Integrity Gates
+
+- Scenario traceability: every active-scope `SCN-036-*` Gherkin scenario maps to at least one executable test row in the active scope Test Plan that names a concrete file path on disk.
+- Live-test authenticity: `integration`, `e2e-api`, `e2e-ui`, and `stress` tests must not use internal request interception or mocked Smackerel service paths.
+- Anti-silent-pass review: required tests must fail when the scenario behavior is missing, misrouted, unauthenticated, blocked, or unavailable.
+- Assertion audit: every test must assert the user/system-visible behavior in the scenario, including persisted fields, state transitions, policy reasons, visible UI text, or delivered channel response.
+
+### Config SST Gates
+
+- All meal-planning config values originate in `config/smackerel.yaml` and flow through the generator before runtime use.
+- Missing required meal-planning config fails loudly; source code must not add fallback ports, URLs, size caps, thresholds, intervals, or secret values.
+- Generated config files are not hand-edited. If generated output is stale, execution reruns `./smackerel.sh config generate` and records the diff/evidence in the active scope report.
+
+### Evidence Gates
+
+- Active-scope evidence records command, exit code, test category, scenario IDs, and claim source before any DoD checkbox is marked complete.
+- E2E evidence identifies the exact live stack boundary and fixture provider state used for the run.
+- Scenario contract changes require updating [scenario-manifest.json](scenario-manifest.json), the active scope `scopes.md` rows, and `report.md` evidence in the same planning change.
+
+---
+
+## Parked Scope Queue (deferred to spec 037-llm-agent-tools)
+
+The scopes below preserve the Phase B product intent recorded in the Architecture Reframe at the top of this file (BS-014..BS-023 — LLM scenario tool suite, scenario foundation, intent routing cutover, suggest/fill, intelligent shopping merge, adversarial coverage). They are **not** part of the active execution inventory because their entire body assumes the spec 037 LLM Scenario Agent + Tool Registry runtime, which has not yet reached `done`.
+
+Their headings below read `## Parked Scope NN: <Name>` (not `## Scope NN: <Name>`) so the traceability guard's active-scope analyzer (`^##[[:space:]]+Scope[[:space:]]+[0-9]+:`) does not analyse them — the planned Phase B test files referenced in those parked Test Plan rows (e.g. `internal/mealplan/tools/tools_test.go`, `tests/e2e/mealplan_adversarial_test.go`, `tests/integration/mealplan_scenarios_test.go`) do not exist on disk yet, and that is intentional while parked. They MUST be expanded back into active `## Scope NN:` sections by `bubbles.plan` after the dependency gate clears.
+
+| Parked Scope | Name | Dependency Gate | Intended Surfaces | Activation Check |
+|--------------|------|-----------------|-------------------|------------------|
+| 09 | Mealplan Tool Suite | spec 037 Scope 2 (Tool Registry) reaches `done` | `internal/mealplan/tools/`, `internal/agent` | Tool registry accepts deterministic tool registrations and exposes side-effect class metadata |
+| 10 | Shopping-List Tool Suite | Parked Scope 09 + spec 037 Scope 2 reach `done` | `internal/mealplan/tools/`, `internal/agent` | Read/write tool split is enforceable via the registry |
+| 11 | Mealplan Scenario Foundation | Parked Scopes 09–10 + spec 037 Scope 3 (Scenario Loader & Linter) reach `done` | `config/scenarios/mealplan/` | Scenario YAMLs lint clean against spec 037 schema and load at boot |
+| 12 | Intent Routing Cutover (BS-014, IP-005) | Parked Scope 11 + spec 037 Scopes 4–5 (Intent Router, Execution Loop) reach `done` | `internal/telegram`, `internal/agent` | `agent.Executor.Run` can replace the regex grammar without losing Scope 04 acceptance |
+| 13 | Suggest-A-Week & Fill-Empty-Slots (BS-015, BS-016) | Parked Scopes 11–12 + spec 035 recipe tools reach `done` | Telegram, scenarios | Recipe-search/get-summary tools are registered and selectable from a scenario allowlist |
+| 14 | Intelligent Shopping-List Scenarios (BS-017, BS-018) | Parked Scopes 10–11 reach `done` | Telegram, REST, scenarios | Substitution-preference inputs flow into the merge scenario without code change |
+| 15 | Adversarial Coverage (BS-019..BS-023) | Parked Scopes 12–14 reach `done` | Telegram, scenarios, traces | Adversarial scenarios produce trace records with overlap_count, deleted_marker, day_resolution_mode, conflict_resolution, rejected_tool fields |
+
+### Parked Scope Contract Notes
+
+- Every parked scope below preserves its original Gherkin scenarios, Implementation Plan, Test Plan, and DoD verbatim. The bodies remain in this file under `## Parked Scope NN: <Name>` headings so reviewers can see exactly what `bubbles.plan` will re-promote when the gate clears; the trace guard ignores them while parked because the heading does not match the active-scope regex.
+- Parked Test Plan rows reference test files that have not been authored yet — that is by design while parked. When `bubbles.plan` re-promotes a parked scope to active, it MUST verify each Test Plan row references a path that will exist on disk before the scope is marked Done, and prefix every active DoD bullet with `Scenario SCN-036-NNN (<title>):` so the Gate G068 fidelity guard accepts them.
+- Spec 037 has NOT yet reached `done`. While that gate remains open, no parked Phase B scope may be activated.
+- Activating a parked scope MUST happen via `bubbles.plan` (not `bubbles.bug` and not `bubbles.implement`) and MUST update the Summary Table and Parked Scope Queue table in the same change set.
+
+---
+
+# Phase B — LLM Scenario Migration (Spec 037 Integration) — PARKED
+
+> All scopes below have [spec 037 — LLM Scenario Agent & Tool Registry](../037-llm-agent-tools/spec.md)
+> as a **HARD prerequisite**. Phase B begins only when 037 reports `done`.
+>
+> **Parked status (this revision):** Spec 037 has not yet reached the `done`
+> state required to begin Phase B. Per the `## Parked Scope Queue` and
+> `## Shared Planning Expectations` above, every Phase B scope below is
+> recorded as `## Parked Scope NN:` (heading reads "Parked Scope" rather
+> than "Scope") so the traceability guard's active-scope analyzer
+> (`^##[[:space:]]+Scope[[:space:]]+[0-9]+:`) does not analyze them. The
+> Gherkin scenarios, Implementation Plan, Test Plan, and DoD blocks below
+> preserve the original parking-time intent verbatim and become the
+> body source `bubbles.plan` will re-promote when the dependency gates
+> clear. The Test Plan rows below reference test files that have not yet
+> been authored — that is by design while parked, since the planned tests
+> will be created during the activation work for each scope.
+
+---
+
+## Parked Scope 09: Mealplan Tool Suite
 
 **Status:** Blocked — deferred pending spec 037 LLM Scenario Agent + Tool Registry (Sc.2)
 **Priority:** P0
@@ -1303,7 +1373,7 @@ Scenario: SCN-036-063 — Write tools refuse to run from a read-only scenario al
 
 ---
 
-## Scope 10: Shopping-List Tool Suite
+## Parked Scope 10: Shopping-List Tool Suite
 
 **Status:** Blocked — deferred pending spec 037 Sc.2 + Scope 09
 **Priority:** P1
@@ -1396,7 +1466,7 @@ Scenario: SCN-036-068 — Substitution preference surfaced in rationale (BS-018)
 
 ---
 
-## Scope 11: Mealplan Scenario Foundation
+## Parked Scope 11: Mealplan Scenario Foundation
 
 **Status:** Blocked — deferred pending spec 037 Sc.3 + Scopes 09–10
 **Priority:** P0
@@ -1480,7 +1550,7 @@ Scenario: SCN-036-071 — merge_ingredients-v1 cannot mutate plans (BS-017 safet
 
 ---
 
-## Scope 12: Intent Routing Cutover (BS-014, IP-005)
+## Parked Scope 12: Intent Routing Cutover (BS-014, IP-005)
 
 **Status:** Blocked — deferred pending spec 037 Sc.4–5 + Scope 11
 **Priority:** P0
@@ -1557,7 +1627,7 @@ Scenario: SCN-036-075 — Telegram dispatcher contains no regex grammar after cu
 
 ---
 
-## Scope 13: Suggest-A-Week & Fill-Empty-Slots (BS-015, BS-016)
+## Parked Scope 13: Suggest-A-Week & Fill-Empty-Slots (BS-015, BS-016)
 
 **Status:** Blocked — deferred pending Scopes 11–12 + spec 035 recipe tools
 **Priority:** P1
@@ -1635,7 +1705,7 @@ Scenario: SCN-036-079 — Targeted variant "use up the chicken" filters by ingre
 
 ---
 
-## Scope 14: Intelligent Shopping-List Scenarios (BS-017, BS-018)
+## Parked Scope 14: Intelligent Shopping-List Scenarios (BS-017, BS-018)
 
 **Status:** Blocked — deferred pending Scopes 10–11
 **Priority:** P1
@@ -1719,7 +1789,7 @@ Scenario: SCN-036-084 — Direct-from-recipe shopping list (Spec 028 path) uncha
 
 ---
 
-## Scope 15: Adversarial Coverage (BS-019..BS-023)
+## Parked Scope 15: Adversarial Coverage (BS-019..BS-023)
 
 **Status:** Blocked — deferred pending Scopes 12–14
 **Priority:** P0

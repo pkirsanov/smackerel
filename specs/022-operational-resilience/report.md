@@ -180,12 +180,12 @@ All 20 tests introduced by hardening and gaps passes verified individually with 
 | `TestPublishToDeadLetter_PublishFailure` | `internal/pipeline` | PASS |
 
 **Scope 3 Cron Tests (4):**
-| Test | Package | Status |
-|------|---------|--------|
-| `TestCronConcurrencyGuard_SameGroupSkipped` | `internal/scheduler` | PASS |
-| `TestCronConcurrencyGuard_DifferentGroupsConcurrent` | `internal/scheduler` | PASS |
-| `TestCronConcurrencyGuard_AllGroupsIndependent` | `internal/scheduler` | PASS |
-| `TestCronConcurrencyGuard_RaceDetectorClean` | `internal/scheduler` | PASS |
+| Test | File | Status |
+|------|------|--------|
+| `TestCronConcurrencyGuard_SameGroupSkipped` | `internal/scheduler/jobs_test.go` | PASS |
+| `TestCronConcurrencyGuard_DifferentGroupsConcurrent` | `internal/scheduler/jobs_test.go` | PASS |
+| `TestCronConcurrencyGuard_AllGroupsIndependent` | `internal/scheduler/jobs_test.go` | PASS |
+| `TestCronConcurrencyGuard_RaceDetectorClean` | `internal/scheduler/jobs_test.go` | PASS |
 
 ### Code Spot Checks
 
