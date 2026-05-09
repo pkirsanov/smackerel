@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "featureDir": "specs/043-ollama-test-infrastructure",
+  "featureNumber": "043",
+  "featureName": "ollama-test-infrastructure",
+  "status": "in_progress",
+  "currentPhase": "analyze",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "runStartedAt": "2026-05-09T05:36:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "scopeProgress": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "executionHistory": [
+    {
+      "phase": "analyst",
+      "agent": "bubbles.analyst",
+      "timestamp": "2026-05-09T05:36:00Z",
+      "summary": "spec.md authored to close MIT-037-OLLAMA-001 routing. Spec scopes a test-stack-only Ollama runtime (deterministic small model qwen2.5:0.5b-instruct in a smackerel-test-isolated volume) plus one canonical live-stack agent happy-path test (tests/e2e/agent/happy_path_test.go) that drives the production NATS driver + Python sidecar handle_invoke path against real Ollama. Outcome Contract, 7 Gherkin scenarios (SCN-OLLAMA-001..007), 9 functional requirements (FR-OLLAMA-001..009), 5 non-functional requirements (NFR-OLLAMA-001..005), 7 acceptance criteria (AC-1..7), Product Principle Alignment (P8/P6/P9 + Constitution C3/C4 advisory pre-ratification), and 5 design-owned open questions recorded for bubbles.design. Cross-references upstream MIT-037-OLLAMA-001, VAL-FINDING-037-G041, spec 037 Scope 5 deferred infra modifier, and spec 037 Scope 9 telegram_replies_test.go cross-spec impact. Hard-constraints explicitly forbid scripted-driver substitution and t.Skip bailouts in the new happy-path test (per Adversarial Regression rule). No design.md or scopes.md authored — those are bubbles.design and bubbles.plan ownership respectively."
+    }
+  ],
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "source": "repo-default"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "lastUpdatedAt": "2026-05-09T05:36:00Z"
+}
