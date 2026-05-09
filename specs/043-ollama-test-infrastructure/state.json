@@ -4,11 +4,11 @@
   "featureNumber": "043",
   "featureName": "ollama-test-infrastructure",
   "status": "in_progress",
-  "currentPhase": "analyze",
+  "currentPhase": "design",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "analyze",
+    "currentPhase": "design",
     "currentScope": null,
     "runStartedAt": "2026-05-09T05:36:00Z",
     "completedPhaseClaims": [],
@@ -30,6 +30,13 @@
       "agent": "bubbles.analyst",
       "timestamp": "2026-05-09T05:36:00Z",
       "summary": "spec.md authored to close MIT-037-OLLAMA-001 routing. Spec scopes a test-stack-only Ollama runtime (deterministic small model qwen2.5:0.5b-instruct in a smackerel-test-isolated volume) plus one canonical live-stack agent happy-path test (tests/e2e/agent/happy_path_test.go) that drives the production NATS driver + Python sidecar handle_invoke path against real Ollama. Outcome Contract, 7 Gherkin scenarios (SCN-OLLAMA-001..007), 9 functional requirements (FR-OLLAMA-001..009), 5 non-functional requirements (NFR-OLLAMA-001..005), 7 acceptance criteria (AC-1..7), Product Principle Alignment (P8/P6/P9 + Constitution C3/C4 advisory pre-ratification), and 5 design-owned open questions recorded for bubbles.design. Cross-references upstream MIT-037-OLLAMA-001, VAL-FINDING-037-G041, spec 037 Scope 5 deferred infra modifier, and spec 037 Scope 9 telegram_replies_test.go cross-spec impact. Hard-constraints explicitly forbid scripted-driver substitution and t.Skip bailouts in the new happy-path test (per Adversarial Regression rule). No design.md or scopes.md authored — those are bubbles.design and bubbles.plan ownership respectively."
+    },
+    {
+      "phase": "design",
+      "agent": "bubbles.design",
+      "timestamp": "2026-05-09T06:10:00Z",
+      "phasesExecuted": ["bootstrap", "design"],
+      "summary": "design.md authored per spec 043 design brief. Resolves all five spec OQs: D1 single compose file (no docker-compose.test.yml overlay) — extends docker-compose.yml with image: ${OLLAMA_IMAGE}; D2 per-env ollama_enabled override via env_override_value (test=true, dev/home-lab=false preserves FR-OLLAMA-007); D3 runner-driven HTTP /api/pull via new scripts/runtime/ollama-test-pull.sh between test_runtime_health.sh and the Go E2E docker run; D4 determinism = temperature=0, top_p=1.0, top_k=1, seed=42, num_predict=256 in new infrastructure.ollama.test.request_* SST keys; D5 happy-path scenario allowlists scope6_e2e_echo with build tag e2e_agent_tools; D6 hook point at smackerel.sh line 1112; D7 reuses existing environments.test.ollama_host_port=47004 and explicitly notes the brief's 47003 collides with the existing nats_monitor_host_port slot. New SST keys: infrastructure.ollama.{image,test.image,test.model,test.pull_timeout_seconds,test.request_temperature,test.request_top_p,test.request_top_k,test.request_seed,test.request_num_predict} + environments.{dev,test,home-lab}.ollama_enabled (11 total). Reuses existing ollama_host_port, ollama_volume_name, ollama_container_port. Cleanup contract change: replace e2e_down_test_stack --volumes with explicit docker volume rm of postgres + nats data (preserves smackerel-test-ollama-data warm cache for SCN-OLLAMA-002 + NFR-OLLAMA-002), with ./smackerel.sh clean full as the operator escape hatch. Three-phase rollout (config + compose; happy-path test + pull script; cross-spec MIT closure). Design covers all 12 sections required by the brief: System Context, Component Diagram (ASCII), Configuration Plan, Test-Stack Lifecycle, Happy-Path Test Anatomy (build tags, preconditions, wiring, hard prohibitions), Failure Modes (incl. adversarial regression test), Performance Budget (cold path Δ ≤ 90s, warm path Δ ≤ 30s), Test Isolation (per bubbles-test-environment-isolation skill), SST Compliance (per bubbles-config-sst skill), Risks & Mitigations, Rollout Plan, Open Questions (4 deferred to scope DoD). Cross-references SCN-OLLAMA-001..007 + FR-OLLAMA-001..009 + NFR-OLLAMA-001..005 + AC-1..7 throughout. No source code, scopes.md, or USER WIP files modified per authority constraints."
     }
   ],
   "policySnapshot": {
@@ -63,5 +70,5 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-09T05:36:00Z"
+  "lastUpdatedAt": "2026-05-09T06:10:00Z"
 }
