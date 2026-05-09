@@ -157,6 +157,17 @@
       "startedAt": "2026-04-14T06:00:00Z",
       "completedAt": "2026-04-14T07:00:00Z",
       "summary": "Implemented Scopes 2-6: (S2) Real REST client with doDiscordRequest, fetchChannelMessages pagination, fetchPinnedMessages, rate limit handling. (S3) Real token validation via GET /users/@me. (S4) Gateway EventPoller with per-channel polling, event buffering, reconnection with exponential backoff. (S5) Active+archived thread fetching, per-thread cursors, thread metadata on artifacts. (S6) Capture tier forced to full, capture metadata in artifacts. Regression sweep (REG-014-R22-001/002), improve pass (IMP-014-IE-001/002/003). 147 test functions, all pass with -race."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-09T04:00:00Z",
+      "completedAt": "2026-05-09T04:30:00Z",
+      "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 15 trace failures (15->0). Added Test Plan tables to Scopes 01-06 referencing internal/connector/discord/discord_test.go and internal/connector/discord/gateway_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-DC-NRM-001/002, SCN-DC-REST-001/002, SCN-DC-CONN-001, SCN-DC-GW-001, SCN-DC-THR-004, SCN-DC-CMD-003. No DoD content rewriting; no source/test/config/framework changes. artifact-lint clean; traceability-guard PASSED 0 failures."
     }
   ],
   "activeBugs": [],

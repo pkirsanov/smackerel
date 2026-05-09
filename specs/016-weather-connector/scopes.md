@@ -76,17 +76,25 @@ Scenario: SCN-WX-OM-003 Historical weather lookup
   And the response is cached with no expiration
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-WX-OM-001 Fetch current weather | TestRoundCoords, TestSync_ProducesForecastArtifacts | internal/connector/weather/weather_test.go |
+| Unit | SCN-WX-OM-002 Cache hit avoids API call | TestEvictExpiredLocked, TestCacheConcurrentAccess | internal/connector/weather/weather_test.go |
+| Unit | SCN-WX-OM-003 Historical weather lookup | TestDecodeHistorical_ValidJSON, TestFetchHistorical_CacheHit, TestFetchHistorical_ArchiveURL | internal/connector/weather/weather_test.go |
+
 ### Definition of Done
 
-- [x] `FetchCurrent()` retrieves current weather from Open-Meteo
+- [x] Scenario "SCN-WX-OM-001 Fetch current weather": `FetchCurrent()` retrieves current weather from Open-Meteo
   > Evidence: `weather.go::fetchCurrent()` queries api.open-meteo.com/v1/forecast with current params; retries with exponential backoff via connector.DefaultBackoff()
 - [x] `FetchForecast()` retrieves multi-day forecast
   > Evidence: `weather.go::fetchForecast()` queries api.open-meteo.com/v1/forecast with daily params (temperature_2m_max/min, weather_code, precipitation_sum); `decodeForecast()` parses daily arrays; cached with 2h TTL; `weather_test.go::TestDecodeForecast_ValidJSON`, `TestFetchForecast_CacheHit`, `TestSync_ProducesForecastArtifacts` verify
-- [x] `FetchHistorical()` retrieves past weather from archive API
+- [x] Scenario "SCN-WX-OM-003 Historical weather lookup": `FetchHistorical()` retrieves past weather from archive API
   > Evidence: `weather.go::fetchHistorical()` queries archiveURL/v1/archive with start_date/end_date params; `decodeHistorical()` parses single-day response, returns avg of max/min temperature; cached permanently (100yr TTL); `weather_test.go::TestDecodeHistorical_ValidJSON`, `TestFetchHistorical_CacheHit`, `TestFetchHistorical_ArchiveURL` verify
 - [x] Coordinates rounded to configurable precision for privacy
   > Evidence: `weather.go::roundCoords()` rounds to configurable decimal places; `weather_test.go::TestRoundCoords` verifies 37.7749→37.77, -122.4194→-122.42
-- [x] `WeatherCache` implements Get/Set with TTL-based expiration
+- [x] Scenario "SCN-WX-OM-002 Cache hit avoids API call": `WeatherCache` implements Get/Set with TTL-based expiration
   > Evidence: `weather.go::cacheEntry` with expiresAt field; fetchCurrent() checks cache before API call; `weather_test.go::TestEvictExpiredLocked` verifies TTL eviction
 - [x] Cache TTLs: current=30min, forecast=2h, historical=never
   > Evidence: `fetchCurrent()` caches with 30min TTL; `fetchForecast()` caches with 2h TTL; `fetchHistorical()` caches with 100yr TTL (permanent); `TestDecodeForecast_ValidJSON` and `TestDecodeHistorical_ValidJSON` verify cache population

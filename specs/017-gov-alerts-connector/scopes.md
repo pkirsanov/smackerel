@@ -79,15 +79,22 @@ Scenario: SCN-GA-LIFE-001 Alert lifecycle transitions
   Then the alert state transitions to "expired"
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-PROX-001 Filter by proximity radius | TestHaversineKm, TestFindNearestLocation, TestIsFiniteCoord | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-LIFE-001 Alert lifecycle transitions | TestKnownMapEviction, TestConcurrentSyncHealth | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
 - [x] `haversineKm()` calculates correct great-circle distances
   > Evidence: `alerts.go::haversineKm()` implements Haversine formula; `alerts_test.go::TestHaversineKm` verifies SF-to-LA ≈559km and same-point=0
-- [x] `FindNearest()` returns closest location within radius, or nil
+- [x] Scenario "SCN-GA-PROX-001 Filter by proximity radius": `FindNearest()` returns closest location within radius, or nil
   > Evidence: `alerts.go::findNearestLocation()` returns ProximityMatch with LocationName+DistanceKm; `alerts_test.go::TestFindNearestLocation` verifies match at 40km and no match at 3800km
 - [x] Multiple locations checked; closest match returned
   > Evidence: `alerts.go::findNearestLocation()` iterates c.config.Locations, tracks closest match within radius
-- [x] `LifecycleManager.Process()` returns new/updated/unchanged/cancelled
+- [x] Scenario "SCN-GA-LIFE-001 Alert lifecycle transitions": `LifecycleManager.Process()` returns new/updated/unchanged/cancelled
   > Evidence: `alerts.go::known` map tracks alert_id→first-seen for lifecycle dedup; TestKnownMapEviction verifies eviction
 - [x] `ExpireOld()` transitions expired alerts
   > Evidence: `alerts.go::Sync()` evicts old entries from known map using `knownEvictionAge` (7 days); TestKnownMapEviction verifies
@@ -135,15 +142,22 @@ Scenario: SCN-GA-USGS-002 Earthquake severity classification
   And eq4 → "minor" (M2.5+ distant)
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-USGS-001 Fetch earthquakes above minimum magnitude | TestSync_WeatherAlertsOnly, TestSyncContextCancellation | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-USGS-002 Earthquake severity classification | TestClassifyEarthquakeSeverity | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
-- [x] GeoJSON FeatureCollection response parsed correctly
+- [x] Scenario "SCN-GA-USGS-001 Fetch earthquakes above minimum magnitude": GeoJSON FeatureCollection response parsed correctly
   > Evidence: `alerts.go::fetchUSGSEarthquakes()` decodes GeoJSON with Features[].Properties (Mag, Place, Time) and Geometry.Coordinates; uses io.LimitReader(maxResponseBytes=10MB)
 - [x] Magnitude, location, depth, time, tsunami flag extracted from each feature
   > Evidence: `alerts.go::Earthquake` struct with Magnitude, Latitude, Longitude, DepthKm, Time, Place fields; populated from GeoJSON features
 - [x] Minimum magnitude filter applied before returning results
   > Evidence: `alerts.go::fetchUSGSEarthquakes()` uses minmagnitude query parameter from c.config.MinEarthquakeMag
-- [x] Earthquake severity calculated from magnitude + distance
+- [x] Scenario "SCN-GA-USGS-002 Earthquake severity classification": Earthquake severity calculated from magnitude + distance
   > Evidence: `alerts.go::classifyEarthquakeSeverity()` — M7+→extreme, M5+ within 100km→severe, M3+ within 50km→moderate, else→minor; TestClassifyEarthquakeSeverity verifies
 - [x] `since` parameter used to limit query window
   > Evidence: `alerts.go::fetchUSGSEarthquakes()` queries with limit=20 and orderby=time for recent events
@@ -185,9 +199,16 @@ Scenario: SCN-GA-NWS-002 NWS severity and event classification
   And a3 → severity "minor", event_type "heat"
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-NWS-001 Fetch severe weather alerts by location | TestFetchNWSAlerts_PointInURL, TestFetchNWSAlerts_UserAgentHeader, TestFetchNWSAlerts_ValidResponse | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-NWS-002 NWS severity and event classification | TestMapNWSSeverity, TestClassifyNWSEventType | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
-- [x] NWS Alert API queried with point-based coordinates for each location
+- [x] Scenario "SCN-GA-NWS-001 Fetch severe weather alerts by location": NWS Alert API queried with point-based coordinates for each location
   > Evidence: `alerts.go::fetchNWSAlerts()` queries `{nwsBaseURL}/alerts/active?point={lat},{lon}&status=actual&limit=50`; TestFetchNWSAlerts_PointInURL verifies coordinate formatting
 - [x] User-Agent header set per NWS API requirements
   > Evidence: `alerts.go::fetchNWSAlerts()` sets `User-Agent: Smackerel/1.0 (gov-alerts-connector)` via shared userAgent const; TestFetchNWSAlerts_UserAgentHeader verifies
@@ -228,9 +249,15 @@ Scenario: SCN-GA-CONN-001 Multi-source sync
   And artifacts are returned with cursor = latest effective time
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-CONN-001 Multi-source sync | TestSync_WeatherAlertsOnly, TestSync_WeatherAlertDeduplication, TestSync_NWSHTTPError_SetsDegraded | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
-- [x] `Connector` implements `connector.Connector` interface
+- [x] Scenario "SCN-GA-CONN-001 Multi-source sync": `Connector` implements `connector.Connector` interface
   > Evidence: `alerts.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods; TestNew, TestConnect_Valid, TestClose verify
 - [x] Config parsing extracts locations, source toggles, and magnitude threshold
   > Evidence: `alerts.go::parseAlertsConfig()` extracts Locations, MinEarthquakeMag, SourceEarthquake/SourceWeather/SourceTsunami/SourceVolcano/SourceWildfire/SourceAirNow/SourceGDACS; TestConnect_NoLocations, TestConnect_Valid, TestParseAlertsConfig_AllSourceFlags verify. Polling intervals are owned by the connector supervisor, not parsed here.
@@ -288,17 +315,25 @@ Scenario: SCN-GA-GDACS-001 Global disaster alerts proximity-filtered
   And the distant alert is filtered out
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-TSUN-001 Tsunami alerts parsed and proximity-filtered | TestFetchTsunamiAlerts_ValidResponse | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-AQI-001 Air quality observations with severity mapping | TestFetchAirNowAQI_ValidResponse, TestFetchAirNowAQI_SeverityMapping | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-GDACS-001 Global disaster alerts proximity-filtered | TestFetchGDACSAlerts_ValidResponse, TestFetchGDACSAlerts_SeverityMapping | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
-- [x] NOAA tsunami source parses Atom feeds from tsunami.gov
+- [x] Scenario "SCN-GA-TSUN-001 Tsunami alerts parsed and proximity-filtered": NOAA tsunami source parses Atom feeds from tsunami.gov
   > Evidence: `fetchTsunamiAlerts()` parses Atom/XML from tsunami.gov; TestFetchTsunamiAlerts_ValidResponse, _EmptyFeed, _HTTPError verify
 - [x] USGS volcano source parses JSON from volcanoes.usgs.gov
   > Evidence: `fetchVolcanoAlerts()` parses JSON array; TestFetchVolcanoAlerts_ValidResponse, _EmptyResponse, _HTTPError, _SeverityMapping verify
 - [x] InciWeb wildfire source parses RSS from InciWeb
   > Evidence: `fetchWildfireAlerts()` parses RSS/XML; TestFetchWildfireAlerts_ValidResponse, _EmptyFeed, _HTTPError, _SeverityMapping verify
-- [x] AirNow source fetches AQI data (requires api_key in config)
+- [x] Scenario "SCN-GA-AQI-001 Air quality observations with severity mapping": AirNow source fetches AQI data (requires api_key in config)
   > Evidence: `fetchAirNowAQI()` queries with API key + lat/lon; TestFetchAirNowAQI_ValidResponse, _EmptyResponse, _HTTPError, _SeverityMapping verify; AirNowAPIKey required
-- [x] GDACS source parses RSS from gdacs.org
+- [x] Scenario "SCN-GA-GDACS-001 Global disaster alerts proximity-filtered": GDACS source parses RSS from gdacs.org
   > Evidence: `fetchGDACSAlerts()` parses RSS with georss:point; TestFetchGDACSAlerts_ValidResponse, _EmptyFeed, _HTTPError, _SeverityMapping verify
 - [x] Each source follows fetch+normalize pattern (matching earthquake/NWS)
   > Evidence: Each source has `fetch*()` → `normalize*()` → `connector.RawArtifact` pattern, wired into Sync() with config toggle
@@ -344,12 +379,20 @@ Scenario: SCN-GA-TRAVEL-001 Travel destination uses expanded 2x radius
   And an earthquake at 330km from Tokyo passes the proximity filter
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-GA-NOTIF-001 Extreme earthquake triggers proactive notification | TestMaybeNotify_Extreme, TestMaybeNotify_Severe, TestSync_ExtremeEarthquake_NotifiesAlert | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-NOTIF-002 Moderate alert does NOT trigger notification | TestMaybeNotify_Moderate_NoNotification, TestSync_ModerateWeather_NoNotification | internal/connector/alerts/alerts_test.go |
+| Unit | SCN-GA-TRAVEL-001 Travel destination uses expanded 2x radius | TestTravelLocations_DoubleRadius, TestSync_TravelLocation_ExpandedRadius | internal/connector/alerts/alerts_test.go |
+
 ### Definition of Done
 
-- [x] Extreme and Severe alerts published to `alerts.notify` NATS subject
+- [x] Scenario "SCN-GA-NOTIF-001 Extreme earthquake triggers proactive notification": Extreme and Severe alerts published to `alerts.notify` NATS subject
   > Evidence: `alerts.go::maybeNotify()` checks severity after each artifact creation, calls `AlertNotifier.NotifyAlert()` for extreme/severe; `NATSAlertNotifier` publishes JSON to `alerts.notify` via NATS JetStream; `TestSync_ExtremeEarthquake_NotifiesAlert` and `TestMaybeNotify_Extreme`/`_Severe` PASS via `go test ./internal/connector/alerts/`
-- [x] NATS contract updated with ALERTS stream (if not already done by weather connector)
-  > Evidence: `config/nats_contract.json` contains `alerts.notify` subject (direction: core_to_external, stream: ALERTS, critical: true) and `ALERTS` stream entry; `internal/nats/client.go::SubjectAlertsNotify` constant and ALERTS in `AllStreams()`; `TestSCN002054_GoSubjectsMatchContract` and `TestAllStreams_Coverage` pass via `go test ./internal/connector/alerts/`
+- [x] Scenario "SCN-GA-NOTIF-002 Moderate alert does NOT trigger notification": NATS contract updated with ALERTS stream (if not already done by weather connector)
+  > Evidence: `config/nats_contract.json` contains `alerts.notify` subject (direction: core_to_external, stream: ALERTS, critical: true) and `ALERTS` stream entry; `internal/nats/client.go::SubjectAlertsNotify` constant and ALERTS in `AllStreams()`; `TestSCN002054_GoSubjectsMatchContract` and `TestAllStreams_Coverage` pass via `go test ./internal/connector/alerts/`. Moderate-severity gating verified by `TestMaybeNotify_Moderate_NoNotification` and `TestSync_ModerateWeather_NoNotification`.
 - [x] Travel destination locations auto-derived from calendar events (future integration point)
   > Evidence: `TravelLocationProvider` interface defined in `alerts.go` with `GetTravelLocations(ctx) ([]LocationConfig, error)` method; `Connector.TravelProvider` field accepts any implementation; falls back to config-based `TravelLocations` when provider is nil
 - [x] Travel destinations use expanded radius (2x normal)

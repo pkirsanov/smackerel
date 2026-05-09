@@ -207,6 +207,14 @@
       "timestamp": "2026-04-25T01:18:30Z",
       "outcome": "promoted_to_done",
       "evidence": "Chaos passed against live test stack (see prior chaos record at 2026-04-25T01:15:00Z). All required phases now have real passing evidence: harden, regression, simplify, stabilize, devops, security, chaos, validate, audit, docs. Promoting state.json status: in_progress -> done; certification.status: in_progress -> done. Removed chaos from skippedPhaseClaims/skippedPhases and dropped chaosBlocker."
+    },
+    {
+      "scope": "spec",
+      "phase": "trace-closure",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-05-09T04:30:00Z",
+      "outcome": "partial_close_with_residual",
+      "evidence": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 4 of 8 trace failures (8->4 residual). Added Test Plan table to Scope 01 referencing internal/connector/weather/weather_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-WX-OM-001/002/003. Residual: Scopes 02 (Normalizer & Weather Types), 03 (Weather Connector & Config), 04 (NWS Alert Integration), 05 (Historical Weather Enrichment) lack 'Use Cases (Gherkin)' subsections. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule: 'MUST NOT add new Gherkin scenarios'); routing to bubbles.plan recommended. artifact-lint clean."
     }
   ],
   "phaseRecords": [

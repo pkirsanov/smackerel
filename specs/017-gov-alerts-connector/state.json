@@ -138,6 +138,17 @@
       "runStartedAt": "2026-04-23T00:13:00Z",
       "runFinishedAt": "2026-04-23T00:14:00Z",
       "summary": "Chaos re-validation: ran -race over TestConcurrentSyncHealth, TestConcurrentCloseHealth, TestSyncContextCancellation, TestSync_MaxSyncDurationBoundsTimeout, TestSync_ParentContextCancellation_StopsSyncEarly, TestKnownMapEviction. All clean (1.677s). C-017-001/002/003 and STAB-017-001 fixes still hold under race detector."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-09T04:00:00Z",
+      "runFinishedAt": "2026-05-09T04:30:00Z",
+      "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 18 trace failures (18->0). Added Test Plan tables to Scopes 01-06 referencing internal/connector/alerts/alerts_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-GA-PROX-001, SCN-GA-LIFE-001, SCN-GA-USGS-001/002, SCN-GA-NWS-001, SCN-GA-CONN-001, SCN-GA-TSUN-001, SCN-GA-AQI-001, SCN-GA-GDACS-001, SCN-GA-NOTIF-001/002. No DoD content rewriting; no source/test/config/framework changes. artifact-lint clean; traceability-guard PASSED 0 failures."
     }
   ]
 }
