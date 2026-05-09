@@ -94,9 +94,59 @@ exit 0
 
 Live `./smackerel.sh up --env=test --profile ollama` cold-path validation is deferred to Scope 2 because the model pull and the live agent invocation are Scope 2 surfaces; Scope 1 only proves the config + compose substrate is correct (which the integration contract test does end-to-end against the actual `config.sh` executable).
 
-### Scope 2 + Scope 3 — pending
+### Scope 2 — Happy-Path Test + Pull Script (PARTIAL — 2 of 5 deliverables)
 
-Scopes 2 and 3 will populate this section as they are implemented.
+Status: **In progress.** 2 of 5 Scope 2 deliverables landed in this commit; the remaining 3 are deferred to a follow-up turn that introduces the LLM determinism plumbing prerequisite.
+
+**Landed in this commit:**
+
+- `scripts/commands/ollama-test-pull.sh` — fail-loud Ollama HTTP pull script. Honors `OLLAMA_TEST_PULL_TIMEOUT_SECONDS` SST key as a `timeout(1)`-enforced ceiling. Exit codes: 0 (success), 1 (missing/empty required env var), 2 (HTTP non-2xx from `/api/pull`), 3 (timeout before `success` reported), 4 (model still missing from `/api/tags` after success). Reads `OLLAMA_URL`, `OLLAMA_TEST_MODEL`, `OLLAMA_TEST_PULL_TIMEOUT_SECONDS` from env (no Go-style fallback defaults).
+- `tests/e2e/agent/no_skip_guard_test.go` — three tests that enforce SCN-OLLAMA-004 contract regardless of build tag:
+  - `TestNoSkipBailoutInAgentE2E` — production guard, scans every `*.go` under `tests/e2e/agent/` for `\bt\.(Skip|SkipNow|Skipf)\(` calls. Skips an explicit allowlist of 10 spec-037 scripted-driver e2e files (each entry has a written justification).
+  - `TestNoSkipBailout_HappyPathTestExplicitlyForbidden` — stricter gate that asserts `happy_path_test.go` contains zero `t.Skip*` calls regardless of allowlist. Currently dormant (`t.Skipf` on `os.IsNotExist`) until the file lands in the follow-up commit.
+  - `TestNoSkipBailout_AdversarialFinding` — 5-case regex regression: 3 positive cases (`t.Skip`, `t.SkipNow`, `t.Skipf`) and 2 negative carve-outs (`runner.SkipFooBar` and the identifier `skipFoo`).
+
+**Command evidence:**
+
+```
+$ env -i bash scripts/commands/ollama-test-pull.sh
+ollama-test-pull: required env var OLLAMA_URL is missing or empty (SST violation; check config/generated/test.env)
+$ echo $?
+1
+
+$ go test -count=1 -v -run 'TestNoSkipBailout' ./tests/e2e/agent/...
+=== RUN   TestNoSkipBailoutInAgentE2E
+--- PASS: TestNoSkipBailoutInAgentE2E (0.00s)
+=== RUN   TestNoSkipBailout_HappyPathTestExplicitlyForbidden
+    no_skip_guard_test.go:167: happy_path_test.go does not exist yet at <repo>/tests/e2e/agent/happy_path_test.go — guard is dormant until Scope 2 file lands
+--- SKIP: TestNoSkipBailout_HappyPathTestExplicitlyForbidden (0.00s)
+=== RUN   TestNoSkipBailout_AdversarialFinding
+--- PASS: TestNoSkipBailout_AdversarialFinding (0.00s)
+    --- PASS: TestNoSkipBailout_AdversarialFinding/plain_t_Skip (0.00s)
+    --- PASS: TestNoSkipBailout_AdversarialFinding/plain_t_SkipNow (0.00s)
+    --- PASS: TestNoSkipBailout_AdversarialFinding/plain_t_Skipf (0.00s)
+    --- PASS: TestNoSkipBailout_AdversarialFinding/named_method_no_match (0.00s)
+    --- PASS: TestNoSkipBailout_AdversarialFinding/identifier_no_match (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  0.027s
+
+$ go test -tags=e2e -count=1 -run 'TestNoSkipBailout' ./tests/e2e/agent/...
+ok      github.com/smackerel/smackerel/tests/e2e/agent  0.028s
+```
+
+**Deferred to follow-up commit (with explicit reasons):**
+
+1. `tests/e2e/agent/happy_path_test.go` (T2-01, T2-02, T2-03) — requires LLM determinism plumbing as a prerequisite (next item).
+2. **LLM determinism plumbing in `ml/app/agent.py`.** The current litellm call passes only `temperature` and `max_tokens`; the SST keys `OLLAMA_TEST_REQUEST_TOP_P`, `OLLAMA_TEST_REQUEST_TOP_K`, `OLLAMA_TEST_REQUEST_SEED`, `OLLAMA_TEST_REQUEST_NUM_PREDICT` are emitted to `config/generated/test.env` (Scope 1) but are NOT yet consumed. Without consumption, a 3-run byte-identical assertion would either fail (genuine non-determinism) or be tautological. The plumbing change is small but cross-cutting (Python + Go TurnRequest + scenario YAML) and warrants its own atomic commit.
+3. **Per-env override of `agent.provider_routing.fast.model` to `qwen2.5:0.5b-instruct` in test env.** Requires extending `scripts/commands/config.sh`'s `env_override_value` to handle the `agent.provider_routing.*` path AND extending `smackerel.yaml`'s `environments.test` block. The current routing maps `fast → ollama/gpt-oss:20b` which is a 20B-parameter model not pinned to the spec 043 deterministic test target.
+4. **New scenario YAML `config/prompt_contracts/e2e_ollama_smoke.yaml`** that wires the new test-only `fast` route to an allowlisted read-only echo tool (e.g., `scope6_e2e_echo` already registered under build tag `e2e_agent_tools`).
+5. **T2-05 manual smoke** — `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e` against live test stack with Ollama profile. Requires (1)-(4) plus a ~5min cold-pull of `qwen2.5:0.5b-instruct` (~397MB).
+
+The 2 landed deliverables are independently useful (the pull script wires into Scope 3's `./smackerel.sh test e2e` lifecycle even if happy_path_test.go is not yet present; the no-skip guard PROTECTS the future happy_path_test.go from the regression it forbids).
+
+### Scope 3 — pending
+
+Scope 3 will populate this section as it is implemented.
 
 
 ---
