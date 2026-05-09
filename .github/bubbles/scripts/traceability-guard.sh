@@ -198,7 +198,8 @@ extract_test_rows() {
   printf '%s\n' "$section" \
     | grep -E '^\|' \
     | grep -Ev '^\|[-:[:space:]|]+\|$' \
-    | grep -Evi '^\|[[:space:]]*test type[[:space:]]*\|'
+    | grep -Evi '^\|[[:space:]]*test type[[:space:]]*\|' \
+    || true
 }
 
 extract_dod_items() {
@@ -265,7 +266,9 @@ scenario_matches_dod() {
 
 extract_scenarios() {
   local scope_path="$1"
-  grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//'
+  grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" \
+    | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//' \
+    || true
 }
 
 extract_trace_ids() {

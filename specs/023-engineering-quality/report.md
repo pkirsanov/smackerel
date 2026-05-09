@@ -761,8 +761,19 @@ Multiple commits touched spec 023 files since the last security scan. All change
 ### Build & Test Baseline
 
 ```
-./smackerel.sh check — Config is in sync with SST, env_file drift guard: OK
-./smackerel.sh test unit — All Go packages pass + Python ML sidecar pass
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 4, rejected: 0
+scenario-lint: OK
+
+$ ./smackerel.sh test unit
+411 passed in 17.82s (Go core + Python ML sidecar)
+ok  	github.com/smackerel/smackerel/internal/api  3.214s
+ok  	github.com/smackerel/smackerel/internal/auth  0.108s
+ok  	github.com/smackerel/smackerel/internal/config  0.892s
+ok  	github.com/smackerel/smackerel/internal/connector  1.456s
 ```
 
 ### Findings
