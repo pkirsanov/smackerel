@@ -39,7 +39,7 @@ Each scope ends with a working state. Test plan rows must reference real test fi
 
 ## Scope 1: Config + Compose Foundation
 
-**Status:** Done (2026-05-09)
+**Status:** Done
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Land all 12 Ollama-related SST keys in `config/smackerel.yaml`, emit them via `./smackerel.sh config generate`, and add the `smackerel-test-ollama` service to test compose. After this scope, `./smackerel.sh up --env=test --profile ollama` brings up a healthy Ollama container.
@@ -51,7 +51,7 @@ Each scope ends with a working state. Test plan rows must reference real test fi
 ```gherkin
 Scenario: SCN-OLLAMA-001 Ollama starts deterministically with qwen2.5:0.5b-instruct on test profile
   Given config/smackerel.yaml declares the infrastructure.ollama and environments.test.ollama_* blocks
-  And docker-compose.test.yml defines smackerel-test-ollama service gated on profile ollama
+  And docker-compose.yml defines the ollama service gated on profile ollama
   When ./smackerel.sh up --env=test --profile ollama runs
   Then the smackerel-test-ollama container reports healthy
   And the Ollama HTTP API at the configured host_port returns 200 on /api/tags within pull_timeout_seconds
@@ -87,7 +87,7 @@ Scenario: SCN-OLLAMA-006 Configuration flows through SST, no hardcoded model str
   - Reuse existing `environments.test.ollama_host_port` (47004 — distinct from postgres:47001, nats:47002, nats_monitor:47003 per design.md §3 correction)
   - Reuse existing `environments.test.ollama_volume_name` (`smackerel-test-ollama-data`)
 - Update `scripts/commands/config.sh` to emit all `OLLAMA_*` keys to `config/generated/test.env` with required-value validation.
-- Update `docker-compose.test.yml` to add `smackerel-test-ollama` service with `profiles: [ollama]`, healthcheck on `/api/tags`, volume mount for model cache.
+- Update `docker-compose.yml` to add the `ollama` service with `profiles: [ollama]`, healthcheck on `/api/tags`, volume mount for model cache, and per-env `${OLLAMA_*}` substitutions (single compose file collapse per design.md §3 OQ-D1; per-env behavior comes from `environments.<env>.ollama_enabled` toggling the profile activation in `scripts/lib/runtime.sh::smackerel_compose`).
 - Update `internal/deploy/compose_contract_test.go` to assert `smackerel-test-ollama` service contract when `ollama_enabled=true`.
 - Forbidden patterns: `os.Getenv("OLLAMA_*", "fallback")`, hardcoded `:11434`, hardcoded `ollama/ollama:` tags, hardcoded `qwen2.5` model strings.
 
@@ -119,7 +119,7 @@ Scenario: SCN-OLLAMA-006 Configuration flows through SST, no hardcoded model str
 
 ## Scope 2: Happy-Path Test + Pull Script
 
-**Status:** Done (2026-05-09)
+**Status:** Done
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Author `tests/e2e/agent/happy_path_test.go` exercising the production NATS+sidecar+litellm+Ollama path with deterministic output. Author `scripts/commands/ollama-test-pull.sh` to wire model pull into the e2e test setup. Includes adversarial regression test asserting fail-loud (NOT skip) when Ollama or model is unavailable.
@@ -188,7 +188,7 @@ Scenario: SCN-OLLAMA-004 Test fails loudly when Ollama or model is unavailable (
 
 ## Scope 3: Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure
 
-**Status:** Done (2026-05-09)
+**Status:** Done
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Wire `./smackerel.sh test e2e` to gate Ollama profile startup + model pull on `SMACKEREL_TEST_OLLAMA=1` env-var. Update spec 037 state.json + scopes.md to mark MIT-037-OLLAMA-001 closed and drop "deferred infra" modifier from Scope 5 DoD bullets.

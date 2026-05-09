@@ -242,6 +242,64 @@ test that needs live Ollama.
 
 ---
 
+## Code Diff Evidence
+
+**Phase:** implement
+**Claim Source:** executed
+**Gate:** G053 (implementation delta evidence)
+
+This section records the executed `git diff --stat` proof of the spec 043
+implementation delta against `main` baseline (`fab9d41a~1`). All 14 files
+below are non-artifact runtime/source/config files (no `specs/`, `docs/`, or
+`README.md` paths in the runtime-path tally).
+
+### `git diff --stat` summary
+
+```text
+$ git diff fab9d41a~1..HEAD --stat -- '*.go' '*.py' '*.sh' '*.yaml' '*.yml' \
+    ':(exclude)specs/' ':(exclude)docs/' ':(exclude)README.md'
+ config/prompt_contracts/e2e-ollama-smoke-v1.yaml |  67 ++++
+ config/smackerel.yaml                            |  34 ++
+ docker-compose.yml                               |   4 +-
+ internal/config/sst_grep_guard_test.go           | 305 ++++++++++++++++
+ internal/deploy/compose_ollama_contract_test.go  | 202 +++++++++++
+ ml/app/agent.py                                  |  73 +++-
+ ml/app/intelligence.py                           |   9 +-
+ ml/tests/test_agent.py                           | 138 ++++++++
+ scripts/commands/config.sh                       |  43 ++-
+ scripts/commands/ollama-test-pull.sh             | 105 ++++++
+ smackerel.sh                                     |  73 ++++
+ tests/e2e/agent/happy_path_test.go               | 433 +++++++++++++++++++++++
+ tests/e2e/agent/no_skip_guard_test.go            | 227 ++++++++++++
+ tests/integration/ollama_config_contract_test.go | 204 +++++++++++
+ 14 files changed, 1912 insertions(+), 5 deletions(-)
+```
+
+Total delta: 12 new files + 2 modified files (+1912 / -5).
+
+### File classification
+
+| File | Scope | Type | Purpose |
+|------|-------|------|---------|
+| `config/prompt_contracts/e2e-ollama-smoke-v1.yaml` | 02 | NEW | Agent scenario `e2e_ollama_smoke` with `recommendation_parse_intent` allowlist; scenario-lint registered=5/0 |
+| `config/smackerel.yaml` | 01,02 | MODIFIED | New SST keys: `infrastructure.ollama.{image,container_port,test.*}` (12 keys) + `environments.{dev,test,home-lab}.ollama_enabled` + `environments.test.agent_provider_fast_model` |
+| `docker-compose.yml` | 01 | MODIFIED | `services.ollama` extended with `${OLLAMA_IMAGE}` substitution + healthcheck on `/api/tags` |
+| `internal/config/sst_grep_guard_test.go` | 01 | NEW | SCN-OLLAMA-006 enforcement: zero hardcoded Ollama literals in production source; SCN-OLLAMA-005 per-env volume isolation |
+| `internal/deploy/compose_ollama_contract_test.go` | 01 | NEW | SCN-OLLAMA-001 contract test: live `docker-compose.yml` parsed; asserts `services.ollama` shape + profile-gating + per-env env-file substitution |
+| `ml/app/agent.py` | 02 | MODIFIED | New `resolve_ollama_determinism_options()` reads `OLLAMA_TEST_REQUEST_*` env vars and forwards as litellm kwargs; `handle_invoke()` extended to consume them when provider=`ollama` (no-op for other providers) |
+| `ml/app/intelligence.py` | 01 | MODIFIED | Replaced fallback `url = ollama_url or "http://localhost:11434"` with explicit fail-loud `if not ollama_url: return None` (SST violation rooted in spec 037 plumbing, fixed in passing) |
+| `ml/tests/test_agent.py` | 02 | MODIFIED | 6 new pytest cases for `resolve_ollama_determinism_options` (full set, malformed skip, no-leak adversarial for non-Ollama providers, no-op when env unset) |
+| `scripts/commands/config.sh` | 01,02 | MODIFIED | New `OLLAMA_*` env emission to test.env; flipped `AGENT_PROVIDER_FAST_MODEL` from `required_value` to `env_override_value` for per-env override |
+| `scripts/commands/ollama-test-pull.sh` | 02 | NEW | Fail-loud HTTP pull script honoring `OLLAMA_TEST_PULL_TIMEOUT_SECONDS`; exit codes 0/1/2/3/4 for success/missing-env/HTTP-error/timeout/post-pull-tag-missing |
+| `smackerel.sh` | 03 | MODIFIED | `test e2e` block extended with `SMACKEREL_TEST_OLLAMA=1` gate that runs pull script + `go test -tags e2e_ollama` |
+| `tests/e2e/agent/happy_path_test.go` | 02 | NEW | Build tag `e2e_ollama`; 3 tests: `TestAgentHappyPath_PlanToolSynthesis`, `TestAgentHappyPath_DeterministicOutput`, `TestOllamaUnreachable_FailsLoudly` |
+| `tests/e2e/agent/no_skip_guard_test.go` | 02 | NEW | 3 guard tests enforcing zero `t.Skip*` in agent E2E (10-entry allowlist) + adversarial regex regression |
+| `tests/integration/ollama_config_contract_test.go` | 01 | NEW | Live config-generation contract: asserts `./smackerel.sh config generate` emits all required `OLLAMA_*` keys with correct values |
+
+Spec-artifact deltas (scopes.md, report.md, scenario-manifest.json, state.json, plus cross-spec spec 037 scopes.md + state.json) are intentionally excluded from this code-diff section per Gate G053; those are tracked separately by trace-guard + artifact-lint.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §11 Rollout Plan and [`scopes.md`](./scopes.md):

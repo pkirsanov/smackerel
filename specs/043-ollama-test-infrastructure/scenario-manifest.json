@@ -19,7 +19,14 @@
           "function": "TestOllamaConfigGenerateAndRuntimeValidationStayInSync",
           "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/deploy/compose_ollama_contract_test.go::TestOllamaComposeContract_LiveFile",
+        "tests/integration/ollama_config_contract_test.go::TestOllamaConfigGenerateAndRuntimeValidationStayInSync"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-002",
@@ -33,7 +40,12 @@
           "status": "implemented"
         }
       ],
-      "status": "implemented"
+      "status": "implemented",
+      "requiredTestType": "e2e",
+      "linkedTests": [
+        "tests/e2e/agent/happy_path_test.go::TestAgentHappyPath_DeterministicOutput"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-003",
@@ -47,7 +59,12 @@
           "status": "implemented"
         }
       ],
-      "status": "implemented"
+      "status": "implemented",
+      "requiredTestType": "e2e",
+      "linkedTests": [
+        "tests/e2e/agent/happy_path_test.go::TestAgentHappyPath_PlanToolSynthesis"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-004",
@@ -59,7 +76,15 @@
         "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_AdversarialFinding",
         "tests/e2e/agent/happy_path_test.go::TestOllamaUnreachable_FailsLoudly"
       ],
-      "status": "implemented"
+      "status": "implemented",
+      "requiredTestType": "adversarial",
+      "linkedTests": [
+        "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailoutInAgentE2E",
+        "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_HappyPathTestExplicitlyForbidden",
+        "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_AdversarialFinding",
+        "tests/e2e/agent/happy_path_test.go::TestOllamaUnreachable_FailsLoudly"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-005",
@@ -78,7 +103,13 @@
           "function": "TestOllamaComposeContract_AdversarialHardcodedVolumeName",
           "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/config/sst_grep_guard_test.go::TestPerEnvOllamaVolumeIsolation"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-006",
@@ -103,7 +134,13 @@
           "function": "TestOllamaConfigGenerateAndRuntimeValidationStayInSync",
           "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/config/sst_grep_guard_test.go::TestSST_NoHardcodedOllamaValues"
+      ],
+      "regressionProtected": true
     },
     {
       "scenarioId": "SCN-OLLAMA-007",
@@ -129,7 +166,13 @@
           "status": "implemented"
         }
       ],
-      "status": "implemented"
+      "status": "implemented",
+      "requiredTestType": "smoke",
+      "linkedTests": [
+        "smackerel.sh::SMACKEREL_TEST_OLLAMA-gate-block",
+        "specs/037-llm-agent-tools/state.json::MIT-037-OLLAMA-001"
+      ],
+      "regressionProtected": true
     }
   ]
 }
