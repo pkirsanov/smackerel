@@ -784,7 +784,12 @@ AGENT_PROVIDER_DEFAULT_MODEL="$(required_value agent.provider_routing.default.mo
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
 AGENT_PROVIDER_REASONING_MODEL="$(required_value agent.provider_routing.reasoning.model)"
 AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provider)"
-AGENT_PROVIDER_FAST_MODEL="$(required_value agent.provider_routing.fast.model)"
+# Spec 043 — agent_provider_fast_model uses per-env override so the test
+# environment can pin to a small tool-calling model (the smallest one that
+# runs on the CI / no-GPU lane) without forcing dev / home-lab off their
+# preferred routes. The model literal lives in
+# environments.<env>.agent_provider_fast_model in config/smackerel.yaml.
+AGENT_PROVIDER_FAST_MODEL="$(env_override_value agent_provider_fast_model agent.provider_routing.fast.model)"
 AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.provider)"
 AGENT_PROVIDER_VISION_MODEL="$(required_value agent.provider_routing.vision.model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
