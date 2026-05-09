@@ -216,6 +216,17 @@
       "startedAt": "2026-04-23T00:00:00Z",
       "completedAt": "2026-04-23T00:30:00Z",
       "summary": "Spec-review pass: confirmed spec.md / design.md / scopes.md remain coherent with twitter.go (860 LOC) + twitter_test.go (2355 LOC, 127 tests). All 6 scopes Done with intact DoD evidence. No drift between active artifacts and implementation."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-09T04:00:00Z",
+      "completedAt": "2026-05-09T04:30:00Z",
+      "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 9 of 12 trace failures (12->3 residual). Added Test Plan tables to Scopes 01, 02, 04 referencing internal/connector/twitter/twitter_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-TW-ARC-001/002, SCN-TW-THR-001/002, SCN-TW-CONN-001/002. Residual: Scopes 03 (Normalizer & Tier Assignment), 05 (Tweet Link Extraction), 06 (API Client) lack 'Use Cases (Gherkin)' subsections. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule: 'MUST NOT add new Gherkin scenarios'); routing to bubbles.plan recommended. artifact-lint clean."
     }
   ],
   "policySnapshot": {

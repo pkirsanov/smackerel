@@ -79,11 +79,18 @@ Scenario: SCN-TW-ARC-002 Parse like.js and bookmark.js
   And each has tweet_id for cross-referencing with tweets.js
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-ARC-001 Parse tweets.js with JS wrapper | TestParseTweetsJS, TestParseTweetTime | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-ARC-002 Parse like.js and bookmark.js | TestSyncArchive_FullRoundTrip, TestSyncArchive_MultiPartFiles | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] `ParseTweetsFile()` strips JS wrapper and returns `[]ArchiveTweet`
+- [x] Scenario "SCN-TW-ARC-001 Parse tweets.js with JS wrapper": `ParseTweetsFile()` strips JS wrapper and returns `[]ArchiveTweet`
   > Evidence: `twitter.go::parseTweetsJS()` strips `window.YTD.tweet.part0 = ` prefix and parses JSON array; `twitter_test.go::TestParseTweetsJS` verifies 2-tweet parsing with all fields
-- [x] `ParseLikesFile()` strips wrapper and returns `[]ArchiveLike`
+- [x] Scenario "SCN-TW-ARC-002 Parse like.js and bookmark.js": `ParseLikesFile()` strips wrapper and returns `[]ArchiveLike`
   > Evidence: `twitter.go::syncArchive()` processes likes/bookmarks from archive directory structure
 - [x] `ParseBookmarksFile()` strips wrapper and returns bookmarked tweets
   > Evidence: `twitter.go::syncArchive()` builds bookmarked/liked sets for tier assignment in normalizeTweet()
@@ -130,13 +137,20 @@ Scenario: SCN-TW-THR-002 Ignore replies to other users
   Then tweet 201 is NOT treated as a thread continuation
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-THR-001 Reconstruct self-reply thread | TestBuildThreads, TestNormalizeTweet_ThreadPosition | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-THR-002 Ignore replies to other users | TestBuildThreads, TestBuildThreads_BranchingReplies | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] `BuildThreads()` detects self-reply chains by matching author
+- [x] Scenario "SCN-TW-THR-001 Reconstruct self-reply thread": `BuildThreads()` detects self-reply chains by matching author
   > Evidence: `twitter.go::buildThreads()` groups tweets by InReplyToStatusID into reply chains; `twitter_test.go::TestBuildThreads` verifies 3-tweet thread with root_id="100"
 - [x] Thread trees built with correct order (root → replies)
   > Evidence: `twitter.go::buildThreads()` returns Thread structs with RootID, ordered Tweets slice, and Position map (tweet ID → 0-based index); TestBuildThreads verifies 3 tweets in order; TestNormalizeTweet_ThreadPosition verifies position metadata
-- [x] Standalone tweets (no thread) are not wrapped in thread objects
+- [x] Scenario "SCN-TW-THR-002 Ignore replies to other users": Standalone tweets (no thread) are not wrapped in thread objects
   > Evidence: `twitter.go::buildThreads()` only creates Thread for chains of 2+ tweets; standalone tweet "200" excluded in TestBuildThreads
 - [x] Incomplete threads (missing intermediate tweets) handled gracefully
   > Evidence: `twitter.go::buildThreads()` builds from available tweets; `twitter_test.go::TestBuildThreads_BranchingReplies` tests branching conversation handling
@@ -202,9 +216,16 @@ Scenario: SCN-TW-CONN-002 Dedup on re-import
   Then only 400 new tweets are returned (dedup by tweet_id via cursor)
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-CONN-001 Full archive import | TestSyncArchive_FullRoundTrip, TestSyncArchive_MultiPartFiles | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-CONN-002 Dedup on re-import | TestSyncArchive_ChildURLDedup | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] `Connector` implements `connector.Connector` interface
+- [x] Scenario "SCN-TW-CONN-001 Full archive import": `Connector` implements `connector.Connector` interface
   > Evidence: `twitter.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods; TestNew, TestClose verify
 - [x] Config parsing extracts all Twitter-specific fields
   > Evidence: `twitter.go::parseTwitterConfig()` extracts SyncMode, ArchiveDir, BearerToken, APIEnabled; TestConnect_MissingArchiveDir, TestConnect_NonexistentArchiveDir, TestConnect_InvalidSyncMode verify
@@ -214,7 +235,7 @@ Scenario: SCN-TW-CONN-002 Dedup on re-import
   > Evidence: `twitter.go::syncArchive()` reads tweets.js from archive_dir/data/, parses with parseTweetsJS(), builds threads, normalizes all
 - [x] Thread reconstruction integrated into sync flow
   > Evidence: `twitter.go::syncArchive()` calls buildThreads() and builds threadMap for normalization
-- [x] Cursor-based dedup skips previously imported tweets
+- [x] Scenario "SCN-TW-CONN-002 Dedup on re-import": Cursor-based dedup skips previously imported tweets
   > Evidence: `twitter.go::syncArchive()` compares tweet timestamps against cursor to skip already-imported tweets
 - [x] Config added to `smackerel.yaml` with empty-string placeholders
   > Evidence: `config/smackerel.yaml` contains twitter connector section

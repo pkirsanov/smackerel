@@ -113,15 +113,22 @@ Scenario: SCN-DC-NRM-002 Assign processing tiers per R-007
 - `internal/connector/discord/normalizer_test.go` — 15 unit tests covering all content types, tiers, metadata
 - `internal/connector/discord/ratelimiter_test.go` — rate limiter tests
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-NRM-001 Classify all message content types | TestClassifyMessage, TestNormalizeMessage | internal/connector/discord/discord_test.go |
+| Unit | SCN-DC-NRM-002 Assign processing tiers per R-007 | TestAssignTier | internal/connector/discord/discord_test.go |
+
 ### Definition of Done
 
 - [x] `Normalizer.Normalize()` converts `discordgo.Message` to `connector.RawArtifact`
   > Evidence: `internal/connector/discord/discord.go::normalizeMessage()` converts DiscordMessage to connector.RawArtifact; `discord_test.go::TestNormalizeMessage` verifies
-- [x] All 8 content types are classified correctly
+- [x] Scenario "SCN-DC-NRM-001 Classify all message content types": All 8 content types are classified correctly
   > Evidence: `discord.go::classifyMessage()` — discord/message, discord/embed, discord/link, discord/code, discord/attachment, discord/reply, discord/thread, discord/capture; `discord_test.go::TestClassifyMessage` — 10 cases
 - [x] All metadata fields per R-004 are populated
   > Evidence: `discord.go::normalizeMessage()` populates server_name, channel_name, pinned, reaction_count, mentions, thread_id, thread_name, reply_to_id; verified in TestNormalizeMessage
-- [x] Processing tier assignment matches R-007 rules
+- [x] Scenario "SCN-DC-NRM-002 Assign processing tiers per R-007": Processing tier assignment matches R-007 rules
   > Evidence: `discord.go::assignTier()` — pinned/high-reactions/links→full, attachments/code/replies/embeds→standard, short→metadata; `discord_test.go::TestAssignTier` — 10 cases
 - [x] `RateLimiter` tracks per-route rate buckets
   > Evidence: `discord.go::RateLimiter` struct with `NewRateLimiter()`, attached to connector in `New()`
@@ -166,11 +173,18 @@ Scenario: SCN-DC-REST-002 Per-channel cursor advancement
 - `internal/connector/discord/rest.go` — `fetchChannelMessages()`, `fetchPinnedMessages()`, pagination logic
 - `internal/connector/discord/rest_test.go` — 10 unit tests + 4 integration tests
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-REST-001 Fetch message history with pagination | TestFetchChannelMessages_Basic, TestFetchChannelMessages_Pagination, TestFetchChannelMessages_RespectsBackfillLimit | internal/connector/discord/discord_test.go |
+| Unit | SCN-DC-REST-002 Per-channel cursor advancement | TestSyncEndToEnd_CursorPreventsRefetch | internal/connector/discord/discord_test.go |
+
 ### Definition of Done
 
-- [x] `fetchChannelMessages()` paginates with backfill_limit
+- [x] Scenario "SCN-DC-REST-001 Fetch message history with pagination": `fetchChannelMessages()` paginates with backfill_limit
   > Evidence: `fetchChannelMessages()` is now a method on Connector making real HTTP calls to `GET /channels/{id}/messages?limit={n}&after={cursor}`. Pagination loops until `backfill_limit` is reached or no more messages. Tested in `TestFetchChannelMessages_Basic`, `TestFetchChannelMessages_Pagination`, `TestFetchChannelMessages_RespectsBackfillLimit`.
-- [x] Per-channel cursors tracked via `ChannelCursors` map
+- [x] Scenario "SCN-DC-REST-002 Per-channel cursor advancement": Per-channel cursors tracked via `ChannelCursors` map
   > Evidence: `discord.go::ChannelCursors` type (map[string]string), serialized as JSON cursor in Sync(). `TestSyncEndToEnd_CursorPreventsRefetch` verifies cursor-based dedup.
 - [x] `fetchPinnedMessages()` retrieves all pins for a channel
   > Evidence: `fetchPinnedMessages()` is now a method on Connector making real HTTP calls to `GET /channels/{id}/pins`. Tested in `TestFetchPinnedMessages_Basic`, `TestSyncEndToEnd_WithMessagesAndPins`.
@@ -217,9 +231,15 @@ Scenario: SCN-DC-CONN-001 Connector lifecycle
 **Files modified:**
 - `config/smackerel.yaml` — add `discord` connector section
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-CONN-001 Connector lifecycle | TestConnect_TokenValidationSuccess, TestConnect_TokenValidationUnauthorized, TestSyncEndToEnd_WithMessagesAndPins, TestClose | internal/connector/discord/discord_test.go |
+
 ### Definition of Done
 
-- [x] `Connector` implements `connector.Connector` interface
+- [x] Scenario "SCN-DC-CONN-001 Connector lifecycle": `Connector` implements `connector.Connector` interface
   > Evidence: `discord.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods matching connector.Connector; compile-time check `var _ connector.Connector = (*Connector)(nil)`
 - [x] Config parsing extracts all Discord-specific fields from `ConnectorConfig`
   > Evidence: `discord.go::parseDiscordConfig()` extracts BotToken, MonitoredChannels, EnableGateway, BackfillLimit, IncludeThreads, IncludePins, CaptureCommands; TestConnect_ValidConfig verifies
@@ -259,11 +279,17 @@ Scenario: SCN-DC-GW-001 Real-time message capture
   And the next Sync() drains the buffer into artifacts
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-GW-001 Real-time message capture | TestEventPoller_ConnectStartsPolling, TestEventPoller_EventsFilterToMonitoredChannels, TestEventPoller_SyncDrainsBufferedEvents | internal/connector/discord/gateway_test.go |
+
 ### Definition of Done
 
 - [x] Gateway connection opens with correct intents (GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT)
   > Evidence: `gateway.go` defines `IntentGuilds` (1), `IntentGuildMessages` (512), `IntentMessageContent` (32768) constants. `Connect()` in `discord.go` passes `IntentGuilds | IntentGuildMessages | IntentMessageContent` to `EventPoller.Connect()`. `GatewayClient` interface stores intents. TestConnector_GatewayStartsOnConnectWithEnabledFlag verifies gateway starts on Connect with `enable_gateway: true`.
-- [x] MESSAGE_CREATE events from monitored channels are buffered
+- [x] Scenario "SCN-DC-GW-001 Real-time message capture": MESSAGE_CREATE events from monitored channels are buffered
   > Evidence: `EventPoller.pollChannel()` fetches messages via REST poller and sends `GatewayEvent{Type: "MESSAGE_CREATE", Message: msg}` to the buffered `events` channel (default cap 10000). TestEventPoller_ConnectStartsPolling verifies events appear on the channel with correct type and message ID.
 - [x] Non-monitored channel events are filtered out
   > Evidence: `EventPoller` only starts polling goroutines for channels in its `channels` set (configured at construction). Additionally, `Sync()` drain loop checks `configuredChannels` before accepting events. TestEventPoller_EventsFilterToMonitoredChannels verifies only monitored channels are polled.
@@ -316,6 +342,13 @@ Scenario: SCN-DC-THR-004 Thread ingestion disabled via config
   Then no thread discovery or thread message fetching occurs
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-THR-001, SCN-DC-THR-002, SCN-DC-THR-003 | TestFetchActiveThreads_ParsesResponse, TestFetchActiveThreads_FiltersToMonitoredChannels, TestSync_IncludesThreadMessages, TestNormalizeMessage_ThreadMetadata | internal/connector/discord/discord_test.go |
+| Unit | SCN-DC-THR-004 Thread ingestion disabled via config | TestSync_IncludeThreadsFalse_SkipsThreads | internal/connector/discord/discord_test.go |
+
 ### Definition of Done
 
 - [x] THREAD_CREATE events in monitored channels trigger thread following
@@ -328,7 +361,7 @@ Scenario: SCN-DC-THR-004 Thread ingestion disabled via config
   > Evidence: `discord.go::normalizeMessage()` sets metadata["thread_id"] and metadata["thread_name"]; TestNormalizeMessage_ThreadMetadata, TestSync_ThreadMetadataOnArtifacts verify
 - [x] Active threads: monitored via Gateway; archived threads: fetched on backfill
   > Evidence: `fetchActiveThreads()` calls `GET /guilds/{guild_id}/threads/active` for active threads. `fetchArchivedThreads()` calls `GET /channels/{channel_id}/threads/archived/public` for archived threads. Discovered thread IDs are added to EventPoller via `AddChannels()`. TestSync_IncludesThreadMessages verifies.
-- [x] 5 unit tests for thread ingestion pass
+- [x] Scenario "SCN-DC-THR-004 Thread ingestion disabled via config": 5 unit tests for thread ingestion pass
   > Evidence: TestFetchActiveThreads_ParsesResponse, TestFetchActiveThreads_FiltersToMonitoredChannels, TestSync_IncludesThreadMessages, TestSync_ThreadMetadataOnArtifacts, TestSync_IncludeThreadsFalse_SkipsThreads all pass with `-race`. Total discord package: 147 test functions.
 
 ---
@@ -369,11 +402,18 @@ Scenario: SCN-DC-CMD-003 Capture command with unsafe URL rejected
   And the text is preserved as capture_comment
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-DC-CMD-001, SCN-DC-CMD-002 | TestParseBotCommand, TestNormalize_BotCommand_SetsCaptureType, TestSync_CaptureCommand_ProducesFullTierArtifact | internal/connector/discord/discord_test.go |
+| Unit | SCN-DC-CMD-003 Capture command with unsafe URL rejected | TestParseBotCommand_CommentTruncated, TestParseBotCommand | internal/connector/discord/discord_test.go |
+
 ### Definition of Done
 
 - [x] Bot detects `!save` and `!capture` prefixes in messages
   > Evidence: `discord.go::classifyMessage()` checks CaptureCommands list for prefix match, returns "discord/capture"; TestClassifyMessage covers "!save" and "!capture" cases
-- [x] URL extraction from command text
+- [x] Scenario "SCN-DC-CMD-003 Capture command with unsafe URL rejected": URL extraction from command text
   > Evidence: `discord.go::ParseBotCommand()` extracts URL and comment from capture command text; TestParseBotCommand verifies; SSRF protection via `isSafeURL()`
 - [x] Non-URL text preserved as capture comment in metadata
   > Evidence: `discord.go::ParseBotCommand()` returns comment text; TestParseBotCommand_CommentTruncated verifies truncation. `normalizeMessage()` stores `capture_url` and `capture_comment` in metadata. TestNormalize_BotCommand_SetsCaptureType verifies.
