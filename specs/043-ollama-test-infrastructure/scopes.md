@@ -119,7 +119,7 @@ Scenario: SCN-OLLAMA-006 Configuration flows through SST, no hardcoded model str
 
 ## Scope 2: Happy-Path Test + Pull Script
 
-**Status:** Not started
+**Status:** In progress (2 of 5 deliverables landed; happy_path_test.go + LLM determinism plumbing + per-env model override deferred to a follow-up turn — see report.md Scope 2 section for split rationale)
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Author `tests/e2e/agent/happy_path_test.go` exercising the production NATS+sidecar+litellm+Ollama path with deterministic output. Author `scripts/commands/ollama-test-pull.sh` to wire model pull into the e2e test setup. Includes adversarial regression test asserting fail-loud (NOT skip) when Ollama or model is unavailable.
@@ -163,18 +163,20 @@ Scenario: SCN-OLLAMA-004 Test fails loudly when Ollama or model is unavailable (
 
 | ID | Test Type | Location | Trace ID | Assertion |
 |----|-----------|----------|----------|-----------|
-| T2-01 | e2e | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-002 | `TestAgentHappyPath_DeterministicOutput` runs the same invocation 3 times; asserts byte-identical agent_traces.synthesis_response payloads |
-| T2-02 | e2e | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-003 | `TestAgentHappyPath_PlanToolSynthesis` records 3-step trace in agent_traces table (plan → tool_call → synthesis); each step has populated NATS-subject and tool-name fields |
-| T2-03 | adversarial | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-004 | `TestOllamaUnreachable_FailsLoudly` produces Go test FAILURE (rc != 0) when Ollama is stopped; failure message includes unreachable URL and `pull_timeout_seconds` |
-| T2-04 | grep-guard | `tests/e2e/agent/no_skip_guard_test.go` | SCN-OLLAMA-004 | `TestNoSkipBailoutInAgentE2E` greps `tests/e2e/agent/*.go` for `t.Skip\|t.SkipNow\|t.Skipf` outside the regression test that adversarially asserts fail-loud; returns ZERO unexpected matches |
-| T2-05 | smoke | `scripts/commands/ollama-test-pull.sh` | SCN-OLLAMA-002 | Manual run with `SMACKEREL_TEST_OLLAMA=1`; asserts pull completes within `pull_timeout_seconds`; fail-loud on non-200 |
+| T2-01 | smoke | `scripts/commands/ollama-test-pull.sh` | SCN-OLLAMA-002 | Manual run with `SMACKEREL_TEST_OLLAMA=1`; asserts pull completes within `pull_timeout_seconds`; fail-loud on non-200 |
+| T2-02 | grep-guard | `tests/e2e/agent/no_skip_guard_test.go` | SCN-OLLAMA-004 | `TestNoSkipBailoutInAgentE2E` greps `tests/e2e/agent/*.go` for `t.Skip\|t.SkipNow\|t.Skipf` outside the regression test that adversarially asserts fail-loud; returns ZERO unexpected matches |
+| T2-03 | e2e | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-002 | `TestAgentHappyPath_DeterministicOutput` runs the same invocation 3 times; asserts byte-identical agent_traces.synthesis_response payloads |
+| T2-04 | e2e | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-003 | `TestAgentHappyPath_PlanToolSynthesis` records 3-step trace in agent_traces table (plan → tool_call → synthesis); each step has populated NATS-subject and tool-name fields |
+| T2-05 | adversarial | `tests/e2e/agent/happy_path_test.go` | SCN-OLLAMA-004 | `TestOllamaUnreachable_FailsLoudly` produces Go test FAILURE (rc != 0) when Ollama is stopped; failure message includes unreachable URL and `pull_timeout_seconds` |
 
 ### Definition of Done
 
 - [ ] Scenario "SCN-OLLAMA-002 Agent happy path test exercises plan→tool→synthesis loop with deterministic temperature=0": `tests/e2e/agent/happy_path_test.go` authored with `TestAgentHappyPath_DeterministicOutput`; 3-run comparison shows byte-identical agent_traces.synthesis_response.
 - [ ] Scenario "SCN-OLLAMA-003 Happy-path test exercises plan→tool→synthesis through real Ollama": `TestAgentHappyPath_PlanToolSynthesis` passes against test compose with Ollama profile; agent_traces records 3 ordered steps; cold-path wall-clock ≤ 90s.
 - [ ] Scenario "SCN-OLLAMA-004 Test fails loudly when Ollama or model is unavailable": adversarial test `TestOllamaUnreachable_FailsLoudly` exists; `grep -rnE 't\.Skip(\(|f\(|Now\()' tests/e2e/agent/` returns ZERO matches outside the explicitly-allowlisted regression test.
-- [ ] `scripts/commands/ollama-test-pull.sh` authored; respects `pull_timeout_seconds` SST key; fail-loud on non-200 from Ollama HTTP API.
+  - **PARTIAL evidence (2026-05-09):** The `tests/e2e/agent/no_skip_guard_test.go` (`TestNoSkipBailoutInAgentE2E` + `TestNoSkipBailout_HappyPathTestExplicitlyForbidden` + `TestNoSkipBailout_AdversarialFinding`) implements the grep portion of this DoD with a 10-entry allowlist and adversarial regex regression. PASS under both `go test` (no tags) and `go test -tags=e2e`. The bullet stays unchecked because `TestOllamaUnreachable_FailsLoudly` requires `happy_path_test.go` which is deferred to a follow-up turn (depends on LLM determinism plumbing + per-env model override + scenario YAML).
+- [x] `scripts/commands/ollama-test-pull.sh` authored; respects `pull_timeout_seconds` SST key; fail-loud on non-200 from Ollama HTTP API.
+  - **Evidence (2026-05-09):** `scripts/commands/ollama-test-pull.sh` exists; `bash -n` syntax-clean; `env -i bash scripts/commands/ollama-test-pull.sh` exits 1 with `ollama-test-pull: required env var OLLAMA_URL is missing or empty (SST violation; check config/generated/test.env)`. Pull POSTs `{"name":"<model>","stream":false}` to `${OLLAMA_URL}/api/pull` with `timeout(1)` enforcing `OLLAMA_TEST_PULL_TIMEOUT_SECONDS` as a wall-clock ceiling; verifies `${OLLAMA_URL}/api/tags` contains the model after a successful pull. Exit codes 0/1/2/3/4 for success/missing-env/HTTP-error/timeout/post-pull-tag-missing.
 - [ ] All e2e tests still pass: `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e` (when manually run with profile gate).
 
 ---

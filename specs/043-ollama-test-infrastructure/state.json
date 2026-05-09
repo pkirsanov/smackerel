@@ -18,6 +18,14 @@
         "claimedAt": "2026-05-09T20:30:00Z",
         "agent": "bubbles.implement (parent)",
         "summary": "Scope 1 (Config + Compose Foundation) implemented: 12 SST keys added to config/smackerel.yaml (infrastructure.ollama.image + 8 test sub-keys + 3 per-env ollama_enabled flags); scripts/commands/config.sh emits OLLAMA_IMAGE + 7 OLLAMA_TEST_* keys with per-env ollama_enabled override via env_override_value; docker-compose.yml ollama service uses ${OLLAMA_IMAGE}; ml/app/intelligence.py SST violation (line 40 fallback to http://localhost:11434) replaced with explicit fail-loud branch. New tests: internal/config/sst_grep_guard_test.go (3 subtests, primary + 2 adversarial), internal/deploy/compose_ollama_contract_test.go (4 subtests, primary + 3 adversarial), tests/integration/ollama_config_contract_test.go (1 test + 3 adversarial subtests). All 5 DoD bullets carry trace-prefix evidence blocks per Gate G068. ./smackerel.sh check passes (config in sync with SST + env_file drift guard OK + scenario-lint OK). ./smackerel.sh test unit exits 0 (78 Go packages PASS, 411 Python tests PASS in 15.04s). Live ./smackerel.sh up --env=test --profile ollama deferred to Scope 2 (model pull + agent invocation are Scope 2 surfaces; Scope 1 substrate correctness is proven end-to-end by the integration contract test which execs the actual config.sh executable)."
+      },
+      {
+        "agent": "bubbles.implement",
+        "scope": 2,
+        "phase": "implement",
+        "claimedAt": "2026-05-09T22:00:00Z",
+        "partial": true,
+        "summary": "Scope 2 PARTIAL: pull script + no-skip guard authored; happy_path_test.go + LLM determinism plumbing + per-env model override deferred to a follow-up turn. See executionHistory for full split. Pull script verified fail-loud on missing env (env -i exit 1). Guard PASS under both no-tag and -tags=e2e go test invocations."
       }
     ],
     "pendingTransitionRequests": []
@@ -76,6 +84,12 @@
       ],
       "scope": "01",
       "summary": "Scope 1 (Config + Compose Foundation) implemented in one continuous run after the security-hardening git rewrite. (a) config/smackerel.yaml gained 12 SST keys: infrastructure.ollama.image, infrastructure.ollama.test.{image,model,pull_timeout_seconds,request_temperature,request_top_p,request_top_k,request_seed,request_num_predict}, and environments.{dev,test,home-lab}.ollama_enabled. (b) scripts/commands/config.sh switched OLLAMA_ENABLED to env_override_value (so per-env ollama_enabled wins) and added a test-vs-non-test branch resolving OLLAMA_IMAGE plus the 7 OLLAMA_TEST_* keys (emitted populated for test env, empty for dev/home-lab). (c) docker-compose.yml line 169 hoisted from literal 'image: ollama/ollama:0.6' to 'image: ${OLLAMA_IMAGE}'. (d) Pre-existing SST violation in ml/app/intelligence.py line 40 (fallback 'url = ollama_url or \"http://localhost:11434\"') was an in-scope blocker for SCN-OLLAMA-006 zero-hardcoded-values requirement; replaced with explicit fail-loud 'if not ollama_url: warn + return None' branch so OLLAMA_URL is the only configured URL path. (e) Three new test files: internal/config/sst_grep_guard_test.go enforces zero forbidden literals (11434, qwen2.5, ollama/ollama:) outside config/ with two adversarial guards; internal/deploy/compose_ollama_contract_test.go enforces ${OLLAMA_IMAGE} substitution + profile gate + ${OLLAMA_VOLUME_NAME} indirection with three adversarial guards; tests/integration/ollama_config_contract_test.go (build-tag integration) enforces SST\u2192test.env round-trip with three adversarial strip-and-re-run config.sh subtests. (f) All 5 DoD bullets in scopes.md carry trace-prefix evidence per Gate G068. (g) Mid-run discovery: deploy/compose.deploy.yml (untouched by Scope 1) had been corrupted by the IDE cache-poisoning bug documented in /memories/repo/ide-cache-poisoning.md (every '#' replaced with '***REMOVED***'); restored from HEAD via git checkout. (h) Validation evidence: ./smackerel.sh config generate emits all envs cleanly with per-env ENABLE_OLLAMA differing (dev=false, test=true, home-lab=false); ./smackerel.sh check passes; ./smackerel.sh test unit exits 0 (78 Go packages + 411 Python tests). Live ./smackerel.sh up --env=test --profile ollama deferred to Scope 2 by design (Scope 2 owns model-pull + live agent invocation; Scope 1 substrate correctness proven by the integration contract test). Scope 2 + Scope 3 still pending."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-05-09T22:00:00Z",
+      "summary": "Scope 2 PARTIAL progress \u2014 2 of 5 deliverables landed, 3 deferred to a follow-up turn. DONE: (1) scripts/commands/ollama-test-pull.sh \u2014 fail-loud Ollama HTTP pull script honoring OLLAMA_TEST_PULL_TIMEOUT_SECONDS SST key, exit 0/1/2/3/4 for success/missing-env/HTTP-error/timeout/post-pull-tag-missing; verified env -i invocation exits 1 with explicit SST violation message. (2) tests/e2e/agent/no_skip_guard_test.go \u2014 three tests: TestNoSkipBailoutInAgentE2E (production guard, scans tests/e2e/agent/*.go for t.Skip|SkipNow|Skipf calls outside an explicit allowlist of 10 scripted-driver e2e files), TestNoSkipBailout_HappyPathTestExplicitlyForbidden (stricter gate that asserts happy_path_test.go contains zero t.Skip calls regardless of allowlist; SKIPS dormant when the file does not yet exist), TestNoSkipBailout_AdversarialFinding (5-case regex regression covering plain t.Skip/SkipNow/Skipf + 2 negative carve-outs); all 3 PASS under both `go test` (no tags) and `go test -tags=e2e`. DEFERRED: (3) tests/e2e/agent/happy_path_test.go (3 test functions per scopes.md T2-01/T2-02/T2-03) \u2014 requires prerequisite LLM determinism plumbing in ml/app/agent.py to pass top_p/top_k/seed/num_predict to litellm so 3-run byte-identical synthesis_response is achievable (currently only temperature+max_tokens are passed). (4) Per-env override of agent.provider_routing.fast.model = qwen2.5:0.5b-instruct in test env (requires extending scripts/commands/config.sh's env_override_value to handle the agent.provider_routing.* path AND extending the smackerel.yaml environments.test block). (5) New scenario YAML config/prompt_contracts/e2e_ollama_smoke.yaml that wires the new test-only fast route to an allowlisted read-only echo tool. These three are a single coherent slice that cannot be reviewed independently of each other; deferring to a single follow-up commit keeps the change set atomic + reviewable. Pull script + no-skip guard ARE independently useful and pass all gates today, so they ship now."
     }
   ],
   "policySnapshot": {
@@ -109,5 +123,5 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-09T20:30:00Z"
+  "lastUpdatedAt": "2026-05-09T22:00:00Z"
 }
