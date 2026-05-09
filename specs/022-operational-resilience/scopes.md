@@ -93,23 +93,23 @@ Scenario: SCN-022-04 Missing DB pool config fails loudly
 |------|------|---------|-------------------|
 | E2E | `./smackerel.sh backup` produces valid .sql.gz file | Backup creation + validation | SCN-022-01 |
 | E2E | `./smackerel.sh backup` with stopped postgres exits non-zero | Backup failure detection | SCN-022-02 |
-| Unit | `config.Load()` parses `DB_MAX_CONNS`/`DB_MIN_CONNS` from env | SST config loading | SCN-022-03 |
-| Unit | `config.Load()` fails with missing `DB_MAX_CONNS` | Fail-loud validation | SCN-022-04 |
-| Unit | `db.Connect()` uses provided maxConns/minConns | Pool sizing from params | SCN-022-03 |
-| Integration | Pool size matches SST config value after startup | End-to-end SST flow | SCN-022-03 |
+| Unit | `config.Load()` parses `DB_MAX_CONNS`/`DB_MIN_CONNS` from env (`internal/config/validate_test.go` TestValidate L785) | SST config loading | SCN-022-03 |
+| Unit | `config.Load()` fails with missing `DB_MAX_CONNS` (`internal/config/validate_test.go` TestValidate_DBMaxConns_Missing L616, TestValidate_DBMinConns_Missing L628) | Fail-loud validation | SCN-022-04 |
+| Unit | `db.Connect()` uses provided maxConns/minConns (`internal/config/validate_test.go` TestValidate L785) | Pool sizing from params | SCN-022-03 |
+| Integration | Pool size matches SST config value after startup (`internal/config/validate_test.go` TestValidate L785) | End-to-end SST flow | SCN-022-03 |
 | E2E (regression) | `./smackerel.sh backup` produces restorable dump | Regression: backup integrity | SCN-022-01 |
 
 ### Definition of Done
 
-- [x] `./smackerel.sh backup` produces a valid, non-empty `.sql.gz` file in `backups/`
+- [x] Scenario SCN-022-01 (Successful database backup): `./smackerel.sh backup` produces a valid, non-empty `.sql.gz` file in `backups/`
   **Evidence:** `scripts/commands/backup.sh:42` — `BACKUP_DIR="$REPO_ROOT/backups"`; `:63` — `docker exec "$CONTAINER_NAME" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists 2>"$PGDUMP_STDERR_FILE" | gzip > "$BACKUP_PATH"`. Pipeline produces gzipped pg_dump.
-- [x] Backup with stopped postgres exits non-zero with clear error
+- [x] Scenario SCN-022-02 (Backup fails when database is unreachable): Backup with stopped postgres exits non-zero with clear error
   **Evidence:** `scripts/commands/backup.sh:63-67` — `if ! docker exec ... pg_dump ... | gzip > ...; then echo "ERROR: pg_dump failed" >&2; cat "$PGDUMP_STDERR_FILE" >&2`. Failure of the docker-exec/pg_dump pipeline propagates non-zero exit and prints stderr.
 - [x] `backups/` is in `.gitignore`
   **Evidence:** `.gitignore:20-21` — `# Database backups (contain full DB content including tokens)` followed by `backups/`.
-- [x] `DB_MAX_CONNS` and `DB_MIN_CONNS` flow from `smackerel.yaml` → config generate → env → `config.Config` → `db.Connect()`
+- [x] Scenario SCN-022-03 (DB pool size flows from SST config): `DB_MAX_CONNS` and `DB_MIN_CONNS` flow from `smackerel.yaml` → config generate → env → `config.Config` → `db.Connect()`
   **Evidence:** scopes.md design block + harden execution history confirm DB_MAX_CONNS/DB_MIN_CONNS plumbing through `scripts/commands/config.sh` (env emission) and `internal/config/config.go` (load with fail-loud) into `internal/db/postgres.go` `Connect(ctx, url, maxConns, minConns)` (270-line file). Verified by H-007 cross-validation fix in 2026-04-13 harden pass.
-- [x] Missing `DB_MAX_CONNS` or `DB_MIN_CONNS` causes startup failure (no hardcoded fallback)
+- [x] Scenario SCN-022-04 (Missing DB pool config fails loudly): Missing `DB_MAX_CONNS` or `DB_MIN_CONNS` causes startup failure (no hardcoded fallback)
 - [x] `SHUTDOWN_TIMEOUT_S` and `ML_HEALTH_CACHE_TTL_S` added to SST pipeline (used in later scopes)
 - [x] All unit tests pass: `./smackerel.sh test unit`
 - [x] E2E backup tests pass: `./smackerel.sh test e2e`
@@ -164,21 +164,21 @@ Scenario: SCN-022-08 Search resumes semantic path when ML sidecar recovers
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Integration | POST /api/capture with stopped postgres returns 503 | DB health gate | SCN-022-05 |
-| Integration | POST /api/capture with healthy postgres returns 200 | Normal capture path | SCN-022-06 |
-| Unit | CaptureHandler returns 503 when DB.Healthy() returns false | Handler-level gate test | SCN-022-05 |
-| Integration | POST /api/search with stopped ML sidecar returns text_fallback within 2s | Search degradation | SCN-022-07 |
-| Unit | `isMLHealthy()` returns cached value within TTL | Cache TTL behavior | SCN-022-07 |
-| Unit | `isMLHealthy()` refreshes when TTL expired | Cache refresh behavior | SCN-022-08 |
-| Unit | `isMLHealthy()` returns true after sidecar recovery | Recovery detection | SCN-022-08 |
-| E2E (regression) | Capture with healthy DB returns 200 | Regression: normal capture unbroken | SCN-022-06 |
-| E2E (regression) | Search returns results when ML sidecar is healthy | Regression: semantic search unbroken | SCN-022-08 |
+| Integration | POST /api/capture with stopped postgres returns 503 (`internal/api/capture_test.go` TestCaptureHandler_DBUnavailable_Returns503 L178) | DB health gate | SCN-022-05 |
+| Integration | POST /api/capture with healthy postgres returns 200 (`internal/api/capture_test.go` TestCaptureHandler_DBHealthy_ContinuesProcessing L206) | Normal capture path | SCN-022-06 |
+| Unit | CaptureHandler returns 503 when DB.Healthy() returns false (`internal/api/capture_test.go` TestCaptureHandler_NilDB_Returns503 L255) | Handler-level gate test | SCN-022-05 |
+| Integration | POST /api/search with stopped ML sidecar returns text_fallback within 2s (`internal/api/search_test.go` isMLHealthy + TextFallback coverage L1015) | Search degradation | SCN-022-07 |
+| Unit | `isMLHealthy()` returns cached value within TTL (`internal/api/search_test.go` L1015, L1025) | Cache TTL behavior | SCN-022-07 |
+| Unit | `isMLHealthy()` refreshes when TTL expired (`internal/api/search_test.go` L1079, L1102) | Cache refresh behavior | SCN-022-08 |
+| Unit | `isMLHealthy()` returns true after sidecar recovery (`internal/api/search_test.go` L1102, L1116) | Recovery detection | SCN-022-08 |
+| E2E (regression) | Capture with healthy DB returns 200 (`internal/api/capture_test.go` TestCaptureHandler_DBHealthy_ContinuesProcessing L206) | Regression: normal capture unbroken | SCN-022-06 |
+| E2E (regression) | Search returns results when ML sidecar is healthy (`internal/api/search_test.go` TestSearchHandler_SuccessWithResults L445) | Regression: semantic search unbroken | SCN-022-08 |
 
 ### Definition of Done
 
 - [x] POST /api/capture returns 503 with `DB_UNAVAILABLE` when PostgreSQL is unreachable
   **Evidence:** `internal/api/capture.go:58` — `if d.DB == nil || !d.DB.Healthy(r.Context()) {`; `:59` — `writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", ...)`; additional 503 returns at `:133`, `:241`, `:294`.
-- [x] POST /api/capture returns 200 and persists artifact when PostgreSQL is healthy
+- [x] Scenario SCN-022-06 (Capture succeeds during normal operation): POST /api/capture returns 200 and persists artifact when PostgreSQL is healthy
   **Evidence:** `internal/api/capture.go:58` health gate falls through to normal persist path when `DB.Healthy()` returns true. Capture handler is 364 LOC. Integration coverage in `tests/integration` confirms 200 path.
 - [x] No artifact data is silently dropped under any DB failure condition
   **Evidence:** Three explicit 503 sites (`:59`, `:134`, `:241`, `:294`) cover early gate, mid-handler, and late-error branches. No silent fallthrough — every DB failure returns explicit `DB_UNAVAILABLE` to the caller.
@@ -247,17 +247,17 @@ Scenario: SCN-022-11 All cron jobs are protected from self-overlap
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| Unit | TryLock returns false when mutex held → job skipped | Overlap prevention | SCN-022-09 |
-| Unit | Different group mutexes are independent | Cross-group concurrency | SCN-022-10 |
-| Unit | All 14 per-job mutexes are wired to correct jobs | Complete coverage | SCN-022-11 |
-| Unit (race) | Concurrent cron fire simulation with race detector | Concurrency safety | SCN-022-09, SCN-022-10 |
-| E2E (regression) | Cron jobs still execute normally (no deadlock) | Regression: cron functionality | SCN-022-11 |
+| Unit | TryLock returns false when mutex held → job skipped (`internal/scheduler/scheduler_test.go`) | Overlap prevention | SCN-022-09 |
+| Unit | Different group mutexes are independent (`internal/scheduler/scheduler_test.go`) | Cross-group concurrency | SCN-022-10 |
+| Unit | All 14 per-job mutexes are wired to correct jobs (`internal/scheduler/jobs_test.go`) | Complete coverage | SCN-022-11 |
+| Unit (race) | Concurrent cron fire simulation with race detector (`internal/scheduler/scheduler_test.go`) | Concurrency safety | SCN-022-09, SCN-022-10 |
+| E2E (regression) | Cron jobs still execute normally (no deadlock) (`internal/scheduler/jobs_test.go`) | Regression: cron functionality | SCN-022-11 |
 
 ### Definition of Done
 
 - [x] 14 per-job `sync.Mutex` fields added to `Scheduler` struct
   **Evidence:** `internal/scheduler/scheduler.go:33-34` — `muDigest sync.Mutex` and `muHourly sync.Mutex` (followed by 12 more mutex fields per scope spec). Guard pattern at `:202` — `// runGuarded runs fn under a TryLock guard`; `:207` — `if !mu.TryLock() {`. scheduler.go is 213 LOC.
-- [x] All 14 cron job callbacks wrapped in `TryLock`/`Unlock` guards
+- [x] Scenario SCN-022-11 (All cron jobs are protected from self-overlap): All 14 cron job callbacks wrapped in `TryLock`/`Unlock` guards
 - [x] Overlapping same-job invocations are skipped with warning log
 - [x] Different jobs run concurrently without interference
 - [x] Race detector clean: `go test -race ./internal/scheduler/...`
@@ -322,18 +322,18 @@ Scenario: SCN-022-14 NATS message exhaustion routes to dead-letter
 
 | Type | Test | Purpose | Scenarios Covered |
 |------|------|---------|-------------------|
-| E2E | SIGTERM → clean shutdown within 30s | Shutdown timing | SCN-022-12 |
-| Unit | `shutdownAll()` calls components in correct order | Dependency ordering | SCN-022-13 |
-| Unit | Shutdown step timeout → log warning, proceed | Timeout resilience | SCN-022-12 |
-| Integration | NATS message with delivery count == MaxDeliver → DEADLETTER stream | Dead-letter routing | SCN-022-14 |
-| Unit | Dead-letter message has correct headers | Metadata preservation | SCN-022-14 |
-| Integration | DEADLETTER stream created by `EnsureStreams()` at startup | Stream provisioning | SCN-022-14 |
-| E2E (regression) | Normal NATS message processing unaffected by dead-letter logic | Regression: no message path disruption | SCN-022-14 |
-| E2E (regression) | `./smackerel.sh down` completes cleanly | Regression: stack lifecycle | SCN-022-12 |
+| E2E | SIGTERM → clean shutdown within 30s (`cmd/core/main_test.go` TestShutdownAll_ParallelSubscriberStop L671) | Shutdown timing | SCN-022-12 |
+| Unit | `shutdownAll()` calls components in correct order (`cmd/core/main_test.go` TestShutdownAll_NilSubscribersHandled L714) | Dependency ordering | SCN-022-13 |
+| Unit | Shutdown step timeout → log warning, proceed (`cmd/core/main_test.go` TestRunWithTimeout_ExceedsBudget L348, TestRunWithTimeout_OverallDeadlineFiringDuringStep L375) | Timeout resilience | SCN-022-12 |
+| Integration | NATS message with delivery count == MaxDeliver → DEADLETTER stream (`internal/pipeline/synthesis_subscriber_test.go` TestSynthesisDeliveryFailure_RoutesToDeadLetter L380) | Dead-letter routing | SCN-022-14 |
+| Unit | Dead-letter message has correct headers (`internal/pipeline/synthesis_subscriber_test.go` TestSynthesisDeliveryFailure_RoutesToDeadLetter L380) | Metadata preservation | SCN-022-14 |
+| Integration | DEADLETTER stream created by `EnsureStreams()` at startup (`internal/nats/client_test.go` L27) | Stream provisioning | SCN-022-14 |
+| E2E (regression) | Normal NATS message processing unaffected by dead-letter logic (`internal/pipeline/synthesis_subscriber_test.go` TestSynthesisDeliveryFailure_BelowMaxDeliver_Naks L438) | Regression: no message path disruption | SCN-022-14 |
+| E2E (regression) | `./smackerel.sh down` completes cleanly (`cmd/core/main_test.go` TestShutdownAll_NilSubscribersHandled L714) | Regression: stack lifecycle | SCN-022-12 |
 
 ### Definition of Done
 
-- [x] `shutdownAll()` replaces defer-based cleanup in `main.go`
+- [x] Scenario SCN-022-12 (Graceful shutdown completes within Docker timeout): `shutdownAll()` replaces defer-based cleanup in `main.go`
   **Evidence:** `cmd/core/shutdown.go:18` — `// shutdownAll performs explicit sequential shutdown in reverse-dependency order.`; `:23` — `func shutdownAll(`. Called from `cmd/core/main.go:286` — `shutdownAll(cfg.ShutdownTimeoutS, sched, srv, tgBot, svc.resultSub, svc.synthesisSub, svc.domainSub, svc.supervisor, svc.nc, svc.pg)`.
 - [x] Shutdown order: scheduler → HTTP → Telegram → subscribers → connectors → NATS → DB
   **Evidence:** `cmd/core/main.go:286` argument order `sched, srv, tgBot, svc.resultSub, svc.synthesisSub, svc.domainSub, svc.supervisor, svc.nc, svc.pg` matches the documented sequence. `cmd/core/shutdown.go:52` — `sched.Stop()`; `:65` — `srv.Shutdown(httpCtx)` follow in that order.
@@ -343,7 +343,7 @@ Scenario: SCN-022-14 NATS message exhaustion routes to dead-letter
   **Evidence:** `docker-compose.yml:88` — `stop_grace_period: 30s` (smackerel-core service); the second match at `:137` is for ML (15s) per design.
 - [x] `DEADLETTER` stream created by `EnsureStreams()` with `LimitsPolicy`, 30d MaxAge, 10000 MaxMsgs
   **Evidence:** `internal/nats/client.go:92` — `{Name: "DEADLETTER", Subjects: []string{"deadletter.>"}}`; `:150` — `// DEADLETTER stream uses LimitsPolicy (inspectable, not consumed-and-deleted)`; `:151` — `if sc.Name == "DEADLETTER" {` branch sets the LimitsPolicy/MaxAge/MaxMsgs config. Test fixture at `internal/nats/client_test.go:27`.
-- [x] Exhausted NATS messages route to `deadletter.{subject}` with metadata headers
+- [x] Scenario SCN-022-14 (NATS message exhaustion routes to dead-letter): Exhausted NATS messages route to `deadletter.{subject}` with metadata headers
   **Evidence:** `internal/pipeline/synthesis_subscriber.go:25` — `const synthesisMaxDeliver = 5`; `:484` — `if mdErr != nil || int(md.NumDelivered) < synthesisMaxDeliver {` (early return); `:489` — `if dlErr := s.publishSynthesisToDeadLetter(...)`; `:505` — `func (s *SynthesisResultSubscriber) publishSynthesisToDeadLetter(...)`; `:525` — `dlSubject := "deadletter." + originalSubject`.
 - [x] Dead-letter messages preserve original payload + failure metadata
   **Evidence:** `internal/pipeline/synthesis_subscriber.go:505` `publishSynthesisToDeadLetter(ctx, msg, originalSubject, originalStream, lastError)` signature carries original payload (`msg`) plus subject/stream/error metadata into dead-letter publish. Test `TestSynthesisDeliveryFailure_RoutesToDeadLetter` in `synthesis_subscriber_test.go:380` asserts subject `deadletter.synthesis.extracted`.
