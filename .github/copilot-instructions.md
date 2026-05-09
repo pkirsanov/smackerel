@@ -393,3 +393,49 @@ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/<feature>
 ```
 
 Keep this audit aligned with the committed repo-standard runtime commands in the same change set that changes the CLI surface.
+
+---
+
+## No Env-Specific Content In This Repo (NON-NEGOTIABLE)
+
+**The Smackerel repo MUST be 100% generic. Zero environment-specific content. Zero personal data. Zero deployment-target identifiers.**
+
+Environment-specific content (real hostnames, real IPs, real Linux usernames, real geographic locations, real Tailscale tailnet identifiers, real overlay-repo names) MUST live in the deploy-overlay repo, NEVER in this repo. The deploy adapter overlay owns all per-target knowledge; this repo provides only the abstract substitution points.
+
+### What Is Forbidden In This Repo
+
+| Class | Where it belongs |
+|-------|------------------|
+| Real Linux usernames and home-directory paths | local machine only — never committed |
+| Real deploy-host short names | deploy-overlay repo |
+| Real Tailscale tailnet identifiers and FQDNs | deploy-overlay repo |
+| Real Tailscale CGNAT IPv4 addresses (RFC 6598 shared address space) | deploy-overlay repo |
+| Real geographic locations (city, region, country) | nowhere — irrelevant to a generic runtime |
+| The literal short name of the deploy-overlay repo | refer generically as "deploy adapter" |
+| Real customer or tenant names | nowhere |
+| Private key blocks (any `-----BEGIN ... PRIVATE KEY-----`) | secret manager only |
+
+### What Is Allowed (Stays In This Repo)
+
+| Identifier | Reason |
+|------------|--------|
+| The owner's GitHub username | Public, intentional. Used as the registry namespace owner (`ghcr.io/<owner>/...`) and copyright holder. |
+| `${HOST_BIND_ADDRESS:-127.0.0.1}` substitution form | Abstract substitution point — the deploy adapter overrides at apply time. |
+| Generic placeholders (`<deploy-host>`, `<deploy-host-fqdn>`, `<tailnet-id>`, `<tailnet-fqdn>`, `<host-tailnet-ip>`, `<sample-location>`) | Used in docs to describe DevOps shapes without leaking real values. |
+| `127.0.0.1`, `localhost`, RFC1918 private ranges | Generic loopback / private-net references. |
+| Test fixtures with placeholder secrets | Covered by `.gitleaks.toml` allowlist for test paths. |
+
+### Enforcement (Layered Defense)
+
+1. **Local pre-commit hook** runs `bash .github/bubbles/scripts/pii-scan.sh` against the staged diff. Blocks the commit if any pattern in `.gitleaks.toml` matches OR if any token in `~/.config/bubbles/pii-tokens.txt` (machine-local, gitignored) appears.
+2. **CI workflow** `.github/workflows/gitleaks.yml` re-runs gitleaks against the diff on every push and PR. Blocks the merge on any finding.
+3. **Code review** rejects any change that introduces real env-specific values, even if the scanners did not flag them.
+
+### When You Need Environment-Specific Behavior
+
+Implement abstract substitution points in this repo (env vars, config keys, generic placeholders in docs) and let the deploy adapter overlay populate the real values at apply time. NEVER embed the real values here.
+
+### Bypass Policy
+
+`SKIP_PII_SCAN=1 git commit ...` is reserved for genuine emergencies and MUST be justified in the commit message body. Bypass usage is reviewed by CI and by audit. Repeat bypass without legitimate cause is a rule violation.
+
