@@ -25,15 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout (full history — gitleaks scans all commits)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0
+    - name: Checkout (full history — gitleaks scans all commits)
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      with:
+        fetch-depth: 0
 
-      - name: Run gitleaks (pinned action; uses .gitleaks.toml at repo root)
-        uses: gitleaks/gitleaks-action@7df8511fe8c2f4d56d80f48e94f15eb1d23c7e6f # v2.3.7
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The action auto-discovers .gitleaks.toml at the repo root.
-          # Default behavior: scan from origin/main to HEAD on PRs, full
-          # history on pushes to main.
+    - name: Run gitleaks (pinned action; uses .gitleaks.toml at repo root)
+      uses: gitleaks/gitleaks-action@7df8511fe8c2f4d56d80f48e94f15eb1d23c7e6f # v2.3.7
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The action auto-discovers .gitleaks.toml at the repo root.
+        # Default behavior: scan from origin/main to HEAD on PRs, full
+        # history on pushes to main.
