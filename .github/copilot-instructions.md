@@ -186,6 +186,46 @@ See [`docs/Deployment.md`](../docs/Deployment.md) for full operator workflow,
 and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](skills/bubbles-deployment-target-adapter/SKILL.md)
 for framework rationale.
 
+### Tailnet-Edge Bind Pattern (home-lab/production targets)
+
+Smackerel's home-lab and production deployments use the canonical
+tailnet-edge bind pattern (see
+`bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` in the framework
+repo). The deploy compose file `deploy/compose.deploy.yml` ships with
+adapter-ready L3 invariants. Future agents and operators MUST preserve
+these invariants:
+
+| Service              | Host port mapping                                                            | DevOps access path |
+|----------------------|------------------------------------------------------------------------------|--------------------|
+| `smackerel-core`     | `${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`   | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
+| `smackerel-ml`       | `${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`       | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
+| `postgres`           | **None** (no `ports:` block)                                                  | `tailscale ssh <host> -- docker exec -it smackerel-<env>-postgres psql ...` (Pattern P1) |
+| `nats`               | **None** (no `ports:` block)                                                  | `tailscale ssh <host> -- docker exec -it smackerel-<env>-nats nats ...` (Pattern P1) |
+
+Forbidden — `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden`
+for the `smackerel-core` and `smackerel-ml` `ports:` entries (this is the
+spec 020 form and is reversed by spec 042). The
+`${HOST_BIND_ADDRESS:-127.0.0.1}:` substitution preserves the
+loopback-by-default behavior while letting a deploy adapter override
+`HOST_BIND_ADDRESS` in the bundled `app.env` for tailnet-edge fronting.
+
+Forbidden — re-publishing host ports for `postgres` or `nats` in
+`deploy/compose.deploy.yml`. Infra services have no business reason to be
+reachable from outside the compose network on home-lab; Pattern P1
+(`docker exec` over Tailscale SSH) is the recommended and only DevOps
+access path.
+
+Enforced — `internal/deploy/compose_contract_test.go` parses the live
+compose file on every `./smackerel.sh test unit --go` run and fails the
+build if either invariant regresses. The test includes adversarial
+sub-tests that prove it would catch a regression to the spec 020 literal
+form or to a re-published infra port.
+
+References:
+- `specs/042-tailnet-edge-bind-pattern/` — spec, design, scope DoD
+- `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` — canonical pattern
+- `docs/Operations.md` → "DevOps Access on Home-Lab (Tailnet-Edge Pattern)"
+
 ---
 
 ## Testing Requirements

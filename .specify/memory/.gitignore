@@ -1,3 +1,5 @@
 developer-profile.md
 skill-proposals.md
 skill-proposals-dismissed.md
+# Per-session local state — never commit (contains workspace-scoped session metadata)
+bubbles.session.json

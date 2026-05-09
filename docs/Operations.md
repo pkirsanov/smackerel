@@ -116,6 +116,94 @@ Returns JSON with status for: API, PostgreSQL, NATS, ML sidecar, Telegram bot, O
 
 Available at `http://127.0.0.1:40001/metrics` (unauthenticated, standard Prometheus scrape endpoint).
 
+## DevOps Access on Home-Lab (Tailnet-Edge Pattern)
+
+On home-lab and production deployments, the deploy compose
+(`deploy/compose.deploy.yml`) implements the canonical tailnet-edge bind
+pattern (see `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and
+[spec 042](../specs/042-tailnet-edge-bind-pattern/spec.md)). Backend
+services bind `${HOST_BIND_ADDRESS:-127.0.0.1}` and infra services
+(Postgres, NATS) have **no host port mapping**. This section shows the
+canonical DevOps access shapes for each.
+
+### HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)
+
+The `smackerel-core` API and the `smackerel-ml` sidecar are reached via
+the host Caddy reverse proxy running on the Tailscale IP. The deploy adapter
+deployment adapter writes the Caddy snippet from the canonical Bubbles
+template (`bubbles/templates/caddy-tailnet-snippet.caddy.template`); this
+repo only ensures the compose is ready.
+
+```bash
+# Core API health (HTTPS via host Caddy on the tailnet)
+curl --max-time 5 https://smackerel.<host-tailnet-fqdn>/api/health
+
+# ML sidecar health (HTTPS via host Caddy on the tailnet)
+curl --max-time 5 https://ml.smackerel.<host-tailnet-fqdn>/health
+```
+
+`<host-tailnet-fqdn>` is the host's Tailscale FQDN (e.g.,
+`<deploy-host-fqdn>`). The exact subdomain shape is owned by the deploy adapter
+adapter and can be customized per deployment.
+
+### PostgreSQL (Pattern P1: docker exec over Tailscale SSH)
+
+There is no published Postgres host port. DevOps reaches Postgres via:
+
+```bash
+# Interactive psql session (recommended)
+tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres \
+    psql -U smackerel -d smackerel
+
+# Single-shot query
+tailscale ssh <deploy-host> -- docker exec -i smackerel-home-lab-postgres \
+    psql -U smackerel -d smackerel -Atqc 'SELECT count(*) FROM artifacts'
+
+# Streaming pg_dump backup (write the dump on the operator's workstation)
+tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-postgres \
+    pg_dump -U smackerel -d smackerel -Fc | \
+    cat > /tmp/smackerel-home-lab.pgdump
+```
+
+Container name follows the pattern `smackerel-<env>-postgres` because the
+deploy compose's `COMPOSE_PROJECT` env var is set per environment by the
+adapter (e.g., `smackerel-home-lab` for the home-lab target).
+
+### NATS (Pattern P1: docker exec over Tailscale SSH)
+
+There is no published NATS client or monitor port. DevOps reaches NATS
+via:
+
+```bash
+# Subscribe to all subjects (interactive monitoring)
+tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+    nats sub '>'
+
+# Inspect server health (NATS monitor endpoint, in-network)
+tailscale ssh <deploy-host> -- docker exec smackerel-home-lab-nats \
+    wget -qO- http://localhost:8222/healthz
+
+# List streams
+tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
+    nats stream ls
+```
+
+### Why this pattern
+
+- Closes the host network footgun: no operator or agent can accidentally
+  `psql -h 127.0.0.1 -p <pg_host_port>` into the home-lab database from a
+  tool that happens to share the env file. The only access path is via
+  the audited `tailscale ssh` + `docker exec` chain.
+- Reuses the Tailscale identity for authentication. No extra credentials
+  to manage for the SSH side.
+- Backend HTTP UIs get TLS for free via `tailscale cert`, fronted by the
+  host Caddy that the deploy adapter adapter installs.
+
+If a future deployment needs a public-internet-reachable HTTP endpoint
+for one of the backends, that is a separate spec. The compose contract
+in this repo stays loopback-by-default, and the deploy adapter is the
+only surface that decides what goes on the public NIC.
+
 ## Connector Management
 
 Connectors run on 5-minute sync cycles managed by the connector supervisor. Each connector maintains a cursor in the `sync_state` table for incremental syncing.

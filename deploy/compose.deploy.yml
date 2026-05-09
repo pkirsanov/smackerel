@@ -12,8 +12,17 @@
 #   - All file references are relative to this compose file's own directory
 #     (i.e. <composeDir>/), populated from the extracted bundle.
 #   - Bound host ports come from the extracted env file (./app.env).
-#   - All ports bind to 127.0.0.1 only. External exposure is owned by the host
-#     reverse proxy (Caddy) running outside this stack.
+#   - Backend services (smackerel-core, smackerel-ml) bind
+#     ${HOST_BIND_ADDRESS:-127.0.0.1} on the host. The default keeps the deploy
+#     bundle safe-by-default; a deploy adapter MAY override HOST_BIND_ADDRESS
+#     in app.env to bind a specific NIC. External exposure is owned by the host
+#     reverse proxy (Caddy) running outside this stack — see
+#     bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md and
+#     specs/042-tailnet-edge-bind-pattern/.
+#   - Infra services (postgres, nats) have NO host port mapping. DevOps reaches
+#     them via `tailscale ssh <host> -- docker exec -it <container> ...`
+#     (Pattern P1). This closes a small footgun and keeps the persistence
+#     boundary off the host network entirely.
 #   - Volume names embed the project (env) suffix, e.g. smackerel-home-lab-postgres-data.
 #     They are declared in app.env via POSTGRES_VOLUME_NAME etc. so the bundle
 #     environment owns the persistence boundary.
@@ -24,8 +33,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    ports:
-      - "127.0.0.1:${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
+    # No host port published. DevOps reaches Postgres via:
+    #   tailscale ssh <host> -- docker exec -it smackerel-<env>-postgres \
+    #       psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+    # See specs/042-tailnet-edge-bind-pattern/ (Pattern P1).
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -61,9 +72,10 @@ services:
     cap_add:
       - DAC_READ_SEARCH
     command: ["--config", "/etc/nats/nats.conf"]
-    ports:
-      - "127.0.0.1:${NATS_CLIENT_HOST_PORT}:${NATS_CLIENT_PORT}"
-      - "127.0.0.1:${NATS_MONITOR_HOST_PORT}:${NATS_MONITOR_PORT}"
+    # No host port published. DevOps reaches NATS via:
+    #   tailscale ssh <host> -- docker exec -it smackerel-<env>-nats \
+    #       nats sub '>'    # or any other nats CLI subcommand
+    # See specs/042-tailnet-edge-bind-pattern/ (Pattern P1).
     volumes:
       - nats-data:/data
       - ./nats.conf:/etc/nats/nats.conf:ro
@@ -94,7 +106,7 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     env_file:
       - ./app.env
     extra_hosts:
@@ -140,7 +152,7 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     env_file:
       - ./app.env
     environment:
