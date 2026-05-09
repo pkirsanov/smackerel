@@ -84,13 +84,27 @@ EOF
 fi
 
 # 3. Run gitleaks against staged content only.
-gitleaks_args=(
-  protect
-  --staged
-  --config .gitleaks.toml
-  --no-banner
-  --redact
-)
+#    Subcommand selection: gitleaks v8.18+ uses `gitleaks git --staged ...`,
+#    older versions used `gitleaks protect --staged ...`. Detect which one the
+#    installed binary supports so this script works across both eras without
+#    requiring downstream consumers to pin a specific gitleaks version.
+if gitleaks --help 2>&1 | grep -qE '^[[:space:]]+protect[[:space:]]'; then
+  gitleaks_args=(
+    protect
+    --staged
+    --config .gitleaks.toml
+    --no-banner
+    --redact
+  )
+else
+  gitleaks_args=(
+    git
+    --staged
+    --config .gitleaks.toml
+    --no-banner
+    --redact
+  )
+fi
 if [[ -f "$repo_root/.gitleaksignore" ]]; then
   : # gitleaks auto-loads .gitleaksignore; no flag needed.
 fi

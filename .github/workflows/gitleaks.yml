@@ -1,0 +1,39 @@
+# Gitleaks PII / Secret Scan
+#
+# Runs gitleaks against the full repository on every push and PR. This is the
+# CI-side enforcement of the same .gitleaks.toml that the local pre-commit
+# hook uses. A leaked secret or PII identifier that slips past the local hook
+# (e.g., committed with SKIP_PII_SCAN=1, or by an agent that bypassed the
+# hook) will be caught here and block the merge.
+#
+# Pinned action SHA: per OWASP supply-chain guidance, all third-party actions
+# are pinned to a full commit SHA, not a floating tag.
+name: Gitleaks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Scan repo for PII and secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history — gitleaks scans all commits)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks (pinned action; uses .gitleaks.toml at repo root)
+        uses: gitleaks/gitleaks-action@7df8511fe8c2f4d56d80f48e94f15eb1d23c7e6f # v2.3.7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The action auto-discovers .gitleaks.toml at the repo root.
+          # Default behavior: scan from origin/main to HEAD on PRs, full
+          # history on pushes to main.
