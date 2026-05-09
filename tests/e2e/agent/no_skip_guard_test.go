@@ -72,16 +72,16 @@ var allowedSkipFiles = map[string]string{
 	// stack (postgres + nats) is unavailable, because the surface
 	// under test (HTTP envelope mapping) requires a real DB+NATS even
 	// when the LLM is scripted. They are not the spec 043 happy path.
-	"helpers_test.go":              "scripted-driver e2e helpers (spec 037 Scope 9)",
-	"api_invoke_test.go":           "scripted-driver e2e (spec 037 Scope 9)",
-	"telegram_replies_test.go":     "scripted-driver e2e (spec 037 Scope 9)",
-	"bs014_never_invent_test.go":   "scripted-driver adversarial regression (spec 037 BS-014)",
+	"helpers_test.go":                "scripted-driver e2e helpers (spec 037 Scope 9)",
+	"api_invoke_test.go":             "scripted-driver e2e (spec 037 Scope 9)",
+	"telegram_replies_test.go":       "scripted-driver e2e (spec 037 Scope 9)",
+	"bs014_never_invent_test.go":     "scripted-driver adversarial regression (spec 037 BS-014)",
 	"bs020_prompt_injection_test.go": "scripted-driver adversarial regression (spec 037 BS-020)",
-	"cli_filter_test.go":           "scripted-driver CLI e2e (spec 037 Scope 8)",
-	"operator_ui_test.go":          "scripted-driver UI e2e (spec 037 Scope 8)",
-	"replay_pass_test.go":          "scripted-driver replay e2e (spec 037 Scope 6)",
-	"replay_fail_test.go":          "scripted-driver replay e2e (spec 037 Scope 6)",
-	"bs001_zero_go_change_test.go": "scripted-driver scenario-reload e2e (spec 037 BS-001)",
+	"cli_filter_test.go":             "scripted-driver CLI e2e (spec 037 Scope 8)",
+	"operator_ui_test.go":            "scripted-driver UI e2e (spec 037 Scope 8)",
+	"replay_pass_test.go":            "scripted-driver replay e2e (spec 037 Scope 6)",
+	"replay_fail_test.go":            "scripted-driver replay e2e (spec 037 Scope 6)",
+	"bs001_zero_go_change_test.go":   "scripted-driver scenario-reload e2e (spec 037 BS-001)",
 }
 
 // skipPattern matches any of the t.Skip family verbs as a method call
