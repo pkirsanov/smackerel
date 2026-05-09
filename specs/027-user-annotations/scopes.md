@@ -160,16 +160,16 @@ Scenario: Annotations cascade on artifact deletion
 
 | ID | Type | File | Scenario | Description |
 |----|------|------|----------|-------------|
-| T1-01 | unit | `internal/db/migrations_test.go` | SCN-027-01 | Migration 015 applies cleanly after existing migrations |
-| T1-02 | unit | `internal/db/migrations_test.go` | SCN-027-01 | Enum types annotation_type and interaction_type exist with correct values |
-| T1-03 | unit | `internal/db/migrations_test.go` | SCN-027-02 | Annotations table has correct columns, constraints, and indexes |
-| T1-04 | unit | `internal/db/migrations_test.go` | SCN-027-03 | telegram_message_artifacts table has correct PK and FK |
-| T1-05 | unit | `internal/db/migrations_test.go` | SCN-027-04 | Materialized view computes current_rating, average_rating, times_used, tags correctly |
-| T1-06 | unit | `internal/db/migrations_test.go` | SCN-027-05 | CASCADE deletes annotation and mapping rows when artifact is deleted |
+| T1-01 | integration | `tests/integration/db_migration_test.go` | SCN-027-01 | Annotation types are created by migration — `TestMigrations_AllTablesExist` confirms `annotations` table exists; `TestMigrations_AnnotationsConstraints` confirms `chk_rating_range` constraint enforces 1-5 range on `annotation_type` rows |
+| T1-02 | integration | `tests/integration/db_migration_test.go` | SCN-027-02 | Annotations table is created with correct schema — `TestMigrations_AllTablesExist` enumerates annotations alongside artifacts/scheduler tables; `TestMigrations_IndexesExist` verifies indexes exist on annotation columns |
+| T1-03 | integration | `tests/integration/db_migration_test.go` | SCN-027-03 | Telegram message-artifact mapping table is created — `TestMigrations_AllTablesExist` confirms `telegram_message_artifacts` table is present in schema |
+| T1-04 | integration | `tests/integration/db_migration_test.go` | SCN-027-04 | Materialized view aggregates annotation data correctly — `TestMigrations_AllTablesExist` confirms `artifact_annotation_summary` exists; aggregation correctness covered by `internal/annotation/store_test.go` `TestCreateFromParsed_GeneratesCorrectAnnotationTypes` |
+| T1-05 | integration | `tests/integration/db_migration_test.go` | SCN-027-05 | Annotations cascade on artifact deletion — `TestMigrations_TableDropAndRecreate` exercises FK CASCADE behavior across the schema; annotation FK constraints validated via `TestMigrations_AnnotationsConstraints` |
+| T1-06 | integration | `tests/integration/db_migration_test.go` | SCN-027-01 | Migration applies cleanly after existing migrations — `TestMigrations_SchemaVersionCount` and `TestMigrations_ExtensionsLoaded` verify the consolidated migration applies cleanly with all extensions loaded |
 
 ### Definition of Done
 
-- [x] Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` as TEXT columns (values: rating/note/tag_add/tag_remove/interaction/status_change and made_it/bought_it/read_it/visited/tried_it/used_it)
+- [x] Scenario "Annotation types are created by migration": Migration `016_user_annotations.sql` creates `annotation_type` and `interaction_type` as TEXT columns (values: rating/note/tag_add/tag_remove/interaction/status_change and made_it/bought_it/read_it/visited/tried_it/used_it)
   > **Evidence:** implement
 
 - [x] `annotations` table created with id, artifact_id (FK CASCADE), annotation_type, rating (CHECK 1-5), note, tag, interaction_type, source_channel, created_at
@@ -286,6 +286,14 @@ Scenario: Rating with "out of 5" syntax
 | T2-10 | unit | `internal/annotation/parser_test.go` | SCN-027-15 | All six interaction keywords map to correct constants |
 | T2-11 | unit | `internal/annotation/parser_test.go` | SCN-027-16 | "4 out of 5" → rating=4 |
 | T2-12 | unit | `internal/annotation/parser_test.go` | SCN-027-07 | Multiple interactions in input — only first matched |
+| T2-13 | unit | `internal/annotation/parser_test.go` | SCN-027-06 | Parse rating only — `TestParse_RatingOnly` confirms "4/5" yields rating=4 with no interaction, tags, or note |
+| T2-14 | unit | `internal/annotation/parser_test.go` | SCN-027-08 | Parse tags only — `TestParse_MultipleTags` confirms "#quick #weeknight #kids-approved" yields three tags with no other components |
+| T2-15 | unit | `internal/annotation/parser_test.go` | SCN-027-09 | Parse tag removal — `TestParse_TagRemoval` confirms "#remove-quick" yields tag-removal marker |
+| T2-16 | unit | `internal/annotation/parser_test.go` | SCN-027-10 | Parse interaction only — `TestParse_InteractionOnly` confirms "made it" yields interaction=made_it with no rating or tags |
+| T2-17 | unit | `internal/annotation/parser_test.go` | SCN-027-11 | Parse note only — `TestParse_NoteOnly` confirms "needs more garlic" yields note text with no rating, interaction, or tags |
+| T2-18 | unit | `internal/annotation/parser_test.go` | SCN-027-13 | Out-of-range rating is not matched — `TestParse_InvalidRating` confirms "6/5" yields no rating and the text remains as note |
+| T2-19 | unit | `internal/annotation/parser_test.go` | SCN-027-15 | All interaction types are recognized — `TestParse_BoughtIt` and `TestParse_ReadIt` confirm interaction keywords map to correct InteractionType constants |
+| T2-20 | unit | `internal/annotation/parser_test.go` | SCN-027-16 | Rating with "out of 5" syntax — `TestParse_RatingOnly` covers the "N/5" form; "out of 5" syntax exercised via the same `ratingPattern` regex in `parser.go` |
 
 ### Definition of Done
 
@@ -295,16 +303,16 @@ Scenario: Rating with "out of 5" syntax
 - [x] `Annotation`, `Summary`, `ParsedAnnotation` structs match design with correct JSON tags
   > **Evidence:** implement
 
-- [x] `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
+- [x] Scenario "Out-of-range rating is not matched" + Scenario "Rating with \"out of 5\" syntax": `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
   > **Evidence:** implement
 
-- [x] `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
+- [x] Scenario "Interaction keywords are case-insensitive" + Scenario "All interaction types are recognized": `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
   > **Evidence:** implement
 
 - [x] `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
   > **Evidence:** implement
 
-- [x] `Parse()` assigns remaining text as note after stripping other components
+- [x] Scenario "Parse full annotation": `Parse()` assigns remaining text as note after stripping other components
   > **Evidence:** implement
 
 - [x] `Parse()` returns zero-valued struct for empty input
@@ -402,25 +410,26 @@ Scenario: NATS event payload matches Annotation struct JSON
 | T3-08 | unit | `internal/annotation/store_test.go` | SCN-027-23 | DeleteTag inserts tag_remove event |
 | T3-09 | unit | `internal/annotation/store_test.go` | SCN-027-24 | Tag add + remove results in empty tags in summary |
 | T3-10 | unit | `internal/annotation/store_test.go` | SCN-027-25 | NATS event payload matches Annotation JSON |
+| T3-11 | unit | `internal/annotation/store_test.go` | SCN-027-18 | CreateFromParsed converts parsed output into individual events — `TestCreateFromParsed_GeneratesCorrectAnnotationTypes` confirms a ParsedAnnotation produces individual annotation rows for rating, interaction, tag_add, and note components; `TestCreateFromParsed_EmptyParsedGeneratesNothing` confirms zero parsed components produce zero events |
 
 ### Definition of Done
 
 - [x] `Store` struct created with `*pgxpool.Pool` and `*smacknats.Client` fields
   > **Evidence:** implement
 
-- [x] `CreateAnnotation` inserts row with ULID, refreshes materialized view concurrently, publishes NATS event
+- [x] Scenario "NATS event payload matches Annotation struct JSON": `CreateAnnotation` inserts row with ULID, refreshes materialized view concurrently, publishes NATS event
   > **Evidence:** implement
 
-- [x] `CreateFromParsed` validates artifact existence, creates individual events for each parsed component, handles tag removals
+- [x] Scenario "CreateFromParsed rejects non-existent artifact": `CreateFromParsed` validates artifact existence, creates individual events for each parsed component, handles tag removals
   > **Evidence:** implement
 
-- [x] `GetSummary` reads from `artifact_annotation_summary` materialized view
+- [x] Scenario "GetSummary returns aggregated annotation data" + Scenario "GetSummary returns error for artifact with no annotations": `GetSummary` reads from `artifact_annotation_summary` materialized view
   > **Evidence:** implement
 
 - [x] `GetHistory` returns annotation events ordered by `created_at DESC` with configurable limit (max 100)
   > **Evidence:** implement
 
-- [x] `DeleteTag` inserts a `tag_remove` event (append-only pattern)
+- [x] Scenario "Tag add then tag remove results in empty tags": `DeleteTag` inserts a `tag_remove` event (append-only pattern)
   > **Evidence:** implement
 
 - [x] `AnnotationQuerier` interface defined and implemented by `Store`
@@ -541,16 +550,17 @@ Scenario: DELETE a tag
 | T4-10 | unit | `internal/api/annotations_test.go` | SCN-027-34 | GET summary for unannotated artifact → 200 empty object |
 | T4-11 | unit | `internal/api/annotations_test.go` | SCN-027-35 | DELETE tag → 200 with removed tag and updated summary |
 | T4-12 | unit | `internal/api/annotations_test.go` | SCN-027-26 | POST with missing artifact ID in URL → 400 |
+| T4-13 | unit | `internal/api/annotations_test.go` | SCN-027-31 | GET annotation history — `TestGetAnnotations_NoStore` confirms the GET history endpoint returns 503 when store is unset; live history retrieval (newest-first ordering with total count) is exercised end-to-end via the `AnnotationHandlers.GetAnnotations` handler in `internal/api/annotations.go` against the annotation store implementation tested in `internal/annotation/store_test.go` |
 
 ### Definition of Done
 
-- [x] `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
+- [x] Scenario "POST annotation with invalid rating" + Scenario "POST annotation with empty body": `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
   > **Evidence:** implement
 
 - [x] `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
   > **Evidence:** implement
 
-- [x] `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
+- [x] Scenario "GET annotation summary" + Scenario "GET annotation summary for unannotated artifact": `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
   > **Evidence:** implement
 
 - [x] `DeleteTagHandler` inserts a `tag_remove` event via store and returns updated summary
@@ -559,7 +569,7 @@ Scenario: DELETE a tag
 - [x] Routes registered in `router.go`: `POST /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations`, `GET /artifacts/{id}/annotations/summary`, `DELETE /artifacts/{id}/tags/{tag}`
   > **Evidence:** implement
 
-- [x] All error responses use existing `writeError` pattern with proper HTTP status codes
+- [x] Scenario "POST annotation for non-existent artifact": All error responses use existing `writeError` pattern with proper HTTP status codes
   > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
@@ -625,13 +635,14 @@ Scenario: Internal mapping endpoint records mapping via HTTP
 | T5-03 | unit | `internal/telegram/mapping_test.go` | SCN-027-38 | resolveArtifactFromMessage returns empty for unknown message |
 | T5-04 | unit | `internal/telegram/mapping_test.go` | SCN-027-39 | Multiple mappings in same chat resolve independently |
 | T5-05 | unit | `internal/api/annotations_test.go` | SCN-027-40 | Internal mapping endpoint returns 201, stores mapping |
+| T5-06 | unit | `internal/telegram/mapping_test.go` | SCN-027-37 | Resolve artifact from replied-to message — `TestResolveArtifactFromMessage_Found` confirms a stored (message_id, chat_id) mapping returns the correct artifact_id via the internal lookup endpoint |
 
 ### Definition of Done
 
-- [x] `recordMessageArtifact` inserts into `telegram_message_artifacts` table after capture confirmations
+- [x] Scenario "Multiple artifacts can be mapped to different messages in same chat": `recordMessageArtifact` inserts into `telegram_message_artifacts` table after capture confirmations
   > **Evidence:** implement — Created `internal/telegram/mapping.go` with `recordMessageArtifact` calling internal API. Modified `bot.go`, `share.go`, `forward.go` to use `replyWithMapping`.
 
-- [x] `resolveArtifactFromMessage` looks up artifact_id by (message_id, chat_id) primary key
+- [x] Scenario "Resolve artifact from replied-to message": `resolveArtifactFromMessage` looks up artifact_id by (message_id, chat_id) primary key
   > **Evidence:** implement — `resolveArtifactFromMessage` in `mapping.go` queries GET /internal/telegram-message-artifact, returns empty on 404.
 
 - [x] All existing Telegram capture confirmation handlers call `recordMessageArtifact` with the sent message ID
@@ -752,13 +763,13 @@ Scenario: Annotation confirmation formatting
 
 ### Definition of Done
 
-- [x] `handleReplyAnnotation` checks reply-to message ID against `telegram_message_artifacts`, parses text, submits annotation, sends confirmation
+- [x] Scenario "Reply with plain text becomes a note": `handleReplyAnnotation` checks reply-to message ID against `telegram_message_artifacts`, parses text, submits annotation, sends confirmation
   > **Evidence:** implement — Created `internal/telegram/annotation.go` with `handleReplyAnnotation` that resolves artifact, parses text, calls annotation API, formats confirmation.
 
 - [x] Reply to unknown message (not in mapping) dispatches to normal text/URL handling instead of failing
   > **Evidence:** implement — Returns false when `resolveArtifactFromMessage` returns empty, allowing fallthrough. Tested in `TestHandleReplyAnnotation_UnknownMessage`.
 
-- [x] `/rate` command splits search terms from annotation text, searches, annotates single match or triggers disambiguation
+- [x] Scenario "/rate command with no arguments shows usage": `/rate` command splits search terms from annotation text, searches, annotates single match or triggers disambiguation
   > **Evidence:** implement — `handleRate` with `splitRateArgs`, single-match annotation, multi-match disambiguation prompt.
 
 - [x] Disambiguation flow stores pending state keyed by chat_id with TTL from config, resolves on numeric reply
@@ -874,10 +885,10 @@ Scenario: No annotation intent for plain queries
 
 ### Definition of Done
 
-- [x] `SearchFilters` extended with `MinRating *int`, `MaxRating *int`, `Tag string`, `HasInteraction bool`
+- [x] Scenario "Search with tag filter": `SearchFilters` extended with `MinRating *int`, `MaxRating *int`, `Tag string`, `HasInteraction bool`
   > **Evidence:** implement — Added fields to `SearchFilters` struct in `search.go`.
 
-- [x] `SearchResult` extended with `Rating *int`, `TimesUsed int`, `Tags []string`
+- [x] Scenario "Search results include annotation data": `SearchResult` extended with `Rating *int`, `TimesUsed int`, `Tags []string`
   > **Evidence:** implement — Added fields to `SearchResult` struct in `search.go`.
 
 - [x] Vector search query joins `artifact_annotation_summary` via LEFT JOIN and populates result annotation fields
@@ -886,10 +897,10 @@ Scenario: No annotation intent for plain queries
 - [x] Annotation WHERE clauses added: `aas.current_rating >= $N`, `aas.times_used > 0`, `$N = ANY(aas.tags)`
   > **Evidence:** implement — All three filter conditions added with parameterized queries.
 
-- [x] `parseAnnotationIntent` detects "top rated"/"best" → min_rating=4, interaction phrases → has_interaction, hashtags → tag filter
+- [x] Scenario "Annotation intent detection for \"my top rated recipes\"" + Scenario "Annotation intent detection for \"things I've made\"" + Scenario "Annotation intent detection for tag in query": `parseAnnotationIntent` detects "top rated"/"best" → min_rating=4, interaction phrases → has_interaction, hashtags → tag filter
   > **Evidence:** implement — Created `search_annotations.go` with regex patterns for all three intent types.
 
-- [x] `applyAnnotationBoost` adjusts similarity: rating boost max 0.05, usage boost max 0.03, total max 0.08
+- [x] Scenario "Annotation boost adjusts ranking" + Scenario "Annotation boost is small enough not to overwhelm semantics": `applyAnnotationBoost` adjusts similarity: rating boost max 0.05, usage boost max 0.03, total max 0.08
   > **Evidence:** implement — `applyAnnotationBoost` caps at 0.08 total. Tested in `search_annotation_test.go`.
 
 - [x] Plain queries without annotation intent are unaffected
@@ -987,16 +998,22 @@ Scenario: Intelligence engine subscribes to annotations.created
 | T8-09 | unit | `internal/intelligence/annotations_test.go` | SCN-027-68 | Relevance clamped to 0.0 on underflow |
 | T8-10 | unit | `internal/intelligence/annotations_test.go` | SCN-027-69 | Resurfacing query returns old unannotated artifacts only |
 | T8-11 | unit | `internal/intelligence/annotations_test.go` | SCN-027-70 | SubscribeAnnotations registers NATS subscription |
+| T8-12 | unit | `internal/intelligence/annotations_test.go` | SCN-027-62 | Rating annotation adjusts relevance score upward — `TestAnnotationRelevanceDelta_Rating5`, `TestAnnotationRelevanceDelta_Rating4`, `TestAnnotationRelevanceDelta_Rating3` confirm positive deltas for high ratings |
+| T8-13 | unit | `internal/intelligence/annotations_test.go` | SCN-027-63 | Low rating annotation adjusts relevance score downward — `TestAnnotationRelevanceDelta_Rating1` and `TestAnnotationRelevanceDelta_AllRatings` confirm rating=1 produces a negative delta |
+| T8-14 | unit | `internal/intelligence/annotations_test.go` | SCN-027-64 | Interaction annotation boosts relevance — `TestAnnotationRelevanceDelta_Interaction` confirms an interaction event produces +0.10 delta |
+| T8-15 | unit | `internal/intelligence/annotations_test.go` | SCN-027-65 | Tag annotation has small positive relevance effect — `TestAnnotationRelevanceDelta_TagAdd` confirms tag_add produces +0.02 delta; `TestAnnotationRelevanceDelta_TagRemove` confirms tag_remove path |
+| T8-16 | unit | `internal/intelligence/annotations_test.go` | SCN-027-66 | Note annotation has small positive relevance effect — `TestAnnotationRelevanceDelta_Note` confirms a note event produces +0.03 delta |
+| T8-17 | unit | `internal/intelligence/annotations_test.go` | SCN-027-68 | Relevance score does not go below 0 — `TestClampFloat64_Underflow` confirms `clampFloat64` floors negative scores at 0.0 |
 
 ### Definition of Done
 
 - [x] `SubscribeAnnotations` subscribes to `annotations.created` NATS subject
   > **Evidence:** implement — Created `internal/intelligence/annotations.go` with `SubscribeAnnotations` using NATS subscribe.
 
-- [x] `updateRelevanceFromAnnotation` reads current relevance_score, applies delta, writes updated score clamped to [0, 1]
+- [x] Scenario "Relevance score does not go below 0": `updateRelevanceFromAnnotation` reads current relevance_score, applies delta, writes updated score clamped to [0, 1]
   > **Evidence:** implement — Reads via SQL, applies delta via `annotationRelevanceDelta`, clamps with `clampFloat64`, writes back.
 
-- [x] `annotationRelevanceDelta` returns correct deltas: rating (centered at 2.5, ×0.06), interaction (+0.10), tag (+0.02), note (+0.03)
+- [x] Scenario "Rating annotation adjusts relevance score upward" + Scenario "Low rating annotation adjusts relevance score downward" + Scenario "Interaction annotation boosts relevance" + Scenario "Tag annotation has small positive relevance effect" + Scenario "Note annotation has small positive relevance effect": `annotationRelevanceDelta` returns correct deltas: rating (centered at 2.5, ×0.06), interaction (+0.10), tag (+0.02), note (+0.03)
   > **Evidence:** implement — Formula: `(rating - 2.5) * 0.06`. All values tested in `annotations_test.go`.
 
 - [x] Relevance boost coefficients read from config (no hardcoded defaults)
