@@ -1,0 +1,67 @@
+{
+  "version": 3,
+  "featureDir": "specs/044-per-user-bearer-auth",
+  "featureNumber": "044",
+  "featureName": "per-user-bearer-auth",
+  "status": "in_progress",
+  "currentPhase": "analyze",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "runStartedAt": "2026-05-09T06:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "scopeProgress": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "executionHistory": [
+    {
+      "phase": "analyst",
+      "agent": "bubbles.analyst",
+      "timestamp": "2026-05-09T06:00:00Z",
+      "summary": "spec.md authored to close MIT-040-S-008 routing (carry-forward from MIT-040-S-003 partial closure at commit 4e399a4) plus MIT-038-S-003 (cloud-drive Connect body-sourced owner_user_id) plus the actor-source segment of MIT-027-TRACE-001 (annotation actor_source). Spec scopes the foundation-level per-user bearer-auth trust boundary: per-user token issuance contract (admin-issued for MVP; self-service signup out-of-scope), stateless validation on the hot path with no DB roundtrip per request (NFR-AUTH-001 ≤5ms p99), claim-binding for actor_id / owner_user_id / actor_source derivation in production (rejecting body/header trust), rotation with SST-configured grace window (NFR-AUTH-003 ≥24h default), revocation with ≤60s propagation budget across instances (NFR-AUTH-006), and a non-disruptive backward-compatibility contract that keeps SMACKEREL_AUTH_TOKEN fully valid for development/test profiles (FR-AUTH-015..017). Outcome Contract authored with concrete Intent / Success Signal / Hard Constraints / Failure Condition (no DB roundtrip, claim-binding only in production, dev/test backward compat, fail-loud on missing config, SST flow, MIT closures in scope). 11 Gherkin scenarios authored: SCN-AUTH-001 (enrollment issuance), SCN-AUTH-002 (stateless validation no DB), SCN-AUTH-003 (actor_id from claims not header trust), SCN-AUTH-004 (rotation with grace window), SCN-AUTH-005 (SMACKEREL_AUTH_TOKEN dev/test backward compat), SCN-AUTH-006 (fail-loud on missing config), SCN-AUTH-007 (drive Connect owner_user_id closes MIT-038-S-003), SCN-AUTH-008 (annotation actor_source closes MIT-027-TRACE-001 actor segment), SCN-AUTH-009 (revocation refused on next request), SCN-AUTH-010 (stale/tampered token constant-time refusal), SCN-AUTH-011 (dev/test migration zero-changes). 21 functional requirements (FR-AUTH-001..021) covering issuance/validation/claim-binding/rotation/revocation/backward-compat/configuration/closure-routing. 8 non-functional requirements (NFR-AUTH-001..008): hot-path latency budget, no-DB-roundtrip, ≥24h rotation grace default, at-rest hashing for stored tokens, ≤60s clock-skew, ≤60s revocation propagation, log hygiene, constant-time comparison. 11 acceptance criteria (AC-1..11) with explicit grep verification (AC-11) of header-trust path elimination in production. Backward Compatibility section enumerates the development/test no-changes contract and the production migration steps. Security Considerations surfaces token format / signing key storage / transport / replay / cross-spec QF boundary topics for design. Product Principle Alignment cites Principles 1/6/8/10 (P10 NON-NEGOTIABLE QF cross-product) plus Constitution C1/C5/C7/C8 (advisory pre-ratification). 10 design-owned Open Questions recorded (OQ-1 token format JWT/PASETO/opaque, OQ-2 key management, OQ-3 session context shape, OQ-4 revocation propagation mechanism, OQ-5 coexistence policy, OQ-6 enrollment surface, OQ-7 web UI session model, OQ-8 hashing strategy, OQ-9 telemetry, OQ-10 bootstrapping). Cross-references upstream MIT-040-S-008 / MIT-040-S-003 partial close / MIT-038-S-003 / MIT-027-TRACE-001 and adjacent ratified specs 020 / 040 / 038 / 027. No design.md or scopes.md authored — those are bubbles.design and bubbles.plan ownership respectively per task scope. uservalidation.md and report.md not authored — owned by later-phase agents."
+    }
+  ],
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "source": "repo-default"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "lastUpdatedAt": "2026-05-09T06:00:00Z"
+}
