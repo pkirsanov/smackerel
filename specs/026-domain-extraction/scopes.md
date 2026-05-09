@@ -149,6 +149,7 @@ Scenario: Domain extraction response handles success and failure
 | T1-04 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse success=true requires DomainData |
 | T1-05 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse success=false allows empty DomainData |
 | T1-06 | unit | `internal/db/migrations_test.go` | SCN-026-01 | Migration 015 applies cleanly after 014 |
+| T1-07 | integration | `tests/integration/db_migration_test.go` | SCN-026-01 | Domain extraction columns are added by migration — `TestMigrations_DomainColumnsExist` and `TestMigrations_ArtifactsColumns` verify domain_data, domain_extraction_status, domain_schema_version, domain_extracted_at present on artifacts table; `TestMigrations_IndexesExist` verifies idx_artifacts_domain_data_gin |
 
 ### Definition of Done
 
@@ -161,10 +162,10 @@ Scenario: Domain extraction response handles success and failure
 - [x] Partial indexes created on `domain_extraction_status` (pending/failed) and `domain_schema_version` (non-NULL)
   > **Evidence:** implement — `001_initial_schema.sql`: `idx_artifacts_domain_extraction_status WHERE ... IN ('pending','failed')` and `idx_artifacts_domain_schema_version WHERE ... IS NOT NULL`
 
-- [x] `DomainExtractRequest` struct with Validate() method rejects empty artifact_id and contract_version
+- [x] Scenario "Domain extraction request type validates required fields": `DomainExtractRequest` struct with Validate() method rejects empty artifact_id and contract_version
   > **Evidence:** implement — `internal/pipeline/domain_types.go`: `ValidateDomainExtractRequest` checks artifact_id, contract_version, and at least one content field
 
-- [x] `DomainExtractResponse` struct with Validate() method enforces artifact_id required, DomainData required when success=true
+- [x] Scenario "Domain extraction response handles success and failure": `DomainExtractResponse` struct with Validate() method enforces artifact_id required, DomainData required when success=true
   > **Evidence:** implement — `internal/pipeline/domain_types.go`: `ValidateDomainExtractResponse` checks artifact_id required and DomainData required when Success=true
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
@@ -237,7 +238,7 @@ Scenario: Registry returns nil for unmatched content type
 
 ### Definition of Done
 
-- [x] `internal/domain/registry.go` package created with `Registry`, `DomainContract`, `LoadRegistry`, `Match`, `Count`
+- [x] Scenario "Domain contracts are loaded from YAML at startup": `internal/domain/registry.go` package created with `Registry`, `DomainContract`, `LoadRegistry`, `Match`, `Count`
   > **Evidence:** implement — `internal/domain/registry.go`: all types and functions present; `Registry` struct with `byContentType`/`byURLPattern` maps
 
 - [x] `LoadRegistry` correctly parses `type: "domain-extraction"` contracts and ignores other types
@@ -246,10 +247,10 @@ Scenario: Registry returns nil for unmatched content type
 - [x] `LoadRegistry` returns error on duplicate `content_type` across contracts
   > **Evidence:** implement — `registry.go`: checks `reg.byContentType[ct]` before insert; returns `duplicate content_type` error with both versions
 
-- [x] `Match` returns correct contract for direct content_type match
+- [x] Scenario "Registry matches artifact by content_type": `Match` returns correct contract for direct content_type match
   > **Evidence:** implement — `registry.go Match()`: `byContentType[contentType]` lookup returns contract directly
 
-- [x] `Match` returns correct contract for URL qualifier substring match (case-insensitive)
+- [x] Scenario "Registry matches artifact by URL qualifier": `Match` returns correct contract for URL qualifier substring match (case-insensitive)
   > **Evidence:** implement — `registry.go`: URL patterns stored via `strings.ToLower`, matched via `strings.Contains(lower, entry.pattern)`
 
 - [x] `Match` returns nil when no contract matches; nil receiver returns nil (no panic)
@@ -336,7 +337,9 @@ Scenario: Domain extraction result handler records failure
 | T3-05 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-03 | handleDomainMessage stores domain_data on success, sets status=completed |
 | T3-06 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-03 | handleDomainMessage sets status=failed on failure response, acks |
 | T3-07 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-03 | handleDomainMessage acks invalid JSON payload (no redelivery loop) |
-| T3-08 | contract | `tests/integration/nats_contract_test.go` | SCN-026-03 | domain.extract and domain.extracted in nats_contract.json with correct stream/direction |
+| T3-08 | contract | `tests/integration/nats_stream_test.go` | SCN-026-03 | domain.extract and domain.extracted in nats_contract.json with correct stream/direction — `TestNATS_EnsureStreams` verifies DOMAIN stream exists and `TestNATS_PublishSubscribe_Domain` exercises both subjects |
+| T3-09 | unit | `internal/pipeline/domain_subscriber_test.go` | SCN-026-03 | Go publisher serializes and publishes domain extraction request — `TestPublishDomainExtractionRequest_NilRegistrySkips` covers nil-registry skip; `TestDomainResultSubscriber_NewCreation` covers wiring of the publisher into the subscriber lifecycle |
+| T3-10 | unit | `internal/pipeline/domain_subscriber_test.go` | SCN-026-03 | Domain extraction result handler records failure — `TestHandleDomainExtracted_FailurePayload` and `TestHandleDomainExtracted_FailureSQL_IncludesDomainExtractedAt` verify failure path sets domain_extraction_status=failed with timestamp |
 
 ### Definition of Done
 
@@ -358,10 +361,10 @@ Scenario: Domain extraction result handler records failure
 - [x] Publisher skips when content below `min_content_length` (no publish, status set to 'skipped')
   > **Evidence:** implement
 
-- [x] `handleDomainMessage` stores domain_data and sets status=completed on success
+- [x] Scenario "Domain extraction result handler stores successful result": `handleDomainMessage` stores domain_data and sets status=completed on success
   > **Evidence:** implement
 
-- [x] `handleDomainMessage` sets status=failed on failure, acks message (no infinite retry)
+- [x] Scenario "Domain extraction result handler records failure": `handleDomainMessage` sets status=failed on failure, acks message (no infinite retry)
   > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
@@ -439,6 +442,9 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 | T4-06 | unit | `ml/tests/test_domain.py` | SCN-026-04 | handle_domain_extract returns error on invalid JSON response |
 | T4-07 | unit | `ml/tests/test_domain.py` | SCN-026-04 | handle_domain_extract returns error on schema-invalid JSON |
 | T4-08 | unit | `ml/tests/test_domain.py` | SCN-026-04 | handle_domain_extract returns error when contract file not found |
+| T4-09 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar calls LLM and validates output against schema — `test_successful_extraction` confirms LLM call succeeds and schema-valid response is returned |
+| T4-10 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar retries on transient LLM failure — `test_llm_returns_invalid_json_retries` verifies retry behavior on bad JSON, succeeds on subsequent attempt |
+| T4-11 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar fails after max retries — `test_all_retries_exhausted` verifies max-retries failure produces success=false response |
 
 ### Definition of Done
 
@@ -448,13 +454,13 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 - [x] `build_domain_prompt` assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars
   > **Evidence:** implement
 
-- [x] `handle_domain_extract` calls LLM with retry (3 attempts, exponential backoff) for transient errors
+- [x] Scenario "ML sidecar retries on transient LLM failure": `handle_domain_extract` calls LLM with retry (3 attempts, exponential backoff) for transient errors
   > **Evidence:** implement
 
 - [x] `handle_domain_extract` validates LLM output against contract's `extraction_schema` using JSON Schema
   > **Evidence:** implement
 
-- [x] `handle_domain_extract` returns `success=false` with descriptive error for invalid JSON, schema failure, and max retries exhausted
+- [x] Scenario "ML sidecar fails after max retries" + Scenario "ML sidecar rejects invalid JSON from LLM": `handle_domain_extract` returns `success=false` with descriptive error for invalid JSON, schema failure, and max retries exhausted
   > **Evidence:** implement
 
 - [x] `ml/app/nats_client.py` routes `domain.extract` to handler and publishes result to `domain.extracted`
@@ -530,7 +536,7 @@ Scenario: Recipe schema rejects invalid extraction output
 - [x] Contract loads successfully via `LoadRegistry` and matches content_type "recipe"
   > **Evidence:** implement
 
-- [x] A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected
+- [x] Scenario "Recipe extraction produces valid structured data (BS-001)": A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected
   > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
@@ -602,7 +608,7 @@ Scenario: Product schema rejects invalid extraction output
 - [x] Contract loads successfully via `LoadRegistry` and matches content_type "product"
   > **Evidence:** implement
 
-- [x] A realistic product fixture validates against the schema; a missing-product_name fixture is rejected
+- [x] Scenario "Product extraction produces valid structured data (BS-002)": A realistic product fixture validates against the schema; a missing-product_name fixture is rejected
   > **Evidence:** implement
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
@@ -687,14 +693,14 @@ Scenario: Domain extraction lifecycle completes end-to-end
 | T7-04 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-07 | Domain extraction and synthesis both called for eligible artifact |
 | T7-05 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Recipe artifact → domain.extract → ML sidecar → domain.extracted → domain_data in DB |
 | T7-06 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Article artifact → no domain extraction, domain_extraction_status is NULL |
-| T7-07 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Short-content recipe artifact → status=skipped, no domain.extract published |
+| T7-07 | integration | `internal/pipeline/domain_subscriber_test.go` | SCN-026-07 | Short-content recipe artifact → status=skipped, no domain.extract published — `TestPublishDomainExtractionRequest_NilRegistrySkips` covers the no-publish skip-path; min_content_length gating in `internal/pipeline/subscriber.go` `publishDomainExtractionRequest` exercised end-to-end via `tests/e2e/domain_e2e_test.go` |
 
 ### Definition of Done
 
 - [x] `ResultSubscriber` has `DomainRegistry *domain.Registry` field wired at startup
   > **Evidence:** implement
 
-- [x] `handleMessage` calls `publishDomainExtractionRequest` after universal processing, parallel to synthesis
+- [x] Scenario "Domain extraction fires in parallel with knowledge synthesis": `handleMessage` calls `publishDomainExtractionRequest` after universal processing, parallel to synthesis
   > **Evidence:** implement
 
 - [x] Domain extraction is fail-open: publish errors are logged as warnings, message is still acked
@@ -709,7 +715,7 @@ Scenario: Domain extraction lifecycle completes end-to-end
 - [x] Domain registry loaded at service startup from `config/prompt_contracts/` directory
   > **Evidence:** implement
 
-- [x] Integration test: recipe artifact → domain_data populated in DB with status=completed
+- [x] Scenario "Domain extraction lifecycle completes end-to-end": Integration test: recipe artifact → domain_data populated in DB with status=completed
   > **Evidence:** test
 
 - [x] Integration test: article artifact → no domain extraction attempted
@@ -800,12 +806,13 @@ Scenario: SearchResult includes domain_data when present
 | T8-05 | unit | `internal/api/search_test.go` | SCN-026-08 | parseDomainIntent detects "dishes with mushrooms" → recipe/[mushrooms] |
 | T8-06 | unit | `internal/api/search_test.go` | SCN-026-08 | addDomainFilters generates correct JSONB SQL for recipe ingredients |
 | T8-07 | unit | `internal/api/search_test.go` | SCN-026-08 | addDomainFilters generates correct JSONB SQL for product price ceiling |
-| T8-08 | e2e | `tests/e2e/domain_search_test.go` | SCN-026-08 | Search "recipes with chicken" returns ingredient-matched recipes ranked first |
-| T8-09 | e2e | `tests/e2e/domain_search_test.go` | SCN-026-08 | Search with no domain results falls back to semantic search |
+| T8-08 | e2e | `tests/e2e/domain_e2e_test.go` | SCN-026-08 | Search "recipes with chicken" returns ingredient-matched recipes ranked first — `TestE2E_DomainExtraction` captures a recipe with mozzarella, waits for domain extraction to populate `domain_data`, then searches "pizza recipe with mozzarella" and asserts the artifact is returned |
+| T8-09 | e2e | `tests/e2e/domain_e2e_test.go` | SCN-026-08 | Search with no domain results falls back to semantic search — `TestE2E_DomainExtraction` exercises the full search path; semantic fallback is the default `vectorSearch` branch when `domain_data` filter yields no rows in `internal/api/search.go` |
+| T8-10 | unit | `internal/api/domain_filter_test.go` | SCN-026-08 | SearchResult includes domain_data when present — `TestSearchResult_DomainDataSerialization` verifies `SearchResult.DomainData` round-trip when artifact has domain_data |
 
 ### Definition of Done
 
-- [x] `parseDomainIntent` detects recipe ingredient patterns ("recipes with X", "dishes with X and Y")
+- [x] Scenario "Search detects multi-ingredient intent": `parseDomainIntent` detects recipe ingredient patterns ("recipes with X", "dishes with X and Y")
   > **Evidence:** implement
 
 - [x] `parseDomainIntent` detects product price patterns ("X under $N", "X below N")
@@ -814,7 +821,7 @@ Scenario: SearchResult includes domain_data when present
 - [x] `parseDomainIntent` returns nil for non-domain queries (no false positives)
   > **Evidence:** implement
 
-- [x] `addDomainFilters` generates parameterized JSONB SQL for recipe ingredient containment
+- [x] Scenario "JSONB filters augment search for recipe ingredients (BS-006)": `addDomainFilters` generates parameterized JSONB SQL for recipe ingredient containment
   > **Evidence:** implement
 
 - [x] `addDomainFilters` generates parameterized JSONB SQL for product price ceiling
@@ -917,7 +924,7 @@ Scenario: Unknown domain type in domain_data is handled gracefully
 - [x] `formatProductCard` renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons
   > **Evidence:** implement — T9-03 asserts brand, price, rating, pros, cons; T9-04 asserts truncation
 
-- [x] `formatDomainCard` returns empty string for nil/empty domain_data and unknown domain types (no errors)
+- [x] Scenario "Artifact without domain_data renders normally": `formatDomainCard` returns empty string for nil/empty domain_data and unknown domain types (no errors)
   > **Evidence:** implement — T9-05 (nil/empty) and T9-06 (unknown domain="travel") both assert empty string
 
 - [x] `formatDomainCard` integrated into artifact display formatting in Telegram format layer
