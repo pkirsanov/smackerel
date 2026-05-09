@@ -1,0 +1,900 @@
+# Spec 044 — Per-User Bearer Auth Foundation: Design
+
+**Status:** in_progress (design phase)
+**Source spec:** [`spec.md`](./spec.md) — 11 SCN-AUTH-001..011 + 21 FR-AUTH-001..021 + 8 NFR-AUTH-001..008 + 11 AC-1..11 + 10 OQ-1..10
+**Closes:** MIT-040-S-008 (carry-forward from MIT-040-S-003 partial close at commit `4e399a4`); MIT-038-S-003 (cloud-drive Connect body-sourced `owner_user_id`); MIT-027-TRACE-001 actor-source segment (annotation actor_source).
+**Related design anchors:** `bubbles-config-sst` skill (SST zero-defaults); `bubbles-test-environment-isolation` skill (test isolation); `docs/Operations.md` (operator surfaces); `docs/Deployment.md` (Build-Once Deploy-Many bundle contract).
+
+---
+
+## 1. Design Brief
+
+Spec 044 establishes Smackerel's per-user trust boundary. Today the API uses a single shared token (`SMACKEREL_AUTH_TOKEN`) per deployment, which forces every per-user identity question to be answered the wrong way (header trust via `X-Actor-Id`, body trust via `OwnerUserID`, literal `actor_source: "system"`). This spec replaces that with a **stateless bearer-token contract** in production, while preserving the existing dev/test ergonomic intact.
+
+The hot-path validation is fully stateless — the middleware verifies a signature against an SST-derived signing key and parses claims, with **zero database queries per request** in the common case (NFR-AUTH-001 ≤ 5 ms p99). Revocation is checked against an in-memory cache that is refreshed asynchronously via NATS broadcast (NFR-AUTH-006 ≤ 60 s propagation budget). Rotation supports a configurable grace window (NFR-AUTH-003 ≥ 24 h default) so long-lived clients can refresh without seeing 401s.
+
+The closure plan in this design routes three previously-routed MIT items (MIT-040-S-008 photo reveal mint, MIT-038-S-003 drive Connect owner, MIT-027-TRACE-001 annotation actor_source) through a single uniform claim-binding contract. The dev/test backward-compat plan keeps `SMACKEREL_AUTH_TOKEN` as a fully-supported authentication mechanism for `runtime.environment in {development, test}`, including the empty-token bypass at `internal/api/router.go` lines 444–451.
+
+This design resolves all 10 open questions raised in spec.md, lands 14 new SST keys under a new `auth.*` block in `config/smackerel.yaml`, and lays out a 4-phase rollout that closes the routed MIT items in Phase 2.
+
+---
+
+## 2. System Context
+
+| Component | Owner | Change |
+|-----------|-------|--------|
+| `internal/api/router.go` `bearerAuthMiddleware` | Go core | Extended to validate per-user PASETO tokens in production; preserves shared-token + empty-token paths in dev/test |
+| `internal/api/router.go` `webAuthMiddleware` | Go core | Cookie-based session preserved; cookie value is per-user PASETO in production, shared token in dev/test |
+| **NEW** `internal/auth/` package | Go core | Token issuance, validation, rotation, revocation, session-context helpers |
+| **NEW** `internal/auth/revocation/` | Go core | NATS-pub/sub revocation broadcaster + per-instance in-memory cache |
+| `internal/api/photos_upload.go` `MintReveal` | Go core | Production: derive `actor_id` from session; dev/test: fall back to `X-Actor-Id` per existing MIT-040-S-003 partial-close contract |
+| `internal/drive/google/google.go` `Connect` + `internal/drive/context.go` | Go core | Production: derive `OwnerUserID` from session; dev/test: fall back to body |
+| `internal/annotation/` pipeline | Go core | Production: derive `actor_source` from session; dev/test: fall back to literal `system` or supplied value |
+| `cmd/core/wiring.go` startup | Go core | Production fail-loud extension: missing `auth.*` SST keys → service refuses to start |
+| `internal/config/config.go` SST surface | Go core | New `Auth` config struct + validation |
+| `config/smackerel.yaml` SST source | Configuration | 14 new keys under `auth.*` block |
+| `scripts/commands/config.sh` | Shell | Emit `AUTH_*` env vars to `config/generated/{dev,test,production}.env` |
+| `internal/nats/` subscriber wiring | Go core | New NATS subject `auth.revocations` for cross-instance broadcast |
+| **NEW** `cmd/core/cmd_auth.go` | Go core | CLI entry points: `./smackerel.sh auth enroll <user-id>`, `./smackerel.sh auth rotate <user-id>`, `./smackerel.sh auth revoke <token-id>`, `./smackerel.sh auth list-users`, `./smackerel.sh auth bootstrap` |
+| **NEW** `internal/api/auth_handlers.go` | Go core | Admin HTTP endpoints: `POST /v1/auth/users`, `POST /v1/auth/users/{user-id}/rotate`, `POST /v1/auth/tokens/{token-id}/revoke`, `GET /v1/auth/users` (gated on admin scope) |
+| **NEW** PostgreSQL tables `auth_users`, `auth_tokens`, `auth_revocations` | Database | Schema migrations under `internal/db/migrations/` |
+| `web/pwa/` + `web/extension/` | Web surfaces | Receive per-user PASETO tokens; preserve cookie storage with HTTP-only + Secure flags in production |
+| `internal/telegram/` | Telegram connector | Map Telegram chat-id to enrolled user; emit annotation events with session-derived `actor_source` |
+
+**Out of scope (per spec.md Non-Goals):** third-party connector OAuth, end-user enrollment UX (admin-issued only for MVP), multi-factor auth, federated identity (OIDC/SAML/SSO), session-management UI, RBAC beyond identity, rate limiting, replacing shared token in dev/test, historical record migration.
+
+---
+
+## 3. Component Diagram
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│                      CLIENT (PWA / extension / CLI / Telegram)       │
+│                                                                      │
+│   Authorization: Bearer <PASETO-v4.public-token>                     │
+└──────────────────────────────────────┬───────────────────────────────┘
+                                       │ HTTPS (production)
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                   internal/api/router.go middleware chain             │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────┐     │
+│   │   bearerAuthMiddleware (per request, ≤ 5 ms p99)           │     │
+│   │                                                            │     │
+│   │   1. extractBearerToken(r)         (header parse)          │     │
+│   │   2. if dev/test: matchSharedToken (existing path)         │     │
+│   │   3. else (production):                                    │     │
+│   │       3a. paseto.Verify(token, signingKey)  (in-memory)   │     │
+│   │       3b. claims.Parse() → Session{UserID,...}             │     │
+│   │       3c. revocationCache.IsRevoked(tokenID)  (sync.Map)   │     │
+│   │       3d. attach Session to r.Context() via auth.WithSess  │     │
+│   │   4. else: HTTP 401 + slog.Warn("bearer auth failure")     │     │
+│   └─────────────────────────┬──────────────────────────────────┘     │
+└─────────────────────────────┼────────────────────────────────────────┘
+                              │ r.Context() carries auth.Session
+                              ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                       Downstream handlers                            │
+│                                                                      │
+│   sess := auth.SessionFromContext(r.Context())  // typed accessor   │
+│   if sess == nil { return 500 }  // middleware contract violation    │
+│                                                                      │
+│   actorID       := sess.UserID  // photos_upload.MintReveal          │
+│   ownerUserID   := sess.UserID  // drive.Connect                     │
+│   actorSource   := sess.UserID  // annotation pipeline               │
+│                                                                      │
+│   In production: body/header values for these fields are REJECTED.   │
+│   In dev/test:   body/header values fall back per existing patterns. │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                    Async background workers                          │
+│                                                                      │
+│   ┌──────────────────────────────────┐                               │
+│   │  RevocationBroadcaster (NATS)    │                               │
+│   │  Subject: auth.revocations       │                               │
+│   │                                  │                               │
+│   │  On revoke: publish {tokenID}    │                               │
+│   │  On startup: bootstrap from DB   │                               │
+│   │  On message: cache.Set(tokenID)  │                               │
+│   │  On timer (15 min): refresh DB   │                               │
+│   └──────────────────────────────────┘                               │
+│                                                                      │
+│   ┌──────────────────────────────────┐                               │
+│   │  RotationGracePruner             │                               │
+│   │  On timer (1 h): SELECT tokens   │                               │
+│   │     WHERE rotated_at <           │                               │
+│   │     now() - grace_window         │                               │
+│   │  Mark rotated tokens revoked     │                               │
+│   └──────────────────────────────────┘                               │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Configuration Plan
+
+This section resolves OQs 1, 2, 4, 5, 7, 8, 9, 10 by declaring the SST surface they map to. OQs 3, 6 (session shape, enrollment surface) are resolved structurally in §5 below.
+
+### New SST keys under `auth.*` block in `config/smackerel.yaml`
+
+```yaml
+auth:
+  # OQ-1 RESOLVED: PASETO v4.public — stateless, no JWKS required,
+  # no algorithm-confusion attacks, EdDSA-based, simpler than JWT.
+  # See §10 Security Considerations for full rationale.
+  token_format: paseto-v4-public
+
+  # OQ-2 RESOLVED: signing keys are SST values; rotation is overlap-based
+  # with active key + at-most-one-prior key for grace window.
+  signing:
+    # Active signing key (Ed25519 private key, base64-encoded).
+    # Empty in dev/test (falls back to shared-token mode).
+    # MUST be set in production; fail-loud at startup if empty.
+    active_private_key: ""
+    active_key_id: ""  # short identifier, e.g., "k1"; embedded in token claims
+
+    # Optional prior key for the rotation grace window. When the active
+    # key is rotated, the prior key MUST be moved here for grace_window
+    # so existing tokens still validate.
+    prior_public_key: ""
+    prior_key_id: ""
+
+  # Token TTL — how long an issued token is valid before requiring rotation.
+  # MUST be bounded; no infinite tokens in production.
+  token_ttl_hours: 720  # 30 days; design recommendation, configurable
+
+  # Rotation grace window — how long the prior token + prior key remain valid
+  # after rotation. NFR-AUTH-003: ≥ 24 hours.
+  rotation_grace_window_hours: 168  # 7 days; design recommendation, configurable
+
+  # Clock-skew tolerance — NFR-AUTH-005: ≤ 60 seconds.
+  clock_skew_tolerance_seconds: 30
+
+  # Revocation propagation — NFR-AUTH-006: ≤ 60 s across runtime instances.
+  # In-memory cache refresh interval (DB poll fallback when NATS is unavailable).
+  revocation_cache_refresh_interval_seconds: 30
+  # NATS subject for cross-instance revocation broadcast.
+  revocation_nats_subject: "auth.revocations"
+
+  # OQ-8 RESOLVED: at-rest token storage uses HMAC-SHA-256 keyed by a separate
+  # SST key. Tokens are NOT stored as plaintext; only the HMAC is stored.
+  # Constant-time comparison applied at lookup time.
+  # MUST be set in production; fail-loud at startup if empty.
+  at_rest_hashing_key: ""
+
+  # OQ-5 RESOLVED: in production, SMACKEREL_AUTH_TOKEN is REJECTED by default
+  # once any per-user token is enrolled. Operators may opt in to the shared
+  # token as an escape hatch via this flag (deprecation pathway with warning logs).
+  production_shared_token_fallback_enabled: false
+
+  # OQ-9 RESOLVED: telemetry surface for spec 030 observability.
+  telemetry_enabled: true
+  telemetry_metric_prefix: "smackerel_auth"
+
+  # OQ-10 RESOLVED: bootstrap token for first-user enrollment on a fresh
+  # production deployment. Consumed exactly once via
+  # `./smackerel.sh auth bootstrap` and cleared.
+  # MUST be set when production deployment has zero enrolled users.
+  bootstrap_token: ""
+
+# Per-environment overrides
+environments:
+  development:
+    auth:
+      enabled: false  # FR-AUTH-016: per-user auth disabled-by-default in dev
+  test:
+    auth:
+      enabled: false  # disabled-by-default in test
+  production:
+    auth:
+      enabled: true   # FR-AUTH-016: enabled-by-default in production
+  home-lab:
+    auth:
+      enabled: true   # production-class environment
+```
+
+### Reused existing SST keys
+
+| Key | Path | Reuse rationale |
+|-----|------|-----------------|
+| `runtime.auth_token` | existing | Shared `SMACKEREL_AUTH_TOKEN` — preserved per FR-AUTH-015 for dev/test ergonomic |
+| `runtime.environment` | existing | Gates production-strict claim-binding behavior (FR-AUTH-007/008/009/010) |
+| `db.url` | existing | `auth_users` / `auth_tokens` / `auth_revocations` tables live in canonical DB |
+| `nats.url` | existing | RevocationBroadcaster subscribes/publishes here |
+| `runtime.cookie_domain` | existing | Used by `webAuthMiddleware` to set Secure cookies |
+
+### Generated env file additions
+
+`config/generated/{dev,test,production}.env` adds (via `scripts/commands/config.sh`):
+
+```sh
+AUTH_ENABLED=
+AUTH_TOKEN_FORMAT=
+AUTH_SIGNING_ACTIVE_PRIVATE_KEY=
+AUTH_SIGNING_ACTIVE_KEY_ID=
+AUTH_SIGNING_PRIOR_PUBLIC_KEY=
+AUTH_SIGNING_PRIOR_KEY_ID=
+AUTH_TOKEN_TTL_HOURS=
+AUTH_ROTATION_GRACE_WINDOW_HOURS=
+AUTH_CLOCK_SKEW_TOLERANCE_SECONDS=
+AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS=
+AUTH_REVOCATION_NATS_SUBJECT=
+AUTH_AT_REST_HASHING_KEY=
+AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=
+AUTH_TELEMETRY_ENABLED=
+AUTH_TELEMETRY_METRIC_PREFIX=
+AUTH_BOOTSTRAP_TOKEN=
+```
+
+### SST validation contract (cmd/core/wiring.go extension)
+
+When `SMACKEREL_ENV=production` AND `auth.enabled=true`:
+
+```go
+// FR-AUTH-019: fail-loud on missing/invalid auth config in production
+if cfg.Environment == "production" && cfg.Auth.Enabled {
+    var missing []string
+    if cfg.Auth.SigningActivePrivateKey == "" { missing = append(missing, "auth.signing.active_private_key") }
+    if cfg.Auth.SigningActiveKeyID == "" { missing = append(missing, "auth.signing.active_key_id") }
+    if cfg.Auth.AtRestHashingKey == "" { missing = append(missing, "auth.at_rest_hashing_key") }
+    if cfg.Auth.TokenTTLHours <= 0 { missing = append(missing, "auth.token_ttl_hours (must be > 0)") }
+    if cfg.Auth.RotationGraceWindowHours < 24 { missing = append(missing, "auth.rotation_grace_window_hours (must be >= 24)") }
+
+    // bootstrap_token required only when zero users enrolled
+    enrolledCount, err := authStore.UserCount(ctx)
+    if err != nil { return fmt.Errorf("auth user count: %w", err) }
+    if enrolledCount == 0 && cfg.Auth.BootstrapToken == "" {
+        missing = append(missing, "auth.bootstrap_token (required when production has zero enrolled users)")
+    }
+
+    if len(missing) > 0 {
+        return fmt.Errorf("production auth config missing required keys: %s", strings.Join(missing, ", "))
+    }
+}
+```
+
+---
+
+## 5. Token Lifecycle
+
+### 5.1 Issuance flow (FR-AUTH-001/002/003)
+
+**Trigger:** Operator runs `./smackerel.sh auth enroll <user-id>` OR sends `POST /v1/auth/users` (admin-scoped).
+
+```text
+1. Validate user-id format (UUID or stable alphanumeric, ≥ 8 chars)
+2. INSERT INTO auth_users(user_id, enrolled_at, enrolled_by)
+3. Generate token-id (UUIDv7)
+4. Build claims:
+   - sub:    <user-id>
+   - iat:    <now>
+   - exp:    <now> + token_ttl_hours
+   - iss:    <runtime.environment>:<runtime.cookie_domain>
+   - kid:    <auth.signing.active_key_id>
+   - tid:    <token-id>
+5. PASETO v4.public sign with auth.signing.active_private_key
+6. Compute hash := HMAC-SHA-256(auth.at_rest_hashing_key, token)
+7. INSERT INTO auth_tokens(token_id, user_id, key_id, issued_at, expires_at, hash)
+8. Return token to operator (over secure channel; tokens are NEVER re-derivable)
+9. Emit metric smackerel_auth_issuance_total{user_id=<...>}
+```
+
+**Bootstrap flow (OQ-10):** When the production deployment has zero enrolled users, the operator MUST set `auth.bootstrap_token` and run `./smackerel.sh auth bootstrap`. The bootstrap command:
+
+1. Verifies the supplied bootstrap-token matches `auth.bootstrap_token` SST value (constant-time compare).
+2. Prompts the operator for the first user-id (or accepts via `--user-id` flag).
+3. Runs the issuance flow for that user.
+4. Updates `config/smackerel.yaml` (or emits a secret-manager directive) to clear `auth.bootstrap_token`.
+5. Operator commits the cleared SST + redeploys.
+
+### 5.2 Validation flow (FR-AUTH-004/005/006, NFR-AUTH-001/002)
+
+```text
+1. extractBearerToken(r) → token string
+2. if dev/test:
+     return matchSharedToken(token, cfg.RuntimeAuthToken)  // existing path
+3. else (production):
+     3a. paseto.Verify(token, cfg.Auth.SigningActivePrivateKey.Public()) OR
+         (if "kid" claim matches PriorKeyID and within grace window)
+         paseto.Verify(token, cfg.Auth.SigningPriorPublicKey)
+     3b. parse claims → Session{UserID, IssuedAt, ExpiresAt, KeyID, TokenID}
+     3c. if Session.ExpiresAt + clock_skew < now: return UNAUTHORIZED
+     3d. if revocationCache.IsRevoked(Session.TokenID): return UNAUTHORIZED
+     3e. attach Session to r.Context() via auth.WithSession(ctx, sess)
+4. r.Context() now carries auth.Session
+```
+
+**Latency budget breakdown (NFR-AUTH-001 ≤ 5 ms p99):**
+
+| Step | Budget |
+|------|--------|
+| Header parse + base64 decode | ≤ 0.1 ms |
+| PASETO signature verify (Ed25519) | ≤ 1.5 ms |
+| Claims parse | ≤ 0.1 ms |
+| Expiry + clock-skew check | ≤ 0.05 ms |
+| Revocation cache lookup (sync.Map) | ≤ 0.05 ms |
+| Context attach | ≤ 0.05 ms |
+| **Total per request** | **≤ 2 ms p50, ≤ 5 ms p99** |
+
+### 5.3 Rotation flow (FR-AUTH-011/012, NFR-AUTH-003)
+
+**Trigger:** Operator runs `./smackerel.sh auth rotate <user-id>` OR sends `POST /v1/auth/users/{user-id}/rotate` (admin-scoped or self-scoped).
+
+```text
+1. SELECT * FROM auth_tokens WHERE user_id=<...> AND revoked=false
+   ORDER BY issued_at DESC LIMIT 1  → oldToken
+2. Run issuance flow → newToken
+3. UPDATE auth_tokens SET rotated_at=now() WHERE token_id=<oldToken.token_id>
+4. The oldToken remains VALID until rotated_at + rotation_grace_window_hours
+5. RotationGracePruner background worker (1h timer):
+   SELECT token_id FROM auth_tokens
+   WHERE rotated_at IS NOT NULL
+     AND rotated_at + interval '<grace_window_hours> hours' < now()
+     AND revoked = false
+   For each: UPDATE auth_tokens SET revoked=true, revoked_at=now()
+             AND publish revocation broadcast on auth.revocations
+6. Return newToken to operator
+7. Emit metric smackerel_auth_rotation_total{user_id=<...>}
+```
+
+### 5.4 Revocation flow (FR-AUTH-013/014, NFR-AUTH-006)
+
+**Trigger:** Operator runs `./smackerel.sh auth revoke <token-id>` OR sends `POST /v1/auth/tokens/{token-id}/revoke` (admin-scoped).
+
+```text
+1. UPDATE auth_tokens SET revoked=true, revoked_at=now() WHERE token_id=<...>
+2. Publish on NATS subject auth.revocations: {token_id, revoked_at}
+3. Every running runtime instance:
+   On NATS message: revocationCache.Set(token_id, true)
+   (sync.Map; no DB query, no allocation per validation)
+4. Emit metric smackerel_auth_revocation_total{reason=<...>}
+```
+
+**Cold-start bootstrap:** On startup, every runtime instance loads ALL non-expired revoked tokens from the DB into the in-memory cache. The 30-second timer-based refresh re-loads to catch any missed broadcasts. Combined with NATS pub/sub, propagation is well within NFR-AUTH-006's 60-second budget under normal conditions.
+
+**Failure mode:** If NATS is unavailable, the 30-second timer refresh is the only propagation channel, raising worst-case propagation to 30 seconds (still inside the 60-second budget). If both NATS AND the DB are unavailable, the cache stays stale until either recovers — a tradeoff accepted for the no-DB-roundtrip-on-hot-path Hard Constraint.
+
+### 5.5 Claim-binding rules (FR-AUTH-007/008/009/010)
+
+The following table summarizes how each MIT-routed handler MUST derive identity in `production` vs `development`/`test`:
+
+| Handler | Production source | Dev/test fallback | Enforcement |
+|---------|-------------------|-------------------|-------------|
+| `MintReveal` (photos_upload.go) | `sess.UserID` from `r.Context()` | `X-Actor-Id` header (existing MIT-040-S-003 partial-close pattern) | If body/header present in production, return HTTP 400 with `actor_id_in_body_forbidden` |
+| `Connect` (drive/google/google.go) | `sess.UserID` from `r.Context()` | request body `OwnerUserID` (existing MIT-038-S-003 pattern) | If `OwnerUserID` present in body in production, return HTTP 400 with `owner_user_id_in_body_forbidden` |
+| Annotation pipeline | `sess.UserID` from event context | event payload `actor_source` OR literal `system` (existing patterns) | If event payload supplies `actor_source` in production, log warning and override with session-derived value |
+
+### 5.6 Authenticated session context shape (OQ-3 RESOLVED)
+
+A typed `auth.Session` struct attached to `context.Context` via type-keyed value:
+
+```go
+package auth
+
+type Session struct {
+    UserID    string
+    TokenID   string
+    KeyID     string
+    IssuedAt  time.Time
+    ExpiresAt time.Time
+    // Source distinguishes "per-user" from "shared-token" sessions for
+    // dev/test backward compat. In production with auth.enabled=true,
+    // Source is always "per-user".
+    Source SessionSource
+}
+
+type SessionSource int
+const (
+    SessionSourcePerUser SessionSource = iota  // production path
+    SessionSourceSharedToken                    // dev/test path
+    SessionSourceEmpty                          // dev empty-token bypass
+)
+
+type sessionCtxKey struct{}
+
+func WithSession(ctx context.Context, sess *Session) context.Context {
+    return context.WithValue(ctx, sessionCtxKey{}, sess)
+}
+
+func SessionFromContext(ctx context.Context) *Session {
+    sess, _ := ctx.Value(sessionCtxKey{}).(*Session)
+    return sess
+}
+
+// Helper: returns the user-id for handlers that don't need full session metadata.
+// Returns empty string if no session is attached (handler programmer error).
+func UserIDFromContext(ctx context.Context) string {
+    sess := SessionFromContext(ctx)
+    if sess == nil { return "" }
+    return sess.UserID
+}
+```
+
+Handlers downstream of the middleware use `auth.SessionFromContext(r.Context())` for full session metadata or `auth.UserIDFromContext(r.Context())` for the common case.
+
+### 5.7 Enrollment surface (OQ-6 RESOLVED)
+
+**MVP enrollment surface is admin-issued only.** Two parallel surfaces are provided:
+
+1. **CLI:** `./smackerel.sh auth enroll <user-id>` (operator-side, runs against the live deployment via the local DB).
+2. **Admin HTTP:** `POST /v1/auth/users` with body `{"user_id": "<...>"}`. The HTTP endpoint is gated to admin scope, which for the MVP is a session originating from a token whose `Session.UserID` matches one in the SST `auth.admin_user_ids` allowlist (added per OQ-6 to the SST schema if needed; otherwise the bootstrap-issued user IS the implicit first admin).
+
+**Self-service signup is explicitly out-of-scope per spec.md Non-Goals.**
+
+---
+
+## 6. Hot-Path Validation Anatomy
+
+This section maps the validation flow §5.2 onto the actual Go code surfaces and the test-able guarantees they enforce.
+
+### 6.1 Middleware code path (production)
+
+```go
+// internal/api/router.go bearerAuthMiddleware (production branch)
+func bearerAuthMiddleware(cfg *config.Config, authStore auth.Store, revoker auth.RevocationCache) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            token := extractBearerToken(r)
+            if token == "" {
+                if cfg.Environment != "production" && cfg.RuntimeAuthToken == "" {
+                    // dev empty-token bypass (preserved per FR-AUTH-015)
+                    sess := &auth.Session{Source: auth.SessionSourceEmpty}
+                    next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+                    return
+                }
+                bearerAuthFail(w, r, "missing bearer")
+                return
+            }
+
+            // Production per-user PASETO path
+            if cfg.Environment == "production" && cfg.Auth.Enabled {
+                sess, err := auth.VerifyAndParse(token, cfg.Auth, revoker)
+                if err != nil {
+                    bearerAuthFail(w, r, err.Error())
+                    return
+                }
+                next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+                return
+            }
+
+            // Dev/test shared-token path (preserved per FR-AUTH-015)
+            if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.RuntimeAuthToken)) == 1 {
+                sess := &auth.Session{Source: auth.SessionSourceSharedToken}
+                next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+                return
+            }
+
+            // Optional production shared-token escape hatch (OQ-5)
+            if cfg.Environment == "production" && cfg.Auth.ProductionSharedTokenFallbackEnabled {
+                if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.RuntimeAuthToken)) == 1 {
+                    slog.Warn("production shared-token fallback used (deprecation pathway)", ...)
+                    sess := &auth.Session{Source: auth.SessionSourceSharedToken}
+                    next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+                    return
+                }
+            }
+
+            bearerAuthFail(w, r, "no match")
+        })
+    }
+}
+```
+
+### 6.2 PASETO verification (auth.VerifyAndParse)
+
+```go
+// internal/auth/verify.go
+func VerifyAndParse(token string, cfg config.AuthConfig, revoker RevocationCache) (*Session, error) {
+    parser := paseto.NewParser()
+    parser.AddRule(paseto.NotExpired())
+    parser.AddRule(paseto.IssuedBy(cfg.ExpectedIssuer()))
+
+    parsed, err := parser.ParseV4Public(cfg.SigningActivePublicKey, token, nil)
+    if err != nil && cfg.SigningPriorPublicKey != nil {
+        // Try prior key (rotation grace window)
+        parsed, err = parser.ParseV4Public(cfg.SigningPriorPublicKey, token, nil)
+    }
+    if err != nil {
+        return nil, fmt.Errorf("paseto verify: %w", err)
+    }
+
+    sess := &Session{
+        UserID:    parsed.GetString("sub"),
+        TokenID:   parsed.GetString("tid"),
+        KeyID:     parsed.GetString("kid"),
+        IssuedAt:  parsed.GetTime("iat"),
+        ExpiresAt: parsed.GetTime("exp"),
+        Source:    SessionSourcePerUser,
+    }
+
+    if revoker.IsRevoked(sess.TokenID) {
+        return nil, errors.New("revoked")
+    }
+
+    return sess, nil
+}
+```
+
+### 6.3 Revocation cache (in-memory sync.Map)
+
+```go
+// internal/auth/revocation/cache.go
+type Cache struct {
+    revoked sync.Map // map[tokenID]time.Time (revoked_at)
+}
+
+func (c *Cache) IsRevoked(tokenID string) bool {
+    _, ok := c.revoked.Load(tokenID)
+    return ok
+}
+
+func (c *Cache) Set(tokenID string, revokedAt time.Time) {
+    c.revoked.Store(tokenID, revokedAt)
+}
+
+func (c *Cache) BootstrapFromDB(ctx context.Context, store Store) error {
+    rows, err := store.ListNonExpiredRevoked(ctx)
+    if err != nil { return err }
+    for _, row := range rows {
+        c.Set(row.TokenID, row.RevokedAt)
+    }
+    return nil
+}
+```
+
+### 6.4 NATS broadcaster
+
+```go
+// internal/auth/revocation/broadcaster.go
+type Broadcaster struct {
+    nats    *nats.Conn
+    cache   *Cache
+    subject string
+}
+
+func (b *Broadcaster) Publish(ctx context.Context, tokenID string, revokedAt time.Time) error {
+    payload, _ := json.Marshal(map[string]interface{}{
+        "token_id": tokenID,
+        "revoked_at": revokedAt,
+    })
+    return b.nats.Publish(b.subject, payload)
+}
+
+func (b *Broadcaster) Subscribe(ctx context.Context) error {
+    _, err := b.nats.Subscribe(b.subject, func(m *nats.Msg) {
+        var ev struct {
+            TokenID   string    `json:"token_id"`
+            RevokedAt time.Time `json:"revoked_at"`
+        }
+        if err := json.Unmarshal(m.Data, &ev); err != nil {
+            slog.Warn("auth revocation broadcast unmarshal", "err", err)
+            return
+        }
+        b.cache.Set(ev.TokenID, ev.RevokedAt)
+    })
+    return err
+}
+```
+
+---
+
+## 7. Failure Modes
+
+| Failure mode | Detection | Response | Test |
+|--------------|-----------|----------|------|
+| Invalid token (not PASETO) | `paseto.Parse` returns error | HTTP 401, log `"bearer auth failure"` with reason category | `TestVerifyAndParse_InvalidFormat_Returns401` |
+| Expired token | `NotExpired` rule fails | HTTP 401, log reason `"expired"` | `TestVerifyAndParse_Expired_Returns401` |
+| Wrong signing key | Signature verification fails | HTTP 401, log reason `"signature_mismatch"` | `TestVerifyAndParse_WrongKey_Returns401` |
+| Revoked token | `revoker.IsRevoked` returns true | HTTP 401, log reason `"revoked"` | `TestVerifyAndParse_Revoked_Returns401` |
+| Mid-rotation: token signed with prior key | First parse fails on active key; retry on prior key succeeds | Validation succeeds (within grace window) | `TestVerifyAndParse_PriorKeyDuringGrace_Validates` |
+| Mid-rotation: token signed with prior key, grace expired | Both keys fail (RotationGracePruner has revoked the token) | HTTP 401 | `TestVerifyAndParse_PriorKeyAfterGrace_Returns401` |
+| Missing `auth.signing.active_private_key` in production | `wiring.go` startup validation | Service refuses to start with error naming the key | `TestStartup_MissingSigningKey_FailsLoud` |
+| Missing `auth.bootstrap_token` AND zero enrolled users | `wiring.go` startup validation queries `UserCount` | Service refuses to start with error naming the key | `TestStartup_NoUsersNoBootstrap_FailsLoud` |
+| NATS disconnection during revocation broadcast | `nats.Publish` returns error | Log warning; revocation is still persisted in DB; 30-second timer refresh will catch it next cycle | `TestRevocation_NATSDown_DBRefreshCatches` |
+| DB unreachable during cache bootstrap on startup | `BootstrapFromDB` returns error | Service refuses to start (cannot guarantee NFR-AUTH-006 with empty cache) | `TestStartup_DBDownDuringBootstrap_FailsLoud` |
+| Body/header attempts to claim `actor_id` in production | Handler reads request body OR header | HTTP 400 with `actor_id_in_body_forbidden` error | `TestMintReveal_ActorIDInBody_Production_Returns400` |
+| Body/header attempts to claim `owner_user_id` in production | Handler reads request body | HTTP 400 with `owner_user_id_in_body_forbidden` error | `TestDriveConnect_OwnerInBody_Production_Returns400` |
+| Annotation pipeline event supplies `actor_source` in production | Pipeline logs warning, OVERRIDES with session-derived value | Pipeline succeeds with corrected `actor_source`; warning logged | `TestAnnotationPipeline_ActorSourceInPayload_Production_Overrides` |
+| Web UI cookie has shared-token in production with fallback enabled | `webAuthMiddleware` matches shared token path | Authenticated as `SessionSourceSharedToken`; deprecation warning logged | `TestWebAuthMiddleware_SharedTokenInProductionFallback_Works` |
+| Web UI cookie has shared-token in production WITHOUT fallback | `webAuthMiddleware` rejects | HTTP 401 + cookie cleared | `TestWebAuthMiddleware_SharedTokenInProductionDefault_Rejects` |
+| Adversarial: re-using a token across users (token theft) | Per-token `tid` claim cannot be transferred; revocation eliminates it | Operator-driven revocation flow | `TestRevocation_StolenToken_RevokesPropagates` |
+
+---
+
+## 8. Performance Budget
+
+| Metric | Budget | Verification |
+|--------|--------|--------------|
+| Per-request middleware validation latency p50 | ≤ 2 ms | Microbenchmark `BenchmarkVerifyAndParse_HotPath` |
+| Per-request middleware validation latency p99 | ≤ 5 ms (NFR-AUTH-001) | `tests/stress/auth_validation_latency_test.go` measures p99 over 10k requests |
+| DB queries per request (common case) | 0 (NFR-AUTH-002) | `TestVerifyAndParse_NoDBQueries` uses query-counting harness |
+| Issuance latency | ≤ 100 ms (admin operation, not hot path) | not measured beyond rough wall-clock |
+| Rotation grace window | ≥ 24 h (NFR-AUTH-003); design default 168 h (7 days) | SST schema validates `>= 24` |
+| Clock-skew tolerance | ≤ 60 s (NFR-AUTH-005); design default 30 s | Validated against in-flight tests with adjusted clocks |
+| Revocation propagation worst-case (NATS up) | ≤ 1 s | `TestRevocation_PropagationLatency` measures wall-clock from publish to all-instances-aware |
+| Revocation propagation worst-case (NATS down, DB up) | ≤ 30 s (cache refresh interval) | `TestRevocation_NATSDown_DBRefreshCatches` |
+| Revocation propagation absolute ceiling | ≤ 60 s (NFR-AUTH-006) | NFR test |
+| Cold-start cache bootstrap latency | ≤ 500 ms for 10k revoked tokens | `BenchmarkRevocationCache_BootstrapFromDB_10k` |
+| Cache memory footprint per revoked token | ≤ 64 bytes | `BenchmarkRevocationCache_MemoryPerEntry` |
+
+---
+
+## 9. Backward Compatibility Plan
+
+### 9.1 Dev/test environments (FR-AUTH-015/016, SCN-AUTH-005/011)
+
+**ZERO changes required.** A developer pulling the spec-044 implementation runs `./smackerel.sh config generate && ./smackerel.sh up` and the deployment behaves exactly as at HEAD `f7001ab`:
+
+- `SMACKEREL_AUTH_TOKEN` is the auth source.
+- The empty-token bypass at `internal/api/router.go` lines 444–451 is preserved.
+- No enrollment step is required.
+- `MintReveal` accepts `X-Actor-Id` header.
+- `drive.Connect` accepts `OwnerUserID` in body.
+- Annotation pipeline accepts `actor_source` in payload OR defaults to `system`.
+
+The dev/test policy is encoded as `auth.enabled: false` in `environments.development.auth` and `environments.test.auth`. Even if a developer enables `auth.enabled: true` in dev for testing the new path, the shared-token + empty-token paths remain valid (FR-AUTH-015 unconditional preservation).
+
+### 9.2 Production environment migration
+
+For an existing production operator at HEAD `f7001ab` running `SMACKEREL_AUTH_TOKEN` only:
+
+```text
+Step 1: Add auth.* SST keys to config/smackerel.yaml
+   - auth.signing.active_private_key (generate via openssl + base64)
+   - auth.signing.active_key_id (e.g., "k1")
+   - auth.at_rest_hashing_key (generate via openssl rand -hex 32)
+   - auth.token_ttl_hours, auth.rotation_grace_window_hours, etc. (use defaults)
+   - auth.bootstrap_token (generate via openssl rand -hex 32)
+   - environments.production.auth.enabled: true
+
+Step 2: Run ./smackerel.sh config generate --env production
+   - Verifies all required keys present (FR-AUTH-019 fail-loud)
+   - Emits config/generated/production.env
+
+Step 3: Deploy the new build (per docs/Deployment.md Build-Once Deploy-Many)
+   - Service starts up; sees zero enrolled users + bootstrap_token set; service starts
+   - First request without per-user token: 401 + "no match" log
+
+Step 4: Run ./smackerel.sh auth bootstrap --user-id <admin-user-id>
+   - Consumes bootstrap_token; enrolls first user; emits per-user PASETO token
+   - Operator stores token securely; uses for subsequent admin operations
+
+Step 5: Update auth.bootstrap_token to "" (or delete from SST)
+   - Redeploy
+   - Service now requires per-user tokens for all auth (no bootstrap fallback)
+
+Step 6: Enroll additional users via admin endpoint or CLI
+   - For each user: ./smackerel.sh auth enroll <user-id>
+   - Distribute tokens through secure channel
+
+Step 7 (optional): Disable production shared-token fallback
+   - auth.production_shared_token_fallback_enabled: false (default)
+   - Existing SMACKEREL_AUTH_TOKEN clients receive 401
+   - Per-user tokens only
+```
+
+**Rollback path:** If migration fails mid-way, set `environments.production.auth.enabled: false` in `config/smackerel.yaml` and redeploy. Service reverts to shared-token-only mode (per FR-AUTH-015 preservation). All issued per-user tokens remain in DB but are unused.
+
+### 9.3 Coexistence policy (OQ-5 RESOLVED)
+
+In production with at least one enrolled user:
+
+- **Default:** `SMACKEREL_AUTH_TOKEN` is REJECTED. Only per-user PASETO tokens authenticate.
+- **Opt-in escape hatch:** `auth.production_shared_token_fallback_enabled: true` allows the shared token to authenticate as `SessionSourceSharedToken`. Each use logs a deprecation warning. Handlers requiring per-user identity (MintReveal, drive.Connect, annotations) MUST detect `Source == SharedToken` and either reject or fall back to body/header values per the same dev/test pattern.
+
+This gives operators a transitional pathway without a hard cutover. The expectation is that the fallback flag stays `false` in production after the migration completes.
+
+---
+
+## 10. Security Considerations
+
+### 10.1 Token format choice (OQ-1 RESOLVED)
+
+**Selected: PASETO v4.public (Ed25519 signature, no encryption).**
+
+Rationale:
+
+| Format | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| JWT (HS256) | Widely supported; simple | Symmetric — verifier needs the same key as issuer; algorithm-confusion attacks well-documented; "alg":"none" footgun | REJECTED — algorithm-confusion footguns disqualifying for a security-foundation spec |
+| JWT (EdDSA / RS256) | Public-key verification; widely supported | Library-quality varies; algorithm-confusion still a concern; key formats sprawl (PEM vs JWK vs raw) | REJECTED — too much footgun surface |
+| **PASETO v4.public (Ed25519)** | **No algorithm field — no algorithm-confusion attacks; one canonical signing primitive (Ed25519); compact (~70 bytes for our claims); standard library quality (e.g., aidantwoods/go-paseto)** | **Fewer integrations than JWT; client-side parser needs PASETO support** | **SELECTED** |
+| PASETO v4.local (XChaCha20 encrypted) | Encryption hides claims from intermediaries | Symmetric (verifier needs the encryption key); for our hot-path-stateless contract, no benefit over signed | REJECTED — encryption not needed; signed is sufficient for trust boundary |
+| Opaque tokens with stored hash | Trivial revocation; no key management for verification | DB roundtrip per request — VIOLATES Hard Constraint NFR-AUTH-002 | REJECTED — disqualifying constraint violation |
+
+PASETO v4.public is the only candidate that satisfies all of: (a) no DB roundtrip per request; (b) no algorithm-confusion attack surface; (c) compact wire size; (d) clean key-management story (one Ed25519 keypair per active+prior); (e) no JWKS server requirement (local-first per Constitution C1).
+
+**Library choice:** `github.com/aidantwoods/go-paseto` (well-maintained, idiomatic Go API, PASETO v4 native).
+
+### 10.2 Signing key storage and rotation
+
+- Signing keys are SST values resolved into `config/generated/production.env`. Storage discipline depends on the operator's secret-management posture (env vars, sealed secrets, KMS-injected). Keys MUST NOT be checked into the repo (existing `.gitignore` covers `config/generated/`).
+- Rotation: operator generates a new Ed25519 keypair, swaps `auth.signing.active_private_key` to the new private key, moves the old public key to `auth.signing.prior_public_key`, redeploys. Existing tokens validate via `prior_public_key` for `rotation_grace_window_hours`; new tokens are signed with the active key.
+- After grace window: `auth.signing.prior_public_key` cleared via SST update + redeploy.
+
+### 10.3 Token transport
+
+- `Authorization: Bearer <token>` header is the only sanctioned transport for API clients.
+- Web UI continues to use the existing `auth_token` cookie at `internal/api/router.go` lines 425–433 (per OQ-7 below). In production, the cookie value is a per-user PASETO token; the cookie MUST be marked `HttpOnly` and `Secure`.
+- Tokens MUST NOT appear in URLs, query strings, or referer headers.
+
+### 10.4 Web UI session model (OQ-7 RESOLVED)
+
+**Preserve cookie-based sessions for the web UI.** Browser ergonomics + CSRF prevention are well-served by the existing pattern. In production:
+
+- `webAuthMiddleware` reads `auth_token` cookie value, treats it as a PASETO token, runs `auth.VerifyAndParse`.
+- Cookie attributes: `HttpOnly`, `Secure` (enforced when `runtime.environment == production`), `SameSite=Lax`, `Path=/`.
+- Cookie value is set by the login flow (admin-issued for MVP; UX out-of-scope per Non-Goals).
+- In dev/test, cookie value remains `SMACKEREL_AUTH_TOKEN` (existing behavior).
+
+### 10.5 At-rest token hashing (OQ-8 RESOLVED)
+
+**Selected: HMAC-SHA-256 with a separate at-rest hashing key.**
+
+Rationale: The stored hash is used for token-lookup-by-presented-value scenarios (e.g., debugging "is this token in our DB?", or future audit-trail-by-token), NOT for hot-path validation. We don't need a memory-hard primitive (Argon2id) because tokens are high-entropy random bytes, not user-chosen passwords. HMAC-SHA-256 with a separate key (`auth.at_rest_hashing_key`) is fast enough for batch operations, secure against rainbow-table attacks (the key is the unguessable component), and constant-time compare friendly.
+
+```go
+func HashToken(token string, key []byte) []byte {
+    h := hmac.New(sha256.New, key)
+    h.Write([]byte(token))
+    return h.Sum(nil)
+}
+
+func CompareTokenHash(stored, candidate []byte) bool {
+    return subtle.ConstantTimeCompare(stored, candidate) == 1
+}
+```
+
+`auth.at_rest_hashing_key` MUST be a 32-byte (64-hex-char) random value, distinct from the signing key. SST validation enforces non-empty in production.
+
+### 10.6 Replay
+
+- Bounded TTL via `auth.token_ttl_hours` (design default 30 days; configurable).
+- Revocation via in-memory cache + NATS broadcast.
+- No anti-replay `jti` cache (out-of-scope for MVP; replay window is bounded by TTL).
+
+### 10.7 Constant-time comparison sites
+
+| Site | Comparison | Discipline |
+|------|------------|------------|
+| `bearerAuthMiddleware` shared-token match | `cfg.RuntimeAuthToken` vs presented | `subtle.ConstantTimeCompare` (preserves existing pattern at `internal/api/router.go` line 467) |
+| PASETO signature verify | Library handles internally | `aidantwoods/go-paseto` uses constant-time Ed25519 |
+| `CompareTokenHash` (auth/hash.go) | Stored HMAC vs computed HMAC | `subtle.ConstantTimeCompare` |
+| Bootstrap token compare | `cfg.Auth.BootstrapToken` vs presented | `subtle.ConstantTimeCompare` |
+
+### 10.8 Logging hygiene (NFR-AUTH-007)
+
+Authentication-failure logs include only:
+
+- `path` (e.g., `/v1/photos/{id}/reveal`)
+- `remote_addr`
+- `reason` (one of: `missing_bearer`, `expired`, `signature_mismatch`, `revoked`, `no_match`, `bootstrap_required`)
+- `user_id` (only on SUCCESS, never on failure — failure logs do NOT disclose which user-id was attempted because a malicious caller could probe enrolled user-ids)
+
+Authentication SUCCESS logs (at debug level) include `user_id`, `token_id`, `key_id` for audit trail.
+
+The raw token value, signature bytes, and any HMAC of the token MUST NEVER appear in logs.
+
+### 10.9 Cross-spec QF Companion boundary
+
+Per spec.md Security Considerations: Smackerel-issued PASETO tokens MUST NOT be reused as QF authentication tokens. The QF `PersonalEvidenceBundle` and `QFDecisionPacket` metadata are separate trust boundaries. This spec does not change the QF packet metadata surface (Principle 10 NON-NEGOTIABLE).
+
+Concretely: if QF Companion (spec 041) lands and needs an authenticated channel, it MUST use its own token format (whether signed identically with PASETO+Ed25519 or otherwise) with a distinct issuer claim and a distinct signing key. Smackerel auth subsystem MUST refuse to validate any token whose issuer claim does not match `cfg.ExpectedIssuer()`.
+
+---
+
+## 11. Risks & Mitigations
+
+| # | Risk | Likelihood | Impact | Mitigation |
+|---|------|------------|--------|------------|
+| 1 | Operators set `auth.signing.active_private_key` to a known/weak value (e.g., copying a sample from docs) | medium | critical | (a) SST schema does NOT ship a default; (b) `./smackerel.sh auth keygen` command emits cryptographically-random keys; (c) operator runbook mandates `openssl genpkey` not copy-paste; (d) startup validation rejects keys with insufficient entropy via length check |
+| 2 | `auth.at_rest_hashing_key` reused across signing key (same value in both fields) | medium | high | SST validation rejects when `at_rest_hashing_key == signing.active_private_key` |
+| 3 | Production deployment without enrolled users gets locked out (chicken-and-egg) | high (without mitigation) | critical | OQ-10 RESOLUTION: `auth.bootstrap_token` SST key + `./smackerel.sh auth bootstrap` command. Startup validation enforces "either ≥1 enrolled user OR bootstrap_token set". |
+| 4 | NATS subject `auth.revocations` collides with another subject (typo, mis-config) | low | high | New SST key `auth.revocation_nats_subject` defaults to `"auth.revocations"`; subject is namespaced; NATS contract test validates uniqueness |
+| 5 | Web UI cookie not marked Secure in production due to misconfig (running behind reverse proxy without TLS termination forwarding) | medium | high | `webAuthMiddleware` UNCONDITIONALLY sets `Secure` flag when `cfg.Environment == "production"`; if cookie cannot be set (browser rejects on plain HTTP), authentication fails-loud with a clear error |
+| 6 | Adversarial actor extracts a token from logs (server-side log compromise) | low | critical | NFR-AUTH-007 logging hygiene: tokens never logged. Plus: token revocation is a one-call operation if leak is detected. |
+| 7 | PASETO library bug introduces false-positive validation | low | critical | (a) Pin `aidantwoods/go-paseto` to an audited release; (b) integration test suite exercises the full PASETO v4 spec test vectors; (c) validation depends on Go's standard `crypto/ed25519` for the underlying primitive |
+| 8 | Cache desync between runtime instances (NATS partition + cache refresh interval mismatch) | medium | medium | (a) NATS pub/sub is the primary propagation channel; (b) 30-second timer-based DB refresh is a backstop; (c) in worst case (both NATS AND DB down), cache stays stale until either recovers — accepted tradeoff for the no-DB-roundtrip-on-hot-path Hard Constraint |
+| 9 | Operators forget to clear `auth.bootstrap_token` after first use | medium | medium | Bootstrap CLI command emits a clear "next steps" message including "set auth.bootstrap_token: \"\" in config/smackerel.yaml and redeploy". Service start-up logs a WARNING on every boot when both `bootstrap_token != ""` AND `enrolled_user_count > 0`. |
+| 10 | Cross-spec drift: handlers added after spec 044 closure don't honor claim-binding | medium | high | Code-quality test `TestNoBodyHeaderActorIDInProductionHandlers` greps `internal/` for body/header `actor_id` reads and asserts every match is gated on `cfg.Environment != "production"` (per AC-11) |
+
+---
+
+## 12. Rollout Plan
+
+The implementation lands in 4 sequential phases. Each phase ends with a working state.
+
+### Phase 1: SST Foundation + Token Subsystem (Scope 01)
+
+**Outcome:** `auth.*` SST keys exist; `internal/auth/` package implements PASETO issuance/validation; `cmd/core/cmd_auth.go` provides CLI entry points; admin HTTP endpoints exist; bootstrap flow works on a fresh production deployment. **No handler refactor yet** — the new infrastructure is staged but not yet hot-pathed for MIT closures.
+
+- Add 14 SST keys to `config/smackerel.yaml`
+- Update `scripts/commands/config.sh` to emit `AUTH_*` env vars
+- Author `internal/auth/` package: `Session`, `WithSession`, `SessionFromContext`, `VerifyAndParse`, `IssueToken`, hash helpers
+- Author `internal/auth/revocation/` package: `Cache`, `Broadcaster`, `BootstrapFromDB`
+- Author `cmd/core/cmd_auth.go` CLI commands: `enroll`, `rotate`, `revoke`, `list-users`, `bootstrap`, `keygen`
+- Author `internal/api/auth_handlers.go` admin HTTP endpoints
+- Author DB migrations: `auth_users`, `auth_tokens`, `auth_revocations` tables
+- Update `cmd/core/wiring.go` startup fail-loud validation
+- Author unit tests: `TestVerifyAndParse_*`, `TestRevocationCache_*`, `TestStartup_*Auth*FailsLoud`
+- Author integration test: `TestAuthBootstrap_FreshProduction_EnrollsFirstUser`
+- Author SST grep guard: `TestSST_NoHardcodedAuthValues`
+
+### Phase 2: Hot-Path Middleware Integration + MIT Closures (Scope 02)
+
+**Outcome:** `bearerAuthMiddleware` validates per-user tokens in production; `MintReveal`, `drive.Connect`, and the annotation pipeline derive identity from session in production. MIT-040-S-008, MIT-038-S-003, and MIT-027-TRACE-001 actor-source segment are closed.
+
+- Refactor `bearerAuthMiddleware` per §6.1
+- Refactor `webAuthMiddleware` for cookie-based PASETO sessions
+- Refactor `MintReveal` to read `auth.UserIDFromContext(r.Context())` in production; preserve `X-Actor-Id` fallback in dev/test
+- Refactor `drive.google.Connect` to read session in production; preserve body fallback in dev/test
+- Refactor annotation pipeline to derive `actor_source` from session in production; log warning + override in production if payload supplies it
+- Update spec 040, 038, 027 state.json files: mark MIT entries resolved with `closureSpec: 044-per-user-bearer-auth`
+- Update `internal/api/photos_upload.go` lines 246–321 comment block to reflect resolved state (per FR-AUTH-021)
+- Author integration tests: `TestMintReveal_Production_DerivesActorIDFromSession`, `TestDriveConnect_Production_DerivesOwnerFromSession`, `TestAnnotationPipeline_Production_DerivesActorSourceFromSession`
+- Author production-vs-dev-test fork tests: `TestMintReveal_DevTest_HonorsXActorID`, etc.
+- Author code-quality grep test: `TestNoBodyHeaderActorIDInProductionHandlers` (per AC-11)
+- Author adversarial regression test: `TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly` (per Adversarial Regression rule)
+
+### Phase 3: Web Surfaces + Telegram Connector (Scope 03)
+
+**Outcome:** `web/pwa/` and `web/extension/` send per-user PASETO tokens; Telegram connector maps Telegram chat-id → enrolled user; admin UX enables operator self-service for user enrollment (admin HTTP via PWA, not full UI).
+
+- Update `web/pwa/` to send `Authorization: Bearer <PASETO>` from a per-user storage slot
+- Update `web/extension/` similarly
+- Update `internal/telegram/` to map `chat_id` → enrolled user; emit annotation events with session-derived `actor_source`
+- Author admin token-management UI in `web/pwa/` (list users, rotate token, revoke token)
+- Author E2E tests: `TestE2E_PWAAuth_Production_PerUserSession`
+- Update `docs/Operations.md` with the operator enrollment workflow
+
+### Phase 4: Deprecation Pathway + Documentation Freshness (Scope 04)
+
+**Outcome:** `SMACKEREL_AUTH_TOKEN` is fully deprecated for production; `auth.production_shared_token_fallback_enabled` defaults to `false`; documentation updated; metrics dashboard for spec 030 observability.
+
+- Default `auth.production_shared_token_fallback_enabled: false` in `config/smackerel.yaml`
+- Update `docs/Deployment.md` with the new SST keys + bootstrap flow
+- Update `docs/Development.md` with the dev/test backward-compat contract
+- Update `docs/smackerel.md` architecture section with the auth boundary
+- Author Prometheus metrics emitters per OQ-9 resolution (`smackerel_auth_issuance_total`, `smackerel_auth_validation_latency_seconds`, `smackerel_auth_revocation_total`, `smackerel_auth_failure_total{reason}`)
+- Update spec 030 observability docs to include the auth metrics
+- Run `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose`
+
+---
+
+## 13. Open Questions Deferred to Scopes
+
+All 10 spec.md OQs are resolved in this design. No questions are deferred to scopes. The scope DoD bullets will reference these resolutions:
+
+- OQ-1 → §10.1 (PASETO v4.public)
+- OQ-2 → §4 + §10.2 (SST signing keys with overlap rotation)
+- OQ-3 → §5.6 (typed `auth.Session` via `context.Context`)
+- OQ-4 → §5.4 + §6.4 (NATS pub/sub + 30s timer DB refresh)
+- OQ-5 → §9.3 (rejected by default; opt-in fallback for transition)
+- OQ-6 → §5.7 (admin-issued only; CLI + HTTP)
+- OQ-7 → §10.4 (preserve cookie-based sessions, HttpOnly + Secure)
+- OQ-8 → §10.5 (HMAC-SHA-256 with separate at-rest key)
+- OQ-9 → §4 (telemetry SST keys; `smackerel_auth` metric prefix)
+- OQ-10 → §4 + §5.1 (`auth.bootstrap_token` SST + `./smackerel.sh auth bootstrap` CLI)
+
+---
+
+## References
+
+- [`spec.md`](./spec.md) — feature specification
+- `internal/api/router.go` — middleware refactor target (lines 425–471)
+- `internal/api/photos_upload.go` — MintReveal refactor target (lines 246–321)
+- `internal/drive/google/google.go` + `internal/drive/context.go` — Connect refactor target
+- `internal/annotation/` — annotation pipeline refactor target
+- `cmd/core/wiring.go` — startup fail-loud extension target (lines 48–55)
+- `config/smackerel.yaml` — SST source (USER WIP — touch via PR after USER finalizes other in-flight changes)
+- `specs/040-cloud-photo-libraries/state.json` — MIT-040-S-008 closure target
+- `specs/038-cloud-drives-integration/state.json` — MIT-038-S-003 closure target
+- `specs/027-user-annotations/state.json` — MIT-027-TRACE-001 actor-source segment closure target
+- `.github/skills/bubbles-config-sst/SKILL.md` — SST zero-defaults compliance
+- `.github/skills/bubbles-test-environment-isolation/SKILL.md` — test-isolated DB pattern
+- `docs/Deployment.md` — Build-Once Deploy-Many bundle contract that flows the new SST keys
+- `docs/Operations.md` — operator surfaces (auth enrollment workflow added in Phase 4)
+- `docs/smackerel.md` — architecture posture (auth boundary section added in Phase 4)
+- [PASETO v4 spec](https://github.com/paseto-standard/paseto-spec/blob/master/docs/01-Protocol-Versions/Version4.md) — wire format reference
+- [`github.com/aidantwoods/go-paseto`](https://github.com/aidantwoods/go-paseto) — selected Go library
