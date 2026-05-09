@@ -391,6 +391,123 @@
         {"type": "unit-test", "location": "internal/connector/weather/weather_test.go::TestWmoCodeToDescription"}
       ],
       "linkedDoD": ["Location name included in artifact title (e.g., \"Weather: Home \u2014 22\u00b0C, Sunny\")"]
+    },
+    {
+      "scenarioId": "SCN-WX-CON-001",
+      "name": "Sync fetches current and forecast for each configured location",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestSync_ProducesArtifacts"},
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestSync_ProducesForecastArtifacts"},
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestSync_MultipleLocations"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/weather_test.go::TestSync_ProducesArtifacts"},
+        {"type": "unit-test", "location": "internal/connector/weather/weather_test.go::TestSync_ProducesForecastArtifacts"},
+        {"type": "source", "location": "internal/connector/weather/weather.go::Sync"}
+      ],
+      "linkedDoD": ["Sync fetches current + forecast for each configured location", "Artifacts published to NATS artifacts.process"]
+    },
+    {
+      "scenarioId": "SCN-WX-CON-002",
+      "name": "Connect requires at least one configured location",
+      "scope": "scope-03",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestConnect_NoLocations"},
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestConnect_Valid"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/weather_test.go::TestConnect_NoLocations"},
+        {"type": "source", "location": "internal/connector/weather/weather.go::Connect"}
+      ],
+      "linkedDoD": ["At least one location required on Connect()"]
+    },
+    {
+      "scenarioId": "SCN-WX-NWS-001",
+      "name": "NWSClient fetches active alerts and maps CAP severity to processing tier",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/nws_test.go", "function": "TestNWSClient_FetchActiveAlerts_Success"},
+        {"file": "internal/connector/weather/nws_test.go", "function": "TestMapCAPSeverityToTier_AllLevels"},
+        {"file": "internal/connector/weather/nws_test.go", "function": "TestNWSClient_FetchActiveAlerts_UserAgentSet"},
+        {"file": "tests/e2e/weather_alerts_e2e_test.go", "function": "TestWeatherAlerts_E2E_FullStack"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success"},
+        {"type": "unit-test", "location": "internal/connector/weather/nws_test.go::TestMapCAPSeverityToTier_AllLevels"},
+        {"type": "e2e-test", "location": "tests/e2e/weather_alerts_e2e_test.go::TestWeatherAlerts_E2E_FullStack"},
+        {"type": "source", "location": "internal/connector/weather/nws.go::FetchActiveAlerts"}
+      ],
+      "linkedDoD": ["NWSClient fetches active alerts from api.weather.gov", "CAP severity mapped: Extreme \u2192 full, Severe \u2192 full, Moderate \u2192 standard, Minor \u2192 light"]
+    },
+    {
+      "scenarioId": "SCN-WX-NWS-002",
+      "name": "Extreme and Severe alerts publish to alerts.notify with dedup by alert ID",
+      "scope": "scope-04",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/nws_test.go", "function": "TestIsHighSeverity"},
+        {"file": "internal/connector/weather/nws_test.go", "function": "TestNWSClient_FetchActiveAlerts_CacheReuse"},
+        {"file": "tests/integration/weather_alerts_test.go", "function": "TestWeatherAlerts_PublishedToAlertsNotify"},
+        {"file": "tests/integration/weather_alerts_test.go", "function": "TestWeatherAlerts_LowSeverityNotPublishedToNotify"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/nws_test.go::TestIsHighSeverity"},
+        {"type": "integration-test", "location": "tests/integration/weather_alerts_test.go::TestWeatherAlerts_PublishedToAlertsNotify"},
+        {"type": "source", "location": "internal/connector/weather/weather.go::fetchAndNormalizeAlerts"}
+      ],
+      "linkedDoD": ["Extreme/Severe alerts published to alerts.notify NATS subject", "Alert dedup by NWS alert ID"]
+    },
+    {
+      "scenarioId": "SCN-WX-ENR-001",
+      "name": "NATS subscriber publishes response to weather enrich request with historical data",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit", "integration", "e2e"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/enrich_test.go", "function": "TestEnrich_HandleRequest_SuccessAndShape"},
+        {"file": "internal/connector/weather/enrich_test.go", "function": "TestEnrich_StartSubscriber_RejectsNilClient"},
+        {"file": "tests/integration/weather_enrich_test.go", "function": "TestWeatherEnrich_Integration_RoundTrip"},
+        {"file": "tests/e2e/weather_enrich_e2e_test.go", "function": "TestWeatherEnrich_E2E_LiveStackRoundTrip"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/enrich_test.go::TestEnrich_HandleRequest_SuccessAndShape"},
+        {"type": "integration-test", "location": "tests/integration/weather_enrich_test.go::TestWeatherEnrich_Integration_RoundTrip"},
+        {"type": "e2e-test", "location": "tests/e2e/weather_enrich_e2e_test.go::TestWeatherEnrich_E2E_LiveStackRoundTrip"},
+        {"type": "source", "location": "internal/connector/weather/enrich.go::handleEnrichRequest"}
+      ],
+      "linkedDoD": ["NATS subscriber for weather.enrich.request subject", "Response published to weather.enrich.response with weather data"]
+    },
+    {
+      "scenarioId": "SCN-WX-ENR-002",
+      "name": "Historical data cached permanently is reused on second enrich request via cache hit",
+      "scope": "scope-05",
+      "status": "active",
+      "source": "specs/016-weather-connector/scopes.md",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/connector/weather/enrich_test.go", "function": "TestEnrich_HandleRequest_CacheReuse"},
+        {"file": "internal/connector/weather/weather_test.go", "function": "TestFetchHistorical_CacheHit"},
+        {"file": "tests/integration/weather_enrich_test.go", "function": "TestWeatherEnrich_Integration_CacheReuse"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/connector/weather/enrich_test.go::TestEnrich_HandleRequest_CacheReuse"},
+        {"type": "integration-test", "location": "tests/integration/weather_enrich_test.go::TestWeatherEnrich_Integration_CacheReuse"},
+        {"type": "source", "location": "internal/connector/weather/weather.go::fetchHistorical"}
+      ],
+      "linkedDoD": ["Cache checked first; API called only on cache miss", "Historical data cached permanently"]
     }
   ]
 }

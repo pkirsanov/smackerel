@@ -36,6 +36,22 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - Minimum: 16GB RAM, 15GB disk, Docker 24+, Docker Compose v2
 - Recommended: 32GB RAM, 30GB disk
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-DOCFRESH-001 README documents measurable system requirements including Docker and version requirements
+  Given an operator opens README.md to evaluate hardware needs
+  When they read the System Requirements section
+  Then they see measured RAM, measured disk, and Docker plus Docker Compose version requirements
+  And the values reflect docker stats / docker images measurement, not estimates
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Doc | SCN-DOCFRESH-001 README documents measurable system requirements including Docker and version requirements | manual review of README.md System Requirements section captured in spec report | specs/032-documentation-freshness/report.md |
+
 ### Definition of Done
 
 - [x] README.md has System Requirements section — **Phase:** implement — Added `## System Requirements` section with minimum/recommended tables and container memory limits table
@@ -71,7 +87,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
   101:| **Disk** | 10 GB (Docker images + PostgreSQL data) |
   111:| **Disk** | 30 GB (includes Ollama model weights) |
   ```
-- [x] Docker and Docker Compose version requirements stated — **Phase:** implement — Docker Engine 24+ with Docker Compose v2 documented in both minimum and recommended tables
+- [x] Scenario "SCN-DOCFRESH-001 README documents measurable system requirements including Docker and version requirements": Docker and Docker Compose version requirements stated — **Phase:** implement — Docker Engine 24+ with Docker Compose v2 documented in both minimum and recommended tables
   > Evidence:
   ```
   $ grep -n "Docker Engine\|Docker Compose" README.md
@@ -93,6 +109,23 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - List all 7 prompt contracts with type/purpose
 - Add new packages: `internal/domain/`, `internal/annotation/`, `internal/list/`
 - Document prompt contract format guide for new domain schemas
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-DOCFRESH-002 Development docs list every Go package and prompt contracts with type and purpose
+  Given a developer reads docs/Development.md
+  When they review the Go Packages and Prompt Contracts inventory
+  Then every Go package under internal/ is listed with a description
+  And every prompt contract is listed with type and purpose
+  And the migrations and prompt contracts inventory matches what is on disk
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Doc | SCN-DOCFRESH-002 Development docs list every Go package and prompt contracts with type and purpose | manual reconciliation of Go Packages, Database Migrations, Prompt Contracts inventory tables in docs/Development.md | docs/Development.md |
 
 ### Definition of Done
 
@@ -168,6 +201,22 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - Error lookup table: 10+ common errors with cause and resolution
 - Each documented command verified by running it
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-DOCFRESH-003 Operations runbook deployment section covers config generate and stack lifecycle
+  Given an operator opens docs/Operations.md
+  When they read the deployment section
+  Then the section covers first-time setup, config generate, and stack up/down lifecycle
+  And documented commands are verified against the real stack via ./smackerel.sh check
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Doc | SCN-DOCFRESH-003 Operations runbook deployment section covers config generate and stack lifecycle | manual review of Deployment, Connector Management, Troubleshooting, and Backup sections | docs/Operations.md |
+
 ### Definition of Done
 
 - [x] `docs/Operations.md` exists — **Phase:** implement — Created `docs/Operations.md` with 13 major sections
@@ -226,9 +275,26 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - nginx reverse proxy setup (alternative)
 - Document which ports to expose and which to keep localhost-only
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-DOCFRESH-004 TLS guide documents Caddy reverse proxy and nginx configuration
+  Given an operator wants to expose Smackerel over HTTPS
+  When they follow the TLS setup section in docs/Operations.md
+  Then the guide includes a Caddy reverse proxy Caddyfile sample with automatic HTTPS
+  And the guide also documents an nginx reverse proxy configuration alternative
+  And only the core port is exposed via reverse proxy while other services stay on localhost
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Doc | SCN-DOCFRESH-004 TLS guide documents Caddy reverse proxy and nginx configuration | manual review of TLS Setup section (Caddy, nginx, port exposure, PWA HTTPS) | docs/Operations.md |
+
 ### Definition of Done
 
-- [x] Caddy reverse proxy configuration documented — **Phase:** implement — Full Caddyfile example with reverse_proxy, security headers, and automatic HTTPS explanation
+- [x] Scenario "SCN-DOCFRESH-004 TLS guide documents Caddy reverse proxy and nginx configuration": Caddy reverse proxy configuration documented — **Phase:** implement — Full Caddyfile example with reverse_proxy, security headers, and automatic HTTPS explanation
   > Evidence:
   ```
   $ grep -n "^### Caddy\|Caddyfile\|automatically obtains" docs/Operations.md

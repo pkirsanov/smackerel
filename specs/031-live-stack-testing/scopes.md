@@ -37,9 +37,32 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - Wire `./smackerel.sh test integration` to start test stack → run Go tests → stop stack
 - Test data uses unique IDs: `test-{TestName}-{UnixNano}`
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-LST-005 Integration test stack isolation via SST config and ports 47001 47004
+  Given config/smackerel.yaml defines environments.test with isolated ports 47001-47004
+  When ./smackerel.sh test integration starts the test stack
+  Then the test stack uses isolated ports, isolated smackerel-test volumes, and the smackerel-test compose project
+  And the integration test stack does not collide with the dev stack
+
+Scenario: SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit unique IDs
+  Given an integration test calls a helper (cleanupArtifact, cleanupList, cleanupAnnotation)
+  When the helper registers a t.Cleanup callback and emits a unique testID
+  Then test data is removed after the test completes
+  And IDs follow the test-{TestName}-{UnixNano} pattern
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Integration | SCN-LST-005 Integration test stack isolation via SST config and ports 47001 47004 | helper bootstrap path validates SST-derived env vars and isolated test stack | tests/integration/helpers_test.go |
+| Integration | SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit unique IDs | cleanupArtifact, cleanupList, cleanupAnnotation, testID | tests/integration/helpers_test.go |
+
 ### Definition of Done
 
-- [x] Test stack isolation via SST config (`environments.test` in `config/smackerel.yaml`): ports 47001-47004, volumes `smackerel-test-*`, project `smackerel-test` — **Phase:** implement
+- [x] Scenario "SCN-LST-005 Integration test stack isolation via SST config and ports 47001 47004": Test stack isolation via SST config (`environments.test` in `config/smackerel.yaml`): ports 47001-47004, volumes `smackerel-test-*`, project `smackerel-test` — **Phase:** implement
   Evidence: `config/smackerel.yaml` environments.test section
   ```
   $ grep -nE '^  test:|smackerel-test|47001|47004' config/smackerel.yaml | head -10
@@ -49,7 +72,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
   ```
   $ grep -nE 'test integration|integration_test|--network host' scripts/commands/test.sh | head -5
   ```
-- [x] Test cleanup via `t.Cleanup()` and `cleanupArtifact`/`cleanupList`/`cleanupAnnotation` helpers in `tests/integration/helpers_test.go` — **Phase:** implement
+- [x] Scenario "SCN-LST-006 Test cleanup helpers register t.Cleanup callbacks and emit unique IDs": Test cleanup via `t.Cleanup()` and `cleanupArtifact`/`cleanupList`/`cleanupAnnotation` helpers in `tests/integration/helpers_test.go` — **Phase:** implement
   Evidence: `tests/integration/helpers_test.go` cleanup helpers
   ```
   $ grep -nE 'cleanupArtifact|cleanupList|cleanupAnnotation|t\.Cleanup' tests/integration/helpers_test.go | head -5
@@ -124,21 +147,48 @@ Scenario: Schema DDL resilience
 **Priority:** P1
 **Depends On:** Scope 1
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-LST-007 EnsureStreams provisions every configured stream against real NATS
+  Given a fresh real NATS instance is reachable from the integration test
+  When TestNATS_EnsureStreams runs against nats_stream_test.go fixtures
+  Then the 11 expected streams (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER) are provisioned
+
+Scenario: SCN-LST-008 Test publish and subscribe roundtrip on ARTIFACTS stream
+  Given ARTIFACTS and DOMAIN streams are provisioned
+  When TestNATS_PublishSubscribe_Artifacts publishes a message and subscribes for delivery
+  Then the published message is received by the subscriber and the publish/subscribe roundtrip is verified
+
+Scenario: SCN-LST-009 Nak'd DEADLETTER message is redelivered to the consumer
+  Given a consumer reads a DEADLETTER message from a real NATS stream
+  When the consumer Naks the message and the wait/fetch loop retries
+  Then the redelivered message is delivered again to the consumer
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Integration | SCN-LST-007 EnsureStreams provisions every configured stream against real NATS | TestNATS_EnsureStreams | tests/integration/nats_stream_test.go |
+| Integration | SCN-LST-008 Test publish and subscribe roundtrip on ARTIFACTS stream | TestNATS_PublishSubscribe_Artifacts, TestNATS_PublishSubscribe_Domain | tests/integration/nats_stream_test.go |
+| Integration | SCN-LST-009 Nak'd DEADLETTER message is redelivered to the consumer | TestNATS_ConsumerReplay_NakRedeliver | tests/integration/nats_stream_test.go |
+
 ### Definition of Done
 
-- [x] 11 streams verified (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER) via `TestNATS_EnsureStreams` in `tests/integration/nats_stream_test.go` — **Phase:** implement
+- [x] Scenario "SCN-LST-007 EnsureStreams provisions every configured stream against real NATS": 11 streams verified (ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER) via `TestNATS_EnsureStreams` in `tests/integration/nats_stream_test.go` — **Phase:** implement
   Evidence: `tests/integration/nats_stream_test.go` (401 lines)
   ```
   $ wc -l tests/integration/nats_stream_test.go
   401 tests/integration/nats_stream_test.go
   $ grep -nE 'func TestNATS_(EnsureStreams|PublishSubscribe|ConsumerReplay)' tests/integration/nats_stream_test.go | head -10
   ```
-- [x] Publish + subscribe roundtrip verified on ARTIFACTS and DOMAIN streams: `TestNATS_PublishSubscribe_Artifacts`, `TestNATS_PublishSubscribe_Domain` — **Phase:** implement
+- [x] Scenario "SCN-LST-008 Test publish and subscribe roundtrip on ARTIFACTS stream": Publish + subscribe roundtrip verified on ARTIFACTS and DOMAIN streams: `TestNATS_PublishSubscribe_Artifacts`, `TestNATS_PublishSubscribe_Domain` — **Phase:** implement
   Evidence: `tests/integration/nats_stream_test.go` PubSub test functions
   ```
   $ grep -nE 'TestNATS_PublishSubscribe' tests/integration/nats_stream_test.go
   ```
-- [x] Consumer replay after simulated crash: `TestNATS_ConsumerReplay_NakRedeliver` — Nak + wait + fetch redelivered message on DEADLETTER stream — **Phase:** implement
+- [x] Scenario "SCN-LST-009 Nak'd DEADLETTER message is redelivered to the consumer": Consumer replay after simulated crash: `TestNATS_ConsumerReplay_NakRedeliver` — Nak + wait + fetch redelivered message on DEADLETTER stream — **Phase:** implement
   Evidence: `tests/integration/nats_stream_test.go` ConsumerReplay test
   ```
   $ grep -nE 'TestNATS_ConsumerReplay_NakRedeliver|DEADLETTER' tests/integration/nats_stream_test.go | head -5
@@ -152,16 +202,43 @@ Scenario: Schema DDL resilience
 **Priority:** P1
 **Depends On:** Scope 2
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-LST-010 Inserted artifact is retrievable via pgvector similarity search
+  Given an artifact is inserted with an embedding into PostgreSQL
+  When a pgvector similarity search runs against the artifact corpus
+  Then the inserted artifact is returned in the search results
+
+Scenario: SCN-LST-011 Annotation history aggregates into the materialized summary view
+  Given a user creates rating, interaction, and tag annotations against an artifact
+  When the materialized summary view is refreshed
+  Then the annotation summary view reflects the aggregated annotation history
+
+Scenario: SCN-LST-012 Recipe domain data is queryable via JSONB containment
+  Given an artifact carries recipe domain data stored as JSONB
+  When a JSONB containment query is executed
+  Then matching recipes are returned and non-matching artifacts are excluded
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Integration | SCN-LST-010 Inserted artifact is retrievable via pgvector similarity search | TestArtifact_InsertAndVectorSearch, TestArtifact_VectorSimilarityDifferentEmbeddings | tests/integration/artifact_crud_test.go |
+| Integration | SCN-LST-011 Annotation history aggregates into the materialized summary view | TestAnnotation_CRUD | tests/integration/artifact_crud_test.go |
+| Integration | SCN-LST-012 Recipe domain data is queryable via JSONB containment | TestArtifact_DomainDataContainmentQuery | tests/integration/artifact_crud_test.go |
+
 ### Definition of Done
 
-- [x] Insert artifact with embedding → pgvector similarity search → find result: `TestArtifact_InsertAndVectorSearch` + `TestArtifact_VectorSimilarityDifferentEmbeddings` in `tests/integration/artifact_crud_test.go` — **Phase:** implement
+- [x] Scenario "SCN-LST-010 Inserted artifact is retrievable via pgvector similarity search": Insert artifact with embedding → pgvector similarity search → find result: `TestArtifact_InsertAndVectorSearch` + `TestArtifact_VectorSimilarityDifferentEmbeddings` in `tests/integration/artifact_crud_test.go` — **Phase:** implement
   Evidence: `tests/integration/artifact_crud_test.go:20,401`
   ```
   $ grep -nE 'func TestArtifact_(InsertAndVectorSearch|VectorSimilarityDifferentEmbeddings)' tests/integration/artifact_crud_test.go
   20:func TestArtifact_InsertAndVectorSearch(t *testing.T) {
   401:func TestArtifact_VectorSimilarityDifferentEmbeddings(t *testing.T) {
   ```
-- [x] Annotation CRUD: create rating/interaction/tag, query history, refresh materialized view, verify summary: `TestAnnotation_CRUD` — **Phase:** implement
+- [x] Scenario "SCN-LST-011 Annotation history aggregates into the materialized summary view": Annotation CRUD: create rating/interaction/tag, query history, refresh materialized view, verify summary: `TestAnnotation_CRUD` — **Phase:** implement
   Evidence: `tests/integration/artifact_crud_test.go:180`
   ```
   $ grep -nE 'func TestAnnotation_CRUD' tests/integration/artifact_crud_test.go
@@ -173,7 +250,7 @@ Scenario: Schema DDL resilience
   $ grep -nE 'func TestList_CreateAndUpdateStatus' tests/integration/artifact_crud_test.go
   288:func TestList_CreateAndUpdateStatus(t *testing.T) {
   ```
-- [x] Domain data JSONB containment query verified: `TestArtifact_DomainDataContainmentQuery` (positive + negative cases) — **Phase:** implement
+- [x] Scenario "SCN-LST-012 Recipe domain data is queryable via JSONB containment": Domain data JSONB containment query verified: `TestArtifact_DomainDataContainmentQuery` (positive + negative cases) — **Phase:** implement
   Evidence: `tests/integration/artifact_crud_test.go:119`
   ```
   $ grep -nE 'func TestArtifact_DomainDataContainmentQuery' tests/integration/artifact_crud_test.go

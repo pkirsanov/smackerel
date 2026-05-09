@@ -150,6 +150,17 @@
       "runStartedAt": "2026-05-09T04:36:00Z",
       "runEndedAt": "2026-05-09T04:40:00Z",
       "summary": "Trace-guard cleanup batch: closed 7 of 10 trace-guard failures. Added Test Plan tables + DoD-trace-prefixes to scopes 2 (Mobile share capture → internal/api/pwa_test.go), 4 (Right-click + Selected text capture → web/extension/background.js), 5 (Offline capture queued + Auth failure preserves queue → web/extension/lib/queue.js + web/pwa/lib/queue.js), and 7 (Extension setup with validation + HTTP security warning → web/extension/popup/popup.js + popup.html). Residual 3 failures are scopes 1, 3, 6 lacking Gherkin scenarios — routed to bubbles.plan ownership. report.md Trace-Guard Closure section appended. artifact-lint PASSED."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-09T05:00:00Z",
+      "runEndedAt": "2026-05-09T05:10:00Z",
+      "summary": "Authored 3 Gherkin scenarios across scopes 1, 3, 6 (SCN-MC-008 PWA manifest share target + installable shell, SCN-MC-009 Chrome extension popup title/URL with persisted auth token, SCN-MC-010 Firefox extension WebExtension polyfill + Chrome parity) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing web/pwa/manifest.json, web/pwa/sw.js, web/extension/manifest.json, web/extension/popup/popup.js, web/extension/manifest.firefox.json, web/extension/lib/browser-polyfill.js. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
     }
   ],
   "activeBugs": [],

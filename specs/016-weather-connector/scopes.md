@@ -117,13 +117,37 @@ Build the normalizer that converts weather API responses into `connector.RawArti
 
 **Scope reconciliation — 2026-04-24:** Historical weather is delivered via the on-demand enrichment response pattern owned by Scope 05 (NATS `weather.enrich.request`/`weather.enrich.response`), not as a standalone `weather/historical` `RawArtifact`. This matches `design.md` §“Data Flow — On-Demand Enrichment” (“Caller incorporates weather into its own artifact metadata”) and the Scope 05 implementation in `internal/connector/weather/enrich.go`. `spec.md` R-005 and R-007 have been reconciled to remove the stale `weather/historical` artifact-type contract. See `report.md` “Spec Reconciliation — 2026-04-24”.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-WX-NRM-001 Normalize current weather artifact with temperature and wind metadata
+  Given an Open-Meteo current weather response with temperature, humidity, wind_speed, and weather_code
+  When the connector normalizes the response into an artifact
+  Then a weather/current RawArtifact is created with the location name in the title
+  And metadata includes temperature, humidity, wind_speed, and weather_code
+
+Scenario: SCN-WX-NRM-003 Normalize weather alert artifact with severity and CAP tier
+  Given an NWS active alert response with CAP severity and instruction
+  When the connector normalizes the alert
+  Then a weather/alert RawArtifact is created with the location name in the title
+  And metadata includes severity, instruction, headline, event, and expires
+  And the processing tier reflects CAP severity (Extreme/Severe → full, Moderate → standard, Minor → light)
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-WX-NRM-001 Normalize current weather artifact with temperature and wind metadata | TestSync_ProducesArtifacts, TestSync_ArtifactEnrichedMetadata | internal/connector/weather/weather_test.go |
+| Unit | SCN-WX-NRM-003 Normalize weather alert artifact with severity and CAP tier | TestNWSClient_FetchActiveAlerts_Success, TestMapCAPSeverityToTier_AllLevels | internal/connector/weather/nws_test.go |
+
 ### Definition of Done
 
-- [x] `NormalizeCurrent()` creates `weather/current` artifact with temperature, conditions, wind
+- [x] Scenario "SCN-WX-NRM-001 Normalize current weather artifact with temperature and wind metadata": `NormalizeCurrent()` creates `weather/current` artifact with temperature, conditions, wind
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/current", Title="Weather: {loc} — {desc}", metadata includes temperature, humidity, wind_speed, weather_code
 - [x] `NormalizeForecast()` creates `weather/forecast` artifact with multi-day data
   > Evidence: `weather.go::Sync()` creates RawArtifact with ContentType="weather/forecast", Title="Forecast: {loc} — {N} days", metadata includes daily array with per-day temp_max/min, weather_code, precipitation; `TestSync_ProducesForecastArtifacts` verifies
-- [x] `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
+- [x] Scenario "SCN-WX-NRM-003 Normalize weather alert artifact with severity and CAP tier": `NormalizeAlert()` creates `weather/alert` artifact with severity, instructions
   > Evidence: `internal/connector/weather/weather.go:354-376` builds `connector.RawArtifact{ContentType: "weather/alert", Title: "Weather Alert: {loc} — {event}", ...}` with metadata keys including `severity`, `instruction`, `headline`, `event`, `expires`, `processing_tier`; `internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success` covers parsed-alert shape end-to-end via the NWS client; per-tier mapping verified by `TestMapCAPSeverityToTier_AllLevels`. **Phase:** implement.
 - [x] Historical weather delivery (response-only; no standalone artifact)
   > Reconciliation evidence (Option A, 2026-04-24): the original DoD line read “`NormalizeHistorical()` creates `weather/historical` artifact with past conditions”. That contract is stale and contradicts the implemented design. `design.md` §“Data Flow — On-Demand Enrichment” states the response flow ends with “Caller incorporates weather into its own artifact metadata,” so no standalone `weather/historical` `RawArtifact` is intended. Scope 05 implements this pattern in `internal/connector/weather/enrich.go::handleEnrichRequest`, which fetches via `fetchHistorical()` and publishes an `EnrichResponse{Weather *CurrentWeather, ...}` on `SubjectWeatherEnrichResponse` — no `RawArtifact` is emitted, by design. `spec.md` R-005 and R-007 are reconciled in this same pass to remove the `weather/historical` artifact contract. The historical-data path is therefore fully covered by Scope 05's evidence (`enrich.go` + 11 unit tests + 3 integration + 1 e2e).
@@ -146,15 +170,38 @@ Build the normalizer that converts weather API responses into `connector.RawArti
 
 Implement the full `Connector` interface, location configuration, and sync orchestration. After this scope, basic weather sync (current + forecast for configured locations) is end-to-end functional.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-WX-CON-001 Sync fetches current and forecast for each configured location
+  Given a weather connector configured with locations [Home, Office]
+  When Sync() runs
+  Then for each configured location both fetchCurrent and fetchForecast are invoked
+  And RawArtifacts of type weather/current and weather/forecast are emitted per location
+
+Scenario: SCN-WX-CON-002 Connect requires at least one configured location
+  Given a weather connector configuration with zero configured locations
+  When Connect() is called
+  Then it returns an error stating that at least one location must be configured
+  And the connector does not enter the ready state
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-WX-CON-001 Sync fetches current and forecast for each configured location | TestSync_ProducesArtifacts, TestSync_ProducesForecastArtifacts, TestSync_MultipleLocations | internal/connector/weather/weather_test.go |
+| Unit | SCN-WX-CON-002 Connect requires at least one configured location | TestConnect_NoLocations, TestConnect_Valid | internal/connector/weather/weather_test.go |
+
 ### Definition of Done
 
 - [x] `Connector` implements `connector.Connector` interface
   > Evidence: `weather.go::Connector` has ID(), Connect(), Sync(), Health(), Close() methods; TestNew, TestConnect_Valid, TestClose verify
 - [x] Config parsing extracts locations, polling interval, feature flags
   > Evidence: `weather.go::parseWeatherConfig()` extracts Locations, EnableAlerts, ForecastDays, Precision; TestConnect_Valid verifies
-- [x] At least one location required on Connect()
+- [x] Scenario "SCN-WX-CON-002 Connect requires at least one configured location": At least one location required on Connect()
   > Evidence: `weather.go::Connect()` returns error "at least one location must be configured" when empty; TestConnect_NoLocations verifies
-- [x] Sync fetches current + forecast for each configured location
+- [x] Scenario "SCN-WX-CON-001 Sync fetches current and forecast for each configured location": Sync fetches current + forecast for each configured location
   > Evidence: `weather.go::Sync()` iterates c.config.Locations, calls fetchCurrent() and fetchForecast() per location; creates weather/current + weather/forecast RawArtifact per location; TestSync_ProducesForecastArtifacts verifies both artifact types
 - [x] Artifacts published to NATS `artifacts.process`
   > Evidence: `weather.go::Sync()` returns []connector.RawArtifact for supervisor to publish to NATS
@@ -175,15 +222,40 @@ Implement the full `Connector` interface, location configuration, and sync orche
 
 Add NWS severe weather alert fetching for US locations. Alerts are classified by CAP severity and high-severity alerts are routed to `alerts.notify` for proactive delivery.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-WX-NWS-001 NWSClient fetches active alerts and maps CAP severity to processing tier
+  Given a US location with active NWS alerts at multiple CAP severities
+  When NWSClient.FetchActiveAlerts(lat, lon) is called against api.weather.gov
+  Then the response is parsed into alerts with severity, instruction, headline, event
+  And mapCAPSeverityToTier returns full for Extreme and Severe, standard for Moderate, light for Minor or unknown
+
+Scenario: SCN-WX-NWS-002 Extreme and Severe alerts publish to alerts.notify with dedup by alert ID
+  Given an NWS poll returns Extreme, Severe, Moderate, and Minor alerts
+  When fetchAndNormalizeAlerts processes the response
+  Then only Extreme and Severe alerts are published to the alerts.notify NATS subject
+  And alerts already seen by NWS alert ID are skipped via the seenAlertIDs map
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-WX-NWS-001 NWSClient fetches active alerts and maps CAP severity to processing tier | TestNWSClient_FetchActiveAlerts_Success, TestMapCAPSeverityToTier_AllLevels, TestNWSClient_FetchActiveAlerts_UserAgentSet | internal/connector/weather/nws_test.go |
+| Unit | SCN-WX-NWS-002 Extreme and Severe alerts publish to alerts.notify with dedup by alert ID | TestIsHighSeverity, TestNWSClient_FetchActiveAlerts_CacheReuse | internal/connector/weather/nws_test.go |
+| Integration | SCN-WX-NWS-002 Extreme and Severe alerts publish to alerts.notify with dedup by alert ID | TestWeatherAlerts_PublishedToAlertsNotify, TestWeatherAlerts_LowSeverityNotPublishedToNotify | tests/integration/weather_alerts_test.go |
+| E2E | SCN-WX-NWS-001 NWSClient fetches active alerts and maps CAP severity to processing tier | TestWeatherAlerts_E2E_FullStack | tests/e2e/weather_alerts_e2e_test.go |
+
 ### Definition of Done
 
-- [x] `NWSClient` fetches active alerts from api.weather.gov
+- [x] Scenario "SCN-WX-NWS-001 NWSClient fetches active alerts and maps CAP severity to processing tier": `NWSClient` fetches active alerts from api.weather.gov
   > Evidence: `internal/connector/weather/nws.go` (248 LOC) — `NWSClient` struct + `NewNWSClient()` + `FetchActiveAlerts(ctx, lat, lon)` issues GET against `api.weather.gov/alerts/active` with bounded lat/lon; `internal/connector/weather/nws_test.go::TestNWSClient_FetchActiveAlerts_Success`, `TestNWSClient_FetchActiveAlerts_EmptyResponse`, `TestNWSClient_FetchActiveAlerts_HTTPError`, `TestNWSClient_FetchActiveAlerts_MalformedJSON` verify happy-path and error-path behavior against an `httptest.Server`. **Phase:** implement.
 - [x] User-Agent header set per NWS requirements
   > Evidence: `internal/connector/weather/nws.go::NewNWSClient` defaults a User-Agent string per NWS API requirements; `nws_test.go::TestNWSClient_FetchActiveAlerts_UserAgentSet` asserts the request header value is non-empty when the request hits the test server. **Phase:** implement.
 - [x] CAP severity mapped: Extreme → full, Severe → full, Moderate → standard, Minor → light
   > Evidence: `internal/connector/weather/nws.go::mapCAPSeverityToTier` returns `"full"` for `Extreme`/`Severe`, `"standard"` for `Moderate`, `"light"` for `Minor`/unknown; `nws_test.go::TestMapCAPSeverityToTier_AllLevels` exercises every CAP level + an unknown fallback. **Phase:** implement.
-- [x] Extreme/Severe alerts published to `alerts.notify` NATS subject
+- [x] Scenario "SCN-WX-NWS-002 Extreme and Severe alerts publish to alerts.notify with dedup by alert ID": Extreme/Severe alerts published to `alerts.notify` NATS subject
   > Evidence: `internal/connector/weather/weather.go:379-396` (`fetchAndNormalizeAlerts`) calls `c.alertPublishFn(ctx, c.alertSubject, data)` when `isHighSeverity(a.Severity)` returns true; wiring at `cmd/core/connectors.go:272-273` calls `weatherConn.SetAlertPublisher(svc.nc.Publish, smacknats.SubjectAlertsNotify)`; `internal/connector/weather/nws_test.go::TestIsHighSeverity` verifies the high-severity predicate (Extreme/Severe → true; Moderate/Minor → false). **Phase:** implement.
 - [x] NATS contract updated with ALERTS stream and alerts.notify subject
   > Evidence: `internal/nats/client.go:43` already declares `SubjectAlertsNotify = "alerts.notify"`; `config/nats_contract.json:136` already registers the `alerts.notify` subject and `ALERTS` stream. Scope 04 reuses pre-existing contract entries; no contract diff required. Wiring confirmed at `cmd/core/connectors.go:273` and exercised via the publisher-injection path tested in `nws_test.go`. **Phase:** implement.
@@ -204,9 +276,37 @@ Add NWS severe weather alert fetching for US locations. Alerts are classified by
 
 Implement NATS-based enrichment request/response pattern enabling other connectors (Maps, Digest) to request weather data for specific date+location combinations.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-WX-ENR-001 NATS subscriber publishes response to weather enrich request with historical data
+  Given a NATS subscriber is bound to weather.enrich.request
+  And the request payload includes latitude, longitude, and date
+  When handleEnrichRequest receives a valid request
+  Then fetchHistorical retrieves weather for the date and rounded coordinates
+  And a response is published to weather.enrich.response with the historical weather data
+
+Scenario: SCN-WX-ENR-002 Historical data cached permanently is reused on second enrich request via cache hit
+  Given handleEnrichRequest has fetched historical weather for a given coordinate and date
+  And historical data is cached permanently
+  When a second enrich request arrives for the same coordinate and date
+  Then the cached historical data is reused without an upstream API call
+  And only the cached value drives the response payload
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-WX-ENR-001 NATS subscriber publishes response to weather enrich request with historical data | TestEnrich_HandleRequest_SuccessAndShape, TestEnrich_StartSubscriber_RejectsNilClient, TestEnrich_ValidateRequest_AcceptsValid | internal/connector/weather/enrich_test.go |
+| Unit | SCN-WX-ENR-002 Historical data cached permanently is reused on second enrich request via cache hit | TestEnrich_HandleRequest_CacheReuse, TestFetchHistorical_CacheHit | internal/connector/weather/enrich_test.go |
+| Integration | SCN-WX-ENR-001 NATS subscriber publishes response to weather enrich request with historical data | TestWeatherEnrich_Integration_RoundTrip | tests/integration/weather_enrich_test.go |
+| Integration | SCN-WX-ENR-002 Historical data cached permanently is reused on second enrich request via cache hit | TestWeatherEnrich_Integration_CacheReuse | tests/integration/weather_enrich_test.go |
+| E2E | SCN-WX-ENR-001 NATS subscriber publishes response to weather enrich request with historical data | TestWeatherEnrich_E2E_LiveStackRoundTrip | tests/e2e/weather_enrich_e2e_test.go |
+
 ### Definition of Done
 
-- [x] NATS subscriber for `weather.enrich.request` subject
+- [x] Scenario "SCN-WX-ENR-001 NATS subscriber publishes response to weather enrich request with historical data": NATS subscriber for `weather.enrich.request` subject
   > Evidence: `internal/connector/weather/enrich.go::StartEnrichmentSubscriber` (lines ~150-214) subscribes via `nc.Subscribe(SubjectWeatherEnrichRequest, handler)` as a durable consumer; wired in `cmd/core/connectors.go:268-273` after weather connector starts; `enrich_test.go::TestEnrich_StartSubscriber_RejectsNilClient` verifies guard
 - [x] Request payload includes latitude, longitude, date
   > Evidence: `internal/connector/weather/enrich.go::EnrichRequest` struct defines `Latitude float64`, `Longitude float64`, `Date string` (format `2006-01-02`); `validateEnrichRequest` enforces date format and lat/lon ranges; `enrich_test.go::TestEnrich_ValidateRequest_AcceptsValid`, `TestEnrich_ValidateRequest_RejectsMissingDate`, `TestEnrich_ValidateRequest_RejectsMalformedDate`, `TestEnrich_ValidateRequest_RejectsLatitudeOutOfRange`, `TestEnrich_ValidateRequest_RejectsLongitudeOutOfRange` verify
@@ -214,7 +314,7 @@ Implement NATS-based enrichment request/response pattern enabling other connecto
   > Evidence: `internal/connector/weather/enrich.go::handleEnrichRequest` calls `c.fetchHistorical(ctx, lat, lon, date)` and publishes correlated reply on `SubjectWeatherEnrichResponse` via `nc.PublishMessage`; `enrich_test.go::TestEnrich_HandleRequest_SuccessAndShape` verifies response shape; `TestEnrich_HandleRequest_FetchErrorReturnsErrorResponse` and `TestEnrich_HandleRequest_InvalidPayloadReturnsErrorResponse` verify error-path response
 - [x] Cache checked first; API called only on cache miss
   > Evidence: `handleEnrichRequest` delegates to existing `fetchHistorical()` which checks cache before issuing HTTP call; `enrich_test.go::TestEnrich_HandleRequest_CacheReuse` verifies only 1 upstream call across 2 sequential identical requests
-- [x] Historical data cached permanently (weather doesn't change in the past)
+- [x] Scenario "SCN-WX-ENR-002 Historical data cached permanently is reused on second enrich request via cache hit": Historical data cached permanently (weather doesn't change in the past)
   > Evidence: `fetchHistorical()` caches entries with 100yr TTL (effectively permanent — no eviction during process lifetime); reused unchanged by `handleEnrichRequest`; `weather_test.go::TestDecodeHistorical_ValidJSON` verifies long TTL on cache population
 - [x] NATS contract updated with WEATHER stream and enrichment subjects
   > Evidence: `config/nats_contract.json:213-224` defines `weather.enrich.request` and `weather.enrich.response` subjects with cross-references; line 239 registers WEATHER stream; `internal/nats/client.go:70-76` declares `SubjectWeatherEnrichRequest`, `SubjectWeatherEnrichResponse` constants and registers WEATHER stream; `internal/nats/contract_test.go:94-95` covers constants in contract test; `tests/integration/nats_stream_test.go:46` lists `WEATHER` in `expectedStreams`

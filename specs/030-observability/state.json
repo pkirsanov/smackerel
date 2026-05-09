@@ -42,8 +42,17 @@
         "statusAfter": "done",
         "runStartedAt": "2026-05-09T00:00:00Z",
         "runEndedAt": "2026-05-09T00:00:00Z",
-        "summary": "Trace-guard closure pass: closed 5 of 7 trace failures (7\u21922 residual). Added Test Plan tables to Scopes 1, 2, 5 pointing at internal/metrics/metrics_test.go and internal/metrics/trace_test.go. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. Residual: Scopes 3 (Connector Sync Metrics) and 4 (ML Sidecar Metrics) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."
-      }
+        "summary": "Trace-guard closure pass: closed 5 of 7 trace failures (7\u21922 residual). Added Test Plan tables to Scopes 1, 2, 5 pointing at internal/metrics/metrics_test.go and internal/metrics/trace_test.go. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. Residual: Scopes 3 (Connector Sync Metrics) and 4 (ML Sidecar Metrics) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": [
+          "trace-closure"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-09T05:00:00Z",
+        "runEndedAt": "2026-05-09T05:10:00Z",
+        "summary": "Authored 4 Gherkin scenarios across scopes 3, 4 (SCN-OBS-004/005 connector sync metrics + dead-letter counter, SCN-OBS-006/007 ML sidecar metrics + ml_request_seconds histogram) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/metrics/metrics_test.go and ml/tests. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."      }
     ]
   },
   "certification": {

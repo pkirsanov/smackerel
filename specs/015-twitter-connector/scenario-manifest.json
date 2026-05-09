@@ -2,7 +2,7 @@
   "version": 1,
   "featureDir": "specs/015-twitter-connector",
   "generatedAt": "2026-04-26T00:00:00Z",
-  "notes": "Six active scope-level scenarios from scopes.md (Scopes 1, 2, 4). Scope 6 was deferred per BUG-015-001 on 2026-04-26; SCN-TW-005 (the original API polling scenario) was relocated to spec.md `Deferred / Non-Goals — API Path` and is intentionally NOT included here. Spec-level scenarios SCN-TW-001 through SCN-TW-006 in spec.md remain locked but are tracked via the lockdownState.lockedScenarioIds field in state.json.",
+  "notes": "Scope-level scenarios from scopes.md (Scopes 1-6). Scope 6 (API Client Opt-In) was previously deferred per BUG-015-001 on 2026-04-26 and is delivered as opt-in (api_enabled flag); SCN-TW-API-001/002 added 2026-05-09 to satisfy trace-guard for the Done scope. Spec-level scenarios SCN-TW-001 through SCN-TW-006 in spec.md remain locked but are tracked via the lockdownState.lockedScenarioIds field in state.json.",
   "scenarios": [
     {
       "scenarioId": "SCN-TW-ARC-001",
@@ -138,6 +138,34 @@
         "given": "two tweets that both reference https://example.com/shared",
         "when": "syncArchive processes both tweets",
         "then": "exactly 1 child RawArtifact is emitted for https://example.com/shared and both parent tweet artifacts are still emitted"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-API-001",
+      "scope": "06-api-client-opt-in",
+      "title": "Bearer token authenticates the Twitter API client opt-in",
+      "gherkin": {
+        "given": "a Twitter connector configured with api_enabled=true and a bearer_token",
+        "when": "Connect() runs in api or hybrid sync mode",
+        "then": "the APIClient authenticates against the Twitter API v2 with the provided bearer token and bookmark/like endpoints become available for cursor-based polling"
+      },
+      "linkedTests": ["internal/connector/twitter/twitter_test.go"],
+      "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],
+      "regressionProtected": true,
+      "status": "done"
+    },
+    {
+      "scenarioId": "SCN-TW-API-002",
+      "scope": "06-api-client-opt-in",
+      "title": "Hybrid mode merges archive and API tweets without duplicates",
+      "gherkin": {
+        "given": "prior archive sync has imported tweets into the cursor and API polling returns fresh bookmarks/likes for the same account",
+        "when": "hybrid Sync() runs the archive path followed by the API path",
+        "then": "tweets that already exist by tweet ID are skipped via cursor-based dedup and only new tweets from the API are emitted as RawArtifacts"
       },
       "linkedTests": ["internal/connector/twitter/twitter_test.go"],
       "evidenceRefs": ["report.md#bubblesvalidate-replay--user-validation-2026-04-26", "uservalidation.md"],

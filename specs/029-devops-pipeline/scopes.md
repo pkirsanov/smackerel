@@ -125,15 +125,38 @@ Scenario: Untagged builds use commit SHA
 **Priority:** P2
 **Depends On:** Scope 1
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-029-012 Documented branch protection settings cover required status checks for main
+  Given the docs/Branch_Protection.md document exists
+  When an operator follows the documented branch protection settings for main
+  Then the documented recommended settings include lint-and-test and build as required status checks
+  And status checks must pass before merge
+
+Scenario: SCN-029-013 Branch protection requires PR review for solo developer workflow
+  Given a solo developer wants to enable branch protection on main
+  When they follow the documented branch protection settings
+  Then required approving reviews defaults to 1 (optional for solo developer)
+  And the documentation explicitly mentions solo developer can set reviews to 0
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Doc | SCN-029-012 Documented branch protection settings cover required status checks for main | manual review of required status checks section | docs/Branch_Protection.md |
+| Doc | SCN-029-013 Branch protection requires PR review for solo developer workflow | manual review of required approving reviews section | docs/Branch_Protection.md |
+
 ### Definition of Done
 
-- [x] Documented recommended branch protection settings for main
+- [x] Scenario "SCN-029-012 Documented branch protection settings cover required status checks for main": Documented recommended branch protection settings for main
   **Evidence:** implement | `docs/Branch_Protection.md` created with required settings (status checks, PR reviews, branch restrictions), optional settings table, setup steps, and CI integration details.
   **Claim Source:** executed
 - [x] Require CI pass before merge
   **Evidence:** implement | Doc specifies `lint-and-test` and `build` as required status checks with "Require status checks to pass before merging: Enabled".
   **Claim Source:** executed
-- [x] Require PR review (optional for solo developer)
+- [x] Scenario "SCN-029-013 Branch protection requires PR review for solo developer workflow": Require PR review (optional for solo developer)
   **Evidence:** implement | Doc states "Required approving reviews: 1 (optional for solo developer — can be set to 0)".
   **Claim Source:** executed
 
@@ -145,15 +168,38 @@ Scenario: Untagged builds use commit SHA
 **Priority:** P1
 **Depends On:** Scope 1
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-029-014 Go binary embeds version and commit hash via ldflags
+  Given the Dockerfile passes VERSION and COMMIT_HASH as build args
+  When the Go binary is built with -ldflags -X main.version=... -X main.commitHash=...
+  Then the running binary exposes version and commit values populated from ldflags
+  And ./smackerel.sh test unit covers the version/commit/buildTime variables
+
+Scenario: SCN-029-015 Health endpoint response includes version commit hash and build time
+  Given the core service is started with embedded version, commitHash, and buildTime
+  When GET /api/health is requested with admin auth
+  Then the response includes version, commit hash, and build time fields
+  And TestHealthHandler_VersionAndCommitHash asserts each field is populated
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-029-014 Go binary embeds version and commit hash via ldflags | TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionVisibleWithAuth | internal/api/health_test.go |
+| Unit | SCN-029-015 Health endpoint response includes version commit hash and build time | TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionHiddenWithoutAuth | internal/api/health_test.go |
+
 ### Definition of Done
 
-- [x] Go binary includes version and commit via ldflags (already exists — verify)
+- [x] Scenario "SCN-029-014 Go binary embeds version and commit hash via ldflags": Go binary includes version and commit via ldflags (already exists — verify)
   **Evidence:** implement | `cmd/core/main.go` has `var version`, `commitHash`, `buildTime` set by ldflags. `Dockerfile` line 13: `-X main.version=${VERSION} -X main.commitHash=${COMMIT_HASH} -X main.buildTime=${BUILD_TIME}`. Verified: `./smackerel.sh test unit` passes with all 37 Go packages OK.
   **Claim Source:** executed
 - [x] Docker images have OCI labels (org.opencontainers.image.version, revision, created)
   **Evidence:** implement | Both `Dockerfile` and `ml/Dockerfile` have `LABEL org.opencontainers.image.version`, `.revision`, `.created`. `docker-compose.yml` passes `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` as build args.
   **Claim Source:** executed
-- [x] `/api/health` response includes version and commit hash
+- [x] Scenario "SCN-029-015 Health endpoint response includes version commit hash and build time": `/api/health` response includes version and commit hash and build time
   **Evidence:** implement | `internal/api/health.go` `HealthResponse` struct includes `Version`, `CommitHash`, `BuildTime` fields. `Dependencies` struct wired with `BuildTime` from main.go. Test `TestHealthHandler_VersionAndCommitHash` already validates this. All API tests pass.
   **Claim Source:** executed
 

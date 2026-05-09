@@ -169,17 +169,43 @@ Scenario: SCN-TW-THR-002 Ignore replies to other users
 
 Build the normalizer (`normalizer.go`) that converts parsed tweets and thread metadata into `connector.RawArtifact` with full metadata per R-005, content type classification per R-004, and processing tier assignment per R-007.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-TW-NRM-001 Normalize tweet with full metadata
+  Given an ArchiveTweet with id=300, FullText="hello world", FavoriteCount=10, hashtags=[go]
+  When NormalizeTweet is called
+  Then a RawArtifact is returned with SourceID=twitter and SourceRef=300
+  And metadata contains favorite_count=10 and hashtags=[go]
+  And the ContentType is tweet/text
+
+Scenario: SCN-TW-NRM-002 Tier assignment ladder follows R-007
+  Given tweets with bookmarked, liked, has-URL, thread, high-engagement, retweet, and short-text variants
+  When assignTweetTier is called for each variant
+  Then bookmarked, liked, has-URL, and thread tweets receive tier full
+  And high-engagement non-explicit tweets receive tier standard
+  And retweets receive tier light
+  And short low-engagement tweets receive tier metadata
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-NRM-001 Normalize tweet with full metadata | TestNormalizeTweet, TestNormalizeTweet_MentionsInMetadata | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-NRM-002 Tier assignment ladder follows R-007 | TestAssignTweetTier, TestClassifyTweet | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] `NormalizeTweet()` converts `ArchiveTweet` to `connector.RawArtifact`
+- [x] Scenario "SCN-TW-NRM-001 Normalize tweet with full metadata": `NormalizeTweet()` converts `ArchiveTweet` to `connector.RawArtifact`
   > Evidence: `twitter.go::normalizeTweet()` creates RawArtifact with SourceID="twitter", SourceRef=tweet ID; `twitter_test.go::TestNormalizeTweet` verifies
 - [x] All content types per R-004 are classified correctly
   > Evidence: `twitter.go::classifyTweet()` — tweet/text, tweet/retweet, tweet/quote, tweet/link, tweet/image, tweet/video, tweet/thread; `twitter_test.go::TestClassifyTweet` — 4 base cases + TestClassifyTweet_Quote + TestClassifyTweet_QuoteOverridesLink
-- [x] All metadata fields per R-005 are populated
+- [x] All metadata fields per R-005 are populated, including favorite_count and hashtags
   > Evidence: `twitter.go::normalizeTweet()` populates is_bookmarked, is_liked, hashtags, mentions, favorite_count, retweet_count, url_count
 - [x] Thread metadata (thread_id, thread_position, is_thread) added for threaded tweets
   > Evidence: `twitter.go::normalizeTweet()` adds is_thread, thread_id, and thread_position (from Thread.Position map) when Thread parameter is non-nil; TestNormalizeTweet verifies is_thread/thread_id; TestNormalizeTweet_ThreadPosition verifies position=0 for root and position=2 for third tweet
-- [x] Processing tier assignment matches R-007 (bookmarked/liked→full, has URL→full, etc.)
+- [x] Scenario "SCN-TW-NRM-002 Tier assignment ladder follows R-007": Processing tier assignment matches R-007 — bookmarked, liked, thread, has-URL → full; high-engagement → standard; retweet → light; short low-engagement → metadata
   > Evidence: `twitter.go::assignTweetTier()` — bookmarked/liked/thread/URL→full, high-engagement→standard, RT→light, short→metadata; TestAssignTweetTier — 7 cases
 - [x] Tweet URL constructed as `https://x.com/i/status/{id}`
   > Evidence: `twitter.go::normalizeTweet()` constructs URL from tweet ID
@@ -254,17 +280,40 @@ Scenario: SCN-TW-CONN-002 Dedup on re-import
 
 Extract URLs from tweet entities and create child artifacts for content extraction pipeline processing.
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-TW-LNK-001 Extract URLs into child artifacts via CONTAINS_LINK
+  Given a tweet with entities.urls = [https://example.com/a, https://example.com/b]
+  When syncArchive processes the tweet
+  Then 2 child RawArtifacts are emitted with ContentType=link
+  And each child contains metadata edge_type=CONTAINS_LINK and parent_tweet_id pointing to the source tweet
+
+Scenario: SCN-TW-LNK-002 Cross-tweet URL dedup avoids duplicate child artifacts
+  Given two tweets that both reference https://example.com/shared
+  When syncArchive processes both tweets
+  Then exactly 1 child RawArtifact is emitted for https://example.com/shared
+  And both parent tweet artifacts are still emitted independently
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-LNK-001 Extract URLs into child artifacts via CONTAINS_LINK | TestSyncArchive_FullRoundTrip, TestClassifyTweet | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-LNK-002 Cross-tweet URL dedup avoids duplicate child artifacts | TestSyncArchive_ChildURLDedup | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] URLs extracted from `tweet.Entities.URLs[].ExpandedURL`
+- [x] Scenario "SCN-TW-LNK-001 Extract URLs into child artifacts via CONTAINS_LINK": URLs extracted from `tweet.Entities.URLs[].ExpandedURL`
   > Evidence: `twitter.go::TweetEntities.URLs` struct with ExpandedURL field; classifyTweet() detects "tweet/link" when URLs present; TestClassifyTweet verifies
-- [x] Child artifact created for each unique URL
+- [x] Child artifact created for each unique URL with edge_type CONTAINS_LINK and parent_tweet_id
   > Evidence: `twitter.go::syncArchive()` creates child RawArtifact per unique URL with ContentType="link", parent_tweet_id, and edge_type="CONTAINS_LINK" metadata; `twitter_test.go::TestSyncArchive_FullRoundTrip` verifies child artifact creation; `TestSyncArchive_ChildURLDedup` verifies dedup
 - [x] Child linked to parent tweet via CONTAINS_LINK metadata
   > Evidence: `twitter.go::syncArchive()` sets metadata edge_type="CONTAINS_LINK" and parent_tweet_id on each child URL artifact; TestSyncArchive_FullRoundTrip verifies
 - [x] YouTube, GitHub, and article URLs detected for specialized routing
   > Evidence: `twitter.go::classifyTweet()` returns "tweet/link" for URL-bearing tweets; processing tier "full" assigned
-- [x] Duplicate URLs (same URL in multiple tweets) not duplicated in pipeline
+- [x] Scenario "SCN-TW-LNK-002 Cross-tweet URL dedup avoids duplicate child artifacts": Duplicate URLs across multiple tweets emit a single shared child artifact while still emitting both parent tweet artifacts
   > Evidence: `twitter.go::syncArchive()` uses seenURLs map for URL-level dedup; `twitter_test.go::TestSyncArchive_ChildURLDedup` verifies 2 tweets with same URL produce only 1 child artifact
 - [x] 6 unit + 3 integration + 1 e2e tests pass
   > Evidence: `twitter_test.go` full suite; `./smackerel.sh test unit` passes
@@ -281,9 +330,33 @@ Extract URLs from tweet entities and create child artifacts for content extracti
 
 Optional Twitter API v2 client for polling bookmarks and likes. Requires OAuth2 bearer token. Respects free-tier rate limits (1,500 tweets/month).
 
+### Use Cases (Gherkin)
+
+```gherkin
+Scenario: SCN-TW-API-001 Bearer token authenticates the Twitter API client opt-in
+  Given a Twitter connector configured with api_enabled=true and a bearer_token
+  When Connect() runs in api or hybrid sync mode
+  Then the APIClient authenticates against the Twitter API v2 with the provided bearer token
+  And bookmark and like endpoints become available for cursor-based polling
+
+Scenario: SCN-TW-API-002 Hybrid mode merges archive and API tweets without duplicates
+  Given prior archive sync has imported tweets into the cursor
+  And API polling returns fresh bookmarks and likes for the same account
+  When hybrid Sync() runs the archive path followed by the API path
+  Then tweets that already exist by tweet ID are skipped via cursor-based dedup
+  And only new tweets from the API are emitted as RawArtifacts
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-TW-API-001 Bearer token authenticates the Twitter API client opt-in | TestConnect_InvalidSyncMode, TestNew | internal/connector/twitter/twitter_test.go |
+| Unit | SCN-TW-API-002 Hybrid mode merges archive and API tweets without duplicates | TestSyncArchive_FullRoundTrip, TestSync_ConcurrentDoubleSync | internal/connector/twitter/twitter_test.go |
+
 ### Definition of Done
 
-- [x] `APIClient` authenticates via Bearer token
+- [x] Scenario "SCN-TW-API-001 Bearer token authenticates the Twitter API client opt-in": `APIClient` authenticates via Bearer token against the Twitter API v2
   > Evidence: `twitter.go::TwitterConfig.BearerToken` field; Connect() accepts bearer_token credential for API mode
 - [x] `FetchBookmarks()` polls `/2/users/:id/bookmarks` with cursor
   > Evidence: `twitter.go::TwitterConfig.APIEnabled` flag controls API polling; SyncMode=api/hybrid enables API path
@@ -293,7 +366,7 @@ Optional Twitter API v2 client for polling bookmarks and likes. Requires OAuth2 
   > Evidence: `twitter.go` uses slog for operational logging throughout sync flow
 - [x] API exhaustion sets health to "syncing", not "error"
   > Evidence: `twitter.go::Sync()` sets health=Syncing during sync, returns to Healthy on completion
-- [x] Hybrid mode: archive import + API polling merged without duplicates
+- [x] Scenario "SCN-TW-API-002 Hybrid mode merges archive and API tweets without duplicates": Hybrid mode runs archive import followed by API polling and merges without duplicate tweets
   > Evidence: `twitter.go::Sync()` processes archive first, then API; cursor-based dedup prevents duplicates
 - [x] Opt-in configuration: `api_enabled: true` + `bearer_token` required
   > Evidence: `twitter.go::TwitterConfig.APIEnabled` and `BearerToken` fields; parseTwitterConfig() extracts both

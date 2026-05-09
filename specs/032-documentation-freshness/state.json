@@ -141,8 +141,13 @@
       "agent": "bubbles.implement",
       "outcome": "completed",
       "at": "2026-05-09T00:00:00Z",
-      "summary": "Trace-guard closure pass: 0 of 4 trace failures closed (4\u21924 residual). All 4 scopes (README System Requirements, Development.md Update, Operations Runbook, TLS Setup Guide) lack Gherkin scenarios because spec 032 is documentation-only. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended if Gherkin coverage is desired for documentation scopes; otherwise the trace-guard \"no Gherkin scenarios to trace\" failures are acceptable artifacts of this spec's documentation-only nature. Appended Trace-Guard Closure section to report.md documenting this rationale. No source/test/config/framework changes; no DoD content rewriting. artifact-lint PASSED, traceability-guard residual=4 (Gherkin-missing). No status/certification field changes."
-    }
+      "summary": "Trace-guard closure pass: 0 of 4 trace failures closed (4\u21924 residual). All 4 scopes (README System Requirements, Development.md Update, Operations Runbook, TLS Setup Guide) lack Gherkin scenarios because spec 032 is documentation-only. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended if Gherkin coverage is desired for documentation scopes; otherwise the trace-guard \"no Gherkin scenarios to trace\" failures are acceptable artifacts of this spec's documentation-only nature. Appended Trace-Guard Closure section to report.md documenting this rationale. No source/test/config/framework changes; no DoD content rewriting. artifact-lint PASSED, traceability-guard residual=4 (Gherkin-missing). No status/certification field changes."    },
+    {
+      "phase": "trace-closure",
+      "agent": "bubbles.plan",
+      "outcome": "completed",
+      "at": "2026-05-09T05:00:00Z",
+      "summary": "Authored 4 Gherkin scenarios across scopes 1, 2, 3, 4 (SCN-DOCFRESH-001 README system requirements + Docker version, SCN-DOCFRESH-002 Development docs Go package + prompt contracts inventory, SCN-DOCFRESH-003 Operations runbook deployment + stack lifecycle, SCN-DOCFRESH-004 TLS guide Caddy + nginx configuration) to close trace-guard residuals for documentation-only spec. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing README.md (via report.md), docs/Development.md, docs/Operations.md. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."    }
   ],
   "activeBugs": [
     {

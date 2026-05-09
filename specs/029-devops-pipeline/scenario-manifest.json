@@ -238,6 +238,64 @@
       "testFiles": ["docker-compose.yml"],
       "liveTestExpectation": "Local verification via ./smackerel.sh build (default behavior unchanged)",
       "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-012",
+      "scope": 3,
+      "title": "Documented branch protection settings cover required status checks for main",
+      "gherkinSummary": "Given the docs/Branch_Protection.md document exists, When an operator follows the documented settings for main, Then lint-and-test and build are required status checks that must pass before merge",
+      "regressionRequired": true,
+      "testFiles": ["docs/Branch_Protection.md"],
+      "linkedTests": [
+        {"file": "docs/Branch_Protection.md", "function": "manual:required-status-checks-section"}
+      ],
+      "evidenceRefs": ["scopes.md#scope-3-dod", "report.md#scope-3-branch-protection"],
+      "liveTestExpectation": "Manual review of docs/Branch_Protection.md",
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-013",
+      "scope": 3,
+      "title": "Branch protection requires PR review for solo developer workflow",
+      "gherkinSummary": "Given a solo developer wants to enable branch protection on main, When they follow the documented branch protection settings, Then required approving reviews defaults to 1 (optional for solo developer can set to 0)",
+      "regressionRequired": true,
+      "testFiles": ["docs/Branch_Protection.md"],
+      "linkedTests": [
+        {"file": "docs/Branch_Protection.md", "function": "manual:required-approving-reviews-section"}
+      ],
+      "evidenceRefs": ["scopes.md#scope-3-dod", "report.md#scope-3-branch-protection"],
+      "liveTestExpectation": "Manual review of docs/Branch_Protection.md",
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-014",
+      "scope": 4,
+      "title": "Go binary embeds version and commit hash via ldflags",
+      "gherkinSummary": "Given the Dockerfile passes VERSION and COMMIT_HASH as build args, When the Go binary is built with -ldflags -X main.version and -X main.commitHash, Then the running binary exposes version and commit values populated from ldflags",
+      "regressionRequired": true,
+      "testFiles": ["internal/api/health_test.go", "cmd/core/main.go"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionAndCommitHash"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionVisibleWithAuth"}
+      ],
+      "evidenceRefs": ["scopes.md#scope-4-dod", "report.md#tq-029-001"],
+      "liveTestExpectation": "go test ./internal/api/...",
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-029-015",
+      "scope": 4,
+      "title": "Health endpoint response includes version commit hash and build time",
+      "gherkinSummary": "Given the core service is started with embedded version commitHash and buildTime, When GET /api/health is requested with admin auth, Then the response includes version commit hash and build time fields",
+      "regressionRequired": true,
+      "testFiles": ["internal/api/health_test.go"],
+      "linkedTests": [
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionAndCommitHash"},
+        {"file": "internal/api/health_test.go", "function": "TestHealthHandler_VersionHiddenWithoutAuth"}
+      ],
+      "evidenceRefs": ["scopes.md#scope-4-dod", "report.md#tq-029-002"],
+      "liveTestExpectation": "go test ./internal/api/...",
+      "status": "verified"
     }
   ]
 }

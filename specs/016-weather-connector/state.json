@@ -215,6 +215,14 @@
       "timestamp": "2026-05-09T04:30:00Z",
       "outcome": "partial_close_with_residual",
       "evidence": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 4 of 8 trace failures (8->4 residual). Added Test Plan table to Scope 01 referencing internal/connector/weather/weather_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-WX-OM-001/002/003. Residual: Scopes 02 (Normalizer & Weather Types), 03 (Weather Connector & Config), 04 (NWS Alert Integration), 05 (Historical Weather Enrichment) lack 'Use Cases (Gherkin)' subsections. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule: 'MUST NOT add new Gherkin scenarios'); routing to bubbles.plan recommended. artifact-lint clean."
+    },
+    {
+      "scope": "spec",
+      "phase": "trace-closure",
+      "agent": "bubbles.plan",
+      "timestamp": "2026-05-09T05:00:00Z",
+      "outcome": "completed",
+      "evidence": "Authored 8 Gherkin scenarios across scopes 02, 03, 04, 05 (SCN-WX-NRM-001/003 weather normalizer + alert mapping, SCN-WX-CON-001/002 weather connector + config, SCN-WX-NWS-001/002 NWS alert integration, SCN-WX-ENR-001/002 historical weather enrichment) to close trace-guard residuals. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/connector/weather/weather_test.go and nws_test.go. Added scenario-manifest.json entries for the 6 new IDs (CON-001/002, NWS-001/002, ENR-001/002). traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
     }
   ],
   "phaseRecords": [
