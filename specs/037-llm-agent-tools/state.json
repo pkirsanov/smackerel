@@ -235,7 +235,11 @@
             ],
             "trigger": "When test-stack capacity supports an Ollama service container and a deterministic-model pull strategy is approved (likely a NEW SPEC for 'Ollama test infrastructure').",
             "crossSpecImpact": "Scope 9 (End-User Failure Surfaces \u2014 Telegram replies) tests/e2e/agent/telegram_replies_test.go has the same Ollama dependency; closing MIT-037-OLLAMA-001 would also unblock that scope's full live-stack verification.",
-            "carryForwardSource": "Scope 5 deferred-DoD pre-existing language; surfaced as G041 by bubbles.validate Iter 7 of bubbles.goal at HEAD ab6fc4f"
+            "carryForwardSource": "Scope 5 deferred-DoD pre-existing language; surfaced as G041 by bubbles.validate Iter 7 of bubbles.goal at HEAD ab6fc4f",
+            "status": "resolved",
+            "closureSpec": "043-ollama-test-infrastructure",
+            "closureCommitDate": "2026-05-09",
+            "closureSummary": "Resolved by spec 043 Scope 3 \u2014 SMACKEREL_TEST_OLLAMA=1 wires ./smackerel.sh test e2e to pull qwen2.5:0.5b-instruct via scripts/commands/ollama-test-pull.sh and run tests/e2e/agent/happy_path_test.go (build tag e2e_ollama, 3 tests including BS-014 adversarial TestOllamaUnreachable_FailsLoudly). Per-env override environments.test.agent_provider_fast_model pins the fast route to the smallest tool-calling Ollama model. Determinism plumbing (ml/app/agent.resolve_ollama_determinism_options) forwards OLLAMA_TEST_REQUEST_* env vars to litellm. Cross-spec impact: Scope 9 telegram_replies_test.go full live verification is also unblocked."
           }
         ],
         "attestations": {
@@ -250,7 +254,18 @@
   },
   "certification": {
     "status": "done",
-    "completedScopes": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"],
+    "completedScopes": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
     "certifiedCompletedPhases": [
       "select",
       "bootstrap",
