@@ -363,8 +363,34 @@ DB_MAX_CONNS="$(required_value infrastructure.postgres.max_conns)"
 DB_MIN_CONNS="$(required_value infrastructure.postgres.min_conns)"
 NATS_CLIENT_PORT="$(required_value infrastructure.nats.client_port)"
 NATS_MONITOR_PORT="$(required_value infrastructure.nats.monitor_port)"
-OLLAMA_ENABLED="$(required_value infrastructure.ollama.enabled)"
+# Spec 043 — Ollama enabled flag uses per-env override so dev/test/home-lab can
+# differ. infrastructure.ollama.enabled remains as the legacy fallback when no
+# per-env value is set.
+OLLAMA_ENABLED="$(env_override_value ollama_enabled infrastructure.ollama.enabled)"
 OLLAMA_CONTAINER_PORT="$(required_value infrastructure.ollama.container_port)"
+# Spec 043 — Ollama image identifier hoisted out of docker-compose.yml. The test
+# image is pinned to a digest at scope-execution time per design.md OQ-D1; the
+# initial pin matches the dev image. Test env wins when TARGET_ENV=test; the
+# extra OLLAMA_TEST_* keys are emitted only for the test env (empty otherwise).
+if [[ "$TARGET_ENV" == "test" ]]; then
+  OLLAMA_IMAGE="$(required_value infrastructure.ollama.test.image)"
+  OLLAMA_TEST_MODEL="$(required_value infrastructure.ollama.test.model)"
+  OLLAMA_TEST_PULL_TIMEOUT_SECONDS="$(required_value infrastructure.ollama.test.pull_timeout_seconds)"
+  OLLAMA_TEST_REQUEST_TEMPERATURE="$(required_value infrastructure.ollama.test.request_temperature)"
+  OLLAMA_TEST_REQUEST_TOP_P="$(required_value infrastructure.ollama.test.request_top_p)"
+  OLLAMA_TEST_REQUEST_TOP_K="$(required_value infrastructure.ollama.test.request_top_k)"
+  OLLAMA_TEST_REQUEST_SEED="$(required_value infrastructure.ollama.test.request_seed)"
+  OLLAMA_TEST_REQUEST_NUM_PREDICT="$(required_value infrastructure.ollama.test.request_num_predict)"
+else
+  OLLAMA_IMAGE="$(required_value infrastructure.ollama.image)"
+  OLLAMA_TEST_MODEL=""
+  OLLAMA_TEST_PULL_TIMEOUT_SECONDS=""
+  OLLAMA_TEST_REQUEST_TEMPERATURE=""
+  OLLAMA_TEST_REQUEST_TOP_P=""
+  OLLAMA_TEST_REQUEST_TOP_K=""
+  OLLAMA_TEST_REQUEST_SEED=""
+  OLLAMA_TEST_REQUEST_NUM_PREDICT=""
+fi
 LLM_PROVIDER="$(required_value llm.provider)"
 LLM_MODEL="$(required_value llm.model)"
 LLM_API_KEY="$(required_value llm.api_key)"
@@ -794,6 +820,14 @@ ML_HOST_PORT=${ML_HOST_PORT}
 OLLAMA_CONTAINER_PORT=${OLLAMA_CONTAINER_PORT}
 OLLAMA_HOST_PORT=${OLLAMA_HOST_PORT}
 OLLAMA_VOLUME_NAME=${OLLAMA_VOLUME_NAME}
+OLLAMA_IMAGE=${OLLAMA_IMAGE}
+OLLAMA_TEST_MODEL=${OLLAMA_TEST_MODEL}
+OLLAMA_TEST_PULL_TIMEOUT_SECONDS=${OLLAMA_TEST_PULL_TIMEOUT_SECONDS}
+OLLAMA_TEST_REQUEST_TEMPERATURE=${OLLAMA_TEST_REQUEST_TEMPERATURE}
+OLLAMA_TEST_REQUEST_TOP_P=${OLLAMA_TEST_REQUEST_TOP_P}
+OLLAMA_TEST_REQUEST_TOP_K=${OLLAMA_TEST_REQUEST_TOP_K}
+OLLAMA_TEST_REQUEST_SEED=${OLLAMA_TEST_REQUEST_SEED}
+OLLAMA_TEST_REQUEST_NUM_PREDICT=${OLLAMA_TEST_REQUEST_NUM_PREDICT}
 ENABLE_OLLAMA=${OLLAMA_ENABLED}
 DATABASE_URL=${DATABASE_URL}
 NATS_URL=${NATS_URL}

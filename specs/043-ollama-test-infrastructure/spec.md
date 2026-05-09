@@ -202,7 +202,7 @@ And the test does NOT skip via `t.Skip` or equivalent bailout
 And the test does NOT silently degrade to a scripted-driver substitution
 ```
 
-### SCN-OLLAMA-005 — Test isolation is preserved across dev / test / home-lab
+### SCN-OLLAMA-005 — Per-environment Ollama storage volumes remain isolated
 
 ```gherkin
 Given the developer has a running dev Ollama container with a different

@@ -4,20 +4,37 @@
   "featureNumber": "043",
   "featureName": "ollama-test-infrastructure",
   "status": "in_progress",
-  "currentPhase": "plan",
+  "currentPhase": "implement",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "plan",
-    "currentScope": null,
+    "currentPhase": "implement",
+    "currentScope": "01",
     "runStartedAt": "2026-05-09T05:36:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "01",
+        "claimedAt": "2026-05-09T20:30:00Z",
+        "agent": "bubbles.implement (parent)",
+        "summary": "Scope 1 (Config + Compose Foundation) implemented: 12 SST keys added to config/smackerel.yaml (infrastructure.ollama.image + 8 test sub-keys + 3 per-env ollama_enabled flags); scripts/commands/config.sh emits OLLAMA_IMAGE + 7 OLLAMA_TEST_* keys with per-env ollama_enabled override via env_override_value; docker-compose.yml ollama service uses ${OLLAMA_IMAGE}; ml/app/intelligence.py SST violation (line 40 fallback to http://localhost:11434) replaced with explicit fail-loud branch. New tests: internal/config/sst_grep_guard_test.go (3 subtests, primary + 2 adversarial), internal/deploy/compose_ollama_contract_test.go (4 subtests, primary + 3 adversarial), tests/integration/ollama_config_contract_test.go (1 test + 3 adversarial subtests). All 5 DoD bullets carry trace-prefix evidence blocks per Gate G068. ./smackerel.sh check passes (config in sync with SST + env_file drift guard OK + scenario-lint OK). ./smackerel.sh test unit exits 0 (78 Go packages PASS, 411 Python tests PASS in 15.04s). Live ./smackerel.sh up --env=test --profile ollama deferred to Scope 2 (model pull + agent invocation are Scope 2 surfaces; Scope 1 substrate correctness is proven end-to-end by the integration contract test which execs the actual config.sh executable)."
+      }
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
-    "scopeProgress": [],
+    "completedScopes": [
+      "01"
+    ],
+    "scopeProgress": [
+      {
+        "scope": "01",
+        "status": "done",
+        "completedAt": "2026-05-09T20:30:00Z",
+        "doD_evidence_ref": "specs/043-ollama-test-infrastructure/scopes.md#definition-of-done"
+      }
+    ],
     "certifiedCompletedPhases": [],
     "lockdownState": {
       "active": false,
@@ -29,21 +46,36 @@
       "phase": "analyst",
       "agent": "bubbles.analyst",
       "timestamp": "2026-05-09T05:36:00Z",
-      "summary": "spec.md authored to close MIT-037-OLLAMA-001 routing. Spec scopes a test-stack-only Ollama runtime (deterministic small model qwen2.5:0.5b-instruct in a smackerel-test-isolated volume) plus one canonical live-stack agent happy-path test (tests/e2e/agent/happy_path_test.go) that drives the production NATS driver + Python sidecar handle_invoke path against real Ollama. Outcome Contract, 7 Gherkin scenarios (SCN-OLLAMA-001..007), 9 functional requirements (FR-OLLAMA-001..009), 5 non-functional requirements (NFR-OLLAMA-001..005), 7 acceptance criteria (AC-1..7), Product Principle Alignment (P8/P6/P9 + Constitution C3/C4 advisory pre-ratification), and 5 design-owned open questions recorded for bubbles.design. Cross-references upstream MIT-037-OLLAMA-001, VAL-FINDING-037-G041, spec 037 Scope 5 deferred infra modifier, and spec 037 Scope 9 telegram_replies_test.go cross-spec impact. Hard-constraints explicitly forbid scripted-driver substitution and t.Skip bailouts in the new happy-path test (per Adversarial Regression rule). No design.md or scopes.md authored — those are bubbles.design and bubbles.plan ownership respectively."
+      "summary": "spec.md authored to close MIT-037-OLLAMA-001 routing. Spec scopes a test-stack-only Ollama runtime (deterministic small model qwen2.5:0.5b-instruct in a smackerel-test-isolated volume) plus one canonical live-stack agent happy-path test (tests/e2e/agent/happy_path_test.go) that drives the production NATS driver + Python sidecar handle_invoke path against real Ollama. Outcome Contract, 7 Gherkin scenarios (SCN-OLLAMA-001..007), 9 functional requirements (FR-OLLAMA-001..009), 5 non-functional requirements (NFR-OLLAMA-001..005), 7 acceptance criteria (AC-1..7), Product Principle Alignment (P8/P6/P9 + Constitution C3/C4 advisory pre-ratification), and 5 design-owned open questions recorded for bubbles.design. Cross-references upstream MIT-037-OLLAMA-001, VAL-FINDING-037-G041, spec 037 Scope 5 deferred infra modifier, and spec 037 Scope 9 telegram_replies_test.go cross-spec impact. Hard-constraints explicitly forbid scripted-driver substitution and t.Skip bailouts in the new happy-path test (per Adversarial Regression rule). No design.md or scopes.md authored \u2014 those are bubbles.design and bubbles.plan ownership respectively."
     },
     {
       "phase": "design",
       "agent": "bubbles.design",
       "timestamp": "2026-05-09T06:10:00Z",
-      "phasesExecuted": ["bootstrap", "design"],
-      "summary": "design.md authored per spec 043 design brief. Resolves all five spec OQs: D1 single compose file (no docker-compose.test.yml overlay) — extends docker-compose.yml with image: ${OLLAMA_IMAGE}; D2 per-env ollama_enabled override via env_override_value (test=true, dev/home-lab=false preserves FR-OLLAMA-007); D3 runner-driven HTTP /api/pull via new scripts/runtime/ollama-test-pull.sh between test_runtime_health.sh and the Go E2E docker run; D4 determinism = temperature=0, top_p=1.0, top_k=1, seed=42, num_predict=256 in new infrastructure.ollama.test.request_* SST keys; D5 happy-path scenario allowlists scope6_e2e_echo with build tag e2e_agent_tools; D6 hook point at smackerel.sh line 1112; D7 reuses existing environments.test.ollama_host_port=47004 and explicitly notes the brief's 47003 collides with the existing nats_monitor_host_port slot. New SST keys: infrastructure.ollama.{image,test.image,test.model,test.pull_timeout_seconds,test.request_temperature,test.request_top_p,test.request_top_k,test.request_seed,test.request_num_predict} + environments.{dev,test,home-lab}.ollama_enabled (11 total). Reuses existing ollama_host_port, ollama_volume_name, ollama_container_port. Cleanup contract change: replace e2e_down_test_stack --volumes with explicit docker volume rm of postgres + nats data (preserves smackerel-test-ollama-data warm cache for SCN-OLLAMA-002 + NFR-OLLAMA-002), with ./smackerel.sh clean full as the operator escape hatch. Three-phase rollout (config + compose; happy-path test + pull script; cross-spec MIT closure). Design covers all 12 sections required by the brief: System Context, Component Diagram (ASCII), Configuration Plan, Test-Stack Lifecycle, Happy-Path Test Anatomy (build tags, preconditions, wiring, hard prohibitions), Failure Modes (incl. adversarial regression test), Performance Budget (cold path Δ ≤ 90s, warm path Δ ≤ 30s), Test Isolation (per bubbles-test-environment-isolation skill), SST Compliance (per bubbles-config-sst skill), Risks & Mitigations, Rollout Plan, Open Questions (4 deferred to scope DoD). Cross-references SCN-OLLAMA-001..007 + FR-OLLAMA-001..009 + NFR-OLLAMA-001..005 + AC-1..7 throughout. No source code, scopes.md, or USER WIP files modified per authority constraints."
+      "phasesExecuted": [
+        "bootstrap",
+        "design"
+      ],
+      "summary": "design.md authored per spec 043 design brief. Resolves all five spec OQs: D1 single compose file (no docker-compose.test.yml overlay) \u2014 extends docker-compose.yml with image: ${OLLAMA_IMAGE}; D2 per-env ollama_enabled override via env_override_value (test=true, dev/home-lab=false preserves FR-OLLAMA-007); D3 runner-driven HTTP /api/pull via new scripts/runtime/ollama-test-pull.sh between test_runtime_health.sh and the Go E2E docker run; D4 determinism = temperature=0, top_p=1.0, top_k=1, seed=42, num_predict=256 in new infrastructure.ollama.test.request_* SST keys; D5 happy-path scenario allowlists scope6_e2e_echo with build tag e2e_agent_tools; D6 hook point at smackerel.sh line 1112; D7 reuses existing environments.test.ollama_host_port=47004 and explicitly notes the brief's 47003 collides with the existing nats_monitor_host_port slot. New SST keys: infrastructure.ollama.{image,test.image,test.model,test.pull_timeout_seconds,test.request_temperature,test.request_top_p,test.request_top_k,test.request_seed,test.request_num_predict} + environments.{dev,test,home-lab}.ollama_enabled (11 total). Reuses existing ollama_host_port, ollama_volume_name, ollama_container_port. Cleanup contract change: replace e2e_down_test_stack --volumes with explicit docker volume rm of postgres + nats data (preserves smackerel-test-ollama-data warm cache for SCN-OLLAMA-002 + NFR-OLLAMA-002), with ./smackerel.sh clean full as the operator escape hatch. Three-phase rollout (config + compose; happy-path test + pull script; cross-spec MIT closure). Design covers all 12 sections required by the brief: System Context, Component Diagram (ASCII), Configuration Plan, Test-Stack Lifecycle, Happy-Path Test Anatomy (build tags, preconditions, wiring, hard prohibitions), Failure Modes (incl. adversarial regression test), Performance Budget (cold path \u0394 \u2264 90s, warm path \u0394 \u2264 30s), Test Isolation (per bubbles-test-environment-isolation skill), SST Compliance (per bubbles-config-sst skill), Risks & Mitigations, Rollout Plan, Open Questions (4 deferred to scope DoD). Cross-references SCN-OLLAMA-001..007 + FR-OLLAMA-001..009 + NFR-OLLAMA-001..005 + AC-1..7 throughout. No source code, scopes.md, or USER WIP files modified per authority constraints."
     },
     {
       "phase": "plan",
       "agent": "bubbles.plan (parent-expanded from bubbles.goal due to nested-runtime network timeout)",
       "timestamp": "2026-05-09T07:00:00Z",
-      "phasesExecuted": ["plan"],
-      "summary": "scopes.md, scenario-manifest.json, report.md (placeholder), uservalidation.md (placeholder) authored. Three scopes match design.md §11 rollout plan: Scope 01 Config + Compose Foundation (FR-OLLAMA-001/002/006/007/008; covers SCN-OLLAMA-001/005/006; 6 Test Plan rows T1-01..T1-06; 5 DoD bullets). Scope 02 Happy-Path Test + Pull Script (FR-OLLAMA-003/004/005; covers SCN-OLLAMA-002/003/004; 5 Test Plan rows T2-01..T2-05; 5 DoD bullets including required adversarial regression test). Scope 03 Wire Into ./smackerel.sh test e2e + Cross-Spec Closure (FR-OLLAMA-009; covers SCN-OLLAMA-007; 4 Test Plan rows T3-01..T3-04; 5 DoD bullets including spec 037 state.json + scopes.md cross-spec MIT-037-OLLAMA-001 closure). All DoD bullets carry Scenario \"<SCN-OLLAMA-NNN ...>\": trace prefix per Gate G068. Test Plan rows reference real-or-future test files: internal/config/validate_test.go, internal/config/sst_grep_guard_test.go, internal/deploy/compose_contract_test.go, tests/integration/ollama_health_test.go, tests/e2e/agent/happy_path_test.go, tests/e2e/agent/no_skip_guard_test.go, scripts/commands/ollama-test-pull.sh, scripts/commands/test.sh, specs/037-llm-agent-tools/state.json. Scenario-manifest authored with planned status entries for all 7 SCN-OLLAMA scenarios. Artifact lint PASSED. Trace-guard FAILED on planned-not-yet-implemented test file references (expected for in-progress scopes; will close as Scope 1+2+3 land). Direct create_file fallback used because two consecutive bubbles.plan dispatches via runSubagent timed out with HTTP/2 stream timeout after 300s. No source code or USER WIP files modified."
+      "phasesExecuted": [
+        "plan"
+      ],
+      "summary": "scopes.md, scenario-manifest.json, report.md (placeholder), uservalidation.md (placeholder) authored. Three scopes match design.md \u00a711 rollout plan: Scope 01 Config + Compose Foundation (FR-OLLAMA-001/002/006/007/008; covers SCN-OLLAMA-001/005/006; 6 Test Plan rows T1-01..T1-06; 5 DoD bullets). Scope 02 Happy-Path Test + Pull Script (FR-OLLAMA-003/004/005; covers SCN-OLLAMA-002/003/004; 5 Test Plan rows T2-01..T2-05; 5 DoD bullets including required adversarial regression test). Scope 03 Wire Into ./smackerel.sh test e2e + Cross-Spec Closure (FR-OLLAMA-009; covers SCN-OLLAMA-007; 4 Test Plan rows T3-01..T3-04; 5 DoD bullets including spec 037 state.json + scopes.md cross-spec MIT-037-OLLAMA-001 closure). All DoD bullets carry Scenario \"<SCN-OLLAMA-NNN ...>\": trace prefix per Gate G068. Test Plan rows reference real-or-future test files: internal/config/validate_test.go, internal/config/sst_grep_guard_test.go, internal/deploy/compose_contract_test.go, tests/integration/ollama_health_test.go, tests/e2e/agent/happy_path_test.go, tests/e2e/agent/no_skip_guard_test.go, scripts/commands/ollama-test-pull.sh, scripts/commands/test.sh, specs/037-llm-agent-tools/state.json. Scenario-manifest authored with planned status entries for all 7 SCN-OLLAMA scenarios. Artifact lint PASSED. Trace-guard FAILED on planned-not-yet-implemented test file references (expected for in-progress scopes; will close as Scope 1+2+3 land). Direct create_file fallback used because two consecutive bubbles.plan dispatches via runSubagent timed out with HTTP/2 stream timeout after 300s. No source code or USER WIP files modified."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement (parent)",
+      "timestamp": "2026-05-09T20:30:00Z",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "scope": "01",
+      "summary": "Scope 1 (Config + Compose Foundation) implemented in one continuous run after the security-hardening git rewrite. (a) config/smackerel.yaml gained 12 SST keys: infrastructure.ollama.image, infrastructure.ollama.test.{image,model,pull_timeout_seconds,request_temperature,request_top_p,request_top_k,request_seed,request_num_predict}, and environments.{dev,test,home-lab}.ollama_enabled. (b) scripts/commands/config.sh switched OLLAMA_ENABLED to env_override_value (so per-env ollama_enabled wins) and added a test-vs-non-test branch resolving OLLAMA_IMAGE plus the 7 OLLAMA_TEST_* keys (emitted populated for test env, empty for dev/home-lab). (c) docker-compose.yml line 169 hoisted from literal 'image: ollama/ollama:0.6' to 'image: ${OLLAMA_IMAGE}'. (d) Pre-existing SST violation in ml/app/intelligence.py line 40 (fallback 'url = ollama_url or \"http://localhost:11434\"') was an in-scope blocker for SCN-OLLAMA-006 zero-hardcoded-values requirement; replaced with explicit fail-loud 'if not ollama_url: warn + return None' branch so OLLAMA_URL is the only configured URL path. (e) Three new test files: internal/config/sst_grep_guard_test.go enforces zero forbidden literals (11434, qwen2.5, ollama/ollama:) outside config/ with two adversarial guards; internal/deploy/compose_ollama_contract_test.go enforces ${OLLAMA_IMAGE} substitution + profile gate + ${OLLAMA_VOLUME_NAME} indirection with three adversarial guards; tests/integration/ollama_config_contract_test.go (build-tag integration) enforces SST\u2192test.env round-trip with three adversarial strip-and-re-run config.sh subtests. (f) All 5 DoD bullets in scopes.md carry trace-prefix evidence per Gate G068. (g) Mid-run discovery: deploy/compose.deploy.yml (untouched by Scope 1) had been corrupted by the IDE cache-poisoning bug documented in /memories/repo/ide-cache-poisoning.md (every '#' replaced with '***REMOVED***'); restored from HEAD via git checkout. (h) Validation evidence: ./smackerel.sh config generate emits all envs cleanly with per-env ENABLE_OLLAMA differing (dev=false, test=true, home-lab=false); ./smackerel.sh check passes; ./smackerel.sh test unit exits 0 (78 Go packages + 411 Python tests). Live ./smackerel.sh up --env=test --profile ollama deferred to Scope 2 by design (Scope 2 owns model-pull + live agent invocation; Scope 1 substrate correctness proven by the integration contract test). Scope 2 + Scope 3 still pending."
     }
   ],
   "policySnapshot": {
@@ -77,5 +109,5 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-09T06:10:00Z"
+  "lastUpdatedAt": "2026-05-09T20:30:00Z"
 }

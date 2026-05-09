@@ -166,7 +166,9 @@ services:
       com.smackerel.lifecycle: ephemeral
 
   ollama:
-    image: ollama/ollama:0.6
+    # Spec 043 — image hoisted to SST. Resolves to infrastructure.ollama.image
+    # for dev/home-lab and infrastructure.ollama.test.image for the test stack.
+    image: ${OLLAMA_IMAGE}
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
