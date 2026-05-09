@@ -196,6 +196,15 @@
       "runStartedAt": "2026-05-09T00:00:00Z",
       "runEndedAt": "2026-05-09T00:00:00Z",
       "summary": "Trace-guard closure pass: closed 15 of 17 trace failures (17\u21922 residual). Added Test Plan tables to Scopes 1, 2, 5, 6, 7 pointing at .github/workflows/ci.yml, internal/api/health_test.go, ml/Dockerfile, ml/tests/, docker-compose.yml + scripts/commands/config.sh + smackerel.sh, deploy/compose.deploy.yml. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5, 6, 7. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative artifact paths. Residual: Scopes 3 (Branch Protection Documentation) and 4 (Build Metadata) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "runStartedAt": "2026-05-09T05:00:00Z",
+      "runEndedAt": "2026-05-09T05:10:00Z",
+      "summary": "Authored 4 Gherkin scenarios across scopes 3, 4 (SCN-029-012/013 branch protection rules + protected branch enforcement, SCN-029-014/015 build metadata commit SHA + image labels) to close trace-guard residuals. Added Use Cases (Gherkin) and Test Plan subsections referencing docs/Branch_Protection.md, internal/api/version.go, internal/api/version_test.go, .github/workflows/ci.yml. Added scenario-manifest.json entries for the 4 new IDs. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
     }
   ],
   "activeBugs": [],

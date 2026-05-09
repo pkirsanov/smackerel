@@ -227,6 +227,17 @@
       "startedAt": "2026-05-09T04:00:00Z",
       "completedAt": "2026-05-09T04:30:00Z",
       "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 9 of 12 trace failures (12->3 residual). Added Test Plan tables to Scopes 01, 02, 04 referencing internal/connector/twitter/twitter_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-TW-ARC-001/002, SCN-TW-THR-001/002, SCN-TW-CONN-001/002. Residual: Scopes 03 (Normalizer & Tier Assignment), 05 (Tweet Link Extraction), 06 (API Client) lack 'Use Cases (Gherkin)' subsections. Adding new Gherkin scenarios is bubbles.plan ownership (agent rule: 'MUST NOT add new Gherkin scenarios'); routing to bubbles.plan recommended. artifact-lint clean."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "trace-closure"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-09T05:00:00Z",
+      "completedAt": "2026-05-09T05:10:00Z",
+      "summary": "Authored 6 Gherkin scenarios across scopes 03, 05, 06 (SCN-TW-NRM-001/002 normalizer + tier assignment, SCN-TW-LNK-001/002 tweet-link extraction, SCN-TW-API-001/002 Bearer-token API client opt-in) to close trace-guard residuals. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/connector/twitter/twitter_test.go and api_test.go. Added scenario-manifest.json entries for SCN-TW-API-001/002. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
     }
   ],
   "policySnapshot": {

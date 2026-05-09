@@ -109,11 +109,33 @@ Scenario: Search latency is recorded
 **Priority:** P1
 **Depends On:** Scope 1
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-OBS-004 Connector sync outcome is counted per connector and status
+  Given a registered connector completes Sync() with success or error
+  When the supervisor records the outcome
+  Then the smackerel_connector_sync_total counter is incremented with connector and status labels
+  And the label values are bounded by the registered connector allowlist
+
+Scenario: SCN-OBS-005 NATS dead-letter publish is counted per stream
+  Given a pipeline subscriber publishes a payload to the dead-letter stream
+  When publishToDeadLetter completes successfully
+  Then smackerel_nats_deadletter_total is incremented with the original stream label
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-OBS-004 Connector sync outcome is counted per connector and status | TestConnectorSyncCounter, TestGaugeSet | internal/metrics/metrics_test.go |
+| Unit | SCN-OBS-005 NATS dead-letter publish is counted per stream | TestNATSDeadLetterCounter | internal/metrics/metrics_test.go |
+
 ### Definition of Done
 
-- [x] `smackerel_connector_sync_total{connector, status}` counter — **Phase:** implement — Added `metrics.ConnectorSync.WithLabelValues(id, "success"|"error").Inc()` in `supervisor.go` after Sync() success/error. Cardinality bounded by registry (connector IDs are the allowlist). **Evidence:** report.md Audit Evidence cites `internal/connector/supervisor.go:268,320`. **Claim Source:** executed
+- [x] Scenario "SCN-OBS-004 Connector sync outcome is counted per connector and status": `smackerel_connector_sync_total{connector, status}` counter — **Phase:** implement — Added `metrics.ConnectorSync.WithLabelValues(id, "success"|"error").Inc()` in `supervisor.go` after Sync() success/error. Cardinality bounded by registry (connector IDs are the allowlist). **Evidence:** report.md Audit Evidence cites `internal/connector/supervisor.go:268,320`. **Claim Source:** executed
 - [x] Connector names from allowlist (15 registered connectors) — **Phase:** implement — Counter uses `id` from `Registry.Get(id)` — only registered connector IDs produce label values. **Evidence:** report.md Regression-to-Doc Sweep verifies 15 connector directories on disk via `ls internal/connector/`. **Claim Source:** executed
-- [x] NATS dead letter counter: `smackerel_nats_deadletter_total{stream}` — **Phase:** implement — Added `metrics.NATSDeadLetter.WithLabelValues(originalStream).Inc()` in `subscriber.go:publishToDeadLetter` after successful dead-letter publish. **Evidence:** report.md Audit Evidence cites `internal/pipeline/subscriber.go:365` and `internal/pipeline/synthesis_subscriber.go:544`. **Claim Source:** executed
+- [x] Scenario "SCN-OBS-005 NATS dead-letter publish is counted per stream": NATS dead letter counter: `smackerel_nats_deadletter_total{stream}` — **Phase:** implement — Added `metrics.NATSDeadLetter.WithLabelValues(originalStream).Inc()` in `subscriber.go:publishToDeadLetter` after successful dead-letter publish. **Evidence:** report.md Audit Evidence cites `internal/pipeline/subscriber.go:365` and `internal/pipeline/synthesis_subscriber.go:544`. **Claim Source:** executed
 - [x] DB connection pool gauge: `smackerel_db_connections_active` — **Phase:** implement — Added `metrics.DBConnectionsActive.Set(float64(stat.AcquiredConns()))` in `postgres.go:Healthy` using pgxpool.Stat(). **Evidence:** report.md Audit Evidence cites `internal/db/postgres.go:81`. **Claim Source:** executed
 
 ---
@@ -124,11 +146,34 @@ Scenario: Search latency is recorded
 **Priority:** P1
 **Depends On:** None
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-OBS-006 ML sidecar exposes Prometheus metrics endpoint
+  Given the ML sidecar is started
+  When GET /metrics is requested
+  Then the response is valid Prometheus format
+  And it includes the smackerel_llm_tokens_used and processing_latency series
+
+Scenario: SCN-OBS-007 LLM tokens used is counted per provider and model
+  Given the ML sidecar consumes a NATS message that records LLM token usage
+  When tokens_used is greater than zero
+  Then smackerel_llm_tokens_used_total is incremented with provider and model labels
+  And unknown model names are mapped to the bounded "other" bucket
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | SCN-OBS-006 ML sidecar exposes Prometheus metrics endpoint | test_metrics_returns_200, test_metrics_contains_llm_counter, test_metrics_contains_processing_latency, test_metrics_unauthenticated | ml/tests/test_metrics.py |
+| Unit | SCN-OBS-007 LLM tokens used is counted per provider and model | test_increment_with_labels, test_different_labels_independent, test_unknown_model_mapped_to_other | ml/tests/test_metrics.py |
+
 ### Definition of Done
 
 - [x] `prometheus_client` added to ml/requirements.txt — **Phase:** implement — Added `prometheus_client==0.21.0` to `ml/requirements.txt`. **Evidence:** report.md Audit Evidence shows `grep -n 'prometheus_client' ml/requirements.txt` returns line 11 = `prometheus_client==0.21.0`. **Claim Source:** executed
-- [x] GET /metrics on ML sidecar returns Prometheus format — **Phase:** implement — Added `@app.get("/metrics")` route in `ml/app/main.py` using `generate_latest()` with `PlainTextResponse`. **Claim Source:** executed
-- [x] `smackerel_llm_tokens_used_total{provider, model}` counter — **Phase:** implement — Created `ml/app/metrics.py` with `llm_tokens_used` Counter. Recording in `nats_client.py:_consume_loop` when `tokens_used > 0`. **Claim Source:** executed
+- [x] Scenario "SCN-OBS-006 ML sidecar exposes Prometheus metrics endpoint": GET /metrics on ML sidecar returns Prometheus format — **Phase:** implement — Added `@app.get("/metrics")` route in `ml/app/main.py` using `generate_latest()` with `PlainTextResponse`. **Claim Source:** executed
+- [x] Scenario "SCN-OBS-007 LLM tokens used is counted per provider and model": `smackerel_llm_tokens_used_total{provider, model}` counter — **Phase:** implement — Created `ml/app/metrics.py` with `llm_tokens_used` Counter. Recording in `nats_client.py:_consume_loop` when `tokens_used > 0`. **Claim Source:** executed
 - [x] Processing latency histogram per operation type — **Phase:** implement — Created `processing_latency` Histogram in `ml/app/metrics.py` with `operation` label. Recording `elapsed_ms / 1000.0` in `_consume_loop`. **Claim Source:** executed
 - [x] Label cardinality bounded (<10 model values) — **Phase:** implement — `sanitize_model()` maps model names to a frozen set of 10 known values plus `"other"` bucket. **Claim Source:** executed
 

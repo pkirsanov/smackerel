@@ -39,9 +39,27 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - Create minimal app shell (HTML + CSS)
 - Add PWA routes to Go core router via `internal/api/pwa.go`
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-MC-008 PWA manifest defines share target name icons and installable mobile shell
+  Given a user installs the Smackerel PWA on a mobile device
+  When they inspect web/pwa/manifest.json and the registered service worker
+  Then the manifest defines name, icons, and a share_target action
+  And the service worker caches the static PWA assets
+  And the share target appears in the OS share sheet after install
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | SCN-MC-008 PWA manifest defines share target name icons and installable mobile shell | manifest.json defines name, icons, share_target action; sw.js installs cache; index.html registers service worker | web/pwa/manifest.json |
+| Asset | SCN-MC-008 PWA manifest defines share target name icons and installable mobile shell | service worker install/activate/fetch handlers cache the PWA shell | web/pwa/sw.js |
+
 ### Definition of Done
 
-- [x] `pwa/manifest.json` with name, icons, share_target — **Phase:** implement — `web/pwa/manifest.json` created with `share_target` config (action: `/pwa/share`, method: POST, params: title/text/url)
+- [x] Scenario "SCN-MC-008 PWA manifest defines share target name icons and installable mobile shell": `pwa/manifest.json` with name, icons, share_target — **Phase:** implement — `web/pwa/manifest.json` created with `share_target` config (action: `/pwa/share`, method: POST, params: title/text/url)
   Evidence: `web/pwa/manifest.json:18`
   ```
   $ grep -nE 'share_target|name|icons' web/pwa/manifest.json | head -5
@@ -133,9 +151,27 @@ Scenario: Mobile share capture
 - Create `popup/popup.html` + `popup.js`
 - Token stored in `chrome.storage.local`
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-MC-009 Chrome extension popup shows current page title and URL with persisted auth token
+  Given the Chrome MV3 extension is installed via developer mode
+  When the user opens the extension popup on the active tab
+  Then the popup shows the current page title and URL
+  And the auth token is persisted via chrome.storage.local
+  And the background service worker can dispatch capture requests to /api/capture
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | SCN-MC-009 Chrome extension popup shows current page title and URL with persisted auth token | manifest.json declares MV3 + permissions; popup.js renders title/URL via chrome.tabs.query | web/extension/manifest.json |
+| Asset | SCN-MC-009 Chrome extension popup shows current page title and URL with persisted auth token | popup.js persists serverUrl/authToken via chrome.storage.local; sends capture messages to background.js | web/extension/popup/popup.js |
+
 ### Definition of Done
 
-- [x] Extension installs on Chrome via developer mode — **Phase:** implement — `web/extension/manifest.json` is valid MV3 manifest with required permissions
+- [x] Scenario "SCN-MC-009 Chrome extension popup shows current page title and URL with persisted auth token": Extension installs on Chrome via developer mode — **Phase:** implement — `web/extension/manifest.json` is valid MV3 manifest with required permissions
   Evidence: `web/extension/manifest.json` (37 lines) MV3 manifest
   ```
   $ wc -l web/extension/manifest.json
@@ -294,9 +330,27 @@ Scenario: Auth failure preserves queue
 **Priority:** P2
 **Depends On:** Scopes 3, 4
 
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-MC-010 Firefox extension loads via WebExtension manifest polyfill and Chrome parity for context menu and popup
+  Given the Firefox build of the extension is loaded from web/extension/manifest.firefox.json
+  When the WebExtension polyfill bridges chrome.* APIs to browser.* on Firefox
+  Then the extension loads without errors
+  And the context menu and popup work identically to the Chrome build
+  And browser_specific_settings.gecko declares the Firefox manifest fields
+```
+
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | SCN-MC-010 Firefox extension loads via WebExtension manifest polyfill and Chrome parity for context menu and popup | manifest.firefox.json declares MV2 + browser_specific_settings.gecko + loads polyfill/background.js | web/extension/manifest.firefox.json |
+| Asset | SCN-MC-010 Firefox extension loads via WebExtension manifest polyfill and Chrome parity for context menu and popup | browser-polyfill.js wraps chrome.* callback APIs as Promise-based browser.* APIs across storage/tabs/runtime/notifications/contextMenus | web/extension/lib/browser-polyfill.js |
+
 ### Definition of Done
 
-- [x] Extension loads in Firefox without errors — **Phase:** implement — `web/extension/manifest.firefox.json` is a valid MV2 WebExtension manifest compatible with Firefox
+- [x] Scenario "SCN-MC-010 Firefox extension loads via WebExtension manifest polyfill and Chrome parity for context menu and popup": Extension loads in Firefox without errors — **Phase:** implement — `web/extension/manifest.firefox.json` is a valid MV2 WebExtension manifest compatible with Firefox
   Evidence: `web/extension/manifest.firefox.json` (40 lines)
   ```
   $ wc -l web/extension/manifest.firefox.json
