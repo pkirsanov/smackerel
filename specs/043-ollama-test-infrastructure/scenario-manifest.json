@@ -7,24 +7,44 @@
       "name": "Ollama starts deterministically with qwen2.5:0.5b-instruct on test profile",
       "scope": "01-config-compose-foundation",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_TestOllamaService_PresentWithProfile", "status": "planned"},
-        {"type": "test", "file": "tests/integration/ollama_health_test.go", "function": "TestOllamaHealth_TestProfile_HTTPApiResponds", "status": "planned"}
+        {
+          "type": "test",
+          "file": "internal/deploy/compose_ollama_contract_test.go",
+          "function": "TestOllamaComposeContract_LiveFile",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_config_contract_test.go",
+          "function": "TestOllamaConfigGenerateAndRuntimeValidationStayInSync",
+          "status": "implemented"
+        }
       ]
     },
     {
       "scenarioId": "SCN-OLLAMA-002",
-      "name": "Agent happy path test exercises plan→tool→synthesis loop with deterministic temperature=0",
+      "name": "Agent happy path test exercises plan\u2192tool\u2192synthesis loop with deterministic temperature=0",
       "scope": "02-happy-path-test",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/e2e/agent/happy_path_test.go", "function": "TestAgentHappyPath_DeterministicOutput", "status": "planned"}
+        {
+          "type": "test",
+          "file": "tests/e2e/agent/happy_path_test.go",
+          "function": "TestAgentHappyPath_DeterministicOutput",
+          "status": "planned"
+        }
       ]
     },
     {
       "scenarioId": "SCN-OLLAMA-003",
-      "name": "Happy-path test exercises plan→tool→synthesis through real Ollama",
+      "name": "Happy-path test exercises plan\u2192tool\u2192synthesis through real Ollama",
       "scope": "02-happy-path-test",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/e2e/agent/happy_path_test.go", "function": "TestAgentHappyPath_PlanToolSynthesis", "status": "planned"}
+        {
+          "type": "test",
+          "file": "tests/e2e/agent/happy_path_test.go",
+          "function": "TestAgentHappyPath_PlanToolSynthesis",
+          "status": "planned"
+        }
       ]
     },
     {
@@ -32,16 +52,37 @@
       "name": "Test fails loudly when Ollama or model is unavailable (no t.Skip bailout)",
       "scope": "02-happy-path-test",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/e2e/agent/happy_path_test.go", "function": "TestOllamaUnreachable_FailsLoudly", "status": "planned"},
-        {"type": "test", "file": "tests/e2e/agent/no_skip_guard_test.go", "function": "TestNoSkipBailoutInAgentE2E", "status": "planned"}
+        {
+          "type": "test",
+          "file": "tests/e2e/agent/happy_path_test.go",
+          "function": "TestOllamaUnreachable_FailsLoudly",
+          "status": "planned"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/agent/no_skip_guard_test.go",
+          "function": "TestNoSkipBailoutInAgentE2E",
+          "status": "planned"
+        }
       ]
     },
     {
       "scenarioId": "SCN-OLLAMA-005",
-      "name": "Test isolation preserved across dev/test/home-lab",
+      "name": "Per-environment Ollama storage volumes remain isolated",
       "scope": "01-config-compose-foundation",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_TestOllamaVolume_DistinctFromDev", "status": "planned"}
+        {
+          "type": "test",
+          "file": "internal/deploy/compose_ollama_contract_test.go",
+          "function": "TestOllamaComposeContract_LiveFile",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/deploy/compose_ollama_contract_test.go",
+          "function": "TestOllamaComposeContract_AdversarialHardcodedVolumeName",
+          "status": "implemented"
+        }
       ]
     },
     {
@@ -49,9 +90,24 @@
       "name": "Configuration flows through SST, no hardcoded model strings",
       "scope": "01-config-compose-foundation",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/config/validate_test.go", "function": "TestValidate_OllamaConfig_FailsLoudOnEmpty", "status": "planned"},
-        {"type": "test", "file": "internal/config/validate_test.go", "function": "TestValidate_OllamaConfig_FailsLoudOnInvalidPort", "status": "planned"},
-        {"type": "test", "file": "internal/config/sst_grep_guard_test.go", "function": "TestSST_NoHardcodedOllamaValues", "status": "planned"}
+        {
+          "type": "test",
+          "file": "internal/config/sst_grep_guard_test.go",
+          "function": "TestSST_NoHardcodedOllamaValues",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/config/sst_grep_guard_test.go",
+          "function": "TestSST_NoHardcodedOllamaValues_Adversarial",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_config_contract_test.go",
+          "function": "TestOllamaConfigGenerateAndRuntimeValidationStayInSync",
+          "status": "implemented"
+        }
       ]
     },
     {
@@ -59,9 +115,24 @@
       "name": "Closing this spec closes MIT-037-OLLAMA-001 and unblocks Scope 9",
       "scope": "03-wire-into-test-e2e",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/e2e/agent/happy_path_test.go", "function": "TestAgentHappyPath_PlanToolSynthesis", "status": "planned"},
-        {"type": "spec-state", "file": "specs/037-llm-agent-tools/state.json", "function": "MIT-037-OLLAMA-001", "status": "planned"},
-        {"type": "spec-trace", "file": "specs/037-llm-agent-tools/scopes.md", "function": "Scope 5 deferred-infra modifier removal", "status": "planned"}
+        {
+          "type": "test",
+          "file": "tests/e2e/agent/happy_path_test.go",
+          "function": "TestAgentHappyPath_PlanToolSynthesis",
+          "status": "planned"
+        },
+        {
+          "type": "spec-state",
+          "file": "specs/037-llm-agent-tools/state.json",
+          "function": "MIT-037-OLLAMA-001",
+          "status": "planned"
+        },
+        {
+          "type": "spec-trace",
+          "file": "specs/037-llm-agent-tools/scopes.md",
+          "function": "Scope 5 deferred-infra modifier removal",
+          "status": "planned"
+        }
       ]
     }
   ]

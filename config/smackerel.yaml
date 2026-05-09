@@ -637,8 +637,28 @@ infrastructure:
     client_port: 4222
     monitor_port: 8222
   ollama:
+    # Default fallback (legacy spec 037 — superseded by per-env ollama_enabled
+    # override added by spec 043). Kept so existing readers that ignore the
+    # per-env override do not break. Per-env value (if present) wins via
+    # env_override_value() in scripts/commands/config.sh.
     enabled: false
     container_port: 11434
+    # Spec 043 — Ollama image identifier hoisted out of docker-compose.yml.
+    # `image` is the default for non-test environments. `test.image` is the
+    # pinned-digest test runtime (OQ-D1 — initial pin matches dev image; a
+    # digest pin is deferred to a future hardening spec per OQ-D2).
+    image: ollama/ollama:0.6
+    test:
+      image: ollama/ollama:0.6
+      model: qwen2.5:0.5b-instruct
+      pull_timeout_seconds: 300
+      # Determinism knobs — same input + same seed + same image → same output
+      # (FR-OLLAMA-006, design.md OQ-3 resolution D4).
+      request_temperature: 0.0
+      request_top_p: 1.0
+      request_top_k: 1
+      request_seed: 42
+      request_num_predict: 256
 
 environments:
   dev:
@@ -652,6 +672,9 @@ environments:
     postgres_volume_name: smackerel-postgres-data
     nats_volume_name: smackerel-nats-data
     ollama_volume_name: smackerel-ollama-data
+    # Spec 043 — per-env opt-in. Dev preserves manual --profile ollama
+    # ergonomic (FR-OLLAMA-007); operator flips to true to auto-start.
+    ollama_enabled: false
   test:
     compose_project: smackerel-test
     postgres_host_port: 47001
@@ -663,6 +686,9 @@ environments:
     postgres_volume_name: smackerel-test-postgres-data
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
+    # Spec 043 — test stack auto-starts Ollama (FR-OLLAMA-001). Final
+    # SMACKEREL_TEST_OLLAMA=1 enforcement is wired in scope 03.
+    ollama_enabled: true
     ml_processing_degraded_fallback_enabled: true
     qf_decisions_enabled: true
     qf_decisions_base_url: "http://host.docker.internal:45003"
@@ -683,3 +709,6 @@ environments:
     postgres_volume_name: smackerel-home-lab-postgres-data
     nats_volume_name: smackerel-home-lab-nats-data
     ollama_volume_name: smackerel-home-lab-ollama-data
+    # Spec 043 — home-lab preserves opt-in. Operator flips to true after
+    # provisioning the GPU host and pulling the production model.
+    ollama_enabled: false

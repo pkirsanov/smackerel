@@ -37,7 +37,14 @@ async def _call_llm(prompt: str, provider: str, model: str, api_key: str, ollama
         if provider == "ollama":
             import httpx
 
-            url = ollama_url or "http://localhost:11434"
+            # Spec 043 — SST: no hardcoded fallback URL. The caller MUST pass
+            # the resolved OLLAMA_URL (sourced from the ML sidecar's env file
+            # which is generated from infrastructure.ollama.* SST keys). An
+            # empty string here is a configuration bug, not a runtime branch.
+            if not ollama_url:
+                logger.warning("LLM call (provider=ollama) missing ollama_url; refusing fallback")
+                return None
+            url = ollama_url
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
                     f"{url}/api/generate",
