@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "featureDir": "specs/042-tailnet-edge-bind-pattern",
+  "generatedAt": "2026-05-08T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-042-001",
+      "scope": "01-compose-contract-and-lint-test",
+      "title": "Backend ports use the configurable bind address",
+      "gherkin": {
+        "given": "the deploy compose file deploy/compose.deploy.yml",
+        "when": "the file is parsed by the Go unit lint test",
+        "then": "the smackerel-core and smackerel-ml ports entries use the prefix ${HOST_BIND_ADDRESS:-127.0.0.1}:"
+      },
+      "gherkinHash": "sha256:placeholder-001",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_LiveFile"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-001"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-042-002",
+      "scope": "01-compose-contract-and-lint-test",
+      "title": "Infra services have no host port mapping",
+      "gherkin": {
+        "given": "the deploy compose file deploy/compose.deploy.yml",
+        "when": "the file is parsed by the Go unit lint test",
+        "then": "the postgres and nats services have no ports block"
+      },
+      "gherkinHash": "sha256:placeholder-002",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_LiveFile"
+        },
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialInfraHasPorts"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-002"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-042-003",
+      "scope": "01-compose-contract-and-lint-test",
+      "title": "Compose default is safe for local runs",
+      "gherkin": {
+        "given": "the deploy compose file deploy/compose.deploy.yml",
+        "when": "docker compose -f deploy/compose.deploy.yml --env-file config/generated/home-lab.env config renders the file",
+        "then": "the rendered backend port mappings start with 127.0.0.1: because the SST sets HOST_BIND_ADDRESS=127.0.0.1 in home-lab.env"
+      },
+      "gherkinHash": "sha256:placeholder-003",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_LiveFile"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-003"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-042-004",
+      "scope": "02-copilot-guardrail-and-operations-doc",
+      "title": "Operations doc tells devops how to reach infra",
+      "gherkin": {
+        "given": "the home-lab compose has no host port for postgres or nats",
+        "when": "a devops user reads docs/Operations.md",
+        "then": "the document shows docker exec command shapes for psql and nats CLI access plus the host-Caddy HTTPS access flow"
+      },
+      "gherkinHash": "sha256:placeholder-004",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "docs/Operations.md",
+          "testId": "doc-lint:devops-access-on-home-lab"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-004"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-042-005",
+      "scope": "01-compose-contract-and-lint-test",
+      "title": "Adversarial: literal 127.0.0.1: would FAIL the lint test",
+      "gherkin": {
+        "given": "an in-test fixture compose YAML where the smackerel-core port prefix is the literal 127.0.0.1: (the spec 020 form)",
+        "when": "the lint contract function is called against that fixture",
+        "then": "the function returns a non-nil error naming the violation"
+      },
+      "gherkinHash": "sha256:placeholder-005",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/compose_contract_test.go",
+          "testId": "TestComposeContract_AdversarialLiteralBind"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-005"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-042-006",
+      "scope": "02-copilot-guardrail-and-operations-doc",
+      "title": "Copilot guardrail prevents regression to literal 127.0.0.1",
+      "gherkin": {
+        "given": "a future agent reads .github/copilot-instructions.md",
+        "when": "that agent considers re-introducing literal 127.0.0.1: prefixes in deploy/compose.deploy.yml for backend services",
+        "then": "the Tailnet-Edge Bind Pattern subsection under Required Runtime Standards explicitly forbids it and points to spec 042"
+      },
+      "gherkinHash": "sha256:placeholder-006",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": ".github/copilot-instructions.md",
+          "testId": "doc-lint:tailnet-edge-bind-pattern"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scenario-scn-042-006"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

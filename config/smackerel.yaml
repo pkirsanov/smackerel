@@ -24,6 +24,17 @@ runtime:
   # auth_token logs a warning and continues (single-tenant dev ergonomics).
   # Test config generation overrides to "test" automatically.
   environment: development
+  # host_bind_address — host interface that backend services (smackerel-core,
+  # smackerel-ml) bind on the host. Default "127.0.0.1" keeps the deploy bundle
+  # safe-by-default: backends are only reachable from the host loopback. A
+  # deploy adapter may override HOST_BIND_ADDRESS in the bundled app.env to
+  # bind a specific NIC when host-level reverse-proxy fronting requires it.
+  # Cross-references:
+  #   - bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md (canonical pattern)
+  #   - specs/042-tailnet-edge-bind-pattern/ (compose contract enforcement)
+  # Infra services (postgres, nats) ignore this value because they have no host
+  # port mapping in deploy/compose.deploy.yml; DevOps reaches them via
+  # `tailscale ssh <host> -- docker exec ...` (Pattern P1).
   host_bind_address: "127.0.0.1"
   compose_wait_timeout_s: 180
   digest_cron: "0 7 * * *"
