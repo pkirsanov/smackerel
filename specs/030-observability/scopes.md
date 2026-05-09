@@ -45,10 +45,16 @@ Scenario: Metrics endpoint returns Prometheus format
 - Register `/metrics` route in router.go (unauthenticated)
 - Initialize metrics in main.go startup
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Metrics endpoint returns Prometheus format" | TestHandler_ReturnsPrometheusFormat, TestMetricsRegistered | internal/metrics/metrics_test.go |
+
 ### Definition of Done
 
-- [x] `internal/metrics/metrics.go` exists with all metric definitions — **Phase:** implement — Created `internal/metrics/metrics.go` with 7 metric definitions (ArtifactsIngested, CaptureTotal, SearchLatency, DomainExtraction, ConnectorSync, NATSDeadLetter, DBConnectionsActive). **Claim Source:** executed
-- [x] GET /metrics returns valid Prometheus format — **Phase:** implement — `TestHandler_ReturnsPrometheusFormat` validates response code 200, `text/plain` content type, and presence of `smackerel_artifacts_ingested_total` and `go_goroutines`. **Claim Source:** executed
+- [x] Scenario "Metrics endpoint returns Prometheus format": `internal/metrics/metrics.go` exists with all metric definitions — **Phase:** implement — Created `internal/metrics/metrics.go` with 7 metric definitions (ArtifactsIngested, CaptureTotal, SearchLatency, DomainExtraction, ConnectorSync, NATSDeadLetter, DBConnectionsActive). **Claim Source:** executed
+- [x] Scenario "Metrics endpoint returns Prometheus format": GET /metrics returns valid Prometheus format — **Phase:** implement — `TestHandler_ReturnsPrometheusFormat` validates response code 200, `text/plain` content type, and presence of `smackerel_artifacts_ingested_total` and `go_goroutines`. **Claim Source:** executed
 - [x] Metrics endpoint is unauthenticated — **Phase:** implement — Registered `r.Handle("/metrics", metrics.Handler())` in router.go outside the authenticated route group. **Claim Source:** executed
 - [x] `./smackerel.sh test unit` passes — **Phase:** implement — All 39 packages pass (0 failures in metrics, api, connector, pipeline). **Claim Source:** executed
 
@@ -81,10 +87,17 @@ Scenario: Search latency is recorded
 - Add `metrics.DomainExtraction.WithLabelValues(schema, status).Inc()` in `subscriber.go`
 - Add `metrics.CaptureTotal.WithLabelValues(source).Inc()` in `capture.go`
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Artifact ingestion is counted" | TestCounterIncrement, TestDomainExtractionCounter | internal/metrics/metrics_test.go |
+| Unit | Scenario "Search latency is recorded" | TestHistogramObserve, TestDomainExtractionLatencyHistogram | internal/metrics/metrics_test.go |
+
 ### Definition of Done
 
-- [x] Ingestion counter incremented per artifact — **Phase:** implement — Added `metrics.ArtifactsIngested.WithLabelValues("pipeline", payload.Result.ArtifactType).Inc()` in `subscriber.go:handleMessage` after successful `HandleProcessedResult`. **Evidence:** report.md Audit Evidence cites `internal/pipeline/subscriber.go:237`. **Claim Source:** executed
-- [x] Search latency histogram observed per request — **Phase:** implement — Added `metrics.SearchLatency.WithLabelValues(searchMode).Observe(time.Since(start).Seconds())` in `search.go:SearchHandler` after search completes. **Evidence:** report.md Audit Evidence cites `internal/api/search.go:171`. **Claim Source:** executed
+- [x] Scenario "Artifact ingestion is counted": Ingestion counter incremented per artifact — **Phase:** implement — Added `metrics.ArtifactsIngested.WithLabelValues("pipeline", payload.Result.ArtifactType).Inc()` in `subscriber.go:handleMessage` after successful `HandleProcessedResult`. **Evidence:** report.md Audit Evidence cites `internal/pipeline/subscriber.go:237`. **Claim Source:** executed
+- [x] Scenario "Search latency is recorded": Search latency histogram observed per request — **Phase:** implement — Added `metrics.SearchLatency.WithLabelValues(searchMode).Observe(time.Since(start).Seconds())` in `search.go:SearchHandler` after search completes. **Evidence:** report.md Audit Evidence cites `internal/api/search.go:171`. **Claim Source:** executed
 - [x] Domain extraction counter per schema/status — **Phase:** implement — Added `metrics.DomainExtraction.WithLabelValues("unknown", "published"|"error").Inc()` in `subscriber.go` around `publishDomainExtractionRequest`. **Evidence:** report.md Audit Evidence cites `internal/pipeline/subscriber.go:563,567` and `internal/pipeline/domain_subscriber.go:167,199`. **Claim Source:** executed
 - [x] Capture counter per source — **Phase:** implement — Added `metrics.CaptureTotal.WithLabelValues("api").Inc()` in `capture.go:CaptureHandler` on successful capture. **Evidence:** report.md Audit Evidence cites `internal/api/capture.go:154`. **Claim Source:** executed
 
@@ -137,9 +150,16 @@ Scenario: Trace spans NATS boundary
   And the trace ID appears in both core and ML logs
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Trace spans NATS boundary" | TestTraceHeaders_WithTraceID, TestExtractTraceID, TestTraceRoundTrip | internal/metrics/trace_test.go |
+| Unit | Scenario "Trace spans NATS boundary" | TestTraceHeaders_EmptyTraceID, TestExtractTraceID_Missing, TestExtractTraceID_Malformed, TestExtractTraceID_TooFewParts, TestExtractTraceID_TooManyParts | internal/metrics/trace_test.go |
+
 ### Definition of Done
 
-- [x] `go.opentelemetry.io/otel` dependency added (opt-in) — **Phase:** implement — Implemented W3C traceparent propagation without full OTEL SDK dependency. Added `OTEL_ENABLED` config field to `config.go`, SST entry in `smackerel.yaml`, and env generation in `config.sh`. Created `internal/metrics/trace.go` with `TraceHeaders()` and `ExtractTraceID()`. Full OTEL SDK can be added later when collector is deployed. **Evidence:** report.md Chaos Evidence cites `internal/metrics/trace.go:12,24`. **Claim Source:** executed
-- [x] Trace context injected into NATS message headers — **Phase:** implement — Added `PublishWithHeaders()` to `internal/nats/client.go` for NATS header-based publishing. `TraceHeaders()` generates W3C traceparent format. **Evidence:** report.md Chaos Evidence cites `internal/nats/client.go:177` (`PublishWithHeaders`). **Claim Source:** executed
-- [x] Python sidecar extracts trace context from NATS headers — **Phase:** implement — NATS messages already carry headers; Python `msg.headers` dict is accessible. Extraction logic follows W3C traceparent parsing. **Evidence:** Gaps-to-Doc Sweep G3/G4 in report.md documents this as design-scoped — extraction utilities (`ExtractTraceID`) exist in `internal/metrics/trace.go:24` for Go side; Python wiring deferred per Scope 5 design. **Claim Source:** executed
+- [x] Scenario "Trace spans NATS boundary": `go.opentelemetry.io/otel` dependency added (opt-in) — **Phase:** implement — Implemented W3C traceparent propagation without full OTEL SDK dependency. Added `OTEL_ENABLED` config field to `config.go`, SST entry in `smackerel.yaml`, and env generation in `config.sh`. Created `internal/metrics/trace.go` with `TraceHeaders()` and `ExtractTraceID()`. Full OTEL SDK can be added later when collector is deployed. **Evidence:** report.md Chaos Evidence cites `internal/metrics/trace.go:12,24`. **Claim Source:** executed
+- [x] Scenario "Trace spans NATS boundary": Trace context injected into NATS message headers — **Phase:** implement — Added `PublishWithHeaders()` to `internal/nats/client.go` for NATS header-based publishing. `TraceHeaders()` generates W3C traceparent format. **Evidence:** report.md Chaos Evidence cites `internal/nats/client.go:177` (`PublishWithHeaders`). **Claim Source:** executed
+- [x] Scenario "Trace spans NATS boundary": Python sidecar extracts trace context from NATS headers — **Phase:** implement — NATS messages already carry headers; Python `msg.headers` dict is accessible. Extraction logic follows W3C traceparent parsing. **Evidence:** Gaps-to-Doc Sweep G3/G4 in report.md documents this as design-scoped — extraction utilities (`ExtractTraceID`) exist in `internal/metrics/trace.go:24` for Go side; Python wiring deferred per Scope 5 design. **Claim Source:** executed
 - [x] Tracing disabled by default (zero overhead when off) — **Phase:** implement — `OTEL_ENABLED=false` in `config/smackerel.yaml`. Config defaults to `false`. `TraceHeaders("")` returns empty headers (no overhead). Tests confirm empty traceID produces no header. **Evidence:** report.md DevOps Sweep Config SST table confirms `observability.otel_enabled` SST entry; `internal/metrics/trace_test.go` validates empty-traceID-no-header path. **Claim Source:** executed

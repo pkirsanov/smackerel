@@ -363,3 +363,18 @@ tests/integration/ml_readiness_test.go:func TestMLReadiness_Chaos_ContextCancell
 - Build: `./smackerel.sh build` — PASS (core and ML images built)
 - Unit tests: `./smackerel.sh test unit` — 41 Go packages PASS, 263 Python tests PASS
 - Config: `./smackerel.sh check` — PASS (config in sync)
+
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+This section consolidates the full repo-relative paths of test files that back each scope's Test Plan rows, satisfying traceability-guard concrete-evidence checks. No source/test/config/framework changes; no DoD content rewriting beyond the `Scenario "<name>": ` prefix on existing DoD bullets.
+
+| Scope | Test File (full repo path) |
+|---|---|
+| 2 — Database Migration Integration Tests | tests/integration/db_migration_test.go |
+| 5 — E2E Capture → Process → Search | tests/e2e/capture_process_search_test.go |
+| 6 — ML Sidecar Readiness Gate | tests/integration/ml_readiness_test.go |
+
+**Residual (not in implement authority):**
+- Scope 1 (Integration Test Infrastructure), Scope 3 (NATS Stream Integration Tests), and Scope 4 (Artifact CRUD + Vector Search) lack `### Gherkin Scenarios` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.

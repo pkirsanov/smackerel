@@ -141,10 +141,17 @@ Scenario: List type constants compile
   And List, ListItem, ListWithItems, AggregationSource, and ListItemSeed structs compile
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "List tables created by migration" | TestListType_Constants, TestListStatus_Constants, TestItemStatus_Constants | internal/list/types_test.go |
+| Unit | Scenario "List type constants compile" | TestListType_Constants, TestListStatus_Constants, TestItemStatus_Constants, TestList_JSONRoundTrip, TestListItem_JSONRoundTrip, TestListWithItems_JSONRoundTrip, TestAggregationSource_RawJSON, TestListItemSeed_NilQuantity | internal/list/types_test.go |
+
 ### Definition of Done
 
-- [x] Migration file `017_actionable_lists.sql` created and applies cleanly **Evidence:** implement — consolidated into `internal/db/migrations/001_initial_schema.sql` lines 545-588; `lists` and `list_items` tables with FK, indexes on status/type/created_at/list_id/category
-- [x] Go types defined in `internal/list/types.go` **Evidence:** implement — ListType, ListStatus, ItemStatus constants + List, ListItem, ListWithItems, AggregationSource, ListItemSeed, Aggregator interface, ListStore interface
+- [x] Scenario "List tables created by migration": Migration file `017_actionable_lists.sql` created and applies cleanly **Evidence:** implement — consolidated into `internal/db/migrations/001_initial_schema.sql` lines 545-588; `lists` and `list_items` tables with FK, indexes on status/type/created_at/list_id/category
+- [x] Scenario "List type constants compile": Go types defined in `internal/list/types.go` **Evidence:** implement — ListType, ListStatus, ItemStatus constants + List, ListItem, ListWithItems, AggregationSource, ListItemSeed, Aggregator interface, ListStore interface
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` (cached). **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
@@ -197,11 +204,22 @@ Scenario: Archive list
   Then list.status is "archived"
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Create a list with items" | TestCreateListHandler_Success, TestAddItemHandler | internal/api/lists_test.go |
+| Unit | Scenario "Get list with items" | TestGetListHandler, TestGetListHandler_NotFound | internal/api/lists_test.go |
+| Unit | Scenario "Update item status to done" | TestCheckItemHandler, TestCheckItemHandler_DefaultDone, TestCheckItemHandler_SkipItem, TestCheckItemHandler_SubstituteItem | internal/api/lists_test.go |
+| Unit | Scenario "Add manual item" | TestAddItemHandler, TestAddItemHandler_MissingContent | internal/api/lists_test.go |
+| Unit | Scenario "Complete list" | TestCompleteListHandler, TestCompleteListHandler_NotFound | internal/api/lists_test.go |
+| Unit | Scenario "Archive list" | TestArchiveListHandler, TestArchiveListHandler_NotFound, TestUpdateListHandler_ArchiveViaUpdate | internal/api/lists_test.go |
+
 ### Definition of Done
 
-- [x] Store CRUD operations implemented with tests **Evidence:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, RemoveItem, CompleteList, ArchiveList
-- [x] Denormalized counter updates (total_items, checked_items) correct **Evidence:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; RemoveItem recalculates both; CreateList sets total_items = len(items)
-- [x] NATS events published for create and complete **Evidence:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
+- [x] Scenario "Create a list with items": Store CRUD operations implemented with tests **Evidence:** implement — `internal/list/store.go` has CreateList, GetList, ListLists, UpdateItemStatus, AddManualItem, RemoveItem, CompleteList, ArchiveList
+- [x] Scenario "Get list with items": Denormalized counter updates (total_items, checked_items) correct **Evidence:** implement — UpdateItemStatus recalculates checked_items via subquery; AddManualItem increments total_items; RemoveItem recalculates both; CreateList sets total_items = len(items)
+- [x] Scenario "Update item status to done" / "Add manual item" / "Complete list" / "Archive list": NATS events published for create and complete **Evidence:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/nats`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
@@ -251,14 +269,25 @@ Scenario: Handle uncountable quantities
   Then quantity is nil and the item is kept as-is with original text
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Merge duplicate ingredients across recipes" | TestRecipeAggregator_MergeDuplicates, TestRecipeAggregator_SameUnitsMerged, TestRecipeAggregator_ThreeRecipeMerge | internal/list/recipe_aggregator_test.go |
+| Unit | Scenario "Normalize units before merging" | TestRecipeAggregator_DifferentUnitsMergedByAlias, TestNormalizeUnit | internal/list/recipe_aggregator_test.go |
+| Unit | Scenario "Keep incompatible units separate" | TestRecipeAggregator_IncompatibleUnitsKeptSeparate, TestRecipeAggregator_DifferentIngredients | internal/list/recipe_aggregator_test.go |
+| Unit | Scenario "Categorize ingredients" | TestRecipeAggregator_CategoriesAssigned, TestCategorizeIngredient | internal/list/recipe_aggregator_test.go |
+| Unit | Scenario "Parse fractional quantities" | TestParseQuantity_MixedFraction, TestParseQuantity_SimpleFraction, TestParseQuantity_Decimal, TestParseQuantity_Integer | internal/list/recipe_aggregator_test.go |
+| Unit | Scenario "Handle uncountable quantities" | TestParseQuantity_UncountableQuantities, TestParseQuantity_Empty, TestRecipeAggregator_UncountableQuantityPreserved | internal/list/recipe_aggregator_test.go |
+
 ### Definition of Done
 
 - [x] Aggregator interface defined **Evidence:** implement — `internal/list/types.go` Aggregator interface with Aggregate(), Domain(), DefaultListType()
-- [x] RecipeAggregator implemented with full test coverage **Evidence:** implement — `internal/list/recipe_aggregator.go` + `recipe_aggregator_test.go`; merges ingredients by normalized name+unit
-- [x] parseQuantity handles integers, decimals, fractions, mixed numbers, "a pinch", "to taste" **Evidence:** implement — `internal/recipe/quantity.go` ParseQuantity with mixed fraction regex, simple fraction regex, Unicode fraction normalization; returns 0 for unparseable
-- [x] normalizeUnit converts between volume units (tsp/tbsp/cup/ml/l) and weight units (oz/lb/g/kg) **Evidence:** implement — `internal/recipe/quantity.go` NormalizeUnit with 24 aliases covering tablespoon→tbsp, teaspoon→tsp, cups→cup, ounce→oz, pound→lb, gram→g, kilogram→kg, milliliter→ml, liter→l
+- [x] Scenario "Merge duplicate ingredients across recipes" / "Normalize units before merging" / "Keep incompatible units separate": RecipeAggregator implemented with full test coverage **Evidence:** implement — `internal/list/recipe_aggregator.go` + `recipe_aggregator_test.go`; merges ingredients by normalized name+unit
+- [x] Scenario "Parse fractional quantities" / "Handle uncountable quantities": parseQuantity handles integers, decimals, fractions, mixed numbers, "a pinch", "to taste" **Evidence:** implement — `internal/recipe/quantity.go` ParseQuantity with mixed fraction regex, simple fraction regex, Unicode fraction normalization; returns 0 for unparseable
+- [x] Scenario "Normalize units before merging": normalizeUnit converts between volume units (tsp/tbsp/cup/ml/l) and weight units (oz/lb/g/kg) **Evidence:** implement — `internal/recipe/quantity.go` NormalizeUnit with 24 aliases covering tablespoon→tbsp, teaspoon→tsp, cups→cup, ounce→oz, pound→lb, gram→g, kilogram→kg, milliliter→ml, liter→l
 - [x] normalizeIngredientName handles plurals and common synonyms **Evidence:** implement — `internal/recipe/quantity.go` NormalizeIngredientName strips trailing "s" and "oes" plurals
-- [x] categorizeIngredient maps 50+ common ingredients to categories **Evidence:** implement — `internal/recipe/quantity.go` CategorizeIngredient maps 88 ingredients across 7 categories (proteins, dairy, produce, spices, baking, pantry, beverages)
+- [x] Scenario "Categorize ingredients": categorizeIngredient maps 50+ common ingredients to categories **Evidence:** implement — `internal/recipe/quantity.go` CategorizeIngredient maps 88 ingredients across 7 categories (proteins, dairy, produce, spices, baking, pantry, beverages)
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/recipe`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
 
@@ -292,10 +321,18 @@ Scenario: Estimate read time
   Then the result is approximately 10 minutes (at 200 WPM)
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Generate reading list from articles" | TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle, TestReadingAggregator_SortOrder, TestReadingAggregator_SourceTraceability | internal/list/reading_aggregator_test.go |
+| Unit | Scenario "Generate product comparison" | TestCompareAggregator_BasicComparison, TestCompareAggregator_MultiProductAlignment, TestCompareAggregator_MissingFields, TestCompareAggregator_InvalidJSON | internal/list/reading_aggregator_test.go |
+| Unit | Scenario "Estimate read time" | TestEstimateReadTime | internal/list/reading_aggregator_test.go |
+
 ### Definition of Done
 
-- [x] ReadingAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` with EstimateReadTime + `reading_aggregator_test.go` (TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle)
-- [x] CompareAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` CompareAggregator with product name/brand/price/rating/specs aggregation
+- [x] Scenario "Generate reading list from articles" / "Estimate read time": ReadingAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` with EstimateReadTime + `reading_aggregator_test.go` (TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle)
+- [x] Scenario "Generate product comparison": CompareAggregator implemented with tests **Evidence:** implement — `internal/list/reading_aggregator.go` CompareAggregator with product name/brand/price/rating/specs aggregation
 - [x] Both register with the aggregator registry **Evidence:** implement — Generator.Aggregators map[string]Aggregator in `internal/list/generator.go`; keyed by domain ("recipe", "reading", "product")
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
@@ -335,13 +372,22 @@ Scenario: Handle artifacts without domain_data
   And a warning is logged for the artifact without domain_data
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Generate list from explicit artifact IDs" | TestGenerator_GenerateFromIDs, TestGenerator_DefaultListType, TestGenerator_DeduplicatesArtifacts | internal/list/generator_test.go |
+| Unit | Scenario "Generate list from tag filter" | TestGenerator_GenerateFromTagFilter | internal/list/generator_test.go |
+| Unit | Scenario "Reject mixed-domain generation" | TestGenerator_RejectMixedDomains, TestValidateDomains_MixedDomains, TestValidateDomains_SingleDomain | internal/list/generator_test.go |
+| Unit | Scenario "Handle artifacts without domain_data" | TestGenerator_HandlesMissingDomainData, TestGenerator_NoArtifactsFound, TestGenerator_NoAggregatorForDomain, TestValidateDomains_NoDomainField, TestDomainFromData | internal/list/generator_test.go |
+
 ### Definition of Done
 
-- [x] Generator resolves artifacts from IDs, tags, and search queries **Evidence:** implement — ArtifactResolver interface + PostgresArtifactResolver
+- [x] Scenario "Generate list from explicit artifact IDs" / "Generate list from tag filter": Generator resolves artifacts from IDs, tags, and search queries **Evidence:** implement — ArtifactResolver interface + PostgresArtifactResolver
 - [x] Generator selects correct aggregator based on list_type + domain **Evidence:** implement — validateDomains() + aggregator map lookup
 - [x] Generator persists list via Store **Evidence:** implement — ListStore interface injection
-- [x] Handles missing domain_data gracefully (skip with warning) **Evidence:** implement — slog.Warn when resolved < requested
-- [x] Rejects incompatible domain combinations **Evidence:** implement — TestGenerator_RejectMixedDomains passes
+- [x] Scenario "Handle artifacts without domain_data": Handles missing domain_data gracefully (skip with warning) **Evidence:** implement — slog.Warn when resolved < requested
+- [x] Scenario "Reject mixed-domain generation": Rejects incompatible domain combinations **Evidence:** implement — TestGenerator_RejectMixedDomains passes
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 
@@ -390,11 +436,22 @@ Scenario: List all active lists
   Then status 200 is returned with 3 lists
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Create shopping list via API" | TestCreateListHandler_Success, TestCreateListHandler_MissingTitle, TestCreateListHandler_NoSources, TestCreateListHandler_InvalidJSON | internal/api/lists_test.go |
+| Unit | Scenario "Get list with items" | TestGetListHandler, TestGetListHandler_NotFound | internal/api/lists_test.go |
+| Unit | Scenario "Check off an item" | TestCheckItemHandler, TestCheckItemHandler_DefaultDone, TestCheckItemHandler_SkipItem, TestCheckItemHandler_SubstituteItem, TestCheckItemHandler_ItemNotFound | internal/api/lists_test.go |
+| Unit | Scenario "Add manual item to list" | TestAddItemHandler, TestAddItemHandler_MissingContent, TestRemoveItemHandler, TestRemoveItemHandler_NotFound | internal/api/lists_test.go |
+| Unit | Scenario "Complete a list" | TestCompleteListHandler, TestCompleteListHandler_NotFound, TestArchiveListHandler, TestArchiveListHandler_NotFound, TestUpdateListHandler_ArchiveViaUpdate, TestUpdateListHandler_InvalidJSON | internal/api/lists_test.go |
+| Unit | Scenario "List all active lists" | TestListListsHandler, TestListListsHandler_Empty, TestListListsHandler_FilterByType | internal/api/lists_test.go |
+
 ### Definition of Done
 
-- [x] All list CRUD endpoints implemented **Evidence:** reconcile — POST/GET /api/lists, GET/PATCH/DELETE /api/lists/{id}
-- [x] All item-level operation endpoints implemented **Evidence:** reconcile — POST items, POST check, DELETE items/{itemId}, POST complete
-- [x] Route group registered in router.go **Evidence:** implement — Chi r.Route("/lists", ...) with all routes including PATCH, DELETE
+- [x] Scenario "Create shopping list via API" / "Get list with items" / "Add manual item to list": All list CRUD endpoints implemented **Evidence:** reconcile — POST/GET /api/lists, GET/PATCH/DELETE /api/lists/{id}
+- [x] Scenario "Check off an item" / "Complete a list": All item-level operation endpoints implemented **Evidence:** reconcile — POST items, POST check, DELETE items/{itemId}, POST complete
+- [x] Scenario "List all active lists": Route group registered in router.go **Evidence:** implement — Chi r.Route("/lists", ...) with all routes including PATCH, DELETE
 - [x] Dependencies wired (Generator, Store) **Evidence:** implement — ListHandlers struct + Dependencies field
 - [x] Error responses follow existing API error format **Evidence:** implement — JSON error pattern
 - [x] `./smackerel.sh test unit` passes **Evidence:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
@@ -441,13 +498,23 @@ Scenario: Complete list via Telegram
   And a summary of the completed list is sent
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Generate shopping list via Telegram" | TestHandleList_GenerateShoppingList, TestHandleList_GenerateInvalidType, TestParseListCommand | internal/telegram/list_test.go |
+| Unit | Scenario "Check item via inline keyboard" | TestHandleListCallback, TestHandleListCallback_InvalidData | internal/telegram/list_test.go |
+| Unit | Scenario "Show active lists" | TestHandleList_ShowActiveLists, TestHandleList_ShowEmpty, TestFormatListSummary, TestFormatListMessage, TestFormatListMessage_AllDone | internal/telegram/list_test.go |
+| Unit | Scenario "Add manual item via Telegram" | TestHandleList_AddItem | internal/telegram/list_test.go |
+| Unit | Scenario "Complete list via Telegram" | TestHandleList_Done | internal/telegram/list_test.go |
+
 ### Definition of Done
 
-- [x] `/list` command parser implemented and registered **Evidence:** implement — parseListCommand() + bot command switch
-- [x] List display with inline keyboard renders correctly **Evidence:** implement — formatListMessage() with keyboard buttons
-- [x] Callback handler for check/skip/substitute works **Evidence:** implement — handleListCallback() with callback data parsing
-- [x] Message editing on item state change works **Evidence:** implement — NewEditMessageText after callback
-- [x] `/list add` and `/list done` sub-commands work **Evidence:** implement — tested with mock HTTP servers
+- [x] Scenario "Generate shopping list via Telegram" / "Add manual item via Telegram" / "Complete list via Telegram": `/list` command parser implemented and registered **Evidence:** implement — parseListCommand() + bot command switch
+- [x] Scenario "Show active lists": List display with inline keyboard renders correctly **Evidence:** implement — formatListMessage() with keyboard buttons
+- [x] Scenario "Check item via inline keyboard": Callback handler for check/skip/substitute works **Evidence:** implement — handleListCallback() with callback data parsing
+- [x] Scenario "Check item via inline keyboard": Message editing on item state change works **Evidence:** implement — NewEditMessageText after callback
+- [x] Scenario "Add manual item via Telegram" / "Complete list via Telegram": `/list add` and `/list done` sub-commands work **Evidence:** implement — tested with mock HTTP servers
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 
@@ -475,11 +542,18 @@ Scenario: Frequently purchased ingredients detected
   And this data is available for future list pre-population
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Completed shopping list informs intelligence" | TestHandleListCompleted_UnmarshalEvent, TestHandleListCompleted_InvalidJSON, TestHandleListCompleted_NilPool, TestSubscribeListsCompleted_NilNATS, TestBoostArtifactRelevance_NilPool, TestBoostArtifactRelevance_EmptyIDs | internal/intelligence/lists_test.go |
+| Unit | Scenario "Frequently purchased ingredients detected" | TestTrackPurchaseFrequency_NilPool, TestPurchaseFrequency_Struct | internal/intelligence/lists_test.go |
+
 ### Definition of Done
 
-- [x] NATS subscriber for `lists.completed` implemented in intelligence engine **Evidence:** implement — SubscribeListsCompleted() + NATS subjects in contract
-- [x] Completed list analysis updates artifact relevance scores **Evidence:** implement — boostArtifactRelevance() +0.1 capped at 1.0
-- [x] Frequency tracking for purchased items stored (for future pantry awareness) **Evidence:** implement — trackPurchaseFrequency() upserts
+- [x] Scenario "Completed shopping list informs intelligence": NATS subscriber for `lists.completed` implemented in intelligence engine **Evidence:** implement — SubscribeListsCompleted() + NATS subjects in contract
+- [x] Scenario "Completed shopping list informs intelligence": Completed list analysis updates artifact relevance scores **Evidence:** implement — boostArtifactRelevance() +0.1 capped at 1.0
+- [x] Scenario "Frequently purchased ingredients detected": Frequency tracking for purchased items stored (for future pantry awareness) **Evidence:** implement — trackPurchaseFrequency() upserts
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
 

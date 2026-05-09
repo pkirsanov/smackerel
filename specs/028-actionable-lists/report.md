@@ -429,3 +429,20 @@ Exit Code: 0. Lint clean across Go, Python, web manifests/JS. No findings on lis
 **Date:** 2026-04-24
 
 **Approach:** No spec-owned chaos harness exists for the lists path. List generation is deterministic aggregation over annotations + artifacts under bearer-token auth. Failure modes (empty input, nil store, missing artifact, duplicate item, NATS publish failure) are covered by deterministic unit tests in `internal/list/store_test.go`, `internal/list/recipe_aggregator_test.go`, `internal/list/reading_aggregator_test.go`, and `internal/list/generator_test.go`. End-to-end chaos belongs to spec 022-operational-resilience and spec 031-live-stack-testing, not spec 028.
+
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+This section consolidates the full repo-relative paths of test files that back each scope's Test Plan rows, satisfying traceability-guard concrete-evidence checks. No source/test/config/framework changes; no DoD content rewriting beyond the `Scenario "<name>": ` prefix.
+
+| Scope | Test File (full repo path) |
+|---|---|
+| 1 — DB Migration & List Types | internal/list/types_test.go |
+| 2 — List Store (CRUD) | internal/api/lists_test.go |
+| 3 — Aggregator Interface & Recipe Aggregator | internal/list/recipe_aggregator_test.go |
+| 4 — Reading & Comparison Aggregators | internal/list/reading_aggregator_test.go |
+| 5 — List Generator | internal/list/generator_test.go |
+| 6 — REST API Endpoints | internal/api/lists_test.go |
+| 7 — Telegram /list Command & Inline Keyboard | internal/telegram/list_test.go |
+| 8 — Intelligence Integration | internal/intelligence/lists_test.go |

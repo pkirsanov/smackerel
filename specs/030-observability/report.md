@@ -379,3 +379,18 @@ Systematic DevOps audit of observability infrastructure: build pipeline, Docker 
 ### Verdict
 
 **CLEAN (code) + 3 doc-sync fixes applied.** Build pipeline, Docker Compose, config SST, and test infrastructure are all healthy. No code changes required. Operations documentation now matches the full implemented metrics surface.
+
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+This section consolidates the full repo-relative paths of test files that back each scope's Test Plan rows, satisfying traceability-guard concrete-evidence checks. No source/test/config/framework changes; no DoD content rewriting beyond the `Scenario "<name>": ` prefix on existing DoD bullets.
+
+| Scope | Test File (full repo path) |
+|---|---|
+| 1 — Prometheus Metrics Endpoint | internal/metrics/metrics_test.go |
+| 2 — Ingestion & Search Metrics | internal/metrics/metrics_test.go |
+| 5 — OpenTelemetry Trace Propagation | internal/metrics/trace_test.go |
+
+**Residual (not in implement authority):**
+- Scope 3 (Connector Sync Metrics) and Scope 4 (ML Sidecar Metrics) lack `### Gherkin Scenarios` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.

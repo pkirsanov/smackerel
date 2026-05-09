@@ -462,3 +462,12 @@ None. Previous devops fix (migration table consolidation 19→3 entries) remains
 - `web/pwa/manifest.json` confirms PWA share target with POST method
 - `web/extension/popup/popup.html` confirms setup screen with server URL and auth token fields
 - Documentation instructions match actual code behavior (context menu IDs, share target params, service worker scope)
+
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+Spec 032 is documentation-only — Scopes 1-4 cover updates to `README.md`, `docs/Development.md`, `docs/Operations.md`, and `docs/TLS_Setup.md` (a future addition). None of the four scopes contain `### Gherkin Scenarios` subsections in scopes.md because documentation behavior is not traditionally specified via Given/When/Then.
+
+**Residual (not in implement authority):**
+- All 4 scopes (README System Requirements, Development.md Update, Operations Runbook, TLS Setup Guide) lack Gherkin scenarios. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended if Gherkin coverage is desired for documentation scopes; otherwise, the trace-guard "no Gherkin scenarios to trace" failures are an acceptable artifact of this spec's documentation-only nature.
