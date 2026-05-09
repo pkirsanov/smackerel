@@ -32,6 +32,17 @@
         "runStartedAt": "2026-04-24T00:00:00Z",
         "runEndedAt": "2026-04-24T00:00:00Z",
         "summary": "Manual spec-review pass for 030-observability: verified implementation files referenced in scopes.md exist on disk via ls -la and grep (internal/metrics/metrics.go 222 lines, trace.go 50 lines, ml/app/metrics.py 42 lines); confirmed all 8 metric callsites wired in source via grep across internal/**/*.go (ArtifactsIngested, CaptureTotal, SearchLatency, DomainExtraction, ConnectorSync, NATSDeadLetter, DBConnectionsActive, DigestGeneration); ran package tests via go test -count=1 (metrics 0.017s, api 6.738s, digest 0.320s — all PASS); confirmed state.json completedScopes aligned with scopes.md Done markers; report.md evidence markers added with **Executed:**, **Command:**, **Phase Agent:** for Validation/Audit/Chaos sections."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": [
+          "implement"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-09T00:00:00Z",
+        "runEndedAt": "2026-05-09T00:00:00Z",
+        "summary": "Trace-guard closure pass: closed 5 of 7 trace failures (7\u21922 residual). Added Test Plan tables to Scopes 1, 2, 5 pointing at internal/metrics/metrics_test.go and internal/metrics/trace_test.go. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. Residual: Scopes 3 (Connector Sync Metrics) and 4 (ML Sidecar Metrics) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."
       }
     ]
   },

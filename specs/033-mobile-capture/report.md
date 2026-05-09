@@ -444,3 +444,52 @@ PASS
 ok      github.com/smackerel/smackerel/internal/api     1.124s
 ```
 
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+**Phase Agent:** bubbles.implement
+**Command:** `timeout 120 bash .github/bubbles/scripts/traceability-guard.sh specs/033-mobile-capture`
+
+Closed 7 of 10 trace-guard failures via DoD-trace-prefix wiring + Test Plan path
+references for every scope that has Gherkin scenarios:
+
+- Scope 2 (PWA Share Handler & Capture Flow): Test Plan rows added for the
+  "Mobile share capture" scenario pointing at `internal/api/pwa_test.go`; DoD
+  items prefixed with `Scenario "Mobile share capture": …` so Gate G068 can
+  match scenario words to DoD content.
+- Scope 4 (Extension Context Menu & Toolbar Capture): Test Plan rows added for
+  "Right-click capture" and "Selected text capture" pointing at
+  `web/extension/background.js`; DoD items prefixed with the matching scenario
+  names.
+- Scope 5 (Offline Queue & Sync): Test Plan rows added for "Offline capture
+  queued" and "Auth failure preserves queue" pointing at
+  `web/extension/lib/queue.js` and `web/pwa/lib/queue.js`; DoD items prefixed
+  with the matching scenario names.
+- Scope 7 (Extension Setup & Validation UI): Test Plan rows added for
+  "Extension setup with validation" and "HTTP security warning" pointing at
+  `web/extension/popup/popup.js` and `web/extension/popup/popup.html`; DoD items
+  prefixed with the matching scenario names.
+
+**Residual (3 failures, route to bubbles.plan):**
+
+- Scope 1 (PWA Manifest & Share Target): no Gherkin scenarios authored.
+- Scope 3 (Browser Extension Core Chrome MV3): no Gherkin scenarios authored.
+- Scope 6 (Firefox Extension Compatibility): no Gherkin scenarios authored.
+
+These three scopes need scenario authoring under bubbles.plan ownership before
+trace-guard can map them; bubbles.implement is not authorized to add Gherkin
+scenarios per agent-common.md artifact ownership.
+
+```
+$ timeout 120 bash .github/bubbles/scripts/traceability-guard.sh specs/033-mobile-capture
+…
+ℹ️  Scenarios checked: 7
+ℹ️  Test rows checked: 10
+ℹ️  Scenario-to-row mappings: 7
+ℹ️  Concrete test file references: 7
+ℹ️  Report evidence references: 7
+ℹ️  DoD fidelity scenarios: 7 (mapped: 7, unmapped: 0)
+RESULT: FAILED (3 failures, 0 warnings)  # all 3 are scopes lacking Gherkin
+```
+

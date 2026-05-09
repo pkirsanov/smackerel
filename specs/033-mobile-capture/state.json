@@ -139,12 +139,23 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runEndedAt": "2026-04-23T00:00:00Z",
       "summary": "Manual cross-check verified spec implementation files exist on disk: web/pwa/{manifest.json,sw.js,index.html,app.js,lib/queue.js,embed.go} (PWA shell + share target + offline queue), web/extension/{manifest.json,manifest.firefox.json,background.js,popup/popup.{html,js},lib/{queue.js,browser-polyfill.js}} (Chrome MV3 + Firefox MV2 with polyfill), internal/api/pwa.go (PWAShareHandler at line 241). Context menu IDs smackerel-save-page/smackerel-save-selection registered in background.js. go test passes for internal/api package."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "trace-guard-closure"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-09T04:36:00Z",
+      "runEndedAt": "2026-05-09T04:40:00Z",
+      "summary": "Trace-guard cleanup batch: closed 7 of 10 trace-guard failures. Added Test Plan tables + DoD-trace-prefixes to scopes 2 (Mobile share capture → internal/api/pwa_test.go), 4 (Right-click + Selected text capture → web/extension/background.js), 5 (Offline capture queued + Auth failure preserves queue → web/extension/lib/queue.js + web/pwa/lib/queue.js), and 7 (Extension setup with validation + HTTP security warning → web/extension/popup/popup.js + popup.html). Residual 3 failures are scopes 1, 3, 6 lacking Gherkin scenarios — routed to bubbles.plan ownership. report.md Trace-Guard Closure section appended. artifact-lint PASSED."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T14:25:00Z",
+  "lastUpdatedAt": "2026-05-09T04:40:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

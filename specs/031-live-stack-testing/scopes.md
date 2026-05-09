@@ -82,9 +82,16 @@ Scenario: Schema DDL resilience
   Then other tables are unaffected
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Integration | Scenario "All migrations apply cleanly" | TestMigrations_AllTablesExist, TestMigrations_SchemaVersionCount, TestMigrations_ExtensionsLoaded, TestMigrations_ArtifactsColumns, TestMigrations_IndexesExist, TestMigrations_AnnotationsConstraints | tests/integration/db_migration_test.go |
+| Integration | Scenario "Schema DDL resilience" | TestMigrations_TableDropAndRecreate | tests/integration/db_migration_test.go |
+
 ### Definition of Done
 
-- [x] All consolidated migrations verified: `TestMigrations_SchemaVersionCount` checks >= 3 (001, 018, 019), `TestMigrations_AllTablesExist` verifies 12 tables, `TestMigrations_ExtensionsLoaded` verifies vector + pg_trgm in `tests/integration/db_migration_test.go` — **Phase:** implement
+- [x] Scenario "All migrations apply cleanly": All consolidated migrations verified: `TestMigrations_SchemaVersionCount` checks >= 3 (001, 018, 019), `TestMigrations_AllTablesExist` verifies 12 tables, `TestMigrations_ExtensionsLoaded` verifies vector + pg_trgm in `tests/integration/db_migration_test.go` — **Phase:** implement
   Evidence: `tests/integration/db_migration_test.go` (305 lines)
   ```
   $ wc -l tests/integration/db_migration_test.go
@@ -94,13 +101,13 @@ Scenario: Schema DDL resilience
   115:func TestMigrations_ExtensionsLoaded(t *testing.T) {
   135:func TestMigrations_SchemaVersionCount(t *testing.T) {
   ```
-- [x] Schema DDL resilience tested: `TestMigrations_TableDropAndRecreate` drops lists/list_items, verifies other tables unaffected, recreates via fresh DDL in `tests/integration/db_migration_test.go` — **Phase:** implement
+- [x] Scenario "Schema DDL resilience": Schema DDL resilience tested: `TestMigrations_TableDropAndRecreate` drops lists/list_items, verifies other tables unaffected, recreates via fresh DDL in `tests/integration/db_migration_test.go` — **Phase:** implement
   Evidence: `tests/integration/db_migration_test.go:162`
   ```
   $ grep -nE 'func TestMigrations_TableDropAndRecreate' tests/integration/db_migration_test.go
   162:func TestMigrations_TableDropAndRecreate(t *testing.T) {
   ```
-- [x] Table/column/index checks: `TestMigrations_ArtifactsColumns` (21 columns), `TestMigrations_IndexesExist` (11 indexes), `TestMigrations_AnnotationsConstraints` (chk_rating_range) — **Phase:** implement
+- [x] Scenario "All migrations apply cleanly": Table/column/index checks: `TestMigrations_ArtifactsColumns` (21 columns), `TestMigrations_IndexesExist` (11 indexes), `TestMigrations_AnnotationsConstraints` (chk_rating_range) — **Phase:** implement
   Evidence: `tests/integration/db_migration_test.go` test functions
   ```
   $ grep -nE 'func TestMigrations_(ArtifactsColumns|IndexesExist|AnnotationsConstraints)' tests/integration/db_migration_test.go
@@ -192,16 +199,22 @@ Scenario: Full pipeline flow
   And searching for content from that artifact returns it
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| E2E | Scenario "Full pipeline flow" | TestE2E_CaptureProcessSearch | tests/e2e/capture_process_search_test.go |
+
 ### Definition of Done
 
-- [x] Text capture → processing verified end-to-end: `TestE2E_CaptureProcessSearch` in `tests/e2e/capture_process_search_test.go` — POST /api/capture → poll /api/artifact/{id} → POST /api/search — **Phase:** implement
+- [x] Scenario "Full pipeline flow": Text capture → processing verified end-to-end: `TestE2E_CaptureProcessSearch` in `tests/e2e/capture_process_search_test.go` — POST /api/capture → poll /api/artifact/{id} → POST /api/search — **Phase:** implement
   Evidence: `tests/e2e/capture_process_search_test.go` (166 lines)
   ```
   $ wc -l tests/e2e/capture_process_search_test.go
   166 tests/e2e/capture_process_search_test.go
   $ grep -nE 'func TestE2E_CaptureProcessSearch|/api/capture|/api/search' tests/e2e/capture_process_search_test.go | head -5
   ```
-- [x] Search returns captured artifact: test verifies artifact_id appears in search results after processing — **Phase:** implement
+- [x] Scenario "Full pipeline flow": Search returns captured artifact: test verifies artifact_id appears in search results after processing — **Phase:** implement
   Evidence: same test file verifies search-result containment
   ```
   $ grep -nE 'artifact_id|results' tests/e2e/capture_process_search_test.go | head -10
@@ -242,21 +255,27 @@ Scenario: Search works after cold start
 - Configurable via `ML_READINESS_TIMEOUT_S` env var (SST: `services.ml.readiness_timeout_s`)
 - On timeout: log warning, set mlHealthy=false → text fallback until next health check
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Integration | Scenario "Search works after cold start" | TestMLReadiness_WaitForHealthy, TestMLReadiness_TimeoutFallback, TestMLReadiness_EmptyURL, TestMLReadiness_ZeroTimeout | tests/integration/ml_readiness_test.go |
+
 ### Definition of Done
 
-- [x] `WaitForMLReady` implemented in `internal/api/ml_readiness.go` — polls ML /health every 500ms until healthy or timeout — **Phase:** implement
+- [x] Scenario "Search works after cold start": `WaitForMLReady` implemented in `internal/api/ml_readiness.go` — polls ML /health every 500ms until healthy or timeout — **Phase:** implement
   Evidence: `internal/api/ml_readiness.go` (52 lines)
   ```
   $ wc -l internal/api/ml_readiness.go
   52 internal/api/ml_readiness.go
   $ grep -nE 'func WaitForMLReady|500.*Millisecond|/health' internal/api/ml_readiness.go | head -5
   ```
-- [x] Configurable timeout: SST path `services.ml.readiness_timeout_s` → config gen → `ML_READINESS_TIMEOUT_S` env var → `config.MLReadinessTimeoutS` → `buildCoreServices` — **Phase:** implement
+- [x] Scenario "Search works after cold start": Configurable timeout: SST path `services.ml.readiness_timeout_s` → config gen → `ML_READINESS_TIMEOUT_S` env var → `config.MLReadinessTimeoutS` → `buildCoreServices` — **Phase:** implement
   Evidence: SST flow through config.go and services.go
   ```
   $ grep -nE 'MLReadinessTimeoutS|ML_READINESS_TIMEOUT_S' internal/config/config.go cmd/core/services.go | head -5
   ```
-- [x] Falls back to text mode on timeout: sets `mlHealthy=false` + `mlHealthAt=now` so `isMLHealthy()` returns false until TTL expires — **Phase:** implement
+- [x] Scenario "Search works after cold start": Falls back to text mode on timeout: sets `mlHealthy=false` + `mlHealthAt=now` so `isMLHealthy()` returns false until TTL expires — **Phase:** implement
   Evidence: `internal/api/ml_readiness.go` and `internal/api/health.go`
   ```
   $ grep -nE 'mlHealthy|mlHealthAt|isMLHealthy' internal/api/health.go internal/api/ml_readiness.go | head -10

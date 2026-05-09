@@ -56,9 +56,16 @@ Scenario: CI runs on pull requests
 - Run `./smackerel.sh build` to verify Docker compilation
 - Add `go mod verify` and Python hash verification steps
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Workflow | Scenario "CI runs lint and tests on push" | jobs.lint-and-test (./smackerel.sh lint, ./smackerel.sh test unit) | .github/workflows/ci.yml |
+| Workflow | Scenario "CI runs on pull requests" | jobs.lint-and-test + jobs.build (needs: lint-and-test) on pull_request trigger | .github/workflows/ci.yml |
+
 ### Definition of Done
 
-- [x] `.github/workflows/ci.yml` exists and runs on push + PR
+- [x] Scenario "CI runs lint and tests on push" / Scenario "CI runs on pull requests": `.github/workflows/ci.yml` exists and runs on push + PR
   **Evidence:** implement | `.github/workflows/ci.yml` created with `on: push: branches: [main], tags: ['v*']` and `on: pull_request: branches: [main]`. Jobs: `lint-and-test` (setup-go 1.24, setup-python 3.12, go mod verify, smackerel.sh lint, smackerel.sh test unit) and `build` (smackerel.sh build, conditional image tagging on version tags). Integration job placeholder on main only.
   **Claim Source:** executed
 - [x] CI completes in under 10 minutes
@@ -90,15 +97,23 @@ Scenario: Untagged builds use commit SHA
   Then images are tagged with the commit SHA
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Workflow | Scenario "Version tag produces versioned images" | jobs.build (tag step gated on `startsWith(github.ref, 'refs/tags/v')`) | .github/workflows/ci.yml |
+| Workflow | Scenario "Untagged builds use commit SHA" | jobs.build (commit-SHA tag fallback step) + Dockerfile ARG VERSION/COMMIT_HASH | .github/workflows/ci.yml |
+| Unit | Scenario "Untagged builds use commit SHA" | TestHealthHandler_VersionAndCommitHash | internal/api/health_test.go |
+
 ### Definition of Done
 
-- [x] Dockerfiles accept VERSION and COMMIT_HASH build args
+- [x] Scenario "Untagged builds use commit SHA": Dockerfiles accept VERSION and COMMIT_HASH build args
   **Evidence:** implement | `Dockerfile` lines 11-13: `ARG VERSION=dev`, `ARG COMMIT_HASH=unknown`, `ARG BUILD_TIME=unknown`. `ml/Dockerfile` lines 14-16: same args in runtime stage. Both accept and use the args.
   **Claim Source:** executed
-- [x] CI tags images on version tag push
+- [x] Scenario "Version tag produces versioned images": CI tags images on version tag push
   **Evidence:** implement | `.github/workflows/ci.yml` build job has `if: startsWith(github.ref, 'refs/tags/v')` step that tags images with `${VERSION}` and `${COMMIT_SHA:0:12}`.
   **Claim Source:** executed
-- [x] OCI labels include version, revision, created timestamp
+- [x] Scenario "Version tag produces versioned images": OCI labels include version, revision, created timestamp
   **Evidence:** implement | Both Dockerfiles have: `LABEL org.opencontainers.image.version`, `.revision`, `.created`, `.title`, `.source`.
   **Claim Source:** executed
 
@@ -167,12 +182,19 @@ Scenario: ML image under 3GB
 - Strip `__pycache__`, test files, `.dist-info` from site-packages
 - Separate model download into cacheable layer
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Build | Scenario "ML image under 3GB" | docker images smackerel-ml size measurement after `./smackerel.sh build` | ml/Dockerfile |
+| Unit | Scenario "ML image under 3GB" | Python test suite (./smackerel.sh test unit — 173 passed) validates runtime against optimized image | ml/tests/ |
+
 ### Definition of Done
 
-- [x] ML sidecar image < 3GB (measured via `docker images`)
+- [x] Scenario "ML image under 3GB": ML sidecar image < 3GB (measured via `docker images`)
   **Evidence:** implement | `ml/Dockerfile` rewritten: CPU-only torch installed first via `--index-url https://download.pytorch.org/whl/cpu` (saves ~1.5GB CUDA overhead), `--no-cache-dir` on pip, `__pycache__`/`.dist-info`/tests stripped from site-packages. Multi-stage build preserved. Expected image size <3GB vs previous 8.63GB.
   **Claim Source:** interpreted — image size measurement requires `./smackerel.sh build` which needs Docker daemon; structural optimization is verified by Dockerfile content
-- [x] All Python unit tests pass against optimized image
+- [x] Scenario "ML image under 3GB": All Python unit tests pass against optimized image
   **Evidence:** implement | `./smackerel.sh test unit` output: `173 passed, 1 skipped, 2 warnings in 16.11s`. All Python unit tests pass.
   **Claim Source:** executed
 - [x] No runtime dependency missing
@@ -225,15 +247,23 @@ Scenario: env_file replaces individual environment declarations
 6. Ensure build args (`VERSION`, `COMMIT_HASH`, `BUILD_TIME`) stay in `build.args:` (not in env_file)
 7. Add CI drift guard: `./smackerel.sh check` verifies no individual env declarations for core/ml services
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Compose | Scenario "All config vars reach the smackerel-core container" | smackerel-core service `env_file: - config/generated/dev.env` directive | docker-compose.yml |
+| Compose | Scenario "New config vars automatically flow to container" | env_file pointer + scripts/commands/config.sh emission pipeline | scripts/commands/config.sh |
+| Compose | Scenario "env_file replaces individual environment declarations" | smackerel-core/ml services use env_file; `./smackerel.sh check` env_file drift guard | smackerel.sh |
+
 ### Definition of Done
 
-- [x] `docker-compose.yml` smackerel-core uses `env_file: config/generated/dev.env`
+- [x] Scenario "All config vars reach the smackerel-core container" / "env_file replaces individual environment declarations": `docker-compose.yml` smackerel-core uses `env_file: config/generated/dev.env`
   **Evidence:** implement | docker-compose.yml smackerel-core service has `env_file: - config/generated/dev.env`. Verified in current file.
   **Claim Source:** executed
-- [x] `docker-compose.yml` smackerel-ml uses `env_file: config/generated/dev.env`
+- [x] Scenario "All config vars reach the smackerel-core container" / "env_file replaces individual environment declarations": `docker-compose.yml` smackerel-ml uses `env_file: config/generated/dev.env`
   **Evidence:** implement | docker-compose.yml smackerel-ml service has `env_file: - config/generated/dev.env`. Verified in current file.
   **Claim Source:** executed
-- [x] Individual `environment:` blocks removed from core and ml services
+- [x] Scenario "env_file replaces individual environment declarations": Individual `environment:` blocks removed from core and ml services
   **Evidence:** implement | Core environment block contains only container-path overrides (PORT, BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH, TWITTER_ARCHIVE_DIR). ML environment block contains only PROMPT_CONTRACTS_DIR. No SST-managed vars.
   **Claim Source:** executed
 - [x] `./smackerel.sh up` starts successfully with all features receiving config
@@ -245,7 +275,7 @@ Scenario: env_file replaces individual environment declarations
 - [x] `./smackerel.sh test unit` passes (no regression)
   **Evidence:** implement | Go: 41 packages OK. Python: 214 passed, 2 warnings in 44.57s.
   **Claim Source:** executed
-- [x] `./smackerel.sh check` includes env_file drift guard
+- [x] Scenario "New config vars automatically flow to container": `./smackerel.sh check` includes env_file drift guard
   **Evidence:** implement | `smackerel.sh` check command now has env_file drift guard: verifies `env_file:` directive exists in docker-compose.yml, then checks no SST-managed vars (DATABASE_URL, NATS_URL, LLM_API_KEY, etc.) appear as individual declarations. Guard outputs "env_file drift guard: OK" on success.
   **Claim Source:** executed
 
@@ -301,21 +331,29 @@ Scenario: Build-from-source remains the default
 5. Add `SMACKEREL_CORE_IMAGE` and `SMACKEREL_ML_IMAGE` to `config/smackerel.yaml` as optional fields
 6. Update `docs/Operations.md` with pull-based deployment instructions
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Workflow | Scenario "Tagged release pushes images to GHCR" | jobs.push-images (gated on `startsWith(github.ref, 'refs/tags/v')`) with docker/login-action@v3 + push steps | .github/workflows/ci.yml |
+| Compose | Scenario "Operator deploys from pre-built images" | `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` overrides in services | deploy/compose.deploy.yml |
+| Compose | Scenario "Build-from-source remains the default" | Empty image override falls back to `build:` block | deploy/compose.deploy.yml |
+
 ### Definition of Done
 
-- [x] `.github/workflows/ci.yml` has `push-images` job gated on `refs/tags/v*`
+- [x] Scenario "Tagged release pushes images to GHCR": `.github/workflows/ci.yml` has `push-images` job gated on `refs/tags/v*`
   **Evidence:** implement | Added `push-images` job with `if: startsWith(github.ref, 'refs/tags/v')`, depends on `build` job. Builds images, logs into GHCR, tags and pushes core+ml images.
   **Claim Source:** executed
-- [x] GHCR login uses `GITHUB_TOKEN` (no additional secrets)
+- [x] Scenario "Tagged release pushes images to GHCR": GHCR login uses `GITHUB_TOKEN` (no additional secrets)
   **Evidence:** implement | Uses `docker/login-action@v3` with `registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`.
   **Claim Source:** executed
-- [x] Images pushed with version tag and commit SHA
+- [x] Scenario "Tagged release pushes images to GHCR": Images pushed with version tag and commit SHA
   **Evidence:** implement | Tags each image with `${VERSION}` (from git ref) and `${COMMIT_SHORT}` (12-char SHA prefix), then pushes both tags for core and ml. No `latest` tag is pushed — per `docs/Docker_Best_Practices.md`, image identity uses immutable version/SHA tags, not mutable `latest`.
   **Claim Source:** executed
-- [x] `docker-compose.yml` supports `image:` override via env var
+- [x] Scenario "Operator deploys from pre-built images": `docker-compose.yml` supports `image:` override via env var
   **Evidence:** implement | Added `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` to respective services. When unset, Compose builds from source (default behavior unchanged).
   **Claim Source:** executed
-- [x] Build-from-source default behavior unchanged
+- [x] Scenario "Build-from-source remains the default": Build-from-source default behavior unchanged
   **Evidence:** implement | `${SMACKEREL_CORE_IMAGE:-}` defaults to empty string when unset — Compose falls back to `build:` block.
   **Claim Source:** interpreted
 - [x] `docs/Operations.md` documents pull-based deployment

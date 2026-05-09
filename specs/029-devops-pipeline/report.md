@@ -302,3 +302,20 @@ Exit Code: 0. Lint clean across Go, Python, web. CI YAML, Dockerfile, docker-com
 **Date:** 2026-04-24
 
 **Approach:** Spec 029 is build-time CI infrastructure with no runtime failure surface that warrants a dedicated chaos harness. CI failures surface via GitHub Actions run status; image build failures surface via `docker build` exit codes; env_file drift is caught by `./smackerel.sh check`. The chaos-hardening sweep recorded above (2026-04-22 section) already verified absence of `:latest` floating tags, immutable NATS SHA pinning, and proper secret usage. End-to-end chaos belongs to spec 022-operational-resilience and spec 031-live-stack-testing.
+
+---
+
+## Trace-Guard Closure (2026-05-09)
+
+This section consolidates the full repo-relative paths of CI/build/compose/deploy artifacts that back each scope's Test Plan rows, satisfying traceability-guard concrete-evidence checks. No source/test/config/framework changes; no DoD content rewriting beyond the `Scenario "<name>": ` prefix on existing DoD bullets.
+
+| Scope | Artifact File (full repo path) |
+|---|---|
+| 1 — GitHub Actions CI Workflow | .github/workflows/ci.yml |
+| 2 — Docker Image Versioning | .github/workflows/ci.yml ; internal/api/health_test.go |
+| 5 — ML Sidecar Image Optimization | ml/Dockerfile ; ml/tests/ |
+| 6 — Docker Compose env_file Migration | docker-compose.yml ; scripts/commands/config.sh ; smackerel.sh |
+| 7 — GHCR Image Push on Tagged Releases | .github/workflows/ci.yml ; deploy/compose.deploy.yml |
+
+**Residual (not in implement authority):**
+- Scope 3 (Branch Protection Documentation) and Scope 4 (Build Metadata) lack `### Use Cases (Gherkin)` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.

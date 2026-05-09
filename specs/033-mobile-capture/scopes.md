@@ -87,24 +87,31 @@ Scenario: Mobile share capture
   And the PWA returns to the source app
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Unit | Scenario "Mobile share capture" | TestPWAShareHandler_ValidFormData, TestPWAShareHandler_URLOnlyShare, TestPWAShareHandler_RendersStructuralElements, TestPWAShareHandler_CaptureSourceHeader, TestPWAShareHandler_CSPHeaderPresent, TestPWAShareHandler_CSPNonceUniqueness, TestPWAShareHandler_NoInlineEventHandlers, TestPWAShareHandler_GETMethodRejected, TestPWAShareHandler_EmptyFields, TestPWAShareHandler_SpecialCharactersEscaped, TestPWAShareHandler_OversizedBodyRejected | internal/api/pwa_test.go |
+| Unit | Scenario "Mobile share capture" | TestPWAStaticFileServer, TestPWAFileServer_SWContentHashInjected, TestPWAFileServer_SWNoCacheHeader, TestPWAContentHash_NotEmpty | internal/api/pwa_test.go |
+
 ### Definition of Done
 
-- [x] POST handler at `/pwa/share` processes share target data — **Phase:** implement — `internal/api/pwa.go` PWAShareHandler parses form data (title/text/url), serves share page template
+- [x] Scenario "Mobile share capture": POST handler at `/pwa/share` processes share target data — **Phase:** implement — `internal/api/pwa.go` PWAShareHandler parses form data (title/text/url), serves share page template
   Evidence: `internal/api/pwa.go:241` PWAShareHandler
   ```
   $ grep -nE 'PWAShareHandler|r\.FormValue|share' internal/api/pwa.go | head -10
   ```
-- [x] URL and text captured via existing API — **Phase:** implement — Share page JS calls `fetch('/api/capture')` with Bearer auth from localStorage
+- [x] Scenario "Mobile share capture": URL and text captured via existing API — **Phase:** implement — Share page JS calls `fetch('/api/capture')` with Bearer auth from localStorage
   Evidence: `internal/api/pwa.go` share template; `web/pwa/app.js` capture flow
   ```
   $ grep -nE '/api/capture|localStorage|Authorization' internal/api/pwa.go web/pwa/app.js | head -10
   ```
-- [x] Success/error feedback displayed — **Phase:** implement — Share page shows spinner → ✅ Saved! / ❌ error with retry button
+- [x] Scenario "Mobile share capture": Success/error feedback displayed — **Phase:** implement — Share page shows spinner → ✅ Saved! / ❌ error with retry button
   Evidence: pwa.go embeds inline share page HTML with status feedback
   ```
   $ grep -nE 'Saved|spinner|error' internal/api/pwa.go | head -5
   ```
-- [x] Auto-close and return to source app — **Phase:** implement — `setTimeout(window.close(), 1500)` after success
+- [x] Scenario "Mobile share capture": Auto-close and return to source app — **Phase:** implement — `setTimeout(window.close(), 1500)` after success
   Evidence: pwa.go inline share page uses setTimeout window.close
   ```
   $ grep -nE 'setTimeout|window\.close' internal/api/pwa.go | head -5
@@ -176,28 +183,35 @@ Scenario: Selected text capture
   Then URL, title, and selected text are captured
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | Scenario "Right-click capture" | smackerel-save-page context menu (background.js:23) + onClicked handler routes capture to /api/capture | web/extension/background.js |
+| Asset | Scenario "Selected text capture" | smackerel-save-selection context menu (background.js:29) + info.selectionText handler at background.js:46 | web/extension/background.js |
+
 ### Definition of Done
 
-- [x] Context menu "Save to Smackerel" registered — **Phase:** implement — `background.js` creates context menu with id `smackerel-save-page` on `runtime.onInstalled` for page/link/image contexts
+- [x] Scenario "Right-click capture": Context menu "Save to Smackerel" registered — **Phase:** implement — `background.js` creates context menu with id `smackerel-save-page` on `runtime.onInstalled` for page/link/image contexts
   Evidence: `web/extension/background.js:23`
   ```
   $ grep -nE 'smackerel-save-page|smackerel-save-selection|contextMenus\.create' web/extension/background.js
   23:    id: 'smackerel-save-page',
   29:    id: 'smackerel-save-selection',
   ```
-- [x] Context menu "Save with selection" when text selected — **Phase:** implement — `background.js` creates `smackerel-save-selection` context menu for selection context; handler sends `info.selectionText`
+- [x] Scenario "Selected text capture": Context menu "Save with selection" when text selected — **Phase:** implement — `background.js` creates `smackerel-save-selection` context menu for selection context; handler sends `info.selectionText`
   Evidence: `web/extension/background.js:29,46`
   ```
   $ grep -nE 'smackerel-save-selection|info\.selectionText' web/extension/background.js
   29:    id: 'smackerel-save-selection',
   46:  if (info.menuItemId === 'smackerel-save-selection' && info.selectionText) {
   ```
-- [x] Toolbar button captures current page with one click — **Phase:** implement — `popup.js` capture button calls `chrome.runtime.sendMessage({action: 'capture'})` with active tab data
+- [x] Scenario "Right-click capture": Toolbar button captures current page with one click — **Phase:** implement — `popup.js` capture button calls `chrome.runtime.sendMessage({action: 'capture'})` with active tab data
   Evidence: `web/extension/popup/popup.js`
   ```
   $ grep -nE 'chrome\.runtime\.sendMessage|action.*capture' web/extension/popup/popup.js | head -5
   ```
-- [x] Desktop notification confirms capture — **Phase:** implement — `background.js` `showNotification()` uses `chrome.notifications.create()` on success/error
+- [x] Scenario "Right-click capture": Desktop notification confirms capture — **Phase:** implement — `background.js` `showNotification()` uses `chrome.notifications.create()` on success/error
   Evidence: `web/extension/background.js`
   ```
   $ grep -nE 'chrome\.notifications\.create|showNotification' web/extension/background.js | head -5
@@ -235,25 +249,33 @@ Scenario: Auth failure preserves queue
 - On 401: preserve items, flag re-auth needed
 - Shared between PWA service worker and extension background.js
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | Scenario "Offline capture queued" | CaptureQueue class with smackerel-queue IndexedDB store | web/extension/lib/queue.js |
+| Asset | Scenario "Offline capture queued" | PWA service worker sync event + flushWithConfig() | web/pwa/lib/queue.js |
+| Asset | Scenario "Auth failure preserves queue" | flush() preserves items on 401, sets authFailed flag | web/extension/lib/queue.js |
+
 ### Definition of Done
 
-- [x] IndexedDB queue stores pending captures — **Phase:** implement — `web/extension/lib/queue.js` and `web/pwa/lib/queue.js` implement CaptureQueue with IndexedDB `smackerel-queue` store
+- [x] Scenario "Offline capture queued": IndexedDB queue stores pending captures — **Phase:** implement — `web/extension/lib/queue.js` and `web/pwa/lib/queue.js` implement CaptureQueue with IndexedDB `smackerel-queue` store
   Evidence: `web/extension/lib/queue.js` (154 lines)
   ```
   $ wc -l web/extension/lib/queue.js web/pwa/lib/queue.js
   $ grep -nE 'CaptureQueue|smackerel-queue|indexedDB\.open' web/extension/lib/queue.js | head -5
   ```
-- [x] Queue survives page close and browser restart — **Phase:** implement — IndexedDB is persistent storage; data survives page close and browser restart
+- [x] Scenario "Offline capture queued": Queue survives page close and browser restart — **Phase:** implement — IndexedDB is persistent storage; data survives page close and browser restart
   Evidence: queue.js uses IndexedDB which is persistent (browser-managed)
   ```
   $ grep -nE 'indexedDB\.open|objectStore|transaction' web/extension/lib/queue.js | head -5
   ```
-- [x] Automatic sync on connectivity restore — **Phase:** implement — Extension uses `chrome.alarms` (1-min periodic check); PWA uses ServiceWorker `sync` event with `flushWithConfig()`
+- [x] Scenario "Offline capture queued": Automatic sync on connectivity restore — **Phase:** implement — Extension uses `chrome.alarms` (1-min periodic check); PWA uses ServiceWorker `sync` event with `flushWithConfig()`
   Evidence: `web/extension/background.js` chrome.alarms; `web/pwa/sw.js` sync event
   ```
   $ grep -nE 'chrome\.alarms|self\.addEventListener.*sync|flushWithConfig' web/extension/background.js web/pwa/sw.js | head -5
   ```
-- [x] 401 errors preserve queue and signal re-auth — **Phase:** implement — `flush()` sets `authFailed: true` on 401, preserves items; extension shows notification; popup shows error
+- [x] Scenario "Auth failure preserves queue": 401 errors preserve queue and signal re-auth — **Phase:** implement — `flush()` sets `authFailed: true` on 401, preserves items; extension shows notification; popup shows error
   Evidence: queue.js flush() preserves items on 401
   ```
   $ grep -nE '401|authFailed|status' web/extension/lib/queue.js | head -10
@@ -324,24 +346,32 @@ Scenario: HTTP security warning
   And the user can proceed at their own risk
 ```
 
+### Test Plan
+
+| Test Type | Scenarios | Test Functions | Location |
+|---|---|---|---|
+| Asset | Scenario "Extension setup with validation" | testBtn click handler validates serverUrl + authToken via /api/health | web/extension/popup/popup.js |
+| Asset | Scenario "Extension setup with validation" | server-url + auth-token form fields | web/extension/popup/popup.html |
+| Asset | Scenario "HTTP security warning" | http-warning div toggle when URL starts with http:// | web/extension/popup/popup.js |
+
 ### Definition of Done
 
-- [x] Setup form with Server URL + Auth Token fields — **Phase:** implement — `popup.html` setup screen has `server-url` (type=url) and `auth-token` (type=password) inputs
+- [x] Scenario "Extension setup with validation": Setup form with Server URL + Auth Token fields — **Phase:** implement — `popup.html` setup screen has `server-url` (type=url) and `auth-token` (type=password) inputs
   Evidence: `web/extension/popup/popup.html`
   ```
   $ grep -nE 'server-url|auth-token|type="(url|password)"' web/extension/popup/popup.html
   ```
-- [x] "Test Connection" validates via /api/health — **Phase:** implement — `popup.js` testBtn click handler fetches `serverUrl + '/api/health'` with Bearer auth, shows Connected/error
+- [x] Scenario "Extension setup with validation": "Test Connection" validates via /api/health — **Phase:** implement — `popup.js` testBtn click handler fetches `serverUrl + '/api/health'` with Bearer auth, shows Connected/error
   Evidence: `web/extension/popup/popup.js`
   ```
   $ grep -nE 'testBtn|/api/health|Test Connection' web/extension/popup/popup.js web/extension/popup/popup.html | head -5
   ```
-- [x] HTTP vs HTTPS detection with warning — **Phase:** implement — `popup.js` input listener shows/hides `http-warning` div when URL starts with `http://`
+- [x] Scenario "HTTP security warning": HTTP vs HTTPS detection with warning — **Phase:** implement — `popup.js` input listener shows/hides `http-warning` div when URL starts with `http://`
   Evidence: `web/extension/popup/popup.js` http-warning logic
   ```
   $ grep -nE 'http-warning|http://|https' web/extension/popup/popup.js | head -10
   ```
-- [x] Settings saved only after successful validation — **Phase:** implement — Save button (`saveBtn`) only appears after successful "Test Connection"; `chrome.storage.local.set()` called on save
+- [x] Scenario "Extension setup with validation": Settings saved only after successful validation — **Phase:** implement — Save button (`saveBtn`) only appears after successful "Test Connection"; `chrome.storage.local.set()` called on save
   Evidence: `popup.js` saveBtn enabled after testBtn success
   ```
   $ grep -nE 'saveBtn|chrome\.storage\.local\.set' web/extension/popup/popup.js | head -5

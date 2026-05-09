@@ -194,6 +194,15 @@
       "runStartedAt": "2026-04-24T00:55:00Z",
       "runEndedAt": "2026-04-24T00:56:00Z",
       "summary": "Manual cross-check: spec.md/design.md/scopes.md aligned with implementation. All 8 scopes Done. List generation pipeline (annotations \u2192 aggregator \u2192 generator \u2192 store \u2192 REST/Telegram surfacing) matches spec intent."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "runStartedAt": "2026-05-09T00:00:00Z",
+      "runEndedAt": "2026-05-09T00:00:00Z",
+      "summary": "Trace-guard closure pass: closed all 40 trace failures (40\u21920). Added Test Plan tables to Scopes 1-8 pointing at existing tests in internal/list/{types,recipe_aggregator,reading_aggregator,generator}_test.go, internal/api/lists_test.go, internal/telegram/list_test.go, internal/intelligence/lists_test.go (G068 fidelity prefixes added to existing DoD bullets). Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard PASSED. No status/certification field changes."
     }
   ],
   "activeBugs": [],
