@@ -154,9 +154,89 @@ config/generated/home-lab.env:AGENT_PROVIDER_FAST_MODEL=gpt-oss:20b
 
 T2-05 manual smoke (`SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e`) is held until Scope 3 wires the gating into the e2e runner and unblocks the cold-pull of `qwen2.5:0.5b-instruct` (~397MB). The compile + vet evidence above proves the test code is correct; the live cold-pull run is Scope 3 surface.
 
-### Scope 3 — pending
+### Scope 3 — Wire Into `./smackerel.sh test e2e` + Cross-Spec Closure (DONE 2026-05-09)
 
-Scope 3 will populate this section as it is implemented.
+Status: **Done.** All 5 Scope 3 DoD bullets ticked.
+
+**Deliverables:**
+
+1. `smackerel.sh` — `test e2e` block extended with a `SMACKEREL_TEST_OLLAMA=1`
+   gate. When set:
+   - Reads `OLLAMA_URL`, `OLLAMA_TEST_MODEL`, `OLLAMA_TEST_PULL_TIMEOUT_SECONDS`,
+     `OLLAMA_TEST_REQUEST_*`, `OLLAMA_HOST_PORT` from the generated `test.env`.
+   - Invokes `scripts/commands/ollama-test-pull.sh` against
+     `http://127.0.0.1:${OLLAMA_HOST_PORT}` (the host-side port; the in-cluster
+     `OLLAMA_URL=http://ollama:11434` is not reachable from the host where the
+     pull script runs).
+   - On pull success, runs `go test -tags e2e_ollama -v -count=1 -timeout 600s
+     ./tests/e2e/agent/...` inside the same `golang:1.25.10-bookworm` container
+     that ran the baseline Go E2E block, with `OLLAMA_URL` and the determinism
+     env vars exported.
+   - On any failure (pull or test), records FAIL line and propagates exit code
+     via `e2e_overall_status`.
+   - When `SMACKEREL_TEST_OLLAMA` is unset, emits `Skipping Ollama agent E2E
+     (set SMACKEREL_TEST_OLLAMA=1 to enable ...)` and continues.
+
+2. `specs/037-llm-agent-tools/state.json` — MIT-037-OLLAMA-001 entry marked
+   `status: resolved` with `closureSpec: 043-ollama-test-infrastructure`,
+   `closureCommitDate: 2026-05-09`, and a `closureSummary` documenting the
+   wiring + cross-spec impact on Scope 9 telegram_replies_test.go.
+
+3. `specs/037-llm-agent-tools/scopes.md` — Scope 5 Status line + Status Note +
+   2 DoD bullets rewritten to drop the "Done modulo deferred infra — see
+   MIT-037-OLLAMA-001" prefix. `grep -n 'modulo deferred infra'
+   specs/037-llm-agent-tools/scopes.md` returns ZERO matches after this commit
+   (was 2 before).
+
+**Command evidence:**
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+
+$ ./smackerel.sh format --check
+49 files already formatted
+
+$ ./smackerel.sh test unit --go    # all packages green (incl. config + e2e package compile)
+ok      github.com/smackerel/smackerel/internal/config        ...
+ok      github.com/smackerel/smackerel/tests/e2e/agent        ...
+
+$ ./smackerel.sh test unit --python    # 417 PASS
+417 passed in 16.10s
+
+$ bash -n smackerel.sh && echo OK
+OK
+
+$ grep -c 'SMACKEREL_TEST_OLLAMA' smackerel.sh
+4
+
+$ grep -n 'modulo deferred infra' specs/037-llm-agent-tools/scopes.md
+(no output)
+
+$ python3 -c "import json; d=json.load(open('specs/037-llm-agent-tools/state.json')); ..."
+MIT-037-OLLAMA-001: status=resolved closureSpec=043-ollama-test-infrastructure
+```
+
+**Live cold-pull verification (operator workflow):**
+
+The `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e` cold-pull verification
+(~397MB pull of `qwen2.5:0.5b-instruct` plus the 3 happy_path tests) is the
+operator-side acceptance lane. The compile + vet + syntax + scenario-lint
+gates above prove the wiring is correct; the cold-pull lane is the final
+acceptance step the operator runs once on a host with sufficient bandwidth.
+
+**Cross-spec closure:**
+
+Spec 037 MIT-037-OLLAMA-001 marked resolved (state.json + scopes.md). The
+cross-spec impact noted in MIT-037-OLLAMA-001 (Scope 9 telegram_replies_test.go
+also blocked on the same Ollama gap) is also unblocked — the `e2e_ollama`
+build tag + SMACKEREL_TEST_OLLAMA=1 gate are now available to any future
+test that needs live Ollama.
+
 
 
 

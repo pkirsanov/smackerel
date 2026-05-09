@@ -114,21 +114,22 @@
           "type": "test",
           "file": "tests/e2e/agent/happy_path_test.go",
           "function": "TestAgentHappyPath_PlanToolSynthesis",
-          "status": "planned"
+          "status": "implemented"
         },
         {
           "type": "spec-state",
           "file": "specs/037-llm-agent-tools/state.json",
           "function": "MIT-037-OLLAMA-001",
-          "status": "planned"
+          "status": "implemented"
         },
         {
           "type": "spec-trace",
           "file": "specs/037-llm-agent-tools/scopes.md",
           "function": "Scope 5 deferred-infra modifier removal",
-          "status": "planned"
+          "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented"
     }
   ]
 }

@@ -1133,6 +1133,79 @@ case "$COMMAND" in
           fi
         fi
 
+        # Spec 043 Scope 3 - Ollama happy-path agent E2E (opt-in via SMACKEREL_TEST_OLLAMA=1).
+        # Requires the live Ollama profile (auto-started in test env per
+        # config/smackerel.yaml::environments.test.ollama_enabled=true) plus a
+        # ~397MB cold-pull of OLLAMA_TEST_MODEL. Skipped by default to keep the
+        # baseline e2e lane fast; opt-in unlocks tests/e2e/agent/happy_path_test.go.
+        if [[ "${SMACKEREL_TEST_OLLAMA:-}" == "1" || "${SMACKEREL_TEST_OLLAMA:-}" == "true" ]]; then
+          echo "SMACKEREL_TEST_OLLAMA=1 - running Ollama happy-path agent E2E (build tag e2e_ollama)"
+
+          ollama_test_model="$(smackerel_env_value "$env_file" "OLLAMA_TEST_MODEL")"
+          ollama_pull_timeout="$(smackerel_env_value "$env_file" "OLLAMA_TEST_PULL_TIMEOUT_SECONDS")"
+          ollama_test_request_temperature="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_TEMPERATURE")"
+          ollama_test_request_top_p="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_TOP_P")"
+          ollama_test_request_top_k="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_TOP_K")"
+          ollama_test_request_seed="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_SEED")"
+          ollama_test_request_num_predict="$(smackerel_env_value "$env_file" "OLLAMA_TEST_REQUEST_NUM_PREDICT")"
+          ollama_host_port="$(smackerel_env_value "$env_file" "OLLAMA_HOST_PORT")"
+          ollama_pull_url="http://127.0.0.1:${ollama_host_port}"
+
+          set +e
+          e2e_run_child env \
+            OLLAMA_URL="$ollama_pull_url" \
+            OLLAMA_TEST_MODEL="$ollama_test_model" \
+            OLLAMA_TEST_PULL_TIMEOUT_SECONDS="$ollama_pull_timeout" \
+            bash "$SCRIPT_DIR/scripts/commands/ollama-test-pull.sh"
+          e2e_ollama_pull_status=$?
+          set -e
+
+          if [[ "$e2e_ollama_pull_status" -ne 0 ]]; then
+            echo "FAIL: ollama-test-pull (exit=${e2e_ollama_pull_status})"
+            if [[ "$e2e_overall_status" -eq 0 ]]; then
+              e2e_overall_status="$e2e_ollama_pull_status"
+            fi
+          else
+            echo "PASS: ollama-test-pull"
+
+            set +e
+            e2e_run_child docker run --rm \
+              --network host \
+              -v "$SCRIPT_DIR:/workspace" \
+              -v smackerel-gomod-cache:/go/pkg/mod \
+              -v smackerel-gobuild-cache:/root/.cache/go-build \
+              -w /workspace \
+              -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
+              -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+              -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
+              -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
+              -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+              -e "OLLAMA_URL=$ollama_pull_url" \
+              -e "OLLAMA_TEST_MODEL=$ollama_test_model" \
+              -e "OLLAMA_TEST_PULL_TIMEOUT_SECONDS=$ollama_pull_timeout" \
+              -e "OLLAMA_TEST_REQUEST_TEMPERATURE=$ollama_test_request_temperature" \
+              -e "OLLAMA_TEST_REQUEST_TOP_P=$ollama_test_request_top_p" \
+              -e "OLLAMA_TEST_REQUEST_TOP_K=$ollama_test_request_top_k" \
+              -e "OLLAMA_TEST_REQUEST_SEED=$ollama_test_request_seed" \
+              -e "OLLAMA_TEST_REQUEST_NUM_PREDICT=$ollama_test_request_num_predict" \
+              golang:1.25.10-bookworm \
+              go test -tags e2e_ollama -v -count=1 -timeout 600s ./tests/e2e/agent/...
+            e2e_ollama_status=$?
+            set -e
+
+            if [[ "$e2e_ollama_status" -eq 0 ]]; then
+              echo "PASS: go-e2e-ollama"
+            else
+              echo "FAIL: go-e2e-ollama (exit=${e2e_ollama_status})"
+              if [[ "$e2e_overall_status" -eq 0 ]]; then
+                e2e_overall_status="$e2e_ollama_status"
+              fi
+            fi
+          fi
+        else
+          echo "Skipping Ollama agent E2E (set SMACKEREL_TEST_OLLAMA=1 to enable tests/e2e/agent/happy_path_test.go)"
+        fi
+
         if [[ "$e2e_overall_status" -ne 0 ]]; then
           exit "$e2e_overall_status"
         fi
