@@ -189,7 +189,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+      # Spec 042: bind via HOST_BIND_ADDRESS for tailnet-edge override (loopback default).
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:
       - ollama-data:/root/.ollama
     profiles:
