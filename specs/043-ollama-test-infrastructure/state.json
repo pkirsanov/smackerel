@@ -26,6 +26,13 @@
         "claimedAt": "2026-05-09T22:00:00Z",
         "partial": true,
         "summary": "Scope 2 PARTIAL: pull script + no-skip guard authored; happy_path_test.go + LLM determinism plumbing + per-env model override deferred to a follow-up turn. See executionHistory for full split. Pull script verified fail-loud on missing env (env -i exit 1). Guard PASS under both no-tag and -tags=e2e go test invocations."
+      },
+      {
+        "agent": "bubbles.implement",
+        "scope": "2",
+        "phase": "implement",
+        "claimedAt": "2026-05-09T23:30:00Z",
+        "summary": "Scope 2 complete \u2014 happy_path_test.go + determinism plumbing + per-env override + scenario yaml all landed"
       }
     ],
     "pendingTransitionRequests": []
@@ -90,6 +97,13 @@
       "agent": "bubbles.implement",
       "timestamp": "2026-05-09T22:00:00Z",
       "summary": "Scope 2 PARTIAL progress \u2014 2 of 5 deliverables landed, 3 deferred to a follow-up turn. DONE: (1) scripts/commands/ollama-test-pull.sh \u2014 fail-loud Ollama HTTP pull script honoring OLLAMA_TEST_PULL_TIMEOUT_SECONDS SST key, exit 0/1/2/3/4 for success/missing-env/HTTP-error/timeout/post-pull-tag-missing; verified env -i invocation exits 1 with explicit SST violation message. (2) tests/e2e/agent/no_skip_guard_test.go \u2014 three tests: TestNoSkipBailoutInAgentE2E (production guard, scans tests/e2e/agent/*.go for t.Skip|SkipNow|Skipf calls outside an explicit allowlist of 10 scripted-driver e2e files), TestNoSkipBailout_HappyPathTestExplicitlyForbidden (stricter gate that asserts happy_path_test.go contains zero t.Skip calls regardless of allowlist; SKIPS dormant when the file does not yet exist), TestNoSkipBailout_AdversarialFinding (5-case regex regression covering plain t.Skip/SkipNow/Skipf + 2 negative carve-outs); all 3 PASS under both `go test` (no tags) and `go test -tags=e2e`. DEFERRED: (3) tests/e2e/agent/happy_path_test.go (3 test functions per scopes.md T2-01/T2-02/T2-03) \u2014 requires prerequisite LLM determinism plumbing in ml/app/agent.py to pass top_p/top_k/seed/num_predict to litellm so 3-run byte-identical synthesis_response is achievable (currently only temperature+max_tokens are passed). (4) Per-env override of agent.provider_routing.fast.model = qwen2.5:0.5b-instruct in test env (requires extending scripts/commands/config.sh's env_override_value to handle the agent.provider_routing.* path AND extending the smackerel.yaml environments.test block). (5) New scenario YAML config/prompt_contracts/e2e_ollama_smoke.yaml that wires the new test-only fast route to an allowlisted read-only echo tool. These three are a single coherent slice that cannot be reviewed independently of each other; deferring to a single follow-up commit keeps the change set atomic + reviewable. Pull script + no-skip guard ARE independently useful and pass all gates today, so they ship now."
+    },
+    {
+      "timestamp": "2026-05-09T23:30:00Z",
+      "agent": "bubbles.implement",
+      "scope": "02",
+      "phase": "implement",
+      "summary": "Scope 2 Done \u2014 landed remaining 4 deliverables: ml/app/agent.py LLM determinism plumbing (resolve_ollama_determinism_options + 6 new pytest cases), per-env override environments.test.agent_provider_fast_model = qwen2.5:0.5b-instruct (yaml + scripts/commands/config.sh env_override_value), config/prompt_contracts/e2e-ollama-smoke-v1.yaml scenario (registered=5/0), tests/e2e/agent/happy_path_test.go (build tag e2e_ollama; TestAgentHappyPath_PlanToolSynthesis + TestAgentHappyPath_DeterministicOutput + TestOllamaUnreachable_FailsLoudly). All Go and Python unit tests PASS. SST guard PASS. scenario-lint PASS. no-skip guard 3 tests PASS under all 3 tag configs."
     }
   ],
   "policySnapshot": {
@@ -123,5 +137,9 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-09T22:00:00Z"
+  "lastUpdatedAt": "2026-05-09T23:30:00Z",
+  "completedScopes": [
+    "01",
+    "02"
+  ]
 }

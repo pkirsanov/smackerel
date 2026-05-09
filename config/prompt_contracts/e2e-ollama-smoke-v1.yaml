@@ -1,0 +1,67 @@
+id: e2e_ollama_smoke
+version: "e2e-ollama-smoke-v1"
+type: "scenario"
+description: |
+  Spec 043 — agent E2E smoke test against real Ollama (deterministic).
+  This scenario is invoked by tests/e2e/agent/happy_path_test.go to
+  exercise the full plan→tool→synthesis loop through the production
+  Go executor → NATS → Python ML sidecar → litellm → Ollama path with
+  pinned determinism knobs (temperature=0, fixed seed, top_p=1, top_k=1)
+  sourced from OLLAMA_TEST_REQUEST_* env vars by ml/app/agent.py
+  (resolve_ollama_determinism_options).
+
+  The model_preference "fast" resolves to qwen2.5:0.5b-instruct in the
+  test environment via the per-env override
+  environments.test.agent_provider_fast_model in config/smackerel.yaml.
+  Dev / home-lab keep their own preferred fast-route models, so this
+  scenario in production routes to whatever the operator picked.
+
+intent_examples:
+- "smoke test the agent against ollama"
+
+system_prompt: |
+  You are the Smackerel agent E2E smoke-test scenario. The user supplies
+  a single short query string. You MUST:
+
+  1. Call the recommendation_parse_intent tool exactly once. Pass the
+     query verbatim as the tool's "query" argument inside a JSON object.
+  2. After the tool returns, produce a final JSON answer matching the
+     output_schema below: {"acknowledged": true}. No prose, no markdown,
+     no extra keys.
+
+  Determinism contract: temperature=0, fixed seed. Two runs with the
+  same input MUST produce byte-identical synthesis_response. Do NOT
+  invent additional steps, alternative tools, or alternative phrasings.
+
+allowed_tools:
+- name: recommendation_parse_intent
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ query ]
+  additionalProperties: false
+  properties:
+    query:
+      type: string
+      minLength: 1
+      maxLength: 200
+
+output_schema:
+  type: object
+  required: [ acknowledged ]
+  additionalProperties: false
+  properties:
+    acknowledged:
+      type: boolean
+
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 60000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 10000
+
+token_budget: 256
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: read

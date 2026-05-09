@@ -20,6 +20,7 @@ from app.agent import (
     handle_invoke,
     render_messages,
     render_tools,
+    resolve_ollama_determinism_options,
     resolve_provider_route,
 )
 
@@ -225,3 +226,140 @@ def test_handle_invoke_dict_arguments_serialized(monkeypatch: pytest.MonkeyPatch
 
     env = asyncio.run(handle_invoke(_request(), completion_fn=DictArgComp()))
     assert env["tool_calls"][0]["arguments"] == '{"q": "dict"}'
+
+
+# ---------------------------------------------------------------------------
+# Spec 043 — Ollama determinism env-var plumbing
+# ---------------------------------------------------------------------------
+
+
+def _clear_ollama_determinism_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "OLLAMA_TEST_REQUEST_TEMPERATURE",
+        "OLLAMA_TEST_REQUEST_TOP_P",
+        "OLLAMA_TEST_REQUEST_TOP_K",
+        "OLLAMA_TEST_REQUEST_SEED",
+        "OLLAMA_TEST_REQUEST_NUM_PREDICT",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_resolve_ollama_determinism_options_unset_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_ollama_determinism_env(monkeypatch)
+    assert resolve_ollama_determinism_options() == {}
+
+
+def test_resolve_ollama_determinism_options_full_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TEMPERATURE", "0.0")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_P", "1.0")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_K", "1")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_SEED", "42")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_NUM_PREDICT", "256")
+
+    options = resolve_ollama_determinism_options()
+
+    assert options == {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": 1,
+        "seed": 42,
+        "num_predict": 256,
+    }
+
+
+def test_resolve_ollama_determinism_options_skips_malformed(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_ollama_determinism_env(monkeypatch)
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_SEED", "not-a-number")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_P", "0.9")
+    options = resolve_ollama_determinism_options()
+    # Malformed seed is skipped; valid top_p is preserved.
+    assert "seed" not in options
+    assert options["top_p"] == 0.9
+
+
+def test_handle_invoke_passes_ollama_determinism_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When provider == ollama and OLLAMA_TEST_REQUEST_* are set, the
+    handler MUST forward (top_p, top_k, seed, num_predict) as kwargs to
+    the completion call AND override the request temperature with the
+    env-sourced value."""
+    _set_route_env(monkeypatch, provider="ollama", model="qwen2.5:0.5b-instruct")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TEMPERATURE", "0.0")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_P", "1.0")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_K", "1")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_SEED", "42")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_NUM_PREDICT", "256")
+
+    seen_kwargs: dict[str, Any] = {}
+
+    async def capture(**kwargs):  # noqa: ANN003
+        seen_kwargs.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None, content="ok"))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            model=kwargs.get("model", ""),
+        )
+
+    # Request supplies temperature=0.7; the env var MUST override it to 0.0.
+    env = asyncio.run(handle_invoke(_request(temperature=0.7), completion_fn=capture))
+    assert "error" not in env, env
+
+    assert seen_kwargs["model"] == "ollama/qwen2.5:0.5b-instruct"
+    assert seen_kwargs["temperature"] == 0.0
+    assert seen_kwargs["top_p"] == 1.0
+    assert seen_kwargs["top_k"] == 1
+    assert seen_kwargs["seed"] == 42
+    assert seen_kwargs["num_predict"] == 256
+
+
+def test_handle_invoke_does_not_inject_ollama_kwargs_for_other_providers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Adversarial — the determinism env vars are Ollama-scoped (their
+    SST keys live under infrastructure.ollama.test.*). They MUST NOT
+    leak into completion calls for OpenAI / Anthropic / etc., which
+    would either error on the unknown ``num_predict``/``top_k`` kwargs
+    or silently change the call shape."""
+    _set_route_env(monkeypatch, provider="openai", model="gpt-4o-mini")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_TOP_K", "1")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_SEED", "42")
+    monkeypatch.setenv("OLLAMA_TEST_REQUEST_NUM_PREDICT", "256")
+
+    seen_kwargs: dict[str, Any] = {}
+
+    async def capture(**kwargs):  # noqa: ANN003
+        seen_kwargs.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None, content="ok"))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            model=kwargs.get("model", ""),
+        )
+
+    asyncio.run(handle_invoke(_request(temperature=0.7), completion_fn=capture))
+
+    # Request temperature is preserved (no env override for non-ollama provider).
+    assert seen_kwargs["temperature"] == 0.7
+    # Ollama-scoped kwargs MUST NOT appear.
+    for forbidden in ("top_k", "seed", "num_predict"):
+        assert forbidden not in seen_kwargs, f"{forbidden} leaked into non-ollama completion call"
+
+
+def test_handle_invoke_no_determinism_env_is_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dev / home-lab path: env vars are unset; the handler MUST pass
+    the request temperature through unchanged and inject NO extra
+    kwargs."""
+    _set_route_env(monkeypatch, provider="ollama", model="some-other-model:7b")
+    _clear_ollama_determinism_env(monkeypatch)
+
+    seen_kwargs: dict[str, Any] = {}
+
+    async def capture(**kwargs):  # noqa: ANN003
+        seen_kwargs.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None, content="ok"))],
+            usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1),
+            model=kwargs.get("model", ""),
+        )
+
+    asyncio.run(handle_invoke(_request(temperature=0.42), completion_fn=capture))
+
+    assert seen_kwargs["temperature"] == 0.42
+    for forbidden in ("top_p", "top_k", "seed", "num_predict"):
+        assert forbidden not in seen_kwargs

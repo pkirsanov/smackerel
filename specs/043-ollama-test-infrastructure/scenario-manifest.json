@@ -30,9 +30,10 @@
           "type": "test",
           "file": "tests/e2e/agent/happy_path_test.go",
           "function": "TestAgentHappyPath_DeterministicOutput",
-          "status": "planned"
+          "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented"
     },
     {
       "scenarioId": "SCN-OLLAMA-003",
@@ -43,9 +44,10 @@
           "type": "test",
           "file": "tests/e2e/agent/happy_path_test.go",
           "function": "TestAgentHappyPath_PlanToolSynthesis",
-          "status": "planned"
+          "status": "implemented"
         }
-      ]
+      ],
+      "status": "implemented"
     },
     {
       "scenarioId": "SCN-OLLAMA-004",
@@ -54,10 +56,10 @@
       "evidenceRefs": [
         "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailoutInAgentE2E",
         "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_HappyPathTestExplicitlyForbidden",
-        "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_AdversarialFinding"
+        "tests/e2e/agent/no_skip_guard_test.go::TestNoSkipBailout_AdversarialFinding",
+        "tests/e2e/agent/happy_path_test.go::TestOllamaUnreachable_FailsLoudly"
       ],
-      "status": "partial",
-      "partialNote": "Grep portion (no t.Skip outside allowlist) implemented and PASSING. The TestOllamaUnreachable_FailsLoudly portion lives in happy_path_test.go which is deferred to a follow-up commit (depends on LLM determinism plumbing + per-env model override + scenario YAML)."
+      "status": "implemented"
     },
     {
       "scenarioId": "SCN-OLLAMA-005",

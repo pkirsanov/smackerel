@@ -68,6 +68,60 @@ def resolve_provider_route(model_preference: str) -> tuple[str, str] | None:
     return provider, model
 
 
+def resolve_ollama_determinism_options() -> dict[str, Any]:
+    """Spec 043 — read OLLAMA_TEST_REQUEST_* env vars (sourced from SST
+    keys infrastructure.ollama.test.request_*) and return them as a
+    kwargs dict for the litellm completion call.
+
+    Empty / unset vars are skipped so dev / home-lab environments
+    (which do not populate these vars) get the scenario-driven defaults
+    untouched. The test environment populates all five keys via
+    config/generated/test.env so the agent's E2E happy-path test pins
+    Ollama to the deterministic envelope (FR-OLLAMA-006, design.md
+    OQ-3 resolution D4).
+
+    The returned keys are litellm/Ollama parameter names:
+
+    * ``temperature`` — overrides the scenario's request.temperature
+      (E2E test pins to 0.0 for determinism)
+    * ``top_p`` — nucleus-sampling cutoff
+    * ``top_k`` — top-k sampling cutoff (Ollama-native option)
+    * ``seed`` — RNG seed for sampler initialization
+    * ``num_predict`` — Ollama-native max-output-tokens cap (litellm
+      maps this to its ``max_tokens`` for OpenAI-compat models, but for
+      Ollama the native ``num_predict`` is the SST-pinned name)
+
+    Callers MUST only invoke this when the resolved provider is
+    ``ollama``; the env var names are explicitly Ollama-scoped (the
+    SST keys live under ``infrastructure.ollama.test.*``) and applying
+    them to other providers would be a semantic violation.
+    """
+    options: dict[str, Any] = {}
+    spec = (
+        ("OLLAMA_TEST_REQUEST_TEMPERATURE", "temperature", float),
+        ("OLLAMA_TEST_REQUEST_TOP_P", "top_p", float),
+        ("OLLAMA_TEST_REQUEST_TOP_K", "top_k", int),
+        ("OLLAMA_TEST_REQUEST_SEED", "seed", int),
+        ("OLLAMA_TEST_REQUEST_NUM_PREDICT", "num_predict", int),
+    )
+    for env_key, kwarg_name, parser in spec:
+        raw = os.environ.get(env_key, "")
+        if not raw:
+            continue
+        try:
+            options[kwarg_name] = parser(raw)
+        except (TypeError, ValueError):
+            # Malformed env var is an SST-level configuration bug.
+            # Log loudly and skip; the scenario default takes over so
+            # the test still runs (and the assertion on byte-identical
+            # output will catch the determinism regression).
+            logger.warning(
+                "agent.invoke: skipping malformed Ollama determinism env var",
+                extra={"env_key": env_key, "raw": raw},
+            )
+    return options
+
+
 def render_messages(
     system_prompt: str,
     turn_messages: list[dict[str, Any]],
@@ -220,14 +274,31 @@ async def handle_invoke(
     if provider != "ollama":
         api_key = os.environ.get("LLM_API_KEY") or os.environ.get(f"{provider.upper()}_API_KEY", "")
 
+    # Spec 043 — overlay Ollama determinism knobs (top_p, top_k, seed,
+    # num_predict, temperature) sourced from OLLAMA_TEST_REQUEST_* env
+    # vars when the resolved provider is ollama. In dev / home-lab the
+    # vars are unset and this is a no-op; in test they pin the call to
+    # the byte-identical envelope the E2E happy-path test asserts on.
+    extra_kwargs: dict[str, Any] = {}
+    effective_temperature = temperature
+    if provider == "ollama":
+        ollama_options = resolve_ollama_determinism_options()
+        # Temperature is a named completion arg (not a **kwargs entry);
+        # the env-var-sourced value MUST override the scenario's value
+        # when present so the determinism envelope is honored.
+        if "temperature" in ollama_options:
+            effective_temperature = ollama_options.pop("temperature")
+        extra_kwargs.update(ollama_options)
+
     try:
         response = await completion_fn(
             model=llm_model,
             messages=messages,
             tools=tools or None,
-            temperature=temperature,
+            temperature=effective_temperature,
             max_tokens=token_budget,
             api_key=api_key,
+            **extra_kwargs,
         )
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar
         logger.warning(
