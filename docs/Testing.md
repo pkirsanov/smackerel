@@ -170,6 +170,82 @@ Required adversarial cases:
 - A local Smackerel synthesis must not rewrite the QF thesis or approval state.
 - A context export without explicit consent or source provenance must fail.
 
+### Ollama-Backed Agent E2E Test Lane (Spec 043)
+
+Spec 043 closes MIT-037-OLLAMA-001 by adding an opt-in test lane that drives the production NATS + Python sidecar + LiteLLM + Ollama path against a real local model. The lane is gated by an environment variable so the default `./smackerel.sh test e2e` run stays Ollama-free.
+
+| Test type | File | Purpose |
+|-----------|------|---------|
+| e2e-api (opt-in) | `tests/e2e/agent/happy_path_test.go` | `TestAgentHappyPath_PlanToolSynthesis` (full agent loop against the SST-pinned test model), `TestAgentHappyPath_DeterministicOutput` (3-run byte-identical synthesis under fixed determinism options), `TestOllamaUnreachable_FailsLoudly` (BS-014 fail-loud regression) |
+| unit guard | `tests/e2e/agent/no_skip_guard_test.go` | `TestNoSkipBailoutInAgentE2E`, `TestNoSkipBailout_HappyPathTestExplicitlyForbidden`, `TestNoSkipBailout_AdversarialFinding` — enforce that no test in `tests/e2e/agent/` reaches for `t.Skip*` to silently bypass an Ollama-unavailable failure |
+
+#### Running the lane
+
+```bash
+SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e
+```
+
+Setting `SMACKEREL_TEST_OLLAMA=1` (or `true`) at the `./smackerel.sh test e2e` entry point causes the runner to:
+
+1. Source the `OLLAMA_TEST_*` env vars from `config/generated/test.env`.
+2. Invoke `scripts/commands/ollama-test-pull.sh` to ensure the test model is present in the live test-stack Ollama container's catalog.
+3. Run `go test -tags=e2e_ollama ./tests/e2e/agent/...` against the live test stack.
+
+Without `SMACKEREL_TEST_OLLAMA=1`, the runner skips both the pull script and the `e2e_ollama`-tagged tests with an explicit log message; the rest of the E2E suite continues.
+
+#### Required env vars (sourced from `config/generated/test.env`)
+
+| Env var | SST key | Purpose |
+|---------|---------|---------|
+| `OLLAMA_URL` | `infrastructure.ollama_url` | Base URL for the live test-stack Ollama HTTP API |
+| `OLLAMA_TEST_MODEL` | `infrastructure.ollama.test.model` | Pinned test model tag (`qwen2.5:0.5b-instruct`) |
+| `OLLAMA_TEST_PULL_TIMEOUT_SECONDS` | `infrastructure.ollama.test.pull_timeout_seconds` | Wall-clock ceiling enforced via `timeout(1)` |
+| `OLLAMA_TEST_REQUEST_TEMPERATURE` | `infrastructure.ollama.test.request_temperature` | Determinism: temperature (default `0.0`) |
+| `OLLAMA_TEST_REQUEST_TOP_P` | `infrastructure.ollama.test.request_top_p` | Determinism: top-p (default `1.0`) |
+| `OLLAMA_TEST_REQUEST_TOP_K` | `infrastructure.ollama.test.request_top_k` | Determinism: top-k (default `1`) |
+| `OLLAMA_TEST_REQUEST_SEED` | `infrastructure.ollama.test.request_seed` | Determinism: PRNG seed (default `42`) |
+| `OLLAMA_TEST_REQUEST_NUM_PREDICT` | `infrastructure.ollama.test.request_num_predict` | Determinism: max tokens (default `256`) |
+
+Dev and home-lab environments emit these `OLLAMA_TEST_*` keys as empty strings; `ml/app/agent.resolve_ollama_determinism_options()` reads them only when set and passes them to `litellm.acompletion` as `extra_kwargs` only when the routed provider is `ollama` (no-op for `openai` / `anthropic` / etc.).
+
+#### Cold-pull workflow
+
+`scripts/commands/ollama-test-pull.sh` POSTs `/api/pull` to the test-stack Ollama container (host port `47004`) and verifies `/api/tags` after. Exit codes:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Pull completed and the model is present in the daemon's catalog |
+| `1` | Missing or empty required env var (SST violation) |
+| `2` | HTTP error from `/api/pull` (non-2xx, or curl transport failure) |
+| `3` | Pull timed out before the daemon reported success |
+| `4` | Model still missing from `/api/tags` after the pull reported success |
+
+The first invocation against an empty `smackerel-test-ollama-data` volume incurs a one-time download of the test model (~397 MB). Subsequent runs warm-cache against the same volume; the test compose lifecycle preserves it across `./smackerel.sh down` (only `postgres` and `nats` test volumes are removed by default, so the Ollama warm-cache survives — use `./smackerel.sh clean full` to drop it explicitly).
+
+#### Per-environment model selection
+
+Spec 043 introduces a per-environment override for the agent `fast` provider model so the test lane can pin a small, deterministic model without affecting dev/home-lab routing:
+
+| Environment | `agent_provider_fast_model` | Source |
+|-------------|----------------------------|--------|
+| `dev` | `gpt-oss:20b` | `config/smackerel.yaml::environments.dev.agent_provider_fast_model` (top-level default) |
+| `test` | `qwen2.5:0.5b-instruct` | `config/smackerel.yaml::environments.test.agent_provider_fast_model` (per-env override) |
+| `home-lab` | `gpt-oss:20b` | `config/smackerel.yaml::environments.home-lab.agent_provider_fast_model` (matches dev) |
+
+After editing the per-env value, regenerate every environment so the override propagates:
+
+```bash
+for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate; done
+```
+
+`environments.<env>.ollama_enabled` follows the same per-env pattern: `true` for `test` (the only environment that auto-starts the `ollama` profile when running E2E), `false` for `dev` and `home-lab` (operators opt in locally per `docs/Development.md` runtime contract).
+
+#### Required adversarial cases
+
+- `happy_path_test.go` MUST NOT contain any `t.Skip` / `SkipNow` / `Skipf` call — `TestNoSkipBailout_HappyPathTestExplicitlyForbidden` enforces this; bypass would let an Ollama outage silently pass the lane.
+- `TestOllamaUnreachable_FailsLoudly` MUST fail (not skip) when the test-stack Ollama container is unreachable; this is the BS-014 fail-loud contract.
+- `ollama-test-pull.sh` MUST exit non-zero on every failure path (missing env var, HTTP error, timeout, or post-pull `/api/tags` mismatch); silent success would mask a corrupt model cache.
+
 ## Environment Isolation Rules
 
 ### Development State Is Sacred
