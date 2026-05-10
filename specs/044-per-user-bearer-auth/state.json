@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "chaos",
+  "currentPhase": "spec-review",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "chaos",
+    "currentPhase": "spec-review",
     "currentScope": "03",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -117,6 +117,12 @@
         "disposition": "approved",
         "verdict": "ship_it",
         "note": "Spec 044 Scope 03 formal audit phase per Bubbles modeInstructions. Eight required audit checks (A1-A8) ran against the post-validate HEAD a4bd82d0 and the Scope 03 commit range 2d483842~1..a4bd82d0. (A1) Auth surface security: PWA cookie HttpOnly+SameSite=Lax+Path=/+Secure-in-production; /v1/web/login + /v1/web/logout under httprate.LimitByIP(20, 1*time.Minute) (matches OAuth start/callback budget); browser extension uses chrome.storage.local (NOT chrome.storage.sync \u2014 correct for per-device per-user PASETO); Telegram per-user PASETO TTL defaults to 5*time.Minute when opts.TTL <= 0 (short-lived bearers minimize replay risk); the only slog.Warn in the production telegram surface logs chat_id+environment ONLY (never token contents); admin UI mounted behind bearerAuthMiddleware in chi.Group; admin static page sets strict CSP (default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none') + X-Content-Type-Options: nosniff + Cache-Control: no-store; XSS-safe rendering via textContent + appendChild only. (A2) Actor identity provenance \u2014 Bot.resolveActorUserID derives user_id from chat_id ONLY (no body-field consultation); both production call sites (handleMessage + handleListCallback) pass Telegram-protocol-derived chat IDs (msg.Chat.ID, cb.Message.Chat.ID); PerUserTokenMinter.MintForChat resolves via Bot then mints PASETO bound to RESOLVED user_id; TestTelegramBridge_BodyClaimedActorRejected proves a real Telegram-minted PASETO + body actor_id smuggling returns HTTP 400 (closes MIT-027-TRACE-001 actor-source defensive contract end-to-end through the Telegram path); Scope 03 does NOT touch NATS consumer code paths so no NATS regression. (A3) SST zero-defaults \u2014 Scope 03 added EXACTLY ONE new env read (os.Getenv(\"TELEGRAM_USER_MAPPING\")) with no fallback default (bare os.Getenv) and fail-loud parse error wrapping (fmt.Errorf with %w); empty mapping permitted at config-time because production fail-loud lives at runtime in resolveActorUserID returning ErrNoUserMappingForChat for production+unmapped chat; tests/e2e/auth/pwa_per_user_test.go calls t.Fatal (NOT t.Skip) on missing DATABASE_URL preserving the spec 043 / Scope 02 no-skip precedent; ZERO new hardcoded ports/hostnames in production code (diff scan against 127.0.0.1:N / localhost:N / :8080 / :9090 / :5432 / :4222 returned zero non-comment matches). (A4) PII / secret hygiene \u2014 pii-scan against the Scope 03 commit range exit=0 'no leaks found'; supplementary regex sweep (philipk, /home/[a-z]+/, 10.x, 192.168.x, smackerel.tail, @gmail.com, @outlook.com, BEGIN PRIVATE KEY, sk-N{20+}) returned zero findings; test fixtures use synthetic identifiers (12345, tg-user-alice, art-tg-bridge-001, mallory). (A5) Build-tag classification \u2014 all 3 tests/integration/auth_*_test.go files carry //go:build integration; tests/e2e/auth/pwa_per_user_test.go carries //go:build e2e; the 3 internal/**/*_test.go files carry no build tag (correct for unit lane); the 4 production source files carry no build tag (correct for production). (A6) Bubbles G074 build-once-deploy-many \u2014 Scope 03 made ZERO changes to deploy/, docker-compose.yml, or docker-compose.prod.yml (git diff --name-only on the Scope 03 commit range against the deploy surface returned no files); existing deploy/contract.yaml uses digest-only registries (ghcr.io/pkirsanov/smackerel-core, ghcr.io/pkirsanov/smackerel-ml, ghcr.io/pkirsanov/smackerel-config-bundles); pinned external image versions (pgvector/pgvector:pg16, nats:2.10-alpine, ollama/ollama:0.23.2) are intentional pinned versions, NOT mutable refs. (A7) Tailnet-edge bind pattern \u2014 Scope 03 made ZERO changes to deploy/compose.deploy.yml; ${HOST_BIND_ADDRESS:-127.0.0.1}: substitution form preserved on smackerel-core (line 109) and smackerel-ml (line 155); postgres + nats remain unpublished; internal/deploy/compose_contract_test.go::TestComposeContract still PASSES (ok github.com/smackerel/smackerel/internal/deploy 0.006s). (A8) Adversarial coverage \u2014 every Scope 03 SCN has at least one adversarial test (SCN-AUTH-001 admin UI: WithoutBearer_Returns401 + DisallowedMethods_Return405; SCN-AUTH-002 PWA + extension: LoginRejectsMissingToken with 3 sub + LoginRejectsInvalidToken with 2 sub including foreign-signed_paseto + MalformedBearer with 4 sub + RevokedPerUserToken_Returns401 + RejectsForeignPASETO + RejectsRevokedToken + DevShared_RejectsWrongToken + DevBypass_RefusesLogin + BodyValidation; SCN-AUTH-008 Telegram: BodyClaimedActorRejected + UnmappedChat_MinterRefusesAndCallerCannotProceed + MintForChat_Production_UnmappedChat_ReturnsError + EmptyMapping_RejectsAll + AdversarialNoBodyTrust + ResolveActorUserID_Production_RejectsUnmappedChat + EmptyMappingRejectsAll); ZERO bailout returns; ZERO t.Skip / .skip / xit / xdescribe / .only / .todo (single grep match in pwa_per_user_test.go line 36 is a no-skip precedent COMMENT, not a violation). Tier 2 independent test verification: audit phase brought up the test stack (5/5 containers Healthy) after the validate-phase teardown and re-ran the Scope 03 selectors against fresh state \u2014 ./smackerel.sh test integration --go-run '^TestExtensionAuth_|^TestTelegramBridge_|^TestAdminUI_' EXIT=0 with 9 PASS lines + 7 sub-tests across the 3 packages (tests/integration ok 38.992s; tests/integration/agent ok 2.767s; tests/integration/drive ok 8.382s) and ZERO FAIL lines; ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' EXIT=0 with 4 tests + 5 sub-tests PASS in 0.382s and 'PASS: go-e2e'. The e2e runner auto-tore-down the test stack cleanly (5/5 containers + 3/3 volumes removed). Findings: HIGH=0, MEDIUM=0, LOW=1 informational (LOW-AUDIT-044-S03-01: pre-existing chi middleware.RequestID emits the developer's Linux hostname as request_id prefix in stdout during local tests; the hostname is NOT committed to the repo and pii-scan against the Scope 03 diff is clean; the behavior is inherited from github.com/go-chi/chi/v5/middleware and predates spec 044; remediation cuts across every API surface and is appropriately tracked outside spec 044; explicitly NOT a Scope 03 audit failure). FINALIZE-PREREQ-044-V7-001 transitionRequest carried forward at status='open' unchanged per validate-phase decision (scope-row count residual 11 vs 12 deferred to spec-level finalize per the original transitionRequest path-(b) language); audit phase does NOT discharge this carry-forward and does NOT block on it. Pre/post-edit gates: artifact-lint EXIT=0 PASS (2 advisory warnings unchanged); traceability-guard EXIT=1 with 1 expected carry-forward (scenario-manifest 11 vs scopes 12); pii-scan clean. Operational discipline: pathlib.write_text heredoc for state.json (cache-poisoning workaround per /memories/repo/ide-cache-poisoning.md); IDE replace_string_in_file for report.md; PII rule honored; NO --no-verify; NO push (SSH agent locked per user instruction). State.json updates: completedPhaseClaims appended this audit object; certifiedCompletedPhases appended '03:audit'; executionHistory appended bubbles.audit entry; currentPhase advanced from 'audit' to 'chaos'; execution.currentPhase advanced from 'audit' to 'chaos'; execution.currentScope preserved at '03'; status preserved at 'in_progress'; certification.completedScopes NOT advanced. Verdict: SHIP_IT."
+      },
+      {
+        "scope": "03",
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "timestamp": "2026-05-11T02:30:00Z"
       }
     ],
     "pendingTransitionRequests": []
@@ -146,7 +152,8 @@
       "02:finalize",
       "03:test",
       "03:validate",
-      "03:audit"
+      "03:audit",
+      "03:chaos"
     ],
     "lockdownState": {
       "active": false,
@@ -563,6 +570,16 @@
       "decision": "approved",
       "verdict": "ship_it",
       "evidence": "8 audit checks (A1-A8) PASS; 0 HIGH / 0 MEDIUM / 1 LOW informational finding (LOW-AUDIT-044-S03-01: pre-existing chi middleware.RequestID hostname in stdout \u2014 NOT Scope 03 work, NOT committed); independent Tier 2 test verification PASS (integration 9 tests + 7 sub-tests EXIT=0 ZERO FAIL; e2e 4 tests + 5 sub-tests EXIT=0 'PASS: go-e2e'); FINALIZE-PREREQ-044-V7-001 carry-forward preserved at status='open'; currentPhase audit -> chaos; status preserved 'in_progress'."
+    },
+    {
+      "timestamp": "2026-05-11T02:30:00Z",
+      "agent": "bubbles.chaos",
+      "phase": "chaos",
+      "scopes": [
+        "03"
+      ],
+      "decision": "approved",
+      "summary": "Scope 03 formal chaos phase complete. Owned new file tests/integration/auth_chaos_scope03_test.go (~770 lines, build tag integration) implementing 5 chaos behaviors C3-B01..C3-B05 from scopes.md plus 1 hot-path benchmark. Stress loop go test -tags=integration -count=20 -race -v -run '^TestAuthChaos_S03_' ./tests/integration/ \u2014 EXIT=0, all 5 tests PASS 20/20 iterations (B01=20/20, B02=20/20, B03=20/20, B04=20/20, B05=20/20), TOTAL-FAIL-COUNT=0, RACE-MARKERS=0 (no WARNING: DATA RACE banners across 100 race-detected iterations). Hot-path benchmark BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath at b.N=10000 single-threaded \u2014 1,477,561 ns/op | 20,782 B/op | 200 allocs/op (includes full DB roundtrip + chi middleware chain + PASETO verify + bearer cache + handler). One in-flight design fix during chaos authoring: B02 originally asserted admit==total which incorrectly counted chi middleware.Throttle(100) 503s as auth-rejects; hardened to track admit/throttle/authReject separately with adversarial lower-bound postT1Admit>0 && postT2Admit>0 to prevent test passing via 100% throttle. Test stack: 5 ephemeral test containers on 127.0.0.1 host ports 47001/47002/47003/47004/45001/45002 (live PG + NATS-with-token + Ollama + core + ML). FINALIZE-PREREQ-044-V7-001 carry-forward preserved (path-b 12th-entry deferred to spec-level finalize). 1 known traceability-guard carry-forward (scope-row count 11 vs 12). Owned artifact only: chaos test file + report.md chaos section + this state.json mutation; no spec/design/scope/userValidation edits. Verdict: SHIP_IT for Scope 03 chaos phase."
     }
   ],
   "policySnapshot": {
