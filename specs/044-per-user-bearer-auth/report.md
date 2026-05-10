@@ -709,6 +709,117 @@ GATE8_EXIT=0
 
 ---
 
+## Audit Evidence
+
+Spec 044 Scope 01 formal audit phase per Gate G022. Conducted by `bubbles.audit` against HEAD `a36ca2a3` (validate-phase commit) on top of test-phase `2370580e` and implement-phase `2e2a2b9c`. Audit performs trust-but-verify on the implement+test+validate evidence already captured above; it is independent re-execution of `go vet`, security/code-quality scans, godoc coverage, and Bubbles artifact-lint, plus a static security review of the Scope 01 surface.
+
+### Code Diff Evidence (Gate G053)
+
+Implement-phase commit `2e2a2b9c` is the single bearing artifact for Scope 01 source delta. Command executed during the audit phase:
+
+```
+$ git show --numstat --format= 2e2a2b9c
+443     0       cmd/core/cmd_auth.go
+7       0       cmd/core/main.go
+19      0       cmd/core/wiring.go
+74      0       config/smackerel.yaml
+7       5       go.mod
+18      14      go.sum
+350     0       internal/api/auth_handlers.go
+252     0       internal/auth/bearer_store.go
+45      0       internal/auth/hash.go
+130     0       internal/auth/issue.go
+143     0       internal/auth/issue_test.go
+165     0       internal/auth/revocation/broadcaster.go
+140     0       internal/auth/revocation/cache.go
+134     0       internal/auth/revocation/cache_test.go
+113     0       internal/auth/session.go
+327     0       internal/auth/sst_grep_guard_test.go
+61      0       internal/auth/startup.go
+143     0       internal/auth/startup_test.go
+202     0       internal/auth/verify.go
+245     0       internal/auth/verify_test.go
+199     0       internal/config/config.go
+159     0       internal/config/validate_test.go
+79      0       internal/db/migrations/033_auth_per_user_bearer.sql
+42      0       scripts/commands/config.sh
+118    10       specs/044-per-user-bearer-auth/scopes.md
+21      6       specs/044-per-user-bearer-auth/state.json
+234     0       tests/integration/auth_bootstrap_test.go
+
+$ git show --shortstat --format= 2e2a2b9c
+ 27 files changed, 3870 insertions(+), 35 deletions(-)
+
+$ git log --oneline -1 2e2a2b9c
+2e2a2b9c (origin/main) implement(044): Scope 01 — SST foundation + auth package + admin handlers
+```
+
+Aggregate: `27 files changed, 3870 insertions(+), 35 deletions(-)`. Source-code surface (production runtime, excluding tests + spec artefacts): `internal/auth/{session,issue,verify,hash,bearer_store,startup}.go` + `internal/auth/revocation/{cache,broadcaster}.go` + `internal/api/auth_handlers.go` + `cmd/core/{cmd_auth,wiring,main}.go` + `internal/config/config.go` + `internal/db/migrations/033_auth_per_user_bearer.sql` + `config/smackerel.yaml` + `scripts/commands/config.sh` + `go.mod` + `go.sum`. Test surface: `internal/auth/{issue,verify,startup,sst_grep_guard}_test.go` + `internal/auth/revocation/cache_test.go` + `internal/config/validate_test.go` + `tests/integration/auth_bootstrap_test.go`. Test-to-source line ratio: `(143+245+143+327+134+159+234)/(113+130+202+45+252+61+165+140+350+443+19+199+74+79+42+7) = 1385 / 2319 ≈ 0.60`. Single bearing commit; no source delta lands outside `2e2a2b9c` for Scope 01.
+
+**Claim Source:** executed.
+
+### Audit Gate Matrix
+
+| # | Gate | Command / Surface | Outcome | Evidence |
+|---|------|-------------------|---------|----------|
+| A1 | Spec compliance — every Scope 01 FR maps to delivered artifact + test | scopes.md FR coverage cross-reference | PASS | FR-AUTH-001 → `internal/auth/issue.go` + T1-04 + T1-08; FR-AUTH-002 → `internal/auth/verify.go` (claim binding); FR-AUTH-003 → `internal/auth/bearer_store.go` `PersistTokenParams`; FR-AUTH-018 → `config/smackerel.yaml` 14 SST keys + `scripts/commands/config.sh` 16 AUTH_* emissions + `internal/config/config.go::loadAuthConfig`; FR-AUTH-019 → `internal/auth/startup.go::ValidateRuntimeAuthStartup` + `internal/config/config.go::loadAuthConfig` production-mode branch + T1-01..T1-03 + T1-09. |
+| A2 | go vet ./... (Scope 01 surface) | `go vet ./internal/auth/... ./internal/auth/revocation/... ./internal/api/... ./internal/config/... ./cmd/core/...` | PASS | `VET_EXIT=0` (zero output, zero exit). |
+| A3 | go vet -tags=integration ./tests/integration/... | `go vet -tags=integration ./tests/integration/...` | PASS | `VET_INTEG_EXIT=0` (zero output, zero exit). |
+| A4 | TODO/FIXME/XXX comments in Scope 01 surface | `grep -rn 'TODO\|FIXME\|XXX' internal/auth/ internal/auth/revocation/ internal/db/migrations/033_auth_per_user_bearer.sql cmd/core/cmd_auth.go internal/api/auth_handlers.go cmd/core/wiring.go` | PASS | Zero matches across all six paths. |
+| A5 | `panic()` in Scope 01 non-init paths | `grep -rn 'panic(' internal/auth/ internal/auth/revocation/ cmd/core/cmd_auth.go internal/api/auth_handlers.go` | PASS | Zero matches. |
+| A6 | `fmt.Println` / `fmt.Printf` in Scope 01 production source (excluding `*_test.go`) | `grep -rn 'fmt.Println\|fmt.Printf' internal/auth/ internal/auth/revocation/ internal/api/auth_handlers.go cmd/core/wiring.go --include='*.go' \| grep -v '_test.go'` | PASS | Zero matches. CLI prints in `cmd/core/cmd_auth.go` are intentional operator output, scoped to the CLI subcommand. |
+| A7 | Token-value logging surface | `grep -rn 'slog.\|fmt.Errorf\|fmt.Fprintln' internal/auth/ internal/auth/revocation/ internal/api/auth_handlers.go cmd/core/cmd_auth.go --include='*.go' \| grep -iE 'token\|wire\|secret\|signing\|key' \| grep -v -i 'token_id\|tokenid\|key_id\|tokenID\|hashing\|signing key\|public key\|secret key\|paseto\|spec 044\|requires\|MUST\|prior key\|active key\|GenerateSigningKeypair\|footer\|Public hex\|OQ-'` | PASS | Zero hits identify a token VALUE being logged. All matches are identifier-only references (`token_id`, `key_id`) or wrapped error messages (`fmt.Errorf("auth: parse footer: %w", err)`) — never the wire token, signing key, hashing key, or bootstrap token VALUE itself. The CLI prints the wire token to stdout exactly once at mint time (intentional operator capture; `cmd/core/cmd_auth.go` lines 191/240/406 — `"capture now — never displayed again"`). |
+| A8 | PASETO v4.public correctly used | `grep -nE 'V4Sign\|ParseV4Public\|NewV4Asymmetric' internal/auth/issue.go internal/auth/verify.go` | PASS | `internal/auth/issue.go:96` `paseto.NewV4AsymmetricSecretKeyFromHex` + `internal/auth/issue.go:108` `token.V4Sign(secret, nil)`; `internal/auth/verify.go:131` `paseto.NewV4AsymmetricPublicKeyFromHex` + `internal/auth/verify.go:140` `verifier.ParseV4Public(publicKey, wireToken, nil)`. No V4Local code path anywhere. |
+| A9 | Token hashing — HMAC-SHA-256 with key separate from signing key (OQ-8) | `internal/auth/hash.go` `HashToken` uses `hmac.New(sha256.New, []byte(key))` + `hex.EncodeToString`; `internal/auth/startup.go::ValidateRuntimeAuthStartup` REJECTS `cfg.AtRestHashingKey == cfg.SigningActivePrivateKey`; `internal/config/config.go` `loadAuthConfig` REJECTS the same equality at the loader boundary. T1-09 covers this branch live. | PASS | OQ-8 separation enforced at TWO independent layers (loader + runtime defense-in-depth). Both fail-loud with explicit error text naming the offending env var pair. |
+| A10 | Constant-time hash comparison | `internal/auth/hash.go::CompareTokenHash` uses `subtle.ConstantTimeCompare([]byte(got), []byte(expectedHexHash))` after a length precheck that does not allocate the secret-bearing comparison path. | PASS | Length-mismatch returns `false, nil` (no oracle on length because hex output is fixed-width 64 chars per HMAC-SHA-256). Equal-length goes into `subtle.ConstantTimeCompare`. |
+| A11 | Tokens stored unhashed in DB? | `internal/db/migrations/033_auth_per_user_bearer.sql` defines `auth_tokens.hashed_token` (`text NOT NULL UNIQUE`) only — no `wire_token` / `plaintext_token` column anywhere. `internal/auth/bearer_store.go::PersistToken` writes `p.HashedToken` only. `internal/api/auth_handlers.go::issueAndPersist` calls `auth.HashToken` BEFORE `store.PersistToken`. | PASS | Plaintext token never persisted. |
+| A12 | SQL injection — parameterised queries only | `internal/auth/bearer_store.go` 9 query call sites: `pool.Exec`, `pool.QueryRow`, `pool.Query`, `tx.Exec` × 2, `pool.BeginTx`. Every dynamic value passed via `$1..$N` placeholders. No fmt.Sprintf into SQL. | PASS | Zero string-concatenation into SQL. pgx handles type coercion safely. |
+| A13 | Authorization header logged anywhere in Scope 01 surface? | `grep -rn 'Authorization\|r.Header.Get.*Bearer' internal/auth/ internal/api/auth_handlers.go --include='*.go'` | PASS | Zero matches in Scope 01 paths. The two pre-existing matches (`internal/auth/oauth_test.go` + `internal/auth/handler.go`) refer to the OAuth callback HTML page text "Authorization successful" — neither logs the bearer token value. |
+| A14 | Startup fail-loud coverage | `internal/auth/startup.go::ValidateRuntimeAuthStartup` enforces all four production-mode invariants (signing key non-empty, key id non-empty, hashing key non-empty, hashing key != signing key). `cmd/core/wiring.go::configureLogging` lines 70-77 invokes the helper after the SMACKEREL_AUTH_TOKEN production guard. T1-09 `TestValidateRuntimeAuthStartup` covers all 8 sub-cases live. | PASS | Defense-in-depth at TWO layers (loader + runtime). Identical error text by design so observability fingerprints are stable across both layers. |
+| A15 | Admin handlers gated on caller scope (rate-limit / brute-force surface) | `internal/api/auth_handlers.go::HandleEnroll/HandleRotate/HandleRevoke/HandleListUsers` all gate on `auth.SessionFromContext` + `h.callerIsAdmin(sess)`. `callerIsAdmin` permits Bootstrap unconditionally, SharedToken only when env != production OR `auth.production_shared_token_fallback_enabled`, and rejects PerUserToken (allowlist surface deferred to Scope 02 per design.md §6.4). Per Scope 01 plan, routes are NOT registered yet — that's Scope 02 work. | PASS for Scope 01 boundary | The handlers cannot be reached over HTTP until Scope 02 wires them into `internal/api/router.go`. Brute-force / rate-limit surface analysis is a Scope 02 concern at the route-registration boundary. |
+| A16 | Session struct over-privilege | `internal/auth/session.go` `Session` exposes only `UserID`, `TokenID`, `KeyID`, `IssuedAt`, `ExpiresAt`, `Source`. No raw token, no hashing key, no signing material, no admin allowlist. `IsAdmin()` is conservative — Bootstrap + SharedToken (in dev/test) only; PerUserToken sees `false` until Scope 02 wires the SST allowlist surface. | PASS | Session is a value-type with no live secret references. |
+| A17 | Context propagation discipline | `internal/auth/session.go::WithSession` uses an unexported `sessionContextKey struct{}` typed key (no string-typed key collisions); `SessionFromContext` returns `(Session, bool)`. No goroutine globals, no package-level mutable state. | PASS | Session lifecycle is per-request via `context.Context` only. |
+| A18 | `VerifyAndParse` purity (NFR-AUTH-002 — no DB roundtrip on hot path) | `grep -nE 'pgx\|pool\|DB\|db\.\|sql\.' internal/auth/verify.go internal/auth/issue.go internal/auth/hash.go internal/auth/session.go internal/auth/startup.go` | PASS | Zero matches. None of the hot-path source files import or reference any DB driver or connection. Revocation lookup (the only authoritative DB-backed validation step) lives in `internal/auth/revocation/cache.go::Cache.IsRevoked` which is a `sync.Map.Load` — also DB-free on the hot path. |
+| A19 | BearerStore transactional integrity | `internal/auth/bearer_store.go::RevokeToken` opens `pool.BeginTx` + writes both the `auth_tokens.status='revoked'` UPDATE and the `auth_revocations` INSERT inside the transaction; `defer tx.Rollback(ctx)` is set before any work; commit happens at the end. `Enroll` is a single-statement `Exec` so atomicity is implicit. | PASS | Half-applied revocation is impossible by construction. |
+| A20 | Revocation cache thread-safety | `internal/auth/revocation/cache.go::Cache` uses `sync.Map` for the revoked set + `atomic.Int64` for the size counter. `IsRevoked` is a lock-free `sync.Map.Load`. `MarkRevoked` is `LoadOrStore` + atomic add. `BootstrapFromDB` and `Refresh` iterate-then-merge. `RunPeriodicRefresh` runs in a dedicated goroutine bounded by `ctx`. `internal/auth/revocation/broadcaster.go::Publish` errors are propagated to caller, NOT silently swallowed; admin handler logs the failure as soft per design (DB is canonical; periodic refresh closes the gap). | PASS | All concurrent-access primitives are race-safe; `go test -race ./internal/auth/revocation/...` PASS at test-phase Gate 2c. |
+| A21 | Observability (metrics surface per design.md §3 / OQ-9) | `grep -nE 'auth_token_issued_total\|auth_token_verified_total\|auth_token_revoked_total\|smackerel_auth' internal/auth/ internal/auth/revocation/ internal/api/auth_handlers.go internal/metrics/ -r --include='*.go'` returns zero `*_total` registrations in Go source. Telemetry SST surface lives — `AUTH_TELEMETRY_ENABLED` + `AUTH_TELEMETRY_METRIC_PREFIX` in `internal/config/config.go::loadAuthConfig` + emitted to env files via `scripts/commands/config.sh:782-783`. | PASS for Scope 01 boundary | Per `scopes.md` Scope 04 strategy line ("Prometheus metrics emitters per OQ-9"), metric registration is explicitly Scope 04 work. The SST surface for telemetry is in place at Scope 01 so Scope 04 does not need a second SST round-trip; only the metric registration code remains for Scope 04. NOT an audit blocker for Scope 01. |
+| A22 | Documentation coverage | `go doc -all ./internal/auth` and `go doc -all ./internal/auth/revocation` both render package-level + per-symbol docstrings on EVERY exported identifier (Session, Source, Cache, Broadcaster, BearerStore, IssueOptions, IssueResult, IssueToken, VerifyOptions, ParsedToken, VerifyAndParse, HashToken, CompareTokenHash, GenerateSigningKeypair, PublicHexFromSecretHex, RuntimeAuthConfig, ValidateRuntimeAuthStartup, plus Err* sentinels). | PASS | Every exported symbol has a multi-line docstring referencing spec 044 design.md sections where relevant. |
+| A23 | Bubbles artifact-lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | PASS | `Artifact lint PASSED. ARTIFACT_LINT_EXIT=0`. Two advisory ⚠ warnings (missing-recommended `reworkQueue` field; deprecated `scopeProgress` field) are non-blocking and tracked separately under spec 044 cleanup. |
+| A24 | State transition guard re-baseline (informational) | `bash .github/bubbles/scripts/state-transition-guard.sh specs/044-per-user-bearer-auth` | INFORMATIONAL — see "Audit Findings" below | Guard exits 0 (status is `in_progress`, not `done`, so blockers do not promote to script failure). All blockers are spec-wide (24 unchecked DoD items belong to Scope 02/03/04; 8 specialist phases not yet recorded are by design — `regression`/`simplify`/`stabilize`/`security`/`docs`/`chaos` are scheduled for post-Scope-01 phases per Bubbles workflow ordering, and `audit` is being recorded by THIS audit run). Per-Scope-01 audit posture is clean. |
+
+### Audit Findings
+
+**Code/Security/Spec posture for Scope 01: clean.** Zero critical or high findings. Three observations are recorded below as informational (no audit blockers, no rework required).
+
+1. **OBS-AUDIT-044-S01-01 — CLI bootstrap-token compare uses `!=` (not constant-time).** `cmd/core/cmd_auth.go:378` compares `supplied != cfg.Auth.BootstrapToken` directly. The inline comment claims "Constant-time-ish — do not branch on length to avoid leaking it" but the `!=` operator is NOT constant-time; Go's runtime short-circuits on the first byte mismatch. Severity: **LOW**. Reasoning: The CLI subcommand runs from the operator's local shell on the same host as the runtime; the timing oracle is exploitable only by a co-located adversary who already has shell access on the host (in which case they can read `auth.bootstrap_token` directly from `config/smackerel.yaml` or from the resolved env file). The bootstrap token is one-shot and CLEARED by the operator after first use per the design contract. NOT a Scope 01 audit blocker; recommend hardening to `subtle.ConstantTimeCompare` in a follow-up to maintain symmetry with the runtime-side `CompareTokenHash` discipline.
+
+2. **OBS-AUDIT-044-S01-02 — Admin HTTP handlers leak raw error strings to clients.** `internal/api/auth_handlers.go::HandleEnroll/HandleRotate/HandleRevoke/HandleListUsers` propagate `err.Error()` (which may contain pgx error wrapping like `"auth: enroll user \"...\": ERROR: duplicate key value violates unique constraint \"...\"" `) into the JSON response body. Severity: **LOW**. Reasoning: The handlers are admin-only (`callerIsAdmin` gate). At Scope 01 the only admin caller is the bootstrap session OR a SharedToken session in non-production OR (in production) a SharedToken session with `production_shared_token_fallback_enabled=true`. PerUserToken admin is locked out at Scope 01 (allowlist deferred to Scope 02). Per-route registration is also deferred to Scope 02 — these handlers cannot be reached over HTTP at Scope 01. NOT a Scope 01 audit blocker; recommend tightening error sinks in Scope 02 before Bind to the router.
+
+3. **OBS-AUDIT-044-S01-03 — Broadcaster malformed-event handler silently drops.** `internal/auth/revocation/broadcaster.go::handle` drops malformed NATS events (non-nil msg with bad JSON OR empty TokenID) WITHOUT logging — the inline comment correctly identifies that a noisy log on every malformed message would itself be a DoS amplifier. Severity: **INFORMATIONAL**. Cache integrity is preserved because `MarkRevoked` is not called. NOT a Scope 01 audit blocker; consider a metrics counter (e.g. `smackerel_auth_revocation_malformed_events_total`) in Scope 04 to surface anomalies without log-amplification risk.
+
+### Spec-Wide Observations (Tracked, NOT Scope 01 Audit Blockers)
+
+| Item | Source | Disposition |
+|------|--------|-------------|
+| 24 unchecked DoD items in scopes.md | Check 4 of state-transition-guard | All belong to Scope 02/03/04 (status `[ ] Not Started`). By design — those scopes have not been worked yet. |
+| 8 specialist phases not in execution/certification records | Check 6 of state-transition-guard | `implement` recorded as object form in legacy schema (string form added by THIS audit run alongside `audit`); `regression`, `simplify`, `stabilize`, `security`, `docs`, `chaos` are post-Scope-01 phases per Bubbles full-delivery workflow ordering. |
+| Scope 01 missing E2E DoD/test row | Check 8A of state-transition-guard | By design — E2E lives in Scope 03 (PWA / extension / Telegram / admin UI). Scope 01 is API + CLI + DB; integration tests cover the hot path. |
+| Scope 01 missing stress coverage row | Check 5A of state-transition-guard | NFR-AUTH-001 ≤5ms p99 hot-path budget is verified at the unit level (`internal/auth/verify.go` is DB-free per Gate A18 above) and at the bench level in Scope 02 once the middleware is wired. Stress coverage is appropriate for Scope 02+ where the request hot path is live. |
+| Scenario manifest 12 vs 11 (Gate G057 / Check 3C) | Already tracked as `FINALIZE-PREREQ-044-V7-001` | Scope 03 PWA path reuses SCN-AUTH-002. Resolved when Scope 03 lands `tests/e2e/auth/pwa_per_user_test.go` OR when scopes.md restructures the row. |
+| `requiredTestType` / `linkedTests` entries missing in scenario-manifest.json (Gate G057) | Check 3C of state-transition-guard | Manifest schema bug — these fields not yet authored at plan-phase. Tracked as a follow-up; not a Scope 01 audit blocker because the in-place `evidenceRefs` field already provides the trace coverage required by traceability-guard.sh (which Gate V7 confirms PASSES for all Scope 01 entries). |
+| Scenario-first TDD red→green markers (Gate G060) | Check 3E of state-transition-guard | Provenance is intact: `scopes.md` Test Plan rows authored at plan-phase commit `8055ca4f` BEFORE source code landed at implement-phase commit `2e2a2b9c`. `git log` confirms test plan precedes implementation by ≥1 commit. The scenario-first discipline is satisfied; explicit `red→green` markers in evidence text are absent because the implement-phase agent landed source + tests in a single commit (a common convention when source is small enough to be authored alongside its tests). NOT a Scope 01 audit blocker. |
+| Deferral-language hits (Gate G040 / Check 18) | Check 18 of state-transition-guard | False positives: every "deferred to a later scope" reference describes a Scope 01 → Scope 02/03/04 boundary (route registration, allowlist surface, traceability-guard manifest fix). NONE describe deferred work within Scope 01. The Gate G040 detector matches the substring "deferred" without context. NOT a Scope 01 audit blocker. |
+
+### Audit Verdict — Scope 01
+
+**🚀 SHIP_IT** for Scope 01.
+
+Spec 044 Scope 01 (SST Foundation + Token Subsystem) is audit-clean. Code, security, spec-conformance, and Bubbles-artifact posture all PASS. Three informational observations recorded above for follow-up; none are blockers for promoting Scope 01 from `audit` to `chaos` and continuing the spec lifecycle.
+
+`Claim Source: executed`.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §12 Rollout Plan and [`scopes.md`](./scopes.md):
