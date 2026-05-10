@@ -1278,6 +1278,225 @@ State.json updates (this entry): completedPhaseClaims appended `docs` (string); 
 
 ---
 
+## Finalize Evidence (Scope 01)
+
+**Phase:** finalize (per-scope, Scope 01 only)
+**Agent:** bubbles.iterate (per-scope finalize equivalent)
+**Spec status target:** UNCHANGED — spec 044 remains `in_progress` because Scopes 02/03/04 are not yet started.
+**Scope 01 status target:** `Done` (already canonicalized at audit phase per Gate G041; reaffirmed here).
+**Decision:** approved (per-scope finalize closure of Scope 01).
+**Carry-forward:** `FINALIZE-PREREQ-044-V7-001` transitionRequest remains OPEN; discharged at spec-level finalize after Scope 03 (or Scope 04 closure) lands `tests/e2e/auth/pwa_per_user_test.go` OR scopes.md is restructured per the documented resolution paths.
+
+### Per-Scope Finalize Gate Set
+
+Eight gates executed against `HEAD=108aa62e` (post-docs commit). Test stack left up for the Scope 02 implement-phase agent.
+
+#### Gate F1 — `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth`
+
+```text
+file_path: specs/044-per-user-bearer-auth (full artifact suite)
+count_summary: 0 errors; 2 advisory warnings (missing-recommended `reworkQueue`; deprecated `scopeProgress`)
+exit_status: 0
+```
+
+Verbatim tail:
+
+```text
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+`Claim Source: executed`.
+
+#### Gate F2 — `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose`
+
+```text
+file_path: specs/044-per-user-bearer-auth (scopes.md + scenario-manifest.json + report.md)
+count_summary: 12 scenarios checked; 12 scenario-to-row mappings; 12 DoD-fidelity scenarios mapped; 11 concrete test file references; 11 report evidence references; 2 failures (BOTH Scope 3 surface — documented carry-forward); 0 warnings
+exit_status: 1 (acceptable per per-scope finalize disposition + open `FINALIZE-PREREQ-044-V7-001`)
+```
+
+The 2 documented Scope 3 failures (verbatim):
+
+```text
+❌ scenario-manifest.json covers only 11 scenarios but scopes define 12
+❌ Scope 3: Web Surfaces + Telegram Connector mapped row references no existing concrete test file: SCN-AUTH-002 Bearer token survives stateless validation in production mode without DB roundtrip [PWA path]
+RESULT: FAILED (2 failures, 0 warnings)
+TRACEABILITY_EXIT=1
+```
+
+ALL Scope 01 entries PASS the guard:
+
+```text
+✅ Scope 1: SST Foundation + Token Subsystem scenario maps to DoD item: SCN-AUTH-001 User enrollment issues a per-user bearer token
+✅ Scope 1: SST Foundation + Token Subsystem scenario maps to DoD item: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
+```
+
+Per-scope finalize disposition: PASS — Scope 01 surface is clean; both failures are EXCLUSIVELY Scope 3 surface and are tracked under the open `FINALIZE-PREREQ-044-V7-001` transitionRequest. Spec-level finalize (post-Scope-04) MUST verify these are resolved before promoting spec 044 to `done`.
+
+`Claim Source: executed`.
+
+#### Gate F3 — `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose`
+
+```text
+file_path: specs/044-per-user-bearer-auth (report.md baseline + cross-spec inventory)
+count_summary: G044 PASS (test baseline comparison found); G045 PASS (42 done specs of 43 total scanned, no regressions); G046 PASS (no route/endpoint collisions detected); 0 failures
+exit_status: 0
+```
+
+Verbatim tail:
+
+```text
+── G044: Regression Baseline ──
+  ✅ Test baseline comparison found in report
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 42 done specs (of 43 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+── Summary ──
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+REGR_EXIT=0
+```
+
+`Claim Source: executed`.
+
+#### Gate F4 — `./smackerel.sh check`
+
+```text
+file_path: config/smackerel.yaml + config/generated/{dev,test,home-lab}.env + config/prompt_contracts/*.yaml
+count_summary: SST in sync; env_file drift OK; scenario-lint OK (5 registered, 0 rejected)
+exit_status: 0
+```
+
+Verbatim tail:
+
+```text
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+```
+
+`Claim Source: executed`.
+
+#### Gate F5 — `./smackerel.sh test unit` (Go + Python full unit suites)
+
+```text
+file_path: internal/* + cmd/* (Go lane) + ml/* (Python lane)
+count_summary: Go lane all packages `ok` (zero `FAIL` lines in runner output); Python lane `417 passed in 11.87s`; auth/auth-revocation/config/cmd-core packages all `ok` (no regressions vs validate phase)
+exit_status: 0
+```
+
+Verbatim Python tail (full pass-rate marker):
+
+```text
+........................................................................ [ 17%]
+........................................................................ [ 34%]
+........................................................................ [ 51%]
+........................................................................ [ 69%]
+........................................................................ [ 86%]
+.........................................................                [100%]
+417 passed in 11.87s
+UNIT_EXIT=0
+```
+
+Go lane FAIL-line scan:
+
+```text
+$ grep -cE "^(FAIL|---.*FAIL)" /tmp/unit_out.txt
+0
+```
+
+`Claim Source: executed`.
+
+#### Gate F6 — `git status --short` (pre-commit)
+
+```text
+file_path: workspace root
+count_summary: 0 modified files in working tree before this finalize commit (after the docs commit at HEAD `108aa62e` landed clean)
+exit_status: 0
+```
+
+```text
+$ git status --short
+$ git log --oneline -1
+108aa62e (HEAD -> main) docs(044): Scope 01 — publish per-user bearer auth ops/dev/deploy surfaces
+```
+
+`Claim Source: executed`.
+
+#### Gate F7 — Scope 01 DoD verification
+
+```text
+file_path: specs/044-per-user-bearer-auth/scopes.md (Scope 01 DoD section)
+count_summary: 11 DoD bullets (10 phase-bullets + 1 finalize-phase bullet appended in this commit), all `[x]`, all with inline evidence sub-blocks (`Phase: implement`, `Phase: test`, `Phase: validate`, `Phase: chaos`, `Phase: spec-review`, `Phase: docs`, `Phase: finalize`); zero `[ ]` unchecked items in Scope 01
+exit_status: PASS
+```
+
+Per-scope unchecked-bullet scan after this commit lands:
+
+```text
+$ awk '/^## Scope 1:/,/^## Scope 2:/' specs/044-per-user-bearer-auth/scopes.md | grep -c '^- \[ \]'
+0
+```
+
+`Claim Source: executed`.
+
+#### Gate F8 — Scope 01 status header canonical (Gate G041)
+
+```text
+file_path: specs/044-per-user-bearer-auth/scopes.md (Scope 01 Status header)
+count_summary: Scope 01 Status header reads `Done` (canonical); Scope 02/03/04 Status headers read `Not Started` (canonical); zero invented status values in scopes.md
+exit_status: PASS
+```
+
+```text
+$ grep -E '^\*\*Status:\*\*' specs/044-per-user-bearer-auth/scopes.md
+**Status:** Done
+**Status:** Not Started
+**Status:** Not Started
+**Status:** Not Started
+```
+
+`Claim Source: executed`.
+
+### Per-Scope Finalize Decision
+
+**🟢 APPROVED** for Scope 01 closure per Gate G022 (per-scope finalize variant).
+
+- Scope 01 status: `Done` (canonical, preserved from audit-phase G041 normalization).
+- `completedScopes` already includes `"01"` (set at validate phase; preserved here).
+- `executionHistory` records this finalize entry with `scopes=["01"]`, `decision="approved"`, and the gate-result summary above.
+- Spec-level status: UNCHANGED — `status: in_progress`, `certification.status: in_progress`. Scope 02 (hot-path middleware integration + MIT closures), Scope 03 (web surfaces + Telegram), Scope 04 (deprecation + docs freshness) are not yet started.
+- `currentPhase` advances from `finalize` to `plan` (signaling next-scope work — Scope 02 plan/implement). `execution.currentScope` advances from `01` to `02`.
+
+### Carry-Forward Summary (deferred to spec-level finalize)
+
+The open `FINALIZE-PREREQ-044-V7-001` transitionRequest is **carried forward** unchanged. It is NOT a Scope 01 finalize prerequisite (the Scope 01 surface is clean at every traceability-guard check). It IS a spec-level finalize prerequisite that MUST be discharged before spec 044 can be promoted to `done`. Resolution paths (per the transitionRequest body):
+
+- **(a)** Scope 03 lands `tests/e2e/auth/pwa_per_user_test.go` and the manifest is updated to either include a 12th SCN entry OR the scope-row is deduplicated against the SCN-AUTH-002 manifest entry.
+- **(b)** At spec-level finalize, scopes.md is restructured so the Scope 3 PWA-path row no longer counts as a separate scope-row (e.g., merging it into the SCN-AUTH-002 manifest entry's evidenceRefs once Scope 3 lands).
+
+Until either resolution is applied, the spec stays `in_progress` and the spec-level finalize-phase agent MUST verify the traceability-guard exits 0 with NO Scope 3 failures before promoting spec 044 to `done`.
+
+### Boundary Note
+
+Scope 01 is closed; Scope 02 work begins. Recommended next iteration: Scope 02 implement (closes MIT-040-S-008 + MIT-038-S-003 + MIT-027-TRACE-001 actor-source mitigations per design.md §12 rollout phase 2).
+
+`Claim Source: executed`.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §12 Rollout Plan and [`scopes.md`](./scopes.md):
