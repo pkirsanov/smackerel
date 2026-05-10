@@ -230,6 +230,13 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   - Skip-marker scan over `internal/auth/` and `tests/integration/auth_*.go` returns ZERO `t.Skip` calls; only one false-positive match (a comment in `tests/integration/auth_bootstrap_test.go:24` documenting the no-skip policy itself).
   - **Claim Source:** executed (live, with verbatim runner outputs cross-referenced to `report.md` → Test Evidence). Both Uncertainty Declarations from the implement-phase block are cleared.
 
+  **Evidence (Phase: validate):**
+  - Full Go unit suite via `./smackerel.sh test unit --go` PASS — every package reports `ok` (no `FAIL` anywhere); `internal/auth` and `internal/auth/revocation` both `ok (cached)`. Verbatim per-package tail in `report.md` → Validation Evidence → Gate V2a.
+  - Python ML sidecar suite via `./smackerel.sh test unit --python` PASS: `417 passed in 13.62s`. Verbatim summary in `report.md` → Validation Evidence → Gate V2b.
+  - Full integration lane via `./smackerel.sh test integration` PASS (`GATE3_EXIT=0`) — the BUG-002 ollama in-image `ollama list` healthcheck fix unblocks the lane; every test-stack service reaches Healthy and the runner manages compose lifecycle end-to-end. Verbatim runner tail (drive integration sub-tests + agent integration package summary) in `report.md` → Validation Evidence → Gate V3.
+  - Auth-specific live re-run after lane teardown — test stack restored via `./smackerel.sh --env test up`, then `go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/...` PASS in 0.124s for both `TestAuthBootstrap_FreshProduction_EnrollsFirstUser` and `TestAuthBootstrap_PublicHexDerivation` against postgres at `127.0.0.1:47001` with `DATABASE_URL` derived from `config/generated/test.env`. Verbatim runner output in `report.md` → Validation Evidence → Gate V3 → "Auth-specific verbatim live re-run".
+  - **Claim Source:** executed.
+
 - [x] `./smackerel.sh check` passes (config in sync; env_file drift guard OK).
 
   **Evidence (Phase: implement):**
@@ -241,6 +248,22 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   scenarios registered: 5, rejected: 0
   scenario-lint: OK
   ```
+  - **Claim Source:** executed.
+
+  **Evidence (Phase: validate):**
+  - Re-executed at validate phase against HEAD `1ec9c5f5`:
+    ```
+    $ ./smackerel.sh check
+    Config is in sync with SST
+    env_file drift guard: OK
+    scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+    scenarios registered: 5, rejected: 0
+    scenario-lint: OK
+    $ echo "GATE1_EXIT=$?"
+    GATE1_EXIT=0
+    ```
+  - Additional validate-phase gates also PASS: `./smackerel.sh lint` (Gate V4 — `All checks passed!` plus web-manifest + JS-syntax + extension-version validation), `./smackerel.sh format --check` (Gate V5 — `49 files already formatted`), `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` (Gate V6 — `Artifact lint PASSED`), `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` (Gate V8 — `🐾 Regression baseline guard: PASSED`). Verbatim outputs in `report.md` → Validation Evidence.
+  - Gate V7 (`traceability-guard.sh`) returns `pass-with-deferred` — both failures are EXCLUSIVELY Scope 3 surface (PWA-path counting mismatch + missing `tests/e2e/auth/pwa_per_user_test.go`); ALL Scope 01 entries (SCN-AUTH-001 → `internal/auth/issue_test.go` + `tests/integration/auth_bootstrap_test.go`; SCN-AUTH-006 → `internal/config/validate_test.go` × 3 + `internal/auth/startup_test.go` + `internal/auth/sst_grep_guard_test.go`) PASS. Tracked under `state.json.transitionRequests` as `finalize_prerequisite`.
   - **Claim Source:** executed.
 
 ---
