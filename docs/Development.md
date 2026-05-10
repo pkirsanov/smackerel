@@ -196,6 +196,21 @@ Current host-forwarding allocation from `config/smackerel.yaml`:
 | `test` | infra | nats monitor | `47003` | `8222` | `http://127.0.0.1:47003` |
 | `test` | infra | ollama | `47004` | `11434` | `http://127.0.0.1:47004` |
 
+### Build Tag Discipline
+
+Most live-stack tests under `tests/e2e/` and `tests/integration/` use Go build tags to keep the default `./smackerel.sh test unit` run free of live-stack dependencies. Two tags carry contractual meaning today:
+
+| Tag | Owner | What it gates | Default test lane behavior |
+|-----|-------|---------------|-----------------------------|
+| `e2e` | spec 037 + general E2E | Live-stack agent + API E2E tests that depend on the test compose stack | Excluded by `./smackerel.sh test unit`; included by `./smackerel.sh test e2e` |
+| `e2e_ollama` | spec 043 | `tests/e2e/agent/happy_path_test.go` (the only file in the repo using this tag) — drives the production NATS + Python sidecar + LiteLLM + Ollama path against a real local model | Excluded from every default lane; included only when `SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e` is invoked |
+
+Constraints:
+
+- A combined `go test -tags=e2e,e2e_ollama ./tests/e2e/agent/...` invocation is structurally invalid today: helper symbols (`postInvoke`, `liveDB`) are redeclared between `happy_path_test.go` and the spec-037 `e2e`-tagged helpers because the two helper signatures differ. `./smackerel.sh test e2e` (with `SMACKEREL_TEST_OLLAMA=1`) builds with `-tags=e2e_ollama` only, never the combined form.
+- The non-tagged `tests/e2e/agent/no_skip_guard_test.go` file MUST remain compilable under every tag config (default, `e2e`, `e2e_ollama`) so its `t.Skip`-bailout regression continues to fire on every test invocation.
+- See `docs/Testing.md` "Ollama-Backed Agent E2E Test Lane (Spec 043)" for the canonical operator workflow, env-var contract, exit codes from `scripts/commands/ollama-test-pull.sh`, and the per-environment `agent_provider_fast_model` override (`qwen2.5:0.5b-instruct` for `test`, `gpt-oss:20b` for `dev` and `home-lab`).
+
 ## Source Of Truth Documents
 
 These docs are already the operational source of truth for architecture and governance. When the standardized runtime workflow lands, they must also become the source of truth for the command surface:

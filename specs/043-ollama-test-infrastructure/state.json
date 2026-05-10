@@ -4,11 +4,11 @@
   "featureNumber": "043",
   "featureName": "ollama-test-infrastructure",
   "status": "done_with_concerns",
-  "currentPhase": "docs",
+  "currentPhase": "closeout",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "docs",
+    "currentPhase": "closeout",
     "currentScope": "01",
     "runStartedAt": "2026-05-09T05:36:00Z",
     "completedPhaseClaims": [
@@ -16,7 +16,8 @@
       "validate",
       "audit",
       "chaos",
-      "spec-review"
+      "spec-review",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
@@ -52,7 +53,8 @@
       "validate",
       "audit",
       "chaos",
-      "spec-review"
+      "spec-review",
+      "docs"
     ],
     "lockdownState": {
       "active": false,
@@ -145,6 +147,16 @@
       "agent": "bubbles.spec-review (parent-executed inline due to subagent dispatch error)",
       "timestamp": "2026-05-10T01:00:00Z",
       "summary": "spec-review phase complete. Trust classification: TRUSTWORTHY. Drift findings: ZERO. Verified: (1) ollama-test-pull.sh exit codes 1/2/3/4 match scopes.md DoD claim; (2) happy_path_test.go function names TestAgentHappyPath_PlanToolSynthesis + TestAgentHappyPath_DeterministicOutput + TestOllamaUnreachable_FailsLoudly match all 7 scenario-manifest linkedTests and all scopes.md DoD evidence refs; (3) ml/app/agent.resolve_ollama_determinism_options reads exactly 5 OLLAMA_TEST_REQUEST_* env vars (TEMPERATURE/TOP_P/TOP_K/SEED/NUM_PREDICT) matching report.md Scope 2 evidence; (4) smackerel.sh::SMACKEREL_TEST_OLLAMA gate has 4 occurrences matching report.md Scope 3 evidence claim of grep -c = 4; (5) cross-spec closure: grep -c 'modulo deferred infra' specs/037-llm-agent-tools/scopes.md = 0 (was 2 pre-7262045e); MIT-037-OLLAMA-001 status=resolved closureSpec=043-ollama-test-infrastructure closureCommitDate=2026-05-09. Redundancy review: no other spec covers the Ollama-test-infra surface (spec 037 routed the gap to MIT-037-OLLAMA-001 and 043 owns the closure; specs 022/030/039 do not overlap). Compaction proposal: NONE \u2014 report.md is verbose by design (Scope 2 has commit-by-commit split because work landed in 2 commits) but every paragraph carries unique evidence; no condensation gain. Certification status decision: PROMOTING from done_with_concerns to done. Reasoning: audit's done_with_concerns was driven solely by G041 + G057 + G053 framework-strict housekeeping items, all closed in commit 1b85a475 (chore(043): address audit housekeeping). Chaos phase added zero new concerns (8 categories PASS, 0 bugs, 4 P3/P4 informational observations explicitly classified as non-blocking). All 5 safety-critical re-verification gates raised by audit re-pass under spec-review re-check. The remaining 2 advisory artifact-lint warnings (deprecated scopeProgress field; legacy phase-block object format) are pre-existing framework drift unrelated to spec 043 surface; they will be addressed by a future framework upgrade pass, not by spec 043. Workflow advancement: currentPhase chaos -> docs (full-delivery position 8/?). No blockers for bubbles.docs. [Self-correction follow-up: parent agent initially promoted status->'done' but artifact-lint correctly flagged that full-delivery 'done' requires test + docs phases (not yet run); rolled back to 'done_with_concerns' (audit verdict stands until closeout finalizes after docs phase). Also compacted certifiedCompletedPhases + completedPhaseClaims from object-form to string-form so artifact-lint's grep -A60 extraction window captures the full array.]"
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "timestamp": "2026-05-10T02:00:00Z",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "outcome": "completed_owned",
+      "summary": "Docs phase (full-delivery 9/9 \u2014 published spec 043 surfaces into managed docs). TOUCHED 2 managed docs: (1) docs/Testing.md +5776 bytes / +76 lines \u2014 added new '### Ollama-Backed Agent E2E Test Lane (Spec 043)' section after the QF Companion Connector Test Surface (Spec 041) section and before 'Environment Isolation Rules'. Documents: opt-in lane invocation (SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e), the 3 happy_path test functions (TestAgentHappyPath_PlanToolSynthesis, TestAgentHappyPath_DeterministicOutput, TestOllamaUnreachable_FailsLoudly), the 3 no_skip_guard test functions, the 8 required env vars sourced from config/generated/test.env (with SST key cross-references), the 5 ollama-test-pull.sh exit codes (0/1/2/3/4), the cold-pull -> warm-cache workflow on the smackerel-test-ollama-data volume (~397 MB first pull preserved across ./smackerel.sh down, dropped only by ./smackerel.sh clean full), the per-env agent_provider_fast_model override table (test=qwen2.5:0.5b-instruct, dev/home-lab=gpt-oss:20b), and 3 required adversarial cases. (2) docs/Development.md +1819 bytes / +15 lines \u2014 added new '### Build Tag Discipline' subsection between '### Port And URL Discipline' and '## Source Of Truth Documents'. Documents: the e2e vs e2e_ollama tag distinction table, the chaos P3 finding that combined -tags=e2e,e2e_ollama is structurally invalid (postInvoke + liveDB redeclaration), and the no-skip-guard tag-config constraint. Cross-links to docs/Testing.md as the canonical operator-workflow home (zero duplication: Development.md mentions identifiers but contains zero setup instructions). SKIPPED 4 managed docs with explicit reasons: (a) docs/Operations.md \u2014 skipped because the Ollama test lane is opt-in for local dev/test only, never deployed to home-lab/production (environments.home-lab.ollama_enabled=false); the operator-facing port table at line 562 already documents the dev-env Ollama port 42004 and adding test-env-only content would bloat the production runbook. (b) docs/Deployment.md \u2014 skipped for the same reason; deploy/compose.deploy.yml does not include the ollama service per the Build-Once Deploy-Many contract. (c) docs/smackerel.md \u2014 skipped because resolve_ollama_determinism_options is an internal Python helper with no external API surface. (d) README.md \u2014 skipped because the README has no top-level test-commands section and adding test-lane content there would require restructuring; cross-link from docs/Testing.md is the right surface for operators discovering the lane. DEDUPLICATION: zero duplicate setup instructions across docs (verified via grep -rn 'SMACKEREL_TEST_OLLAMA|ollama-test-pull|e2e_ollama|qwen2.5' docs/ README.md \u2014 all matches in Testing.md are setup content; all matches in Development.md are contextual references that link to Testing.md). DRIFT REMOVAL: scanned for stale 'MIT-037-OLLAMA-001' / 'modulo deferred infra' / 'Ollama tests deferred' / 'cannot test Ollama' references in docs/ and README.md via grep; ZERO matches found (the prior narrative never made it into managed docs, so no rewrite was needed). FABRICATION GUARDS: every documented claim cross-checked against actual implementation \u2014 verified scripts/commands/ollama-test-pull.sh exit codes by reading the script header (lines 24-31), verified test function names by grep tests/e2e/agent/*.go, verified per-env model config by grep config/generated/{dev,test,home-lab}.env, verified resolve_ollama_determinism_options exists at ml/app/agent.py:71 and reads the 5 OLLAMA_TEST_REQUEST_* env vars at lines 101-105, verified SMACKEREL_TEST_OLLAMA gate at smackerel.sh:1141. VALIDATION: bash .github/bubbles/scripts/artifact-lint.sh specs/043-ollama-test-infrastructure -> EXIT=0 (Artifact lint PASSED; 1 advisory deprecated-field WARN unchanged from prior runs); timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/043-ollama-test-infrastructure --verbose -> RESULT=PASSED (G044 informational, G045 41 done specs cross-spec inventory clean, G046 zero route/endpoint collisions). IDE CACHE POISONING: encountered the documented bug from /memories/repo/ide-cache-poisoning.md \u2014 read_file returned ***REMOVED***-substituted view of *.md files; first replace_string_in_file attempt corrupted both files on disk (every # heading became ***REMOVED***); restored from git via git checkout HEAD -- and re-applied via the user-blessed python heredoc with pathlib.Path.read_text() + string replace + pathlib.Path.write_text() workaround. Final verification: grep -c 'REMOVED' docs/Development.md docs/Testing.md = 0/0. NO source code, compose, config, test, scopes.md, scenario-manifest.json, report.md, uservalidation.md, spec.md, or design.md files modified by this docs pass \u2014 only docs/Testing.md, docs/Development.md, and state.json. status and certification.status preserved at 'done_with_concerns' per closeout-phase ownership rule. Next agent: bubbles.closeout (full-delivery position 10/?)."
     }
   ],
   "policySnapshot": {
@@ -178,7 +190,7 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-10T01:30:00Z",
+  "lastUpdatedAt": "2026-05-10T02:00:00Z",
   "completedScopes": [
     "01",
     "02",
