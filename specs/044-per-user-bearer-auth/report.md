@@ -4276,3 +4276,252 @@ PASSED, and only the intended fields changed (verified via `git diff`).
 **Claim Source:** executed.
 
 ---
+
+### Validate Evidence (Scope 03)
+
+**Phase:** validate **Agent:** bubbles.validate **HEAD at run:**
+`cc426f10` (test phase) **Date:** 2026-05-11 **Decision:**
+APPROVED_WITH_DEFERRED_FINALIZE_BLOCKERS (NOT blocked) — same
+disposition class as Scope 01 / Scope 02 validate phases.
+
+Spec 044 Scope 03 formal validate phase per Gate G022. Nine gate
+commands (V1–V9) executed against HEAD `cc426f10` (test-phase commit).
+The test stack was UP at the start of the run on host ports
+`47001/47002/45001/45002/45003`; the V7 e2e runner tore the test
+stack down on completion (expected runner behavior).
+
+#### Gate Suite (verbatim exit codes)
+
+| Gate | Command                                                                                              | Exit | Disposition |
+|------|------------------------------------------------------------------------------------------------------|------|-------------|
+| V1   | `./smackerel.sh build`                                                                               | 0    | PASS        |
+| V2   | `./smackerel.sh check`                                                                               | 0    | PASS        |
+| V3   | `./smackerel.sh lint`                                                                                | 0    | PASS        |
+| V4   | `./smackerel.sh format --check`                                                                      | 0    | PASS        |
+| V5   | `./smackerel.sh test unit`                                                                           | 0    | PASS        |
+| V6   | `./smackerel.sh test integration`                                                                    | 0    | PASS        |
+| V7   | `./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'`                                                | 0    | PASS        |
+| V8   | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth`                       | 0    | PASS        |
+| V9   | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | 1    | PASS-WITH-DEFERRED (only the known FINALIZE-PREREQ-044-V7-001 carry-forward) |
+
+#### Per-Gate Verbatim Output Highlights
+
+- **V1 build:** `smackerel-core Built` + `smackerel-ml Built`; final
+  layer image SHA `6db7f6c30a40cc4f2a008d658efe59d98560a39104edaa7310a266d879ff792f`.
+- **V2 check:** `Config is in sync with SST` / `env_file drift guard:
+  OK` / `scenarios registered: 5, rejected: 0` / `scenario-lint: OK`.
+- **V3 lint:** `All checks passed!` plus web-manifest validation (PWA
+  + Chrome MV3 + Firefox MV2 OK), JS-syntax validation (7 files OK),
+  extension-version-consistency (1.0.0 match) → `Web validation
+  passed`.
+- **V4 format:** `49 files already formatted`.
+- **V5 test unit:** Python ML sidecar `417 passed in 17.03s`; Go lane
+  full sweep — every `internal/*` and `cmd/*` package returns
+  `ok ... (cached)`. Specifically `internal/auth`, `internal/auth/revocation`,
+  `internal/api`, `internal/telegram`, `internal/config`, `cmd/core`
+  all PASS. Zero `FAIL` lines anywhere in the sweep.
+- **V6 test integration:** Three packages all `ok`, ZERO `FAIL`
+  lines — verbatim summary lines:
+  - `ok      github.com/smackerel/smackerel/tests/integration        43.885s`
+  - `ok      github.com/smackerel/smackerel/tests/integration/agent  2.345s`
+  - `ok      github.com/smackerel/smackerel/tests/integration/drive  13.097s`
+- **V7 test e2e PWA:** `tests/e2e/auth` package PASS in 0.368s; final
+  invariant `PASS: go-e2e`. Sub-test results captured: `TestE2E_PWAAuth_Production_PerUserSession`
+  PASS; `TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_body`,
+  `/empty_token`, `/whitespace_token` all PASS;
+  `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/random_garbage`,
+  `/foreign-signed_paseto` (adversarial) both PASS;
+  `TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks` PASS
+  (200 status). Test stack auto-torn-down by the e2e runner on
+  completion.
+- **V8 artifact-lint:** `Artifact lint PASSED.` Two ⚠ advisory
+  warnings (missing-recommended `reworkQueue` field; deprecated
+  `scopeProgress` field) — non-blocking, tracked under broader spec
+  044 cleanup, unchanged from prior phases.
+- **V9 traceability-guard:** EXIT=1; `RESULT: FAILED (1 failures, 0
+  warnings)`; the SOLE failure is the verbatim line:
+  `❌ scenario-manifest.json covers only 11 scenarios but scopes define 12`.
+  All other guard outputs PASS — Gherkin → DoD content fidelity
+  (Gate G068) reports `12 scenarios checked, 12 mapped to DoD, 0
+  unmapped`; per-scope summaries: Scope 1 OK (2 scenarios mapped),
+  Scope 2 `scenarios=8 test_rows=22` (all 8 SCN-AUTH-002/003/004/005/007/008/009/010
+  green), Scope 3 `scenarios=1 test_rows=5` (`SCN-AUTH-002 [PWA path]`
+  scenario maps to concrete test file
+  `tests/e2e/auth/pwa_per_user_test.go` and to report evidence — both
+  PASS), Scope 4 `scenarios=1 test_rows=5` (SCN-AUTH-011 OK).
+  Aggregate: `Scenarios checked: 12 / Test rows checked: 43 /
+  Scenario-to-row mappings: 12 / Concrete test file references: 12 /
+  Report evidence references: 12`. The remaining failure (1 vs prior
+  validate phase's 2 failures) is the residual scope-row counting
+  artefact: scopes.md Scope 3 lists `SCN-AUTH-002 [PWA path]` as a
+  separate Test Plan row, while `scenario-manifest.json` correctly
+  tracks 11 distinct `SCN-AUTH-NNN` scenarios per `spec.md`.
+
+#### Gate V7 (now V9) Decision Policy Applied
+
+Per the Scope 03 validate-gate decision policy: V9 carries acceptance
+criterion *"Acceptable: only the known scope-row count carry-forward
+(11 vs 12). Any OTHER finding fails the gate."* Result: V9 returns
+EXACTLY ONE failure, which is the carry-forward line. Disposition:
+PASS-WITH-DEFERRED. No new findings emerged.
+
+#### `FINALIZE-PREREQ-044-V7-001` Decision (verbatim)
+
+**Original transitionRequest description (verbatim, opened
+2026-05-10T08:08:04Z by `bubbles.validate` against Scope 01 V7):**
+
+> Gate V7 (traceability-guard.sh) returns 2 failures, BOTH
+> EXCLUSIVELY Scope 3 surface: (1) 'scenario-manifest.json covers
+> only 11 scenarios but scopes define 12' — Scope 3 lists SCN-AUTH-002
+> [PWA path] as a separate Test Plan row but the manifest correctly
+> tracks 11 distinct SCN-AUTH-NNN scenarios per spec.md; this is a
+> scope-row counting mismatch artefact of the Scope 3 PWA-path row
+> reusing the SCN-AUTH-002 ID with a [PWA path] qualifier. (2) 'Scope
+> 3 mapped row references no existing concrete test file: SCN-AUTH-002
+> [PWA path]' — tests/e2e/auth/pwa_per_user_test.go does not exist
+> yet because Scope 3 (Web Surfaces + Telegram Connector) has not
+> been implemented. Per validate-phase decision policy these are
+> pass-with-deferred for the validate phase but they MUST be resolved
+> before finalize promotes spec 044 to done. Resolution paths: (a)
+> Scope 3 lands first and authors tests/e2e/auth/pwa_per_user_test.go
+> which closes both failures (the manifest then can be updated to
+> include a 12th SCN entry or the scope-row can be deduplicated
+> against the SCN-AUTH-002 manifest entry); OR (b) at finalize time,
+> scopes.md is restructured so the Scope 3 PWA-path row no longer
+> counts as a separate scope-row (e.g., merging it into the
+> SCN-AUTH-002 manifest entry's evidenceRefs once Scope 3 lands). The
+> finalize-phase agent MUST verify ./smackerel.sh check +
+> traceability-guard exit=0 with NO Scope 3 failures before promoting
+> spec 044 to done.
+
+**Verbatim per-condition status as of this Scope 03 validate phase:**
+
+| Original failure | Status now | Discharge evidence |
+|------------------|------------|--------------------|
+| (2) `Scope 3 mapped row references no existing concrete test file: SCN-AUTH-002 [PWA path]` — `tests/e2e/auth/pwa_per_user_test.go` does not exist | **DISCHARGED** | File landed at commit `2d483842` (`implement(044): Scope 03 — PWA per-user session + extension token + Telegram bridge claim-binding`). Live execution at V7 of this validate phase confirms PASS — `TestE2E_PWAAuth_Production_PerUserSession` (0.24s) + `TestE2E_PWAAuth_Production_LoginRejectsMissingToken` (3 sub-tests) + `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken` (2 sub-tests including the foreign-signed PASETO adversarial) + `TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks` (0.21s) — `PASS: go-e2e`. Traceability guard now reports `✅ Scope 3 ... scenario maps to concrete test file: tests/e2e/auth/pwa_per_user_test.go` and `✅ Scope 3 ... report references concrete test evidence: tests/e2e/auth/pwa_per_user_test.go`. |
+| (1) `scenario-manifest.json covers only 11 scenarios but scopes define 12` — scope-row counting mismatch | **NOT DISCHARGED** (residual) | The path-(a) completion clause from the original description (*"the manifest then can be updated to include a 12th SCN entry or the scope-row can be deduplicated against the SCN-AUTH-002 manifest entry"*) was NOT performed by the implement/test agents. Manifest still tracks 11 distinct `SCN-AUTH-NNN` scenarios per `spec.md` (correct upstream invariant); scopes.md Scope 3 still surfaces `SCN-AUTH-002 [PWA path]` as a separate Test Plan row. |
+
+**Decision (verbatim) — bubbles.validate at HEAD `cc426f10`:**
+
+The transitionRequest is **KEPT OPEN** with `expectedResolution =
+"spec-level finalize via scopes.md restructure (path-b) OR
+scenario-manifest.json 12th-entry addition (path-a completion clause)
+— deferred to spec-level finalize per the original transitionRequest
+description"`. Rationale (per the user-policy decision rubric):
+
+1. The original transitionRequest description **bundles BOTH
+   failures as the V7 concern** ("Gate V7 (traceability-guard.sh)
+   returns 2 failures") and ties the discharge condition to
+   "traceability-guard exit=0 with NO Scope 3 failures before
+   promoting spec 044 to done." Failure (1) is therefore part of the
+   FINALIZE-PREREQ-044-V7-001 concern, not "a separate cosmetic
+   issue."
+2. Failure (2) is fully discharged at this scope's implement+test
+   phases. Failure (1) is the residual.
+3. Per the validate-phase user-policy explicit choice — *"Keep open
+   with a documented `expectedResolution` of 'spec-level finalize via
+   scopes.md restructure' — this defers to spec-level finalize"* —
+   keeping it open is an EXPLICITLY ACCEPTED choice at this scope's
+   validate boundary.
+4. The original transitionRequest path-(b) language *"at finalize
+   time, scopes.md is restructured"* explicitly anchors the
+   alternative discharge path at spec-level finalize.
+5. Restructuring `scopes.md` Scope 3 to consolidate the `[PWA path]`
+   sub-row affects the planning artifact's structure (a planning
+   responsibility, owned by `bubbles.plan` or by the spec-level
+   finalize agent during scope-row consolidation), not a test/code
+   correctness defect. Deferring to spec-level finalize keeps the
+   ownership boundary clean.
+6. The validate-phase exit criterion explicitly permits both
+   options: *"FINALIZE-PREREQ-044-V7-001 either CLOSED (with
+   resolution evidence) or kept OPEN (with explicit
+   `expectedResolution` at spec-level finalize)."* Option (b) is
+   selected here.
+
+The transitionRequest's `affectedFiles` list is reduced from 3 →
+2: `tests/e2e/auth/pwa_per_user_test.go` is removed (file now
+exists and is live-tested). The remaining affected files are
+`specs/044-per-user-bearer-auth/scenario-manifest.json` and
+`specs/044-per-user-bearer-auth/scopes.md`. `affectedScenarios`
+remains `["SCN-AUTH-002"]`. `resolutionRequiredBeforePhase`
+remains `finalize`.
+
+A new `partialDischargeEvidence` field is added to the
+transitionRequest documenting (i) the test file landing
+(commit `2d483842`) + (ii) the live-stack PASS at V7 of this
+validate phase + (iii) the still-residual scope-row counting
+artefact + (iv) the `expectedResolution` for spec-level finalize.
+
+#### Live-Stack Confirmation
+
+Test stack composition at the start of this validate run was
+verified UP via the test-phase carry-forward (5 containers Healthy
+on host ports `47001/47002/45001/45002/45003` per the test-phase
+report block). V6 and V7 both ran live against this stack. V7's
+own runner subsequently performed a clean teardown on completion.
+No persistent dev-DB state was touched (project-name isolation
+`smackerel-test-*` enforced per `docker-compose.yml`).
+
+#### Mock Audit (mandatory for live-stack categories)
+
+Same audit as the test phase carries forward: ZERO mock patterns
+across any Scope 03 integration / e2e test file. No `httptest.NewServer`
+shorthand was added in this validate phase; V7 and V6 ran the
+exact test files committed at `cc426f10`.
+
+#### Skip Audit (mandatory)
+
+ZERO `t.Skip` / `.skip(` / `xit` / `xdescribe` / `.only` / `test.todo`
+markers across Scope 03 test surface (carry-forward from test
+phase; nothing changed at the test-source layer in this validate
+phase).
+
+#### Operational Discipline
+
+- IDE `replace_string_in_file` used for the report.md append
+  (small, targeted addition; no multi-KB body strings touched).
+- `pathlib.write_text()` heredoc used for `state.json` mutations
+  per the user-blessed cache-poisoning workaround.
+- NO `--no-verify` on the commit. NO push (SSH agent locked per
+  user instruction).
+- NO new code added; NO new tests added. This phase is purely the
+  V1–V9 gate sweep + the formal `FINALIZE-PREREQ-044-V7-001`
+  decision + state.json/report.md artifact updates.
+- Smackerel PII rule honored — no real Linux usernames /
+  hostnames / IPs in committed files (only `127.0.0.1`, RFC1918
+  test-port references, and generic placeholders).
+
+#### Phase Recording Summary
+
+State.json updates:
+
+- `execution.completedPhaseClaims` appended with the Scope 03
+  validate object form (this entry).
+- `certification.certifiedCompletedPhases` appended with
+  `"03:validate"`.
+- `executionHistory` appended with this validate-phase entry
+  (agent=`bubbles.validate`, scopes=`["03"]`,
+  decision=`approved_with_deferred_finalize_blockers`).
+- `currentPhase` advanced from `"validate"` to `"audit"`.
+- `execution.currentPhase` advanced from `"validate"` to
+  `"audit"`.
+- `execution.currentScope` preserved at `"03"`.
+- `status` preserved at `"in_progress"` (Scope 03 not yet
+  finalized).
+- `certification.completedScopes` NOT advanced (per per-scope
+  finalize boundary owned by `bubbles.iterate`).
+- `transitionRequests[FINALIZE-PREREQ-044-V7-001]` updated:
+  - `status` PRESERVED at `"open"` (per the formal decision
+    above).
+  - `affectedFiles` reduced from 3 → 2 entries (PWA test file
+    removed since it now exists and is live-tested).
+  - NEW `partialDischargeEvidence` field added (test file
+    landing + live PASS + residual artefact + expectedResolution).
+  - NEW `expectedResolution` field added documenting the
+    spec-level finalize discharge path.
+  - NEW `lastReviewedAt` / `lastReviewedBy` fields added
+    timestamping this validate-phase formal decision.
+
+**Claim Source:** executed.
+
+---
