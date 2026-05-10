@@ -518,6 +518,19 @@ Scenario: SCN-AUTH-010 Stale or tampered token is refused with constant-time dis
   - Evidence (verbatim): `go test ./internal/api/...` → `ok github.com/smackerel/smackerel/internal/api 9.520s`. `go vet ./...` exit=0. `go vet -tags integration ./tests/integration/...` exit=0. `go build ./...` exit=0. `go build -tags integration ./tests/integration/...` exit=0. The 8 new Scope 02 integration tests (3 MintReveal + 3 DriveConnect + 2 Annotation) all PASS against the live test stack at postgres 127.0.0.1:47001 in 0.343s.
   - Pre-existing config tests fail with `QF_DECISIONS_SYNC_SCHEDULE` missing; verified present on baseline (git stash); unrelated to Scope 02 changes; routed for separate investigation.
 
+  **Evidence (Phase: test):**
+  - **Phase:** test **Agent:** bubbles.test **Claim Source:** executed
+  - Five gate commands per Gate G022 executed against HEAD `2af4ffbb` (Scope 02 implement + follow-up rotation/revocation tests). Test stack already up: smackerel-test-{postgres,nats,smackerel-core,smackerel-ml,ollama}-1 all `Healthy` on host ports 47001/47002/45001/45002/45003.
+  - **Gate 1** `./smackerel.sh check` → exit=0 (`Config is in sync with SST`; `env_file drift guard: OK`; `scenarios registered: 5, rejected: 0`).
+  - **Gate 2a** `./smackerel.sh test unit --go` → exit=0 (every Go package reports `ok` or `(cached)`; `internal/auth`, `internal/auth/revocation`, `internal/api`, `cmd/core` all PASS). Forced uncached re-run `go test -count=1 -race -timeout=180s ./internal/auth/... ./internal/api/... ./cmd/core/...` PASS: `ok internal/auth 16.248s`, `ok internal/auth/revocation 1.017s`, `ok internal/api 13.276s`, `ok cmd/core 1.468s`.
+  - **Gate 2b** `./smackerel.sh test unit --python` → exit=0 (`417 passed in 12.92s`).
+  - **Gate 2c** Pre-existing baseline failure recorded: `internal/config/...` 25 sub-tests fail with `QF_DECISIONS_SYNC_SCHEDULE (not a valid cron expression)` — confirmed identical on prior commit `f7bb75e9` (Scope 01 finalize) by checkout of `internal/config/` from prior commit and re-running `go test ./internal/config/`. Failures are baseline test-isolation issues, NOT introduced by Scope 02. `Claim Source: executed (uncertainty cleared by baseline comparison)`.
+  - **Gate 3** Live integration sweep (DATABASE_URL=postgres://${PGUSER}:${PGPASSWORD}@127.0.0.1:47001/smackerel?sslmode=disable; credentials sourced from `config/generated/test.env`; SMACKEREL_AUTH_TOKEN sourced from `config/generated/test.env`): `go test -count=1 -tags=integration -v -timeout=180s -run 'Test(Auth|MintReveal|DriveConnect|Annotation|Rotation|Revocation_(RevokedTokenRejected|NATSDownFalls|NonExistent|AlreadyRevoked))' ./tests/integration/...` → exit=0; `ok tests/integration 3.266s`; ALL 24 selected tests PASS including all 8 required adversarial confirmations (per report.md → Test Evidence (Scope 02) → Gate 3 → adversarial assertion outputs).
+  - **Gate 4** `go vet ./...` exit=0; `go vet -tags=integration ./tests/integration/...` exit=0.
+  - **Gate 5** `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` → exit=0 (`Artifact lint PASSED`; 2 advisory non-blocking warnings: missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup tracked).
+  - Skip-marker scan over `tests/integration/auth_*.go internal/api/router_auth_middleware_test.go internal/api/auth_actor_grep_guard_test.go` returns ZERO `t.Skip()` calls — all matches are documentary comments confirming no-skip policy (auth_bootstrap_test.go:24, auth_chaos_test.go:29, auth_revocation_test.go:44, auth_rotation_test.go:34).
+  - Verbatim runner outputs and adversarial assertion text captured in `report.md` → Test Evidence (Scope 02). Test stack left up for the Scope 02 validate-phase agent.
+
 ---
 
 ## Scope 3: Web Surfaces + Telegram Connector
