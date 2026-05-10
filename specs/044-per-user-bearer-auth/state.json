@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "spec-review",
+  "currentPhase": "docs",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "spec-review",
+    "currentPhase": "docs",
     "currentScope": "03",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -123,6 +123,13 @@
         "phase": "chaos",
         "agent": "bubbles.chaos",
         "timestamp": "2026-05-11T02:30:00Z"
+      },
+      {
+        "scope": "03",
+        "phase": "spec-review",
+        "agent": "bubbles.spec-review",
+        "timestamp": "2026-05-11T03:30:00Z",
+        "disposition": "approved_with_deferred_finalize_blockers"
       }
     ],
     "pendingTransitionRequests": []
@@ -153,7 +160,8 @@
       "03:test",
       "03:validate",
       "03:audit",
-      "03:chaos"
+      "03:chaos",
+      "03:spec-review"
     ],
     "lockdownState": {
       "active": false,
@@ -580,6 +588,23 @@
       ],
       "decision": "approved",
       "summary": "Scope 03 formal chaos phase complete. Owned new file tests/integration/auth_chaos_scope03_test.go (~770 lines, build tag integration) implementing 5 chaos behaviors C3-B01..C3-B05 from scopes.md plus 1 hot-path benchmark. Stress loop go test -tags=integration -count=20 -race -v -run '^TestAuthChaos_S03_' ./tests/integration/ \u2014 EXIT=0, all 5 tests PASS 20/20 iterations (B01=20/20, B02=20/20, B03=20/20, B04=20/20, B05=20/20), TOTAL-FAIL-COUNT=0, RACE-MARKERS=0 (no WARNING: DATA RACE banners across 100 race-detected iterations). Hot-path benchmark BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath at b.N=10000 single-threaded \u2014 1,477,561 ns/op | 20,782 B/op | 200 allocs/op (includes full DB roundtrip + chi middleware chain + PASETO verify + bearer cache + handler). One in-flight design fix during chaos authoring: B02 originally asserted admit==total which incorrectly counted chi middleware.Throttle(100) 503s as auth-rejects; hardened to track admit/throttle/authReject separately with adversarial lower-bound postT1Admit>0 && postT2Admit>0 to prevent test passing via 100% throttle. Test stack: 5 ephemeral test containers on 127.0.0.1 host ports 47001/47002/47003/47004/45001/45002 (live PG + NATS-with-token + Ollama + core + ML). FINALIZE-PREREQ-044-V7-001 carry-forward preserved (path-b 12th-entry deferred to spec-level finalize). 1 known traceability-guard carry-forward (scope-row count 11 vs 12). Owned artifact only: chaos test file + report.md chaos section + this state.json mutation; no spec/design/scope/userValidation edits. Verdict: SHIP_IT for Scope 03 chaos phase."
+    },
+    {
+      "phase": "spec-review",
+      "agent": "bubbles.spec-review",
+      "timestamp": "2026-05-11T03:30:00Z",
+      "scope": "03",
+      "decision": "approved_with_deferred_finalize_blockers",
+      "trustClassification": "MINOR_DRIFT",
+      "docsAutoInvocation": "NOT_TRIGGERED (per spec-review-mode contract: only MAJOR_DRIFT or OBSOLETE auto-invokes)",
+      "phaseAdvance": "spec-review -> docs",
+      "currentPhasePostAdvance": "docs",
+      "currentScope": "03",
+      "statusPostAdvance": "in_progress (preserved)",
+      "certificationStatusPostAdvance": "in_progress (preserved)",
+      "completedScopesPostAdvance": "[\"01\", \"02\"] (NOT advanced -- per per-scope finalize boundary owned by bubbles.iterate)",
+      "transitionRequestsPostAdvance": "[FINALIZE-PREREQ-044-V7-001 status=open] (carry-forward unchanged by spec-review)",
+      "summary": "Spec 044 Scope 03 formal spec-review phase per Bubbles modeInstructions. Eight required spec-review checks (SR1-SR8) executed against HEAD 9ddfe1a2 and the Scope 03 commit range 79ba3cef..9ddfe1a2. (SR1) Spec.md acceptance criteria conformance: PASS -- Scope 03 contributions to FR-AUTH-005 (web session via cookie-fallback in bearerAuthMiddleware.extractBearerToken + internal/api/web_login.go) and FR-AUTH-010 partial (Telegram chat-id mapping + production unmapped-chat drop + PerUserTokenMinter library) all map to shipped surfaces verified by file-existence check (all 13 referenced files present at expected paths) + grep-for-symbols against the surface; AC-1..AC-11 satisfied through Scope 01/02 + Scope 03 contributions. (SR2) Design.md S6.4 + S10 + S11 contract conformance: PASS_WITH_FIXES -- S6.4 NATS broadcaster ZERO Scope 03 changes; S10.4 Web UI cookie attributes (HttpOnly + SameSite=Lax + Path=/ + Secure-in-production) verified verbatim at internal/api/web_login.go lines 134-141 + 162-169; S11 Risk #5 (cookie not Secure in prod) PASS via Secure: strings.EqualFold(d.Environment, \"production\") enforcement; LOW-finding F01 (admin UI page no direct admin-scope check) closed inline by reconciling with the explanatory comment on the chi.Group registration -- defense-in-depth lives at the underlying /v1/auth/* XHR layer where callerIsAdmin enforces. NEW design.md S16 added (3 sub-sections: S16.1 adjusted-from-design table; S16.2 chaos observations; S16.3 deferred items). (SR3) Scopes.md DoD verbatim conformance: PASS_WITH_FIXES -- bullets 1/3/4 PASS verbatim against shipped surface; bullet 2 (Telegram per-user attribution) carries MEDIUM-defer-to-finalize finding F02 (see SR6); NEW Scope 3 spec-review DoD bullet appended. (SR4) Scenario-manifest live coverage: PASS -- all Scope 03 SCN entries (SCN-AUTH-001 admin UI, SCN-AUTH-002 PWA path, SCN-AUTH-008 Telegram bridge) carry file: (live) entries pointing at real shipped test functions; plannedFile: residuals correctly held back for Scope 04 work (SCN-AUTH-002 internal/metrics/auth_metrics_test.go + SCN-AUTH-011 x3); known scope-row count carry-forward (manifest 11 vs scopes 12) noted explicitly per FINALIZE-PREREQ-044-V7-001. (SR5) Cross-spec MIT closure verification: PASS_WITH_DEFERRAL -- specs/027-user-annotations/state.json line 216-218 records actor-source segment closure via Scope 02 (closed_security_backlog_mit_027_trace_001_actor_source_segment_via_spec_044_scope_02_claim_binding); Scope 03 TestTelegramBridge_BodyClaimedActorRejected is supplementary E2E proof (NOT a separate closure contract); a Scope 03-specific Telegram-segment closure annotation is OPTIONAL and APPROPRIATELY DEFERRED to bubbles.docs (next per-scope phase) or bubbles.iterate finalize (spec-level finalize) per spec-review-mode SR5 deferral language. (SR6) Public-facing surface fidelity: PASS_WITH_FIXES -- PWA matches design S10.4 / OQ-7 (cookie-based session); extension matches storage-slot transparency contract documented at web/extension/README.md; admin UI matches operator workflow per Operations.md; Telegram per-user attribution carries MEDIUM-defer-to-finalize finding F02: PerUserTokenMinter library + integration test prove the contract is implementable, but Bot.callCapture / Bot.handleReplyAnnotation / Bot.handleAnnotationCommand continue to use the shared b.authToken (verified via grep -rn PerUserTokenMinter --include=*.go | grep -v _test.go returning ZERO matches outside per_user_token.go itself + test_helpers.go constructor exposure). Production reality with auth_enabled=true AND production_shared_token_fallback_enabled=false: every mapped-chat Telegram capture would 401 from bearerAuthMiddleware until the wiring lands. Safety contract intact (unmapped chats dropped + defensive body-source rejection at internal/api/annotations.go Scope 02 work). Documented in NEW design.md S16.3 as deferred-finalize-blocker; routing to Scope 04 implement OR a Scope 03 follow-up implement pass. (SR7) Build-once deploy-many compliance: PASS -- git diff --name-only 79ba3cef..9ddfe1a2 -- deploy/ docker-compose*.yml Dockerfile* ml/Dockerfile .github/workflows/ scripts/deploy/ returns ZERO files; 28 total Scope 03 files changed; ZERO mutable image tags introduced; ZERO Compose contract changes; internal/deploy/compose_contract_test.go::TestComposeContract still PASSES per Scope 03 audit Tier 2 verification. (SR8) Carry-forward registry: PASS -- FINALIZE-PREREQ-044-V7-001 carries status=open + expectedResolution + lastReviewedAt/By/Phase populated by Scope 03 validate; pendingTransitionRequests=[]; NEW Scope 03-introduced finding F02 documented as deferred-finalize-blocker via NEW design.md S16.3 + scopes.md NEW Scope 3 spec-review DoD bullet + report.md NEW Spec-Review Evidence (Scope 03) section. Findings: HIGH=0, MEDIUM=1 defer-to-finalize (F02 Telegram bot wiring of PerUserTokenMinter into Bot internal-API call sites NOT yet landed; library + integration test prove implementability; production safety preserved by unmapped-chat drop + defensive body-source rejection; routed to Scope 04 implement OR Scope 03 follow-up implement before bubbles.iterate finalize), LOW=2 (F01 admin UI page no direct admin-scope -- closed inline via design S16.1 row 2 reconciliation note + existing chi.Group explanatory comment; F03 spec 027 Telegram-segment closure annotation -- documented as deferral-only per SR5 deferral language, routing to bubbles.docs or bubbles.iterate finalize). Three artifact-side fixes applied (all surgical, all preserve original design intent): (i) scopes.md Scope 3 header advanced Phase: implement->spec-review and Agent: bubbles.implement->bubbles.spec-review; (ii) scopes.md NEW Scope 3 spec-review DoD bullet appended capturing 8-check spec-review table + finding catalog + verdict; (iii) design.md NEW S16 Design Decisions Reconciled During Scope 03 Implement added with 3 sub-sections (S16.1 adjusted-from-S10/S11 design table 2 rows; S16.2 chaos observations OBS-CHAOS-044-S03-01/02; S16.3 items DEFERRED beyond Scope 03 3 rows including F02 Telegram bot wiring + F03 spec 027 Telegram-segment closure annotation + scope-row count residual). Pre/post-edit gates: artifact-lint EXIT=0 PASS (2 advisory warnings unchanged: missing-recommended reworkQueue + deprecated scopeProgress); traceability-guard EXIT=1 with the SOLE expected carry-forward failure (manifest 11 vs scopes 12) unchanged; pii-scan clean. Test stack: chaos-phase agent left it up; spec-review phase preserved; left up for the Scope 03 docs-phase agent. Operational discipline: IDE replace_string_in_file used for design.md / scopes.md / report.md edits (no IDE cache poisoning detected via grep -c REMOVED on each file post-edit); pathlib.write_text heredoc used for state.json mutation per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround (multi-KB summary entries present in executionHistory); ensure_ascii=True preserves the original unicode-escape style of the file to minimize diff; NO --no-verify; NO push (SSH agent locked per user instruction); Smackerel PII rule honored (no real Linux usernames / hostnames / IPs in committed files). State.json updates this entry: completedPhaseClaims appended Scope 03 spec-review object; certifiedCompletedPhases appended 03:spec-review; executionHistory appended this bubbles.spec-review entry; currentPhase advanced spec-review->docs; execution.currentPhase advanced spec-review->docs; execution.currentScope preserved at 03; status preserved at in_progress; certification.status preserved at in_progress; certification.completedScopes NOT advanced (per per-scope finalize boundary owned by bubbles.iterate); transitionRequests[FINALIZE-PREREQ-044-V7-001] preserved at status=open (carry-forward unchanged). Verdict: APPROVED_WITH_DEFERRED_FINALIZE_BLOCKERS for Scope 03 spec-review phase. Trust classification MINOR_DRIFT. bubbles.docs auto-invocation NOT triggered."
     }
   ],
   "policySnapshot": {
@@ -654,5 +679,5 @@
       "lastReviewedAtScope": "03"
     }
   ],
-  "lastUpdatedAt": "2026-05-11T01:30:00Z"
+  "lastUpdatedAt": "2026-05-11T03:30:00Z"
 }
