@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "bugId": "BUG-001",
+  "parentFeatureDir": "specs/043-ollama-test-infrastructure",
+  "parentScope": "01",
+  "title": "Ollama image pin ollama/ollama:0.6 yanked from Docker Hub (P0)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "filedAt": "2026-05-10T00:00:00Z",
+  "filedBy": "bubbles.bug",
+  "fixedAt": "2026-05-10T01:00:00Z",
+  "lastUpdated": "2026-05-10T01:30:00Z",
+  "fixApproach": "repin-ollama-image-to-0.23.2-plus-adversarial-registry-existence-guard",
+  "filesModified": [
+    "config/smackerel.yaml",
+    "deploy/contract.yaml",
+    "deploy/compose.deploy.yml",
+    "tests/integration/ollama_config_contract_test.go",
+    "tests/integration/ollama_image_availability_test.go",
+    "config/generated/dev.env",
+    "config/generated/test.env",
+    "config/generated/home-lab.env"
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "done",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.bug",
+    "certifiedAt": "2026-05-10T01:30:00Z",
+    "completedScopes": [
+      "01"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "evidence": "specs/043-ollama-test-infrastructure/bugs/BUG-001-ollama-image-pin-stale/report.md",
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "user-input"
+    },
+    "statusCeiling": "done",
+    "capturedAt": "2026-05-10T00:00:00Z"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "discovery",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T00:00:00Z",
+      "summary": "BUG-001 filed under spec 043 Scope 01 territory. Symptom: ollama/ollama:0.6 yanked from Docker Hub (HTTP 404 against tags API); blocks ./smackerel.sh test integration because environments.test.ollama_enabled=true (spec 043 Scope 03) auto-starts ollama. Verified: latest stable per github.com/ollama/ollama/releases/latest is v0.23.2; HTTP 200 against tags API. Discovered while running spec 044 Scope 1 integration tests."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T00:30:00Z",
+      "summary": "Fix landed: (1) config/smackerel.yaml infrastructure.ollama.image and infrastructure.ollama.test.image both re-pinned 0.6 -> 0.23.2 with audit-trail comment; (2) deploy/contract.yaml externalImages.ollama.image bumped 0.6 -> 0.23.2; (3) deploy/compose.deploy.yml services.ollama.image bumped 0.6 -> 0.23.2; (4) tests/integration/ollama_config_contract_test.go AdversarialMissingTestImage strip target updated 0.6 -> 0.23.2 (so the existing strip-and-rerun adversarial continues to find its target line in the live YAML); (5) config/generated/{dev,test,home-lab}.env regenerated via for env in dev test home-lab; do ./smackerel.sh --env $env config generate; done -- all three carry OLLAMA_IMAGE=ollama/ollama:0.23.2; (6) NEW tests/integration/ollama_image_availability_test.go (build tag integration) -- TestOllamaImagePinIsPublished_LiveTag reads OLLAMA_IMAGE from config/generated/test.env and HEADs https://hub.docker.com/v2/repositories/ollama/ollama/tags/<tag>, asserts HTTP 200; TestOllamaImagePinIsPublished_AdversarialYankedTag asserts HTTP 404 for the synthetic input ollama/ollama:0.6 (proves the live test is non-tautological). Zero t.Skip-family calls; fail-loud paths use t.Fatalf."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T00:45:00Z",
+      "summary": "Targeted regression tests PASS live: TestOllamaImagePinIsPublished_LiveTag PASS 0.43s (HTTP 200 against ollama/ollama:0.23.2); TestOllamaImagePinIsPublished_AdversarialYankedTag PASS 0.11s (HTTP 404 against ollama/ollama:0.6). Pre-existing TestOllamaConfigGenerateAndRuntimeValidationStayInSync + 3 adversarial sub-cases PASS 1.31s after the strip-target update. internal/deploy/compose_ollama_contract_test.go (1 LiveFile + 3 adversarial guards) PASS. internal/config/sst_grep_guard_test.go (1 main + 2 adversarial guards) + 2 validate gates PASS. Zero new SST violations from the bump."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T01:00:00Z",
+      "summary": "Full repo gates PASS: ./smackerel.sh check EXIT=0 (Config in sync with SST + env_file drift guard OK + scenario-lint registered=5/0); ./smackerel.sh test unit --go EXIT=0 (all Go packages PASS, 0 fails); ./smackerel.sh test unit --python EXIT=0 (417 pytest tests PASS in 22.41s). All three generated env files contain OLLAMA_IMAGE=ollama/ollama:0.23.2."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T01:30:00Z",
+      "summary": "Self-audit PASS: artifact-lint specs/043-ollama-test-infrastructure/bugs/BUG-001-ollama-image-pin-stale EXIT=0 (no warnings, no failures). All required artifacts present (spec/design/scopes/uservalidation/state/report/scenario-manifest). All 8 DoD checkboxes [x] with inline raw evidence (Gate G025). All 3 uservalidation checklist items [x]. state.json v3 schema valid. Top-level status matches certification.status. No forbidden sidecar artifacts. Workflow ceiling 'done' permitted for bugfix-fastlane. Required specialist phases (implement, test, validate, audit) all in execution.completedPhaseClaims and certification.certifiedCompletedPhases."
+    }
+  ]
+}

@@ -184,7 +184,7 @@ services:
         max-file: "5"
 
   ollama:
-    image: ollama/ollama:0.6
+    image: ollama/ollama:0.23.2
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
