@@ -19,6 +19,8 @@
 // (`ForTest`) and the `Test` prefix on the type name.
 package telegram
 
+import "net/http"
+
 // NewBotForTest constructs a minimal *Bot whose environment and
 // userMapping fields are set so callers can exercise:
 //
@@ -34,4 +36,28 @@ func NewBotForTest(environment string, userMapping map[int64]string) *Bot {
 		environment: environment,
 		userMapping: userMapping,
 	}
+}
+
+// SetSharedAuthTokenForTest sets the legacy shared bearer that
+// `bearerForChat` falls back to when no PerUserTokenMinter is wired
+// (or when a dev/test chat is unmapped). External integration tests
+// use this to plant a sentinel that proves the F02 wiring did NOT
+// silently fall through to the legacy path.
+//
+// Test-only: do not call from production code.
+func (b *Bot) SetSharedAuthTokenForTest(token string) {
+	b.authToken = token
+}
+
+// SetBearerHeaderForTest exposes the unexported `setBearerHeader`
+// helper to external integration tests so they can prove the F02
+// wiring observationally (i.e. that an outbound request prepared the
+// way the live Telegram bridge prepares it carries the per-user
+// PASETO bearer in production and the shared legacy bearer in
+// dev/test).
+//
+// Test-only: do not call from production code. Production callers
+// inside the telegram package use `setBearerHeader` directly.
+func (b *Bot) SetBearerHeaderForTest(req *http.Request, chatID int64) error {
+	return b.setBearerHeader(req, chatID)
 }

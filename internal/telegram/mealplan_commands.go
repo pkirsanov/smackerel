@@ -22,10 +22,14 @@ type MealPlanCommandHandler struct {
 	CookDelegate func(chatID int64, recipeName string, servings int)
 
 	// RecipeResolver searches for a recipe artifact by name and returns
-	// (artifactID, recipeTitle, error). Set by the wiring layer to bridge
-	// into Bot.resolveRecipeByName. When nil, recipeName is used directly
-	// (unit test fallback only — live wiring must set this).
-	RecipeResolver func(ctx context.Context, name string) (artifactID string, title string, err error)
+	// (artifactID, displayTitle, error). Spec 044 Scope 04 — chatID
+	// threads through so the resolver can mint a per-user PASETO via
+	// the bot's bearerForChat path; the live wiring in cmd/core/wiring.go
+	// passes the originating chat through to ResolveRecipeByName.
+	// Set by the wiring layer to bridge into Bot.ResolveRecipeByName.
+	// When nil, recipeName is used directly as the artifactID (unit
+	// test fallback only — live wiring must set this).
+	RecipeResolver func(ctx context.Context, chatID int64, name string) (artifactID string, title string, err error)
 
 	// Draft plan context per chat ID (in-process memory, not DB)
 	mu     sync.RWMutex
@@ -276,7 +280,7 @@ func (h *MealPlanCommandHandler) handleSlotAssign(ctx context.Context, chatID in
 	}
 
 	// Resolve recipe name to artifact ID via search.
-	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, recipeName)
+	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, chatID, recipeName)
 	if err != nil {
 		replyFunc(chatID, fmt.Sprintf("? No recipe found for %q. Try a different name or /find to search.", recipeName))
 		return
@@ -322,7 +326,7 @@ func (h *MealPlanCommandHandler) handleBatchSlotAssign(ctx context.Context, chat
 	}
 
 	// Resolve recipe name to artifact ID via search.
-	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, recipeName)
+	artifactID, resolvedTitle, err := h.resolveRecipe(ctx, chatID, recipeName)
 	if err != nil {
 		replyFunc(chatID, fmt.Sprintf("? No recipe found for %q. Try a different name or /find to search.", recipeName))
 		return
@@ -663,9 +667,9 @@ var dayNames = map[string]time.Weekday{
 // resolveRecipe resolves a user-typed recipe name to an artifact ID.
 // Uses the RecipeResolver callback when set (live wiring), falls back to
 // treating the name as a literal artifact ID (unit test compatibility).
-func (h *MealPlanCommandHandler) resolveRecipe(ctx context.Context, name string) (artifactID string, title string, err error) {
+func (h *MealPlanCommandHandler) resolveRecipe(ctx context.Context, chatID int64, name string) (artifactID string, title string, err error) {
 	if h.RecipeResolver != nil {
-		return h.RecipeResolver(ctx, name)
+		return h.RecipeResolver(ctx, chatID, name)
 	}
 	// Fallback: treat name as artifact ID directly (unit tests only).
 	return name, name, nil

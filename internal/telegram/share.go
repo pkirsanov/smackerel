@@ -37,7 +37,7 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 			body["context"] = contextText
 		}
 
-		result, err := b.callCapture(ctx, body)
+		result, err := b.callCapture(ctx, msg.Chat.ID, body)
 		if err != nil {
 			if errors.Is(err, errDuplicate) {
 				b.replyDuplicate(msg.Chat.ID, result, contextText)
@@ -75,7 +75,7 @@ func (b *Bot) handleShareCapture(ctx context.Context, msg *tgbotapi.Message, tex
 		if contextText != "" {
 			body["context"] = contextText
 		}
-		if _, err := b.callCapture(ctx, body); err != nil {
+		if _, err := b.callCapture(ctx, msg.Chat.ID, body); err != nil {
 			slog.Error("share multi-url capture failed", "error", err, "url", u)
 			continue
 		}

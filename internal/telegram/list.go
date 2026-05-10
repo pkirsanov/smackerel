@@ -35,7 +35,7 @@ func (b *Bot) handleList(ctx context.Context, msg *tgbotapi.Message, args string
 
 // handleListShow sends a summary of active lists.
 func (b *Bot) handleListShow(ctx context.Context, chatID int64) {
-	resp, err := b.callListsAPI(ctx, "GET", b.listsURL+"?status=active", nil)
+	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active", nil)
 	if err != nil {
 		b.reply(chatID, "Failed to fetch lists: "+err.Error())
 		return
@@ -66,7 +66,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 	}
 
 	// Get most recent active list
-	resp, err := b.callListsAPI(ctx, "GET", b.listsURL+"?status=active&limit=1", nil)
+	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active&limit=1", nil)
 	if err != nil {
 		b.reply(chatID, "Failed to fetch lists: "+err.Error())
 		return
@@ -81,7 +81,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"content": content})
-	_, err = b.callListsAPI(ctx, "POST", b.listsURL+"/"+result.Lists[0].ID+"/items", body)
+	_, err = b.callListsAPI(ctx, chatID, "POST", b.listsURL+"/"+result.Lists[0].ID+"/items", body)
 	if err != nil {
 		b.reply(chatID, "Failed to add item: "+err.Error())
 		return
@@ -92,7 +92,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 
 // handleListDone completes the most recent active list.
 func (b *Bot) handleListDone(ctx context.Context, chatID int64) {
-	resp, err := b.callListsAPI(ctx, "GET", b.listsURL+"?status=active&limit=1", nil)
+	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active&limit=1", nil)
 	if err != nil {
 		b.reply(chatID, "Failed to fetch lists: "+err.Error())
 		return
@@ -107,7 +107,7 @@ func (b *Bot) handleListDone(ctx context.Context, chatID int64) {
 	}
 
 	listID := result.Lists[0].ID
-	_, err = b.callListsAPI(ctx, "POST", b.listsURL+"/"+listID+"/complete", nil)
+	_, err = b.callListsAPI(ctx, chatID, "POST", b.listsURL+"/"+listID+"/complete", nil)
 	if err != nil {
 		b.reply(chatID, "Failed to complete list: "+err.Error())
 		return
@@ -132,7 +132,7 @@ func (b *Bot) handleListGenerate(ctx context.Context, chatID int64, args string)
 		"search_query": filter,
 	})
 
-	resp, err := b.callListsAPI(ctx, "POST", b.listsURL, body)
+	resp, err := b.callListsAPI(ctx, chatID, "POST", b.listsURL, body)
 	if err != nil {
 		b.reply(chatID, "Failed to generate list: "+err.Error())
 		return
@@ -163,8 +163,16 @@ func (b *Bot) handleListCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	listID := parts[1]
 	itemID := parts[2]
 
+	// Spec 044 Scope 04 — derive the chat originating the callback so
+	// bearerForChat can mint a per-user PASETO. Telegram callback
+	// queries always carry the originating chat in cb.Message.Chat.
+	var chatID int64
+	if cb.Message != nil {
+		chatID = cb.Message.Chat.ID
+	}
+
 	body, _ := json.Marshal(map[string]string{"status": "done"})
-	_, err := b.callListsAPI(ctx, "POST",
+	_, err := b.callListsAPI(ctx, chatID, "POST",
 		b.listsURL+"/"+listID+"/items/"+itemID+"/check", body)
 
 	if err != nil {
@@ -176,7 +184,7 @@ func (b *Bot) handleListCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	b.answerCallback(cb.ID, "✓ Done")
 
 	// Refresh the list message
-	resp, err := b.callListsAPI(ctx, "GET", b.listsURL+"/"+listID, nil)
+	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"/"+listID, nil)
 	if err != nil {
 		return
 	}
@@ -303,7 +311,11 @@ func formatListMessage(lwi listWithItemsResponse) (string, [][]tgbotapi.InlineKe
 }
 
 // callListsAPI makes an HTTP request to the lists API.
-func (b *Bot) callListsAPI(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+//
+// Spec 044 Scope 04 — F02 closure: chatID threads through to
+// bearerForChat so production callers attach a per-user PASETO
+// instead of the legacy shared bearer.
+func (b *Bot) callListsAPI(ctx context.Context, chatID int64, method, url string, body []byte) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -314,8 +326,8 @@ func (b *Bot) callListsAPI(ctx context.Context, method, url string, body []byte)
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("lists API auth: %w", err)
 	}
 
 	resp, err := b.httpClient.Do(req)

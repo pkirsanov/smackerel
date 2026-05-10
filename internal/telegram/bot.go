@@ -60,6 +60,16 @@ type Bot struct {
 	// existing single-user dev workflow keeps functioning.
 	userMapping map[int64]string
 	environment string
+
+	// Spec 044 Scope 04 — F02 closure. When non-nil AND the runtime
+	// is production with auth.enabled, every internal-API call
+	// (capture, search, annotation, knowledge, list, mapping, photo
+	// upload, recipe commands, digest, recent, expense query/export)
+	// mints a per-user PASETO via tokenMinter.MintForChat(chatID) and
+	// attaches that token as the Authorization bearer instead of the
+	// legacy shared b.authToken. In dev/test (or when tokenMinter is
+	// nil), the legacy shared token path is preserved verbatim.
+	tokenMinter *PerUserTokenMinter
 }
 
 // Config holds Telegram bot configuration.
@@ -170,6 +180,77 @@ func NewBot(cfg Config) (*Bot, error) {
 	)
 
 	return bot, nil
+}
+
+// SetPerUserTokenMinter wires the spec 044 Scope 04 per-user PASETO
+// minter into an already-constructed Bot. Production wiring (see
+// `cmd/core/wiring.go::startTelegramBotIfConfigured`) calls this
+// once after `NewBot` returns and before `Start`. Dev/test wiring
+// leaves the minter nil; in that mode `bearerForChat` falls back to
+// the legacy shared `b.authToken` so the existing single-user
+// development workflow is preserved.
+//
+// Safe to call once at startup; the field is read-only after this
+// call (no concurrent mutator). The minter itself is safe for
+// concurrent use.
+func (b *Bot) SetPerUserTokenMinter(m *PerUserTokenMinter) {
+	b.tokenMinter = m
+}
+
+// bearerForChat returns the bearer token the Telegram bot should
+// attach to an internal-API call originating from `chatID`.
+//
+// Spec 044 Scope 04 — F02 closure. The decision matrix:
+//
+//   - tokenMinter is non-nil (production with auth.enabled): mint a
+//     fresh per-user PASETO via tokenMinter.MintForChat(chatID).
+//     A successful mint returns the wire token bound to the mapped
+//     user. A return of (zero MintedTelegramToken, nil) means the
+//     chat is unmapped in dev/test — fall back to the shared bearer.
+//     A non-nil error (e.g. ErrNoUserMappingForChat in production)
+//     is propagated; the caller MUST refuse the request rather than
+//     attribute the capture to the wrong user.
+//
+//   - tokenMinter is nil (dev/test or auth disabled): return the
+//     legacy shared `b.authToken`. May be empty when AuthToken is
+//     also empty, in which case the caller skips setting the
+//     Authorization header (preserving the dev empty-token bypass).
+//
+// The wire token is short-lived (TTL is supplied by
+// PerUserTokenMinterOptions; production target is 5 minutes per
+// design.md §13). Callers MUST mint per-call rather than caching
+// the wire token across requests.
+func (b *Bot) bearerForChat(chatID int64) (string, error) {
+	if b.tokenMinter == nil {
+		return b.authToken, nil
+	}
+	minted, err := b.tokenMinter.MintForChat(chatID)
+	if err != nil {
+		return "", err
+	}
+	if minted.WireToken == "" {
+		// Dev/test unmapped chat — minter signaled a clean miss;
+		// honor the legacy shared bearer.
+		return b.authToken, nil
+	}
+	return minted.WireToken, nil
+}
+
+// setBearerHeader is a small helper that applies the spec 044
+// Scope 04 Authorization-header policy uniformly across every
+// internal-API caller in this package. When `bearerForChat` returns
+// an error, the caller bubbles the error up (production unmapped
+// chat → request refused). When the bearer is empty, no
+// Authorization header is set (dev empty-token bypass).
+func (b *Bot) setBearerHeader(req *http.Request, chatID int64) error {
+	bearer, err := b.bearerForChat(chatID)
+	if err != nil {
+		return err
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	return nil
 }
 
 // Start begins long-polling for Telegram messages.
@@ -460,7 +541,7 @@ func (b *Bot) handleTextCapture(ctx context.Context, msg *tgbotapi.Message, text
 	if len(text) > maxShareTextLen {
 		text = stringutil.TruncateUTF8(text, maxShareTextLen)
 	}
-	result, err := b.callCapture(ctx, map[string]string{"text": text})
+	result, err := b.callCapture(ctx, msg.Chat.ID, map[string]string{"text": text})
 	if err != nil {
 		b.captureErrorReply(msg.Chat.ID, err, "telegram text capture failed")
 		return
@@ -482,7 +563,7 @@ func (b *Bot) handleVoice(ctx context.Context, msg *tgbotapi.Message) {
 	// Do not pass the Telegram file URL (which contains the bot token) to the capture API.
 	// Instead, pass just the file ID reference so the ML sidecar can fetch it through
 	// a separate authenticated path without leaking the token into stored artifacts.
-	result, err := b.callCapture(ctx, map[string]string{
+	result, err := b.callCapture(ctx, msg.Chat.ID, map[string]string{
 		"text":    "[Voice note transcription requested]",
 		"context": "telegram_voice_file_id:" + msg.Voice.FileID,
 	})
@@ -515,7 +596,7 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		query = stringutil.TruncateUTF8(query, maxFindQueryLen)
 	}
 
-	results, err := b.callSearch(ctx, query)
+	results, err := b.callSearch(ctx, msg.Chat.ID, query)
 	if err != nil {
 		b.reply(msg.Chat.ID, "? Search failed. Try again in a moment.")
 		return
@@ -617,8 +698,10 @@ func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
 		b.reply(msg.Chat.ID, "? Couldn't get today's digest")
 		return
 	}
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, msg.Chat.ID); err != nil {
+		slog.Warn("telegram digest: bearer mint failed", "chat_id", msg.Chat.ID, "error", err)
+		b.reply(msg.Chat.ID, "? Couldn't get today's digest")
+		return
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -692,8 +775,10 @@ func (b *Bot) handleRecent(ctx context.Context, msg *tgbotapi.Message) {
 		b.reply(msg.Chat.ID, "? Couldn't fetch recent items")
 		return
 	}
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, msg.Chat.ID); err != nil {
+		slog.Warn("telegram recent: bearer mint failed", "chat_id", msg.Chat.ID, "error", err)
+		b.reply(msg.Chat.ID, "? Couldn't fetch recent items")
+		return
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -781,7 +866,12 @@ func (b *Bot) captureErrorReply(chatID int64, err error, logMsg string, logArgs 
 }
 
 // callCapture calls the internal capture API.
-func (b *Bot) callCapture(ctx context.Context, body interface{}) (map[string]interface{}, error) {
+//
+// Spec 044 Scope 04 — F02 closure: the chatID parameter is the
+// Telegram chat the capture originates from; it threads through to
+// `bearerForChat` so production callers attach a per-user PASETO
+// instead of the legacy shared bearer.
+func (b *Bot) callCapture(ctx context.Context, chatID int64, body interface{}) (map[string]interface{}, error) {
 	data, _ := json.Marshal(body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.captureURL, bytes.NewReader(data))
@@ -790,8 +880,8 @@ func (b *Bot) callCapture(ctx context.Context, body interface{}) (map[string]int
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Capture-Source", "telegram")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("capture API auth: %w", err)
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -834,7 +924,10 @@ func (b *Bot) callCapture(ctx context.Context, body interface{}) (map[string]int
 }
 
 // callSearch calls the internal search API.
-func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interface{}, error) {
+//
+// Spec 044 Scope 04 — F02 closure: see callCapture for the chatID
+// rationale.
+func (b *Bot) callSearch(ctx context.Context, chatID int64, query string) (map[string]interface{}, error) {
 	body := map[string]interface{}{
 		"query": query,
 		"limit": 3,
@@ -846,8 +939,8 @@ func (b *Bot) callSearch(ctx context.Context, query string) (map[string]interfac
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("search API auth: %w", err)
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -1037,7 +1130,7 @@ func (b *Bot) CaptureAndSaveReceipt(
 	if b.driveSaveBridge == nil {
 		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: drive save bridge not configured")
 	}
-	res, err := b.callCapture(ctx, captureBody)
+	res, err := b.callCapture(ctx, chatID, captureBody)
 	if err != nil {
 		return "", ReceiptSaveOutcome{}, fmt.Errorf("telegram: CaptureAndSaveReceipt: capture: %w", err)
 	}
@@ -1087,7 +1180,11 @@ func (b *Bot) handleExpenseQuery(ctx context.Context, msg *tgbotapi.Message, que
 		b.reply(msg.Chat.ID, "Failed to query expenses")
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, msg.Chat.ID); err != nil {
+		slog.Warn("telegram expense query: bearer mint failed", "chat_id", msg.Chat.ID, "error", err)
+		b.reply(msg.Chat.ID, "Failed to query expenses")
+		return
+	}
 
 	resp, err := b.httpClient.Do(req)
 	if err != nil {
@@ -1143,7 +1240,11 @@ func (b *Bot) handleExpenseExport(ctx context.Context, msg *tgbotapi.Message) {
 		b.reply(msg.Chat.ID, "Failed to request expense export")
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, msg.Chat.ID); err != nil {
+		slog.Warn("telegram expense export: bearer mint failed", "chat_id", msg.Chat.ID, "error", err)
+		b.reply(msg.Chat.ID, "Failed to request expense export")
+		return
+	}
 
 	resp, err := b.httpClient.Do(req)
 	if err != nil {
@@ -1263,7 +1364,7 @@ func (b *Bot) flushConversation(ctx context.Context, buf *ConversationBuffer) er
 			"messages": msgs,
 		},
 	}
-	if _, err := b.callCapture(ctx, body); err != nil {
+	if _, err := b.callCapture(ctx, buf.Key.chatID, body); err != nil {
 		source := buf.SourceChat
 		if source == "" {
 			source = "forwarded conversation"
@@ -1313,7 +1414,7 @@ func (b *Bot) flushMediaGroup(ctx context.Context, buf *MediaGroupBuffer) error 
 		body["forward_meta"] = buf.ForwardMeta.ToMap()
 	}
 
-	if _, err := b.callCapture(ctx, body); err != nil {
+	if _, err := b.callCapture(ctx, buf.ChatID, body); err != nil {
 		b.reply(buf.ChatID, "? Failed to save media group. Try again.")
 		return err
 	}

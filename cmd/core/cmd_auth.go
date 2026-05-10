@@ -12,6 +12,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // runAuthCommand dispatches `smackerel auth <subcommand>`.
@@ -191,6 +192,14 @@ func runAuthEnroll(ctx context.Context, args []string) int {
 		return 1
 	}
 
+	// Spec 044 Scope 04 — telemetry emission for the deprecation
+	// pathway dashboards. The CLI is a separate process from the
+	// runtime; this counter increments inside the CLI invocation and
+	// rolls up via the standard /metrics scrape on the runtime side
+	// once peer instances replay the issuance through the periodic
+	// DB refresh.
+	metrics.AuthIssuance.WithLabelValues("bootstrap_cli").Inc()
+
 	fmt.Printf("user enrolled: %s\n", userID)
 	fmt.Printf("token id: %s\n", tokenID)
 	fmt.Printf("token (capture now — never displayed again):\n  %s\n", wire)
@@ -239,6 +248,12 @@ func runAuthRotate(ctx context.Context, args []string) int {
 		return 1
 	}
 
+	// Spec 044 Scope 04 — rotation pairs an issuance with a flip of
+	// the prior token. Both counters move together so dashboards can
+	// derive rotation rate vs raw issuance rate.
+	metrics.AuthIssuance.WithLabelValues("bootstrap_cli").Inc()
+	metrics.AuthRotation.Inc()
+
 	fmt.Printf("rotated user %s: prior=%s new=%s\n", userID, *priorTokenID, newTokenID)
 	fmt.Printf("new token (capture now — never displayed again):\n  %s\n", wire)
 	return 0
@@ -279,6 +294,11 @@ func runAuthRevoke(ctx context.Context, args []string) int {
 		fmt.Fprintf(os.Stderr, "smackerel auth revoke: %v\n", err)
 		return 1
 	}
+
+	// Spec 044 Scope 04 — revocation telemetry, bucketed via
+	// NormalizeRevocationReason so the `reason` label stays in the
+	// documented closed set.
+	metrics.AuthRevocation.WithLabelValues(metrics.NormalizeRevocationReason(*reason)).Inc()
 
 	// Note: NATS broadcast happens in the running runtime when an admin
 	// HTTP call comes in. The CLI runs OUTSIDE the runtime process, so
@@ -416,6 +436,11 @@ func runAuthBootstrap(ctx context.Context, args []string) int {
 		fmt.Fprintf(os.Stderr, "smackerel auth bootstrap: %v\n", err)
 		return 1
 	}
+
+	// Spec 044 Scope 04 — bootstrap issuance telemetry. The bootstrap
+	// flow runs exactly once per fresh deployment; the counter
+	// increment makes the one-shot visible in deployment dashboards.
+	metrics.AuthIssuance.WithLabelValues("bootstrap_cli").Inc()
 
 	fmt.Println("bootstrap successful — clear auth.bootstrap_token from config now to prevent reuse")
 	fmt.Printf("user enrolled: %s\n", userID)

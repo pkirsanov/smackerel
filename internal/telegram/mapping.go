@@ -32,8 +32,9 @@ func (b *Bot) recordMessageArtifact(ctx context.Context, messageID int, chatID i
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		slog.Warn("telegram mapping write: bearer mint failed", "chat_id", chatID, "error", err)
+		return
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -60,8 +61,9 @@ func (b *Bot) resolveArtifactFromMessage(ctx context.Context, messageID int, cha
 		slog.Warn("failed to create resolve artifact request", "error", err)
 		return ""
 	}
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		slog.Warn("telegram mapping read: bearer mint failed", "chat_id", chatID, "error", err)
+		return ""
 	}
 
 	resp, err := b.httpClient.Do(req)

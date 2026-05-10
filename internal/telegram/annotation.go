@@ -95,7 +95,7 @@ func (b *Bot) handleReplyAnnotation(ctx context.Context, msg *tgbotapi.Message) 
 	parsed := annotation.Parse(text)
 
 	// Submit annotation via internal API
-	created, err := b.submitAnnotation(ctx, artifactID, text)
+	created, err := b.submitAnnotation(ctx, chatID, artifactID, text)
 	if err != nil {
 		slog.Error("failed to submit reply annotation", "error", err, "artifact_id", artifactID)
 		b.reply(chatID, "? Failed to record annotation")
@@ -130,7 +130,7 @@ Examples:
 	}
 
 	// Search for matching artifacts
-	results, err := b.callSearch(ctx, searchTerms)
+	results, err := b.callSearch(ctx, chatID, searchTerms)
 	if err != nil {
 		b.reply(chatID, "? Search failed. Try again in a moment.")
 		return
@@ -154,7 +154,7 @@ Examples:
 		}
 
 		parsed := annotation.Parse(annotationText)
-		created, err := b.submitAnnotation(ctx, artifactID, annotationText)
+		created, err := b.submitAnnotation(ctx, chatID, artifactID, annotationText)
 		if err != nil {
 			b.reply(chatID, "? Failed to record annotation")
 			return
@@ -221,7 +221,7 @@ func (b *Bot) handleDisambiguationReply(ctx context.Context, msg *tgbotapi.Messa
 	}
 
 	parsed := annotation.Parse(pending.Annotation)
-	created, err := b.submitAnnotation(ctx, selected.ArtifactID, pending.Annotation)
+	created, err := b.submitAnnotation(ctx, chatID, selected.ArtifactID, pending.Annotation)
 	if err != nil {
 		b.reply(chatID, "? Failed to record annotation")
 		return true
@@ -233,12 +233,16 @@ func (b *Bot) handleDisambiguationReply(ctx context.Context, msg *tgbotapi.Messa
 }
 
 // submitAnnotation submits an annotation via the internal API and returns the created events.
-func (b *Bot) submitAnnotation(ctx context.Context, artifactID, text string) ([]map[string]interface{}, error) {
+//
+// Spec 044 Scope 04 — F02 closure: chatID threads through to
+// callInternalAPI → bearerForChat so production callers attach a
+// per-user PASETO when minting the annotation event.
+func (b *Bot) submitAnnotation(ctx context.Context, chatID int64, artifactID, text string) ([]map[string]interface{}, error) {
 	url := b.baseURL +
 		fmt.Sprintf("/api/artifacts/%s/annotations", artifactID)
 
 	body := map[string]string{"text": text}
-	result, err := b.callInternalAPI(ctx, "POST", url, body)
+	result, err := b.callInternalAPI(ctx, chatID, "POST", url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +258,10 @@ func (b *Bot) submitAnnotation(ctx context.Context, artifactID, text string) ([]
 }
 
 // callInternalAPI is a generic helper for calling internal JSON APIs.
-func (b *Bot) callInternalAPI(ctx context.Context, method, url string, body interface{}) (map[string]interface{}, error) {
+//
+// Spec 044 Scope 04 — F02 closure: see submitAnnotation for the
+// chatID rationale.
+func (b *Bot) callInternalAPI(ctx context.Context, chatID int64, method, url string, body interface{}) (map[string]interface{}, error) {
 	var bodyReader *strings.Reader
 	if body != nil {
 		data, _ := json.Marshal(body)
@@ -268,8 +275,8 @@ func (b *Bot) callInternalAPI(ctx context.Context, method, url string, body inte
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("internal API auth: %w", err)
 	}
 
 	resp, err := b.httpClient.Do(req)

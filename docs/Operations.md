@@ -988,35 +988,121 @@ The mapping is parsed once at startup (`parseTelegramUserMapping` in
 between pairs and around the colon. Negative chat ids (Telegram supergroups)
 are accepted.
 
-##### Known Deferral — F02 (Scope 04)
+##### F02 Closure (Scope 04 shipped)
 
-`PerUserTokenMinter` (`internal/telegram/per_user_token.go`) ships the library
-that mints short-lived per-user PASETO bearers from
-`auth.signing.active_private_key` keyed by the resolved `user_id`. The
-**per-call wiring** of `MintForChat` into the bot's outbound HTTP calls
-(`Bot.callCapture`, `Bot.handleReplyAnnotation`, `Bot.handleAnnotationCommand`)
-is deferred to Scope 04. As of this docs publication those callsites still
-attach `b.authToken` (the shared bot bearer) on internal API calls.
+Spec 044 Scope 04 closes the F02 deferred-finalize-blocker. The Telegram
+bot now wires `PerUserTokenMinter`
+(`internal/telegram/per_user_token.go`) into every outbound HTTP call via
+`Bot.bearerForChat(chatID)` and the `Bot.setBearerHeader(req, chatID)`
+helper (see `internal/telegram/bot.go` lines 200–254). Production
+deployments with `auth.enabled=true` AND a configured
+`auth.signing.active_private_key` activate per-user PASETO minting:
+`startTelegramBotIfConfigured` (`cmd/core/wiring.go`) constructs the
+minter and calls `tgBot.SetPerUserTokenMinter(minter)` once at startup
+(TTL = 5 minutes per design.md §13).
 
-Production impact while the deferral stands:
+Decision matrix the live bot honors:
 
-- The unmapped-chat drop above + the defensive body-source rejection on the
-  annotation handler (Scope 02 work — see "Production Body / Header
-  Actor-Identity Rejection" above) preserve the safety contract. No
-  privilege escalation is possible.
-- A production deployment with `auth_enabled=true` AND
-  `production_shared_token_fallback_enabled=false` (the spec-mandated
-  default per FR-AUTH-017) would have every mapped-chat Telegram capture
-  return `HTTP 401` from `bearerAuthMiddleware`. Until the wiring lands,
-  production Telegram operators MUST keep
-  `production_shared_token_fallback_enabled=true` — the transitional
-  escape hatch documented in design §9.3 — so the shared bot bearer
-  continues to authenticate.
+| Environment | Chat mapped? | Auth.enabled? | Bearer attached |
+|---|---|---|---|
+| `production` | Yes | Yes | Fresh per-user PASETO via `MintForChat` |
+| `production` | No | Yes | **Request refused** (`ErrNoUserMappingForChat`) — no fallback |
+| `production` | Any | No | Shared `runtime.auth_token` (legacy fallback) |
+| `dev` / `test` | Yes | Yes | Fresh per-user PASETO via `MintForChat` |
+| `dev` / `test` | No | Yes | Shared `runtime.auth_token` (clean dev fallback) |
+| `dev` / `test` | Any | No | Shared `runtime.auth_token` |
 
-Trigger for closure: any production Telegram deployment that flips
-`production_shared_token_fallback_enabled` to `false`. Routing: spec 044
-Scope 04 implement (or a Scope 03 follow-up implement pass) before
-spec-level finalize.
+Closure evidence: in-package unit test
+`internal/telegram/bot_wiring_test.go` (8 cases covering the matrix
+above), live-stack integration test
+`tests/integration/auth_telegram_f02_wiring_test.go`
+(`TestF02Wiring_SetPerUserTokenMinter_HappyPath`,
+`TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses`), and
+the existing Scope 03 e2e suite
+`tests/integration/auth_telegram_e2e_test.go`. The
+`production_shared_token_fallback_enabled` flag (default `false` per
+FR-AUTH-017) is now safe to flip to `false` in any production Telegram
+deployment — see "Deprecation Pathway" below for the supervised
+sequence.
+
+##### Authentication Metrics (Scope 04)
+
+The runtime exposes seven Prometheus series under the
+`smackerel_auth_*` prefix from
+[`internal/metrics/auth.go`](../internal/metrics/auth.go) for
+operator visibility into the per-user bearer-auth subsystem:
+
+| Metric name | Type | Labels | Surface emitted from |
+|---|---|---|---|
+| `smackerel_auth_token_issuance_total` | Counter | `source` (`admin_api`, `bootstrap_cli`, `telegram_bridge`) | `internal/api/auth_handlers.go` (HandleEnroll, HandleRotate); `cmd/core/cmd_auth.go` (runAuthEnroll, runAuthRotate, runAuthBootstrap); `internal/telegram/per_user_token.go` (MintForUser) |
+| `smackerel_auth_token_rotation_total` | Counter | (none) | `HandleRotate`, `runAuthRotate` |
+| `smackerel_auth_token_revocation_total` | Counter | `reason` (closed set: `unspecified`, `compromise`, `rotation`, `offboarding`, `test`, `other`; raw input is bucketed via `NormalizeRevocationReason`) | `HandleRevoke`, `runAuthRevoke` |
+| `smackerel_auth_token_validation_latency_seconds` | Histogram | (none); buckets `0.0001..0.1` | `bearerAuthMiddleware` (per-request, includes verify + revocation lookup) |
+| `smackerel_auth_token_validation_outcome_total` | Counter | `result` (`accepted`, `rejected_expired`, `rejected_unknown_key`, `rejected_malformed`, `rejected_revoked`), `source` (`header`, `pwa_cookie`, `""`) | `bearerAuthMiddleware` per validation branch |
+| `smackerel_auth_legacy_fallback_used_total` | Counter | `environment` (`production`, …) | `bearerAuthMiddleware` Branch 2 (shared-token fallback path) |
+| `smackerel_auth_failure_total` | Counter | `reason` (closed set: `missing_token`, `invalid_format`, `paseto_verify_failed`, `revoked`, `shared_token_mismatch`, `auth_not_configured`) | `bearerAuthMiddleware` per 401 branch |
+
+The `result` label values for `*_validation_outcome_total` are mapped
+from `auth.VerifyToken` errors via `classifyVerifyError`
+(`internal/api/router.go`); the closed set is the contract — operators
+can build alerts on these values without parsing free-text error
+strings.
+
+Recommended scrape examples:
+
+```promql
+# Telegram-bridge mint rate (per-second, 5m window)
+rate(smackerel_auth_token_issuance_total{source="telegram_bridge"}[5m])
+
+# Production legacy-fallback usage (alert if > 0 after deprecation flip)
+sum(rate(smackerel_auth_legacy_fallback_used_total{environment="production"}[5m]))
+
+# Validation latency p95 over 5m
+histogram_quantile(0.95,
+  sum(rate(smackerel_auth_token_validation_latency_seconds_bucket[5m]))
+  by (le))
+
+# Token revocations bucketed by reason (compromise spikes warrant
+# immediate operator review)
+sum(increase(smackerel_auth_token_revocation_total[1h])) by (reason)
+```
+
+##### Deprecation Pathway — `production_shared_token_fallback_enabled`
+
+The flag `auth.production_shared_token_fallback_enabled` (default
+`false` per FR-AUTH-017; verified in `config/smackerel.yaml`) governs
+whether `bearerAuthMiddleware` accepts the legacy shared
+`runtime.auth_token` in production. With Scope 04 shipped (F02 closure
+above + admin UI scoped to per-user PASETO via existing Scope 03 work),
+the flag is safe to keep at its default of `false` for all production
+deployments.
+
+Operator sequence to retire the fallback in an existing deployment that
+currently runs with the flag set to `true`:
+
+1. **Deploy** the new build with all per-user surfaces wired AND
+   `production_shared_token_fallback_enabled=true` retained for one
+   transition window. Verify via
+   `curl http://<host>:<port>/healthz` that the deployment is healthy.
+2. **Monitor** `smackerel_auth_legacy_fallback_used_total{environment="production"}`
+   for at least one full operator workday after the deploy. If the
+   rate is non-zero, identify the caller (the metric labels surface
+   environment; the access log surfaces the request path) and migrate
+   that caller to a per-user token via the admin UI before flipping
+   the flag.
+3. **Flip** the flag to `false` in `config/smackerel.yaml`, run
+   `./smackerel.sh config generate`, then restart the stack
+   (`./smackerel.sh down && ./smackerel.sh up`).
+4. **Verify** `smackerel_auth_legacy_fallback_used_total{environment="production"}`
+   stays at zero post-flip and that admin/PWA/extension/Telegram
+   surfaces all continue to authenticate (look for
+   `smackerel_auth_token_validation_outcome_total{result="accepted"}`
+   ticking on each surface). The
+   `smackerel_auth_failure_total{reason="shared_token_mismatch"}`
+   counter MAY tick if a caller still presents the legacy token; the
+   401 response is the correct contract.
+5. **Rollback** procedure: if step 4 surfaces missed callers, flip
+   the flag back to `true` and resume from step 2.
 
 #### Admin Token-Management UI (`/admin/auth/tokens`)
 
