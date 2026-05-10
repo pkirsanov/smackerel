@@ -20,7 +20,14 @@
         {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_PerUserPASETO_Production_Accepts", "status": "live"},
         {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestUserIDFromContext", "status": "live"},
         {"type": "static-guarantee", "file": "internal/api/router.go", "function": "bearerAuthMiddleware (Branch 1) consumes only auth.VerifyAndParse + sync.Map.Load", "status": "live"},
-        {"type": "test", "plannedFile": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "planned"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_AcceptsValidPASETO", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsForeignPASETO", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsRevokedToken", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestExtractBearerToken_CookieFallback", "status": "live"},
         {"type": "test", "plannedFile": "tests/e2e/auth/extension_per_user_test.go", "function": "TestE2E_ExtensionAuth_Production_PerUserSession", "status": "planned"},
         {"type": "test", "plannedFile": "internal/metrics/auth_metrics_test.go", "function": "TestAuthMetrics_EmitsAllExpectedSeries", "status": "planned"}
       ]
@@ -86,6 +93,10 @@
       "evidenceRefs": [
         {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorSourceInProduction_Rejected", "status": "live"},
         {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorIDInProduction_Rejected", "status": "live"},
+        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_RejectsUnmappedChat", "status": "live"},
+        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_AcceptsMappedChat", "status": "live"},
+        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_EmptyMappingRejectsAll", "status": "live"},
+        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestParseUserMapping", "status": "live"},
         {"type": "test", "plannedFile": "tests/e2e/auth/telegram_per_user_test.go", "function": "TestE2E_TelegramBridge_DerivesActorSourceFromChatID", "status": "planned"},
         {"type": "spec-state", "file": "specs/027-user-annotations/state.json", "function": "MIT-027-TRACE-001 actor-source segment closure entry appended via spec 044 Scope 02", "status": "live"}
       ]

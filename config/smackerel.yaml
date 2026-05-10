@@ -60,6 +60,19 @@ llm:
 telegram:
   bot_token: ""
   chat_ids: ""
+  # Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram
+  # bridge. Format: "<chat_id>:<user_id>" pairs, comma-separated
+  # (mirrors chat_ids).
+  #   Examples:
+  #     ""                              # dev/test default — empty mapping is OK
+  #     "12345:alice"                   # single chat → single user (production)
+  #     "12345:alice,67890:bob"         # multi-user production deployment
+  # In production an unmapped chat is REFUSED (the bot drops the
+  # message with a slog.Warn) so the shared bot token cannot be used
+  # to attribute captures to the wrong user. In development/test the
+  # empty mapping is acceptable and existing single-user dev flows
+  # keep working.
+  user_mapping: ""
   assembly_window_seconds: 10
   assembly_max_messages: 100
   media_group_window_seconds: 3

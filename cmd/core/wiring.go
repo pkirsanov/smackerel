@@ -323,6 +323,12 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		// MIT-040-S-006 — SST byte caps for the photo upload path.
 		PhotoDownloadMaxBytes:  cfg.Photos.IOLimits.TelegramResponseMaxBytes,
 		UploadResponseMaxBytes: cfg.Photos.IOLimits.ProviderMetadataMaxBytes,
+		// Spec 044 Scope 03 — production claim-binding for the
+		// Telegram entry point. In production an unmapped chat_id
+		// is dropped at handleMessage; in dev/test the empty mapping
+		// is acceptable.
+		Environment: cfg.Environment,
+		UserMapping: cfg.TelegramUserMapping,
 	})
 	if err != nil {
 		slog.Warn("telegram bot initialization failed", "error", err)

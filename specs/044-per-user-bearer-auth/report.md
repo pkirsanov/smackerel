@@ -3681,3 +3681,222 @@ ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
 🟢 **APPROVED** — Scope 02 (Hot-Path Middleware Integration + MIT Closures) closes per Gate G022 per-scope variant. All 8 finalize gates PASS or pass-with-deferred (Gate F2 carry-forward acceptable per `FINALIZE-PREREQ-044-V7-001` and Scope 01 finalize precedent). Spec 044 remains `in_progress` because Scopes 03 and 04 are not yet started. Next iteration target: **Scope 03 — Web Surfaces + Telegram Connector** (PWA per-user session model + browser-extension token surface + Telegram bridge per-user identity). Landing `tests/e2e/auth/pwa_per_user_test.go` in Scope 03 will discharge resolution path (a) for `FINALIZE-PREREQ-044-V7-001`.
 
 **Claim Source:** executed.
+
+---
+
+## Scope 03 — Web Surfaces + Telegram Connector — Implement (Partial Minimum Surface)
+
+**Phase:** implement
+**Agent:** bubbles.implement
+**Date:** 2026-05-10
+**Disposition:** Partial — minimum-surface delivery to discharge `FINALIZE-PREREQ-044-V7-001`. NO Scope 03 DoD bullets ticked. Phase remains `implement`. Follow-up implement passes required to close all four DoD bullets and to complete the Test Plan (T3-02 / T3-03 / T3-04).
+
+### Goal Recap
+
+User instruction prioritized landing the PWA per-user session foundation
+with a real, passing live test at `tests/e2e/auth/pwa_per_user_test.go`
+to discharge the open `FINALIZE-PREREQ-044-V7-001` transitionRequest.
+Other Scope 03 surfaces (extension client, admin UI, full Telegram
+per-user-PASETO minting flow) explicitly permitted to be deferred to
+follow-up passes.
+
+### Surfaces Delivered
+
+#### A. PWA per-user session foundation
+
+**`internal/api/web_login.go` (NEW, ~150 LOC)**
+- `POST /v1/web/login` — Body `{"token": "<paseto-or-shared>"}`.
+  Production validates with `auth.VerifyAndParse(token, opts)` AND
+  `revocationCache.IsRevoked(jti)`; dev/test compares via
+  `subtle.ConstantTimeCompare`. Sets `auth_token` cookie HttpOnly +
+  SameSite=Lax + Path=/. Cookie is `Secure` only when
+  `strings.EqualFold(env, "production")` is true (per design.md §10.4).
+  Body: `MaxBytesReader(8KB)` + `DisallowUnknownFields`. Refuses
+  in dev-bypass with HTTP 400 `unsupported_no_auth_token`.
+- `POST /v1/web/logout` — Clears the cookie via `MaxAge=-1`.
+
+**`internal/api/router.go` (MODIFIED)**
+- `extractBearerToken` extended to fall back to the `auth_token`
+  cookie when no Authorization header is present. The
+  malformed-header path still returns `""` without cookie fallback
+  (preserves existing client-bug visibility).
+- Registered `POST /v1/web/login` and `POST /v1/web/logout` in a
+  rate-limited group (`httprate.LimitByIP(20, 1*time.Minute)`)
+  AFTER the OAuth group, OUTSIDE `bearerAuthMiddleware`.
+
+**`tests/e2e/auth/pwa_per_user_test.go` (NEW, ~470 LOC, `//go:build e2e`, `package auth_e2e`)**
+- `TestE2E_PWAAuth_Production_PerUserSession` — Real production-
+  mode HTTP roundtrip with `httptest.NewTLSServer` (Secure cookie
+  acceptance) + `cookiejar.New(nil)`. Enrolls user, mints PASETO
+  via `auth.IssueToken`, posts to `/v1/web/login`, asserts
+  `Set-Cookie` carries HttpOnly + Secure + SameSite=Lax +
+  Path=/, asserts subsequent GET `/v1/health` succeeds with the
+  cookie alone, asserts adversarial bare GET against a non-jar
+  client returns 401.
+- `TestE2E_PWAAuth_Production_LoginRejectsMissingToken/{empty_body, empty_token, whitespace_token}` (3 subtests)
+- `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/{random_garbage, foreign-signed_paseto}` (2 subtests)
+  with `foreign-signed_paseto` minting a v4.public token from a
+  freshly-generated keypair via `auth.GenerateSigningKeypair()` to
+  prove cross-deployment rejection.
+- `TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks` —
+  Regression guard: header path unchanged.
+
+**`internal/api/web_login_test.go` (NEW, ~280 LOC)**
+- 11 tests + 13 subtests; covers production+PASETO accept,
+  production+revoked reject, production+foreign-signed reject,
+  dev+shared accept, dev+wrong reject, dev-bypass refuse, body
+  validation (5 cases including `unknown_field` via
+  `DisallowUnknownFields`), method-not-allowed, logout cookie-
+  clearing (production + dev), `extractBearerToken` cookie
+  fallback (5 cases).
+
+#### B. Telegram chat→user mapping + production rejection
+
+**`internal/telegram/user_mapping.go` (NEW, ~115 LOC)**
+- `ParseUserMapping(raw string) (map[int64]string, error)` —
+  Comma-separated `chat_id:user_id`. Whitespace-tolerant.
+  Supports negative chat-ids (Telegram supergroups). Rejects
+  duplicates. Empty input returns empty map (not error).
+- `(b *Bot) resolveActorUserID(chatID int64) (string, error)` —
+  Production with mapping containing chat → returns
+  (user_id, nil). Production unmapped or empty mapping → returns
+  (`""`, `ErrNoUserMappingForChat`) and the caller MUST drop the
+  message. Dev/test → returns mapping[chatID] (may be `""`) with
+  no error. Production check uses `strings.EqualFold(env, "production")`.
+  Nil-bot defense returns `("", nil)`.
+
+**`internal/telegram/bot.go` (MODIFIED)**
+- Added `userMapping map[int64]string` and `environment string`
+  to `Bot` struct + corresponding `Config` fields.
+- `safeHandleMessage` and `handleMessage` invoke
+  `resolveActorUserID(msg.Chat.ID)` BEFORE handler dispatch;
+  production drops messages from unmapped chats with
+  `slog.Warn("telegram: rejecting message from unmapped chat in production", ...)`.
+- `safeHandleCallback` performs the same check using
+  `cb.Message.Chat.ID` BEFORE `handleListCallback` dispatch.
+
+**`internal/telegram/user_mapping_test.go` (NEW, ~140 LOC)**
+- 6 tests + 18 subtests covering `ParseUserMapping` (empty,
+  single, two pairs, whitespace-tolerant, negative chat-id,
+  missing colon / user_id / chat_id, non-numeric, duplicate,
+  empty pair) and `resolveActorUserID` (production rejects
+  unmapped, production accepts mapped, production empty-mapping
+  rejects all, dev tolerates 3 envs, env-string case-insensitive
+  3 cases, nil-bot defense).
+
+#### C. SST plumbing
+
+**`config/smackerel.yaml`**
+- Added `telegram.user_mapping: ""` with multi-line comment
+  documenting the `<chat_id>:<user_id>` comma-separated format
+  and the production rejection contract.
+
+**`scripts/commands/config.sh`**
+- Resolves `TELEGRAM_USER_MAPPING="$(yaml_get telegram.user_mapping 2>/dev/null)"` (default empty for dev/test).
+- Emits `TELEGRAM_USER_MAPPING=${TELEGRAM_USER_MAPPING}` into
+  both `dev.env` and `test.env`.
+
+**`internal/config/config.go`**
+- Added `Config.TelegramUserMapping map[int64]string` field
+  populated by a `parseTelegramUserMapping` helper at the bottom
+  of `Load()`. Helper duplicates the parsing logic from the
+  telegram package to keep dependency direction telegram→config
+  one-way.
+
+**`cmd/core/wiring.go`**
+- `telegram.NewBot(...)` call now passes
+  `Environment: cfg.Environment` and
+  `UserMapping: cfg.TelegramUserMapping`.
+
+### Validation Gates Run
+
+| Gate | Command | Result |
+|------|---------|--------|
+| G1 build | `go build ./...` | clean |
+| G2 vet | `go vet ./...` | clean |
+| G3 unit (Go) | `./smackerel.sh test unit --go` | ALL PASS (no FAIL lines) |
+| G4 integration | `./smackerel.sh test integration` | ALL PASS (no FAIL lines) |
+| G5 e2e (PWA scope) | `./smackerel.sh test e2e --go-run '^TestE2E_PWAAuth_'` | ALL PASS (4 tests, 5 subtests) |
+| G6 config gen | `./smackerel.sh config generate` | succeeds; `TELEGRAM_USER_MAPPING=` in `config/generated/dev.env` AND `config/generated/test.env` |
+
+**Verbatim e2e PASS output** (Gate G5):
+
+```
+--- PASS: TestE2E_PWAAuth_Production_PerUserSession (0.11s)
+--- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken (0.09s)
+    --- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_body (0.01s)
+    --- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_token (0.00s)
+    --- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken/whitespace_token (0.00s)
+--- PASS: TestE2E_PWAAuth_Production_LoginRejectsInvalidToken (0.06s)
+    --- PASS: TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/random_garbage (0.01s)
+    --- PASS: TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto (0.00s)
+--- PASS: TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks (0.05s)
+PASS
+PASS: go-e2e
+```
+
+**Claim Source:** executed.
+
+### Discharge of `FINALIZE-PREREQ-044-V7-001`
+
+The transitionRequest required: "Land `tests/e2e/auth/pwa_per_user_test.go`
+as a real, passing live test." That file now exists at
+`tests/e2e/auth/pwa_per_user_test.go` (470 LOC, `//go:build e2e`),
+contains 4 tests with 5 subtests covering production-mode PASETO →
+HttpOnly+Secure cookie roundtrip + 5 negative paths + a regression
+guard for the Authorization-header path, and ALL tests PASS via
+`./smackerel.sh test e2e --go-run '^TestE2E_PWAAuth_'`.
+
+The transitionRequest remains `open` in `state.json` until the
+validate phase confirms closure (per agent ownership boundary —
+`bubbles.implement` does not self-certify transitionRequest closure).
+The discharge prerequisite is satisfied; validate will record the
+formal close.
+
+### Deferred to Follow-Up Implement Pass(es)
+
+The following items are EXPLICITLY deferred per user instruction
+("If the PWA login plumbing is too large for one pass, deliver the
+MINIMUM surface that supports a passing live test"). Phase remains
+`implement` until these land:
+
+- **T3-02 — Browser extension per-user session.** Requires updating
+  `web/extension/background.js` + `popup/` to surface the per-user
+  PASETO entry/storage flow, then authoring
+  `tests/e2e/auth/extension_per_user_test.go`
+  (`TestE2E_ExtensionAuth_Production_PerUserSession`).
+- **T3-03 — Telegram per-user PASETO minting + e2e.** The chat→user
+  mapping landed in this pass. End-to-end per-user attribution
+  through the Telegram path requires the bot to MINT a per-user
+  PASETO from `cfg.AuthConfig.SigningActivePrivateKey` keyed by
+  `cfg.TelegramUserMapping[chatID]` and call the internal API with
+  THAT bearer per chat (rather than the shared bot bearer). Then
+  `tests/e2e/auth/telegram_per_user_test.go`
+  (`TestE2E_TelegramBridge_DerivesActorSourceFromChatID`).
+- **T3-04 — Admin token-management UI.** Requires PWA frontend work
+  (list users / rotate / revoke buttons wired to the existing
+  `/v1/auth/users/...` admin endpoints from Scope 02) AND the e2e
+  test `tests/e2e/auth/admin_ui_test.go`.
+- **NATS entry-point claim-binding audit.** Audit of all NATS
+  producer call sites to confirm session-derived metadata is
+  carried (not body-trusted). Already enforced indirectly by the
+  Scope 02 body-actor-id rejection contract; explicit audit
+  deferred to Scope 04 or a dedicated follow-up.
+
+### Anti-Fabrication Notes
+
+- NO `t.Skip()` calls introduced anywhere in the new test files
+  (verified by grep `'t\.Skip\(' tests/e2e/auth/pwa_per_user_test.go internal/api/web_login_test.go internal/telegram/user_mapping_test.go` returns 0 matches).
+- NO mocks or `httptest.Server` interception of the auth subsystem;
+  the e2e test runs against the real `internal/auth/`,
+  `internal/auth/revocation/`, real PASETO library, and a real
+  `httptest.NewTLSServer` issuing real Set-Cookie headers.
+- NO DoD bullets ticked because none of the four bullets is fully
+  satisfied (per implementDiscipline + Gate G040).
+- NO planned content rewritten in scopes.md; deferral context
+  added in a separate `### Scope 3 Implement Evidence — Partial
+  Minimum Surface` subsection AFTER the DoD list.
+
+**Claim Source:** executed.
+
+---

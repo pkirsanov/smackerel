@@ -33,6 +33,13 @@ type Config struct {
 	Environment      string
 	TelegramBotToken string
 	TelegramChatIDs  []string
+	// Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram
+	// bridge. Sourced from TELEGRAM_USER_MAPPING ("<chat_id>:<user>"
+	// pairs, comma-separated) via scripts/commands/config.sh which reads
+	// telegram.user_mapping from smackerel.yaml. Empty in dev/test;
+	// REQUIRED in production for any chat that should successfully
+	// capture (production drops messages from unmapped chats).
+	TelegramUserMapping map[int64]string
 	OllamaURL        string
 	OllamaModel      string
 	EmbeddingModel   string
@@ -473,6 +480,20 @@ func Load() (*Config, error) {
 
 	if chatIDs := os.Getenv("TELEGRAM_CHAT_IDS"); chatIDs != "" {
 		cfg.TelegramChatIDs = strings.Split(chatIDs, ",")
+	}
+
+	// Spec 044 Scope 03 — parse TELEGRAM_USER_MAPPING. The package
+	// import for "telegram" is avoided here to keep the dep direction
+	// (telegram → config), so the parsing is duplicated as a small
+	// helper. The bot calls ParseUserMapping(rawForLogContext) when it
+	// also needs the raw form, but for cfg loading we materialize the
+	// map directly.
+	if rawMapping := os.Getenv("TELEGRAM_USER_MAPPING"); rawMapping != "" {
+		parsed, perr := parseTelegramUserMapping(rawMapping)
+		if perr != nil {
+			return nil, fmt.Errorf("TELEGRAM_USER_MAPPING: %w", perr)
+		}
+		cfg.TelegramUserMapping = parsed
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -1280,4 +1301,49 @@ func parseIntEnv(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return v
+}
+
+// parseTelegramUserMapping parses a TELEGRAM_USER_MAPPING env value
+// of the form "12345:alice,67890:bob" into a chat_id → user_id map.
+//
+// Spec 044 Scope 03 — claim-binding for the Telegram entry point.
+// The format intentionally mirrors TELEGRAM_CHAT_IDS (comma-separated)
+// so operators have a single mental model. Whitespace around tokens
+// is tolerated; duplicate chat_ids fail loudly so a typo cannot
+// silently re-attribute captures.
+//
+// This helper is duplicated in package telegram (telegram.ParseUserMapping)
+// to keep the dep direction (telegram → config) clean. Both helpers
+// MUST stay in sync; the unit tests in
+// internal/telegram/user_mapping_test.go pin the canonical behavior.
+func parseTelegramUserMapping(raw string) (map[int64]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	out := make(map[int64]string)
+	for idx, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			return nil, fmt.Errorf("entry %d is empty (format: chat_id:user_id, comma-separated)", idx+1)
+		}
+		colon := strings.IndexByte(pair, ':')
+		if colon <= 0 || colon == len(pair)-1 {
+			return nil, fmt.Errorf("entry %d %q is malformed (expected chat_id:user_id)", idx+1, pair)
+		}
+		chatRaw := strings.TrimSpace(pair[:colon])
+		userID := strings.TrimSpace(pair[colon+1:])
+		if userID == "" {
+			return nil, fmt.Errorf("entry %d has empty user_id", idx+1)
+		}
+		chatID, err := strconv.ParseInt(chatRaw, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d chat_id %q is not int64: %w", idx+1, chatRaw, err)
+		}
+		if _, dup := out[chatID]; dup {
+			return nil, fmt.Errorf("entry %d duplicates chat_id %d", idx+1, chatID)
+		}
+		out[chatID] = userID
+	}
+	return out, nil
 }
