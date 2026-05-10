@@ -447,6 +447,11 @@ if [[ "$TARGET_ENV" == "test" ]]; then
 fi
 TELEGRAM_BOT_TOKEN="$(required_value telegram.bot_token)"
 TELEGRAM_CHAT_IDS="$(required_value telegram.chat_ids)"
+# Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram bridge.
+# Optional in dev/test; production deployments populate this so the
+# claim-binding rejection in handleMessage admits real chats. The
+# format mirrors chat_ids: "<chat_id>:<user_id>" pairs, comma-separated.
+TELEGRAM_USER_MAPPING="$(yaml_get telegram.user_mapping 2>/dev/null)" || TELEGRAM_USER_MAPPING=""
 TELEGRAM_ASSEMBLY_WINDOW_SECONDS="$(yaml_get telegram.assembly_window_seconds 2>/dev/null)" || TELEGRAM_ASSEMBLY_WINDOW_SECONDS="10"
 TELEGRAM_ASSEMBLY_MAX_MESSAGES="$(yaml_get telegram.assembly_max_messages 2>/dev/null)" || TELEGRAM_ASSEMBLY_MAX_MESSAGES="100"
 TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS="$(yaml_get telegram.media_group_window_seconds 2>/dev/null)" || TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS="3"
@@ -880,6 +885,7 @@ ML_SIDECAR_URL=${ML_SIDECAR_URL}
 CORE_API_URL=${CORE_API_URL}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 TELEGRAM_CHAT_IDS=${TELEGRAM_CHAT_IDS}
+TELEGRAM_USER_MAPPING=${TELEGRAM_USER_MAPPING}
 TELEGRAM_ASSEMBLY_WINDOW_SECONDS=${TELEGRAM_ASSEMBLY_WINDOW_SECONDS}
 TELEGRAM_ASSEMBLY_MAX_MESSAGES=${TELEGRAM_ASSEMBLY_MAX_MESSAGES}
 TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS=${TELEGRAM_MEDIA_GROUP_WINDOW_SECONDS}

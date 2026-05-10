@@ -52,6 +52,14 @@ type Bot struct {
 	// from PhotosConfig.IOLimits.
 	photoDownloadMaxBytes  int64 // bytes downloaded via Telegram bot file API
 	uploadResponseMaxBytes int64 // bytes read from internal /v1/photos/upload JSON response
+
+	// Spec 044 Scope 03 — chat_id → user_id mapping + environment.
+	// In production, an unmapped chat is refused (drop + warn) so the
+	// shared bot token cannot be used to attribute captures to the
+	// wrong user. In dev/test the empty mapping is acceptable; the
+	// existing single-user dev workflow keeps functioning.
+	userMapping map[int64]string
+	environment string
 }
 
 // Config holds Telegram bot configuration.
@@ -72,6 +80,14 @@ type Config struct {
 	// Zero = unlimited (test paths only).
 	PhotoDownloadMaxBytes  int64 // PHOTOS_IO_LIMITS_TELEGRAM_RESPONSE_MAX_BYTES
 	UploadResponseMaxBytes int64 // PHOTOS_IO_LIMITS_PROVIDER_METADATA_MAX_BYTES
+
+	// Spec 044 Scope 03 — environment + chat_id → user_id mapping.
+	// Environment values: production | development | test (anything
+	// other than "production" tolerates an empty mapping).
+	// UserMapping is sourced from TELEGRAM_USER_MAPPING via
+	// scripts/commands/config.sh.
+	Environment string
+	UserMapping map[int64]string
 }
 
 // NewBot creates and initializes a Telegram bot.
@@ -124,6 +140,10 @@ func NewBot(cfg Config) (*Bot, error) {
 		// MIT-040-S-006 — SST byte caps for io.ReadAll on the photo path.
 		photoDownloadMaxBytes:  cfg.PhotoDownloadMaxBytes,
 		uploadResponseMaxBytes: cfg.UploadResponseMaxBytes,
+
+		// Spec 044 Scope 03 — per-user identity binding.
+		userMapping: cfg.UserMapping,
+		environment: cfg.Environment,
 	}
 
 	// Start cook session cleanup goroutine
@@ -222,6 +242,16 @@ func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			slog.Error("telegram callback handler panic recovered", "panic", r)
 		}
 	}()
+	// Spec 044 Scope 03 — production claim-binding rejection. Every
+	// inline-keyboard callback carries a chat_id via cb.Message.Chat;
+	// in production an unmapped chat MUST be refused before the
+	// handler dispatches (otherwise an attacker who knows a callback
+	// data format could attribute confirmations to the shared session).
+	if cb != nil && cb.Message != nil && cb.Message.Chat != nil {
+		if _, err := b.resolveActorUserID(cb.Message.Chat.ID); err != nil {
+			return
+		}
+	}
 	b.handleListCallback(ctx, cb)
 }
 
@@ -242,6 +272,17 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	} else {
 		// Open-access mode — log every distinct chat for operator awareness
 		slog.Warn("open-access mode: processing message from unvalidated chat — set TELEGRAM_CHAT_IDS to restrict", "chat_id", chatID)
+	}
+
+	// Spec 044 Scope 03 — production claim-binding rejection. In
+	// production, every Telegram chat MUST have a deterministic
+	// chat_id → user_id mapping (TELEGRAM_USER_MAPPING). An unmapped
+	// chat is dropped here — the bot does NOT call the internal API
+	// at all, so no capture/annotation can be attributed to the wrong
+	// user. Closes the last MIT-027-TRACE-001 actor-source segment
+	// for the Telegram entry point.
+	if _, err := b.resolveActorUserID(chatID); err != nil {
+		return
 	}
 
 	text := msg.Text

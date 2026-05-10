@@ -176,6 +176,19 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
+	// Spec 044 Scope 03 — PWA per-user session foundation.
+	// POST /v1/web/login converts a per-user PASETO (production) or the
+	// shared dev token (dev/test) into an HttpOnly auth_token cookie;
+	// POST /v1/web/logout clears that cookie. Both routes are PUBLIC
+	// (no bearerAuthMiddleware) — they are entry points by definition.
+	// Rate-limited to absorb credential-stuffing attempts; the per-IP
+	// budget mirrors the OAuth start/callback budget for consistency.
+	r.Group(func(r chi.Router) {
+		r.Use(httprate.LimitByIP(20, 1*time.Minute))
+		r.Post("/v1/web/login", deps.HandleWebLogin)
+		r.Post("/v1/web/logout", deps.HandleWebLogout)
+	})
+
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
 	if deps.WebHandler != nil {
 		// Web UI group — auth required when AuthToken is configured.
@@ -412,18 +425,34 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// extractBearerToken extracts the token from an "Authorization: Bearer <token>" header.
-// Returns the token string, or empty string if the header is missing or malformed.
+// extractBearerToken extracts the token used for bearer authentication.
+//
+// Lookup order:
+//   1. Authorization header ("Authorization: Bearer <token>"). When the
+//      header is present but malformed (missing scheme, wrong scheme,
+//      empty token), the function returns "" without falling back to
+//      the cookie — a malformed header is a client bug that must be
+//      surfaced as a 401, not silently masked by the cookie.
+//   2. Spec 044 Scope 03 — auth_token cookie fallback. The PWA POSTs
+//      to /v1/web/login with a per-user PASETO (or shared dev token);
+//      the login handler sets an HttpOnly+SameSite=Lax cookie
+//      (Secure in production). Subsequent same-origin requests carry
+//      the cookie automatically; bearerAuthMiddleware uses the cookie
+//      value as the bearer token when no Authorization header is
+//      present, so the PWA does not have to attach Authorization
+//      headers to every fetch().
 func extractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
+	if header := r.Header.Get("Authorization"); header != "" {
+		parts := strings.SplitN(header, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+			return ""
+		}
+		return parts[1]
 	}
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-		return ""
+	if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+		return cookie.Value
 	}
-	return parts[1]
+	return ""
 }
 
 // matchBearerToken returns true if the request carries a Bearer token that
