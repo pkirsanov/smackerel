@@ -5206,3 +5206,125 @@ Three artifact-side fixes applied during this spec-review phase (all surgical, a
 **Claim Source:** executed.
 
 ---
+
+### Docs Evidence (Scope 03)
+
+**Phase:** docs (per-scope, runs after `spec-review` for Scope 03).
+**Agent:** `bubbles.docs`.
+**Run window:** 2026-05-11.
+**Trust classification carried forward from spec-review:** `MINOR_DRIFT` (no `MAJOR_DRIFT` / `OBSOLETE`; auto-invocation NOT triggered — this is a normal per-scope `docs` run).
+
+#### Discovery + Drift-Scan Results
+
+Cross-referenced current managed-doc text against the live Scope 03 implementation (commit `ff14a7a1`). Drift findings before this docs phase:
+
+| Doc | Section | Doc Said | Code Says | Action |
+|-----|---------|----------|-----------|--------|
+| docs/Operations.md | (no section) | No mention of PWA cookie-derived sessions, browser-extension token storage contract, Telegram chat→user mapping format, or admin token-management UI | `internal/api/web_login.go` sets `auth_token` cookie via `POST /v1/web/login`; browser extension reads `chrome.storage.local.authToken`; `internal/telegram/user_mapping.go` parses `TELEGRAM_USER_MAPPING`; `internal/api/admin_ui.go` serves `/admin/auth/tokens` behind bearer middleware | ADDED new "### Per-User Bearer Auth — Scope 03 (Web Surfaces + Telegram)" subsection (~184 lines) under existing "## Per-User Bearer Authentication (Spec 044)" |
+| docs/Development.md | (no section) | No dev notes on the four caller-side surfaces or the build-tag conventions for the Scope 03 test files | Test files: `internal/api/web_login_test.go` (no tag), `internal/telegram/per_user_token_test.go` (no tag), `internal/telegram/user_mapping_test.go` (no tag), `tests/e2e/auth/pwa_per_user_test.go` (`e2e` tag), `tests/integration/auth_extension_test.go` + `auth_telegram_e2e_test.go` + `auth_admin_ui_test.go` + `auth_chaos_scope03_test.go` (`integration` tag) | ADDED new "#### Spec 044 Scope 03 Dev Notes (Web Surfaces + Telegram + Admin UI)" subsection (~93 lines) |
+| docs/Deployment.md | "API-Consumer Migration (Scope 02)" only | No mention of how PWA users / extension users / Telegram users / admins migrate to the per-user model after Scope 03 | 4 caller-side surfaces shipped in Scope 03; the F02 deferred-finalize-blocker means Telegram users currently fall back to the shared `runtime.auth_token` until Scope 04 wires `PerUserTokenMinter` into the bot's outbound HTTP | ADDED new "### API-Consumer Migration (Scope 03)" + "#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)" subsections (~100 lines) |
+| docs/Testing.md | "Per-User Bearer Auth Test Surface (Spec 044)" | Said Scope 03 PWA / extension / Telegram E2E tests are "NOT yet authored" and tracked under `scenario-manifest.json` | All 4 Scope 03 caller-surface test files PRESENT and PASSING (4 e2e tests + 9 integration tests + chaos suite + hot-path benchmark); 3 Scope 03 unit-test files PRESENT and PASSING | REPLACED stale Scope 03 placeholder paragraph with a complete "### Per-User Bearer Auth — Scope 03 Test Inventory (Spec 044)" subsection — 7-row test-file table + 12-case adversarial-coverage list + chaos suite inventory + invocation snippet |
+| docs/smackerel.md | §17.2 last paragraph | Did not mention Scope 03 closure of caller-side surfaces or the supplementary Telegram E2E coverage of MIT-027-TRACE-001 | Scope 03 closes PWA cookie session, extension per-user PASETO, Telegram per-user bridge, and admin token-management UI; `TestTelegramBridge_BodyClaimedActorRejected` proves the Scope 02 actor-source rejection works through the Telegram path; remaining NATS-segment closure deferred to Scope 04 | APPENDED new paragraph to §17.2 documenting Scope 03 closure + the supplementary Telegram E2E coverage + the F02 / NATS-segment deferral |
+| README.md | "### Authentication" | Only mentioned the legacy shared `runtime.auth_token` model | Scope 03 ships PWA cookie session + extension per-user PASETO + Telegram chat→user mapping + admin UI; per-user model is the home-lab default and production posture | EXTENDED "### Authentication" with a new "#### Per-User Bearer Auth (spec 044) — Production Posture" subsection (~38 lines) covering all 4 caller surfaces and pointing readers to docs/Operations.md + docs/Deployment.md anchors |
+
+All drift fixes were applied in this docs phase — zero deferred drift remaining for Scope 03 caller-side surfaces.
+
+#### Files Modified This Docs Phase
+
+| File | Lines (before → after) | Section added/extended |
+|------|------------------------|------------------------|
+| docs/Operations.md | 1250 → 1434 | Added "### Per-User Bearer Auth — Scope 03 (Web Surfaces + Telegram)" subsection under "## Per-User Bearer Authentication (Spec 044)" |
+| docs/Development.md | 523 → 616 | Added "#### Spec 044 Scope 03 Dev Notes (Web Surfaces + Telegram + Admin UI)" subsection under per-user bearer auth dev notes |
+| docs/Deployment.md | 402 → 502 | Added "### API-Consumer Migration (Scope 03)" + "#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)" subsections under "## Per-User Bearer Auth (Spec 044) — Production Posture" |
+| docs/Testing.md | 333 → 439 | Replaced stale "Scope 03 NOT yet authored" placeholder with full Scope 03 test inventory under "### Per-User Bearer Auth Test Surface (Spec 044)" |
+| docs/smackerel.md | 2557 → 2574 | Appended Scope 03 closure paragraph to §17.2 |
+| README.md | 868 → 899 | Extended "### Authentication" with "#### Per-User Bearer Auth (spec 044) — Production Posture" subsection |
+
+#### F02 Deferral Documentation (NOT a closure)
+
+F02 (`PerUserTokenMinter` is shipped in Scope 03 but the bot does not yet
+invoke it on the outbound HTTP path) is documented in this docs phase as a
+**deferred-finalize-blocker for Scope 04** — NOT as a closure or as a shipped
+deliverable. Locations:
+
+- `docs/Operations.md` → "#### Known Deferral — Telegram Per-User Attribution
+  Wiring (F02, Scope 04)" — explicit operator-facing deferral table.
+- `docs/Deployment.md` → "#### Known Deferral — Telegram Per-User Attribution
+  Wiring (F02, Scope 04)" — explicit deploy-facing deferral table.
+- `docs/smackerel.md` §17.2 last paragraph — architecture-level deferral note
+  ("the remaining NATS-segment closure for MIT-027-TRACE-001 is deferred to
+  Scope 04 alongside the per-call wiring of `PerUserTokenMinter` into the
+  bot's outbound HTTP calls").
+
+The deferral language in every doc is consistent: F02 is real, planned for
+Scope 04, and the current behavior is that Telegram captures continue to
+rely on the shared `runtime.auth_token` until Scope 04 lands. NO doc
+describes F02 as "shipped", "complete", or "closed".
+
+#### F03 Closure (cross-spec, MIT-027-TRACE-001 Telegram E2E segment)
+
+F03 (LOW): supplementary Telegram E2E coverage proving the Scope 02
+body-claimed-actor rejection works through the Telegram bridge path. Closed
+in this docs phase by `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected`
+(landed earlier in the Scope 03 implement phase) plus the cross-spec closure
+annotation now appended to `specs/027-user-annotations/state.json`
+(`executionHistory[-1]`):
+
+```
+agent: bubbles.docs
+runStartedAt: 2026-05-11T00:00:00Z
+runEndedAt: 2026-05-11T00:00:00Z
+action: closed_telegram_e2e_segment_of_mit_027_trace_001_via_spec_044_scope_03_telegram_bridge_coverage
+crossSpec: specs/044-per-user-bearer-auth
+closureSpec: 044-per-user-bearer-auth
+closureSegment: telegram-end-to-end-coverage
+closed_findings: ["MIT-027-TRACE-001-telegram-e2e-segment"]
+blockers_resolved: ["MIT-027-TRACE-001-telegram-e2e-segment"]
+```
+
+Spec 027 status, certification.\*, scopeProgress, completedScopes, and
+certifiedCompletedPhases were ALL preserved unchanged — only
+`executionHistory` was appended and `lastUpdatedAt` was bumped. The
+remaining NATS-segment closure for MIT-027-TRACE-001 is NOT addressed by
+this F03 closure — it stays deferred to Scope 04.
+
+#### Cross-Reference Verification (anchor checks)
+
+GitHub-rendered anchor compatibility verified against actual headings:
+
+| Reference | Target | Anchor | Verified |
+|-----------|--------|--------|----------|
+| README.md → Operations.md | `## Per-User Bearer Authentication (Spec 044)` (line 588) | `#per-user-bearer-authentication-spec-044` | PASS |
+| README.md → Deployment.md | `## Per-User Bearer Auth (Spec 044) — Production Posture` (line 239) | `#per-user-bearer-auth-spec-044--production-posture` | PASS |
+
+#### state.json Updates This Docs Phase
+
+- `execution.completedPhaseClaims` appended with the Scope 03 docs object form: `{scope: "03", phase: "docs", agent: "bubbles.docs", timestamp: "2026-05-11T..."}`.
+- `certification.certifiedCompletedPhases` appended with `"03:docs"`.
+- `executionHistory` appended with this docs-phase entry (agent=`bubbles.docs`, scopes=`["03"]`, decision=`approved`, evidence: 6 managed docs updated + F03 closure annotation in spec 027 + F02 deferral notes in 3 docs).
+- `currentPhase` advanced from `"docs"` to `"finalize"`.
+- `execution.currentPhase` advanced from `"docs"` to `"finalize"`.
+- `execution.currentScope` preserved at `"03"`.
+- `status` preserved at `"in_progress"` (Scope 03 still not yet finalized — finalize phase is the next gate, blocked by the FINALIZE-PREREQ-044-V7-001 transitionRequest carry-forward + the Scope 04 deliverables for F02 + remaining MIT-027-TRACE-001 NATS segment).
+- `certification.status` preserved at `"in_progress"`.
+- `certification.completedScopes` NOT advanced (per per-scope finalize boundary owned by `bubbles.iterate`).
+- `transitionRequests[FINALIZE-PREREQ-044-V7-001]` preserved at status `"open"` (carry-forward unchanged by docs phase).
+
+#### Tier-1 + Tier-2 Validation Recorded
+
+| Gate | Command | Expected | Recorded |
+|------|---------|----------|----------|
+| Docs-Gate-1 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` (post-edit) | exit 0 — `Artifact lint PASSED` (with the same 2 advisory non-blocking warnings: missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup) | recorded post-commit |
+| Docs-Gate-2 | `bash .github/bubbles/scripts/artifact-lint.sh specs/027-user-annotations` (post-edit, since 027 state.json was touched) | exit 0 — `Artifact lint PASSED` (with the same pre-existing advisory warnings tracked from earlier 027 closures) | recorded post-commit |
+| Docs-Gate-3 | `bash .github/bubbles/scripts/pii-scan.sh` against the diff | exit 0 (no real PII / hostnames / IPs / Linux usernames in committed files; all examples use `<deploy-host>` / `<tailnet-id>` / RFC1918 placeholders per repo policy) | PASS |
+| Docs-Gate-4 | Cross-spec closure shape preserved (no spec 027 status mutation) | spec 027 top-level `status` and `certification.status` UNCHANGED at `"done"`; only `executionHistory` appended | PASS |
+| Docs-Gate-5 | All 6 managed docs cleanly written (no IDE-cache REMOVED corruption) | `grep -c REMOVED docs/Operations.md docs/Development.md docs/Deployment.md docs/Testing.md docs/smackerel.md README.md` returns 0 for each | PASS |
+| Docs-Gate-6 | Test stack state preserved (spec-review-phase agent left it up; chaos-phase agent before that left it up) | Test stack left up for the next phase | PASS |
+| Docs-Gate-7 | Build-once deploy-many surface untouched by docs edits | docs edits touch only `docs/{Operations,Development,Deployment,Testing,smackerel}.md`, `README.md`, `specs/027-user-annotations/state.json`, `specs/044-per-user-bearer-auth/{report,state}.json` — ZERO deploy-surface diffs | PASS |
+| Docs-Gate-8 | F02 documented as deferral, NOT as closure, in EVERY doc that mentions Telegram per-user attribution | Three docs explicitly use the phrase "deferred-finalize-blocker" or "deferred to Scope 04"; ZERO doc claims F02 is shipped | PASS |
+
+**Verdict:** ✅ **APPROVED** for Scope 03 docs phase. All managed docs reflect the actual Scope 03 implementation; F02 documented as deferral; F03 closed via cross-spec annotation; no anti-fabrication violations. Phase advances `docs → finalize`.
+
+**Claim Source:** executed.
+
+---

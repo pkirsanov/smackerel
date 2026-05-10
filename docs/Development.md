@@ -186,6 +186,99 @@ production-mode rejection (HTTP 400) only fires when `auth.enabled=true` AND
 `runtime.environment=production`. The hot-path middleware lives at
 `internal/api/router.go` (`(*Dependencies).bearerAuthMiddleware`).
 
+#### Spec 044 Scope 03 Dev Notes (Web Surfaces + Telegram + Admin UI)
+
+Scope 03 adds four new caller-side surfaces, each with its own extension point.
+The same shared-token dev contract applies to all of them — none require
+per-user enrollment for local development.
+
+**Adding a web surface that uses cookie-derived sessions.** The browser-side
+contract is `POST /v1/web/login` → `Set-Cookie: auth_token=...; HttpOnly` →
+subsequent requests carry the cookie. The login handler lives at
+[`internal/api/web_login.go`](../internal/api/web_login.go) and the cookie
+fallback in `extractBearerToken` lives in
+[`internal/api/router.go`](../internal/api/router.go) (the same
+`bearerAuthMiddleware` accepts the bearer from either the `Authorization`
+header OR the `auth_token` cookie). New web routes that require auth should be
+mounted under a `chi.Group` with `r.Use(deps.bearerAuthMiddleware)` — the
+session is attached before the handler runs and is reachable via
+`auth.SessionFromContext(r.Context())` /
+`auth.UserIDFromContext(r.Context())`. The login route itself MUST stay
+outside `bearerAuthMiddleware` (it is the entry point) and SHOULD be
+rate-limited (the existing 20-req/IP/min `httprate.LimitByIP` Group is the
+canonical pattern).
+
+**Extending the Telegram bridge for new user mappings.** Chat → user
+resolution lives at
+[`internal/telegram/user_mapping.go`](../internal/telegram/user_mapping.go).
+`ParseUserMapping(raw string)` is the SST parser; `Bot.resolveActorUserID(chatID)`
+is the runtime lookup. Production with an unmapped chat returns
+`ErrNoUserMappingForChat` and the calling handler MUST drop the message; dev
+and test return `("", nil)` so existing single-user dev flows keep working.
+The mapping is parsed once at startup from the `TELEGRAM_USER_MAPPING` env var
+(format: `<chat_id>:<user_id>` comma-separated) — there is no hot-reload. To
+add a new mapping at runtime, edit `telegram.user_mapping` in
+`config/smackerel.yaml`, run `./smackerel.sh config generate`, and restart
+the stack.
+
+The companion library
+[`internal/telegram/per_user_token.go`](../internal/telegram/per_user_token.go)
+authors `PerUserTokenMinter`, which mints short-lived per-user PASETO bearers
+keyed by the resolved `user_id`. This library is wired and unit-tested in
+isolation but is NOT yet invoked from the bot's outbound HTTP callsites
+(`Bot.callCapture` / `Bot.handleReplyAnnotation` / `Bot.handleAnnotationCommand`
+still use `b.authToken`). That wiring is deferred to spec 044 Scope 04 — see
+the F02 deferral note in
+[Operations.md](../docs/Operations.md#known-deferral--f02-scope-04).
+
+**Extending the admin token-management UI.** The single embedded HTML page
+lives at
+[`internal/api/admin_ui_static/tokens.html`](../internal/api/admin_ui_static/tokens.html)
+and is served by `HandleAdminTokensUI` in
+[`internal/api/admin_ui.go`](../internal/api/admin_ui.go) via `//go:embed
+admin_ui_static/tokens.html`. The page calls the existing Scope 02
+`/v1/auth/*` admin REST endpoints via `fetch()` with `credentials:
+'same-origin'` (the cookie set by `/v1/web/login` carries the admin
+session). Three constraints when extending:
+
+- All response data MUST be rendered with `textContent` + `appendChild` —
+  never `innerHTML` for response data (XSS-safe rendering policy).
+- The strict CSP header set by `HandleAdminTokensUI` (`default-src 'none';
+  style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self';
+  base-uri 'none'; form-action 'none'`) forbids external script/style
+  loads, image loads, font loads, and form submissions — keep all UI logic
+  inline.
+- The page handler enforces ONLY `bearerAuthMiddleware` admit; admin-scope
+  enforcement happens at the underlying `/v1/auth/*` XHR layer via
+  `AuthAdminHandlers.callerIsAdmin`. Do NOT duplicate the admin gate at the
+  page layer (defense-in-depth at the XHR layer is stronger — see
+  design.md §16.1 row 2 for the rationale).
+
+**Build-tag conventions for Scope 03 tests.** Per the live-stack
+classification in `docs/Testing.md`:
+
+| Surface | Test files | Build tag |
+|---|---|---|
+| PWA cookie-derived session E2E | `tests/e2e/auth/pwa_per_user_test.go` | `e2e` |
+| Browser extension Authorization-header forward | `tests/integration/auth_extension_test.go` | `integration` |
+| Telegram bridge per-user mint + bridge | `tests/integration/auth_telegram_e2e_test.go` | `integration` |
+| Admin UI page + headers + method allowlist | `tests/integration/auth_admin_ui_test.go` | `integration` |
+| Scope 03 chaos behaviors | `tests/integration/auth_chaos_scope03_test.go` | `integration` |
+| Web login handler unit tests | `internal/api/web_login_test.go` | (none — default lane) |
+| Per-user token minter unit tests | `internal/telegram/per_user_token_test.go` | (none) |
+| User mapping parser + resolver unit tests | `internal/telegram/user_mapping_test.go` | (none) |
+
+The `tests/integration/auth_*_e2e_test.go` files use the `integration` tag
+(NOT `e2e`) by deliberate choice during the Scope 03 follow-up implement pass
+— assembling the live PostgreSQL + revocation cache + Telegram-bot wiring
+in-process via `httptest.NewServer(api.NewRouter(deps))` is substantially
+simpler under the `integration` tag than under the multi-process `e2e`
+runner. The functional contract is identical: real PostgreSQL on
+`127.0.0.1:47001`, real PASETO mint via `auth.IssueToken`, real
+`RevocationCache`, real `bearerAuthMiddleware`. Only the PWA cookie-derived
+session test file remains under the `e2e` tag because it is the discharge
+test for `FINALIZE-PREREQ-044-V7-001`.
+
 ### Port And URL Discipline
 
 When ports are introduced, they must come from the config pipeline, not from literals embedded in code or Compose files.
