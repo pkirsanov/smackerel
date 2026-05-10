@@ -1,0 +1,44 @@
+{
+  "spec": "043-ollama-test-infrastructure/bugs/BUG-001-ollama-image-pin-stale",
+  "version": "1.0.0",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-001-001",
+      "name": "Pinned ollama tag is currently published on Docker Hub",
+      "scope": "01-repin-ollama-image",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_image_availability_test.go",
+          "function": "TestOllamaImagePinIsPublished_LiveTag",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/ollama_image_availability_test.go::TestOllamaImagePinIsPublished_LiveTag"
+      ],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-BUG-001-002",
+      "name": "Adversarial \u2014 guard rejects yanked tags",
+      "scope": "01-repin-ollama-image",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_image_availability_test.go",
+          "function": "TestOllamaImagePinIsPublished_AdversarialYankedTag",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/ollama_image_availability_test.go::TestOllamaImagePinIsPublished_AdversarialYankedTag"
+      ],
+      "regressionProtected": true
+    }
+  ]
+}

@@ -113,10 +113,13 @@ func TestOllamaConfigGenerateAndRuntimeValidationStayInSync(t *testing.T) {
 	})
 
 	// Adversarial 2: strip infrastructure.ollama.test.image — generator must fail-loud.
+	// spec 043 / BUG-001 (2026-05-10) — strip target updated to track the live
+	// re-pinned tag (`0.23.2`); pre-fix this fixture targeted `0.6` which is
+	// yanked from Docker Hub.
 	t.Run("AdversarialMissingTestImage", func(t *testing.T) {
 		assertConfigGenerateFailsLoudWhenStripped(
 			t, root, srcBytes,
-			"      image: ollama/ollama:0.6",
+			"      image: ollama/ollama:0.23.2",
 			"infrastructure.ollama.test.image",
 		)
 	})

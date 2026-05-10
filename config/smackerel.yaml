@@ -710,9 +710,16 @@ infrastructure:
     # `image` is the default for non-test environments. `test.image` is the
     # pinned-digest test runtime (OQ-D1 — initial pin matches dev image; a
     # digest pin is deferred to a future hardening spec per OQ-D2).
-    image: ollama/ollama:0.6
+    #
+    # spec 043 / BUG-001 (2026-05-10) — re-pinned from `0.6` (yanked from
+    # Docker Hub; pull manifest now returns 404) to `0.23.2` (verified live
+    # 200 against hub.docker.com tags API). Adversarial regression test
+    # `tests/integration/ollama_image_availability_test.go` HEADs the Docker
+    # Hub tags API on every integration run so a future yanked tag fails
+    # loudly before the test stack tries to start.
+    image: ollama/ollama:0.23.2
     test:
-      image: ollama/ollama:0.6
+      image: ollama/ollama:0.23.2
       model: qwen2.5:0.5b-instruct
       pull_timeout_seconds: 300
       # Determinism knobs — same input + same seed + same image → same output
