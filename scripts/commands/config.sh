@@ -763,6 +763,32 @@ PROMPT_CONTRACTS_DIR="$(required_value knowledge.prompt_contracts_dir)"
 OTEL_ENABLED="$(yaml_get observability.otel_enabled 2>/dev/null)" || OTEL_ENABLED="false"
 OTEL_EXPORTER_ENDPOINT="$(yaml_get observability.otel_exporter_endpoint 2>/dev/null)" || OTEL_EXPORTER_ENDPOINT=""
 
+# Spec 044 — Per-User Bearer Auth Foundation. SST zero-defaults: every key is
+# REQUIRED at the generator boundary. Empty-string secret-bearing fields are
+# the intended dev/test pattern (SCN-AUTH-005). The Go core fails loud at
+# runtime startup when SMACKEREL_ENV=production AND AUTH_ENABLED=true AND any
+# required signing/hashing/bootstrap value is empty (SCN-AUTH-006). The
+# generator does NOT short-circuit on empty secret values because the
+# operator MUST be able to run `./smackerel.sh config generate --env home-lab`
+# and edit the resulting bundle before redeploying — the runtime is the
+# fail-loud authority for production-mode validation.
+AUTH_ENABLED="$(env_override_value auth_enabled auth.enabled)"
+AUTH_TOKEN_FORMAT="$(required_value auth.token_format)"
+AUTH_SIGNING_ACTIVE_PRIVATE_KEY="$(yaml_get auth.signing.active_private_key 2>/dev/null)" || AUTH_SIGNING_ACTIVE_PRIVATE_KEY=""
+AUTH_SIGNING_ACTIVE_KEY_ID="$(yaml_get auth.signing.active_key_id 2>/dev/null)" || AUTH_SIGNING_ACTIVE_KEY_ID=""
+AUTH_SIGNING_PRIOR_PUBLIC_KEY="$(yaml_get auth.signing.prior_public_key 2>/dev/null)" || AUTH_SIGNING_PRIOR_PUBLIC_KEY=""
+AUTH_SIGNING_PRIOR_KEY_ID="$(yaml_get auth.signing.prior_key_id 2>/dev/null)" || AUTH_SIGNING_PRIOR_KEY_ID=""
+AUTH_TOKEN_TTL_HOURS="$(required_value auth.token_ttl_hours)"
+AUTH_ROTATION_GRACE_WINDOW_HOURS="$(required_value auth.rotation_grace_window_hours)"
+AUTH_CLOCK_SKEW_TOLERANCE_SECONDS="$(required_value auth.clock_skew_tolerance_seconds)"
+AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS="$(required_value auth.revocation_cache_refresh_interval_seconds)"
+AUTH_REVOCATION_NATS_SUBJECT="$(required_value auth.revocation_nats_subject)"
+AUTH_AT_REST_HASHING_KEY="$(yaml_get auth.at_rest_hashing_key 2>/dev/null)" || AUTH_AT_REST_HASHING_KEY=""
+AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED="$(required_value auth.production_shared_token_fallback_enabled)"
+AUTH_TELEMETRY_ENABLED="$(required_value auth.telemetry_enabled)"
+AUTH_TELEMETRY_METRIC_PREFIX="$(required_value auth.telemetry_metric_prefix)"
+AUTH_BOOTSTRAP_TOKEN="$(yaml_get auth.bootstrap_token 2>/dev/null)" || AUTH_BOOTSTRAP_TOKEN=""
+
 # Agent (spec 037 — LLM Scenario Agent & Tool Registry). SST zero-defaults:
 # every value is REQUIRED. Missing keys → config generate exits non-zero.
 AGENT_SCENARIO_DIR="$(required_value agent.scenario_dir)"
@@ -1090,6 +1116,22 @@ KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASSEMBLY=${KNOWLEDGE_PROMPT_CONTRACT_DIGEST_ASS
 PROMPT_CONTRACTS_DIR=${PROMPT_CONTRACTS_DIR}
 OTEL_ENABLED=${OTEL_ENABLED}
 OTEL_EXPORTER_ENDPOINT=${OTEL_EXPORTER_ENDPOINT}
+AUTH_ENABLED=${AUTH_ENABLED}
+AUTH_TOKEN_FORMAT=${AUTH_TOKEN_FORMAT}
+AUTH_SIGNING_ACTIVE_PRIVATE_KEY=${AUTH_SIGNING_ACTIVE_PRIVATE_KEY}
+AUTH_SIGNING_ACTIVE_KEY_ID=${AUTH_SIGNING_ACTIVE_KEY_ID}
+AUTH_SIGNING_PRIOR_PUBLIC_KEY=${AUTH_SIGNING_PRIOR_PUBLIC_KEY}
+AUTH_SIGNING_PRIOR_KEY_ID=${AUTH_SIGNING_PRIOR_KEY_ID}
+AUTH_TOKEN_TTL_HOURS=${AUTH_TOKEN_TTL_HOURS}
+AUTH_ROTATION_GRACE_WINDOW_HOURS=${AUTH_ROTATION_GRACE_WINDOW_HOURS}
+AUTH_CLOCK_SKEW_TOLERANCE_SECONDS=${AUTH_CLOCK_SKEW_TOLERANCE_SECONDS}
+AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS=${AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS}
+AUTH_REVOCATION_NATS_SUBJECT=${AUTH_REVOCATION_NATS_SUBJECT}
+AUTH_AT_REST_HASHING_KEY=${AUTH_AT_REST_HASHING_KEY}
+AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=${AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED}
+AUTH_TELEMETRY_ENABLED=${AUTH_TELEMETRY_ENABLED}
+AUTH_TELEMETRY_METRIC_PREFIX=${AUTH_TELEMETRY_METRIC_PREFIX}
+AUTH_BOOTSTRAP_TOKEN=${AUTH_BOOTSTRAP_TOKEN}
 EXPENSES_ENABLED=${EXPENSES_ENABLED}
 EXPENSES_DEFAULT_CURRENCY=${EXPENSES_DEFAULT_CURRENCY}
 EXPENSES_EXPORT_MAX_ROWS=${EXPENSES_EXPORT_MAX_ROWS}

@@ -241,6 +241,84 @@ type Config struct {
 	Drive           DriveConfig
 	Photos          PhotosConfig
 	Recommendations RecommendationsConfig
+
+	// Spec 044 — Per-user bearer auth foundation. SST-compliant; populated
+	// from AUTH_* env vars produced by `./smackerel.sh config generate`.
+	// Empty signing/hashing/bootstrap fields are accepted in dev/test
+	// (preserves SMACKEREL_AUTH_TOKEN ergonomic) but rejected at startup
+	// when Environment == "production" AND Auth.Enabled == true.
+	Auth AuthConfig
+}
+
+// AuthConfig holds the SST-resolved per-user bearer-auth subsystem
+// configuration (spec 044). Every field is REQUIRED at the generator
+// boundary; secret-bearing fields (SigningActivePrivateKey,
+// SigningActiveKeyID, AtRestHashingKey, BootstrapToken) are accepted as
+// empty strings in dev/test and validated as non-empty in production by
+// `cmd/core/wiring.go` startup validation.
+type AuthConfig struct {
+	// Enabled gates the per-user PASETO validation path. False in dev/test
+	// by default; true in production-class environments via
+	// environments.<env>.auth_enabled override. SCN-AUTH-005/011 preserve
+	// shared SMACKEREL_AUTH_TOKEN semantics when Enabled is false.
+	Enabled bool
+
+	// TokenFormat is the wire-format identifier for issued tokens. Spec 044
+	// hardcodes "paseto-v4-public" (OQ-1 RESOLVED).
+	TokenFormat string
+
+	// Signing key material. SigningActivePrivateKey is the Ed25519 private
+	// key that signs newly issued tokens; SigningActiveKeyID is the short
+	// identifier embedded in the kid claim. SigningPriorPublicKey + KeyID
+	// are populated during the rotation grace window so in-flight tokens
+	// continue to validate. Empty values are valid in dev/test only.
+	SigningActivePrivateKey string
+	SigningActiveKeyID      string
+	SigningPriorPublicKey   string
+	SigningPriorKeyID       string
+
+	// TokenTTLHours bounds the lifetime of an issued token before requiring
+	// rotation. MUST be > 0; design default is 720 hours (30 days).
+	TokenTTLHours int
+
+	// RotationGraceWindowHours determines how long the prior token + prior
+	// signing key remain valid after rotation. NFR-AUTH-003 floor: ≥ 24.
+	RotationGraceWindowHours int
+
+	// ClockSkewToleranceSeconds — NFR-AUTH-005 ceiling: ≤ 60.
+	ClockSkewToleranceSeconds int
+
+	// RevocationCacheRefreshIntervalSeconds — periodic DB poll cadence as
+	// the failure-mode backstop when the NATS broadcast channel is down.
+	// Worst-case revocation propagation is bounded by NFR-AUTH-006 (≤ 60s).
+	RevocationCacheRefreshIntervalSeconds int
+
+	// RevocationNATSSubject is the cross-instance broadcast channel for
+	// token revocation events. Default "auth.revocations" per design §4.
+	RevocationNATSSubject string
+
+	// AtRestHashingKey is the HMAC-SHA-256 key used to hash issued tokens
+	// before persistence. MUST be empty in dev/test only.
+	AtRestHashingKey string
+
+	// ProductionSharedTokenFallbackEnabled is the OQ-5 escape hatch that
+	// lets the legacy SMACKEREL_AUTH_TOKEN authenticate in production
+	// during the migration window. Defaults to false; flipping to true
+	// emits a deprecation warning on every successful match.
+	ProductionSharedTokenFallbackEnabled bool
+
+	// TelemetryEnabled gates emission of smackerel_auth_* Prometheus
+	// metrics (spec 030 dashboards via OQ-9).
+	TelemetryEnabled bool
+
+	// TelemetryMetricPrefix prefixes all auth subsystem metric names.
+	// Default "smackerel_auth"; tied to spec 030 collector naming.
+	TelemetryMetricPrefix string
+
+	// BootstrapToken authorizes first-user enrollment on a fresh production
+	// deployment. Consumed exactly once via `./smackerel.sh auth bootstrap`
+	// and then cleared by the operator (OQ-10 RESOLVED).
+	BootstrapToken string
 }
 
 // Load reads configuration from environment variables.
@@ -855,7 +933,128 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Spec 044 — Per-user bearer auth foundation. Every AUTH_* key is
+	// REQUIRED at the SST generator boundary; secret-bearing fields are
+	// allowed to be empty in dev/test (Auth.Enabled=false) and validated
+	// here for production-mode (Environment=="production" + Enabled=true).
+	if err := loadAuthConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// loadAuthConfig populates cfg.Auth from AUTH_* env vars and validates
+// production-mode invariants. Spec 044 SCN-AUTH-005..006/011 — empty
+// secret material is accepted in dev/test, fail-loud in production with
+// auth.enabled=true.
+func loadAuthConfig(cfg *Config) error {
+	cfg.Auth.TokenFormat = os.Getenv("AUTH_TOKEN_FORMAT")
+	cfg.Auth.SigningActivePrivateKey = os.Getenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY")
+	cfg.Auth.SigningActiveKeyID = os.Getenv("AUTH_SIGNING_ACTIVE_KEY_ID")
+	cfg.Auth.SigningPriorPublicKey = os.Getenv("AUTH_SIGNING_PRIOR_PUBLIC_KEY")
+	cfg.Auth.SigningPriorKeyID = os.Getenv("AUTH_SIGNING_PRIOR_KEY_ID")
+	cfg.Auth.RevocationNATSSubject = os.Getenv("AUTH_REVOCATION_NATS_SUBJECT")
+	cfg.Auth.AtRestHashingKey = os.Getenv("AUTH_AT_REST_HASHING_KEY")
+	cfg.Auth.TelemetryMetricPrefix = os.Getenv("AUTH_TELEMETRY_METRIC_PREFIX")
+	cfg.Auth.BootstrapToken = os.Getenv("AUTH_BOOTSTRAP_TOKEN")
+
+	var authErrors []string
+
+	if v := os.Getenv("AUTH_ENABLED"); v == "" {
+		authErrors = append(authErrors, "AUTH_ENABLED")
+	} else {
+		cfg.Auth.Enabled = v == "true"
+	}
+
+	if cfg.Auth.TokenFormat == "" {
+		authErrors = append(authErrors, "AUTH_TOKEN_FORMAT")
+	} else if cfg.Auth.TokenFormat != "paseto-v4-public" {
+		authErrors = append(authErrors, "AUTH_TOKEN_FORMAT (must be \"paseto-v4-public\" — spec 044 OQ-1)")
+	}
+
+	if v := os.Getenv("AUTH_TOKEN_TTL_HOURS"); v == "" {
+		authErrors = append(authErrors, "AUTH_TOKEN_TTL_HOURS")
+	} else if n, err := strconv.Atoi(v); err != nil || n < 1 {
+		authErrors = append(authErrors, "AUTH_TOKEN_TTL_HOURS (must be a positive integer)")
+	} else {
+		cfg.Auth.TokenTTLHours = n
+	}
+
+	if v := os.Getenv("AUTH_ROTATION_GRACE_WINDOW_HOURS"); v == "" {
+		authErrors = append(authErrors, "AUTH_ROTATION_GRACE_WINDOW_HOURS")
+	} else if n, err := strconv.Atoi(v); err != nil || n < 24 {
+		authErrors = append(authErrors, "AUTH_ROTATION_GRACE_WINDOW_HOURS (must be ≥ 24 — NFR-AUTH-003)")
+	} else {
+		cfg.Auth.RotationGraceWindowHours = n
+	}
+
+	if v := os.Getenv("AUTH_CLOCK_SKEW_TOLERANCE_SECONDS"); v == "" {
+		authErrors = append(authErrors, "AUTH_CLOCK_SKEW_TOLERANCE_SECONDS")
+	} else if n, err := strconv.Atoi(v); err != nil || n < 0 || n > 60 {
+		authErrors = append(authErrors, "AUTH_CLOCK_SKEW_TOLERANCE_SECONDS (must be in range [0, 60] — NFR-AUTH-005)")
+	} else {
+		cfg.Auth.ClockSkewToleranceSeconds = n
+	}
+
+	if v := os.Getenv("AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS"); v == "" {
+		authErrors = append(authErrors, "AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS")
+	} else if n, err := strconv.Atoi(v); err != nil || n < 1 {
+		authErrors = append(authErrors, "AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS (must be a positive integer)")
+	} else {
+		cfg.Auth.RevocationCacheRefreshIntervalSeconds = n
+	}
+
+	if cfg.Auth.RevocationNATSSubject == "" {
+		authErrors = append(authErrors, "AUTH_REVOCATION_NATS_SUBJECT")
+	}
+
+	if v := os.Getenv("AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED"); v == "" {
+		authErrors = append(authErrors, "AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED")
+	} else {
+		cfg.Auth.ProductionSharedTokenFallbackEnabled = v == "true"
+	}
+
+	if v := os.Getenv("AUTH_TELEMETRY_ENABLED"); v == "" {
+		authErrors = append(authErrors, "AUTH_TELEMETRY_ENABLED")
+	} else {
+		cfg.Auth.TelemetryEnabled = v == "true"
+	}
+
+	if cfg.Auth.TelemetryMetricPrefix == "" {
+		authErrors = append(authErrors, "AUTH_TELEMETRY_METRIC_PREFIX")
+	}
+
+	// Production-mode validation — reject empty secret material when
+	// auth.enabled is true and SMACKEREL_ENV is "production". Dev/test
+	// configurations preserve the SMACKEREL_AUTH_TOKEN ergonomic
+	// (SCN-AUTH-005/011).
+	if cfg.Environment == "production" && cfg.Auth.Enabled {
+		if cfg.Auth.SigningActivePrivateKey == "" {
+			authErrors = append(authErrors, "AUTH_SIGNING_ACTIVE_PRIVATE_KEY (REQUIRED in production with auth.enabled=true)")
+		}
+		if cfg.Auth.SigningActiveKeyID == "" {
+			authErrors = append(authErrors, "AUTH_SIGNING_ACTIVE_KEY_ID (REQUIRED in production with auth.enabled=true)")
+		}
+		if cfg.Auth.AtRestHashingKey == "" {
+			authErrors = append(authErrors, "AUTH_AT_REST_HASHING_KEY (REQUIRED in production with auth.enabled=true)")
+		}
+		// At-rest hashing key MUST differ from the signing key (OQ-8).
+		if cfg.Auth.AtRestHashingKey != "" && cfg.Auth.SigningActivePrivateKey != "" &&
+			cfg.Auth.AtRestHashingKey == cfg.Auth.SigningActivePrivateKey {
+			authErrors = append(authErrors, "AUTH_AT_REST_HASHING_KEY (MUST differ from AUTH_SIGNING_ACTIVE_PRIVATE_KEY — spec 044 OQ-8)")
+		}
+		// If a prior key id is set, the prior public key MUST also be set
+		// (and vice versa) — partial rotation state is a configuration bug.
+		if (cfg.Auth.SigningPriorPublicKey == "") != (cfg.Auth.SigningPriorKeyID == "") {
+			authErrors = append(authErrors, "AUTH_SIGNING_PRIOR_PUBLIC_KEY and AUTH_SIGNING_PRIOR_KEY_ID (both must be set together or both empty)")
+		}
+	}
+
+	if len(authErrors) > 0 {
+		return fmt.Errorf("missing or invalid required auth configuration: %s", strings.Join(authErrors, ", "))
+	}
+	return nil
 }
 
 // requiredVars returns the list of required environment variable names

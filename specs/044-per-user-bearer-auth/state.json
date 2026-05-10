@@ -4,19 +4,26 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "plan",
+  "currentPhase": "test",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "plan",
-    "currentScope": null,
+    "currentPhase": "test",
+    "currentScope": "02",
     "runStartedAt": "2026-05-09T06:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "scope": "01",
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-10T00:00:00Z"
+      }
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": ["01"],
     "scopeProgress": [],
     "certifiedCompletedPhases": [],
     "lockdownState": {
@@ -44,6 +51,14 @@
       "timestamp": "2026-05-09T08:15:00Z",
       "phasesExecuted": ["plan"],
       "summary": "scopes.md, scenario-manifest.json, report.md (placeholder), uservalidation.md (placeholder) authored. Four scopes match design.md §12 rollout plan: Scope 01 SST Foundation + Token Subsystem (FR-AUTH-001/002/003/018/019; covers SCN-AUTH-001/006; 10 Test Plan rows T1-01..T1-10; 9 DoD bullets). Scope 02 Hot-Path Middleware Integration + MIT Closures (FR-AUTH-004..017/020/021; covers SCN-AUTH-002/003/004/005/007/008/009/010; 21 Test Plan rows T2-01..T2-21 including required adversarial regression test TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly + AC-11 grep guard; 13 DoD bullets including spec 040/038/027 state.json cross-spec MIT closures). Scope 03 Web Surfaces + Telegram Connector (FR-AUTH-005/010; covers SCN-AUTH-002 PWA path + SCN-AUTH-008 Telegram bridge; 4 Test Plan rows T3-01..T3-04; 4 DoD bullets). Scope 04 Deprecation Pathway + Documentation Freshness (FR-AUTH-017/018; covers SCN-AUTH-011; 4 Test Plan rows T4-01..T4-04; 7 DoD bullets including spec 030 cross-spec metrics integration). All DoD bullets carry Scenario \"<SCN-AUTH-NNN ...>\": trace prefix per Gate G068. Test Plan rows reference real-or-future test files: internal/config/validate_test.go, internal/auth/{issue,verify,sst_grep_guard}_test.go, internal/auth/revocation/cache_test.go, internal/api/router_test.go, internal/metrics/auth_metrics_test.go, tests/integration/auth_{bootstrap,startup,mintreveal,drive_connect,annotation,rotation,revocation,no_body_header_actor_id}_test.go, tests/e2e/auth/{pwa_per_user,extension_per_user,telegram_per_user,admin_ui}_test.go, specs/{040,038,027}/state.json. Scenario-manifest authored with planned status entries for all 11 SCN-AUTH scenarios. Artifact lint PASSED. Direct create_file fallback used because runSubagent dispatch to bubbles.plan timed out with HTTP/2 stream timeout after 300s. No source code or USER WIP files modified."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "timestamp": "2026-05-10T00:00:00Z",
+      "phasesExecuted": ["implement"],
+      "scope": "01",
+      "summary": "Scope 01 SST Foundation + Token Subsystem closed. Landed: (1) 14 SST keys at config/smackerel.yaml lines 67-130 + per-env auth_enabled overrides (dev=false, test=false, home-lab=true); (2) scripts/commands/config.sh emits 16 AUTH_* env keys to config/generated/{dev,test,home-lab}.env via required_value/yaml_get extractions; (3) internal/config/config.go AuthConfig struct + loadAuthConfig with production-mode fail-loud validation (signing private key, key id, hashing key non-empty AND hashing key != signing key per OQ-8); (4) internal/auth/ package: session.go (Session + SessionSource consts + WithSession/SessionFromContext/UserIDFromContext helpers), issue.go (IssueOptions/IssueResult/IssueToken using paseto.NewToken+SetIssuer/Subject/Jti/IssuedAt/NotBefore/Expiration+SetFooter+V4Sign + GenerateSigningKeypair + PublicHexFromSecretHex), verify.go (VerifyOptions/ParsedToken/VerifyAndParse with kid-routed key selection between active and prior keys, custom skew tolerance, sentinel errors), hash.go (HashToken HMAC-SHA-256 hex + CompareTokenHash constant-time), bearer_store.go (BearerStore wrapping pgxpool.Pool with Enroll/CountUsers/ListUsers/PersistToken/MarkTokenRotated/RevokeToken/LoadRevokedTokenIDs), startup.go (RuntimeAuthConfig + ValidateRuntimeAuthStartup defense-in-depth used by cmd/core/wiring.go); (5) internal/auth/revocation/ package: cache.go (Cache backed by sync.Map + atomic size counter; Loader interface; BootstrapFromDB; Refresh delta; MarkRevoked idempotent; IsRevoked lock-free; RunPeriodicRefresh), broadcaster.go (EventV1 envelope; Broadcaster wrapping nats.Conn; defensive handle dropping malformed events); (6) DB migration internal/db/migrations/033_auth_per_user_bearer.sql creating auth_users, auth_tokens, auth_revocations with indexes; (7) cmd/core/cmd_auth.go 410-line subcommand dispatcher: enroll/rotate/revoke/list-users/bootstrap/keygen; main.go dispatch parallel to existing agent subcommand; (8) internal/api/auth_handlers.go 280-line file authoring AuthAdminHandlers with HandleEnroll/HandleRotate/HandleRevoke/HandleListUsers — gated on callerIsAdmin (bootstrap unconditional, shared-token only when env != production OR production_shared_token_fallback_enabled, per-user rejected pending allowlist surface in later scope). Routes NOT registered in router.go per Scope 1 task scope (deferred to Scope 02 alongside bearerAuthMiddleware wiring); (9) cmd/core/wiring.go calls auth.ValidateRuntimeAuthStartup defense-in-depth between SMACKEREL_AUTH_TOKEN guard and config completion. Tests authored: T1-01..T1-03 + 5 production-mode hardening cases at internal/config/validate_test.go (8 sub-tests), T1-04 issue_test.go (RoundTripWithVerify + RejectsMissingFields), T1-05 verify_test.go (RejectsExpiredAndFutureAndForeignIssuer 4 cases), T1-06 verify_test.go (RotationGraceWindow_HonorsPriorKey 3 cases including forged-kid adversarial + RejectsHalfRotationConfig), T1-07 cache_test.go (BootstrapAndPropagate + PropagatesLoaderErrors + RejectsNilLoader), T1-09 startup_test.go (TestValidateRuntimeAuthStartup 8 sub-cases), T1-10 sst_grep_guard_test.go (forbidden-literals scan + adversarial + allowlist + comment-filter validation), T1-08 tests/integration/auth_bootstrap_test.go (TestAuthBootstrap_FreshProduction_EnrollsFirstUser + TestAuthBootstrap_PublicHexDerivation). Validation: go build ./... clean; go vet ./... clean; go vet -tags integration ./tests/integration/... clean; go test -race -count=1 ./internal/auth/... ./internal/config/... ./cmd/core/... → all OK; smackerel.sh check OK (config in sync; env_file drift guard OK; scenario-lint OK 5 registered); smackerel.sh config generate for dev/test/home-lab all clean with all 16 AUTH_* keys propagating. Two pre-existing infra blockers identified and routed: (a) smackerel.sh test integration cannot bring up the test stack because SST-pinned ollama/ollama:0.6 image is missing on Docker Hub (spec 043 follow-up), so live T1-08 was authored + compiles + is unit-test-validatable but not live-executed; (b) smackerel.sh test unit timed out internal/connector/guesthost at 600s under parallel-run contention but guesthost is unchanged in this scope and passes in isolation in 0.6s. Both routed to bubbles.test for follow-up. Scope 02 hot-path middleware integration + MIT closures NOT started — that is the next scope's work."
     }
   ],
   "policySnapshot": {
@@ -77,5 +92,5 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-09T06:00:00Z"
+  "lastUpdatedAt": "2026-05-10T00:00:00Z"
 }

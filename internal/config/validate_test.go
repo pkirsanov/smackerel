@@ -611,6 +611,27 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("RECOMMENDATIONS_DELIVERY_TELEGRAM_ENABLED", "true")
 	t.Setenv("RECOMMENDATIONS_DELIVERY_DIGEST_ENABLED", "true")
 	t.Setenv("RECOMMENDATIONS_DELIVERY_TRIP_DOSSIER_ENABLED", "true")
+
+	// Spec 044 — Per-User Bearer Auth Foundation. Defaults mirror dev/test
+	// (Auth.Enabled=false, secret-bearing fields empty). Production-mode
+	// fail-loud paths are exercised by dedicated TestValidate_AuthConfig_*
+	// cases that override SMACKEREL_ENV=production AND AUTH_ENABLED=true.
+	t.Setenv("AUTH_ENABLED", "false")
+	t.Setenv("AUTH_TOKEN_FORMAT", "paseto-v4-public")
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", "")
+	t.Setenv("AUTH_SIGNING_ACTIVE_KEY_ID", "")
+	t.Setenv("AUTH_SIGNING_PRIOR_PUBLIC_KEY", "")
+	t.Setenv("AUTH_SIGNING_PRIOR_KEY_ID", "")
+	t.Setenv("AUTH_TOKEN_TTL_HOURS", "720")
+	t.Setenv("AUTH_ROTATION_GRACE_WINDOW_HOURS", "168")
+	t.Setenv("AUTH_CLOCK_SKEW_TOLERANCE_SECONDS", "30")
+	t.Setenv("AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS", "30")
+	t.Setenv("AUTH_REVOCATION_NATS_SUBJECT", "auth.revocations")
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", "")
+	t.Setenv("AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED", "false")
+	t.Setenv("AUTH_TELEMETRY_ENABLED", "true")
+	t.Setenv("AUTH_TELEMETRY_METRIC_PREFIX", "smackerel_auth")
+	t.Setenv("AUTH_BOOTSTRAP_TOKEN", "")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
@@ -1131,5 +1152,143 @@ func TestLoad_HospitableSyncFlags_RequireExplicitTrue(t *testing.T) {
 	}
 	if cfg.HospitableSyncReviews {
 		t.Error("HospitableSyncReviews should be false when HOSPITABLE_SYNC_REVIEWS is unset")
+	}
+}
+
+// --- Spec 044 — Per-User Bearer Auth Foundation production-mode validation ---
+//
+// T1-01..T1-03 — fail-loud cases for production-mode auth configuration.
+// SCN-AUTH-006 (production startup with empty signing material MUST refuse
+// to start) and design.md §4 SST validation contract. Each test starts from
+// a valid baseline (SMACKEREL_ENV=production, AUTH_ENABLED=true, all keys
+// populated) and then clears one key to prove the loader names it in the
+// returned error.
+
+// setProductionAuthBaseline upgrades the dev-test setRequiredEnv defaults
+// to a valid production-mode auth configuration. Tests then knock out one
+// field at a time to prove the loader fails loud with the expected name.
+func setProductionAuthBaseline(t *testing.T) {
+	t.Helper()
+	t.Setenv("SMACKEREL_ENV", "production")
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "production-shared-token-baseline")
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", "k4.secret.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	t.Setenv("AUTH_SIGNING_ACTIVE_KEY_ID", "key-2026-05")
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", "hmac-secret-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+}
+
+// T1-01 — production-mode missing signing key fails loud.
+func TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production(t *testing.T) {
+	setRequiredEnv(t)
+	setProductionAuthBaseline(t)
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when AUTH_SIGNING_ACTIVE_PRIVATE_KEY is empty in production with auth.enabled=true")
+	}
+	if !strings.Contains(err.Error(), "AUTH_SIGNING_ACTIVE_PRIVATE_KEY") {
+		t.Errorf("error should name AUTH_SIGNING_ACTIVE_PRIVATE_KEY, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "production") {
+		t.Errorf("error should mention production, got: %v", err)
+	}
+}
+
+// T1-02 — production-mode missing at-rest hashing key fails loud.
+func TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production(t *testing.T) {
+	setRequiredEnv(t)
+	setProductionAuthBaseline(t)
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when AUTH_AT_REST_HASHING_KEY is empty in production with auth.enabled=true")
+	}
+	if !strings.Contains(err.Error(), "AUTH_AT_REST_HASHING_KEY") {
+		t.Errorf("error should name AUTH_AT_REST_HASHING_KEY, got: %v", err)
+	}
+}
+
+// T1-03 — invalid (out-of-range) rotation grace window fails loud regardless
+// of environment. NFR-AUTH-003 floor: ≥ 24 hours.
+func TestValidate_AuthConfig_FailsLoudOnInvalidGraceWindow(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("AUTH_ROTATION_GRACE_WINDOW_HOURS", "12")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when AUTH_ROTATION_GRACE_WINDOW_HOURS < 24")
+	}
+	if !strings.Contains(err.Error(), "AUTH_ROTATION_GRACE_WINDOW_HOURS") {
+		t.Errorf("error should name AUTH_ROTATION_GRACE_WINDOW_HOURS, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "24") {
+		t.Errorf("error should mention the 24-hour floor, got: %v", err)
+	}
+}
+
+// Additional T1-01 hardening — production-mode missing key id also fails.
+func TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production(t *testing.T) {
+	setRequiredEnv(t)
+	setProductionAuthBaseline(t)
+	t.Setenv("AUTH_SIGNING_ACTIVE_KEY_ID", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when AUTH_SIGNING_ACTIVE_KEY_ID is empty in production with auth.enabled=true")
+	}
+	if !strings.Contains(err.Error(), "AUTH_SIGNING_ACTIVE_KEY_ID") {
+		t.Errorf("error should name AUTH_SIGNING_ACTIVE_KEY_ID, got: %v", err)
+	}
+}
+
+// Additional T1-02 hardening — at-rest key MUST differ from signing key.
+func TestValidate_AuthConfig_RejectsHashingKeyEqualsSigningKey_Production(t *testing.T) {
+	setRequiredEnv(t)
+	setProductionAuthBaseline(t)
+	shared := "k4.secret.SHARED-SECRET-VALUE-USED-FOR-BOTH-FIELDS-WHICH-IS-A-BUG"
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", shared)
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", shared)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when AUTH_AT_REST_HASHING_KEY == AUTH_SIGNING_ACTIVE_PRIVATE_KEY")
+	}
+	if !strings.Contains(err.Error(), "OQ-8") && !strings.Contains(err.Error(), "differ") {
+		t.Errorf("error should call out the OQ-8 separation requirement, got: %v", err)
+	}
+}
+
+// Production fail-loud is suppressed when auth.enabled=false (preserves the
+// dev/test ergonomic; SCN-AUTH-005 / SCN-AUTH-011).
+func TestValidate_AuthConfig_AllowsEmptyKeysWhenAuthDisabled_Production(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_ENV", "production")
+	t.Setenv("SMACKEREL_AUTH_TOKEN", "production-shared-token-baseline")
+	t.Setenv("AUTH_ENABLED", "false")
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", "")
+	t.Setenv("AUTH_SIGNING_ACTIVE_KEY_ID", "")
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", "")
+
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("Load should succeed in production when AUTH_ENABLED=false even with empty signing material, got: %v", err)
+	}
+}
+
+// Dev/test environments allow empty signing material with auth.enabled=true
+// (single-tenant ergonomic preserved while the operator is staging keys).
+func TestValidate_AuthConfig_AllowsEmptyKeysInDev_AuthEnabled(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("SMACKEREL_ENV", "development")
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_SIGNING_ACTIVE_PRIVATE_KEY", "")
+	t.Setenv("AUTH_SIGNING_ACTIVE_KEY_ID", "")
+	t.Setenv("AUTH_AT_REST_HASHING_KEY", "")
+
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("Load should succeed in development with empty signing material, got: %v", err)
 	}
 }
