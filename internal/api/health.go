@@ -142,11 +142,11 @@ type Dependencies struct {
 	// an auth.Session to the request context for downstream handlers.
 	// All four MUST be non-nil when AuthConfig.Enabled is true; the
 	// wiring layer enforces this at startup.
-	AuthConfig         config.AuthConfig
-	AuthVerifyOptions  auth.VerifyOptions
-	BearerStore        *auth.BearerStore
-	RevocationCache    *revocation.Cache
-	AuthAdminHandlers  *AuthAdminHandlers
+	AuthConfig        config.AuthConfig
+	AuthVerifyOptions auth.VerifyOptions
+	BearerStore       *auth.BearerStore
+	RevocationCache   *revocation.Cache
+	AuthAdminHandlers *AuthAdminHandlers
 
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).
