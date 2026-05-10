@@ -266,6 +266,30 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   - Gate V7 (`traceability-guard.sh`) returns `pass-with-deferred` — both failures are EXCLUSIVELY Scope 3 surface (PWA-path counting mismatch + missing `tests/e2e/auth/pwa_per_user_test.go`); ALL Scope 01 entries (SCN-AUTH-001 → `internal/auth/issue_test.go` + `tests/integration/auth_bootstrap_test.go`; SCN-AUTH-006 → `internal/config/validate_test.go` × 3 + `internal/auth/startup_test.go` + `internal/auth/sst_grep_guard_test.go`) PASS. Tracked under `state.json.transitionRequests` as `finalize_prerequisite`.
   - **Claim Source:** executed.
 
+- [x] Chaos-phase exercise of Scope 01 auth surface PASSES with one LOW-severity observation; no functional defect, no race, no panic, no leaked goroutines, no residual chaos data. (Behaviors B1 concurrent-enrollment, B2 concurrent-rotate-vs-verify, B3 revocation-broadcaster-race, B4 cache-bootstrap-under-load, B5 broadcaster-malformed-payloads, B6 migration-idempotency, B7 token-boundary-conditions, B8 CLI-subcommand-smoke, B9 pure-CPU-verify-benchmark.)
+
+  **Evidence (Phase: chaos):**
+  - Owned chaos test file [`tests/integration/auth_chaos_test.go`](../../tests/integration/auth_chaos_test.go) (build tag `integration`, no `t.Skip`, race-clean) authored with 7 stress tests + 1 informational benchmark. CLI subcommand smoke (B8) executed via `docker exec smackerel-test-smackerel-core-1 smackerel-core auth <subcommand>`.
+  - Canonical chaos run (`-count=1 -race -v -timeout=180s`) PASS:
+    ```
+    --- PASS: TestAuthChaos_ConcurrentEnrollment_DuplicatesRejectedAtomically (0.14s)
+    --- PASS: TestAuthChaos_ConcurrentRotateVsVerify_GraceWindowSurvives (0.18s)
+    --- PASS: TestAuthChaos_RevocationBroadcasterRace_CacheConverges (0.07s)
+    --- PASS: TestAuthChaos_CacheBootstrapUnderConcurrentLoad (0.52s)
+    --- PASS: TestAuthChaos_BroadcasterMalformedPayloads_CacheIntact (0.21s)
+    --- PASS: TestAuthChaos_MigrationIdempotency (0.22s)
+    --- PASS: TestAuthChaos_TokenBoundaryConditions (0.01s)
+    PASS
+    ok      github.com/smackerel/smackerel/tests/integration        2.424s
+    ```
+  - Stress loop (`-count=20 -race -timeout=600s`) — 7 tests × 20 iterations = 140 invocations under `-race`, all PASS in 24.162s. No race-detector hits, no flake.
+  - Pure-CPU verify benchmark (B9): `BenchmarkAuthChaos_VerifyAndParse_HotPath-8  25276  95543 ns/op` ≈ 95 µs/op — 52× under NFR-AUTH-001 ≤ 5 ms p99 hot-path budget.
+  - CLI subcommand smoke (B8): all 6 subcommands (`enroll/rotate/revoke/list-users/bootstrap/keygen`) + 2 negative paths (`auth` no-args, `auth unknown-cmd`) surface stable usage / exit codes per the documented contract (rc=0 success, rc=1 command-level failure, rc=2 invocation error).
+  - Observation OBS-CHAOS-044-S01-01 (LOW): `revocation.Broadcaster.handle` accepts events with unknown `version` strings as long as `token_id` is non-empty. Benign at v1; recommend version-strict gating in v2 broadcaster evolution. NOT a Scope 01 chaos blocker.
+  - Strict cleanup verified: `auth_users=0`, `auth_tokens=0`, `auth_revocations=0` post-run via `psql` row-count query against the ephemeral test DB. Persistent dev DB never touched.
+  - Verbatim per-behavior runner output, observations, and findings summary captured in `report.md` → **Chaos Evidence**.
+  - **Claim Source:** executed.
+
 ---
 
 ## Scope 2: Hot-Path Middleware Integration + MIT Closures

@@ -820,6 +820,310 @@ Spec 044 Scope 01 (SST Foundation + Token Subsystem) is audit-clean. Code, secur
 
 ---
 
+## Chaos Evidence
+
+The chaos phase exercises the per-user bearer-auth surface that landed in Scope 01 against the LIVE test stack (postgres on `127.0.0.1:47001`, NATS on `127.0.0.1:47002`) with stochastic concurrency, malformed inputs, and lifecycle edge conditions. Owner: `bubbles.chaos`. Owned chaos test file: [`tests/integration/auth_chaos_test.go`](../../tests/integration/auth_chaos_test.go) (build tag `integration`, no `t.Skip` calls). Nine behaviors exercised (B1..B9 below). All Behavior tests PASS; one observation (OBS-CHAOS-044-S01-01) recorded.
+
+### Chaos Run Plan
+- **Target:** `specs/044-per-user-bearer-auth` Scope 01 — `internal/auth/`, `internal/auth/revocation/`, `cmd/core/cmd_auth.go`, `internal/api/auth_handlers.go`, `internal/db/migrations/033_auth_per_user_bearer.sql`
+- **Mode:** mixed (Go race-mode + live DB + live NATS + container CLI smoke + pure-CPU benchmark)
+- **Profile:** weighted-mix (concurrent-stress 60% / boundary 30% / observability 10%)
+- **Limits:** behavior tests bounded to 180 s wall clock at `-count=1`; stress loop bounded to 600 s at `-count=20`
+- **Concurrency:** in-test (24 goroutines for B1, 16×16 = 256 verify ops for B2, 8 publishers + 16 verifiers for B3, 12 concurrent IsRevoked workers + 1 bootstrap goroutine for B4)
+- **Cleanup:** strict — chaos test data uses unique `chaos-044-*` prefix; final manual cleanup removed all residual rows
+- **Database:** ephemeral test database ONLY (postgres at `127.0.0.1:47001`, isolated test stack project name `smackerel-test-*`). Persistent dev DB NEVER touched.
+
+### Behavior 1 — Concurrent Enrollment (duplicates rejected atomically)
+
+**Command:**
+
+```
+$ export DATABASE_URL='postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/smackerel?sslmode=disable'
+$ export CHAOS_NATS_URL='nats://<auth-token>@127.0.0.1:47002'
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_ConcurrentEnrollment_DuplicatesRejectedAtomically' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_ConcurrentEnrollment_DuplicatesRejectedAtomically
+    auth_chaos_test.go:157: Behavior 1: 24 concurrent Enroll → 1 success, 23 dup-key errors (auth_users row count = 1)
+--- PASS: TestAuthChaos_ConcurrentEnrollment_DuplicatesRejectedAtomically (0.14s)
+```
+
+**Observation:** 24 goroutines fire `BearerStore.Enroll(user_id=X)` simultaneously through a single sync-gate channel. EXACTLY ONE INSERT wins; the other 23 surface a Postgres duplicate-key error matched by `strings.Contains(err.Error(), "duplicate"|"unique")`. The `auth_users.user_id UNIQUE` constraint is the canonical race winner — there is no application-side TOCTOU window where two callers could both observe "no row" and both INSERT. Live row-count assertion: `auth_users` ends with exactly 1 row.
+
+`Claim Source: executed`.
+
+### Behavior 2 — Concurrent Rotate vs Verify (grace window survives)
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_ConcurrentRotateVsVerify_GraceWindowSurvives' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_ConcurrentRotateVsVerify_GraceWindowSurvives
+    auth_chaos_test.go:289: Behavior 2: 16 workers x 16 iter — prior-inside=256, active-inside=256, prior-outside-expired=256 (no panics, no surprise outcomes)
+--- PASS: TestAuthChaos_ConcurrentRotateVsVerify_GraceWindowSurvives (0.18s)
+```
+
+**Observation:** 16 workers × 16 iterations = 256 concurrent `VerifyAndParse` calls each on (a) prior-key token inside grace window (must verify cleanly via `PriorPublicKey`), (b) active-key token inside grace window (must verify via `ActivePublicKey`), and (c) prior-key token OUTSIDE grace window after exp + tolerance (must surface `ErrTokenExpired`). All 768 verify calls produce the exact expected outcome — no panics, no surprise sentinel mismatches, no half-rotation-state leaks. The PASETO library's signature verification is read-only and lock-free; the verifier exposes no shared mutable state.
+
+`Claim Source: executed`.
+
+### Behavior 3 — Revocation Broadcaster Race (cache converges)
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_RevocationBroadcasterRace_CacheConverges' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_RevocationBroadcasterRace_CacheConverges
+    auth_chaos_test.go:397: Behavior 3: 8 publishers x 25 revocations + 16 verifier goroutines, cache.Size=200, all 200 IDs present, hot-path probes ≥36000 (no panics, no leaks)
+--- PASS: TestAuthChaos_RevocationBroadcasterRace_CacheConverges (0.07s)
+```
+
+**Observation:** 8 publisher goroutines each publish 25 distinct revocation events through `Broadcaster.Publish` while 16 verifier goroutines fire `cache.IsRevoked` queries against the same `*revocation.Cache` instance. Total: 200 `MarkRevoked` operations interleaved with ≥36 000 lock-free `IsRevoked` reads. Final cache state: `cache.Size() == 200`, every published `token_id` reachable via `IsRevoked` (zero missing). No panics under `-race`. Subscription cleanly stops on test exit (no leaked goroutines surfaced by the race detector).
+
+`Claim Source: executed`.
+
+### Behavior 4 — Cache Bootstrap Under Concurrent Load
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_CacheBootstrapUnderConcurrentLoad' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_CacheBootstrapUnderConcurrentLoad
+    auth_chaos_test.go:523: Behavior 4: BootstrapFromDB seeded 50 revocations under 12 concurrent IsRevoked workers (probe iterations ≈ 5372, cache.Size=50, no race hits, all expected IDs visible)
+--- PASS: TestAuthChaos_CacheBootstrapUnderConcurrentLoad (0.52s)
+```
+
+**Observation:** 50 revoked tokens seeded into the live test DB (full Enroll → IssueToken → PersistToken → RevokeToken pipeline). 12 concurrent IsRevoked-query goroutines fire ≥5 300 probes against a cold cache while a single goroutine runs `cache.BootstrapFromDB(ctx, store)`. After bootstrap completes, cache.Size ≥ 50, every seeded token id is visible to subsequent `IsRevoked` calls. No race-detector hits. The pre-bootstrap probes correctly return `false` for not-yet-loaded IDs; post-bootstrap probes return `true` for the seeded IDs. Cache bootstrap is therefore safe under concurrent hot-path load — no torn reads, no missed inserts.
+
+`Claim Source: executed`.
+
+### Behavior 5 — Broadcaster Malformed Payloads (cache integrity preserved)
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_BroadcasterMalformedPayloads_CacheIntact' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_BroadcasterMalformedPayloads_CacheIntact
+    auth_chaos_test.go:598: Behavior 5: 8 malformed payloads dropped silently (cache integrity preserved); 1 well-formed event after barrage processed correctly (cache.Size=2)
+--- PASS: TestAuthChaos_BroadcasterMalformedPayloads_CacheIntact (0.21s)
+```
+
+**Observation:** 9 pathological NATS payloads published directly to the broadcaster's subject (bypassing `Publish` so the subscriber's defensive `handle` runs against the raw bytes): nil, empty, non-JSON, unterminated JSON, missing `token_id`, empty `token_id`, unknown `version`, wrong-type `token_id`, oversized garbage. The subscriber drops 8 silently (preserving cache integrity per OBS-AUDIT-044-S01-03) and accepts 1 (the unknown-version message that still carries a non-empty `token_id` — current code treats `token_id` presence as the only acceptance criterion regardless of `version`). Final cache reaches the expected post-barrage size (1 from the unknown-version message + 1 from a well-formed event published after the barrage). Subscriber continues processing well-formed events after the malformed barrage — no permanent disable, no goroutine death.
+
+**Confirms OBS-AUDIT-044-S01-03:** the silent-drop policy on malformed events preserves cache integrity at the cost of observability. A telemetry counter for `auth_revocation_broadcast_drops_total` remains a Scope 04 follow-up. **NEW observation OBS-CHAOS-044-S01-01:** the subscriber accepts events with unknown `version` strings as long as `token_id` is non-empty. This is benign at v1 (the only consumer-visible field is `token_id`) but becomes a forward-compat hazard if v2 adds semantic fields the v1 subscriber must enforce. Recommend version-strict acceptance OR version-allowlist gating in the v2 evolution; not a Scope 01 chaos blocker.
+
+`Claim Source: executed`.
+
+### Behavior 6 — Migration Idempotency
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_MigrationIdempotency' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_MigrationIdempotency
+    auth_chaos_test.go:705: Behavior 6: db.Migrate idempotent across 3 invocations; adversarial DROP+downstream-query yields loud 'relation does not exist' error (no silent failure)
+--- PASS: TestAuthChaos_MigrationIdempotency (0.22s)
+```
+
+**Observation:** `db.Migrate` is invoked 3 times in succession — every iteration returns nil (version-based idempotency: 033 already applied → no-op). All 3 spec-044 tables (`auth_users`, `auth_tokens`, `auth_revocations`) confirmed present after the loop. Adversarial second pass: DROP `auth_revocations` CASCADE, re-run `db.Migrate` (still no-op because version 033 is recorded as applied), then call `BearerStore.LoadRevokedTokenIDs` against the missing table — error surfaces as `auth: load revoked token ids: ERROR: relation "auth_revocations" does not exist (SQLSTATE 42P01)`. The "behavior must be loud and consistent" contract holds: schema drift surfaces immediately on the next downstream query rather than silently returning empty results. The migration runner's version-based idempotency is intentional (re-applying 033 from scratch would risk DROPing real data); the loud failure path on schema drift is the canonical recovery signal — operators must run a manual rebuild + version-tracker reset.
+
+`Claim Source: executed`.
+
+### Behavior 7 — Token Boundary Conditions
+
+**Command:**
+
+```
+$ go test -count=1 -race -tags=integration -v -timeout=180s -run 'TestAuthChaos_TokenBoundaryConditions' ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+=== RUN   TestAuthChaos_TokenBoundaryConditions
+    auth_chaos_test.go:845: Behavior 7: 10 boundary conditions (A..J) all yield the expected sentinel error category — no silent acceptance, no panic
+--- PASS: TestAuthChaos_TokenBoundaryConditions (0.01s)
+```
+
+**Observation:** 10 boundary cases exercised:
+
+| Case | Input | Expected | Result |
+|------|-------|----------|--------|
+| A | TTL = 0 | `IssueToken` rejects with "positive TTL" | PASS |
+| B | TTL = -1h | `IssueToken` rejects with "positive TTL" | PASS |
+| C | foreign kid in footer | `VerifyAndParse` returns `ErrUnknownKeyID` | PASS |
+| D | empty wire token | `VerifyAndParse` returns non-nil error | PASS |
+| E | tampered tail (4-byte chop) | `VerifyAndParse` returns signature-verification error | PASS |
+| F | nbf in far future | `VerifyAndParse` returns `ErrTokenNotYetValid` | PASS |
+| G | exp in far past | `VerifyAndParse` returns `ErrTokenExpired` | PASS |
+| H | half-rotation config (only `PriorPublicKey` set) | `VerifyAndParse` rejects with "PriorPublicKey and PriorKeyID" | PASS |
+| I | `HashToken` with empty key | rejects with "empty hashing key" | PASS |
+| J | `HashToken` with empty token | rejects with "empty token" | PASS |
+
+No silent acceptance of any pathological input. No panics. Every error category is surfaced via the documented sentinel.
+
+`Claim Source: executed`.
+
+### Behavior 8 — CLI Subcommand Smoke
+
+**Method:** `docker exec smackerel-test-smackerel-core-1 smackerel-core auth <subcommand>` with the test-env baked into the container (AUTH_ENABLED=false; signing keys empty). Six subcommands exercised + 2 negative paths:
+
+```
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth ; echo "rc=$?"
+usage: smackerel auth <enroll|rotate|revoke|list-users|bootstrap|keygen> [args...]
+rc=2
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth unknown-cmd ; echo "rc=$?"
+smackerel auth: unknown subcommand "unknown-cmd" (expected: enroll|rotate|revoke|list-users|bootstrap|keygen)
+rc=2
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth keygen ; echo "rc=$?"
+# spec 044 — paste these into config/smackerel.yaml under auth.signing
+# (rotate auth.signing.prior_public_key + prior_key_id from previous active values first)
+active_private_key: "<128-hex chars>"
+active_public_key:  "<64-hex chars>"  # publish for verifier-only consumers
+active_key_id:      "key-2026-05"  # short identifier; embed in PASETO footer
+rc=0
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth list-users ; echo "rc=$?"
+USER_ID                                        ENROLLED_AT           ENROLLED_BY            STATUS  NOTES
+chaos-044-cache-bootstrap-1778403184576954706  2026-05-10T08:53:04Z  chaos-cache-bootstrap  active  -
+rc=0
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth bootstrap chaos-bootstrap-test-user ; echo "rc=$?"
+smackerel auth bootstrap: auth.bootstrap_token is empty in config; cannot bootstrap
+rc=1
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth enroll ; echo "rc=$?"
+usage: smackerel auth enroll [--notes "..."] <user-id>
+rc=2
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth rotate ; echo "rc=$?"
+usage: smackerel auth rotate --prior-token-id <id> <user-id>
+rc=2
+
+$ docker exec smackerel-test-smackerel-core-1 smackerel-core auth revoke ; echo "rc=$?"
+usage: smackerel auth revoke [--reason "..."] <token-id>
+rc=2
+```
+
+**Observation:** Exit codes match the documented contract from `cmd/core/cmd_auth.go` (rc=0 success, rc=1 command-level failure, rc=2 invocation error). Every subcommand surfaces a deterministic usage line on missing/extra arguments. `keygen` has no DB or env dependency and produces a parseable YAML fragment ready to paste into `config/smackerel.yaml`. `list-users` reads the live test-stack DB without requiring AUTH_ENABLED=true (validated against the post-Behavior-4 leftover row before strict cleanup). `bootstrap` correctly fails-loud when `auth.bootstrap_token` is empty.
+
+`Claim Source: executed`.
+
+### Behavior 9 — Pure-CPU Verify Benchmark (informational)
+
+**Command:**
+
+```
+$ go test -tags=integration -bench=BenchmarkAuthChaos_VerifyAndParse_HotPath -run='^$' -benchtime=2s -count=1 ./tests/integration/
+```
+
+**Verbatim output:**
+
+```
+goos: linux
+goarch: amd64
+pkg: github.com/smackerel/smackerel/tests/integration
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+BenchmarkAuthChaos_VerifyAndParse_HotPath-8        25276             95543 ns/op
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        3.416s
+```
+
+**Observation:** Pure-CPU `VerifyAndParse` (no DB, no cache lookup) runs at ~95.5 µs per operation on a single core (Intel Xeon Platinum 8370C @ 2.80 GHz). That is ~10 470 verifications/sec/core. Translated to a per-request hot-path budget: at p50 latency this is **52× under the NFR-AUTH-001 ≤ 5 ms p99 budget**. The cache.IsRevoked check (sync.Map.Load) is in the nanosecond range and does not measurably move the needle. NFR-AUTH-001 is comfortably met at the verifier level; the only remaining hot-path risk is the middleware integration (Scope 02) introducing additional per-request work — that is a Scope 02 chaos surface, not Scope 01.
+
+**Informational only — not a pass/fail gate.** `Claim Source: executed`.
+
+### Stress Loop (-count=20)
+
+To surface non-deterministic flakiness, the entire chaos suite was rerun with `-count=20 -race`:
+
+```
+$ go test -count=20 -race -tags=integration -timeout=600s -run 'TestAuthChaos' ./tests/integration/
+ok      github.com/smackerel/smackerel/tests/integration        24.162s
+```
+
+7 chaos tests × 20 iterations = 140 invocations under `-race`, all PASS in 24.162 s wall clock. No race-detector hits. No flake. No panic. The behavior contract is stable under repeated stress.
+
+`Claim Source: executed`.
+
+### Cleanup Report
+
+| Stage | Action | Residual |
+|-------|--------|----------|
+| Pre-run | Test stack already up (postgres/nats/smackerel-core/smackerel-ml/ollama all healthy) | 0 chaos rows |
+| Mid-run | Behavior 4 seeds 50 chaos `auth_tokens` + 1 chaos `auth_users` row (auto-revoked); Behavior 6 drops then rebuilds `auth_revocations` (defensive setup ensures clean state on subsequent runs) | up to 50 tokens + 1 user during run |
+| Post-run | Manual `DELETE` of all `chaos-044-*` user rows + `chaos-cache-tok-*` token rows | **0 chaos rows** verified via `\dt` count |
+
+```
+$ docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel -c "SELECT 'auth_users' AS t, COUNT(*) FROM auth_users UNION ALL SELECT 'auth_tokens', COUNT(*) FROM auth_tokens UNION ALL SELECT 'auth_revocations', COUNT(*) FROM auth_revocations;"
+        t         | count
+------------------+-------
+ auth_users       |     0
+ auth_tokens      |     0
+ auth_revocations |     0
+(3 rows)
+```
+
+**Database isolation verified:** all chaos work executed against the ephemeral `smackerel-test-postgres-1` container at `127.0.0.1:47001`. The persistent dev DB was NEVER touched (project name `smackerel-test-*` enforces isolation per `docker-compose.yml`).
+
+`Claim Source: executed`.
+
+### Findings Summary
+
+| Behavior | Severity | Finding |
+|----------|----------|---------|
+| B1 — Concurrent Enrollment | None | Race resolves via Postgres UNIQUE constraint as designed |
+| B2 — Concurrent Rotate vs Verify | None | Verifier is read-only; grace window honored under 256 concurrent verify ops |
+| B3 — Revocation Broadcaster Race | None | Cache converges; lock-free reads / sync.Map writes are race-clean |
+| B4 — Cache Bootstrap Under Load | None | Bootstrap is safe under concurrent IsRevoked queries |
+| B5 — Broadcaster Malformed Payloads | **OBS-CHAOS-044-S01-01** (LOW, non-blocking) | Subscriber accepts unknown-`version` events when `token_id` non-empty — recommend version-strict gating in v2 broadcaster evolution |
+| B6 — Migration Idempotency | None | Version-based idempotency holds; schema drift surfaces loudly on downstream queries |
+| B7 — Token Boundary Conditions | None | 10/10 boundary cases produce documented sentinel errors |
+| B8 — CLI Subcommand Smoke | None | All 6 subcommands + 2 negative paths surface stable usage / exit codes |
+| B9 — Pure-CPU Verify Benchmark | None (informational) | ~95 µs/op = 52× under NFR-AUTH-001 hot-path budget |
+
+**Bug artifacts created:** ZERO. The single observation OBS-CHAOS-044-S01-01 is a forward-compat hazard for the v2 broadcaster (NOT a v1 functional defect). Tracking via report.md only — no `specs/044-per-user-bearer-auth/bugs/BUG-CHAOS-*` directory is warranted at this severity.
+
+### Chaos Verdict — Scope 01
+
+**🚀 SHIP_IT (approved_with_observations)** for Scope 01 chaos phase.
+
+The Scope 01 auth surface is concurrency-safe, race-clean, lifecycle-loud, and CLI-stable. One LOW-severity forward-compat observation recorded for v2 broadcaster evolution; not a Scope 01 chaos blocker. Test stack left up for the spec-review-phase agent; teardown not invoked here. No `t.Skip` used. No `--no-verify` planned on the commit. Verbatim chaos test output captured per behavior above.
+
+`Claim Source: executed`.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §12 Rollout Plan and [`scopes.md`](./scopes.md):
