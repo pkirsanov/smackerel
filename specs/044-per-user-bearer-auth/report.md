@@ -5328,3 +5328,145 @@ GitHub-rendered anchor compatibility verified against actual headings:
 **Claim Source:** executed.
 
 ---
+
+## Finalize Evidence (Scope 03)
+
+**Phase:** finalize **Agent:** bubbles.iterate **Workflow Mode:** full-delivery **Scope:** 03 **Decision:** approved
+**Run started:** 2026-05-11T04:30:00Z **Run completed:** 2026-05-11T05:00:00Z
+**Boundary:** This is a **per-scope finalize** for Scope 03 ONLY. Scope 03 (Web Surfaces + Telegram Connector) closes; the spec remains `in_progress` because Scope 04 (Deprecation Pathway + Documentation Freshness) is not yet started. Carry-forward registry (`FINALIZE-PREREQ-044-V7-001` + Scope 03 finding F02 Telegram bot wiring) is preserved unchanged for spec-level finalize / Scope 04 work.
+
+### Per-Scope Finalize Gate Set
+
+Eight gates executed against HEAD `37099a28` (post-docs commit `docs(044): Scope 03 — publish web surfaces + Telegram + admin operator surfaces`). The gate set mirrors the Scope 01 finalize precedent recorded at `108aa62e` and the Scope 02 finalize precedent recorded at `7cc8181b`.
+
+| Gate | Command | File / Reference | Recorded Result | Exit |
+|------|---------|------------------|-----------------|------|
+| F1 | `awk '/^## Scope 3:/,/^## Scope 4:/' scopes.md \| grep -c '^- \[x\]'` and `grep -c '^- \[ \]'` | `specs/044-per-user-bearer-auth/scopes.md` Scope 3 DoD | Pre-write: `5` ticked (4 implement + 1 spec-review), `0` unticked. Post-write: `6` ticked (the 6th is this finalize bullet itself). All Scope 3 DoD bullets carry inline evidence sub-blocks (Phase: implement / spec-review / finalize). | PASS |
+| F2 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | `specs/044-per-user-bearer-auth/{spec,design,scopes,report,uservalidation,state.json}` | `Artifact lint PASSED.` All required artifacts present; checkbox syntax canonical; `state.json v3` schema satisfied (`status=in_progress`, `workflowMode=full-delivery`); 2 advisory non-blocking warnings unchanged from prior phases (missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup, not Scope 03 finalize blockers). | 0 |
+| F3 | `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | scenario-manifest.json + scopes.md Test Plan | `RESULT: FAILED (1 failures, 0 warnings)`. The SOLE failure is the verbatim line `❌ scenario-manifest.json covers only 11 scenarios but scopes define 12` — the documented `FINALIZE-PREREQ-044-V7-001` path-(b) scope-row counting carry-forward (Scope 3 PWA-path Test Plan row counts as a separate scenario from the manifest's 11 distinct SCN-AUTH-NNN entries per spec.md). **All Scope 03 PWA-path entries PASS the guard** at the file-existence + report-evidence layers (`✅ Scope 3: Web Surfaces + Telegram Connector scenario maps to concrete test file: tests/e2e/auth/pwa_per_user_test.go` and `✅ Scope 3: Web Surfaces + Telegram Connector report references concrete test evidence: tests/e2e/auth/pwa_per_user_test.go`). Gate G068 fidelity: `12 scenarios checked, 12 mapped to DoD, 0 unmapped`. **Disposition: pass-with-deferred** — Scope 03 surface is clean; the carry-forward is acceptable per per-scope finalize policy and matches Scope 01/02 finalize precedent. The carry-forward is a SPEC-LEVEL finalize prerequisite, NOT a Scope 03 finalize prerequisite. | 1 (acceptable) |
+| F4 | Scope 03 phase claim certification | `state.json` `certification.certifiedCompletedPhases` | All required Scope 03 phase claims certified pre-write: `03:test`, `03:validate`, `03:audit`, `03:chaos`, `03:spec-review`, `03:docs`. Post-write: `03:finalize` appended. Coverage for the full Scope 03 phase tail: implement → test → validate → audit → chaos → spec-review → docs → finalize (8/8 phases). | PASS |
+| F5 | Open MEDIUM/HIGH findings status review | spec-review evidence + design.md §16.3 + Operations.md + Deployment.md + spec 027 state.json | **F02** (MEDIUM defer-to-finalize: Telegram bot wiring of `PerUserTokenMinter` into `Bot.callCapture` / `Bot.handleReplyAnnotation` / `Bot.handleAnnotationCommand`) is explicit carry-forward to Scope 04, documented in 4 places: (i) design.md §16.3 deferred items table; (ii) scopes.md Scope 3 spec-review DoD bullet; (iii) docs/Operations.md `#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)` subsection; (iv) docs/Deployment.md `#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)` subsection. Production safety contract intact (unmapped chats dropped at `internal/telegram/bot.go` line 284; defensive body-source rejection at `internal/api/annotations.go` from Scope 02 work). **F03** (LOW supplementary Telegram E2E coverage) closed by docs phase via `MIT-027-TRACE-001-telegram-e2e-segment` annotation in `specs/027-user-annotations/state.json` `executionHistory[-1]` (with `closureSegment: telegram-end-to-end-coverage`); spec 027 top-level `status` + `certification.status` + `scopeProgress` + `completedScopes` + `certifiedCompletedPhases` ALL UNCHANGED. **F01** (LOW admin UI page no direct admin-scope check) closed inline at spec-review phase via design.md §16.1 reconciliation (defense-in-depth lives at `/v1/auth/*` XHR layer where `callerIsAdmin` enforces). Zero HIGH findings. Carry-forward registry preserved unchanged. | PASS |
+| F6 | `./smackerel.sh build` | `Dockerfile` (smackerel-core) + `ml/Dockerfile` (smackerel-ml) | `smackerel-core  Built` + `smackerel-ml  Built`. Final smackerel-core image SHA: `sha256:6db7f6c30a40cc4f2a008d658efe59d98560a39104edaa7310a266d879ff792f` (matches the validate-phase Gate V1 image SHA recorded at `cc426f10`, confirming no Scope 03 finalize-phase artifact edits affect the build surface — Scope 03 finalize touches only `specs/044-per-user-bearer-auth/{scopes,report}.md` + `state.json`). | 0 |
+| F7 | `./smackerel.sh check` | config SST + env_file drift + scenario-lint | `Config is in sync with SST`; `env_file drift guard: OK`; `scenario-lint: scanning config/prompt_contracts (glob: *.yaml)`; `scenarios registered: 5, rejected: 0`; `scenario-lint: OK`. | 0 |
+| F8 | Scope 03 status header canonical (Gate G041) | `scopes.md` Scope 3 header (post-write) | Pre-write: `**Status:** In Progress`, `**Phase:** spec-review`, `**Agent:** bubbles.spec-review`. Post-write: `**Status:** Done`, `**Phase:** finalize`, `**Agent:** bubbles.iterate`. Scope 04 reads `**Status:** Not Started` (canonical preserved). | PASS |
+
+### Verbatim Gate Output
+
+**F1 — Scope 3 DoD bullet count (pre-write):**
+
+```text
+---F1-DoD-bullets-Scope-3---
+5
+0
+---EXIT=0
+```
+
+**F2 — artifact-lint:**
+
+```text
+⚠️  state.json v3 missing recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+EXIT_F2=0
+```
+
+**F3 — traceability-guard (key passages):**
+
+```text
+✅ Scope 3: Web Surfaces + Telegram Connector scenario maps to DoD item: SCN-AUTH-002 Bearer token survives stateless validation in production mode without DB roundtrip [PWA path]
+✅ Scope 4: Deprecation Pathway + Documentation Freshness scenario maps to DoD item: SCN-AUTH-011 Migration path: existing dev / test deployments need zero changes
+ℹ️  DoD fidelity: 12 scenarios checked, 12 mapped to DoD, 0 unmapped
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 12
+ℹ️  Test rows checked: 43
+ℹ️  Scenario-to-row mappings: 12
+ℹ️  Concrete test file references: 12
+ℹ️  Report evidence references: 12
+ℹ️  DoD fidelity scenarios: 12 (mapped: 12, unmapped: 0)
+
+❌ scenario-manifest.json covers only 11 scenarios but scopes define 12
+RESULT: FAILED (1 failures, 0 warnings)
+RAW_EXIT=1
+```
+
+The SOLE failure is the documented `FINALIZE-PREREQ-044-V7-001` path-(b) scope-row count residual; pass-with-deferred per per-scope finalize policy. Note that this is a STRICT IMPROVEMENT over the Scope 02 finalize traceability-guard run which carried 2 failures (the second failure — missing PWA test file — was discharged at Scope 03 implement commit `2d483842` and confirmed at Scope 03 validate commit `cc426f10` Gate V7).
+
+**F6 — `./smackerel.sh build`:**
+
+```text
+ smackerel-core  Built
+ smackerel-ml  Built
+RAW_EXIT=0
+```
+
+Final core image SHA: `sha256:6db7f6c30a40cc4f2a008d658efe59d98560a39104edaa7310a266d879ff792f` (matches Scope 03 validate-phase recorded SHA at `cc426f10`, confirming finalize-phase artifact-only edits do not affect build surface).
+
+**F7 — `./smackerel.sh check`:**
+
+```text
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+EXIT_F7=0
+```
+
+### Carry-Forward Registry (Preserved Unchanged)
+
+| Carry-Forward | Status | Owner | Discharge Path | Documented At |
+|---------------|--------|-------|----------------|---------------|
+| `FINALIZE-PREREQ-044-V7-001` (V7 traceability-guard scope-row count 11 vs 12) | `open` | spec-level finalize agent (`bubbles.iterate`) | (a) scenario-manifest.json 12th-entry addition adding the SCN-AUTH-002 [PWA path] entry; OR (b) scopes.md restructure consolidating the SCN-AUTH-002 [PWA path] row into the SCN-AUTH-002 manifest entry's `evidenceRefs` | `state.json` `transitionRequests[0]` (open since `2026-05-10T08:08:04Z`); `expectedResolution` populated at validate phase (`2026-05-11T01:30:00Z`); reviewed at every Scope 03 phase since validate; preserved unchanged at finalize |
+| F02 (MEDIUM defer-to-finalize: Telegram bot wiring of `PerUserTokenMinter` into `Bot.callCapture` / `Bot.handleReplyAnnotation` / `Bot.handleAnnotationCommand`) | `deferred-to-Scope-04` | Scope 04 implement-phase agent (`bubbles.implement`) | Wire `PerUserTokenMinter.MintForChat` into the 3 Bot internal-API call sites; mint short-lived per-user PASETO bound to mapped user_id; replace shared `b.authToken` usage on Telegram path. Production safety contract preserved in the meantime via unmapped-chat drop + body-source rejection from Scope 02. | design.md §16.3; scopes.md Scope 3 spec-review DoD bullet; docs/Operations.md `#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)`; docs/Deployment.md `#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)` |
+
+Both items are carry-forward UNCHANGED by this finalize phase. Neither is a Scope 03 finalize blocker.
+
+### State.json Updates (This Entry)
+
+| Field | Before | After |
+|-------|--------|-------|
+| `status` | `in_progress` | `in_progress` (UNCHANGED — spec stays in_progress; Scope 04 not yet started) |
+| `currentPhase` | `finalize` | `plan` (matches Scope 01/02 finalize precedent — signals next-scope plan/implement work) |
+| `execution.currentPhase` | `finalize` | `plan` |
+| `execution.currentScope` | `"03"` | `"04"` (signals Scope 04 is the next-scope work target) |
+| `execution.completedPhaseClaims` | last entry: docs (Scope 03) | appended Scope 03 `finalize` object form |
+| `certification.status` | `in_progress` | `in_progress` (UNCHANGED) |
+| `certification.completedScopes` | `["01", "02"]` | `["01", "02", "03"]` |
+| `certification.certifiedCompletedPhases` | last Scope 03 entry: `03:docs` | appended scope-prefixed `03:finalize` |
+| `executionHistory` | last entry: bubbles.docs Scope 03 | appended `bubbles.iterate` finalize entry recording `scopes=["03"]`, `scopesCompleted=["03"]`, `decision=approved`, gate results summary, scope advance note |
+| `transitionRequests[FINALIZE-PREREQ-044-V7-001]` | open (`lastReviewedAtPhase=validate`) | open (UNCHANGED — carried forward; lastReviewedAtPhase NOT updated by per-scope finalize) |
+| `lastUpdatedAt` | `2026-05-11T04:00:00Z` | `2026-05-11T05:00:00Z` |
+
+### Operational Discipline
+
+- **Terminal hygiene** (per `/memories/critical-rules.md`): IDE file-edit tools (`replace_string_in_file` / `multi_replace_string_in_file`) used for `scopes.md` + `report.md`; Python `pathlib.write_text` heredoc (per the user-blessed `/memories/repo/ide-cache-poisoning.md` exception for state.json single-write JSON edits with multi-KB summary entries) used for `state.json`. Zero shell `>`/`>>`/`tee` redirection. Zero shell heredoc-to-file via `cat`/`python -c`.
+- **PII rule** (Smackerel-wide): No real Linux usernames, hostnames, IPs, or tailnet identifiers introduced in this commit. Generic placeholders + `127.0.0.1` only.
+- **Push policy**: Commit landed; push deferred per user instruction (SSH agent locked).
+- **Test stack**: Not exercised by this finalize phase (artifact-only). Whatever state the docs phase left it in is preserved.
+- **No --no-verify**: Standard `git commit` (no flags) — pre-commit + commit-msg hooks run normally; pre-push hook NOT triggered (no push).
+
+### Per-Scope Finalize Verdict — Scope 03
+
+🟢 **APPROVED** — Scope 03 (Web Surfaces + Telegram Connector) closes per Gate G022 per-scope variant. All 8 finalize gates PASS or pass-with-deferred (Gate F3 carry-forward acceptable per `FINALIZE-PREREQ-044-V7-001` and Scope 01/02 finalize precedent). Spec 044 remains `in_progress` because Scope 04 is not yet started. Next iteration target: **Scope 04 — Deprecation Pathway + Documentation Freshness** (`auth.production_shared_token_fallback_enabled: false` default; F02 PerUserTokenMinter wiring into Bot internal-API call sites; spec 030 Prometheus metrics emitters; final docs freshness sweep). Closing F02 in Scope 04 will eliminate the only open MEDIUM finding; resolving `FINALIZE-PREREQ-044-V7-001` (path-a or path-b) will be the spec-level finalize gate that promotes spec 044 to `done`.
+
+**Claim Source:** executed.
+
+---
