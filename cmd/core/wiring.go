@@ -12,6 +12,7 @@ import (
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/auth"
+	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/drive"
@@ -81,7 +82,12 @@ func configureLogging(cfg *config.Config) error {
 // buildAPIDeps assembles the api.Dependencies struct including annotation and
 // actionable-list handlers (specs 027 and 028). It returns the deps plus the
 // list resolver and store so callers can reuse them when wiring meal planning.
-func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store) {
+//
+// Spec 044 Scope 02 added an error return — the per-user bearer-auth
+// subsystem (BearerStore + RevocationCache + Broadcaster) has fail-fast
+// validation paths (e.g. nil pool, malformed PASETO key material) that
+// MUST surface to the caller rather than be silently swallowed.
+func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
 	deps := &api.Dependencies{
 		DB:                              svc.pg,
 		NATS:                            svc.nc,
@@ -107,7 +113,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
-		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool),
+		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool).WithEnvironment(cfg.Environment),
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
@@ -198,7 +204,86 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 
 	// Wire annotation handlers (spec 027)
 	annotationStore := annotation.NewStore(svc.pg.Pool, svc.nc)
-	deps.AnnotationHandlers = &api.AnnotationHandlers{Store: annotationStore}
+	deps.AnnotationHandlers = &api.AnnotationHandlers{
+		Store:       annotationStore,
+		Environment: cfg.Environment,
+	}
+
+	// Spec 044 Scope 02 — wire the per-user bearer-auth subsystem.
+	// Production deployments (`auth.enabled=true`) need the verifier
+	// options pre-populated with the active+prior public keys so the
+	// hot-path middleware does not pay parse cost per request, the
+	// revocation cache hydrated from the auth_revocations table for
+	// the revocation-on-next-request contract (NFR-AUTH-006), and the
+	// NATS broadcaster subscribed so multi-replica deployments see
+	// revocation events propagate within the SST-derived window.
+	deps.AuthConfig = cfg.Auth
+	bearerStore, err := auth.NewBearerStore(svc.pg.Pool)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("auth bearer store: %w", err)
+	}
+	deps.BearerStore = bearerStore
+
+	revocationCache := revocation.NewCache()
+	if cfg.Auth.Enabled {
+		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		count, err := revocationCache.BootstrapFromDB(bootstrapCtx, bearerStore)
+		bootstrapCancel()
+		if err != nil {
+			slog.Error("auth revocation cache bootstrap failed", "error", err)
+		} else {
+			slog.Info("auth revocation cache bootstrapped",
+				"size", count,
+				"refresh_interval_seconds", cfg.Auth.RevocationCacheRefreshIntervalSeconds)
+		}
+	}
+	deps.RevocationCache = revocationCache
+
+	if cfg.Auth.Enabled && svc.nc != nil && svc.nc.Conn != nil && cfg.Auth.RevocationNATSSubject != "" {
+		instanceID := os.Getenv("HOSTNAME")
+		if instanceID == "" {
+			instanceID = "smackerel-core"
+		}
+		broadcaster, err := revocation.NewBroadcaster(svc.nc.Conn, cfg.Auth.RevocationNATSSubject, revocationCache, instanceID)
+		if err != nil {
+			slog.Error("auth revocation broadcaster construction failed", "error", err)
+		} else if subErr := broadcaster.Subscribe(); subErr != nil {
+			slog.Error("auth revocation broadcaster subscribe failed", "error", subErr)
+		} else {
+			slog.Info("auth revocation broadcaster subscribed",
+				"subject", cfg.Auth.RevocationNATSSubject,
+				"instance_id", instanceID)
+			svc.authRevocationBroadcaster = broadcaster
+		}
+	}
+
+	// Pre-derive the active public key from the configured private
+	// key so the hot-path verifier does not re-parse per request. The
+	// key derivation is a single elliptic-curve point multiplication;
+	// doing it once at startup keeps middleware allocation-free.
+	if cfg.Auth.Enabled && cfg.Auth.SigningActivePrivateKey != "" {
+		activePub, err := auth.PublicHexFromSecretHex(cfg.Auth.SigningActivePrivateKey)
+		if err != nil {
+			slog.Error("auth active public key derivation failed", "error", err)
+		} else {
+			deps.AuthVerifyOptions = auth.VerifyOptions{
+				ActivePublicKey:    activePub,
+				ActiveKeyID:        cfg.Auth.SigningActiveKeyID,
+				PriorPublicKey:     cfg.Auth.SigningPriorPublicKey,
+				PriorKeyID:         cfg.Auth.SigningPriorKeyID,
+				Issuer:             "smackerel",
+				ClockSkewTolerance: time.Duration(cfg.Auth.ClockSkewToleranceSeconds) * time.Second,
+				Now:                time.Now,
+			}
+		}
+	}
+
+	authAdmin, err := api.NewAuthAdminHandlers(bearerStore, cfg, svc.authRevocationBroadcaster)
+	if err != nil {
+		slog.Error("auth admin handlers wiring failed", "error", err)
+	} else {
+		deps.AuthAdminHandlers = authAdmin
+	}
 
 	// Wire actionable list handlers (spec 028)
 	listResolver := list.NewPostgresArtifactResolver(svc.pg.Pool)
@@ -215,7 +300,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 	}
 	slog.Info("actionable list handlers configured")
 
-	return deps, listResolver, listStore
+	return deps, listResolver, listStore, nil
 }
 
 // startTelegramBotIfConfigured creates and starts the Telegram bot when a

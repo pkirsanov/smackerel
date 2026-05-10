@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/smackerel/smackerel/internal/auth"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 )
 
@@ -207,7 +208,7 @@ func (h *PhotosHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		Provider:  provider,
 		Outcome:   "stored",
 		Reason:    string(channel),
-		Actor:     actorIDFromRequest(r),
+		Actor:     h.actorIDFromRequest(r),
 		Metadata: map[string]any{
 			"source_channel": string(channel),
 			"source_ref":     sourceRef,
@@ -243,12 +244,17 @@ func (h *PhotosHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 // PhotoRevealRequest is the optional body for `POST /v1/photos/{id}/reveal`.
 //
-// MIT-040-S-003 partial closure (2026-05-08) — `actor_id` is no
-// longer accepted in the request body. The handler reads the actor
-// identity ONLY from the `X-Actor-Id` request header so callers
-// cannot smuggle a forged actor through the JSON payload. Requests
-// whose body still contains an `actor_id` JSON key are rejected with
-// HTTP 400 `actor_id_in_body_forbidden`.
+// Spec 044 Scope 02 (MIT-040-S-008 closure, 2026-05-08+): `actor_id`
+// is permanently rejected from the request body. The handler derives
+// the actor identity from the authenticated session attached by
+// `bearerAuthMiddleware` (PASETO `sub` claim → `auth.Session.UserID`
+// in production; shared-token sessions fall back to the dev/test
+// ergonomic). Requests whose body still contains an `actor_id` JSON
+// key are rejected with HTTP 400 `actor_id_in_body_forbidden`. The
+// `X-Actor-Id` header is now ALSO rejected in production (`HTTP 400
+// actor_id_in_header_forbidden`) — claim-binding closes the
+// client-controlled-identity residual that MIT-040-S-003's partial
+// closure left open.
 type PhotoRevealRequest struct {
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
 }
@@ -267,17 +273,23 @@ type PhotoRevealResponse struct {
 // delivery) can authorise a single subsequent fetch. Audit rows are
 // written for both mint and consume to satisfy SCN-040-012.
 //
-// MIT-040-S-003 partial closure (2026-05-08): actor identity is now
-// header-only (`X-Actor-Id`). Requests whose body smuggles an
-// `actor_id` key are rejected with 400 `actor_id_in_body_forbidden`.
-// In `production` deployments the header is required — when missing
-// the handler returns 400 `actor_id_required`. The dev/test ergonomic
-// (fall back to `system` actor when the header is absent) is
-// preserved for `development` and `test` environments. Residual:
-// `X-Actor-Id` is still client-controlled; full closure (NEW
-// MIT-040-S-008) requires per-user bearer auth that threads
-// authenticated identity into `r.Context()` via
-// `bearerAuthMiddleware`.
+// Spec 044 Scope 02 closure of MIT-040-S-008 (2026-05-08+):
+//   - Body `actor_id` continues to be rejected with HTTP 400
+//     `actor_id_in_body_forbidden` (preserves the MIT-040-S-003
+//     partial closure invariant).
+//   - In `production` (auth.enabled=true), `X-Actor-Id` is rejected
+//     with HTTP 400 `actor_id_in_header_forbidden` and the actor is
+//     derived from the authenticated session
+//     (`auth.UserIDFromContext(r.Context())`). When the session is
+//     present but UserID is empty (shared-token fallback or bootstrap
+//     session) the handler returns HTTP 400 `actor_id_required`
+//     because the production code path can no longer downgrade to a
+//     client-controlled value.
+//   - In `development` / `test`, `X-Actor-Id` continues to be honored
+//     (FR-AUTH-015 dev ergonomic) and the handler falls back to
+//     `system` when no header AND no session-derived UserID is
+//     present. This preserves the test stack ergonomic without
+//     leaking client-controlled identity into production.
 func (h *PhotosHandlers) MintReveal(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(strings.TrimSpace(chi.URLParam(r, "id")))
 	if err != nil {
@@ -298,7 +310,7 @@ func (h *PhotosHandlers) MintReveal(w http.ResponseWriter, r *http.Request) {
 	}
 	if bytes.Contains(bodyBytes, []byte(`"actor_id"`)) {
 		writeError(w, http.StatusBadRequest, "actor_id_in_body_forbidden",
-			"actor_id in request body is forbidden; use the X-Actor-Id header instead")
+			"actor_id in request body is forbidden")
 		return
 	}
 
@@ -310,18 +322,29 @@ func (h *PhotosHandlers) MintReveal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// MIT-040-S-003 partial closure — header is the ONLY source of
-	// truth for the requesting actor. We read it directly here (rather
-	// than via actorIDFromRequest, which falls back to "system") so the
-	// production-mode strictness check below sees the raw value and
-	// can fail closed when the header is absent.
+	// Spec 044 Scope 02 (MIT-040-S-008 closure) — actor identity is
+	// resolved against the authenticated session attached by
+	// `bearerAuthMiddleware`. In production we additionally reject the
+	// X-Actor-Id header (no client-controlled identity surface)
+	// because PASETO `sub` is the single source of truth.
 	headerActor := strings.TrimSpace(r.Header.Get("X-Actor-Id"))
-	if h.environment == "production" && headerActor == "" {
-		writeError(w, http.StatusBadRequest, "actor_id_required",
-			"X-Actor-Id header is required in production")
-		return
+	sessionUserID := auth.UserIDFromContext(r.Context())
+	if h.environment == "production" {
+		if headerActor != "" {
+			writeError(w, http.StatusBadRequest, "actor_id_in_header_forbidden",
+				"X-Actor-Id header is forbidden in production; identity is derived from the bearer token")
+			return
+		}
+		if sessionUserID == "" {
+			writeError(w, http.StatusBadRequest, "actor_id_required",
+				"per-user bearer auth is required in production")
+			return
+		}
 	}
-	actor := headerActor
+	actor := sessionUserID
+	if actor == "" {
+		actor = headerActor
+	}
 	if actor == "" {
 		actor = "system"
 	}

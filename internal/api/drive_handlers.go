@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/drive"
 	driveextract "github.com/smackerel/smackerel/internal/drive/extract"
 )
@@ -63,6 +64,14 @@ type DriveProviderRegistry interface {
 type DriveHandlers struct {
 	registry DriveProviderRegistry
 	pool     *pgxpool.Pool
+	// environment is the deployment environment string (allowed:
+	// development | test | production). Sourced from
+	// runtime.environment in smackerel.yaml via SMACKEREL_ENV.
+	// Spec 044 Scope 02 (MIT-038-S-003 closure) — when "production",
+	// Connect rejects body `owner_user_id` with HTTP 400
+	// `owner_user_id_in_body_forbidden` and derives the owner from the
+	// authenticated session attached by `bearerAuthMiddleware`.
+	environment string
 }
 
 // NewDriveHandlers returns a DriveHandlers backed by the supplied
@@ -84,6 +93,19 @@ func NewDriveHandlersWithPool(registry DriveProviderRegistry, pool *pgxpool.Pool
 		panic("api: NewDriveHandlersWithPool called with nil DriveProviderRegistry")
 	}
 	return &DriveHandlers{registry: registry, pool: pool}
+}
+
+// WithEnvironment threads the deployment environment string into the
+// handler so production-mode strictness applies. Wiring code calls
+// this with `cfg.Environment` after construction; tests that omit it
+// inherit the empty-string default which keeps the legacy dev/test
+// ergonomic intact.
+func (h *DriveHandlers) WithEnvironment(env string) *DriveHandlers {
+	if h == nil {
+		return nil
+	}
+	h.environment = env
+	return h
 }
 
 // ListConnectors handles GET /v1/connectors/drive. It returns every
@@ -137,6 +159,20 @@ type DriveConnectResponse struct {
 // Connect handles POST /v1/connectors/drive/connect. It resolves the
 // provider from the registry, plumbs the owner into the request context,
 // and proxies to provider.BeginConnect.
+//
+// Spec 044 Scope 02 closure of MIT-038-S-003 (2026-05-08+):
+//   - In `production`, body `owner_user_id` is rejected with HTTP 400
+//     `owner_user_id_in_body_forbidden`. The owner is derived from
+//     the authenticated session attached by `bearerAuthMiddleware`
+//     (`auth.UserIDFromContext`). When no session is present (or
+//     UserID is empty — shared-token / bootstrap fallback) the
+//     handler returns HTTP 400 `owner_user_id_required` because the
+//     production code path can no longer downgrade to a
+//     client-controlled value.
+//   - In `development` / `test`, the body field continues to be the
+//     authoritative owner identity (preserves the existing test
+//     ergonomic and avoids touching every fixture in
+//     drive_handlers_test.go in this scope).
 func (h *DriveHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 	if r.Body == nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "missing request body")
@@ -155,10 +191,27 @@ func (h *DriveHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "provider_id is required")
 		return
 	}
-	if req.OwnerUserID == "" {
+
+	// Spec 044 Scope 02 — production rejects body `owner_user_id` and
+	// derives the owner from the authenticated session.
+	ownerID := req.OwnerUserID
+	if h.environment == "production" {
+		if req.OwnerUserID != "" {
+			writeError(w, http.StatusBadRequest, "owner_user_id_in_body_forbidden",
+				"owner_user_id in request body is forbidden in production; identity is derived from the bearer token")
+			return
+		}
+		ownerID = auth.UserIDFromContext(r.Context())
+		if ownerID == "" {
+			writeError(w, http.StatusBadRequest, "owner_user_id_required",
+				"per-user bearer auth is required in production")
+			return
+		}
+	} else if ownerID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "owner_user_id is required")
 		return
 	}
+
 	mode := drive.AccessMode(req.AccessMode)
 	if err := mode.Validate(); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
@@ -170,7 +223,7 @@ func (h *DriveHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := drive.WithOwnerUserID(r.Context(), req.OwnerUserID)
+	ctx := drive.WithOwnerUserID(r.Context(), ownerID)
 	scope := drive.Scope{
 		FolderIDs:     req.Scope.FolderIDs,
 		IncludeShared: req.Scope.IncludeShared,

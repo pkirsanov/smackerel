@@ -312,7 +312,7 @@ func (h *PhotosHandlers) Preview(w http.ResponseWriter, r *http.Request) {
 	revealParam := strings.TrimSpace(r.URL.Query().Get("reveal_token"))
 	hasValidReveal := false
 	now := time.Now().UTC()
-	actor := actorIDFromRequest(r)
+	actor := h.actorIDFromRequest(r)
 	if record.Sensitivity != photolib.SensitivityNone && revealParam != "" {
 		if _, consumeErr := h.store.ConsumeRevealToken(r.Context(), id, actor, revealParam, now); consumeErr == nil {
 			hasValidReveal = true

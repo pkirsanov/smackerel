@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/smackerel/smackerel/internal/auth"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 )
 
@@ -78,7 +79,7 @@ func (h *PhotosHandlers) PlanAction(w http.ResponseWriter, r *http.Request) {
 	action := photolib.ActionKind(request.Action)
 	ttl := h.actionTokenTTL(action)
 	mintInput := photolib.MintPhotoActionTokenInput{
-		ActorID:       actorIDFromRequest(r),
+		ActorID:       h.actorIDFromRequest(r),
 		Action:        action,
 		Scope:         request.Scope,
 		BytesEstimate: request.BytesEstimate,
@@ -153,7 +154,7 @@ func (h *PhotosHandlers) ConfirmAction(w http.ResponseWriter, r *http.Request) {
 	}
 	confirmInput := photolib.ConfirmPhotoActionTokenInput{
 		TokenID:          tokenID,
-		ActorID:          actorIDFromRequest(r),
+		ActorID:          h.actorIDFromRequest(r),
 		Scope:            request.Scope,
 		TextConfirmation: request.TextConfirmation,
 	}
@@ -293,11 +294,36 @@ func decisionForAction(kind photolib.ActionKind) string {
 	}
 }
 
-func actorIDFromRequest(r *http.Request) string {
-	// The runtime bearer-token middleware sets the actor in a header for
-	// downstream handlers; fall back to "system" when no header is set
-	// (test/internal callers).
+// actorIDFromRequest resolves the requesting actor's identity for
+// audit + action-token attribution.
+//
+// Spec 044 Scope 02 (MIT-040-S-008 closure):
+//   - In `production`, identity is derived from the authenticated
+//     session attached by `bearerAuthMiddleware`
+//     (`auth.UserIDFromContext(r.Context())`). The X-Actor-Id header
+//     is rejected at the calling-handler boundary (see PlanAction /
+//     ConfirmAction / SetClusterBestPick / ResolveCluster) before
+//     this helper is invoked, so production traffic that reaches the
+//     helper will only ever resolve via session.
+//   - In `development` / `test`, the X-Actor-Id header is honored as
+//     the legacy ergonomic; absent that, "system" is the fallback so
+//     internal/test callers do not need to forge a header.
+//
+// The helper does NOT call writeError on its own — it only resolves
+// the actor string. Production-mode rejection of header smuggling is
+// the caller's responsibility (so the handler can return a
+// well-typed 400 with the precise error code at the right place).
+func (h *PhotosHandlers) actorIDFromRequest(r *http.Request) string {
 	if r == nil {
+		return "system"
+	}
+	if sessionUser := auth.UserIDFromContext(r.Context()); sessionUser != "" {
+		return sessionUser
+	}
+	if h != nil && h.environment == "production" {
+		// Production with no session UserID — caller should have
+		// rejected upstream. Fail-closed to "system" rather than
+		// trust a header.
 		return "system"
 	}
 	if value := r.Header.Get("X-Actor-Id"); value != "" {
@@ -305,6 +331,19 @@ func actorIDFromRequest(r *http.Request) string {
 	}
 	return "system"
 }
+
+// actorIDFromRequest is the legacy package-level helper retained for
+// call sites that do not have a *PhotosHandlers in scope (none today).
+// Kept as a thin wrapper that always honors the dev/test ergonomic;
+// any production-mode call path MUST go through the method form on
+// *PhotosHandlers so the production gate is enforced.
+//
+// Spec 044 Scope 02: removed. The package-level helper had zero
+// remaining callers, and leaving it in the tree both produced a false
+// positive in the AC-11 grep guard and offered a future maintenance
+// hazard (someone could re-introduce a call site that bypasses the
+// production gate). All callers go through (h *PhotosHandlers).
+// actorIDFromRequest above.
 
 // validatePlanScope enforces UUID format on photo_ids/removal_ids and
 // caps the total scope size at the SST-derived
@@ -390,7 +429,7 @@ func (h *PhotosHandlers) SetClusterBestPick(w http.ResponseWriter, r *http.Reque
 	if pickedBy == "" {
 		pickedBy = "user"
 	}
-	cluster, err := h.store.SetBestPick(r.Context(), clusterID, photoID, pickedBy, actorIDFromRequest(r))
+	cluster, err := h.store.SetBestPick(r.Context(), clusterID, photoID, pickedBy, h.actorIDFromRequest(r))
 	if err != nil {
 		// Spec 040 chaos C-004 — the previous response leaked the
 		// raw lib/pq "no rows in result set" sentinel as a 400. A
@@ -441,7 +480,7 @@ func (h *PhotosHandlers) ResolveCluster(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	cluster, err := h.store.ResolveCluster(r.Context(), clusterID, request.Action, actorIDFromRequest(r))
+	cluster, err := h.store.ResolveCluster(r.Context(), clusterID, request.Action, h.actorIDFromRequest(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "resolve_cluster_failed", err.Error())
 		return

@@ -105,6 +105,22 @@ func SessionFromContext(ctx context.Context) (Session, bool) {
 	return sess, ok
 }
 
+// UserIDFromContext is the convenience accessor for handlers that only
+// need the caller's user_id (the common case for MintReveal,
+// drive.Connect, and the annotation pipeline). Returns the empty string
+// when no session is present OR when the session has an empty UserID
+// (e.g. SessionSourceSharedToken under the dev/test legacy ergonomic).
+//
+// Spec 044 design.md §14.3 — helper deferred from Scope 01 and landed
+// in Scope 02 alongside the bearer middleware integration.
+func UserIDFromContext(ctx context.Context) string {
+	sess, ok := SessionFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	return sess.UserID
+}
+
 // ErrNoSession is returned by helpers that REQUIRE an authenticated
 // session but receive a context that lacks one. Handlers that depend on
 // per-user identity should panic on this error in development and

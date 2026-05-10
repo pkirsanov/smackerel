@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 
+	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/metrics"
 )
 
@@ -240,17 +241,27 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
-	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil || deps.DriveConfirmationsHandlers != nil {
+	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil || deps.DriveConfirmationsHandlers != nil || deps.AuthAdminHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
 
 			if deps.DriveHandlers != nil {
-				r.Get("/connectors/drive", deps.DriveHandlers.ListConnectors)
-				r.Post("/connectors/drive/connect", deps.DriveHandlers.Connect)
+				// Spec 044 Scope 02 (MIT-038-S-003) — drive Connect must
+				// derive owner_user_id from the authenticated session in
+				// production. Wrap the drive routes in bearerAuthMiddleware
+				// so the session is attached before the handler runs.
+				// OAuthCallback stays unauthenticated because it is invoked
+				// by the upstream OAuth provider redirect, which carries
+				// no bearer token.
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Get("/connectors/drive", deps.DriveHandlers.ListConnectors)
+					r.Post("/connectors/drive/connect", deps.DriveHandlers.Connect)
+					r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
+					r.Get("/connectors/drive/connection/{id}/skipped", deps.DriveHandlers.GetSkippedBlocked)
+					r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)
+				})
 				r.Get("/connectors/drive/oauth/callback", deps.DriveHandlers.OAuthCallback)
-				r.Get("/connectors/drive/connection/{id}", deps.DriveHandlers.GetConnection)
-				r.Get("/connectors/drive/connection/{id}/skipped", deps.DriveHandlers.GetSkippedBlocked)
-				r.Get("/drive/artifacts/{id}", deps.DriveHandlers.GetArtifactDetail)
 			}
 
 			// Spec 038 Scope 5 — Save Rules CRUD + audit + dry-run.
@@ -336,6 +347,25 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Post("/agent/invoke", deps.AgentInvokeHandler.AgentInvokeHandlerFunc)
 				}
 			})
+
+			// Spec 044 Scope 02 — admin auth surface (POST/GET /v1/auth/*).
+			// Behind bearerAuthMiddleware so callers must authenticate;
+			// each handler additionally enforces admin scope via
+			// callerIsAdmin against the auth.Session attached by the
+			// middleware. Routes mirror the cmd_auth.go subcommand
+			// surface one-for-one. Per OQ-6 the bootstrap session is
+			// always admin and the shared-token session is admin in
+			// dev/test only (or in production with the
+			// production_shared_token_fallback_enabled opt-in flag).
+			if deps.AuthAdminHandlers != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(deps.bearerAuthMiddleware)
+					r.Post("/auth/users", deps.AuthAdminHandlers.HandleEnroll)
+					r.Get("/auth/users", deps.AuthAdminHandlers.HandleListUsers)
+					r.Post("/auth/users/{user_id}/rotate", deps.AuthAdminHandlers.HandleRotate)
+					r.Post("/auth/tokens/{token_id}/revoke", deps.AuthAdminHandlers.HandleRevoke)
+				})
+			}
 		})
 	}
 
@@ -436,20 +466,58 @@ func (d *Dependencies) webAuthMiddleware(next http.Handler) http.Handler {
 }
 
 // bearerAuthMiddleware checks Bearer token authentication for API routes.
-// If no AuthToken is configured, all requests are allowed (dev mode).
-// MIT-040-S-004 — when Environment == "production" an empty AuthToken is
-// rejected with 401 as defense-in-depth (the wiring constructor already
-// fails fast in production, so this branch should be unreachable in
-// normal operation, but enforce it here too).
+//
+// Spec 044 Scope 02 hot-path validation contract. Five branches in order:
+//
+//  1. Production AND auth.enabled — verify per-user PASETO v4.public via
+//     auth.VerifyAndParse; consult RevocationCache; on success attach an
+//     auth.Session{Source: SessionSourcePerUserToken}. On failure return
+//     401 with a generic UNAUTHORIZED body (NFR-AUTH-007 — no token
+//     material in the response). FR-AUTH-004 / NFR-AUTH-001 / NFR-AUTH-002.
+//  2. Production AND auth.enabled AND production_shared_token_fallback_enabled
+//     opt-in — fall back to constant-time shared-token compare with a
+//     deprecation slog.Warn so operators can drain legacy clients during
+//     migration. Attaches SessionSourceSharedToken (UserID="").
+//  3. Dev/test shared-token compare — preserves the SMACKEREL_AUTH_TOKEN
+//     ergonomic per FR-AUTH-015. Attaches SessionSourceSharedToken
+//     (UserID="").
+//  4. Dev empty-token bypass — preserves the today-ever lever at the
+//     prior router.go lines 444–451. Attaches SessionSourceSharedToken
+//     so downstream session lookups still resolve the (Session, ok)
+//     tuple instead of returning ok=false.
+//  5. MIT-040-S-004 production empty-token defense-in-depth — when
+//     d.AuthToken == "" AND Environment == "production" AND no PASETO
+//     surface configured, reject 401 (the wiring layer already fails
+//     fast on this case; this is the second layer).
+//
+// Constant-time discipline (NFR-AUTH-008): the shared-token comparison
+// uses subtle.ConstantTimeCompare; the PASETO v4.public verifier inside
+// go-paseto uses constant-time signature primitives. The 401 error
+// response body never names which validation step failed (SCN-AUTH-010).
 func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if d.AuthToken == "" {
+		// Branch 5 first — empty AuthToken AND no per-user surface is
+		// the dev-bypass lever; production-mode is the defense-in-depth
+		// 401 (the loader already failed earlier; we belt-and-brace).
+		perUserActive := d.Environment == "production" && d.AuthConfig.Enabled
+
+		if d.AuthToken == "" && !perUserActive {
 			if d.Environment == "production" {
-				slog.Warn("bearer auth blocked", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", "auth not configured in production")
+				slog.Warn("bearer auth blocked",
+					"path", r.URL.Path,
+					"remote_addr", r.RemoteAddr,
+					"reason", "auth not configured in production")
 				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "auth not configured in production")
 				return
 			}
-			next.ServeHTTP(w, r)
+			// Dev empty-token bypass — attach a synthetic session so
+			// downstream handlers that consult auth.SessionFromContext
+			// see a (Session, ok=true) tuple. Source is SharedToken so
+			// the dev/test claim-binding fallbacks honor it.
+			ctx := auth.WithSession(r.Context(), auth.Session{
+				Source: auth.SessionSourceSharedToken,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
@@ -459,17 +527,72 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			if r.Header.Get("Authorization") != "" {
 				reason = "invalid format"
 			}
-			slog.Warn("bearer auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", reason)
+			slog.Warn("bearer auth failure",
+				"path", r.URL.Path,
+				"remote_addr", r.RemoteAddr,
+				"reason", reason)
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
 
-		if subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) != 1 {
-			slog.Warn("bearer auth failure", "path", r.URL.Path, "remote_addr", r.RemoteAddr, "reason", "invalid token")
+		// Branch 1 — production per-user PASETO path.
+		if perUserActive {
+			parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
+			if err == nil {
+				// Revocation lookup is sync.Map.Load — lock-free,
+				// allocation-free for the common case.
+				if d.RevocationCache != nil && d.RevocationCache.IsRevoked(parsed.TokenID) {
+					slog.Warn("bearer auth failure",
+						"path", r.URL.Path,
+						"remote_addr", r.RemoteAddr,
+						"reason", "revoked")
+					writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
+					return
+				}
+				sess := auth.Session{
+					UserID:    parsed.UserID,
+					TokenID:   parsed.TokenID,
+					KeyID:     parsed.KeyID,
+					IssuedAt:  parsed.IssuedAt,
+					ExpiresAt: parsed.ExpiresAt,
+					Source:    auth.SessionSourcePerUserToken,
+				}
+				next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+				return
+			}
+
+			// Branch 2 — production opt-in shared-token fallback.
+			if d.AuthConfig.ProductionSharedTokenFallbackEnabled &&
+				d.AuthToken != "" &&
+				subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) == 1 {
+				slog.Warn("production shared-token fallback used (deprecation pathway)",
+					"path", r.URL.Path,
+					"remote_addr", r.RemoteAddr)
+				sess := auth.Session{Source: auth.SessionSourceSharedToken}
+				next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+				return
+			}
+
+			slog.Warn("bearer auth failure",
+				"path", r.URL.Path,
+				"remote_addr", r.RemoteAddr,
+				"reason", "paseto verify failed")
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
 
-		next.ServeHTTP(w, r)
+		// Branch 3 — dev/test shared-token compare (preserved per FR-AUTH-015).
+		if d.AuthToken != "" &&
+			subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) == 1 {
+			sess := auth.Session{Source: auth.SessionSourceSharedToken}
+			next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
+			return
+		}
+
+		slog.Warn("bearer auth failure",
+			"path", r.URL.Path,
+			"remote_addr", r.RemoteAddr,
+			"reason", "invalid token")
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 	})
 }
