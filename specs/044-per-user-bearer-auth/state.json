@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "test",
+  "currentPhase": "validate",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "test",
+    "currentPhase": "validate",
     "currentScope": "04",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -152,6 +152,14 @@
         "timestamp": "2026-05-10T23:10:00Z",
         "disposition": "approved",
         "note": "Scope 04 implement closes per Gate G027 (phase exit gate). All 7 DoD bullets ticked with executed-claim evidence; F02 closure (Bot.bearerForChat + setBearerHeader + cmd/core/wiring.go::startTelegramBotIfConfigured construct PerUserTokenMinter and call SetPerUserTokenMinter when production+auth.enabled+signing-key configured); 7-series Prometheus metrics surface live (internal/metrics/auth.go registered via init() against default registerer; emitter sites wired into auth_handlers.go, cmd_auth.go, per_user_token.go, router.go::bearerAuthMiddleware); deprecation flag default false verified at config/smackerel.yaml line 514 + smackerel.sh check returns Config is in sync with SST; docs sweep complete (Operations.md F02 closure + auth metrics + deprecation pathway runbook; Deployment.md shipped status; Development.md closure pointer; smackerel.md §17.2 closure paragraph; Testing.md Scope 04 inventory subsection; README.md no changes required); scenario-manifest.json now ships 12 entries (SCN-AUTH-001..012) with the new SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; scopes.md Scope 4 status flipped to In Progress with all 7 DoD bullets ticked. Test verdicts: go build clean, go vet clean, ./smackerel.sh check OK, ./smackerel.sh lint OK, ./smackerel.sh test unit PASS (Python 417 + all Go packages), ./smackerel.sh test integration PASS (3 packages 39.274s + 2.695s + 7.558s), ./smackerel.sh test e2e --go-run TestE2E_PWAAuth_ 4 PASS, F02 wiring unit 8 PASS, F02 wiring integration 2 PASS, auth metrics unit 8 PASS. Pre-commit gates: artifact-lint PASSED, traceability-guard PASSED (12 scenarios, 0 carry-forward, NO FINALIZE-PREREQ-044-V7-001 firing), regression-baseline-guard PASSED, pii-scan clean."
+      },
+      {
+        "scope": "04",
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-11T06:00:00Z",
+        "disposition": "approved",
+        "note": "Scope 04 test phase closes per Gate G027 (phase exit gate). Inventory: 5 files (4 test, 1 helper) added under git diff 6f1df0cf..9e3fc996 — internal/metrics/auth_test.go (8 unit tests, no build tag, in-package), internal/telegram/bot_wiring_test.go (8 unit tests, no build tag, in-package), internal/telegram/photo_upload_test.go (signature update +4/-2, no build tag), internal/telegram/test_helpers.go (helper file +26 lines for external integration test surface), tests/integration/auth_telegram_f02_wiring_test.go (2 integration tests with //go:build integration tag). Build-tag header verification: 100% compliance — unit files in-package, integration file carries //go:build integration. Live-stack verification: integration test reaches DB-backed pgxpool via productionTelegramBridgeDeps→authTestPool; unit tests make zero DB or NATS calls. 11 gate commands all EXIT=0: ./smackerel.sh build (smackerel-core + smackerel-ml Built), ./smackerel.sh check (Config in sync with SST + env_file drift guard OK + scenario-lint OK), ./smackerel.sh lint (Web validation passed), ./smackerel.sh format --check (49 files already formatted), ./smackerel.sh test unit (Python 417 passed + all Go packages ok), ./smackerel.sh test integration (3 packages PASS — tests/integration 39.728s including TestF02Wiring_SetPerUserTokenMinter_HappyPath PASS 0.05s and TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses PASS 0.04s; tests/integration/agent 2.321s; tests/integration/drive 8.339s), ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' (4 PWA tests + 5 sub-tests PASS in tests/e2e/auth 0.289s; PASS: go-e2e; e2e runner auto-tore-down stack), go vet ./... (clean), go vet -tags integration ./tests/... (clean), bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth (Artifact lint PASSED, 2 advisory warnings unchanged), bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose (RESULT: PASSED 0 warnings; 12 scenarios checked, 12 mapped to DoD, 0 unmapped; manifest covers 12 contracts; NO carry-forward — FINALIZE-PREREQ-044-V7-001 no longer fires). Skip-marker grep: zero matches across all 5 Scope 04 test files. Mock-framework grep (jest.fn|sinon|nock|msw|gomock|testify/mock): zero matches; the only httptest.NewServer uses are (a) photo_upload_test.go which fakes the EXTERNAL Telegram API endpoint as a legitimate boundary fake for the postPhotoUpload helper unit test, and (b) auth_telegram_f02_wiring_test.go:75 which wraps the REAL api.NewRouter with REAL DB-backed deps from productionTelegramBridgeDeps — neither is a mock of our code. Adversarial coverage VERDICT: PRESENT for every Scope 04 surface — F02 wiring (TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError + TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses with sentinel WRONG-shared-bearer-MUST-NOT-LEAK and counter delta=0 assertion), F02 mapped happy path (TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO + TestF02Wiring_SetPerUserTokenMinter_HappyPath with sentinel WRONG-shared-bearer-DO-NOT-USE-IN-F02-PATH and counter delta=1 assertion plus Bearer v4.public. prefix check), auth-metrics closed-set normalization (TestAuthRevocation_NormalizesReason adversarial sub-case 'Bobby Tables\\n\\n\\nDROP TABLE auth_tokens;--' asserts bucket stays in {unspecified, compromise, rotation, offboarding, test, other}), auth-metrics no-double-count (TestAuthIssuance_IncrementsBySource + TestAuthValidationOutcome_AcceptsClosedSetLabels + TestAuthFailure_AcceptsClosedSetLabels all assert delta=1 per Inc), auth-metrics canonical prefix (TestAuthMetrics_NamesUseCanonicalPrefix), dev empty-token bypass (TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty + TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset), dev shared-token fallback (TestBot_bearerForChat_NilMinter_FallsBackToSharedToken + TestBot_setBearerHeader_NilMinter_AppliesSharedToken), dev unmapped-chat fallback (TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared), deprecation flag default (./smackerel.sh check verbatim Config is in sync with SST). Scenario-manifest status: 12 entries with zero plannedFile residuals; SCN-AUTH-011 + SCN-AUTH-012 carry status=live evidenceRefs pointing at real shipped tests/smoke commands/static guarantees — no manifest updates required. Test stack lifecycle: DOWN at phase start; integration runner brought stack up; e2e runner tore stack down at exit cleanup; final state DOWN. Operational discipline: IDE replace_string_in_file for report.md targeted append; pathlib.write_text heredoc for state.json per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround (multi-KB summary entries); JSON re-parse verified; PII rule honored (no real usernames/IPs/hostnames); NO --no-verify; NOT pushed (SSH agent locked). Verdict: TESTED — 11/11 gates green, adversarial coverage PRESENT, mock+skip audits clean."
       }
     ],
     "pendingTransitionRequests": []
@@ -186,7 +194,8 @@
       "03:chaos",
       "03:spec-review",
       "03:docs",
-      "03:finalize"
+      "03:finalize",
+      "04:test"
     ],
     "lockdownState": {
       "active": false,
@@ -726,6 +735,16 @@
       "decision": "approved",
       "timestamp": "2026-05-10T23:10:00Z",
       "summary": "Scope 04 (Deprecation Pathway + Documentation Freshness) implement phase closed. Six MUST-LAND deliverables landed and verified: (1) F02 Telegram bot wiring of PerUserTokenMinter via Bot.bearerForChat / setBearerHeader / cmd/core/wiring.go::SetPerUserTokenMinter — refactored 10+ telegram-package functions threading chatID int64 through ~25 call sites; (2) Deprecation flag auth.production_shared_token_fallback_enabled default false verified at config/smackerel.yaml line 514; (3) Auth metrics per OQ-9 — 7 Prometheus series under smackerel_auth_* prefix shipped in NEW internal/metrics/auth.go with NormalizeRevocationReason closed-set bucketing; emitters wired into internal/api/auth_handlers.go (HandleEnroll/Rotate/Revoke), cmd/core/cmd_auth.go (runAuthEnroll/Rotate/Revoke/Bootstrap), internal/telegram/per_user_token.go (MintForUser), internal/api/router.go (bearerAuthMiddleware with classifyVerifyError + AuthValidationLatency timing); (4) Final docs freshness sweep — Operations.md replaced 'Known Deferral — F02' with three new subsections (F02 Closure shipped + Authentication Metrics + Deprecation Pathway runbook); Deployment.md replaced deferral with shipped status; Development.md replaced pointer with closure pointer; smackerel.md §17.2 replaced deferred-finalize-blocker paragraph with closure paragraph; Testing.md updated outlook + appended Scope 04 inventory subsection; README.md no changes required (zero F02/deferral references); (5) scenario-manifest.json 12th entry SCN-AUTH-012 added with 20 evidence references covering bot_wiring_test.go (8 unit fns) + auth_telegram_f02_wiring_test.go (2 integration fns) + auth_test.go (9 unit fns) + 2 static-guarantees; SCN-AUTH-002 promoted from plannedFile to live file: internal/metrics/auth_test.go; SCN-AUTH-011 three plannedFile entries promoted to live; (6) scopes.md Scope 4 status flipped to In Progress + 7 DoD bullets ticked with inline evidence sub-blocks. Validation gates: go build clean; go vet clean; ./smackerel.sh check OK; ./smackerel.sh lint OK; ./smackerel.sh test unit (Python 417 + all Go packages PASS); ./smackerel.sh test integration (3 pkgs PASS); ./smackerel.sh test e2e --go-run TestE2E_PWAAuth_ (4 PASS); F02 wiring unit (8 PASS); F02 wiring integration (2 PASS); auth metrics unit (8 PASS); artifact-lint PASSED; traceability-guard PASSED (12 scenarios, 0 carry-forward, FINALIZE-PREREQ-044-V7-001 no longer fires); regression-baseline-guard PASSED; pii-scan clean. Commit landed under prefix implement(044): Scope 04 — Telegram wiring + deprecation flag + auth metrics + docs sweep. Push deferred per user instruction (SSH agent locked). Spec 044 remains in_progress; finalize is owned by bubbles.iterate, not bubbles.implement."
+    },
+    {
+      "timestamp": "2026-05-11T06:00:00Z",
+      "agent": "bubbles.test",
+      "scopes": [
+        "04"
+      ],
+      "phase": "test",
+      "disposition": "approved",
+      "summary": "Scope 04 test phase formal — 11/11 gates EXIT=0 (build, check, lint, format --check, test unit, test integration, test e2e --go-run TestE2E_PWAAuth_, go vet ./..., go vet -tags integration ./tests/..., artifact-lint, traceability-guard --verbose); 5 Scope 04 test files inventoried (4 test + 1 helper, +764/-2 lines); 16 test functions added (8 auth-metrics unit + 6 F02 wiring unit + 2 F02 wiring integration); build-tag headers 100% compliant; live-stack verification confirmed for integration tag; mock-framework grep zero matches; skip-marker grep zero matches; adversarial coverage PRESENT for every Scope 04 surface (F02 wiring + auth metrics + deprecation flag + dev/test backward-compat); scenario-manifest 12 entries with zero plannedFile residuals; FINALIZE-PREREQ-044-V7-001 already resolved at finalize-03; manifest=12 scopes=12 mapped 12 unmapped 0; status=in_progress preserved; certification.status preserved in_progress; currentPhase advanced test→validate."
     }
   ],
   "policySnapshot": {
@@ -803,5 +822,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-10T23:10:00Z"
+  "lastUpdatedAt": "2026-05-11T06:00:00Z"
 }
