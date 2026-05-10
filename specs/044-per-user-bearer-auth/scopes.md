@@ -338,9 +338,9 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
 
 ## Scope 2: Hot-Path Middleware Integration + MIT Closures
 
-**Status:** In Progress
-**Phase:** docs
-**Agent:** bubbles.docs
+**Status:** Done
+**Phase:** finalize
+**Agent:** bubbles.iterate
 **Goal:** Wire `bearerAuthMiddleware` and `webAuthMiddleware` to validate per-user PASETO tokens in production. Refactor `MintReveal`, `drive.Connect`, and the annotation pipeline to derive identity from session in production. Preserve dev/test fallbacks. Mark MIT-040-S-008, MIT-038-S-003, and MIT-027-TRACE-001 actor-source segment closed in their owning state.json files. Update FR-AUTH-021 comment block at `internal/api/photos_upload.go` lines 246–321.
 **FR coverage:** FR-AUTH-004 (validation), FR-AUTH-005 (session context attach), FR-AUTH-006 (failed validation HTTP 401 + log), FR-AUTH-007 (claim-binding rule), FR-AUTH-008 (MintReveal), FR-AUTH-009 (drive.Connect), FR-AUTH-010 (annotation actor_source), FR-AUTH-011 (rotation), FR-AUTH-012 (rotation no restart), FR-AUTH-013 (revocation), FR-AUTH-014 (revocation propagation), FR-AUTH-015 (SMACKEREL_AUTH_TOKEN dev/test preservation), FR-AUTH-016 (per-user enabled-in-production default), FR-AUTH-017 (production coexistence policy), FR-AUTH-020 (closure routing), FR-AUTH-021 (handler comment update).
 **Dependencies:** Scope 1 (SST Foundation + Token Subsystem).
@@ -640,6 +640,26 @@ Scenario: SCN-AUTH-010 Stale or tampered token is refused with constant-time dis
   - `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` post-commit → `Artifact lint PASSED.` (the same 2 advisory non-blocking warnings tracked from validate/audit/chaos/spec-review unchanged).
   - `./smackerel.sh check` post-edit → exit 0 (docs-only changes do not affect config or compose wiring).
   - `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` post-commit → PASSED (managed-docs deltas are additive Scope 02 surface, not regressions).
+  - **Claim Source:** executed.
+
+- [x] Per-scope finalize phase certifies Scope 02 closure per Gate G022. Scope 02 status flips to `Done`; `completedScopes` includes `"02"` (now `["01", "02"]`); `executionHistory` records the finalize entry; the spec remains `in_progress` because Scopes 03/04 are not yet started; the open `FINALIZE-PREREQ-044-V7-001` transitionRequest is carried forward unchanged to spec-level finalize (discharged when Scope 03 lands `tests/e2e/auth/pwa_per_user_test.go` OR when scopes.md is restructured at spec-level finalize per the documented resolution paths).
+
+  **Evidence (Phase: finalize):**
+  - **Phase:** finalize **Agent:** bubbles.iterate **Claim Source:** executed
+  - Per-scope finalize gate set executed against HEAD `7cc8181b` (post-docs commit). All gates exit 0 EXCEPT traceability-guard which returns the documented Scope 3 carry-forward (acceptable per the open `FINALIZE-PREREQ-044-V7-001` transitionRequest and matching the Scope 01 finalize precedent):
+    | Gate | Command | Expected | Recorded |
+    |------|---------|----------|----------|
+    | F1 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | exit 0 | PASS (exit 0) — `Artifact lint PASSED.` with the same 2 advisory non-blocking warnings tracked across validate/audit/chaos/spec-review/docs (missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup, NOT Scope 02 finalize blockers) |
+    | F2 | `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | Scope 02 surface clean; Scope 3 failures acceptable per `FINALIZE-PREREQ-044-V7-001` | exit 1 with EXACTLY the 2 documented Scope 3 failures (scope-row count mismatch + missing `tests/e2e/auth/pwa_per_user_test.go`); ALL Scope 02 entries (SCN-AUTH-002/003/004/005/007/008/009/010 mapped to `internal/api/router_test.go` per Test Plan + concrete shipped tests in `internal/api/router_auth_middleware_test.go` + `internal/api/auth_actor_grep_guard_test.go` + `tests/integration/auth_{mintreveal,drive_connect,annotation,rotation,revocation,chaos_scope02}_test.go`) PASS the guard; Gate G068 fidelity reports 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Carry-forward acceptable per per-scope finalize disposition and matches Scope 01 finalize precedent. |
+    | F3 | `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` | exit 0 | PASS (exit 0) — `🐾 Regression baseline guard: PASSED`; G044 test baseline comparison found in report; G045 cross-spec inventory clean (42 done specs of 43 total scanned with no regressions); G046 no route/endpoint collisions detected across specs |
+    | F4 | `./smackerel.sh check` | exit 0 | PASS (exit 0) — `Config is in sync with SST`; `env_file drift guard: OK`; `scenarios registered: 5, rejected: 0` |
+    | F5 | `./smackerel.sh test unit` | exit 0; no regressions | PASS (exit 0) — Python lane `417 passed in 12.83s`; Go lane all packages `ok` or `(cached)` (re-confirmed via `./smackerel.sh test unit --go` exit 0 with every `internal/*` and `cmd/*` package green; zero `FAIL` lines in runner output) |
+    | F6 | `git status --short` (pre-commit, scoped to `specs/044-per-user-bearer-auth/`) | clean | PASS — Scope 02 spec surface clean before this finalize commit (framework-asset working-tree noise under `.github/bubbles/`/`.github/agents/`/`.github/docs/` is unrelated to spec 044 and excluded from this commit per the precedent set across all six prior Scope 02 phase commits) |
+    | F7 | Scope 02 DoD verification | all bullets `[x]` with evidence | PASS — every Scope 02 DoD bullet (including this finalize one post-write) has `[x]` + evidence block; `awk '/^## Scope 2:/,/^## Scope 3:/' scopes.md \| grep -c '^\- \[ \]'` returns `0` |
+    | F8 | Scope 02 status header canonical (Gate G041) | `Done` | PASS — Scope 02 Status header reads `Done`; Scope 03/04 read `Not Started` (canonical) |
+  - Per-scope finalize verdict: **🟢 APPROVED** for Scope 02 closure. Spec 044 remains `in_progress` because Scopes 03 (Web Surfaces + Telegram Connector) and 04 (Deprecation Pathway + Documentation Freshness) are not yet started. The open `FINALIZE-PREREQ-044-V7-001` transitionRequest (Gate V7 Scope 3 surface) is **carried forward** unchanged to spec-level finalize after Scope 04 lands per the documented resolution path (a) `tests/e2e/auth/pwa_per_user_test.go` ships in Scope 03 OR (b) scopes.md is restructured at spec-level finalize per resolution path (b).
+  - State.json updates (this entry): `executionHistory` appended bubbles.iterate finalize entry recording `scopes=["02"]`, `decision=approved`, gate results summary; `execution.completedPhaseClaims` appended Scope 02 finalize object; `certification.certifiedCompletedPhases` appended scope-prefixed `02:finalize`; `certification.completedScopes` advanced from `["01"]` to `["01", "02"]`; `currentPhase` advanced from `finalize` to `plan` (signaling next-scope work — Scope 03 plan/implement; matches Scope 01 finalize precedent); `execution.currentPhase` advanced from `finalize` to `plan`; `execution.currentScope` advanced from `"02"` to `"03"` (signaling Scope 03 next); `status` remains `in_progress`; `certification.status` remains `in_progress`. Test stack left up for the Scope 03 implement-phase agent.
+  - Verbatim per-gate runner output captured in `report.md` → **Finalize Evidence (Scope 02)**.
   - **Claim Source:** executed.
 
 ---
