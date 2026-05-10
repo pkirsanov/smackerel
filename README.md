@@ -199,7 +199,36 @@ Known placeholder values like `development-change-me` are rejected at startup. U
 Authorization: Bearer your-secret-token-here
 ```
 
-### LLM Provider
+#### Per-User Bearer Auth (spec 044) — Production Posture
+
+For multi-user / production-class deployments, Smackerel ships a per-user
+PASETO v4.public bearer-auth subsystem alongside the legacy shared
+`runtime.auth_token`. The per-user model is the **home-lab default** and the
+recommended production posture; the shared token remains the local-dev and
+local-test contract (no per-user enrollment is required for `./smackerel.sh
+up`).
+
+When `auth.enabled=true` AND `runtime.environment=production`:
+
+- **PWA users** authenticate by `POST /v1/web/login` with their per-user
+  PASETO; the server sets an `auth_token` cookie marked `HttpOnly +
+  SameSite=Lax + Secure` that the browser presents on subsequent requests.
+- **Browser extension users** paste their per-user token into the
+  extension popup; the extension stores it in `chrome.storage.local.authToken`
+  and forwards it as `Authorization: Bearer <token>` on every request.
+- **Telegram users** are attributed by chat-id via the `telegram.user_mapping`
+  config (format `<chat_id>:<user_id>` comma-separated). Production drops
+  messages from unmapped chats; the bot never lets the shared bearer
+  attribute captures to the wrong user.
+- **Operators** use the admin token-management UI at `/admin/auth/tokens`
+  (mint / list / rotate / revoke) plus the `smackerel-core auth` CLI
+  subcommands.
+
+See [`docs/Operations.md`](docs/Operations.md#per-user-bearer-authentication-spec-044)
+for the operator runbook (key generation, bootstrap, enrollment, rotation,
+revocation, the four caller surfaces, and the admin UI), and
+[`docs/Deployment.md`](docs/Deployment.md#per-user-bearer-auth-spec-044--production-posture)
+for the deploy-time secrets checklist and API-consumer migration steps.### LLM Provider
 
 The ML sidecar uses [litellm](https://docs.litellm.ai/) to route to any LLM. Configure in `config/smackerel.yaml`:
 

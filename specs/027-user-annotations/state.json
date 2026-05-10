@@ -226,12 +226,31 @@
         "audit: spec 027 status / certification.* / scopeProgress / completedScopes / certifiedCompletedPhases ALL UNTOUCHED — spec 027 stays at done; only executionHistory appended with this closure entry; lastUpdatedAt bumped.",
         "docs: closure narrative captured in specs/044-per-user-bearer-auth/report.md → Scope 02 Implement Evidence section; this state.json entry references that location and explicitly notes that Telegram + NATS entry-point claim-binding remains a spec 044 Scope 03 deliverable."
       ]
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-11T00:00:00Z",
+      "runEndedAt": "2026-05-11T00:00:00Z",
+      "action": "closed_telegram_e2e_segment_of_mit_027_trace_001_via_spec_044_scope_03_telegram_bridge_coverage",
+      "scope": "feature-wide cross-spec closure (Telegram end-to-end coverage segment of MIT-027-TRACE-001)",
+      "crossSpec": "specs/044-per-user-bearer-auth",
+      "summary": "Cross-spec closure of the Telegram-end-to-end-coverage segment of MIT-027-TRACE-001 via spec 044 Scope 03. The actor-source defensive rejection at the API entry path was already CLOSED on 2026-05-10 (entry above) by spec 044 Scope 02, but at that time the supplementary end-to-end coverage proving the body-claimed-actor rejection ALSO works through the Telegram bridge entry point was deferred. Spec 044 Scope 03 lands `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected` which mints a Telegram-issued PASETO via PerUserTokenMinter.MintForChat, sends a body with `actor_source: \"telegram\"` smuggled in, and asserts the production AnnotationHandlers.CreateAnnotation handler rejects it with HTTP 400. This proves the Scope 02 actor-source rejection works through the Telegram path end-to-end. Note: The remaining NATS-bus-segment closure for MIT-027-TRACE-001 (annotation pipeline derives actor_source from session for ALL entry points including raw NATS subjects) is NOT yet shipped — it remains a spec 044 Scope 04 deliverable per design.md §16.3 and is tracked by the F02 deferred-finalize-blocker (`PerUserTokenMinter` per-call wiring into the bot's outbound HTTP). closedAt: 2026-05-11. closedBy: bubbles.docs (mode: spec 044 Scope 03 docs publish). closureSpec: 044-per-user-bearer-auth. closureSegment: telegram-end-to-end-coverage. closureEvidence: specs/044-per-user-bearer-auth/report.md → Test Evidence (Scope 03) → Telegram Bridge subsection. nextRequiredOwner=null for the Telegram segment (NATS segment remains owned by spec 044 Scope 04). Spec 027 status / certification.* / scopeProgress / completedScopes / certifiedCompletedPhases UNTOUCHED — spec 027 stays at done; only executionHistory appended with this closure entry.",
+      "closed_findings": ["MIT-027-TRACE-001-telegram-e2e-segment"],
+      "blockers_resolved": ["MIT-027-TRACE-001-telegram-e2e-segment"],
+      "attestations": [
+        "test: tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected PASSES against the live test stack — Telegram-minted PASETO admits middleware but body-claimed actor_source is rejected by the production AnnotationHandlers handler with HTTP 400.",
+        "audit: spec 027 status remains 'done'; certification.completedScopes / certification.certifiedCompletedPhases / scopeProgress UNCHANGED — only executionHistory appended.",
+        "docs: cross-reference recorded in this state.json entry; closure narrative lives in specs/044-per-user-bearer-auth/report.md Test Evidence (Scope 03)."
+      ]
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-10T14:30:00Z",
+  "lastUpdatedAt": "2026-05-11T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

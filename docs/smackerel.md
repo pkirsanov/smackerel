@@ -1897,6 +1897,21 @@ annotation create handlers. Operator runbook lives at `docs/Operations.md`
 ("Per-User Bearer Authentication"); design rationale lives at
 `specs/044-per-user-bearer-auth/`.
 
+Spec 044 Scope 03 closes the four caller-side surfaces: PWA cookie-derived
+sessions via `POST /v1/web/login` (cookie attributes `HttpOnly +
+SameSite=Lax + Secure`-in-production); browser extension per-user PASETO
+forwarded as `Authorization: Bearer` from `chrome.storage.local.authToken`;
+Telegram chat → user mapping (`TELEGRAM_USER_MAPPING`) with production
+unmapped-chat drop and body-claimed-actor rejection through the Telegram
+entry point; and an admin token-management UI at `/admin/auth/tokens`
+behind `bearerAuthMiddleware` with strict CSP and XSS-safe rendering. The
+supplementary Telegram E2E coverage (`TestTelegramBridge_BodyClaimedActorRejected`)
+proves the Scope 02 actor-source closure works end-to-end through the
+Telegram path; the remaining NATS-segment closure for MIT-027-TRACE-001 is
+deferred to Scope 04 alongside the per-call wiring of `PerUserTokenMinter`
+into the bot's outbound HTTP calls (the F02 deferred-finalize-blocker
+documented in design.md §16.3).
+
 ### 17.3 The Privacy Trifecta
 
 ```mermaid

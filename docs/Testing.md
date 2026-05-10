@@ -200,9 +200,73 @@ go test -count=1 -tags=integration -v -timeout=180s \
 ```
 
 Scope 02 `bearerAuthMiddleware` integration is exercised end-to-end by the
-files above; the PWA / extension / Telegram E2E tests (Scope 03) and the
-Scope 04 deprecation tests are NOT yet authored — their planned files are
-tracked under `specs/044-per-user-bearer-auth/scenario-manifest.json`.
+files above. Scope 03 (PWA / extension / Telegram bridge / admin UI) test
+inventory is documented in the next subsection. Scope 04 (deprecation +
+metrics) tests are NOT yet authored — their planned files are tracked under
+`specs/044-per-user-bearer-auth/scenario-manifest.json`.
+
+### Per-User Bearer Auth — Scope 03 Test Inventory (Spec 044)
+
+Scope 03 lands four caller-side surfaces (PWA cookie session, browser
+extension Authorization header, Telegram per-user bridge, admin
+token-management UI) plus the Scope 03 chaos suite. Test files (zero mocks,
+zero `t.Skip()`):
+
+| Surface | Test files | Build tag | Coverage |
+|---|---|---|---|
+| PWA cookie-derived session E2E | `tests/e2e/auth/pwa_per_user_test.go` (4 tests + 5 sub-tests) | `e2e` | `TestE2E_PWAAuth_Production_PerUserSession` (login → cookie → authenticated photos round-trip), `TestE2E_PWAAuth_Production_LoginRejectsMissingToken` (3 sub-tests: empty body, empty token, whitespace token), `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken` (2 sub-tests: random garbage, foreign-signed PASETO), `TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks` (header path preserved alongside cookie). Discharges `FINALIZE-PREREQ-044-V7-001`. |
+| Browser extension bearer forward (live) | `tests/integration/auth_extension_test.go` (3 tests + 4 sub-tests) | `integration` | `TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession` (mint via `auth.IssueToken` → header forward → admit + session attach), `TestExtensionAuth_MalformedBearer_Production_Returns401` (4 sub-tests: empty / garbage / missing-space / wrong-scheme), `TestExtensionAuth_RevokedPerUserToken_Returns401` (`BearerStore.RevokeToken` + `RevocationCache.MarkRevoked` propagation). |
+| Telegram per-user bridge (live) | `tests/integration/auth_telegram_e2e_test.go` (3 tests) | `integration` | `TestTelegramBridge_MintsPerUserBearer_AdmitsRequest` (mint via `PerUserTokenMinter.MintForChat` → bearer-authenticated annotation create succeeds), `TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed` (production unmapped chat → `ErrNoUserMappingForChat` → caller drops with no API call), `TestTelegramBridge_BodyClaimedActorRejected` (Telegram-minted PASETO admits middleware but body-claimed `actor_source: "telegram"` is rejected by the production handler defense from Scope 02 — closes MIT-027-TRACE-001 actor-source contract end-to-end through the Telegram path). |
+| Admin token-management UI (live) | `tests/integration/auth_admin_ui_test.go` (3 tests + 3 sub-tests) | `integration` | `TestAdminUI_WithBearer_Returns200HTML` (5 functional content markers + `Content-Type` + `Cache-Control: no-store` + `X-Content-Type-Options: nosniff` + non-empty CSP), `TestAdminUI_WithoutBearer_Production_Returns401`, `TestAdminUI_DisallowedMethods_Return405` (POST / PUT / DELETE sub-tests). |
+| Web login handler unit | `internal/api/web_login_test.go` (11 tests with sub-tests) | (none) | Production PASETO accept / foreign-signed reject / revoked reject; dev shared accept / wrong-token reject; dev-bypass `RefusesLogin`; body validation (5 cases); method not-allowed; logout cookie clear (production + dev); `extractBearerToken` cookie fallback (5 cases). |
+| Per-user token minter unit | `internal/telegram/per_user_token_test.go` (8 tests) | (none) | `TestNewPerUserTokenMinter_Validates`, `TestNewPerUserTokenMinter_DefaultsAppliedWhenZero`, `TestMintForChat_Production_MappedChat_ProducesVerifiableToken` (round-trip via `auth.VerifyAndParse`), `TestMintForChat_Production_UnmappedChat_ReturnsError`, `TestMintForChat_Production_EmptyMapping_RejectsAll`, `TestMintForChat_Dev_UnmappedChat_ReturnsZeroAndNil`, `TestMintForChat_Dev_MappedChat_StillMintsForCorrectness`, `TestMintForUser_RejectsEmptyUserID`, `TestMintForChat_AdversarialNoBodyTrust` (chat-id never leaks into PASETO claims), `TestMintForChat_FreshTokenIDPerCall` (token id regenerated per call). |
+| User mapping parser + resolver unit | `internal/telegram/user_mapping_test.go` (6 tests) | (none) | `TestParseUserMapping` (12 sub-tests: empty / single / two / whitespace / negative chat-id / missing colon / missing user_id / missing chat_id / non-numeric / duplicate / empty pair), `TestResolveActorUserID_Production_RejectsUnmappedChat`, `TestResolveActorUserID_Production_AcceptsMappedChat`, `TestResolveActorUserID_Production_EmptyMappingRejectsAll`, `TestResolveActorUserID_Dev_AllowsMappedAndUnmapped`, `TestResolveActorUserID_Production_CaseInsensitiveEnv`, `TestResolveActorUserID_NilBot`. |
+| Scope 03 chaos behaviors (live) | `tests/integration/auth_chaos_scope03_test.go` (5 tests + 1 hot-path benchmark) | `integration` | `TestAuthChaos_S03_PWALoginCookieJarChurn_NoSessionInterleave` (50 jars × 10 reuses; distinct synthetic `RemoteAddr` per jar to bypass per-IP login rate-limit; 0 jar leaks), `TestAuthChaos_S03_ExtensionTokenRotationRace_GraceWindowSurvives` (3-cohort classify pattern; `authReject == 0`; chi `Throttle(100)` 503s classified orthogonal; adversarial lower-bound prevents false-pass via 100% throttle), `TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak` (100 mapped + 100 unmapped + 20 parser allocations per iter), `TestAuthChaos_S03_AdminUIUnderRevocationRace_HTMLOrCleanReject` (revoker injected mid-burst on real test-stack NATS subject; every response 200+HTML or 401-clean; zero panic/torn/leak/cache-leak), `TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed` (50 concurrent mints under DB pressure; all unique TokenIDs — validates design §11 mint-path-DB-independent invariant). All 5 PASS 20/20 under `-race -count=20`; `TOTAL-FAIL-COUNT=0`; `RACE-MARKERS=0`. Hot-path benchmark `BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath`: **1,477,561 ns/op** / **20,782 B/op** / **200 allocs/op** at b.N=10000 single-threaded against the live test stack (full DB roundtrip + chi middleware chain + PASETO verify + bearer cache + handler) — well below NFR-AUTH-001 ≤5 ms p99 budget. |
+
+Required adversarial cases for Scope 03 (12 cases tabulated under
+[`specs/044-per-user-bearer-auth/report.md` → Test Evidence (Scope 03) → Adversarial Coverage Summary](../specs/044-per-user-bearer-auth/report.md)):
+
+- Foreign-signed PASETO accepted in production →
+  `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto`.
+- Whitespace-only token accepted →
+  `TestE2E_PWAAuth_Production_LoginRejectsMissingToken/whitespace_token`.
+- Missing token in body accepted →
+  `TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_body` +
+  `/empty_token`.
+- Random garbage token accepted →
+  `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/random_garbage`.
+- Body-claimed `actor_source` overrides session-derived in Telegram path →
+  `TestTelegramBridge_BodyClaimedActorRejected` (closes MIT-027-TRACE-001
+  end-to-end through the Telegram entry point).
+- Unmapped Telegram chat ID minted any token in production →
+  `TestMintForChat_Production_UnmappedChat_ReturnsError` +
+  `TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed`.
+- Empty Telegram user mapping admits all chats →
+  `TestMintForChat_Production_EmptyMapping_RejectsAll`.
+- Body-claimed `actor_id` not verified through full path →
+  `TestMintForChat_AdversarialNoBodyTrust`.
+- Malformed bearer header (4 cases: empty / garbage / missing-space /
+  wrong-scheme) admitted →
+  `TestExtensionAuth_MalformedBearer_Production_Returns401`.
+- Revoked per-user token still admits requests →
+  `TestExtensionAuth_RevokedPerUserToken_Returns401`.
+- Admin UI loads without bearer in production →
+  `TestAdminUI_WithoutBearer_Production_Returns401`.
+- Admin UI accepts non-GET methods (POST / PUT / DELETE) →
+  `TestAdminUI_DisallowedMethods_Return405`.
+
+Each adversarial test would FAIL if the underlying invariant were weakened —
+zero tautological regressions; zero `t.Skip()`; zero bailout returns.
+
+Run Scope 03 live integration coverage (test stack must be up — host ports
+postgres `47001`, NATS `47002`, smackerel-ml `45002`, smackerel-core `45001`):
+
+```bash
+./smackerel.sh --env test up
+./smackerel.sh test integration --go-run '^TestExtensionAuth_|^TestTelegramBridge_|^TestAdminUI_'
+./smackerel.sh test integration --go-run '^TestAuthChaos_S03_'
+./smackerel.sh test e2e --go-run '^TestE2E_PWAAuth_'
+```
 
 ### QF Companion Connector Test Surface (Spec 041)
 

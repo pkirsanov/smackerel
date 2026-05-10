@@ -879,6 +879,190 @@ client-supplied value can override it.
 Metric registration lands at Scope 04 (per spec 044 OQ-9 + spec 030 dashboards);
 Scopes 01-02 only ship the SST keys.
 
+### Per-User Bearer Auth — Scope 03 (Web Surfaces + Telegram)
+
+Scope 03 extends per-user PASETO authentication onto three caller surfaces — the
+PWA web client, the browser extension, and the Telegram bridge — and ships an
+operator-facing admin token-management UI behind the existing bearer middleware.
+The same `auth.signing.*` and `auth.at_rest_hashing_key` SST surface from Scopes
+01-02 covers all four; no new secret material is required at this scope.
+
+#### PWA Cookie-Derived Sessions (`/v1/web/login`)
+
+`POST /v1/web/login` accepts a per-user PASETO token in the request body
+(production) or the shared `runtime.auth_token` value (dev/test) and converts it
+into an HttpOnly cookie that the browser presents on subsequent same-origin
+requests. The route lives outside `bearerAuthMiddleware` (it is the entry point
+itself) and is rate-limited to 20 requests per IP per minute via
+`httprate.LimitByIP` to absorb credential-stuffing attempts.
+
+Request shape:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"token":"<per-user PASETO>"}' \
+  https://<deploy-host-fqdn>/v1/web/login
+```
+
+On success the handler sets the `auth_token` cookie with these attributes
+(`internal/api/web_login.go`):
+
+| Attribute | Value | Source |
+|---|---|---|
+| `HttpOnly` | `true` | unconditional |
+| `SameSite` | `Lax` | unconditional |
+| `Path` | `/` | unconditional |
+| `Secure` | `true` only when `runtime.environment=production` | `strings.EqualFold(env, "production")` |
+| `Expires` | matches the verified PASETO `exp` claim | derived from token |
+
+`POST /v1/web/logout` clears the cookie (`MaxAge: -1`). Both endpoints respond
+with JSON-only payloads; tokens never appear in URLs or query strings.
+
+The hot-path bearer middleware (`(*Dependencies).bearerAuthMiddleware` in
+`internal/api/router.go`) was extended in this scope so that
+`extractBearerToken` falls back to the `auth_token` cookie when no
+`Authorization: Bearer` header is present. Existing API clients that send the
+header continue to work unchanged; only browser callers that previously had no
+session path benefit from the cookie fallback.
+
+#### Browser Extension Per-User PASETO
+
+The browser extension stores its bearer token in
+`chrome.storage.local.authToken` and forwards it verbatim as
+`Authorization: Bearer <token>` on every request (`web/extension/background.js`
+`getConfig()` block). The storage slot is format-agnostic — either a per-user
+PASETO produced by the `smackerel-core auth enroll <user-id>` CLI OR the legacy
+shared `SMACKEREL_AUTH_TOKEN` value works without any extension code change.
+
+Operator workflow for switching an extension installation to per-user auth:
+
+1. Mint a token for the user with `smackerel-core auth enroll <user-id>`
+   (see CLI Surface above).
+2. Open the extension popup and paste the wire token into the auth-token
+   field; the popup writes it to `chrome.storage.local.authToken`
+   atomically (`web/extension/popup/popup.js`).
+3. Verify by capturing any URL — the extension makes a `GET
+   /v1/photos/connectors` round-trip first to validate the bearer.
+
+See [`web/extension/README.md`](../web/extension/README.md) for the
+extension-side transparency contract.
+
+#### Telegram Chat → User Mapping
+
+The Telegram bridge resolves an inbound chat into an enrolled `user_id` via the
+`TELEGRAM_USER_MAPPING` env var (sourced from `telegram.user_mapping` in
+`config/smackerel.yaml`). Format: comma-separated `<chat_id>:<user_id>` pairs.
+
+```yaml
+telegram:
+  bot_token: ""
+  chat_ids: ""
+  user_mapping: "12345:alice,67890:bob"
+```
+
+Behavior at the bot's message-handling entry point
+(`internal/telegram/bot.go` `safeHandleMessage` line 284 +
+`safeHandleCallback` line 251):
+
+| Environment | Mapping state | Behavior |
+|---|---|---|
+| `production` | chat-id is mapped | Resolve `user_id`, continue handler dispatch |
+| `production` | chat-id is NOT mapped | `slog.Warn` + drop message (no internal API call) |
+| `production` | mapping is empty | Reject all chats |
+| `dev` / `test` | any | Permissive — empty mapping or unmapped chat both proceed |
+
+Operator runbook for adding or removing a mapping:
+
+1. Edit `telegram.user_mapping` in `config/smackerel.yaml` (or the deploy
+   adapter's overlay).
+2. Regenerate config: `./smackerel.sh config generate`.
+3. Restart the stack: `./smackerel.sh down && ./smackerel.sh up`.
+4. Confirm the mapping took effect by sending a Telegram message from the
+   targeted chat and watching the logs — a mapped chat produces a normal
+   capture log line, an unmapped chat in production produces the
+   `telegram: drop message from unmapped chat` warning.
+
+The mapping is parsed once at startup (`parseTelegramUserMapping` in
+`internal/config/config.go`); there is no hot-reload. Whitespace is tolerated
+between pairs and around the colon. Negative chat ids (Telegram supergroups)
+are accepted.
+
+##### Known Deferral — F02 (Scope 04)
+
+`PerUserTokenMinter` (`internal/telegram/per_user_token.go`) ships the library
+that mints short-lived per-user PASETO bearers from
+`auth.signing.active_private_key` keyed by the resolved `user_id`. The
+**per-call wiring** of `MintForChat` into the bot's outbound HTTP calls
+(`Bot.callCapture`, `Bot.handleReplyAnnotation`, `Bot.handleAnnotationCommand`)
+is deferred to Scope 04. As of this docs publication those callsites still
+attach `b.authToken` (the shared bot bearer) on internal API calls.
+
+Production impact while the deferral stands:
+
+- The unmapped-chat drop above + the defensive body-source rejection on the
+  annotation handler (Scope 02 work — see "Production Body / Header
+  Actor-Identity Rejection" above) preserve the safety contract. No
+  privilege escalation is possible.
+- A production deployment with `auth_enabled=true` AND
+  `production_shared_token_fallback_enabled=false` (the spec-mandated
+  default per FR-AUTH-017) would have every mapped-chat Telegram capture
+  return `HTTP 401` from `bearerAuthMiddleware`. Until the wiring lands,
+  production Telegram operators MUST keep
+  `production_shared_token_fallback_enabled=true` — the transitional
+  escape hatch documented in design §9.3 — so the shared bot bearer
+  continues to authenticate.
+
+Trigger for closure: any production Telegram deployment that flips
+`production_shared_token_fallback_enabled` to `false`. Routing: spec 044
+Scope 04 implement (or a Scope 03 follow-up implement pass) before
+spec-level finalize.
+
+#### Admin Token-Management UI (`/admin/auth/tokens`)
+
+Scope 03 ships a single embedded static HTML page that serves as the operator
+self-service surface for the Scope 02 `/v1/auth/*` admin endpoints. The page
+lives at `internal/api/admin_ui_static/tokens.html` and is served via
+`HandleAdminTokensUI` (`internal/api/admin_ui.go`) at `GET
+/admin/auth/tokens` behind `bearerAuthMiddleware`.
+
+Three panels are rendered XSS-safe (`textContent` + `appendChild` only):
+
+| Panel | Calls | Purpose |
+|---|---|---|
+| **Mint a New User** | `POST /v1/auth/users` | Enroll a new user; UI displays the wire token exactly once |
+| **Enrolled Users** | `GET /v1/auth/users` + per-row `POST /v1/auth/users/{user_id}/rotate` | List existing enrollments; rotate each user's active token |
+| **Revoke a Specific Token** | `POST /v1/auth/tokens/{token_id}/revoke` | Revoke an individual token immediately |
+
+Response headers set by `HandleAdminTokensUI`:
+
+- `Content-Type: text/html; charset=utf-8`
+- `Cache-Control: no-store`
+- `X-Content-Type-Options: nosniff`
+- `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'`
+
+XHR mutations carry `credentials: 'same-origin'` so the existing `auth_token`
+cookie (set by `/v1/web/login`) authenticates the call.
+
+Access model — defense in depth at the XHR layer:
+
+1. The page handler enforces ONLY `bearerAuthMiddleware` admit (any
+   authenticated session that has a cookie OR `Authorization: Bearer` header
+   can load the page).
+2. The underlying `/v1/auth/*` admin REST endpoints independently enforce
+   admin scope via `AuthAdminHandlers.callerIsAdmin` (per the table in the
+   "Admin HTTP Endpoints" section above). A non-admin authenticated session
+   that loads the page sees the form chrome, but every admin operation
+   returns `HTTP 401 FORBIDDEN admin scope required` from the underlying
+   endpoint.
+
+Per-user PASETO sessions (`SessionSourcePerUserToken`) currently do NOT pass
+`callerIsAdmin` (the per-user admin allowlist surface is deferred). Operators
+on production-class deployments use either the bootstrap session or — when
+`production_shared_token_fallback_enabled=true` — the legacy shared token to
+exercise the admin UI's mutation panels. The page itself loads under any
+authenticated session.
+
 ## Expense Tracking Configuration
 
 Expense tracking captures receipts from email, photos, and PDFs, classifies them using a 7-level rule chain, and supports CSV export.

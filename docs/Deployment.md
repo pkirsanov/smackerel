@@ -314,6 +314,97 @@ handlers continue to honor body-supplied actor identifiers and the
 `X-Actor-Id` header, so existing local-dev consumers and integration fixtures
 do not need to be changed before the flip.
 
+### API-Consumer Migration (Scope 03)
+
+Scope 03 extends per-user PASETO authentication onto the PWA, browser
+extension, and Telegram bridge, plus an admin token-management UI. Each
+surface has a distinct migration step for production targets where
+`auth.enabled=true`.
+
+1. **PWA users — clear browser state and re-authenticate.** Existing PWA
+   sessions backed by a stored `SMACKEREL_AUTH_TOKEN` (in `localStorage` or
+   the legacy cookie) MUST be cleared and the user must re-authenticate via
+   the new `POST /v1/web/login` endpoint. The login handler converts a
+   per-user PASETO into an `auth_token` cookie marked `HttpOnly +
+   SameSite=Lax + Path=/` and (in production) `Secure`. End users who keep
+   the existing token in localStorage will see authenticated requests
+   continue to work unchanged in `dev` / `test`; in production once the
+   shared-token fallback is disabled the cookie path is the only working
+   browser auth surface. See
+   [Operations.md](Operations.md#pwa-cookie-derived-sessions-v1weblogin) for
+   the full request shape and cookie attribute table.
+
+2. **Browser extension users — install per-user tokens.** The extension
+   storage slot `chrome.storage.local.authToken`
+   (`web/extension/background.js`) accepts EITHER a per-user PASETO
+   (production) OR the legacy shared `SMACKEREL_AUTH_TOKEN` (dev/test). To
+   migrate an installation:
+
+    - On the server: mint a token for the user with `smackerel-core auth
+      enroll <user-id>` (see Operations.md "CLI Surface" for the docker exec
+      form).
+    - On the client: open the extension popup, paste the wire token into
+      the auth-token input, and click save. The popup writes the value to
+      `chrome.storage.local.authToken` atomically; subsequent capture
+      requests carry it as `Authorization: Bearer <token>` with no further
+      code change. Operators MAY also write `chrome.storage.local.authToken`
+      directly via Chrome DevTools for bulk rollouts.
+
+3. **Operators — populate Telegram chat → user mapping before flip.** Any
+   production target that intends to use the Telegram bridge with per-user
+   attribution MUST populate `telegram.user_mapping` in
+   `config/smackerel.yaml` (or the deploy adapter overlay's
+   `TELEGRAM_USER_MAPPING` env var) before flipping `auth_enabled=true`.
+   Format: `<chat_id>:<user_id>` pairs, comma-separated. Production with an
+   unmapped chat drops the message at the bot's entry point (`slog.Warn` +
+   no internal API call); production with empty mapping rejects all chats.
+   Dev / test tolerate empty mapping. Steps:
+
+    - Edit `telegram.user_mapping` in `config/smackerel.yaml` (or the deploy
+      overlay).
+    - `./smackerel.sh config generate` to refresh `<env>.env` with the new
+      `TELEGRAM_USER_MAPPING` value.
+    - Restart the stack so the bot reloads its mapping (the parser is
+      startup-only).
+
+4. **Admin operators — exercise the token-management UI behind admin
+   bearer.** The admin token-management UI is reachable at `GET
+   /admin/auth/tokens` (`internal/api/admin_ui.go`) behind
+   `bearerAuthMiddleware`. The page exposes three panels — Mint a New
+   User, Enrolled Users (with per-row Rotate), and Revoke a Specific
+   Token — that drive the existing Scope 02 `/v1/auth/*` admin REST
+   endpoints. Per the admin-scope rule (see
+   [Operations.md](Operations.md#admin-token-management-ui-adminauthtokens)),
+   per-user PASETO sessions do NOT yet pass `callerIsAdmin`, so admin
+   mutations require either the bootstrap session or — when
+   `production_shared_token_fallback_enabled=true` — the legacy shared
+   token. The page itself loads under any authenticated session.
+
+#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)
+
+The library `internal/telegram/per_user_token.go` (`PerUserTokenMinter`) is
+shipped, unit-tested, and integration-tested in isolation. The **per-call
+wiring** of `MintForChat` into the bot's outbound HTTP calls
+(`Bot.callCapture` / `Bot.handleReplyAnnotation` /
+`Bot.handleAnnotationCommand`) is **deferred to spec 044 Scope 04**. As of
+this docs publication those callsites still attach the shared bot bearer
+(`b.authToken`) on internal API calls.
+
+Operator implication for any production Telegram deployment that intends
+to disable the shared-token fallback:
+
+| Setting | Behavior while F02 deferral stands |
+|---|---|
+| `auth_enabled=true` AND `production_shared_token_fallback_enabled=true` | **Working** — bot uses shared bearer; mapped chats are dropped per the safety contract; unmapped chats are dropped by `Bot.resolveActorUserID` |
+| `auth_enabled=true` AND `production_shared_token_fallback_enabled=false` | **Telegram captures will 401** — every mapped-chat outbound call uses `b.authToken`, which `bearerAuthMiddleware` rejects when shared-token fallback is disabled |
+
+Until F02 lands, production Telegram operators MUST keep
+`production_shared_token_fallback_enabled=true` (the transitional escape
+hatch documented in design §9.3). Trigger for closure: any production
+Telegram deployment that needs the fallback flipped to `false`. Routing:
+spec 044 Scope 04 implement (or a Scope 03 follow-up implement pass) before
+spec-level finalize.
+
 ## Docker Compose Production Overrides
 
 Create a `docker-compose.prod.yml` for production-specific settings:
