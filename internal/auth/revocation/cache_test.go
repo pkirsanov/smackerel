@@ -45,7 +45,7 @@ func (s *stubLoader) LoadRevokedTokenIDs(_ context.Context) ([]string, error) {
 func TestRevocationCache_BootstrapAndPropagate(t *testing.T) {
 	cache := NewCache()
 	loader := &stubLoader{queue: [][]string{
-		{"tok-1", "tok-2", "tok-3"}, // bootstrap
+		{"tok-1", "tok-2", "tok-3"},          // bootstrap
 		{"tok-1", "tok-2", "tok-3", "tok-4"}, // first refresh — adds tok-4
 	}}
 
