@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "validate",
+  "currentPhase": "audit",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "validate",
+    "currentPhase": "audit",
     "currentScope": "03",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -98,6 +98,16 @@
         "timestamp": "2026-05-11T00:30:00Z",
         "disposition": "approved",
         "note": "Spec 044 Scope 03 formal test phase per Gate G022. Ten gate commands executed against HEAD on top of implement-phase commit 74010f1f. (T1) ./smackerel.sh check exit=0 — config in sync; env_file drift OK; scenario-lint OK (5/0). (T2) ./smackerel.sh build exit=0 — smackerel-core + smackerel-ml rebuilt clean. (T3) ./smackerel.sh lint exit=0 — All checks passed including web manifests, JS-syntax (7 files), extension-version-consistency (1.0.0 match). (T4) ./smackerel.sh format --check exit=0 — '49 files already formatted'. (T5) ./smackerel.sh test unit exit=0 — Go lane all packages 'ok' (internal/auth, internal/telegram, internal/api, internal/config); Python lane '417 passed in 12.90s'. (T6) ./smackerel.sh test integration exit=0 — tests/integration 40.181s + tests/integration/agent 2.403s + tests/integration/drive 8.311s, ZERO FAIL across all 3 packages; TestExtensionAuth_*, TestTelegramBridge_*, TestAdminUI_*, TestAuthBootstrap_* all PASS against live PostgreSQL on 127.0.0.1:47001 with real PASETO mint via auth.IssueToken, real RevocationCache, real bearerAuthMiddleware. (T7) ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' exit=0 (0.721s) — 4 PWA Go E2E tests + 5 sub-tests in tests/e2e/auth/pwa_per_user_test.go (build tag e2e, package auth_e2e) PASS against real httptest.NewTLSServer + cookiejar.New + real pgxpool against DATABASE_URL: TestE2E_PWAAuth_Production_PerUserSession (0.24s) discharges FINALIZE-PREREQ-044-V7-001 + SCN-AUTH-002 [PWA path]; TestE2E_PWAAuth_Production_LoginRejectsMissingToken (0.09s) with 3 sub-tests (empty_body, empty_token, whitespace_token); TestE2E_PWAAuth_Production_LoginRejectsInvalidToken (0.09s) with 2 sub-tests (random_garbage, foreign-signed_paseto adversarial); TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks (0.21s); 'PASS: go-e2e'. Targeted selector rationale: full ./smackerel.sh test e2e would also run 5 lifecycle scripts and 36 shared shell scripts covering specs unrelated to Scope 03 (recommendations, photos, knowledge graph, drive, etc.) — Scope 03 e2e proof is the PWA Go test which the --go-run selector executes verbatim against the same Go-E2E test stack with the same real dependencies. (T8) go vet ./... exit=0; go vet -tags integration ./tests/... exit=0; go vet -tags e2e ./tests/... exit=0 — all 3 vet variants clean. (T9) artifact-lint.sh PASSED — all required artifacts present, all DoD bullets carry evidence blocks, no fabrication signals. (T10) traceability-guard.sh exit=1 — 1 EXPECTED carry-forward failure 'scenario-manifest.json covers only 11 scenarios but scopes define 12' (FINALIZE-PREREQ-044-V7-001 path-b scope-row count discrepancy); ALL 12 DoD-fidelity scenario mappings PASS, ALL 43 test-row checks PASS, ALL 12 concrete file refs resolve, ALL 12 report evidence refs resolve. Test inventory (Scope 03 surface): tests/e2e/auth/pwa_per_user_test.go (4+5 e2e tag); tests/integration/auth_extension_test.go (3+4 integration tag); tests/integration/auth_telegram_e2e_test.go (3 integration tag); tests/integration/auth_admin_ui_test.go (3+3 integration tag); internal/telegram/per_user_token_test.go (8 unit); internal/telegram/user_mapping_test.go (7 unit); internal/api/web_login_test.go (11 unit). Mock audit: ZERO mocks across any Scope 03 test file. Skip audit: ZERO t.Skip / .skip( / xit / xdescribe / .only / test.todo. Adversarial coverage: foreign-signed PASETO in PWA login; body-claimed actor_id rejection in Telegram path (closes MIT-027-TRACE-001 actor-source defensive contract end-to-end); whitespace-only token rejection; missing-token request body rejection; revoked-token rejection through bearerAuthMiddleware. Test stack: brought back UP via ./smackerel.sh --env test up after artifact updates so validate-phase inherits healthy stack on host ports 47001/47002/45002/45001/45003. State.json updates: completedPhaseClaims appended this object; certifiedCompletedPhases appended '03:test'; execution.currentPhase + top-level currentPhase advanced from 'test' to 'validate'; execution.currentScope preserved at '03'; status remains 'in_progress'; completedScopes NOT advanced. FINALIZE-PREREQ-044-V7-001 transitionRequest remains 'open' (carry-forward to validate/finalize phase). IDE file-edit tools FAILED with cache-poisoning truncating the prior implement entry's summary field; restored from git and re-applied via pathlib.write_text heredoc per /memories/repo/ide-cache-poisoning.md (USER-BLESSED workaround). PII rule honored. NO --no-verify. NO push (SSH agent locked)."
+      },
+      {
+        "scope": "03",
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-11T01:30:00Z",
+        "disposition": "approved_with_deferred_finalize_blockers",
+        "decision": "approved_with_deferred_finalize_blockers",
+        "transitionRequestDecision": "FINALIZE-PREREQ-044-V7-001 KEPT OPEN with expectedResolution at spec-level finalize (path-b) — failure (2) DISCHARGED by tests/e2e/auth/pwa_per_user_test.go landing at commit 2d483842 + live PASS at V7; failure (1) scope-row count residual deferred to spec-level finalize per the original transitionRequest path-b language",
+        "note": "Spec 044 Scope 03 formal validate phase per Gate G022. Nine gate commands (V1-V9) executed against HEAD cc426f10 (test-phase commit). (V1) ./smackerel.sh build exit=0 — smackerel-core + smackerel-ml Built; final image SHA 6db7f6c30a40cc4f2a008d658efe59d98560a39104edaa7310a266d879ff792f. (V2) ./smackerel.sh check exit=0 — Config in sync with SST; env_file drift guard OK; scenarios registered: 5, rejected: 0; scenario-lint OK. (V3) ./smackerel.sh lint exit=0 — All checks passed plus web-manifest validation (PWA + Chrome MV3 + Firefox MV2 OK), JS-syntax (7 files OK), extension-version-consistency (1.0.0 match), Web validation passed. (V4) ./smackerel.sh format --check exit=0 — '49 files already formatted'. (V5) ./smackerel.sh test unit exit=0 — Python ML sidecar '417 passed in 17.03s'; Go lane every internal/* and cmd/* package returns 'ok ... (cached)' across the full sweep; ZERO FAIL lines. (V6) ./smackerel.sh test integration exit=0 — three packages all 'ok' verbatim: tests/integration 43.885s, tests/integration/agent 2.345s, tests/integration/drive 13.097s; ZERO FAIL lines across all 3 packages. (V7) ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' exit=0 — tests/e2e/auth package PASS in 0.368s; 'PASS: go-e2e'; sub-test results: TestE2E_PWAAuth_Production_PerUserSession PASS (0.24s discharges FINALIZE-PREREQ-044-V7-001 failure-2 + SCN-AUTH-002 [PWA path]); TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_body + /empty_token + /whitespace_token all PASS; TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/random_garbage + /foreign-signed_paseto (adversarial) both PASS; TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks PASS (0.21s, 200 status). Test stack auto-torn-down by e2e runner on completion (expected runner behavior). (V8) bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth exit=0 — 'Artifact lint PASSED.' Two non-blocking advisory ⚠ warnings (missing-recommended reworkQueue field, deprecated scopeProgress field) unchanged from prior phases. (V9) timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose exit=1 — RESULT: FAILED (1 failures, 0 warnings); the SOLE failure is the verbatim line '❌ scenario-manifest.json covers only 11 scenarios but scopes define 12' which is the FINALIZE-PREREQ-044-V7-001 path-b residual scope-row counting artefact (scopes.md Scope 3 lists SCN-AUTH-002 [PWA path] as separate Test Plan row vs manifest's correct 11 distinct SCN-AUTH-NNN entries per spec.md); ALL Scope 3 PWA-path entries now PASS the guard ('Scope 3: Web Surfaces + Telegram Connector scenario maps to concrete test file: tests/e2e/auth/pwa_per_user_test.go' and 'Scope 3: Web Surfaces + Telegram Connector report references concrete test evidence: tests/e2e/auth/pwa_per_user_test.go'); Gherkin → DoD content fidelity (Gate G068) reports '12 scenarios checked, 12 mapped to DoD, 0 unmapped'; aggregate 'Scenarios checked: 12 / Test rows checked: 43 / Scenario-to-row mappings: 12 / Concrete test file references: 12 / Report evidence references: 12'. Per Scope 03 validate-gate decision policy ('Acceptable: only the known scope-row count carry-forward (11 vs 12). Any OTHER finding fails the gate.') V9 disposition: PASS-WITH-DEFERRED. FINALIZE-PREREQ-044-V7-001 DECISION (verbatim per the original transitionRequest description bundling BOTH failures as the V7 concern with discharge condition 'traceability-guard exit=0 with NO Scope 3 failures before promoting spec 044 to done'): KEPT OPEN with expectedResolution = 'spec-level finalize via scopes.md restructure (path-b) OR scenario-manifest.json 12th-entry addition (path-a completion clause) — deferred to spec-level finalize per the original transitionRequest description'. Rationale: (i) original transitionRequest description bundles BOTH failures under V7 concern (not 'separate cosmetic issue'); (ii) failure (2) (PWA test file) fully discharged at this scope's implement+test phases (commit 2d483842 + V7 live PASS); (iii) failure (1) (scope-row count) is the residual per path-(a) completion clause that was not performed; (iv) per user-policy 'Keep open with documented expectedResolution' is an EXPLICITLY ACCEPTED choice at this scope's validate boundary; (v) original path-(b) language 'at finalize time, scopes.md is restructured' explicitly anchors alternative discharge at spec-level finalize; (vi) restructuring scopes.md Scope 3 to consolidate [PWA path] sub-row affects planning artifact structure (planning responsibility, owned by bubbles.plan or by spec-level finalize agent during scope-row consolidation), not test/code correctness defect; (vii) validate exit criterion explicitly permits both options. Updates to transitionRequest: affectedFiles reduced 3->2 (PWA test file removed since exists+live-tested); NEW partialDischargeEvidence field added (test file landing + live PASS + residual artefact + expectedResolution); NEW expectedResolution field added; NEW lastReviewedAt + lastReviewedBy fields added. State.json updates this entry: completedPhaseClaims appended scope-03 validate object form + 'validate' string parity entry; certification.certifiedCompletedPhases appended '03:validate'; currentPhase advanced 'validate' -> 'audit'; execution.currentPhase advanced 'validate' -> 'audit'; execution.currentScope preserved at '03'; status remains 'in_progress'; certification.status remains 'in_progress'; certification.completedScopes NOT advanced (per per-scope finalize boundary owned by bubbles.iterate). Test stack: V7 e2e runner tore the stack down on completion (no stack left up for audit-phase agent — audit-phase agent should re-bring up via ./smackerel.sh --env test up if needed). Operational discipline: IDE replace_string_in_file used for report.md append (small targeted addition; no multi-KB body strings touched); pathlib.write_text() heredoc used for state.json mutations per user-blessed cache-poisoning workaround (multi-KB summary entries present); NO new code added; NO new tests added; NO --no-verify on the commit; NO push (SSH agent locked). Smackerel PII rule honored — no real Linux usernames / hostnames / IPs in committed files."
       }
     ],
     "pendingTransitionRequests": []
@@ -125,7 +135,8 @@
       "02:spec-review",
       "02:docs",
       "02:finalize",
-      "03:test"
+      "03:test",
+      "03:validate"
     ],
     "lockdownState": {
       "active": false,
@@ -486,6 +497,51 @@
       ],
       "decision": "approved",
       "summary": "Spec 044 Scope 03 formal test phase per Gate G022. Ten gate commands executed against HEAD on top of implement-phase commit 74010f1f. (T1) ./smackerel.sh check exit=0. (T2) ./smackerel.sh build exit=0. (T3) ./smackerel.sh lint exit=0. (T4) ./smackerel.sh format --check exit=0. (T5) ./smackerel.sh test unit exit=0 — Go lane all 'ok'; Python 417 passed in 12.90s. (T6) ./smackerel.sh test integration exit=0 — tests/integration 40.181s + agent 2.403s + drive 8.311s, ZERO FAIL; TestExtensionAuth_*/TestTelegramBridge_*/TestAdminUI_*/TestAuthBootstrap_* all PASS against live PostgreSQL on 127.0.0.1:47001. (T7) ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' exit=0 (0.721s) — 4 PWA Go E2E tests + 5 sub-tests in tests/e2e/auth/pwa_per_user_test.go (e2e tag) PASS against real httptest.NewTLSServer + real pgxpool: PerUserSession (0.24s) discharges FINALIZE-PREREQ-044-V7-001 + SCN-AUTH-002 [PWA path]; LoginRejectsMissingToken (0.09s, 3 sub-tests); LoginRejectsInvalidToken (0.09s, 2 sub-tests including foreign-signed_paseto adversarial); AuthorizationHeaderStillWorks (0.21s); 'PASS: go-e2e'. Targeted selector rationale: full e2e would also run lifecycle/shared shell scripts covering unrelated specs — Scope 03 e2e proof is the PWA Go test executed verbatim against the same Go-E2E test stack with the same real dependencies. (T8) go vet ./...=0; go vet -tags integration ./tests/...=0; go vet -tags e2e ./tests/...=0 — all 3 clean. (T9) artifact-lint.sh PASSED. (T10) traceability-guard.sh exit=1 — 1 EXPECTED carry-forward failure (FINALIZE-PREREQ-044-V7-001 path-b scope-row count); ALL 12 DoD-fidelity mappings PASS, ALL 43 test-row checks PASS, ALL 12 concrete file refs resolve, ALL 12 report evidence refs resolve. Test inventory (Scope 03 surface): tests/e2e/auth/pwa_per_user_test.go (4+5 e2e), tests/integration/auth_extension_test.go (3+4 integration), tests/integration/auth_telegram_e2e_test.go (3 integration), tests/integration/auth_admin_ui_test.go (3+3 integration), internal/telegram/per_user_token_test.go (8 unit), internal/telegram/user_mapping_test.go (7 unit), internal/api/web_login_test.go (11 unit). Mock audit: ZERO mocks. Skip audit: ZERO skip markers. Adversarial coverage: foreign-signed PASETO in PWA login; body-claimed actor_id rejection in Telegram path (closes MIT-027-TRACE-001); whitespace-only token; missing-token body; revoked-token through bearerAuthMiddleware. Test stack restored UP via ./smackerel.sh --env test up after artifact updates. State.json updates: completedPhaseClaims appended this object; certifiedCompletedPhases appended '03:test'; execution.currentPhase + top-level currentPhase advanced 'test'→'validate'; execution.currentScope preserved at '03'; status remains 'in_progress'; completedScopes NOT advanced. FINALIZE-PREREQ-044-V7-001 transitionRequest remains 'open' (carry-forward). IDE file-edit tools FAILED with cache-poisoning on first attempt (truncated prior implement entry summary); restored from git + reapplied via pathlib.write_text heredoc per /memories/repo/ide-cache-poisoning.md (USER-BLESSED). PII rule honored. NO --no-verify. NO push (SSH agent locked)."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "scope": "03",
+      "scopes": [
+        "03"
+      ],
+      "timestamp": "2026-05-11T01:30:00Z",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "decision": "approved_with_deferred_finalize_blockers",
+      "headAtRun": "cc426f10",
+      "gateExitCodes": {
+        "V1_build": 0,
+        "V2_check": 0,
+        "V3_lint": 0,
+        "V4_format": 0,
+        "V5_test_unit": 0,
+        "V6_test_integration": 0,
+        "V7_test_e2e_pwa": 0,
+        "V8_artifact_lint": 0,
+        "V9_traceability_guard": 1
+      },
+      "v9DispositionRationale": "EXACTLY 1 failure ('scenario-manifest.json covers only 11 scenarios but scopes define 12') = known FINALIZE-PREREQ-044-V7-001 path-b carry-forward; per Scope 03 validate-gate policy 'Acceptable: only the known scope-row count carry-forward (11 vs 12). Any OTHER finding fails the gate.' Disposition: PASS-WITH-DEFERRED.",
+      "transitionRequestDecisions": [
+        {
+          "id": "FINALIZE-PREREQ-044-V7-001",
+          "decision": "kept_open_with_expectedResolution",
+          "verbatimRationale": "Original transitionRequest description bundles BOTH failures under V7 concern with discharge condition 'traceability-guard exit=0 with NO Scope 3 failures before promoting spec 044 to done.' Failure (2) (PWA test file does not exist) DISCHARGED by tests/e2e/auth/pwa_per_user_test.go landing at commit 2d483842 + live PASS at V7 of this validate phase. Failure (1) (scope-row count 11 vs 12) is the path-(a) completion-clause residual that was not performed by implement/test agents. Per user-policy 'Keep open with documented expectedResolution' is EXPLICITLY ACCEPTED at this scope's validate boundary; original path-(b) language 'at finalize time, scopes.md is restructured' explicitly anchors alternative discharge at spec-level finalize. KEPT OPEN with expectedResolution = 'spec-level finalize via scopes.md restructure (path-b) OR scenario-manifest.json 12th-entry addition (path-a completion clause) — deferred to spec-level finalize'.",
+          "partialDischargeEvidence": "tests/e2e/auth/pwa_per_user_test.go landed at commit 2d483842; PWA E2E TestE2E_PWAAuth_Production_PerUserSession + 3 LoginRejectsMissingToken sub-tests + 2 LoginRejectsInvalidToken sub-tests + AuthorizationHeaderStillWorks all PASS at V7 against the live test stack; traceability guard now reports '✅ Scope 3: Web Surfaces + Telegram Connector scenario maps to concrete test file: tests/e2e/auth/pwa_per_user_test.go' and '✅ Scope 3: Web Surfaces + Telegram Connector report references concrete test evidence: tests/e2e/auth/pwa_per_user_test.go'; affectedFiles reduced 3->2 (PWA test file removed)."
+        }
+      ],
+      "stateMutations": {
+        "currentPhase": "validate -> audit",
+        "executionCurrentPhase": "validate -> audit",
+        "executionCurrentScope": "03 (preserved)",
+        "status": "in_progress (preserved)",
+        "certificationStatus": "in_progress (preserved)",
+        "certificationCompletedScopes": "['01', '02'] (preserved — Scope 03 not yet finalized)",
+        "completedPhaseClaimsAppended": "scope-03 validate object form",
+        "certifiedCompletedPhasesAppended": "'03:validate'"
+      },
+      "summary": "Spec 044 Scope 03 formal validate phase per Gate G022. Nine gate commands (V1-V9) executed against HEAD cc426f10. V1-V8 all exit=0 PASS; V9 exit=1 PASS-WITH-DEFERRED (only the known FINALIZE-PREREQ-044-V7-001 path-b carry-forward 'scenario-manifest.json covers only 11 scenarios but scopes define 12'). All Scope 3 PWA-path traceability entries now PASS the guard at the file-existence + report-evidence layers. FINALIZE-PREREQ-044-V7-001 KEPT OPEN with expectedResolution at spec-level finalize per the original transitionRequest description's bundled-V7-concern framing and explicitly-accepted user-policy choice. Failure (2) (PWA test file) DISCHARGED at commit 2d483842 + V7 live PASS; failure (1) (scope-row count) deferred to spec-level finalize. NO new code, NO new tests added in this phase. Test stack torn down by V7 e2e runner on completion. NOT pushed (SSH agent locked). Verbatim per-gate exit codes + transitionRequest decision rationale captured in report.md -> Validate Evidence (Scope 03)."
     }
   ],
   "policySnapshot": {
@@ -536,12 +592,29 @@
       ],
       "affectedFiles": [
         "specs/044-per-user-bearer-auth/scenario-manifest.json",
-        "specs/044-per-user-bearer-auth/scopes.md",
-        "tests/e2e/auth/pwa_per_user_test.go"
+        "specs/044-per-user-bearer-auth/scopes.md"
       ],
       "resolutionRequiredBeforePhase": "finalize",
-      "evidenceRef": "report.md#gate-v7-traceability-guard-failure-disposition-reasoning"
+      "evidenceRef": "report.md#gate-v7-traceability-guard-failure-disposition-reasoning",
+      "partialDischargeEvidence": {
+        "failure_2_pwaTestFile_discharged": true,
+        "failure_2_dischargedByCommit": "2d483842",
+        "failure_2_dischargedByCommitMessage": "implement(044): Scope 03 — PWA per-user session + extension token + Telegram bridge claim-binding",
+        "failure_2_liveTestEvidence": "V7 of Scope 03 validate phase (HEAD cc426f10): TestE2E_PWAAuth_Production_PerUserSession + TestE2E_PWAAuth_Production_LoginRejectsMissingToken (3 sub-tests) + TestE2E_PWAAuth_Production_LoginRejectsInvalidToken (2 sub-tests including foreign-signed_paseto adversarial) + TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks all PASS in tests/e2e/auth package (0.368s, PASS: go-e2e)",
+        "failure_1_scopeRowCount_residual": true,
+        "failure_1_residualReason": "Path-(a) completion clause from original transitionRequest description (\"the manifest then can be updated to include a 12th SCN entry or the scope-row can be deduplicated against the SCN-AUTH-002 manifest entry\") was NOT performed by implement/test agents; manifest still tracks 11 distinct SCN-AUTH-NNN entries per spec.md (correct upstream invariant); scopes.md Scope 3 still surfaces SCN-AUTH-002 [PWA path] as a separate Test Plan row",
+        "reviewedAtPhase": "validate",
+        "reviewedAtScope": "03",
+        "reviewedByAgent": "bubbles.validate",
+        "reviewedAtHEAD": "cc426f10",
+        "reviewedAtTimestamp": "2026-05-11T01:30:00Z"
+      },
+      "expectedResolution": "spec-level finalize via scopes.md restructure (path-b) OR scenario-manifest.json 12th-entry addition (path-a completion clause) — deferred to spec-level finalize per the original transitionRequest description path-(b) language (\"at finalize time, scopes.md is restructured\")",
+      "lastReviewedAt": "2026-05-11T01:30:00Z",
+      "lastReviewedBy": "bubbles.validate",
+      "lastReviewedAtPhase": "validate",
+      "lastReviewedAtScope": "03"
     }
   ],
-  "lastUpdatedAt": "2026-05-11T00:30:00Z"
+  "lastUpdatedAt": "2026-05-11T01:30:00Z"
 }
