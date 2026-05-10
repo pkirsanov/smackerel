@@ -176,7 +176,15 @@ contract; no per-user enrollment is required for `./smackerel.sh up`,
 `./smackerel.sh test unit`, or `./smackerel.sh test integration`. The per-user
 PASETO subsystem and operator runbook live under `internal/auth/` and are
 documented for production-class deployments in
-[Operations.md](../docs/Operations.md#per-user-bearer-authentication-spec-044-scope-01).
+[Operations.md](../docs/Operations.md#per-user-bearer-authentication-spec-044).
+
+In `dev` and `test`, the Scope 02 MIT-closure handlers (photos `MintReveal`,
+cloud-drive `Connect`, user-annotation create) continue to honor body-supplied
+`actor_id` / `owner_user_id` / `actor_source` and the `X-Actor-Id` header, so
+existing local-dev scripts and integration fixtures work unchanged. The
+production-mode rejection (HTTP 400) only fires when `auth.enabled=true` AND
+`runtime.environment=production`. The hot-path middleware lives at
+`internal/api/router.go` (`(*Dependencies).bearerAuthMiddleware`).
 
 ### Port And URL Discipline
 

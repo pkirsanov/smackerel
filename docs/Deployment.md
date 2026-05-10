@@ -241,7 +241,7 @@ After changing the token:
 Spec 044 introduces a per-user PASETO v4.public bearer-auth subsystem alongside
 the legacy `runtime.auth_token`. The per-environment default and the operator
 runbook (key generation, bootstrap, enrollment, rotation, revocation) live in
-[Operations.md](Operations.md#per-user-bearer-authentication-spec-044-scope-01).
+[Operations.md](Operations.md#per-user-bearer-authentication-spec-044).
 This section is the deploy-time checklist.
 
 When deploying to a target where `auth.enabled=true` (the home-lab default;
@@ -285,6 +285,34 @@ Forbidden:
   startup per OQ-8).
 - Leaving `AUTH_BOOTSTRAP_TOKEN` populated in the deploy overlay after the
   first user has been enrolled (the runbook clears it).
+
+### API-Consumer Migration (Scope 02)
+
+A target that flips `auth_enabled=true` for the first time gains the per-user
+`bearerAuthMiddleware` on the API hot path. Two consumer-visible changes
+follow:
+
+1. **Bearer-token transition.** API callers MUST present a per-user PASETO
+   token issued via the bootstrap / enroll flow (or, when
+   `auth.production_shared_token_fallback_enabled=true`, the legacy shared
+   `SMACKEREL_AUTH_TOKEN`). The middleware verifies the token statelessly with
+   no DB roundtrip per request, attaches the resolved `Session` to the request
+   context, and returns `HTTP 401` on failure.
+2. **Body-supplied actor identifiers are rejected.** In production mode, the
+   photos `MintReveal`, cloud-drive `Connect`, and user-annotation create
+   handlers reject any client-supplied actor identifier in the request body or
+   headers (closing MIT-040-S-008, MIT-038-S-003, MIT-027-TRACE-001
+   actor-source segment). See the operator-side error-code table in
+   [Operations.md](Operations.md#production-body--header-actor-identity-rejection-scope-02-mit-closures).
+   API consumers that previously sent `actor_id`, `owner_user_id`, or
+   `actor_source` MUST be updated to omit those fields before the target flip
+   — the actor identity is derived from the bearer-token claims and no
+   client-supplied value can override it.
+
+In `dev` and `test` (or in production while `auth.enabled=false`), all three
+handlers continue to honor body-supplied actor identifiers and the
+`X-Actor-Id` header, so existing local-dev consumers and integration fixtures
+do not need to be changed before the flip.
 
 ## Docker Compose Production Overrides
 
