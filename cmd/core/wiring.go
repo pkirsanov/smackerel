@@ -334,6 +334,37 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		slog.Warn("telegram bot initialization failed", "error", err)
 		return nil
 	}
+
+	// Spec 044 Scope 04 — F02 closure. In production with auth.enabled
+	// AND signing-key material present, wire a PerUserTokenMinter so
+	// every internal-API call originating from a Telegram chat carries
+	// a per-user PASETO bearer (instead of the legacy shared bearer).
+	// In dev/test (or when signing material is absent), the minter
+	// stays nil and bearerForChat falls back to b.authToken — the
+	// existing single-user development workflow keeps functioning.
+	if cfg.Environment == "production" && cfg.Auth.Enabled &&
+		cfg.Auth.SigningActivePrivateKey != "" && cfg.Auth.SigningActiveKeyID != "" {
+		minter, err := telegram.NewPerUserTokenMinter(telegram.PerUserTokenMinterOptions{
+			Bot:        tgBot,
+			SigningKey: cfg.Auth.SigningActivePrivateKey,
+			KeyID:      cfg.Auth.SigningActiveKeyID,
+			Issuer:     "smackerel",
+			TTL:        5 * time.Minute,
+		})
+		if err != nil {
+			// A nil minter means production telegram traffic falls
+			// back to the legacy shared bearer; the deprecation flag
+			// (auth.production_shared_token_fallback_enabled) governs
+			// whether the middleware accepts that. We log and
+			// continue so the bot itself remains operational.
+			slog.Warn("telegram per-user token minter setup failed; per-user PASETO disabled",
+				"error", err)
+		} else {
+			tgBot.SetPerUserTokenMinter(minter)
+			slog.Info("telegram per-user token minter wired (spec 044 Scope 04 F02 closure)")
+		}
+	}
+
 	tgBot.Start(ctx)
 	deps.TelegramBot = tgBot
 	slog.Info("telegram bot started")
@@ -466,8 +497,8 @@ func wireMealPlanning(
 		tgMealPlan.CookDelegate = func(chatID int64, recipeName string, servings int) {
 			tgBot.TriggerCookMode(chatID, recipeName, servings)
 		}
-		tgMealPlan.RecipeResolver = func(ctx context.Context, name string) (string, string, error) {
-			rd, artifactID, err := tgBot.ResolveRecipeByName(ctx, name)
+		tgMealPlan.RecipeResolver = func(ctx context.Context, chatID int64, name string) (string, string, error) {
+			rd, artifactID, err := tgBot.ResolveRecipeByName(ctx, chatID, name)
 			if err != nil {
 				return "", "", err
 			}

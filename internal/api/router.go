@@ -459,17 +459,30 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 //     present, so the PWA does not have to attach Authorization
 //     headers to every fetch().
 func extractBearerToken(r *http.Request) string {
+	token, _ := extractBearerTokenWithSource(r)
+	return token
+}
+
+// extractBearerTokenWithSource is the spec 044 Scope 04 metric-aware
+// variant of extractBearerToken: it returns the token AND the
+// transport source ("header" or "pwa_cookie") so the middleware can
+// label the validation outcome metric. Callers that don't need the
+// source label use the unlabeled extractBearerToken.
+//
+// When neither a header nor a cookie is present, the source is "" and
+// the token is "" — the caller writes a 401 (`missing_token`).
+func extractBearerTokenWithSource(r *http.Request) (token, source string) {
 	if header := r.Header.Get("Authorization"); header != "" {
 		parts := strings.SplitN(header, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			return ""
+			return "", "header"
 		}
-		return parts[1]
+		return parts[1], "header"
 	}
 	if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
-		return cookie.Value
+		return cookie.Value, "pwa_cookie"
 	}
-	return ""
+	return "", ""
 }
 
 // matchBearerToken returns true if the request carries a Bearer token that
@@ -553,6 +566,7 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"remote_addr", r.RemoteAddr,
 					"reason", "auth not configured in production")
+				metrics.AuthFailure.WithLabelValues("auth_not_configured").Inc()
 				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "auth not configured in production")
 				return
 			}
@@ -567,23 +581,29 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		token := extractBearerToken(r)
+		token, source := extractBearerTokenWithSource(r)
 		if token == "" {
-			reason := "missing header"
+			reason := "missing_token"
 			if r.Header.Get("Authorization") != "" {
-				reason = "invalid format"
+				reason = "invalid_format"
 			}
 			slog.Warn("bearer auth failure",
 				"path", r.URL.Path,
 				"remote_addr", r.RemoteAddr,
 				"reason", reason)
+			metrics.AuthFailure.WithLabelValues(reason).Inc()
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
+		}
+		if source == "" {
+			source = "header"
 		}
 
 		// Branch 1 — production per-user PASETO path.
 		if perUserActive {
+			start := time.Now()
 			parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
+			metrics.AuthValidationLatency.Observe(time.Since(start).Seconds())
 			if err == nil {
 				// Revocation lookup is sync.Map.Load — lock-free,
 				// allocation-free for the common case.
@@ -592,6 +612,8 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 						"path", r.URL.Path,
 						"remote_addr", r.RemoteAddr,
 						"reason", "revoked")
+					metrics.AuthValidationOutcome.WithLabelValues("rejected_revoked", source).Inc()
+					metrics.AuthFailure.WithLabelValues("revoked").Inc()
 					writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 					return
 				}
@@ -603,6 +625,7 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 					ExpiresAt: parsed.ExpiresAt,
 					Source:    auth.SessionSourcePerUserToken,
 				}
+				metrics.AuthValidationOutcome.WithLabelValues("accepted", source).Inc()
 				next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
 				return
 			}
@@ -614,15 +637,22 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 				slog.Warn("production shared-token fallback used (deprecation pathway)",
 					"path", r.URL.Path,
 					"remote_addr", r.RemoteAddr)
+				metrics.AuthLegacyFallbackUsed.WithLabelValues("production").Inc()
 				sess := auth.Session{Source: auth.SessionSourceSharedToken}
 				next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
 				return
 			}
 
+			// Classify the verifier error into one of the closed-set
+			// outcome buckets for the metric label. The 401 body is
+			// generic per NFR-AUTH-007.
+			outcome := classifyVerifyError(err)
 			slog.Warn("bearer auth failure",
 				"path", r.URL.Path,
 				"remote_addr", r.RemoteAddr,
 				"reason", "paseto verify failed")
+			metrics.AuthValidationOutcome.WithLabelValues(outcome, source).Inc()
+			metrics.AuthFailure.WithLabelValues("paseto_verify_failed").Inc()
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
@@ -639,6 +669,28 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"remote_addr", r.RemoteAddr,
 			"reason", "invalid token")
+		metrics.AuthFailure.WithLabelValues("shared_token_mismatch").Inc()
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 	})
+}
+
+// classifyVerifyError buckets a VerifyAndParse error into one of the
+// closed-set outcome labels for the AuthValidationOutcome metric.
+// Spec 044 Scope 04 OQ-9: outcome label MUST be one of {accepted,
+// rejected_revoked, rejected_expired, rejected_malformed,
+// rejected_unknown_key}. Anything we cannot positively classify lands
+// in `rejected_malformed` so the dashboard never sees an empty bucket.
+func classifyVerifyError(err error) string {
+	if err == nil {
+		return "accepted"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "expired"), strings.Contains(msg, "not yet valid"), strings.Contains(msg, "nbf"):
+		return "rejected_expired"
+	case strings.Contains(msg, "unknown key"), strings.Contains(msg, "no public key"), strings.Contains(msg, "kid"):
+		return "rejected_unknown_key"
+	default:
+		return "rejected_malformed"
+	}
 }

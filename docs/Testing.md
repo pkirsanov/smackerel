@@ -202,7 +202,8 @@ go test -count=1 -tags=integration -v -timeout=180s \
 Scope 02 `bearerAuthMiddleware` integration is exercised end-to-end by the
 files above. Scope 03 (PWA / extension / Telegram bridge / admin UI) test
 inventory is documented in the next subsection. Scope 04 (deprecation +
-metrics) tests are NOT yet authored — their planned files are tracked under
+metrics + F02 closure) test inventory is in the subsection after that and
+is fully tracked under
 `specs/044-per-user-bearer-auth/scenario-manifest.json`.
 
 ### Per-User Bearer Auth — Scope 03 Test Inventory (Spec 044)
@@ -266,6 +267,45 @@ postgres `47001`, NATS `47002`, smackerel-ml `45002`, smackerel-core `45001`):
 ./smackerel.sh test integration --go-run '^TestExtensionAuth_|^TestTelegramBridge_|^TestAdminUI_'
 ./smackerel.sh test integration --go-run '^TestAuthChaos_S03_'
 ./smackerel.sh test e2e --go-run '^TestE2E_PWAAuth_'
+```
+
+### Per-User Bearer Auth — Scope 04 Test Inventory (Spec 044)
+
+Scope 04 closes F02 (Telegram-bridge per-user PASETO wiring) and ships
+the `smackerel_auth_*` metrics surface. Test files (zero mocks, zero
+`t.Skip()`):
+
+| Surface | Test files | Build tag | Coverage |
+|---|---|---|---|
+| Auth metrics surface | `internal/metrics/auth_test.go` (8 tests) | (none) | `TestAuthMetrics_EmitsAllExpectedSeries` (all 7 series surface from `prometheus.DefaultGatherer` after seeding via `seedAllAuthMetrics`), `TestAuthIssuance_IncrementsBySource` (3 sources: `admin_api`, `bootstrap_cli`, `telegram_bridge`), `TestAuthRotation_Increments`, `TestAuthRevocation_NormalizesReason` (11 cases incl. an adversarial Bobby-Tables SQL-injection-like input — proves the bucket stays in the closed set), `TestAuthRevocation_IncrementsBucketed`, `TestAuthValidationLatency_RecordsObservation` (verified via `histogramSampleCount` helper), `TestAuthValidationOutcome_AcceptsClosedSetLabels` (5 results × 2 sources), `TestAuthLegacyFallbackUsed_OperatorVisibility`, `TestAuthFailure_AcceptsClosedSetLabels` (6 reasons), `TestAuthMetrics_NamesUseCanonicalPrefix` (every metric name starts with `smackerel_auth_`). |
+| F02 wiring (in-package unit) | `internal/telegram/bot_wiring_test.go` (8 tests) | (none) | `TestBot_bearerForChat_NilMinter_FallsBackToSharedToken` (legacy dev path), `TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty` (dev empty-token bypass), `TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO` (production happy path; PASETO `v4.public.` prefix verified), `TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared` (dev fallback contract), `TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError` (production safety: `ErrNoUserMappingForChat` propagated, no shared-bearer leak), `TestBot_setBearerHeader_NilMinter_AppliesSharedToken`, `TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset` (dev bypass — header MUST be unset), `TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError` (helper-level safety propagation). |
+| F02 wiring (live integration) | `tests/integration/auth_telegram_f02_wiring_test.go` (2 tests) | `integration` | `TestF02Wiring_SetPerUserTokenMinter_HappyPath` (Bot.SetPerUserTokenMinter wired against live test-stack pool → outbound request prepared via setBearerHeader carries fresh `v4.public.` PASETO bearer → bearerAuthMiddleware admits with HTTP 200 → `smackerel_auth_token_issuance_total{source="telegram_bridge"}` ticks by exactly 1 — sentinel `WRONG-shared-bearer-DO-NOT-USE-IN-F02-PATH` planted in `b.authToken` to catch silent fallback regressions), `TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` (production unmapped chat → setBearerHeader errors → Authorization header unset → metric counter delta = 0). |
+
+Required adversarial cases for Scope 04:
+
+- Free-text revocation reason must NOT escape the closed bucket set →
+  `TestAuthRevocation_NormalizesReason/bobby-tables-sql-style` (asserts
+  `NormalizeRevocationReason("compromise; DROP TABLE auth_tokens; --")`
+  buckets to `compromise`, not the raw string).
+- Production unmapped chat must NOT silently fall back to the shared
+  bearer when a minter is wired →
+  `TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError`
+  (sentinel `WRONG-shared-bearer-DO-NOT-USE` planted in `b.authToken`).
+- F02 wiring observable through live HTTP path →
+  `TestF02Wiring_SetPerUserTokenMinter_HappyPath` proves the bearer
+  attached is a fresh PASETO (verified by `v4.public.` prefix +
+  middleware admit) AND the metric ticks; an inverse case
+  (`TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses`)
+  proves the metric counter delta is exactly 0 when the bot refuses.
+
+Run Scope 04 coverage:
+
+```bash
+go test ./internal/metrics/ -count=1
+go test ./internal/telegram/ -count=1 -run '^TestBot_bearerForChat|^TestBot_setBearerHeader'
+./smackerel.sh --env test up
+DATABASE_URL='postgres://smackerel:smackerel@127.0.0.1:47001/smackerel?sslmode=disable' \
+  go test -tags integration -count=1 -run '^TestF02Wiring_' ./tests/integration/
 ```
 
 ### QF Companion Connector Test Surface (Spec 041)

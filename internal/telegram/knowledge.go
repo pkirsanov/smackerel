@@ -25,8 +25,9 @@ func (b *Bot) knowledgeGet(ctx context.Context, chatID int64, path string, resul
 		b.reply(chatID, "? Couldn't reach knowledge service")
 		return 0, false
 	}
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		b.reply(chatID, "? Couldn't reach knowledge service")
+		return 0, false
 	}
 	resp, err := b.httpClient.Do(req)
 	if err != nil {

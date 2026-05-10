@@ -380,30 +380,36 @@ surface has a distinct migration step for production targets where
    `production_shared_token_fallback_enabled=true` — the legacy shared
    token. The page itself loads under any authenticated session.
 
-#### Known Deferral — Telegram Per-User Attribution Wiring (F02, Scope 04)
+#### Telegram Per-User Attribution Wiring (F02 Scope 04 — shipped)
 
 The library `internal/telegram/per_user_token.go` (`PerUserTokenMinter`) is
-shipped, unit-tested, and integration-tested in isolation. The **per-call
-wiring** of `MintForChat` into the bot's outbound HTTP calls
-(`Bot.callCapture` / `Bot.handleReplyAnnotation` /
-`Bot.handleAnnotationCommand`) is **deferred to spec 044 Scope 04**. As of
-this docs publication those callsites still attach the shared bot bearer
-(`b.authToken`) on internal API calls.
+shipped, unit-tested, and integration-tested in isolation. Spec 044
+Scope 04 closes the F02 deferred-finalize-blocker by wiring `MintForChat`
+into the bot's outbound HTTP calls via `Bot.bearerForChat(chatID)` and
+the `Bot.setBearerHeader(req, chatID)` helper
+(`internal/telegram/bot.go` lines 200–254). Production wiring is
+performed by `startTelegramBotIfConfigured` (`cmd/core/wiring.go`) when
+`auth.enabled=true` AND `auth.signing.active_private_key` is configured;
+the minter is constructed once with TTL = 5 minutes and attached via
+`tgBot.SetPerUserTokenMinter(minter)` before `Start`.
 
-Operator implication for any production Telegram deployment that intends
-to disable the shared-token fallback:
+Operator implication for any production Telegram deployment:
 
-| Setting | Behavior while F02 deferral stands |
+| Setting | Behavior |
 |---|---|
-| `auth_enabled=true` AND `production_shared_token_fallback_enabled=true` | **Working** — bot uses shared bearer; mapped chats are dropped per the safety contract; unmapped chats are dropped by `Bot.resolveActorUserID` |
-| `auth_enabled=true` AND `production_shared_token_fallback_enabled=false` | **Telegram captures will 401** — every mapped-chat outbound call uses `b.authToken`, which `bearerAuthMiddleware` rejects when shared-token fallback is disabled |
+| `auth_enabled=true` AND `production_shared_token_fallback_enabled=true` | **Working** — bot mints per-user PASETO for mapped chats; production unmapped chats are refused (no fallback to shared bearer); legacy callers presenting `runtime.auth_token` still authenticate during the transition window |
+| `auth_enabled=true` AND `production_shared_token_fallback_enabled=false` (recommended default) | **Working** — bot mints per-user PASETO for mapped chats; production unmapped chats are refused; legacy callers presenting `runtime.auth_token` are rejected with 401 |
 
-Until F02 lands, production Telegram operators MUST keep
-`production_shared_token_fallback_enabled=true` (the transitional escape
-hatch documented in design §9.3). Trigger for closure: any production
-Telegram deployment that needs the fallback flipped to `false`. Routing:
-spec 044 Scope 04 implement (or a Scope 03 follow-up implement pass) before
-spec-level finalize.
+Closure evidence:
+[`internal/telegram/bot_wiring_test.go`](../internal/telegram/bot_wiring_test.go)
+(8 unit cases),
+[`tests/integration/auth_telegram_f02_wiring_test.go`](../tests/integration/auth_telegram_f02_wiring_test.go)
+(`TestF02Wiring_SetPerUserTokenMinter_HappyPath`,
+`TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses`),
+[`tests/integration/auth_telegram_e2e_test.go`](../tests/integration/auth_telegram_e2e_test.go)
+(Scope 03 e2e). Operator deprecation sequence for the shared-token
+fallback flag is documented in
+[Operations.md → "Deprecation Pathway"](Operations.md#deprecation-pathway--production_shared_token_fallback_enabled).
 
 ## Docker Compose Production Overrides
 

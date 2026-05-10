@@ -53,7 +53,7 @@ func (b *Bot) handlePhotoUpload(ctx context.Context, msg *tgbotapi.Message, capt
 		return
 	}
 	sourceRef := fmt.Sprintf("%d:%d", msg.Chat.ID, msg.MessageID)
-	resp, err := b.postPhotoUpload(ctx, telegramPhotoUploadRequest{
+	resp, err := b.postPhotoUpload(ctx, msg.Chat.ID, telegramPhotoUploadRequest{
 		Filename:    fmt.Sprintf("telegram-%s.jpg", largest.FileUniqueID),
 		ContentType: contentType,
 		File:        body,
@@ -118,7 +118,7 @@ type telegramPhotoUploadResponse struct {
 	ArtifactID string `json:"artifact_id"`
 }
 
-func (b *Bot) postPhotoUpload(ctx context.Context, request telegramPhotoUploadRequest) (*telegramPhotoUploadResponse, error) {
+func (b *Bot) postPhotoUpload(ctx context.Context, chatID int64, request telegramPhotoUploadRequest) (*telegramPhotoUploadResponse, error) {
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
 	if err := writer.WriteField("source_channel", request.Channel); err != nil {
@@ -148,8 +148,8 @@ func (b *Bot) postPhotoUpload(ctx context.Context, request telegramPhotoUploadRe
 		return nil, err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("photo upload auth: %w", err)
 	}
 	resp, err := b.httpClient.Do(req)
 	if err != nil {

@@ -220,3 +220,12 @@ f37505d7963d9fa4b1cf4613be555f050a2cab61:docs/Home_Lab_Master_Deployment_Plan.md
 f37505d7963d9fa4b1cf4613be555f050a2cab61:docs/Home_Lab_Master_Deployment_Plan.md:tailscale-cgnat-ip:80
 f3c10da649687301eef8be9e427965b3b0e3ac1f:specs/037-llm-agent-tools/report.md:linux-home-username-leak:72
 f8787058ae1e0c4d7bd146ef08c175c956ebc04c:specs/031-live-stack-testing/bugs/BUG-031-004-e2e-timeout-process-cleanup/report.md:linux-home-username-leak:134
+
+# Spec 044 Scope 04 (per-user bearer auth — F02 closure + auth metrics + docs sweep):
+# Canonical dev/test DATABASE_URL using `postgres://<user>:<password>@127.0.0.1:<test-port>/<db>?sslmode=disable`
+# is the documented test-stack default per .github/copilot-instructions.md ("Dev DB password is
+# acceptable for local dev only"). Pattern matches 18 prior url-inline-password allowlist entries (specs/037,
+# specs/031, docs/Operations.md, specs/002). Staged-content fingerprints (no commit SHA prefix):
+docs/Testing.md:url-inline-password:307
+specs/044-per-user-bearer-auth/report.md:url-inline-password:5549
+specs/044-per-user-bearer-auth/report.md:url-inline-password:5688

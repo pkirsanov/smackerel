@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/auth"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // PerUserTokenMinter issues short-lived per-user PASETO bearers on
@@ -195,6 +196,13 @@ func (m *PerUserTokenMinter) MintForUser(chatID int64, userID string) (MintedTel
 	if err != nil {
 		return MintedTelegramToken{}, fmt.Errorf("telegram: mint per-user PASETO: %w", err)
 	}
+
+	// Spec 044 Scope 04 — telemetry emission. Telegram-originated
+	// per-user tokens are the third issuance source (alongside
+	// admin_api and bootstrap_cli); operators monitor the rate to
+	// detect Telegram-bridge anomalies.
+	metrics.AuthIssuance.WithLabelValues("telegram_bridge").Inc()
+
 	return MintedTelegramToken{
 		WireToken: issued.WireToken,
 		UserID:    userID,

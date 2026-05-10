@@ -115,7 +115,7 @@ func parseCookNavigation(text string) string {
 func (b *Bot) handleScaleTrigger(ctx context.Context, chatID int64, requestedServings int) {
 	// Resolve the most recently displayed recipe in this chat.
 	// Use the recent API to find a recipe artifact.
-	recipeData, artifactID, err := b.resolveRecentRecipe(ctx)
+	recipeData, artifactID, err := b.resolveRecentRecipe(ctx, chatID)
 	if err != nil {
 		slog.Warn("scale trigger: failed to resolve recent recipe", "error", err)
 		b.reply(chatID, "? Which recipe? Send a recipe link or search with /find.")
@@ -173,8 +173,8 @@ func formatScaleFactor(factor float64) string {
 }
 
 // resolveRecentRecipe fetches the most recently displayed recipe from the API.
-func (b *Bot) resolveRecentRecipe(ctx context.Context) (*recipe.RecipeData, string, error) {
-	body, err := b.apiGet(ctx, "/api/recent?limit=10")
+func (b *Bot) resolveRecentRecipe(ctx context.Context, chatID int64) (*recipe.RecipeData, string, error) {
+	body, err := b.apiGet(ctx, chatID, "/api/recent?limit=10")
 	if err != nil {
 		return nil, "", fmt.Errorf("fetch recent: %w", err)
 	}
@@ -223,14 +223,14 @@ func (b *Bot) handleCookEntry(ctx context.Context, chatID int64, recipeName stri
 
 	if recipeName == "" {
 		// Bare "cook" — use most recently displayed recipe
-		rd, artifactID, err = b.resolveRecentRecipe(ctx)
+		rd, artifactID, err = b.resolveRecentRecipe(ctx, chatID)
 		if err != nil {
 			b.reply(chatID, "? Which recipe? Send a name or search with /find.")
 			return
 		}
 	} else {
 		// Search for recipe by name — handle disambiguation if multiple matches
-		matches, searchErr := b.SearchRecipesByName(ctx, recipeName)
+		matches, searchErr := b.SearchRecipesByName(ctx, chatID, recipeName)
 		if searchErr != nil || len(matches) == 0 {
 			b.reply(chatID, fmt.Sprintf("? I don't have a recipe called \"%s\". Try /find %s to search.", recipeName, recipeName))
 			return
@@ -443,8 +443,11 @@ func (b *Bot) handleCookDisambiguation(ctx context.Context, chatID int64, text s
 
 // ResolveRecipeByName searches for a recipe by name via the API.
 // Exported for use by MealPlanCommandHandler's RecipeResolver callback.
-func (b *Bot) ResolveRecipeByName(ctx context.Context, name string) (*recipe.RecipeData, string, error) {
-	matches, err := b.SearchRecipesByName(ctx, name)
+//
+// Spec 044 Scope 04 — F02 closure: chatID threads through to
+// SearchRecipesByName so production callers mint a per-user PASETO.
+func (b *Bot) ResolveRecipeByName(ctx context.Context, chatID int64, name string) (*recipe.RecipeData, string, error) {
+	matches, err := b.SearchRecipesByName(ctx, chatID, name)
 	if err != nil {
 		return nil, "", err
 	}
@@ -461,13 +464,16 @@ type recipeMatch struct {
 }
 
 // SearchRecipesByName searches for recipes by name and returns all matches.
-func (b *Bot) SearchRecipesByName(ctx context.Context, name string) ([]recipeMatch, error) {
+//
+// Spec 044 Scope 04 — F02 closure: chatID threads through to
+// apiPost so production callers mint a per-user PASETO.
+func (b *Bot) SearchRecipesByName(ctx context.Context, chatID int64, name string) ([]recipeMatch, error) {
 	// Truncate name for safety
 	if len(name) > 200 {
 		name = name[:200]
 	}
 
-	body, err := b.apiPost(ctx, "/api/search", map[string]string{"query": name + " recipe"})
+	body, err := b.apiPost(ctx, chatID, "/api/search", map[string]string{"query": name + " recipe"})
 	if err != nil {
 		return nil, fmt.Errorf("search recipe: %w", err)
 	}
@@ -503,9 +509,13 @@ func (b *Bot) SearchRecipesByName(ctx context.Context, name string) ([]recipeMat
 }
 
 // doAPIRequest executes an HTTP request with auth and standard response handling.
-func (b *Bot) doAPIRequest(req *http.Request) ([]byte, error) {
-	if b.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+b.authToken)
+//
+// Spec 044 Scope 04 — F02 closure: the chatID parameter threads
+// through to bearerForChat so production callers attach a per-user
+// PASETO instead of the legacy shared bearer.
+func (b *Bot) doAPIRequest(req *http.Request, chatID int64) ([]byte, error) {
+	if err := b.setBearerHeader(req, chatID); err != nil {
+		return nil, fmt.Errorf("recipe API auth: %w", err)
 	}
 
 	resp, err := b.httpClient.Do(req)
@@ -525,16 +535,16 @@ func (b *Bot) doAPIRequest(req *http.Request) ([]byte, error) {
 }
 
 // apiGet performs an authenticated GET request to the core API.
-func (b *Bot) apiGet(ctx context.Context, path string) ([]byte, error) {
+func (b *Bot) apiGet(ctx context.Context, chatID int64, path string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.baseURL+path, nil)
 	if err != nil {
 		return nil, err
 	}
-	return b.doAPIRequest(req)
+	return b.doAPIRequest(req, chatID)
 }
 
 // apiPost performs an authenticated POST request to the core API.
-func (b *Bot) apiPost(ctx context.Context, path string, payload interface{}) ([]byte, error) {
+func (b *Bot) apiPost(ctx context.Context, chatID int64, path string, payload interface{}) ([]byte, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -544,5 +554,5 @@ func (b *Bot) apiPost(ctx context.Context, path string, payload interface{}) ([]
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return b.doAPIRequest(req)
+	return b.doAPIRequest(req, chatID)
 }

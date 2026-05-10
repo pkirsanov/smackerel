@@ -224,12 +224,19 @@ the stack.
 The companion library
 [`internal/telegram/per_user_token.go`](../internal/telegram/per_user_token.go)
 authors `PerUserTokenMinter`, which mints short-lived per-user PASETO bearers
-keyed by the resolved `user_id`. This library is wired and unit-tested in
-isolation but is NOT yet invoked from the bot's outbound HTTP callsites
-(`Bot.callCapture` / `Bot.handleReplyAnnotation` / `Bot.handleAnnotationCommand`
-still use `b.authToken`). That wiring is deferred to spec 044 Scope 04 — see
-the F02 deferral note in
-[Operations.md](../docs/Operations.md#known-deferral--f02-scope-04).
+keyed by the resolved `user_id`. Spec 044 Scope 04 closes the F02
+deferred-finalize-blocker by wiring this minter into the bot's outbound
+HTTP calls via `Bot.bearerForChat(chatID)` and the
+`Bot.setBearerHeader(req, chatID)` helper
+([`internal/telegram/bot.go`](../internal/telegram/bot.go) lines 200–254).
+Production wiring is performed by `startTelegramBotIfConfigured`
+([`cmd/core/wiring.go`](../cmd/core/wiring.go)) when `auth.enabled=true`
+AND `auth.signing.active_private_key` is configured. See the F02 closure
+section in
+[Operations.md](../docs/Operations.md#f02-closure-scope-04-shipped) for
+the live decision matrix and the auth metrics surface
+([`internal/metrics/auth.go`](../internal/metrics/auth.go)) used to
+monitor the deprecation pathway.
 
 **Extending the admin token-management UI.** The single embedded HTML page
 lives at

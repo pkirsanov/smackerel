@@ -1907,10 +1907,18 @@ entry point; and an admin token-management UI at `/admin/auth/tokens`
 behind `bearerAuthMiddleware` with strict CSP and XSS-safe rendering. The
 supplementary Telegram E2E coverage (`TestTelegramBridge_BodyClaimedActorRejected`)
 proves the Scope 02 actor-source closure works end-to-end through the
-Telegram path; the remaining NATS-segment closure for MIT-027-TRACE-001 is
-deferred to Scope 04 alongside the per-call wiring of `PerUserTokenMinter`
-into the bot's outbound HTTP calls (the F02 deferred-finalize-blocker
-documented in design.md §16.3).
+Telegram path.
+
+Spec 044 Scope 04 closes the F02 deferred-finalize-blocker by wiring
+`PerUserTokenMinter` into every Telegram-bridge outbound HTTP call
+(`Bot.bearerForChat` / `Bot.setBearerHeader` in
+`internal/telegram/bot.go`; production attachment in
+`cmd/core/wiring.go::startTelegramBotIfConfigured`). The same scope
+ships the seven-series authentication metrics surface
+(`internal/metrics/auth.go`, `smackerel_auth_*` prefix — see
+`docs/Operations.md` "Authentication Metrics") and verifies the
+deprecation flag `auth.production_shared_token_fallback_enabled` defaults
+to `false` per FR-AUTH-017.
 
 ### 17.3 The Privacy Trifecta
 

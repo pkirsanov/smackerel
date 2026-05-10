@@ -153,7 +153,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			"context":      forwardContext,
 			"forward_meta": fwdMeta,
 		}
-		result, err := b.callCapture(ctx, body)
+		result, err := b.callCapture(ctx, msg.Chat.ID, body)
 		if err != nil {
 			b.captureErrorReply(msg.Chat.ID, err, "forward URL capture failed")
 			return
@@ -171,7 +171,7 @@ func (b *Bot) captureSingleForward(ctx context.Context, msg *tgbotapi.Message, m
 			"context":      forwardContext,
 			"forward_meta": fwdMeta,
 		}
-		result, err := b.callCapture(ctx, body)
+		result, err := b.callCapture(ctx, msg.Chat.ID, body)
 		if err != nil {
 			b.captureErrorReply(msg.Chat.ID, err, "forward text capture failed")
 			return
@@ -226,7 +226,7 @@ func (b *Bot) flushSingleForward(ctx context.Context, buf *ConversationBuffer) e
 			"context":      forwardContext,
 			"forward_meta": fwdMeta,
 		}
-		result, err := b.callCapture(ctx, body)
+		result, err := b.callCapture(ctx, buf.Key.chatID, body)
 		if err != nil {
 			b.captureErrorReply(buf.Key.chatID, err, "forward URL capture failed")
 			return err
@@ -243,7 +243,7 @@ func (b *Bot) flushSingleForward(ctx context.Context, buf *ConversationBuffer) e
 			"context":      forwardContext,
 			"forward_meta": fwdMeta,
 		}
-		result, err := b.callCapture(ctx, body)
+		result, err := b.callCapture(ctx, buf.Key.chatID, body)
 		if err != nil {
 			b.captureErrorReply(buf.Key.chatID, err, "forward text capture failed")
 			return err

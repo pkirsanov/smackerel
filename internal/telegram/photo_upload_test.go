@@ -85,7 +85,7 @@ func TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse(t *testing.T) {
 		uploadResponseMaxBytes: cap,
 	}
 
-	_, err := bot.postPhotoUpload(context.Background(), telegramPhotoUploadRequest{
+	_, err := bot.postPhotoUpload(context.Background(), 99, telegramPhotoUploadRequest{
 		Filename:    "telegram-test.jpg",
 		ContentType: "image/jpeg",
 		File:        []byte("fake image bytes"),
@@ -145,7 +145,7 @@ func TestPostPhotoUpload_MultipartFormStillWorksUnderCap(t *testing.T) {
 		uploadResponseMaxBytes: cap,
 	}
 
-	resp, err := bot.postPhotoUpload(context.Background(), telegramPhotoUploadRequest{
+	resp, err := bot.postPhotoUpload(context.Background(), 99, telegramPhotoUploadRequest{
 		Filename:    "telegram-test.jpg",
 		ContentType: "image/jpeg",
 		File:        []byte("fake image bytes"),

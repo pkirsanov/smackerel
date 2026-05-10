@@ -14,6 +14,7 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
 
 // AuthAdminHandlers groups the spec 044 Scope 01 admin HTTP endpoints
@@ -112,6 +113,10 @@ func (h *AuthAdminHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Spec 044 Scope 04 — telemetry emission for the deprecation
+	// pathway dashboards (per spec 030 + design.md §13 OQ-9 resolution).
+	metrics.AuthIssuance.WithLabelValues("admin_api").Inc()
+
 	writeJSON(w, http.StatusCreated, EnrollResponse{
 		UserID:    req.UserID,
 		TokenID:   tokenID,
@@ -166,6 +171,14 @@ func (h *AuthAdminHandlers) HandleRotate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Spec 044 Scope 04 — telemetry emission. Rotation is the only
+	// flow that pairs an issuance with a deliberate flip of the
+	// prior token; the dashboards thread `AuthIssuance{source=
+	// admin_api}` and `AuthRotation` together to monitor the
+	// rotation cadence.
+	metrics.AuthIssuance.WithLabelValues("admin_api").Inc()
+	metrics.AuthRotation.Inc()
+
 	writeJSON(w, http.StatusOK, EnrollResponse{
 		UserID:    userID,
 		TokenID:   tokenID,
@@ -211,6 +224,11 @@ func (h *AuthAdminHandlers) HandleRevoke(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "REVOKE_FAILED", err.Error())
 		return
 	}
+
+	// Spec 044 Scope 04 — telemetry emission. The free-text reason is
+	// bucketed via NormalizeRevocationReason so the `reason` label
+	// stays in the documented closed set.
+	metrics.AuthRevocation.WithLabelValues(metrics.NormalizeRevocationReason(req.Reason)).Inc()
 
 	if h.broadcaster != nil {
 		if err := h.broadcaster.Publish(tokenID, req.Reason); err != nil {

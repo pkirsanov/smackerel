@@ -33,7 +33,7 @@
         {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession", "status": "live"},
         {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_MalformedBearer_Production_Returns401", "status": "live"},
         {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_RevokedPerUserToken_Returns401", "status": "live"},
-        {"type": "test", "plannedFile": "internal/metrics/auth_metrics_test.go", "function": "TestAuthMetrics_EmitsAllExpectedSeries", "status": "planned"}
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthMetrics_EmitsAllExpectedSeries", "status": "live"}
       ]
     },
     {
@@ -138,9 +138,36 @@
       "name": "Migration path: existing dev / test deployments need zero changes",
       "scope": "04-deprecation-pathway-docs-freshness",
       "evidenceRefs": [
-        {"type": "smoke", "plannedFile": "scripts/commands/up.sh", "function": "./smackerel.sh up && ./smackerel.sh status (dev)", "status": "planned"},
-        {"type": "docs-trace", "plannedFile": ".github/bubbles/scripts/regression-baseline-guard.sh", "function": "regression-baseline-guard for spec 044", "status": "planned"},
-        {"type": "smoke", "plannedFile": ".github/bubbles/scripts/artifact-lint.sh", "function": "artifact-lint for spec 044", "status": "planned"}
+        {"type": "smoke", "file": "smackerel.sh", "function": "./smackerel.sh up && ./smackerel.sh status (dev)", "status": "live"},
+        {"type": "docs-trace", "file": ".github/bubbles/scripts/regression-baseline-guard.sh", "function": "regression-baseline-guard for spec 044", "status": "live"},
+        {"type": "smoke", "file": ".github/bubbles/scripts/artifact-lint.sh", "function": "artifact-lint for spec 044", "status": "live"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-AUTH-012",
+      "name": "Telegram bridge per-user PASETO wiring + operator-visible auth metrics surface (Scope 04 F02 closure)",
+      "scope": "04-deprecation-pathway-docs-freshness",
+      "evidenceRefs": [
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_NilMinter_FallsBackToSharedToken", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_NilMinter_AppliesSharedToken", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset", "status": "live"},
+        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_telegram_f02_wiring_test.go", "function": "TestF02Wiring_SetPerUserTokenMinter_HappyPath", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_telegram_f02_wiring_test.go", "function": "TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthIssuance_IncrementsBySource", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRotation_Increments", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRevocation_NormalizesReason", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRevocation_IncrementsBucketed", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthValidationLatency_RecordsObservation", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthValidationOutcome_AcceptsClosedSetLabels", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthLegacyFallbackUsed_OperatorVisibility", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthFailure_AcceptsClosedSetLabels", "status": "live"},
+        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthMetrics_NamesUseCanonicalPrefix", "status": "live"},
+        {"type": "static-guarantee", "file": "internal/metrics/auth.go", "function": "init() registers all 7 series via prometheus.MustRegister", "status": "live"},
+        {"type": "static-guarantee", "file": "cmd/core/wiring.go", "function": "startTelegramBotIfConfigured constructs PerUserTokenMinter (TTL=5m) and calls tgBot.SetPerUserTokenMinter when production+auth.enabled+signing key configured", "status": "live"}
       ]
     }
   ]
