@@ -60,7 +60,7 @@ All 38 Go packages have tests:
 
 - `internal/api` — capture, search, health, digest, recent, annotations, lists handlers
 - `internal/annotation` — freeform parser, store CRUD, materialized summary, Telegram message mapping
-- `internal/auth` — OAuth2 provider, token exchange
+- `internal/auth` — OAuth2 provider (token exchange + encrypted token storage); spec 044 per-user PASETO v4.public bearer auth (issue/verify/hash, rotation grace window, `Session` context helpers, startup fail-loud guard, SST grep guard); revocation cache + NATS broadcaster (`internal/auth/revocation`)
 - `internal/config` — validation, placeholder rejection, env parsing
 - `internal/connector` — framework, registry, backoff, supervisor
 - `internal/connector/bookmarks` — Chrome/Netscape parsing
@@ -142,6 +142,43 @@ Required adversarial cases:
 - The same photo content present in two providers MUST surface as a single canonical artifact in cross-provider search results.
 - A reveal token MUST fail closed on reuse, after TTL, or when used by a different actor than the one who minted it.
 - Sensitive search results MUST omit preview URLs and set `requires_reveal=true`.
+
+### Per-User Bearer Auth Test Surface (Spec 044)
+
+Spec 044 Scope 01 ships the per-user PASETO v4.public bearer-auth foundation
+(SST keys, token issue/verify/hash, revocation cache + NATS broadcaster, CLI
+subcommands, admin HTTP handlers — routes register at Scope 02, DB migration
+033, startup fail-loud guard). Test coverage matches scope DoD:
+
+| Test type | Files | Coverage |
+|-----------|-------|----------|
+| unit | `internal/config/validate_test.go` (8 sub-tests), `internal/auth/issue_test.go`, `internal/auth/verify_test.go`, `internal/auth/startup_test.go` (8 sub-cases), `internal/auth/sst_grep_guard_test.go` (+ adversarial + allowlist), `internal/auth/revocation/cache_test.go` | Loader and runtime fail-loud branches (production+enabled+empty-signing-key, +empty-key-id, +empty-hashing-key, +hashing-key==signing-key per OQ-8); PASETO sign/verify round-trip; rotation grace window honoring prior key (incl. forged-kid adversarial); revocation cache bootstrap → propagation → idempotency; SST grep guard for hardcoded auth values across `internal/` and `cmd/` |
+| integration | `tests/integration/auth_bootstrap_test.go` (build tag `integration`) | Live test-stack bootstrap on a fresh production-mode DB: `Enroll` → `IssueToken` → `HashToken` → `PersistToken` round-trip; `auth_users.user_id` UNIQUE adversarial; PASETO public-hex derivation |
+| stress / chaos | `tests/integration/auth_chaos_test.go` (build tag `integration`) | 7 stress scenarios + 1 informational benchmark: concurrent enrollment with UNIQUE rejection; concurrent rotate-vs-verify across grace window; revocation broadcaster race; cache bootstrap under concurrent load; broadcaster malformed-payload defensive handling; migration idempotency; token boundary conditions; pure-CPU verify benchmark vs NFR-AUTH-001 5ms hot-path budget |
+
+Required adversarial cases:
+
+- Hashing key equal to the signing private key MUST fail loud at startup
+  (`internal/auth/startup_test.go` covers all four production-mode fail-loud
+  branches per spec 044 OQ-8).
+- A token signed with a `kid` not matching either the active or prior key MUST
+  surface `auth.ErrUnknownKeyID`.
+- A second `Enroll` for the same `user_id` MUST surface a uniqueness error
+  (UNIQUE constraint on `auth_users.user_id`).
+- The SST grep guard MUST detect a fresh hardcoded PASETO key inserted into the
+  source tree (verified by the adversarial sub-test injecting a literal pattern
+  outside the allowlist).
+
+Run live integration coverage:
+
+```bash
+./smackerel.sh --env test up
+go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/...
+```
+
+The `bearerAuthMiddleware` integration tests (Scope 02) and the PWA / extension
+/ Telegram E2E tests (Scope 03) are NOT yet authored — their planned files are
+tracked under `specs/044-per-user-bearer-auth/scenario-manifest.json`.
 
 ### QF Companion Connector Test Surface (Spec 041)
 

@@ -1884,6 +1884,14 @@ OUTPUT:
 | **No exfiltration** | System never sends data to external services beyond LLM processing | No outbound email, no posting, no external API writes |
 | **Content sanitization** | User-generated content (emails, web pages) may contain attacks | LLM processing uses system prompts that instruct ignoring embedded instructions. Content is data, not instructions. |
 
+Per-user bearer auth (spec 044) extends the access-control layer with PASETO
+v4.public per-user enrollment, an in-memory revocation cache propagated over
+NATS (≤60s budget), and stateless hot-path validation with no DB roundtrip per
+request. The legacy single-tenant `runtime.auth_token` remains the dev/test
+contract; per-user PASETO is the home-lab default and the production-class
+posture. Operator runbook lives at `docs/Operations.md` ("Per-User Bearer
+Authentication"); design rationale lives at `specs/044-per-user-bearer-auth/`.
+
 ### 17.3 The Privacy Trifecta
 
 ```mermaid

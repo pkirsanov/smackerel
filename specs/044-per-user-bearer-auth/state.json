@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "docs",
+  "currentPhase": "finalize",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "docs",
+    "currentPhase": "finalize",
     "currentScope": "02",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -23,7 +23,8 @@
       "validate",
       "audit",
       "chaos",
-      "spec-review"
+      "spec-review",
+      "docs"
     ],
     "pendingTransitionRequests": []
   },
@@ -31,7 +32,7 @@
     "status": "in_progress",
     "completedScopes": ["01"],
     "scopeProgress": [],
-    "certifiedCompletedPhases": ["implement", "test", "validate", "audit", "chaos", "spec-review"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit", "chaos", "spec-review", "docs"],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -110,6 +111,15 @@
       "scopes": ["01"],
       "decision": "approved_with_artifact_fixes",
       "summary": "Spec 044 Scope 01 formal spec-review phase per Gate G022. Per-spec post-chaos verification that the seven Scope 01 artifacts (spec.md / design.md / scopes.md / scenario-manifest.json / report.md / uservalidation.md / state.json) truthfully reflect what was implemented and shipped through the implement → test → validate → audit → chaos chain. Trust classification: MINOR_DRIFT — substantive accuracy across all seven artifacts; shipped code is sound; only descriptive pseudo-code in design.md §5.6 and stale planned-test-names in scopes.md Test Plan rows T1-04..T1-09 needed surgical reconciliation. NO MAJOR_DRIFT or OBSOLETE classification, therefore the spec-review-mode Phase 5 auto-invocation of bubbles.docs is NOT triggered — managed-doc impact for Scope 01 is limited to the design.md §14 reconciliation note (intra-artifact) and the docs-phase work that legitimately belongs to Scope 04. Per-artifact verdicts: spec.md PASS (FRs/NFRs/scenarios faithful to shipped surface; OQs marked resolved in design.md §13 + reconciled at §14). design.md PASS_WITH_FIXES (§5.6 SessionSource type/names/signatures fully reconciled to shipped reality — string enum + WithSession/SessionFromContext value-passing tuple; NEW §14 'Design Decisions Reconciled During Scope 01 Implement' added recording 6 design adjustments + 4 OBS-* observations carried forward + UserIDFromContext deferral + SST line-number reconciliation). scopes.md PASS_WITH_FIXES (Test Plan rows T1-04..T1-07/T1-09 reconciled to shipped test names per the manifest restructure at commit 1ec9c5f5 with rationale annotations; SST line numbers corrected `67-130` → `459-511`; UserIDFromContext claim removed from shipped helper list with deferred-to-Scope-02 note; NEW spec-review DoD bullet appended capturing this phase's evidence). scenario-manifest.json PASS (all Scope 01 file: entries reference real shipped tests; all Scope 02/03/04 entries correctly use plannedFile: per restructure at 1ec9c5f5). report.md PASS_WITH_FIXES (NEW Spec-Review Evidence section added with per-artifact review matrix + drift findings catalog + cross-artifact coherence check + inline fixes summary + spec-review verdict). uservalidation.md PASS (placeholder per design — full acceptance lands at Scope 04 closure). state.json PASS_WITH_FIXES (this entry plus completedPhaseClaims/certifiedCompletedPhases append + currentPhase advance to 'docs'). Cross-artifact coherence: PASS — all 11 SCN-AUTH-NNN scenario IDs match across spec/design/scopes/manifest; MIT-040-S-008/MIT-038-S-003/MIT-027-TRACE-001 actor-source segment correctly carried forward to Scope 02 (NOT mis-claimed as closed by Scope 01); Scope 02/03/04 remain Not Started per audit's G041 canonicalization. 5 inline artifact fixes landed (D1-D8 catalogued in report.md → Spec-Review Evidence → Drift Findings Catalog). NO route_back_to_implement transitionRequest opened — every drift item is artifact-side only; no shipped code is wrong. artifact-lint exit=0 post-fix. FINALIZE-PREREQ-044-V7-001 transitionRequest remains open and is carried forward to the docs and finalize phases. Verdict: 🟢 APPROVED_WITH_ARTIFACT_FIXES for Scope 01 spec-review phase. State.json updates: completedPhaseClaims appended 'spec-review' (string); certifiedCompletedPhases appended 'spec-review'; currentPhase advanced from 'spec-review' to 'docs'; status remains 'in_progress'; certification.status remains 'in_progress'. Test stack left up for the docs-phase agent; teardown not invoked here. No t.Skip used. No --no-verify planned on the commit. Verbatim per-artifact review matrix + drift findings catalog + cross-artifact coherence check captured in report.md → Spec-Review Evidence."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "timestamp": "2026-05-10T11:30:00Z",
+      "phasesExecuted": ["docs"],
+      "scopes": ["01"],
+      "decision": "approved",
+      "summary": "Spec 044 Scope 01 formal docs phase per Gate G022. Published the Scope 01 operator-facing surface to the four Bubbles-managed docs resolved by `docs-registry-resolve.sh` (Operations / Deployment / Development / Testing) plus the project-owned architecture doc `docs/smackerel.md`. Five docs touched, no spec content duplicated, every Scope 02/03/04 future-work reference annotated explicitly. Mandatory drift scan run BEFORE publication and surfaced two pre-existing managed-doc drifts in the `internal/auth/` description (Development.md and Testing.md still described it as OAuth2-only despite spec 044 having landed both subsystems in `internal/auth/`); both fixed inline in the same commit. Per-doc deltas: (1) `docs/Operations.md` +172 lines — added `## Per-User Bearer Authentication (Spec 044, Scope 01)` between OAuth Callback URL Update and Expense Tracking Configuration, with subsections for per-environment defaults table (verified against config/smackerel.yaml: dev=false, test=false, home-lab=true), required production secrets table (3 required + 2 rotation + 1 bootstrap, mapped to both auth.* SST keys and AUTH_* env vars), startup fail-loud (loader at internal/config/config.go + runtime at internal/auth/startup.go per OQ-8), CLI surface (`docker exec ... smackerel-core auth <subcommand>` invocation contract — explicit no-./smackerel.sh-auth-wrapper note), six-subcommand table (keygen / bootstrap / enroll / rotate / revoke / list-users with usage strings + rc=0/1/2 contract), key-generation example, first-user bootstrap walkthrough, manual enroll/rotate/revoke examples (placeholder ids only), admin HTTP endpoint table with explicit (Scope 02) annotation noting routes are NOT yet registered, observability deferral note. All examples use generic placeholders per Smackerel PII rule. (2) `docs/Deployment.md` +60 lines — added `## Per-User Bearer Auth (Spec 044) — Production Posture` between Auth Token Generation and Docker Compose Production Overrides documenting deploy-time secret-injection contract (AUTH_* env vars overlaid by deploy adapter, NEVER committed in per-env bundle per bubbles G074), pre-apply checklist for any target with auth.enabled=true, forbidden patterns (committing real secrets, reusing signing key as at-rest hashing key per OQ-8, leaving AUTH_BOOTSTRAP_TOKEN populated after first enrollment). Cross-links Operations.md for runbook. (3) `docs/Development.md` +12/-2 lines — replaced stale internal/auth/ package row (was OAuth2-only) with a row covering both subsystems and per-environment auth_enabled posture; added brief Environment Model paragraph noting per-user bearer auth is disabled by default in dev/test (legacy SMACKEREL_AUTH_TOKEN flow remains the local-development contract; no per-user enrollment required for ./smackerel.sh up / test unit / test integration); cross-links Operations.md. (4) `docs/Testing.md` +37/-1 lines — corrected stale `internal/auth` package coverage line; added `### Per-User Bearer Auth Test Surface (Spec 044)` subsection between Cloud Photo Libraries (Spec 040) and QF Companion Connector (Spec 041), tabulating actually-shipped Scope 01 test files (8 unit + 2 integration with build tag integration), the four required adversarial cases (hashing key == signing key fail-loud per OQ-8, foreign-kid ErrUnknownKeyID, duplicate Enroll UNIQUE rejection, SST grep-guard adversarial), live-integration invocation, explicit forward-reference note for Scope 02/03 deferred test files. (5) `docs/smackerel.md` +7 lines — added brief paragraph at end of §17.2 Security Model acknowledging spec 044 subsystem (PASETO v4.public, per-user enrollment, NATS-backed revocation cache ≤60s, stateless hot-path validation with no DB roundtrip, dev/test contract preserved on legacy runtime.auth_token, home-lab default and production-class posture on per-user PASETO). Cross-links Operations.md (operator runbook) and specs/044-per-user-bearer-auth/ (design rationale). Does NOT duplicate spec content. (6) README.md INTENTIONALLY UNTOUCHED at Scope 01 — project-level mention deferred until Scope 03 lands user-facing web/Telegram surfaces when an end-user-visible behavior change warrants README treatment. (7) docs/Architecture.md and docs/API.md listed in resolved managed-docs registry but DO NOT EXIST in repo (architecture doc is docs/smackerel.md project-owned; no top-level API.md); cross-doc registry/repo reconciliation out-of-scope for spec 044. Validation gates: artifact-lint exit=0 post-commit; ./smackerel.sh check exit=0 (docs-only changes do not affect config or compose wiring); regression-baseline-guard exit=0 (no managed-docs regressions). FINALIZE-PREREQ-044-V7-001 transitionRequest remains OPEN and is carried forward to finalize-phase agent. State.json updates: completedPhaseClaims appended 'docs' (string); certifiedCompletedPhases appended 'docs'; currentPhase advanced from 'docs' to 'finalize'; status remains 'in_progress'; certification.status remains 'in_progress'. Test stack left up for the finalize-phase agent; teardown not invoked here. No t.Skip used. No --no-verify planned on the commit. Verbatim per-doc delta narrative captured in report.md → Docs Evidence; new Scope 01 docs DoD bullet captured in scopes.md Scope 01 with full per-doc evidence sub-block. NO route_back_to_implement transitionRequest opened — every change is doc-side only; no shipped code touched."
     }
   ],
   "policySnapshot": {
@@ -159,5 +169,5 @@
       "evidenceRef": "report.md#gate-v7-traceability-guard-failure-disposition-reasoning"
     }
   ],
-  "lastUpdatedAt": "2026-05-10T10:30:00Z"
+  "lastUpdatedAt": "2026-05-10T11:30:00Z"
 }

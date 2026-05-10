@@ -236,6 +236,56 @@ After changing the token:
 ./smackerel.sh down && ./smackerel.sh up
 ```
 
+## Per-User Bearer Auth (Spec 044) — Production Posture
+
+Spec 044 introduces a per-user PASETO v4.public bearer-auth subsystem alongside
+the legacy `runtime.auth_token`. The per-environment default and the operator
+runbook (key generation, bootstrap, enrollment, rotation, revocation) live in
+[Operations.md](Operations.md#per-user-bearer-authentication-spec-044-scope-01).
+This section is the deploy-time checklist.
+
+When deploying to a target where `auth.enabled=true` (the home-lab default;
+optional per-target override for production rollouts), the deploy adapter MUST
+inject the spec 044 secrets via the standard secret-injection mechanism. They
+are NEVER committed in the build's per-env config bundle — the bundle treats
+them as empty-string placeholders and the deploy adapter overlays the real
+values at apply time.
+
+Required `AUTH_*` env vars (target-specific):
+
+| Env var | Source | Required when |
+|---|---|---|
+| `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` | `smackerel-core auth keygen` (one per target) | `auth.enabled=true` AND `runtime.environment=production` |
+| `AUTH_SIGNING_ACTIVE_KEY_ID` | Operator-chosen short identifier (e.g. `key-2026-05`) | `auth.enabled=true` AND `runtime.environment=production` |
+| `AUTH_AT_REST_HASHING_KEY` | `openssl rand -hex 32` (must differ from signing key) | `auth.enabled=true` AND `runtime.environment=production` |
+| `AUTH_SIGNING_PRIOR_PUBLIC_KEY` | Previous active public key (hex) | Only during a key rotation overlap window |
+| `AUTH_SIGNING_PRIOR_KEY_ID` | Previous active key id | Only during a key rotation overlap window |
+| `AUTH_BOOTSTRAP_TOKEN` | One-shot secret (`openssl rand -hex 24`); cleared after first user enrolls | Fresh production deployment with zero enrolled users |
+
+Pre-`apply` checklist for any target with `auth.enabled=true`:
+
+1. Confirm the target's bundle reports the three required keys as empty
+   placeholders (per `bubbles G074` — secrets MUST NOT live in the bundle).
+2. Confirm the deploy adapter overlay populates `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`,
+   `AUTH_SIGNING_ACTIVE_KEY_ID`, and `AUTH_AT_REST_HASHING_KEY` from the
+   target's secret store before invoking the runtime.
+3. For a fresh target, set `AUTH_BOOTSTRAP_TOKEN` in the overlay, run the
+   bootstrap flow per Operations.md, then remove the bootstrap secret from the
+   overlay and re-`apply`.
+4. The runtime fails loud at startup if any required value is missing or if the
+   hashing key equals the signing key (spec 044 OQ-8). Operators see explicit
+   error messages naming each missing field; recovery is to populate the secret
+   and re-`apply`.
+
+Forbidden:
+
+- Committing real `AUTH_SIGNING_*` or `AUTH_AT_REST_HASHING_KEY` values into
+  `config/smackerel.yaml` or any file under `config/generated/`.
+- Reusing the signing private key as the at-rest hashing key (rejected at
+  startup per OQ-8).
+- Leaving `AUTH_BOOTSTRAP_TOKEN` populated in the deploy overlay after the
+  first user has been enrolled (the runbook clears it).
+
 ## Docker Compose Production Overrides
 
 Create a `docker-compose.prod.yml` for production-specific settings:

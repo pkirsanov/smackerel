@@ -169,6 +169,15 @@ Rules:
 - Validation or chaos flows must never run against the dev database or long-lived JetStream state.
 - Reuse of running stacks must be compatibility-aware and safe to prove.
 
+**Per-user bearer auth (spec 044)** is disabled by default in `dev` and `test`
+(`environments.dev.auth_enabled=false`, `environments.test.auth_enabled=false`).
+The legacy shared `SMACKEREL_AUTH_TOKEN` flow remains the local-development
+contract; no per-user enrollment is required for `./smackerel.sh up`,
+`./smackerel.sh test unit`, or `./smackerel.sh test integration`. The per-user
+PASETO subsystem and operator runbook live under `internal/auth/` and are
+documented for production-class deployments in
+[Operations.md](../docs/Operations.md#per-user-bearer-authentication-spec-044-scope-01).
+
 ### Port And URL Discipline
 
 When ports are introduced, they must come from the config pipeline, not from literals embedded in code or Compose files.
@@ -228,7 +237,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 |---------|---------|
 | `internal/annotation/` | User annotation model, freeform parser (ratings, tags, interactions, notes), PostgreSQL store, materialized summary view |
 | `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
-| `internal/auth/` | OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage |
+| `internal/auth/` | Two coexisting subsystems: (1) OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, encrypted token storage (`oauth.go`, `handler.go`, `store.go`); (2) spec 044 per-user PASETO v4.public bearer auth (`issue.go`, `verify.go`, `hash.go`, `session.go`, `startup.go`, `bearer_store.go`) plus `revocation/` cache + NATS broadcaster. Per-user surface is gated by `auth.enabled` per environment; dev/test default to off (legacy shared `SMACKEREL_AUTH_TOKEN` ergonomic preserved) and home-lab defaults to on. |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
 | `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `qfdecisions/` (Scope 1 QF bridge validation only; no artifact publication yet), `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |
 | `internal/drive/` | Spec 038 cloud-drives surface — `DriveProvider` interface, `google/` provider implementation (OAuth `BeginConnect`/`FinalizeConnect`, plaintext bearer in `drive_connections.credentials_ref` per design.md §2.3 + decision-log A1), `scan/` + `monitor/` loops on the `DRIVE` NATS stream, `extract/` content extraction, `rules/` Save Rules engine, `save/` Save Service, `confirm/` low-confidence confirmation handler, `policy/` sensitivity policy enforcement, `retrieve/` retrieval service, `tools/` agent tool registrations, `health/` cursor durability and bounded rescan, `consumers/` NATS consumer wiring, `memprovider/` in-memory test provider |
