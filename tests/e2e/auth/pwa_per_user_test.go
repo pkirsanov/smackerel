@@ -10,28 +10,28 @@
 //
 // Test architecture (live, not mocked):
 //
-//   1. Open a real pgxpool against the live test stack DATABASE_URL
-//      (test-stack PostgreSQL on 127.0.0.1:47001 from
-//      config/generated/test.env). Apply migrations.
-//   2. Reset the spec 044 auth tables so each test starts clean.
-//   3. Enroll a user via the real auth.BearerStore.Enroll.
-//   4. Mint a real PASETO v4.public token via auth.IssueToken.
-//   5. Build api.Dependencies with Environment="production" and
-//      AuthConfig.Enabled=true so bearerAuthMiddleware runs Branch 1
-//      (per-user PASETO + RevocationCache) — the same code path the
-//      home-lab production deployment runs.
-//   6. Spin up the real Chi router under httptest.NewTLSServer so
-//      Secure cookies survive the round-trip in the cookie jar.
-//   7. POST /v1/web/login with the PASETO body, capture Set-Cookie,
-//      assert the auth_token cookie attributes match design.md §10.4
-//      (HttpOnly + Secure + SameSite=Lax + Path=/).
-//   8. GET /v1/photos/connectors carrying the cookie via cookiejar;
-//      assert 200 and that the bearerAuthMiddleware accepted the
-//      cookie-sourced bearer token.
-//   9. Adversarial — bare GET (no cookie) MUST return 401.
+//  1. Open a real pgxpool against the live test stack DATABASE_URL
+//     (test-stack PostgreSQL on 127.0.0.1:47001 from
+//     config/generated/test.env). Apply migrations.
+//  2. Reset the spec 044 auth tables so each test starts clean.
+//  3. Enroll a user via the real auth.BearerStore.Enroll.
+//  4. Mint a real PASETO v4.public token via auth.IssueToken.
+//  5. Build api.Dependencies with Environment="production" and
+//     AuthConfig.Enabled=true so bearerAuthMiddleware runs Branch 1
+//     (per-user PASETO + RevocationCache) — the same code path the
+//     home-lab production deployment runs.
+//  6. Spin up the real Chi router under httptest.NewTLSServer so
+//     Secure cookies survive the round-trip in the cookie jar.
+//  7. POST /v1/web/login with the PASETO body, capture Set-Cookie,
+//     assert the auth_token cookie attributes match design.md §10.4
+//     (HttpOnly + Secure + SameSite=Lax + Path=/).
+//  8. GET /v1/photos/connectors carrying the cookie via cookiejar;
+//     assert 200 and that the bearerAuthMiddleware accepted the
+//     cookie-sourced bearer token.
+//  9. Adversarial — bare GET (no cookie) MUST return 401.
 //  10. Adversarial — POST /v1/web/login without a token body MUST
-//      return 400 missing_token; with an invalid PASETO MUST return
-//      401 invalid_token.
+//     return 400 missing_token; with an invalid PASETO MUST return
+//     401 invalid_token.
 //
 // No t.Skip — when DATABASE_URL is unset the test fails with a clear
 // message because spec 043 set the no-skip precedent for live-stack

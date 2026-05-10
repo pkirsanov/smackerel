@@ -40,14 +40,14 @@ type Config struct {
 	// REQUIRED in production for any chat that should successfully
 	// capture (production drops messages from unmapped chats).
 	TelegramUserMapping map[int64]string
-	OllamaURL        string
-	OllamaModel      string
-	EmbeddingModel   string
-	DigestCron       string
-	LogLevel         string
-	Port             string
-	MLSidecarURL     string
-	CoreAPIURL       string
+	OllamaURL           string
+	OllamaModel         string
+	EmbeddingModel      string
+	DigestCron          string
+	LogLevel            string
+	Port                string
+	MLSidecarURL        string
+	CoreAPIURL          string
 
 	// DB pool sizing (SST-compliant — from smackerel.yaml via config generate)
 	DBMaxConns int32

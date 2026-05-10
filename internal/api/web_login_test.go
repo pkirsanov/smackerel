@@ -56,14 +56,14 @@ func newWebLoginDeps_Production(t *testing.T) (*Dependencies, string, string) {
 	return &Dependencies{
 		Environment: "production",
 		AuthConfig: config.AuthConfig{
-			Enabled:                              true,
-			SigningActivePrivateKey:              priv,
-			SigningActiveKeyID:                   kid,
-			TokenTTLHours:                        1,
-			RotationGraceWindowHours:             1,
-			ClockSkewToleranceSeconds:            60,
+			Enabled:                               true,
+			SigningActivePrivateKey:               priv,
+			SigningActiveKeyID:                    kid,
+			TokenTTLHours:                         1,
+			RotationGraceWindowHours:              1,
+			ClockSkewToleranceSeconds:             60,
 			RevocationCacheRefreshIntervalSeconds: 60,
-			AtRestHashingKey:                     priv + "-hash",
+			AtRestHashingKey:                      priv + "-hash",
 		},
 		AuthVerifyOptions: auth.VerifyOptions{
 			ActivePublicKey:    pub,
