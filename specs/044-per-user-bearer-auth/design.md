@@ -378,40 +378,60 @@ type Session struct {
     KeyID     string
     IssuedAt  time.Time
     ExpiresAt time.Time
-    // Source distinguishes "per-user" from "shared-token" sessions for
-    // dev/test backward compat. In production with auth.enabled=true,
-    // Source is always "per-user".
+    // Source distinguishes per-user PASETO sessions from the legacy
+    // shared-token / bootstrap fallbacks for telemetry, audit logs,
+    // and admin-route gating policy. In production with auth.enabled=true,
+    // Source is always SessionSourcePerUserToken (except for the one-shot
+    // SessionSourceBootstrap path used by `./smackerel.sh auth bootstrap`).
     Source SessionSource
 }
 
-type SessionSource int
+// SessionSource is a string enum (NOT int/iota) so the value flows
+// directly into structured logs, metrics labels, and audit records
+// without a separate stringification step. Reconciled at spec-review
+// against shipped code in `internal/auth/session.go`.
+type SessionSource string
 const (
-    SessionSourcePerUser SessionSource = iota  // production path
-    SessionSourceSharedToken                    // dev/test path
-    SessionSourceEmpty                          // dev empty-token bypass
+    SessionSourcePerUserToken SessionSource = "per_user_token" // production path
+    SessionSourceSharedToken  SessionSource = "shared_token"   // dev/test + opt-in production fallback
+    SessionSourceBootstrap    SessionSource = "bootstrap"      // one-shot first-user enrollment
 )
 
-type sessionCtxKey struct{}
+type sessionContextKey struct{}
 
-func WithSession(ctx context.Context, sess *Session) context.Context {
-    return context.WithValue(ctx, sessionCtxKey{}, sess)
+// WithSession takes Session by VALUE (not pointer) because Session is
+// a small immutable record and pointer-passing would invite mutation
+// from downstream handlers. Reconciled at spec-review against shipped
+// code in `internal/auth/session.go`.
+func WithSession(ctx context.Context, sess Session) context.Context {
+    if sess.Source == "" {
+        return ctx // no-op for zero value to surface programming errors
+    }
+    return context.WithValue(ctx, sessionContextKey{}, sess)
 }
 
-func SessionFromContext(ctx context.Context) *Session {
-    sess, _ := ctx.Value(sessionCtxKey{}).(*Session)
-    return sess
+// SessionFromContext returns (Session, bool) tuple — the boolean ok
+// flag is the single source of truth for "is this an authenticated
+// request" downstream of middleware. Reconciled at spec-review.
+func SessionFromContext(ctx context.Context) (Session, bool) {
+    sess, ok := ctx.Value(sessionContextKey{}).(Session)
+    return sess, ok
 }
 
-// Helper: returns the user-id for handlers that don't need full session metadata.
-// Returns empty string if no session is attached (handler programmer error).
-func UserIDFromContext(ctx context.Context) string {
-    sess := SessionFromContext(ctx)
-    if sess == nil { return "" }
-    return sess.UserID
-}
+// IsAdmin is a method on Session that gates the admin HTTP surface
+// (POST /v1/auth/users, etc). Bootstrap is admin unconditionally;
+// SharedToken is admin in dev/test only (handler-side defense-in-depth
+// re-checks production_shared_token_fallback_enabled); PerUserToken
+// admin requires SST allowlist membership evaluated at handler layer.
+//
+// **UserIDFromContext helper deferred to Scope 02.** Scope 01 admin
+// handlers consume Session directly via SessionFromContext +
+// session.IsAdmin(). The convenience helper `UserIDFromContext` for
+// downstream business handlers (MintReveal, drive.Connect, annotation
+// pipeline) lands when Scope 02 wires `bearerAuthMiddleware`.
 ```
 
-Handlers downstream of the middleware use `auth.SessionFromContext(r.Context())` for full session metadata or `auth.UserIDFromContext(r.Context())` for the common case.
+Handlers downstream of the middleware use `auth.SessionFromContext(r.Context())` to read full session metadata. Scope 02 will add `auth.UserIDFromContext` as a convenience accessor for the common "I just need the caller's user-id" case.
 
 ### 5.7 Enrollment surface (OQ-6 RESOLVED)
 
@@ -876,6 +896,40 @@ All 10 spec.md OQs are resolved in this design. No questions are deferred to sco
 - OQ-8 → §10.5 (HMAC-SHA-256 with separate at-rest key)
 - OQ-9 → §4 (telemetry SST keys; `smackerel_auth` metric prefix)
 - OQ-10 → §4 + §5.1 (`auth.bootstrap_token` SST + `./smackerel.sh auth bootstrap` CLI)
+
+---
+
+## 14. Design Decisions Reconciled During Scope 01 Implement
+
+The implement → test → validate → audit → chaos cycle for Scope 01 surfaced a small number of design adjustments and forward-compat observations that this design document records here so that downstream scopes (02/03/04) inherit a faithful design baseline. None of these alter the spec.md outcome contract or any FR/NFR commitment; they refine §5–§6 implementation details and capture observations carried forward to subsequent scopes.
+
+### 14.1 Adjusted from §5–§6 design (rationale-preserving)
+
+| # | Design (§5–§6 pseudocode) | Shipped reality (`internal/auth/`) | Rationale |
+|---|---------------------------|-------------------------------------|-----------|
+| 1 | `SessionSource` is `int` (iota) | `SessionSource` is `string` with stable named values (`per_user_token` / `shared_token` / `bootstrap`) | Stable string values flow directly into structured logs, metrics labels, and audit records without a stringification table — better observability ergonomics for the same trust boundary. |
+| 2 | `SessionSourcePerUser` / `SessionSourceEmpty` | `SessionSourcePerUserToken` / `SessionSourceBootstrap` (no `SourceEmpty`) | The bootstrap path needed an explicit, non-empty source distinct from per-user-token; the dev empty-token bypass continues to attach a session whose Source is one of the named values per `bearerAuthMiddleware` design (Scope 02 work). |
+| 3 | `WithSession(ctx, *Session)` and `SessionFromContext(ctx) *Session` | `WithSession(ctx, Session)` and `SessionFromContext(ctx) (Session, bool)` | Pass-by-value Session is small and immutable; pointer-passing would invite mutation from downstream handlers. The `(Session, bool)` tuple makes "is this an authenticated request?" the single canonical check downstream of middleware. |
+| 4 | `func VerifyAndParse(token string, cfg config.AuthConfig, revoker RevocationCache) (*Session, error)` | `func VerifyAndParse(wireToken string, opts VerifyOptions) (ParsedToken, error)` | Cleaner separation of concerns: `VerifyAndParse` does PASETO signature verify + claim parsing only and returns `ParsedToken`. Session attachment + revocation cache lookup happens at the middleware boundary (Scope 02 work). This keeps `internal/auth/verify.go` provably DB-free (verified by Audit Gate A18) and lets Scope 02 wire revocation policy + session attach without touching the verifier. |
+| 5 | `auth.UserIDFromContext(ctx)` helper landed in Scope 01 | Helper deferred to Scope 02 | No Scope 01 caller needs it: admin handlers consume `Session` directly via `IsAdmin`. Scope 02 will add the helper alongside `bearerAuthMiddleware` integration when `MintReveal`/`drive.Connect`/annotation pipeline begin reading per-request user identity from context. |
+| 6 | Admin allowlist surface for per-user admin gating | `auth.Session.IsAdmin()` returns `false` for `SessionSourcePerUserToken` at Scope 01; allowlist surface deferred to Scope 02 | Scope 01 admin gating is sufficient for bootstrap + non-production shared-token paths. Per-user admin gating requires the SST allowlist evaluator at the handler layer; Scope 02 wires it alongside the route registration in `internal/api/router.go`. |
+
+### 14.2 Observations carried forward (from audit + chaos phases)
+
+The audit phase and chaos phase recorded four LOW-severity / informational observations. None are Scope 01 blockers; all are tracked here so subsequent scopes / future evolution can address them.
+
+- **OBS-AUDIT-044-S01-01** (LOW) — `cmd/core/cmd_auth.go` bootstrap-token compare uses `!=` instead of `subtle.ConstantTimeCompare`. The CLI is local-shell-only and the bootstrap token is one-shot (cleared after first use), so timing-oracle exploitability requires co-located shell access (which already grants direct read of `auth.bootstrap_token`). **Recommended follow-up:** harden to `subtle.ConstantTimeCompare` for symmetry with the runtime-side `CompareTokenHash` discipline. Tracked in `report.md` → Audit Findings.
+- **OBS-AUDIT-044-S01-02** (LOW) — `internal/api/auth_handlers.go` admin handlers leak raw `err.Error()` strings (which may include pgx wrapping) into JSON response bodies. Handlers are admin-only; routes NOT registered at Scope 01. **Recommended follow-up:** tighten error sinks to opaque categories at Scope 02 router-binding time. Tracked in `report.md` → Audit Findings.
+- **OBS-AUDIT-044-S01-03** (INFORMATIONAL) — `internal/auth/revocation/broadcaster.go::handle` silently drops malformed NATS events to avoid log-amplification DoS surface. Cache integrity preserved. **Recommended follow-up:** add a metrics counter `smackerel_auth_revocation_broadcast_drops_total` in Scope 04 (alongside the OQ-9 telemetry surface).
+- **OBS-CHAOS-044-S01-01** (LOW) — `Broadcaster.handle` accepts events with unknown `version` strings as long as `token_id` is non-empty. Benign at v1 (the only consumer-visible field is `token_id`); becomes a forward-compat hazard if v2 adds semantic fields the v1 subscriber must enforce. **Recommended follow-up:** add version-strict gating OR explicit version-allowlist in any v2 broadcaster envelope evolution. Tracked in `report.md` → Chaos Evidence → Findings Summary.
+
+### 14.3 Helper deferred to Scope 02 (not yet shipped)
+
+- `auth.UserIDFromContext(ctx context.Context) string` — convenience accessor for handlers that only need the caller's user-id (the common case for `MintReveal`/`drive.Connect`/annotation pipeline in Scope 02). Spec 044 §6.1 middleware code path snippet uses this helper; Scope 02 lands the helper alongside the middleware refactor.
+
+### 14.4 SST line-number reconciliation
+
+The 14 `auth.*` SST keys live at `config/smackerel.yaml` lines 459-511 (top-level `auth:` block) plus per-environment `auth_enabled` overrides at lines 750 (dev), 767 (test), and 800 (home-lab). Earlier evidence blocks reference `lines 67-130` from the implement-phase snapshot before USER WIP merged additional config blocks above the `auth:` section; the current line numbers are reconciled here for posterity. The block content itself is unchanged from the implement-phase landing.
 
 ---
 

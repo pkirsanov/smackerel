@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "spec-review",
+  "currentPhase": "docs",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "spec-review",
+    "currentPhase": "docs",
     "currentScope": "02",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -22,7 +22,8 @@
       "test",
       "validate",
       "audit",
-      "chaos"
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
@@ -30,7 +31,7 @@
     "status": "in_progress",
     "completedScopes": ["01"],
     "scopeProgress": [],
-    "certifiedCompletedPhases": ["implement", "test", "validate", "audit", "chaos"],
+    "certifiedCompletedPhases": ["implement", "test", "validate", "audit", "chaos", "spec-review"],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -100,6 +101,15 @@
       "scopes": ["01"],
       "decision": "approved_with_observations",
       "summary": "Spec 044 Scope 01 formal chaos phase per Gate G022. Nine chaos behaviors (B1..B9) exercised against the LIVE test stack (postgres at 127.0.0.1:47001, NATS at 127.0.0.1:47002 with auth token, smackerel-core/smackerel-ml/ollama all healthy on host ports 45001/45002/45003). Owned chaos test file authored at tests/integration/auth_chaos_test.go (build tag 'integration', no t.Skip, race-clean) covering 7 stress tests + 1 informational benchmark. CLI subcommand smoke (B8) executed via 'docker exec smackerel-test-smackerel-core-1 smackerel-core auth <subcommand>'. (B1) Concurrent enrollment — 24 goroutines fire BearerStore.Enroll(user_id=X) through a sync gate; EXACTLY 1 INSERT wins, 23 surface duplicate-key errors via the auth_users.user_id UNIQUE constraint; final auth_users count = 1. PASS. (B2) Concurrent rotate vs verify — 16 workers x 16 iterations = 256 verify calls each on (a) prior-key inside grace window, (b) active-key inside grace window, (c) prior-key OUTSIDE grace window — all 768 calls produce the documented sentinel (verify success / verify success / ErrTokenExpired). PASS. (B3) Revocation broadcaster race — 8 publishers x 25 events + 16 verifier goroutines firing IsRevoked, totals: 200 MarkRevoked operations + ≥36 000 lock-free reads, cache.Size = 200 with all IDs visible, no race-detector hits. PASS. (B4) Cache bootstrap under load — 50 revocations seeded via full Enroll→Issue→Persist→Revoke pipeline; 12 concurrent IsRevoked workers fire ≥5 300 probes during BootstrapFromDB; post-bootstrap cache.Size ≥ 50 with every seeded ID visible. PASS. (B5) Broadcaster malformed payloads — 9 pathological NATS payloads published bypass Publish so subscriber's defensive handle runs against raw bytes; 8 dropped silently, 1 (unknown-version with non-empty token_id) accepted; well-formed event after barrage processed correctly; subscriber not permanently disabled. Surfaces NEW observation OBS-CHAOS-044-S01-01 (LOW): subscriber accepts unknown-version events as long as token_id is non-empty — benign at v1, recommend version-strict gating for v2 broadcaster evolution. PASS. (B6) Migration idempotency — db.Migrate run 3x consecutively returns nil (version-based idempotency); adversarial DROP auth_revocations + downstream LoadRevokedTokenIDs surfaces loud 'relation does not exist' (SQLSTATE 42P01) — schema drift surfaces immediately, not silently. PASS. (B7) Token boundary conditions — 10 cases (TTL=0, TTL<0, foreign kid, empty wire token, tampered tail, far-future nbf, far-past exp, half-rotation config, HashToken empty key, HashToken empty token) all yield documented sentinel errors; no silent acceptance, no panic. PASS. (B8) CLI subcommand smoke — all 6 subcommands (enroll/rotate/revoke/list-users/bootstrap/keygen) + 2 negative paths (no-args, unknown-cmd) surface stable usage / exit codes per cmd_auth.go contract: rc=0 success, rc=1 command-level failure, rc=2 invocation error. PASS. (B9) Pure-CPU verify benchmark — BenchmarkAuthChaos_VerifyAndParse_HotPath-8 25276 95543 ns/op ≈ 95 µs/op, ~10 470 verifications/sec/core, **52x under NFR-AUTH-001 ≤ 5 ms p99 hot-path budget**. Informational only. Stress loop: -count=20 -race -timeout=600s for 7 chaos tests x 20 iterations = 140 invocations all PASS in 24.162s with no race-detector hits and no flake. Cleanup: strict — chaos test data uses 'chaos-044-*' unique prefix; final manual psql cleanup verified zero residual rows (auth_users=0, auth_tokens=0, auth_revocations=0). Persistent dev DB never touched (project name 'smackerel-test-*' enforces isolation per docker-compose.yml). Bug artifacts created: ZERO. The single observation OBS-CHAOS-044-S01-01 is a forward-compat hazard for v2 broadcaster evolution (NOT a v1 functional defect); tracked via report.md only. Verdict: 🚀 SHIP_IT (approved_with_observations) for Scope 01 chaos phase. State.json updates: completedPhaseClaims appended 'chaos' (string); certifiedCompletedPhases appended 'chaos'; currentPhase advanced from 'chaos' to 'spec-review'; status remains 'in_progress'; certification.status remains 'in_progress'. FINALIZE-PREREQ-044-V7-001 transitionRequest remains open and carries forward to spec-review and finalize. Test stack left up for the spec-review-phase agent; teardown not invoked here. No t.Skip used. No --no-verify planned on the commit. Verbatim per-behavior runner output, observations, and findings summary captured in report.md → Chaos Evidence (9-behavior matrix + cleanup report + findings summary)."
+    },
+    {
+      "phase": "spec-review",
+      "agent": "bubbles.spec-review",
+      "timestamp": "2026-05-10T10:30:00Z",
+      "phasesExecuted": ["spec-review"],
+      "scopes": ["01"],
+      "decision": "approved_with_artifact_fixes",
+      "summary": "Spec 044 Scope 01 formal spec-review phase per Gate G022. Per-spec post-chaos verification that the seven Scope 01 artifacts (spec.md / design.md / scopes.md / scenario-manifest.json / report.md / uservalidation.md / state.json) truthfully reflect what was implemented and shipped through the implement → test → validate → audit → chaos chain. Trust classification: MINOR_DRIFT — substantive accuracy across all seven artifacts; shipped code is sound; only descriptive pseudo-code in design.md §5.6 and stale planned-test-names in scopes.md Test Plan rows T1-04..T1-09 needed surgical reconciliation. NO MAJOR_DRIFT or OBSOLETE classification, therefore the spec-review-mode Phase 5 auto-invocation of bubbles.docs is NOT triggered — managed-doc impact for Scope 01 is limited to the design.md §14 reconciliation note (intra-artifact) and the docs-phase work that legitimately belongs to Scope 04. Per-artifact verdicts: spec.md PASS (FRs/NFRs/scenarios faithful to shipped surface; OQs marked resolved in design.md §13 + reconciled at §14). design.md PASS_WITH_FIXES (§5.6 SessionSource type/names/signatures fully reconciled to shipped reality — string enum + WithSession/SessionFromContext value-passing tuple; NEW §14 'Design Decisions Reconciled During Scope 01 Implement' added recording 6 design adjustments + 4 OBS-* observations carried forward + UserIDFromContext deferral + SST line-number reconciliation). scopes.md PASS_WITH_FIXES (Test Plan rows T1-04..T1-07/T1-09 reconciled to shipped test names per the manifest restructure at commit 1ec9c5f5 with rationale annotations; SST line numbers corrected `67-130` → `459-511`; UserIDFromContext claim removed from shipped helper list with deferred-to-Scope-02 note; NEW spec-review DoD bullet appended capturing this phase's evidence). scenario-manifest.json PASS (all Scope 01 file: entries reference real shipped tests; all Scope 02/03/04 entries correctly use plannedFile: per restructure at 1ec9c5f5). report.md PASS_WITH_FIXES (NEW Spec-Review Evidence section added with per-artifact review matrix + drift findings catalog + cross-artifact coherence check + inline fixes summary + spec-review verdict). uservalidation.md PASS (placeholder per design — full acceptance lands at Scope 04 closure). state.json PASS_WITH_FIXES (this entry plus completedPhaseClaims/certifiedCompletedPhases append + currentPhase advance to 'docs'). Cross-artifact coherence: PASS — all 11 SCN-AUTH-NNN scenario IDs match across spec/design/scopes/manifest; MIT-040-S-008/MIT-038-S-003/MIT-027-TRACE-001 actor-source segment correctly carried forward to Scope 02 (NOT mis-claimed as closed by Scope 01); Scope 02/03/04 remain Not Started per audit's G041 canonicalization. 5 inline artifact fixes landed (D1-D8 catalogued in report.md → Spec-Review Evidence → Drift Findings Catalog). NO route_back_to_implement transitionRequest opened — every drift item is artifact-side only; no shipped code is wrong. artifact-lint exit=0 post-fix. FINALIZE-PREREQ-044-V7-001 transitionRequest remains open and is carried forward to the docs and finalize phases. Verdict: 🟢 APPROVED_WITH_ARTIFACT_FIXES for Scope 01 spec-review phase. State.json updates: completedPhaseClaims appended 'spec-review' (string); certifiedCompletedPhases appended 'spec-review'; currentPhase advanced from 'spec-review' to 'docs'; status remains 'in_progress'; certification.status remains 'in_progress'. Test stack left up for the docs-phase agent; teardown not invoked here. No t.Skip used. No --no-verify planned on the commit. Verbatim per-artifact review matrix + drift findings catalog + cross-artifact coherence check captured in report.md → Spec-Review Evidence."
     }
   ],
   "policySnapshot": {
@@ -149,5 +159,5 @@
       "evidenceRef": "report.md#gate-v7-traceability-guard-failure-disposition-reasoning"
     }
   ],
-  "lastUpdatedAt": "2026-05-10T09:30:00Z"
+  "lastUpdatedAt": "2026-05-10T10:30:00Z"
 }
