@@ -181,9 +181,32 @@ func (s *BearerStore) MarkTokenRotated(ctx context.Context, tokenID string) erro
 	return nil
 }
 
+// ErrTokenNotFound is returned by RevokeToken when no auth_tokens row
+// matches the supplied token_id. Distinct from the "already revoked"
+// no-op so Scope 02 follow-up adversarial tests can assert each shape
+// independently and so admin-API callers can surface a clean 404 rather
+// than misclassifying a missing token as a permission failure.
+var ErrTokenNotFound = errors.New("auth: token id not found")
+
 // RevokeToken atomically writes both the auth_revocations row and the
 // auth_tokens.status='revoked' transition inside a single transaction
 // so the bootstrap cache cannot observe a half-applied revocation.
+//
+// Contract refinement (spec 044 Scope 02 follow-up): the function
+// distinguishes three outcomes for the same input space the prior
+// implementation collapsed:
+//
+//  1. The token does not exist → returns ErrTokenNotFound (wrapped with
+//     the token id for log clarity).
+//  2. The token exists and is already 'revoked' → returns nil
+//     (idempotent — repeated revoke calls are a no-op so operator
+//     retries and crash-restart loops never error out a second time).
+//  3. The token exists and is 'active' or 'rotated' → updates the
+//     status row, inserts the auth_revocations audit row, commits.
+//
+// The (1)/(2) split is enforced via a SELECT ... FOR UPDATE inside the
+// transaction so a concurrent revoker cannot race a status check past
+// the commit boundary.
 func (s *BearerStore) RevokeToken(ctx context.Context, tokenID, revokedBy, reason string) error {
 	if tokenID == "" || revokedBy == "" {
 		return errors.New("auth: RevokeToken requires tokenID and revokedBy")
@@ -195,15 +218,37 @@ func (s *BearerStore) RevokeToken(ctx context.Context, tokenID, revokedBy, reaso
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	res, err := tx.Exec(ctx, `
-        UPDATE auth_tokens SET status = 'revoked'
-        WHERE token_id = $1 AND status <> 'revoked'
-    `, tokenID)
+	// Lock the row (or surface ErrTokenNotFound when absent) so the
+	// (not-found / already-revoked / active) decision is made under
+	// transactional isolation.
+	var status string
+	err = tx.QueryRow(ctx, `
+        SELECT status FROM auth_tokens
+        WHERE token_id = $1
+        FOR UPDATE
+    `, tokenID).Scan(&status)
 	if err != nil {
-		return fmt.Errorf("auth: revoke status update: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("auth: revoke %q: %w", tokenID, ErrTokenNotFound)
+		}
+		return fmt.Errorf("auth: revoke status lookup: %w", err)
 	}
-	if res.RowsAffected() == 0 {
-		return fmt.Errorf("auth: no token with id %q to revoke (already revoked or absent)", tokenID)
+
+	if status == "revoked" {
+		// Idempotent — the canonical revocation is already in place.
+		// Commit the (empty) transaction so the FOR UPDATE lock
+		// releases cleanly.
+		if cerr := tx.Commit(ctx); cerr != nil {
+			return fmt.Errorf("auth: commit idempotent revoke tx: %w", cerr)
+		}
+		return nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+        UPDATE auth_tokens SET status = 'revoked'
+        WHERE token_id = $1
+    `, tokenID); err != nil {
+		return fmt.Errorf("auth: revoke status update: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `

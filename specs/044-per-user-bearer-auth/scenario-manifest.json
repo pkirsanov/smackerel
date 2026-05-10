@@ -41,8 +41,9 @@
       "name": "Token rotation revokes prior token without breaking active sessions for grace window",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "tests/integration/auth_rotation_test.go", "function": "TestRotation_GraceWindow_BothTokensValid", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_rotation_test.go", "function": "TestRotation_AfterGraceWindow_OldTokenRejected", "status": "planned"}
+        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_GraceWindow_BothTokensValid", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_AfterGraceWindow_OldTokenRejected", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_AdminEndpoint_RejectsNonAdminCaller", "status": "live"}
       ]
     },
     {
@@ -94,9 +95,11 @@
       "name": "Revoked token is refused on the next authenticated request",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "internal/auth/revocation/cache_test.go", "function": "TestCache_IsRevoked_AfterSet_ReturnsTrue", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_PropagationLatency_NextRequestRejected", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_NATSDown_DBRefreshCatches", "status": "planned"}
+        {"type": "test", "file": "internal/auth/revocation/cache_test.go", "function": "TestRevocationCache_BootstrapAndPropagate", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_RevokedTokenRejectedOnNextRequest", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_NATSDownFallsBackToDBRefresh", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_NonExistentToken_ClearError", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_AlreadyRevokedToken_Idempotent", "status": "live"}
       ]
     },
     {

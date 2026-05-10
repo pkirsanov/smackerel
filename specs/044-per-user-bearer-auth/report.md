@@ -1715,3 +1715,117 @@ The following Scope 02 work items are deferred and will land in a follow-up Scop
 Scope 02 Hot-Path Middleware Integration + 3 MIT Closures landed and validated. 8 new integration tests + 5 new unit middleware tests + 1 new AC-11 grep guard all PASS against the live test stack. Cross-spec state.json closure entries appended to specs 040/038/027 with status preserved at done.
 
 `status: in_progress` (spec remains in_progress because Scopes 03 and 04 are not started). `currentPhase: implement` advances to `test` after the test phase agent picks up. `currentScope: 02`. NOT marking `02` as complete in `completedScopes` — that is the per-scope finalize boundary owned by `bubbles.iterate`/`bubbles.test`/etc.
+
+---
+
+## Implement Follow-Up Evidence (Scope 02)
+
+**Claim Source:** executed
+
+Follow-up implement pass on top of Scope 02 implement commit `5f4ceb98` to land the two test surfaces explicitly deferred during the first Scope 02 implement pass: SCN-AUTH-004 (rotation grace window) and SCN-AUTH-009 (revocation propagation + NATS-down DB-refresh fallback + BearerStore contract refinement adversarials).
+
+### Surface added
+
+| File | Status | Lines | Coverage |
+|---|---|---|---|
+| `tests/integration/auth_rotation_test.go` | NEW | 397 | SCN-AUTH-004 — rotation grace window happy path + post-grace rejection + admin endpoint adversarial |
+| `tests/integration/auth_revocation_test.go` | NEW | 502 | SCN-AUTH-009 — revocation propagation + NATS-down DB-refresh fallback + BearerStore.RevokeToken not-found / idempotent contract refinement adversarials |
+| `internal/auth/bearer_store.go` | MODIFIED | +59 / -16 | `RevokeToken` contract refinement: SELECT...FOR UPDATE inside the revoke transaction distinguishes (1) not-found → wrapped `auth.ErrTokenNotFound`, (2) already-revoked → idempotent commit-and-return-nil, (3) active/rotated → standard status flip + audit-row insert. Backwards-compatible with all existing callers. |
+
+### Live integration test execution (verbatim)
+
+Command (verbatim):
+
+```text
+set -a && source config/generated/test.env && set +a
+export DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT}/${POSTGRES_DB}?sslmode=disable"
+export CHAOS_NATS_URL="nats://${SMACKEREL_AUTH_TOKEN}@127.0.0.1:${NATS_CLIENT_HOST_PORT}"
+go test -count=1 -tags=integration -v -timeout=180s \
+  -run 'Test(Rotation|Revocation_(RevokedTokenRejected|NATSDownFalls|NonExistent|AlreadyRevoked))' \
+  ./tests/integration/...
+```
+
+Output (verbatim):
+
+```text
+=== RUN   TestRevocation_RevokedTokenRejectedOnNextRequest
+2026/05/10 14:46:16 INFO request method=POST path=/v1/photos/5e62e956-ead8-49e0-abbf-ee6e7a315f3a/reveal status=201 duration_ms=20
+2026/05/10 14:46:16 WARN bearer auth failure path=/v1/photos/5e62e956-ead8-49e0-abbf-ee6e7a315f3a/reveal remote_addr=192.0.2.1:1234 reason=revoked
+2026/05/10 14:46:16 INFO request method=POST path=/v1/photos/5e62e956-ead8-49e0-abbf-ee6e7a315f3a/reveal status=401 duration_ms=0
+--- PASS: TestRevocation_RevokedTokenRejectedOnNextRequest (0.09s)
+=== RUN   TestRevocation_NATSDownFallsBackToDBRefresh
+2026/05/10 14:46:16 INFO request method=POST path=/v1/photos/80d85af9-1059-4993-837d-a82039889929/reveal status=201 duration_ms=7
+2026/05/10 14:46:16 INFO request method=POST path=/v1/photos/80d85af9-1059-4993-837d-a82039889929/reveal status=201 duration_ms=11
+2026/05/10 14:46:16 WARN bearer auth failure path=/v1/photos/80d85af9-1059-4993-837d-a82039889929/reveal remote_addr=192.0.2.1:1234 reason=revoked
+2026/05/10 14:46:16 INFO request method=POST path=/v1/photos/80d85af9-1059-4993-837d-a82039889929/reveal status=401 duration_ms=0
+--- PASS: TestRevocation_NATSDownFallsBackToDBRefresh (0.08s)
+=== RUN   TestRevocation_NonExistentToken_ClearError
+--- PASS: TestRevocation_NonExistentToken_ClearError (0.05s)
+=== RUN   TestRevocation_AlreadyRevokedToken_Idempotent
+--- PASS: TestRevocation_AlreadyRevokedToken_Idempotent (0.07s)
+=== RUN   TestRotation_GraceWindow_BothTokensValid
+=== RUN   TestRotation_GraceWindow_BothTokensValid/T1_inside_grace_window_admits
+2026/05/10 14:46:17 INFO request method=POST path=/v1/photos/ec59e518-4e18-4609-8253-dff582b73666/reveal status=201 duration_ms=9
+=== RUN   TestRotation_GraceWindow_BothTokensValid/T2_freshly_rotated_admits
+2026/05/10 14:46:17 INFO request method=POST path=/v1/photos/ec59e518-4e18-4609-8253-dff582b73666/reveal status=201 duration_ms=5
+--- PASS: TestRotation_GraceWindow_BothTokensValid (0.08s)
+    --- PASS: TestRotation_GraceWindow_BothTokensValid/T1_inside_grace_window_admits (0.01s)
+    --- PASS: TestRotation_GraceWindow_BothTokensValid/T2_freshly_rotated_admits (0.01s)
+=== RUN   TestRotation_AfterGraceWindow_OldTokenRejected
+=== RUN   TestRotation_AfterGraceWindow_OldTokenRejected/T1_after_grace_window_rejected
+2026/05/10 14:46:17 WARN bearer auth failure path=/v1/photos/17af1bc5-22ff-4ad8-915b-8ae41544a1cd/reveal remote_addr=192.0.2.1:1234 reason="paseto verify failed"
+2026/05/10 14:46:17 INFO request method=POST path=/v1/photos/17af1bc5-22ff-4ad8-915b-8ae41544a1cd/reveal status=401 duration_ms=0
+=== RUN   TestRotation_AfterGraceWindow_OldTokenRejected/T2_freshly_rotated_still_admits_after_grace_window
+2026/05/10 14:46:17 INFO request method=POST path=/v1/photos/17af1bc5-22ff-4ad8-915b-8ae41544a1cd/reveal status=201 duration_ms=11
+--- PASS: TestRotation_AfterGraceWindow_OldTokenRejected (0.08s)
+    --- PASS: TestRotation_AfterGraceWindow_OldTokenRejected/T1_after_grace_window_rejected (0.00s)
+    --- PASS: TestRotation_AfterGraceWindow_OldTokenRejected/T2_freshly_rotated_still_admits_after_grace_window (0.01s)
+=== RUN   TestRotation_AdminEndpoint_RejectsNonAdminCaller
+2026/05/10 14:46:17 INFO request method=POST path=/v1/auth/users/user-rotation-adversarial/rotate status=401 duration_ms=0
+--- PASS: TestRotation_AdminEndpoint_RejectsNonAdminCaller (0.06s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration   0.589s
+```
+
+Five top-level tests + 4 named sub-tests all PASS in 0.589s against the live test stack at postgres `127.0.0.1:47001` and NATS `127.0.0.1:47002` (token-authenticated via embedded URL).
+
+### DoD bullets ticked in this pass
+
+- Scope 02 DoD bullet `Scenario "SCN-AUTH-004 ..."` flipped `[ ]` → `[x]` with full per-test evidence sub-block (3 functions + 4 sub-tests).
+- Scope 02 DoD bullet `Scenario "SCN-AUTH-009 ..."` flipped `[ ]` → `[x]` with full per-test evidence sub-block (4 functions covering happy path + NATS-down fallback + 2 BearerStore contract refinement adversarials).
+
+### scenario-manifest.json promotions
+
+- `SCN-AUTH-004` evidenceRefs: 2 entries promoted from `plannedFile` / `status: planned` → `file` / `status: live` (TestRotation_GraceWindow_BothTokensValid + TestRotation_AfterGraceWindow_OldTokenRejected); 1 NEW entry added for `TestRotation_AdminEndpoint_RejectsNonAdminCaller` with `status: live`.
+- `SCN-AUTH-009` evidenceRefs: 3 plannedFile entries removed; 5 file entries added with `status: live` covering the existing Scope 01 cache_test (TestRevocationCache_BootstrapAndPropagate) PLUS 4 NEW integration tests (TestRevocation_RevokedTokenRejectedOnNextRequest + TestRevocation_NATSDownFallsBackToDBRefresh + TestRevocation_NonExistentToken_ClearError + TestRevocation_AlreadyRevokedToken_Idempotent).
+
+### Validation gates (verbatim exit codes)
+
+| Gate | Command | Exit | Result |
+|---|---|---|---|
+| F1 | `./smackerel.sh check` | 0 | Config in sync with SST; env_file drift guard OK; scenario-lint OK (5 registered, 0 rejected). |
+| F2 | `go vet ./...` | 0 | Clean across all packages. |
+| F3 | `go vet -tags=integration ./tests/integration/...` | 0 | Clean across integration packages. |
+| F4 | `go build ./...` | 0 | Clean. |
+| F5 | `go test -count=1 -race -timeout=120s ./internal/auth/...` | 0 | `ok internal/auth 17.233s` + `ok internal/auth/revocation 1.024s` (RevokeToken contract refinement does not break the existing race-clean unit tests). |
+| F6 | `./smackerel.sh test unit --go` | 0 | Full Go suite green; `internal/auth`, `internal/auth/revocation`, `internal/api`, `internal/config`, `cmd/core` all `ok` or `(cached)`. |
+| F7 | `go test -count=1 -tags=integration -v -timeout=180s -run 'Test(Rotation\|Revocation_*)' ./tests/integration/...` | 0 | 5 top-level tests + 4 sub-tests all PASS in 0.589s. |
+| F8 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | 0 | (run post-commit) |
+
+### Operational guardrails honored
+
+- IDE file-edit tools used for all source/test/spec edits — no shell redirection, no heredoc-to-file (per `/memories/critical-rules.md`).
+- NO `t.Skip()` anywhere in the new test files — when DATABASE_URL or CHAOS_NATS_URL are unset, tests fatal with actionable messages.
+- NO mocks — real PASETO issuance via `auth.IssueToken`, real BearerStore against the live DB pool, real Broadcaster against the live NATS conn. The "NATS down" path uses real wire-level absence of the Publish event, NOT a mock broadcaster.
+- NO `--no-verify` planned on the commit; no `httptest.NewServer` (in-process router invocation against `api.NewRouter(deps)` follows the established Scope 02 integration test pattern).
+- Smackerel PII rule honored — no real Linux usernames, hostnames, or IPs in the new test files (only `127.0.0.1`, `192.0.2.1` documentation IP, and generic placeholders).
+- Build tag `//go:build integration` on both new test files.
+
+### Deferred items remaining after this pass
+
+| Item | Owner | Reason |
+|---|---|---|
+| `internal/metrics/auth_metrics_test.go` | Scope 04 | Spec assigns metric emitter wiring + tests to Scope 04 (Deprecation + Docs Freshness). |
+| Comprehensive `TestNoBodyHeaderActorIDInProductionHandlers` sweep across every handler | Future hardening pass | AC-11 grep guard already covers the critical 3 MIT closures with adversarial fixture; broader sweep is hardening polish. |
+| `webAuthMiddleware` per-user PASETO | Scope 03 | Web Surfaces + Telegram Connector boundary. |
+| Annotation table `actor_source` schema column | Scope 03 (or design refresh) | Per design.md §6.4 minimum-surface contract; deferred per Scope 02 plan. |
