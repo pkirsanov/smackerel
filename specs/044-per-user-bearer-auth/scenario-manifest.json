@@ -17,9 +17,9 @@
       "name": "Bearer token survives stateless validation in production mode without DB roundtrip",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_ValidToken_ReturnsSession", "status": "planned"},
-        {"type": "test", "plannedFile": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_NoDBQueries", "status": "planned"},
-        {"type": "test", "plannedFile": "internal/api/router_test.go", "function": "TestBearerAuthMiddleware_Production_ValidatesPerUserToken", "status": "planned"},
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_PerUserPASETO_Production_Accepts", "status": "live"},
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestUserIDFromContext", "status": "live"},
+        {"type": "static-guarantee", "file": "internal/api/router.go", "function": "bearerAuthMiddleware (Branch 1) consumes only auth.VerifyAndParse + sync.Map.Load", "status": "live"},
         {"type": "test", "plannedFile": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "planned"},
         {"type": "test", "plannedFile": "tests/e2e/auth/extension_per_user_test.go", "function": "TestE2E_ExtensionAuth_Production_PerUserSession", "status": "planned"},
         {"type": "test", "plannedFile": "internal/metrics/auth_metrics_test.go", "function": "TestAuthMetrics_EmitsAllExpectedSeries", "status": "planned"}
@@ -30,9 +30,10 @@
       "name": "actor_id is derived from token claims, not request header trust",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_Production_DerivesActorIDFromSession", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_no_body_header_actor_id_test.go", "function": "TestNoBodyHeaderActorIDInProductionHandlers", "status": "planned"}
+        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_ProductionWithSession_DerivesFromPASETO", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_HeaderActorIDInProduction_Returns400", "status": "live"},
+        {"type": "test", "file": "internal/api/auth_actor_grep_guard_test.go", "function": "TestAuthActorIdentitySourcesGrepGuard", "status": "live"}
       ]
     },
     {
@@ -49,9 +50,9 @@
       "name": "Single-tenant SMACKEREL_AUTH_TOKEN remains valid for dev/test profiles",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "internal/api/router_test.go", "function": "TestBearerAuthMiddleware_DevTest_PreservesSharedToken", "status": "planned"},
-        {"type": "test", "plannedFile": "internal/api/router_test.go", "function": "TestBearerAuthMiddleware_DevEmptyTokenBypass_Preserved", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_DevTest_HonorsXActorID", "status": "planned"}
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_DevSharedToken_Allows", "status": "live"},
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_DevEmpty_Bypass_Allows", "status": "live"},
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_ProductionSharedTokenFallback_Optin", "status": "live"}
       ]
     },
     {
@@ -71,9 +72,10 @@
       "name": "Cloud-drive Connect derives owner_user_id from session (closes MIT-038-S-003)",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_Production_DerivesOwnerFromSession", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_OwnerInBody_Production_Returns400", "status": "planned"},
-        {"type": "spec-state", "plannedFile": "specs/038-cloud-drives-integration/state.json", "function": "MIT-038-S-003 closure", "status": "planned"}
+        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_ProductionWithSession_DerivesOwner", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_OwnerInBody_Production_Returns400", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_NoOwnerNoSession_Production_Returns400", "status": "live"},
+        {"type": "spec-state", "file": "specs/038-cloud-drives-integration/state.json", "function": "MIT-038-S-003 closure entry appended via spec 044 Scope 02", "status": "live"}
       ]
     },
     {
@@ -81,10 +83,10 @@
       "name": "User annotation actor_source is session-derived (closes MIT-027-TRACE-001 actor source)",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "tests/integration/auth_annotation_test.go", "function": "TestAnnotationPipeline_Production_DerivesActorSourceFromSession", "status": "planned"},
-        {"type": "test", "plannedFile": "tests/integration/auth_annotation_test.go", "function": "TestAnnotationPipeline_ActorSourceInPayload_Production_Overrides", "status": "planned"},
+        {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorSourceInProduction_Rejected", "status": "live"},
+        {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorIDInProduction_Rejected", "status": "live"},
         {"type": "test", "plannedFile": "tests/e2e/auth/telegram_per_user_test.go", "function": "TestE2E_TelegramBridge_DerivesActorSourceFromChatID", "status": "planned"},
-        {"type": "spec-state", "plannedFile": "specs/027-user-annotations/state.json", "function": "MIT-027-TRACE-001 actor-source segment closure", "status": "planned"}
+        {"type": "spec-state", "file": "specs/027-user-annotations/state.json", "function": "MIT-027-TRACE-001 actor-source segment closure entry appended via spec 044 Scope 02", "status": "live"}
       ]
     },
     {
@@ -102,9 +104,9 @@
       "name": "Stale or tampered token is refused with constant-time discipline",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "plannedFile": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_Expired_Returns401", "status": "planned"},
-        {"type": "test", "plannedFile": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_WrongKey_Returns401", "status": "planned"},
-        {"type": "test", "plannedFile": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_Malformed_Returns401", "status": "planned"}
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_PerUserPASETO_Production_Accepts/foreign_key_rejected", "status": "live"},
+        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_Production_EmptyToken_Rejected", "status": "live"},
+        {"type": "test", "file": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_RejectsExpiredAndFutureAndForeignIssuer", "status": "live"}
       ]
     },
     {

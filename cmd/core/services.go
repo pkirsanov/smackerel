@@ -8,6 +8,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/auth"
+	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
@@ -54,6 +55,12 @@ type coreServices struct {
 	driveSaveService       *save.Service
 	driveRetrieveService   *retrieve.Service // spec 038 Scope 7 — drive retrieval
 	mealPlanSaveBack       *mealplan.DriveSaveBack
+	// Spec 044 Scope 02 — auth revocation NATS broadcaster. May be nil
+	// when auth is disabled or NATS is unavailable; in that case the
+	// revocation cache still hydrates from the database via the
+	// periodic refresh and revoke calls still update the canonical
+	// auth_revocations table.
+	authRevocationBroadcaster *revocation.Broadcaster
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.

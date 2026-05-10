@@ -71,7 +71,10 @@ func run() error {
 	}
 
 	// Build API dependencies (annotations, lists, etc.)
-	deps, listResolver, listStore := buildAPIDeps(cfg, svc)
+	deps, listResolver, listStore, err := buildAPIDeps(cfg, svc)
+	if err != nil {
+		return fmt.Errorf("buildAPIDeps: %w", err)
+	}
 
 	// Spec 037 Scope 10 — wire the agent runtime (bridge + router +
 	// executor) into deps so POST /v1/agent/invoke is live and

@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/auth"
+	"github.com/smackerel/smackerel/internal/auth/revocation"
+	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
@@ -130,6 +133,20 @@ type Dependencies struct {
 	Version     string
 	CommitHash  string
 	BuildTime   string
+
+	// Spec 044 Scope 02 — per-user bearer-auth subsystem wiring. When
+	// AuthConfig.Enabled is true (production-class deployments), the
+	// bearerAuthMiddleware validates per-user PASETO v4.public tokens
+	// against AuthVerifyOptions, consults RevocationCache for the
+	// revocation-on-next-request contract (NFR-AUTH-006), and attaches
+	// an auth.Session to the request context for downstream handlers.
+	// All four MUST be non-nil when AuthConfig.Enabled is true; the
+	// wiring layer enforces this at startup.
+	AuthConfig         config.AuthConfig
+	AuthVerifyOptions  auth.VerifyOptions
+	BearerStore        *auth.BearerStore
+	RevocationCache    *revocation.Cache
+	AuthAdminHandlers  *AuthAdminHandlers
 
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).

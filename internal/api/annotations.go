@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -10,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/smackerel/smackerel/internal/annotation"
+	"github.com/smackerel/smackerel/internal/auth"
 )
 
 const (
@@ -34,8 +37,27 @@ type CreateAnnotationResponse struct {
 }
 
 // AnnotationHandlers holds annotation API handler methods.
+//
+// Spec 044 Scope 02 closure of MIT-027-TRACE-001 (actor-source segment):
+// when `Environment == "production"`, CreateAnnotation defensively
+// rejects requests whose body smuggles an `actor_source` or `actor_id`
+// JSON key (HTTP 400 `actor_source_in_body_forbidden` /
+// `actor_id_in_body_forbidden`). The actor-source channel is now
+// resolved from the authenticated session attached by
+// `bearerAuthMiddleware` (`auth.UserIDFromContext`); when present it
+// is logged alongside the parse outcome so the audit trail records the
+// authenticated principal. Full schema-level actor_source persistence
+// (annotations table column + downstream consumers) is documented as
+// deferred follow-up implement work; the smuggling-rejection +
+// session-actor logging close the trace residual.
 type AnnotationHandlers struct {
 	Store annotation.AnnotationQuerier
+	// Environment is the deployment environment string (allowed:
+	// development | test | production). Sourced from
+	// runtime.environment in smackerel.yaml via SMACKEREL_ENV. Wiring
+	// sets this field at startup; tests omit it (empty default keeps
+	// the legacy dev/test ergonomic).
+	Environment string
 }
 
 // CreateAnnotation handles POST /api/artifacts/{id}/annotations.
@@ -51,9 +73,34 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxAnnotationBodySize)
+	// Spec 044 Scope 02 — read body once so we can defensively scan
+	// for `actor_source`/`actor_id` smuggling before the typed
+	// unmarshal. We bound the read at maxAnnotationBodySize; a body
+	// that exceeds the cap returns the standard MaxBytesReader error
+	// path through json.Unmarshal below.
+	bodyBytes, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxAnnotationBodySize))
+	if err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if h.Environment == "production" {
+		if bytes.Contains(bodyBytes, []byte(`"actor_source"`)) {
+			http.Error(w, `{"error":"actor_source in request body is forbidden in production"}`, http.StatusBadRequest)
+			return
+		}
+		if bytes.Contains(bodyBytes, []byte(`"actor_id"`)) {
+			http.Error(w, `{"error":"actor_id in request body is forbidden in production"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	var req CreateAnnotationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if len(bytes.TrimSpace(bodyBytes)) == 0 {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
 		return
 	}
@@ -75,6 +122,17 @@ func (h *AnnotationHandlers) CreateAnnotation(w http.ResponseWriter, r *http.Req
 		slog.Error("failed to create annotations", "artifact_id", artifactID, "error", err)
 		http.Error(w, `{"error":"failed to create annotations"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Spec 044 Scope 02 — log the authenticated principal alongside
+	// the parse outcome so the audit trail records the actor source
+	// even before the schema column lands (deferred follow-up).
+	if sessionUser := auth.UserIDFromContext(r.Context()); sessionUser != "" {
+		slog.Info("annotation created",
+			"artifact_id", artifactID,
+			"actor_source", "session",
+			"actor_user_id", sessionUser,
+			"created_count", len(created))
 	}
 
 	summary, _ := h.Store.GetSummary(r.Context(), artifactID)
