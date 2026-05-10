@@ -25,9 +25,9 @@ Each scope ends with a working state. Test plan rows must reference real test fi
 | # | Name | Surfaces | Tests | DoD Summary | Status |
 |---|------|----------|-------|-------------|--------|
 | 1 | SST Foundation + Token Subsystem | `config/smackerel.yaml`, `internal/auth/`, `internal/auth/revocation/`, `cmd/core/cmd_auth.go`, `internal/api/auth_handlers.go`, DB migrations | unit, integration | 14 SST keys live; `internal/auth/` package; CLI + admin HTTP entry points; bootstrap flow works on fresh production deployment; SST grep guard | [ ] Not started |
-| 2 | Hot-Path Middleware Integration + MIT Closures | `internal/api/router.go`, `internal/api/photos_upload.go`, `internal/drive/`, `internal/annotation/`, spec 040/038/027 state.json | unit, integration, adversarial | `bearerAuthMiddleware` validates per-user tokens in production; MIT-040-S-008 / MIT-038-S-003 / MIT-027-TRACE-001 actor-source closed | [ ] Not started |
-| 3 | Web Surfaces + Telegram Connector | `web/pwa/`, `web/extension/`, `internal/telegram/`, admin token-management UI | e2e | PWA + extension send per-user tokens; Telegram chat-id → user mapping; admin UI lists/rotates/revokes tokens | [ ] Not started |
-| 4 | Deprecation Pathway + Documentation Freshness | `config/smackerel.yaml` (defaults), `docs/`, Prometheus metrics emitters | smoke, docs-trace | Production shared-token fallback default false; docs updated; metrics live for spec 030 dashboards | [ ] Not started |
+| 2 | Hot-Path Middleware Integration + MIT Closures | `internal/api/router.go`, `internal/api/photos_upload.go`, `internal/drive/`, `internal/annotation/`, spec 040/038/027 state.json | unit, integration, adversarial | `bearerAuthMiddleware` validates per-user tokens in production; MIT-040-S-008 / MIT-038-S-003 / MIT-027-TRACE-001 actor-source closed | [ ] Not Started |
+| 3 | Web Surfaces + Telegram Connector | `web/pwa/`, `web/extension/`, `internal/telegram/`, admin token-management UI | e2e | PWA + extension send per-user tokens; Telegram chat-id → user mapping; admin UI lists/rotates/revokes tokens | [ ] Not Started |
+| 4 | Deprecation Pathway + Documentation Freshness | `config/smackerel.yaml` (defaults), `docs/`, Prometheus metrics emitters | smoke, docs-trace | Production shared-token fallback default false; docs updated; metrics live for spec 030 dashboards | [ ] Not Started |
 
 ---
 
@@ -270,7 +270,7 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
 
 ## Scope 2: Hot-Path Middleware Integration + MIT Closures
 
-**Status:** Not started
+**Status:** Not Started
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Wire `bearerAuthMiddleware` and `webAuthMiddleware` to validate per-user PASETO tokens in production. Refactor `MintReveal`, `drive.Connect`, and the annotation pipeline to derive identity from session in production. Preserve dev/test fallbacks. Mark MIT-040-S-008, MIT-038-S-003, and MIT-027-TRACE-001 actor-source segment closed in their owning state.json files. Update FR-AUTH-021 comment block at `internal/api/photos_upload.go` lines 246–321.
@@ -410,7 +410,7 @@ Scenario: SCN-AUTH-010 Stale or tampered token is refused with constant-time dis
 
 ## Scope 3: Web Surfaces + Telegram Connector
 
-**Status:** Not started
+**Status:** Not Started
 **Phase:** implement
 **Agent:** bubbles.implement
 **Goal:** Update `web/pwa/` and `web/extension/` to send per-user PASETO tokens. Update `internal/telegram/` to map Telegram chat-id to enrolled user. Author admin token-management UI in PWA (list users, rotate token, revoke token) — admin HTTP-driven, NOT a full enrollment UX (out-of-scope per Non-Goals).
@@ -459,7 +459,7 @@ Scenario: SCN-AUTH-002 Bearer token survives stateless validation in production 
 
 ## Scope 4: Deprecation Pathway + Documentation Freshness
 
-**Status:** Not started
+**Status:** Not Started
 **Phase:** implement + docs
 **Agent:** bubbles.implement, bubbles.docs
 **Goal:** Default `auth.production_shared_token_fallback_enabled: false` in `config/smackerel.yaml`. Update `docs/Operations.md`, `docs/Deployment.md`, `docs/Development.md`, `docs/smackerel.md` with the new auth contract. Author Prometheus metrics emitters per OQ-9 resolution. Run regression-baseline-guard.
