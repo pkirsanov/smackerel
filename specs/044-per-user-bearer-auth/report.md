@@ -1194,6 +1194,90 @@ Next phase: `docs` (per `scope-workflow.md` phase progression) — handles Scope
 
 ---
 
+## Docs Evidence
+
+The following blocks capture the per-managed-doc deltas published by `bubbles.docs` for spec 044 Scope 01 against HEAD `3501477e`. Per [`scope-workflow.md` phase progression](../../agents/bubbles_shared/scope-workflow.md), this phase publishes the operator-facing surface for what Scope 01 LANDED into the managed-doc registry resolved by `bash .github/bubbles/scripts/docs-registry-resolve.sh` (Operations / Deployment / Development / Testing) plus the project-owned architecture doc `docs/smackerel.md`. Spec content is NOT duplicated; the docs cross-link to `specs/044-per-user-bearer-auth/` for design rationale.
+
+### Docs Drift Scan (mandatory pre-publication)
+
+Per docs-phase mandate, this agent cross-referenced current managed-doc content against shipped Scope 01 implementation BEFORE publishing the new sections. Two drift entries detected and fixed inline alongside the new content:
+
+| Doc | Section | Doc Said | Code Says | Action |
+|-----|---------|----------|-----------|--------|
+| `docs/Development.md` | `internal/auth/` package row | "OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, token storage" | Two coexisting subsystems: pre-existing OAuth2 (`oauth.go`, `handler.go`, `store.go`) PLUS spec 044 per-user PASETO surface (`issue.go`, `verify.go`, `hash.go`, `session.go`, `startup.go`, `bearer_store.go` + `revocation/`) | Fix doc — replaced the row with both subsystems described and the per-environment `auth_enabled` posture recorded |
+| `docs/Testing.md` | `internal/auth` package coverage line | "OAuth2 provider, token exchange" | Spec 044 surface adds 8 unit-test files + 2 integration-test files including chaos | Fix doc — extended the line to cover both subsystems and added the new `### Per-User Bearer Auth Test Surface (Spec 044)` subsection |
+
+### Per-Doc Deltas
+
+#### `docs/Operations.md`
+
+```
+docs/Operations.md | +172 / -0
+```
+
+- Added `## Per-User Bearer Authentication (Spec 044, Scope 01)` between OAuth Callback URL Update (line ~586) and Expense Tracking Configuration. Subsections: per-environment default table (dev=false / test=false / home-lab=true verified against `config/smackerel.yaml` `environments.<env>.auth_enabled`); required production secrets table (3 required + 2 rotation + 1 bootstrap, mapped to both `auth.*` SST keys and `AUTH_*` env vars); startup fail-loud (loader at `internal/config/config.go` + runtime at `internal/auth/startup.go` per OQ-8); CLI invocation contract (`docker exec -it smackerel-<env>-smackerel-core-1 smackerel-core auth <subcommand>` — explicit note that no `./smackerel.sh auth` wrapper exists at Scope 01); table of all six subcommands per `cmd/core/cmd_auth.go` with usage strings and exit-code contract (rc=0/1/2); key generation example; first-user bootstrap walkthrough; manual enroll/rotate/revoke examples (placeholder ids); admin HTTP endpoint table with explicit `(Scope 02)` annotation noting routes are NOT yet registered in `internal/api/router.go`; observability deferral note pointing to Scope 04.
+- All examples use generic placeholders for IDs/keys (`<user-id>`, `<token-id>`, `<env>`) per Smackerel PII rule. No real Linux usernames, hostnames, or IPs.
+
+#### `docs/Deployment.md`
+
+```
+docs/Deployment.md | +60 / -0
+```
+
+- Added `## Per-User Bearer Auth (Spec 044) — Production Posture` between Auth Token Generation (line ~238) and Docker Compose Production Overrides. Documents the deploy-time secret-injection contract: the build's per-env config bundle treats `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` / `AUTH_SIGNING_ACTIVE_KEY_ID` / `AUTH_AT_REST_HASHING_KEY` as empty placeholders, the deploy adapter overlay populates them at apply time per bubbles G074 (no plaintext secrets in bundles).
+- Pre-`apply` checklist for any target with `auth.enabled=true`: confirm bundle has empty placeholders; confirm deploy adapter overlay populates the three required secrets; for fresh targets, set `AUTH_BOOTSTRAP_TOKEN` via overlay, run bootstrap per Operations.md, then remove from overlay and re-apply.
+- Forbidden patterns: committing real `AUTH_SIGNING_*` or `AUTH_AT_REST_HASHING_KEY` values into `config/smackerel.yaml` or `config/generated/*`; reusing the signing private key as the at-rest hashing key (rejected at startup per OQ-8); leaving `AUTH_BOOTSTRAP_TOKEN` populated in the deploy overlay after first enrollment.
+
+#### `docs/Development.md`
+
+```
+docs/Development.md | +12 / -2
+```
+
+- Replaced the stale `internal/auth/` package row (described only OAuth2) with a row that documents BOTH coexisting subsystems and the per-environment `auth_enabled` posture.
+- Added a brief paragraph in §Environment Model documenting that per-user bearer auth is disabled by default in `dev` and `test` (the legacy shared `SMACKEREL_AUTH_TOKEN` flow remains the local-development contract; no per-user enrollment required for `./smackerel.sh up`, `test unit`, or `test integration`). Cross-links to Operations.md for the production-class runbook.
+
+#### `docs/Testing.md`
+
+```
+docs/Testing.md | +37 / -1
+```
+
+- Replaced the stale `internal/auth` package coverage line with a line that lists both subsystems' test surface (OAuth2 token exchange + storage; spec 044 PASETO issue/verify/hash, rotation grace window, `Session` context helpers, startup fail-loud guard, SST grep guard; revocation cache + NATS broadcaster).
+- Added `### Per-User Bearer Auth Test Surface (Spec 044)` subsection between Cloud Photo Libraries Test Surface (Spec 040) and QF Companion Connector Test Surface (Spec 041). Tabulates the actually-shipped Scope 01 test files (8 unit + 2 integration with build tag `integration`), the four required adversarial cases (hashing key == signing key fail-loud, foreign-kid `ErrUnknownKeyID`, duplicate `Enroll` UNIQUE rejection, SST grep-guard adversarial), the live-integration invocation (`./smackerel.sh --env test up && go test -tags=integration -run 'TestAuth' ./tests/integration/...`), and an explicit forward-reference note that Scope 02 middleware integration tests and Scope 03 E2E tests are tracked under `scenario-manifest.json` but NOT yet authored.
+
+#### `docs/smackerel.md`
+
+```
+docs/smackerel.md | +7 / -0
+```
+
+- Added a brief paragraph at the end of §17.2 Security Model acknowledging the spec 044 subsystem: PASETO v4.public per-user enrollment, NATS-backed revocation cache (≤60s propagation budget), stateless hot-path validation with no DB roundtrip per request, dev/test contract preserved on the legacy `runtime.auth_token`, home-lab default and production-class posture on per-user PASETO.
+- Cross-links Operations.md (operator runbook) and `specs/044-per-user-bearer-auth/` (design rationale). Does NOT duplicate spec content.
+
+### Intentionally Unmodified
+
+- `README.md` — Project-level mention is deferred until Scope 03 lands user-facing web/Telegram surfaces, when an end-user-visible behavior change warrants README treatment. At Scope 01 the operator-visible surface is restricted to a CLI subcommand reachable only via `docker exec`, plus admin HTTP handlers whose routes are not yet registered. README is the wrong venue for this surface.
+- `docs/Architecture.md` and `docs/API.md` — listed in the resolved managed-docs registry but DO NOT EXIST in this repo. The architecture doc is `docs/smackerel.md` (project-owned); there is no top-level API.md doc. Cross-doc registry/repo reconciliation is out-of-scope for spec 044 Scope 01 docs work.
+
+### Validation Gates
+
+| Gate | Command | Expected | Recorded |
+|------|---------|----------|----------|
+| Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | exit 0 | PASS post-commit |
+| Smackerel check | `./smackerel.sh check` | exit 0 (docs-only changes do not affect config or compose wiring) | PASS |
+| Regression baseline guard | `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` | exit 0 (no managed-docs regressions) | PASS |
+
+### Docs Verdict — Scope 01
+
+**🟢 APPROVED** for Scope 01 docs phase. Five managed/project-owned docs updated with operator-facing surface that mirrors what Scope 01 actually shipped; spec content not duplicated; cross-references to spec 044 preserve design-rationale boundary; Scope 02/03/04 future work explicitly annotated. Two pre-existing managed-doc drifts in `Development.md` and `Testing.md` (stale `internal/auth/` description) detected via the mandatory drift scan and fixed inline. README intentionally untouched until Scope 03.
+
+State.json updates (this entry): completedPhaseClaims appended `docs` (string); certifiedCompletedPhases appended `docs`; currentPhase advanced from `docs` to `finalize`; status remains `in_progress`; certification.status remains `in_progress`. `FINALIZE-PREREQ-044-V7-001` transitionRequest remains open and is carried forward to the finalize-phase agent (Gate V7 Scope 3 surface).
+
+`Claim Source: executed`.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §12 Rollout Plan and [`scopes.md`](./scopes.md):

@@ -585,6 +585,211 @@ If switching from `http://127.0.0.1:40001` to `https://smackerel.example.com`, u
 3. Regenerate config: `./smackerel.sh config generate`
 4. Restart: `./smackerel.sh down && ./smackerel.sh up`
 
+## Per-User Bearer Authentication (Spec 044, Scope 01)
+
+Spec 044 introduces a per-user PASETO v4.public bearer-auth subsystem alongside
+the legacy single-tenant `runtime.auth_token`. Scope 01 lands the SST surface,
+the `internal/auth/` issue/verify/hash/revocation primitives, the DB schema, the
+`smackerel-core auth` CLI, and the production-mode startup fail-loud guard.
+Hot-path middleware integration lands at Scope 02; web/Telegram surfaces land at
+Scope 03; production deprecation of `SMACKEREL_AUTH_TOKEN` lands at Scope 04.
+
+The full design rationale lives in
+[`specs/044-per-user-bearer-auth/spec.md`](../specs/044-per-user-bearer-auth/spec.md)
+and [`design.md`](../specs/044-per-user-bearer-auth/design.md). This section is
+the operator-facing reference for Scope 01.
+
+### Per-Environment Default
+
+| Environment | `auth.enabled` default | Mode |
+|---|---|---|
+| `dev` | `false` | Shared `SMACKEREL_AUTH_TOKEN` (legacy). No per-user setup required. |
+| `test` | `false` | Shared `SMACKEREL_AUTH_TOKEN` (disposable). No per-user setup required. |
+| `home-lab` | `true` | Per-user PASETO required. Operator MUST populate the three secrets below before the runtime starts. |
+
+The per-environment override lives at `environments.<env>.auth_enabled` in
+`config/smackerel.yaml`. Production-class deployments (any environment with
+`runtime.environment=production` AND `auth.enabled=true`) refuse to start when
+required signing or hashing material is missing — see Startup Fail-Loud below.
+
+### Required Secrets For Production-Class Deployments
+
+When `runtime.environment=production` AND `auth.enabled=true`, three secrets MUST
+be populated in `config/smackerel.yaml` (or injected by the deploy adapter as
+`AUTH_*` env vars) before `./smackerel.sh up`:
+
+| Config key | Env var | Purpose |
+|---|---|---|
+| `auth.signing.active_private_key` | `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` | PASETO v4.public Ed25519 private key (hex). Signs newly-issued tokens. |
+| `auth.signing.active_key_id` | `AUTH_SIGNING_ACTIVE_KEY_ID` | Short identifier embedded in the PASETO footer (e.g. `key-2026-05`). Verifier routes incoming tokens to the active or prior key by this id. |
+| `auth.at_rest_hashing_key` | `AUTH_AT_REST_HASHING_KEY` | HMAC-SHA-256 key used to hash issued tokens before persisting them in `auth_tokens.hashed_token`. MUST differ from `auth.signing.active_private_key` (per spec 044 OQ-8 — startup refuses when they match). |
+
+Two additional rotation-related keys are optional during normal operation but
+required during a key rotation overlap window:
+
+| Config key | Env var | Purpose |
+|---|---|---|
+| `auth.signing.prior_public_key` | `AUTH_SIGNING_PRIOR_PUBLIC_KEY` | PASETO v4.public Ed25519 public key (hex) of the previous active key. Verifier uses it to honor in-flight tokens issued before rotation, for the configured grace window. |
+| `auth.signing.prior_key_id` | `AUTH_SIGNING_PRIOR_KEY_ID` | Key id of the prior key. The verifier matches an incoming token's footer `kid` against active or prior. |
+
+A one-shot bootstrap secret is also required for the very first user enrollment
+on a fresh production deployment:
+
+| Config key | Env var | Purpose |
+|---|---|---|
+| `auth.bootstrap_token` | `AUTH_BOOTSTRAP_TOKEN` | Required when `auth.enabled=true` AND zero users are enrolled. Consumed once via `smackerel-core auth bootstrap` and then cleared. |
+
+### Startup Fail-Loud
+
+The runtime validates auth secrets at TWO layers and refuses to start when any
+required value is missing:
+
+1. **Loader layer** (`internal/config/config.go`) — `loadAuthConfig` rejects
+   `token_format != paseto-v4-public`, `rotation_grace_window_hours < 24`,
+   `clock_skew_tolerance_seconds` outside `[0, 60]`, and (in production with
+   `auth.enabled=true`) empty signing private key, key id, hashing key, OR a
+   hashing key that equals the signing private key.
+2. **Runtime layer** (`internal/auth/startup.go`) — `ValidateRuntimeAuthStartup`
+   re-runs the production-mode invariants from `cmd/core/wiring.go` immediately
+   after the legacy `SMACKEREL_AUTH_TOKEN` guard, providing defense in depth if
+   future loader changes weaken the loader-side check.
+
+Operators see explicit error messages naming the missing field, e.g.:
+
+```text
+AUTH_SIGNING_ACTIVE_PRIVATE_KEY must be set when auth.enabled=true and runtime.environment=production
+AUTH_AT_REST_HASHING_KEY must differ from AUTH_SIGNING_ACTIVE_PRIVATE_KEY (spec 044 OQ-8)
+```
+
+The same SST validation runs during `./smackerel.sh config generate --env <env>`,
+surfacing the missing keys before the env file is written.
+
+### CLI Surface
+
+Scope 01 ships the auth subcommands inside the `smackerel-core` binary; there is
+no `./smackerel.sh auth` wrapper at this scope. Operators invoke the CLI inside
+the running core container:
+
+```bash
+docker exec -it smackerel-<env>-smackerel-core-1 smackerel-core auth <subcommand> [args...]
+```
+
+The container project name varies by environment: `smackerel-dev-smackerel-core-1`,
+`smackerel-test-smackerel-core-1`, `smackerel-home-lab-smackerel-core-1`. Use
+`./smackerel.sh status` to confirm the exact container name.
+
+Available subcommands (per `cmd/core/cmd_auth.go`):
+
+| Subcommand | Purpose |
+|---|---|
+| `keygen` | Print a fresh PASETO v4.public keypair (hex) plus a suggested `key_id`. Pure stdout; no DB or NATS. Used during rotation. |
+| `bootstrap <user-id>` | One-shot first-user enrollment on a fresh deployment. Refuses if any user is already enrolled. Requires `SMACKEREL_BOOTSTRAP_TOKEN` env var matching `auth.bootstrap_token`. |
+| `enroll [--notes "..."] <user-id>` | Enroll a new user. Mints the user's first token and prints it to stdout exactly once. |
+| `rotate --prior-token-id <id> <user-id>` | Mint a fresh token for an enrolled user. Marks the prior token `rotated`; the prior token remains valid until its natural expiry, bounded by `auth.rotation_grace_window_hours`. |
+| `revoke [--reason "..."] <token-id>` | Revoke a token immediately. The cache is updated locally and a NATS event is broadcast on `auth.revocations` so peer instances drop the token within the propagation budget (NFR-AUTH-006 ≤ 60s). |
+| `list-users` | Print enrolled users (`user_id`, `enrolled_at`, `enrolled_by`, `status`, `notes`) as a tab-separated table. |
+
+Exit codes: `0` success; `1` command-level failure (DB error, validation error,
+missing material); `2` invocation error (missing args, unknown subcommand).
+
+### Key Generation
+
+```bash
+docker exec -it smackerel-home-lab-smackerel-core-1 smackerel-core auth keygen
+```
+
+Output (placeholder values shown):
+
+```text
+# spec 044 — paste these into config/smackerel.yaml under auth.signing
+# (rotate auth.signing.prior_public_key + prior_key_id from previous active values first)
+active_private_key: "<64-byte hex private key>"
+active_public_key:  "<32-byte hex public key>"  # publish for verifier-only consumers
+active_key_id:      "key-2026-05"               # short identifier; embed in PASETO footer
+```
+
+Capture the output to your secret store (sealed-secrets, vault, deploy-overlay
+secret env vars). The CLI never persists the key material; it only prints to
+stdout.
+
+### First-User Bootstrap (Fresh Production Deployment)
+
+On a fresh deployment with `auth.enabled=true` AND zero enrolled users:
+
+1. Set `auth.bootstrap_token` to a one-shot secret (e.g. `openssl rand -hex 24`)
+   and regenerate config: `./smackerel.sh config generate --env <env>`.
+2. Bring up the stack: `./smackerel.sh --env <env> up`.
+3. Enroll the first user:
+
+   ```bash
+   docker exec -it smackerel-<env>-smackerel-core-1 \
+     env SMACKEREL_BOOTSTRAP_TOKEN='<bootstrap secret>' \
+     smackerel-core auth bootstrap '<user-id>'
+   ```
+
+4. The CLI prints `bootstrap successful — clear auth.bootstrap_token from config now to prevent reuse`,
+   the new `user_id`, the new `token_id`, and the wire token (PASETO string).
+   Capture the wire token immediately; it is never displayed again.
+5. Clear `auth.bootstrap_token` back to the empty string in
+   `config/smackerel.yaml`, regenerate config, and restart the stack.
+
+The bootstrap path bypasses the admin-scope check (Scope 01 only allows the
+bootstrap subcommand to run when zero users are enrolled).
+
+### Manual Enrollment, Rotation, And Revocation
+
+After bootstrap, use the regular subcommands. Examples (placeholder ids shown):
+
+```bash
+# Enroll a second user
+docker exec -it smackerel-home-lab-smackerel-core-1 \
+  smackerel-core auth enroll --notes 'household co-owner' '<user-id>'
+
+# Rotate a user's token (during planned key rotation or after suspected leakage)
+docker exec -it smackerel-home-lab-smackerel-core-1 \
+  smackerel-core auth rotate --prior-token-id '<old-token-id>' '<user-id>'
+
+# Revoke a specific token immediately (e.g. after device loss)
+docker exec -it smackerel-home-lab-smackerel-core-1 \
+  smackerel-core auth revoke --reason 'device-lost' '<token-id>'
+
+# List enrolled users
+docker exec -it smackerel-home-lab-smackerel-core-1 \
+  smackerel-core auth list-users
+```
+
+The minted wire token is printed exactly once at `enroll`/`rotate` time. There
+is no recovery path for a lost token — operators MUST capture the value from
+stdout into the user's secret store at mint time. The `auth_tokens` row only
+stores the HMAC-SHA-256 hash of the wire token under `hashed_token`.
+
+### Admin HTTP Endpoints (Scope 02)
+
+`internal/api/auth_handlers.go` ships parallel admin HTTP endpoints at Scope 01,
+but the routes are NOT registered in `internal/api/router.go` yet — that wiring
+lands at Scope 02 alongside the per-user `bearerAuthMiddleware`. The eventual
+routes (documented for forward reference; do NOT call them at Scope 01):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/auth/users` | Enroll a user (Scope 02) |
+| `POST` | `/v1/auth/users/{user_id}/rotate` | Rotate a user's active token (Scope 02) |
+| `POST` | `/v1/auth/tokens/{token_id}/revoke` | Revoke a specific token (Scope 02) |
+| `GET` | `/v1/auth/users` | List enrolled users (Scope 02) |
+
+All four handlers gate on the spec 044 admin scope policy: `SessionSourceBootstrap`
+permitted unconditionally; `SessionSourceSharedToken` permitted only when
+`runtime.environment != production` OR `auth.production_shared_token_fallback_enabled=true`;
+`SessionSourcePerUserToken` rejected at Scope 01 (the per-user admin allowlist
+surface lands at Scope 02).
+
+### Observability
+
+`AUTH_TELEMETRY_ENABLED=true` (default) and `AUTH_TELEMETRY_METRIC_PREFIX=smackerel_auth`
+(default) reserve the SST surface for the per-user-bearer-auth metric family.
+Metric registration lands at Scope 04 (per spec 044 OQ-9 + spec 030 dashboards);
+Scope 01 only ships the SST keys.
+
 ## Expense Tracking Configuration
 
 Expense tracking captures receipts from email, photos, and PDFs, classifies them using a 7-level rule chain, and supports CSV export.
