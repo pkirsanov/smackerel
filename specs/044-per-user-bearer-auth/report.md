@@ -3448,3 +3448,86 @@ Three artifact-side fixes applied during this spec-review phase (all surgical, a
 ✅ **APPROVED_WITH_ARTIFACT_FIXES** — Trust classification `MINOR_DRIFT`. All 7 artifacts truthfully reflect shipped reality after the 3 surgical artifact-side fixes (scopes.md header advance + scopes.md DoD bullet append + design.md §15 NEW). All 4 drift findings (D1-D4) closed inline. Cross-spec MIT closures verified well-formed. `bubbles.docs` auto-invocation NOT triggered (per spec-review-mode contract — `MINOR_DRIFT` does not auto-invoke). `FINALIZE-PREREQ-044-V7-001` transitionRequest carried forward unchanged. Test stack left up for the Scope 02 docs-phase agent. Phase advances to `docs`.
 
 **Claim Source:** executed.
+
+## Docs Evidence (Scope 02)
+
+**Phase:** docs **Agent:** bubbles.docs **HEAD pre-edit:** `1078818f` (spec-review). **Claim Source:** executed.
+
+### Pre-Flight Implementation Drift Scan (Phase 0b)
+
+Per the `bubbles.docs` mode contract, every invocation begins with a drift scan that cross-references docs claims against shipped code. The scan surfaced 5 items, all resolved inline during this phase:
+
+| # | Doc | Section | Doc Said | Code Says | Action |
+|---|-----|---------|----------|-----------|--------|
+| 1 | Operations.md | "Per-User Bearer Authentication (Spec 044, **Scope 01**)" header + opening paragraph | "Hot-path middleware integration lands at Scope 02" | `internal/api/router.go:497 func (d *Dependencies) bearerAuthMiddleware` IS landed; admin routes registered at `internal/api/router.go` lines 251-362 | Section header + opening paragraph rewritten to credit Scope 02 explicitly (hot-path middleware + admin routes + 3 MIT closures named) |
+| 2 | Operations.md | "Admin HTTP Endpoints (**Scope 02**)" subsection | "routes are NOT registered in `internal/api/router.go` yet" | All four routes registered and reachable on the live API | Subsection retitled `Admin HTTP Endpoints` (no parenthetical), opening rewritten to say routes are registered, individual route rows lost their `(Scope 02)` parenthetical |
+| 3 | Operations.md | Admin gating policy footnote | "`SessionSourcePerUserToken` rejected at Scope 01 (the per-user admin allowlist surface lands at Scope 02)" | `internal/api/auth_handlers.go::callerIsAdmin` STILL returns `false` for `SessionSourcePerUserToken` (comment: "Future scope: SST allowlist of per-user admin user_ids") | Subsection rewritten with corrected admin-scope policy table; "lands at Scope 02" replaced with "per-user admin allowlist not yet wired" + the operator workaround (use bootstrap or shared-token fallback) |
+| 4 | Development.md + Deployment.md | Operations.md anchor link | `#per-user-bearer-authentication-spec-044-scope-01` | Operations.md section header is now `## Per-User Bearer Authentication (Spec 044)` → anchor `#per-user-bearer-authentication-spec-044` | Both anchor links updated |
+| 5 | Testing.md | "Per-User Bearer Auth Test Surface (Spec 044)" closing paragraph | "The `bearerAuthMiddleware` integration tests (Scope 02) ... are NOT yet authored" | 6 Scope 02 integration files + 2 Scope 02 unit files all present on disk and referenced by the Scope 02 spec-review verdict | Closing paragraph rewritten to current state; new Scope 02 test files enumerated in the test inventory table |
+
+Verification commands run during the scan (with verbatim observations):
+
+```bash
+$ grep -n 'actor_id_in_body_forbidden\|owner_user_id_in_body_forbidden\|actor_source.*forbidden\|400' \
+    internal/api/photos_upload.go internal/api/drive_handlers.go internal/api/annotations.go
+internal/api/photos_upload.go:312:writeError(w, http.StatusBadRequest, "actor_id_in_body_forbidden",
+internal/api/drive_handlers.go:200:writeError(w, http.StatusBadRequest, "owner_user_id_in_body_forbidden",
+internal/api/annotations.go:89:   http.Error(w, `{"error":"actor_source in request body is forbidden in production"}`, http.StatusBadRequest)
+# (annotations handler returns the raw JSON body via http.Error, NOT the structured writeError envelope)
+
+$ grep -n 'bearerAuthMiddleware' internal/api/router.go internal/api/health.go | head -5
+internal/api/router.go:497:func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
+internal/api/health.go:128:     // via SMACKEREL_ENV. MIT-040-S-004 — bearerAuthMiddleware uses this to
+$ ls internal/api/middleware/ 2>&1 | head -3
+ls: cannot access 'internal/api/middleware/': No such file or directory
+# Confirms the implement-phase deviation: middleware kept on (*Dependencies); subpackage NOT created.
+
+$ grep -n 'revocation' internal/config/config.go config/smackerel.yaml | head -5
+internal/config/config.go:294:  RevocationCacheRefreshIntervalSeconds int
+internal/config/config.go:298:  RevocationNATSSubject string
+config/smackerel.yaml:486:  # NFR-AUTH-006 — revocation propagation ≤ 60 s. NATS pub/sub is the primary
+config/smackerel.yaml:488:  revocation_cache_refresh_interval_seconds: 30
+config/smackerel.yaml:489:  revocation_nats_subject: "auth.revocations"
+# Real config keys; the inline brief's "auth.revocation_grace_seconds" shorthand was descriptive — docs use the actual keys.
+```
+
+### Files Modified
+
+| File | Numstat (added/removed) | Section / delta summary |
+|------|-------------------------|--------------------------|
+| `docs/Operations.md` | +108 / -19 | Header `(Spec 044, Scope 01)` → `(Spec 044)`; opening paragraph extended to credit Scope 02 hot-path middleware + admin route registration + three named MIT closures (MIT-040-S-008, MIT-038-S-003, MIT-027-TRACE-001 actor-source segment); stale `Admin HTTP Endpoints (Scope 02)` subsection replaced with live `Admin HTTP Endpoints` subsection (corrected admin-scope policy table reflecting shipped `callerIsAdmin` semantics; rotate + revoke `curl` operator examples with placeholder ids); three NEW subsections appended: `Token Rotation Grace Window`, `Revocation Propagation` (NATS subject + DB-poll fallback + NFR-AUTH-006 ≤ 60 s budget), `Production Body / Header Actor-Identity Rejection (Scope 02 MIT closures)` (per-handler error-code table + dev/test backward-compat note); Observability subsection updated to credit Scopes 01-02 |
+| `docs/Development.md` | +9 / -1 | Per-user-bearer-auth dev-mode paragraph extended with Scope 02 mode-branch note (dev/test preserves body/header actor identifiers + `X-Actor-Id`); bearer middleware location documented at the actual shipped path `internal/api/router.go` (`(*Dependencies).bearerAuthMiddleware`) — NOT the speculative `internal/api/middleware/bearer_auth.go` package; Operations.md anchor link fixed |
+| `docs/Deployment.md` | +29 / -1 | NEW `API-Consumer Migration (Scope 02)` subsection appended within `Per-User Bearer Auth (Spec 044) — Production Posture`; documents the two consumer-visible deltas a target gains when flipping `auth_enabled=true` (bearer-token transition + body/header actor-identifier rejection); cross-links to the Operations.md error-code table to avoid duplication; explicit dev/test backward-compat carried through; Operations.md anchor link fixed |
+| `docs/Testing.md` | +34 / -10 | `Per-User Bearer Auth Test Surface (Spec 044)` opening paragraph extended to credit Scope 02 (hot-path middleware + four admin route registrations + three named MIT closures); test inventory table promoted from Scope 01 list to Scope 01+02 list (unit row adds `internal/api/router_auth_middleware_test.go` + `internal/api/auth_actor_grep_guard_test.go`; integration row adds 5 new files; chaos row adds `auth_chaos_scope02_test.go` with 11 behaviors enumerated); required-adversarial bullet list extended with 4 new bullets (3 MIT-closure adversarials + dev/test mode-branch contract + rotation post-grace + revocation NFR-AUTH-007 401-body redaction); live integration invocation updated to Scope 02 superset (`-run 'Test(Auth\|MintReveal\|DriveConnect\|Annotation\|Rotation\|Revocation)'`, host-port note, timeout 120s → 180s); stale closing paragraph replaced with current-state note |
+| `docs/smackerel.md` | +7 / -2 | §17.2 Security Model brief auth subsystem paragraph extended with one-sentence Scope 02 closure note: "Spec 044 Scope 02 closes MIT-040-S-008, MIT-038-S-003, and the MIT-027-TRACE-001 actor-source segment by deriving actor identity from the verified bearer-token session in production mode and rejecting body / header actor identifiers at the photos `MintReveal`, cloud-drive `Connect`, and user annotation create handlers." |
+| `README.md` | 0 / 0 | INTENTIONALLY UNTOUCHED at Scope 02 (mirrors Scope 01 docs decision) — no end-user-visible behavior change yet warrants README treatment; Scope 03 (PWA + Telegram surfaces) is the natural promotion point. `grep -n 'Spec 044\|spec 044\|Per-User Bearer\|per-user bearer' README.md` returns ZERO hits, so there is no stale `(Scope 02)` annotation to drift-fix. |
+
+### Spec-Artifact Updates
+
+| File | Change | Purpose |
+|------|--------|---------|
+| `specs/044-per-user-bearer-auth/scopes.md` | Scope 2 header `Phase: spec-review → docs`, `Agent: bubbles.spec-review → bubbles.docs` | Per-scope phase advance per Bubbles state machine |
+| `specs/044-per-user-bearer-auth/scopes.md` | NEW Scope 2 DoD bullet appended (`Docs phase publishes the Scope 02 surface...`) with full evidence block enumerating per-doc deltas, drift-scan rationale, and gate exit codes | Docs DoD claim per Gate G027 + scope-workflow bookend rule |
+| `specs/044-per-user-bearer-auth/report.md` | NEW `## Docs Evidence (Scope 02)` section appended (this section) | Per-scope phase recording |
+| `specs/044-per-user-bearer-auth/state.json` | `currentPhase: spec-review → docs` (NB: state-machine continuity preserved — kept `docs` here through this phase recording, advances to `finalize` at exit); `execution.currentPhase: spec-review → docs`; `completedPhaseClaims` appended Scope 02 docs object; `certifiedCompletedPhases` appended `02:docs`; `executionHistory` appended bubbles.docs entry | State machine + certification ledger advance |
+
+### Verification Gates
+
+| Gate | Command | Result |
+|------|---------|--------|
+| D1 | `bash .github/bubbles/scripts/pii-scan.sh` (post-edit) | PASS — `🫧 pii-scan: clean.` (no real Linux usernames, hostnames, IPs, or tailnet identifiers introduced; all curl/operator examples use placeholder `<user-id>`/`<token-id>`/`<old-token-id>`/`<admin-token>` per Smackerel PII rule) |
+| D2 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` (post-commit) | PASS — `Artifact lint PASSED` (the same 2 advisory non-blocking warnings tracked from validate/audit/chaos/spec-review unchanged: missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup, NOT docs-phase blockers) |
+| D3 | `./smackerel.sh check` | PASS — exit 0 (docs-only changes do not affect config or compose wiring) |
+| D4 | `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` (post-commit) | PASS — managed-docs deltas are additive Scope 02 surface, not regressions |
+| D5 | Cross-spec status preserved (no spec 040/038/027 status mutation) | PASS — `grep -rn '"status"' specs/{040,038,027}*/state.json | head -10` confirms top-level `status` and `certification.status` UNCHANGED across all three closure-target specs |
+| D6 | Test stack state preserved (spec-review-phase agent left it up) | PASS — test stack `smackerel-test-{postgres,nats,smackerel-core,smackerel-ml,ollama}-1` Healthy throughout docs phase; left up for the Scope 02 finalize-phase agent |
+
+### Carry-Forward
+
+`FINALIZE-PREREQ-044-V7-001` (Gate V7 Scope 3 PWA-path test missing) carried forward unchanged. Resolution paths unchanged: (a) Scope 03 lands `tests/e2e/auth/pwa_per_user_test.go`; OR (b) scopes.md restructure at spec-level finalize.
+
+### Docs Verdict — Scope 02
+
+✅ **PUBLISHED** — All five managed Bubbles docs (`Operations.md`, `Development.md`, `Deployment.md`, `Testing.md`, `smackerel.md`) accurately reflect the shipped Scope 02 surface. Five Phase-0b drift items resolved inline (Operations.md Scope-01-era forward-references promoted to live; admin-allowlist misclaim corrected; anchor links repaired; Testing.md closing paragraph promoted; Development.md middleware location corrected from speculative subpackage to actual shipped path). No spec content duplicated; cross-references to `specs/044-per-user-bearer-auth/` and Operations.md preserved as the design-rationale and operator-runbook canonical sources. README.md intentionally untouched (deferred to Scope 03 user-facing surfaces). Phase advances to `finalize`.
+
+**Claim Source:** executed.

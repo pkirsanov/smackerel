@@ -585,19 +585,24 @@ If switching from `http://127.0.0.1:40001` to `https://smackerel.example.com`, u
 3. Regenerate config: `./smackerel.sh config generate`
 4. Restart: `./smackerel.sh down && ./smackerel.sh up`
 
-## Per-User Bearer Authentication (Spec 044, Scope 01)
+## Per-User Bearer Authentication (Spec 044)
 
 Spec 044 introduces a per-user PASETO v4.public bearer-auth subsystem alongside
 the legacy single-tenant `runtime.auth_token`. Scope 01 lands the SST surface,
 the `internal/auth/` issue/verify/hash/revocation primitives, the DB schema, the
 `smackerel-core auth` CLI, and the production-mode startup fail-loud guard.
-Hot-path middleware integration lands at Scope 02; web/Telegram surfaces land at
-Scope 03; production deprecation of `SMACKEREL_AUTH_TOKEN` lands at Scope 04.
+Scope 02 wires the per-user `bearerAuthMiddleware` onto the API hot path
+(`internal/api/router.go`), registers the four admin HTTP endpoints, and closes
+three cross-spec body-actor trust-boundary issues in production mode
+(MIT-040-S-008 photos mint/reveal, MIT-038-S-003 cloud-drive Connect,
+MIT-027-TRACE-001 actor-source segment for user annotations). Web/Telegram
+surfaces land at Scope 03; production deprecation of `SMACKEREL_AUTH_TOKEN`
+lands at Scope 04.
 
 The full design rationale lives in
 [`specs/044-per-user-bearer-auth/spec.md`](../specs/044-per-user-bearer-auth/spec.md)
 and [`design.md`](../specs/044-per-user-bearer-auth/design.md). This section is
-the operator-facing reference for Scope 01.
+the operator-facing reference.
 
 ### Per-Environment Default
 
@@ -763,32 +768,116 @@ is no recovery path for a lost token — operators MUST capture the value from
 stdout into the user's secret store at mint time. The `auth_tokens` row only
 stores the HMAC-SHA-256 hash of the wire token under `hashed_token`.
 
-### Admin HTTP Endpoints (Scope 02)
+### Admin HTTP Endpoints
 
-`internal/api/auth_handlers.go` ships parallel admin HTTP endpoints at Scope 01,
-but the routes are NOT registered in `internal/api/router.go` yet — that wiring
-lands at Scope 02 alongside the per-user `bearerAuthMiddleware`. The eventual
-routes (documented for forward reference; do NOT call them at Scope 01):
+`internal/api/auth_handlers.go` ships parallel admin HTTP endpoints to the CLI.
+Scope 02 registers all four routes in `internal/api/router.go` behind
+`bearerAuthMiddleware`, so they are reachable on the live API:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/auth/users` | Enroll a user (Scope 02) |
-| `POST` | `/v1/auth/users/{user_id}/rotate` | Rotate a user's active token (Scope 02) |
-| `POST` | `/v1/auth/tokens/{token_id}/revoke` | Revoke a specific token (Scope 02) |
-| `GET` | `/v1/auth/users` | List enrolled users (Scope 02) |
+| `POST` | `/v1/auth/users` | Enroll a user |
+| `POST` | `/v1/auth/users/{user_id}/rotate` | Rotate a user's active token |
+| `POST` | `/v1/auth/tokens/{token_id}/revoke` | Revoke a specific token |
+| `GET` | `/v1/auth/users` | List enrolled users |
 
-All four handlers gate on the spec 044 admin scope policy: `SessionSourceBootstrap`
-permitted unconditionally; `SessionSourceSharedToken` permitted only when
-`runtime.environment != production` OR `auth.production_shared_token_fallback_enabled=true`;
-`SessionSourcePerUserToken` rejected at Scope 01 (the per-user admin allowlist
-surface lands at Scope 02).
+Admin scope is enforced by `AuthAdminHandlers.callerIsAdmin`
+(`internal/api/auth_handlers.go`):
+
+| Caller's session source | Admin in production? | Admin in dev/test? |
+|---|---|---|
+| `SessionSourceBootstrap` (one-shot bootstrap session) | Yes (always) | Yes |
+| `SessionSourceSharedToken` (`SMACKEREL_AUTH_TOKEN`) | Only when `auth.production_shared_token_fallback_enabled=true` | Yes |
+| `SessionSourcePerUserToken` (per-user PASETO) | No (per-user admin allowlist not yet wired) | No |
+
+Until the per-user admin allowlist surface lands in a later scope, operators in
+production-class deployments use either the bootstrap session OR (when
+`production_shared_token_fallback_enabled=true`) the legacy shared token to call
+the admin endpoints. Non-admin callers receive `HTTP 401 FORBIDDEN` with body
+`{"error":"FORBIDDEN","message":"admin scope required"}`.
+
+Rotate a user's token (placeholder ids shown):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"prior_token_id":"<old-token-id>"}' \
+  http://127.0.0.1:40001/v1/auth/users/<user-id>/rotate
+```
+
+The handler issues a fresh token, persists it via `BearerStore`, and returns the
+wire token in the response body. Capture the value immediately — it is never
+displayed again.
+
+Revoke a token (placeholder id shown):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"device-lost"}' \
+  http://127.0.0.1:40001/v1/auth/tokens/<token-id>/revoke
+```
+
+The handler updates `auth_tokens.status` to `revoked`, refreshes the local
+revocation cache, and broadcasts an event on `auth.revocation_nats_subject`
+(default `auth.revocations`).
+
+### Token Rotation Grace Window
+
+When a token is rotated (via the CLI `rotate` subcommand or the
+`POST /v1/auth/users/{user_id}/rotate` endpoint), the prior token is marked
+`rotated` in `auth_tokens` but the verifier continues to honor it until its
+recorded `expires_at` passes. Within that window, requests bearing either the
+prior token OR the freshly-minted token are admitted; after the window, the
+prior token is rejected with `HTTP 401`. The new token admits immediately. The
+window is bounded by `auth.rotation_grace_window_hours` (loader floor 24 h).
+
+### Revocation Propagation
+
+Revocations propagate across runtime instances via two paths configured in SST:
+
+| Config key | Default | Purpose |
+|---|---|---|
+| `auth.revocation_nats_subject` | `auth.revocations` | NATS broadcast subject. Producers publish on revoke; subscribers update their local cache on receive. |
+| `auth.revocation_cache_refresh_interval_seconds` | `30` | Periodic DB-poll cadence as the failure-mode backstop when NATS is partitioned. |
+
+In the happy path the broadcast loopback closes the staleness window in well
+under one second; the DB-refresh fallback closes it within
+`revocation_cache_refresh_interval_seconds`. Worst-case propagation is bounded
+by NFR-AUTH-006 (≤ 60 s).
+
+### Production Body / Header Actor-Identity Rejection (Scope 02 MIT closures)
+
+In `runtime.environment=production` with `auth.enabled=true`, the per-user
+`bearerAuthMiddleware` derives the actor identity from the verified PASETO
+session and rejects any client-supplied actor identifier on three handlers
+(closing MIT-040-S-008, MIT-038-S-003, and the actor-source segment of
+MIT-027-TRACE-001):
+
+| Handler | Forbidden client surface | Production response |
+|---|---|---|
+| Photos `MintReveal` (`POST /api/v1/photos/upload`) — `internal/api/photos_upload.go` | Body field `actor_id` | `HTTP 400 actor_id_in_body_forbidden` |
+| Photos `MintReveal` | Header `X-Actor-Id` | `HTTP 400 actor_id_in_header_forbidden` |
+| Cloud-drive `Connect` (`POST /v1/drives/connections`) — `internal/api/drive_handlers.go` | Body field `owner_user_id` | `HTTP 400 owner_user_id_in_body_forbidden` |
+| User annotation create (`POST /api/annotations`) — `internal/api/annotations.go` | Body field `actor_source` | `HTTP 400 {"error":"actor_source in request body is forbidden in production"}` |
+
+In `dev` and `test` (or in production when `auth.enabled=false`), the legacy
+ergonomic is preserved — body and header actor identifiers continue to be
+honored so existing local-dev scripts and integration tests work unchanged.
+
+Operator action: any production API consumer that previously sent `actor_id`,
+`owner_user_id`, or `actor_source` in the request body MUST be updated to omit
+those fields. The actor identity is derived from the bearer token claims; no
+client-supplied value can override it.
 
 ### Observability
 
 `AUTH_TELEMETRY_ENABLED=true` (default) and `AUTH_TELEMETRY_METRIC_PREFIX=smackerel_auth`
 (default) reserve the SST surface for the per-user-bearer-auth metric family.
 Metric registration lands at Scope 04 (per spec 044 OQ-9 + spec 030 dashboards);
-Scope 01 only ships the SST keys.
+Scopes 01-02 only ship the SST keys.
 
 ## Expense Tracking Configuration
 

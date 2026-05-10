@@ -147,14 +147,18 @@ Required adversarial cases:
 
 Spec 044 Scope 01 ships the per-user PASETO v4.public bearer-auth foundation
 (SST keys, token issue/verify/hash, revocation cache + NATS broadcaster, CLI
-subcommands, admin HTTP handlers — routes register at Scope 02, DB migration
-033, startup fail-loud guard). Test coverage matches scope DoD:
+subcommands, admin HTTP handlers, DB migration 033, startup fail-loud guard).
+Scope 02 wires the per-user `bearerAuthMiddleware` onto the API hot path,
+registers the four admin HTTP routes, and closes three cross-spec body-actor
+trust-boundary issues in production mode (MIT-040-S-008 photos mint/reveal,
+MIT-038-S-003 cloud-drive Connect, MIT-027-TRACE-001 actor-source segment for
+annotations). Test coverage matches scope DoD:
 
 | Test type | Files | Coverage |
 |-----------|-------|----------|
-| unit | `internal/config/validate_test.go` (8 sub-tests), `internal/auth/issue_test.go`, `internal/auth/verify_test.go`, `internal/auth/startup_test.go` (8 sub-cases), `internal/auth/sst_grep_guard_test.go` (+ adversarial + allowlist), `internal/auth/revocation/cache_test.go` | Loader and runtime fail-loud branches (production+enabled+empty-signing-key, +empty-key-id, +empty-hashing-key, +hashing-key==signing-key per OQ-8); PASETO sign/verify round-trip; rotation grace window honoring prior key (incl. forged-kid adversarial); revocation cache bootstrap → propagation → idempotency; SST grep guard for hardcoded auth values across `internal/` and `cmd/` |
-| integration | `tests/integration/auth_bootstrap_test.go` (build tag `integration`) | Live test-stack bootstrap on a fresh production-mode DB: `Enroll` → `IssueToken` → `HashToken` → `PersistToken` round-trip; `auth_users.user_id` UNIQUE adversarial; PASETO public-hex derivation |
-| stress / chaos | `tests/integration/auth_chaos_test.go` (build tag `integration`) | 7 stress scenarios + 1 informational benchmark: concurrent enrollment with UNIQUE rejection; concurrent rotate-vs-verify across grace window; revocation broadcaster race; cache bootstrap under concurrent load; broadcaster malformed-payload defensive handling; migration idempotency; token boundary conditions; pure-CPU verify benchmark vs NFR-AUTH-001 5ms hot-path budget |
+| unit | `internal/config/validate_test.go` (8 sub-tests), `internal/auth/issue_test.go`, `internal/auth/verify_test.go`, `internal/auth/startup_test.go` (8 sub-cases), `internal/auth/sst_grep_guard_test.go` (+ adversarial + allowlist), `internal/auth/revocation/cache_test.go`, `internal/api/router_auth_middleware_test.go` (Scope 02 — production PASETO + dev/test shared-token + empty-token bypass branches), `internal/api/auth_actor_grep_guard_test.go` (Scope 02 AC-11 grep guard with adversarial fixture) | Loader and runtime fail-loud branches (production+enabled+empty-signing-key, +empty-key-id, +empty-hashing-key, +hashing-key==signing-key per OQ-8); PASETO sign/verify round-trip; rotation grace window honoring prior key (incl. forged-kid adversarial); revocation cache bootstrap → propagation → idempotency; SST grep guard for hardcoded auth values across `internal/` and `cmd/`; middleware mode-branch coverage; AC-11 grep guard (zero production-applicable header-trust paths) |
+| integration | `tests/integration/auth_bootstrap_test.go`, `tests/integration/auth_mintreveal_test.go`, `tests/integration/auth_drive_connect_test.go`, `tests/integration/auth_annotation_test.go`, `tests/integration/auth_rotation_test.go`, `tests/integration/auth_revocation_test.go` (all build tag `integration`) | Live test-stack bootstrap on a fresh production-mode DB: `Enroll` → `IssueToken` → `HashToken` → `PersistToken` round-trip; `auth_users.user_id` UNIQUE adversarial; PASETO public-hex derivation. Scope 02 MIT-closure verification: photos mint/reveal rejects body `actor_id`, drive `Connect` rejects body `owner_user_id`, annotation create rejects body `actor_source` — all `HTTP 400` with the documented error codes against the live test-stack core (host port 45001) backed by postgres 47001 + NATS 47002. Rotation grace timeline: prior token admits during the grace window then rejects after `expires_at`. Revocation propagation: revoke broadcasts on the configured NATS subject and the next request returns `HTTP 401`; NATS-down fallback exercises `Cache.Refresh(ctx, store)` against `BearerStore.LoadRevokedTokenIDs` to close the staleness window. |
+| stress / chaos | `tests/integration/auth_chaos_test.go` (Scope 01 — 7 stress scenarios + 1 informational benchmark), `tests/integration/auth_chaos_scope02_test.go` (Scope 02 — 11 behaviors C2-B01..C2-B11 covering concurrent middleware-verify, verify-vs-revoke race, concurrent mint/reveal under MIT-040-S-008 closure, concurrent drive `Connect` under MIT-038-S-003 closure, concurrent annotation create under MIT-027-TRACE-001 closure, rotation under load, revocation under load, admin endpoint stress, malformed-Authorization-header storm, `-race -count=20` stress loop, pure-CPU middleware benchmark) | Concurrent enrollment with UNIQUE rejection; concurrent rotate-vs-verify across the grace window; revocation broadcaster race; cache bootstrap under concurrent load; broadcaster malformed-payload defensive handling; migration idempotency; token boundary conditions; pure-CPU verify benchmark vs NFR-AUTH-001 5 ms hot-path budget; Scope 02 hot-path race-clean stress + body-key adversarial fixtures + admin-endpoint contention. |
 
 Required adversarial cases:
 
@@ -168,16 +172,36 @@ Required adversarial cases:
 - The SST grep guard MUST detect a fresh hardcoded PASETO key inserted into the
   source tree (verified by the adversarial sub-test injecting a literal pattern
   outside the allowlist).
+- Production mode MUST reject body-supplied `actor_id` / `owner_user_id` /
+  `actor_source` on the photos mint/reveal, drive `Connect`, and annotation
+  create handlers respectively — required adversarial integration tests
+  `TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly`,
+  `TestDriveConnect_OwnerInBody_Production_Returns400`,
+  `TestAnnotation_BodyActorSourceInProduction_Rejected`.
+- Dev/test mode MUST continue to honor body-supplied actor identifiers and the
+  `X-Actor-Id` header so existing local-dev fixtures work unchanged (covered by
+  the same MIT-closure integration tests via mode-branch sub-cases).
+- After token rotation, the prior token MUST be rejected once `expires_at`
+  passes (`TestRotation_AfterGraceWindow_OldTokenRejected` with `expired` /
+  `exp claim` / `signature` / `verify` body-content adversarials).
+- A revoked token MUST be rejected on the next request with `HTTP 401` and the
+  401 body MUST NOT leak `revoked` / `revocation` / `cache hit` strings
+  (`TestRevocation_RevokedTokenRejectedOnNextRequest` with NFR-AUTH-007 body
+  content adversarial).
 
-Run live integration coverage:
+Run live integration coverage (test stack must be up — host ports postgres
+47001, NATS 47002, smackerel-ml 45002, smackerel-core 45001):
 
 ```bash
 ./smackerel.sh --env test up
-go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/...
+go test -count=1 -tags=integration -v -timeout=180s \
+  -run 'Test(Auth|MintReveal|DriveConnect|Annotation|Rotation|Revocation)' \
+  ./tests/integration/...
 ```
 
-The `bearerAuthMiddleware` integration tests (Scope 02) and the PWA / extension
-/ Telegram E2E tests (Scope 03) are NOT yet authored — their planned files are
+Scope 02 `bearerAuthMiddleware` integration is exercised end-to-end by the
+files above; the PWA / extension / Telegram E2E tests (Scope 03) and the
+Scope 04 deprecation tests are NOT yet authored — their planned files are
 tracked under `specs/044-per-user-bearer-auth/scenario-manifest.json`.
 
 ### QF Companion Connector Test Surface (Spec 041)
