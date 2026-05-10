@@ -4985,3 +4985,142 @@ this carry-forward and does NOT block on it.
 **Claim Source:** executed.
 
 ---
+
+### Chaos Evidence (Scope 03)
+
+**Phase:** Scope 03 formal chaos (`bubbles.chaos`)
+**Date:** 2026-05-11 (UTC)
+**Agent:** `bubbles.chaos`
+**Owned artifact:** `tests/integration/auth_chaos_scope03_test.go` (NEW, build tag `integration`, ~770 lines)
+**Source spec:** `specs/044-per-user-bearer-auth/scopes.md` Scope 3 chaos behaviors C3-B01..C3-B05
+
+#### Chaos behavior coverage
+
+| ID | Test function | Surface stressed | Concurrency shape | Stress-loop result (`-race -count=20`) |
+|----|---------------|------------------|-------------------|-----------------------------------------|
+| **C3-B01** | `TestAuthChaos_S03_PWALoginCookieJarChurn_NoSessionInterleave` | `/v1/web/login` → `Set-Cookie: auth_token` → `/v1/photos/connectors` round-trip | 50 jars × 10 cookie reuses (500 derived sessions) per iter; distinct synthetic `RemoteAddr` per jar to bypass per-IP login rate-limit | **20/20 PASS** — 50 logins admitted, 500 derived sessions admitted, ZERO jar leaks |
+| **C3-B02** | `TestAuthChaos_S03_ExtensionTokenRotationRace_GraceWindowSurvives` | `auth.IssueToken` + `store.MarkTokenRotated` + concurrent bearer hits on `/v1/photos/connectors` for both T1 (in-grace) and T2 (active) | 100 pre-rotation T1 + 100 post-rotation T1(grace) + 100 post-rotation T2(active), all started behind a gate channel | **20/20 PASS** — `authReject == 0` across all three cohorts; chi `middleware.Throttle(100)` 503s classified as orthogonal throttle (NOT auth-reject) per chaos contract; lower-bound assertion `postT1Admit > 0 && postT2Admit > 0` proves both grace and active paths actually ran |
+| **C3-B03** | `TestAuthChaos_S03_TelegramMappingConcurrentReads_NoRaceNoLeak` | `telegram.NewBotForTest` + `PerUserTokenMinter.MintForChat` concurrent reads against 50-entry chat→user map + parallel `telegram.ParseUserMapping` parser stress | 100 mapped + 100 unmapped reads + 20 parser allocations per iter; map is set-once (production code does not hot-reload), so chaos exercises concurrent READ correctness which is the only invariant the implementation guarantees today | **20/20 PASS** — all 100 mapped reads return correct UserID; all 100 unmapped reads return `ErrNoUserMappingForChat`; race-detector clean |
+| **C3-B04** | `TestAuthChaos_S03_AdminUIUnderRevocationRace_HTMLOrCleanReject` | `GET /admin/auth/tokens` + concurrent revoker injecting `store.RevokeToken` + `broadcaster.Publish` against real test-stack NATS at slot 40 of 80 | 80 concurrent admin-UI requests, revoker injected mid-burst on real `auth.revocations.test.chaos-s03.*` NATS subject; per-iter unique runID prevents cross-iteration cookie/cache cross-talk | **20/20 PASS** — every response is either (a) 200 + `text/html` Content-Type + page heading "Smackerel — Per-User Bearer Tokens" + zero token leak, or (b) 401 + clean body (no leak words `revoked`/`revocation`/`cache hit`); no 5xx, no torn HTML, no token leak; post-burst probe confirms permanent revocation |
+| **C3-B05** | `TestAuthChaos_S03_TelegramMintUnderDBPressure_AllSucceed` | `PerUserTokenMinter.MintForChat` × 50 under concurrent `CountUsers` DB-hog goroutines | 50 concurrent mints firing simultaneously with a 5-goroutine `CountUsers` DB-pressure pool; each minted token verified end-to-end via `auth.VerifyAndParse` | **20/20 PASS** — all 50 mints succeed, all 50 wire tokens parse to expected UserID, all 50 TokenIDs unique (mint path is DB-independent — validates design §11 invariant) |
+
+#### Verbatim stress-loop counters (`go test -tags=integration -count=20 -race -v -run '^TestAuthChaos_S03_' ./tests/integration/`)
+
+```text
+EXIT=0
+B01-PASS-COUNT=20
+B02-PASS-COUNT=20
+B03-PASS-COUNT=20
+B04-PASS-COUNT=20
+B05-PASS-COUNT=20
+TOTAL-FAIL-COUNT=0
+RACE-MARKERS=0
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        43.059s
+```
+
+**Race-detector verdict:** `RACE-MARKERS=0` (no `WARNING: DATA RACE` or `==================` race-report banners across 100 stress iterations of the 5 chaos tests). Race detector was active for all 100 iterations (`-race` flag).
+
+**Sample per-iteration log line (from one iteration):**
+
+```text
+auth_chaos_scope03_test.go:600: C3-B02: pre admit=100 throttle=0 authReject=0 |
+  post-rot T1(grace) admit=66 throttle=34 authReject=0 |
+  post-rot T2(active) admit=85 throttle=15 authReject=0
+  (race-detector clean; throttle is orthogonal to auth correctness)
+```
+
+The throttle counts vary iteration-to-iteration (`postT1 throttle` ranged 0-34
+across the 20 iterations of B02) — this is expected because chi
+`middleware.Throttle(100)` is a *global* in-flight ceiling that two
+simultaneous 100-goroutine cohorts (T1 + T2 = 200 concurrent in-flight) trip
+non-deterministically. The chaos invariant — `authReject == 0` — held in
+**every iteration**.
+
+#### Verbatim hot-path benchmark (`go test -tags=integration -run='^$' -bench='^BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath$' -benchtime=10000x -benchmem ./tests/integration/`)
+
+```text
+goos: linux
+goarch: amd64
+pkg: github.com/smackerel/smackerel/tests/integration
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath
+BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath-8           10000          1477561 ns/op           20782 B/op            200 allocs/op
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        14.974s
+```
+
+**Hot-path numbers (verbatim):** **1,477,561 ns/op** (~1.48 ms/op),
+**20,782 B/op**, **200 allocs/op** at b.N=10000 single-threaded.
+
+**Interpretation (informational, not a PASS gate):** the cookie-derived
+session hot-path includes one full `store.LookupByHash` Postgres roundtrip per
+call against the live test-stack DB at `127.0.0.1:47001` plus the full chi
+middleware chain (RequestID, RealIP, Recoverer, Throttle, Heartbeat, RateLimit
+matchers), full PASETO v4.public verify, full bearer-cache lookup-or-fill, and
+the `/v1/photos/connectors` handler returning a JSON `connectors` array. ~1.48
+ms/op end-to-end including DB roundtrip is consistent with prior Scope 02
+chaos benchmark numbers and well below any per-request budget.
+
+#### Test stack used
+
+```text
+DATABASE_URL=postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/smackerel?sslmode=disable
+CHAOS_NATS_URL=nats://${SMACKEREL_AUTH_TOKEN}@127.0.0.1:47002
+NATS_URL=$CHAOS_NATS_URL
+```
+
+(`<test-db-user>` and `<test-db-pw>` sourced from `config/generated/test.env`
+via `set -a; source config/generated/test.env; set +a`. The literal credentials
+are SST-resolved test-stack defaults from `config/smackerel.yaml` and never
+committed to source.)
+
+5 ephemeral test containers (`smackerel-test-{postgres,nats,ollama,core,ml}`)
+on documented host ports per `config/generated/test.env`. Test stack brought
+up via `./smackerel.sh --env test up` and confirmed Healthy via `docker ps`
+before chaos execution. No real PII (usernames / IPs / hostnames) — only
+`127.0.0.1`, RFC1918 synthetic addresses (`10.X.0.Y`), and project
+placeholders.
+
+#### Pre-flight repairs during chaos authoring
+
+The first single-iteration smoke run (before stress loop) caught one
+B02 design weakness: the test originally asserted `admit == total &&
+reject == 0` on each cohort. Two simultaneous 100-goroutine cohorts
+(200 concurrent in-flight) trip chi's global `middleware.Throttle(100)`
+ceiling, returning 503 — which is orthogonal to auth correctness. The
+test was hardened to:
+
+1. Track three counters (`admit`, `throttle`, `authReject`) instead of two;
+2. Assert `authReject == 0 && admit + throttle == total` (the actual chaos invariant);
+3. Add an adversarial lower-bound `postT1Admit > 0 && postT2Admit > 0` so the test cannot pass via 100% throttle.
+
+After the fix, all 5 tests passed all 20 stress iterations.
+
+#### state.json updates this chaos phase
+
+- `execution.completedPhaseClaims` appended with the Scope 03 chaos
+  object form: `{scope: "03", phase: "chaos", agent: "bubbles.chaos",
+  timestamp: "2026-05-11T02:30:00Z"}`.
+- `certification.certifiedCompletedPhases` appended with `"03:chaos"`.
+- `executionHistory` appended with this chaos-phase entry
+  (agent=`bubbles.chaos`, scopes=`["03"]`, decision=`approved`,
+  evidence: `5 chaos behaviors C3-B01..C3-B05 each PASS 20/20 with
+  -race; race-detector markers=0; hot-path benchmark = 1,477,561 ns/op
+  | 20,782 B/op | 200 allocs/op at b.N=10000`).
+- `currentPhase` advanced from `"chaos"` to `"spec-review"`.
+- `execution.currentPhase` advanced from `"chaos"` to `"spec-review"`.
+- `execution.currentScope` preserved at `"03"`.
+- `status` preserved at `"in_progress"` (Scope 03 not yet finalized).
+- `certification.status` preserved at `"in_progress"`.
+- `certification.completedScopes` NOT advanced (per per-scope finalize
+  boundary owned by `bubbles.iterate`).
+- `transitionRequests[FINALIZE-PREREQ-044-V7-001]` preserved at status
+  `"open"` (carry-forward — path-b 12th-entry deferred to spec-level
+  finalize).
+
+**Verdict:** 🚀 **SHIP_IT** for Scope 03 chaos phase.
+
+**Claim Source:** executed.
+
+---
