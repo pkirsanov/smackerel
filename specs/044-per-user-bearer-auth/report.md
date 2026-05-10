@@ -1124,6 +1124,76 @@ The Scope 01 auth surface is concurrency-safe, race-clean, lifecycle-loud, and C
 
 ---
 
+## Spec-Review Evidence
+
+This section records the formal `bubbles.spec-review` phase for Scope 01: a per-spec post-chaos verification that the seven Scope 01 artifacts (`spec.md`, `design.md`, `scopes.md`, `scenario-manifest.json`, `report.md`, `uservalidation.md`, `state.json`) truthfully reflect what was implemented and shipped through the implement → test → validate → audit → chaos chain. This is **NOT** a freshness audit of all repo specs (`bubbles.spec-review all`); it is the per-spec post-chaos phase scoped to spec 044 Scope 01 only.
+
+### Trust Classification — Scope 01
+
+**MINOR_DRIFT** (resolved via inline artifact fixes). Substantive accuracy across all seven artifacts; shipped code is sound; only descriptive pseudo-code in `design.md` §5.6 and stale planned-test-names in `scopes.md` Test Plan rows T1-04..T1-09 needed surgical reconciliation. NO `MAJOR_DRIFT` and NO `OBSOLETE` classifications, therefore the spec-review-mode Phase 5 auto-invocation of `bubbles.docs` is **NOT triggered** — managed-doc impact for Scope 01 is limited to the design.md §14 reconciliation note (intra-artifact) and the docs-phase work that legitimately belongs to Scope 04 (deprecation pathway + documentation freshness).
+
+### Per-Artifact Review Matrix
+
+| # | Artifact | Verdict | Drift items | Inline fix applied |
+|---|----------|---------|-------------|-------------------|
+| 1 | `spec.md` | PASS | None — FRs/NFRs/scenarios faithful to shipped surface; OQs marked resolved in `design.md` §13 + reconciled at §14 | None |
+| 2 | `design.md` | PASS_WITH_FIXES | §5.6 `SessionSource` typed as `int`/iota and helpers signed for `*Session` (mismatch vs shipped `string` enum and pass-by-value Session); §6.4 design decisions made during implement not recorded; SST line numbers `lines 67-130` in §4 historical context | §5.6 fully reconciled to shipped reality (`SessionSource` `string` enum + `WithSession`/`SessionFromContext` value-passing signatures + `UserIDFromContext` deferral note); NEW §14 added recording 6 design adjustments + 4 OBS-* observations carried forward + UserIDFromContext deferral + SST line-number reconciliation |
+| 3 | `scopes.md` | PASS_WITH_FIXES | Scope 01 SST evidence cited `lines 67-130` (stale snapshot) instead of `459-511`; Scope 01 implement DoD claimed `WithSession/SessionFromContext/UserIDFromContext` shipped (UserIDFromContext was deferred to Scope 02); Test Plan rows T1-04/T1-05/T1-06/T1-07/T1-09 carried planned-phase test names from before the manifest restructure at commit `1ec9c5f5` | SST line numbers reconciled to `459-511` with reconciliation annotation; UserIDFromContext claim removed from shipped helper list with deferred-to-Scope-02 note; Test Plan rows T1-04..T1-09 reconciled to shipped test names with rationale annotations; NEW spec-review DoD bullet appended capturing this phase |
+| 4 | `scenario-manifest.json` | PASS | None — all Scope 01 entries use real `file:` references mapping to shipped tests; all Scope 02/03/04 entries correctly use `plannedFile:` per restructure at `1ec9c5f5` | None |
+| 5 | `report.md` | PASS_WITH_FIXES | Missing dedicated Spec-Review Evidence section per the bubbles-spec-review-mode template; Test/Validation/Audit/Chaos sections all PASS verbatim | NEW Spec-Review Evidence section added (this section) |
+| 6 | `uservalidation.md` | PASS | None — placeholder per design; full user acceptance lands at Scope 04 closure | None |
+| 7 | `state.json` | PASS_WITH_FIXES | Missing `spec-review` entry in `execution.completedPhaseClaims` and `certification.certifiedCompletedPhases`; `execution.executionHistory` missing spec-review phase record; `currentPhase` still `spec-review` (needs advance to `docs` post-spec-review-completion) | All four state.json updates applied per Phase Recording Responsibility (`scope-workflow.md`) and Gate G027 |
+
+### Drift Findings Catalog
+
+| # | Severity | Artifact | Finding | Resolution |
+|---|----------|----------|---------|------------|
+| D1 | MINOR | `scopes.md` Scope 01 SST evidence | Cited `config/smackerel.yaml lines 67-130` (implement-phase snapshot) | Reconciled to `lines 459-511` with annotation noting reconciliation against HEAD `1f25d49e` |
+| D2 | MINOR | `scopes.md` Scope 01 implement DoD evidence | Falsely claimed `UserIDFromContext` shipped in Scope 01 | Helper claim removed from shipped list; added explicit deferred-to-Scope-02 note (no Scope 01 caller needs it; admin handlers consume `Session` directly via `IsAdmin`) |
+| D3 | MINOR | `scopes.md` Scope 01 Test Plan rows T1-04..T1-09 | Carried 5 stale planned-phase test names from before manifest restructure at commit `1ec9c5f5` (e.g., `TestIssueToken_BindsClaimsToUserID`, `TestVerifyAndParse_ValidToken_ReturnsSession`, `TestVerifyAndParse_NoDBQueries`, `TestCache_IsRevoked_AfterSet_ReturnsTrue`, `TestStartup_NoUsersNoBootstrap_FailsLoud`) | All 5 rows reconciled to shipped test names with rationale annotations: T1-04 → `TestIssueToken_RoundTripWithVerify`; T1-05 → `TestVerifyAndParse_RejectsExpiredAndFutureAndForeignIssuer` + `TestVerifyAndParse_RotationGraceWindow_HonorsPriorKey` + `TestVerifyAndParse_RejectsHalfRotationConfig`; T1-06 → static structural guarantee enforced by Audit Gate A18 (live query-counting test deferred to Scope 02); T1-07 → `TestRevocationCache_BootstrapAndPropagate` + companions; T1-09 → `internal/auth/startup_test.go::TestValidateRuntimeAuthStartup` (manifest already canonical) |
+| D4 | MINOR | `design.md` §5.6 | Pseudo-code typed `SessionSource` as `int` (iota) with `SessionSourcePerUser`/`SessionSourceSharedToken`/`SessionSourceEmpty` constants and helpers `WithSession(ctx, *Session)` / `SessionFromContext(ctx) *Session` returning pointer | Reconciled to shipped: `SessionSource string` with `SessionSourcePerUserToken`/`SessionSourceSharedToken`/`SessionSourceBootstrap` named string constants; `WithSession(ctx, Session)` and `SessionFromContext(ctx) (Session, bool)` pass-by-value with bool ok flag |
+| D5 | MINOR | `design.md` §6.2 / §13 | Did not record the design decisions made during Scope 01 implement (SessionSource shape, VerifyAndParse signature separation, UserIDFromContext deferral, OBS observations) | NEW §14 "Design Decisions Reconciled During Scope 01 Implement" added with 6-row adjustment table + 4 OBS-* observations carried forward + UserIDFromContext deferral + SST line-number reconciliation |
+| D6 | MINOR | `report.md` | Missing dedicated Spec-Review Evidence section | This section added |
+| D7 | MINOR | `scopes.md` Scope 01 DoD list | Missing spec-review-phase DoD bullet | Bullet appended at end of Scope 01 DoD list with full evidence sub-block (per-artifact verdicts, cross-artifact coherence, inline fix list, no `route_back_to_implement` opened, artifact-lint exit 0, Claim Source: executed) |
+| D8 | MINOR | `state.json` | Missing spec-review-phase records (no entry in `execution.completedPhaseClaims`, `execution.executionHistory`, `certification.certifiedCompletedPhases`); `currentPhase` not advanced | All four updates applied per scope-workflow.md Phase Recording Responsibility |
+
+### Cross-Artifact Coherence Check
+
+| Coherence rule | Result |
+|----------------|--------|
+| All 11 SCN-AUTH-NNN scenario IDs match across `spec.md`, `design.md`, `scopes.md`, `scenario-manifest.json` | PASS |
+| Scope 01 owns SCN-AUTH-001 + SCN-AUTH-006 (SST + Token + Issue + Verify + Revocation Cache + Bootstrap CLI); Scope 02 owns SCN-AUTH-002/003/004/005/007/008/009/010/011 (middleware integration, route guards, MIT closures) — every artifact agrees on this assignment | PASS |
+| MIT-040-S-008 / MIT-038-S-003 / MIT-027-TRACE-001 carried forward to Scope 02 in scopes.md AND scenario-manifest.json AND state.json (NOT mis-claimed as closed by Scope 01) | PASS |
+| Scope 02 / Scope 03 / Scope 04 status remains `Not Started` per audit's G041 canonicalization across scopes.md AND state.json | PASS |
+| All `internal/auth/`, `internal/auth/revocation/`, `cmd/core/cmd_auth.go`, `internal/api/auth_handlers.go`, `internal/db/migrations/033_auth_per_user_bearer.sql` files referenced in artifacts exist in HEAD `1f25d49e` | PASS |
+| All test functions named in scopes.md Test Plan post-fix exist in shipped test files | PASS |
+| All commits referenced in report.md evidence blocks (`9c97e09b`, `8a01a76e`, `bf3a32c4`, `1ec9c5f5`, `c8d4a8f1`, `1f25d49e`, etc.) exist in `git log` | PASS |
+| 4 OBS-* observations (3 audit + 1 chaos) traceable to source code locations and recorded in BOTH report.md AND design.md §14 | PASS |
+| 1 open transitionRequest `FINALIZE-PREREQ-044-V7-001` carried forward (deferred Gate V7 disposition, due-by Scope 04 finalize) — NOT closed prematurely by spec-review | PASS |
+
+### Inline Fixes Summary
+
+5 surgical artifact fixes applied during this phase. All fixes are **artifact-side only** — no shipped code was modified. Files touched:
+
+1. `specs/044-per-user-bearer-auth/scopes.md` — D1 (SST line numbers), D2 (UserIDFromContext claim), D3 (Test Plan rows T1-04..T1-09), D7 (NEW spec-review DoD bullet)
+2. `specs/044-per-user-bearer-auth/design.md` — D4 (§5.6 reconciliation), D5 (NEW §14 reconciliation subsection)
+3. `specs/044-per-user-bearer-auth/report.md` — D6 (NEW Spec-Review Evidence section, this section)
+4. `specs/044-per-user-bearer-auth/state.json` — D8 (executionHistory + completedPhaseClaims + certifiedCompletedPhases + currentPhase advance)
+
+NO `route_back_to_implement` transitionRequest was opened. Every drift item is artifact-side only; no shipped code is wrong; the gap was design-doc / scope-doc descriptive content lagging behind the shipped reality of `internal/auth/`.
+
+### Spec-Review Verdict — Scope 01
+
+**🟢 APPROVED_WITH_ARTIFACT_FIXES** for Scope 01 spec-review phase.
+
+The seven Scope 01 artifacts now truthfully reflect what was implemented, tested, validated, audited, and chaos-tested. Trust classification **MINOR_DRIFT** resolved fully via inline artifact-side fixes. Coherence across all seven artifacts confirmed. The Scope 01 auth surface remains the certified ship-it baseline established by the chaos phase; this phase adds no new code, no new tests, no new shipped behavior — it certifies the artifacts themselves are now a faithful description of reality.
+
+Next phase: `docs` (per `scope-workflow.md` phase progression) — handles Scope 04 docs-phase work + cross-artifact docs sync where appropriate. The spec-review phase itself does NOT auto-invoke `bubbles.docs` for Scope 01 because trust classification is MINOR_DRIFT (NOT MAJOR_DRIFT or OBSOLETE per spec-review-mode Phase 5 trigger conditions); managed-doc updates legitimately belong to Scope 04 (deprecation pathway + documentation freshness) and to the explicit `docs` phase that follows this commit.
+
+`Claim Source: executed`.
+
+---
+
 ## Planned Implementation Order
 
 Per [`design.md`](./design.md) §12 Rollout Plan and [`scopes.md`](./scopes.md):
