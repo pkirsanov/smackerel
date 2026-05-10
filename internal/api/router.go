@@ -254,6 +254,23 @@ func NewRouter(deps *Dependencies) http.Handler {
 		})
 	}
 
+	// Spec 044 Scope 03 — Per-user PASETO admin token-management UI.
+	// Single static HTML page that calls the existing Scope 02
+	// /v1/auth/* admin REST endpoints via fetch() with same-origin
+	// credentials. Behind bearerAuthMiddleware so:
+	//   - production callers must supply a per-user PASETO bearer
+	//     (header) or auth_token cookie (set by /v1/web/login);
+	//   - dev/test callers fall through the same shared-token /
+	//     empty-token branches the rest of the admin REST surface
+	//     uses.
+	// The /v1/auth/* REST endpoints independently enforce the
+	// callerIsAdmin gate, so non-admin authenticated callers can
+	// load the page but XHR mutations will return 403.
+	r.Group(func(r chi.Router) {
+		r.Use(deps.bearerAuthMiddleware)
+		r.Get("/admin/auth/tokens", deps.HandleAdminTokensUI)
+	})
+
 	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil || deps.DriveConfirmationsHandlers != nil || deps.AuthAdminHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))

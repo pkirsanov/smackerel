@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<!--
+  Spec 044 Scope 03 — Admin Token Management UI.
+
+  Single-file HTML+JS surface served by Go core at /admin/auth/tokens.
+  Calls the existing Scope 02 admin REST endpoints:
+    GET  /v1/auth/users
+    POST /v1/auth/users
+    POST /v1/auth/users/{user_id}/rotate
+    POST /v1/auth/tokens/{token_id}/revoke
+
+  Auth model: this page is registered behind bearerAuthMiddleware in
+  internal/api/router.go. The browser must already hold an admin
+  session — typically established by POST /v1/web/login with an
+  admin-class bearer (bootstrap or shared-token in dev/test). The
+  XHR calls below rely on the auth_token cookie being attached
+  same-origin; no token is stored or transmitted in JavaScript.
+
+  No build step. No external dependencies. All content rendered with
+  textContent / appendChild so XSS is impossible by construction.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smackerel — Per-User Bearer Tokens</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; color: #1a1a1a; background: #f6f6f6; }
+    h1 { margin-top: 0; font-size: 1.4rem; }
+    h2 { margin-top: 2rem; font-size: 1.1rem; }
+    .panel { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
+    button { padding: 6px 12px; border-radius: 4px; border: 1px solid #999; background: #fff; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+    button.primary { background: #1a73e8; color: white; border-color: #1a73e8; }
+    button.danger { background: #d93025; color: white; border-color: #d93025; }
+    input { padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; min-width: 200px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+    th { background: #fafafa; font-weight: 600; }
+    .status-active { color: #1e8e3e; font-weight: 600; }
+    .status-revoked { color: #d93025; font-weight: 600; }
+    .status-rotated { color: #f29900; font-weight: 600; }
+    .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.85rem; }
+    .error { background: #fce8e6; color: #c5221f; padding: 8px 12px; border-radius: 4px; margin: 8px 0; }
+    .success { background: #e6f4ea; color: #137333; padding: 8px 12px; border-radius: 4px; margin: 8px 0; }
+    .secret { background: #fff8e1; padding: 12px; border-radius: 4px; border: 1px solid #f9ab00; word-break: break-all; }
+    .secret strong { color: #b06000; }
+  </style>
+</head>
+<body>
+  <h1>Smackerel — Per-User Bearer Tokens</h1>
+  <p>Spec 044 Scope 03 admin surface. Mint, rotate, and revoke per-user PASETO bearers
+  for the deployment. Only callers whose session resolves as <em>admin</em>
+  (bootstrap session, or shared-token session in dev / test) can use these
+  controls. All actions hit the Scope 02 REST endpoints under
+  <code>/v1/auth/...</code>.</p>
+
+  <div id="message-area"></div>
+
+  <div class="panel">
+    <h2>Mint a New User</h2>
+    <p>Issue a fresh per-user PASETO bearer for a new user. The wire token is
+    shown <strong>once</strong>; capture it immediately — it is never displayed again.</p>
+    <label>User ID: <input type="text" id="enroll-user-id" placeholder="e.g. alice"></label>
+    <label style="margin-left:8px;">Notes (optional): <input type="text" id="enroll-notes" placeholder="e.g. ops on-call"></label>
+    <button class="primary" id="enroll-btn" style="margin-left:8px;">Enroll User</button>
+    <div id="enroll-secret" style="margin-top:12px; display:none;"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Enrolled Users</h2>
+    <button id="reload-btn">Reload</button>
+    <table id="user-table">
+      <thead>
+        <tr>
+          <th>User ID</th>
+          <th>Status</th>
+          <th>Enrolled By</th>
+          <th>Enrolled At (UTC)</th>
+          <th>Notes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="user-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Revoke a Specific Token</h2>
+    <p>Use the token id (PASETO <code>jti</code>) — for example
+    <code>tok-bootstrap-001</code> — to revoke a token outside of a user
+    rotation. Useful when a single device is compromised but the user
+    remains active.</p>
+    <label>Token ID: <input type="text" id="revoke-token-id" placeholder="tok-..."></label>
+    <label style="margin-left:8px;">Reason (optional): <input type="text" id="revoke-reason" placeholder="e.g. lost laptop"></label>
+    <button class="danger" id="revoke-btn" style="margin-left:8px;">Revoke Token</button>
+  </div>
+
+  <script>
+    'use strict';
+
+    const messageArea = document.getElementById('message-area');
+    const userTbody = document.getElementById('user-tbody');
+    const enrollBtn = document.getElementById('enroll-btn');
+    const enrollSecret = document.getElementById('enroll-secret');
+    const reloadBtn = document.getElementById('reload-btn');
+    const revokeBtn = document.getElementById('revoke-btn');
+
+    function showMessage(text, klass) {
+      const div = document.createElement('div');
+      div.className = klass;
+      div.textContent = text;
+      messageArea.innerHTML = '';
+      messageArea.appendChild(div);
+    }
+
+    function clearMessage() {
+      messageArea.innerHTML = '';
+    }
+
+    async function apiCall(method, path, body) {
+      const opts = {
+        method: method,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const resp = await fetch(path, opts);
+      const text = await resp.text();
+      let payload = null;
+      if (text) {
+        try { payload = JSON.parse(text); } catch (e) { payload = { raw: text }; }
+      }
+      if (!resp.ok) {
+        const message = (payload && (payload.error && payload.error.message || payload.message)) || ('HTTP ' + resp.status);
+        const err = new Error(message);
+        err.status = resp.status;
+        err.payload = payload;
+        throw err;
+      }
+      return payload;
+    }
+
+    function statusClass(status) {
+      if (status === 'active') return 'status-active';
+      if (status === 'revoked') return 'status-revoked';
+      if (status === 'rotated') return 'status-rotated';
+      return '';
+    }
+
+    async function reloadUsers() {
+      try {
+        const payload = await apiCall('GET', '/v1/auth/users');
+        userTbody.innerHTML = '';
+        const users = (payload && payload.users) || [];
+        if (users.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 6;
+          td.textContent = 'No users enrolled yet.';
+          tr.appendChild(td);
+          userTbody.appendChild(tr);
+          return;
+        }
+        for (const u of users) {
+          const tr = document.createElement('tr');
+          const cells = [
+            { text: u.user_id, mono: true },
+            { text: u.status || 'unknown', cls: statusClass(u.status) },
+            { text: u.enrolled_by || '' },
+            { text: u.enrolled_at || '', mono: true },
+            { text: u.notes || '' },
+          ];
+          for (const c of cells) {
+            const td = document.createElement('td');
+            td.textContent = c.text;
+            if (c.mono) td.className = 'mono';
+            if (c.cls) td.className = (td.className ? td.className + ' ' : '') + c.cls;
+            tr.appendChild(td);
+          }
+          const actionTd = document.createElement('td');
+          const rotateBtn = document.createElement('button');
+          rotateBtn.textContent = 'Rotate';
+          rotateBtn.addEventListener('click', () => promptRotate(u.user_id));
+          actionTd.appendChild(rotateBtn);
+          tr.appendChild(actionTd);
+          userTbody.appendChild(tr);
+        }
+        clearMessage();
+      } catch (err) {
+        showMessage('Failed to load users: ' + err.message, 'error');
+      }
+    }
+
+    async function promptRotate(userID) {
+      const priorTokenID = window.prompt(
+        'Rotate token for user "' + userID + '". Enter the prior token id (the jti of the token to retire). The new token is bound to the same user. The prior token is honored for the configured rotation grace window.'
+      );
+      if (!priorTokenID) return;
+      try {
+        const payload = await apiCall(
+          'POST',
+          '/v1/auth/users/' + encodeURIComponent(userID) + '/rotate',
+          { prior_token_id: priorTokenID.trim() }
+        );
+        showMessage('Rotation successful. New wire token shown below.', 'success');
+        renderSecret('Rotated token for ' + userID, payload);
+        await reloadUsers();
+      } catch (err) {
+        showMessage('Rotate failed: ' + err.message, 'error');
+      }
+    }
+
+    function renderSecret(label, payload) {
+      enrollSecret.innerHTML = '';
+      enrollSecret.style.display = 'block';
+      const div = document.createElement('div');
+      div.className = 'secret';
+      const strong = document.createElement('strong');
+      strong.textContent = label + ' — capture this token now.';
+      div.appendChild(strong);
+      div.appendChild(document.createElement('br'));
+      const monoDiv = document.createElement('div');
+      monoDiv.className = 'mono';
+      monoDiv.style.marginTop = '8px';
+      monoDiv.textContent = payload && payload.token ? payload.token : '(no token in response)';
+      div.appendChild(monoDiv);
+      const meta = document.createElement('div');
+      meta.style.marginTop = '8px';
+      meta.style.fontSize = '0.85rem';
+      meta.textContent =
+        'token_id: ' + (payload && payload.token_id || '?') +
+        '   issued_at: ' + (payload && payload.issued_at || '?') +
+        '   expires_at: ' + (payload && payload.expires_at || '?');
+      div.appendChild(meta);
+      enrollSecret.appendChild(div);
+    }
+
+    enrollBtn.addEventListener('click', async () => {
+      const userID = document.getElementById('enroll-user-id').value.trim();
+      const notes = document.getElementById('enroll-notes').value.trim();
+      if (!userID) {
+        showMessage('user_id is required', 'error');
+        return;
+      }
+      try {
+        const payload = await apiCall('POST', '/v1/auth/users', { user_id: userID, notes: notes });
+        showMessage('Enrolled ' + userID + '. Wire token shown below.', 'success');
+        renderSecret('Minted token for ' + userID, payload);
+        document.getElementById('enroll-user-id').value = '';
+        document.getElementById('enroll-notes').value = '';
+        await reloadUsers();
+      } catch (err) {
+        showMessage('Enroll failed: ' + err.message, 'error');
+      }
+    });
+
+    revokeBtn.addEventListener('click', async () => {
+      const tokenID = document.getElementById('revoke-token-id').value.trim();
+      const reason = document.getElementById('revoke-reason').value.trim();
+      if (!tokenID) {
+        showMessage('token_id is required', 'error');
+        return;
+      }
+      const confirmed = window.confirm('Revoke token ' + tokenID + '? This is immediate and cannot be undone.');
+      if (!confirmed) return;
+      try {
+        await apiCall('POST', '/v1/auth/tokens/' + encodeURIComponent(tokenID) + '/revoke', { reason: reason });
+        showMessage('Revoked ' + tokenID + '.', 'success');
+        document.getElementById('revoke-token-id').value = '';
+        document.getElementById('revoke-reason').value = '';
+        await reloadUsers();
+      } catch (err) {
+        showMessage('Revoke failed: ' + err.message, 'error');
+      }
+    });
+
+    reloadBtn.addEventListener('click', reloadUsers);
+
+    // Initial load.
+    reloadUsers();
+  </script>
+</body>
+</html>
