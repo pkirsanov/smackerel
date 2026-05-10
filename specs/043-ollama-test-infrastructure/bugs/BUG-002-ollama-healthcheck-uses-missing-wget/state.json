@@ -1,0 +1,93 @@
+{
+  "version": 3,
+  "bugId": "BUG-002",
+  "parentFeatureDir": "specs/043-ollama-test-infrastructure",
+  "parentScope": "01",
+  "title": "Ollama healthcheck calls wget (binary not in ollama/ollama:0.23.2 image) — blocks ./smackerel.sh test integration (P0)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "filedAt": "2026-05-10T02:00:00Z",
+  "filedBy": "bubbles.bug",
+  "fixedAt": "2026-05-10T03:00:00Z",
+  "lastUpdated": "2026-05-10T03:30:00Z",
+  "fixApproach": "replace-wget-healthcheck-with-in-image-ollama-cli-plus-adversarial-binary-presence-guard",
+  "filesModified": [
+    "docker-compose.yml",
+    "deploy/compose.deploy.yml",
+    "tests/integration/ollama_healthcheck_test.go"
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "done",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "analysis",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.bug",
+    "certifiedAt": "2026-05-10T03:30:00Z",
+    "completedScopes": [
+      "01"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "evidence": "specs/043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget/report.md",
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "user-input"
+    },
+    "statusCeiling": "done",
+    "capturedAt": "2026-05-10T02:00:00Z"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "discovery",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T02:00:00Z",
+      "summary": "BUG-002 filed under spec 043 Scope 01 territory. Symptom: services.ollama.healthcheck in docker-compose.yml line 182 (and deploy/compose.deploy.yml line 199) calls wget, but the ollama/ollama:0.23.2 image (pinned by BUG-001 fix ea2af19a) does not ship wget or curl. Container starts and ollama serves on :11434, but every healthcheck invocation exits 127 with `executable file not found in $PATH`. `docker compose up -d --wait` therefore reports container `unhealthy` and `--wait-timeout` elapses, returning exit code 124. Blocks `./smackerel.sh test integration` at the stack-up step. Discovered while running spec 044 validate phase. Verified: `docker exec smackerel-test-ollama-1 ollama list` exits 0 when daemon up, exit 1 with bad OLLAMA_HOST — real liveness signal."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T02:30:00Z",
+      "summary": "Fix landed: (1) docker-compose.yml services.ollama.healthcheck.test switched from CMD-SHELL `wget … /api/tags || exit 1` to `[\"CMD\", \"ollama\", \"list\"]`; interval/timeout/retries/start_period preserved; inline comment cites spec 043 / BUG-002 audit trail and uses SST key names (OLLAMA_IMAGE, OLLAMA_HOST, OLLAMA_CONTAINER_PORT) instead of literals to satisfy the SST grep guard. (2) deploy/compose.deploy.yml services.ollama.healthcheck.test mirrored from wget form to `[\"CMD\", \"ollama\", \"list\"]` with parallel inline comment. (3) NEW tests/integration/ollama_healthcheck_test.go (build tag integration, 363 lines): one helper `assertOllamaHealthcheckUsesInImageBinary` that parses YAML, extracts services.ollama.healthcheck.test first command token (handles both CMD form and CMD-SHELL form via shell-string field-split), enforces in-image-binary allowlist {ollama, /usr/bin/ollama, /bin/ollama} and forbidden-binaries set {wget, curl, /usr/bin/wget, /usr/bin/curl, /bin/wget, /bin/curl}, errors name the offending binary AND the pinned image AND suggest the fix. Four tests: TestOllamaHealthcheck_LiveFiles (parses both production compose files; fail-loud); TestOllamaHealthcheck_AdversarialMissingBinary (synthetic CMD wget — proves rejection); TestOllamaHealthcheck_AdversarialMissingBinaryCurl (synthetic CMD curl — proves coverage of curl too); TestOllamaHealthcheck_AdversarialCMDShellWrappedWget (synthetic CMD-SHELL wget — proves validator handles both forms). Zero t.Skip-family calls; fail-loud paths use t.Fatalf."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T02:45:00Z",
+      "summary": "Targeted regression tests PASS live (4/4): TestOllamaHealthcheck_LiveFiles PASS 0.00s (both docker-compose.yml and deploy/compose.deploy.yml report first-token `ollama` in allowlist); TestOllamaHealthcheck_AdversarialMissingBinary PASS 0.00s (CMD wget rejected with error citing wget + pinned image + ollama list fix suggestion); TestOllamaHealthcheck_AdversarialMissingBinaryCurl PASS 0.00s (CMD curl rejected); TestOllamaHealthcheck_AdversarialCMDShellWrappedWget PASS 0.00s (CMD-SHELL wget rejected with `extracted from CMD-SHELL form` annotation). Pre-existing tests unaffected: TestSST_NoHardcodedOllamaValues PASS (after rewriting the docker-compose.yml comment to drop `ollama/ollama:` and `11434` literals — initial commit landed comments containing those literals which tripped the SST grep guard; resolved by citing SST key names instead of literal values). Pre-existing TestOllamaImagePinIsPublished_*, TestOllamaConfigGenerateAndRuntimeValidationStayInSync, TestOllamaComposeContract_* all unaffected."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T03:00:00Z",
+      "summary": "Full repo gates PASS: ./smackerel.sh check EXIT=0 (Config is in sync with SST + env_file drift guard OK + scenario-lint registered=5/0); ./smackerel.sh test unit EXIT=0 (72 Go packages ok with ZERO FAIL lines + Python 417 tests passed in 14.78s); go test -count=1 -tags=integration -v -run 'TestOllamaHealthcheck' ./tests/integration/ EXIT=0 (4 PASS / 0 FAIL). Live-stack health: docker ps --filter name=smackerel-test-ollama showed `Up 23 seconds (healthy)` after `./smackerel.sh --env test up` against the fixed compose file. Full integration lane: ./smackerel.sh test integration EXIT=0; stack-up banner `[+] Running 9/9 ✔ Container smackerel-test-ollama-1 Healthy 12.6s ✔ Container smackerel-test-nats-1 Healthy 12.6s ✔ Container smackerel-test-postgres-1 Healthy 12.6s ✔ Container smackerel-test-smackerel-ml-1 Healthy 16.9s ✔ Container smackerel-test-smackerel-core-1 Healthy 17.4s` (pre-fix this banner showed `container smackerel-test-ollama-1 is unhealthy / EXIT=124`); 159 PASS / 0 FAIL across all integration packages. Spec 044 validate phase unblocked."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.bug",
+      "timestamp": "2026-05-10T03:30:00Z",
+      "summary": "Self-audit PASS: artifact-lint specs/043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget EXIT=0 (no warnings, no failures). All required artifacts present (spec/design/scopes/uservalidation/state/report/scenario-manifest). All 8 DoD checkboxes [x] with inline raw evidence (Gate G025). All 3 uservalidation checklist items [x]. state.json v3 schema valid. Top-level status matches certification.status. No forbidden sidecar artifacts. Workflow ceiling 'done' permitted for bugfix-fastlane. Required specialist phases (implement, test, validate, audit) all in execution.completedPhaseClaims and certification.certifiedCompletedPhases. Test stack left up `(healthy)` for next agent."
+    }
+  ]
+}
