@@ -3380,3 +3380,71 @@ Post-run cleanup query against the test DB returns 0 rows for chaos-prefixed ide
 ✅ **CHAOS-PHASE PASS** — Scope 02 hot-path middleware integration + 3 MIT closures hold under all 11 chaos behaviors. Zero defects, zero races, zero panics, zero leaks, zero residual chaos data. Gate G022 satisfied. Phase advances to `spec-review`.
 
 **Claim Source:** executed.
+
+---
+
+## Spec-Review Evidence (Scope 02)
+
+**Phase:** spec-review
+**Agent:** bubbles.spec-review
+**Recorded:** 2026-05-10
+**HEAD audited:** `c379ed26` (chaos(044): Scope 02 — record formal chaos phase per Gate G022)
+**Trust classification:** `MINOR_DRIFT` — substantive accuracy across all 7 artifacts; only design.md §6.1/§6.2 pseudocode lags shipped reality (already forward-noted in §14.1 row 4 + closed in NEW §15 added by this phase). No `MAJOR_DRIFT` or `OBSOLETE` → `bubbles.docs` auto-invocation NOT triggered (docs phase will run as the next per-scope phase per state machine).
+
+### Per-Artifact Review Matrix
+
+| # | Artifact | Verdict | Drift Findings | Inline Fixes |
+|---|----------|---------|----------------|--------------|
+| 1 | `spec.md` | PASS | None — every Scope 02 FR/NFR (FR-AUTH-004/005/006/007/008/009/010/011/012/013/014/015/016/017/020/021 + NFR-AUTH-001/002/003/004/005/006/007/008) and SCN-AUTH-002..010 + AC-11 maps cleanly to shipped middleware/handler/test surface. | None |
+| 2 | `design.md` | PASS_WITH_FIXES | §6.1/§6.2 pseudocode preserves the original Scope-pre-implement design intent but the shipped middleware uses the post-Scope-01 reconciled `auth.VerifyAndParse(token, opts) (ParsedToken, error)` signature with revocation lookup at the middleware boundary; `auth.SessionSourcePerUser` / `auth.SessionSourceEmpty` enum names referenced in §6.1/§6.2 do not exist (shipped names are `SessionSourcePerUserToken` / `SessionSourceSharedToken` / `SessionSourceBootstrap`). All forward-noted in §14.1 rows 2 + 4. | NEW §15 added: 6 Scope 02 implement adjustments (5-branch middleware on `*Dependencies` receiver / chi-Group drive route wrap with OAuthCallback bypass / environment plumbing via `WithEnvironment` setter / annotations defensive body-key scan / `BearerStore.RevokeToken` 3-outcome refinement with `ErrTokenNotFound` / `auth.UserIDFromContext` helper closing §14.3 deferral) + 2 chaos observations carried forward (OBS-CHAOS-044-S02-01 rate-limit classification / OBS-CHAOS-044-S02-02 sub-millisecond cache convergence) + Scope 03/04 deferred items recorded for downstream traceability (annotation table `actor_source` schema column / `webAuthMiddleware` per-user PASETO / per-user admin allowlist / Scope 01 OBS-AUDIT carry-forward). |
+| 3 | `scopes.md` | PASS_WITH_FIXES | Scope 2 header `Phase:` was `chaos` and `Agent:` was `bubbles.chaos` (stale post-chaos-phase). | Scope 2 header advanced to `Phase: spec-review` / `Agent: bubbles.spec-review`. NEW spec-review DoD bullet appended capturing this phase (matches Scope 01 spec-review bullet pattern). |
+| 4 | `scenario-manifest.json` | PASS | None — all 8 Scope 02 SCN-AUTH `file:` entries (SCN-AUTH-002/003/004/005/007/008/009/010) point to real shipped test functions; SCN-AUTH-002 PWA-path `plannedFile:` and SCN-AUTH-008 Telegram-bridge `plannedFile:` correctly carried forward to Scope 03; SCN-AUTH-011 correctly held back as Scope 04 surface. Verified by `grep -E '^func Test' tests/integration/auth_*_test.go internal/api/router_auth_middleware_test.go internal/api/auth_actor_grep_guard_test.go` against the manifest entries — every named function is present in the shipped source. | None |
+| 5 | `report.md` | PASS | None — all 6 Scope 02 phase evidence sections present with verbatim runner output (Scope 02 Implement Evidence line 1562 + Implement Follow-Up line 1721 + Test Evidence line 1835 + Validation Evidence line 2263 + Audit Evidence line 2683 + Chaos Evidence line 3227); all referenced commits present in git history; OBS-AUDIT-044-S02-01 (state-transition-guard Check 20 grep defect — framework issue, NOT Smackerel) and 2 chaos observations (C2-B01 rate-limit / C2-B02 sub-ms convergence) traceable. | NEW Spec-Review Evidence (Scope 02) section appended (this section). |
+| 6 | `uservalidation.md` | PASS | None — placeholder per design (full AC-1..AC-11 acceptance lands at Scope 04 closure; Scope 02 did not introduce user-facing surface that requires acceptance sign-off). | None |
+| 7 | `state.json` | PASS | None — `status=in_progress`, `currentPhase=spec-review` (advancing to `docs`), `completedScopes=["01"]`, `completedPhaseClaims` includes Scope 02 implement (×2: primary + follow-up) / test / validate / audit / chaos object-form entries; `certifiedCompletedPhases` includes `02:test`, `02:validate`, `02:audit`, `02:chaos`; 1 open `FINALIZE-PREREQ-044-V7-001` transitionRequest carried forward to spec-level finalize (Scope 3 PWA-path test missing — NOT a Scope 02 blocker per validate/audit pass-with-deferred precedent). | Append spec-review entry to `executionHistory` + `02:spec-review` to `certifiedCompletedPhases` + advance `currentPhase` from `spec-review` to `docs`. |
+
+### Drift Findings Catalog
+
+All 4 findings are **artifact-side only** — every divergence is between the design pseudocode and the shipped middleware/verifier signatures. **Zero shipped-code drift detected.** No `route_back_to_implement` transitionRequest opened.
+
+| ID | Severity | Where | Finding | Disposition |
+|----|----------|-------|---------|-------------|
+| **D1** | MINOR | `design.md` §6.1 | Pseudocode shows `auth.VerifyAndParse(token, cfg.Auth, revoker)` while shipped `internal/api/router.go::bearerAuthMiddleware` uses `auth.VerifyAndParse(token, d.AuthVerifyOptions)` followed by separate `d.RevocationCache.IsRevoked(parsed.TokenID)` check at the middleware boundary. | Already forward-noted in §14.1 row 4 ("Session attachment + revocation cache lookup happens at the middleware boundary (Scope 02 work)"). Closed in NEW §15.1 row 2. |
+| **D2** | MINOR | `design.md` §6.2 | Pseudocode shows `func VerifyAndParse(token string, cfg config.AuthConfig, revoker RevocationCache) (*Session, error)` returning `*Session` with revocation logic embedded while shipped `internal/auth/verify.go::VerifyAndParse` returns `(ParsedToken, error)` with no revocation logic. | Already forward-noted in §14.1 row 4. Closed in NEW §15.1 row 2. |
+| **D3** | MINOR | `design.md` §6.1 + §6.2 | Pseudocode references `auth.SessionSourcePerUser` enum constant; shipped enum is `auth.SessionSourcePerUserToken` (string value `"per_user_token"`). | Already forward-noted in §14.1 row 2. Closed in NEW §15.1 row 4. |
+| **D4** | MINOR | `design.md` §6.1 | Pseudocode dev empty-token bypass attaches `&auth.Session{Source: auth.SessionSourceEmpty}`; shipped middleware attaches `auth.Session{Source: auth.SessionSourceSharedToken}` (synthetic SharedToken session by value, not pointer; no `SourceEmpty` enum member exists). | Already forward-noted in §14.1 row 2. Closed in NEW §15.1 row 3. |
+
+### Cross-Artifact Coherence Check
+
+| Coherence Claim | Verdict |
+|-----------------|---------|
+| spec/design/scopes/manifest agree on the 11 SCN-AUTH-NNN scenario IDs and per-scope assignment (Scope 01 owns SCN-AUTH-001/006; Scope 02 owns SCN-AUTH-002/003/004/005/007/008/009/010; Scope 03 owns SCN-AUTH-002 PWA-path + SCN-AUTH-008 Telegram-bridge; Scope 04 owns SCN-AUTH-011) | PASS |
+| Cross-spec MIT closures all reference `closureSpec=specs/044-per-user-bearer-auth`: `specs/040-cloud-photo-libraries/state.json` MIT-040-S-008 + `specs/038-cloud-drives-integration/state.json` MIT-038-S-003 + `specs/027-user-annotations/state.json` MIT-027-TRACE-001-actor-source-segment with `closureSegment=actor-source-defensive-rejection` | PASS |
+| Spec 040/038/027 top-level `status` and `certification.status` fields NOT mutated (correct post-feature-done backlog closure pattern; closures appended to `executionHistory` only) | PASS |
+| G041 hot-path DB-free middleware ordering verified in shipped `internal/api/router.go` line 540 (PASETO verify) precedes line 545 (revocation cache lookup) | PASS |
+| Scope 03/04 remain `Not Started` per audit's G041 canonicalization (preserved); Scope 03 `webAuthMiddleware` per-user PASETO + PWA-path E2E + Telegram-bridge claim-binding NOT yet landed (intentional — outside Scope 02 boundary) | PASS |
+| Open `FINALIZE-PREREQ-044-V7-001` transitionRequest unchanged (`resolutionRequiredBeforePhase: finalize`); 0 new transition requests opened by spec-review phase | PASS |
+
+### Inline Fixes Summary
+
+Three artifact-side fixes applied during this spec-review phase (all surgical, all preserve original design intent):
+
+1. **`scopes.md` Scope 2 header** — advanced `Phase:` from `chaos` to `spec-review` and `Agent:` from `bubbles.chaos` to `bubbles.spec-review`.
+2. **`scopes.md` Scope 2 NEW spec-review DoD bullet** — appended capturing per-artifact review summary + drift findings catalog + cross-artifact coherence check + inline fixes summary + verdict (matches the Scope 01 spec-review bullet pattern at line 293).
+3. **`design.md` NEW §15 "Design Decisions Reconciled During Scope 02 Implement"** — added 4 subsections (15.1 §6 design adjustments table with 6 rows; 15.2 chaos observations OBS-CHAOS-044-S02-01/02; 15.3 helpers/refinements that DID land alongside Scope 02 work — `auth.UserIDFromContext` closing §14.3 / `BearerStore.RevokeToken` 3-outcome refinement / environment plumbing / annotations defensive body-key scan; 15.4 items DEFERRED beyond Scope 02 — annotation table schema column / `webAuthMiddleware` per-user PASETO / per-user admin allowlist / Scope 01 OBS-AUDIT carry-forward).
+
+### Verification Gates
+
+| Gate | Command | Expected | Recorded |
+|------|---------|----------|----------|
+| SR1 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` (post-fix) | exit 0 — `Artifact lint PASSED` (with the same 2 advisory non-blocking warnings tracked from validate/audit/chaos: missing-recommended `reworkQueue`, deprecated `scopeProgress` field — pre-existing spec-wide cleanup, NOT spec-review blockers) | PASS (exit 0) |
+| SR2 | Phase 5 docs auto-invocation check (per spec-review-mode contract) | NOT triggered (trust classification = `MINOR_DRIFT`; auto-invocation only fires on `MAJOR_DRIFT` or `OBSOLETE`) | PASS — docs phase will run as the next per-scope phase per state machine |
+| SR3 | Cross-spec closure shape preserved (no spec 040/038/027 status mutation) | All 3 cross-spec entries verified well-formed; spec 040/038/027 top-level `status` and `certification.status` UNCHANGED | PASS (verified by `grep -rn '"status"' specs/{040,038,027}*/state.json | head -10`) |
+| SR4 | No `route_back_to_implement` transitionRequest opened | All 4 drift findings are artifact-side only; zero shipped-code drift | PASS |
+| SR5 | Test stack state preserved (chaos-phase agent left it up) | Test stack `smackerel-test-{postgres,nats,smackerel-core,smackerel-ml,ollama}-1` Healthy throughout spec-review phase | PASS — left up for the Scope 02 docs-phase agent |
+
+### Spec-Review Verdict — Scope 02
+
+✅ **APPROVED_WITH_ARTIFACT_FIXES** — Trust classification `MINOR_DRIFT`. All 7 artifacts truthfully reflect shipped reality after the 3 surgical artifact-side fixes (scopes.md header advance + scopes.md DoD bullet append + design.md §15 NEW). All 4 drift findings (D1-D4) closed inline. Cross-spec MIT closures verified well-formed. `bubbles.docs` auto-invocation NOT triggered (per spec-review-mode contract — `MINOR_DRIFT` does not auto-invoke). `FINALIZE-PREREQ-044-V7-001` transitionRequest carried forward unchanged. Test stack left up for the Scope 02 docs-phase agent. Phase advances to `docs`.
+
+**Claim Source:** executed.
