@@ -80,6 +80,22 @@ input:focus { border-color: var(--primary); }
   border-radius: 4px;
 }
 
+/* Spec 044 Scope 03 — Per-user PASETO setup hint shown under the
+   Auth Token input. Compact + low-emphasis so it does not crowd the
+   primary controls but is always visible during setup. */
+.help-text {
+  font-size: 11px;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.help-text code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* Buttons */
 .btn {
   border: none;

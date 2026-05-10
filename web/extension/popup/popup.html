@@ -22,7 +22,15 @@
 
     <div class="form-group">
       <label for="auth-token">Auth Token</label>
-      <input type="password" id="auth-token" placeholder="Paste your auth token" autocomplete="off">
+      <input type="password" id="auth-token" placeholder="Paste per-user PASETO or shared dev token" autocomplete="off">
+      <div class="help-text">
+        <strong>Per-user PASETO (production):</strong> issue with
+        <code>./smackerel.sh auth enroll &lt;user_id&gt;</code>; paste the
+        wire token shown once. <strong>Shared dev token:</strong> the value
+        of <code>SMACKEREL_AUTH_TOKEN</code>. Either format works — the
+        extension forwards it verbatim as
+        <code>Authorization: Bearer &lt;token&gt;</code>.
+      </div>
     </div>
 
     <button id="test-btn" class="btn primary">Test Connection</button>

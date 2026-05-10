@@ -6,6 +6,28 @@
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Spec 044 Scope 03 — Auth token storage contract.
+//
+// `authToken` in chrome.storage.local is the bearer the extension
+// attaches verbatim as `Authorization: Bearer <token>` on every
+// outbound request. Two formats are supported transparently — the
+// extension does NOT parse or interpret the value:
+//
+//   1. **Per-user PASETO v4.public** (production) — issued by
+//      `./smackerel.sh auth enroll <user_id>`. The Go core verifies
+//      the signature, attaches `auth.Session{UserID: <enrolled>}`,
+//      and downstream handlers derive `actor_id` from that session.
+//      The wire token is shown ONCE during enrollment; the operator
+//      pastes it into the extension setup screen.
+//
+//   2. **Shared dev token** (development / test) — the value of
+//      `SMACKEREL_AUTH_TOKEN`. The Go core falls back to constant-time
+//      shared-token compare in non-production environments.
+//
+// The extension does not need to know which format it holds; the
+// header shape is identical and the server picks the validation
+// branch. To rotate, the operator pastes a fresh token into the setup
+// screen and re-saves; the popup overwrites `authToken` atomically.
 function getConfig() {
   return new Promise(function(resolve) {
     chrome.storage.local.get(['serverUrl', 'authToken'], function(data) {
