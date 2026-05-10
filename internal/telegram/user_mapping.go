@@ -10,14 +10,14 @@
 //
 // This file adds:
 //
-//   1. Config.UserMapping (chat_id → user_id) — populated from
-//      TELEGRAM_USER_MAPPING env var (config/smackerel.yaml SST).
-//   2. Bot.Environment — production | development | test.
-//   3. Bot.resolveActorUserID(chatID) — the entry-point lookup.
-//      In production, an unmapped chat MUST be refused (the bot
-//      drops the message with a slog.Warn). In dev/test, an empty
-//      string is acceptable so the existing dev workflow is not
-//      disrupted.
+//  1. Config.UserMapping (chat_id → user_id) — populated from
+//     TELEGRAM_USER_MAPPING env var (config/smackerel.yaml SST).
+//  2. Bot.Environment — production | development | test.
+//  3. Bot.resolveActorUserID(chatID) — the entry-point lookup.
+//     In production, an unmapped chat MUST be refused (the bot
+//     drops the message with a slog.Warn). In dev/test, an empty
+//     string is acceptable so the existing dev workflow is not
+//     disrupted.
 //
 // Wiring (cmd/core/wiring.go) MUST pass cfg.Environment +
 // cfg.TelegramUserMapping into telegram.NewBot.

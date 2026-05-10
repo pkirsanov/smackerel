@@ -19,10 +19,10 @@
 // claiming a different actor_id never reaches the persisted artifact
 // because:
 //
-//   1. The chat → user lookup is done by `Bot.resolveActorUserID` on
-//      the chat ID alone (no body field is consulted).
-//   2. The annotation handler defensively rejects body `actor_source`
-//      / `actor_id` smuggling in production (Scope 02 work).
+//  1. The chat → user lookup is done by `Bot.resolveActorUserID` on
+//     the chat ID alone (no body field is consulted).
+//  2. The annotation handler defensively rejects body `actor_source`
+//     / `actor_id` smuggling in production (Scope 02 work).
 //
 // The minter is intentionally minimal:
 //

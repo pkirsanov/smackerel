@@ -445,19 +445,19 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 // extractBearerToken extracts the token used for bearer authentication.
 //
 // Lookup order:
-//   1. Authorization header ("Authorization: Bearer <token>"). When the
-//      header is present but malformed (missing scheme, wrong scheme,
-//      empty token), the function returns "" without falling back to
-//      the cookie — a malformed header is a client bug that must be
-//      surfaced as a 401, not silently masked by the cookie.
-//   2. Spec 044 Scope 03 — auth_token cookie fallback. The PWA POSTs
-//      to /v1/web/login with a per-user PASETO (or shared dev token);
-//      the login handler sets an HttpOnly+SameSite=Lax cookie
-//      (Secure in production). Subsequent same-origin requests carry
-//      the cookie automatically; bearerAuthMiddleware uses the cookie
-//      value as the bearer token when no Authorization header is
-//      present, so the PWA does not have to attach Authorization
-//      headers to every fetch().
+//  1. Authorization header ("Authorization: Bearer <token>"). When the
+//     header is present but malformed (missing scheme, wrong scheme,
+//     empty token), the function returns "" without falling back to
+//     the cookie — a malformed header is a client bug that must be
+//     surfaced as a 401, not silently masked by the cookie.
+//  2. Spec 044 Scope 03 — auth_token cookie fallback. The PWA POSTs
+//     to /v1/web/login with a per-user PASETO (or shared dev token);
+//     the login handler sets an HttpOnly+SameSite=Lax cookie
+//     (Secure in production). Subsequent same-origin requests carry
+//     the cookie automatically; bearerAuthMiddleware uses the cookie
+//     value as the bearer token when no Authorization header is
+//     present, so the PWA does not have to attach Authorization
+//     headers to every fetch().
 func extractBearerToken(r *http.Request) string {
 	if header := r.Header.Get("Authorization"); header != "" {
 		parts := strings.SplitN(header, " ", 2)
