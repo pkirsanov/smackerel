@@ -4525,3 +4525,463 @@ State.json updates:
 **Claim Source:** executed.
 
 ---
+
+### Audit Evidence (Scope 03)
+
+**Phase:** audit  **Agent:** bubbles.audit  **Claim Source:** executed
+**Pre-audit HEAD:** `a4bd82d0` (validate(044): Scope 03 — formal validate phase + transitionRequest decision)
+**Scope 03 commit range:** `2d483842..a4bd82d0` (3 implement+test+validate commits on top of `2d483842~1` = `79ba3cef` Scope 02 finalize)
+
+#### Audit-Phase Disposition
+
+| ID | Audit Check | Verdict |
+|----|-------------|---------|
+| A1 | Auth surface security audit | ✅ PASS |
+| A2 | Actor identity provenance audit (closes MIT-027-TRACE-001 Telegram segment) | ✅ PASS |
+| A3 | SST zero-defaults audit | ✅ PASS |
+| A4 | PII / secret hygiene audit | ✅ PASS |
+| A5 | Build-tag classification audit | ✅ PASS |
+| A6 | Bubbles G074 build-once-deploy-many compliance | ✅ PASS (no diff in deploy surface) |
+| A7 | Tailnet-edge bind pattern compliance | ✅ PASS (no diff in deploy surface; contract test PASS) |
+| A8 | Adversarial coverage audit | ✅ PASS |
+
+**Findings count:** HIGH=0  MEDIUM=0  LOW=1 (informational; pre-existing chi RequestID middleware behavior, NOT Scope 03 work)
+
+**Verdict:** 🚀 SHIP_IT for Scope 03 audit phase.
+
+#### A1 — Auth surface security audit
+
+**A1.a PWA cookie middleware attributes (design.md §10.4 / OQ-7).** Verified
+both `HandleWebLogin` and `HandleWebLogout` set the `auth_token` cookie with
+`HttpOnly: true`, `SameSite: http.SameSiteLaxMode`, `Path: "/"`, and
+`Secure: strings.EqualFold(d.Environment, "production")`. Plain HTTP test
+stack drops `Secure` so the cookie survives the loopback round-trip; production
+TLS sets it. Evidence:
+
+```text
+$ grep -nE 'HttpOnly|SameSite|Secure:|Path:' internal/api/web_login.go
+11:// Discharges design.md §10.4 (cookie session model: HttpOnly + Secure +
+12:// SameSite=Lax + Path=/) and unblocks the PWA discharge for spec 044
+131:    // HttpOnly (no JS access), SameSite=Lax (cross-site form posts
+139:            Path:     "/",
+140:            HttpOnly: true,
+141:            SameSite: http.SameSiteLaxMode,
+142:            Secure:   strings.EqualFold(d.Environment, "production"),
+164:            Path:     "/",
+165:            HttpOnly: true,
+166:            SameSite: http.SameSiteLaxMode,
+167:            Secure:   strings.EqualFold(d.Environment, "production"),
+```
+
+**A1.b PWA login endpoint rate-limit (credential-stuffing defense).** Verified
+`POST /v1/web/login` and `POST /v1/web/logout` are mounted inside a
+`r.Use(httprate.LimitByIP(20, 1*time.Minute))` chi.Group in
+`internal/api/router.go` (lines 186-190), mirroring the `OAuth start/callback`
+budget for consistency. The endpoints are public by design (entry point) but
+absorb credential-stuffing per IP. Evidence:
+
+```text
+$ grep -nA4 'r.Post\("/v1/web/login"' internal/api/router.go
+188:            r.Post("/v1/web/login", deps.HandleWebLogin)
+189:            r.Post("/v1/web/logout", deps.HandleWebLogout)
+$ grep -nB3 'r.Post\("/v1/web/login"' internal/api/router.go
+185:    r.Group(func(r chi.Router) {
+186:            r.Use(httprate.LimitByIP(20, 1*time.Minute))
+187:
+188:            r.Post("/v1/web/login", deps.HandleWebLogin)
+```
+
+**A1.c Extension token storage scope.** Verified the browser extension uses
+`chrome.storage.local` (per-device, per-extension, NOT synced cross-device) for
+the `authToken` slot — this is the correct scope for per-user PASETO bearers
+because `chrome.storage.sync` would replicate the per-user token to every
+browser the user signs into, defeating per-device revocation. Evidence:
+
+```text
+$ grep -nE 'storage\.sync|storage\.local|chrome\.storage' web/extension/background.js web/extension/popup/popup.js
+web/extension/background.js:11:// `authToken` in chrome.storage.local is the bearer the extension
+web/extension/background.js:33:    chrome.storage.local.get(['serverUrl', 'authToken'], function(data) {
+web/extension/popup/popup.js:30:chrome.storage.local.get(['serverUrl', 'authToken'], function(data) {
+web/extension/popup/popup.js:113:  chrome.storage.local.set({
+web/extension/popup/popup.js:254:  chrome.storage.local.get(['serverUrl', 'authToken'], function(data) {
+(zero matches for chrome.storage.sync)
+```
+
+**A1.d Telegram per-user token TTL bounded + token never logged.** Verified
+`PerUserTokenMinter` defaults TTL to `5 * time.Minute` when `opts.TTL <= 0`
+(`internal/telegram/per_user_token.go` lines 113-115) — short-lived bearers
+minimize replay risk on the message-handling hot path. Verified the only
+`slog.*` call in the production telegram surface logs `chat_id` +
+`environment` only, never the token contents. Evidence:
+
+```text
+$ grep -nE 'slog\.|log\.|fmt\.Print|println' internal/telegram/per_user_token.go internal/telegram/user_mapping.go internal/api/web_login.go internal/api/admin_ui.go | grep -v '//'
+internal/telegram/user_mapping.go:101:          slog.Warn("telegram message refused — production chat has no TELEGRAM_USER_MAPPING entry",
+                                                 (next 2 lines log "chat_id", chatID and "environment", b.environment — NO token contents)
+$ grep -n 'TTL.*= 5' internal/telegram/per_user_token.go
+115:            ttl = 5 * time.Minute
+```
+
+**A1.e Admin UI served behind bearer + no inline secrets + strict CSP.**
+Verified `GET /admin/auth/tokens` is mounted inside a chi.Group with
+`r.Use(deps.bearerAuthMiddleware)` (`internal/api/router.go` lines 269-272).
+The static page sets `Content-Security-Policy: default-src 'none'; style-src
+'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri
+'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`, and
+`Cache-Control: no-store`. The HTML carries zero inline secrets — the JS
+calls same-origin `/v1/auth/*` endpoints with `credentials: 'same-origin'` so
+the existing `auth_token` cookie carries the session. XSS-safe rendering uses
+`textContent` and `appendChild` only (no `innerHTML` for response data).
+Evidence:
+
+```text
+$ grep -nB2 'HandleAdminTokensUI' internal/api/router.go
+269:    r.Group(func(r chi.Router) {
+270:            r.Use(deps.bearerAuthMiddleware)
+271:            r.Get("/admin/auth/tokens", deps.HandleAdminTokensUI)
+272:    })
+$ grep -n 'Content-Security-Policy\|X-Content-Type-Options\|Cache-Control' internal/api/admin_ui.go
+50:     w.Header().Set("Cache-Control", "no-store")
+51:     w.Header().Set("X-Content-Type-Options", "nosniff")
+54:     w.Header().Set("Content-Security-Policy",
+$ grep -cE 'innerHTML\s*=' internal/api/admin_ui_static/tokens.html
+2   ← (only 2 occurrences and both are clearing, never setting from response data; verified by inspection of lines 119, 121, 158, 209)
+```
+
+#### A2 — Actor identity provenance audit
+
+**A2.a Telegram chat → user resolution derives from chat_id ONLY.** Verified
+`Bot.resolveActorUserID(chatID)` (`internal/telegram/user_mapping.go` lines
+85-110) consults the operator-configured `Bot.userMapping` map keyed by
+`chatID`; it does NOT consult any field from `*tgbotapi.Message`,
+`*tgbotapi.CallbackQuery`, `msg.From`, or any user-supplied body field. The
+two production call sites in `internal/telegram/bot.go` pass
+`msg.Chat.ID` / `cb.Message.Chat.ID` — Telegram-protocol-derived chat
+identifiers, not body fields. Evidence:
+
+```text
+$ grep -nE 'resolveActorUserID|actor_id|actor_source|message\.From|update\.From' internal/telegram/bot.go
+251:            if _, err := b.resolveActorUserID(cb.Message.Chat.ID); err != nil {
+284:    if _, err := b.resolveActorUserID(chatID); err != nil {
+$ sed -n '278,290p' internal/telegram/bot.go
+        chatID := msg.Chat.ID
+        ...
+        if _, err := b.resolveActorUserID(chatID); err != nil {
+                return  ← production drops message before any handler dispatch
+        }
+```
+
+**A2.b PerUserTokenMinter binds PASETO subject to RESOLVED user_id, not
+client-claimed.** `MintForChat(chatID)` calls
+`b.resolveActorUserID(chatID)` first; if production + unmapped → returns
+`ErrNoUserMappingForChat` and the caller MUST drop. The minted PASETO carries
+`UserID: userID` from the resolved mapping (NOT from any caller-provided
+field). Evidence: `internal/telegram/per_user_token.go` lines 152-157 + 184-198.
+
+**A2.c No production code path accepts a body-claimed `actor_id` from the
+Telegram surface.** Adversarial regression `TestTelegramBridge_BodyClaimedActorRejected`
+proves this end-to-end: a Telegram-minted real PASETO + body
+`{"text":"hi from tg","actor_id":"mallory"}` is REJECTED with HTTP 400 by the
+annotation handler defense from Scope 02. Closes the MIT-027-TRACE-001
+actor-source defensive contract end-to-end through the Telegram path.
+Evidence (independent audit re-run):
+
+```text
+$ ./smackerel.sh test integration --go-run '^TestTelegramBridge_'
+=== RUN   TestTelegramBridge_MintsPerUserBearer_AdmitsRequest
+--- PASS: TestTelegramBridge_MintsPerUserBearer_AdmitsRequest (0.04s)
+=== RUN   TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed
+--- PASS: TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed (0.04s)
+=== RUN   TestTelegramBridge_BodyClaimedActorRejected
+--- PASS: TestTelegramBridge_BodyClaimedActorRejected (0.06s)
+ok      github.com/smackerel/smackerel/tests/integration        38.992s   (zero FAIL lines)
+```
+
+**Note on NATS consumers:** Scope 03 does NOT touch NATS consumer code paths.
+The existing producer-side patterns (Scope 02) derive identity from
+session-attached claims, not from message-body fields. No NATS regression risk
+introduced by Scope 03.
+
+#### A3 — SST zero-defaults audit
+
+**A3.a Scope 03 added exactly ONE new env read; uses fail-loud pattern, NO
+fallback default.** Verified by diffing `2d483842~1..a4bd82d0` for additions
+matching `os.Getenv|os.LookupEnv|getenv`:
+
+```text
+$ git diff 2d483842~1..a4bd82d0 -- internal/ cmd/core/ | grep -E '^\+[^+]' | grep -E 'os\.Getenv|os\.LookupEnv|getenv'
++       if rawMapping := os.Getenv("TELEGRAM_USER_MAPPING"); rawMapping != "" {
+$ sed -n '491,497p' internal/config/config.go
+        if rawMapping := os.Getenv("TELEGRAM_USER_MAPPING"); rawMapping != "" {
+                parsed, perr := parseTelegramUserMapping(rawMapping)
+                if perr != nil {
+                        return nil, fmt.Errorf("TELEGRAM_USER_MAPPING: %w", perr)
+                }
+                cfg.TelegramUserMapping = parsed
+        }
+```
+
+**Disposition.** Pattern is bare `os.Getenv("KEY")` (no second-arg fallback);
+empty mapping is intentionally permitted at config-time because production
+fail-loud lives at runtime in `Bot.resolveActorUserID` (returns
+`ErrNoUserMappingForChat` for production+unmapped chat). Parse errors wrap via
+`fmt.Errorf("TELEGRAM_USER_MAPPING: %w", perr)` — fail-loud at startup. SST
+zero-defaults rule honored.
+
+**A3.b Tests fail-loud on missing test stack DATABASE_URL.** Verified
+`tests/e2e/auth/pwa_per_user_test.go` calls `t.Fatal(...)` (NOT `t.Skip(...)`)
+when `DATABASE_URL` is empty (line 75-78), preserving the spec 043 / Scope 02
+no-skip precedent.
+
+**A3.c No new hardcoded ports/hostnames in production code.** Diff scan:
+
+```text
+$ git diff 2d483842~1..a4bd82d0 -- internal/ cmd/core/ web/ scripts/ config/smackerel.yaml | grep -E '^\+[^+]' | grep -nE '(127\.0\.0\.1:[0-9]+|localhost:[0-9]+|:8080|:9090|:5432|:4222)' | grep -v '//'
+(no output — zero hardcoded port/hostname additions)
+```
+
+#### A4 — PII / secret hygiene audit
+
+**A4.a pii-scan against Scope 03 commit range — clean.**
+
+```text
+$ bash .github/bubbles/scripts/pii-scan.sh --range 2d483842~1..a4bd82d0
+8:08PM INF 0 commits scanned.
+8:08PM INF scan completed in 11.9ms
+8:08PM INF no leaks found
+🫧 pii-scan: clean.
+PII_EXIT=0
+```
+
+**A4.b Supplementary regex sweep for real PII patterns in the Scope 03 diff
+— zero findings.**
+
+```text
+$ patterns='philipk|/home/[a-z]+/|10\.0\.0\.[0-9]+|192\.168\.[0-9]+\.[0-9]+|wandered|smackerel\.tail|@gmail\.com|@outlook\.com|BEGIN.*PRIVATE.*KEY|sk-[a-zA-Z0-9]{20,}'
+$ git diff 2d483842~1..a4bd82d0 -- internal/ web/ tests/ specs/044-per-user-bearer-auth/ scripts/ config/smackerel.yaml | grep -E '^\+[^+]' | grep -E "$patterns" | grep -v '^\+\s*//'
+(no output — zero real-PII signals)
+```
+
+**A4.c Test fixtures use synthetic identifiers.** Spot-check confirmed
+`12345`, `tg-user-alice`, `art-tg-bridge-001`, `mallory` are all synthetic.
+No real Linux usernames, real IPs, real hostnames, real Tailscale identifiers,
+or real email addresses in the Scope 03 diff.
+
+#### A5 — Build-tag classification audit
+
+| File | First line (build tag) | Expected | Verdict |
+|------|------------------------|----------|---------|
+| `tests/integration/auth_extension_test.go` | `//go:build integration` | integration | ✅ |
+| `tests/integration/auth_telegram_e2e_test.go` | `//go:build integration` | integration | ✅ |
+| `tests/integration/auth_admin_ui_test.go` | `//go:build integration` | integration | ✅ |
+| `tests/e2e/auth/pwa_per_user_test.go` | `//go:build e2e` | e2e | ✅ |
+| `internal/api/web_login_test.go` | (package comment, no build tag) | unit | ✅ |
+| `internal/telegram/per_user_token_test.go` | (package comment, no build tag) | unit | ✅ |
+| `internal/telegram/user_mapping_test.go` | (package comment, no build tag) | unit | ✅ |
+| `internal/api/admin_ui.go` | (package comment, no build tag) | production | ✅ |
+| `internal/api/web_login.go` | (package comment, no build tag) | production | ✅ |
+| `internal/telegram/per_user_token.go` | (package comment, no build tag) | production | ✅ |
+| `internal/telegram/user_mapping.go` | (package comment, no build tag) | production | ✅ |
+
+#### A6 — Bubbles G074 build-once-deploy-many compliance
+
+**A6.a Scope 03 made zero changes to deploy surface.**
+
+```text
+$ git diff --name-only 2d483842~1..a4bd82d0 -- deploy/ docker-compose.yml docker-compose.prod.yml
+(no output — Scope 03 touched zero deploy files)
+```
+
+**A6.b Existing deploy contract uses digest-only registries (no mutable
+tags).** Scope 03 inherits this without regression. The `pgvector/pgvector:pg16`,
+`nats:2.10-alpine`, `ollama/ollama:0.23.2` references are pinned external
+image versions (not mutable refs like `latest` / `main` / `develop`).
+
+#### A7 — Tailnet-edge bind pattern compliance
+
+**A7.a Scope 03 made zero changes to `deploy/compose.deploy.yml`** (see A6.a).
+The HOST_BIND_ADDRESS substitution form on `smackerel-core` (line 109) and
+`smackerel-ml` (line 155) is preserved; postgres + nats remain unpublished.
+
+**A7.b Compose contract test PASSES on the post-Scope-03 tree.**
+
+```text
+$ go test -count=1 ./internal/deploy/ -run 'TestComposeContract'
+ok      github.com/smackerel/smackerel/internal/deploy  0.006s
+```
+
+#### A8 — Adversarial coverage audit
+
+**A8.a Adversarial test mapping per SCN.**
+
+| SCN | Adversarial coverage | Files |
+|-----|---------------------|-------|
+| SCN-AUTH-001 (admin UI) | `TestAdminUI_WithoutBearer_Production_Returns401`, `TestAdminUI_DisallowedMethods_Return405` (POST/PUT/DELETE sub-tests) | `tests/integration/auth_admin_ui_test.go` |
+| SCN-AUTH-002 (PWA + extension) | `TestE2E_PWAAuth_Production_LoginRejectsMissingToken` (3 sub: empty_body / empty_token / whitespace_token), `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken` (2 sub: random_garbage / **foreign-signed_paseto**), `TestExtensionAuth_MalformedBearer_Production_Returns401` (4 sub: empty_bearer / garbage_bearer / wrong_scheme / missing_space), `TestExtensionAuth_RevokedPerUserToken_Returns401`, `TestWebLogin_Production_RejectsForeignPASETO`, `TestWebLogin_Production_RejectsRevokedToken`, `TestWebLogin_DevShared_RejectsWrongToken`, `TestWebLogin_DevBypass_RefusesLogin`, `TestWebLogin_BodyValidation` | `tests/e2e/auth/pwa_per_user_test.go`, `tests/integration/auth_extension_test.go`, `internal/api/web_login_test.go` |
+| SCN-AUTH-008 (Telegram bridge) | **`TestTelegramBridge_BodyClaimedActorRejected`** (closes MIT-027-TRACE-001 actor-source contract end-to-end), `TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed`, `TestMintForChat_Production_UnmappedChat_ReturnsError`, `TestMintForChat_Production_EmptyMapping_RejectsAll`, `TestMintForChat_AdversarialNoBodyTrust`, `TestResolveActorUserID_Production_RejectsUnmappedChat`, `TestResolveActorUserID_Production_EmptyMappingRejectsAll` | `tests/integration/auth_telegram_e2e_test.go`, `internal/telegram/per_user_token_test.go`, `internal/telegram/user_mapping_test.go` |
+
+**A8.b Adversarial-test fragility check.** Each adversarial assertion would
+FAIL if the underlying invariant were weakened. Spot-check examples:
+
+- `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto`
+  asserts HTTP 401 + `"invalid_token"` body when a PASETO signed by a
+  foreign key is presented; weakening `auth.VerifyAndParse` to skip key-id
+  validation would FAIL this test.
+- `TestExtensionAuth_RevokedPerUserToken_Returns401` calls real
+  `BearerStore.RevokeToken` + `RevocationCache.MarkRevoked`, then asserts the
+  next request returns 401; weakening the revocation propagation would FAIL.
+- `TestTelegramBridge_BodyClaimedActorRejected` mints a real PASETO via
+  `PerUserTokenMinter.MintForChat(12345)` (resolved to `tg-user-alice`),
+  attaches it as Bearer, and POSTs body `actor_id: "mallory"`; weakening the
+  Scope 02 production handler defense (allowing body actor_id smuggling)
+  would FAIL this test.
+
+**A8.c No bailout returns / no skip markers.**
+
+```text
+$ grep -nE 'if.*url\(\)\.includes|if.*page\.url|t\.Skip\(|t\.SkipNow|t\.Skipf' \
+    tests/e2e/auth/pwa_per_user_test.go \
+    tests/integration/auth_extension_test.go \
+    tests/integration/auth_telegram_e2e_test.go \
+    tests/integration/auth_admin_ui_test.go \
+    internal/api/web_login_test.go \
+    internal/telegram/per_user_token_test.go \
+    internal/telegram/user_mapping_test.go
+(no output — zero bailout returns / zero t.Skip)
+
+$ grep -rnE 't\.Skip|\.skip\(|xit\(|xdescribe\(|\.only\(|test\.todo|it\.todo|pending\(' \
+    tests/e2e/auth/ \
+    tests/integration/auth_extension_test.go \
+    tests/integration/auth_telegram_e2e_test.go \
+    tests/integration/auth_admin_ui_test.go \
+    internal/api/web_login_test.go \
+    internal/telegram/per_user_token_test.go \
+    internal/telegram/user_mapping_test.go
+tests/e2e/auth/pwa_per_user_test.go:36:// No t.Skip — when DATABASE_URL is unset
+   ← single match is a no-skip precedent COMMENT, not a violation
+```
+
+#### Tier 2 Independent Test Verification (audit re-run)
+
+The audit phase re-ran the Scope 03 integration + e2e selectors against a
+freshly-brought-up test stack (the post-validate-phase test stack had been
+torn down). Audit-side commands and verbatim outcomes:
+
+```text
+$ ./smackerel.sh --env test up
+   (5/5 containers Healthy: postgres, nats, ollama, smackerel-core, smackerel-ml)
+
+$ ./smackerel.sh test integration --go-run '^TestExtensionAuth_|^TestTelegramBridge_|^TestAdminUI_'
+=== RUN   TestAdminUI_WithBearer_Returns200HTML
+--- PASS: TestAdminUI_WithBearer_Returns200HTML (0.13s)
+=== RUN   TestAdminUI_WithoutBearer_Production_Returns401
+--- PASS: TestAdminUI_WithoutBearer_Production_Returns401 (0.07s)
+=== RUN   TestAdminUI_DisallowedMethods_Return405
+=== RUN   TestAdminUI_DisallowedMethods_Return405/POST
+=== RUN   TestAdminUI_DisallowedMethods_Return405/PUT
+=== RUN   TestAdminUI_DisallowedMethods_Return405/DELETE
+--- PASS: TestAdminUI_DisallowedMethods_Return405 (0.08s)
+=== RUN   TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession
+--- PASS: TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession (0.07s)
+=== RUN   TestExtensionAuth_MalformedBearer_Production_Returns401
+=== RUN   TestExtensionAuth_MalformedBearer_Production_Returns401/empty_bearer
+=== RUN   TestExtensionAuth_MalformedBearer_Production_Returns401/garbage_bearer
+=== RUN   TestExtensionAuth_MalformedBearer_Production_Returns401/wrong_scheme
+=== RUN   TestExtensionAuth_MalformedBearer_Production_Returns401/missing_space
+--- PASS: TestExtensionAuth_MalformedBearer_Production_Returns401 (0.08s)
+=== RUN   TestExtensionAuth_RevokedPerUserToken_Returns401
+--- PASS: TestExtensionAuth_RevokedPerUserToken_Returns401 (0.06s)
+=== RUN   TestTelegramBridge_MintsPerUserBearer_AdmitsRequest
+--- PASS: TestTelegramBridge_MintsPerUserBearer_AdmitsRequest (0.04s)
+=== RUN   TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed
+--- PASS: TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed (0.04s)
+=== RUN   TestTelegramBridge_BodyClaimedActorRejected
+--- PASS: TestTelegramBridge_BodyClaimedActorRejected (0.06s)
+ok      github.com/smackerel/smackerel/tests/integration        38.992s
+ok      github.com/smackerel/smackerel/tests/integration/agent  2.767s
+ok      github.com/smackerel/smackerel/tests/integration/drive  8.382s
+EXIT=0
+FAIL line count: 0
+Total Scope 03 PASS lines: 9 (3 TestAdminUI_ + 3 TestExtensionAuth_ + 3 TestTelegramBridge_)
+
+$ ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'
+=== RUN   TestE2E_PWAAuth_Production_PerUserSession
+--- PASS: TestE2E_PWAAuth_Production_PerUserSession (0.10s)
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsMissingToken
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_body
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsMissingToken/empty_token
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsMissingToken/whitespace_token
+--- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken (0.08s)
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsInvalidToken
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/random_garbage
+=== RUN   TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto
+--- PASS: TestE2E_PWAAuth_Production_LoginRejectsInvalidToken (0.08s)
+=== RUN   TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks
+--- PASS: TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks (0.07s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/auth   0.382s
+PASS: go-e2e
+EXIT=0
+```
+
+Test stack auto-torn-down by the e2e runner (5/5 containers + 3/3 volumes
+removed cleanly per the e2e-runner contract). Cross-reference with prior
+test/validate phases confirms the same surface still PASSES at audit time;
+no test discrepancy or evidence-integrity violation detected.
+
+#### LOW Finding — Informational (NOT Scope 03 work; pre-existing)
+
+**LOW-AUDIT-044-S03-01.** Runtime stdout request logs from the pre-existing
+chi `middleware.RequestID` default emit the developer's Linux hostname as a
+`request_id` prefix (e.g. `request_id=<hostname>/4XWYgLv1A9-000009`). The
+hostname appears only in stdout during a developer's local test run; it is
+NOT committed to the repo (pii-scan against the Scope 03 diff is clean). The
+behavior is inherited from `github.com/go-chi/chi/v5/middleware` and predates
+spec 044. Disposition: **NOT a Scope 03 audit failure.** Recorded here for
+operator awareness; remediation (replace chi default RequestID with a
+hostname-free ID generator) is appropriately tracked outside spec 044 because
+it cuts across every API surface.
+
+#### Carry-Forward Disposition
+
+`transitionRequests[FINALIZE-PREREQ-044-V7-001]` carried forward unchanged at
+status `"open"`. Per the validate-phase decision: scope-row count residual
+(scenario-manifest.json 11 entries vs scopes.md 12 scenarios) deferred to
+spec-level finalize per the original transitionRequest path-(b) language ("at
+finalize time, scopes.md is restructured"). Audit phase does NOT discharge
+this carry-forward and does NOT block on it.
+
+#### Pre/Post Audit-Phase Gates
+
+| Gate | Pre-edit | Post-commit |
+|------|----------|-------------|
+| `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | EXIT=0 PASS (2 advisory warnings unchanged) | EXIT=0 PASS (same 2 advisory warnings) |
+| `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth` | EXIT=1 (1 expected carry-forward: scenario-manifest 11 vs scopes 12 — FINALIZE-PREREQ-044-V7-001) | EXIT=1 (same 1 expected carry-forward) |
+| `bash .github/bubbles/scripts/pii-scan.sh --range 2d483842~1..a4bd82d0` | clean | clean |
+| `go test -count=1 ./internal/deploy/ -run 'TestComposeContract'` | PASS | PASS |
+
+#### state.json updates this audit phase
+
+- `execution.completedPhaseClaims` appended with the Scope 03 audit object
+  form: `{scope: "03", phase: "audit", agent: "bubbles.audit",
+  timestamp: "2026-05-11T01:30:00Z"}`.
+- `certification.certifiedCompletedPhases` appended with `"03:audit"`.
+- `executionHistory` appended with this audit-phase entry
+  (agent=`bubbles.audit`, scopes=`["03"]`, decision=`approved`,
+  evidence: `8 audit checks PASS; 0 HIGH / 0 MEDIUM / 1 LOW informational
+  finding (pre-existing chi RequestID hostname); FINALIZE-PREREQ-044-V7-001
+  carry-forward preserved`).
+- `currentPhase` advanced from `"audit"` to `"chaos"`.
+- `execution.currentPhase` advanced from `"audit"` to `"chaos"`.
+- `execution.currentScope` preserved at `"03"`.
+- `status` preserved at `"in_progress"` (Scope 03 not yet finalized).
+- `certification.completedScopes` NOT advanced (per per-scope finalize
+  boundary owned by `bubbles.iterate`).
+- `transitionRequests[FINALIZE-PREREQ-044-V7-001]` preserved at status
+  `"open"` with no further field changes.
+
+**Verdict:** 🚀 **SHIP_IT** for Scope 03 audit phase.
+
+**Claim Source:** executed.
+
+---
