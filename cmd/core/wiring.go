@@ -11,6 +11,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/config"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	"github.com/smackerel/smackerel/internal/drive"
@@ -55,6 +56,24 @@ func configureLogging(cfg *config.Config) error {
 			return fmt.Errorf("config: SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
 		}
 		slog.Warn("SMACKEREL_AUTH_TOKEN is empty — auth bypassed (dev-mode)", "environment", cfg.Environment)
+	}
+
+	// Spec 044 — Per-user bearer auth foundation. When AUTH_ENABLED=true
+	// the runtime MUST refuse to start in production with empty signing
+	// material, an empty at-rest hashing key, or a hashing key that
+	// equals the signing key (OQ-8). config.Load already validates
+	// these cases at the loader boundary; this check is defense-in-
+	// depth so a bug in the loader cannot silently let a misconfigured
+	// production runtime serve traffic. Delegated to
+	// auth.ValidateRuntimeAuthStartup so the contract is unit-testable
+	// from outside cmd/core.
+	if err := auth.ValidateRuntimeAuthStartup(cfg.Environment, auth.RuntimeAuthConfig{
+		Enabled:                 cfg.Auth.Enabled,
+		SigningActivePrivateKey: cfg.Auth.SigningActivePrivateKey,
+		SigningActiveKeyID:      cfg.Auth.SigningActiveKeyID,
+		AtRestHashingKey:        cfg.Auth.AtRestHashingKey,
+	}); err != nil {
+		return fmt.Errorf("config: %w", err)
 	}
 	return nil
 }

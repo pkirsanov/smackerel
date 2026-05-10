@@ -31,6 +31,13 @@ func main() {
 		defer cancel()
 		os.Exit(runAgentCommand(ctx, os.Args[2:]))
 	}
+	// Spec 044 Scope 01 — `smackerel auth <subcommand>` operator surface
+	// (enroll | rotate | revoke | list-users | bootstrap | keygen).
+	if len(os.Args) > 1 && os.Args[1] == "auth" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runAuthCommand(ctx, os.Args[2:]))
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
 		os.Exit(1)

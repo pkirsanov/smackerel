@@ -447,6 +447,69 @@ observability:
   otel_enabled: false # Opt-in OpenTelemetry trace propagation (zero overhead when disabled)
   otel_exporter_endpoint: "" # OTLP gRPC endpoint (e.g. http://localhost:4317)
 
+# Spec 044 — Per-User Bearer Auth Foundation. SST zero-defaults: every key is
+# REQUIRED at the generator boundary. Secret-bearing fields are empty-string
+# placeholders here (dev/test fall back to runtime.auth_token shared-token
+# semantics); production deployments MUST populate signing material, the
+# at-rest hashing key, and (on a fresh install with zero enrolled users) the
+# bootstrap token before the runtime starts. The Go core fails loud on
+# startup if any required production-mode value is missing or invalid (see
+# `internal/config/config.go` Validate + `cmd/core/wiring.go` startup
+# validation). Per-env enable flag lives at environments.<env>.auth_enabled.
+auth:
+  # OQ-1 RESOLVED — PASETO v4.public (Ed25519). No algorithm-confusion
+  # surface, compact wire size, no JWKS server requirement.
+  token_format: paseto-v4-public
+
+  # Disabled by default; per-env overrides flip this on for production-class
+  # environments. environments.<env>.auth_enabled wins via env_override_value.
+  enabled: false
+
+  signing:
+    # OQ-2 RESOLVED — overlap rotation: active key signs new tokens; prior
+    # public key validates in-flight tokens for rotation_grace_window_hours.
+    # Empty in dev/test (falls back to shared-token mode); REQUIRED in
+    # production with auth.enabled=true (fail-loud at startup if empty).
+    active_private_key: ""
+    active_key_id: ""
+    prior_public_key: ""
+    prior_key_id: ""
+
+  # Bounded TTL — no infinite tokens in production. NFR-AUTH-003 sets the
+  # rotation_grace_window_hours floor at 24h; design default is 7 days.
+  token_ttl_hours: 720
+  rotation_grace_window_hours: 168
+
+  # NFR-AUTH-005 — clock-skew tolerance ≤ 60 s.
+  clock_skew_tolerance_seconds: 30
+
+  # NFR-AUTH-006 — revocation propagation ≤ 60 s. NATS pub/sub is the primary
+  # propagation channel; the periodic DB refresh is the failure-mode backstop.
+  revocation_cache_refresh_interval_seconds: 30
+  revocation_nats_subject: "auth.revocations"
+
+  # OQ-8 RESOLVED — at-rest token hashing key (HMAC-SHA-256). MUST differ
+  # from auth.signing.active_private_key. REQUIRED in production with
+  # auth.enabled=true (fail-loud at startup if empty).
+  at_rest_hashing_key: ""
+
+  # OQ-5 RESOLVED — production rejects shared SMACKEREL_AUTH_TOKEN by
+  # default once any per-user token is enrolled. Operators may opt-in via
+  # this flag during the migration window; each use logs a deprecation
+  # warning. Spec 044 Scope 04 flips production defaults; Scope 01 lands
+  # the SST surface only.
+  production_shared_token_fallback_enabled: false
+
+  # OQ-9 RESOLVED — telemetry surface for spec 030 dashboards.
+  telemetry_enabled: true
+  telemetry_metric_prefix: "smackerel_auth"
+
+  # OQ-10 RESOLVED — bootstrap token for first-user enrollment on a fresh
+  # production deployment. Consumed exactly once via
+  # `./smackerel.sh auth bootstrap` and then cleared by the operator.
+  # REQUIRED in production with auth.enabled=true AND zero enrolled users.
+  bootstrap_token: ""
+
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key
   # is REQUIRED. The Go core and Python ML sidecar both refuse to start if any
@@ -675,6 +738,9 @@ environments:
     # Spec 043 — per-env opt-in. Dev preserves manual --profile ollama
     # ergonomic (FR-OLLAMA-007); operator flips to true to auto-start.
     ollama_enabled: false
+    # Spec 044 — per-user bearer auth disabled in dev (preserves
+    # SMACKEREL_AUTH_TOKEN dev/test ergonomic; SCN-AUTH-005/011).
+    auth_enabled: false
   test:
     compose_project: smackerel-test
     postgres_host_port: 47001
@@ -689,6 +755,9 @@ environments:
     # Spec 043 — test stack auto-starts Ollama (FR-OLLAMA-001). Final
     # SMACKEREL_TEST_OLLAMA=1 enforcement is wired in scope 03.
     ollama_enabled: true
+    # Spec 044 — per-user bearer auth disabled in test (test stack uses
+    # the disposable shared SMACKEREL_AUTH_TOKEN; SCN-AUTH-005/011).
+    auth_enabled: false
     # Spec 043 — pin the fast-route model to the smallest tool-calling
     # Ollama model so the agent E2E happy-path test runs on the CI /
     # no-GPU lane within pull_timeout_seconds. Dev / home-lab keep the
@@ -717,3 +786,8 @@ environments:
     # Spec 043 — home-lab preserves opt-in. Operator flips to true after
     # provisioning the GPU host and pulling the production model.
     ollama_enabled: false
+    # Spec 044 — per-user bearer auth enabled by default on home-lab
+    # (production-class environment per FR-AUTH-016). Operator MUST
+    # populate auth.signing.* and auth.at_rest_hashing_key (and
+    # auth.bootstrap_token on a fresh deploy) before the runtime starts.
+    auth_enabled: true
