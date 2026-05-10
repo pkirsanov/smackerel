@@ -107,7 +107,7 @@
       "status": "implemented",
       "requiredTestType": "unit",
       "linkedTests": [
-        "internal/config/sst_grep_guard_test.go::TestPerEnvOllamaVolumeIsolation"
+        "internal/deploy/compose_ollama_contract_test.go::TestOllamaComposeContract_AdversarialHardcodedVolumeName"
       ],
       "regressionProtected": true
     },
