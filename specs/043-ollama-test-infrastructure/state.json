@@ -3,7 +3,7 @@
   "featureDir": "specs/043-ollama-test-infrastructure",
   "featureNumber": "043",
   "featureName": "ollama-test-infrastructure",
-  "status": "done",
+  "status": "done_with_concerns",
   "currentPhase": "docs",
   "workflowMode": "full-delivery",
   "execution": {
@@ -12,63 +12,16 @@
     "currentScope": "01",
     "runStartedAt": "2026-05-09T05:36:00Z",
     "completedPhaseClaims": [
-      {
-        "phase": "implement",
-        "scope": "01",
-        "claimedAt": "2026-05-09T20:30:00Z",
-        "agent": "bubbles.implement (parent)",
-        "summary": "Scope 1 (Config + Compose Foundation) implemented: 12 SST keys added to config/smackerel.yaml (infrastructure.ollama.image + 8 test sub-keys + 3 per-env ollama_enabled flags); scripts/commands/config.sh emits OLLAMA_IMAGE + 7 OLLAMA_TEST_* keys with per-env ollama_enabled override via env_override_value; docker-compose.yml ollama service uses ${OLLAMA_IMAGE}; ml/app/intelligence.py SST violation (line 40 fallback to http://localhost:11434) replaced with explicit fail-loud branch. New tests: internal/config/sst_grep_guard_test.go (3 subtests, primary + 2 adversarial), internal/deploy/compose_ollama_contract_test.go (4 subtests, primary + 3 adversarial), tests/integration/ollama_config_contract_test.go (1 test + 3 adversarial subtests). All 5 DoD bullets carry trace-prefix evidence blocks per Gate G068. ./smackerel.sh check passes (config in sync with SST + env_file drift guard OK + scenario-lint OK). ./smackerel.sh test unit exits 0 (78 Go packages PASS, 411 Python tests PASS in 15.04s). Live ./smackerel.sh up --env=test --profile ollama deferred to Scope 2 (model pull + agent invocation are Scope 2 surfaces; Scope 1 substrate correctness is proven end-to-end by the integration contract test which execs the actual config.sh executable)."
-      },
-      {
-        "agent": "bubbles.implement",
-        "scope": 2,
-        "phase": "implement",
-        "claimedAt": "2026-05-09T22:00:00Z",
-        "partial": true,
-        "summary": "Scope 2 PARTIAL: pull script + no-skip guard authored; happy_path_test.go + LLM determinism plumbing + per-env model override deferred to a follow-up turn. See executionHistory for full split. Pull script verified fail-loud on missing env (env -i exit 1). Guard PASS under both no-tag and -tags=e2e go test invocations."
-      },
-      {
-        "agent": "bubbles.implement",
-        "scope": "2",
-        "phase": "implement",
-        "claimedAt": "2026-05-09T23:30:00Z",
-        "summary": "Scope 2 complete \u2014 happy_path_test.go + determinism plumbing + per-env override + scenario yaml all landed"
-      },
-      {
-        "phase": "validate",
-        "agent": "bubbles.validate",
-        "scope": null,
-        "claimedAt": "2026-05-09T23:59:00Z",
-        "evidenceRef": "state.json#executionHistory[7]",
-        "summary": "Validate diagnostic \u2014 outcome: completed_diagnostic. ALL 15 GATES GREEN. Gates: artifact-lint spec/043 PASS (1 advisory deprecated-field WARN, no blockers); traceability-guard spec/043 RESULT PASSED (7 scenarios, 18 test rows, 7 concrete test files, 7 report-evidence refs, 7 DoD-fidelity scenarios mapped, 0 warnings, 0 failures); traceability-guard spec/037 PASSED (33 scenarios, 0 unmapped \u2014 cross-spec closure did not break spec 037); ./smackerel.sh check EXIT=0 (SST sync + env_file drift OK + scenario-lint registered=5/0 incl. new e2e-ollama-smoke-v1.yaml); ./smackerel.sh format --check EXIT=0 (Go cmd/internal gofmt-clean + Python 49 files ruff-clean + new tests/e2e/agent test files independently gofmt-clean); ./smackerel.sh test unit --go EXIT=0 (78 packages PASS \u2014 tests/e2e/agent under default no-tag config: 3 no_skip_guard tests pass, happy_path correctly tag-gated); ./smackerel.sh test unit --python EXIT=0 (417 tests PASS in 13.02s incl. 6 new resolve_ollama_determinism_options cases); build-tag hygiene VERIFIED \u2014 go vet PASS under no-tags / -tags=e2e / -tags=e2e_ollama; go test -list under no tags returns ONLY {TestNoSkipBailoutInAgentE2E, TestNoSkipBailout_HappyPathTestExplicitlyForbidden, TestNoSkipBailout_AdversarialFinding}; go test -list -tags=e2e_ollama adds {TestAgentHappyPath_PlanToolSynthesis, TestAgentHappyPath_DeterministicOutput, TestOllamaUnreachable_FailsLoudly} \u2014 confirms FR-OLLAMA-005; SST hardcoded-literals scan PASS (all qwen2.5/ollama/ollama:/11434/47004 hits confined to *_test.go allowlisted files; zero matches in production source paths); per-env override VERIFIED (qwen2.5:0.5b-instruct only in test.env; gpt-oss:20b in dev/home-lab.env; OLLAMA_TEST_MODEL empty in dev/home-lab.env; ENABLE_OLLAMA=true only in test.env per FR-OLLAMA-007); SMACKEREL_TEST_OLLAMA gate count = 4 in smackerel.sh (FR-OLLAMA-009 wiring confirmed); cross-spec closure VERIFIED (specs/037 MIT-037-OLLAMA-001 status=resolved + closureSpec=043-ollama-test-infrastructure + closureCommitDate=2026-05-09; specs/037 scopes.md grep -c 'modulo deferred infra' = 0); artifact-lint spec/037 EXIT=0 after Scope 5 modifier removal; regression-baseline-guard spec/043 RESULT PASSED (G044/G045/G046 all clean); scenario-manifest integrity VERIFIED (7/7 SCN-OLLAMA scenarios with implemented evidenceRefs). LIVE COLD-PULL LANE (SMACKEREL_TEST_OLLAMA=1 ./smackerel.sh test e2e) NOT EXECUTED per user instruction \u2014 operator-side acceptance step (~397MB pull + live Docker + ~90s wall-clock per test). Drift surfaced for audit: (a) certification.completedScopes=['01'] but scopes 02 and 03 are DoD-complete in scopes.md \u2014 implement specialist did not advance certification past Scope 1; audit must reconcile. (b) currentPhase still reads 'implement' \u2014 should advance through 'validate' to 'audit'. (c) Top-level completedScopes=['01','02','03'] mirrors scopes.md but disagrees with certification.completedScopes. (d) IDE cache poisoning observed on this state.json during validate pass; sed -i used to write per /memories/repo/ide-cache-poisoning.md workaround. NO files modified outside state.json (this entry + executionHistory[7] + lastUpdatedAt). certification.status, certification.completedScopes, certification.certifiedCompletedPhases preserved unchanged per audit-phase ownership. Next agent: bubbles.audit (full-delivery position 6/6)."
-      },
-      {
-        "phase": "audit",
-        "scope": null,
-        "agent": "bubbles.audit",
-        "claimedAt": "2026-05-10T00:30:00Z",
-        "evidenceRef": "state.json#executionHistory[8]",
-        "summary": "Audit re-verification of 5 safety-critical gates ALL PASS: (1) traceability-guard spec/043 PASSED 7 scenarios 0 warnings; (2) traceability-guard spec/037 PASSED 33 scenarios 0 warnings; (3) SST hardcoded-literals scan ZERO matches in production source for spec 043 surface (qwen2.5/gpt-oss/ollama:11434/47004); (4) go vet PASS under no-tags / -tags=e2e / -tags=e2e_ollama (all EXIT=0); (5) build-tag hygiene VERIFIED \u2014 go test -list under no tags returns ONLY {TestNoSkipBailoutInAgentE2E, TestNoSkipBailout_HappyPathTestExplicitlyForbidden, TestNoSkipBailout_AdversarialFinding}, -tags=e2e_ollama adds {TestAgentHappyPath_PlanToolSynthesis, TestAgentHappyPath_DeterministicOutput, TestOllamaUnreachable_FailsLoudly}. Security/quality scans: ZERO TODO/FIXME/XXX/HACK in spec 043 surfaces; ZERO real t.Skip() calls in happy_path_test.go (5 hits all in explanatory comments); ZERO mockOllama/fakeOllama/httptest.*ollama in happy_path_test.go. Artifact-lint spec/043 + spec/037 BOTH PASS. Drift reconciled: certification.completedScopes [\"01\"] \u2192 [\"01\",\"02\",\"03\"]; certification.scopeProgress extended with 02+03; certification.certifiedCompletedPhases populated with implement/validate/audit; currentPhase + execution.currentPhase advanced \"implement\" \u2192 \"chaos\"; top-level status mirrored to done_with_concerns. Verdict: done_with_concerns. Audit-discovered concerns: (a) Gate G041 \u2014 scopes.md uses non-canonical scope status \"Done (2026-05-09)\" instead of canonical \"Done\"; authored by implement specialist; per-instructions audit cannot modify scopes.md. (b) Gate G057 \u2014 scenario-manifest.json missing requiredTestType + linkedTests entries (newer schema fields). (c) Gate G053 \u2014 report.md missing \"### Code Diff Evidence\" section. (d) Gate G028 \u2014 implementation-reality-scan flagged 4 DEFAULT_FALLBACK pattern matches in ml/app/agent.py:64,65,108,275; manual review confirms ALL paired with explicit fail-loud branches (lines 64-65 \u2192 \"if not provider or not model: return None\"; line 108 \u2192 \"if not raw: continue\" with scenario default fallback documented in spec 043 design.md OQ-3 D4; line 275 \u2192 api_key fallthrough chain in non-Ollama branch unrelated to spec 043 surface) \u2014 pattern-matcher false positives. (e) Gate G040 \u2014 14+6=20 deferral language hits all are CHRONOLOGICAL references to closing prior MIT-037-OLLAMA-001 routing, not new deferred work; cross-spec closure VERIFIED complete (spec 037 grep -c \"modulo deferred infra\" = 0). (f) Gate G022 \u2014 7 specialist phases remaining in full-delivery (test/regression/simplify/stabilize/security/docs/chaos); next agent is bubbles.chaos per user-stated full-delivery position 6/6. NO files modified outside state.json (this entry + executionHistory[8] + completedScopes mirror + currentPhase advance + certification block update + lastUpdatedAt). Per user instruction 7, smackerel.sh / source / scopes.md / report.md NOT modified."
-      },
-      {
-        "phase": "chaos",
-        "scope": null,
-        "agent": "bubbles.chaos",
-        "claimedAt": "2026-05-10T00:17:46Z",
-        "evidenceRef": "state.json#executionHistory[9]",
-        "summary": "Chaos phase complete \u2014 8 categories executed against the spec 043 surface WITHOUT live Docker stack. ALL 8 CATEGORIES PASS: (1) config generate determinism PASS 6/6; (2) per-env spec-043 SST key fingerprint stability PASS 6/6; (3) ollama-test-pull.sh adversarial inputs PASS 8/10 strict + 2 P4 (whitespace URL \u2192 exit 2; timeout=abc \u2192 exit 2; both fail-loud, never hang); (4) build-tag visibility + strict-guard active scan PASS for 3 single-tag configs (15/15) + 1 P3 design observation (combined -tags=e2e,e2e_ollama structurally invalid by design \u2014 production never invokes it); (5) resolve_ollama_determinism_options under 15 adversarial env states PASS 15/15 with 0 raises; (6) scenario-lint stress \u2014 7/7 broken yamls rejected, production scan stable at 5/0 across 5 post-chaos runs; (7) workflow command permutation chaos PASS 40/40 invocations across 10 random orderings of (check, format --check, test unit --go, test unit --python); (8) cross-spec drift chaos PASS 19/20 + 1 P3 transient flake observation (unreproducible in 15+ subsequent attempts). 0 true bugs found. 0 flaky tests requiring hardening. 4 informational P3/P4 observations recorded. Live Docker stack not spun up per user guardrail (operator-side cold-pull lane is the acceptance step). NO files modified outside state.json. Next agent: bubbles.spec-review."
-      },
-      {
-        "agent": "bubbles.spec-review",
-        "phase": "spec-review",
-        "claimedAt": "2026-05-10T01:00:00Z",
-        "summary": "Trust classification: trustworthy. Drift findings: zero. Promoted certification.status from done_with_concerns to done."
-      }
+      "implement",
+      "validate",
+      "audit",
+      "chaos",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "done_with_concerns",
     "completedScopes": [
       "01",
       "02",
@@ -95,35 +48,11 @@
       }
     ],
     "certifiedCompletedPhases": [
-      {
-        "phase": "implement",
-        "completedAt": "2026-05-09T23:30:00Z",
-        "agent": "bubbles.implement",
-        "evidenceRef": "state.json#execution.completedPhaseClaims[implement]"
-      },
-      {
-        "phase": "validate",
-        "completedAt": "2026-05-09T23:59:00Z",
-        "agent": "bubbles.validate",
-        "evidenceRef": "state.json#executionHistory[7]"
-      },
-      {
-        "phase": "audit",
-        "completedAt": "2026-05-10T00:30:00Z",
-        "agent": "bubbles.audit",
-        "evidenceRef": "state.json#executionHistory[8]"
-      },
-      {
-        "phase": "chaos",
-        "completedAt": "2026-05-10T00:17:46Z",
-        "agent": "bubbles.chaos",
-        "evidenceRef": "state.json#executionHistory[9]"
-      },
-      {
-        "phase": "spec-review",
-        "completedAt": "2026-05-10T01:00:00Z",
-        "agent": "bubbles.spec-review"
-      }
+      "implement",
+      "validate",
+      "audit",
+      "chaos",
+      "spec-review"
     ],
     "lockdownState": {
       "active": false,
@@ -215,7 +144,7 @@
       "phase": "spec-review",
       "agent": "bubbles.spec-review (parent-executed inline due to subagent dispatch error)",
       "timestamp": "2026-05-10T01:00:00Z",
-      "summary": "spec-review phase complete. Trust classification: TRUSTWORTHY. Drift findings: ZERO. Verified: (1) ollama-test-pull.sh exit codes 1/2/3/4 match scopes.md DoD claim; (2) happy_path_test.go function names TestAgentHappyPath_PlanToolSynthesis + TestAgentHappyPath_DeterministicOutput + TestOllamaUnreachable_FailsLoudly match all 7 scenario-manifest linkedTests and all scopes.md DoD evidence refs; (3) ml/app/agent.resolve_ollama_determinism_options reads exactly 5 OLLAMA_TEST_REQUEST_* env vars (TEMPERATURE/TOP_P/TOP_K/SEED/NUM_PREDICT) matching report.md Scope 2 evidence; (4) smackerel.sh::SMACKEREL_TEST_OLLAMA gate has 4 occurrences matching report.md Scope 3 evidence claim of grep -c = 4; (5) cross-spec closure: grep -c 'modulo deferred infra' specs/037-llm-agent-tools/scopes.md = 0 (was 2 pre-7262045e); MIT-037-OLLAMA-001 status=resolved closureSpec=043-ollama-test-infrastructure closureCommitDate=2026-05-09. Redundancy review: no other spec covers the Ollama-test-infra surface (spec 037 routed the gap to MIT-037-OLLAMA-001 and 043 owns the closure; specs 022/030/039 do not overlap). Compaction proposal: NONE \u2014 report.md is verbose by design (Scope 2 has commit-by-commit split because work landed in 2 commits) but every paragraph carries unique evidence; no condensation gain. Certification status decision: PROMOTING from done_with_concerns to done. Reasoning: audit's done_with_concerns was driven solely by G041 + G057 + G053 framework-strict housekeeping items, all closed in commit 1b85a475 (chore(043): address audit housekeeping). Chaos phase added zero new concerns (8 categories PASS, 0 bugs, 4 P3/P4 informational observations explicitly classified as non-blocking). All 5 safety-critical re-verification gates raised by audit re-pass under spec-review re-check. The remaining 2 advisory artifact-lint warnings (deprecated scopeProgress field; legacy phase-block object format) are pre-existing framework drift unrelated to spec 043 surface; they will be addressed by a future framework upgrade pass, not by spec 043. Workflow advancement: currentPhase chaos -> docs (full-delivery position 8/?). No blockers for bubbles.docs."
+      "summary": "spec-review phase complete. Trust classification: TRUSTWORTHY. Drift findings: ZERO. Verified: (1) ollama-test-pull.sh exit codes 1/2/3/4 match scopes.md DoD claim; (2) happy_path_test.go function names TestAgentHappyPath_PlanToolSynthesis + TestAgentHappyPath_DeterministicOutput + TestOllamaUnreachable_FailsLoudly match all 7 scenario-manifest linkedTests and all scopes.md DoD evidence refs; (3) ml/app/agent.resolve_ollama_determinism_options reads exactly 5 OLLAMA_TEST_REQUEST_* env vars (TEMPERATURE/TOP_P/TOP_K/SEED/NUM_PREDICT) matching report.md Scope 2 evidence; (4) smackerel.sh::SMACKEREL_TEST_OLLAMA gate has 4 occurrences matching report.md Scope 3 evidence claim of grep -c = 4; (5) cross-spec closure: grep -c 'modulo deferred infra' specs/037-llm-agent-tools/scopes.md = 0 (was 2 pre-7262045e); MIT-037-OLLAMA-001 status=resolved closureSpec=043-ollama-test-infrastructure closureCommitDate=2026-05-09. Redundancy review: no other spec covers the Ollama-test-infra surface (spec 037 routed the gap to MIT-037-OLLAMA-001 and 043 owns the closure; specs 022/030/039 do not overlap). Compaction proposal: NONE \u2014 report.md is verbose by design (Scope 2 has commit-by-commit split because work landed in 2 commits) but every paragraph carries unique evidence; no condensation gain. Certification status decision: PROMOTING from done_with_concerns to done. Reasoning: audit's done_with_concerns was driven solely by G041 + G057 + G053 framework-strict housekeeping items, all closed in commit 1b85a475 (chore(043): address audit housekeeping). Chaos phase added zero new concerns (8 categories PASS, 0 bugs, 4 P3/P4 informational observations explicitly classified as non-blocking). All 5 safety-critical re-verification gates raised by audit re-pass under spec-review re-check. The remaining 2 advisory artifact-lint warnings (deprecated scopeProgress field; legacy phase-block object format) are pre-existing framework drift unrelated to spec 043 surface; they will be addressed by a future framework upgrade pass, not by spec 043. Workflow advancement: currentPhase chaos -> docs (full-delivery position 8/?). No blockers for bubbles.docs. [Self-correction follow-up: parent agent initially promoted status->'done' but artifact-lint correctly flagged that full-delivery 'done' requires test + docs phases (not yet run); rolled back to 'done_with_concerns' (audit verdict stands until closeout finalizes after docs phase). Also compacted certifiedCompletedPhases + completedPhaseClaims from object-form to string-form so artifact-lint's grep -A60 extraction window captures the full array.]"
     }
   ],
   "policySnapshot": {
@@ -249,7 +178,7 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-10T01:00:00Z",
+  "lastUpdatedAt": "2026-05-10T01:30:00Z",
   "completedScopes": [
     "01",
     "02",
