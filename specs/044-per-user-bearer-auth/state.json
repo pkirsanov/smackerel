@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "test",
+  "currentPhase": "validate",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "test",
+    "currentPhase": "validate",
     "currentScope": "02",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -17,7 +17,8 @@
         "phase": "implement",
         "agent": "bubbles.implement",
         "timestamp": "2026-05-10T00:00:00Z"
-      }
+      },
+      "test"
     ],
     "pendingTransitionRequests": []
   },
@@ -25,7 +26,7 @@
     "status": "in_progress",
     "completedScopes": ["01"],
     "scopeProgress": [],
-    "certifiedCompletedPhases": [],
+    "certifiedCompletedPhases": ["test"],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -59,6 +60,15 @@
       "phasesExecuted": ["implement"],
       "scope": "01",
       "summary": "Scope 01 SST Foundation + Token Subsystem closed. Landed: (1) 14 SST keys at config/smackerel.yaml lines 67-130 + per-env auth_enabled overrides (dev=false, test=false, home-lab=true); (2) scripts/commands/config.sh emits 16 AUTH_* env keys to config/generated/{dev,test,home-lab}.env via required_value/yaml_get extractions; (3) internal/config/config.go AuthConfig struct + loadAuthConfig with production-mode fail-loud validation (signing private key, key id, hashing key non-empty AND hashing key != signing key per OQ-8); (4) internal/auth/ package: session.go (Session + SessionSource consts + WithSession/SessionFromContext/UserIDFromContext helpers), issue.go (IssueOptions/IssueResult/IssueToken using paseto.NewToken+SetIssuer/Subject/Jti/IssuedAt/NotBefore/Expiration+SetFooter+V4Sign + GenerateSigningKeypair + PublicHexFromSecretHex), verify.go (VerifyOptions/ParsedToken/VerifyAndParse with kid-routed key selection between active and prior keys, custom skew tolerance, sentinel errors), hash.go (HashToken HMAC-SHA-256 hex + CompareTokenHash constant-time), bearer_store.go (BearerStore wrapping pgxpool.Pool with Enroll/CountUsers/ListUsers/PersistToken/MarkTokenRotated/RevokeToken/LoadRevokedTokenIDs), startup.go (RuntimeAuthConfig + ValidateRuntimeAuthStartup defense-in-depth used by cmd/core/wiring.go); (5) internal/auth/revocation/ package: cache.go (Cache backed by sync.Map + atomic size counter; Loader interface; BootstrapFromDB; Refresh delta; MarkRevoked idempotent; IsRevoked lock-free; RunPeriodicRefresh), broadcaster.go (EventV1 envelope; Broadcaster wrapping nats.Conn; defensive handle dropping malformed events); (6) DB migration internal/db/migrations/033_auth_per_user_bearer.sql creating auth_users, auth_tokens, auth_revocations with indexes; (7) cmd/core/cmd_auth.go 410-line subcommand dispatcher: enroll/rotate/revoke/list-users/bootstrap/keygen; main.go dispatch parallel to existing agent subcommand; (8) internal/api/auth_handlers.go 280-line file authoring AuthAdminHandlers with HandleEnroll/HandleRotate/HandleRevoke/HandleListUsers — gated on callerIsAdmin (bootstrap unconditional, shared-token only when env != production OR production_shared_token_fallback_enabled, per-user rejected pending allowlist surface in later scope). Routes NOT registered in router.go per Scope 1 task scope (deferred to Scope 02 alongside bearerAuthMiddleware wiring); (9) cmd/core/wiring.go calls auth.ValidateRuntimeAuthStartup defense-in-depth between SMACKEREL_AUTH_TOKEN guard and config completion. Tests authored: T1-01..T1-03 + 5 production-mode hardening cases at internal/config/validate_test.go (8 sub-tests), T1-04 issue_test.go (RoundTripWithVerify + RejectsMissingFields), T1-05 verify_test.go (RejectsExpiredAndFutureAndForeignIssuer 4 cases), T1-06 verify_test.go (RotationGraceWindow_HonorsPriorKey 3 cases including forged-kid adversarial + RejectsHalfRotationConfig), T1-07 cache_test.go (BootstrapAndPropagate + PropagatesLoaderErrors + RejectsNilLoader), T1-09 startup_test.go (TestValidateRuntimeAuthStartup 8 sub-cases), T1-10 sst_grep_guard_test.go (forbidden-literals scan + adversarial + allowlist + comment-filter validation), T1-08 tests/integration/auth_bootstrap_test.go (TestAuthBootstrap_FreshProduction_EnrollsFirstUser + TestAuthBootstrap_PublicHexDerivation). Validation: go build ./... clean; go vet ./... clean; go vet -tags integration ./tests/integration/... clean; go test -race -count=1 ./internal/auth/... ./internal/config/... ./cmd/core/... → all OK; smackerel.sh check OK (config in sync; env_file drift guard OK; scenario-lint OK 5 registered); smackerel.sh config generate for dev/test/home-lab all clean with all 16 AUTH_* keys propagating. Two pre-existing infra blockers identified and routed: (a) smackerel.sh test integration cannot bring up the test stack because SST-pinned ollama/ollama:0.6 image is missing on Docker Hub (spec 043 follow-up), so live T1-08 was authored + compiles + is unit-test-validatable but not live-executed; (b) smackerel.sh test unit timed out internal/connector/guesthost at 600s under parallel-run contention but guesthost is unchanged in this scope and passes in isolation in 0.6s. Both routed to bubbles.test for follow-up. Scope 02 hot-path middleware integration + MIT closures NOT started — that is the next scope's work."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "timestamp": "2026-05-10T07:00:00Z",
+      "phasesExecuted": ["test"],
+      "scopes": ["01"],
+      "decision": "approved",
+      "summary": "Spec 044 Scope 01 formal test phase per Gate G022. Five gate commands executed against commit 2e2a2b9c on top of BUG-001 ollama image-pin fix ea2af19a. (Gate 1) ./smackerel.sh check exit=0 — config in sync with SST; env_file drift guard OK; scenario-lint OK (5 registered, 0 rejected). (Gate 2a) ./smackerel.sh test unit --go exit=0 — full Go unit suite PASSES across every internal/* and cmd/* package including the previously-flaky internal/connector/guesthost. internal/auth and internal/auth/revocation produce 0 skips (skip-marker scan returns 1 false-positive comment line in tests/integration/auth_bootstrap_test.go:24 — explanatory header text only, not an actual t.Skip call). (Gate 2b) ./smackerel.sh test unit --python exit=0 — 417 passed in 15.08s on the Python ML sidecar. (Gate 2c) Targeted go test -race -count=1 -v ./internal/auth/... PASS — captures verbose output for T1-04 TestIssueToken_RoundTripWithVerify + 7 RejectsMissingFields sub-tests, T1-05 TestVerifyAndParse_RejectsExpiredAndFutureAndForeignIssuer (sentinel errors ErrTokenExpired / ErrTokenNotYetValid / ErrIssuerMismatch), T1-06 TestVerifyAndParse_RotationGraceWindow_HonorsPriorKey including forged-kid adversarial + foreign-kid ErrUnknownKeyID assertion, T1-09 TestValidateRuntimeAuthStartup 8 sub-cases including all four production+enabled fail-loud branches (empty signing private key → 'AUTH_SIGNING_ACTIVE_PRIVATE_KEY must be set'; empty key id → 'AUTH_SIGNING_ACTIVE_KEY_ID must be set'; empty hashing key → 'AUTH_AT_REST_HASHING_KEY must be set'; hashing key == signing key → 'AUTH_AT_REST_HASHING_KEY must differ from AUTH_SIGNING_ACTIVE_PRIVATE_KEY (spec 044 OQ-8)'), T1-10 sst_grep_guard_test trio (TestSST_NoHardcodedAuthValues + Adversarial + AllowlistAdversarial), T1-07 revocation cache trio. (Gate 3) Live T1-08 — ./smackerel.sh --env test up brings the test stack up cleanly (postgres/nats/smackerel-ml/smackerel-core all Healthy on host ports 47001/47002/45002/45001); go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/... PASS in 0.087s for both TestAuthBootstrap_FreshProduction_EnrollsFirstUser and TestAuthBootstrap_PublicHexDerivation, executing live against postgres at 127.0.0.1:47001 with DATABASE_URL exported and migration 033_auth_per_user_bearer.sql applied via db.Migrate inside authTestPool. Live DB row-count evidence post-test: auth_users=1 (user-bootstrap-001 / bootstrap@integration-test / active), auth_tokens=1 (tok-bootstrap-001 / key-test-2026-05 / hashed_token length 64 chars = 32-byte HMAC-SHA-256 hex), auth_revocations=0. T1-06 BearerStore.Enroll duplicate-user adversarial sub-case PASSES live (UNIQUE constraint on auth_users.user_id surfaces a duplicate-key error matched by the test's strings.Contains(err.Error(), 'duplicate'|'unique') assertion). (Gate 4) go vet ./... exit=0; go vet -tags=integration ./tests/integration/... exit=0 — both clean. (Gate 5) bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth PASSED — all required artifacts present, all DoD bullets carry evidence blocks, no fabrication signals. Side work: staged 3 gofmt-clean whitespace-only re-alignments in internal/auth/revocation/cache_test.go (column alignment of bootstrap-vs-refresh stub fixture), internal/auth/startup_test.go (gofmt-blank between consecutive doc-comment paragraphs), tests/integration/auth_bootstrap_test.go (gofmt-canonical numbered-list indentation in file-header comment). Both Uncertainty Declarations from the implement-phase block (DB migrations live execution + integration test live execution) are CLEARED — live execution evidence captured under Phase: test sub-blocks in scopes.md and report.md. Test stack left up for the validate-phase agent; teardown not invoked here. No t.Skip used. No --no-verify on the commit. Verbatim runner outputs and live DB query evidence captured in report.md → Test Evidence (Gates 1 through 5) and cross-referenced from scopes.md DoD evidence sub-blocks."
     }
   ],
   "policySnapshot": {
@@ -92,5 +102,5 @@
     }
   },
   "transitionRequests": [],
-  "lastUpdatedAt": "2026-05-10T00:00:00Z"
+  "lastUpdatedAt": "2026-05-10T07:00:00Z"
 }

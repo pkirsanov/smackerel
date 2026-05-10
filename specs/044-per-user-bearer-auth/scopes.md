@@ -178,8 +178,25 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   - `internal/db/migrations/033_auth_per_user_bearer.sql` creates auth_users (id bigserial PK, user_id text UNIQUE, enrolled_at, enrolled_by, status CHECK active|disabled, notes), auth_tokens (id PK, token_id UNIQUE, user_id FK CASCADE, key_id, issued_at, expires_at, hashed_token UNIQUE, status CHECK active|rotated|revoked, rotated_from_token_id, issued_by, issued_source CHECK cli|admin_api|bootstrap), auth_revocations (token_id PK FK CASCADE, revoked_at, revoked_by, reason). Indexes on status, user_id, expires_at, revoked_at.
   - Migration is picked up automatically by `internal/db/migrate.go` (bumped sequence applied on startup AND in `tests/integration/auth_bootstrap_test.go` `authTestPool` fixture).
   - T1-08 integration test `TestAuthBootstrap_FreshProduction_EnrollsFirstUser` at `tests/integration/auth_bootstrap_test.go` exercises the migrated schema end-to-end: enrolls a user, persists a token, queries back the hashed_token column, asserts uniqueness via second-enroll adversarial.
-  - **Claim Source:** executed for unit-side schema validation (BearerStore round-trip in `internal/auth` tests). Integration test code is authored and compiles cleanly under `-tags integration`; its live execution is blocked by an unrelated pre-existing infrastructure issue (the SST-pinned Ollama image tag `ollama/ollama:0.6` is missing on Docker Hub — owned by spec 043 follow-up, not spec 044).
-  - **Uncertainty Declaration:** Live T1-08 not executed in this session because the test-stack `up` step fails on `manifest unknown: ollama/ollama:0.6`. The integration test compiles via `go vet -tags integration ./tests/integration/...` (clean). Routed to `bubbles.test` to either bring up Ollama-less integration coverage or to coordinate the spec 043 image-tag fix.
+  - **Claim Source:** executed for unit-side schema validation (BearerStore round-trip in `internal/auth` tests). Integration test code is authored and compiles cleanly under `-tags integration`; live execution recorded under the **Phase: test** sub-block below.
+
+  **Evidence (Phase: test):**
+  - T1-08 executed live against the test stack at `127.0.0.1:47001` (POSTGRES_HOST_PORT for env=test). Test-stack brought up via `./smackerel.sh --env test up` after BUG-001 ollama image-pin fix landed at commit `ea2af19a`. Verbatim runner output:
+    ```
+    $ docker ps --filter "name=smackerel-test-postgres" --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+    smackerel-test-postgres-1       Up 2 minutes (healthy)  127.0.0.1:47001->5432/tcp
+    $ export DATABASE_URL='postgres://smackerel:${POSTGRES_PASSWORD}@127.0.0.1:47001/smackerel?sslmode=disable'
+    $ go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/...
+    === RUN   TestAuthBootstrap_FreshProduction_EnrollsFirstUser
+    --- PASS: TestAuthBootstrap_FreshProduction_EnrollsFirstUser (0.06s)
+    === RUN   TestAuthBootstrap_PublicHexDerivation
+    --- PASS: TestAuthBootstrap_PublicHexDerivation (0.00s)
+    PASS
+    ok      github.com/smackerel/smackerel/tests/integration        0.087s
+    ```
+  - Live DB row counts after T1-08 PASS (per `report.md` → Test Evidence → Gate 3 detail block): `auth_users` = 1 (user-bootstrap-001 / bootstrap@integration-test / active), `auth_tokens` = 1 (tok-bootstrap-001 / key-test-2026-05 / hashed_token length 64 chars = 32-byte HMAC-SHA-256 hex), `auth_revocations` = 0. Migration `033_auth_per_user_bearer.sql` applied cleanly (3 tables present per `\dt auth_*`).
+  - T1-06 BearerStore.Enroll duplicate-user adversarial sub-case ran live as part of `TestAuthBootstrap_FreshProduction_EnrollsFirstUser` and PASSES — second `Enroll` of `user-bootstrap-001` returns a uniqueness-violation error matched by the test's `strings.Contains(err.Error(), "duplicate"|"unique")` assertion.
+  - **Claim Source:** executed (live, against test-stack postgres). Uncertainty Declaration cleared.
 
 - [x] `cmd/core/cmd_auth.go` provides `enroll`, `rotate`, `revoke`, `list-users`, `bootstrap`, `keygen` subcommands.
 
@@ -205,6 +222,13 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   - Integration tests `./smackerel.sh test integration -- -run TestAuth` cannot run because of the pre-existing Ollama image tag issue (see T1-08 uncertainty above). Integration test code compiles cleanly under `go vet -tags integration ./tests/integration/...`.
   - **Claim Source:** executed for unit; not-run for integration (with provenance for the pre-existing infra block).
   - **Uncertainty Declaration:** Live integration auth tests not executed in this session for the reason above. Routed to `bubbles.test`.
+
+  **Evidence (Phase: test):**
+  - Full Go unit suite via `./smackerel.sh test unit --go` PASS — the previously-flaky `internal/connector/guesthost` package now resolves cleanly (cached result hit in this run); every other auth-touching package (`internal/auth`, `internal/auth/revocation`, `internal/config`, `internal/api`, `cmd/core`) PASSES with `ok` status. Verbatim runner tail captured in `report.md` → Test Evidence → Gate 2a.
+  - Python ML sidecar suite via `./smackerel.sh test unit --python` PASS: `417 passed in 15.08s` (verbatim summary in `report.md` → Test Evidence → Gate 2b).
+  - Live `go test -count=1 -tags=integration -v -timeout=120s -run 'TestAuth' ./tests/integration/...` against the test stack (postgres on `127.0.0.1:47001`) PASS in 0.087s for both `TestAuthBootstrap_FreshProduction_EnrollsFirstUser` (T1-08) and `TestAuthBootstrap_PublicHexDerivation`. Verbatim runner output and live DB row-count evidence in `report.md` → Test Evidence → Gate 3.
+  - Skip-marker scan over `internal/auth/` and `tests/integration/auth_*.go` returns ZERO `t.Skip` calls; only one false-positive match (a comment in `tests/integration/auth_bootstrap_test.go:24` documenting the no-skip policy itself).
+  - **Claim Source:** executed (live, with verbatim runner outputs cross-referenced to `report.md` → Test Evidence). Both Uncertainty Declarations from the implement-phase block are cleared.
 
 - [x] `./smackerel.sh check` passes (config in sync; env_file drift guard OK).
 

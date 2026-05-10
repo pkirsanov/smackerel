@@ -16,6 +16,7 @@ import (
 //   - production + enabled + empty key id
 //   - production + enabled + empty hashing key
 //   - production + enabled + hashing key == signing key
+//
 // Permitted cases (each MUST return nil):
 //   - production + disabled (empty material is fine)
 //   - development + enabled (bootstrap-time flow)

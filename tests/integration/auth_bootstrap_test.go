@@ -4,17 +4,17 @@
 //
 // Validates the full bootstrap path against a live test DB:
 //
-//   1. Apply the auth migration (it ships in
-//      internal/db/migrations/033_auth_per_user_bearer.sql and is picked
-//      up by db.Migrate when the test stack starts).
-//   2. Confirm a freshly-migrated DB has zero enrolled users.
-//   3. Call BearerStore.Enroll + IssueToken + HashToken + PersistToken
-//      to simulate the bootstrap subcommand WITHOUT shelling out to the
-//      CLI.
-//   4. Round-trip the issued token through VerifyAndParse to prove the
-//      operator-facing wire token is usable.
-//   5. Adversarial: attempt a duplicate enrollment and confirm the
-//      UNIQUE constraint surfaces a duplicate-user error.
+//  1. Apply the auth migration (it ships in
+//     internal/db/migrations/033_auth_per_user_bearer.sql and is picked
+//     up by db.Migrate when the test stack starts).
+//  2. Confirm a freshly-migrated DB has zero enrolled users.
+//  3. Call BearerStore.Enroll + IssueToken + HashToken + PersistToken
+//     to simulate the bootstrap subcommand WITHOUT shelling out to the
+//     CLI.
+//  4. Round-trip the issued token through VerifyAndParse to prove the
+//     operator-facing wire token is usable.
+//  5. Adversarial: attempt a duplicate enrollment and confirm the
+//     UNIQUE constraint surfaces a duplicate-user error.
 //
 // SCN-AUTH-008 evidence: the test runs against a DB that started empty
 // and ends with exactly one auth_users row + one auth_tokens row whose
