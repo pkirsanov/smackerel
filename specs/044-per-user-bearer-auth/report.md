@@ -5743,3 +5743,103 @@ addition discharges).
 **Claim Source:** executed.
 
 ---
+
+### Test Evidence (Scope 04)
+
+**Phase:** test **Agent:** bubbles.test **Claim Source:** executed
+**Range:** `git diff --name-only 6f1df0cf..9e3fc996 -- '*_test.go' '*test*.go'`
+
+#### Scope 04 Test Inventory
+
+| File | Build Tag | Surface | SCN Coverage | Adversarial Cases | Status |
+|---|---|---|---|---|---|
+| `internal/metrics/auth_test.go` | unit (no tag) | Auth metrics surface (7 series + closed-set normalization) | SCN-AUTH-012 | `TestAuthRevocation_NormalizesReason` injects `Bobby Tables\n\n\nDROP TABLE auth_tokens;--` and asserts the bucket label stays in the closed set `{unspecified, compromise, rotation, offboarding, test, other}` (defends label-cardinality blow-up); `TestAuthMetrics_NamesUseCanonicalPrefix` enforces `smackerel_auth_*` prefix discipline so a future drift slips into a unit failure | PASS — 8 test functions; in-package; no DB; gathers from default Prometheus registry |
+| `internal/telegram/bot_wiring_test.go` | unit (no tag) | Telegram bridge `Bot.bearerForChat` + `Bot.setBearerHeader` decision matrix (F02 closure) | SCN-AUTH-012 | `TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError` asserts `errors.Is(err, ErrNoUserMappingForChat)` AND `bearer == ""` for unmapped production chat (proves no shared-token fallback); `TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO` plants `bot.authToken = "WRONG-shared-bearer-DO-NOT-USE"` sentinel to prove the minter branch is taken; `TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError` asserts `Authorization` header stays unset on error (no downgrade); `TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset` defends the dev empty-token bypass | PASS — 6 test functions (NilMinter shared, NilMinter empty, WithMinter mapped, WithMinter dev unmapped, WithMinter prod unmapped, setBearerHeader nil/empty/prod-unmapped) |
+| `internal/telegram/photo_upload_test.go` | unit (no tag) | `Bot.postPhotoUpload` signature carries `chatID` so per-user bearer can be applied via `setBearerHeader` | SCN-AUTH-012 (signature plumbing) | Existing oversized-response truncation test (`TestPostPhotoUpload_LimitReaderTruncatesOversizedResponse`) and multipart smoke (`TestPostPhotoUpload_MultipartFormStillWorksUnderCap`) updated to pass new `chatID=99` argument; both prove the F02-wired signature does not regress upload-side limits | PASS — signature-only +4/-2 lines |
+| `internal/telegram/test_helpers.go` | helper (no tag) | External-test surface: `NewBotForTest`, `SetSharedAuthTokenForTest`, `SetBearerHeaderForTest` (so `tests/integration` can plant sentinels and call the unexported `setBearerHeader`) | n/a (helper) | Provides the sentinel-plant capability used by `auth_telegram_f02_wiring_test.go` to prove the WRONG bearer is never observed | n/a (helper file) |
+| `tests/integration/auth_telegram_f02_wiring_test.go` | `//go:build integration` | F02 closure observed through live-stack chain: real `api.NewRouter(deps)` + real `pgxpool` against live Postgres + real `prometheus.DefaultGatherer` | SCN-AUTH-012 | `TestF02Wiring_SetPerUserTokenMinter_HappyPath` plants `bot.SetSharedAuthTokenForTest("WRONG-shared-bearer-DO-NOT-USE-IN-F02-PATH")` then verifies (a) `Authorization` header carries `Bearer v4.public.…` (not the sentinel), (b) middleware admits with HTTP 200, (c) `smackerel_auth_token_issuance_total{source="telegram_bridge"}` delta = 1; `TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` verifies (a) `setBearerHeader` returns error, (b) `Authorization` header stays empty, (c) issuance counter delta = 0 (refused mints MUST NOT tick the metric — adversarial inverse) | PASS — 2 test functions; live test-stack pool from `productionTelegramBridgeDeps`; build tag verified via `head -1` showing `//go:build integration` |
+
+**Inventory totals:** 5 files (4 test, 1 helper); +764 / -2 lines; 16 test functions added (8 auth-metrics unit + 6 F02 wiring unit + 2 F02 wiring integration); 100 % build-tag header compliance (3 unit files in-package no tag, 1 helper file no tag, 1 integration file `//go:build integration`); 0 mock-framework imports; 0 skip markers.
+
+#### Build Tag + Live-Stack Verification
+
+```text
+$ for f in internal/metrics/auth_test.go internal/telegram/bot_wiring_test.go internal/telegram/photo_upload_test.go internal/telegram/test_helpers.go tests/integration/auth_telegram_f02_wiring_test.go; do echo "=== $f ==="; head -1 "$f"; done
+=== internal/metrics/auth_test.go ===
+// Spec 044 Scope 04 — coverage for the per-user bearer-auth metrics
+=== internal/telegram/bot_wiring_test.go ===
+// Spec 044 Scope 04 — F02 closure unit test.
+=== internal/telegram/photo_upload_test.go ===
+package telegram
+=== internal/telegram/test_helpers.go ===
+// Spec 044 Scope 03 — Test helpers exposed to external test packages
+=== tests/integration/auth_telegram_f02_wiring_test.go ===
+//go:build integration
+
+$ grep -nE 't\.Skip|\.skip\(|xit\(|xdescribe\(|\.only\(|t\.Skipf|test\.todo|it\.todo|pending\(' internal/metrics/auth_test.go internal/telegram/bot_wiring_test.go internal/telegram/photo_upload_test.go internal/telegram/test_helpers.go tests/integration/auth_telegram_f02_wiring_test.go
+# (zero matches — no skip markers in Scope 04 tests)
+
+$ grep -nE 'jest\.fn|sinon|nock|msw|gomock|testify/mock' internal/metrics/auth_test.go internal/telegram/bot_wiring_test.go internal/telegram/photo_upload_test.go internal/telegram/test_helpers.go tests/integration/auth_telegram_f02_wiring_test.go
+# (zero matches — no mock-framework imports; the only httptest.NewServer use in the integration file wraps the REAL api.NewRouter against a REAL DB-backed pgxpool returned by productionTelegramBridgeDeps in tests/integration/auth_telegram_e2e_test.go, which is the canonical Go integration pattern, NOT a mock)
+```
+
+The integration file (`auth_telegram_f02_wiring_test.go`) reaches the live test stack via `productionTelegramBridgeDeps(t, mapping)` → `authTestPool(t)` → real `pgxpool.New(DATABASE_URL)`; the test fails loudly if the test stack is not up. The unit files (`internal/metrics/auth_test.go`, `internal/telegram/bot_wiring_test.go`, `internal/telegram/photo_upload_test.go`) make zero DB or NATS calls.
+
+#### Verbatim Gate Output (this test phase)
+
+| # | Command | Exit | Verdict |
+|---|---|---|---|
+| 1 | `./smackerel.sh build` | 0 | `smackerel-core Built`; `smackerel-ml Built` (compose build, all stages cached except final builder layer) |
+| 2 | `./smackerel.sh check` | 0 | `Config is in sync with SST`; `env_file drift guard: OK`; `scenario-lint: scanning config/prompt_contracts (glob: *.yaml)`; `scenarios registered: 5, rejected: 0`; `scenario-lint: OK` |
+| 3 | `./smackerel.sh lint` | 0 | `All checks passed!`; `Web validation passed` (PWA + extension manifests; JS syntax; extension version consistency) |
+| 4 | `./smackerel.sh format --check` | 0 | `49 files already formatted` |
+| 5 | `./smackerel.sh test unit` | 0 | Python `417 passed in 14.97s`; Go: every package in `cmd/`, `internal/`, `tests/e2e/agent`, `tests/integration` (no tests to run with default tags), `tests/stress/readiness` reports `ok` (cached) — including `internal/metrics`, `internal/telegram`, `internal/auth`, `internal/auth/revocation`, `internal/api` |
+| 6 | `./smackerel.sh test integration` | 0 | `tests/integration` PASS 39.728s including `TestF02Wiring_SetPerUserTokenMinter_HappyPath` PASS (0.05s) and `TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` PASS (0.04s); `tests/integration/agent` PASS 2.321s; `tests/integration/drive` PASS 8.339s; all 3 packages green |
+| 7 | `./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'` | 0 | 4 PWA tests + 5 sub-tests PASS in `tests/e2e/auth` 0.289s including `TestE2E_PWAAuth_Production_PerUserSession`, `TestE2E_PWAAuth_Production_LoginRejectsMissingToken`, `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto`, `TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks`; `PASS: go-e2e`; e2e runner auto-tore-down test stack cleanly |
+| 8 | `go vet ./...` | 0 | (no output) |
+| 9 | `go vet -tags integration ./tests/...` | 0 | (no output) |
+| 10 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | 0 | `Artifact lint PASSED` (2 advisory non-blocking warnings unchanged from prior phases: `reworkQueue` recommended field absent + `scopeProgress` deprecated field present — both pre-existing) |
+| 11 | `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | 0 | `RESULT: PASSED (0 warnings)`; 12 scenarios checked, 12 mapped to DoD, 0 unmapped; manifest covers 12 contracts; **NO carry-forward** — `FINALIZE-PREREQ-044-V7-001` no longer fires |
+
+All 11 gates green. The two anti-fabrication audits (skip-marker grep + mock-framework grep) returned zero matches across all five Scope 04 test files.
+
+#### Adversarial Coverage Verdict
+
+| Surface | Required Adversarial Inverse | Test Function | Status |
+|---|---|---|---|
+| F02 wiring (production unmapped chat MUST refuse) | Error path returns `ErrNoUserMappingForChat`; no shared-token fallback; counter does NOT tick | `TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError` (unit) + `TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` (integration, asserts counter delta = 0) | ✅ PRESENT |
+| F02 wiring (mapped happy path MUST mint per-user PASETO, never use shared bearer) | Sentinel `WRONG-shared-bearer-DO-NOT-USE` planted on `bot.authToken`; bearer MUST NOT equal sentinel; metric MUST tick once | `TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO` (unit) + `TestF02Wiring_SetPerUserTokenMinter_HappyPath` (integration, asserts delta = 1 AND `Bearer v4.public.` prefix) | ✅ PRESENT |
+| Auth metrics (revocation reason MUST stay in closed bucket set under adversarial input) | SQL-injection-shaped free-text input MUST land in `{unspecified, compromise, rotation, offboarding, test, other}` (label cardinality defense) | `TestAuthRevocation_NormalizesReason` adversarial sub-case `Bobby Tables\n\n\nDROP TABLE auth_tokens;--` → asserts bucket ∈ closed set | ✅ PRESENT |
+| Auth metrics (counter MUST NOT double-count) | Each `Inc()` produces delta = 1; closed-set label values exercised exhaustively | `TestAuthIssuance_IncrementsBySource` (3 sources × delta=1), `TestAuthValidationOutcome_AcceptsClosedSetLabels` (5×2 = 10 combos × delta=1), `TestAuthFailure_AcceptsClosedSetLabels` (6 reasons × delta=1) | ✅ PRESENT |
+| Auth metrics (canonical name prefix MUST hold) | New series MUST share `smackerel_auth_*` prefix so single Prometheus rule sweeps all | `TestAuthMetrics_NamesUseCanonicalPrefix` enforces `strings.HasPrefix(name, "smackerel_auth_")` for every expected series | ✅ PRESENT |
+| Dev empty-token bypass (FR-AUTH-015 unconditional preservation) | Empty `authToken` AND nil minter → bearer == "" → `Authorization` header MUST be unset | `TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty` + `TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset` | ✅ PRESENT |
+| Dev shared-token fallback (legacy single-bearer dev workflow) | nil minter → bearer == legacy `b.authToken` exactly | `TestBot_bearerForChat_NilMinter_FallsBackToSharedToken` + `TestBot_setBearerHeader_NilMinter_AppliesSharedToken` | ✅ PRESENT |
+| Dev unmapped-chat fallback (with minter wired) | Dev minter returns zero-token for unmapped → bearer falls through to shared, NOT errors | `TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared` | ✅ PRESENT |
+| Deprecation flag default (FR-AUTH-017) | `auth.production_shared_token_fallback_enabled: false` is the SST default; `./smackerel.sh check` prints `Config is in sync with SST` | Gate 2 above (`./smackerel.sh check` EXIT=0 with verbatim output line) | ✅ PRESENT |
+
+**Verdict:** Adversarial coverage PASS. Every Scope 04 surface (F02 wiring, auth metrics, deprecation flag, dev/test backward-compat) carries at least one adversarial inverse case that would fail if the corresponding behavior regressed. Sentinel patterns (planted `WRONG-shared-bearer-DO-NOT-USE` strings) detect silent fall-through bugs; counter-delta assertions detect double-counting AND wrong-branch tick-without-mint regressions; closed-set label assertions detect cardinality blow-ups under adversarial reason inputs.
+
+#### Mock Audit + Skip Audit
+
+- **Mock audit:** `grep -nE 'jest\.fn|sinon|nock|msw|gomock|testify/mock' [Scope 04 test files]` → ZERO matches. The only `httptest.NewServer` calls are: (a) `internal/telegram/photo_upload_test.go` — three uses that fake the EXTERNAL Telegram REST API endpoint (legitimate boundary-fake unit-test pattern; tests OUR `postPhotoUpload` helper against a controlled HTTP boundary), and (b) `tests/integration/auth_telegram_f02_wiring_test.go:75` — `httptest.NewServer(api.NewRouter(deps))` wraps the REAL production router with REAL deps (DB-backed `pgxpool`, real auth wiring, real Prometheus default registry). Neither is a mock of our code. The integration test reaches the live test stack via `authTestPool(t)` and fails loudly if `DATABASE_URL` is unreachable.
+- **Skip audit:** `grep -nE 't\.Skip|\.skip\(|xit\(|xdescribe\(|\.only\(|t\.Skipf|test\.todo|it\.todo|pending\(' [Scope 04 test files]` → ZERO matches.
+
+#### Scenario Manifest Status
+
+`specs/044-per-user-bearer-auth/scenario-manifest.json` already ships 12 entries (SCN-AUTH-001..012); `grep -n 'plannedFile' scenario-manifest.json` returns ZERO — every Scope 04 SCN entry (SCN-AUTH-011 + SCN-AUTH-012) carries `evidenceRefs[*].status = "live"` with file references pointing at real shipped tests, smoke commands, and static guarantees. No manifest updates required during this test phase.
+
+#### Operational Discipline (test phase)
+
+- **Terminal hygiene:** IDE `replace_string_in_file` for `report.md` (single targeted append at file tail; small enough to escape the cache-poisoning trap documented in `/memories/repo/ide-cache-poisoning.md`); Python `pathlib.write_text` heredoc for `state.json` per the user-blessed workaround; verified post-write with `python3 -c 'import json; json.load(open(p))'`. Zero shell `>`/`>>`/`tee`/`cat-heredoc-to-file` redirection.
+- **PII rule:** No real Linux usernames, hostnames, IPs, or tailnet identifiers introduced. Generic placeholders only.
+- **No --no-verify:** Standard `git commit` (no flags).
+- **Push policy:** Local-only commit; SSH agent locked per user instruction. NOT pushed.
+- **Test stack lifecycle:** Stack was DOWN at phase start; integration runner brought it up automatically; e2e runner tore it down at exit cleanup. Final state at end of test phase: **DOWN**.
+
+### Per-Scope Test Verdict — Scope 04
+
+✅ **TESTED** — Scope 04 test phase closes per Gate G027 (phase exit gate). All 11 gate commands EXIT=0; all 5 Scope 04 test files inventoried with verified build tags; 16 added test functions all PASS; adversarial coverage PRESENT for every Scope 04 surface (F02 wiring, auth metrics, deprecation flag, dev/test backward-compat); zero mock-framework imports; zero skip markers; zero `plannedFile` residuals in `scenario-manifest.json`. Spec 044 remains `in_progress` because validate + audit + chaos + spec-review + docs + finalize are owned by downstream phase agents, not `bubbles.test`. Next iteration target: **bubbles.validate** (certification of Scope 04 completedPhaseClaims against the live gate evidence above).
+
+**Claim Source:** executed.
+
+---
