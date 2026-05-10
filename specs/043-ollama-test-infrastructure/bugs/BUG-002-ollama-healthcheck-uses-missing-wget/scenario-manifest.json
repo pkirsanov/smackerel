@@ -1,0 +1,63 @@
+{
+  "spec": "043-ollama-test-infrastructure/bugs/BUG-002-ollama-healthcheck-uses-missing-wget",
+  "version": "1.0.0",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-002-001",
+      "name": "ollama container reports healthy via in-image command",
+      "scope": "01-fix-ollama-healthcheck",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_healthcheck_test.go",
+          "function": "TestOllamaHealthcheck_LiveFiles",
+          "status": "implemented"
+        },
+        {
+          "type": "live-stack",
+          "command": "./smackerel.sh test integration",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/ollama_healthcheck_test.go::TestOllamaHealthcheck_LiveFiles"
+      ],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-BUG-002-002",
+      "name": "Adversarial — guard rejects healthcheck commands that reference binaries not in the ollama image",
+      "scope": "01-fix-ollama-healthcheck",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_healthcheck_test.go",
+          "function": "TestOllamaHealthcheck_AdversarialMissingBinary",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_healthcheck_test.go",
+          "function": "TestOllamaHealthcheck_AdversarialMissingBinaryCurl",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/ollama_healthcheck_test.go",
+          "function": "TestOllamaHealthcheck_AdversarialCMDShellWrappedWget",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/ollama_healthcheck_test.go::TestOllamaHealthcheck_AdversarialMissingBinary",
+        "tests/integration/ollama_healthcheck_test.go::TestOllamaHealthcheck_AdversarialMissingBinaryCurl",
+        "tests/integration/ollama_healthcheck_test.go::TestOllamaHealthcheck_AdversarialCMDShellWrappedWget"
+      ],
+      "regressionProtected": true
+    }
+  ]
+}

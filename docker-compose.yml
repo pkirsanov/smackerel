@@ -178,8 +178,17 @@ services:
       - ollama-data:/root/.ollama
     profiles:
       - ollama
+    # spec 043 / BUG-002 (2026-05-10) — healthcheck command MUST invoke a
+    # binary that exists in whichever ollama image the OLLAMA_IMAGE SST key
+    # currently resolves to. The previous wget-spider form broke when
+    # BUG-001 bumped infrastructure.ollama.test.image to a newer ollama
+    # release whose base image ships neither wget nor curl in PATH. The
+    # in-image `ollama list` CLI is a real liveness signal — exits 0 only
+    # when the daemon is reachable on OLLAMA_HOST (default loopback on the
+    # OLLAMA_CONTAINER_PORT). Adversarial guard:
+    # tests/integration/ollama_healthcheck_test.go.
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${OLLAMA_CONTAINER_PORT}/api/tags || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 10s
       timeout: 5s
       retries: 5
