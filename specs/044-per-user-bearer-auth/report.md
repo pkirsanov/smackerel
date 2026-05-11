@@ -6030,3 +6030,98 @@ ok      github.com/smackerel/smackerel/internal/deploy  0.012s
 **Claim Source:** executed.
 
 ---
+
+### Chaos Evidence (Scope 04)
+
+#### Phase summary
+
+`bubbles.chaos` formal phase for Scope 04 (`04-photos-bot-bridge-mint-and-deprecation`) — produced 5 stochastic concurrent / failure-injection chaos behaviors covering the Scope 04 surface (F02 wiring through `Bot.PerUserTokenMinter`, auth-metrics CounterVec atomicity under contention, deprecation-flag `production_shared_token_fallback_enabled` per-instance immutability) plus 1 hot-path benchmark for `BotPasetoMinter.MintForChatID`. All 5 behaviors landed in `tests/integration/auth_chaos_scope04_test.go`, ran under the live test stack with `-race -count=20`, and all 100 invocations PASS clean — race detector observed zero data races, zero panics, zero unexpected statuses. Hot-path benchmark for the F02 mint surface measured at **173,224 ns/op (~0.17 ms/op) / 6,227 B/op / 78 allocs/op**, ~3.5% of the NFR-AUTH-001 ~5 ms/op budget, leaving ample headroom for the production `Bot.handleStartCommand → MintForChatID → bot_session_token persistence → admin notification` end-to-end path.
+
+#### Chaos behavior coverage
+
+| Behavior | Test name | Surface exercised | Stochastic dimension | Hard invariants asserted |
+|---|---|---|---|---|
+| C4-B01 | `TestAuthChaos_S04_F02WiringConcurrentMappedBurst_AllMint` | F02: `Bot.PerUserTokenMinter` injection in production env, 50 concurrent goroutines minting per-user tokens for 50 distinct mapped chat_ids via `productionTelegramBridgeDeps`-constructed minter | Concurrent goroutine schedule under release-gate burst; per-chat random user_id distribution | (1) all 50 admit, (2) per-chat returned user_id matches `telegram_user_chat_map` row, (3) `AuthIssuance{telegram_bridge}` counter delta == 50, (4) race detector clean |
+| C4-B02 | `TestAuthChaos_S04_F02WiringUnmappedConcurrentBurst_AllRefuse` | F02 negative path: 50 concurrent unmapped chat_ids → `MintForChatID` MUST refuse without falling back to a shared-bearer leak | Concurrent goroutine schedule; chat_id stochastic in unmapped range | (1) all 50 refused with `auth.ErrUserNotFound`, (2) `AuthIssuance{telegram_bridge}` counter delta == 0 (refused mints MUST NOT tick the metric), (3) zero shared-token leak in returned bearer, (4) race detector clean |
+| C4-B03 | `TestAuthChaos_S04_DeprecationFlagToggleRace_NoInconsistency` | `production_shared_token_fallback_enabled` per-instance immutability under simulated operator-restart flip; 100 concurrent legacy-bearer requests dispatched to flag=false vs flag=true router based on per-iteration `atomic.Bool` snapshot | Goroutine schedule decides which workers snapshot pre-flip vs post-flip (cohort split is stochastic by design — Go runtime scheduler arbitrates) | (1) per-request status matches per-request flag snapshot (flag=false → 401, flag=true → 200), (2) both cohorts non-empty (proves the test exercised an actual transition rather than degenerating into a single-flag run), (3) cohort total == 100 (no lost results), (4) `AuthLegacyFallbackUsed{production}` counter delta == flag=true cohort size (one tick per admit, zero per reject), (5) race detector clean |
+| C4-B04 | `TestAuthChaos_S04_AuthMetricsCounterConcurrentEmit_AggregatesMatch` | Auth-metrics `smackerel_auth_validation_outcome_total{result, source}` CounterVec atomicity under contention; 100 goroutines × 50 emits each = 5000 total emissions across the 10 closed-set buckets (5 results × 2 sources) | Concurrent goroutine schedule under release-gate; deterministic bucket assignment (`goroutineID % 10`) so per-bucket aggregate is computable up front | (1) per-bucket delta == 500 exact for all 10 buckets (no lost increments under contention — Prometheus CounterVec atomicity intact), (2) aggregate delta == 5000 exact, (3) closed-label-set invariant holds (every emission targets a documented bucket pair), (4) race detector clean |
+| C4-B05 | `TestAuthChaos_S04_LegacyFallbackProductionFlagFalse_AllRejected` | Bot decision-matrix row 4 (legacy `SMACKEREL_AUTH_TOKEN` in production with deprecation flag=false) — 50 concurrent legacy-bearer requests through the production router | Concurrent goroutine schedule; remote_addr stochastic across RFC1918 range | (1) all 50 requests rejected with HTTP 401, (2) `AuthLegacyFallbackUsed{production}` counter delta == 0 (deprecation enforced — no admit, no metric tick), (3) `AuthFailure{paseto_verify_failed}` counter delta == 50 (every reject taxonomized as paseto_verify_failed, not bucketed under a different reason code), (4) race detector clean |
+| C4-BENCH | `BenchmarkAuthChaos_S04_F02MintHotPath` | F02 mint hot-path microbenchmark for `BotPasetoMinter.MintForChatID` against a single mapped chat_id (the production `Bot.handleStartCommand` per-user mint surface) | `-benchtime=10000x` deterministic iteration count | NFR-AUTH-001: per-mint latency MUST stay well within ~5 ms/op budget so the bot's `/start` handler remains snappy at burst |
+
+#### Stress-loop verbatim counts
+
+```text
+$ docker run --rm --network host -v $PWD:/workspace -v smackerel-gomod-cache:/go/pkg/mod -v smackerel-gobuild-cache:/root/.cache/go-build -w /workspace \
+    -e DATABASE_URL=postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/<test-db-name>?sslmode=disable \
+    -e POSTGRES_URL=postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/<test-db-name>?sslmode=disable \
+    -e NATS_URL=nats://<test-auth-token>@127.0.0.1:47002 \
+    -e SMACKEREL_AUTH_TOKEN=<test-auth-token> \
+    golang:1.25.10-bookworm \
+    go test -tags integration -race -count=20 -v -timeout 600s -run '^TestAuthChaos_S04_' ./tests/integration/
+
+===PASS COUNTS===
+  F02WiringConcurrentMappedBurst_AllMint                       20
+  F02WiringUnmappedConcurrentBurst_AllRefuse                   20
+  DeprecationFlagToggleRace_NoInconsistency                    20
+  AuthMetricsCounterConcurrentEmit_AggregatesMatch             20
+  LegacyFallbackProductionFlagFalse_AllRejected                20
+===FAIL COUNTS===
+0
+===RACE DETECTOR===
+0
+===PANIC===
+0
+===AGGREGATE===
+ok      github.com/smackerel/smackerel/tests/integration        24.307s
+EXIT=0
+```
+
+**Total:** 5 chaos tests × 20 stress iterations = **100 invocations**, **100 PASS / 0 FAIL / 0 race detector hits / 0 panics**, package result `ok` in 24.307s, exit code 0.
+
+#### Hot-path benchmark verbatim
+
+```text
+$ docker run --rm --network host -v $PWD:/workspace -v smackerel-gomod-cache:/go/pkg/mod -v smackerel-gobuild-cache:/root/.cache/go-build -w /workspace \
+    -e DATABASE_URL=postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/<test-db-name>?sslmode=disable \
+    -e POSTGRES_URL=postgres://<test-db-user>:<test-db-pw>@127.0.0.1:47001/<test-db-name>?sslmode=disable \
+    -e NATS_URL=nats://<test-auth-token>@127.0.0.1:47002 \
+    -e SMACKEREL_AUTH_TOKEN=<test-auth-token> \
+    golang:1.25.10-bookworm \
+    go test -tags integration -benchmem -bench=BenchmarkAuthChaos_S04_F02MintHotPath -benchtime=10000x -run=^$ ./tests/integration/
+
+goos: linux
+goarch: amd64
+pkg: github.com/smackerel/smackerel/tests/integration
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+BenchmarkAuthChaos_S04_F02MintHotPath-8            10000            173224 ns/op            6227 B/op         78 allocs/op
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        1.842s
+EXIT=0
+```
+
+**Result:** **173,224 ns/op = ~0.17 ms/op / 6,227 B/op / 78 allocs/op**. NFR-AUTH-001 budget per-mint is ~5 ms/op; observed latency is **~3.5% of budget**. Headroom for the full production `Bot.handleStartCommand → MintForChatID → bot_session_token UPSERT → admin notification` path is comfortable.
+
+#### Race-detector verdict
+
+**Clean across all 100 stress invocations** of all 5 chaos behaviors. The 4 surfaces under stress (50-goroutine F02 mint burst with shared minter/Pool/Cache, 50-goroutine F02 refuse burst on unmapped chat_ids, 100-goroutine flag-snapshot race against an `atomic.Bool`-mediated operator-flip simulation, 100-goroutine × 50-emit CounterVec contention) all sustain the race detector without flagging a single read-write or write-write race. The only synchronization primitives the chaos surfaces touch are `sync.WaitGroup`, release-gate `chan struct{}`, `sync/atomic.Bool`, and the SUT's own internal locks (PostgreSQL connection pool, Prometheus CounterVec atomic increments, in-process `revocation.Cache`'s sync.Map). The clean race verdict means the F02 wiring, deprecation-flag enforcement, and auth-metrics emission paths are all data-race free under concurrent load.
+
+#### Flake repaired during chaos phase
+
+C4-B03 (`TestAuthChaos_S04_DeprecationFlagToggleRace_NoInconsistency`) initially asserted strict cohort sizes (`flagOffCount == flipPoint` and `flagOnCount == totalReqs - flipPoint`) on the assumption that goroutines `i < flipPoint` would reliably snapshot `flag=false` and goroutines `i >= flipPoint` would reliably snapshot `flag=true`. This held in the smoke run but failed on stress iteration 1 with `pre-flip cohort size=63 want 50` because the Go runtime scheduler does not preserve goroutine launch order — under stress, workers `i > flipPoint` can win the schedule race and snapshot `flag` before the flipper goroutine reaches `flag.Store(true)`. The cohort split is fundamentally stochastic by design. The fix tightens the assertions to the invariants that ACTUALLY guard the production semantic ("a request belongs to the flag value in effect when its handler started"): both cohorts MUST be non-empty (proves the test exercised an actual transition), per-request status MUST match per-request flag snapshot, and the legacy-fallback metric delta MUST equal the admitted-cohort size. The strict cohort-size assertions were removed, the test header docstring was updated to reflect the stochastic split, and the assertion-block comment block now documents which invariants are hard vs. which are stochastic. After the repair, all 20 stress iterations PASS with cohort splits varying naturally across runs.
+
+#### Chaos-phase exit criteria — all met
+
+- ✅ All 5 chaos behaviors LANDED as live integration tests in `tests/integration/auth_chaos_scope04_test.go` (build tag `integration`, package `integration`, ~720 lines)
+- ✅ All 5 behaviors PASS in stress loop (`-race -count=20`) — **100/100 PASS, 0 FAIL**
+- ✅ No race-detector hits across 100 invocations
+- ✅ Hot-path benchmark recorded with verbatim ns/op + B/op + allocs/op + budget comparison
+- ✅ One in-phase test repair (C4-B03 cohort-size assertion → cohort-non-empty invariant) recorded with root cause + fix
+- ✅ Test stack brought UP via `./smackerel.sh --env test up` (5/5 containers Healthy); chaos run executed via direct `docker run` against `golang:1.25.10-bookworm` to bypass the smackerel.sh `test integration` lifecycle trap (which auto-tears the stack down on completion) AND to access the `-race -count=20 -bench=...` flags that the smackerel.sh wrapper does not surface; test stack left UP for downstream phases
+- ✅ Verbatim stress + benchmark output recorded in this section
+- ✅ Sibling regression preserved: S02 (9 chaos tests) + S03 (5 chaos tests) all still PASS in the smoke run executed against the same test stack
+
+**Operational discipline:** test stack started via `./smackerel.sh --env test up`; chaos test file authored via IDE `create_file` (compile-clean, vet-clean); stress + benchmark executed via direct `docker run` (smackerel.sh `test integration` does not surface `--go-count`/`--go-race`/`--bench` flags AND tears the stack down at end of run); IDE `replace_string_in_file` for report.md targeted append; `pathlib.write_text` heredoc for state.json per `/memories/repo/ide-cache-poisoning.md` USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write; PII rule honored (test-DB credentials and tokens anonymized in transcribed commands; container-emitted hostname/IP byproducts redacted from filtered output); NO `--no-verify`; NOT pushed (SSH agent locked per user instruction).
+
+**Claim Source:** executed.
+
+---
