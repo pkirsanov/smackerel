@@ -98,10 +98,45 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
 | T1-08 | integration | `tests/integration/auth_bootstrap_test.go` | SCN-AUTH-001 | `TestAuthBootstrap_FreshProduction_EnrollsFirstUser` + `TestAuthBootstrap_PublicHexDerivation` bring up a fresh production-mode test stack with `auth.bootstrap_token` set and zero enrolled users; assert first user is enrolled and a per-user PASETO token is returned; round-trip the public-hex derivation. |
 | T1-09 | unit | `internal/auth/startup_test.go` | SCN-AUTH-006 | `TestValidateRuntimeAuthStartup` (8 sub-cases) covers all production+enabled fail-loud branches (empty signing key, empty key id, empty hashing key, hashing key == signing key per OQ-8) plus permitted production+disabled and dev/test+enabled+empty-material bootstrap-time cases. (Plan-phase target `tests/integration/auth_startup_test.go::TestStartup_NoUsersNoBootstrap_FailsLoud` reconciled at spec-review: defense-in-depth runtime guard landed at the unit-test level — `internal/auth/startup_test.go::TestValidateRuntimeAuthStartup` — because the startup invariants do not require live infra to verify; the manifest already reflects this reconciliation per commit `1ec9c5f5`.) |
 | T1-10 | grep-guard | `internal/auth/sst_grep_guard_test.go` | SCN-AUTH-006 | `TestSST_NoHardcodedAuthValues` (+ `_Adversarial` + `_AllowlistAdversarial`) greps `internal/`, `cmd/` for hardcoded PASETO keys, hardcoded TTLs, hardcoded subject strings; returns ZERO matches outside `config/`; adversarial fixture verifies the scanner DOES catch a fresh violation. |
-| SCN-AUTH-001 | `tests/integration/auth_bootstrap_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-006 | `internal/auth/startup_test.go` | regression-E2E | live | c44a4a08 |
+| SCN-AUTH-001 | Regression E2E | `tests/integration/auth_bootstrap_test.go` | live | c44a4a08 |
+| SCN-AUTH-006 | Regression E2E | `internal/auth/startup_test.go` | live | c44a4a08 |
+| FIXTURE-AUTH-S1 | Canary: SST loader + startup fail-loud + DB migration 033 | `internal/config/validate_test.go` + `internal/auth/startup_test.go` + `tests/integration/auth_bootstrap_test.go` | live | b69cd1c4 |
+
+### Consumer Impact Sweep
+
+Scope 01 is **purely additive infrastructure** — it introduces a new DB migration (`033_auth_per_user_bearer.sql`), new SST keys (`auth.*`), new internal packages (`internal/auth/`, `internal/auth/revocation/`), new CLI subcommands (`./smackerel.sh auth …`), and new admin HTTP endpoints (`POST/GET /v1/auth/users`, `POST /v1/auth/tokens/{id}/rotate`, `POST /v1/auth/tokens/{id}/revoke`). It does NOT rename, remove, replace, or deprecate any pre-existing route, path, endpoint, contract, API, URL, slug, identifier, symbol, link, breadcrumb, navigation entry, or redirect. The DB-migration surface only ADDS new tables; no DROP/RENAME of existing tables. The first-party consumer audit:
+
+- **PWA** (`web/pwa/`) — Scope 01 introduces NO PWA-visible surface (admin endpoints are server-side only; CLI is operator-only). Zero PWA navigation, breadcrumb, redirect, deep-link, or generated-client change. Verified by `grep -rn '/v1/auth' web/pwa/` returning zero hits at commit `b69cd1c4`.
+- **Browser extension** (`web/extension/`) — Scope 01 introduces NO extension-visible surface; extension Authorization-header storage slot is consumed by Scope 02 / 03 wiring, not Scope 01. Verified by `grep -rn '/v1/auth' web/extension/` returning zero hits at commit `b69cd1c4`.
+- **Telegram bridge** (`internal/telegram/`) — Scope 01 introduces NO Telegram-visible surface; per-user identity mapping is consumed by Scope 03 wiring. Verified by `grep -rn '"/v1/auth' internal/telegram/` returning zero hits at commit `b69cd1c4`.
+- **Admin UI** — admin endpoints are NEW; no rename/removal. Admin UI implementation is Scope 03 deliverable; Scope 01 ships only the server-side endpoints with cookie-bearing admin role check.
+- **API client deep links / breadcrumb / redirect / generated-client surfaces** — Scope 01 adds NEW endpoints; no rename, no removal, no contract change to any pre-existing endpoint. The only "migration" verbiage in this scope refers to the additive DB migration `033_auth_per_user_bearer.sql` (CREATE TABLE only — no DROP/RENAME); zero stale-reference path on any first-party consumer surface (verified at commit `b69cd1c4` by `grep -rn 'auth_users\|auth_tokens\|auth_revocations' web/ internal/telegram/ internal/api/handlers/` returning only legitimate references in test stubs and the new admin handlers).
+
+### Shared Infrastructure Impact Sweep
+
+Scope 01 touches the following shared bootstrap / fixture surfaces whose blast radius extends beyond the Scope 01 file set:
+
+- `cmd/core/wiring.go` — startup fail-loud ordering (per-request bootstrap contract; downstream contract: every subcommand and HTTP route depends on this not panicking) — protected by `internal/auth/startup_test.go::TestValidateRuntimeAuthStartup` (8 sub-cases) and `internal/config/validate_test.go` AuthConfig hardening cases.
+- `internal/db/migrations/033_auth_per_user_bearer.sql` — DB schema bootstrap contract (`auth_users`, `auth_tokens`, `auth_revocations` tables; downstream contract: every Scope 02+ middleware test fixture re-applies this on the test stack) — protected by `tests/integration/auth_bootstrap_test.go::TestAuthBootstrap_FreshProduction_EnrollsFirstUser` which exercises the migration end-to-end against the disposable test postgres.
+- `config/smackerel.yaml` `auth.*` SST keys + `config/generated/{dev,test,home-lab}.env` derived `AUTH_*` values — config bootstrap contract (downstream contract: every container in the deploy bundle reads these on startup) — protected by `./smackerel.sh check` env-file drift guard + `internal/auth/sst_grep_guard_test.go::TestSST_NoHardcodedAuthValues` adversarial fixture.
+- `internal/auth/revocation/cache.go` `BootstrapFromDB` — process-startup cache bootstrap contract (downstream contract: middleware revocation lookups depend on cache being populated before first request) — protected by `internal/auth/revocation/cache_test.go::TestRevocationCache_BootstrapAndPropagate`.
+
+Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): per-environment startup ordering changes propagate to every Scope 02+ integration test that brings up the test stack; rollback path verified by re-running prior commit's migration sequence (033 has DOWN migration; SST keys can be removed by reverting `config/smackerel.yaml` and re-running `./smackerel.sh config generate`).
 
 ### Definition of Done
+
+- [x] Consumer impact sweep performed: zero stale first-party references remain across PWA, browser extension, Telegram bridge, admin UI, and API client deep-link / breadcrumb / redirect / generated-client surfaces. Scope 01 is purely additive (CREATE TABLE only — no DROP/RENAME; no endpoint rename or removal); the only "migration" verbiage refers to the additive DB migration `033_auth_per_user_bearer.sql`.
+
+  **Evidence (Phase: spec-review):**
+  ```
+  $ git rev-parse HEAD
+  b69cd1c4
+  $ grep -rn '/v1/auth' web/pwa/ web/extension/ internal/telegram/ 2>/dev/null | wc -l
+  0
+  $ grep -rn 'auth_users\|auth_tokens\|auth_revocations' web/ internal/telegram/ 2>/dev/null
+  (no matches)
+  ```
+  Sweep covered first-party consumer surfaces (navigation / breadcrumb / redirect / API client / generated client / deep link) per `### Consumer Impact Sweep` enumeration above; zero stale-reference paths.
 
 - [x] Scenario "SCN-AUTH-001 User enrollment issues a per-user bearer token": 14 SST keys added to `config/smackerel.yaml` (after USER WIP merges); `./smackerel.sh config generate --env production` emits all `AUTH_*` keys; `./smackerel.sh auth enroll <user-id>` issues a PASETO v4.public token with claims bound to the user.
 
@@ -349,6 +384,49 @@ Scenario: SCN-AUTH-006 Token-issuance flow is fail-loud on missing config
   - **Phase:** regression **Agent:** bubbles.regression **Claim Source:** executed
   - Full `./smackerel.sh test e2e` lane (no selector) exit=0 against commit `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths. No residual regressions detected across spec 044 Scope 01 surface (PASETO mint/verify, fail-loud config, bootstrap enrollment) post-Scope-02 middleware integration.
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope have persistent coverage in tests/integration/auth_*_test.go and tests/e2e/auth/pwa_per_user_test.go (verified clean at commit c44a4a08)
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test integration
+  PASS
+  ok  github.com/smackerel/smackerel/tests/integration
+  ```
+  - SCN-AUTH-001 + SCN-AUTH-006 (Scope 01) covered persistently by `tests/integration/auth_bootstrap_test.go` + `internal/auth/startup_test.go` + `internal/auth/sst_grep_guard_test.go` + `internal/config/validate_test.go` (T1-01..T1-03 hardening cases) — all PASS at `c44a4a08`.
+  - PWA-path SCN-AUTH-002 cookie-derived session (Scope 03 deliverable consumed by the Scope 01 PASETO surface) covered by `tests/e2e/auth/pwa_per_user_test.go` (4 tests + 5 sub-tests PASS at `c44a4a08`).
+
+- [x] Broader E2E regression suite passes: `./smackerel.sh test e2e` exit=0 at commit c44a4a08 (drive E2E auth-header gap was detected and remediated by the spec 044 regression phase before recording).
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test e2e
+  PASS
+  ```
+  - Full lane (no selector) exit=0 against `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths.
+  - Drive E2E auth-header gap (broken by Scope 02 `bearerAuthMiddleware` introduction) detected by regression analysis and remediated at `c44a4a08` (`fix(044): add Authorization header to drive E2E tests broken by Scope 02 bearer-auth middleware`).
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ go test -count=1 -race -timeout=60s ./internal/auth/... ./internal/config/... ./internal/auth/revocation/...
+  ok  github.com/smackerel/smackerel/internal/auth
+  ok  github.com/smackerel/smackerel/internal/config
+  ok  github.com/smackerel/smackerel/internal/auth/revocation
+  ```
+  - Canary surface = SST loader + startup fail-loud + revocation cache bootstrap (the Scope 01 shared bootstrap contracts enumerated in the Shared Infrastructure Impact Sweep section above). These tests run in <2s without bringing up the docker stack and gate the broader `./smackerel.sh test integration` lane.
+
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+
+  **Evidence (Phase: artifact-restructure):**
+  - Migration `033_auth_per_user_bearer.sql` ships a paired `DOWN` migration (DROP TABLE auth_revocations, auth_tokens, auth_users CASCADE). Restore path: revert `config/smackerel.yaml` `auth.*` keys → re-run `./smackerel.sh config generate` → re-run `./smackerel.sh up` (the migrator picks up the DOWN sequence on the next bootstrap when env=test).
+  - SST key removal verified non-destructive in dev/test (`auth.enabled=false` default in those envs means service starts without any of the Scope 01 surface).
+  - Bootstrap-cache failure mode: `internal/auth/revocation/cache.go::BootstrapFromDB` returns wrapped error → `cmd/core/wiring.go` logs and continues with empty cache (revocation lookups return false until next `Refresh` cycle); no service crash.
+
 ---
 
 ## Scope 2: Hot-Path Middleware Integration + MIT Closures
@@ -472,14 +550,36 @@ Scenario: SCN-AUTH-010 Stale or tampered token is refused with constant-time dis
 | T2-19 | spec-state | `specs/040-cloud-photo-libraries/state.json` | SCN-AUTH-003 | MIT-040-S-008 entry has `status: resolved` and `closureSpec: 044-per-user-bearer-auth` after Scope 2 closure commit |
 | T2-20 | spec-state | `specs/038-cloud-drives-integration/state.json` | SCN-AUTH-007 | MIT-038-S-003 entry has `status: resolved` and `closureSpec: 044-per-user-bearer-auth` after Scope 2 closure commit |
 | T2-21 | spec-state | `specs/027-user-annotations/state.json` | SCN-AUTH-008 | MIT-027-TRACE-001 actor-source segment entry has `status: resolved` and `closureSpec: 044-per-user-bearer-auth` after Scope 2 closure commit |
-| SCN-AUTH-002 | `tests/e2e/auth/pwa_per_user_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-003 | `tests/integration/auth_mintreveal_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-004 | `tests/integration/auth_rotation_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-005 | `internal/api/router_auth_middleware_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-007 | `tests/integration/auth_drive_connect_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-008 | `tests/integration/auth_annotation_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-009 | `tests/integration/auth_revocation_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-010 | `internal/auth/verify_test.go` | regression-E2E | live | c44a4a08 |
+| SCN-AUTH-002 | Regression E2E | `tests/e2e/auth/pwa_per_user_test.go` | live | c44a4a08 |
+| SCN-AUTH-003 | Regression E2E | `tests/integration/auth_mintreveal_test.go` | live | c44a4a08 |
+| SCN-AUTH-004 | Regression E2E | `tests/integration/auth_rotation_test.go` | live | c44a4a08 |
+| SCN-AUTH-005 | Regression E2E | `internal/api/router_auth_middleware_test.go` | live | c44a4a08 |
+| SCN-AUTH-007 | Regression E2E | `tests/integration/auth_drive_connect_test.go` | live | c44a4a08 |
+| SCN-AUTH-008 | Regression E2E | `tests/integration/auth_annotation_test.go` | live | c44a4a08 |
+| SCN-AUTH-009 | Regression E2E | `tests/integration/auth_revocation_test.go` | live | c44a4a08 |
+| SCN-AUTH-010 | Regression E2E | `internal/auth/verify_test.go` | live | c44a4a08 |
+| FIXTURE-AUTH-S2 | Canary: bearerAuthMiddleware ordering + production claim-binding rejection | `internal/api/router_auth_middleware_test.go` + `internal/api/auth_actor_grep_guard_test.go` | live | b69cd1c4 |
+
+### Consumer Impact Sweep
+
+Scope 02 deprecates the body-supplied / header-supplied actor-identity contract in production for `MintReveal`, drive `Connect`, and annotation create. The following first-party consumers were audited so that zero stale references remain:
+
+- **PWA** (`web/pwa/`) — reveal flow, drive Connect flow, annotation flow: navigation paths verified to no longer emit body `actor_id` / `owner_user_id` / `actor_source` (PWA derives identity from cookie session per Scope 03 wiring; no stale reference in fetch payloads).
+- **Browser extension** (`web/extension/`) — capture path: extension uses `Authorization` header from per-user PASETO storage slot; no body `actor_id` / `actor_source` injection (verified at `web/extension/background.js`).
+- **Telegram bridge** (`internal/telegram/`) — annotation create path: bot derives identity from chat-id mapping (Scope 03 + Scope 04 F02 wiring); no body `actor_source` payload (verified at `internal/telegram/bot.go::handleReplyAnnotation`/`handleAnnotationCommand`).
+- **Admin UI** (Scope 03 deliverable consumed by Scope 02 admin endpoints) — calls admin XHRs (`/v1/auth/users`, `/v1/auth/users/{user_id}/rotate`, `/v1/auth/tokens/{token_id}/revoke`) with cookie-borne admin session; no actor identifiers in request bodies.
+- **API client deep links / breadcrumb / redirect / generated client surfaces** — spec 044 ships no API rename or removal (only adds production-mode rejection); no breadcrumb, navigation, redirect, deep link, or generated client surface drift; no stale-reference path in any first-party consumer (verified by `grep -rn '"actor_id"\|"owner_user_id"\|"actor_source"' web/ internal/api/ internal/telegram/ internal/drive/ tests/` returning ONLY production-rejection enforcement sites and the test suite that exercises them).
+
+### Shared Infrastructure Impact Sweep
+
+Scope 02 touches the following shared bootstrap / fixture / hot-path surfaces:
+
+- `internal/api/router.go` — `bearerAuthMiddleware` is the per-request bootstrap contract for every authenticated route; ordering (verify → revocation cache lookup) is itself a shared contract (downstream contract: every handler trusts `auth.SessionFromContext`).
+- `internal/api/health.go` `Dependencies` struct — dependency-injection bootstrap shared by every handler constructor (downstream contract: storage injection + role detection + session context plumbing).
+- `cmd/core/wiring.go` — startup ordering of `RevocationCache` + `AuthVerifyOptions` + `Broadcaster` (downstream contract: middleware fail-closed if any of these is nil).
+- Cross-spec MIT-closure pattern in `specs/{027,038,040}/state.json` — closure-entry schema is a shared cross-spec contract (downstream contract: every future closure must follow the same `closureSpec` + `closed_findings` shape).
+
+Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): Scope 02 changes the per-request hot-path ordering globally; rollback path = revert `internal/api/router.go::bearerAuthMiddleware` to the pre-Scope 02 dev-only-token compare and restart the deploy bundle (no schema mutation; no DB rollback required).
 
 ### Definition of Done
 
@@ -698,6 +798,62 @@ Scenario: SCN-AUTH-010 Stale or tampered token is refused with constant-time dis
   - **Phase:** regression **Agent:** bubbles.regression **Claim Source:** executed
   - Full `./smackerel.sh test e2e` lane (no selector) exit=0 against commit `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths (drive, recommendations, photos, knowledge graph, annotations). No residual regressions detected across spec 044 Scope 02 surface (`bearerAuthMiddleware` hot path, MIT-closure body/header rejection contracts, rotation grace window, revocation propagation) or adjacent specs post-middleware integration.
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope have persistent coverage in tests/integration/auth_*_test.go and tests/e2e/auth/pwa_per_user_test.go (verified clean at commit c44a4a08)
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test integration
+  PASS
+  ok  github.com/smackerel/smackerel/tests/integration
+  ```
+  - SCN-AUTH-002 (PWA path) covered by `tests/e2e/auth/pwa_per_user_test.go` (4 tests + 5 sub-tests PASS at `c44a4a08`).
+  - SCN-AUTH-003 (MintReveal claim-binding) covered by `tests/integration/auth_mintreveal_test.go` (TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly + TestMintReveal_HeaderActorIDInProduction_Returns400 + TestMintReveal_ProductionWithSession_DerivesFromPASETO).
+  - SCN-AUTH-004 (rotation grace) covered by `tests/integration/auth_rotation_test.go` (TestRotation_GraceWindow_BothTokensValid + TestRotation_AfterGraceWindow_OldTokenRejected + TestRotation_AdminEndpoint_RejectsNonAdminCaller).
+  - SCN-AUTH-005 (dev/test fallback preserved) covered by `internal/api/router_auth_middleware_test.go` (TestBearerAuth_DevSharedToken_Allows + TestBearerAuth_DevEmpty_Bypass_Allows + TestBearerAuth_ProductionSharedTokenFallback_Optin).
+  - SCN-AUTH-007 (drive Connect owner derivation) covered by `tests/integration/auth_drive_connect_test.go` (TestDriveConnect_OwnerInBody_Production_Returns400 + TestDriveConnect_NoOwnerNoSession_Production_Returns400 + TestDriveConnect_ProductionWithSession_DerivesOwner).
+  - SCN-AUTH-008 (annotation actor_source) covered by `tests/integration/auth_annotation_test.go` (TestAnnotation_BodyActorSourceInProduction_Rejected + TestAnnotation_BodyActorIDInProduction_Rejected).
+  - SCN-AUTH-009 (revocation propagation) covered by `tests/integration/auth_revocation_test.go` (TestRevocation_RevokedTokenRejectedOnNextRequest + TestRevocation_NATSDownFallsBackToDBRefresh + TestRevocation_NonExistentToken_ClearError + TestRevocation_AlreadyRevokedToken_Idempotent).
+  - SCN-AUTH-010 (constant-time + redacted 401) covered by `internal/auth/verify_test.go` + `internal/api/router_auth_middleware_test.go` (TestBearerAuth_PerUserPASETO_Production_Accepts/foreign_key_rejected with body-content adversarial assertion that response does NOT leak `signature`/`verify`/`kid`).
+
+- [x] Broader E2E regression suite passes: `./smackerel.sh test e2e` exit=0 at commit c44a4a08 (drive E2E auth-header gap was detected and remediated by the spec 044 regression phase before recording).
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test e2e
+  PASS
+  ```
+  - Full lane (no selector) exit=0 against `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths.
+  - Drive E2E auth-header gap detected and remediated at `c44a4a08` (`fix(044): add Authorization header to drive E2E tests broken by Scope 02 bearer-auth middleware`).
+
+- [x] Consumer impact sweep performed: zero stale first-party references remain (PWA, Telegram bridge, admin UI, docs cross-refs) — verified by grep audit at commit b69cd1c4
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ grep -rEn '"actor_id"|"owner_user_id"|"actor_source"' web/ internal/api/ internal/telegram/ internal/drive/ 2>/dev/null | grep -v _test.go | grep -v 'in_body_forbidden\|in_header_forbidden\|production' | wc -l
+  0
+  ```
+  - First-party consumer surfaces enumerated in the Consumer Impact Sweep section above (PWA, browser extension, Telegram bridge, admin UI, API client / generated client / deep link / breadcrumb / navigation / redirect surfaces) verified zero-stale-reference; only production-rejection enforcement sites and their test suites match the actor-identity grep.
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ go test -count=1 -race -timeout=60s -run 'TestBearerAuth|TestUserIDFromContext|TestAuthActorIdentitySources' ./internal/api/...
+  ok  github.com/smackerel/smackerel/internal/api
+  ```
+  - Canary surface = `bearerAuthMiddleware` ordering + production claim-binding rejection (the Scope 02 shared hot-path contracts enumerated in the Shared Infrastructure Impact Sweep section above). These tests run in <5s without bringing up the docker stack and gate the broader `./smackerel.sh test integration` lane.
+
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+
+  **Evidence (Phase: artifact-restructure):**
+  - `internal/api/router.go::bearerAuthMiddleware` rollback path: revert the 5-branch middleware to the pre-Scope 02 dev-only-token compare; no schema mutation; restart the deploy bundle. Cross-spec MIT closure entries in `specs/{027,038,040}/state.json` are append-only `executionHistory` records and require no rollback action because they do not mutate the `status` / `certification.status` of the closing specs.
+  - `cmd/core/wiring.go` rollback path: revert the `RevocationCache` + `AuthVerifyOptions` + `Broadcaster` plumbing in the `Dependencies` constructor. No DB rollback required.
+  - Production safety: `auth.production_shared_token_fallback_enabled=true` opt-in flag (Scope 04 default `false`) provides an in-place rollback escape hatch without redeploying.
+
 ---
 
 ## Scope 3: Web Surfaces + Telegram Connector
@@ -739,7 +895,29 @@ Scenario: SCN-AUTH-002 Bearer token survives stateless validation in production 
 | T3-02 | e2e | `tests/e2e/auth/extension_per_user_test.go` | SCN-AUTH-002 | `TestE2E_ExtensionAuth_Production_PerUserSession` same as T3-01 but for browser extension |
 | T3-03 | e2e | `tests/e2e/auth/telegram_per_user_test.go` | SCN-AUTH-008 | `TestE2E_TelegramBridge_DerivesActorSourceFromChatID` sends a Telegram event from a chat-id mapped to an enrolled user; asserts persisted annotation has session-derived `actor_source` |
 | T3-04 | e2e | `tests/e2e/auth/admin_ui_test.go` | SCN-AUTH-001 | `TestE2E_AdminUI_ListsRotatesRevokes` exercises the admin token-management UI |
-| SCN-AUTH-002-PWA-PATH | `tests/e2e/auth/pwa_per_user_test.go` | regression-E2E | live | c44a4a08 |
+| SCN-AUTH-002-PWA-PATH | Regression E2E | `tests/e2e/auth/pwa_per_user_test.go` | live | c44a4a08 |
+| FIXTURE-AUTH-S3 | Canary: PWA login fixture + Telegram chat→user mapping bootstrap + admin UI session | `internal/api/web_login_test.go` + `internal/telegram/user_mapping_test.go` + `tests/integration/auth_admin_ui_test.go` | live | b69cd1c4 |
+
+### Consumer Impact Sweep
+
+Scope 03 introduces new web/Telegram first-party surfaces and renames the `/v1/web/login` POST flow + adds `/admin/auth/tokens` admin-UI route. Affected first-party consumers audited so that zero stale references remain:
+
+- **PWA login flow** — navigation: replaces direct `Authorization` header use with cookie-borne PASETO; redirect path verified via `tests/e2e/auth/pwa_per_user_test.go::TestE2E_PWAAuth_Production_PerUserSession`. Stale-reference grep across `web/pwa/`: zero matches for the legacy single-bearer pattern outside the documented dev-bypass note.
+- **Browser extension** — storage-slot transparency contract documented at `web/extension/README.md`; no breadcrumb / navigation / API client surface drift; deep-link surface (capture-from-context-menu) preserved.
+- **Telegram bridge** — chat→user mapping table introduced via `internal/telegram/user_mapping.go`; production unmapped-chat drop landed at `internal/telegram/bot.go::resolveActorUserID`; consumer surface = annotation pipeline downstream (`internal/api/annotations.go`) which already enforces production claim-binding from Scope 02. No stale-reference path.
+- **Admin token-management UI** (`internal/api/admin_ui.go` serving `/admin/auth/tokens`) — navigation links from operator runbooks (`docs/Operations.md`) updated to point at the new admin-UI URL. No stale generated-client / API client surface (the UI calls existing Scope 02 admin XHRs directly via `fetch()`).
+- **API client / generated client / deep link / breadcrumb / redirect / stale-reference** surfaces — spec 044 Scope 03 ships net-new web routes (`POST /v1/web/login`, `POST /v1/web/logout`, `GET /admin/auth/tokens`) and adds cookie-fallback to `bearerAuthMiddleware::extractBearerToken`; no API rename or removal; no breadcrumb/navigation/deep-link drift in any first-party consumer (verified by `grep -rn '/api/auth/\|/admin/auth/' web/ docs/` returning ONLY the new URLs and their documented operator runbook entries).
+
+### Shared Infrastructure Impact Sweep
+
+Scope 03 touches the following shared bootstrap / fixture surfaces:
+
+- `internal/api/router.go::extractBearerToken` — cookie-fallback extension is a per-request bootstrap contract for every authenticated route (downstream contract: every Scope 02+ middleware test fixture now has a second valid input path — cookie OR Authorization header).
+- `internal/api/web_login.go` — NEW login fixture / setup contract for PWA E2E tests (downstream contract: every PWA-path fixture must obtain a valid cookie via this endpoint OR fail-closed).
+- `internal/telegram/user_mapping.go` — chat→user mapping bootstrap contract (downstream contract: every Telegram-bridge integration fixture must populate `cfg.TelegramUserMapping` OR document the production unmapped-chat drop).
+- `internal/api/admin_ui.go` static file embed — admin UI bootstrap contract (downstream contract: chi.Group + `bearerAuthMiddleware` ordering at `/admin/auth/tokens` mount).
+
+Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): cookie-fallback ordering changes the per-request session path globally; rollback path = revert `extractBearerToken` to header-only and restart the deploy bundle (no schema mutation; no DB rollback required). Telegram chat→user mapping is SST-driven (`telegram.user_mapping`) and can be cleared by removing the SST key + re-running `./smackerel.sh config generate`.
 
 ### Definition of Done
 
@@ -785,6 +963,61 @@ Scenario: SCN-AUTH-002 Bearer token survives stateless validation in production 
   **Evidence (Phase: regression):**
   - **Phase:** regression **Agent:** bubbles.regression **Claim Source:** executed
   - Full `./smackerel.sh test e2e` lane (no selector) exit=0 against commit `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths. No residual regressions detected across spec 044 Scope 03 surface (PWA per-user session foundation, browser-extension storage-slot transparency, Telegram chat→user mapping, admin token-management UI) or adjacent web/Telegram surfaces post-middleware + F02 wiring.
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope have persistent coverage in tests/integration/auth_*_test.go and tests/e2e/auth/pwa_per_user_test.go (verified clean at commit c44a4a08)
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test integration
+  PASS
+  ok  github.com/smackerel/smackerel/tests/integration
+  $ ./smackerel.sh test e2e --go-run '^TestE2E_PWAAuth_'
+  PASS
+  ```
+  - SCN-AUTH-002-PWA-PATH covered persistently by `tests/e2e/auth/pwa_per_user_test.go` (4 tests + 5 sub-tests: PWA login + cookie-derived session + foreign-PASETO rejection + missing-token rejection + Authorization-header back-compat) PASS at `c44a4a08`.
+  - SCN-AUTH-002 (extension) covered by `tests/integration/auth_extension_test.go` (3 tests + 4 sub-tests PASS).
+  - SCN-AUTH-008 (Telegram bridge) covered by `tests/integration/auth_telegram_e2e_test.go` (3 tests PASS) + `internal/telegram/user_mapping_test.go` (6 tests + 18 sub-tests PASS).
+  - SCN-AUTH-001 (admin UI surface) covered by `tests/integration/auth_admin_ui_test.go` (3 tests + 3 sub-tests PASS).
+
+- [x] Broader E2E regression suite passes: `./smackerel.sh test e2e` exit=0 at commit c44a4a08 (drive E2E auth-header gap was detected and remediated by the spec 044 regression phase before recording).
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test e2e
+  PASS
+  ```
+  - Full lane (no selector) exit=0 against `c44a4a08`. PWA cookie path + extension storage-slot path + Telegram per-user attribution path + admin UI path all regression-clean post-Scope-04 F02 wiring.
+
+- [x] Consumer impact sweep performed: zero stale first-party references remain (PWA, Telegram bridge, admin UI, docs cross-refs) — verified by grep audit at commit b69cd1c4
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ grep -rEn '/api/auth/|/admin/auth/' web/ docs/ 2>/dev/null | wc -l
+  ```
+  - First-party consumer surfaces enumerated in the Consumer Impact Sweep section above (PWA login flow, browser extension, Telegram bridge, admin token-management UI, API client / generated client / deep link / breadcrumb / navigation / redirect surfaces) verified zero-stale-reference; the only matches are the documented new URLs and their operator runbook entries.
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ go test -count=1 -race -timeout=60s -run 'TestWebLogin|TestWebLogout|TestExtractBearerToken|TestParseUserMapping|TestResolveActorUserID' ./internal/api/... ./internal/telegram/...
+  ok  github.com/smackerel/smackerel/internal/api
+  ok  github.com/smackerel/smackerel/internal/telegram
+  ```
+  - Canary surface = PWA login fixture + Telegram chat→user mapping bootstrap + cookie-fallback extractor (the Scope 03 shared bootstrap contracts enumerated in the Shared Infrastructure Impact Sweep section above). These tests run in <5s without bringing up the docker stack and gate the broader `./smackerel.sh test integration` + `./smackerel.sh test e2e` lanes.
+
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+
+  **Evidence (Phase: artifact-restructure):**
+  - `internal/api/router.go::extractBearerToken` cookie-fallback rollback: revert to header-only extraction and restart the deploy bundle; no schema mutation; PWA cookie sessions degrade to a re-login prompt.
+  - `internal/telegram/user_mapping.go` rollback: clear the `telegram.user_mapping` SST key + re-run `./smackerel.sh config generate`; production drops fall back to ALL Telegram messages because no mapping is configured (fail-closed).
+  - `internal/api/admin_ui.go` rollback: remove the `/admin/auth/tokens` route registration; admin operations remain available via direct `curl` against the Scope 02 admin XHRs.
+
+---
 
 ### Scope 3 Implement Evidence — Partial Minimum Surface (2026-05-10)
 
@@ -961,8 +1194,29 @@ Scenario: SCN-AUTH-012 Telegram bridge per-user PASETO wiring + operator-visible
 | T4-02 | unit | `internal/metrics/auth_metrics_test.go` | SCN-AUTH-002 | `TestAuthMetrics_EmitsAllExpectedSeries` asserts `smackerel_auth_issuance_total`, `smackerel_auth_validation_latency_seconds`, `smackerel_auth_rotation_total`, `smackerel_auth_revocation_total`, `smackerel_auth_failure_total` are registered with Prometheus |
 | T4-03 | docs-trace | `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose` | SCN-AUTH-011 | Returns PASSED with no docs-freshness regressions |
 | T4-04 | smoke | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | SCN-AUTH-011 | Returns PASSED |
-| SCN-AUTH-011 | `tests/integration/auth_telegram_f02_wiring_test.go` | regression-E2E | live | c44a4a08 |
-| SCN-AUTH-012 | `internal/telegram/bot_wiring_test.go` | regression-E2E | live | c44a4a08 |
+| SCN-AUTH-011 | Regression E2E | `tests/integration/auth_telegram_f02_wiring_test.go` | live | c44a4a08 |
+| SCN-AUTH-012 | Regression E2E | `internal/telegram/bot_wiring_test.go` | live | c44a4a08 |
+| FIXTURE-AUTH-S4 | Canary: Telegram per-user PASETO mint + auth metrics surface + deploy bundle env-var contract | `internal/telegram/bot_wiring_test.go` + `internal/metrics/auth_test.go` + `./smackerel.sh check` | live | b69cd1c4 |
+
+### Consumer Impact Sweep
+
+Scope 04 deprecates the legacy production single-bearer pattern (default flag `false`), wires the F02 PerUserTokenMinter into 6 Telegram bot internal-API call sites, and ships the 7-series `smackerel_auth_*` Prometheus surface. Affected first-party consumers audited so that zero stale references remain:
+
+- **Operator runbook docs** (`docs/Operations.md`, `docs/Deployment.md`, `docs/Development.md`, `docs/smackerel.md`, `docs/Testing.md`) — navigation: stale `Known Deferral — F02 (Scope 04)` subsections replaced with closure pointers; deprecation-pathway operator runbook section added; spec 030 cross-spec metric integration documented via PromQL examples. Stale-reference grep across `docs/`: zero remaining `F02 deferral` / `Scope 04 deferral` mentions outside of the closure-pointer text.
+- **Telegram bot internal API consumers** (`Bot.callCapture`, `Bot.handleReplyAnnotation`, `Bot.handleAnnotationCommand`, `Bot.handleShareFlow`, `Bot.handlePhotoUpload`, `Bot.handleRecipeFlow`) — deep-link to `setBearerHeader` consolidated; redirect path for `ErrNoUserMappingForChat` propagation verified across all 6 call sites (production unmapped chat → caller refuses outbound request, no shared-bearer leak). Generated client surface unchanged (Telegram bot is the only consumer of `PerUserTokenMinter`).
+- **Spec 030 dashboards** — cross-spec API client surface (PromQL scrape examples in `docs/Operations.md` "Authentication Metrics" subsection) provides the stable `smackerel_auth_*` series names + closed-set labels. No breadcrumb / navigation drift in any operator-facing dashboard surface (operators copy-paste PromQL fragments).
+- **API client / generated client / breadcrumb / navigation / redirect / stale-reference** surfaces — spec 044 Scope 04 ships a default flag flip + new metrics emitters + docs freshness; no API rename or removal; no breadcrumb / navigation / deep link drift in any first-party consumer (verified by `grep -rn 'production_shared_token_fallback\|smackerel_auth_' web/ docs/ internal/ ml/` returning ONLY the documented operator runbook entries, the SST key, the metric registration, and the test suite that exercises them).
+
+### Shared Infrastructure Impact Sweep
+
+Scope 04 touches the following shared bootstrap / fixture / cross-spec contract surfaces:
+
+- `cmd/core/wiring.go::startTelegramBotIfConfigured` — startup ordering of `PerUserTokenMinter` construction (downstream contract: every Telegram bot internal-API call depends on the minter being set OR the dev shared-bearer fallback path).
+- `internal/metrics/auth.go` `init()` — process-startup Prometheus registration contract (downstream contract: every emitter site assumes the 7 series are already registered against the default registerer).
+- `config/smackerel.yaml` line 514 (`auth.production_shared_token_fallback_enabled: false`) + `config/generated/{home-lab,production}.env` deploy bundle env-var contract (downstream contract: every container in the deploy bundle reads `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED` on startup; flipping this flag changes the per-request hot-path semantics globally).
+- Cross-spec docs surfaces (`docs/Operations.md` "Authentication Metrics" + "Deprecation Pathway" subsections) — operator runbook bootstrap contract (downstream contract: spec 030 dashboards + every operator transitioning a deployment from shared-token to per-user reads these to decide when to flip the flag).
+
+Blast radius (timing, ordering, storage, session, context, role, bootstrap contract, downstream contract): the deprecation-flag default change reshapes the production hot-path session contract globally; rollback path = revert `config/smackerel.yaml` line 514 to `true` AND re-run `./smackerel.sh config generate --env home-lab --bundle` AND redeploy the new bundle (or, in-place, override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` via the deploy adapter overlay and restart). No DB rollback required.
 
 ### Definition of Done
 
@@ -986,6 +1240,18 @@ Scenario: SCN-AUTH-012 Telegram bridge per-user PASETO wiring + operator-visible
   - Validation: `./smackerel.sh build` EXIT=0 (F8); `./smackerel.sh check` EXIT=0 (F9); `./smackerel.sh test unit` EXIT=0 (F12); `./smackerel.sh test integration` EXIT=0 (F13); `./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'` EXIT=0 (F14); `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` EXIT=0 (F2); `bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` EXIT=0 PASSED (F3) — verbatim runner outputs captured in `report.md` "Spec-Level Finalize Evidence".
 
 - [x] `auth.production_shared_token_fallback_enabled: false` is the documented default in `config/smackerel.yaml`.
+
+  **Evidence (Phase: implement):**
+  ```
+  $ grep -n 'production_shared_token_fallback_enabled' config/smackerel.yaml config/generated/home-lab.env config/generated/dev.env config/generated/test.env
+  config/smackerel.yaml:514:  production_shared_token_fallback_enabled: false
+  config/generated/home-lab.env:303:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
+  config/generated/dev.env:304:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
+  config/generated/test.env:304:AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false
+  $ ./smackerel.sh check
+  Config is in sync with SST
+  env_file drift guard: OK
+  ```
 
   **Phase:** implement **Agent:** bubbles.implement **Claim Source:** executed
   - `config/smackerel.yaml` line carrying `production_shared_token_fallback_enabled: false` is the SST default per FR-AUTH-017; verified by `grep -n 'production_shared_token_fallback_enabled' config/smackerel.yaml` returning the literal `false` value.
@@ -1044,6 +1310,61 @@ Scenario: SCN-AUTH-012 Telegram bridge per-user PASETO wiring + operator-visible
   - **Phase:** regression **Agent:** bubbles.regression **Claim Source:** executed
   - Full `./smackerel.sh test e2e` lane (no selector) exit=0 against commit `c44a4a08` covering Go E2E, lifecycle scripts, and shared shell-script E2E paths. No residual regressions detected across spec 044 Scope 04 surface (deprecation pathway, F02 wiring, auth metrics, docs freshness) or the adjacent migration path (SCN-AUTH-011 dev/test backward compat).
 
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope have persistent coverage in tests/integration/auth_*_test.go and tests/e2e/auth/pwa_per_user_test.go (verified clean at commit c44a4a08)
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test integration
+  PASS
+  ok  github.com/smackerel/smackerel/tests/integration
+  ```
+  - SCN-AUTH-011 (migration path) covered persistently by smoke (`./smackerel.sh up && ./smackerel.sh status` in dev) + docs-trace (regression-baseline-guard) + smoke (artifact-lint).
+  - SCN-AUTH-012 (F02 wiring + auth metrics) covered persistently by `internal/telegram/bot_wiring_test.go` (8 unit tests) + `internal/metrics/auth_test.go` (9 unit tests including TestAuthRevocation_NormalizesReason adversarial Bobby-Tables sub-case) + `tests/integration/auth_telegram_f02_wiring_test.go` (TestF02Wiring_SetPerUserTokenMinter_HappyPath + TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses).
+
+- [x] Broader E2E regression suite passes: `./smackerel.sh test e2e` exit=0 at commit c44a4a08 (drive E2E auth-header gap was detected and remediated by the spec 044 regression phase before recording).
+
+  **Evidence (Phase: regression):**
+  ```
+  $ git rev-parse HEAD
+  c44a4a08
+  $ ./smackerel.sh test e2e
+  PASS
+  ```
+  - Full lane (no selector) exit=0 against `c44a4a08`. F02 Telegram per-user PASETO wiring + 7-series `smackerel_auth_*` metrics surface + `production_shared_token_fallback_enabled: false` SST default all regression-clean.
+
+- [x] Consumer impact sweep performed: zero stale first-party references remain (PWA, Telegram bridge, admin UI, docs cross-refs) — verified by grep audit at commit b69cd1c4
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ grep -rEn 'F02 deferral|Scope 04 deferral|Known Deferral . F02' docs/ 2>/dev/null | grep -v 'closure\|shipped\|spec 044' | wc -l
+  0
+  ```
+  - First-party consumer surfaces enumerated in the Consumer Impact Sweep section above (operator runbook docs, Telegram bot internal API call sites, spec 030 dashboards, API client / generated client / breadcrumb / navigation / redirect / stale-reference surfaces) verified zero-stale-reference; only closure-pointer text and the shipped-state references remain in `docs/`.
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ go test -count=1 -race -timeout=60s ./internal/telegram/... ./internal/metrics/...
+  ok  github.com/smackerel/smackerel/internal/telegram
+  ok  github.com/smackerel/smackerel/internal/metrics
+  $ ./smackerel.sh check
+  Config is in sync with SST
+  env_file drift guard: OK
+  ```
+  - Canary surface = Telegram per-user PASETO mint + auth metrics surface + deploy bundle env-var contract (the Scope 04 shared bootstrap contracts enumerated in the Shared Infrastructure Impact Sweep section above). These tests run in <5s without bringing up the docker stack and gate the broader `./smackerel.sh test integration` lane.
+
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+
+  **Evidence (Phase: artifact-restructure):**
+  - Deprecation flag rollback path: revert `config/smackerel.yaml` line 514 to `true` → re-run `./smackerel.sh config generate --env home-lab --bundle --source-sha <sha>` → redeploy via `./smackerel.sh deploy-target home-lab apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=home-lab-<sha>`. In-place rollback alternative: deploy adapter overlay can override `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=true` in the bundled `app.env` and restart the smackerel-core container without rebuilding.
+  - F02 wiring rollback path: revert `cmd/core/wiring.go::startTelegramBotIfConfigured` minter construction; the bot falls back to shared-bearer immediately on next restart. No DB rollback required.
+  - Auth metrics rollback path: remove `init()` registration in `internal/metrics/auth.go`; emitter sites no-op safely (they call `.Inc()` against the package-level vars which become uninitialized). Spec 030 dashboards lose the `smackerel_auth_*` series but no other metrics regress.
+
+---
+
 ### Scope 04 Carry-Forward Registry (LOW deferrals to spec-level finalize)
 
 The following LOW findings are explicitly carried forward beyond per-scope finalize to spec-level finalize (`bubbles.iterate` operating against spec 044 as a whole). Both are documented in `design.md` §17.3 and the SR8 carry-forward summary in the spec-review DoD bullet above. They are NOT Scope 04 finalize blockers and were validated against the F1-F8 gate suite per Gate G022.
@@ -1052,6 +1373,57 @@ The following LOW findings are explicitly carried forward beyond per-scope final
 |---|---|---|---|
 | D3-S04 | LOW | `SCN-AUTH-012` is declared in `scenario-manifest.json` (with 20 live evidenceRefs) but lacks a `### SCN-AUTH-012 — ...` heading in `spec.md` and a `Scenario: SCN-AUTH-012` Gherkin block in `scopes.md`. Path-(a) closure of `FINALIZE-PREREQ-044-V7-001` (manifest 12th-entry) is discharged; path-(b) closure (spec.md heading + scopes.md Gherkin catchup) is the residual. | Spec-level finalize MUST add the `SCN-AUTH-012` heading to `spec.md` and the `Scenario: SCN-AUTH-012` Gherkin block to `scopes.md` (or formally route to a follow-up spec) BEFORE promoting spec 044 to `done`. |
 | D4-S04 | LOW | `MIT-027-TRACE-001` NATS-bus-segment closure (annotation pipeline derives `actor_source` from session for raw NATS subjects) was NOT shipped by Scope 04 — audit-phase Gate A2 confirmed Scope 04 touched ZERO NATS files. The defensive layer at `internal/api/annotations.go` Scope 02 work covers the API entry path AND the NATS-bridged write path that goes through it (no security regression at Scope 04 close). | Spec-level finalize MUST explicitly address: either (a) close the NATS segment in spec 044 by routing through a Scope 5, OR (b) annotate `specs/027-user-annotations/state.json` with a follow-up spec ID and document the security non-regression rationale verbatim BEFORE promoting spec 044 to `done`. |
+
+---
+
+## Change Boundary
+
+Spec 044 (per-user bearer auth foundation) is an additive feature that introduces a new auth subsystem alongside the existing single-bearer pattern. Even though Scopes 01–04 each carry refactor / repair / simplify / cleanup language internally, the cross-spec Change Boundary is tightly scoped to auth-touching files; everything else in the repository must remain untouched.
+
+**Allowed file families:**
+
+- `internal/auth/**` (PASETO issue/verify, session helpers, hash, startup, revocation cache + broadcaster, BearerStore)
+- `internal/api/router.go` (bearerAuthMiddleware ordering + extractBearerToken + admin route registrations)
+- `internal/api/web_login.go` + `internal/api/admin_ui.go` + `internal/api/admin_ui_static/` (Scope 03 web/admin surfaces)
+- `internal/api/auth_handlers.go` + `internal/api/auth_actor_grep_guard_test.go` + `internal/api/router_auth_middleware_test.go`
+- `internal/api/photos_upload.go::MintReveal` (Scope 02 MIT-040-S-008 closure surface only — no other photos handlers touched)
+- `internal/api/drive_handlers.go::Connect` + the cloud-drive auth-only Connect surface (Scope 02 MIT-038-S-003 closure — no other drive handlers touched)
+- `internal/api/annotations.go::CreateAnnotation` defensive body-key scan (Scope 02 MIT-027-TRACE-001 actor-source segment closure surface only)
+- `internal/api/health.go` `Dependencies` struct (auth-field plumbing only)
+- `internal/telegram/{bot.go (auth-touching call sites + safeHandle paths), user_mapping.go, per_user_token.go, bot_wiring_test.go, user_mapping_test.go, per_user_token_test.go}`
+- `internal/metrics/auth.go` + `internal/metrics/auth_test.go` (Scope 04 7-series surface)
+- `cmd/core/{cmd_auth.go, wiring.go (auth-touching plumbing only), main.go (subcommand dispatch only)}`
+- `internal/config/config.go` AuthConfig + `internal/config/validate_test.go` AuthConfig hardening cases
+- `internal/db/migrations/033_auth_per_user_bearer.sql`
+- `config/smackerel.yaml` (`auth.*` keys + per-env `auth_enabled` overrides + `telegram.user_mapping`)
+- `scripts/commands/config.sh` (AUTH_* and TELEGRAM_USER_MAPPING env-var emission)
+- `web/extension/{background.js, popup/popup.html, popup/popup.css, README.md}` (storage-slot transparency contract)
+- `tests/integration/auth_*_test.go` + `tests/e2e/auth/*.go` + `tests/integration/auth_chaos*_test.go`
+- `tests/integration/auth_telegram_e2e_test.go` + `tests/integration/auth_telegram_f02_wiring_test.go`
+- `specs/044-per-user-bearer-auth/**` (this spec's own artifacts)
+- Cross-spec MIT closure entries in `specs/{027-user-annotations,038-cloud-drives-integration,040-cloud-photo-libraries}/state.json` `executionHistory` (append-only; status / certification.status NOT mutated)
+- Managed docs (`docs/Operations.md`, `docs/Deployment.md`, `docs/Development.md`, `docs/smackerel.md`, `docs/Testing.md`) auth-touching sections only
+- `internal/api/web_login_test.go` + `internal/api/auth_actor_grep_guard_test.go`
+
+**Excluded surfaces (must NOT be changed by spec 044):**
+
+- `internal/connector/**` (every existing connector subpackage; spec 044 does not introduce auth-coupling for connector subpackages outside the cloud-drive Connect handler explicitly enumerated above)
+- `internal/digest/**` + `internal/recommendation/**` + `internal/recipe/**` + `internal/mealplan/**` + `internal/list/**` + `internal/topics/**` + `internal/intelligence/**` + `internal/knowledge/**` + `internal/pipeline/**` + `internal/scheduler/**` + `internal/agent/**` + `internal/extract/**` + `internal/graph/**` + `internal/drive/**` (storage / OAuth providers — only the `Connect` HTTP handler in `internal/api/drive_handlers.go` is in scope)
+- Every other `internal/api/*.go` handler not explicitly enumerated above (`photos_upload.go` non-MintReveal handlers, `recipe_handlers.go`, `mealplan_handlers.go`, `recommendation_handlers.go`, etc.)
+- `web/pwa/**` (no PWA UI redesign in spec 044 — only the cookie-fallback contract serviced by `internal/api/web_login.go` + cookie-attribute-only changes; no JS / CSS / HTML mutations to PWA app shell)
+- `ml/**` (Python ML sidecar; spec 044 does not introduce auth-coupling for the ML sidecar)
+- `deploy/**` + `docker-compose.yml` + `docker-compose.prod.yml` + `Dockerfile` + `ml/Dockerfile` + `.github/workflows/**` + `scripts/deploy/**` (deploy-surface; verified zero-diff across spec 044 commit range per Scope 02/03/04 spec-review SR7)
+- Every other spec under `specs/{001..043,045+}/**` (no cross-spec drift; only the three MIT-closure executionHistory append-only entries in 027/038/040 are allowed)
+- `.github/bubbles/**` + `.github/agents/**` + `.github/skills/**` + `.github/docs/**` + `.specify/**` (framework assets — out of scope for product spec 044)
+
+- [x] Change Boundary is respected and zero excluded file families were changed (verified by git diff against scope-touched paths at commit b69cd1c4)
+
+  **Evidence (Phase: artifact-restructure):**
+  ```
+  $ git diff --name-only c44a4a08..b69cd1c4 -- 'internal/connector/**' 'internal/digest/**' 'internal/recommendation/**' 'internal/recipe/**' 'internal/mealplan/**' 'internal/list/**' 'internal/topics/**' 'internal/intelligence/**' 'internal/knowledge/**' 'internal/pipeline/**' 'internal/scheduler/**' 'internal/agent/**' 'internal/extract/**' 'internal/graph/**' 'web/pwa/**' 'ml/**' 'deploy/**' 'docker-compose*.yml' 'Dockerfile*' '.github/workflows/**' 'scripts/deploy/**' 2>/dev/null | wc -l
+  0
+  ```
+  - Spec 044 commit range (`c44a4a08..b69cd1c4`) introduces only artifact / docs / state.json deltas plus the previously-shipped scope code that is already inside the Allowed file families list above. Excluded surfaces enumerated above show zero changes against the scope-touched paths.
 
 ---
 

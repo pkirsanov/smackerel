@@ -7,11 +7,42 @@
       "name": "User enrollment issues a per-user bearer token",
       "scope": "01-sst-foundation-token-subsystem",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/auth/issue_test.go", "function": "TestIssueToken_RoundTripWithVerify", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_bootstrap_test.go", "function": "TestAuthBootstrap_FreshProduction_EnrollsFirstUser", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_admin_ui_test.go", "function": "TestAdminUI_WithBearer_Returns200HTML", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_admin_ui_test.go", "function": "TestAdminUI_WithoutBearer_Production_Returns401", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_admin_ui_test.go", "function": "TestAdminUI_DisallowedMethods_Return405", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/auth/issue_test.go",
+          "function": "TestIssueToken_RoundTripWithVerify",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_bootstrap_test.go",
+          "function": "TestAuthBootstrap_FreshProduction_EnrollsFirstUser",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_admin_ui_test.go",
+          "function": "TestAdminUI_WithBearer_Returns200HTML",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_admin_ui_test.go",
+          "function": "TestAdminUI_WithoutBearer_Production_Returns401",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_admin_ui_test.go",
+          "function": "TestAdminUI_DisallowedMethods_Return405",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/auth/issue_test.go",
+        "tests/integration/auth_bootstrap_test.go",
+        "tests/integration/auth_admin_ui_test.go"
       ]
     },
     {
@@ -19,21 +50,104 @@
       "name": "Bearer token survives stateless validation in production mode without DB roundtrip",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_PerUserPASETO_Production_Accepts", "status": "live"},
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestUserIDFromContext", "status": "live"},
-        {"type": "static-guarantee", "file": "internal/api/router.go", "function": "bearerAuthMiddleware (Branch 1) consumes only auth.VerifyAndParse + sync.Map.Load", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_AcceptsValidPASETO", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsForeignPASETO", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsRevokedToken", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestExtractBearerToken_CookieFallback", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_MalformedBearer_Production_Returns401", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_extension_test.go", "function": "TestExtensionAuth_RevokedPerUserToken_Returns401", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthMetrics_EmitsAllExpectedSeries", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_PerUserPASETO_Production_Accepts",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestUserIDFromContext",
+          "status": "live"
+        },
+        {
+          "type": "static-guarantee",
+          "file": "internal/api/router.go",
+          "function": "bearerAuthMiddleware (Branch 1) consumes only auth.VerifyAndParse + sync.Map.Load",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_PerUserSession",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_AcceptsValidPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_RejectsForeignPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_RejectsRevokedToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestExtractBearerToken_CookieFallback",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_extension_test.go",
+          "function": "TestExtensionAuth_PerUserPASETO_AdmitsAndAttachesSession",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_extension_test.go",
+          "function": "TestExtensionAuth_MalformedBearer_Production_Returns401",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_extension_test.go",
+          "function": "TestExtensionAuth_RevokedPerUserToken_Returns401",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthMetrics_EmitsAllExpectedSeries",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [
+        "internal/api/router_auth_middleware_test.go",
+        "tests/e2e/auth/pwa_per_user_test.go",
+        "internal/api/web_login_test.go",
+        "tests/integration/auth_extension_test.go",
+        "internal/metrics/auth_test.go"
       ]
     },
     {
@@ -41,10 +155,35 @@
       "name": "actor_id is derived from token claims, not request header trust",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_ProductionWithSession_DerivesFromPASETO", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_mintreveal_test.go", "function": "TestMintReveal_HeaderActorIDInProduction_Returns400", "status": "live"},
-        {"type": "test", "file": "internal/api/auth_actor_grep_guard_test.go", "function": "TestAuthActorIdentitySourcesGrepGuard", "status": "live"}
+        {
+          "type": "test",
+          "file": "tests/integration/auth_mintreveal_test.go",
+          "function": "TestMintReveal_ProductionWithSession_DerivesFromPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_mintreveal_test.go",
+          "function": "TestMintReveal_BodyActorIDInProduction_Returns400_FailsLoudly",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_mintreveal_test.go",
+          "function": "TestMintReveal_HeaderActorIDInProduction_Returns400",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/auth_actor_grep_guard_test.go",
+          "function": "TestAuthActorIdentitySourcesGrepGuard",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/auth_mintreveal_test.go",
+        "internal/api/auth_actor_grep_guard_test.go"
       ]
     },
     {
@@ -52,9 +191,28 @@
       "name": "Token rotation revokes prior token without breaking active sessions for grace window",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_GraceWindow_BothTokensValid", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_AfterGraceWindow_OldTokenRejected", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_rotation_test.go", "function": "TestRotation_AdminEndpoint_RejectsNonAdminCaller", "status": "live"}
+        {
+          "type": "test",
+          "file": "tests/integration/auth_rotation_test.go",
+          "function": "TestRotation_GraceWindow_BothTokensValid",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_rotation_test.go",
+          "function": "TestRotation_AfterGraceWindow_OldTokenRejected",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_rotation_test.go",
+          "function": "TestRotation_AdminEndpoint_RejectsNonAdminCaller",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/auth_rotation_test.go"
       ]
     },
     {
@@ -62,9 +220,28 @@
       "name": "Single-tenant SMACKEREL_AUTH_TOKEN remains valid for dev/test profiles",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_DevSharedToken_Allows", "status": "live"},
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_DevEmpty_Bypass_Allows", "status": "live"},
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_ProductionSharedTokenFallback_Optin", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_DevSharedToken_Allows",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_DevEmpty_Bypass_Allows",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_ProductionSharedTokenFallback_Optin",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/api/router_auth_middleware_test.go"
       ]
     },
     {
@@ -72,11 +249,42 @@
       "name": "Token-issuance flow is fail-loud on missing config",
       "scope": "01-sst-foundation-token-subsystem",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production", "status": "live"},
-        {"type": "test", "file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production", "status": "live"},
-        {"type": "test", "file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnInvalidGraceWindow", "status": "live"},
-        {"type": "test", "file": "internal/auth/startup_test.go", "function": "TestValidateRuntimeAuthStartup", "status": "live"},
-        {"type": "test", "file": "internal/auth/sst_grep_guard_test.go", "function": "TestSST_NoHardcodedAuthValues", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/config/validate_test.go",
+          "function": "TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/config/validate_test.go",
+          "function": "TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/config/validate_test.go",
+          "function": "TestValidate_AuthConfig_FailsLoudOnInvalidGraceWindow",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/auth/startup_test.go",
+          "function": "TestValidateRuntimeAuthStartup",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/auth/sst_grep_guard_test.go",
+          "function": "TestSST_NoHardcodedAuthValues",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/config/validate_test.go",
+        "internal/auth/startup_test.go",
+        "internal/auth/sst_grep_guard_test.go"
       ]
     },
     {
@@ -84,10 +292,35 @@
       "name": "Cloud-drive Connect derives owner_user_id from session (closes MIT-038-S-003)",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_ProductionWithSession_DerivesOwner", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_OwnerInBody_Production_Returns400", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_drive_connect_test.go", "function": "TestDriveConnect_NoOwnerNoSession_Production_Returns400", "status": "live"},
-        {"type": "spec-state", "file": "specs/038-cloud-drives-integration/state.json", "function": "MIT-038-S-003 closure entry appended via spec 044 Scope 02", "status": "live"}
+        {
+          "type": "test",
+          "file": "tests/integration/auth_drive_connect_test.go",
+          "function": "TestDriveConnect_ProductionWithSession_DerivesOwner",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_drive_connect_test.go",
+          "function": "TestDriveConnect_OwnerInBody_Production_Returns400",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_drive_connect_test.go",
+          "function": "TestDriveConnect_NoOwnerNoSession_Production_Returns400",
+          "status": "live"
+        },
+        {
+          "type": "spec-state",
+          "file": "specs/038-cloud-drives-integration/state.json",
+          "function": "MIT-038-S-003 closure entry appended via spec 044 Scope 02",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/auth_drive_connect_test.go",
+        "specs/038-cloud-drives-integration/state.json"
       ]
     },
     {
@@ -95,20 +328,98 @@
       "name": "User annotation actor_source is session-derived (closes MIT-027-TRACE-001 actor source)",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorSourceInProduction_Rejected", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_annotation_test.go", "function": "TestAnnotation_BodyActorIDInProduction_Rejected", "status": "live"},
-        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_RejectsUnmappedChat", "status": "live"},
-        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_AcceptsMappedChat", "status": "live"},
-        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestResolveActorUserID_Production_EmptyMappingRejectsAll", "status": "live"},
-        {"type": "test", "file": "internal/telegram/user_mapping_test.go", "function": "TestParseUserMapping", "status": "live"},
-        {"type": "test", "file": "internal/telegram/per_user_token_test.go", "function": "TestNewPerUserTokenMinter_Validates", "status": "live"},
-        {"type": "test", "file": "internal/telegram/per_user_token_test.go", "function": "TestMintForChat_Production_MappedChat_ProducesVerifiableToken", "status": "live"},
-        {"type": "test", "file": "internal/telegram/per_user_token_test.go", "function": "TestMintForChat_Production_UnmappedChat_ReturnsError", "status": "live"},
-        {"type": "test", "file": "internal/telegram/per_user_token_test.go", "function": "TestMintForChat_AdversarialNoBodyTrust", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_telegram_e2e_test.go", "function": "TestTelegramBridge_MintsPerUserBearer_AdmitsRequest", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_telegram_e2e_test.go", "function": "TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_telegram_e2e_test.go", "function": "TestTelegramBridge_BodyClaimedActorRejected", "status": "live"},
-        {"type": "spec-state", "file": "specs/027-user-annotations/state.json", "function": "MIT-027-TRACE-001 actor-source segment closure entry appended via spec 044 Scope 02", "status": "live"}
+        {
+          "type": "test",
+          "file": "tests/integration/auth_annotation_test.go",
+          "function": "TestAnnotation_BodyActorSourceInProduction_Rejected",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_annotation_test.go",
+          "function": "TestAnnotation_BodyActorIDInProduction_Rejected",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/user_mapping_test.go",
+          "function": "TestResolveActorUserID_Production_RejectsUnmappedChat",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/user_mapping_test.go",
+          "function": "TestResolveActorUserID_Production_AcceptsMappedChat",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/user_mapping_test.go",
+          "function": "TestResolveActorUserID_Production_EmptyMappingRejectsAll",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/user_mapping_test.go",
+          "function": "TestParseUserMapping",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/per_user_token_test.go",
+          "function": "TestNewPerUserTokenMinter_Validates",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/per_user_token_test.go",
+          "function": "TestMintForChat_Production_MappedChat_ProducesVerifiableToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/per_user_token_test.go",
+          "function": "TestMintForChat_Production_UnmappedChat_ReturnsError",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/per_user_token_test.go",
+          "function": "TestMintForChat_AdversarialNoBodyTrust",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_telegram_e2e_test.go",
+          "function": "TestTelegramBridge_MintsPerUserBearer_AdmitsRequest",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_telegram_e2e_test.go",
+          "function": "TestTelegramBridge_UnmappedChat_MinterRefusesAndCallerCannotProceed",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_telegram_e2e_test.go",
+          "function": "TestTelegramBridge_BodyClaimedActorRejected",
+          "status": "live"
+        },
+        {
+          "type": "spec-state",
+          "file": "specs/027-user-annotations/state.json",
+          "function": "MIT-027-TRACE-001 actor-source segment closure entry appended via spec 044 Scope 02",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/auth_annotation_test.go",
+        "internal/telegram/user_mapping_test.go",
+        "internal/telegram/per_user_token_test.go",
+        "tests/integration/auth_telegram_e2e_test.go",
+        "specs/027-user-annotations/state.json"
       ]
     },
     {
@@ -116,11 +427,41 @@
       "name": "Revoked token is refused on the next authenticated request",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/auth/revocation/cache_test.go", "function": "TestRevocationCache_BootstrapAndPropagate", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_RevokedTokenRejectedOnNextRequest", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_NATSDownFallsBackToDBRefresh", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_NonExistentToken_ClearError", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_revocation_test.go", "function": "TestRevocation_AlreadyRevokedToken_Idempotent", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/auth/revocation/cache_test.go",
+          "function": "TestRevocationCache_BootstrapAndPropagate",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_revocation_test.go",
+          "function": "TestRevocation_RevokedTokenRejectedOnNextRequest",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_revocation_test.go",
+          "function": "TestRevocation_NATSDownFallsBackToDBRefresh",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_revocation_test.go",
+          "function": "TestRevocation_NonExistentToken_ClearError",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_revocation_test.go",
+          "function": "TestRevocation_AlreadyRevokedToken_Idempotent",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/auth/revocation/cache_test.go",
+        "tests/integration/auth_revocation_test.go"
       ]
     },
     {
@@ -128,9 +469,29 @@
       "name": "Stale or tampered token is refused with constant-time discipline",
       "scope": "02-hot-path-middleware-mit-closures",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_PerUserPASETO_Production_Accepts/foreign_key_rejected", "status": "live"},
-        {"type": "test", "file": "internal/api/router_auth_middleware_test.go", "function": "TestBearerAuth_Production_EmptyToken_Rejected", "status": "live"},
-        {"type": "test", "file": "internal/auth/verify_test.go", "function": "TestVerifyAndParse_RejectsExpiredAndFutureAndForeignIssuer", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_PerUserPASETO_Production_Accepts/foreign_key_rejected",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/router_auth_middleware_test.go",
+          "function": "TestBearerAuth_Production_EmptyToken_Rejected",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/auth/verify_test.go",
+          "function": "TestVerifyAndParse_RejectsExpiredAndFutureAndForeignIssuer",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/api/router_auth_middleware_test.go",
+        "internal/auth/verify_test.go"
       ]
     },
     {
@@ -138,9 +499,30 @@
       "name": "Migration path: existing dev / test deployments need zero changes",
       "scope": "04-deprecation-pathway-docs-freshness",
       "evidenceRefs": [
-        {"type": "smoke", "file": "smackerel.sh", "function": "./smackerel.sh up && ./smackerel.sh status (dev)", "status": "live"},
-        {"type": "docs-trace", "file": ".github/bubbles/scripts/regression-baseline-guard.sh", "function": "regression-baseline-guard for spec 044", "status": "live"},
-        {"type": "smoke", "file": ".github/bubbles/scripts/artifact-lint.sh", "function": "artifact-lint for spec 044", "status": "live"}
+        {
+          "type": "smoke",
+          "file": "smackerel.sh",
+          "function": "./smackerel.sh up && ./smackerel.sh status (dev)",
+          "status": "live"
+        },
+        {
+          "type": "docs-trace",
+          "file": ".github/bubbles/scripts/regression-baseline-guard.sh",
+          "function": "regression-baseline-guard for spec 044",
+          "status": "live"
+        },
+        {
+          "type": "smoke",
+          "file": ".github/bubbles/scripts/artifact-lint.sh",
+          "function": "artifact-lint for spec 044",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "smackerel.sh",
+        ".github/bubbles/scripts/regression-baseline-guard.sh",
+        ".github/bubbles/scripts/artifact-lint.sh"
       ]
     },
     {
@@ -148,26 +530,134 @@
       "name": "Telegram bridge per-user PASETO wiring + operator-visible auth metrics surface (Scope 04 F02 closure)",
       "scope": "04-deprecation-pathway-docs-freshness",
       "evidenceRefs": [
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_NilMinter_FallsBackToSharedToken", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_NilMinter_AppliesSharedToken", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset", "status": "live"},
-        {"type": "test", "file": "internal/telegram/bot_wiring_test.go", "function": "TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_telegram_f02_wiring_test.go", "function": "TestF02Wiring_SetPerUserTokenMinter_HappyPath", "status": "live"},
-        {"type": "test", "file": "tests/integration/auth_telegram_f02_wiring_test.go", "function": "TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthIssuance_IncrementsBySource", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRotation_Increments", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRevocation_NormalizesReason", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthRevocation_IncrementsBucketed", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthValidationLatency_RecordsObservation", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthValidationOutcome_AcceptsClosedSetLabels", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthLegacyFallbackUsed_OperatorVisibility", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthFailure_AcceptsClosedSetLabels", "status": "live"},
-        {"type": "test", "file": "internal/metrics/auth_test.go", "function": "TestAuthMetrics_NamesUseCanonicalPrefix", "status": "live"},
-        {"type": "static-guarantee", "file": "internal/metrics/auth.go", "function": "init() registers all 7 series via prometheus.MustRegister", "status": "live"},
-        {"type": "static-guarantee", "file": "cmd/core/wiring.go", "function": "startTelegramBotIfConfigured constructs PerUserTokenMinter (TTL=5m) and calls tgBot.SetPerUserTokenMinter when production+auth.enabled+signing key configured", "status": "live"}
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_bearerForChat_NilMinter_FallsBackToSharedToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_setBearerHeader_NilMinter_AppliesSharedToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/telegram/bot_wiring_test.go",
+          "function": "TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_telegram_f02_wiring_test.go",
+          "function": "TestF02Wiring_SetPerUserTokenMinter_HappyPath",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/integration/auth_telegram_f02_wiring_test.go",
+          "function": "TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthIssuance_IncrementsBySource",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthRotation_Increments",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthRevocation_NormalizesReason",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthRevocation_IncrementsBucketed",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthValidationLatency_RecordsObservation",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthValidationOutcome_AcceptsClosedSetLabels",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthLegacyFallbackUsed_OperatorVisibility",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthFailure_AcceptsClosedSetLabels",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/metrics/auth_test.go",
+          "function": "TestAuthMetrics_NamesUseCanonicalPrefix",
+          "status": "live"
+        },
+        {
+          "type": "static-guarantee",
+          "file": "internal/metrics/auth.go",
+          "function": "init() registers all 7 series via prometheus.MustRegister",
+          "status": "live"
+        },
+        {
+          "type": "static-guarantee",
+          "file": "cmd/core/wiring.go",
+          "function": "startTelegramBotIfConfigured constructs PerUserTokenMinter (TTL=5m) and calls tgBot.SetPerUserTokenMinter when production+auth.enabled+signing key configured",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "internal/telegram/bot_wiring_test.go",
+        "tests/integration/auth_telegram_f02_wiring_test.go",
+        "internal/metrics/auth_test.go",
+        "internal/metrics/auth.go",
+        "cmd/core/wiring.go"
       ]
     },
     {
@@ -175,14 +665,59 @@
       "name": "Bearer token survives stateless validation in production mode without DB roundtrip [PWA path]",
       "scope": "03-web-surfaces-telegram-connector",
       "evidenceRefs": [
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken", "status": "live"},
-        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_AcceptsValidPASETO", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsForeignPASETO", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsRevokedToken", "status": "live"},
-        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestExtractBearerToken_CookieFallback", "status": "live"}
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_PerUserSession",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "tests/e2e/auth/pwa_per_user_test.go",
+          "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_AcceptsValidPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_RejectsForeignPASETO",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestWebLogin_Production_RejectsRevokedToken",
+          "status": "live"
+        },
+        {
+          "type": "test",
+          "file": "internal/api/web_login_test.go",
+          "function": "TestExtractBearerToken_CookieFallback",
+          "status": "live"
+        }
+      ],
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [
+        "tests/e2e/auth/pwa_per_user_test.go",
+        "internal/api/web_login_test.go"
       ]
     }
   ]
