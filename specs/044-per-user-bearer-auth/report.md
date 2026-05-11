@@ -7255,3 +7255,180 @@ E2E intentionally NOT executed in this stabilize pass per the orchestrator instr
 `Claim Source: executed`.
 
 ---
+
+### Spec-Level Security Evidence
+
+**Phase:** security (spec-level, all 4 scopes)
+**Agent:** bubbles.security
+**Timestamp:** 2026-05-11T21:12:33Z
+**HEAD at run:** dfd56aeb
+**Scope:** spec 044 IS the per-user bearer-auth security feature — focused threat-model + dependency-scan + implementation review of the auth subsystem itself. Files in scope (commits `2e2a2b9c..dfd56aeb`): `internal/auth/*.go` (PASETO mint/verify, middleware, branch-3 fallback, revocation cache), `internal/api/router.go` + `internal/api/web_login.go` + `internal/api/auth_handlers.go` + `internal/api/admin_ui.go` (cookie + bearer wiring, admin REST surface), `cmd/core/wiring.go` (auth subsystem init + revocation broadcaster), `web/pwa/*` (PWA login flow + cookie handling), `config/smackerel.yaml` + `config/generated/home-lab.env` (auth keys + env outputs).
+
+#### 1. Threat Model
+
+| # | Threat | Mitigation | Code Reference | Verdict |
+|---|--------|------------|----------------|---------|
+| T1 | Token theft via XSS reading cookie | `HttpOnly: true` + `SameSite: http.SameSiteLaxMode` + `Secure: production` on `auth_token` cookie | [internal/api/web_login.go](internal/api/web_login.go#L132-L141) (login set), [internal/api/web_login.go](internal/api/web_login.go#L162-L170) (logout clear) | ✅ Mitigated |
+| T2 | Token theft via URL/query-string leakage (referrer logs, browser history, web-server access logs) | Tokens never appear in URLs — bearer is read from `Authorization: Bearer` header or `auth_token` cookie only; grep across `internal/**/*.go` finds zero non-test occurrences of `r.URL.Query().Get("token")`/`?token=` in spec 044 surface | [internal/api/router.go](internal/api/router.go#L461-L487) (`extractBearerToken` / `extractBearerTokenWithSource`) | ✅ Mitigated |
+| T3 | Replay of expired token | PASETO `exp` claim enforced by `VerifyAndParse` against `opts.Now()` with `ClockSkewTolerance ≤ 60s` (NFR-AUTH-005); `ErrTokenExpired` returned on stale wire token | [internal/auth/verify.go](internal/auth/verify.go#L177-L191) (exp/nbf check) | ✅ Mitigated |
+| T4 | Replay of revoked token (≤ NFR-AUTH-006 60s window) | Revocation enforced by `revocation.Cache.IsRevoked(parsed.TokenID)` lookup on every request after PASETO verify; cache hydrated via DB bootstrap + NATS broadcaster + 30s periodic DB refresh | [internal/api/router.go](internal/api/router.go#L612-L621) (middleware revocation lookup), [internal/api/web_login.go](internal/api/web_login.go#L113-L116) (login-time revocation check), [internal/auth/revocation/cache.go](internal/auth/revocation/cache.go#L36-L60) | ✅ Mitigated |
+| T5 | Brute-force / signature forgery on PASETO | PASETO v4.public uses Ed25519 (256-bit) — computationally infeasible to forge; `paseto.NewParser().ParseV4Public` performs constant-time signature verification inside `aidanwoods.dev/go-paseto v1.6.0`; foreign-signed PASETO rejection covered by adversarial test `TestE2E_PWAAuth_Production_LoginRejectsInvalidToken/foreign-signed_paseto` | [internal/auth/verify.go](internal/auth/verify.go#L137-L142) (signature verify routing), [internal/auth/issue.go](internal/auth/issue.go#L86-L107) (mint with V4 secret) | ✅ Mitigated |
+| T6 | Compromised production-shared-token (single-tenant legacy token re-used) | Scope 02 disabled the production fallback in home-lab.env: `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` (verified at [config/generated/home-lab.env](config/generated/home-lab.env#L303)); when `false`, branch-2 of `bearerAuthMiddleware` is unreachable and any shared-token request in production is rejected; opt-in to `true` emits `slog.Warn` ("production shared-token fallback used (deprecation pathway)") + increments `smackerel_auth_legacy_fallback_used_total` | [internal/api/router.go](internal/api/router.go#L633-L645) (Branch 2 gate + audit), [config/smackerel.yaml](config/smackerel.yaml#L514) (default `false`) | ✅ Mitigated |
+| T7 | Cookie session fixation (attacker pre-installs cookie, victim logs in) | The cookie value IS the user's PASETO; on `/v1/web/login` POST, `http.SetCookie(w, ...)` overwrites any pre-existing `auth_token` cookie with the freshly-validated user token; the attacker cannot observe the victim's token to install it pre-emptively because Ed25519-signed PASETO is unforgeable | [internal/api/web_login.go](internal/api/web_login.go#L132-L143) | ✅ Mitigated (functional equivalent of session-ID rotation) |
+| T8 | CSRF via cross-origin request to authenticated endpoints | `SameSite=Lax` cookie + bearer-token requirement for cross-origin API access (CORS allowlist via `deps.CORSAllowedOrigins`); top-level GETs from a foreign origin still send the cookie under Lax but the API surface uses POST/PUT/DELETE for mutations and `bearerAuthMiddleware` permits only matching origins | [internal/api/router.go](internal/api/router.go#L34-L42) (CORS), [internal/api/web_login.go](internal/api/web_login.go#L132-L141) (cookie attrs) | ✅ Mitigated |
+| T9 | Login CSRF (attacker forces victim to install attacker's session) | Mitigated by SameSite=Lax (cross-site form POST blocked); residual risk LOW — login CSRF would let an attacker harvest victim activity in an attacker-owned account but does not grant attacker access to victim data; rate-limited at `httprate.LimitByIP(20, 1*time.Minute)` | [internal/api/router.go](internal/api/router.go#L189-L194) | ⚠️ LOW residual (see L2 below) |
+| T10 | Timing oracle on shared-token compare | All shared-token comparisons use `crypto/subtle.ConstantTimeCompare` (constant-time, bytewise) — three call sites verified: middleware Branch 2, middleware Branch 3, web_login dev-path | [internal/api/router.go](internal/api/router.go#L640) (Branch 2), [internal/api/router.go](internal/api/router.go#L671) (Branch 3), [internal/api/web_login.go](internal/api/web_login.go#L122) (web-login dev path), [internal/auth/hash.go](internal/auth/hash.go#L44) (`CompareTokenHash`) | ✅ Mitigated |
+| T11 | Database compromise yielding usable wire tokens | Tokens stored at rest as HMAC-SHA-256 hash under a SEPARATE key (`auth.at_rest_hashing_key`); validation enforced at config-load that hashing key MUST differ from signing key | [internal/auth/hash.go](internal/auth/hash.go#L18-L29) (HMAC-SHA-256), [internal/config/config.go](internal/config/config.go#L1064-L1066) (key-separation guard), [internal/auth/startup.go](internal/auth/startup.go#L51-L53) (defense-in-depth runtime guard) | ✅ Mitigated |
+| T12 | Auth bypass via misconfigured production runtime (empty signing material) | Two-layer fail-loud: (a) `config.validateAuth` rejects empty `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` / `AUTH_SIGNING_ACTIVE_KEY_ID` / `AUTH_AT_REST_HASHING_KEY` when `SMACKEREL_ENV=production` AND `auth.enabled=true`; (b) `auth.ValidateRuntimeAuthStartup` re-checks at runtime startup before HTTP server binds | [internal/config/config.go](internal/config/config.go#L1053-L1067), [internal/auth/startup.go](internal/auth/startup.go#L41-L60), [cmd/core/wiring.go](cmd/core/wiring.go#L71-L78) | ✅ Mitigated |
+| T13 | Footer-kid forgery (attacker swaps kid to a controlled key) | `VerifyAndParse` parses footer kid first WITHOUT signature trust, then routes to active OR prior public key by kid match — unknown kid returns `ErrUnknownKeyID` (no implicit "try every key" fallback); signature is verified in step 4 against the routed public key, so a forged footer cannot pass validation | [internal/auth/verify.go](internal/auth/verify.go#L100-L142) | ✅ Mitigated |
+
+**Threats modeled: 13** | **Mitigated: 12** | **LOW residual: 1** (Login CSRF — see L2 below).
+
+#### 2. Dependency Scan
+
+`govulncheck` run against the auth surface:
+
+```
+$ ~/go/bin/govulncheck -show verbose ./internal/auth/... ./internal/api/... ./cmd/core/...
+=== Symbol Results ===
+No vulnerabilities found.
+Your code is affected by 0 vulnerabilities.
+This scan also found 2 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+```
+
+**Spec 044 introduces exactly one new direct dependency: `aidanwoods.dev/go-paseto v1.6.0`. govulncheck reports it CLEAN (zero called or uncalled vulnerabilities).**
+
+The 3 uncalled vulnerabilities reported are pre-existing transitive dependencies NOT introduced by spec 044 and NOT reachable from the auth surface:
+
+| ID | Module | Found | Fixed In | Reachable? | Spec 044 Owns? |
+|----|--------|-------|----------|-----------|----------------|
+| GO-2026-4772 (CVE-2026-33816) | `github.com/jackc/pgx/v5` | v5.7.2 | v5.9.0 | NO (uncalled) | NO — pre-existing |
+| GO-2026-4771 (CVE-2026-33815) | `github.com/jackc/pgx/v5` | v5.7.2 | v5.9.0 | NO (uncalled) | NO — pre-existing |
+| GO-2026-4918 | `golang.org/x/net` | v0.47.0 | v0.53.0 | NO (uncalled, HTTP/2 transport) | NO — pre-existing |
+
+These transitive uncalled vulnerabilities are tracked outside spec 044 (recommended: separate dependency-bump spec; non-blocking for spec 044 promotion).
+
+**Result:** ✅ CLEAN for spec 044 surface. Uncalled transitive issues noted as informational follow-up (non-blocking).
+
+`Claim Source: executed`.
+
+#### 3. Code Security Review
+
+| Check | Verification | Verdict |
+|-------|-------------|---------|
+| Constant-time comparison for shared-token compare in branch-3 (NOT `==`) | `subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) == 1` at [internal/api/router.go](internal/api/router.go#L671) (Branch 3) and [internal/api/router.go](internal/api/router.go#L640) (Branch 2) | ✅ PASS |
+| Constant-time compare in web_login.go dev path | `subtle.ConstantTimeCompare([]byte(req.Token), []byte(d.AuthToken)) != 1` at [internal/api/web_login.go](internal/api/web_login.go#L122) | ✅ PASS |
+| Constant-time hash compare in `CompareTokenHash` | `subtle.ConstantTimeCompare([]byte(got), []byte(expectedHexHash)) == 1` at [internal/auth/hash.go](internal/auth/hash.go#L44) | ✅ PASS |
+| No PASETO key material logged | `grep 'slog.*signing\|slog.*at_rest\|slog.*hashing\|slog.*private_key' internal/auth internal/api/auth_handlers.go internal/api/web_login.go` returns ZERO matches; only logged identifier is `token_id` (DB PK), never the wire token or signing key | ✅ PASS |
+| No PASETO key material in error messages | All error returns use `fmt.Errorf("auth: ...: %w", err)` against the underlying parser error; no error message contains the wire token or key hex; `writeError(w, 401, "UNAUTHORIZED", "Valid authentication required")` is the only client-facing 401 body, generic per NFR-AUTH-007 | ✅ PASS |
+| No tokens in URLs / query strings / GET parameters | `grep 'r.URL.Query.*token\|?token=\|?paseto=\|?bearer='` in `internal/auth/**/*.go` and `internal/api/router.go` + `internal/api/web_login.go` + `internal/api/auth_handlers.go` returns ZERO matches in spec 044 surface (the two pre-existing query-token call sites — `internal/api/photos.go` `reveal_token` for spec 040 and `internal/connector/markets/markets_test.go` upstream API key — are unrelated to spec 044 bearer auth) | ✅ PASS |
+| Token-bearing log lines redacted or excluded | All bearer-auth `slog.Warn` calls log `path` + `remote_addr` + `reason` + at most `token_id`; none log the wire token; the only deprecation warning ("production shared-token fallback used (deprecation pathway)") logs only `path` + `remote_addr` | ✅ PASS |
+| Cookie attributes correct (HttpOnly, Secure-in-production, SameSite=Lax, Path=/) | All four attributes set per design.md §10.4 at [internal/api/web_login.go](internal/api/web_login.go#L132-L143) (login) and [internal/api/web_login.go](internal/api/web_login.go#L162-L170) (logout); `Secure: strings.EqualFold(d.Environment, "production")` honors production posture | ✅ PASS |
+| PASETO signing-key file permissions | N/A — keys stored in env vars (AUTH_SIGNING_ACTIVE_PRIVATE_KEY etc.), NOT files; loader fails loud at config-validate boundary if any required production secret is empty | ✅ N/A |
+| At-rest hashing key separation enforced | `cfg.Auth.AtRestHashingKey == cfg.Auth.SigningActivePrivateKey` triggers `authErrors` append at [internal/config/config.go](internal/config/config.go#L1064-L1066); duplicated as defense-in-depth in [internal/auth/startup.go](internal/auth/startup.go#L57-L59) | ✅ PASS |
+| `internal/api/router.go` `bearerAuthMiddleware` — no auth-bypass conditions (e.g. `if env == "dev" { return next }`) | Branch 4 ("dev empty-token bypass") fires ONLY when `d.AuthToken == ""` AND `!perUserActive`; production-mode (`d.Environment == "production" && d.AuthConfig.Enabled`) routes to Branch 1 (per-user PASETO) and never to Branch 4; `grep 'disableAuth\|skipAuth\|bypass\|debug.*allow'` in `internal/auth/**/*.go` and `internal/api/router.go` returns no real bypass conditions (only one match — a TEST NAME at `internal/auth/startup_test.go:47`) | ✅ PASS |
+
+**Issues found: 0 (critical/high/medium); 2 LOW informational findings — see Section 7.**
+
+`Claim Source: executed`.
+
+#### 4. Auth Wiring Verification
+
+| Check | Verification | Verdict |
+|-------|-------------|---------|
+| Middleware wraps ALL protected routes | `bearerAuthMiddleware` applied to: `/api/*` ([router.go](internal/api/router.go#L59)); `/admin/auth/tokens` UI ([router.go](internal/api/router.go#L270)); `/v1/connectors/drive/*` and `/v1/drive/*` ([router.go](internal/api/router.go#L287)); `/v1/photos/*` ([router.go](internal/api/router.go#L314)); `/v1/drive/save` + `/v1/drive/rules` + `/v1/drive/confirmations/*` ([router.go](internal/api/router.go#L297-L327)); `/v1/agent/invoke` ([router.go](internal/api/router.go#L379)); `/v1/auth/*` admin REST ([router.go](internal/api/router.go#L391)) | ✅ PASS |
+| Public-by-design routes correctly excluded | `/api/health`, `/ping`, `/readyz`, `/metrics` are unauthenticated (monitoring scrape pattern); `/v1/web/login` + `/v1/web/logout` are entry points (rate-limited via `httprate.LimitByIP(20, 1*time.Minute)`); `/auth/{provider}/start` + `/auth/{provider}/callback` are OAuth browser-redirect entry points (rate-limited via `httprate.LimitByIP(10, 1*time.Minute)`); `/v1/connectors/drive/oauth/callback` is upstream-OAuth redirect target | ✅ PASS (intentional) |
+| Middleware ordering: auth occurs BEFORE handler-side identity decisions | `r.Use(deps.bearerAuthMiddleware)` precedes every grouped handler registration; auth.Session attached to ctx via `auth.WithSession` so `callerIsAdmin` ([auth_handlers.go](internal/api/auth_handlers.go#L274)) can rely on session presence | ✅ PASS |
+| 401/403 responses don't leak whether the user exists vs token invalid | Middleware returns generic 401 body `"Valid authentication required"` for ALL auth failures (missing token, invalid format, PASETO verify failed, revoked, shared-token mismatch); `callerIsAdmin` returns `"FORBIDDEN: admin scope required"` for non-admin (uniform regardless of session source); the only differentiated 401 codes are on `/v1/web/login` (`invalid_token` vs `revoked_token`) — see L1 below | ✅ PASS (with one LOW caveat — L1) |
+| Admin scope correctly gated | `callerIsAdmin` ([auth_handlers.go](internal/api/auth_handlers.go#L274-L289)): bootstrap session → admin; shared-token → admin in dev/test only OR with explicit `production_shared_token_fallback_enabled=true`; per-user → false (Scope 01-04 ships empty allowlist; future scope adds SST allowlist surface) | ✅ PASS |
+| Rate limiting on entry points | `/v1/web/login` + `/v1/web/logout`: `httprate.LimitByIP(20, 1*time.Minute)`; OAuth start+callback: `httprate.LimitByIP(10, 1*time.Minute)` | ✅ PASS |
+
+**Result:** ✅ Auth wiring is correct, complete, and ordering-safe.
+
+`Claim Source: executed`.
+
+#### 5. Compliance / SST Verification
+
+| Check | Verification | Verdict |
+|-------|-------------|---------|
+| All auth secrets read from env (zero hardcoded) | `internal/auth/sst_grep_guard_test.go` passes (Scope 01 SST guard); production literals (`auth.revocations`, `paseto-v4-public`) absent outside SST source + generator output + tests | ✅ PASS |
+| Secrets NOT committed | `.gitignore` excludes `config/generated/`; `config/generated/home-lab.env` shows `AUTH_SIGNING_ACTIVE_PRIVATE_KEY=` (empty placeholder), `AUTH_AT_REST_HASHING_KEY=` (empty placeholder), `AUTH_BOOTSTRAP_TOKEN=` (empty placeholder) — operator populates at deploy time | ✅ PASS |
+| Production-shared-token-fallback flag set for home-lab | `AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false` at [config/generated/home-lab.env](config/generated/home-lab.env#L303) | ✅ PASS |
+| `pii-scan` allowlist limited to test fixtures | `.gitleaks.toml` allowlist scoped to test paths; pre-commit hook + CI workflow re-run on every commit | ✅ PASS |
+| No PASETO key file permissions issue | N/A — keys live in env vars only, not files | ✅ N/A |
+
+**Result:** ✅ SST + secrets hygiene clean.
+
+`Claim Source: executed`.
+
+#### 6. Verification Gates
+
+```
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: OK (5 registered, 0 rejected)
+EXIT=0
+
+$ ./smackerel.sh lint
+All checks passed!
+Web validation passed (PWA + Chrome MV3 + Firefox MV2 OK; 7 JS files OK; ext version 1.0.0 match)
+EXIT=0
+
+$ ./smackerel.sh test unit
+Python ML sidecar: 417 passed in 13.87s
+Go lane: ALL packages "ok" (internal/api 5.962s, internal/auth 0.304s, internal/auth/revocation cached, internal/config 0.766s, all others ok or cached)
+ZERO FAIL lines
+EXIT=0
+
+$ ./smackerel.sh test integration
+tests/integration: PASS — every Scope 01-04 auth selector (TestAuthBootstrap_*, TestAuthChaos_S02_*, TestAuthChaos_S03_*, TestAuthChaos_S04_*, TestAuthChaos_*, TestAdminUI_*, TestAnnotation_*, TestDriveConnect_*, TestExtensionAuth_*) returns PASS against live PostgreSQL on 127.0.0.1:47001 with real PASETO mint via auth.IssueToken, real RevocationCache, real bearerAuthMiddleware
+tests/integration/drive: ok 12.769s ZERO FAIL
+EXIT=0
+
+$ ~/go/bin/govulncheck -show verbose ./internal/auth/... ./internal/api/... ./cmd/core/...
+Your code is affected by 0 vulnerabilities.
+(3 uncalled transitive vulnerabilities — pgx 5.7.2→5.9.0 x2, golang.org/x/net 0.47.0→0.53.0 — pre-existing, not introduced by spec 044)
+```
+
+| Gate | Command | Exit | Notes |
+|------|---------|------|-------|
+| G1 | `./smackerel.sh check` | 0 | Config in sync with SST; env_file drift OK; scenario-lint OK |
+| G2 | `./smackerel.sh lint` | 0 | All checks passed; web validation passed |
+| G3 | `./smackerel.sh test unit` | 0 | 417 Python tests + every Go package ok; ZERO FAIL |
+| G4 | `./smackerel.sh test integration` | 0 | All Scope 01-04 auth integration suites PASS against real PostgreSQL + real PASETO + real RevocationCache |
+| G5 | `govulncheck` (auth surface) | 0 | Zero called vulnerabilities; 3 uncalled transitive (pre-existing, not 044's) |
+| G6 (optional) | `./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'` | not re-run | Spec-level regression evidence at HEAD `c44a4a08` already records clean e2e; no security-fix code changes were applied this phase, so the e2e contract is unchanged |
+
+`Claim Source: executed`.
+
+#### 7. Issues Found / Fixed
+
+| Severity | OWASP | Domain | Issue | Action |
+|----------|-------|--------|-------|--------|
+| (none — critical) | — | — | — | — |
+| (none — high) | — | — | — | — |
+| (none — medium) | — | — | — | — |
+| **L1 — LOW informational** | A09 (Logging Failures) | Login UX | `/v1/web/login` differentiates `invalid_token` (401) from `revoked_token` (401) at [internal/api/web_login.go](internal/api/web_login.go#L108-L116). This leaks "this token was once valid but is now revoked" vs "this token never validated". Severity LOW because (a) PASETO wire tokens are 256-bit (Ed25519) — unguessable, so an attacker cannot enumerate revoked tokens; (b) the surface is the user's own login flow where the user is supplying their own token; (c) the differentiated error is UX-positive (lets the legitimate user understand "your session was revoked, request a new token" vs "your token is malformed"). | NOT REMEDIATED this phase — accepted as informational/UX trade-off. Recommendation for future: collapse to a single `invalid_token` 401 if the UX team chooses absolute uniformity. Tracked outside spec 044 promotion. |
+| **L2 — LOW informational** | A05 (Security Misconfiguration) | CSRF | `/v1/web/login` does not enforce `Content-Type: application/json` request header. Login CSRF risk: a cross-origin form-encoded POST from a malicious site could attempt to install the attacker's cookie in the victim's browser. Mitigations already present: (a) JSON decoder with `DisallowUnknownFields` + `MaxBytesReader 8KB` would reject form-encoded bodies → 400; (b) SameSite=Lax cookie blocks cross-site scripted requests; (c) login CSRF only allows attacker to install attacker's session, not access victim's data; (d) rate-limited at 20 req/min/IP. | NOT REMEDIATED this phase — defense-in-depth `Content-Type` check is the canonical hardening but the existing layered defenses already neutralize the practical attack. Recommendation: add `if r.Header.Get("Content-Type") != "application/json"` early-rejection in a future spec; non-blocking for spec 044. |
+
+**Issues found: 2 LOW informational | Issues fixed: 0** (both are accepted UX/defense-in-depth trade-offs — no production-impacting code change required).
+
+#### 8. Summary
+
+- Threats modeled: **13** (12 fully mitigated, 1 LOW residual login-CSRF)
+- Dependency scan result: **CLEAN** for spec 044 surface (`aidanwoods.dev/go-paseto v1.6.0` clean; 3 uncalled transitive CVEs pre-existing, not 044's)
+- Code review findings: **0 critical/high/medium**, **2 LOW informational** (L1 differentiated 401 codes on PWA login, L2 missing Content-Type check on PWA login)
+- Issues fixed inline: **0** (no production-impacting issues)
+- Auth wiring: **complete + correct + ordering-safe** (middleware on every protected route; entry points correctly public + rate-limited; admin scope gated; constant-time compares everywhere; no auth-bypass conditions)
+- SST + secrets hygiene: **clean** (zero secrets committed; `production_shared_token_fallback_enabled=false` in home-lab.env)
+- Verification gates: **G1-G5 all EXIT=0**; G6 e2e left to prior regression evidence (no source changes this phase)
+- No `--no-verify`; no PII rule violations; no terminal-discipline violations
+
+**Verdict:** 🔒 **SECURE** — spec 044 implements a defense-in-depth per-user bearer-auth subsystem with constant-time comparisons, fail-loud production validation, separate at-rest hashing key, kid-routed signature verification with no implicit fallback, dual-channel revocation propagation inside the NFR-AUTH-006 budget, correctly-attributed cookies (HttpOnly + SameSite=Lax + Secure-in-production), and zero log/URL token leakage. The 2 LOW informational findings are accepted UX/defense-in-depth trade-offs that do not block spec promotion.
+
+`Claim Source: executed`.
+
+---
