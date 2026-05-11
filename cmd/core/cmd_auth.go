@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -82,68 +80,29 @@ func loadAuthCLIConfig() (*config.Config, string, error) {
 	return cfg, "smackerel-cli@" + hostname, nil
 }
 
-// generateTokenID produces a 128-bit random token id, hex-encoded.
-// PASETO embeds it in the jti claim and the auth_tokens row uses it as
-// the PRIMARY KEY.
-func generateTokenID() (string, error) {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return "", fmt.Errorf("rand read: %w", err)
-	}
-	return hex.EncodeToString(buf[:]), nil
-}
-
-// issueAndPersist combines IssueToken + HashToken + PersistToken into a
-// single audited operation. Returns the wire token (only thing the
-// operator ever sees) and the token id (persisted in auth_tokens).
+// issueAndPersist delegates to auth.IssueAndPersistToken. The cmd
+// surface keeps the (wireToken, tokenID, err) shape — callers don't
+// need iat/exp because the CLI prints the wire token and forgets the
+// rest. The api surface (internal/api/auth_handlers.go) calls the
+// underlying helper directly when it needs iat/exp for its response.
 func issueAndPersist(ctx context.Context, cfg *config.Config, store *auth.BearerStore,
 	userID, issuedBy, issuedSource, rotatedFromTokenID string) (wireToken, tokenID string, err error) {
-
-	if cfg.Auth.SigningActivePrivateKey == "" || cfg.Auth.SigningActiveKeyID == "" {
-		return "", "", fmt.Errorf("auth.signing.active_private_key and active_key_id MUST be set to issue tokens (production deployments require this; dev/test may issue when AUTH_ENABLED=true and signing keys are populated)")
-	}
-	if cfg.Auth.AtRestHashingKey == "" {
-		return "", "", fmt.Errorf("auth.at_rest_hashing_key MUST be set to persist tokens at rest")
-	}
-
-	tokenID, err = generateTokenID()
-	if err != nil {
-		return "", "", err
-	}
-
-	issued, err := auth.IssueToken(auth.IssueOptions{
-		UserID:     userID,
-		TokenID:    tokenID,
-		SigningKey: cfg.Auth.SigningActivePrivateKey,
-		KeyID:      cfg.Auth.SigningActiveKeyID,
-		TTL:        time.Duration(cfg.Auth.TokenTTLHours) * time.Hour,
-		Issuer:     "smackerel",
-		Now:        time.Now,
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("issue token: %w", err)
-	}
-
-	hashed, err := auth.HashToken(issued.WireToken, cfg.Auth.AtRestHashingKey)
-	if err != nil {
-		return "", "", fmt.Errorf("hash token: %w", err)
-	}
-
-	if err := store.PersistToken(ctx, auth.PersistTokenParams{
-		TokenID:            tokenID,
+	res, err := auth.IssueAndPersistToken(ctx, store, auth.IssueAndPersistOptions{
 		UserID:             userID,
-		KeyID:              cfg.Auth.SigningActiveKeyID,
-		IssuedAt:           issued.IssuedAt,
-		ExpiresAt:          issued.ExpiresAt,
-		HashedToken:        hashed,
+		SigningPrivateKey:  cfg.Auth.SigningActivePrivateKey,
+		SigningKeyID:       cfg.Auth.SigningActiveKeyID,
+		AtRestHashingKey:   cfg.Auth.AtRestHashingKey,
+		TTL:                time.Duration(cfg.Auth.TokenTTLHours) * time.Hour,
+		Issuer:             "smackerel",
+		Now:                time.Now,
 		IssuedBy:           issuedBy,
 		IssuedSource:       issuedSource,
 		RotatedFromTokenID: rotatedFromTokenID,
-	}); err != nil {
-		return "", "", fmt.Errorf("persist token: %w", err)
+	})
+	if err != nil {
+		return "", "", err
 	}
-
-	return issued.WireToken, tokenID, nil
+	return res.WireToken, res.TokenID, nil
 }
 
 // runAuthEnroll implements `smackerel auth enroll <user-id> [--notes "..."]`.

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -91,14 +89,11 @@ func (h *AuthAdminHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	enrolledBy := sess.UserID
-	if enrolledBy == "" {
-		enrolledBy = string(sess.Source)
-	}
+	actor := sess.ActorID()
 
 	if err := h.store.Enroll(r.Context(), auth.EnrollUserParams{
 		UserID:     req.UserID,
-		EnrolledBy: enrolledBy,
+		EnrolledBy: actor,
 		Notes:      req.Notes,
 	}); err != nil {
 		slog.Warn("auth admin enroll failed", "user_id", req.UserID, "error", err)
@@ -107,7 +102,7 @@ func (h *AuthAdminHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	wire, tokenID, issuedAt, expiresAt, err := h.issueAndPersist(r, req.UserID, enrolledBy, "admin_api", "")
+	wire, tokenID, issuedAt, expiresAt, err := h.issueAndPersist(r, req.UserID, actor, "admin_api", "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "ISSUE_FAILED", err.Error())
 		return
@@ -155,12 +150,7 @@ func (h *AuthAdminHandlers) HandleRotate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rotatedBy := sess.UserID
-	if rotatedBy == "" {
-		rotatedBy = string(sess.Source)
-	}
-
-	wire, tokenID, issuedAt, expiresAt, err := h.issueAndPersist(r, userID, rotatedBy, "admin_api", req.PriorTokenID)
+	wire, tokenID, issuedAt, expiresAt, err := h.issueAndPersist(r, userID, sess.ActorID(), "admin_api", req.PriorTokenID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "ISSUE_FAILED", err.Error())
 		return
@@ -215,12 +205,7 @@ func (h *AuthAdminHandlers) HandleRevoke(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	revokedBy := sess.UserID
-	if revokedBy == "" {
-		revokedBy = string(sess.Source)
-	}
-
-	if err := h.store.RevokeToken(r.Context(), tokenID, revokedBy, req.Reason); err != nil {
+	if err := h.store.RevokeToken(r.Context(), tokenID, sess.ActorID(), req.Reason); err != nil {
 		writeError(w, http.StatusInternalServerError, "REVOKE_FAILED", err.Error())
 		return
 	}
@@ -303,66 +288,28 @@ func (h *AuthAdminHandlers) callerIsAdmin(sess auth.Session) bool {
 	}
 }
 
-// issueAndPersist mirrors cmd_auth.go's helper but lives in the api
-// package to avoid cross-package importing of an unexported helper.
-// Returns the wire token (one-shot), token id, iat, exp.
+// issueAndPersist delegates to auth.IssueAndPersistToken. The wrapper
+// keeps the per-handler signature small (5 positional args) and lets
+// cross-handler concerns (cfg field plumbing, time.Now injection)
+// live in one place. Returns the wire token (one-shot), token id,
+// iat, exp — the api surface needs iat/exp for its JSON response
+// envelope, which is the only difference vs cmd_auth.go's wrapper.
 func (h *AuthAdminHandlers) issueAndPersist(r *http.Request, userID, issuedBy, issuedSource, rotatedFrom string) (
 	wire, tokenID string, issuedAt, expiresAt time.Time, err error) {
-
-	if h.cfg.Auth.SigningActivePrivateKey == "" || h.cfg.Auth.SigningActiveKeyID == "" {
-		return "", "", time.Time{}, time.Time{},
-			fmt.Errorf("auth.signing.active_private_key and active_key_id MUST be set to issue tokens")
-	}
-	if h.cfg.Auth.AtRestHashingKey == "" {
-		return "", "", time.Time{}, time.Time{},
-			fmt.Errorf("auth.at_rest_hashing_key MUST be set to persist tokens at rest")
-	}
-
-	tokenID, err = generateRandomTokenID()
-	if err != nil {
-		return "", "", time.Time{}, time.Time{}, err
-	}
-
-	issued, err := auth.IssueToken(auth.IssueOptions{
-		UserID:     userID,
-		TokenID:    tokenID,
-		SigningKey: h.cfg.Auth.SigningActivePrivateKey,
-		KeyID:      h.cfg.Auth.SigningActiveKeyID,
-		TTL:        time.Duration(h.cfg.Auth.TokenTTLHours) * time.Hour,
-		Issuer:     "smackerel",
-		Now:        time.Now,
-	})
-	if err != nil {
-		return "", "", time.Time{}, time.Time{}, fmt.Errorf("issue token: %w", err)
-	}
-
-	hashed, err := auth.HashToken(issued.WireToken, h.cfg.Auth.AtRestHashingKey)
-	if err != nil {
-		return "", "", time.Time{}, time.Time{}, fmt.Errorf("hash token: %w", err)
-	}
-
-	if err := h.store.PersistToken(r.Context(), auth.PersistTokenParams{
-		TokenID:            tokenID,
+	res, err := auth.IssueAndPersistToken(r.Context(), h.store, auth.IssueAndPersistOptions{
 		UserID:             userID,
-		KeyID:              h.cfg.Auth.SigningActiveKeyID,
-		IssuedAt:           issued.IssuedAt,
-		ExpiresAt:          issued.ExpiresAt,
-		HashedToken:        hashed,
+		SigningPrivateKey:  h.cfg.Auth.SigningActivePrivateKey,
+		SigningKeyID:       h.cfg.Auth.SigningActiveKeyID,
+		AtRestHashingKey:   h.cfg.Auth.AtRestHashingKey,
+		TTL:                time.Duration(h.cfg.Auth.TokenTTLHours) * time.Hour,
+		Issuer:             "smackerel",
+		Now:                time.Now,
 		IssuedBy:           issuedBy,
 		IssuedSource:       issuedSource,
 		RotatedFromTokenID: rotatedFrom,
-	}); err != nil {
-		return "", "", time.Time{}, time.Time{}, fmt.Errorf("persist token: %w", err)
+	})
+	if err != nil {
+		return "", "", time.Time{}, time.Time{}, err
 	}
-
-	return issued.WireToken, tokenID, issued.IssuedAt, issued.ExpiresAt, nil
-}
-
-// generateRandomTokenID produces a 128-bit random token id, hex-encoded.
-func generateRandomTokenID() (string, error) {
-	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return "", fmt.Errorf("rand: %w", err)
-	}
-	return hex.EncodeToString(buf[:]), nil
+	return res.WireToken, res.TokenID, res.IssuedAt, res.ExpiresAt, nil
 }

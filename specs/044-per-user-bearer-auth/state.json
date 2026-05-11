@@ -211,7 +211,8 @@
         "disposition": "approved",
         "note": "Spec 044 Scope 04 formal per-scope finalize phase per Gate G022. All 8 finalize gates F1-F8 PASS against HEAD e70a2d52 (post-docs commit). F1 (all Scope 04 DoD bullets ticked): 8 [x] DoD bullets in the Scope 4 section match the bullet count; entire scopes.md carries 45 [x] / 0 [ ] checkboxes. F2 (artifact-lint): bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth EXIT=0 'Artifact lint PASSED.' (2 advisory warnings unchanged: missing-recommended reworkQueue + deprecated scopeProgress field). F3 (traceability-guard): timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose EXIT=0 'RESULT: PASSED (0 warnings)'; 12 scenarios checked / 43 test rows checked / 12 scenario-to-row mappings / 12 concrete test file refs / 12 report evidence refs / 12 DoD fidelity scenarios mapped 0 unmapped. NO carry-forward (FINALIZE-PREREQ-044-V7-001 path-(a) closure verified resolved at validate-phase). F4 (Scope 04 phase claims): all six executable phases (test/validate/audit/chaos/spec-review/docs) present in certifiedCompletedPhases; this finalize entry appends 04:finalize. F5 (open MEDIUM/HIGH findings closed OR documented carry-forward): transitionRequests[FINALIZE-PREREQ-044-V7-001].status=resolved (zero open transitionRequests); the two LOW carry-forward findings (D3-S04 SCN-AUTH-012 spec.md heading + Gherkin block missing; D4-S04 MIT-027-TRACE-001 NATS-segment closure) are explicitly documented in NEW scopes.md '### Scope 04 Carry-Forward Registry' subsection AND in design.md \u00a717.3 with explicit per-finding disposition for spec-level finalize (path-b clause for D3-S04; route-or-annotate for D4-S04). F6 (build): ./smackerel.sh build EXIT=0 (Built smackerel-core sha256:b00ce8422f59adc34cf7894ff481c66cb6e5adb1264241ebdfb736d087a0bc85 + smackerel-ml). F7 (check): ./smackerel.sh check EXIT=0 'Config is in sync with SST / env_file drift guard: OK / scenarios registered: 5, rejected: 0 / scenario-lint: OK'. F8 (Scope 04 status promotion): scopes.md Scope 4 status header advanced 'In Progress' -> 'Done', Phase advanced 'spec-review' -> 'finalize', Agent advanced 'bubbles.spec-review' -> 'bubbles.iterate'; Scope Table row 4 advanced '[ ] Not Started' -> '[x] Done'. State.json updates this entry: execution.completedPhaseClaims appended this finalize object; certification.completedScopes advanced ['01','02','03'] -> ['01','02','03','04']; certification.certifiedCompletedPhases appended '04:finalize' (tail now ['04:audit','04:chaos','04:spec-review','04:docs','04:finalize']); executionHistory appended bubbles.iterate finalize entry with scope='04', disposition=approved, statusBefore='in_progress', statusAfter='in_progress'; currentPhase advanced 'finalize' -> 'plan' (per per-scope finalize boundary; the next iteration is SPEC-LEVEL finalize which begins from the 'plan' phase to address the documented carry-forwards before promoting spec 044 to done); execution.currentPhase advanced 'finalize' -> 'plan'; execution.currentScope preserved at '04' (Scope 04 IS the final scope of spec 044; the next spec-level finalize iteration operates against spec 044 as a whole). status PRESERVED at 'in_progress' (spec 044 is NOT done \u2014 spec-level finalize is the next iteration); certification.status PRESERVED at 'in_progress'; transitionRequests[FINALIZE-PREREQ-044-V7-001] PRESERVED at status=resolved unchanged. Recommended next iteration: SPEC-LEVEL finalize (bubbles.iterate) which (a) addresses D3-S04 by adding SCN-AUTH-012 heading to spec.md and Scenario: SCN-AUTH-012 Gherkin block to scopes.md (or formally route to follow-up spec); (b) addresses D4-S04 by either closing MIT-027-TRACE-001 NATS-segment in spec 044 (route via Scope 5) OR annotating specs/027-user-annotations/state.json with follow-up spec ID + security non-regression rationale; (c) re-runs F1-F8 + state-transition-guard expecting EXIT=0 with NO carry-forwards; (d) promotes spec 044 'in_progress' -> 'done'. Operational discipline: IDE replace_string_in_file for scopes.md Scope 4 status header + Scope Table row + NEW Carry-Forward Registry subsection + report.md finalize-evidence append (cache-poisoning verification: post-edit grep -c REMOVED returns expected counts; no CACHE_POISONING_DETECTED markers introduced); pathlib.write_text heredoc for state.json per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write; NO t.Skip() introduced; NO --no-verify on commit; NO push (SSH agent locked per user instruction); Smackerel PII rule honored (no real Linux usernames/hostnames/IPs/FQDNs/geographic locations/token contents in committed files); test stack state left UP as inherited from docs phase; preserved for spec-level finalize agent. Verdict: APPROVED \u2014 Scope 04 closes per Gate G022."
       },
-      "regression"
+      "regression",
+      "simplify"
     ],
     "pendingTransitionRequests": []
   },
@@ -254,7 +255,8 @@
       "04:spec-review",
       "04:docs",
       "04:finalize",
-      "regression"
+      "regression",
+      "simplify"
     ],
     "lockdownState": {
       "active": false,
@@ -921,6 +923,33 @@
       },
       "occurredAtIso8601": "2026-05-11T19:51:20Z",
       "notes": "Drive E2E auth-header gap detected and remediated by bubbles.implement at c44a4a08 before recording. Spec-level regression phase: per-scope DoD bullets (8 = 2 per scope x 4 scopes) and Test Plan regression-E2E rows (13) appended to scopes.md; spec-level Regression Evidence H3 section appended to report.md. Verdict: REGRESSION_FREE. All 5 gates clean (regression-baseline-guard, unit, integration, e2e full, e2e PWA auth selector). Cross-spec MIT closures (MIT-040-S-008 spec 040, MIT-038-S-003 spec 038, MIT-027-TRACE-001 actor-source + telegram-e2e segments spec 027) verified intact. RECORD-ONLY phase: tests not re-run by this agent (test stack lock by orphaned prior e2e run)."
+    },
+    {
+      "who": "bubbles.simplify",
+      "scopes": [
+        "01",
+        "02",
+        "03",
+        "04"
+      ],
+      "phase": "simplify",
+      "decision": "approved",
+      "occurredAtIso8601": "2026-05-11T20:30:00Z",
+      "evidence": {
+        "filesReviewed": 27,
+        "issuesFound": 5,
+        "fixesApplied": 5,
+        "gateExits": {
+          "go_build": 0,
+          "go_vet": 0,
+          "go_vet_integration": 0,
+          "smackerel_check": 0,
+          "smackerel_lint": 0,
+          "smackerel_test_unit": 0,
+          "smackerel_test_integration": 0
+        }
+      },
+      "note": "Spec-level simplify phase (covers all 4 scopes) per Gate G022 \u2014 state-transition-guard reported simplify missing from execution/certification phase records when orchestrator attempted done-ceiling promotion against HEAD 942c19ba. Surface in scope: 39 commits between 2e2a2b9c..942c19ba covering bearer auth subsystem (internal/auth, cmd/core/cmd_auth.go, internal/api/auth_handlers.go, router.go, web_login.go, admin_ui.go), per-user middleware wiring (cmd/core/wiring.go/services.go/main.go), PWA cookie + admin UI surfaces, and auth-side test suites. 5 simplification opportunities found and ALL fixed: (1) generateTokenID + generateRandomTokenID consolidated into auth.GenerateTokenID() in internal/auth/issue.go; (2) two near-identical issueAndPersist helpers consolidated into auth.IssueAndPersistToken(ctx, store, opts) in internal/auth/issue.go; (3) three copies of actor-from-session pattern in HandleEnroll/HandleRotate/HandleRevoke replaced with new Session.ActorID() helper in internal/auth/session.go; (4) duplicate truncForLogS04 in tests/integration/auth_chaos_scope04_test.go deleted, 6 call sites switched to existing truncForLog from scope03; (5) local func min(a,b int) int in tests/integration/auth_chaos_test.go deleted, single call site uses Go 1.21+ builtin min (go.mod declares go 1.25.10). Net diff: +193/-155 across 6 files (cmd/core/cmd_auth.go, internal/api/auth_handlers.go, internal/auth/issue.go, internal/auth/session.go, tests/integration/auth_chaos_scope04_test.go, tests/integration/auth_chaos_test.go). No behavior change \u2014 the new helpers preserve the IssueToken+HashToken+PersistToken sequence and the actor-from-session fallback logic byte-for-byte. Validation gates ALL clean: go build ./... exit=0; go vet ./... exit=0; go vet -tags=integration ./tests/integration/... exit=0; ./smackerel.sh check exit=0; ./smackerel.sh lint exit=0; ./smackerel.sh test unit exit=0 (Go 4 modified packages auth/auth.revocation/api/cmd.core all ok with -count=1; Python 417 passed); ./smackerel.sh test integration exit=0 (3 packages all ok: tests/integration + tests/integration/agent + tests/integration/drive; ZERO FAIL; auth-related tests TestAuthBootstrap_*, TestAuthChaos_S02/S03/S04 suites, TestExtensionAuth_*, TestAdminUI_*, TestTelegramBridge_* all PASS). E2E intentionally NOT executed in this simplify pass per orchestrator instruction (a prior orphaned e2e suite was still active in the test stack at phase invocation; the spec-level regression evidence already records a clean ./smackerel.sh test e2e run against HEAD c44a4a08 whose source has not changed in the post-simplify HEAD with respect to e2e-touched surfaces \u2014 simplify diff is confined to internal/auth helper consolidation + two test-helper deletions and produces no behavior change observable to the e2e lane). State.json updates this entry: execution.completedPhaseClaims appended simplify; certification.certifiedCompletedPhases appended simplify; this executionHistory entry recorded; lastUpdatedAt updated. Verdict: REVIEWED_AND_FIXED. Operational discipline: IDE file-edit tools used for ALL Go source/test edits; pathlib.write_text used for state.json per orchestrator instruction; PII rule honored; NO --no-verify on commit; pre-commit pii-scan clean."
     }
   ],
   "policySnapshot": {
@@ -998,5 +1027,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-11T19:51:20Z"
+  "lastUpdatedAt": "2026-05-11T20:30:00Z"
 }

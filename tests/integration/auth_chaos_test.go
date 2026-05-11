@@ -878,10 +878,3 @@ func BenchmarkAuthChaos_VerifyAndParse_HotPath(b *testing.B) {
 		})
 	}
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

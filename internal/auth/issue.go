@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -127,4 +130,136 @@ func PublicHexFromSecretHex(privateHex string) (string, error) {
 		return "", fmt.Errorf("auth: parse secret key hex: %w", err)
 	}
 	return secret.Public().ExportHex(), nil
+}
+
+// GenerateTokenID produces a 128-bit random token id, hex-encoded.
+// PASETO embeds it in the jti claim and the auth_tokens row uses it as
+// the PRIMARY KEY. Used by the operator CLI (cmd/core/cmd_auth.go) and
+// the admin HTTP handlers (internal/api/auth_handlers.go) so the
+// id-generation contract has exactly one definition.
+func GenerateTokenID() (string, error) {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "", fmt.Errorf("auth: rand read: %w", err)
+	}
+	return hex.EncodeToString(buf[:]), nil
+}
+
+// IssueAndPersistOptions configures a single mint-and-persist call
+// against a BearerStore. Spec 044 — issuance happens from two
+// surfaces (the operator CLI in cmd/core/cmd_auth.go and the admin
+// HTTP endpoints in internal/api/auth_handlers.go); both flow through
+// this helper so the IssueToken + HashToken + PersistToken sequence
+// has exactly one definition.
+type IssueAndPersistOptions struct {
+	// UserID is the principal the token is being issued for.
+	UserID string
+
+	// SigningPrivateKey / SigningKeyID are the active PASETO v4.public
+	// signing material (auth.signing.active_private_key and
+	// auth.signing.active_key_id from SST).
+	SigningPrivateKey string
+	SigningKeyID      string
+
+	// AtRestHashingKey is auth.at_rest_hashing_key from SST. The
+	// minted wire token is HMAC-hashed under this key before being
+	// written to auth_tokens.hashed_token.
+	AtRestHashingKey string
+
+	// TTL is how long the issued token should remain valid.
+	TTL time.Duration
+
+	// Issuer is the `iss` claim (typically "smackerel").
+	Issuer string
+
+	// Now is the injectable clock; tests pass a deterministic fake.
+	Now func() time.Time
+
+	// IssuedBy is the operator identity recorded in auth_tokens
+	// (CLI host, admin user_id, or "bootstrap").
+	IssuedBy string
+
+	// IssuedSource is the channel that minted the token — "cli" for
+	// the operator subcommand, "admin_api" for the HTTP admin
+	// handlers, "bootstrap" for the one-shot first-user enrollment.
+	IssuedSource string
+
+	// RotatedFromTokenID is the prior token id when this is a
+	// rotation; empty for fresh enrollments.
+	RotatedFromTokenID string
+}
+
+// IssueAndPersistResult is the wire token (only displayed once at
+// mint time) plus the persisted-row metadata callers need to surface
+// in their response payload.
+type IssueAndPersistResult struct {
+	WireToken string
+	TokenID   string
+	IssuedAt  time.Time
+	ExpiresAt time.Time
+}
+
+// IssueAndPersistToken combines GenerateTokenID + IssueToken +
+// HashToken + PersistToken into a single audited operation. Returns
+// the wire token and the persisted-row metadata. Validation that
+// belongs to each composed operation (positive TTL, non-empty
+// SigningKey, etc.) is enforced inside the composed helpers; this
+// wrapper validates only the inputs that have no natural home in the
+// composed helpers (signing material presence and at-rest hashing
+// key presence — the same fail-loud contract spec 044 enforces at
+// the SST-loader boundary, repeated here as defense-in-depth).
+func IssueAndPersistToken(ctx context.Context, store *BearerStore, opts IssueAndPersistOptions) (IssueAndPersistResult, error) {
+	if store == nil {
+		return IssueAndPersistResult{}, errors.New("auth: IssueAndPersistToken requires non-nil BearerStore")
+	}
+	if opts.SigningPrivateKey == "" || opts.SigningKeyID == "" {
+		return IssueAndPersistResult{}, errors.New("auth.signing.active_private_key and active_key_id MUST be set to issue tokens")
+	}
+	if opts.AtRestHashingKey == "" {
+		return IssueAndPersistResult{}, errors.New("auth.at_rest_hashing_key MUST be set to persist tokens at rest")
+	}
+
+	tokenID, err := GenerateTokenID()
+	if err != nil {
+		return IssueAndPersistResult{}, err
+	}
+
+	issued, err := IssueToken(IssueOptions{
+		UserID:     opts.UserID,
+		TokenID:    tokenID,
+		SigningKey: opts.SigningPrivateKey,
+		KeyID:      opts.SigningKeyID,
+		TTL:        opts.TTL,
+		Issuer:     opts.Issuer,
+		Now:        opts.Now,
+	})
+	if err != nil {
+		return IssueAndPersistResult{}, fmt.Errorf("issue token: %w", err)
+	}
+
+	hashed, err := HashToken(issued.WireToken, opts.AtRestHashingKey)
+	if err != nil {
+		return IssueAndPersistResult{}, fmt.Errorf("hash token: %w", err)
+	}
+
+	if err := store.PersistToken(ctx, PersistTokenParams{
+		TokenID:            tokenID,
+		UserID:             opts.UserID,
+		KeyID:              opts.SigningKeyID,
+		IssuedAt:           issued.IssuedAt,
+		ExpiresAt:          issued.ExpiresAt,
+		HashedToken:        hashed,
+		IssuedBy:           opts.IssuedBy,
+		IssuedSource:       opts.IssuedSource,
+		RotatedFromTokenID: opts.RotatedFromTokenID,
+	}); err != nil {
+		return IssueAndPersistResult{}, fmt.Errorf("persist token: %w", err)
+	}
+
+	return IssueAndPersistResult{
+		WireToken: issued.WireToken,
+		TokenID:   tokenID,
+		IssuedAt:  issued.IssuedAt,
+		ExpiresAt: issued.ExpiresAt,
+	}, nil
 }

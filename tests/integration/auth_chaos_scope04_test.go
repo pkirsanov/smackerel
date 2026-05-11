@@ -77,16 +77,6 @@ func uniqueChaosS04RunID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
 
-// truncForLogS04 truncates a string for safe inclusion in failure
-// logs — bearer tokens are long and would dominate test output.
-func truncForLogS04(s string) string {
-	const maxLen = 64
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "...(" + fmt.Sprintf("%d total", len(s)) + ")"
-}
-
 // --- C4-B01 ---------------------------------------------------------
 
 // TestAuthChaos_S04_F02WiringConcurrentMappedBurst_AllMint proves the
@@ -173,12 +163,12 @@ func TestAuthChaos_S04_F02WiringConcurrentMappedBurst_AllMint(t *testing.T) {
 			const wantPrefix = "Bearer v4.public."
 			if len(authz) < len(wantPrefix) || authz[:len(wantPrefix)] != wantPrefix {
 				mintErr.Add(1)
-				recordFailure(fmt.Sprintf("chat=%d Authorization=%q does not look like per-user PASETO", chatID, truncForLogS04(authz)))
+				recordFailure(fmt.Sprintf("chat=%d Authorization=%q does not look like per-user PASETO", chatID, truncForLog(authz)))
 				return
 			}
 			if strings.Contains(authz, "WRONG-shared-bearer-MUST-NOT-LEAK-S04-B01") {
 				mintErr.Add(1)
-				recordFailure(fmt.Sprintf("chat=%d Authorization=%q LEAKED shared sentinel", chatID, truncForLogS04(authz)))
+				recordFailure(fmt.Sprintf("chat=%d Authorization=%q LEAKED shared sentinel", chatID, truncForLog(authz)))
 				return
 			}
 
@@ -311,7 +301,7 @@ func TestAuthChaos_S04_F02WiringUnmappedConcurrentBurst_AllRefuse(t *testing.T) 
 					return
 				}
 				leaked.Add(1)
-				recordFailure(fmt.Sprintf("chat=%d setBearerHeader admitted unmapped chat: Authorization=%q", chatID, truncForLogS04(authz)))
+				recordFailure(fmt.Sprintf("chat=%d setBearerHeader admitted unmapped chat: Authorization=%q", chatID, truncForLog(authz)))
 				return
 			}
 			// Hard contract: error path must not have set the
@@ -319,7 +309,7 @@ func TestAuthChaos_S04_F02WiringUnmappedConcurrentBurst_AllRefuse(t *testing.T) 
 			// setBearerHeader partial-applied before erroring.
 			if got := req.Header.Get("Authorization"); got != "" {
 				leaked.Add(1)
-				recordFailure(fmt.Sprintf("chat=%d setBearerHeader err=%v BUT Authorization=%q (partial application)", chatID, err, truncForLogS04(got)))
+				recordFailure(fmt.Sprintf("chat=%d setBearerHeader err=%v BUT Authorization=%q (partial application)", chatID, err, truncForLog(got)))
 				return
 			}
 			refused.Add(1)
@@ -791,10 +781,10 @@ func TestAuthChaos_S04_LegacyFallbackProductionFlagFalse_AllRejected(t *testing.
 				admitted.Add(1)
 				slipped.Add(1)
 				recordFailure(fmt.Sprintf("req=%d slipped through with 200 (flag=false but legacy bearer admitted) body=%s",
-					i, truncForLogS04(rec.Body.String())))
+					i, truncForLog(rec.Body.String())))
 			default:
 				recordFailure(fmt.Sprintf("req=%d unexpected status=%d body=%s",
-					i, rec.Code, truncForLogS04(rec.Body.String())))
+					i, rec.Code, truncForLog(rec.Body.String())))
 			}
 		}()
 	}
