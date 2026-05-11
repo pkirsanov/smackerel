@@ -82,6 +82,20 @@ func (s Session) IsAdmin() bool {
 	}
 }
 
+// ActorID returns the audit identity for the session — the per-user
+// UserID when present, otherwise the SessionSource literal. Used by
+// the admin HTTP handlers to record `enrolled_by` / `rotated_by` /
+// `revoked_by` columns in `auth_tokens` and `auth_revocations` rows
+// so the bootstrap and shared-token sessions still have a stable
+// label in the audit trail (the alternative — empty strings — would
+// surface as ambiguous "unknown" entries).
+func (s Session) ActorID() string {
+	if s.UserID != "" {
+		return s.UserID
+	}
+	return string(s.Source)
+}
+
 // sessionContextKey is the unexported context key type for Session
 // values. Using a typed key prevents collisions with other context
 // values pushed by upstream middleware.

@@ -6971,3 +6971,101 @@ Total per-scope regression DoD bullets added: **8** (2 per scope × 4 scopes). T
 `Claim Source: executed`.
 
 ---
+
+### Spec-Level Simplify Evidence
+
+**Executed:** YES
+
+**Phase Agent:** bubbles.simplify
+
+**Mode:** Spec-level (covers all four scopes 01–04). Required by Gate G022 (state-transition-guard reported `simplify` missing from execution / certification phase records when the orchestrator attempted the `done` ceiling promotion against HEAD `942c19ba`).
+
+**Surface in scope:** the 39 commits between `2e2a2b9c..942c19ba` that produced spec 044 — the bearer auth subsystem (`internal/auth/*.go`, `cmd/core/cmd_auth.go`, `internal/api/auth_handlers.go`, `internal/api/router.go`, `internal/api/web_login.go`, `internal/api/admin_ui.go`), the per-user middleware wiring (`cmd/core/wiring.go`, `cmd/core/services.go`, `cmd/core/main.go`), the PWA cookie + admin UI surfaces, and the auth-side test suites (`tests/integration/auth_*_test.go`, `tests/e2e/auth/pwa_per_user_test.go`, `tests/e2e/drive/helpers.go` plus the 13 drive-test callers updated for the auth-header gap fix).
+
+**Files reviewed (count):** 27 production + test files (full list in scope description above).
+
+**Issues found (3 production-code duplications + 2 test-helper duplications):**
+
+| # | File pair | Category | Severity | Issue | Fix |
+|---|-----------|----------|----------|-------|-----|
+| 1 | `cmd/core/cmd_auth.go` `generateTokenID` ↔ `internal/api/auth_handlers.go` `generateRandomTokenID` | code reuse | medium | Two byte-identical 16-byte random hex token-id generators with different names | Extract to `auth.GenerateTokenID()` in `internal/auth/issue.go`; delete both local copies |
+| 2 | `cmd/core/cmd_auth.go` `issueAndPersist` ↔ `internal/api/auth_handlers.go` `issueAndPersist` | code reuse | high | Two near-identical mint-and-persist helpers (IssueToken + HashToken + PersistToken combo). The api version even comments: *"mirrors cmd_auth.go's helper but lives in the api package to avoid cross-package importing of an unexported helper"* — acknowledged duplication | Extract to `auth.IssueAndPersistToken(ctx, store, opts)` in `internal/auth/issue.go`; replace both call-site bodies with thin wrappers that adapt the SST `*config.Config` shape into `auth.IssueAndPersistOptions` |
+| 3 | `internal/api/auth_handlers.go` (`HandleEnroll`, `HandleRotate`, `HandleRevoke`) | code reuse | low | Three copies of the actor-from-session pattern `actor := sess.UserID; if actor == "" { actor = string(sess.Source) }` for `enrolled_by` / `rotated_by` / `revoked_by` audit columns | Add `Session.ActorID()` method in `internal/auth/session.go`; replace all three inline blocks with `sess.ActorID()` |
+| 4 | `tests/integration/auth_chaos_scope04_test.go` `truncForLogS04` ↔ `auth_chaos_scope03_test.go` `truncForLog` | code reuse | low | Byte-identical helper duplicated under a name-disambiguated identifier solely to dodge a Go redeclaration error inside the same `integration` test package | Delete `truncForLogS04`; rename its 6 call sites to use the existing `truncForLog` from the same package |
+| 5 | `tests/integration/auth_chaos_test.go` `func min(a, b int) int` | code quality | low | Local `min(int, int)` shadows the Go 1.21+ built-in `min` (repo `go.mod` declares `go 1.25.10`) | Delete the local function; the single call site in `auth_chaos_test.go:277` resolves to the builtin transparently |
+
+**Fixes applied (per-file diff summary):**
+
+```
+$ git diff --stat HEAD -- internal/auth/issue.go internal/auth/session.go internal/api/auth_handlers.go cmd/core/cmd_auth.go tests/integration/auth_chaos_scope04_test.go tests/integration/auth_chaos_test.go
+ cmd/core/cmd_auth.go                         |  73 ++++-----------
+ internal/api/auth_handlers.go                |  97 +++++--------------
+ internal/auth/issue.go                       | 135 +++++++++++++++++++++++++++
+ internal/auth/session.go                     |  14 +++
+ tests/integration/auth_chaos_scope04_test.go |  22 ++---
+ tests/integration/auth_chaos_test.go         |   7 --
+ 6 files changed, 193 insertions(+), 155 deletions(-)
+```
+
+Net: **+38 lines** across 6 files. The +193 insertions include the new shared `auth.IssueAndPersistToken` helper (~135 lines of Go incl. doc comments + options struct + result struct + the helper itself) and the new `Session.ActorID()` method (~14 lines incl. comment); the −155 deletions remove the two duplicate `issueAndPersist` blocks (~50 lines each in cmd / api) and the duplicate `generateTokenID` / `generateRandomTokenID` / `truncForLogS04` / `min` definitions. Logical duplication removed: **3 production-code duplicates + 2 test-helper duplicates** = **5 identifiers** consolidated. No behavior change — the new helpers preserve the pre-existing IssueToken + HashToken + PersistToken sequence and the actor-from-session fallback logic byte-for-byte.
+
+**Validation gate exits (HEAD post-simplify, before commit):**
+
+```
+$ go build ./...
+(silent)
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ go vet ./...
+(silent)
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ go vet -tags=integration ./tests/integration/...
+(silent)
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json … (every manifest + JS file OK)
+Web validation passed
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/auth     15.310s
+ok      github.com/smackerel/smackerel/internal/auth/revocation 0.006s
+ok      github.com/smackerel/smackerel/internal/api      9.439s
+ok      github.com/smackerel/smackerel/cmd/core          0.430s
+(plus every other Go package — all ok or cached, ZERO FAIL)
+Python ML sidecar: 417 passed in 16.26s
+$ echo "Exit Code: $?"
+Exit Code: 0
+
+$ ./smackerel.sh test integration
+ok      github.com/smackerel/smackerel/tests/integration
+ok      github.com/smackerel/smackerel/tests/integration/agent
+ok      github.com/smackerel/smackerel/tests/integration/drive
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+E2E intentionally NOT executed in this simplify pass per the orchestrator instructions (a prior orphaned e2e suite was still active in the test stack at the time of this phase invocation; the spec-level regression evidence above already records a clean `./smackerel.sh test e2e` run against HEAD `c44a4a08` whose source has not changed in the post-simplify HEAD with respect to the e2e-touched surfaces — the simplify diff is confined to internal/auth helper consolidation + two test-helper deletions and produces no behavior change observable to the e2e lane).
+
+**Verdict:** 🟢 **REVIEWED_AND_FIXED** — 5 simplification opportunities found and fixed; 0 simplification opportunities deferred; every validation gate clean (build, vet, check, lint, unit, integration); no behavior change introduced.
+
+`Claim Source: executed`.
+
+---
