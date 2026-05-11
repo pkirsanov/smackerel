@@ -6287,3 +6287,116 @@ regression — the defensive layer covers the NATS-bridged write path).
 **Verdict:** PUBLISHED — all 6 managed docs reflect the FINAL Scope 04 state; F02 described as shipped (with closure pointers); auth metrics published with operator-facing scrape examples; deprecation-flag operator runbook complete; end-to-end migration sequence (Scope 1 → 2 → 3 → 4 → flag flip) + metric-based cutover criteria + rollback path documented in NEW Final Scope 04 Audit subsection; cross-spec MIT closure annotations intact (spec 027 telegram-e2e-segment + actor-source-segment + spec 040 + spec 038) plus NEW spec 030 cross-reference; deferred-finding-language audit PASS (zero managed-doc claims that D3-S04 / D4-S04 are shipped). Phase advances `docs → finalize`. Recommended next iteration: Scope 04 finalize phase (`bubbles.iterate`) which is the spec-level finalize (Scope 04 IS the final scope of spec 044).
 
 ---
+
+### Finalize Evidence (Scope 04)
+
+**Phase:** finalize **Agent:** bubbles.iterate **Timestamp:** 2026-05-11T11:30:00Z **Disposition:** approved
+
+**Scope:** Per-scope finalize (closes Scope 04 only). Spec-level finalize (which would promote spec 044 from `in_progress` → `done`) is a SEPARATE next iteration explicitly deferred to address the documented carry-forward registry (D3-S04 + D4-S04).
+
+#### Pre-edit gate run (F1-F8) — verbatim exit codes
+
+| Gate | Command | EXIT |
+|---|---|---|
+| F1 | `grep -c '\[x\]' scopes.md` (Scope 4 section) — 8 ticked DoD bullets matching 8 bullet count | 0 (count match) |
+| F1 | `grep -c '^\- \[ \]' specs/044-per-user-bearer-auth/scopes.md` (zero unticked DoD items across entire spec) | 0 (count match) |
+| F2 | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` | 0 |
+| F3 | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | 0 |
+| F4 | All Scope 04 phase claims present in `state.json` `certification.certifiedCompletedPhases` (`04:test`, `04:validate`, `04:audit`, `04:chaos`, `04:spec-review`, `04:docs`); `04:finalize` appended this phase | PASS |
+| F5 | All open MEDIUM/HIGH findings closed: `transitionRequests[FINALIZE-PREREQ-044-V7-001].status = resolved`; `pendingTransitionRequests = []`; D3-S04 + D4-S04 are LOW carry-forwards documented in `Scope 04 Carry-Forward Registry` section above + `design.md` §17.3 | PASS |
+| F6 | `./smackerel.sh build` (Built smackerel-core + smackerel-ml) | 0 |
+| F7 | `./smackerel.sh check` (Config in sync with SST; env_file drift guard OK; scenario-lint OK 5/0) | 0 |
+| F8 | Scope 04 status header in `scopes.md` flipped `In Progress` → `Done`; Scope 4 row in scope table flipped `[ ] Not Started` → `[x] Done`; Phase advanced `spec-review` → `finalize`; Agent advanced `bubbles.spec-review` → `bubbles.iterate` | PASS |
+
+#### Verbatim F2 / F3 / F6 / F7 output
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth
+... (truncated head — see implementing log) ...
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+F2_EXIT=0
+
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose
+... (truncated head — see implementing log) ...
+ℹ️  DoD fidelity: 12 scenarios checked, 12 mapped to DoD, 0 unmapped
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 12
+ℹ️  Test rows checked: 43
+ℹ️  Scenario-to-row mappings: 12
+ℹ️  Concrete test file references: 12
+ℹ️  Report evidence references: 12
+ℹ️  DoD fidelity scenarios: 12 (mapped: 12, unmapped: 0)
+RESULT: PASSED (0 warnings)
+F3_EXIT=0
+
+$ ./smackerel.sh build
+... (truncated head — see implementing log) ...
+ smackerel-core  Built
+ smackerel-ml  Built
+F6_EXIT=0
+
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+F7_EXIT=0
+```
+
+#### Scope 04 status promotion to `Done`
+
+- `scopes.md` Scope 4 status header advanced: `**Status:** In Progress` → `**Status:** Done`; `**Phase:** spec-review` → `**Phase:** finalize`; `**Agent:** bubbles.spec-review` → `**Agent:** bubbles.iterate`.
+- `scopes.md` Scope 4 row in the Scope Table advanced: `[ ] Not Started` → `[x] Done`.
+- `scopes.md` NEW `### Scope 04 Carry-Forward Registry` subsection added inside the Scope 4 section documenting the two LOW finalize-deferred items (D3-S04 + D4-S04) with explicit per-finding disposition for spec-level finalize.
+
+#### completedScopes advancement
+
+- `state.json` `certification.completedScopes` advanced: `["01", "02", "03"]` → `["01", "02", "03", "04"]`.
+- `state.json` `execution.completedPhaseClaims` appended Scope 04 finalize object form.
+- `state.json` `certification.certifiedCompletedPhases` appended `04:finalize` (tail now `['04:audit', '04:chaos', '04:spec-review', '04:docs', '04:finalize']`).
+- `state.json` `executionHistory` appended `bubbles.iterate` finalize entry with `scope: '04'`, `disposition: approved`.
+- `state.json` `currentPhase` advanced `finalize` → `plan` (per per-scope finalize boundary; the next iteration is SPEC-LEVEL finalize which begins from the `plan` phase to address the documented carry-forwards).
+- `state.json` `execution.currentPhase` advanced `finalize` → `plan`.
+- `state.json` `execution.currentScope` preserved at `'04'` (Scope 04 IS the final scope of spec 044; the next spec-level finalize iteration operates against spec 044 as a whole, not a new scope).
+- `state.json` `status` PRESERVED at `'in_progress'` (spec 044 is NOT done — spec-level finalize is the next iteration).
+- `state.json` `certification.status` PRESERVED at `'in_progress'`.
+- `state.json` `transitionRequests[FINALIZE-PREREQ-044-V7-001]` PRESERVED at `status=resolved` unchanged.
+
+#### Carry-Forward Registry (LOW deferrals to spec-level finalize)
+
+| Finding | Severity | Disposition for spec-level finalize |
+|---|---|---|
+| D3-S04 | LOW | Spec-level finalize MUST add `### SCN-AUTH-012 — ...` heading to `spec.md` and `Scenario: SCN-AUTH-012` Gherkin block to `scopes.md` (or formally route to a follow-up spec) BEFORE promoting spec 044 to `done`. |
+| D4-S04 | LOW | Spec-level finalize MUST explicitly address: either (a) close the `MIT-027-TRACE-001` NATS-bus-segment in spec 044 (route via Scope 5), OR (b) annotate `specs/027-user-annotations/state.json` with a follow-up spec ID and document the security non-regression rationale verbatim BEFORE promoting spec 044 to `done`. |
+
+Both deferrals are documented in `scopes.md` → `### Scope 04 Carry-Forward Registry` and `design.md` §17.3.
+
+#### Recommended next iteration
+
+**Spec-level finalize (`bubbles.iterate`)** operating against spec 044 as a whole:
+
+1. Address D3-S04: add `SCN-AUTH-012` heading to `spec.md` and `Scenario: SCN-AUTH-012` Gherkin block to `scopes.md` (or route to follow-up spec).
+2. Address D4-S04: close `MIT-027-TRACE-001` NATS-segment in spec 044 (via Scope 5) OR annotate `specs/027-user-annotations/state.json` with follow-up spec ID + security non-regression rationale.
+3. Re-run F1-F8 + run state-transition-guard expecting EXIT=0 with NO carry-forwards.
+4. Promote `state.json` `status` `in_progress` → `done`; `certification.status` `in_progress` → `done`; mark `executionHistory` entry with `statusBefore: 'in_progress'`, `statusAfter: 'done'`.
+
+#### Operational discipline
+
+- IDE `replace_string_in_file` for `scopes.md` Scope 4 status header + Scope Table row + NEW Carry-Forward Registry subsection + this `report.md` finalize-evidence append (cache-poisoning verification: post-edit `grep -c REMOVED` returns expected counts).
+- `pathlib.write_text` heredoc for `state.json` per `/memories/repo/ide-cache-poisoning.md` USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write.
+- NO `t.Skip()` introduced; NO `--no-verify` on commit; NO push (SSH agent locked per user instruction).
+- Smackerel PII rule honored (no real Linux usernames, hostnames, IPs, FQDNs, geographic locations, or token contents in committed files).
+- Test stack state: left UP as inherited from docs phase; preserved for spec-level finalize agent.
+
+**Claim Source:** executed.
+
+**Verdict:** APPROVED — Scope 04 closes per Gate G022. F1-F8 all PASS. Scope 04 status promoted to `Done`; `completedScopes` advanced to `["01", "02", "03", "04"]`; `currentPhase` advanced to `plan` for the spec-level finalize iteration. Spec 044 status preserved at `in_progress` pending spec-level finalize.
+
+---
