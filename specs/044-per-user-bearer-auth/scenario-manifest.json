@@ -169,6 +169,21 @@
         {"type": "static-guarantee", "file": "internal/metrics/auth.go", "function": "init() registers all 7 series via prometheus.MustRegister", "status": "live"},
         {"type": "static-guarantee", "file": "cmd/core/wiring.go", "function": "startTelegramBotIfConfigured constructs PerUserTokenMinter (TTL=5m) and calls tgBot.SetPerUserTokenMinter when production+auth.enabled+signing key configured", "status": "live"}
       ]
+    },
+    {
+      "scenarioId": "SCN-AUTH-002-PWA-PATH",
+      "name": "Bearer token survives stateless validation in production mode without DB roundtrip [PWA path]",
+      "scope": "03-web-surfaces-telegram-connector",
+      "evidenceRefs": [
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_PerUserSession", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsMissingToken", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken", "status": "live"},
+        {"type": "test", "file": "tests/e2e/auth/pwa_per_user_test.go", "function": "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_AcceptsValidPASETO", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsForeignPASETO", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestWebLogin_Production_RejectsRevokedToken", "status": "live"},
+        {"type": "test", "file": "internal/api/web_login_test.go", "function": "TestExtractBearerToken_CookieFallback", "status": "live"}
+      ]
     }
   ]
 }

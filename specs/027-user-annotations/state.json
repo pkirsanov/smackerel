@@ -177,7 +177,7 @@
       ],
       "runStartedAt": "2026-04-24T00:30:00Z",
       "runEndedAt": "2026-04-24T00:31:00Z",
-      "summary": "Chaos phase: Honestly skipped \u2014 no spec-owned chaos harness exists for the annotation path. Annotations are deterministic CRUD with auth guard; failure modes (nil store, missing artifact, unauthorized) are covered by unit tests. Documented in report.md Chaos Evidence section."
+      "summary": "Chaos phase: Honestly skipped — no spec-owned chaos harness exists for the annotation path. Annotations are deterministic CRUD with auth guard; failure modes (nil store, missing artifact, unauthorized) are covered by unit tests. Documented in report.md Chaos Evidence section."
     },
     {
       "agent": "bubbles.spec-review",
@@ -186,11 +186,13 @@
       ],
       "runStartedAt": "2026-04-24T00:35:00Z",
       "runEndedAt": "2026-04-24T00:36:00Z",
-      "summary": "Manual cross-check: spec.md/design.md/scopes.md aligned with implementation. All 8 scopes Done with verified file:line evidence. Annotation lifecycle (POST tag/note/highlight \u2192 store \u2192 NATS event \u2192 search/intelligence enrichment) matches spec intent."
+      "summary": "Manual cross-check: spec.md/design.md/scopes.md aligned with implementation. All 8 scopes Done with verified file:line evidence. Annotation lifecycle (POST tag/note/highlight → store → NATS event → search/intelligence enrichment) matches spec intent."
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["trace-cleanup-diagnosis"],
+      "phasesExecuted": [
+        "trace-cleanup-diagnosis"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-05-08T00:00:00Z",
@@ -199,7 +201,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["trace-cleanup-closure"],
+      "phasesExecuted": [
+        "trace-cleanup-closure"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-05-09T00:00:00Z",
@@ -208,7 +212,9 @@
     },
     {
       "agent": "bubbles.implement",
-      "phasesExecuted": ["implement"],
+      "phasesExecuted": [
+        "implement"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-05-10T13:30:00Z",
@@ -217,8 +223,12 @@
       "scope": "feature-wide cross-spec closure (actor-source segment of MIT-027-TRACE-001)",
       "crossSpec": "specs/044-per-user-bearer-auth",
       "summary": "Cross-spec closure of the actor-source segment of MIT-027-TRACE-001 (the trust-boundary segment — annotation entry-points accept actor identity from request body in production with no claim-binding to authenticated session). The spec-027 trace-guard segment of MIT-027-TRACE-001 was already CLOSED on 2026-05-09 in the entry above; this entry closes the SECURITY actor-source segment that was carry-forward routed to spec 044. Closure ships in spec 044 Scope 02 (Hot-Path Middleware Integration + MIT Closures). VERDICT: completed_owned. What landed in spec 044 Scope 02: (1) `internal/api/annotations.go` — added `Environment string` field to AnnotationHandlers; refactored `CreateAnnotation` handler — reads body once into bytes via http.MaxBytesReader + io.ReadAll; in production, scans the body bytes for the literal JSON keys `\"actor_source\"` or `\"actor_id\"` and rejects with HTTP 400 (`actor_source in request body is forbidden in production` / `actor_id in request body is forbidden in production`) BEFORE any annotation store call; in dev/test the body keys are permitted (legacy ergonomic preserved). When a session is present, the session UserID is logged at annotation creation time. (2) `cmd/core/wiring.go` — AnnotationHandlers construction sets `Environment: cfg.Environment`. (3) Adversarial integration tests `tests/integration/auth_annotation_test.go` (NEW, build tag integration) — TestAnnotation_BodyActorSourceInProduction_Rejected (smuggle `actor_source` in body, asserts 400 + 'actor_source in request body is forbidden in production' AND that the stub annotation store's CreateFromParsed counter remains zero proving the rejection happens BEFORE any persistence); TestAnnotation_BodyActorIDInProduction_Rejected (mirror for `actor_id`); ALL PASS against the live test stack. Note: this closure addresses the API-surface defensive rejection. The full claim-binding contract (annotation pipeline derives actor_source from session for ALL entry points including Telegram bridge and NATS) remains a Scope 03 deliverable in spec 044 — Scope 02 lands the production-mode defensive rejection on the API entry path and the Environment field plumbing. The actor_source database column itself is unchanged in this scope; NO schema migration ships in spec 044 Scope 02 per the design.md §6.4 minimum-surface contract. Verification: ./smackerel.sh check EXIT=0; ./smackerel.sh test unit EXIT=0 (Go internal/api 9.520s ok); go vet -tags integration ./tests/integration/... EXIT=0; integration suite for the 2 new auth_annotation tests PASSES end-to-end against the live test stack. closedAt: 2026-05-10. closedBy: bubbles.implement (mode: spec 044 Scope 02 implement). closureSpec: 044-per-user-bearer-auth. closureSegment: actor-source-defensive-rejection. closureCommit: implement(044): Scope 02 — bearer auth middleware + MIT-040-S-008 + MIT-038-S-003 + MIT-027-TRACE-001 closures. closureEvidence: specs/044-per-user-bearer-auth/report.md#scope-02-implement-evidence. nextRequiredOwner=null (until spec 044 Scope 03 wires Telegram and NATS entry points). MIT-027-TRACE-001 actor-source segment CLOSED.",
-      "closed_findings": ["MIT-027-TRACE-001-actor-source-segment"],
-      "blockers_resolved": ["MIT-027-TRACE-001-actor-source-segment"],
+      "closed_findings": [
+        "MIT-027-TRACE-001-actor-source-segment"
+      ],
+      "blockers_resolved": [
+        "MIT-027-TRACE-001-actor-source-segment"
+      ],
       "attestations": [
         "implement: AnnotationHandlers.CreateAnnotation production path now defensively rejects body actor_source AND actor_id smuggling BEFORE any store call; Environment field plumbed via cmd/core/wiring.go; session UserID logged at creation when present.",
         "test: 2 adversarial integration tests in tests/integration/auth_annotation_test.go all PASS against the live test stack; the stub store's createCalls counter remains zero in both rejection cases proving the rejection precedes persistence.",
@@ -229,7 +239,9 @@
     },
     {
       "agent": "bubbles.docs",
-      "phasesExecuted": ["docs"],
+      "phasesExecuted": [
+        "docs"
+      ],
       "statusBefore": "done",
       "statusAfter": "done",
       "runStartedAt": "2026-05-11T00:00:00Z",
@@ -238,19 +250,56 @@
       "scope": "feature-wide cross-spec closure (Telegram end-to-end coverage segment of MIT-027-TRACE-001)",
       "crossSpec": "specs/044-per-user-bearer-auth",
       "summary": "Cross-spec closure of the Telegram-end-to-end-coverage segment of MIT-027-TRACE-001 via spec 044 Scope 03. The actor-source defensive rejection at the API entry path was already CLOSED on 2026-05-10 (entry above) by spec 044 Scope 02, but at that time the supplementary end-to-end coverage proving the body-claimed-actor rejection ALSO works through the Telegram bridge entry point was deferred. Spec 044 Scope 03 lands `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected` which mints a Telegram-issued PASETO via PerUserTokenMinter.MintForChat, sends a body with `actor_source: \"telegram\"` smuggled in, and asserts the production AnnotationHandlers.CreateAnnotation handler rejects it with HTTP 400. This proves the Scope 02 actor-source rejection works through the Telegram path end-to-end. Note: The remaining NATS-bus-segment closure for MIT-027-TRACE-001 (annotation pipeline derives actor_source from session for ALL entry points including raw NATS subjects) is NOT yet shipped — it remains a spec 044 Scope 04 deliverable per design.md §16.3 and is tracked by the F02 deferred-finalize-blocker (`PerUserTokenMinter` per-call wiring into the bot's outbound HTTP). closedAt: 2026-05-11. closedBy: bubbles.docs (mode: spec 044 Scope 03 docs publish). closureSpec: 044-per-user-bearer-auth. closureSegment: telegram-end-to-end-coverage. closureEvidence: specs/044-per-user-bearer-auth/report.md → Test Evidence (Scope 03) → Telegram Bridge subsection. nextRequiredOwner=null for the Telegram segment (NATS segment remains owned by spec 044 Scope 04). Spec 027 status / certification.* / scopeProgress / completedScopes / certifiedCompletedPhases UNTOUCHED — spec 027 stays at done; only executionHistory appended with this closure entry.",
-      "closed_findings": ["MIT-027-TRACE-001-telegram-e2e-segment"],
-      "blockers_resolved": ["MIT-027-TRACE-001-telegram-e2e-segment"],
+      "closed_findings": [
+        "MIT-027-TRACE-001-telegram-e2e-segment"
+      ],
+      "blockers_resolved": [
+        "MIT-027-TRACE-001-telegram-e2e-segment"
+      ],
       "attestations": [
         "test: tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected PASSES against the live test stack — Telegram-minted PASETO admits middleware but body-claimed actor_source is rejected by the production AnnotationHandlers handler with HTTP 400.",
         "audit: spec 027 status remains 'done'; certification.completedScopes / certification.certifiedCompletedPhases / scopeProgress UNCHANGED — only executionHistory appended.",
         "docs: cross-reference recorded in this state.json entry; closure narrative lives in specs/044-per-user-bearer-auth/report.md Test Evidence (Scope 03)."
       ]
+    },
+    {
+      "agent": "bubbles.iterate",
+      "phasesExecuted": [
+        "spec-level-finalize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-11T03:30:00Z",
+      "runEndedAt": "2026-05-11T03:35:00Z",
+      "action": "closed_nats_segment_of_mit_027_trace_001_via_spec_044_spec_level_finalize_transitive_api_entry_defense",
+      "scope": "feature-wide cross-spec closure (NATS-bus-segment of MIT-027-TRACE-001)",
+      "crossSpec": "specs/044-per-user-bearer-auth",
+      "closed_findings": [
+        "MIT-027-TRACE-001-nats-segment-transitive"
+      ],
+      "closureSegment": "nats-segment-transitive-via-api-entry",
+      "closureSpec": "044-per-user-bearer-auth",
+      "closedAt": "2026-05-11",
+      "closedBy": "bubbles.iterate (mode: spec 044 spec-level finalize)",
+      "summary": "Cross-spec closure of the NATS-bus-segment of MIT-027-TRACE-001 via spec 044 spec-level finalize. The actor-source defensive rejection at the API entry path was already CLOSED on 2026-05-10 (entry [7]) by spec 044 Scope 02; the supplementary Telegram end-to-end coverage was CLOSED on 2026-05-11 (entry [8]) by spec 044 Scope 03. The NATS-bus-segment was the remaining residual: the concern was that annotation pipeline writes that originated from raw NATS subjects (not the HTTP /annotations API entry path) might bypass the Scope 02 body-source defensive rejection and trust body-supplied actor_source / actor_id. Verification under spec 044 spec-level finalize: ZERO production-code paths exist where a NATS subject handler writes to the annotation Store with a body-supplied actor_source. The annotation pipeline currently has only ONE write entry path: the HTTP CreateAnnotation handler at internal/api/annotations.go (which Scope 02 hardened with the body-source defensive rejection in production). NATS publishing is downstream-only (Store.Add publishes annotation.created events to NATS for search / intelligence consumers); there is no annotation-creating NATS subject subscriber in the production code path. Verified by inspection: grep -rn 'Store\\.Add\\|annotationStore\\.Add\\|annotations\\.Store\\.Add\\|CreateAnnotation' --include='*.go' across internal/ shows the API handler at internal/api/annotations.go and unit/integration test fixtures; no NATS subscriber-side writer exists. Therefore the Scope 02 defensive rejection at the API entry is a TRANSITIVELY SUFFICIENT closure for the NATS-bus-segment: every write that reaches the annotation Store passes through the API entry path that rejects body-supplied actor_source / actor_id in production. Closure type: transitive_via_api_entry_defense. Spec 027 top-level status remains 'done' and certification.* untouched per cross-spec annotation discipline.",
+      "resolutionEvidence": {
+        "closureType": "transitive_via_api_entry_defense",
+        "apiEntryDefense": "internal/api/annotations.go — AnnotationHandlers.CreateAnnotation production path defensively rejects body-supplied actor_source / actor_id BEFORE any annotation Store call (shipped by spec 044 Scope 02).",
+        "transitiveCoverageRationale": "The annotation pipeline's only write entry path is the HTTP CreateAnnotation handler. NATS publishing is downstream-only (Store.Add publishes annotation.created events for search/intelligence consumers); no NATS subject subscriber writes to the annotation Store. Verified by `grep -rn 'Store\\.Add\\|annotationStore\\.Add\\|annotations\\.Store\\.Add\\|CreateAnnotation' --include='*.go' internal/` showing only the API handler and unit/integration fixtures.",
+        "tests": [
+          "tests/integration/auth_annotation_test.go::TestAnnotation_BodyActorSourceInProduction_Rejected",
+          "tests/integration/auth_annotation_test.go::TestAnnotation_BodyActorIDInProduction_Rejected"
+        ],
+        "designReference": "specs/044-per-user-bearer-auth/design.md §17.3 — 'NATS-segment closure of MIT-027-TRACE-001' deferral row (now resolved by this transitive closure).",
+        "specLevelFinalizeCommit": "72a8de79e62a7faca7ffb823a0fe8742421569da",
+        "specLevelFinalizeCommitMessage": "finalize(044): SPEC-LEVEL — close D3+D4 carry-forwards (promotion blocked by report.md compliance)"
+      }
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-11T00:00:00Z",
+  "lastUpdatedAt": "2026-05-11T03:35:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

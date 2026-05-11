@@ -1,5 +1,9 @@
 # Feature 044 — Per-User Bearer Auth Foundation
 
+### Status
+
+In Progress
+
 ## Problem Statement
 
 Smackerel's API trust boundary today is a **single, shared bearer token**
@@ -410,6 +414,44 @@ And no new required configuration values are introduced for
    `development` deployments (per FR-AUTH-013)
 And no enrollment step is required for the deployment to be usable
    for local development
+```
+
+### SCN-AUTH-012 — Telegram bridge per-user PASETO wiring + operator-visible auth metrics surface (Scope 04 F02 closure)
+
+```gherkin
+Given a `production` deployment at HEAD `99be90d8` with
+   `auth.enabled: true`, signing key material configured, and the
+   Telegram connector enabled with a populated
+   `TELEGRAM_USER_MAPPING` (chat_id:user_id pairs)
+When the Telegram bot makes any internal API call on behalf of a
+   mapped chat (capture, reply-annotation, annotation-command,
+   share-flow, photo-upload, recipe-flow)
+Then `cmd/core/wiring.go::startTelegramBotIfConfigured` has
+   constructed a `PerUserTokenMinter` (TTL=5m) and called
+   `tgBot.SetPerUserTokenMinter` at startup (because production AND
+   `auth.enabled` AND signing key material are all present)
+And `internal/telegram/bot.go::Bot.bearerForChat` mints a per-user
+   PASETO via `tokenMinter.MintForChat(chatID)` whose claims bind
+   the token to the resolved `user_id` from the chat-id mapping
+And `Bot.setBearerHeader` attaches the per-user PASETO to the
+   outbound `Authorization` header (replacing any shared bearer)
+And the production unmapped-chat case propagates
+   `auth.ErrNoUserMappingForChat` through `setBearerHeader` and
+   forces the caller to refuse the outbound request (no shared-bearer
+   leak; counter delta=0 on refused mint)
+And the seven-series `smackerel_auth_*` Prometheus surface
+   (`AuthIssuance`, `AuthRotation`, `AuthRevocation`,
+   `AuthValidationLatency`, `AuthValidationOutcome`,
+   `AuthLegacyFallbackUsed`, `AuthFailure`) registered via
+   `internal/metrics/auth.go` `init()` ticks under closed-set labels
+   (no actor IDs, no chat IDs, no token contents in label values)
+And `auth.production_shared_token_fallback_enabled: false` (the
+   SST default at `config/smackerel.yaml` line 514) ensures
+   `internal/api/router.go` `bearerAuthMiddleware` Branch 2
+   refuses the legacy `SMACKEREL_AUTH_TOKEN` in production while
+   recording `AuthLegacyFallbackUsed{environment="production"}`
+   only when the operator has explicitly opted in to the
+   transition fallback
 ```
 
 ## Functional Requirements
