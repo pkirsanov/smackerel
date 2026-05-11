@@ -1041,6 +1041,81 @@
         "reportSection": "specs/044-per-user-bearer-auth/report.md#spec-level-security-evidence"
       },
       "note": "Spec 044 SPEC-LEVEL formal security phase \u2014 focused threat-model + dependency-scan + implementation review of the per-user bearer-auth feature itself (spec 044 IS the security feature). 13 threats modeled across token theft, replay, brute-force/forgery, compromised-shared-token, cookie fixation, CSRF, login-CSRF, timing oracle, DB compromise, misconfigured production runtime, footer-kid forgery; 12 fully mitigated with concrete code references; 1 LOW residual (login-CSRF on /v1/web/login already neutralized by SameSite=Lax + JSON-only decoder + MaxBytesReader + httprate.LimitByIP(20, 1*time.Minute)). govulncheck against ./internal/auth/... ./internal/api/... ./cmd/core/... reports 0 called vulnerabilities and 3 uncalled transitive (pgx 5.7.2 GO-2026-4772/GO-2026-4771 fixed in 5.9.0; golang.org/x/net 0.47.0 GO-2026-4918 fixed in 0.53.0); spec 044 introduces aidanwoods.dev/go-paseto v1.6.0 which is CLEAN; the 3 transitive uncalled CVEs are pre-existing, not 044's, and not reachable. Code review (11 checks): constant-time compares verified at 3 shared-token sites + hash-compare site (subtle.ConstantTimeCompare); zero PASETO key material logged or in errors (only token_id logged, never wire token or signing key); zero tokens in URLs/query strings/GET params in spec 044 surface; cookie attributes correct (HttpOnly + SameSite=Lax + Secure-in-production + Path=/); kid-routed signature verification with no implicit fallback; at-rest hashing key separation enforced at config-validate AND runtime startup boundaries; no auth-bypass conditions in middleware (Branch 4 dev-empty-token bypass fires only when AuthToken==\"\" AND !perUserActive \u2014 production with auth.enabled never reaches Branch 4). Auth wiring verified: bearerAuthMiddleware applied to /api/*, /v1/auth/*, /v1/connectors/drive/*, /v1/drive/*, /v1/photos/*, /v1/agent/invoke, /admin/auth/tokens; entry points (/v1/web/login, /v1/web/logout, /auth/{provider}/start, /auth/{provider}/callback) correctly public + rate-limited; admin scope gated via callerIsAdmin (bootstrap+sharedTokenInDevTest+optInProductionFallback admit; per-user reject pending future SST allowlist); generic 401 body for ALL middleware auth failures (no leak of failure reason). Compliance/SST: AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED=false in config/generated/home-lab.env line 303 (Scope 02 disabled production fallback); .gitignore excludes config/generated/; secret-bearing keys (AUTH_SIGNING_*, AUTH_AT_REST_HASHING_KEY, AUTH_BOOTSTRAP_TOKEN) ship as empty placeholders in home-lab.env; sst_grep_guard test enforces no hardcoded auth literals in production source. Verification gates: G1 ./smackerel.sh check EXIT=0; G2 ./smackerel.sh lint EXIT=0 (web validation incl PWA + Chrome MV3 + Firefox MV2 manifests); G3 ./smackerel.sh test unit EXIT=0 (Python 417 passed; Go all packages ok including internal/api 5.962s + internal/auth 0.304s + internal/auth/revocation cached + internal/config 0.766s; ZERO FAIL); G4 ./smackerel.sh test integration EXIT=0 (every TestAuthBootstrap_* + TestAuthChaos_S02_* + TestAuthChaos_S03_* + TestAuthChaos_S04_* + TestAuthChaos_* + TestAdminUI_* + TestAnnotation_* + TestDriveConnect_* + TestExtensionAuth_* PASS against live PostgreSQL on 127.0.0.1:47001 with real PASETO mint via auth.IssueToken + real RevocationCache + real bearerAuthMiddleware; tests/integration/drive ok 12.769s ZERO FAIL); G5 govulncheck EXIT=0 (zero called); G6 e2e not re-run because no source changes were applied this phase \u2014 spec-level regression evidence at HEAD c44a4a08 already records clean ./smackerel.sh test e2e. Findings: 0 critical / 0 high / 0 medium / 2 LOW informational (L1 differentiated PWA login error codes \u2014 accepted UX trade-off; L2 missing Content-Type check on PWA login \u2014 login-CSRF residual already neutralized by layered defenses). NO code, config, or wiring changes applied this phase. Operational discipline: replace_string_in_file used for report.md append (single targeted insertion after the Stabilize Evidence section); pathlib.write_text used for state.json mutation per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write; NO --no-verify on commit; smackerel PII rule honored (no real Linux usernames / hostnames / IPs / FQDNs / geographic locations / token contents in committed files); test stack lock left as inherited; .github/** framework files left unstaged per user instruction. Verdict: SECURE."
+    },
+    {
+      "phase": "artifact-restructure",
+      "agent": "bubbles.docs",
+      "timestamp": "2026-05-11T22:35:05Z",
+      "scopes": [
+        "01",
+        "02",
+        "03",
+        "04"
+      ],
+      "decision": "approved",
+      "verdict": "PLANNING_COMPLETENESS_BACKFILLED",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-11T22:00:00Z",
+      "occurredAtIso8601": "2026-05-11T22:35:05Z",
+      "evidence": {
+        "scope": "artifact-only restructure (no code/test changes)",
+        "guardBlocksClosedAtDoneCeiling": {
+          "Check_8A_regression_E2E_DoD": 12,
+          "Check_8B_consumer_impact_sweep": 11,
+          "Check_8C_shared_infrastructure_canary_rollback": 16,
+          "Check_8D_change_boundary_containment": 2,
+          "Check_9_DoD_evidence_presence_chaos_bullet": 1,
+          "G057_scenario_manifest_required_test_type_and_linked_tests": 2,
+          "totalClosed": 44
+        },
+        "guardBlocksRemainingAtDoneCeiling": {
+          "count": 4,
+          "items": [
+            "Check_13_artifact_lint (pre-existing report.md narrative+signal hits \u2014 out of scope for artifact-restructure)",
+            "Check_17_commit_message_prefix (self-closes when commit lands with bubbles(044/...) prefix)",
+            "Check_18_scope_deferral_language (50 hits in scopes.md \u2014 explicitly out of scope per user instruction)",
+            "Check_18_report_deferral_language (180 hits in report.md \u2014 explicitly out of scope per user instruction)"
+          ],
+          "userExpectedCeiling": 4
+        },
+        "scopesArtifactChanges": {
+          "Scope_01_Consumer_Impact_Sweep_added": true,
+          "Scope_01_Consumer_Impact_Sweep_DoD_bullet_added": true,
+          "Scope_01_Shared_Infrastructure_Impact_Sweep_present": true,
+          "Scopes_02_03_04_Consumer_Impact_Sweep_added": true,
+          "Scopes_02_03_04_Shared_Infrastructure_Impact_Sweep_added": true,
+          "All_4_scopes_canonical_Regression_E2E_test_plan_rows_added": true,
+          "All_4_scopes_canary_FIXTURE_AUTH_S_rows_added": true,
+          "All_4_scopes_DoD_canary_rollback_broader_E2E_bullets_added": true,
+          "Whole_file_Change_Boundary_section_added_with_allowed_excluded_enumeration": true,
+          "Scope_04_fallback_DoD_bullet_evidence_block_added": true,
+          "Scope_3_Implement_Evidence_Scope_4_heading_swap_repair": true
+        },
+        "scenarioManifestChanges": {
+          "scenariosBackfilledWithRequiredTestType_and_linkedTests": 13,
+          "G057_manifest_gate_closed": true
+        },
+        "verifiedAtCommit": "b69cd1c4 (HEAD prior to this artifact-restructure commit)",
+        "stateTransitionGuardSubsetVerified": [
+          "Check_8A: PASS (4/4 scopes)",
+          "Check_8B: PASS (4/4 scopes)",
+          "Check_8C: PASS (4/4 scopes)",
+          "Check_8D: PASS (single-file)",
+          "Check_9: PASS (74/74 DoD items have evidence)",
+          "G057: PASS (13/13 scenarios mapped)"
+        ]
+      },
+      "stateBefore": {
+        "status": "in_progress",
+        "currentPhase": "plan",
+        "executionCurrentPhase": "plan"
+      },
+      "stateAfter": {
+        "status": "in_progress",
+        "currentPhase": "plan",
+        "executionCurrentPhase": "plan"
+      }
     }
   ],
   "policySnapshot": {
@@ -1118,5 +1193,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-11T21:13:00Z"
+  "lastUpdatedAt": "2026-05-11T22:35:05Z"
 }
