@@ -6125,3 +6125,73 @@ C4-B03 (`TestAuthChaos_S04_DeprecationFlagToggleRace_NoInconsistency`) initially
 **Claim Source:** executed.
 
 ---
+
+### Spec-Review Evidence (Scope 04)
+
+**Phase:** spec-review **Agent:** bubbles.spec-review **Claim Source:** executed
+**Disposition:** APPROVED_WITH_ARTIFACT_FIXES (`MINOR_DRIFT` trust classification)
+**Findings:** HIGH=0 / MEDIUM=0 / LOW=4 (2 closed-inline + 2 deferred)
+**HEAD:** `99be90d8`
+**Scope 04 commit range:** `9e3fc996..99be90d8` (5 commits: implement → test → validate → audit → chaos)
+
+#### 8-check verdict table (SR1-SR8)
+
+| Check | Surface | Verdict | Evidence summary |
+|-------|---------|---------|------------------|
+| SR1 | spec.md acceptance criteria conformance | PASS | Scope 04 contributions to FR-AUTH-013 (revocation lifecycle visibility via `smackerel_auth_token_revocation_total{reason}`), FR-AUTH-015 (dev/test backward-compat preserved per `TestBot_bearerForChat_NilMinter_*` unit tests), FR-AUTH-017 (production coexistence policy default `false` at `config/smackerel.yaml` line 514), FR-AUTH-018 (SST flow + 7-series `smackerel_auth_*` Prometheus surface live in `internal/metrics/auth.go` with `init()` registration). SCN-AUTH-011 (migration path) covered by 3 live evidenceRefs (smoke `./smackerel.sh up && ./smackerel.sh status`; docs-trace `regression-baseline-guard`; smoke `artifact-lint`). SCN-AUTH-012 (F02 closure + auth metrics surface) covered by 20 live evidenceRefs. AC-1..AC-11 satisfied through Scope 01/02/03/04 contributions. |
+| SR2 | design.md §4 + §11 Risk #4 + §12 Phase 4 contract conformance | PASS_WITH_FIXES | All 14 SST keys live (Scope 01); deprecation flag default `false` enforced through SST chain (`config/smackerel.yaml` line 514 → `scripts/commands/config.sh` line 792 `required_value` → `internal/config/config.go` line 1036). 7 Phase 4 Outcome deliverables shipped (default flag; 4 docs updated; metrics emitters; spec 030 cross-references via Operations.md "Authentication Metrics" subsection; regression-baseline-guard PASSED; artifact-lint PASSED). §16.3 deferred items (F02 + scope-row count) BOTH closed by Scope 04 implement. **Fix applied inline:** NEW design.md §17 added (3 sub-sections: §17.1 adjustments-from-§4/§11/§12 design 3 rows; §17.2 chaos observations OBS-CHAOS-044-S04-01/02; §17.3 items DEFERRED beyond Scope 04 — NATS-segment of MIT-027-TRACE-001 + SCN-AUTH-012 declaration gap). |
+| SR3 | scopes.md DoD verbatim conformance | PASS_WITH_FIXES | All 7 Scope 04 implement DoD bullets PASS verbatim with `[x]` + `**Phase:** implement` + `**Agent:** bubbles.implement` + `**Claim Source:** executed` + evidence sub-blocks; bullet 1 carries `Scenario "SCN-AUTH-011 ...":` trace prefix per Gate G068. **Fixes applied inline:** Scope 4 header advanced (`**Phase:** implement + docs` → `**Phase:** spec-review`; `**Agent:** bubbles.implement, bubbles.docs` → `**Agent:** bubbles.spec-review`); NEW spec-review DoD bullet appended carrying the 8-check table + finding catalog + verdict. Status header preserved at `**Status:** In Progress` (per-scope finalize boundary owned by `bubbles.iterate`). |
+| SR4 | scenario-manifest.json live coverage | PASS | Manifest now ships 12 entries (SCN-AUTH-001..012; the 12th-entry path-(a) closure for `FINALIZE-PREREQ-044-V7-001` discharged by Scope 04 implement). ZERO planned residuals across the entire manifest (verified by `grep -c '"status": "planned"' scenario-manifest.json` returning `0`). Per-scope live-evidence count: Scope 01: 2 scenarios / 5 + 5 = 10 live refs; Scope 02: 8 scenarios / 4 + 5 + 3 + 4 + 4 + 14 + 5 + 3 = 42 live refs; Scope 04: 2 scenarios / 3 + 20 = 23 live refs. Scope 04 SCN-AUTH-012 evidenceRefs: 8 unit `internal/telegram/bot_wiring_test.go` + 9 unit `internal/metrics/auth_test.go` + 2 integration `tests/integration/auth_telegram_f02_wiring_test.go` + 1 static-guarantee `internal/metrics/auth.go` `init()` registration + 1 static-guarantee `cmd/core/wiring.go::startTelegramBotIfConfigured` minter wiring at lines 339-368. |
+| SR5 | Cross-spec MIT closure verification | PASS_WITH_DEFERRAL | `specs/040-cloud-photo-libraries/state.json` records MIT-040-S-008 closure via spec 044 Scope 02 (executionHistory entry at 2026-05-08T07:15:00Z). `specs/038-cloud-drives-integration/state.json` records MIT-038-S-003 closure via spec 044 Scope 02 (executionHistory entry at 2026-05-10T14:30:00Z). `specs/027-user-annotations/state.json` records actor-source-segment closure via spec 044 Scope 02 (line 216-218) AND telegram-end-to-end-coverage segment closure via spec 044 Scope 03 docs phase (line 237; `closedAt: 2026-05-11`; `closureSegment: telegram-end-to-end-coverage`). NATS-segment closure of MIT-027-TRACE-001 NOT shipped by Scope 04 (audit-phase Gate A2 confirmed Scope 04 touched ZERO NATS files); per spec-review-mode SR5 deferral language, this segment is APPROPRIATELY DEFERRED beyond Scope 04 to spec-level finalize or future spec; documented in NEW design.md §17.3 with no security regression (defensive layer at `internal/api/annotations.go` Scope 02 work intact for the API and NATS-bridged write paths). |
+| SR6 | Public-facing surface fidelity (F02 wiring + metrics + deprecation flag + docs) | PASS | F02 wiring SHIPPED at production code: `internal/telegram/bot.go::SetPerUserTokenMinter` (line 196) + `bearerForChat` (line 223) + `setBearerHeader` (line 245); 6 internal-API call sites use `setBearerHeader` (lines 701, 778, 883, 942, 1183, 1243) covering `Bot.callCapture` and the reply-annotation, annotation-command, share-flow, photo-upload, recipe-flow paths. `cmd/core/wiring.go::startTelegramBotIfConfigured` lines 339-368 constructs `PerUserTokenMinter` (TTL=5m, Issuer=`smackerel`) and calls `tgBot.SetPerUserTokenMinter` ONLY when `cfg.Environment == "production" AND cfg.Auth.Enabled AND cfg.Auth.SigningActivePrivateKey != "" AND cfg.Auth.SigningActiveKeyID != ""`. Deprecation flag wiring: `internal/api/router.go` Branch 2 at line 634 honors `d.AuthConfig.ProductionSharedTokenFallbackEnabled` (production opt-in only); `metrics.AuthLegacyFallbackUsed.WithLabelValues("production").Inc()` ticks ONLY in Branch 2 at line 640 (operator-visibility metric). All 7 docs surfaces (Operations.md "F02 Closure (Scope 04 shipped)" line 991 + "Authentication Metrics (Scope 04)" line 1028 + "Deprecation Pathway — `production_shared_token_fallback_enabled`" line 1070; Deployment.md "Telegram Per-User Attribution Wiring (F02 Scope 04 — shipped)" line 383; Development.md F02 closure pointer line 227; smackerel.md §17.2 closure paragraph line 1912; Testing.md "Per-User Bearer Auth — Scope 04 Test Inventory" line 272) match shipped behavior verbatim. |
+| SR7 | G074 build-once deploy-many compliance | PASS | `git diff --stat 9e3fc996..99be90d8 -- 'deploy/' 'docker-compose*.yml' 'Dockerfile*' 'ml/Dockerfile' '.github/workflows/' 'scripts/deploy/'` returns EMPTY. ZERO mutable image tags introduced; ZERO Compose contract changes; ZERO workflow changes. `internal/deploy/compose_contract_test.go::TestComposeContract` PASSES — `go test ./internal/deploy/...` returns `ok github.com/smackerel/smackerel/internal/deploy 0.008s`. |
+| SR8 | Carry-forward registry | PASS | `transitionRequests[FINALIZE-PREREQ-044-V7-001]` `status=resolved` (`lastReviewedAt: 2026-05-11T01:30:00Z` by `bubbles.validate`); `expectedResolution` populated (path-b at spec-level finalize OR path-a 12th-entry completion clause); `resolutionEvidence` populated (path-a discharge: scenario-manifest.json now ships 12 entries with SCN-AUTH-012 covering F02 wiring); ZERO open transitionRequests remain. F02 (MEDIUM defer-to-finalize from Scope 03 spec-review) is now CLOSED by Scope 04 implement (verified at SR6). |
+
+#### Findings catalog
+
+| ID | Severity | Surface | Finding | Disposition |
+|----|----------|---------|---------|-------------|
+| D1-S04 | LOW | design.md §17 (missing) | No Scope 04 design-reconciliation section existed (Scope 02 added §15, Scope 03 added §16; Scope 04 should follow precedent). | **CLOSED INLINE** at this spec-review by adding NEW design.md §17 with 3 sub-sections (§17.1 adjustments × 3 rows; §17.2 chaos observations × 2; §17.3 deferred items × 2). |
+| D2-S04 | LOW | scopes.md Scope 4 DoD | No spec-review DoD bullet existed yet on Scope 4 (Scope 02 + Scope 03 spec-reviews each appended one). | **CLOSED INLINE** at this spec-review by appending the 8-check + finding-catalog + verdict bullet plus advancing the Scope 4 header `Phase: implement + docs → spec-review` and `Agent: bubbles.implement, bubbles.docs → bubbles.spec-review`. |
+| D3-S04 | LOW | spec.md / scopes.md SCN-AUTH-012 declaration | SCN-AUTH-012 declared only in `scenario-manifest.json` with no `### SCN-AUTH-012 — ...` heading in spec.md and no `Scenario: SCN-AUTH-012` Gherkin block in scopes.md. The manifest 12th-entry path-(a) discharge IS the documented closure for `FINALIZE-PREREQ-044-V7-001`; the spec.md/scopes.md catchup is OPTIONAL per the same transitionRequest `expectedResolution` field language. | **DEFERRED** beyond Scope 04 to spec-level finalize (`bubbles.iterate finalize`) per the path-(b) clause; documented in NEW design.md §17.3 as deferred-segment-closure. |
+| D4-S04 | LOW | specs/027-user-annotations/state.json NATS-segment closure | NATS-segment closure of MIT-027-TRACE-001 (annotation pipeline derives `actor_source` from session for ALL entry points including raw NATS subjects) NOT shipped by Scope 04 — Scope 04 audit-phase Gate A2 confirmed Scope 04 touched ZERO NATS files. The Scope 02 closure entry at spec 027 line 216-218 closes the contract via the defensive body-source rejection in `internal/api/annotations.go` (API entry path AND NATS-bridged write path); Scope 03 docs-phase line 237 closes the supplementary Telegram-end-to-end coverage. No security regression (defensive layer intact at the API/NATS-bridged write path). | **DEFERRED** beyond Scope 04 to spec-level finalize or future spec; documented in NEW design.md §17.3 as deferred-segment-closure. |
+
+#### Trust classification
+
+`MINOR_DRIFT` — 4 LOW findings, 2 closed inline at this spec-review (D1, D2), 2 deferred to spec-level finalize per existing carry-forward routing (D3, D4). Production code is faithful to shipped reality at all 7 surfaces verified at SR6. No `bubbles.docs` auto-invocation triggered (per spec-review-mode contract Phase 5: only `MAJOR_DRIFT` and `OBSOLETE` auto-fire).
+
+#### Inline fixes applied
+
+1. `specs/044-per-user-bearer-auth/scopes.md` — Scope 4 header advanced (`Phase: implement + docs → spec-review`; `Agent: bubbles.implement, bubbles.docs → bubbles.spec-review`); NEW spec-review DoD bullet appended (8-check table + finding catalog + verdict; `Phase: spec-review`; `Agent: bubbles.spec-review`).
+2. `specs/044-per-user-bearer-auth/design.md` — NEW §17 ("Design Decisions Reconciled During Scope 04 Implement") with 3 sub-sections (§17.1 adjustments × 3 rows covering F02 wiring helper pattern + 7-series metric naming + spec 030 cross-spec routing; §17.2 chaos observations OBS-CHAOS-044-S04-01 cohort-split-stochastic + OBS-CHAOS-044-S04-02 CounterVec atomicity; §17.3 deferred items D3-S04 + D4-S04).
+3. `specs/044-per-user-bearer-auth/report.md` — this `### Spec-Review Evidence (Scope 04)` section.
+
+#### Pre/post-commit gates
+
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` — EXIT=0 PASS post-edit (2 advisory warnings unchanged from prior phases).
+- `pii-scan` (pre-commit) — clean.
+- `state-transition-guard` — pre-existing carry-forward findings inherited from Scope 01/02/03 audits unchanged; ZERO Scope 04 spec-review-phase failures.
+
+#### State.json mutations
+
+- `currentPhase` advanced `spec-review → docs`; `execution.currentPhase` advanced `spec-review → docs`; `execution.currentScope` preserved `04`.
+- `execution.completedPhaseClaims` appended Scope 04 spec-review object.
+- `certification.certifiedCompletedPhases` appended `04:spec-review` (tail now `['04:audit', '04:chaos', '04:spec-review']`).
+- `executionHistory` appended `bubbles.spec-review` entry with `disposition: approved`.
+- `status` preserved `in_progress`; `certification.status` preserved `in_progress`; `certification.completedScopes` NOT advanced (per per-scope finalize boundary owned by `bubbles.iterate`).
+- `transitionRequests[FINALIZE-PREREQ-044-V7-001]` preserved at `status=resolved` unchanged.
+
+#### Operational discipline
+
+- IDE `replace_string_in_file` for design.md / scopes.md / report.md targeted edits (cache-poisoning verification via `grep -c REMOVED` returning `0` post-write for all three files).
+- `pathlib.write_text` heredoc for state.json with `ensure_ascii=False` per USER-BLESSED workaround `/memories/repo/ide-cache-poisoning.md` (multi-KB summary entries).
+- JSON re-parse verification post-state.json-write.
+- NO `t.Skip()` introduced; NO `--no-verify` on commit; NO push (SSH agent locked per user instruction).
+- Smackerel PII rule honored (no real Linux usernames, hostnames, IPs, FQDNs, geographic locations, or token contents in committed files).
+- Test stack state: left as inherited from chaos phase (UP); preserved for Scope 04 docs-phase agent.
+
+**Claim Source:** executed.
+
+**Verdict:** APPROVED_WITH_ARTIFACT_FIXES — `MINOR_DRIFT` trust classification; 4 LOW findings (zero MEDIUM, zero HIGH); SR1-SR8 all PASS or PASS_WITH_FIXES (fixes closed inline) or PASS_WITH_DEFERRAL (deferrals documented in design.md §17.3). Phase advances `spec-review → docs`. Recommended next iteration: Scope 04 docs phase (`bubbles.docs`).
+
+---
