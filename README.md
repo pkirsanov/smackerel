@@ -224,6 +224,17 @@ When `auth.enabled=true` AND `runtime.environment=production`:
   (mint / list / rotate / revoke) plus the `smackerel-core auth` CLI
   subcommands.
 
+Production deployments coexist with the legacy shared `runtime.auth_token`
+through the `auth.production_shared_token_fallback_enabled` migration
+flag (default `false` per FR-AUTH-017). Operators upgrading an existing
+single-tenant deployment flip the flag to `true` for one transition
+window, migrate every legacy caller to a per-user PASETO via the admin
+UI while watching `smackerel_auth_legacy_fallback_used_total`, then
+flip the flag back to `false` to retire the shared-token surface. The
+end-to-end migration sequence (Scope 1 → 2 → 3 → 4 → flag flip), the
+metric-driven cutover criteria, and the rollback procedure live in
+[`docs/Operations.md` → "Final Scope 04 Audit"](docs/Operations.md#final-scope-04-audit--end-to-end-migration).
+
 See [`docs/Operations.md`](docs/Operations.md#per-user-bearer-authentication-spec-044)
 for the operator runbook (key generation, bootstrap, enrollment, rotation,
 revocation, the four caller surfaces, and the admin UI), and

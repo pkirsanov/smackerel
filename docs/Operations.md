@@ -1104,6 +1104,74 @@ currently runs with the flag set to `true`:
 5. **Rollback** procedure: if step 4 surfaces missed callers, flip
    the flag back to `true` and resume from step 2.
 
+##### Final Scope 04 Audit — End-To-End Migration
+
+This subsection consolidates the operator-facing migration story for
+spec 044 across the four shipped scopes plus the supervised
+deprecation-flag flip. Operators running an existing single-tenant
+Smackerel deployment use this checklist to move to the per-user
+bearer-auth posture without downtime, with metric-driven cutover
+gates at each step. Cross-references to the per-scope deliverables
+live above; this view is the operator-side end-to-end audit.
+
+**Migration sequence (Scope 1 → 2 → 3 → 4 → flag flip).** Each step is
+durable and reversible until step 5; nothing destroys the legacy
+shared-token surface until the operator explicitly flips
+`auth.production_shared_token_fallback_enabled=false` in step 5.
+
+| Step | Scope | What lands | Cutover gate (operator-observable) |
+|---|---|---|---|
+| 1 | Scope 01 | PASETO v4.public foundation, signing/at-rest keys (3 required env vars), DB migration 033, CLI subcommands, admin HTTP handlers, in-memory revocation cache + NATS broadcaster, startup fail-loud guard. Deploy with `auth.enabled=false` first to run the migration safely; flip to `true` once secrets are confirmed in the deploy overlay. | `./smackerel.sh status` reports healthy; `curl http://<host>:<port>/healthz` returns `200`; no unexpected `auth_not_configured` failures in logs. |
+| 2 | Scope 02 | Hot-path `bearerAuthMiddleware` on every API route; admin REST endpoints (`POST /v1/auth/users`, `POST /v1/auth/users/{id}/rotate`, `POST /v1/auth/tokens/{id}/revoke`, `GET /v1/auth/users`); production-mode body / header actor-identity rejection at photos `MintReveal`, drive `Connect`, and annotation create handlers (closes MIT-040-S-008, MIT-038-S-003, MIT-027-TRACE-001 actor-source segment). Flip `auth.enabled=true` AND `auth.production_shared_token_fallback_enabled=true` (the transition setting) in this step. | `smackerel_auth_token_validation_outcome_total{result="accepted"}` ticks for every authenticated route; `smackerel_auth_failure_total{reason="paseto_verify_failed"}` stays low (it ticks on a real misuse); no `actor_id_in_body_forbidden` / `owner_user_id_in_body_forbidden` 400s from a legitimate client (any API consumer presenting body-supplied actor identifiers MUST be migrated to omit those fields per the spec 044 Scope 02 contract). |
+| 3 | Scope 03 | PWA `POST /v1/web/login` cookie-derived sessions; browser extension reads `chrome.storage.local.authToken`; Telegram `chat_id → user_id` mapping with production unmapped-chat drop; admin token-management UI at `/admin/auth/tokens` (mint / list / rotate / revoke). | `smackerel_auth_token_issuance_total{source="admin_api"}` ticks on user enrollment; PWA users authenticate via `/v1/web/login` and request the `auth_token` cookie attaches; Telegram bot logs `telegram: drop message from unmapped chat` for any chat not present in `telegram.user_mapping`. |
+| 4 | Scope 04 | F02 closure: Telegram bot wires `PerUserTokenMinter.MintForChat` into every outbound HTTP call (production mapped chats mint per-user PASETO; production unmapped chats are refused via `ErrNoUserMappingForChat`); seven-series `smackerel_auth_*` metrics surface; `auth.production_shared_token_fallback_enabled` defaults to `false`. | `smackerel_auth_token_issuance_total{source="telegram_bridge"}` ticks per Telegram-originated capture against a mapped chat; `smackerel_auth_legacy_fallback_used_total{environment="production"}` MAY still tick if any legacy caller is still presenting the shared token (this is the signal that step 5 is not yet safe). |
+| 5 | Flag flip | Operator flips `auth.production_shared_token_fallback_enabled=false` in `config/smackerel.yaml`, runs `./smackerel.sh config generate`, then `./smackerel.sh down && ./smackerel.sh up`. | `smackerel_auth_legacy_fallback_used_total{environment="production"}` stays at zero post-flip; `smackerel_auth_failure_total{reason="shared_token_mismatch"}` MAY tick on residual legacy callers (the 401 response is the contract). |
+
+**Metric-based cutover criteria (the gate to flip the flag in step 5).**
+The supervised cutover from "shared-token fallback permitted" to
+"per-user PASETO only" is gated on the operator confirming the
+following three criteria over a representative observation window
+(at least one full operator workday after the Scope 04 deploy):
+
+1. `sum(rate(smackerel_auth_legacy_fallback_used_total{environment="production"}[5m]))` is `0` for every 5-minute bucket across the window. A non-zero rate identifies a caller still presenting the legacy `runtime.auth_token`; the access log surfaces the request path, and the caller MUST be migrated to a per-user token via the admin UI before the flag flip.
+2. Every active caller surface has at least one `smackerel_auth_token_validation_outcome_total{result="accepted"}` increment per session: PWA users (`source="pwa_cookie"`), browser extension users (`source="header"`), Telegram users (`source="header"` via `telegram_bridge` mints), and admin operators (`source="header"` via the bootstrap or per-user admin token).
+3. `histogram_quantile(0.95, sum(rate(smackerel_auth_token_validation_latency_seconds_bucket[5m])) by (le))` is below the NFR-AUTH-001 5 ms p99 hot-path budget (chaos-phase benchmark `BenchmarkAuthChaos_S03_PWACookieDerivedSession_HotPath` recorded ≈1.5 ms/op against a live test stack — the production-class deployment SHOULD see comparable or better numbers given the at-rest hashing and NATS subjects are already warm).
+
+**Rollback path (any step).** Every step before the flag flip is
+reversible via the corresponding compose-level revert + restart;
+the flag flip itself is reversible by setting
+`auth.production_shared_token_fallback_enabled=true` in
+`config/smackerel.yaml`, regenerating, and restarting (the
+shared-token Branch 2 of `bearerAuthMiddleware` re-activates on
+boot and accepts the legacy token while still admitting per-user
+PASETO bearers). Operators monitoring step 5 SHOULD plan a
+rollback if `smackerel_auth_failure_total{reason="shared_token_mismatch"}`
+ticks for any caller they cannot identify and migrate within the
+post-flip observation window. No data is lost on rollback —
+revocation state, enrolled users, and the at-rest token hashes
+all live in PostgreSQL and survive any combination of flag flips.
+
+**Deferred beyond Scope 04 (intentional, NOT blocking).** Two items
+remain explicitly deferred per
+[`specs/044-per-user-bearer-auth/design.md` §17.3](../specs/044-per-user-bearer-auth/design.md):
+
+- The MIT-027-TRACE-001 NATS-segment closure (annotation pipeline
+  derives `actor_source` from session for ALL entry points
+  including raw NATS subjects). Scope 04 audit Gate A2 confirmed
+  Scope 04 touched ZERO NATS files. The defensive layer at
+  `internal/api/annotations.go` (Scope 02 work) covers the API
+  entry path AND the NATS-bridged write path that goes through it;
+  no security regression. Closure is appropriately deferred to
+  spec-level finalize or a future spec.
+- The per-user admin allowlist surface (`callerIsAdmin` for
+  `SessionSourcePerUserToken`). Currently admin mutations require
+  either the bootstrap session OR — when
+  `production_shared_token_fallback_enabled=true` — the legacy
+  shared token. Per-user admin token authoring is a follow-up
+  surface; the page itself loads under any authenticated session
+  and the underlying `/v1/auth/*` endpoints continue to enforce
+  admin scope at the XHR layer.
+
 #### Admin Token-Management UI (`/admin/auth/tokens`)
 
 Scope 03 ships a single embedded static HTML page that serves as the operator
