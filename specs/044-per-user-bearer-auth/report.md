@@ -5843,3 +5843,82 @@ All 11 gates green. The two anti-fabrication audits (skip-marker grep + mock-fra
 **Claim Source:** executed.
 
 ---
+
+### Validate Evidence (Scope 04)
+
+**Phase:** validate **Agent:** bubbles.validate **HEAD at run:** `75c624ab` (Scope 04 test-phase commit) **Date:** 2026-05-11 **Decision:** APPROVED — same disposition class as Scope 02 / Scope 03 validate phases, BUT this round all 9 gates exit clean with NO carry-forward (the spec-level `FINALIZE-PREREQ-044-V7-001` blocker recorded against prior validate phases is `status=resolved` per the Scope 04 implement-phase discharge).
+
+Spec 044 Scope 04 formal validate phase per Gate G022. Nine gate commands (V1–V9) executed verbatim against HEAD `75c624ab` (test-phase commit). The test stack was brought UP at the start of the run via `./smackerel.sh --env test up` (5/5 containers `Healthy`: ollama, postgres, nats, smackerel-ml, smackerel-core); the V7 e2e runner tore the test stack down on completion (expected runner behavior); the integration tests (V6, including F02 wiring re-verification) executed against a live test stack that the integration runner brought back up.
+
+#### Gate Suite (verbatim exit codes)
+
+| Gate | Command                                                                                                  | Exit | Disposition |
+|------|----------------------------------------------------------------------------------------------------------|------|-------------|
+| V1   | `./smackerel.sh build`                                                                                   | 0    | PASS        |
+| V2   | `./smackerel.sh check`                                                                                   | 0    | PASS        |
+| V3   | `./smackerel.sh lint`                                                                                    | 0    | PASS        |
+| V4   | `./smackerel.sh format --check`                                                                          | 0    | PASS        |
+| V5   | `./smackerel.sh test unit`                                                                               | 0    | PASS        |
+| V6   | `./smackerel.sh test integration`                                                                        | 0    | PASS        |
+| V7   | `./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'`                                                    | 0    | PASS        |
+| V8   | `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth`                           | 0    | PASS        |
+| V9   | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` | 0    | **PASS (NO carry-forward)** |
+
+#### Per-Gate Verbatim Output Highlights
+
+- **V1 build:** `smackerel-core Built` + `smackerel-ml Built`; final-layer image SHA `sha256:b00ce8422f59adc34cf7894ff481c66cb6e5adb1264241ebdfb736d087a0bc85`.
+- **V2 check:** `Config is in sync with SST` / `env_file drift guard: OK` / `scenarios registered: 5, rejected: 0` / `scenario-lint: OK`.
+- **V3 lint:** `All checks passed!` plus web-manifest validation (PWA + Chrome MV3 + Firefox MV2 OK), JS-syntax validation (7 files OK), extension-version-consistency (1.0.0 match) → `Web validation passed`.
+- **V4 format:** `49 files already formatted`.
+- **V5 test unit:** Python ML sidecar `417 passed in 13.79s`; Go lane full sweep — every `internal/*`, `cmd/*`, `tests/e2e/agent`, `tests/integration` (no tests at unit-tag), and `tests/stress/readiness` package returns `ok ... (cached)` or fresh PASS. Zero `FAIL` lines.
+- **V6 test integration:** Three packages all `ok`, ZERO `FAIL` lines. Targeted F02 re-verification via `--go-run '^TestF02Wiring_'` ran against the live test stack and confirmed BOTH integration tests PASS verbatim:
+  - `--- PASS: TestF02Wiring_SetPerUserTokenMinter_HappyPath (0.06s)` — counter delta=1 + Bearer `v4.public.` prefix asserted
+  - `--- PASS: TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses (0.05s)` — counter delta=0 + WRONG-shared-bearer-MUST-NOT-LEAK invariant asserted
+  - Aggregate package summaries: `ok github.com/smackerel/smackerel/tests/integration 40.843s` / `ok github.com/smackerel/smackerel/tests/integration/agent 2.984s` / `ok github.com/smackerel/smackerel/tests/integration/drive 10.243s`.
+- **V7 test e2e PWA:** `tests/e2e/auth` package PASS in 0.400s; final invariant `PASS: go-e2e`. Sub-test results captured verbatim:
+  - `--- PASS: TestE2E_PWAAuth_Production_PerUserSession (0.11s)`
+  - `--- PASS: TestE2E_PWAAuth_Production_LoginRejectsMissingToken (0.09s)` with sub-tests `/empty_body`, `/empty_token`, `/whitespace_token` all PASS
+  - `--- PASS: TestE2E_PWAAuth_Production_LoginRejectsInvalidToken (0.09s)` with adversarial sub-tests `/random_garbage`, `/foreign-signed_paseto` both PASS
+  - `--- PASS: TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks (0.06s)` (Authorization header path still 200)
+  - Test stack auto-torn-down by the e2e runner on completion.
+- **V8 artifact-lint:** `Artifact lint PASSED.` Two ⚠ advisory warnings (missing-recommended `reworkQueue` field; deprecated `scopeProgress` field) — non-blocking, tracked under broader spec 044 cleanup, unchanged from prior phases. Anti-fabrication checks all PASS: all checked DoD items in scopes.md have evidence blocks; no unfilled evidence template placeholders in scopes.md or report.md; no repo-CLI bypass detected in report.md command evidence.
+- **V9 traceability-guard:** EXIT=0; **`RESULT: PASSED (0 warnings)`**. Aggregate: `Scenarios checked: 12 / Test rows checked: 43 / Scenario-to-row mappings: 12 / Concrete test file references: 12 / Report evidence references: 12 / DoD fidelity scenarios: 12 (mapped: 12, unmapped: 0)`. The previously deferred residual (`❌ scenario-manifest.json covers only 11 scenarios but scopes define 12` — `FINALIZE-PREREQ-044-V7-001` path-(b)) is **fully discharged** by the Scope 04 implement-phase manifest reconciliation; all 12 scopes-defined scenarios now map to manifest entries with concrete test files and report evidence. NO carry-forward remains.
+
+#### TransitionRequest Registry Status
+
+```
+=== transitionRequests registry (post-validate verification) ===
+  FINALIZE-PREREQ-044-V7-001
+    status: resolved
+    expectedResolution: present (274 chars)
+    resolutionEvidence: present (550 chars)
+    lastReviewedAt: 2026-05-11T01:30:00Z
+    lastReviewedBy: bubbles.validate
+```
+
+The single transitionRequest in spec 044 (`FINALIZE-PREREQ-044-V7-001`) is `status=resolved` with both `expectedResolution` and `resolutionEvidence` populated. No open transitionRequests remain. The test-phase agent recorded the resolution; this validate phase confirms the discharge holds against the live V9 traceability-guard run (EXIT=0, NO carry-forward).
+
+#### F02 Closure Confirmation (Spec-Review MEDIUM Finding)
+
+The MEDIUM finding **F02** raised in the Scope 03 spec-review phase ("Telegram bot wiring of `PerUserTokenMinter` into `Bot.callCapture` / `Bot.handleReplyAnnotation` / `Bot.handleAnnotationCommand` not yet landed; production safety preserved by unmapped-chat drop") is **resolved** by Scope 04 implement-phase work. Closure evidence:
+
+| Surface | Closure Marker (verified by `grep`) |
+|---------|--------------------------------------|
+| `docs/Operations.md` line 991 | `##### F02 Closure (Scope 04 shipped)` (with decision matrix + closure-evidence references + 7-series Prometheus surface table + 4 PromQL scrape examples + deprecation-pathway operator runbook) |
+| `docs/Deployment.md` line 383 | `#### Telegram Per-User Attribution Wiring (F02 Scope 04 — shipped)` (operator behavior table updated to reflect both flag values now work; closure-evidence test references) |
+| `docs/Development.md` | F02 deferral pointer **replaced** with closure pointer to Operations.md "F02 Closure" section + cross-link to `internal/metrics/auth.go` |
+| `docs/smackerel.md` §17.2 | Deferred-finalize-blocker paragraph **replaced** with closure paragraph describing F02 wiring (`Bot.bearerForChat` + `Bot.setBearerHeader`) and seven-series metrics surface |
+| `report.md` line 5484 (Implement Evidence Scope 04) | "The F02 deferred-finalize-blocker (design.md §16.3) is closed." |
+| Live integration coverage | `tests/integration/auth_telegram_f02_wiring_test.go` ships 2 tests (happy path + production-unmapped refuses); both re-executed under V6 against live test stack and PASS — proving the F02 wiring works end-to-end through real `pgxpool` + real auth subsystem, not just compile-time symbols |
+
+Production-safety contract intact: unmapped chats still dropped (`internal/telegram/bot.go::resolveActorUserID` production branch), defensive body-source rejection from Scope 02 work still enforced (`internal/api/annotations.go`), the `production_shared_token_fallback_enabled: false` default ships in `config/smackerel.yaml`, and the auth-metrics surface (`internal/metrics/auth.go`) emits the seven `smackerel_auth_*` series wired into the deprecation-pathway operator runbook.
+
+#### Decision
+
+✅ **APPROVED** — Scope 04 validate phase closes per Gate G022. All 9 gate commands (V1–V9) EXIT=0 with NO carry-forward (V9 traceability-guard `RESULT: PASSED (0 warnings)`). All 7 Scope 04 DoD bullets remain ticked with executed `Claim Source` evidence; all test-phase claims certified against this validate-phase live re-run. The single transitionRequest (`FINALIZE-PREREQ-044-V7-001`) is `status=resolved`. F02 (MEDIUM spec-review finding) closure verified across 4 doc surfaces + report.md + 2 live integration tests. Scope 04 phase claim `04:validate` advances to `certification.certifiedCompletedPhases`; `currentPhase` advances `validate → audit`; `execution.currentPhase` advances `validate → audit`; `execution.currentScope` preserved at `04`; spec-level `status` and `certification.status` preserved at `in_progress` (audit + chaos + spec-review + docs + finalize remain owned by downstream phase agents).
+
+**Operational discipline:** test stack brought UP via `./smackerel.sh --env test up` then torn down by V7 e2e runner; F02 wiring re-verified via targeted integration `--go-run` against live stack; IDE `replace_string_in_file` for report.md targeted append (5845 → ~5945 lines, REMOVED count unchanged at 0 — no cache poisoning); `pathlib.write_text` heredoc for state.json per `/memories/repo/ide-cache-poisoning.md` USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write; PII rule honored; NO `--no-verify`; NOT pushed (SSH agent locked per user instruction).
+
+**Claim Source:** executed.
+
+---

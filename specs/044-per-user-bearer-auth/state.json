@@ -4,11 +4,11 @@
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
   "status": "in_progress",
-  "currentPhase": "validate",
+  "currentPhase": "audit",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "validate",
+    "currentPhase": "audit",
     "currentScope": "04",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -160,6 +160,14 @@
         "timestamp": "2026-05-11T06:00:00Z",
         "disposition": "approved",
         "note": "Scope 04 test phase closes per Gate G027 (phase exit gate). Inventory: 5 files (4 test, 1 helper) added under git diff 6f1df0cf..9e3fc996 — internal/metrics/auth_test.go (8 unit tests, no build tag, in-package), internal/telegram/bot_wiring_test.go (8 unit tests, no build tag, in-package), internal/telegram/photo_upload_test.go (signature update +4/-2, no build tag), internal/telegram/test_helpers.go (helper file +26 lines for external integration test surface), tests/integration/auth_telegram_f02_wiring_test.go (2 integration tests with //go:build integration tag). Build-tag header verification: 100% compliance — unit files in-package, integration file carries //go:build integration. Live-stack verification: integration test reaches DB-backed pgxpool via productionTelegramBridgeDeps→authTestPool; unit tests make zero DB or NATS calls. 11 gate commands all EXIT=0: ./smackerel.sh build (smackerel-core + smackerel-ml Built), ./smackerel.sh check (Config in sync with SST + env_file drift guard OK + scenario-lint OK), ./smackerel.sh lint (Web validation passed), ./smackerel.sh format --check (49 files already formatted), ./smackerel.sh test unit (Python 417 passed + all Go packages ok), ./smackerel.sh test integration (3 packages PASS — tests/integration 39.728s including TestF02Wiring_SetPerUserTokenMinter_HappyPath PASS 0.05s and TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses PASS 0.04s; tests/integration/agent 2.321s; tests/integration/drive 8.339s), ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_' (4 PWA tests + 5 sub-tests PASS in tests/e2e/auth 0.289s; PASS: go-e2e; e2e runner auto-tore-down stack), go vet ./... (clean), go vet -tags integration ./tests/... (clean), bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth (Artifact lint PASSED, 2 advisory warnings unchanged), bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose (RESULT: PASSED 0 warnings; 12 scenarios checked, 12 mapped to DoD, 0 unmapped; manifest covers 12 contracts; NO carry-forward — FINALIZE-PREREQ-044-V7-001 no longer fires). Skip-marker grep: zero matches across all 5 Scope 04 test files. Mock-framework grep (jest.fn|sinon|nock|msw|gomock|testify/mock): zero matches; the only httptest.NewServer uses are (a) photo_upload_test.go which fakes the EXTERNAL Telegram API endpoint as a legitimate boundary fake for the postPhotoUpload helper unit test, and (b) auth_telegram_f02_wiring_test.go:75 which wraps the REAL api.NewRouter with REAL DB-backed deps from productionTelegramBridgeDeps — neither is a mock of our code. Adversarial coverage VERDICT: PRESENT for every Scope 04 surface — F02 wiring (TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError + TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses with sentinel WRONG-shared-bearer-MUST-NOT-LEAK and counter delta=0 assertion), F02 mapped happy path (TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO + TestF02Wiring_SetPerUserTokenMinter_HappyPath with sentinel WRONG-shared-bearer-DO-NOT-USE-IN-F02-PATH and counter delta=1 assertion plus Bearer v4.public. prefix check), auth-metrics closed-set normalization (TestAuthRevocation_NormalizesReason adversarial sub-case 'Bobby Tables\\n\\n\\nDROP TABLE auth_tokens;--' asserts bucket stays in {unspecified, compromise, rotation, offboarding, test, other}), auth-metrics no-double-count (TestAuthIssuance_IncrementsBySource + TestAuthValidationOutcome_AcceptsClosedSetLabels + TestAuthFailure_AcceptsClosedSetLabels all assert delta=1 per Inc), auth-metrics canonical prefix (TestAuthMetrics_NamesUseCanonicalPrefix), dev empty-token bypass (TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty + TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset), dev shared-token fallback (TestBot_bearerForChat_NilMinter_FallsBackToSharedToken + TestBot_setBearerHeader_NilMinter_AppliesSharedToken), dev unmapped-chat fallback (TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared), deprecation flag default (./smackerel.sh check verbatim Config is in sync with SST). Scenario-manifest status: 12 entries with zero plannedFile residuals; SCN-AUTH-011 + SCN-AUTH-012 carry status=live evidenceRefs pointing at real shipped tests/smoke commands/static guarantees — no manifest updates required. Test stack lifecycle: DOWN at phase start; integration runner brought stack up; e2e runner tore stack down at exit cleanup; final state DOWN. Operational discipline: IDE replace_string_in_file for report.md targeted append; pathlib.write_text heredoc for state.json per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround (multi-KB summary entries); JSON re-parse verified; PII rule honored (no real usernames/IPs/hostnames); NO --no-verify; NOT pushed (SSH agent locked). Verdict: TESTED — 11/11 gates green, adversarial coverage PRESENT, mock+skip audits clean."
+      },
+      {
+        "scope": "04",
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-11T07:00:00Z",
+        "disposition": "approved",
+        "note": "Scope 04 formal validate phase per Gate G022. All 9 V-gates (V1-V9) EXIT=0 against HEAD 75c624ab. V1 build PASS (smackerel-core + smackerel-ml Built); V2 check PASS (config in sync, env_file drift OK, scenario-lint OK); V3 lint PASS (Go + Python + web manifests + JS syntax + extension version consistency); V4 format --check PASS (49 files already formatted); V5 test unit PASS (Python 417 + Go all ok); V6 test integration PASS (3 packages all ok including TestF02Wiring_SetPerUserTokenMinter_HappyPath 0.06s + TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses 0.05s re-verified against live test stack); V7 test e2e --go-run 'TestE2E_PWAAuth_' PASS (4 PWA tests + 5 sub-tests in 0.400s, 'PASS: go-e2e'); V8 artifact-lint EXIT=0 PASS (2 advisory warnings unchanged); V9 traceability-guard --verbose EXIT=0 PASSED (0 warnings, NO carry-forward, 12 scenarios checked, 12 mapped to DoD, 0 unmapped). transitionRequest registry: FINALIZE-PREREQ-044-V7-001 status=resolved with expectedResolution + resolutionEvidence. F02 closure verified across 4 doc surfaces (Operations.md line 991 'F02 Closure (Scope 04 shipped)'; Deployment.md line 383 'F02 Scope 04 — shipped'; Development.md F02 deferral pointer replaced with closure pointer; smackerel.md §17.2 closure paragraph) + report.md line 5484 + 2 live integration tests. Test stack lifecycle: brought UP via './smackerel.sh --env test up' (5/5 healthy), torn down by V7 e2e runner. Operational discipline: IDE replace_string_in_file for report.md targeted append (5845→5924 lines, REMOVED count benign); pathlib.write_text heredoc for state.json per /memories/repo/ide-cache-poisoning.md USER-BLESSED workaround; ensure_ascii=False to match committed encoding (raw em-dashes preserved, minimize diff); JSON re-parse verified; PII rule honored; NO --no-verify; NOT pushed (SSH agent locked). Decision: APPROVED. currentPhase validate → audit; execution.currentPhase validate → audit; execution.currentScope preserved 04; status preserved in_progress; certification.status preserved in_progress."
       }
     ],
     "pendingTransitionRequests": []
@@ -195,7 +203,8 @@
       "03:spec-review",
       "03:docs",
       "03:finalize",
-      "04:test"
+      "04:test",
+      "04:validate"
     ],
     "lockdownState": {
       "active": false,
@@ -745,6 +754,16 @@
       "phase": "test",
       "disposition": "approved",
       "summary": "Scope 04 test phase formal — 11/11 gates EXIT=0 (build, check, lint, format --check, test unit, test integration, test e2e --go-run TestE2E_PWAAuth_, go vet ./..., go vet -tags integration ./tests/..., artifact-lint, traceability-guard --verbose); 5 Scope 04 test files inventoried (4 test + 1 helper, +764/-2 lines); 16 test functions added (8 auth-metrics unit + 6 F02 wiring unit + 2 F02 wiring integration); build-tag headers 100% compliant; live-stack verification confirmed for integration tag; mock-framework grep zero matches; skip-marker grep zero matches; adversarial coverage PRESENT for every Scope 04 surface (F02 wiring + auth metrics + deprecation flag + dev/test backward-compat); scenario-manifest 12 entries with zero plannedFile residuals; FINALIZE-PREREQ-044-V7-001 already resolved at finalize-03; manifest=12 scopes=12 mapped 12 unmapped 0; status=in_progress preserved; certification.status preserved in_progress; currentPhase advanced test→validate."
+    },
+    {
+      "timestamp": "2026-05-11T07:00:00Z",
+      "agent": "bubbles.validate",
+      "scopes": [
+        "04"
+      ],
+      "phase": "validate",
+      "disposition": "approved",
+      "summary": "Scope 04 formal validate phase — 9/9 V-gates EXIT=0 verbatim against HEAD 75c624ab (V1 build PASS smackerel-core+smackerel-ml Built; V2 check PASS Config in sync with SST + env_file drift guard OK + scenario-lint OK; V3 lint PASS Go + Python + web manifests + JS syntax + extension version consistency; V4 format --check PASS 49 files already formatted; V5 test unit PASS Python 417 + Go all ok; V6 test integration PASS 3 packages all ok including TestF02Wiring_SetPerUserTokenMinter_HappyPath 0.06s + TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses 0.05s re-verified live; V7 test e2e --go-run TestE2E_PWAAuth_ PASS 4 PWA tests + 5 sub-tests 0.400s 'PASS: go-e2e' incl. adversarial random_garbage + foreign-signed_paseto; V8 artifact-lint PASS 2 advisory warnings unchanged; V9 traceability-guard --verbose RESULT: PASSED 0 warnings NO carry-forward 12/12 scenarios mapped to DoD); transitionRequest FINALIZE-PREREQ-044-V7-001 status=resolved confirmed (expectedResolution + resolutionEvidence both populated, lastReviewedAt 2026-05-11T01:30:00Z lastReviewedBy bubbles.validate); F02 (MEDIUM spec-review finding) closure verified across 4 doc surfaces + report.md line 5484 + 2 live integration tests; Test stack brought UP via './smackerel.sh --env test up' (5/5 healthy ollama+postgres+nats+smackerel-ml+smackerel-core), torn down by V7 e2e runner; report.md +79 insertions Validate Evidence (Scope 04) section appended via IDE replace_string_in_file (no cache poisoning); state.json mutations via pathlib.write_text heredoc per USER-BLESSED workaround with ensure_ascii=False to match committed encoding; currentPhase validate → audit; execution.currentPhase validate → audit; execution.currentScope preserved 04; status + certification.status preserved in_progress; NO --no-verify; NOT pushed; APPROVED."
     }
   ],
   "policySnapshot": {
@@ -822,5 +841,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-11T06:00:00Z"
+  "lastUpdatedAt": "2026-05-11T07:00:00Z"
 }
