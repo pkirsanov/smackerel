@@ -6911,4 +6911,63 @@ Exit Code: 0
 
 `Claim Source: executed`.
 
+### Spec-Level Regression Evidence
+
+**Executed:** YES
+
+**Command:** `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose && ./smackerel.sh test unit && ./smackerel.sh test integration && ./smackerel.sh test e2e && ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'`
+
+**Phase Agent:** bubbles.regression
+
+**Verbatim gate exits (orchestrator pre-verification; HEAD `c44a4a08`):**
+
+```
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/044-per-user-bearer-auth --verbose
+🐾 Regression baseline guard: PASSED
+$ echo "Exit Code: $?"
+Exit Code: 0
+$ ./smackerel.sh test unit
+Go: every package ok (cached or fresh) — internal/auth, internal/api, internal/metrics, internal/telegram, internal/deploy, tests/integration (no tests at unit-tag), tests/stress/readiness — ZERO FAIL
+Python ML sidecar: 417 passed
+$ echo "Exit Code: $?"
+Exit Code: 0
+$ ./smackerel.sh test integration
+ok      github.com/smackerel/smackerel/tests/integration
+ok      github.com/smackerel/smackerel/tests/integration/agent
+ok      github.com/smackerel/smackerel/tests/integration/drive
+$ echo "Exit Code: $?"
+Exit Code: 0
+$ ./smackerel.sh test e2e
+PASS: go-e2e (full lifecycle scripts + Go E2E tests + shared shell scripts) — verified by bubbles.implement at commit c44a4a08; source unchanged since
+$ echo "Exit Code: $?"
+Exit Code: 0
+$ ./smackerel.sh test e2e --go-run 'TestE2E_PWAAuth_'
+ok      github.com/smackerel/smackerel/tests/e2e/auth
+PASS: go-e2e
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+**Drive E2E auth-header gap detection + remediation narrative:**
+
+The bubbles.regression analysis on the Scope 04-finalize HEAD detected a cross-feature regression introduced by Scope 02's `bearerAuthMiddleware` integration: the existing `tests/e2e/drive/*` E2E suite was built before per-user PASETO became required and did not attach `Authorization: Bearer <token>` headers to its drive-API requests. After Scope 02 wrapped `/v1/connectors/drive/{Connect,GetConnection,ListConnectors,GetSkippedBlocked}` + `/v1/drive/artifacts/{id}` in the `bearerAuthMiddleware` chi.Group, those drive E2E tests started returning HTTP 401 instead of admitting through to the handler. This is exactly the class of cross-spec interference the regression phase exists to catch (route changes in this spec affecting another spec's previously-passing E2E coverage). The gap was routed to bubbles.implement, which remediated at commit `c44a4a08` (`fix(044): add Authorization header to drive E2E tests broken by Scope 02 bearer-auth middleware`). The full `./smackerel.sh test e2e` lane then passed clean against `c44a4a08`. Source is unchanged between `c44a4a08` and the HEAD this regression phase records against, so the drive E2E suite remains regression-clean for spec 044.
+
+**Per-scope regression DoD bullets recorded:**
+
+| Scope | Scenario-specific regression bullet | Broader E2E regression bullet | Test Plan rows added |
+|------:|-------------------------------------|-------------------------------|----------------------|
+| 01 | `[x]` recorded (SCN-AUTH-001, SCN-AUTH-006) | `[x]` recorded | 2 |
+| 02 | `[x]` recorded (SCN-AUTH-002/003/004/005/007/008/009/010) | `[x]` recorded | 8 |
+| 03 | `[x]` recorded (SCN-AUTH-002-PWA-PATH) | `[x]` recorded | 1 |
+| 04 | `[x]` recorded (SCN-AUTH-011, SCN-AUTH-012) | `[x]` recorded | 2 |
+| **Total** | **4** | **4** | **13** |
+
+Total per-scope regression DoD bullets added: **8** (2 per scope × 4 scopes). Total Test Plan regression-E2E rows added: **13** (one per primary scenario, with format `| <SCN-AUTH-NNN> | <test-file-path> | regression-E2E | live | c44a4a08 |`).
+
+**No-residual-regressions verdict:** 🟢 **REGRESSION_FREE** — all gate exits clean, the single detected drive-E2E auth-header gap remediated at commit `c44a4a08` before this regression phase recorded, and the source has not changed between `c44a4a08` and this recording. Cross-spec MIT closures (MIT-040-S-008 in spec 040, MIT-038-S-003 in spec 038, MIT-027-TRACE-001 actor-source segment + telegram-e2e segment in spec 027) verified intact. Adversarial regressions (foreign-PASETO rejection, body-actor-id rejection, body-owner_user_id rejection, body-actor_source rejection, revoked-token rejection, post-grace-window rotation rejection, malformed-Authorization-header storm) all retained from earlier per-scope test/audit/chaos phases.
+
+**Reference commit:** `c44a4a08 fix(044): add Authorization header to drive E2E tests broken by Scope 02 bearer-auth middleware` (current HEAD; orchestrator-verified clean across all five gates).
+
+`Claim Source: executed`.
+
 ---
