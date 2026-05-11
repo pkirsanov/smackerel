@@ -159,9 +159,10 @@ func postJSON(t *testing.T, cfg e2eConfig, path string, payload map[string]any) 
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if cfg.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
-	}
+	// Spec 044 Scope 02 — /api/* and /v1/* are behind
+	// bearerAuthMiddleware; loadE2EConfig fails loud if
+	// SMACKEREL_AUTH_TOKEN is unset, so the header is always populated.
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("POST %s: %v", path, err)

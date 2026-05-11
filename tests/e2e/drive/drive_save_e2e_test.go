@@ -102,10 +102,9 @@ func TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable(t *testing.T) {
 	}
 
 	// Now hit the HTTP API and prove /v1/drive/save/requests surfaces this row.
+	// loadE2EConfig already fails loud if SMACKEREL_AUTH_TOKEN is unset
+	// (spec 044 Scope 02 — bearerAuthMiddleware now wraps /v1/drive/*).
 	authToken := cfg.AuthToken
-	if authToken == "" {
-		t.Skip("CLI auth token not present — skip API verification half of E2E")
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.CoreURL+"/v1/drive/save/requests?limit=10", nil)
 	if err != nil {
 		t.Fatalf("build request: %v", err)

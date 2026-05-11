@@ -50,9 +50,10 @@ func TestDriveExtractE2E_MultiFormatFilesBecomeSearchable(t *testing.T) {
 		t.Fatalf("build search request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if liveConfig.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+liveConfig.AuthToken)
-	}
+	// Spec 044 Scope 02 — /api/search is behind bearerAuthMiddleware;
+	// loadE2EConfig fails loud if SMACKEREL_AUTH_TOKEN is unset, so the
+	// header is always populated here.
+	req.Header.Set("Authorization", "Bearer "+liveConfig.AuthToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/search: %v", err)

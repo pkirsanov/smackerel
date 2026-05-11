@@ -30,7 +30,7 @@ func TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates(t *testing.
 	liveConfig := loadE2EConfig(t)
 	waitForHealth(t, liveConfig, 120*time.Second)
 
-	html := getText(t, liveConfig.CoreURL+"/pwa/drive-artifact-detail.html")
+	html := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-artifact-detail.html")
 	for _, expected := range []string{
 		`id="drive-availability-banner"`,
 		`id="drive-extracted-text-unavailable"`,
@@ -41,7 +41,7 @@ func TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates(t *testing.
 		}
 	}
 
-	js := getText(t, liveConfig.CoreURL+"/pwa/drive-artifact-detail.js")
+	js := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-artifact-detail.js")
 	for _, expected := range []string{
 		`detail.banner_message`,
 		`banner_severity`,
@@ -57,11 +57,11 @@ func TestDriveArtifactDetailExplainsTombstonedAndAccessRevokedStates(t *testing.
 		}
 	}
 
-	searchHTML := getText(t, liveConfig.CoreURL+"/pwa/drive-search.html")
+	searchHTML := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-search.html")
 	if !strings.Contains(searchHTML, `drive-availability-banner`) {
 		t.Fatalf("drive-search.html must surface the same availability banner hook so search results explain unavailable bytes too")
 	}
-	searchJS := getText(t, liveConfig.CoreURL+"/pwa/drive-search.js")
+	searchJS := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-search.js")
 	for _, expected := range []string{`tombstoned`, `permission_lost`, `actions_enabled`} {
 		if !strings.Contains(searchJS, expected) {
 			t.Fatalf("drive-search.js missing %q for SCN-038-012 surface", expected)

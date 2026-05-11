@@ -144,6 +144,10 @@ func TestDriveConnectFlowShowsHealthyEmptyDriveConnector(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Spec 044 Scope 02 — /v1/connectors/drive/connect is behind
+	// bearerAuthMiddleware. Dev/test stack uses Branch 3 shared-token
+	// compare against SMACKEREL_AUTH_TOKEN.
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	resp, err = (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("POST connect: %v", err)
@@ -204,7 +208,15 @@ func TestDriveConnectFlowShowsHealthyEmptyDriveConnector(t *testing.T) {
 
 	// 5. GET connection JSON — assert empty-drive contract.
 	getURL := fmt.Sprintf("%s/v1/connectors/drive/connection/%s", cfg.CoreURL, connID.String())
-	resp, err = http.Get(getURL)
+	getReq, err := http.NewRequest(http.MethodGet, getURL, nil)
+	if err != nil {
+		t.Fatalf("build GET connection request: %v", err)
+	}
+	// Spec 044 Scope 02 — /v1/connectors/drive/connection/{id} is
+	// behind bearerAuthMiddleware (Branch 3 shared-token compare in
+	// dev/test).
+	getReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
+	resp, err = (&http.Client{Timeout: 10 * time.Second}).Do(getReq)
 	if err != nil {
 		t.Fatalf("GET connection: %v", err)
 	}

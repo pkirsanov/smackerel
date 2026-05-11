@@ -45,13 +45,13 @@ func TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts(t *testing.T) {
 		t.Fatalf("indexed_count = %v, want 24", response["indexed_count"])
 	}
 
-	detailHTML := getText(t, liveConfig.CoreURL+"/pwa/connector-detail.html")
+	detailHTML := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/connector-detail.html")
 	for _, expected := range []string{"id=\"scan-progress\"", "id=\"recent-activity\"", "Indexed files", "Skipped files"} {
 		if !strings.Contains(detailHTML, expected) {
 			t.Fatalf("connector-detail.html missing %q", expected)
 		}
 	}
-	detailJS := getText(t, liveConfig.CoreURL+"/pwa/connector-detail.js")
+	detailJS := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/connector-detail.js")
 	for _, expected := range []string{"view.progress", "recent_activity", "scan-progress"} {
 		if !strings.Contains(detailJS, expected) {
 			t.Fatalf("connector-detail.js missing %q", expected)
@@ -61,7 +61,7 @@ func TestDriveConnectorDetailShowsLiveScanProgressAndFinalCounts(t *testing.T) {
 
 func getDriveConnectionView(t *testing.T, liveConfig e2eConfig, connectionID string) map[string]any {
 	t.Helper()
-	responseText := getText(t, liveConfig.CoreURL+"/v1/connectors/drive/connection/"+connectionID)
+	responseText := getText(t, liveConfig, liveConfig.CoreURL+"/v1/connectors/drive/connection/"+connectionID)
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(responseText), &decoded); err != nil {
 		t.Fatalf("decode connection view: %v body=%s", err, responseText)

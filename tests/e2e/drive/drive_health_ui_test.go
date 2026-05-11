@@ -43,7 +43,7 @@ func TestDriveConnectorDetailSurfacesProviderOutageAndRetryState(t *testing.T) {
 		t.Fatalf("health_reason = %q, want provider error", view["health_reason"])
 	}
 
-	detailJS := getText(t, liveConfig.CoreURL+"/pwa/connector-detail.js")
+	detailJS := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/connector-detail.js")
 	for _, expected := range []string{"retryable_work_count", "health_reason", "Provider work is queued"} {
 		if !strings.Contains(detailJS, expected) {
 			t.Fatalf("connector-detail.js missing %q", expected)
