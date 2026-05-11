@@ -26,7 +26,7 @@ func TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity(t 
 	liveConfig := loadE2EConfig(t)
 	waitForHealth(t, liveConfig, 120*time.Second)
 
-	html := getText(t, liveConfig.CoreURL+"/pwa/drive-search.html")
+	html := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-search.html")
 	for _, expected := range []string{
 		`id="drive-search-form"`,
 		`id="drive-search-list"`,
@@ -49,7 +49,7 @@ func TestDriveSearchResultsShowSnippetBreadcrumbProviderSharingAndSensitivity(t 
 		}
 	}
 
-	js := getText(t, liveConfig.CoreURL+"/pwa/drive-search.js")
+	js := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-search.js")
 	for _, expected := range []string{
 		`/api/search`,
 		`result.drive`,

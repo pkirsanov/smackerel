@@ -79,9 +79,7 @@ func TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome(t *testin
 
 	// GET the pending row.
 	getReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if cfg.AuthToken != "" {
-		getReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
-	}
+	getReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	getResp, err := client.Do(getReq)
 	if err != nil {
 		t.Fatalf("GET confirmation: %v", err)
@@ -118,9 +116,7 @@ func TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome(t *testin
 	resolvePayload, _ := json.Marshal(resolveBody)
 	postReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(resolvePayload))
 	postReq.Header.Set("Content-Type", "application/json")
-	if cfg.AuthToken != "" {
-		postReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
-	}
+	postReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	postResp, err := client.Do(postReq)
 	if err != nil {
 		t.Fatalf("POST resolve: %v", err)
@@ -147,9 +143,7 @@ func TestLowConfidenceConfirmationPausesRoutingUntilUserChoosesOutcome(t *testin
 	// proven over the live HTTP boundary.
 	post2Req, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(resolvePayload))
 	post2Req.Header.Set("Content-Type", "application/json")
-	if cfg.AuthToken != "" {
-		post2Req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
-	}
+	post2Req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	post2Resp, err := client.Do(post2Req)
 	if err != nil {
 		t.Fatalf("POST resolve (second): %v", err)

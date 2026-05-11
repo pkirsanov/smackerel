@@ -55,7 +55,7 @@ func TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions(t *testing.
 		t.Fatalf("ProcessPending: %v", err)
 	}
 
-	responseText := getText(t, liveConfig.CoreURL+"/v1/connectors/drive/connection/"+connectionID+"/skipped")
+	responseText := getText(t, liveConfig, liveConfig.CoreURL+"/v1/connectors/drive/connection/"+connectionID+"/skipped")
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(responseText), &decoded); err != nil {
 		t.Fatalf("decode skipped view: %v body=%s", err, responseText)
@@ -66,7 +66,7 @@ func TestSkippedAndBlockedFilesAreGroupedByConcreteReasonWithActions(t *testing.
 	if !strings.Contains(responseText, "file_too_large") || !strings.Contains(responseText, "unsupported_binary") || !strings.Contains(responseText, "recommended_action") {
 		t.Fatalf("skipped/blocked response missing reasons/actions: %s", responseText)
 	}
-	detailHTML := getText(t, liveConfig.CoreURL+"/pwa/connector-detail.html")
+	detailHTML := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/connector-detail.html")
 	for _, expected := range []string{"id=\"skipped-review\"", "Skipped and blocked files"} {
 		if !strings.Contains(detailHTML, expected) {
 			t.Fatalf("connector detail HTML missing %q", expected)

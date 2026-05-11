@@ -28,7 +28,7 @@ func TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision(t *te
 	liveConfig := loadE2EConfig(t)
 	waitForHealth(t, liveConfig, 120*time.Second)
 
-	html := getText(t, liveConfig.CoreURL+"/pwa/drive-artifact-detail.html")
+	html := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-artifact-detail.html")
 	for _, expected := range []string{
 		`id="tab-versions"`,
 		`aria-controls="panel-versions"`,
@@ -41,7 +41,7 @@ func TestDriveArtifactDetailVersionsTabShowsPreviousNativeDocumentRevision(t *te
 		}
 	}
 
-	js := getText(t, liveConfig.CoreURL+"/pwa/drive-artifact-detail.js")
+	js := getText(t, liveConfig, liveConfig.CoreURL+"/pwa/drive-artifact-detail.js")
 	for _, expected := range []string{
 		`/v1/drive/artifacts/`,
 		`detail.versions`,

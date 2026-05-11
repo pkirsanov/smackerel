@@ -29,6 +29,16 @@ type e2eConfig struct {
 // loadE2EConfig reads live-stack connection details from environment.
 // Mirrors the helpers in tests/e2e/browser_history_e2e_test.go so the
 // drive e2e suite stays self-contained.
+//
+// Spec 044 Scope 02 wraps the /v1/connectors/drive/* routes in
+// bearerAuthMiddleware. The dev/test stack runs Branch 3 (shared-token
+// compare) which REQUIRES an Authorization: Bearer ${SMACKEREL_AUTH_TOKEN}
+// header on every authed request. Missing SMACKEREL_AUTH_TOKEN is a
+// fail-loud condition — silently skipping would let regressions in the
+// auth wiring slip past CI unnoticed. CORE_EXTERNAL_URL keeps its
+// existing skip semantics because the absence of a live stack is a
+// legitimate "not running e2e here" condition; a missing auth token,
+// in contrast, only happens when the stack is up but misconfigured.
 func loadE2EConfig(t *testing.T) e2eConfig {
 	t.Helper()
 	coreURL := os.Getenv("CORE_EXTERNAL_URL")
@@ -36,6 +46,9 @@ func loadE2EConfig(t *testing.T) e2eConfig {
 		t.Skip("e2e: CORE_EXTERNAL_URL not set — live stack not available")
 	}
 	authToken := os.Getenv("SMACKEREL_AUTH_TOKEN")
+	if authToken == "" {
+		t.Fatalf("SMACKEREL_AUTH_TOKEN not set; run via ./smackerel.sh test e2e")
+	}
 	return e2eConfig{CoreURL: coreURL, AuthToken: authToken}
 }
 
@@ -134,9 +147,20 @@ func generateE2EBulkDriveFiles(totalFiles int, folderCount int) []fixtures.File 
 	return files
 }
 
-func getText(t *testing.T, url string) string {
+func getText(t *testing.T, cfg e2eConfig, url string) string {
 	t.Helper()
-	response, err := http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("build GET %s: %v", url, err)
+	}
+	// Spec 044 Scope 02 wrapped /v1/connectors/drive/* in
+	// bearerAuthMiddleware. PWA paths under /pwa/* are still
+	// unauthenticated, but attaching the header to those requests
+	// is harmless because the middleware never runs for them.
+	// loadE2EConfig fails loud if SMACKEREL_AUTH_TOKEN is unset, so
+	// cfg.AuthToken is always populated when getText is called.
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}

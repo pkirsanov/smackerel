@@ -153,6 +153,10 @@ func TestDriveFoundationE2E_SecondProviderUsesNeutralContract(t *testing.T) {
 		t.Fatalf("build request: %v", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	// Spec 044 Scope 02 — /v1/connectors/drive is behind
+	// bearerAuthMiddleware. Branch 3 (dev/test) compares this header
+	// against SMACKEREL_AUTH_TOKEN; loadE2EConfig fails loud if unset.
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)

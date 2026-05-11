@@ -75,7 +75,7 @@ func TestFolderMoveUpdatesArtifactContextWithoutDuplicateExtractionActivity(t *t
 	if int(view["indexed_count"].(float64)) != 1 {
 		t.Fatalf("connection view indexed_count = %v, want 1", view["indexed_count"])
 	}
-	if !strings.Contains(getText(t, liveConfig.CoreURL+"/pwa/connector-detail.js"), "skipped_review") {
+	if !strings.Contains(getText(t, liveConfig, liveConfig.CoreURL+"/pwa/connector-detail.js"), "skipped_review") {
 		t.Fatalf("connector detail JS is missing skipped review rendering")
 	}
 }
