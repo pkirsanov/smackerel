@@ -5922,3 +5922,111 @@ Production-safety contract intact: unmapped chats still dropped (`internal/teleg
 **Claim Source:** executed.
 
 ---
+
+### Audit Evidence (Scope 04)
+
+Spec 044 Scope 04 formal audit phase per Bubbles `bubbles.audit` modeInstructions. Eight required audit checks (A1–A8) executed against post-validate `HEAD 311078d3` and the Scope 04 commit range `9e3fc996..311078d3` (3 commits: implement → test → validate). The audit responsibility is **SECURITY + COMPLIANCE + ARCHITECTURE conformance review** of the Scope 04 surface (F02 closure + auth metrics + deprecation flag + docs sweep).
+
+**Pre-flight gates:**
+
+- `bash .github/bubbles/scripts/state-transition-guard.sh specs/044-per-user-bearer-auth` script `EXIT=0` with `🔴 TRANSITION BLOCKED: 58 failure(s), 3 warning(s)` reported in stdout. The script-level `EXIT=0` reflects that the spec is `status=in_progress` (the guard only blocks the eventual `in_progress → done` transition). All 58 BLOCK lines are pre-existing carry-forward findings inherited from Scope 01/02/03 audits and explicitly bookmarked for spec-level finalize: (a) Check 4B `Not Started` regex matches narrative prose in `scopes.md` (not actual scope status fields — same false-positive that Scope 03 audit handled and accepted); (b) Check 6 `regression / simplify / security / stabilize` specialist phases not in this spec's `phaseOrder`; (c) Checks 8A/8B/8C/8D framework planning drift carried forward unchanged; (d) Check 9 single DoD evidence-block pattern. NONE are Scope 04 audit failures and NONE are owned by `bubbles.audit` (spec-level finalize is owned by `bubbles.iterate`).
+- `bash .github/bubbles/scripts/artifact-lint.sh specs/044-per-user-bearer-auth` `EXIT=0` `Artifact lint PASSED.` (2 advisory warnings unchanged: missing-recommended `reworkQueue` field; deprecated `scopeProgress` field — both inherited).
+
+#### 8-Check Audit Table
+
+| Check | Surface | Verdict | Evidence |
+|-------|---------|---------|----------|
+| **A1** | Auth surface security | ✅ PASS | F02 wiring — `internal/telegram/bot.go::bearerForChat` (lines 200–238) mints per-user PASETO via `tokenMinter.MintForChat(chatID)` when `tokenMinter != nil`; `cmd/core/wiring.go::startTelegramBotIfConfigured` lines 347–368 constructs the minter only when `cfg.Environment == "production" && cfg.Auth.Enabled && cfg.Auth.SigningActivePrivateKey != "" && cfg.Auth.SigningActiveKeyID != ""`. Production unmapped chats return `ErrNoUserMappingForChat` which propagates through `setBearerHeader` and forces the caller to refuse the outbound request (verified at `tests/integration/auth_telegram_f02_wiring_test.go::TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` with sentinel `WRONG-shared-bearer-MUST-NOT-LEAK` + counter `delta=0` assertion). Deprecation flag — `config/smackerel.yaml` line 514 `production_shared_token_fallback_enabled: false` (default); `internal/api/router.go` line 634 Branch 2 fall-through gated on this flag, so with `false` the production middleware refuses the legacy `SMACKEREL_AUTH_TOKEN`; `internal/config/config.go` line 1033 fail-loud on missing env var; `scripts/commands/config.sh` line 792 `required_value`. Auth-metric labels — every `WithLabelValues` callsite in `internal/api/router.go` (lines 569, 594, 615, 616, 628, 640, 654, 655, 672), `internal/api/auth_handlers.go` (lines 118, 179), `cmd/core/cmd_auth.go` (lines 201, 254, 301, 443), `internal/telegram/per_user_token.go` line 204, and `internal/metrics/auth_test.go` (lines 70–76) uses string literals from documented closed sets (`admin_api`/`bootstrap_cli`/`telegram_bridge`/`production`/`missing_token`/`invalid_format`/`paseto_verify_failed`/`revoked`/`shared_token_mismatch`/`auth_not_configured`/`rejected_revoked`/`accepted`/`header`/`pwa_cookie`) plus `classifyVerifyError(err)` (closed set: `accepted`/`rejected_expired`/`rejected_unknown_key`/`rejected_malformed`) plus `metrics.NormalizeRevocationReason(*reason)` (closed set: `unspecified`/`compromise`/`rotation`/`offboarding`/`test`/`other`). NO actor IDs, NO chat IDs, NO IP addresses, NO usernames, NO token contents in any label value. Token-content logging — `slog.Warn` at router lines 590, 605, 638, 671 logs only `path`/`remote_addr`/`reason`; `per_user_token.go::MintForUser` logs nothing during mint; the only Telegram-source `slog.Warn` (`bot.go` line 351 `open-access mode...`) logs only `chat_id`. |
+| **A2** | Actor identity provenance | ✅ PASS | NATS-segment scope: Scope 04 touched ZERO NATS files (verified via `git diff --name-only 6f1df0cf..311078d3 \| grep -E '(internal/nats\|internal/connector\|nats\.go\|broadcaster\|consumer)'` returning empty). The MIT-027-TRACE-001 NATS-segment closure is therefore not in Scope 04 — already documented as deferred in `specs/027-user-annotations/state.json` per the Scope 02 actor-source segment annotation. Telegram entry-points: `internal/telegram/bot.go::handleMessage` line 365 calls `b.resolveActorUserID(chatID)` which uses `chat_id` ONLY (no body field consulted) — production unmapped chat returns early without calling the internal API. `internal/telegram/bot.go::safeHandleCallback` line 332 mirrors the same protection for inline-keyboard callbacks via `cb.Message.Chat.ID`. `internal/telegram/per_user_token.go::MintForChat` line 151 calls `bot.resolveActorUserID(chatID)` then mints PASETO bound to the **resolved** `user_id` — `actor_id` cannot be smuggled via body. Server-side: `internal/api/router.go::bearerAuthMiddleware` Branch 1 (lines 605–630) derives `auth.Session.UserID` FROM the verified PASETO claim (`parsed.UserID`), never from request body or header. |
+| **A3** | SST zero-defaults | ✅ PASS | `git diff 6f1df0cf..311078d3 -- 'cmd/**/*.go' 'internal/**/*.go' \| grep -E '^\+.*(os\.Getenv\|getenv\()'` returned empty — Scope 04 introduced ZERO new env reads. The deprecation flag `production_shared_token_fallback_enabled` originates from `config/smackerel.yaml` line 514 → `scripts/commands/config.sh` line 792 (`required_value` — fail-loud) → `internal/config/config.go` line 1033 (fail-loud on missing env var, parses `bool` only on present-and-non-empty). No fallback default for any security-critical field. The pre-existing `TELEGRAM_USER_MAPPING` env read (Scope 03 work, `internal/config/config.go` line 491) uses bare `os.Getenv` with no fallback — Scope 04 made no SST additions. |
+| **A4** | PII / secret hygiene | ✅ PASS | `gitleaks detect --no-banner --redact --config .gitleaks.toml --log-opts='9e3fc996^..311078d3'`: `3 commits scanned`, `no leaks found`, `EXIT=0`. Supplementary regex sweep across all 11 Scope 04 source files (owner-username token, `/home/[a-z]+/` paths, RFC1918 ranges, tailnet FQDN suffix, free-mail provider domains, BEGIN-PRIVATE-KEY armor): `EXIT=0` zero matches. Test fixtures use synthetic identifiers (`12345`, `54321`, `99999`, `tg-user-alice`, `tg-user-f02-wiring`). Metric emitter logs do not log any token contents (verified at A1). |
+| **A5** | Build-tag classification | ✅ PASS | `tests/integration/auth_telegram_f02_wiring_test.go` line 1 `//go:build integration` (correct for live-stack integration test). `internal/metrics/auth_test.go` line 1 `// Spec 044 Scope 04 — coverage for...` (NO build tag — correct for in-package unit tests). `internal/telegram/bot_wiring_test.go` line 1 `// Spec 044 Scope 04 — F02 closure unit test.` (NO build tag — correct for in-package unit tests). |
+| **A6** | G074 build-once-deploy-many | ✅ PASS | `git diff --stat 6f1df0cf..311078d3 -- deploy/ docker-compose.yml docker-compose.prod.yml` returned EMPTY — Scope 04 made ZERO changes to the deploy surface. No mutable image tags introduced. `deploy/contract.yaml` and `deploy/compose.deploy.yml` unchanged (digest-only references preserved). |
+| **A7** | Tailnet-edge bind pattern | ✅ PASS | `${HOST_BIND_ADDRESS:-127.0.0.1}:` substitution form preserved on `smackerel-core` (`deploy/compose.deploy.yml` line 109), `smackerel-ml` (line 155), and `ollama` (line 193). No published ports for `postgres` or `nats` (`grep -nE 'postgres\|nats' deploy/compose.deploy.yml \| grep ':[0-9]+:[0-9]+'` returned empty). `go test -count=1 ./internal/deploy/...` `EXIT=0`: `ok github.com/smackerel/smackerel/internal/deploy 0.012s` — `TestComposeContract` PASSES. |
+| **A8** | Adversarial coverage | ✅ PASS | Every Scope 04 SCN has at least one adversarial test that would FAIL if the invariant were weakened: F02 wiring (SCN-AUTH-012) — `TestF02Wiring_SetPerUserTokenMinter_HappyPath` uses sentinel `WRONG-shared-bearer-DO-NOT-USE-IN-F02-PATH` + asserts `Bearer v4.public.` prefix + counter `delta=1`; `TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses` uses sentinel `WRONG-shared-bearer-MUST-NOT-LEAK` + asserts counter `delta=0` on refused mint. Auth metrics closed-set normalization — `TestAuthRevocation_NormalizesReason` adversarial sub-case `"Bobby Tables\n\n\nDROP TABLE auth_tokens;--"` asserts the bucket stays in `{unspecified, compromise, rotation, offboarding, test, other}`. Auth metrics no-double-count — `TestAuthIssuance_IncrementsBySource` + `TestAuthValidationOutcome_AcceptsClosedSetLabels` + `TestAuthFailure_AcceptsClosedSetLabels` assert `delta=1` per `Inc`. Auth metrics canonical prefix — `TestAuthMetrics_NamesUseCanonicalPrefix`. Bot wiring decision matrix — 8 unit tests cover all branches: `TestBot_bearerForChat_NilMinter_FallsBackToSharedToken`, `TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty`, `TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO` (sentinel `WRONG-shared-bearer-DO-NOT-USE`), `TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared`, `TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError` (`errors.Is(err, ErrNoUserMappingForChat)` assertion), `TestBot_setBearerHeader_NilMinter_AppliesSharedToken`, `TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset`, `TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError`. ZERO bailout returns. ZERO `t.Skip` / `.skip(` / `xit` / `xdescribe` / `.only` / `.todo` markers. |
+
+#### Tier 2 Independent Test Verification
+
+Audit phase brought test stack UP via `./smackerel.sh --env test up` (validate-phase teardown) — `5/5 containers Healthy` on host ports 47001/47002/45001/45002/45003 — and re-ran the Scope 04 audit-relevant tests against fresh state to verify the evidence recorded by prior phases:
+
+```
+$ ./smackerel.sh test integration --go-run '^TestF02Wiring_'
+=== RUN   TestF02Wiring_SetPerUserTokenMinter_HappyPath
+--- PASS: TestF02Wiring_SetPerUserTokenMinter_HappyPath (0.08s)
+=== RUN   TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses
+--- PASS: TestF02Wiring_SetPerUserTokenMinter_ProductionUnmappedRefuses (0.05s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        50.081s
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/agent  4.366s
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/drive  9.605s
+EXIT=0
+
+$ go test -count=1 -v -run '^(TestAuthIssuance_|TestAuthRotation_|TestAuthRevocation_|TestAuthValidationLatency_|TestAuthValidationOutcome_|TestAuthLegacyFallback|TestAuthFailure_|TestAuthMetrics_)' ./internal/metrics/
+=== RUN   TestAuthMetrics_EmitsAllExpectedSeries
+--- PASS: TestAuthMetrics_EmitsAllExpectedSeries (0.00s)
+=== RUN   TestAuthIssuance_IncrementsBySource
+--- PASS: TestAuthIssuance_IncrementsBySource (0.00s)
+=== RUN   TestAuthRotation_Increments
+--- PASS: TestAuthRotation_Increments (0.00s)
+=== RUN   TestAuthRevocation_NormalizesReason
+--- PASS: TestAuthRevocation_NormalizesReason (0.00s)
+=== RUN   TestAuthRevocation_IncrementsBucketed
+--- PASS: TestAuthRevocation_IncrementsBucketed (0.00s)
+=== RUN   TestAuthValidationLatency_RecordsObservation
+--- PASS: TestAuthValidationLatency_RecordsObservation (0.00s)
+=== RUN   TestAuthValidationOutcome_AcceptsClosedSetLabels
+--- PASS: TestAuthValidationOutcome_AcceptsClosedSetLabels (0.00s)
+=== RUN   TestAuthLegacyFallbackUsed_OperatorVisibility
+--- PASS: TestAuthLegacyFallbackUsed_OperatorVisibility (0.00s)
+=== RUN   TestAuthFailure_AcceptsClosedSetLabels
+--- PASS: TestAuthFailure_AcceptsClosedSetLabels (0.00s)
+=== RUN   TestAuthMetrics_NamesUseCanonicalPrefix
+--- PASS: TestAuthMetrics_NamesUseCanonicalPrefix (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/metrics 0.022s
+EXIT=0
+
+$ go test -count=1 -v -run '^(TestBot_bearerForChat_|TestBot_setBearerHeader_)' ./internal/telegram/
+=== RUN   TestBot_bearerForChat_NilMinter_FallsBackToSharedToken
+--- PASS: TestBot_bearerForChat_NilMinter_FallsBackToSharedToken (0.00s)
+=== RUN   TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty
+--- PASS: TestBot_bearerForChat_NilMinter_EmptyAuthToken_ReturnsEmpty (0.00s)
+=== RUN   TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO
+--- PASS: TestBot_bearerForChat_WithMinter_MappedChat_ReturnsPerUserPASETO (0.01s)
+=== RUN   TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared
+--- PASS: TestBot_bearerForChat_WithMinter_DevUnmappedChat_FallsBackToShared (0.00s)
+=== RUN   TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError
+--- PASS: TestBot_bearerForChat_WithMinter_ProdUnmappedChat_PropagatesError (0.00s)
+=== RUN   TestBot_setBearerHeader_NilMinter_AppliesSharedToken
+--- PASS: TestBot_setBearerHeader_NilMinter_AppliesSharedToken (0.00s)
+=== RUN   TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset
+--- PASS: TestBot_setBearerHeader_EmptyToken_LeavesHeaderUnset (0.00s)
+=== RUN   TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError
+--- PASS: TestBot_setBearerHeader_ProdUnmappedChat_PropagatesError (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/telegram        0.037s
+EXIT=0
+
+$ go test -count=1 ./internal/deploy/...
+ok      github.com/smackerel/smackerel/internal/deploy  0.012s
+```
+
+#### Findings
+
+| Severity | Count | Disposition |
+|----------|-------|-------------|
+| HIGH     | 0     | — |
+| MEDIUM   | 0     | — |
+| LOW      | 0     | — |
+
+#### Decision
+
+🚀 **SHIP_IT** — Scope 04 audit phase closes per `bubbles.audit` modeInstructions. All 8 audit checks (A1–A8) PASS with HIGH=0 / MEDIUM=0 / LOW=0 findings. Tier 2 independent test verification confirms the F02 wiring + auth metrics + bot decision-matrix surface all PASS at the live-integration AND in-package unit layers. The 58 BLOCK lines from `state-transition-guard` are pre-existing carry-forward findings inherited from Scope 01/02/03 audits and explicitly bookmarked for spec-level finalize; none are Scope 04 audit failures. Scope 04 phase claim `04:audit` advances to `certification.certifiedCompletedPhases`; `currentPhase` advances `audit → chaos`; `execution.currentPhase` advances `audit → chaos`; `execution.currentScope` preserved at `04`; spec-level `status` and `certification.status` preserved at `in_progress` (chaos + spec-review + docs + finalize remain owned by downstream phase agents).
+
+**Operational discipline:** test stack brought UP via `./smackerel.sh --env test up` for Tier 2 verification — left UP for chaos-phase agent; IDE `replace_string_in_file` for report.md targeted append; `pathlib.write_text` heredoc for state.json per `/memories/repo/ide-cache-poisoning.md` USER-BLESSED workaround for multi-KB summary entries; JSON re-parse verification post-write; PII rule honored; NO `--no-verify`; NOT pushed (SSH agent locked per user instruction).
+
+**Claim Source:** executed.
+
+---
