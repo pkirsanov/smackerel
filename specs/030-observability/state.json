@@ -42,7 +42,8 @@
         "statusAfter": "done",
         "runStartedAt": "2026-05-09T00:00:00Z",
         "runEndedAt": "2026-05-09T00:00:00Z",
-        "summary": "Trace-guard closure pass: closed 5 of 7 trace failures (7\u21922 residual). Added Test Plan tables to Scopes 1, 2, 5 pointing at internal/metrics/metrics_test.go and internal/metrics/trace_test.go. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. Residual: Scopes 3 (Connector Sync Metrics) and 4 (ML Sidecar Metrics) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."      },
+        "summary": "Trace-guard closure pass: closed 5 of 7 trace failures (7→2 residual). Added Test Plan tables to Scopes 1, 2, 5 pointing at internal/metrics/metrics_test.go and internal/metrics/trace_test.go. Added G068 Scenario \"<name>\" prefixes to existing DoD bullets in Scopes 1, 2, 5. Appended Trace-Guard Closure section to report.md listing per-scope full repo-relative test paths. Residual: Scopes 3 (Connector Sync Metrics) and 4 (ML Sidecar Metrics) lack Gherkin scenarios; adding new Gherkin scenarios is bubbles.plan ownership (agent rule). Routing to bubbles.plan recommended. No source/test/config/framework changes; no DoD content rewriting (only \"Scenario \\\"<name>\\\": \" prefixes). artifact-lint PASSED, traceability-guard residual=2 (Gherkin-missing). No status/certification field changes."
+      },
       {
         "agent": "bubbles.plan",
         "phasesExecuted": [
@@ -52,7 +53,22 @@
         "statusAfter": "done",
         "runStartedAt": "2026-05-09T05:00:00Z",
         "runEndedAt": "2026-05-09T05:10:00Z",
-        "summary": "Authored 4 Gherkin scenarios across scopes 3, 4 (SCN-OBS-004/005 connector sync metrics + dead-letter counter, SCN-OBS-006/007 ML sidecar metrics + ml_request_seconds histogram) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/metrics/metrics_test.go and ml/tests. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."      }
+        "summary": "Authored 4 Gherkin scenarios across scopes 3, 4 (SCN-OBS-004/005 connector sync metrics + dead-letter counter, SCN-OBS-006/007 ML sidecar metrics + ml_request_seconds histogram) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/metrics/metrics_test.go and ml/tests. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": [
+          "docs"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-11T03:00:00Z",
+        "runEndedAt": "2026-05-11T03:00:00Z",
+        "action": "cross_spec_annotation_auth_metrics_surface_landed_via_spec_044_scope_04",
+        "scope": "feature-wide cross-spec annotation (auth metrics surface)",
+        "crossSpec": "specs/044-per-user-bearer-auth",
+        "summary": "Cross-spec annotation: spec 044 Scope 04 (Per-User Bearer Auth — Deprecation Pathway + Documentation Freshness) landed a NEW seven-series Prometheus authentication metrics family under the `smackerel_auth_*` prefix at `internal/metrics/auth.go` (registered via `init()` against the default registerer). The series are exposed by the same Go-core `/metrics` endpoint that spec 030 owns (Scope 1 — `internal/metrics/metrics.go`); operators scrape both spec 030's existing surface (`smackerel_capture_total`, `smackerel_search_latency_seconds`, `smackerel_artifacts_ingested_total`, `smackerel_connector_sync_*`, `smackerel_nats_dead_letter_total`, `smackerel_db_connections_active`, `smackerel_digest_generation_*`) and the spec 044 auth surface (`smackerel_auth_token_issuance_total`, `smackerel_auth_token_rotation_total`, `smackerel_auth_token_revocation_total`, `smackerel_auth_token_validation_latency_seconds`, `smackerel_auth_token_validation_outcome_total`, `smackerel_auth_legacy_fallback_used_total`, `smackerel_auth_failure_total`) from the same scrape job. Spec 030's contract (Prometheus exposition format, default-registry registration, canonical `smackerel_*` prefix) is preserved; the spec 044 surface conforms to that contract. Operator-facing PromQL examples for the auth surface live in `docs/Operations.md` 'Authentication Metrics (Scope 04)' subsection; spec 030's existing 'Key Metrics' subsection in `docs/Operations.md` (line 417 onwards) covers the spec 030 surface. No spec 030 source / test / scope-DoD / certification field is touched by this annotation. Spec 030 status / certification.* / scopeProgress / completedScopes / certifiedCompletedPhases UNTOUCHED — spec 030 stays at `done`; only execution.executionHistory appended with this cross-reference. closedAt: 2026-05-11. closedBy: bubbles.docs (mode: spec 044 Scope 04 docs publish). closureSpec: 044-per-user-bearer-auth. closureSegment: auth-metrics-surface-cross-reference. closureEvidence: docs/Operations.md 'Authentication Metrics (Scope 04)' + 'Final Scope 04 Audit' subsections; specs/044-per-user-bearer-auth/report.md → Test Evidence (Scope 04) → auth metrics rows."
+      }
     ]
   },
   "certification": {
@@ -150,7 +166,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-24T00:00:00Z",
+  "lastUpdatedAt": "2026-05-11T03:00:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
