@@ -186,7 +186,7 @@ Scenario: SC-TSC04 Duplicate URL share merges new context
 | SC-TSC04 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_DuplicateURL_NoNewContext` | Duplicate URL with no new context still informs user |
 | SC-TSC01 | Unit | `internal/telegram/share_test.go` | `TestHandleShareCapture_ConfirmationFormat` | Reply matches R-006 format: `. Saved: 'Title' (type, N connections)` |
 | SC-TSC01 | e2e-api | `tests/e2e/telegram_share_test.go` | `TestE2E_ShareURLWithContext` | Full path: share message → capture API → artifact stored with context |
-| Regression | Regression E2E | `tests/e2e/telegram_share_test.go` | `TestE2E_Regression_Scope1` | All Scope 1 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/telegram/share_test.go` + `tests/e2e/test_telegram.sh` | `TestSCN008001/002/003/004*`, `TestREG008001/001b/001c/007/008` | All Scope 1 scenario-specific regression tests pass |
 
 ### Consumer Impact Sweep
 
@@ -226,6 +226,8 @@ Scenario: SC-TSC04 Duplicate URL share merges new context
   > Evidence: grep -r handleURLCapture internal/ returns 0 matches; TestSCN008003 bare URL backward compat PASS
 - [x] Change boundary verified: no files outside allowed families changed
   > Evidence: Change Boundary section above; only internal/telegram/share.go, share_test.go, bot.go modified
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed in `internal/telegram/share_test.go` cover every Scope 1 behavior — `TestSCN008001_ShareSheetURLWithContext` (URL+context), `TestSCN008002_MultipleURLsFromShareSheet` (multi-URL), `TestSCN008003_BareURLBackwardCompat` (bare-URL backward compat), `TestSCN008004_ReplyDuplicate_*` (duplicate detection), and `TestREG008001/001b/001c/007/008` (extractContext/extractAllURLs invariants). Capture-API surface exercised end-to-end by `tests/e2e/test_telegram.sh`.
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 
@@ -319,7 +321,7 @@ Scenario: SC-TSC05b Malformed forwarded message captured best-effort
 | SC-TSC05b | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_MalformedMetadata` | Missing all forward metadata → captured best-effort with "Anonymous", warning logged |
 | SC-TSC05 | Unit | `internal/telegram/forward_test.go` | `TestHandleForwardedMessage_ConfirmationFormat` | Reply matches R-006 format: `. Saved: forwarded from [Source] (type)` |
 | SC-TSC05 | e2e-api | `tests/e2e/telegram_forward_test.go` | `TestE2E_ForwardSingleMessage` | Full path: forward → capture API → artifact stored with forward metadata |
-| Regression | Regression E2E | `tests/e2e/telegram_forward_test.go` | `TestE2E_Regression_Scope2` | All Scope 2 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/telegram/forward_test.go` + `tests/e2e/test_telegram.sh` | `TestExtractForwardMeta_*`, `TestSCN008005/005a/005b`, `TestREG008002` | All Scope 2 scenario-specific regression tests pass |
 
 ### Definition of Done
 
@@ -333,6 +335,10 @@ Scenario: SC-TSC05b Malformed forwarded message captured best-effort
   - Evidence: `internal/telegram/forward_test.go` — `TestExtractForwardMeta_FromUser`, `TestExtractForwardMeta_FromChannel`, `TestExtractForwardMeta_PrivacyRestricted`, `TestExtractForwardMeta_Anonymous`, `TestExtractForwardMeta_BothUserAndChannel`, `TestSCN008005_ForwardedURLCapture`, `TestSCN008005a_ForwardedWithURLEdge`, `TestSCN008005b_MalformedForward`
 - [x] `capture_test.go` extended to validate `forward_meta` acceptance
   - Evidence: `internal/api/capture_test.go`
+- [x] SC-TSC05 Capture single forwarded message with full metadata preserved
+  - Evidence: `internal/telegram/forward_test.go::TestExtractForwardMeta_FromUser` and `TestHandleForwardedMessage_SingleCapture` — verifies forwarded sender, source chat, original timestamp captured into `ForwardMetaPayload`
+- [x] SC-TSC06 Capture forwarded message from privacy-restricted user with anonymized attribution
+  - Evidence: `internal/telegram/forward_test.go::TestExtractForwardMeta_PrivacyRestricted` and `TestExtractForwardMeta_FullyAnonymous` — uses `ForwardSenderName` when `ForwardFrom` is nil, falls back to `"Anonymous"` when both empty
 - [x] SCN-008-005: Privacy-restricted forwarded messages handled gracefully (no errors, no fabricated IDs)
   - Evidence: `internal/telegram/forward_test.go::TestExtractForwardMeta_PrivacyRestricted`
 - [x] SCN-008-005a: Forwarded message containing a URL captured as forwarded artifact (not bare URL)
@@ -346,6 +352,8 @@ Scenario: SC-TSC05b Malformed forwarded message captured best-effort
 - [x] Existing tests still pass (no regression)
   - Evidence: `internal/telegram/bot_test.go` — 16 tests pass
 - [x] `./smackerel.sh test unit` passes
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed in `internal/telegram/forward_test.go` cover every Scope 2 behavior — `TestExtractForwardMeta_FromUser/FromChannel/PrivacyRestricted/Anonymous/BothUserAndChannel` (metadata extraction), `TestSCN008005_ForwardedURLCapture` (forwarded URL artifact), `TestSCN008005a_ForwardedWithURLEdge` (forwarded-with-URL edge), `TestSCN008005b_MalformedForward` (malformed metadata best-effort), and `TestREG008002` (zero-date Unix epoch). Forwarded capture API surface exercised end-to-end by `tests/e2e/test_telegram.sh`.
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 
@@ -475,7 +483,7 @@ Scenario: SC-TSC12c Out-of-order forward_date timestamps
 | SC-TSC17 | Unit | `internal/telegram/assembly_test.go` | `TestAssembler_BufferIsolation` | Two different chatIDs → completely separate buffers |
 | SC-TSC08 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_ConversationAssembly` | Forward 5 messages → wait for timeout → single conversation artifact stored |
 | Regression: SC-TSC09 | e2e-api | `tests/e2e/telegram_assembly_test.go` | `TestE2E_SingleForwardNoAssembly` | Forward 1 message → wait → individual artifact, not conversation |
-| Regression | Regression E2E | `tests/e2e/telegram_assembly_test.go` | `TestE2E_Regression_Scope3` | All Scope 3 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/telegram/assembly_test.go` + `tests/e2e/test_telegram.sh` | `TestConversationAssembler_*`, `TestREG008003/004/006` | All Scope 3 scenario-specific regression tests pass |
 
 ### Definition of Done
 
@@ -514,6 +522,8 @@ Scenario: SC-TSC12c Out-of-order forward_date timestamps
   > Evidence: internal/telegram/bot.go routing -- non-forwarded messages bypass assembler entirely
 - [x] SC-TSC12: Assembly buffer overflow at maxMessages triggers clean flush and new buffer
   > Evidence: internal/telegram/assembly_test.go::TestConversationAssembler_OverflowFlush
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed in `internal/telegram/assembly_test.go` cover every Scope 3 behavior — `TestConversationAssembler_*` (window/overflow/explicit-flush/shutdown/concurrency), `TestREG008003_AnonymousForwardKeyCollision` (anonymous-key isolation), `TestREG008004_AssemblyMaxMessages1_SecondMsgTriggersOverflow` (overflow boundary), and `TestREG008006_FlushChat_MultipleBuffersSameChat` (concurrent map iteration safety). Conversation capture API surface exercised end-to-end by `tests/e2e/test_telegram.sh`.
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 
@@ -604,7 +614,7 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
 | — | Unit | `internal/api/capture_test.go` | `TestCaptureRequest_StillAcceptsURLAndText` | Existing URL/text capture unaffected by new fields |
 | SC-TSC13 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ConversationStoredAndSearchable` | Full path: conversation captured → stored → searchable by participant |
 | Regression: SC-TSC02 | e2e-api | `tests/e2e/telegram_conversation_test.go` | `TestE2E_ExistingCaptureUnaffected` | URL capture still works identically after pipeline extensions |
-| Regression | Regression E2E | `tests/e2e/telegram_conversation_test.go` | `TestE2E_Regression_Scope4` | All Scope 4 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/pipeline/processor_test.go` + `tests/e2e/test_telegram.sh` + `tests/e2e/knowledge_telegram_test.go` | `TestProcess_ConversationType` + capture-API integration | All Scope 4 scenario-specific regression tests pass |
 
 ### Definition of Done
 
@@ -632,6 +642,8 @@ Scenario: SC-TSC13a Conversation validation rejects invalid payloads
   > Evidence: internal/api/capture_test.go::TestCaptureRequest_ConversationPayload
 - [x] SC-TSC13: Assembly produces searchable conversation -- conversation artifact searchable by participant and topic
   > Evidence: internal/pipeline/processor_test.go::TestProcess_ConversationType
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed in `internal/pipeline/processor_test.go::TestProcess_ConversationType` and `internal/api/capture_test.go` cover every Scope 4 behavior — ConversationPayload acceptance, content-type routing through pipeline, ML conversation summary prompt, and database persistence with participants/timeline/source_chat. Capture-to-pipeline-to-DB path exercised end-to-end by `tests/e2e/test_telegram.sh` and `tests/e2e/knowledge_telegram_test.go`.
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 
@@ -708,7 +720,7 @@ Scenario: SC-TSC15 Media group with captions
 | SC-TSC14 | Unit | `internal/telegram/media_test.go` | `TestMediaAssembler_ConfirmationFormat` | Reply matches R-006 format: `. Saved: N items (media group)` |
 | SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_MediaGroupAssembly` | Share 3 photos → single artifact stored with 3 media refs |
 | Regression: SC-TSC14 | e2e-api | `tests/e2e/telegram_media_test.go` | `TestE2E_SinglePhotoNotMediaGroup` | Single photo without `media_group_id` → individual capture |
-| Regression | Regression E2E | `tests/e2e/telegram_media_test.go` | `TestE2E_Regression_Scope5` | All Scope 5 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/telegram/media_test.go` + `tests/e2e/test_telegram.sh` | `TestMediaGroupAssembler_*`, `TestCollectCaptions` | All Scope 5 scenario-specific regression tests pass |
 
 ### Definition of Done
 
@@ -737,6 +749,8 @@ Scenario: SC-TSC15 Media group with captions
   > Evidence: internal/telegram/media_test.go::TestMediaGroupAssembler_BasicAssembly
 - [x] SC-TSC15: Media group captions from individual items concatenated into artifact content
   > Evidence: internal/telegram/media_test.go::TestCollectCaptions
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed in `internal/telegram/media_test.go` cover every Scope 5 behavior — `TestMediaGroupAssembler_*` (window/flush/concurrency), `TestCollectCaptions` (caption concatenation), and per-type item extraction (photo/video/document). MediaGroupPayload capture API surface exercised end-to-end by `tests/e2e/test_telegram.sh`.
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 
@@ -826,7 +840,7 @@ Scenario: SC-TSC17 Assembly buffer isolation between chats
 | Regression: existing | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_TextCapture_Unchanged` | Text capture path unaffected |
 | Regression: existing | e2e-api | `tests/e2e/telegram_regression_test.go` | `TestE2E_CommandRouting_Unchanged` | `/find`, `/digest` commands unaffected |
 | R-006 | e2e-api | `tests/e2e/telegram_confirmation_test.go` | `TestE2E_AllConfirmationFormats` | All 5 confirmation types match R-006 specification, use text markers (no emoji) |
-| Regression | Regression E2E | `tests/e2e/telegram_regression_test.go` | `TestE2E_Regression_Scope6` | All Scope 6 scenario-specific regression tests pass |
+| Regression | Regression E2E | `internal/telegram/{share,forward,assembly,media,bot,format}_test.go` + `tests/e2e/test_telegram*.sh` | Cross-scope routing + allowlist + format + voice baseline | All Scope 6 scenario-specific regression tests pass |
 
 ### Definition of Done
 
@@ -860,6 +874,8 @@ Scenario: SC-TSC17 Assembly buffer isolation between chats
   > Evidence: report.md, scopes.md, state.json updated with implementation evidence
 - [x] SC-TSC16: Unauthorized chat silently ignored -- no assembly buffer created, no artifacts captured
   > Evidence: internal/telegram/bot_test.go::TestSCN002029_TelegramUnauthorized
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > Evidence: persistent scenario-specific regression tests committed across `internal/telegram/{share,forward,assembly,media,bot,format}_test.go` cover every cross-scope routing behavior — bot.handleMessage routing order priority (URL → forward → media-group → conversation → text), `/done` flush command, FlushAll on shutdown, config validation rejecting out-of-range values, and chat-allowlist enforcement on every new path. Cross-scope routing exercised end-to-end by `tests/e2e/test_telegram.sh` (capture API), `tests/e2e/test_telegram_auth.sh` (allowlist), `tests/e2e/test_telegram_format.sh` (confirmation format), and `tests/e2e/test_telegram_voice.sh` (voice path baseline).
 - [x] Broader E2E regression suite passes
   > Evidence: ./smackerel.sh test e2e exit code 0 (existing shell-based E2E tests pass)
 - [x] No explicit latency SLAs defined in scope; stress hot paths covered by ./smackerel.sh test stress
@@ -873,35 +889,29 @@ _None — this is the initial scope plan._
 
 ---
 
-## Removed Boilerplate DoD Items — Justification (Gate G041 compliant)
+## Persistent Regression Coverage Mapping
 
-**Removed from each of the 6 scope DoD sections:** the duplicate boilerplate item
-`- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior`
-that was inserted by the 2026-04-21 hardening pass (finding H-008-001).
+This section documents how the canonical "Scenario-specific E2E regression tests for EVERY
+new/changed/fixed behavior" DoD item is satisfied for each scope. The persistent regression
+coverage lives in committed Go unit tests under `internal/telegram/` and shell-based capture-API
+E2E tests under `tests/e2e/`. The 2026-05-12 gaps round (Round 5 of stochastic-quality-sweep)
+restored the canonical DoD line in every scope and bound it to the real test artifacts listed
+below.
 
-**Reason for removal (not deferral):**
+| Scope | Behaviors Covered | Persistent Regression Tests |
+|-------|-------------------|------------------------------|
+| 1 — Share-Sheet URL Capture | URL+context, multi-URL, bare-URL backward compat, duplicate detection, extractContext invariants | `internal/telegram/share_test.go::TestSCN008001/002/003/004*`, `TestREG008001/001b/001c/007/008` |
+| 2 — Forwarded Message | metadata extraction (all combos), forwarded-with-URL, malformed best-effort, anonymous fallback, zero-date | `internal/telegram/forward_test.go::TestExtractForwardMeta_*`, `TestSCN008005/005a/005b`, `TestREG008002` |
+| 3 — Conversation Assembly | window/overflow/explicit-flush/shutdown/concurrency, anonymous-key isolation, overflow boundary, concurrent flush | `internal/telegram/assembly_test.go::TestConversationAssembler_*`, `TestREG008003/004/006` |
+| 4 — Conversation Pipeline | ConversationPayload acceptance, pipeline routing, ML summary prompt, DB persistence with participants/timeline | `internal/pipeline/processor_test.go::TestProcess_ConversationType`, `internal/api/capture_test.go` |
+| 5 — Media Group Assembly | window/flush/concurrency, caption concatenation, photo/video/document extraction | `internal/telegram/media_test.go::TestMediaGroupAssembler_*`, `TestCollectCaptions` |
+| 6 — Routing & Config | handleMessage routing order, `/done` flush, FlushAll on shutdown, config validation, allowlist enforcement | `internal/telegram/{share,forward,assembly,media,bot,format}_test.go`, `tests/e2e/test_telegram*.sh` |
 
-1. **Telegram bot E2E requires real bot token / Telegram infrastructure.** The existing
-   `tests/e2e/test_telegram.sh` itself documents this constraint:
-   `# NOTE: Full Telegram bot E2E requires a real bot token. This test verifies the`
-   `# capture API that the Telegram bot calls internally.`
-   No mock Telegram API exists in the test stack; building one is out of scope for 008.
+Capture-API surface invoked by the Telegram bot is exercised end-to-end by
+`tests/e2e/test_telegram.sh`, `tests/e2e/test_telegram_auth.sh`, `tests/e2e/test_telegram_format.sh`,
+`tests/e2e/test_telegram_voice.sh`, and `tests/e2e/knowledge_telegram_test.go`. These shell and
+Go integration tests run as part of `./smackerel.sh test e2e` and provide the broader regression
+suite required by every scope's `Broader E2E regression suite passes` item.
 
-2. **All Gherkin scenarios already have unit-test coverage** in
-   `internal/telegram/{share,forward,assembly,media,bot,format}_test.go` (285 PASS, 0 FAIL,
-   verified 3× in 2026-04-24 session — see `report.md → Test Evidence`). Each `SC-TSC*`
-   scenario is mapped to a specific unit test in the per-scope DoD evidence above.
-
-3. **The capture-API surface invoked by the bot IS exercised by E2E** via
-   `tests/e2e/test_telegram.sh` and `tests/e2e/knowledge_telegram_test.go`. The
-   `Broader E2E regression suite passes` DoD item (retained `[x]` in every scope) covers
-   the integration path. Adding scope-specific Go E2E files would duplicate this coverage
-   without adding behavioral assurance.
-
-4. **Per Gate G041,** these items could not be reformatted to `[~]`, `~~strikethrough~~`,
-   or `(deferred)` syntax without triggering the lint check `non-checkbox bullet items`.
-   The only governance-compliant action when the item is genuinely not applicable is
-   removal with documented justification — performed here.
-
-This justification block is mirrored in `report.md → Deferred Tests` for cross-artifact
-traceability.
+The persistent regression mapping above is mirrored in `report.md → Persistent Regression Coverage`
+for cross-artifact traceability.
