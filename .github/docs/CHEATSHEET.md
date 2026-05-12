@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 65 Gates · 34 Workflow Modes · 26 Phases**
+> **37 Agents · 65 Gates · 35 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -191,6 +191,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `retro-quality-sweep` | liquor-then-sweep | Retro finds hotspots, then the deterministic quality crew cleans them up |
 | `retro-to-review` | liquor-then-look | Data-driven review — retro finds risks, then code-review diagnoses them |
 | `release-planning-to-doc` | plans-within-plans | Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination |
+| `idea-to-release-completion` | rocket-appliance | Full lifecycle: idea -> release packet bootstrap-or-refresh -> spec/design/scopes -> implement/test/validate/audit/chaos -> final release packet refresh that flips the capability to `delivered`. Closes the loop the standard `product-to-delivery` mode used to leave open. Owned by Sonny "Iron Lung" Smith for the release phases. |
 
 **Optional execution tags:** `grillMode`, `tdd` (inner-loop red→green only), `backlogExport` (off|tasks|issues), `specReview` (off|once-before-implement), `socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit` (off|scope|dod), `maxScopeMinutes`, `maxDodMinutes`, `microFixes`, `crossModelReview` (off|codex|terminal)
 

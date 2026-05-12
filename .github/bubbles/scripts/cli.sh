@@ -1194,6 +1194,8 @@ Commands:
   lint-budget                   Measure instruction density in agent prompts
   sunnyvale <alias>             Resolve a Sunnyvale alias
   aliases                       List all Sunnyvale aliases
+  trajectory [options]          Print human-readable trajectory report from
+                                session, lessons, and per-spec state
   help                          Show this help message
 HELPEOF
 }
@@ -1470,6 +1472,10 @@ cmd_session() {
   fi
 
   echo
+}
+
+cmd_trajectory() {
+  bash "$SCRIPT_DIR/trajectory-inspector.sh" --repo-root "$REPO_ROOT" "$@"
 }
 
 cmd_lint() {
@@ -2236,6 +2242,7 @@ cmd_hooks() {
       echo "Built-in hooks available:"
       echo "  artifact-lint       pre-commit   Fast artifact lint on staged spec files"
       echo "  agnosticity-lint    pre-commit   Portable Bubbles drift check on staged files"
+      echo "  pii-scan            pre-commit   PII & secret scan via gitleaks + machine-local tokens"
       echo "  guard-changed-done-specs  pre-push     Current-policy guard on changed done specs"
       echo "  agnosticity-full    pre-push     Full portable Bubbles drift check"
       echo "  reality-scan        pre-push     Implementation reality scan on changed specs"
@@ -2261,7 +2268,8 @@ cmd_hooks() {
 {
   "pre-commit": [
     {"name": "artifact-lint", "type": "builtin"},
-    {"name": "agnosticity-lint", "type": "builtin"}
+    {"name": "agnosticity-lint", "type": "builtin"},
+    {"name": "pii-scan", "type": "builtin"}
   ],
   "pre-push": [
     {"name": "agnosticity-full", "type": "builtin"},
@@ -2356,6 +2364,10 @@ set -uo pipefail
 failed=0
 echo "🫧 Bubbles pre-commit: checking portable surfaces for drift..."
 bash bubbles/scripts/agnosticity-lint.sh --staged || failed=1
+if [[ -f bubbles/scripts/pii-scan.sh ]]; then
+  echo "🫧 Bubbles pre-commit: PII & secret scan on staged content..."
+  bash bubbles/scripts/pii-scan.sh || failed=1
+fi
 if git diff --cached --name-only | grep -q '^specs/'; then
   echo "🫧 Bubbles pre-commit: artifact lint on staged specs..."
   for spec_dir in $(git diff --cached --name-only | grep '^specs/' | sed 's|/[^/]*$||' | sort -u); do
@@ -3094,6 +3106,7 @@ main() {
     lint-budget)        cmd_lint_budget "$@" ;;
     sunnyvale)          cmd_sunnyvale "$@" ;;
     aliases)            cmd_aliases "$@" ;;
+    trajectory)         cmd_trajectory "$@" ;;
     help|-h|--help)     cmd_help ;;
     *)                  die "Unknown command: $command\nRun 'bubbles help' for usage." ;;
   esac

@@ -30,8 +30,19 @@ assert_file() {
 }
 
 mode_inventory() {
+  # Only collect 2-indent keys that live under the top-level `modes:` section.
+  # Top-level keys match `^[a-zA-Z]` (column 0). Any new top-level key that is
+  # NOT `modes:` flips us out of the modes section so unrelated 2-indent keys
+  # under `outcomeStates:`, `modeTemplates:`, `phases:`, etc. are excluded.
+  # The `description:`-as-next-line heuristic additionally filters out config
+  # blocks like `phaseRelevance:` that live inside `modes:` but are not modes.
   awk '
-    /^  [a-z][a-z0-9-]*:$/ {
+    BEGIN { in_modes = 0 }
+    /^[a-zA-Z][a-zA-Z0-9_-]*:/ {
+      in_modes = ($0 ~ /^modes:/) ? 1 : 0
+      next
+    }
+    in_modes && /^  [a-z][a-z0-9-]*:$/ {
       mode = $1
       sub(/:$/, "", mode)
       if ((getline next_line) > 0) {

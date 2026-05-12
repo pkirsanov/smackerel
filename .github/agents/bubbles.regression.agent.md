@@ -205,6 +205,59 @@ Conflicts detected:
    - Tests changed from strict to permissive (e.g., `toEqual` → `toBeDefined`)
    - New `skip`/`ignore`/`pending` markers added to existing tests
 
+### Step 5: Deployment Regression Detection (Build-Once Deploy-Many — Gate G079)
+
+**Goal:** Detect Build-Once Deploy-Many regressions before they reach a target host.
+
+When a project ships images via the Build-Once Deploy-Many pattern, regressions can hide inside deployment artifacts. Scan for these patterns when changes touch `.github/workflows/build.yml`, `deploy/<target>/`, `config/<project>.yaml`, `scripts/deploy/promote.sh`, `scripts/deploy/rollback.sh`, or any image-pinning file.
+
+#### Regression Scenarios To Detect
+
+| Scenario | What Regressed | Detection |
+|----------|---------------|-----------|
+| **Digest drift** | A deployment manifest pointer that previously named `sha256:<digest-A>` now names `sha256:<digest-B>` without a corresponding `previousManifest` entry | `git diff` on `deploy/<target>/manifest.yaml` — every digest change MUST also write the prior digest into `previousManifest.image.digest` |
+| **Mutable tag reintroduction** | An adapter or manifest that previously pinned by digest now pins by `:latest`/branch tag | `grep -nE 'image:.*:latest\|:main\|:staging-latest\|:prod-latest' deploy/` MUST return zero |
+| **Bundle hash drift** | The same source SHA produces a different bundle hash across two CI runs | Re-run `./<project>.sh config generate --env <env> --bundle --source-sha <SHA>` twice; `sha256sum` MUST match |
+| **Bundle determinism break** | New code introduces non-deterministic ordering, embedded timestamps, or random nonces in generated bundle files | Diff two regenerated bundles; non-zero diff = regression |
+| **Cosign verification removed** | Adapter `apply.sh` previously called `cosign verify` but no longer does | `git log -p deploy/<target>/apply.sh` — any commit that removed a cosign call without explicit replacement is a regression |
+| **SBOM/SLSA attestation skipped** | CI workflow previously published SBOM + SLSA attestations but no longer does | `git diff .github/workflows/build.yml` — any removal of `cosign attest` or `syft` step is a regression |
+| **Trivy gate bypassed** | CI previously failed on CRITICAL/HIGH CVEs but the gate is now disabled or set to ignore | `grep -nE 'continue-on-error.*trivy\|--exit-code 0\|--severity LOW' .github/workflows/build.yml` |
+| **No-SSH guard removed** | CI previously had a `no-ssh-guard` job that greps for SSH/apply patterns; that job was removed | `grep -n 'no-ssh-guard\|grep.*ssh' .github/workflows/build.yml` MUST find an active job |
+| **Apply-side rebuild reintroduced** | `deploy/<target>/apply.sh` now contains a build command (`docker build`, `cargo build`, `npm run build`) | `grep -nE 'docker build\|cargo build\|npm run build\|go build' deploy/<target>/apply.sh` MUST return zero |
+| **Apply-side fallback reintroduced** | `apply.sh` now has a fallback path that builds locally on registry pull failure | `grep -nE '\|\| docker build\|on.*fail.*build\|fallback' deploy/<target>/apply.sh` MUST return zero |
+| **Rollback now rebuilds** | `rollback.sh` previously was pointer-swap only; now it invokes a build command | `grep -nE 'docker build\|cargo build' deploy/<target>/rollback.sh` MUST return zero |
+| **Manifest collision** | Two targets that previously owned separate `deploy/<target>/manifest.yaml` files now share a root `deploy/manifest.yaml` | `find deploy -name 'manifest.yaml'` — count MUST equal one per target, never a single shared root |
+| **Adapter idempotency break** | Re-running `bootstrap.sh` or `apply.sh` with same inputs no longer produces zero diffs | Run the action twice in CI; the second run MUST exit 0 with no host changes (compare host singleton state before/after the second run) |
+| **Host-singleton owner change** | Caddy drop-in / daemon.json deep-merge / ufw tagged rule pattern was replaced with a destructive overwrite | `git diff` on bootstrap script for any singleton — any non-merge write to a shared resource is a regression |
+| **Adapter teardown leaks** | `teardown.sh` no longer removes everything bootstrap created (orphans systemd units, Caddy entries, ufw rules) | After teardown, `systemctl list-units '<project>-<target>-*'`, `caddy validate`, `ufw status numbered \| grep '<project>'` MUST all show no remnants |
+| **Promote script bypasses build manifest** | `scripts/deploy/promote.sh` previously read `build-manifest-<sourceSha>.yaml` to resolve digests; now hardcodes a digest or pulls `:latest` | `grep -n 'build-manifest\|--build-manifest' scripts/deploy/promote.sh` MUST find usage |
+
+#### Detection Workflow
+
+When invoked on a target spec or PR:
+1. Identify if any deployment surface changed: `git diff --name-only` filtered to `deploy/`, `.github/workflows/build.yml`, `config/<project>.yaml`, `scripts/deploy/`.
+2. If yes, run each detection grep above against the changed files.
+3. Cross-reference against the prior commit on `main` (or the merge base) — any regression pattern that existed before but is now broken is a P0 finding.
+4. Bundle determinism check: regenerate the bundle for each affected env on the current SHA, then on the prior commit; both must be byte-identical to themselves and the hash must be stable.
+5. Idempotency check: where CI exposes a dry-run mode for `bootstrap.sh`/`apply.sh`, simulate two consecutive runs and require zero diffs on the second.
+
+#### Severity Classification
+
+| Pattern | Severity |
+|---------|----------|
+| Cosign verification removed, mutable tag reintroduced, apply-side rebuild reintroduced, no-SSH guard removed | **P0 — block merge** |
+| SBOM/SLSA skipped, Trivy gate bypassed, manifest collision, rollback rebuilds, apply-side fallback | **P0 — block merge** |
+| Bundle hash drift, bundle determinism break, adapter idempotency break, host-singleton owner change | **P1 — block release, allow merge with mitigation issue** |
+| Adapter teardown leaks, promote script bypasses build manifest | **P1 — block release, allow merge with mitigation issue** |
+| Digest drift without `previousManifest` update | **P1 — block release** |
+
+#### Cross-References
+
+- Skill: `bubbles-deployment-target-adapter` — Build-Once Deploy-Many Pattern, Idempotency Checklist, CI ↔ Adapter Handshake
+- Skill: `bubbles-config-sst` — Config Bundle Artifact section
+- State gate **G079 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
+- Adversarial regression policy — already enforced by `bubbles-test-integrity` skill; deployment regressions follow the same "would the prior bug be reintroduced?" test
+
 ---
 
 ## Critical Requirements Compliance (Top Priority)
@@ -261,7 +314,11 @@ Execute Step 3 from the Regression Detection Mandate above. If no design changes
 
 Execute Step 4 from the Regression Detection Mandate above.
 
-### Phase 5: Verdict + Remediation Routing
+### Phase 5: Deployment Regression Scan
+
+Execute Step 5 from the Regression Detection Mandate above. Skip if no deployment surface (`deploy/`, `.github/workflows/build.yml`, `config/<project>.yaml`, `scripts/deploy/`) changed in the diff under review.
+
+### Phase 6: Verdict + Remediation Routing
 
 Compile all findings and issue a verdict. Route fixes to appropriate specialists.
 
@@ -352,6 +409,7 @@ Before reporting verdict, this agent MUST run Tier 1 universal checks from [vali
 | R5 | Regression coverage added | Every regression found has a corresponding regression test |
 | R6 | No silent-pass patterns | Required E2E files pass anti-false-positive scans, including redirect/login bailout checks |
 | R7 | Adversarial bugfix coverage | Bug-fix regressions include at least one adversarial case instead of only tautological fixtures |
+| R8 | Deployment regression scan executed | When deployment surface (`deploy/`, `.github/workflows/build.yml`, `config/<project>.yaml`, `scripts/deploy/`) changed, all Step 5 detection greps were run with raw output evidence; bundle determinism + idempotency checks completed when applicable; severity-classified findings routed per Gate G079 |
 
 If any required check fails, do not report a regression verdict. Fix the issue first.
 

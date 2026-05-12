@@ -65,6 +65,33 @@ docker compose up
 
 ---
 
+## 5. Stateless Shell Sessions
+
+Agent terminal invocations are independent shell sessions. State does NOT persist across calls:
+- Environment variables set in one invocation are GONE in the next
+- Working directory resets to repo root for each invocation
+- Background jobs from a previous invocation cannot be referenced
+- Shell history is not shared
+
+Implication: every terminal command MUST be self-contained. Use absolute paths or `cd && ...` chains. Pass values as CLI arguments, not via env vars set in a prior call. If a script needs persistent state, write to a file (using IDE file tools, NOT shell redirection) and read it on the next invocation.
+
+Exception: within a SINGLE persistent terminal session (the same `run_in_terminal` invocation with `mode=async` or interactive), the shell is stateful. But across DIFFERENT calls, treat each as fresh.
+
+---
+
+## 6. Empty Output Sentinel Convention
+
+When a script/tool produces NO output to stdout, this MUST be unambiguous:
+- **Exit 0 + empty stdout** → "no findings, all clean" (success case for a lint/grep)
+- **Exit non-zero + empty stdout** → ERROR (likely crash or timeout — investigate)
+- **Exit 0 + at least one line of output** → either info ("scanned N files") or findings (depending on tool semantics)
+
+Scripts that intentionally print nothing on success SHOULD print a sentinel line `[<tool-name>] OK — zero findings`. RECOMMENDED for every new lint/guard.
+
+Evidence collection: ALWAYS pair empty output with explicit `$?` capture. Example: `bash <tool>; echo "exit=$?"`. Never record "no output" as the only evidence.
+
+---
+
 ## Summary Table
 
 | Category | FORBIDDEN | REQUIRED |

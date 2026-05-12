@@ -321,6 +321,25 @@ read-direction → reconcile-capabilities → produce-release-packet → update-
 - `mode: extend` — Add new plan to existing phase's `docs/plans/<phase>/`
 - `mode: cross-product` — Coordinated plan across two repos with `paired_repo: <path>`
 
+### <img src="../../icons/sonny-ledger.svg" width="20"> idea-to-release-completion
+
+```
+analyze → releases (bootstrap-or-refresh) → select → bootstrap → implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → chaos → releases (refresh) → finalize
+```
+
+**Use when:** A user has an idea and wants the FULL lifecycle: a release packet entry created up front, the spec / design / scopes built and shipped, audit clean, AND the release packet refreshed at the end so `features.md` and the `docs/INVESTOR_OVERVIEW.md` Phase Overview correctly reflect the now-shipped capability. This is the only mode that closes the loop — the standard `product-to-delivery` mode stops at "audit clean" and leaves the release packet stale.
+
+**Why two `releases` phases:** The first run (position 1) is in `bootstrap-or-refresh` mode — if the phase release packet does not exist yet, Sonny bootstraps it; if it does, Sonny refreshes it to add the new idea as a planned capability. The second run (position -2, just before `finalize`) is in `refresh` mode — Sonny reconciles the now-shipped capability into the packet, updates `features.md`, and updates the Phase Overview. Both runs are owned by `bubbles.releases` ("Sonny Iron Lung Smith").
+
+**Required prerequisites:**
+- Product Direction Surfaces trio MUST exist (`docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`). If missing, the mode refuses to start — user must run `/bubbles.setup` first.
+- `phase: <phase-id>` parameter is required so Sonny knows which release packet to bootstrap or refresh.
+- `idea: <plain English>` parameter is recommended so the analyze phase has explicit input.
+
+**Anti-fabrication guarantees:** `forbidFabricatedDeliveredClaim: true` prevents the second `releases` run from flipping the capability to `delivered` if `bubbles.audit` did not certify the work as done. The carry-forward table, inline vision restatement, and no-fabricated-principles/capabilities/competitors constraints all apply.
+
+**Recipe:** [`docs/recipes/idea-to-release.md`](../recipes/idea-to-release.md)
+
 ### <img src="../../icons/randy-cheeseburger.svg" width="20"> validate-only
 
 ```
@@ -485,6 +504,7 @@ analyze → ux
 | `retro-to-harden` | Retro bug magnets → harden targets | Data-driven hardening |
 | `retro-to-review` | Retro risks → code review | Data-driven review |
 | `release-planning-to-doc` | Read direction → reconcile capabilities → produce 8-doc release packet → update Phase Overview → docs sync | Phase release planning, carry-forward, cross-product coordination |
+| `idea-to-release-completion` | analyze → release packet bootstrap-or-refresh → bootstrap → implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → chaos → release packet refresh → finalize | End-to-end: idea to shipped capability AND an updated release packet that reflects what shipped |
 | `stochastic-quality-sweep` | Random quality | Maintenance |
 | `test-to-doc` | Test → docs | Test/doc focus |
 | `validate-to-doc` | Validate → audit → docs | Validation + docs |

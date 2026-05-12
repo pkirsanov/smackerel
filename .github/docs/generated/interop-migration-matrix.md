@@ -1,6 +1,6 @@
 # Interop Migration Matrix
 
-Capability context: 4 shipped, 1 partial, 2 proposed.
+Capability context: 11 shipped, 1 partial, 0 proposed.
 
 This page is generated from `bubbles/capability-ledger.yaml` and `bubbles/interop-registry.yaml` so evaluators can compare supported apply, review-only intake, and proposal-only boundaries without relying on hand-maintained competitor prose.
 

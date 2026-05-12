@@ -7,6 +7,9 @@ handoffs:
   - label: Validate System
     agent: bubbles.validate
     prompt: Run validation after docs and implementation are aligned.
+  - label: Refresh Release Packet
+    agent: bubbles.releases
+    prompt: When the docs being published are referenced in a phase release packet (docs/releases/<phase>/features.md), recommend a release packet refresh so the capability status reflects the just-published documentation. Skip silently when no packet references this spec.
 ---
 
 ## Agent Identity

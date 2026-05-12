@@ -167,11 +167,19 @@ significant_words() {
 
   normalized="$(normalize_text "$text")"
   for word in $normalized; do
-    if [[ ${#word} -lt 4 ]]; then
+    # G068 false-positive fix (v3.8.0): lowered min word length 4 -> 3 so
+    # 3-letter domain words (API, DoD, SLA, CSV, CSP, JWT, SDK, CLI, CRD,
+    # SBOM) are counted as significant instead of stripped as noise.
+    if [[ ${#word} -lt 3 ]]; then
       continue
     fi
+    # G068 false-positive fix (v3.8.0): trimmed exclusion list to TRUE stop
+    # words only. Removed domain-relevant words (user, users, system, should,
+    # must, have, has, will, given, after, before, where, their, there,
+    # about, only) that are frequently the distinguishing words in Gherkin
+    # scenario titles.
     case "$word" in
-      given|when|then|with|from|into|onto|that|this|those|these|user|users|system|should|must|have|has|been|were|will|after|before|while|where|their|there|about|only|each)
+      the|are|was|were|been|being|for|from|with|and|but|not|then|else|when|while|that|this|these|those|its|into|onto|out|all|any|each|every|some|more|less|also)
         continue
         ;;
     esac
@@ -198,8 +206,7 @@ extract_test_rows() {
   printf '%s\n' "$section" \
     | grep -E '^\|' \
     | grep -Ev '^\|[-:[:space:]|]+\|$' \
-    | grep -Evi '^\|[[:space:]]*test type[[:space:]]*\|' \
-    || true
+    | grep -Evi '^\|[[:space:]]*test type[[:space:]]*\|'
 }
 
 extract_dod_items() {
@@ -237,7 +244,15 @@ scenario_matches_dod() {
   fi
 
   # Fuzzy word matching — extract significant words from the scenario
-  # and check how many appear in the DoD item
+  # and check how many appear in the DoD item.
+  #
+  # G068 false-positive fix (v3.8.0): percentage-based threshold with floor
+  # (see stg_scenario_matches_dod in state-transition-guard.sh for the same
+  # logic — both implementations MUST stay aligned).
+  # - Very small scenarios (<3 significant words): require ALL words to
+  #   match so a hard >=3 floor doesn't penalize them.
+  # - Larger scenarios: require BOTH (overlap >= ceil(50% * word_count))
+  #   AND (overlap >= 3) — percentage threshold with absolute floor.
   dod_norm="$(normalize_text "$dod_item")"
   words="$(significant_words "$scenario")"
   if [[ -z "$words" ]]; then
@@ -253,22 +268,18 @@ scenario_matches_dod() {
     fi
   done <<< "$words"
 
-  if [[ "$word_count" -le 1 ]]; then
-    threshold=1
-  elif [[ "$word_count" -le 3 ]]; then
-    threshold=2
-  else
-    threshold=3
+  if [[ "$word_count" -lt 3 ]]; then
+    [[ "$score" -eq "$word_count" ]]
+    return
   fi
 
-  [[ "$score" -ge "$threshold" ]]
+  threshold=$(( (word_count + 1) / 2 ))
+  [[ "$score" -ge 3 && "$score" -ge "$threshold" ]]
 }
 
 extract_scenarios() {
   local scope_path="$1"
-  grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" \
-    | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//' \
-    || true
+  grep -E '^[[:space:]]*Scenario( Outline)?:' "$scope_path" | sed -E 's/^[[:space:]]*Scenario( Outline)?:[[:space:]]*//'
 }
 
 extract_trace_ids() {

@@ -118,6 +118,28 @@ If owner direction is missing or contradictory, this agent surfaces the gap in `
 
 ---
 
+## When This Agent Is Invoked
+
+Inbound triggers (in addition to direct user invocation):
+
+| Trigger | Source | Mode |
+|---------|--------|------|
+| User explicitly asks to author/refresh a release packet | direct user / `bubbles.super` | bootstrap / refresh / extend / cross-product |
+| `bubbles.iterate` Priority 4.5 detects release packet drift | `bubbles.iterate` (auto) | refresh |
+| `bubbles.implement` finishes a spec referenced by `docs/releases/<phase>/features.md` | `bubbles.implement` handoff | refresh |
+| `bubbles.audit` certifies a spec referenced by a release packet as `done` | `bubbles.audit` handoff | refresh |
+| `bubbles.docs` publishes managed docs for a spec referenced by a release packet | `bubbles.docs` handoff | refresh |
+| `bubbles.devops` finishes deployment automation referenced by a release packet | `bubbles.devops` handoff | refresh |
+| `idea-to-release-completion` workflow mode (positions 1 and -2) | `bubbles.workflow` orchestrator | bootstrap (first) / refresh (final) |
+
+When invoked via handoff (auto), this agent runs in **refresh** mode by default and is bounded to the single phase referenced by the triggering spec. It does NOT expand scope to neighboring phases without explicit user permission.
+
+When invoked from `idea-to-release-completion`:
+- **First releases phase (position 1)** — runs in `bootstrap-or-refresh` mode: bootstrap if no packet exists for the phase, refresh otherwise. Declares the new capability as `planned`.
+- **Final releases phase (position -2)** — runs in `refresh` mode. Flips the just-delivered capability to `delivered` (or leaves it `in-progress` if audit did not certify the spec as done — see `forbidFabricatedDeliveredClaim` constraint).
+
+---
+
 ## Execution Flow
 
 ### Phase 0: Resolve Repo + Phase + Trio
@@ -220,6 +242,8 @@ For each doc in scope (`docs:` arg restricts; default all 8), write or refresh:
 - Rollout sequence (if multi-stage)
 - Rollback strategy
 - Health check + observability requirements
+
+**Cross-agent handoff — bubbles.devops:** When `deployment.md` documents signed-image promotion, per-target adapters, cosign verification, config bundle artifacts, manifest pointers, or any Build-Once Deploy-Many invariant (Gate G079), `bubbles.releases` MUST cite the canonical surface (`bubbles-deployment-target-adapter` skill + state-gates.md G079) and MUST recommend `runSubagent(bubbles.devops): focus: deployment-target` for technical-accuracy validation before the packet is published. Sonny writes the narrative; Tommy Bean owns the technical claim.
 
 #### `marketing.md`
 - Audience segments + messaging per segment
