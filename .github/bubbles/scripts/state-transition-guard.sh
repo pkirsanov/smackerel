@@ -2622,11 +2622,19 @@ stg_significant_words() {
 
   normalized="$(stg_normalize_text "$text")"
   for word in $normalized; do
-    if [[ ${#word} -lt 4 ]]; then
+    # G068 false-positive fix (v3.8.0): lowered min word length 4 -> 3 so
+    # 3-letter domain words (API, DoD, SLA, CSV, CSP, JWT, SDK, CLI, CRD,
+    # SBOM) are counted as significant instead of stripped as noise.
+    if [[ ${#word} -lt 3 ]]; then
       continue
     fi
+    # G068 false-positive fix (v3.8.0): trimmed exclusion list to TRUE stop
+    # words only. Removed domain-relevant words (user, users, system, should,
+    # must, have, has, will, given, after, before, where, their, there,
+    # about, only) that are frequently the distinguishing words in Gherkin
+    # scenario titles.
     case "$word" in
-      given|when|then|with|from|into|onto|that|this|those|these|user|users|system|should|must|have|has|been|were|will|after|before|while|where|their|there|about|only|each)
+      the|are|was|were|been|being|for|from|with|and|but|not|then|else|when|while|that|this|these|those|its|into|onto|out|all|any|each|every|some|more|less|also)
         continue
         ;;
     esac
@@ -2642,7 +2650,7 @@ stg_scenario_matches_dod() {
   local word
   local score=0
   local word_count=0
-  local threshold=0
+  local half_threshold=0
 
   dod_norm="$(stg_normalize_text "$dod_item")"
   words="$(stg_significant_words "$scenario")"
@@ -2659,15 +2667,18 @@ stg_scenario_matches_dod() {
     fi
   done <<< "$words"
 
-  if [[ "$word_count" -le 1 ]]; then
-    threshold=1
-  elif [[ "$word_count" -le 3 ]]; then
-    threshold=2
-  else
-    threshold=3
+  # G068 false-positive fix (v3.8.0): percentage-based threshold with floor.
+  # - Very small scenarios (<3 significant words): require ALL words to match
+  #   so a hard >=3 floor doesn't penalize them.
+  # - Larger scenarios: require BOTH (overlap >= ceil(50% * word_count))
+  #   AND (overlap >= 3) — percentage threshold with absolute floor.
+  if [[ "$word_count" -lt 3 ]]; then
+    [[ "$score" -eq "$word_count" ]]
+    return
   fi
 
-  [[ "$score" -ge "$threshold" ]]
+  half_threshold=$(( (word_count + 1) / 2 ))
+  [[ "$score" -ge 3 && "$score" -ge "$half_threshold" ]]
 }
 
 dod_fidelity_failures=0

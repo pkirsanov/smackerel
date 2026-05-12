@@ -307,6 +307,75 @@ bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
 - Decode error logged but swallowed (log + continue) → **MEDIUM** (data loss still possible)
 - Decode error propagated as Result::Err or exception → **PASS**
 
+#### 3.7 Build-Once Deploy-Many Supply-Chain Security (Gate G079)
+
+When a project ships container images to multiple environments via the
+Build-Once Deploy-Many pattern (state-gate **G079 — Build-Once Deploy-Many
+Integrity** in [state-gates.md](bubbles_shared/state-gates.md)), the
+supply-chain attack surface expands sharply. CI builds and signs once;
+operators (or separately credentialed automation) deploy by digest. Any
+break in that chain — a missing signature check, a mutable tag, a
+plaintext-secret-laden bundle, an adapter that silently rebuilds — opens
+a path for tampering, substitution, or credential leakage.
+
+This subsection applies whenever the project under review has a
+`deploy/<target>/` adapter directory, a `build-manifest-*.yaml` artifact
+in CI, or any `cosign verify` / `cosign verify-attestation` call. See the
+**bubbles-deployment-target-adapter** skill (Build-Once Deploy-Many
+Pattern, Verification Steps) and the **bubbles-config-sst** skill (Config
+Bundle Artifact section) for the framework rationale.
+
+##### Required Verifications
+
+| Check | What | How |
+|-------|------|-----|
+| **Cosign signature gating** | Adapter `apply.sh` MUST verify the image signature against the Sigstore/Rekor transparency log BEFORE `docker run` | `grep -n 'cosign verify' deploy/<target>/apply.sh` — must find a verify call with `--certificate-identity-regexp` and `--certificate-oidc-issuer` BEFORE the container start command |
+| **SBOM attestation present** | Every published image MUST have a SPDX/CycloneDX SBOM attestation | `cosign verify-attestation --type spdxjson <registry>/<project>/<service>@sha256:<digest>` |
+| **SLSA build provenance** | Every published image MUST have a SLSA provenance attestation proving CI built it from the declared source SHA | `cosign verify-attestation --type slsaprovenance <registry>/<project>/<service>@sha256:<digest>` |
+| **Trivy CRITICAL+HIGH gate** | CI MUST fail the build if Trivy reports CRITICAL or HIGH CVEs in the image | `grep -nE 'trivy.*CRITICAL\|trivy.*HIGH\|--severity' .github/workflows/build.yml` |
+| **No-SSH guard** | CI workflow MUST NOT contain `ssh`, `scp`, `rsync`, or `apply.sh` invocations (build/deploy fusion) | `grep -nE 'ssh\|scp\|rsync\|apply\.sh' .github/workflows/build.yml` — should return nothing under job steps; if a `no-ssh-guard` job exists it MUST run on the workflow source itself |
+| **Mutable tag prohibition** | Deployment manifest MUST pin by `sha256:<digest>` only | `grep -nE 'image:.*:latest\|image:.*:main\|image:.*:staging-latest\|image:.*:prod-latest' deploy/<target>/manifest.yaml` — should return nothing |
+| **Bundle hash verification** | Adapter `apply.sh` MUST verify the config bundle hash before mounting | `grep -n 'sha256sum.*bundle\|EXPECTED_HASH' deploy/<target>/apply.sh` |
+| **Plaintext secrets in bundle** | Config bundles MUST NOT contain plaintext secrets (use injected env vars or sealed secrets at the host) | Decompress a sample bundle and `grep -rE 'password\|secret\|api_key\|token' --include='*.env'` against the contents — any literal value (not `${VAR}` placeholder) is a finding |
+| **Bundle determinism** | Two CI runs on the same source SHA MUST produce byte-identical bundles | Re-run config generation twice on a fixed SHA and `sha256sum` both bundles — hashes MUST match |
+| **Two-target manifest collision** | Two deployment targets sharing one host MUST own separate `deploy/<target>/manifest.yaml` files | `find deploy -name 'manifest.yaml'` — there must be one per target, never a shared root manifest |
+| **Adapter-side rebuild prohibition** | `deploy/<target>/apply.sh` MUST NOT invoke `docker build`, `cargo build`, `npm run build`, or any local build command | `grep -nE 'docker build\|cargo build\|npm run build\|go build' deploy/<target>/apply.sh` — must return nothing |
+| **Adapter-side fallback prohibition** | `apply.sh` MUST NOT silently fall back to local build on registry pull failure | `grep -nE 'fall.?back\|on.fail.*build\|\\\|\\\| docker build' deploy/<target>/apply.sh` — must return nothing |
+
+##### Threat Scenarios To Model
+
+When reviewing a deployment surface for a Build-Once Deploy-Many project, model these threats:
+
+1. **Compromised registry → tampered image** — without cosign verification, a compromised registry can serve a malicious image at the same tag. Mitigation: cosign verify with `--certificate-identity-regexp` pinning to the expected CI identity (e.g., GitHub Actions OIDC issuer).
+2. **Bundle substitution at deploy time** — without bundle hash verification, an attacker who controls the bundle storage can swap configuration. Mitigation: hash check against the value in the build manifest.
+3. **CI/deploy fusion → production credentials in CI** — if CI performs deploy, CI needs production credentials. Mitigation: CI stops at registry push; operator (or separately credentialed automation) runs apply.
+4. **Mutable tag pivot** — attacker promotes an old vulnerable image to `:latest`. Mitigation: pin by digest only; deny mutable tags in adapter pre-flight.
+5. **Adapter-side rebuild bypass** — if `apply.sh` falls back to local build on pull failure, attacker can DoS the registry to force a build with attacker-controlled local state. Mitigation: fail-fast, no local build path in apply.
+6. **Plaintext secret in bundle → secret in registry** — bundle artifacts are stored in container registries with broad read access. Mitigation: bundles contain only `${VAR}` placeholders; secrets are injected at the host (sealed secrets, env vars, vault).
+7. **Bundle non-determinism → bundle hash drift** — non-deterministic generation makes verification impossible. Mitigation: deterministic ordering, fixed timestamps, no embedded random nonces.
+
+##### Forbidden Patterns / Red Flags
+
+The following indicate a broken Build-Once Deploy-Many supply chain and MUST be classified as findings:
+
+- Adapter `apply.sh` lacking `cosign verify` before `docker run` → **CRITICAL (A08)**
+- Deployment manifest with mutable image tag instead of `sha256:<digest>` → **HIGH (A06 + A08)**
+- CI workflow performing `ssh` / `scp` / `rsync` / `apply.sh` (build/deploy fusion) → **HIGH (A05)**
+- Adapter falling back to local build on registry pull failure → **HIGH (A08)**
+- Plaintext secret values inside a config bundle artifact → **CRITICAL (A02)**
+- Missing `--certificate-identity-regexp` or `--certificate-oidc-issuer` flags on `cosign verify` (allows any-signer attack) → **HIGH (A08)**
+- Trivy gate disabled or set to ignore CRITICAL/HIGH → **HIGH (A06)**
+- Adapter `apply.sh` invoking `docker build`, `cargo build`, `npm run build`, or `go build` → **HIGH (A08)**
+- Two deployment targets sharing a single root `manifest.yaml` (no per-target ownership) → **MEDIUM (A04 + A05)**
+- Bundle generation that produces different hashes for the same source SHA → **HIGH (A08)** (verification becomes impossible)
+
+##### Supply-Chain Finding Classification
+
+- Missing cosign verification, plaintext secrets in bundle → **CRITICAL**
+- Mutable tags, missing attestations, adapter rebuild fallback, build/deploy fusion → **HIGH**
+- Single-manifest collision across targets, missing identity-regexp pin on otherwise-present cosign call → **MEDIUM**
+- All checks pass with evidence → **PASS**
+
 ### Phase 4: OWASP Top 10 Mapping
 
 Map all findings to OWASP Top 10 (2021) categories:
@@ -314,13 +383,13 @@ Map all findings to OWASP Top 10 (2021) categories:
 | Category | ID | What to Check |
 |----------|-----|--------------|
 | Broken Access Control | A01 | Auth bypass, privilege escalation, **IDOR (body identity extraction — Gate G047)**, CORS misconfig |
-| Cryptographic Failures | A02 | Weak hashing, plaintext secrets, insecure TLS config |
+| Cryptographic Failures | A02 | Weak hashing, plaintext secrets, insecure TLS config, **plaintext secrets inside config bundle artifacts (Gate G079)** |
 | Injection | A03 | SQL, OS command, LDAP, XSS, template injection |
 | Insecure Design | A04 | Missing threat model, inadequate trust boundaries |
-| Security Misconfiguration | A05 | Default credentials, verbose errors, unnecessary features |
-| Vulnerable Components | A06 | Known CVEs in dependencies, outdated libraries |
+| Security Misconfiguration | A05 | Default credentials, verbose errors, unnecessary features, **CI/deploy fusion (Gate G079)**, single-manifest collision across deployment targets |
+| Vulnerable Components | A06 | Known CVEs in dependencies, outdated libraries, **Trivy CRITICAL/HIGH gate disabled (Gate G079)**, **mutable image tags in deployment manifest (Gate G079)** |
 | Auth Failures | A07 | Weak passwords, session fixation, credential stuffing |
-| Data Integrity Failures | A08 | Insecure deserialization, unsigned updates, **silent decode failures (Gate G048)** |
+| Data Integrity Failures | A08 | Insecure deserialization, unsigned updates, **silent decode failures (Gate G048)**, **missing cosign verification on container images (Gate G079)**, **missing SBOM/SLSA attestations (Gate G079)**, **adapter-side rebuild fallback (Gate G079)**, **non-deterministic config bundles (Gate G079)** |
 | Logging Failures | A09 | Missing security event logs, log injection, **silently discarded decode errors (Gate G048)** |
 | SSRF | A10 | Server-side request forgery via user-controlled URLs |
 

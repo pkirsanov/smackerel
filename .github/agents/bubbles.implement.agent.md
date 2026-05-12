@@ -13,6 +13,9 @@ handoffs:
   - label: Final Audit
     agent: bubbles.audit
     prompt: Perform the final compliance audit for the completed scope.
+  - label: Refresh Release Packet
+    agent: bubbles.releases
+    prompt: When the delivered spec is referenced in a phase release packet (docs/releases/<phase>/features.md), refresh the packet so the capability flips from `planned`/`in-progress` to `delivered` with the spec evidence link. This handoff is conditional — only invoke when a release packet references this spec. Skip silently if no packet references it.
 ---
 
 ## Agent Identity
@@ -47,11 +50,11 @@ handoffs:
 
 **⚠️ Anti-Fabrication (NON-NEGOTIABLE):** Enforce [evidence-rules.md](bubbles_shared/evidence-rules.md) and [state-gates.md](bubbles_shared/state-gates.md).
 
-**⚠️ No-Defaults / No-Stubs:** See [critical-requirements.md](bubbles_shared/critical-requirements.md). Reality scan (G028+G028) enforces mechanically.
+**⚠️ No-Defaults / No-Stubs:** See [critical-requirements.md](bubbles_shared/critical-requirements.md). Reality scan (G028+G029) enforces mechanically.
 
 **⚠️ Honesty Incentive (ABSOLUTE):** A fabricated completion is infinitely worse than an honest gap. When evidence is ambiguous or a command output does not directly prove a DoD claim, leave the item `[ ]` with an **Uncertainty Declaration** (see [evidence-rules.md](bubbles_shared/evidence-rules.md)). Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, or `not-run`). See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive and [evidence-rules.md](bubbles_shared/evidence-rules.md) → Evidence Provenance Taxonomy.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G028, G036, G038, G040). State transition guard MUST pass before any state.json write. Per-agent validation (Tier 2 checks I1-I5) MUST pass before reporting results. **G040 (zero deferral language) is critical — NEVER write deferral language into scope artifacts and then mark the spec done.**
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G036, G038, G040). State transition guard MUST pass before any state.json write. Per-agent validation (Tier 2 checks I1-I5) MUST pass before reporting results. **G040 (zero deferral language) is critical — NEVER write deferral language into scope artifacts and then mark the spec done.**
 
 **Artifact Ownership (this agent creates/modifies ONLY these):**
 - Product code and test code — implementation and test files

@@ -39,22 +39,14 @@ A scope cannot be `Done` (or `Done with Concerns`) when any of these are true:
 
 ### Done with Concerns
 
-A scope may be marked `Done with Concerns` instead of `Done` when ALL DoD items pass with evidence AND ALL gates pass, but the agent identified concrete risks worth recording. This status:
+A scope may be marked `Done with Concerns` instead of `Done` when ALL DoD items pass with evidence AND ALL gates pass, but the agent identified concrete non-blocking follow-ups worth recording. This status:
 
 - Does NOT bypass any gate — every gate must still pass identically to plain `Done`
 - Does NOT count as incomplete — `Done with Concerns` is a `Done`-equivalent for all gate checks (G024, G027)
-- MUST include a `concerns` list with severity, description, and originating agent
-- Is subject to `bubbles.validate` review — validate may downgrade to `In Progress` if a concern is actually a gate failure in disguise
+- MUST include a `concerns` list following the schema below (id, severity, summary, followUpOwner, followUpAction)
+- Is subject to `bubbles.validate` review — validate may downgrade to `In Progress` or `Blocked` if a concern is actually a gate failure in disguise
 
-Concerns are observational, not deferral. Examples of valid concerns:
-- "Stress test p99 is 48ms, just under 50ms SLA threshold — monitor in production"
-- "Third-party API latency was high during testing — may affect real-world perf"
-- "Code coverage is 100% but one edge case relies on external timing"
-
-Examples of INVALID concerns (these are deferrals, not concerns):
-- "Integration test skipped due to flaky infrastructure" → fix the test
-- "Admin UI not implemented yet" → scope is In Progress
-- "Will address error handling in follow-up" → blocked by deferral language gate (G040)
+See the canonical [Outcome State: done_with_concerns](#outcome-state-done_with_concerns) section below for the full contract, the RESULT-ENVELOPE schema, severity rules, anti-fabrication tie-in, and worked examples.
 
 ## Spec Completion Rules
 
@@ -196,23 +188,155 @@ Only `bubbles.validate` may certify completion state. Other agents submit execut
 - Other agents may write `execution.*` fields (current phase, active agent, execution claims)
 - The top-level `status` field mirrors `certification.status` and must not contradict it
 
-### Concerns Schema
+### Concerns Schema (state.json certification)
 
 ```json
 "certification": {
   "status": "done_with_concerns",
   "concerns": [
     {
+      "id": "CONCERN-1",
       "scope": "02-api-handlers",
-      "description": "Stress test p99 is 48ms, just under 50ms SLA. Monitor in production.",
+      "summary": "Stress test p99 is 48ms, just under 50ms SLA. Monitor in production.",
       "severity": "low",
+      "followUpOwner": "human",
+      "followUpAction": "next-sprint-todo",
       "agent": "bubbles.test"
     }
   ]
 }
 ```
 
-Severity levels: `low` (informational), `medium` (warrants monitoring), `high` (close to gate failure threshold).
+Severity levels: `low` (informational, accept-and-note), `medium` (warrants tracked follow-up). `high` is **NOT** a permitted severity for `done_with_concerns` — anything that would warrant `high` is a real gate failure and MUST use `blocked` instead. The full contract (RESULT-ENVELOPE schema, severity rules, anti-fabrication tie-in, worked examples) lives in the [Outcome State: done_with_concerns](#outcome-state-done_with_concerns) section below.
+
+## Outcome State: done_with_concerns
+
+### What it is
+
+`done_with_concerns` is a first-class workflow outcome state — a third terminal alternative to `done` and `blocked` for any workflow mode whose `statusCeiling` is `done`. It exists because real-world delivery sometimes finishes cleanly *for the work in scope* while surfacing a genuinely-out-of-scope follow-up worth recording. Without it, agents are forced to choose between fabricating success (`done`) or stalling (`blocked`), and both are dishonest. The state is defined in [`bubbles/workflows.yaml#outcome-states`](../../bubbles/workflows.yaml) and certified via `state.json` `certification.status` by `bubbles.validate` only.
+
+### When to use it (vs `done` vs `blocked`)
+
+| Situation | Outcome |
+|----------|--------|
+| All DoD items checked with real evidence, all gates pass, zero follow-ups | `done` |
+| All DoD items checked with real evidence, all gates pass, AND ≥1 non-blocking follow-up worth tracking | `done_with_concerns` |
+| Any required gate fails, any DoD item lacks evidence, any HIGH-severity risk discovered, scope contains deferral language | `blocked` |
+| Required work was deferred to "later" or "a follow-up ticket" instead of done now | `blocked` (deferral, not a concern — see G040) |
+
+### RESULT-ENVELOPE concerns array
+
+When an agent emits `outcome: done_with_concerns`, the RESULT-ENVELOPE MUST include a non-empty `concerns: []` array. Each entry MUST follow this shape:
+
+```yaml
+concerns:
+  - id: CONCERN-1                        # short stable id, scoped to this envelope
+    severity: low | medium               # ONLY low or medium permitted (see severity rules)
+    summary: >                            # 1-2 sentences describing the concern
+      Stress test p99 is 48ms, just under the 50ms SLA threshold. Recommend
+      production monitoring before adding more load.
+    followUpOwner: <agent-name> | human  # who should pick this up
+    followUpAction: new-spec | issue-doc | next-sprint-todo | accept
+```
+
+Field rules:
+
+- **id** — short stable identifier (e.g., `CONCERN-1`, `CONCERN-2`); MUST be unique within the envelope.
+- **severity** — only `low` or `medium` are permitted. See severity rules below.
+- **summary** — 1-2 sentences. Concrete and observable. Not "might be slow" — "p99 was 48ms during stress run".
+- **followUpOwner** — a concrete owner: a Bubbles agent name (e.g., `bubbles.test`, `bubbles.devops`, `bubbles.implement`) or `human`. NEVER `everyone` or `tbd`.
+- **followUpAction** — exactly one of:
+  - `new-spec` — a new feature spec MUST be opened to address this
+  - `issue-doc` — a tracked issue document MUST be created in `docs/issues/`
+  - `next-sprint-todo` — record in the next sprint backlog (no immediate action)
+  - `accept` — acknowledged, no follow-up planned (use sparingly; HIGH-trust acceptance only)
+
+### Severity rules (NON-NEGOTIABLE)
+
+| Severity | Meaning | Permitted with `done_with_concerns`? |
+|---------|--------|--------------------------------------|
+| `low` | Informational; observed during this work; no production impact expected | ✅ yes |
+| `medium` | Warrants tracked follow-up but does not block shipping the current scope | ✅ yes |
+| `high` | Close to or actually a gate failure; ships unsafe behavior or violates a required gate | ⛔ NO — use `blocked` instead |
+
+If you find yourself wanting to write `severity: high`, the outcome is `blocked`, not `done_with_concerns`. The state exists to make honest tradeoffs auditable, not to launder gate failures.
+
+### Anti-fabrication tie-in (NON-NEGOTIABLE)
+
+`done_with_concerns` is **NOT** a deferral mechanism. Agents MUST NOT use it to dodge required work. Concerns are for genuinely-out-of-scope follow-ups discovered during the in-scope work — not for deferred-required-work that the agent simply didn't finish.
+
+The following patterns are FORBIDDEN and constitute fabrication (Gate G021 + G040):
+
+| Forbidden pattern | Why it's wrong | Correct outcome |
+|------------------|---------------|----------------|
+| "Skipped one DoD item, recording as concern" | A DoD item without evidence = `[ ]`, scope stays In Progress | `blocked` or finish the item |
+| "E2E test was flaky, accepting as low concern" | Flaky test is a real gate failure | `blocked` until test is stable |
+| "Will address error handling in follow-up — concern severity medium" | Deferral language; G040 violation | `blocked` until handled now |
+| "Found unrelated bug, marking as medium concern with followUpAction: accept" | Unrelated bug needs `new-spec` or `issue-doc`, not silent acceptance | `done_with_concerns` with the right `followUpAction` |
+| "Code coverage is 87%, recording as low concern" | If 100% is required by the spec, this is a gate failure | `blocked` until coverage ≥ required |
+
+The validate agent (`bubbles.validate`) MUST inspect every `done_with_concerns` envelope and downgrade to `blocked` if any concern is actually a gate failure in disguise.
+
+### Worked examples
+
+**Example 1 — discovered an unrelated flake test outside scope**
+```yaml
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
+    severity: medium
+    summary: >
+      During regression run, observed pre-existing flake in
+      `services/foo/test_unrelated_thing.rs::test_timeout_path` (unrelated to
+      this scope). Failed once across 5 runs.
+    followUpOwner: bubbles.bug
+    followUpAction: new-spec
+```
+
+**Example 2 — lint warning unrelated to changed files**
+```yaml
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
+    severity: low
+    summary: >
+      `cargo clippy` flagged 1 warning in `services/legacy/old_module.rs`
+      (untouched by this scope). Recommend cleanup in next hygiene sweep.
+    followUpOwner: human
+    followUpAction: issue-doc
+```
+
+**Example 3 — feature shipped, audit found follow-up worth tracking**
+```yaml
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
+    severity: medium
+    summary: >
+      Audit confirmed all DoD items met. Spotted that the new endpoint
+      logs request body without redacting potential PII fields. Not in
+      this scope's threat model but worth tightening.
+    followUpOwner: bubbles.security
+    followUpAction: new-spec
+```
+
+**Example 4 — third-party latency observed during stress test**
+```yaml
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
+    severity: low
+    summary: >
+      Stress run observed external upstream API p95 latency of 380ms
+      (outside our SLA, our service met internal targets). May affect
+      real-world end-to-end perception.
+    followUpOwner: bubbles.devops
+    followUpAction: next-sprint-todo
+```
+
+### Cross-reference
+
+The schema, severity rules, and follow-up-action vocabulary above MUST stay in sync with [`bubbles/workflows.yaml#outcome-states`](../../bubbles/workflows.yaml). When updating one, update the other in the same change.
 
 ## Related Modules
 

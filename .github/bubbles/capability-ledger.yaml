@@ -107,14 +107,20 @@ capabilities:
 
   session-aware-runtime-coordination:
     label: Session-aware runtime coordination
-    state: proposed
-    summary: Runtime lease coordination is defined as a framework proposal, but not yet shipped into the control plane.
-    ownerSurface: docs/issues/session-aware-runtime-coordination.md
-    releaseIntroduced: proposed
+    state: shipped
+    summary: Runtime lease coordination is shipped — `runtime-leases.sh` provides acquire/attach/release/heartbeat/doctor/reclaim-stale operations with compatibility fingerprints, share modes (shared-compatible / exclusive / disposable / persistent-protected), and stale-lease takeover semantics; wired into `bubbles/scripts/cli.sh` (`runtime` subcommand, `status`, `doctor`) and `framework-validate.sh` (selftest).
+    ownerSurface: bubbles/scripts/runtime-leases.sh
+    releaseIntroduced: v3.8.0
     docsRefs:
     - docs/issues/session-aware-runtime-coordination.md
     - docs/generated/issue-status.md
+    - docs/guides/CONTROL_PLANE_DESIGN.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
     evidenceRefs:
+    - bubbles/scripts/runtime-leases.sh
+    - bubbles/scripts/runtime-lease-selftest.sh
+    - bubbles/scripts/cli.sh
+    - bubbles/scripts/framework-validate.sh
     - docs/issues/session-aware-runtime-coordination.md
     competitorTags:
     - claude-code
@@ -128,14 +134,16 @@ capabilities:
 
   dod-gherkin-fidelity-threshold:
     label: G068 DoD-Gherkin fidelity threshold tuning
-    state: proposed
-    summary: The current G068 overlap heuristic has a documented false-positive gap and remains an open framework issue.
-    ownerSurface: docs/issues/G068-word-overlap-threshold.md
-    releaseIntroduced: proposed
+    state: shipped
+    summary: G068 overlap heuristic now uses 3-char min word length, a trimmed true-stop-word exclusion list, and a percentage threshold (>=50%) with a >=3 absolute floor — false-positive matching for legitimate DoD items is resolved.
+    ownerSurface: bubbles/scripts/state-transition-guard.sh
+    releaseIntroduced: v3.8.0
     docsRefs:
     - docs/issues/G068-word-overlap-threshold.md
     - docs/generated/issue-status.md
     evidenceRefs:
+    - bubbles/scripts/state-transition-guard.sh
+    - bubbles/scripts/traceability-guard.sh
     - docs/issues/G068-word-overlap-threshold.md
     competitorTags:
     - cline
@@ -145,3 +153,108 @@ capabilities:
     freshnessTargets:
     - docs/issues/G068-word-overlap-threshold.md
     - docs/generated/issue-status.md
+
+  orchestrator-context-compaction:
+    label: Orchestrator context compaction
+    state: shipped
+    summary: Orchestrator agents (workflow, sprint, goal, iterate) compact accumulated subagent RESULT-ENVELOPEs into structured ledger entries before context pressure causes truncation or fabrication. Helper script (`bubbles/scripts/context-compactor.sh`) plus per-agent integration documented in `agents/bubbles_shared/operating-baseline.md`. Modeled after SWE-agent style in-loop runtime context compaction.
+    ownerSurface: bubbles/scripts/context-compactor.sh
+    releaseIntroduced: v3.8.0
+    docsRefs:
+    - agents/bubbles_shared/operating-baseline.md
+    - agents/bubbles.workflow.agent.md
+    - agents/bubbles.sprint.agent.md
+    - agents/bubbles.goal.agent.md
+    - agents/bubbles.iterate.agent.md
+    evidenceRefs:
+    - bubbles/scripts/context-compactor.sh
+    - bubbles/scripts/context-compactor-selftest.sh
+    - agents/bubbles_shared/operating-baseline.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - agents/bubbles_shared/operating-baseline.md
+    - docs/generated/competitive-capabilities.md
+
+  per-turn-state-snapshot:
+    label: Per-turn state snapshot
+    state: shipped
+    summary: Orchestrator agents emit a turn-start and turn-end snapshot to `.specify/memory/bubbles.session.json` under a `turnSnapshots[]` array on every multi-turn cycle. Each record carries `turnNumber`, `timestamp`, `phase`, `scopeId`, `mode`, `note`, and `agent`. Enables deterministic resume-after-crash and a per-turn audit trail for compliance. Helper script `bubbles/scripts/state-snapshot.sh` plus pattern documented in `agents/bubbles_shared/operating-baseline.md`. Modeled after SWE-agent trajectory persistence.
+    ownerSurface: bubbles/scripts/state-snapshot.sh
+    releaseIntroduced: v3.8.0
+    docsRefs:
+    - agents/bubbles_shared/operating-baseline.md
+    evidenceRefs:
+    - bubbles/scripts/state-snapshot.sh
+    - bubbles/scripts/state-snapshot-selftest.sh
+    - agents/bubbles_shared/operating-baseline.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - agents/bubbles_shared/operating-baseline.md
+    - docs/generated/competitive-capabilities.md
+
+  linter-on-edit-gate:
+    label: Linter-on-edit gate
+    state: shipped
+    summary: Project-pluggable linter trampoline. Downstream projects register language-specific linters via `.specify/memory/bubbles.config.json` under `editLintGate.linters`; the framework supplies the gate dispatcher (`bubbles/scripts/edit-lint-gate.sh`). Default state is no-op (opt-in only) to preserve framework agnosticity — the framework MUST NOT bundle default linters. Pattern documented in `agents/bubbles_shared/operating-baseline.md`. Modeled after SWE-agent linter integration.
+    ownerSurface: bubbles/scripts/edit-lint-gate.sh
+    releaseIntroduced: v3.8.0
+    docsRefs:
+    - agents/bubbles_shared/operating-baseline.md
+    evidenceRefs:
+    - bubbles/scripts/edit-lint-gate.sh
+    - bubbles/scripts/edit-lint-gate-selftest.sh
+    - agents/bubbles_shared/operating-baseline.md
+    competitorTags:
+    - claude-code
+    - roo-code
+    freshnessTargets:
+    - agents/bubbles_shared/operating-baseline.md
+    - docs/generated/competitive-capabilities.md
+
+  done-with-concerns-outcome-state:
+    label: done_with_concerns outcome state
+    state: shipped
+    summary: >
+      Workflow modes now support `done_with_concerns` as a third terminal outcome alongside `done` and `blocked`. Permits agents to ship work while honestly recording non-blocking follow-ups in a structured `concerns: []` array (each entry with `id`, `severity: low|medium`, `summary`, `followUpOwner`, `followUpAction`). Removes the false dichotomy that previously forced agents to choose between fabricated success and stall. Defined in `bubbles/workflows.yaml#outcome-states` with the authoritative contract in `agents/bubbles_shared/completion-governance.md#outcome-state-done_with_concerns`. Wired into workflow, validate, audit, harden, and gaps agents.
+    ownerSurface: bubbles/workflows.yaml
+    releaseIntroduced: v3.8.0
+    docsRefs:
+    - agents/bubbles_shared/completion-governance.md
+    - agents/bubbles.workflow.agent.md
+    - agents/bubbles.validate.agent.md
+    - agents/bubbles.audit.agent.md
+    - agents/bubbles.harden.agent.md
+    - agents/bubbles.gaps.agent.md
+    evidenceRefs:
+    - bubbles/workflows.yaml
+    - agents/bubbles_shared/completion-governance.md
+    competitorTags:
+    - swe-agent
+    freshnessTargets:
+    - agents/bubbles_shared/completion-governance.md
+    - bubbles/workflows.yaml
+
+  mode-template-inheritance:
+    label: Mode template inheritance
+    state: shipped
+    summary: >
+      Workflow modes in `bubbles/workflows.yaml` may declare `inherits: [<template-name>...]` to share common scalars, maps, and arrays via reusable bundles defined under a new top-level `modeTemplates:` block. The resolver (`bubbles/scripts/mode-resolver.sh`) deep-merges maps, concatenates and dedups arrays (`requiredGates` is sorted alphabetically as a canonical gate set), uses scalar latest-wins, rejects inherits cycles, and rejects unknown template references. v3.9 ships 4 templates (`base-delivery`, `delivery-quality-constraints`, `delivery-gate-baseline`, `finding-owned-remediation`) with 5 modes refactored (`full-delivery`, `bugfix-fastlane`, `harden-to-doc`, `gaps-to-doc`, `iterate`); 32 other modes intentionally stay verbose pending follow-up refactor. Resolver `--validate` and a 6-case selftest are wired into `framework-validate`. Hard dependency on yq (mikefarah, v4+).
+    ownerSurface: bubbles/workflows.yaml
+    releaseIntroduced: v3.9.0
+    docsRefs:
+    - bubbles/workflows.yaml
+    - agents/bubbles_shared/workflow-mode-resolution.md
+    evidenceRefs:
+    - bubbles/scripts/mode-resolver.sh
+    - bubbles/scripts/mode-resolver-selftest.sh
+    - bubbles/workflows.yaml
+    competitorTags:
+    - yaml-inheritance
+    - dry-config
+    freshnessTargets:
+    - agents/bubbles_shared/workflow-mode-resolution.md
+    - bubbles/workflows.yaml

@@ -61,11 +61,14 @@ echo "Scenario: generated docs or issue status drift must fail loudly before rel
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null
 pass "Fresh fixture generated from the capability ledger"
 
-rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" 'State summary: 4 shipped, 1 partial, 2 proposed.' 'State summary: 2 shipped, 1 partial, 4 proposed.'
+rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" 'State summary: 11 shipped, 1 partial, 0 proposed.' 'State summary: 2 shipped, 1 partial, 4 proposed.'
 expect_check_failure "Generated capability guide drift is detected"
 
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null
-rewrite_once "$TMP_ROOT/docs/issues/G068-word-overlap-threshold.md" '**Ledger Status:** proposed' '**Ledger Status:** shipped'
+# G068 issue MD now ships as 'Ledger Status: shipped' (resolved in v3.8.0).
+# Flip the drift fixture direction: rewrite 'shipped' -> 'proposed' so it no
+# longer matches the regenerated YAML state and the freshness check fires.
+rewrite_once "$TMP_ROOT/docs/issues/G068-word-overlap-threshold.md" '**Ledger Status:** shipped' '**Ledger Status:** proposed'
 expect_check_failure "Issue status block drift is detected"
 
 if [[ "$failures" -gt 0 ]]; then

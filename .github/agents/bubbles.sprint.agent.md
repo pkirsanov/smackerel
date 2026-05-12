@@ -102,6 +102,10 @@ phase_4_wrap_up:
 - If a queued item would be better handled by another Bubbles mode or specialist, dispatch it through `runSubagent` inside the current sprint. Do not stop and ask the user to switch agents, modes, or prompts.
 - If this sprint runtime lacks `runSubagent` despite the `agent` tool being declared, return a `blocked` RESULT-ENVELOPE naming the missing `agent` tool and the exact owner invocation that would have run. If only a nested `bubbles.goal` child lacks `runSubagent`, parent-expand the resolved goal workflow from this sprint runtime and record `executionModel: parent-expanded-goal` in the sprint ledger.
 
+## Context Compaction
+
+When accumulating goal-level `RESULT-ENVELOPE`s across the queued-goal sprint loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 goal results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked goals or `nextRequiredOwner` routing.
+
 ## Time Management
 
 ```yaml
@@ -144,7 +148,7 @@ file: .specify/memory/bubbles.session.json
 resume: "resume: true" → read session JSON, continue from in-progress goal — never re-execute completed goals
 ```
 
-## Anti-Fabrication (Gate G042)
+## Anti-Fabrication (Gate G021)
 
 ```yaml
 detection: count runSubagent(bubbles.goal) calls plus parent-expanded-goal ledger entries vs goals attempted

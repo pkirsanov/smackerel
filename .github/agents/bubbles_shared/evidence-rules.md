@@ -10,6 +10,8 @@ Purpose: canonical source for execution evidence and anti-fabrication requiremen
 - Fabricated, copied, or template evidence blocks invalidate completion claims.
 - Evidence sections must not contain unresolved continuation or follow-up language (`Next Steps`, `Recommended routing`, `Re-run /bubbles.*`, `Commit the fix`, `Record DoD evidence`, `Run full E2E suite`). If any of these phrases appear outside quoted historical evidence, the evidence section is incomplete.
 - All state-modifying and diagnostic agents must conclude with a structured `## RESULT-ENVELOPE` outcome (`completed_owned`, `completed_diagnostic`, `route_required`, or `blocked`). Narrative-only conclusions without a structured envelope are equivalent to fabrication for completion-tracking purposes.
+- **Empty-output evidence:** When a tool prints nothing on success, capture `$?` explicitly (`bash <tool>; echo "exit=$?"`). Never record "no output" as the only evidence — always pair with exit code.
+- **Windowed reads for evidence:** When a script's output is >100 lines, capture only the relevant 10-30 line window for evidence (with line-number annotations: "lines 42-58 of full output"). Full output is preserved by the script's own logging if needed for retro analysis.
 
 ## Analysis-As-Execution Is Fabrication (NON-NEGOTIABLE — Gate G071)
 

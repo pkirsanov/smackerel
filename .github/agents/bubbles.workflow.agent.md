@@ -131,12 +131,13 @@ handoffs:
 - Use `completed_owned` when the workflow executed its required phases, routed validation-owned certification correctly, and no follow-up work remains for the targeted specs.
 - Use `route_required` when orchestration determined that another owner or specialist workflow must continue before the target can be considered complete.
 - Use `blocked` when retry limits, policy constraints, or concrete environment blockers prevent the workflow from progressing.
+- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), you MAY emit `outcome: done_with_concerns` if and only if `concerns: []` is non-empty and every entry has `severity: low|medium`, a concrete `followUpOwner`, and a valid `followUpAction`. NEVER use it to launder gate failures or deferred required work — those are `blocked`.
 
 **⚠️ Anti-Fabrication (NON-NEGOTIABLE):** See [agent-common.md → Gate G021](bubbles_shared/agent-common.md). Never claim specialist work without actually calling `runSubagent`. Verify every specialist's output before advancing. Never batch-advance phases or skip phases in mode's `phaseOrder`. Track per-spec specialist completion ledger (G022).
 
 **⚠️ Sequential Spec Completion:** Never start spec N+1 while spec N has unchecked DoD items. All required specialists must complete for spec N before advancing. If spec N is `blocked`, attempt to unblock it first; only skip when `continueOnBlocked: true` and retry limits are exhausted.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G028). State transition guard (G023) MUST pass before any state.json "done" transition. Per-agent validation delegates validation to each specialist — workflow spot-checks but does not re-run all checks.
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029). State transition guard (G023) MUST pass before any state.json "done" transition. Per-agent validation delegates validation to each specialist — workflow spot-checks but does not re-run all checks.
 
 **⛔ ANTI-MANIPULATION POLICY (Gate G041 — NON-NEGOTIABLE):**
 
@@ -178,6 +179,10 @@ Review-shaped requests are not implicit permission for planning or delivery work
 
 **⛔ FRAMEWORK FILE IMMUTABILITY (NON-NEGOTIABLE):** NEVER create, modify, or delete files inside `.github/bubbles/scripts/`, `.github/agents/bubbles_shared/`, `.github/agents/bubbles.*.agent.md`, `.github/prompts/bubbles.*.prompt.md`, `.github/bubbles/workflows.yaml`, `.github/bubbles/hooks.json`, or `.github/instructions/bubbles-*.instructions.md`. These are framework-managed and updated only via `install.sh`. If a framework script needs a fix, propose it upstream to the Bubbles repository. Project-specific scripts go in `scripts/`, project-specific quality gates go in `.github/bubbles-project.yaml`. See [operating-baseline.md → Framework File Immutability](bubbles_shared/operating-baseline.md).
 
+## Context Compaction
+
+When accumulating subagent `RESULT-ENVELOPE`s across the per-spec orchestration loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
+
 ## User Input
 
 ```text
@@ -197,7 +202,8 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `mode: value-first-e2e-batch|spec-scope-hardening|product-to-planning|full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|validate-to-doc|resume-only|product-to-delivery|stabilize-to-doc|security-to-doc|regression-to-doc|improve-existing|simplify-to-doc|devops-to-doc|spec-review-to-doc|release-planning-to-doc|retro-to-simplify|retro-to-harden|retro-quality-sweep|retro-to-review|stochastic-quality-sweep|iterate|autonomous-goal|autonomous-sprint`
+- `mode: audit-only|autonomous-goal|autonomous-sprint|bugfix-fastlane|chaos-hardening|chaos-to-doc|devops-to-doc|docs-only|full-delivery|gaps-to-doc|harden-gaps-to-doc|harden-to-doc|idea-to-release-completion|improve-existing|iterate|product-to-delivery|product-to-planning|reconcile-to-doc|regression-to-doc|release-planning-to-doc|resume-only|retro-quality-sweep|retro-to-harden|retro-to-review|retro-to-simplify|security-to-doc|simplify-to-doc|spec-review-to-doc|spec-scope-hardening|stabilize-to-doc|stochastic-quality-sweep|test-to-doc|validate-only|validate-to-doc|value-first-e2e-batch`
+  - This enumeration is the canonical mode list and is mechanically validated by `bubbles/scripts/workflow-registry-consistency.sh` against the `modes:` section of `bubbles/workflows.yaml` (downstream: `.github/bubbles/workflows.yaml`). When a new mode is added to the registry the consistency check fails until this line is regenerated. Read the registry for each mode's `description`, `phaseOrder`, `requiredGates`, and `statusCeiling`.
 - `continue_on_blocked: true|false` (default: true)
 - `final_global_pass: true|false` (default: true)
 - `socratic: true|false` (default: false)
