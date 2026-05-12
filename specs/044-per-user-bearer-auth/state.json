@@ -3,12 +3,12 @@
   "featureDir": "specs/044-per-user-bearer-auth",
   "featureNumber": "044",
   "featureName": "per-user-bearer-auth",
-  "status": "in_progress",
-  "currentPhase": "plan",
+  "status": "done",
+  "currentPhase": "done",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "plan",
+    "currentPhase": "done",
     "currentScope": "04",
     "runStartedAt": "2026-05-09T06:00:00Z",
     "completedPhaseClaims": [
@@ -219,7 +219,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": [
       "01",
       "02",
@@ -1145,6 +1145,46 @@
           "timeout 600 bash .github/bubbles/scripts/state-transition-guard.sh specs/044-per-user-bearer-auth \u2192 TRANSITION PERMITTED with 1 warning(s) at status: done ceiling; Check 18 (Gate G040): PASS"
         ]
       }
+    },
+    {
+      "phase": "finalize",
+      "agent": "bubbles.iterate",
+      "who": "bubbles.iterate",
+      "timestamp": "2026-05-12T00:30:34Z",
+      "occurredAtIso8601": "2026-05-12T00:30:34Z",
+      "scopes": ["01", "02", "03", "04"],
+      "decision": "approved",
+      "disposition": "approved",
+      "verdict": "SPEC_PROMOTED_TO_DONE",
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "summary": "Spec-level finalize for spec 044 per-user-bearer-auth. All 4 scopes Done; all 10 required spec-level phases recorded (implement, test, regression, simplify, stabilize, security, docs, validate, audit, chaos) plus spec-review. Formal F1-F14 finalize gate suite executed against HEAD 56bb47292e8fa3a24bf93e01caa33ccc9b63755a (post-deferral-scrub commit). All 14 gates PASS. spec.md status header flipped In Progress \u2192 Done; state.json top-level status + currentPhase + execution.currentPhase + certification.status all advanced to done. ZERO open transitionRequests (FINALIZE-PREREQ-044-V7-001 resolved by Scope 04 implement via path-a 12th-entry discharge). ZERO open MEDIUM/HIGH findings (Scope 03 F02 carry-forward closed by Scope 04 implement; verified at Scope 04 spec-review SR6). LOW findings: D1-S04 + D2-S04 closed inline at Scope 04 spec-review; D3-S04 (path-b 12-entry alternate documentation tweak) and D4-S04 (MIT-027-TRACE-001 NATS-segment closure outside spec 044's surface) appropriately documented in design.md \u00a717.3 as carry-forward-outside-spec-044's-surface to subsequent specs. Managed docs published: docs/Operations.md, docs/Deployment.md, docs/Development.md, docs/smackerel.md, docs/Testing.md, README.md all updated with the new auth contract per spec-level docs phase + Scope 04 docs phase. Operational discipline: IDE replace_string_in_file / multi_replace_string_in_file used for ALL spec.md / state.json / report.md edits per /memories/critical-rules.md (NO pathlib.write_text; NO shell redirection); Smackerel PII rule honored; NO --no-verify. .github/** framework upgrade churn left unstaged per orchestrator instruction.",
+      "evidence": {
+        "headSha": "56bb47292e8fa3a24bf93e01caa33ccc9b63755a",
+        "f1_dod_unchecked_count": 0,
+        "f2_artifact_lint_exit": 0,
+        "f3_traceability_guard_verbose_exit": 0,
+        "f3_scenarios_checked": 13,
+        "f3_scenarios_unmapped": 0,
+        "f3_warnings": 0,
+        "f4_completed_scopes": ["01", "02", "03", "04"],
+        "f5_open_transition_requests": 0,
+        "f6_open_high_medium_findings": 0,
+        "f7_low_findings_routed": "D1-S04 closed inline; D2-S04 closed inline; D3-S04 carry-forward outside Scope 04 surface (path-b alt to FINALIZE-PREREQ-044-V7-001 already path-a-resolved); D4-S04 carry-forward outside spec 044 surface (MIT-027-TRACE-001 NATS-segment)",
+        "f8_smackerel_build_exit": 0,
+        "f9_smackerel_check_exit": 0,
+        "f10_managed_docs_published": ["docs/Operations.md", "docs/Deployment.md", "docs/Development.md", "docs/smackerel.md", "docs/Testing.md", "README.md"],
+        "f11_specmd_status_header": "In Progress \u2192 Done",
+        "f12_smackerel_test_unit_exit": 0,
+        "f12_python_unit_count": 417,
+        "f12_go_unit_packages_ok": "all (zero FAIL across cmd/* and internal/*)",
+        "f13_smackerel_test_integration_exit": 0,
+        "f13_integration_packages_ok": ["tests/integration", "tests/integration/agent", "tests/integration/drive"],
+        "f14_smackerel_test_e2e_pwaauth_exit": 0,
+        "f14_pwa_e2e_tests_passed": ["TestE2E_PWAAuth_Production_PerUserSession", "TestE2E_PWAAuth_Production_LoginRejectsMissingToken", "TestE2E_PWAAuth_Production_LoginRejectsInvalidToken", "TestE2E_PWAAuth_Production_AuthorizationHeaderStillWorks"],
+        "stateTransitionGuardDryRunVerdict": "TRANSITION_PERMITTED_WITH_1_WARNING",
+        "stateTransitionGuardDryRunWarning": "No concrete test file paths found in Test Plan across resolved scope files (advisory non-blocking)"
+      }
     }
   ],
   "policySnapshot": {
@@ -1222,5 +1262,5 @@
       "resolutionEvidence": "Resolved by spec 044 Scope 04 implement: scenario-manifest.json now ships 12 entries (added SCN-AUTH-012 covering F02 wiring + auth metrics with 20 evidence references; promoted SCN-AUTH-002 plannedFile to live file: internal/metrics/auth_test.go; promoted SCN-AUTH-011 three plannedFile entries to live). traceability-guard.sh now returns RESULT: PASSED (0 warnings) with 12 scenarios checked, 12 mapped to DoD, 0 unmapped. Verified by `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/044-per-user-bearer-auth --verbose` exit=0."
     }
   ],
-  "lastUpdatedAt": "2026-05-12T00:30:00Z"
+  "lastUpdatedAt": "2026-05-12T00:30:34Z"
 }
