@@ -53,6 +53,42 @@ A skill is done when:
 - It routes execution through repository-standard workflows.
 - It improves repeatability.
 
+## Optional bin/ and install.sh Conventions
+
+Skills MAY ship executable helpers in a `bin/` subdirectory:
+
+```
+.github/skills/<skill-name>/
+├── SKILL.md
+└── bin/
+    ├── <helper-name>          # executable, no extension
+    └── <other-helper>.sh
+```
+
+**Rules for `bin/` helpers:**
+- MUST be executable (`chmod +x`) and idempotent
+- MUST run with no installation (no `npm install`, no `pip install` at runtime)
+- MUST use only tools available in a baseline POSIX shell + standard CLI (bash, grep, awk, sed, jq if declared)
+- SHOULD honor a `--help` flag and a `--version` flag
+- SHOULD NOT mutate the workspace silently; print what they will change
+
+Skills that need installation (compiled binaries, vendored dependencies) MAY ship an `install.sh`:
+
+```
+.github/skills/<skill-name>/
+├── SKILL.md
+├── install.sh                 # idempotent installer
+└── bin/
+    └── <installed-tool>
+```
+
+**Rules for `install.sh`:**
+- MUST be idempotent (safe to run twice)
+- MUST detect existing install and skip rather than reinstall
+- MUST print what it installs and where
+- MUST NOT require root
+- SHOULD verify installed tool with a checksum or signature
+
 ## References
 - `.github/instructions/bubbles-skills.instructions.md`
 - `.github/agents/bubbles_shared/project-config-contract.md`

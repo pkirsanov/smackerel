@@ -28,7 +28,8 @@ Use this table to select the correct mode based on the execution goal.
 | Audit only | `audit-only` | `validated` | select -> audit -> finalize |
 | Final validation + audit + docs | `validate-to-doc` | `validated` | select -> validate -> audit -> docs -> finalize |
 | Resume from saved state | `resume-only` | `in_progress` | select -> finalize |
-| Discover requirements, design UX, then deliver | `product-to-delivery` | `done` | analyze -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> finalize |
+| Discover requirements, design UX, then deliver | `product-to-delivery` | `done` | analyze -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases -> finalize |
+| Idea -> release packet bootstrap -> spec/design/scopes -> ship -> release packet refresh that flips the capability to delivered | `idea-to-release-completion` | `done` | analyze -> releases (bootstrap-or-refresh) -> select -> bootstrap -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> docs -> validate -> audit -> chaos -> releases (refresh) -> finalize |
 | Analyze existing feature, reconcile stale claims, then improve competitively | `improve-existing` | `done` | analyze -> [one-shot spec-review default] -> select -> validate -> harden -> gaps -> implement -> test -> regression -> simplify -> stabilize -> devops -> security -> validate -> audit -> chaos -> docs -> finalize |
 | Simplify an existing implementation, prove behavior still works, then sync docs | `simplify-to-doc` | `done` | select -> simplify -> test -> validate -> audit -> docs -> finalize |
 | Retro-target the hotspot mess, simplify first, then run the full quality crew | `retro-quality-sweep` | `done` | select -> retro -> simplify -> harden -> gaps -> implement -> test -> regression -> stabilize -> devops -> security -> validate -> audit -> docs -> finalize |
@@ -113,4 +114,48 @@ When resolving mode in Phase 0, `bubbles.workflow` MUST check whether the user's
 
 - If the user's prompt contains words like `complete`, `implement`, `fix`, `test`, or `done` and the selected mode has `statusCeiling` below `done`, warn before starting and suggest a delivery-capable mode instead of silently proceeding.
 - Modes that cannot reach `done`: `spec-scope-hardening` (`specs_hardened`), `product-to-planning` (`specs_hardened`), `docs-only` (`docs_updated`), `validate-only` (`validated`), `audit-only` (`validated`), `validate-to-doc` (`validated`), `resume-only` (`in_progress`).
-- Modes that can reach `done`: all delivery modes, including `full-delivery`, `bugfix-fastlane`, `product-to-delivery`, `stochastic-quality-sweep`, and `iterate`.
+- Modes that can reach `done`: all delivery modes, including `full-delivery`, `bugfix-fastlane`, `product-to-delivery`, `idea-to-release-completion`, `stochastic-quality-sweep`, and `iterate`.
+
+## Mode Template Inheritance
+
+As of v3.9.0, modes in `bubbles/workflows.yaml` may share common scalars, maps, and arrays via reusable templates defined under a top-level `modeTemplates:` block. A mode (or another template) opts in via `inherits: [<template-name>...]`.
+
+**Resolver:** `bubbles/scripts/mode-resolver.sh`
+
+```bash
+# Print the fully-resolved definition of a mode
+bash bubbles/scripts/mode-resolver.sh full-delivery
+
+# List all template names
+bash bubbles/scripts/mode-resolver.sh --list-templates
+
+# List all mode names
+bash bubbles/scripts/mode-resolver.sh --list-modes
+
+# Validate every template and every mode resolves cleanly
+bash bubbles/scripts/mode-resolver.sh --validate
+```
+
+**Resolution semantics:**
+
+- **Maps deep-merge.** Values defined in the mode override values inherited from templates. Among multiple templates listed in `inherits:`, later entries override earlier ones.
+- **Arrays concatenate then deduplicate** (preserving first-occurrence order). The `requiredGates` array is additionally sorted alphabetically as a canonical gate set.
+- **Scalars use latest-wins.** Mode wins over its templates; among templates, later wins over earlier.
+- **Cycles** in `inherits:` chains are detected and rejected.
+- **Unknown template names** are rejected.
+- The `inherits:` field is stripped from the resolved output.
+
+**v3.9 templates:**
+
+| Template | Purpose |
+|----------|---------|
+| `base-delivery` | Universal `statusCeiling: done`. |
+| `delivery-quality-constraints` | 12 universal anti-fabrication constraints (sequentialSpecCompletion, crossAgentVerification, antiFabricationDetection, requireAllSpecialistsComplete, requireAllScopesDoneBeforeSpecDone, requirePerDodItemRawEvidence, requireTestsForAllRealScenarios, require100PercentBusinessLogicCoverage, requirePhaseScopeCoherence, requireImplementationRealityScan, requireNoDefaultsNoFallbacks, requireIntegrationCompleteness). |
+| `delivery-gate-baseline` | 39-gate common baseline (excludes mode-specific gates G002 and G060). |
+| `finding-owned-remediation` | 4 constraints (requireFindingOwnedPlanningWorkflow, findingPlanningAgents, findingDeliveryPhases, requireTerminalFindingClosure) for diagnostic-discovered work. |
+
+**v3.9 refactored modes:** `full-delivery`, `bugfix-fastlane`, `harden-to-doc`, `gaps-to-doc`, `iterate`. The remaining 32 modes intentionally stay verbose pending a follow-up refactor.
+
+**Validation:** `bash bubbles/scripts/mode-resolver.sh --validate` and `bash bubbles/scripts/mode-resolver-selftest.sh` are wired into `framework-validate` so cycle, unknown-template, and inheritance regressions fail the framework gate.
+
+**Hard dependency:** [`yq`](https://github.com/mikefarah/yq) (mikefarah, v4+).

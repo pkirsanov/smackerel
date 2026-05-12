@@ -55,6 +55,7 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 43 | [Autonomous Goal](recipes/autonomous-goal.md) | `autonomous-goal` | Give a goal, agent does everything until done |
 | 44 | [Autonomous Sprint](recipes/autonomous-sprint.md) | `autonomous-sprint` | Multiple goals + time budget, fully autonomous |
 | 45 | [Release Planning](recipes/release-planning.md) | `bubbles.releases` | Phase release packets + cross-product coordination (Sonny "Iron Lung" Smith) |
+| 46 | [Idea → Release Completion](recipes/idea-to-release.md) | `idea-to-release-completion` | Full lifecycle: idea → packet bootstrap → specs → ship → packet refresh (Sonny "Iron Lung" Smith) |
 
 ---
 
@@ -83,6 +84,9 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 
 ### 📋 Day-to-Day
 36 → 37 → 38
+
+### 📦 Release Lifecycle
+8 → 9 → 45 → 46 → 31
 
 ---
 
@@ -129,6 +133,12 @@ START
   │
   ├─ Pre-release quality check?
   │     → Recipe 17 (Quality Sweep)
+  │
+  ├─ New phase capability — idea all the way through release packet refresh?
+  │     → Recipe 46 (Idea → Release Completion)
+  │
+  ├─ Just author or refresh a release packet (no implementation)?
+  │     → Recipe 45 (Release Planning)
   │
   └─ Something else?
         → Recipe 2 (Ask the Super)

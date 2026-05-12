@@ -765,6 +765,7 @@ If `bubbles.validate` is invoked by `bubbles.workflow` or `bubbles.iterate`, it 
 Rules:
 - Emit exactly one `## RESULT-ENVELOPE` block per invocation.
 - Valid outcomes for `bubbles.validate` are `completed_diagnostic`, `route_required`, or `blocked`.
+- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), you MAY also emit `outcome: done_with_concerns` (writing `certification.status: done_with_concerns` to `state.json`) when all DoD items pass with evidence and all gates pass but you are recording one or more non-blocking follow-ups. The envelope MUST include a non-empty `concerns: []` array with every entry at `severity: low|medium` plus a concrete `followUpOwner` and `followUpAction`. Validate is the ONLY agent permitted to certify this state.
 - If `outcome` is `route_required`, `nextRequiredOwner` MUST be a single concrete specialist (`bubbles.plan`, `bubbles.test`, `bubbles.implement`, `bubbles.docs`, `bubbles.design`, `bubbles.analyst`, `bubbles.ux`, or `bubbles.bug`) and `packetRef` or an embedded packet payload MUST identify the concrete follow-up work.
 - If `outcome` is `blocked`, `blockedReason` MUST contain the exact blocker and `evidenceRefs` MUST point to real evidence.
 - Do NOT emit `✅ ALL VALIDATIONS PASSED` while the envelope outcome is `route_required` or `blocked`.

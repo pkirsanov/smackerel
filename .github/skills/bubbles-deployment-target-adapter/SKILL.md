@@ -524,7 +524,7 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 | Vertical Slice (G035) | Deployment artifact (Caddy site, systemd unit, etc.) must exist for every target the service is deployed to |
 | Pre-Completion Self-Audit | `deploy <target> bootstrap` re-run idempotency proof must be in evidence |
 | Docker Lifecycle Governance | Adapter teardown must not destroy peer adapters' state |
-| **Build-Once-Deploy-Many Integrity (G074)** | Production deployment manifests MUST pin image by digest, MUST have a CI-signed signature, and MUST consume a CI-published config bundle. No mutable tags. No deploy-time rebuilds. |
+| **Build-Once-Deploy-Many Integrity (G079)** | Production deployment manifests MUST pin image by digest, MUST have a CI-signed signature, and MUST consume a CI-published config bundle. No mutable tags. No deploy-time rebuilds. |
 
 ## References
 

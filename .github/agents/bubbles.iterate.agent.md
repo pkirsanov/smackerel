@@ -97,7 +97,7 @@ handoffs:
 
 **⚠️ Sequential Completion:** Previous scope MUST be fully complete before next scope. Each iteration N fully complete before N+1.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G028, G028). State transition guard (G023) MUST pass before any state.json write — use `--revert-on-fail`. Tier 2 checks IT1-IT5 MUST pass before reporting.
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029). State transition guard (G023) MUST pass before any state.json write — use `--revert-on-fail`. Tier 2 checks IT1-IT5 MUST pass before reporting.
 
 **Non-goals:**
 - Implementing code directly (→ bubbles.implement)
@@ -130,7 +130,7 @@ $ADDITIONAL_CONTEXT
 ```
 
 Supported options:
-- `type: tests|docs|stabilize|devops|gaps|harden|implement|refactor|feature|bugfix|analyze|improve|security|chaos` - Work type to focus on
+- `type: tests|docs|stabilize|devops|gaps|harden|implement|refactor|feature|bugfix|analyze|improve|security|chaos|release` - Work type to focus on
 - `mode: full-delivery|bugfix-fastlane|docs-only|validate-only|audit-only|chaos-hardening|improve-existing|iterate|resume-only` - Override automatic mode selection (default: auto-detect from work type)
 - `iterations: <N>` - Run N iterations (default: 1)
 - `run_mode: endless` - Keep iterating until time budget expires
@@ -264,6 +264,10 @@ Dispatch rules:
 
 Use `bubbles/workflows.yaml`, [execution-core.md](bubbles_shared/execution-core.md), and [state-gates.md](bubbles_shared/state-gates.md) as the orchestrator baseline: max 3 reads before action, one search attempt for feature resolution, and read only the feature artifacts plus required metadata. For ambiguous requests, ask for the target feature instead of searching.
 
+## Context Compaction
+
+When accumulating subagent `RESULT-ENVELOPE`s across the iterate work loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
+
 ## Key Difference from bubbles.implement
 
 | Aspect | bubbles.iterate | bubbles.implement |
@@ -297,6 +301,7 @@ Use `bubbles/workflows.yaml`, [execution-core.md](bubbles_shared/execution-core.
 | `analyze` | Invoke bubbles.analyst to analyze existing feature against competitors/best practices, then bubbles.ux for UI improvements. Creates improvement scopes if analyst proposes changes. Minor improvements update existing spec; sizable changes create new spec folder. |
 | `improve` | Analyze existing feature for competitive improvements, reconcile stale claims, then implement improvements. Combines analyst insights with gap/harden findings. |
 | `chaos` | Run chaos probes (stochastic browser automation/HTTP tests) against live system to discover runtime bugs and fix what breaks. |
+| `release` | Author or refresh a phase release packet via `bubbles.releases` (Sonny "Iron Lung" Smith). Detects release packet drift when capabilities have shipped but `docs/releases/<phase>/features.md` and the `INVESTOR_OVERVIEW.md` Phase Overview table have not been updated. |
 
 **Bug Reproduction (MANDATORY for `type: bugfix`):** When executing a bugfix scope, the agent MUST:
 - Reproduce the bug BEFORE applying the fix (evidence in report.md under "## Bug Reproduction — Before Fix")
@@ -360,6 +365,18 @@ If no existing scopes or all are done:
 If feature is complete but validation still fails:
 - Create minimal hardening scope
 
+### Priority 4.5: Release Packet Drift
+If the repo carries the Product Direction Surfaces trio (`docs/INVESTOR_OVERVIEW.md`, `docs/Product-Principles.md`, `.github/instructions/product-principles.instructions.md`) AND there is at least one phase release packet under `docs/releases/<phase>/` or `docs/plans/<phase>/`:
+- Scan `docs/releases/<phase>/features.md` for capability rows whose status is `planned` or `in-progress`
+- Cross-reference each row against `specs/*/state.json` for matching spec IDs
+- If any matched spec has `status: done` AND the corresponding `features.md` row is NOT `delivered` → release packet drift exists
+- Also scan the `INVESTOR_OVERVIEW.md` Phase Overview table for capability counts that disagree with the matching `features.md`
+- When drift is found, the next work item is a release packet refresh:
+  - **Mode:** `release-planning-to-doc` with `mode: refresh`
+  - **Owner:** `bubbles.releases` (Sonny "Iron Lung" Smith)
+  - **Type:** `docs` (auto-routed)
+- Iterate MUST NOT mutate `features.md` or the Phase Overview table itself — only `bubbles.releases` is allowed to do that. Iterate just dispatches the refresh.
+
 ### No Work Found
 If nothing actionable:
 - If artifacts are missing (no spec.md, design.md, or scopes.md): auto-create them by invoking the appropriate specialist role (design, plan) inline, then re-evaluate scope selection.
@@ -394,6 +411,8 @@ When the user does NOT specify an explicit `mode:`, iterate auto-selects based o
 | Type: `improve` | `improve-existing` | Competitive analysis + reconcile + implement improvements |
 | Type: `security` | `full-delivery` | Security review runs as part of the full delivery quality chain |
 | Type: `chaos` | `chaos-hardening` | Stochastic probes + fix what breaks |
+| Type: `release` | `release-planning-to-doc` | Author or refresh phase release packet (`bubbles.releases` / Sonny "Iron Lung" Smith) |
+| Release packet drift detected (Priority 4.5) | `release-planning-to-doc` with `mode: refresh` | Capability shipped but `features.md` / Phase Overview not refreshed |
 | All scopes done, validation failing | `chaos-hardening` | Probe and fix remaining issues |
 | Feature complete | N/A | Report completion |
 

@@ -6,7 +6,7 @@
 **Filed:** 2026-03-31
 
 <!-- GENERATED:CAPABILITY_LEDGER_STATUS_START -->
-**Ledger Status:** proposed
+**Ledger Status:** shipped
 **Related Capability:** G068 DoD-Gherkin fidelity threshold tuning
 **Competitive Pressure:** cline, roo-code
 **Source Of Truth:** [Issue Status](../generated/issue-status.md)
@@ -62,3 +62,16 @@ Threshold for 2 words = 2, so a DoD item needs BOTH words. Any rephrasing fails.
 ## Workaround
 
 Until fixed, agents can ensure DoD items use the **exact scenario title** verbatim rather than paraphrasing. But this defeats the purpose of G068's fuzzy matching, which is supposed to detect *rewrites*, not penalize *faithful copies*.
+
+## Resolution
+
+**Shipped in v3.8.0.** Three changes were applied identically to both gate implementations:
+
+1. **Lowered minimum word length 4 → 3 chars** so 3-letter domain words (API, DoD, SLA, CSV, CSP, JWT, SDK, CLI, CRD, SBOM) are counted as significant instead of stripped as noise.
+2. **Trimmed the exclusion list to TRUE stop words only** (`the, are, was, were, been, being, for, from, with, and, but, not, then, else, when, while, that, this, these, those, its, into, onto, out, all, any, each, every, some, more, less, also`). Removed domain-relevant words (`user`, `users`, `system`, `should`, `must`, `have`, `has`, `will`, `given`, `after`, `before`, `where`, `their`, `there`, `about`, `only`) that are frequently the distinguishing words in Gherkin scenario titles.
+3. **Switched to percentage threshold with absolute floor.** For scenarios with ≥3 significant words, a DoD item now matches if `overlap_count / scenario_significant_word_count ≥ 0.50` AND `overlap_count ≥ 3`. For scenarios with fewer than 3 significant words, the gate falls back to requiring full overlap (so very small specs are not penalized by an unreachable absolute floor).
+
+Updated implementations:
+
+- [`bubbles/scripts/state-transition-guard.sh`](../../bubbles/scripts/state-transition-guard.sh) — `stg_significant_words` and `stg_scenario_matches_dod`
+- [`bubbles/scripts/traceability-guard.sh`](../../bubbles/scripts/traceability-guard.sh) — `significant_words` and `scenario_matches_dod` (the looser `scenario_matches_row` traceability matcher is intentionally left alone — it serves a different gate with different fidelity expectations)

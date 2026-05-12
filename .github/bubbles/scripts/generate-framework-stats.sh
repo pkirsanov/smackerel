@@ -20,7 +20,12 @@ count_agents() {
 
 count_workflow_modes() {
   awk '
-    /^  [a-z][a-z0-9-]*:$/ {
+    BEGIN { in_modes = 0 }
+    /^[A-Za-z][A-Za-z0-9_-]*:/ {
+      in_modes = ($0 ~ /^modes:/) ? 1 : 0
+      next
+    }
+    in_modes && /^  [a-z][a-z0-9-]*:$/ {
       candidate = $1
       sub(/:$/, "", candidate)
       if ((getline next_line) > 0) {

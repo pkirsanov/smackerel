@@ -93,7 +93,20 @@ Blocked patterns:
 
 Enforced by: `state-transition-guard.sh` (Check 3B), agent-common.md (Mode Ceiling Pre-Flight), bubbles.implement (Mode Ceiling Pre-Flight behavioral rule), bubbles.bug (Phase 5 Mode Ceiling Gate).
 
-## Build-Once Deploy-Many Integrity Gate (G074)
+## State-Snapshot Fabrication Gates (G075–G078)
+
+These four gates harden `state.json` against the most common fabrication patterns observed in downstream product repos. They are mechanically enforced by `state-transition-guard.sh` (Checks 2B, 5B, 5C, 7A/7B) and `bubbles/scripts/batch-promotion-lint.sh` and are listed in `bubbles/workflows.yaml` `gates:` for canonical reference.
+
+| Gate | Name | Purpose | Enforced by |
+|------|------|---------|-------------|
+| G075 | `scope_index_parity_gate` | Per-scope-directory layout only. The `scopes/_index.md` status column MUST match the `**Status:**` line of every linked `scopes/NN-name/scope.md`. Detects fabricated batch promotions that update individual scope files to `Done` while leaving `_index.md` showing `In Progress`. | `state-transition-guard.sh` Check 5B |
+| G076 | `phantom_scope_detection_gate` | Every entry in `state.json` `completedScopes` (and `certification.completedScopes`) MUST map to a real scope artifact on disk (a `scopes/NN-name/` directory or a `## Scope N:` heading in `scopes.md`). Phantom entries naming scopes that don't exist are a documented fabrication pattern. | `state-transition-guard.sh` Check 5C |
+| G077 | `execution_history_plausibility_gate` | `executionHistory` entries MUST have plausible timestamps: no identical-interval clusters (3+ runs spaced exactly the same), no zero-duration non-trivial entries, no overlapping entries. Also enforces `certification.lockdownState.round` ≤ implement-phase run count and `lastCleanRound` ≤ `round`. | `state-transition-guard.sh` Checks 7A and 7B |
+| G078 | `batch_promotion_limit_gate` | A single git commit (or push range) MUST NOT promote more than one spec's `state.json` `status` to `done` without explicit operator override. Mass promotions are a documented fabrication pattern (e.g., the QF 2026-03-15 batch that promoted 33 specs in one commit). | `batch-promotion-lint.sh` and the `state-transition-guard` GitHub Actions workflow |
+
+These gates have no associated agent prose elsewhere — `bubbles/workflows.yaml` and this section are the authoritative description.
+
+## Build-Once Deploy-Many Integrity Gate (G079)
 
 **Status in framework:** Advisory. Becomes BLOCKING when a downstream product repo opts in via its own `copilot-instructions.md`.
 
@@ -115,4 +128,4 @@ Blocked patterns:
 
 Enforced by: `bubbles-deployment-target-adapter` skill (Build-Once Deploy-Many Pattern, CI ↔ Adapter Handshake, Anti-Patterns table), `bubbles-deployment-target.instructions.md` (Build-Once Deploy-Many section), `bubbles-config-sst` skill (Config Bundle Artifact section).
 
-Downstream enforcement (when a product repo declares G074 BLOCKING in its `copilot-instructions.md`): pre-push hook scans for mutable-tag patterns in deployment manifests; CI workflow lint scans for build/deploy fusion; adapter `apply.sh` audit confirms cosign verification call site exists.
+Downstream enforcement (when a product repo declares G079 BLOCKING in its `copilot-instructions.md`): pre-push hook scans for mutable-tag patterns in deployment manifests; CI workflow lint scans for build/deploy fusion; adapter `apply.sh` audit confirms cosign verification call site exists.

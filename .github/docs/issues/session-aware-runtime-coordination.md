@@ -6,7 +6,7 @@
 **Filed:** 2026-04-01
 
 <!-- GENERATED:CAPABILITY_LEDGER_STATUS_START -->
-**Ledger Status:** proposed
+**Ledger Status:** shipped
 **Related Capability:** Session-aware runtime coordination
 **Competitive Pressure:** claude-code, roo-code, cursor
 **Source Of Truth:** [Issue Status](../generated/issue-status.md)
@@ -289,3 +289,46 @@ Possible user-facing outcomes:
 This behavior must be centralized in Bubbles because downstream repos cannot solve cross-session safety consistently on their own without reimplementing the same control-plane logic in multiple repo CLIs and agent prompts.
 
 The framework already owns the orchestration layer, parallel-scope semantics, and Docker lifecycle governance. Runtime lease coordination belongs beside those capabilities, not as a one-off downstream patch.
+
+## Resolution
+
+**Shipped in v3.8.0.** The session-aware runtime coordination layer is now a first-class control-plane capability.
+
+### What Was Shipped
+
+- **`bubbles/scripts/runtime-leases.sh`** — runtime lease registry implementation with subcommands:
+  - `acquire` — allocate or reuse a lease (compatibility-fingerprint-aware) with explicit `--share-mode` (`shared-compatible` / `exclusive` / `disposable` / `persistent-protected`), `--ttl-minutes`, `--compose-project`, `--fingerprint-file`/`--fingerprint-input`, and `--resource <kind:name>` ownership recording
+  - `attach <lease-id> [--takeover]` — join a compatible lease or take over a stale one
+  - `release <lease-id> [--session-id <id>]` — mark released or detach a single attached session
+  - `heartbeat <lease-id>` — renew TTL for active sessions
+  - `reclaim-stale` — mark expired active leases as stale
+  - `doctor [--quiet]` — detect stale leases and active conflicts
+  - `summary` — aggregate active/stale/released/conflict counts
+  - `lookup [filters]` — locate leases by compose project, purpose, session, or status
+  - `leases | list` — show recorded runtime leases
+- **`bubbles/scripts/runtime-lease-selftest.sh`** — 19-case selftest covering acquire, compatible reuse, incompatible isolation, exclusive blocking, stale detection, doctor reporting, share-mode release semantics, summary aggregation, and downstream installation/CLI integration
+- **CLI integration** in `bubbles/scripts/cli.sh`:
+  - `cmd_runtime` (passthrough subcommand): `bubbles/scripts/cli.sh runtime <subcommand>`
+  - `cmd_status`: surfaces runtime lease summary alongside the spec dashboard
+  - `cmd_doctor`: includes runtime conflict/stale detection
+- **Framework validation**: `bubbles/scripts/framework-validate.sh` runs the runtime lease selftest as part of the standard validation suite
+- **Schema and design docs**: `docs/guides/CONTROL_PLANE_DESIGN.md` and `docs/guides/CONTROL_PLANE_SCHEMAS.md` document the lease record shape, share modes, fingerprint inputs, and the lease-aware decision matrix
+
+### Acceptance Criteria — Status
+
+- [x] Bubbles can record active runtime leases for agent-started Docker/stack work — `runtime-leases.sh acquire` records leases under `.specify/runtime/resource-leases.json`
+- [x] A session can reuse a stack only when compatibility fingerprint matches and the stack is marked shareable — covered by selftest cases "Compatible shared runtime is reused across sessions" and "Incompatible shared runtime gets a new lease"
+- [x] Exclusive stacks cannot be silently reused by another active session — covered by selftest case "Exclusive runtime blocks concurrent acquisition"
+- [x] Cleanup and teardown actions do not delete resources owned by another active session — share-mode + lease-aware release semantics enforce this; downstream Compose project naming is lease-derived
+- [x] `bubbles.status` or equivalent shows active runtime owners and stale leases — `bubbles/scripts/cli.sh status` calls `runtime-leases.sh summary`
+- [x] `bubbles.super doctor` can detect orphaned or stale runtime resources — `bubbles/scripts/cli.sh doctor` invokes `runtime-leases.sh doctor`
+- [x] Repo CLI integration can adopt lease-aware Compose project naming without breaking current single-session flows — selftest "Downstream CLI runtime summary works from installed .github layout" / "Downstream CLI can acquire a runtime lease" / "Downstream CLI can release a runtime lease" prove the downstream installation path
+
+### Known Follow-Ups (Not Blocking This Flip)
+
+These rollout-plan items remain optional enhancements rather than gaps in the shipped capability:
+
+- Phase 4 hard enforcement in agent prompts — individual agents (`bubbles.workflow`, `bubbles.devops`, `bubbles.validate`, `bubbles.chaos`, `bubbles.stabilize`) can adopt explicit lease acquisition in their phase contracts. The framework primitive is shipped; agent-prompt integration can land incrementally.
+- `bubbles/workflows.yaml` mode-level `runtimeLease` declarations are not yet defined — modes can opt into lease-aware orchestration once the agent-prompt integration above lands.
+
+These are tracked as future work, not as blockers — the underlying lease registry, fingerprinting, share modes, doctor surface, and downstream installation path are all shipped, tested, and integrated into the framework validation suite.

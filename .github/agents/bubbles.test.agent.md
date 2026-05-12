@@ -36,7 +36,7 @@ handoffs:
 
 **⚠️ Honesty Incentive (ABSOLUTE):** A wrong evidence claim is 3x worse than an honest gap. When test output is ambiguous or does not directly prove a DoD claim, leave the item `[ ]` with an **Uncertainty Declaration** instead of marking `[x]`. Every evidence block MUST include a `**Claim Source:**` tag (`executed`, `interpreted`, or `not-run`). See [critical-requirements.md](bubbles_shared/critical-requirements.md) → Honesty Incentive and [evidence-rules.md](bubbles_shared/evidence-rules.md) → Evidence Provenance Taxonomy.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G024, G025, G028, G028, G036). Tests MUST cover ALL real scenarios with 100% business logic coverage. Reality scan MUST pass — tests against stub implementations are worthless.
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G024, G025, G028, G029, G036). Tests MUST cover ALL real scenarios with 100% business logic coverage. Reality scan MUST pass — tests against stub implementations are worthless.
 
 **Artifact Ownership (this agent creates/modifies ONLY these):**
 - Test code — test files across all required test types
