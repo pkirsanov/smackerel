@@ -178,11 +178,14 @@ groups:
         mapping are still valid.
 
 # ─────────────────────────────────────────────────────────────────────
-# Backup staleness — fires when capture has been silent during a
-# multi-hour window. Generic rule: a target adapter with a dedicated
-# backup metric should swap in that metric in an overlay rule file.
-# The contract test only requires the alert NAME and a known metric
-# in the expression.
+# Backup staleness — fires when smackerel_backup_last_success_unixtime
+# has not advanced inside the daily backup window. Spec 048 wires
+# this metric from scripts/commands/backup.sh via the on-disk JSON
+# status file polled by internal/backup.Watcher.
+# A still-zero metric (the watcher saw no status file at all) is the
+# strongest stale signal: time() - 0 > window is trivially true, so
+# this rule fires on a brand-new host that has never produced a
+# backup. That is the desired behavior.
 # ─────────────────────────────────────────────────────────────────────
 - name: smackerel-backup
   rules:
@@ -190,18 +193,19 @@ groups:
     expr: |
       up{job="smackerel-core"} == 1
       and
-      (time() - timestamp(smackerel_artifacts_ingested_total)) > 86400
-      and
-      rate(smackerel_artifacts_ingested_total[24h]) == 0
+      (time() - smackerel_backup_last_success_unixtime) > 90000
     for: 30m
     labels:
       severity: warning
       component: backup
     annotations:
-      summary: "No ingestion or backup activity in the last 24h"
+      summary: "No successful backup in the last 25h"
       description: |
-        Either no artifacts have been ingested in 24h (likely cause:
-        connectors disabled, capture pipeline stuck) or the backup
-        pipeline that supplies the audit log has stopped advancing.
-        Target adapters with dedicated backup telemetry should
-        override this rule via the deploy-adapter overlay.
+        The smackerel_backup_last_success_unixtime gauge has not
+        advanced inside the expected daily-backup window. Likely
+        causes: the backup timer is not firing, pg_dump is failing,
+        or the status file at ${BACKUP_STATUS_FILE} is missing or
+        unreadable. Run `./smackerel.sh backup` manually to
+        reproduce, then check the JSON status file for last_error.
+        Run `./smackerel.sh backup-restore-test` to verify the
+        most recent artifact actually restores cleanly.

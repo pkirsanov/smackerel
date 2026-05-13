@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
 )
 
@@ -119,6 +121,23 @@ func run() error {
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
 		slog.Warn("digest scheduler failed to start", "error", err)
 	}
+
+	// Spec 048 — background poll of BACKUP_STATUS_FILE so
+	// smackerel_backup_last_success_unixtime and related metrics stay
+	// fresh between scrapes. Runs in a goroutine; exits when ctx is
+	// canceled at shutdown.
+	backupWatcher := backup.NewWatcher(
+		cfg.BackupStatusFile,
+		time.Duration(cfg.BackupWatcherPollSecs)*time.Second,
+		metrics.NewBackupMetricsSink(),
+	)
+	go backupWatcher.Run(ctx)
+	slog.Info("backup watcher started",
+		"status_file", cfg.BackupStatusFile,
+		"poll_interval_seconds", cfg.BackupWatcherPollSecs,
+		"retention_daily", cfg.BackupRetentionDaily,
+		"retention_weekly", cfg.BackupRetentionWeekly,
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

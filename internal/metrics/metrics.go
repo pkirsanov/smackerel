@@ -318,6 +318,13 @@ func init() {
 		RecommendationSuppression,
 		RecommendationRankingConfidence,
 		RecommendationLocationPrecision,
+		// Spec 048 backup-status metrics — defined in backup.go.
+		// Republished from BACKUP_STATUS_FILE by the
+		// internal/backup.Watcher; consumed by the SmackerelBackupStale
+		// alert in config/prometheus/alerts.yml.
+		BackupLastSuccessUnixtime,
+		BackupSizeBytes,
+		BackupRunsTotal,
 	)
 }
 

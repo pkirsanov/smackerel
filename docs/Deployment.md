@@ -498,7 +498,21 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 - Increase ML sidecar memory if using larger embedding models
 - Set `restart: always` so services recover from crashes
 - Use Docker volumes on fast storage (SSD) for PostgreSQL data
-- Back up PostgreSQL daily (see [Operations Runbook](Operations.md#backup--restore))
+- Back up PostgreSQL daily via the spec 048 contract (see [Operations Runbook → Backup & Restore](Operations.md#backup--restore))
+
+### Spec 048 — Deploy Adapter Backup Contract
+
+The Smackerel runtime owns the dump, retention, status file, and restore drill. The deploy adapter overlay (e.g., `knb` for the home-lab target) owns scheduling and off-host shipping. Adapter responsibilities:
+
+| Responsibility | Adapter contract |
+|----------------|------------------|
+| Daily timer / cron | Install a systemd timer (or equivalent) that invokes `./smackerel.sh backup` on the host. Cadence MUST be at least daily so the 25h `SmackerelBackupStale` alert window stays satisfied. |
+| Off-host destination | Set `BACKUP_DESTINATION_URL` in `app.env` (the adapter-written env file). The destination string is opaque to Smackerel — the adapter chooses S3, BackBlaze, NFS, rclone, etc. Never commit the real URL in this repo. |
+| Off-host shipping job | After `./smackerel.sh backup` succeeds, the adapter ships `${BACKUP_LOCAL_DIR}/smackerel-*.sql.gz` to `${BACKUP_DESTINATION_URL}`. Smackerel does not invoke the shipping job; the adapter chains it after the dump. |
+| Restore drill cadence | The adapter SHOULD invoke `./smackerel.sh backup-restore-test` at least weekly so a silent failure to produce a restorable artifact surfaces inside the alert window. |
+| Bind mounts | If the adapter pins `BACKUP_LOCAL_DIR` to an absolute path on the host (recommended in production), bind-mount that path into the `smackerel-core` container so the watcher can read the status file. |
+
+The adapter MUST NOT override the retention slot counts (`BACKUP_RETENTION_DAILY=7`, `BACKUP_RETENTION_WEEKLY=4`) per Product Principle 9 — those are part of the product contract and changing them is a spec-level decision, not an adapter knob.
 
 ## Telegram Webhook HTTPS Requirement
 

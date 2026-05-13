@@ -1,0 +1,87 @@
+{
+  "version": 2,
+  "specId": "048",
+  "featureDir": "specs/048-backup-restore-automation",
+  "generatedBy": "bubbles.workflow (full-delivery)",
+  "generatedAt": "2026-05-13T23:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-048-B01",
+      "name": "Scheduled backups retain daily and weekly history",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "contract"],
+      "linkedTests": [
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_LongHistory_KeepsExactSlots"},
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_SameDayCollapsesToOneDailySlot"},
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_WeeklySlotsUseISOWeeks"},
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_EmptyInput_NoPanic"},
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_FewerThanBudget_KeepsAll"},
+        {"file": "internal/backup/retention_test.go", "function": "TestSelectKept_DoesNotMutateInput"},
+        {"file": "internal/backup/retention_test.go", "function": "TestRetentionPolicy_Validate"},
+        {"file": "internal/backup/retention_test.go", "function": "TestParseArtifactTime"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/backup/retention_test.go::TestSelectKept_LongHistory_KeepsExactSlots"},
+        {"type": "unit-test", "location": "internal/backup/retention_test.go::TestSelectKept_SameDayCollapsesToOneDailySlot"},
+        {"type": "unit-test", "location": "internal/backup/retention_test.go::TestSelectKept_WeeklySlotsUseISOWeeks"},
+        {"type": "source", "location": "internal/backup/retention.go — RetentionPolicy and SelectKept implementing 7 daily + 4 weekly slot accounting with ISO-week awareness"},
+        {"type": "source", "location": "scripts/commands/backup.sh — Python retention re-implementation mirroring the Go algorithm so cron-only environments prune correctly"},
+        {"type": "source", "location": "config/smackerel.yaml::backup.retention_daily=7 + backup.retention_weekly=4 — SST source of truth"},
+        {"type": "docs", "location": "docs/Operations.md — Backup & Restore section enumerates retention policy and how it interacts with deploy adapter schedule"},
+        {"type": "docs", "location": "docs/Deployment.md — Spec 048 Deploy Adapter Backup Contract section forbids adapter overriding retention slot counts"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-048-B01: T-048-001 passes and proves scheduled backups retain daily and weekly history (7 daily + 4 weekly, older artifacts pruned without deleting retained points)",
+        "Scope 1 DoD: T-048-002 passes and docs preserve product-vs-adapter ownership"
+      ]
+    },
+    {
+      "scenarioId": "SCN-048-B02",
+      "name": "Restore test proves application state is recoverable",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "scripts/commands/restore-test.sh", "function": "restore-drill-against-disposable-postgres"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-script", "location": "scripts/commands/restore-test.sh — gunzip | psql against disposable postgres on tmpfs with no published host port"},
+        {"type": "source", "location": "scripts/commands/restore-test.sh::schema_migrations + vector extension reachability assertions"},
+        {"type": "cli", "location": "./smackerel.sh backup-restore-test — repo-CLI dispatch surface"},
+        {"type": "source", "location": "internal/db/migrations/001_initial_schema.sql — schema referenced by the restore assertions"},
+        {"type": "docs", "location": "docs/Operations.md — Backup & Restore section documents operator workflow for restore drill"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: T-048-003 passes and proves restore health on disposable storage",
+        "Scope 2 DoD: T-048-006 passes and artifact lint confirms feature compliance"
+      ]
+    },
+    {
+      "scenarioId": "SCN-048-B03",
+      "name": "Connector tokens and cursors survive restore",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["integration", "unit", "security-static"],
+      "linkedTests": [
+        {"file": "scripts/commands/restore-test.sh", "function": "sync-state-reachability-and-secret-leak-scan"},
+        {"file": "internal/backup/status_test.go", "function": "TestStatus_ValidateRejectsSecrets"},
+        {"file": "internal/backup/status_test.go", "function": "TestStatus_ValidateRejectsSchemaZero"},
+        {"file": "internal/backup/status_test.go", "function": "TestStatus_ValidateRejectsUnknownStatus"},
+        {"file": "internal/backup/status_test.go", "function": "TestStatus_RoundTrip"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-script", "location": "scripts/commands/restore-test.sh — sync_state table reachability assertion (canonical connector cursor store)"},
+        {"type": "integration-script", "location": "scripts/commands/restore-test.sh — psql stdout/stderr scan rejects any closed-set secret env value"},
+        {"type": "unit-test", "location": "internal/backup/status_test.go::TestStatus_ValidateRejectsSecrets — 3 sub-cases (POSTGRES_PASSWORD, SMACKEREL_AUTH_TOKEN, TELEGRAM_BOT_TOKEN)"},
+        {"type": "source", "location": "internal/backup/status.go::Status.validate() — rejects last_error containing closed-set secret prefix"},
+        {"type": "source", "location": "scripts/commands/backup.sh::redact_secrets() — scrubs 14 closed-set secret env values before writing status file or emitting log lines"},
+        {"type": "source", "location": "internal/db/migrations — sync_state table is the canonical primary cursor store across drive, photos, recommendations, hospitable, twitter connectors"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: T-048-004 passes and proves connector state survives restore",
+        "Scope 2 DoD: SCN-048-B03: T-048-005 passes and proves connector tokens and cursors survive restore without secret values being printed in logs"
+      ]
+    }
+  ]
+}

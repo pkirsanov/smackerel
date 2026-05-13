@@ -2,12 +2,14 @@
 
 ## Status
 
-In Progress - planning packet created
+Done - delivered via full-delivery workflow. Runtime owns the dump
+contract, retention pruning, status JSON, metrics, and restore drill;
+deploy adapter overlay owns scheduling and off-host shipping.
 
 ## Review Findings
 
-- D-019: Backup scheduling and retention are not yet defined as a generic deployment contract.
-- V-019: Restore-test automation and evidence are missing from the readiness plan.
+- D-019: Backup scheduling and retention are not yet defined as a generic deployment contract. **Resolved** — see `docs/Deployment.md` "Spec 048 — Deploy Adapter Backup Contract" and `config/smackerel.yaml` `backup:` SST section.
+- V-019: Restore-test automation and evidence are missing from the readiness plan. **Resolved** — `./smackerel.sh backup-restore-test` drives the drill against disposable storage and asserts schema, connector cursor reachability, and absence of secret leakage.
 
 ## Outcome Contract
 
