@@ -272,6 +272,76 @@ services:
         max-size: "50m"
         max-file: "3"
 
+  # Spec 049 — Monitoring stack (Prometheus). Profile-gated; off by
+  # default. The deploy adapter enables it by appending `--profile
+  # monitoring` to its compose invocation when the operator wants the
+  # monitoring stack live alongside the runtime. Reverse-proxy
+  # fronting + Alertmanager wiring + Grafana provisioning all stay in
+  # the deploy-adapter overlay (per "No env-specific content").
+  #
+  # Invariants enforced by internal/deploy/monitoring_*_contract_test.go
+  # and the spec 042 / spec 045 contract tests:
+  #   - host port uses ${HOST_BIND_ADDRESS:?...} fail-loud SST form
+  #   - read_only: true + tmpfs allowlist [/tmp] only
+  #   - deploy.resources.limits.cpus/memory use ${PROMETHEUS_*_LIMIT:?...}
+  #   - cap_drop: [ALL], no-new-privileges:true
+  #   - profile: [monitoring] so it does not start unless requested
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # The TSDB lives on the named volume prometheus-data mounted at
+    # /prometheus. Only /tmp is allowlisted as writable tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: nobody
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_DAYS}d"
+      - "--web.listen-address=:${PROMETHEUS_CONTAINER_PORT}"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      # Spec 042: bind via HOST_BIND_ADDRESS — deploy adapter MUST set it
+      # (no default; fail-loud per Gate G028). The deploy adapter may set
+      # HOST_BIND_ADDRESS to a tailnet IP so Prometheus is reachable on
+      # the operator's overlay network but never on the broader internet.
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${PROMETHEUS_HOST_PORT}:${PROMETHEUS_CONTAINER_PORT}"
+    volumes:
+      - prometheus-data:/prometheus
+      # prometheus.yml and alerts.yml are extracted from the deploy
+      # bundle into <composeDir>/ alongside this compose file.
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+    profiles:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_CONTAINER_PORT}/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          # Spec 045 FR-045-001 — SST-derived; fail-loud per Gate G028.
+          cpus: "${PROMETHEUS_CPU_LIMIT:?PROMETHEUS_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${PROMETHEUS_MEMORY_LIMIT:?PROMETHEUS_MEMORY_LIMIT must be set by deploy adapter}"
+    labels:
+      com.smackerel.component: prometheus
+      com.smackerel.lifecycle: ephemeral
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
 volumes:
   postgres-data:
     name: ${POSTGRES_VOLUME_NAME}
@@ -279,3 +349,5 @@ volumes:
     name: ${NATS_VOLUME_NAME}
   ollama-data:
     name: ${OLLAMA_VOLUME_NAME}
+  prometheus-data:
+    name: ${PROMETHEUS_VOLUME_NAME}

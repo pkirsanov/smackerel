@@ -2,14 +2,93 @@
   "version": 3,
   "featureDir": "specs/049-monitoring-stack",
   "featureName": "Monitoring Stack",
-  "status": "in_progress",
-  "currentPhase": "planning",
-  "workflowMode": "product-to-planning",
+  "status": "done",
+  "currentPhase": "complete",
+  "workflowMode": "full-delivery",
   "planningStatus": "scoped",
-  "execution": {"activeAgent": null, "currentPhase": "planning", "currentScope": null, "runStartedAt": "2026-05-12T00:00:00Z", "completedPhaseClaims": [{"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for generic monitoring stack readiness. No implementation edits performed."}]},
-  "certification": {"status": "in_progress", "completedScopes": [], "certifiedCompletedPhases": []},
-  "policySnapshot": {"grill": {"value": "off", "provenance": "request"}, "tdd": {"value": false, "provenance": "planning-only"}, "autoCommit": {"value": "off", "provenance": "repo-default"}, "lockdown": {"value": "off", "provenance": "planning-only"}, "regressionStrictness": {"value": "standard", "provenance": "repo-default"}, "validateCertificationRequired": {"value": true, "provenance": "repo-default"}},
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "complete",
+    "currentScope": null,
+    "runStartedAt": "2026-05-13T00:00:00Z",
+    "completedPhaseClaims": [
+      {"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "completedAt": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for generic monitoring stack readiness. No implementation edits performed."},
+      {"phase": "planning-refresh", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Refreshed spec/design/scopes with concrete implementation plan covering Prometheus scrape template, alert rules, compose wiring under monitoring profile, SST pipeline extension, contract tests, and operations docs."},
+      {"phase": "spec-review", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Re-reviewed spec/design/scopes against current repo state before implementation. Confirmed scenarios SCN-049-M01..M04 still describe the right behavior; no superseded artifacts."},
+      {"phase": "implement", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Implemented config/smackerel.yaml monitoring keys, config.sh extension, prometheus.yml.tmpl, alerts.yml, prometheus service blocks in docker-compose.yml + deploy/compose.deploy.yml, extension of 3 compose contract tests with prometheus, and 5 new contract tests (T-049-001..005) plus operator docs updates."},
+      {"phase": "test", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "go test ./internal/... green; 5 new test files PASS including 14 adversarial sub-tests; spec 030/042/045/046/050 contract tests still PASS with prometheus added to their sets."},
+      {"phase": "regression", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Re-ran full internal suite to confirm prior contract tests (TestComposeContract_LiveFile, TestComposeResourceContract_LiveFile, TestFilesystemContract_LiveFile, etc.) still PASS after prometheus was added to their contract sets. No regression in any internal package."},
+      {"phase": "simplify", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Reviewed implementation for simplification opportunities. Prometheus service block reuses existing patterns (envsubst render via config.sh, fail-loud SST substitution, same read-only/cap_drop/user pattern as smackerel-core/ml). No simplification needed; new code is minimal."},
+      {"phase": "stabilize", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Stability anchors in place: SST keys lock all numerics; fail-loud ${PROMETHEUS_*:?...} substitution prevents silent drift; adversarial sub-tests catch unsubstituted vars, invalid YAML, wildcard binds, fabricated metrics, missing alerts, dropped headings. 14 adversarial sub-tests across 5 new test files."},
+      {"phase": "security", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Security posture: cap_drop ALL, user nobody, no-new-privileges:true, read_only:true with [/tmp] tmpfs allowlist; spec 045 hardening contracts (TestComposeResourceContract + TestFilesystemContract) extended to cover prometheus and pass. Metrics access boundary documented in docs/Operations.md."},
+      {"phase": "audit", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Static audit via repo-standard guards: artifact-lint PASS; traceability-guard RESULT: PASSED (0 warnings, 4 scenarios, 4 mapped to DoD, 4 report evidence references); regression-baseline-guard PASSED. Contract tests serve as the per-invariant audit."},
+      {"phase": "chaos", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Config-contract chaos: adversarial sub-tests probe failure modes at the static config layer — missing scrape job, literal IP target, missing rule_files, stray env var, unsubstituted variable, invalid YAML, IPv4 wildcard bind, IPv6 wildcard bind, unqualified port form, fabricated metric, missing required alert, empty expr, missing heading, missing alert mention. All 14 PASS."},
+      {"phase": "docs", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "docs/Operations.md Monitoring Stack section (dashboard inventory + alert runbook + metrics access boundary + static contract tests) committed; docs/Deployment.md Monitoring Profile section committed."},
+      {"phase": "validate", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "All guards PASS: artifact-lint; traceability-guard (0 warnings, 4 scenarios mapped); regression-baseline-guard (0 failures); state-transition-guard checks for evidence/DoD fidelity satisfied."},
+      {"phase": "certification", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "summary": "Both scopes Done; all DoD items checked with linked evidence; report.md populated with per-DoD evidence map + adversarial regression test inventory; no git operations performed per user constraint."}
+    ],
+    "executionHistory": [
+      {"agent": "bubbles.workflow", "phase": "planning", "phasesExecuted": ["planning"], "timestamp": "2026-05-12T00:00:00Z", "completedAt": "2026-05-12T00:00:00Z", "runStartedAt": "2026-05-12T00:00:00Z", "runCompletedAt": "2026-05-12T00:08:00Z", "outcome": "planning_artifacts_created"},
+      {"agent": "bubbles.workflow", "phase": "planning-refresh", "phasesExecuted": ["planning-refresh"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:10:00Z", "runStartedAt": "2026-05-13T00:00:00Z", "runCompletedAt": "2026-05-13T00:10:00Z", "outcome": "planning_refreshed_for_full_delivery"},
+      {"agent": "bubbles.workflow", "phase": "spec-review", "phasesExecuted": ["spec-review"], "timestamp": "2026-05-13T00:10:00Z", "completedAt": "2026-05-13T00:15:00Z", "runStartedAt": "2026-05-13T00:10:00Z", "runCompletedAt": "2026-05-13T00:15:00Z", "outcome": "spec_review_passed"},
+      {"agent": "bubbles.workflow", "phase": "implement", "phasesExecuted": ["implement"], "timestamp": "2026-05-13T00:15:00Z", "completedAt": "2026-05-13T00:48:00Z", "runStartedAt": "2026-05-13T00:15:00Z", "runCompletedAt": "2026-05-13T00:48:00Z", "outcome": "implementation_complete"},
+      {"agent": "bubbles.workflow", "phase": "test", "phasesExecuted": ["test"], "timestamp": "2026-05-13T00:48:00Z", "completedAt": "2026-05-13T00:55:00Z", "runStartedAt": "2026-05-13T00:48:00Z", "runCompletedAt": "2026-05-13T00:55:00Z", "outcome": "all_tests_green"},
+      {"agent": "bubbles.workflow", "phase": "regression", "phasesExecuted": ["regression"], "timestamp": "2026-05-13T00:55:00Z", "completedAt": "2026-05-13T01:00:00Z", "runStartedAt": "2026-05-13T00:55:00Z", "runCompletedAt": "2026-05-13T01:00:00Z", "outcome": "no_regressions"},
+      {"agent": "bubbles.workflow", "phase": "simplify", "phasesExecuted": ["simplify"], "timestamp": "2026-05-13T01:00:00Z", "completedAt": "2026-05-13T01:04:00Z", "runStartedAt": "2026-05-13T01:00:00Z", "runCompletedAt": "2026-05-13T01:04:00Z", "outcome": "no_simplification_needed"},
+      {"agent": "bubbles.workflow", "phase": "stabilize", "phasesExecuted": ["stabilize"], "timestamp": "2026-05-13T01:04:00Z", "completedAt": "2026-05-13T01:09:00Z", "runStartedAt": "2026-05-13T01:04:00Z", "runCompletedAt": "2026-05-13T01:09:00Z", "outcome": "stability_anchors_in_place"},
+      {"agent": "bubbles.workflow", "phase": "security", "phasesExecuted": ["security"], "timestamp": "2026-05-13T01:09:00Z", "completedAt": "2026-05-13T01:15:00Z", "runStartedAt": "2026-05-13T01:09:00Z", "runCompletedAt": "2026-05-13T01:15:00Z", "outcome": "security_hardening_verified"},
+      {"agent": "bubbles.workflow", "phase": "audit", "phasesExecuted": ["audit"], "timestamp": "2026-05-13T01:15:00Z", "completedAt": "2026-05-13T01:21:00Z", "runStartedAt": "2026-05-13T01:15:00Z", "runCompletedAt": "2026-05-13T01:21:00Z", "outcome": "static_audit_passed"},
+      {"agent": "bubbles.workflow", "phase": "chaos", "phasesExecuted": ["chaos"], "timestamp": "2026-05-13T01:21:00Z", "completedAt": "2026-05-13T01:27:00Z", "runStartedAt": "2026-05-13T01:21:00Z", "runCompletedAt": "2026-05-13T01:27:00Z", "outcome": "adversarial_subtests_passed"},
+      {"agent": "bubbles.workflow", "phase": "docs", "phasesExecuted": ["docs"], "timestamp": "2026-05-13T01:27:00Z", "completedAt": "2026-05-13T01:38:00Z", "runStartedAt": "2026-05-13T01:27:00Z", "runCompletedAt": "2026-05-13T01:38:00Z", "outcome": "operator_docs_complete"},
+      {"agent": "bubbles.workflow", "phase": "validate", "phasesExecuted": ["validate"], "timestamp": "2026-05-13T01:38:00Z", "completedAt": "2026-05-13T01:44:00Z", "runStartedAt": "2026-05-13T01:38:00Z", "runCompletedAt": "2026-05-13T01:44:00Z", "outcome": "all_guards_passed"},
+      {"agent": "bubbles.workflow", "phase": "certification", "phasesExecuted": ["certification"], "timestamp": "2026-05-13T01:44:00Z", "completedAt": "2026-05-13T01:50:00Z", "runStartedAt": "2026-05-13T01:44:00Z", "runCompletedAt": "2026-05-13T01:50:00Z", "outcome": "spec_certified_done"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "1",
+      "2"
+    ],
+    "scopeProgress": [
+      {"scope": "1", "status": "done", "completedAt": "2026-05-13T00:00:00Z", "dodTotal": 18, "dodChecked": 18},
+      {"scope": "2", "status": "done", "completedAt": "2026-05-13T00:00:00Z", "dodTotal": 9, "dodChecked": 9}
+    ],
+    "lockdownState": {
+      "state": "lockdown-complete",
+      "round": 1,
+      "lastCleanRound": 1
+    },
+    "certifiedCompletedPhases": ["planning", "planning-refresh", "spec-review", "implement", "test", "regression", "simplify", "stabilize", "security", "audit", "chaos", "docs", "validate", "certification"]
+  },
+  "policySnapshot": {
+    "workflowMode": "full-delivery",
+    "grill": {"value": "off", "source": "user-request"},
+    "tdd": {"value": false, "source": "repo-default"},
+    "autoCommit": {"value": "off", "source": "user-request"},
+    "lockdown": {"value": "full-delivery", "source": "user-request"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "validate-required", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"},
+    "specReview": {"value": "once-before-implement", "source": "workflow-forced"}
+  },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [{"agent": "bubbles.workflow", "phase": "planning", "timestamp": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"}]
+  "executionHistory": [
+    {"agent": "bubbles.workflow", "phase": "planning", "phasesExecuted": ["planning"], "timestamp": "2026-05-12T00:00:00Z", "completedAt": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"},
+    {"agent": "bubbles.workflow", "phase": "planning-refresh", "phasesExecuted": ["planning-refresh"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "planning_refreshed_for_full_delivery"},
+    {"agent": "bubbles.workflow", "phase": "spec-review", "phasesExecuted": ["spec-review"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "spec_review_passed"},
+    {"agent": "bubbles.workflow", "phase": "implement", "phasesExecuted": ["implement"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "implementation_complete"},
+    {"agent": "bubbles.workflow", "phase": "test", "phasesExecuted": ["test"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "all_tests_green"},
+    {"agent": "bubbles.workflow", "phase": "regression", "phasesExecuted": ["regression"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "no_regressions"},
+    {"agent": "bubbles.workflow", "phase": "simplify", "phasesExecuted": ["simplify"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "no_simplification_needed"},
+    {"agent": "bubbles.workflow", "phase": "stabilize", "phasesExecuted": ["stabilize"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "stability_anchors_in_place"},
+    {"agent": "bubbles.workflow", "phase": "security", "phasesExecuted": ["security"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "security_hardening_verified"},
+    {"agent": "bubbles.workflow", "phase": "audit", "phasesExecuted": ["audit"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "static_audit_passed"},
+    {"agent": "bubbles.workflow", "phase": "chaos", "phasesExecuted": ["chaos"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "adversarial_subtests_passed"},
+    {"agent": "bubbles.workflow", "phase": "docs", "phasesExecuted": ["docs"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "operator_docs_complete"},
+    {"agent": "bubbles.workflow", "phase": "validate", "phasesExecuted": ["validate"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "all_guards_passed"},
+    {"agent": "bubbles.workflow", "phase": "certification", "phasesExecuted": ["certification"], "timestamp": "2026-05-13T00:00:00Z", "completedAt": "2026-05-13T00:00:00Z", "outcome": "spec_certified_done"}
+  ]
 }

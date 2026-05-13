@@ -801,6 +801,44 @@ deploy_resources:
   ollama:
     cpus: "4.0"
     memory: "8G"
+  # Spec 049 FR-049-005(c) — Prometheus runs hardened with explicit CPU
+  # and memory envelopes. Profile-gated (monitoring); when the operator
+  # enables `--profile monitoring`, the deploy adapter MUST emit
+  # PROMETHEUS_CPU_LIMIT and PROMETHEUS_MEMORY_LIMIT into app.env or
+  # compose aborts at substitution time (Gate G028).
+  prometheus:
+    cpus: "1.0"
+    memory: "512M"
+
+# Spec 049 — Monitoring Stack SST (FR-049-001 / FR-049-003 / FR-049-005).
+#
+# All keys are required (fail-loud SST). The deploy adapter consumes them
+# via PROMETHEUS_* env vars substituted into deploy/compose.deploy.yml
+# ${VAR:?...} placeholders and into config/prometheus/prometheus.yml.tmpl
+# at config-generate time. Hand-edited literals in either are forbidden —
+# see internal/deploy/monitoring_*_contract_test.go.
+#
+# Prometheus runs behind a `monitoring` Compose profile (off by default).
+# Enable in dev with `docker compose --profile monitoring up -d`. In
+# production, the deploy adapter overlay sets the profile in its compose
+# invocation.
+monitoring:
+  prometheus:
+    # Pinned image tag (no `latest`, no fallback). Bumping requires a
+    # design discussion + adversarial regression test re-run.
+    image: "prom/prometheus:v2.55.1"
+    # Internal container port for the Prometheus web UI / API. Matches
+    # the upstream default.
+    container_port: 9090
+    # Scrape and evaluation intervals (seconds). 15s is the Prometheus
+    # default and the common observability baseline.
+    scrape_interval_seconds: 15
+    evaluation_interval_seconds: 15
+    # On-disk TSDB retention. 15 days is enough for daily-trend dashboards
+    # plus weekly post-mortem queries without runaway disk usage on a
+    # home-lab-class machine. Tune via SST without code changes.
+    retention_days: 15
+
 
 infrastructure:
   postgres:
@@ -910,9 +948,14 @@ environments:
     core_host_port: 40001
     ml_host_port: 40002
     ollama_host_port: 42004
+    # Spec 049 — Prometheus host port lives in the dev infra block
+    # (42001-42099). Used only when the `monitoring` Compose profile is
+    # enabled; the service is off by default.
+    prometheus_host_port: 42005
     postgres_volume_name: smackerel-postgres-data
     nats_volume_name: smackerel-nats-data
     ollama_volume_name: smackerel-ollama-data
+    prometheus_volume_name: smackerel-prometheus-data
     # Spec 043 — per-env opt-in. Dev preserves manual --profile ollama
     # ergonomic (FR-OLLAMA-007); operator flips to true to auto-start.
     ollama_enabled: false
@@ -927,9 +970,14 @@ environments:
     core_host_port: 45001
     ml_host_port: 45002
     ollama_host_port: 47004
+    # Spec 049 — Prometheus host port in the test infra block
+    # (47001-47099). Disposable test stack runs the monitoring profile
+    # opt-in via the integration test fixture.
+    prometheus_host_port: 47005
     postgres_volume_name: smackerel-test-postgres-data
     nats_volume_name: smackerel-test-nats-data
     ollama_volume_name: smackerel-test-ollama-data
+    prometheus_volume_name: smackerel-test-prometheus-data
     # Spec 043 — test stack auto-starts Ollama (FR-OLLAMA-001). Final
     # SMACKEREL_TEST_OLLAMA=1 enforcement is wired in scope 03.
     ollama_enabled: true
@@ -958,9 +1006,15 @@ environments:
     core_host_port: 41001
     ml_host_port: 41002
     ollama_host_port: 43004
+    # Spec 049 — Prometheus host port for home-lab. Operator enables
+    # the `monitoring` Compose profile via the deploy-adapter overlay;
+    # actual host exposure (reverse proxy, Tailscale ACLs) stays in
+    # the overlay too.
+    prometheus_host_port: 43005
     postgres_volume_name: smackerel-home-lab-postgres-data
     nats_volume_name: smackerel-home-lab-nats-data
     ollama_volume_name: smackerel-home-lab-ollama-data
+    prometheus_volume_name: smackerel-home-lab-prometheus-data
     # Spec 043 — home-lab preserves opt-in. Operator flips to true after
     # provisioning the GPU host and pulling the production model.
     ollama_enabled: false
