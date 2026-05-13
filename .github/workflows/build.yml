@@ -100,6 +100,16 @@ jobs:
     # by digest in build-manifest.yaml under attestations.vulnerabilityScan.
     # ─────────────────────────────────────────────────────────────────
     - name: Trivy vulnerability scan — smackerel-core
+      # Threshold tuning per spec 047 design.md §Threshold Tuning:
+      # ignore-unfixed: true blocks deployment ONLY on CRITICAL/HIGH CVEs
+      # that have an upstream fix available. Advisory CVEs in the base
+      # image (debian:bookworm-slim, python:3.12-slim) with no upstream
+      # fix are surfaced in the SARIF artifact for visibility but do not
+      # block deploy — the prior policy of blocking on unfixed advisories
+      # made every CI run unrunnable as soon as a new advisory landed in
+      # the Debian/PyPI vulnerability feed, with no actionable remediation
+      # path. Enforced by internal/deploy/build_workflow_vuln_gate_contract_test.go
+      # which fails the build if this flag is ever flipped back to false.
       id: trivy-core
       uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
       with:
@@ -108,10 +118,12 @@ jobs:
         output: trivy-core.sarif
         severity: CRITICAL,HIGH
         exit-code: '1'
-        ignore-unfixed: false
+        ignore-unfixed: true
         vuln-type: os,library
 
     - name: Trivy vulnerability scan — smackerel-ml
+      # See trivy-core step above for the §Threshold Tuning rationale —
+      # ignore-unfixed: true is enforced symmetrically across both images.
       id: trivy-ml
       uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
       with:
@@ -120,7 +132,7 @@ jobs:
         output: trivy-ml.sarif
         severity: CRITICAL,HIGH
         exit-code: '1'
-        ignore-unfixed: false
+        ignore-unfixed: true
         vuln-type: os,library
 
     - name: Upload Trivy scan reports as workflow artifacts
@@ -234,7 +246,9 @@ jobs:
           vulnerabilityScan:
             scanner: trivy
             severityThreshold: CRITICAL,HIGH
-            gateBlocksOn: CRITICAL,HIGH
+            gateBlocksOn: CRITICAL,HIGH-with-upstream-fix
+            ignoreUnfixed: true
+            ignoreUnfixedRationale: "Threshold tuning per spec 047 design.md §Threshold Tuning. Block on FIXABLE CRITICAL/HIGH only; surface unfixed advisory CVEs in SARIF artifact for visibility without making the gate non-deployable."
             evidenceArtifact: trivy-scan-reports-${{ needs.build-images.outputs.sourceSha }}
             specReference: specs/047-ci-image-vulnerability-gate/spec.md
         EOF
