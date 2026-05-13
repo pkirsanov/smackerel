@@ -111,7 +111,7 @@ jobs:
       # path. Enforced by internal/deploy/build_workflow_vuln_gate_contract_test.go
       # which fails the build if this flag is ever flipped back to false.
       id: trivy-core
-      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       with:
         image-ref: ${{ env.IMAGE_CORE }}@${{ steps.core.outputs.digest }}
         format: sarif
@@ -125,7 +125,7 @@ jobs:
       # See trivy-core step above for the §Threshold Tuning rationale —
       # ignore-unfixed: true is enforced symmetrically across both images.
       id: trivy-ml
-      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
       with:
         image-ref: ${{ env.IMAGE_ML }}@${{ steps.ml.outputs.digest }}
         format: sarif
