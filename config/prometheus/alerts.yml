@@ -1,0 +1,207 @@
+# Spec 049 — Prometheus alert rules (FR-049-003).
+#
+# This file is committed AS-IS (no template substitution) and mounted
+# read-only into the prometheus container at /etc/prometheus/alerts.yml.
+# Every rule below references a metric name that is actually emitted
+# today by either internal/metrics/ (Go core) or ml/app/metrics.py
+# (Python sidecar). The static contract test
+# internal/deploy/monitoring_alerts_contract_test.go (T-049-004)
+# parses this file and rejects any expression that references a
+# metric name not in the known-metrics allowlist extracted from the
+# live runtime code.
+#
+# Receivers (Telegram, PagerDuty, email, etc.) are NOT shipped here.
+# Alertmanager routing belongs to the deploy-adapter overlay so the
+# product repo stays target-agnostic (per
+# .github/copilot-instructions.md "No env-specific content").
+#
+# Thresholds and `for:` windows are intentionally conservative — tune
+# via overlay if a deployment needs tighter alerting.
+
+groups:
+# ─────────────────────────────────────────────────────────────────────
+# Service availability — fires when Prometheus has not scraped a
+# target successfully for 2 minutes. `up` is the synthetic per-scrape
+# gauge Prometheus injects for every target; no Smackerel-side
+# instrumentation needed.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-availability
+  rules:
+  - alert: SmackerelCoreUnavailable
+    expr: up{job="smackerel-core"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: core
+    annotations:
+      summary: "smackerel-core /metrics is unreachable for >=2m"
+      description: |
+        Prometheus has not successfully scraped smackerel-core for at least
+        2 minutes. Inspect container health: `docker ps`, `docker logs
+        <core-container>`. The /metrics endpoint is unauthenticated and
+        served on the SST-bound CORE_CONTAINER_PORT inside the compose
+        network — confirm Postgres + NATS dependencies are healthy first.
+
+  - alert: SmackerelMLUnavailable
+    expr: up{job="smackerel-ml"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: ml
+    annotations:
+      summary: "smackerel-ml /metrics is unreachable for >=2m"
+      description: |
+        Prometheus has not successfully scraped smackerel-ml for at least
+        2 minutes. The Go core has a graceful-degradation fallback to text
+        search (spec 050), so end users may not notice immediately, but
+        ingestion enrichment is paused. Inspect ML sidecar logs and
+        confirm the embedding ThreadPoolExecutor is alive.
+
+# ─────────────────────────────────────────────────────────────────────
+# Ingestion pipeline — fires when no new artifacts have been ingested
+# in the last 30 minutes despite the core being up. Catches the case
+# where the runtime is healthy but every connector silently stopped
+# producing.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-ingestion
+  rules:
+  - alert: SmackerelIngestionStalled
+    expr: |
+      up{job="smackerel-core"} == 1
+      and
+      rate(smackerel_artifacts_ingested_total[30m]) == 0
+    for: 15m
+    labels:
+      severity: warning
+      component: ingestion
+    annotations:
+      summary: "No artifacts ingested in 30 minutes while core is healthy"
+      description: |
+        smackerel_artifacts_ingested_total has not increased in 30
+        minutes even though the core is up. Likely causes: all
+        connectors disabled/misconfigured, scheduler stuck, or upstream
+        sources unreachable. Check `smackerel_connector_sync_total` per
+        connector to localise.
+
+# ─────────────────────────────────────────────────────────────────────
+# NATS dead-letter pressure — fires when messages keep failing all
+# retries and landing in the DEADLETTER stream. The metric is bounded
+# per-stream so the alert fires per stream when the threshold is
+# exceeded.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-nats
+  rules:
+  - alert: SmackerelNATSDeadLetterPressure
+    expr: |
+      sum by (stream) (rate(smackerel_nats_deadletter_total[10m])) > 0.05
+    for: 10m
+    labels:
+      severity: warning
+      component: nats
+    annotations:
+      summary: "Sustained NATS dead-letter rate on stream {{ $labels.stream }}"
+      description: |
+        More than 0.05 messages/second are landing in the dead-letter
+        queue for stream {{ $labels.stream }} over the last 10 minutes.
+        Inspect ML sidecar logs (most DLQ traffic is enrichment
+        failures), confirm Ollama/LLM availability if the failing
+        stream is SEARCH/DOMAIN/INTELLIGENCE.
+
+# ─────────────────────────────────────────────────────────────────────
+# Database pressure — fires when the connection pool is saturated.
+# Threshold uses the configured max_conns (10 by default per
+# config/smackerel.yaml infrastructure.postgres.max_conns).
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-database
+  rules:
+  - alert: SmackerelDBPoolSaturated
+    expr: smackerel_db_connections_active >= 9
+    for: 5m
+    labels:
+      severity: warning
+      component: postgres
+    annotations:
+      summary: "Postgres connection pool >=90% of max for 5 minutes"
+      description: |
+        Active connections are at or above 9 (90% of the default 10
+        max_conns) for 5 minutes. New requests will queue or 503.
+        Either bump infrastructure.postgres.max_conns in the SST and
+        regenerate config + restart, or hunt the slow query in
+        pg_stat_activity.
+
+# ─────────────────────────────────────────────────────────────────────
+# ML embedding starvation — fires when the bounded ThreadPoolExecutor
+# is rejecting requests at the queue cap (spec 050). The Go core
+# falls back to text search, so end-user search keeps working, but
+# quality is degraded.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-ml-embedding
+  rules:
+  - alert: SmackerelMLEmbeddingStarvation
+    expr: |
+      rate(smackerel_ml_embedding_rejected_total[5m]) > 0
+    for: 10m
+    labels:
+      severity: warning
+      component: ml
+    annotations:
+      summary: "ML embedding pool is rejecting requests"
+      description: |
+        smackerel_ml_embedding_rejected_total is incrementing — the
+        bounded ThreadPoolExecutor (spec 050) is rejecting new work at
+        the queue cap. Search is falling back to text-only matching.
+        Either raise services.ml.embedding_workers /
+        services.ml.embedding_queue_max in the SST or scale the ML
+        container's CPU envelope (deploy_resources.smackerel_ml.cpus).
+
+# ─────────────────────────────────────────────────────────────────────
+# Alert delivery pipeline — fires when the alert delivery system
+# itself is failing. This is the "monitor the monitor" rule: if
+# operator alerts cannot reach Telegram, the operator needs to know
+# via Prometheus + Alertmanager (deploy-adapter responsibility).
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-alert-delivery
+  rules:
+  - alert: SmackerelAlertDeliveryFailing
+    expr: rate(smackerel_alert_delivery_failures_total[15m]) > 0
+    for: 15m
+    labels:
+      severity: critical
+      component: alerts
+    annotations:
+      summary: "Smackerel alert delivery pipeline is failing"
+      description: |
+        smackerel_alert_delivery_failures_total has incremented in
+        the last 15 minutes. Operator-facing notifications (Telegram
+        etc.) may be lost. Check core logs for the recent failure
+        class and verify the configured TELEGRAM_BOT_TOKEN / chat
+        mapping are still valid.
+
+# ─────────────────────────────────────────────────────────────────────
+# Backup staleness — fires when capture has been silent during a
+# multi-hour window. Generic rule: a target adapter with a dedicated
+# backup metric should swap in that metric in an overlay rule file.
+# The contract test only requires the alert NAME and a known metric
+# in the expression.
+# ─────────────────────────────────────────────────────────────────────
+- name: smackerel-backup
+  rules:
+  - alert: SmackerelBackupStale
+    expr: |
+      up{job="smackerel-core"} == 1
+      and
+      (time() - timestamp(smackerel_artifacts_ingested_total)) > 86400
+      and
+      rate(smackerel_artifacts_ingested_total[24h]) == 0
+    for: 30m
+    labels:
+      severity: warning
+      component: backup
+    annotations:
+      summary: "No ingestion or backup activity in the last 24h"
+      description: |
+        Either no artifacts have been ingested in 24h (likely cause:
+        connectors disabled, capture pipeline stuck) or the backup
+        pipeline that supplies the audit log has stopped advancing.
+        Target adapters with dedicated backup telemetry should
+        override this rule via the deploy-adapter overlay.

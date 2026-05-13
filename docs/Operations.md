@@ -551,6 +551,133 @@ The NATS monitoring endpoint at `http://127.0.0.1:42003` provides:
 - `/jsz` — JetStream stream and consumer status
 - `/healthz` — health status
 
+## Monitoring Stack
+
+> **Spec 049 — Prometheus profile.** This section is the
+> product-owned contract for the bundled Prometheus monitoring
+> stack. It documents what Smackerel ships, what dashboards and
+> alerts the runtime supports, and where the boundary sits between
+> the product repo and the deploy-adapter overlay. Reverse-proxy
+> fronting, Alertmanager receivers, Grafana provisioning, and
+> TLS termination are deliberately OUT of scope here — they belong
+> in the deploy-adapter overlay so the product repo stays
+> target-agnostic.
+
+### How To Enable
+
+Prometheus is shipped as an OPT-IN Docker Compose profile. The
+runtime stack does NOT include it by default so the bundled image
+footprint stays minimal.
+
+```bash
+# Enable monitoring alongside the runtime stack
+docker compose --profile monitoring up -d
+
+# Inspect Prometheus directly (dev only; bound to 127.0.0.1 per Spec 042)
+curl -s http://127.0.0.1:42005/-/healthy
+curl -s http://127.0.0.1:42005/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+```
+
+On home-lab / production deployments the deploy adapter sets
+`HOST_BIND_ADDRESS` (typically the tailnet IP) so Prometheus
+becomes reachable on the overlay network. The fail-loud
+substitution `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set
+by deploy adapter}` in `deploy/compose.deploy.yml` makes
+`docker compose up` abort at substitution time if the adapter
+forgot to set it.
+
+The scrape config rendered from
+`config/prometheus/prometheus.yml.tmpl` targets two product-owned
+endpoints by compose service name:
+
+| Job | Target | Source |
+|-----|--------|--------|
+| `smackerel-core` | `smackerel-core:${CORE_CONTAINER_PORT}` | Go core router (chi) — `/metrics` (spec 030) |
+| `smackerel-ml` | `smackerel-ml:${ML_CONTAINER_PORT}` | Python FastAPI sidecar — `/metrics` (spec 050) |
+
+### Dashboard Inventory
+
+Dashboard JSON is NOT shipped from this repo (deploy-adapter
+overlay responsibility — different operators provision Grafana
+differently). The inventory below is the canonical list of
+dashboards the runtime metrics support, with the backing metrics
+each dashboard MUST be built from. Any future dashboard change
+that depends on a NEW metric MUST add instrumentation to
+`internal/metrics/` or `ml/app/metrics.py` first; the contract
+test `internal/deploy/monitoring_alerts_contract_test.go`
+enforces this for alert rules.
+
+| # | Dashboard | Purpose | Backing Metrics |
+|---|-----------|---------|-----------------|
+| 1 | Service Health | Up/down state for core + ML, restart count | `up{job="smackerel-core"}`, `up{job="smackerel-ml"}`, container restart counters |
+| 2 | Ingestion Throughput | Rate of artifact ingestion split by source and type | `rate(smackerel_artifacts_ingested_total[5m])`, `rate(smackerel_capture_total[5m])` |
+| 3 | NATS Pressure | Stream depth, ack lag, dead-letter rate | `rate(smackerel_nats_deadletter_total[5m])`, NATS-side `nats_*` metrics from the NATS monitoring port |
+| 4 | ML Latency & Pool | Embedding latency, inflight pool utilization, rejection rate | `smackerel_ml_processing_latency_seconds`, `smackerel_ml_embedding_inflight`, `smackerel_ml_embedding_workers_configured`, `smackerel_ml_embedding_rejected_total` |
+| 5 | Postgres Pressure | Connection pool saturation, slow query count | `smackerel_db_connections_active`, Postgres-side `pg_*` metrics from a sidecar exporter |
+| 6 | Search Latency | Vector vs text fallback latency distribution | `histogram_quantile(0.95, rate(smackerel_search_latency_seconds_bucket[5m]))` split by `mode` |
+| 7 | LLM Usage | Token usage and cost proxy by provider/model | `rate(smackerel_llm_tokens_used_total[1h])` split by `provider`, `model` |
+| 8 | Alert Delivery | Operator notification pipeline health | `rate(smackerel_alert_delivery_failures_total[15m])` |
+| 9 | Connector Sync | Per-connector success/failure trends | `rate(smackerel_connector_sync_total[15m])` split by `connector`, `status` |
+| 10 | Domain Extraction | Schema extraction success by domain | `rate(smackerel_domain_extraction_total[15m])` split by `schema`, `status` |
+
+### Alert Runbook
+
+Alert rules live in `config/prometheus/alerts.yml` and are mounted
+read-only at `/etc/prometheus/alerts.yml`. Every rule below is
+present in the live file (the contract test
+`TestMonitoringAlertsContract_LiveFile` blocks regressions). The
+SEVERITY and FIRING ACTION columns are the operator-facing
+runbook — receiver routing (Telegram chat ID, PagerDuty key,
+email distribution) is deploy-adapter overlay scope.
+
+| Alert | Severity | Backing Metric | Firing Action |
+|-------|----------|----------------|---------------|
+| `SmackerelCoreUnavailable` | critical | `up{job="smackerel-core"}` | Check container health, inspect `docker logs smackerel-core`, confirm Postgres + NATS healthy. |
+| `SmackerelMLUnavailable` | critical | `up{job="smackerel-ml"}` | Inspect ML sidecar logs; Go core falls back to text search but enrichment is paused. |
+| `SmackerelIngestionStalled` | warning | `rate(smackerel_artifacts_ingested_total[30m])` | All connectors silent for 30m while core is up — check `smackerel_connector_sync_total` to localise. |
+| `SmackerelNATSDeadLetterPressure` | warning | `rate(smackerel_nats_deadletter_total[10m])` | Sustained DLQ traffic — inspect failing stream + ML/LLM availability. |
+| `SmackerelDBPoolSaturated` | warning | `smackerel_db_connections_active` | Connection pool ≥ 9/10 for 5m — bump `infrastructure.postgres.max_conns` or hunt slow queries. |
+| `SmackerelMLEmbeddingStarvation` | warning | `rate(smackerel_ml_embedding_rejected_total[5m])` | ThreadPoolExecutor rejecting work — raise `services.ml.embedding_workers/queue_max` or scale CPU envelope. |
+| `SmackerelAlertDeliveryFailing` | critical | `rate(smackerel_alert_delivery_failures_total[15m])` | Operator notifications failing — check Telegram bot token + chat mapping. |
+| `SmackerelBackupStale` | warning | `smackerel_artifacts_ingested_total` | No ingestion for 24h — connectors stuck or backup pipeline silent. |
+
+### Metrics Access Boundary
+
+Per the constitution's "No env-specific content in this repo"
+rule, the product repo is target-agnostic and the deploy-adapter
+overlay (e.g. the `knb` repo) owns all operator-specific
+exposure decisions.
+
+| Concern | Owner | Notes |
+|---------|-------|-------|
+| `/metrics` endpoint on `smackerel-core` and `smackerel-ml` | **Product** (this repo) | Unauthenticated by design — accessible only on the compose network; spec 030 |
+| Metric names, types, label sets | **Product** (this repo) | Cardinality bounds enforced by `internal/metrics/*_test.go`; tests block label explosions |
+| Prometheus scrape config template | **Product** (this repo) | `config/prometheus/prometheus.yml.tmpl`; SST-rendered; T-049-001 contract |
+| Alert rule file | **Product** (this repo) | `config/prometheus/alerts.yml`; T-049-004 contract enforces every metric is real |
+| Dashboard inventory (this table) | **Product** (this repo) | T-049-005 contract enforces this section exists |
+| Prometheus host port binding | **Deploy adapter** | `HOST_BIND_ADDRESS` substitution decides exposure (tailnet IP / loopback) |
+| Reverse proxy fronting Prometheus / Grafana | **Deploy adapter** | Caddy/nginx config + TLS — overlay-specific |
+| Grafana dashboard JSON provisioning | **Deploy adapter** | Different operators use different Grafana versions/datasource configs |
+| Alertmanager receivers (Telegram, PagerDuty, email) | **Deploy adapter** | Receiver credentials are operator-specific secrets |
+| Retention beyond the 15-day default | **Deploy adapter** | Configure via overlay or remote-write to long-term storage |
+
+### Static Contract Tests
+
+The monitoring stack is locked down by a family of static contract
+tests in `internal/deploy/`. None of them require a running
+container — all run in `./smackerel.sh test unit --go`.
+
+| Test | Spec | What it asserts |
+|------|------|-----------------|
+| `TestMonitoringScrapeContract_LiveTemplate` | FR-049-001 | Both required jobs exist; targets use compose service names; no env-specific content |
+| `TestMonitoringRender_LiveTemplate` | FR-049-001/005(b) | Template renders to valid YAML with all substitutions applied |
+| `TestMonitoringBindContract_LiveDevCompose` / `LiveDeployCompose` | FR-049-004 | No wildcard binds anywhere in either compose file |
+| `TestMonitoringAlertsContract_LiveFile` | FR-049-003 | Every required alert exists; every metric reference is emitted by runtime |
+| `TestMonitoringDocsContract_LiveFile` | FR-049-005(e) | This Operations.md section is present and complete |
+| `TestComposeContract_LiveFile` (extended) | FR-049-004 (inherits spec 042) | Prometheus port uses fail-loud `${HOST_BIND_ADDRESS:?...}` substitution |
+| `TestComposeResourceContract_LiveFile` (extended) | FR-049-005(c) (inherits spec 045) | Prometheus declares `${PROMETHEUS_CPU_LIMIT:?...}` and `${PROMETHEUS_MEMORY_LIMIT:?...}` |
+| `TestFilesystemContract_LiveFile` (extended) | FR-049-005(c) (inherits spec 045) | Prometheus is `read_only: true` with `/tmp` as the only tmpfs allowlist entry |
+
 ### ML Sidecar Health Isolation (Spec 050)
 
 The ML sidecar isolates CPU-bound embedding work from the FastAPI async

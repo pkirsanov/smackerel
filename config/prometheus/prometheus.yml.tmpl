@@ -1,0 +1,58 @@
+# Spec 049 — Prometheus scrape configuration template.
+#
+# Source of truth: this file is the COMMITTED, GENERIC template.
+# At config-generate time, scripts/commands/config.sh substitutes the
+# `$VAR` placeholders below (using `envsubst`) into a concrete file
+# at config/generated/prometheus.yml. The generated file is included
+# in the deploy bundle and mounted read-only into the prometheus
+# container at /etc/prometheus/prometheus.yml.
+#
+# Substituted from the SST in config/smackerel.yaml:
+#   PROMETHEUS_SCRAPE_INTERVAL_S      - monitoring.prometheus.scrape_interval_seconds
+#   PROMETHEUS_EVALUATION_INTERVAL_S  - monitoring.prometheus.evaluation_interval_seconds
+#   CORE_CONTAINER_PORT               - infrastructure (smackerel-core container port)
+#   ML_CONTAINER_PORT                 - infrastructure (smackerel-ml container port)
+#
+# NO env-specific content is allowed in this template (per
+# .github/copilot-instructions.md "No env-specific content"): no real
+# hostnames, no IPs, no tailnet identifiers. Targets are addressed by
+# Docker Compose service name only, which resolves via the embedded
+# DNS on the compose project network.
+#
+# Static contract test:
+#   internal/deploy/monitoring_scrape_contract_test.go (T-049-001)
+#   parses this file and asserts both required scrape jobs exist by
+#   compose service name with no embedded IPs/hostnames.
+
+global:
+  scrape_interval: ${PROMETHEUS_SCRAPE_INTERVAL_S}s
+  evaluation_interval: ${PROMETHEUS_EVALUATION_INTERVAL_S}s
+  external_labels:
+    deployment: smackerel
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # smackerel-core publishes its Prometheus metrics on the
+  # unauthenticated /metrics endpoint (spec 030 hard constraint).
+  # Address is the compose service name; the DNS resolution happens
+  # inside the compose project network. NO hostnames or IPs.
+  - job_name: smackerel-core
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "smackerel-core:${CORE_CONTAINER_PORT}"
+        labels:
+          component: core
+
+  # smackerel-ml exposes the same /metrics surface from its FastAPI
+  # app (ml/app/main.py + ml/app/metrics.py). Same compose-network
+  # addressing rule.
+  - job_name: smackerel-ml
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "smackerel-ml:${ML_CONTAINER_PORT}"
+        labels:
+          component: ml

@@ -84,6 +84,11 @@ var readOnlyAllowlist = map[string][]string{
 	"smackerel-core": {"/tmp"},
 	"smackerel-ml":   {"/tmp"},
 	"ollama":         {"/tmp", "/.ollama_tmp"},
+	// Spec 049 — Prometheus inherits the spec 045 read-only-root
+	// contract. The TSDB lives on a named volume mounted at /prometheus
+	// (not a tmpfs); the only writable tmpfs is /tmp for query
+	// buffers and the wal-segment scratch area.
+	"prometheus": {"/tmp"},
 }
 
 // readOnlyExempt is the set of services that MUST NOT declare
@@ -119,10 +124,15 @@ func assertFilesystemContract(yamlBytes []byte) error {
 	sort.Strings(roServices)
 
 	// Check 1 — every read-only-required service has read_only: true.
+	// Services absent from this fixture are SKIPPED; the live-file
+	// test (TestFilesystemContract_LiveFile) calls
+	// `assertFilesystemContractRequiresAll` to enforce presence.
+	// This lets adversarial fixtures scope down to a single service
+	// to prove the violation mode without redundant boilerplate.
 	for _, svcName := range roServices {
 		svc, ok := doc.Services[svcName]
 		if !ok {
-			return fmt.Errorf("contract violation: services.%s not found in compose document", svcName)
+			continue
 		}
 		if !svc.ReadOnly {
 			return fmt.Errorf("contract violation: services.%s.read_only is missing or false — spec 045 FR-045-003 requires this stateless service to run with a read-only root filesystem (set `read_only: true`)", svcName)
@@ -144,7 +154,10 @@ func assertFilesystemContract(yamlBytes []byte) error {
 
 	// Check 3 — every read-only service's tmpfs entries are in the allowlist.
 	for _, svcName := range roServices {
-		svc := doc.Services[svcName]
+		svc, ok := doc.Services[svcName]
+		if !ok {
+			continue
+		}
 		allowed := readOnlyAllowlist[svcName]
 		allowedSet := make(map[string]struct{}, len(allowed))
 		for _, p := range allowed {
@@ -161,6 +174,24 @@ func assertFilesystemContract(yamlBytes []byte) error {
 	return nil
 }
 
+// assertFilesystemContractRequiresAll asserts every read-only-required
+// service in the contract set is PRESENT in the document, then
+// delegates to assertFilesystemContract for the full violation walk.
+// The live-file tests use this stricter form so a regression that
+// silently drops a whole service block is still caught.
+func assertFilesystemContractRequiresAll(yamlBytes []byte) error {
+	var doc composeFilesystemDoc
+	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
+		return fmt.Errorf("yaml.Unmarshal failed: %w", err)
+	}
+	for svcName := range readOnlyAllowlist {
+		if _, ok := doc.Services[svcName]; !ok {
+			return fmt.Errorf("contract violation: services.%s not found in compose document — every service in the spec 045 FR-045-003 read-only allowlist MUST exist in the live deploy compose file", svcName)
+		}
+	}
+	return assertFilesystemContract(yamlBytes)
+}
+
 // TestFilesystemContract_LiveFile is the primary spec 045 FR-045-003
 // assertion. It loads the live deploy/compose.deploy.yml and proves the
 // read-only + tmpfs allowlist contract holds. SCN-045-A03 Gherkin:
@@ -173,10 +204,10 @@ func TestFilesystemContract_LiveFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read live compose file %q: %v", composePath, err)
 	}
-	if err := assertFilesystemContract(yamlBytes); err != nil {
+	if err := assertFilesystemContractRequiresAll(yamlBytes); err != nil {
 		t.Fatalf("live deploy/compose.deploy.yml violates spec 045 FR-045-003 read-only filesystem contract: %v", err)
 	}
-	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-003 (read-only allowlist {smackerel-core, smackerel-ml, ollama} all declare read_only:true; exempt set {postgres, nats} do NOT; every tmpfs entry is in the documented allowlist)")
+	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-003 (read-only allowlist {smackerel-core, smackerel-ml, ollama, prometheus} all declare read_only:true; exempt set {postgres, nats} do NOT; every tmpfs entry is in the documented allowlist)")
 }
 
 // TestFilesystemContract_LiveFile_DevCompose mirrors the live-file
@@ -195,7 +226,7 @@ func TestFilesystemContract_LiveFile_DevCompose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read live dev compose file %q: %v", composePath, err)
 	}
-	if err := assertFilesystemContract(yamlBytes); err != nil {
+	if err := assertFilesystemContractRequiresAll(yamlBytes); err != nil {
 		t.Fatalf("live docker-compose.yml violates spec 045 FR-045-003 read-only filesystem contract (dev stack mirror): %v", err)
 	}
 	t.Logf("contract OK: docker-compose.yml mirrors deploy compose hardening (dev stack runs read-only too)")

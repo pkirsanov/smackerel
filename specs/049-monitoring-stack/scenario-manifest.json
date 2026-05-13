@@ -1,0 +1,121 @@
+{
+  "version": 2,
+  "specId": "049",
+  "featureDir": "specs/049-monitoring-stack",
+  "generatedBy": "bubbles.workflow (full-delivery)",
+  "generatedAt": "2026-05-13T10:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-049-M01",
+      "name": "Operator sees Smackerel metrics scraped",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/monitoring_scrape_contract_test.go", "function": "TestMonitoringScrapeContract_LiveTemplate"},
+        {"file": "internal/deploy/monitoring_scrape_contract_test.go", "function": "TestMonitoringScrapeContract_AdversarialMissingMLJob"},
+        {"file": "internal/deploy/monitoring_scrape_contract_test.go", "function": "TestMonitoringScrapeContract_AdversarialLiteralIP"},
+        {"file": "internal/deploy/monitoring_scrape_contract_test.go", "function": "TestMonitoringScrapeContract_AdversarialMissingRuleFiles"},
+        {"file": "internal/deploy/monitoring_scrape_contract_test.go", "function": "TestMonitoringScrapeContract_AdversarialStrayEnvVar"},
+        {"file": "internal/deploy/monitoring_render_test.go", "function": "TestMonitoringRender_LiveTemplate"},
+        {"file": "internal/deploy/monitoring_render_test.go", "function": "TestMonitoringRender_AdversarialUnsubstitutedVar"},
+        {"file": "internal/deploy/monitoring_render_test.go", "function": "TestMonitoringRender_AdversarialInvalidYAML"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/monitoring_scrape_contract_test.go::TestMonitoringScrapeContract_LiveTemplate"},
+        {"type": "contract-test", "location": "internal/deploy/monitoring_render_test.go::TestMonitoringRender_LiveTemplate"},
+        {"type": "source", "location": "config/prometheus/prometheus.yml.tmpl — committed envsubst template"},
+        {"type": "source", "location": "config/smackerel.yaml::monitoring.prometheus.* + environments.<env>.prometheus_host_port + environments.<env>.prometheus_volume_name"},
+        {"type": "source", "location": "scripts/commands/config.sh — PROMETHEUS_* required_value extraction + envsubst render block + deploy bundle staging"},
+        {"type": "source", "location": "config/generated/prometheus.yml — rendered output proving SST flow"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-049-M01: config/prometheus/prometheus.yml.tmpl declares smackerel-core + smackerel-ml jobs addressed by compose service name",
+        "Scope 1 DoD: SCN-049-M01: config/smackerel.yaml carries monitoring.prometheus.* + per-env prometheus_host_port + prometheus_volume_name keys",
+        "Scope 1 DoD: SCN-049-M01: scripts/commands/config.sh extracts every monitoring var via required_value and renders prometheus.yml via envsubst",
+        "Scope 1 DoD: SCN-049-M01: T-049-001 TestMonitoringScrapeContract_LiveTemplate passes",
+        "Scope 1 DoD: SCN-049-M01: T-049-002 TestMonitoringRender_LiveTemplate passes with all four substitutions applied"
+      ]
+    },
+    {
+      "scenarioId": "SCN-049-M02",
+      "name": "Alerts cover deployment failure modes",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/monitoring_alerts_contract_test.go", "function": "TestMonitoringAlertsContract_LiveFile"},
+        {"file": "internal/deploy/monitoring_alerts_contract_test.go", "function": "TestMonitoringAlertsContract_AdversarialFabricatedMetric"},
+        {"file": "internal/deploy/monitoring_alerts_contract_test.go", "function": "TestMonitoringAlertsContract_AdversarialMissingRequiredAlert"},
+        {"file": "internal/deploy/monitoring_alerts_contract_test.go", "function": "TestMonitoringAlertsContract_AdversarialEmptyExpr"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/monitoring_alerts_contract_test.go::TestMonitoringAlertsContract_LiveFile"},
+        {"type": "contract-test", "location": "internal/deploy/monitoring_alerts_contract_test.go::TestMonitoringAlertsContract_AdversarialFabricatedMetric"},
+        {"type": "contract-test", "location": "internal/deploy/monitoring_alerts_contract_test.go::TestMonitoringAlertsContract_AdversarialMissingRequiredAlert"},
+        {"type": "source", "location": "config/prometheus/alerts.yml — 8 alert rules across 7 groups"},
+        {"type": "source", "location": "internal/metrics/*.go + ml/app/metrics.py — backing metrics every alert expression references"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: SCN-049-M02: config/prometheus/alerts.yml declares all 8 required alerts (Core/MLUnavailable, IngestionStalled, NATSDeadLetterPressure, DBPoolSaturated, MLEmbeddingStarvation, AlertDeliveryFailing, BackupStale)",
+        "Scope 2 DoD: SCN-049-M02: every alert expression references a metric emitted by internal/metrics/*.go or ml/app/metrics.py (or the Prometheus builtin `up`)",
+        "Scope 2 DoD: SCN-049-M02: T-049-004 TestMonitoringAlertsContract_LiveFile passes with 8 required alerts + 54-metric known-emitted set",
+        "Scope 2 DoD: SCN-049-M02: adversarial TestMonitoringAlertsContract_AdversarialFabricatedMetric rejects a non-existent metric reference"
+      ]
+    },
+    {
+      "scenarioId": "SCN-049-M03",
+      "name": "Metrics endpoints remain inside the operator boundary",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/monitoring_bind_contract_test.go", "function": "TestMonitoringBindContract_LiveDevCompose"},
+        {"file": "internal/deploy/monitoring_bind_contract_test.go", "function": "TestMonitoringBindContract_LiveDeployCompose"},
+        {"file": "internal/deploy/monitoring_bind_contract_test.go", "function": "TestMonitoringBindContract_AdversarialIPv4Wildcard"},
+        {"file": "internal/deploy/monitoring_bind_contract_test.go", "function": "TestMonitoringBindContract_AdversarialIPv6Wildcard"},
+        {"file": "internal/deploy/monitoring_bind_contract_test.go", "function": "TestMonitoringBindContract_AdversarialUnqualifiedPort"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeContract_LiveFile"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/monitoring_bind_contract_test.go::TestMonitoringBindContract_LiveDevCompose"},
+        {"type": "contract-test", "location": "internal/deploy/monitoring_bind_contract_test.go::TestMonitoringBindContract_LiveDeployCompose"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeContract_LiveFile — extended with prometheus bind invariant"},
+        {"type": "source", "location": "deploy/compose.deploy.yml — prometheus port uses ${HOST_BIND_ADDRESS:?...} fail-loud per Gate G028"},
+        {"type": "source", "location": "docker-compose.yml — prometheus binds 127.0.0.1:${PROMETHEUS_HOST_PORT} on dev stack"},
+        {"type": "source", "location": "docs/Operations.md::Monitoring Stack — Metrics Access Boundary section"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-049-M03: deploy/compose.deploy.yml prometheus service uses fail-loud ${HOST_BIND_ADDRESS:?...} substitution (Gate G028 NO-DEFAULTS)",
+        "Scope 1 DoD: SCN-049-M03: docker-compose.yml prometheus binds to 127.0.0.1 only on dev stack",
+        "Scope 1 DoD: SCN-049-M03: docs/Operations.md Metrics Access Boundary table assigns reverse-proxy/Alertmanager/Grafana to deploy-adapter overlay",
+        "Scope 1 DoD: SCN-049-M03: T-049-003 TestMonitoringBindContract proves NO wildcard binds anywhere in either compose file",
+        "Scope 1 DoD: SCN-049-M03: extended T-042 TestComposeContract_LiveFile blocks regression to literal bind on prometheus port"
+      ]
+    },
+    {
+      "scenarioId": "SCN-049-M04",
+      "name": "Monitoring stack obeys spec 045 hardening",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_resource_contract_test.go", "function": "TestComposeResourceContract_LiveFile"},
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_LiveFile"},
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_LiveFile_DevCompose"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/compose_resource_contract_test.go::TestComposeResourceContract_LiveFile — extended set now includes prometheus"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_LiveFile — read-only allowlist now includes prometheus"},
+        {"type": "source", "location": "config/smackerel.yaml::deploy_resources.prometheus.cpus/memory"},
+        {"type": "source", "location": "deploy/compose.deploy.yml — prometheus declares read_only:true, tmpfs /tmp, cap_drop: [ALL], user: nobody, deploy.resources.limits via ${PROMETHEUS_*_LIMIT:?...}"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-049-M04: deploy/compose.deploy.yml prometheus declares read_only:true with /tmp tmpfs allowlist only",
+        "Scope 1 DoD: SCN-049-M04: deploy/compose.deploy.yml prometheus declares cpus + memory via fail-loud ${PROMETHEUS_CPU_LIMIT:?...} / ${PROMETHEUS_MEMORY_LIMIT:?...}",
+        "Scope 1 DoD: SCN-049-M04: deploy/compose.deploy.yml prometheus drops all capabilities, runs as user nobody, sets no-new-privileges",
+        "Scope 1 DoD: SCN-049-M04: spec 045 contract tests TestComposeResourceContract_LiveFile + TestFilesystemContract_LiveFile pass with prometheus added to the contract set"
+      ]
+    }
+  ]
+}

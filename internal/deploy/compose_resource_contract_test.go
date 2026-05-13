@@ -81,6 +81,12 @@ var servicesUnderResourceContract = []struct {
 	{"smackerel-core", "CORE_CPU_LIMIT", "CORE_MEMORY_LIMIT"},
 	{"smackerel-ml", "ML_CPU_LIMIT", "ML_MEMORY_LIMIT"},
 	{"ollama", "OLLAMA_CPU_LIMIT", "OLLAMA_MEMORY_LIMIT"},
+	// Spec 049 — Prometheus inherits the spec 045 FR-045-001 resource
+	// envelope contract. The `monitoring` Compose profile is opt-in;
+	// when enabled, the deploy adapter MUST emit PROMETHEUS_CPU_LIMIT
+	// and PROMETHEUS_MEMORY_LIMIT in app.env or compose aborts at
+	// substitution time per Gate G028.
+	{"prometheus", "PROMETHEUS_CPU_LIMIT", "PROMETHEUS_MEMORY_LIMIT"},
 }
 
 // assertResourceContract returns nil iff every service in the contract
@@ -97,7 +103,11 @@ func assertResourceContract(yamlBytes []byte) error {
 	for _, contract := range servicesUnderResourceContract {
 		svc, ok := doc.Services[contract.service]
 		if !ok {
-			return fmt.Errorf("contract violation: services.%s not found in compose document", contract.service)
+			// Service absent from this fixture — SKIP. Adversarial
+			// fixtures may scope down to a subset of services.
+			// `assertResourceContractRequiresAll` enforces presence
+			// for the live-file test below.
+			continue
 		}
 		cpus := svc.Deploy.Resources.Limits.Cpus
 		memory := svc.Deploy.Resources.Limits.Memory
@@ -146,10 +156,28 @@ func TestComposeResourceContract_LiveFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read live compose file %q: %v", composePath, err)
 	}
-	if err := assertResourceContract(yamlBytes); err != nil {
+	if err := assertResourceContractRequiresAll(yamlBytes); err != nil {
 		t.Fatalf("live deploy/compose.deploy.yml violates spec 045 FR-045-001 resource envelope contract: %v", err)
 	}
-	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-001 (every service in {postgres, nats, smackerel-core, smackerel-ml, ollama} declares both cpus and memory under deploy.resources.limits using the fail-loud ${VAR:?...} SST form)")
+	t.Logf("contract OK: deploy/compose.deploy.yml satisfies spec 045 FR-045-001 (every service in {postgres, nats, smackerel-core, smackerel-ml, ollama, prometheus} declares both cpus and memory under deploy.resources.limits using the fail-loud ${VAR:?...} SST form)")
+}
+
+// assertResourceContractRequiresAll first asserts every contract-set
+// service is PRESENT in the document, then delegates to
+// assertResourceContract for the full violation walk. The live-file
+// tests use this stricter form so a regression that silently drops a
+// whole service block is still caught.
+func assertResourceContractRequiresAll(yamlBytes []byte) error {
+	var doc composeResourceDoc
+	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
+		return fmt.Errorf("yaml.Unmarshal failed: %w", err)
+	}
+	for _, contract := range servicesUnderResourceContract {
+		if _, ok := doc.Services[contract.service]; !ok {
+			return fmt.Errorf("contract violation: services.%s not found in compose document — every service in the spec 045 FR-045-001 contract set MUST exist in the live deploy compose file", contract.service)
+		}
+	}
+	return assertResourceContract(yamlBytes)
 }
 
 // TestComposeResourceContract_AdversarialMissingCPU proves the contract

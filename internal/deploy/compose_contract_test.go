@@ -80,8 +80,9 @@ type composeDoc struct {
 // inside `:?...` is part of the prefix and MUST match the live compose
 // file character-for-character.
 const (
-	requiredCorePrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:`
-	requiredMLPrefix   = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:`
+	requiredCorePrefix       = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:`
+	requiredMLPrefix         = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:`
+	requiredPrometheusPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${PROMETHEUS_HOST_PORT}:`
 )
 
 // repoRoot returns the repository root by climbing two directories up from
@@ -177,6 +178,27 @@ func assertComposeContract(yamlBytes []byte) error {
 		}
 		if len(n.Ports) > 0 {
 			return fmt.Errorf("contract violation: services.nats.ports is non-empty (got %v) — nats must have NO host port mapping per spec 042 (Pattern P1: tailscale ssh + docker exec)", n.Ports)
+		}
+	}
+
+	// Spec 049 — Prometheus is profile-gated (off by default) but its
+	// service definition still exists in the compose document. When
+	// present, its host port MUST inherit the spec 042 fail-loud
+	// HOST_BIND_ADDRESS substitution like other operator-facing
+	// services (smackerel-core, smackerel-ml). network_mode: host is
+	// rejected for the same reason. If the service block is absent
+	// (e.g. in a test fixture that scopes down), the check is skipped
+	// — mirrors the pattern used for postgres + nats above.
+	if prom, ok := doc.Services["prometheus"]; ok {
+		if prom.NetworkMode == "host" {
+			return fmt.Errorf("contract violation: services.prometheus.network_mode=%q — `network_mode: host` is forbidden by spec 042/049 (host networking exposes Prometheus on every host NIC and defeats the HOST_BIND_ADDRESS-substituted port mapping)", prom.NetworkMode)
+		}
+		if len(prom.Ports) > 0 {
+			for i, p := range prom.Ports {
+				if !strings.HasPrefix(p, requiredPrometheusPrefix) {
+					return fmt.Errorf("contract violation: services.prometheus.ports[%d]=%q does not start with required prefix %q (spec 049 inherits the spec 042 tailnet-edge bind contract; Prometheus host port MUST use the fail-loud ${HOST_BIND_ADDRESS:?...} SST substitution so compose aborts at start time if HOST_BIND_ADDRESS is unset — no literal 127.0.0.1: prefix, no default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} form)", i, p, requiredPrometheusPrefix)
+				}
+			}
 		}
 	}
 
