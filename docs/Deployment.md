@@ -85,7 +85,7 @@ removed.
 | Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` |
 | Config bundle (per env)              | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No (immutable, deterministic) | `./smackerel.sh config generate --env <env> --bundle` |
 | Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | CI workflow artifact |
-| Deployment manifest (per target)     | `deploy/<target>/manifest.yaml`                    | **Yes** (pointer)              | `deploy/<target>/apply.sh` |
+| Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like the home-lab adapter that lives in the knb deploy-adapter overlay). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates to the adapter's `apply.sh`. |
 
 Image tags like `:latest`, `:main`, `:staging-latest` MUST NOT be used in any
 deployment manifest. Adapters consume images by digest only.
@@ -164,9 +164,54 @@ bash scripts/deploy/promote.sh --target home-lab --build-manifest /tmp/sm-releas
 
 ---
 
+## knb Deploy-Adapter Overlay Dependency
+
+Some deploy targets shipped by Smackerel are **operator-coupled** —
+they require a real hostname, a real Tailscale tailnet identity, real
+reverse-proxy site files, real ufw rules, real systemd unit names, and
+real backup destinations to actually apply against a host. Per the
+deployment ownership boundary recorded in
+[`.github/copilot-instructions.md`](../.github/copilot-instructions.md),
+that operator-coupled content does NOT live in this product repo.
+Instead, this product repo ships only the generic adapter contract,
+the `deploy/_example/target-skeleton`, and the strict
+`DEPLOY_TARGETS_ROOT` resolution rule in
+[`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh).
+
+The operator-coupled adapter implementations live in the **knb
+deploy-adapter overlay repo** alongside any host-specific topology
+they bind. Today the home-lab target is the canonical example.
+
+### Operator verification step
+
+Before invoking `./smackerel.sh deploy-target <target> apply` for an
+operator-coupled target, the operator MUST:
+
+1. Confirm the knb deploy-adapter overlay's adapter-readiness spec for
+   the target is shipped and certified — for the home-lab target this
+   is the knb overlay spec `003-smackerel-home-lab-adapter-readiness`
+   (see the knb overlay's own README for the canonical path).
+2. Confirm `DEPLOY_TARGETS_ROOT` is set in the operator's environment
+   per the resolution rule in
+   [`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh)
+   so the dispatcher resolves the out-of-tree adapter without silent
+   fallback.
+3. Confirm the Generic Pre-Apply Prerequisites below are satisfied;
+   the knb overlay adapter MUST NOT mask or work around any of them.
+
+The verification step is described generically here. This product
+repo names no real hostnames, no real IPs, no real tailnet
+identifiers, no real reverse-proxy site files, no real systemd unit
+names, and no real secret values. The knb overlay owns those.
+
+---
+
 ## Adapter contract (per bubbles G074)
 
-Each `deploy/<target>/apply.sh` MUST:
+Each per-target adapter's `apply.sh` MUST (regardless of whether the
+adapter lives in-tree under `deploy/<target>/` or out-of-tree under
+`${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` per the locality rule in
+[`deploy/README.md`](../deploy/README.md#adapter-locality-in-tree-vs-out-of-tree)):
 
 1. Reject any image reference not of form `<repo>@sha256:<digest>`
 2. Pull both images by digest
@@ -175,11 +220,12 @@ Each `deploy/<target>/apply.sh` MUST:
 4. Pull the config bundle by `<env>-<sourceSha>` tag and verify its sha256
 5. Write the new pointer into `manifest.yaml` (preserving the prior pointer in
    `previousManifest`) BEFORE starting any container
-6. Run the rollout strategy declared in `params.yaml` (`recreate` for home-lab today;
-   `blue-green` available)
-7. On verify failure, invoke `rollback.sh` (pointer-swap, no rebuild)
+6. Run the rollout strategy declared in `params.yaml` (the home-lab adapter in
+   the knb deploy-adapter overlay declares `recreate`; `blue-green` is also
+   available)
+7. On verify failure, invoke the adapter's `rollback.sh` (pointer-swap, no rebuild)
 
-Each `deploy/<target>/rollback.sh` MUST:
+Each adapter's `rollback.sh` MUST:
 
 - Restore the `previousManifest` pointer (atomic swap)
 - NEVER invoke any build step
@@ -189,13 +235,32 @@ Each `deploy/<target>/rollback.sh` MUST:
 
 ## Adding a new deploy target
 
-1. `cp -R deploy/home-lab deploy/<new-target>`
-2. Edit `deploy/<new-target>/params.yaml` with target-specific knobs (rollout
+This repo ships a fully-stubbed adapter skeleton at
+[`deploy/_example/target-skeleton/`](../deploy/_example/target-skeleton/).
+Use it as the copy source. Choose in-tree or out-of-tree per the locality
+rule in [`deploy/README.md`](../deploy/README.md#adapter-locality-in-tree-vs-out-of-tree):
+
+```bash
+# In-tree (generic, shareable, safe for public repos):
+cp -R deploy/_example/target-skeleton deploy/<new-target>
+
+# Out-of-tree (operator-coupled, public-repo-safe; e.g. how the home-lab
+# adapter is provided via the knb deploy-adapter overlay):
+mkdir -p "${DEPLOY_TARGETS_ROOT}/smackerel"
+cp -R deploy/_example/target-skeleton "${DEPLOY_TARGETS_ROOT}/smackerel/<new-target>"
+```
+
+Then:
+
+1. Edit `<adapter-root>/<new-target>/params.yaml` with target-specific knobs (rollout
    strategy, hostnames, replica counts, host paths)
-3. Edit each script for target-specific differences (e.g., k8s vs docker compose)
-4. Add the env name to `deploy/contract.yaml` `configBundles.environments` and to
+2. Edit each script for target-specific differences (e.g., k8s vs docker compose)
+3. Add the env name to `deploy/contract.yaml` `configBundles.environments` and to
    the matrix in `.github/workflows/build.yml`
-5. The CLI auto-discovers the new target on the next `./smackerel.sh deploy-target` run
+4. The CLI auto-discovers the new target on the next `./smackerel.sh deploy-target` run
+   (in-tree adapters are auto-discovered; out-of-tree adapters require
+   `DEPLOY_TARGETS_ROOT` to be set per the strict resolution rule in
+   [`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh))
 
 ---
 

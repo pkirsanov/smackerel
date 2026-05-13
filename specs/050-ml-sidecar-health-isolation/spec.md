@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress - planning packet created
+Resolved — implemented 2026-05-15 (matches `state.json::status` and `state.json::certification.status` = `done`)
 
 ## Review Finding
 
