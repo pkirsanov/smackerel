@@ -1,0 +1,89 @@
+{
+  "version": 2,
+  "specId": "051",
+  "featureDir": "specs/051-deployment-secret-auth-contract",
+  "generatedBy": "bubbles.workflow (full-delivery, R12 reconciliation)",
+  "generatedAt": "2026-05-13T01:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-051-S01",
+      "name": "Missing auth signing key fails before runtime start",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production"},
+        {"file": "internal/config/validate_test.go", "function": "TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction"},
+        {"type": "source", "location": "internal/config/config.go::loadAuthConfig (production-mode block) — adds AUTH_BOOTSTRAP_TOKEN to authErrors when SMACKEREL_ENV=production AND AUTH_ENABLED=true AND AUTH_BOOTSTRAP_TOKEN is empty"},
+        {"type": "source", "location": "internal/auth/startup.go::ValidateRuntimeAuthStartup — defense-in-depth wiring-time check (already present from spec 044)"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: T-051-001 passes for missing AUTH_SIGNING_ACTIVE_PRIVATE_KEY",
+        "Scope 1 DoD: T-051-001 passes for missing AUTH_SIGNING_ACTIVE_KEY_ID",
+        "Scope 1 DoD: T-051-001 passes for missing AUTH_AT_REST_HASHING_KEY",
+        "Scope 1 DoD: T-051-002 passes for missing AUTH_BOOTSTRAP_TOKEN in production with auth.enabled=true"
+      ]
+    },
+    {
+      "scenarioId": "SCN-051-S02",
+      "name": "Default database password is rejected for deployment (defense-in-depth)",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "shell"],
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsDevDBPassword_Production"},
+        {"file": "internal/config/sst_loader_test.go", "function": "TestSSTLoader_RejectsDevPostgresPassword_HomeLab"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsPlaceholderDBPassword_Production"},
+        {"type": "unit-test", "location": "internal/config/sst_loader_test.go::TestSSTLoader_RejectsDevPostgresPassword_HomeLab"},
+        {"type": "source", "location": "internal/config/secrets.go::DevDBPasswords + IsDevDBPassword"},
+        {"type": "source", "location": "scripts/commands/config.sh — dev-default rejection block immediately after POSTGRES_PASSWORD resolution"},
+        {"type": "source", "location": "internal/config/config.go::Validate — DATABASE_URL dev-default check when SMACKEREL_ENV=production"},
+        {"type": "shell", "location": "scripts/commands/config_secret_rejection_test.sh — invokes config.sh --env home-lab with dev-default yaml and asserts non-zero exit + key-named-without-value stderr"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: T-051-003 passes for runtime dev-default rejection in production",
+        "Scope 2 DoD: T-051-003 passes for dev/test acceptance (no regression)",
+        "Scope 2 DoD: T-051-006 passes for SST loader rejection (home-lab)",
+        "Scope 2 DoD: T-051-006 passes for SST loader stderr never echoes the dev-default value"
+      ]
+    },
+    {
+      "scenarioId": "SCN-051-S03",
+      "name": "Bootstrap token is required and never echoed in any error",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["unit", "security-static", "docs-static"],
+      "linkedTests": [
+        {"file": "internal/config/log_redaction_test.go", "function": "TestLogRedaction_NoSecretValueAppearsInAuthConfigErrors"},
+        {"file": "internal/config/log_redaction_test.go", "function": "TestLogRedaction_NoSecretValueAppearsInValidateErrors"},
+        {"file": "internal/config/log_redaction_test.go", "function": "TestLogRedaction_NoSecretValueAppearsInRuntimeAuthStartupErrors"},
+        {"file": "internal/config/log_redaction_test.go", "function": "TestLogRedaction_ErrorsNameOffendingKeys"},
+        {"file": "internal/config/docs_required_keys_test.go", "function": "TestDocs_DeploymentMentionsCanonicalSecretKeys"},
+        {"file": "internal/config/docs_required_keys_test.go", "function": "TestDocs_OperationsMentionsCanonicalSecretKeys"},
+        {"file": "internal/config/docs_required_keys_test.go", "function": "TestDocs_DoNotContainForbiddenAliases"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/log_redaction_test.go (security-static — sentinel canary substring detection)"},
+        {"type": "unit-test", "location": "internal/config/docs_required_keys_test.go (docs-static — canonical key presence + forbidden alias absence)"},
+        {"type": "source", "location": "docs/Deployment.md — Per-User Bearer Auth required env-var table"},
+        {"type": "source", "location": "docs/Operations.md — auth.* env-var table"}
+      ],
+      "linkedDoD": [
+        "Scope 3 DoD: T-051-004 passes — no auth secret value appears in any returned error",
+        "Scope 3 DoD: T-051-004 passes — no DB password value appears in any returned error",
+        "Scope 3 DoD: T-051-004 passes — error messages name the offending KEY",
+        "Scope 3 DoD: T-051-005 passes — canonical key names appear in docs/Deployment.md and docs/Operations.md",
+        "Scope 3 DoD: T-051-005 passes — no forbidden aliases (auth.signing.hmac_key, auth.signing.issuer, …) appear in either doc",
+        "Scope 3 DoD: T-051-007 passes — artifact-lint, traceability-guard, state-transition-guard each EXIT=0"
+      ]
+    }
+  ]
+}
