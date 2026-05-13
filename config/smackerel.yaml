@@ -709,6 +709,34 @@ services:
     health_cache_ttl_s: 30
     readiness_timeout_s: 60
     processing_degraded_fallback_enabled: false
+    # Spec 050 FR-050-001/002/003/005 — ML sidecar health/worker isolation.
+    # All three values are required (fail-loud SST). The Python ML sidecar
+    # reads them via os.environ[...] in ml/app/main.py::_check_required_config
+    # and configures the dedicated embedding ThreadPoolExecutor in
+    # ml/app/embedder.py. Health request handling (FastAPI /health) is on
+    # the async event loop and never enters the embedding executor, so a
+    # saturated worker pool cannot starve health probes (FR-050-001).
+    #
+    #   embedding_workers — max concurrent CPU-bound embed workers. This is
+    #     the size of the dedicated ThreadPoolExecutor that runs
+    #     sentence-transformer encode() calls. MUST be a positive integer
+    #     and SHOULD be ≤ deploy_resources.smackerel_ml.cpus to avoid
+    #     CPU oversubscription. Typical value: 2 (matches default 2-vCPU
+    #     envelope for smackerel_ml). Bounded concurrency satisfies
+    #     FR-050-002.
+    #   embedding_queue_max — max in-flight embedding requests (active +
+    #     queued) before the sidecar starts rejecting with a 4xx-shaped
+    #     backpressure error. Provides the upstream signal the search
+    #     fallback (internal/api/search.go textSearch fallback) consumes
+    #     when ML is degraded. MUST be ≥ embedding_workers.
+    #   health_latency_sla_ms — documented SLA budget for /health response
+    #     latency under embedding load. Used by docs/Operations.md and the
+    #     adversarial regression in ml/tests/test_embedder.py to assert
+    #     /health stays responsive (FR-050-003). MUST be a positive
+    #     integer (milliseconds).
+    embedding_workers: 2
+    embedding_queue_max: 3
+    health_latency_sla_ms: 500
     # Spec 045 FR-045-002 — model memory envelope. Each entry maps an Ollama
     # model name to its RUN-TIME memory requirement in MiB (matching what
     # `ollama ps` reports as resident size when the model is loaded). The Go

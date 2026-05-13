@@ -26,6 +26,12 @@ def _check_required_config() -> dict[str, str]:
         "OLLAMA_URL",
         "ML_PROCESSING_DEGRADED_FALLBACK_ENABLED",
         "SMACKEREL_ENV",
+        # Spec 050 FR-050-001/002/003 — ML sidecar health/worker isolation
+        # contract. All three values are SST-owned and required (fail-loud).
+        # The sidecar refuses to start if any is missing, empty, or invalid.
+        "ML_EMBEDDING_WORKERS",
+        "ML_EMBEDDING_QUEUE_MAX",
+        "ML_HEALTH_LATENCY_SLA_MS",
     ]
     required: dict[str, str] = {}
     missing: list[str] = []
@@ -57,6 +63,67 @@ def _check_required_config() -> dict[str, str]:
         logger.error(
             "Invalid ML_PROCESSING_DEGRADED_FALLBACK_ENABLED=%r; expected true or false",
             required["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"],
+        )
+        sys.exit(1)
+
+    # Spec 050 FR-050-002 — embedding worker pool size MUST be a positive
+    # integer. Zero or negative values would deadlock the executor; non-
+    # integer values are an SST contract violation.
+    try:
+        workers = int(required["ML_EMBEDDING_WORKERS"])
+    except ValueError:
+        logger.error(
+            "ML_EMBEDDING_WORKERS must be a positive integer, got %r",
+            required["ML_EMBEDDING_WORKERS"],
+        )
+        sys.exit(1)
+    if workers < 1:
+        logger.error(
+            "ML_EMBEDDING_WORKERS must be a positive integer, got %d",
+            workers,
+        )
+        sys.exit(1)
+
+    try:
+        queue_max = int(required["ML_EMBEDDING_QUEUE_MAX"])
+    except ValueError:
+        logger.error(
+            "ML_EMBEDDING_QUEUE_MAX must be a positive integer, got %r",
+            required["ML_EMBEDDING_QUEUE_MAX"],
+        )
+        sys.exit(1)
+    if queue_max < 1:
+        logger.error(
+            "ML_EMBEDDING_QUEUE_MAX must be a positive integer, got %d",
+            queue_max,
+        )
+        sys.exit(1)
+
+    # Cross-validate: queue_max must be ≥ workers so the pool can stay
+    # saturated without immediately rejecting active work.
+    if queue_max < workers:
+        logger.error(
+            "ML_EMBEDDING_QUEUE_MAX (%d) must be ≥ ML_EMBEDDING_WORKERS (%d)",
+            queue_max,
+            workers,
+        )
+        sys.exit(1)
+
+    # Spec 050 FR-050-003 — health SLA budget in milliseconds. Required for
+    # documentation and the adversarial regression. MUST be a positive
+    # integer.
+    try:
+        sla_ms = int(required["ML_HEALTH_LATENCY_SLA_MS"])
+    except ValueError:
+        logger.error(
+            "ML_HEALTH_LATENCY_SLA_MS must be a positive integer (ms), got %r",
+            required["ML_HEALTH_LATENCY_SLA_MS"],
+        )
+        sys.exit(1)
+    if sla_ms < 1:
+        logger.error(
+            "ML_HEALTH_LATENCY_SLA_MS must be a positive integer (ms), got %d",
+            sla_ms,
         )
         sys.exit(1)
 
