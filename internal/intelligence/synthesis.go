@@ -149,7 +149,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 
 	// 2. Synthesis insights from this week
 	insights, err := e.RunSynthesis(ctx)
-	if err == nil {
+	if err != nil {
+		slog.Warn("weekly synthesis inner RunSynthesis failed", "error", err)
+	} else {
 		ws.Insights = insights
 	}
 
@@ -167,7 +169,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 		ORDER BY this_week DESC
 		LIMIT 10
 	`)
-	if err == nil {
+	if err != nil {
+		slog.Warn("weekly synthesis topic movement query failed", "error", err)
+	} else {
 		defer topicRows.Close()
 		for topicRows.Next() {
 			var tm TopicMovement
@@ -193,7 +197,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 		SELECT text FROM action_items WHERE status = 'open' AND expected_date < CURRENT_DATE
 		ORDER BY expected_date ASC LIMIT 5
 	`)
-	if err == nil {
+	if err != nil {
+		slog.Warn("weekly synthesis open loops query failed", "error", err)
+	} else {
 		defer loopRows.Close()
 		for loopRows.Next() {
 			var t string
@@ -212,7 +218,9 @@ func (e *Engine) GenerateWeeklySynthesis(ctx context.Context) (*WeeklySynthesis,
 
 	// 5. Serendipity pick
 	candidates, err := e.Resurface(ctx, 1)
-	if err == nil {
+	if err != nil {
+		slog.Warn("weekly synthesis inner Resurface failed", "error", err)
+	} else {
 		ws.SerendipityPicks = candidates
 	}
 
@@ -249,7 +257,9 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 		ORDER BY cnt DESC
 		LIMIT 1
 	`)
-	if err == nil {
+	if err != nil {
+		slog.Warn("capture pattern day-of-week query failed", "error", err)
+	} else {
 		defer rows.Close()
 		dayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 		for rows.Next() {
@@ -276,7 +286,9 @@ func (e *Engine) detectCapturePatterns(ctx context.Context) []string {
 		ORDER BY cnt DESC
 		LIMIT 1
 	`)
-	if err == nil {
+	if err != nil {
+		slog.Warn("capture pattern hour-of-day query failed", "error", err)
+	} else {
 		defer rows2.Close()
 		for rows2.Next() {
 			var hr, cnt int

@@ -475,7 +475,6 @@ func wireMealPlanning(
 	// don't trigger SavePlan don't pay any cost.
 	if svc.driveSaveService != nil {
 		mealPlanSaveBack := mealplan.NewDriveSaveBack(
-			svc.pg.Pool,
 			rules.NewRepository(svc.pg.Pool),
 			rules.NewEngine(time.Now),
 			svc.driveSaveService,

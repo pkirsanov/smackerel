@@ -122,9 +122,13 @@ On home-lab and production deployments, the deploy compose
 (`deploy/compose.deploy.yml`) implements the canonical tailnet-edge bind
 pattern (see `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md` and
 [spec 042](../specs/042-tailnet-edge-bind-pattern/spec.md)). Backend
-services bind `${HOST_BIND_ADDRESS:-127.0.0.1}` and infra services
-(Postgres, NATS) have **no host port mapping**. This section shows the
-canonical DevOps access shapes for each.
+services bind through fail-loud `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`
+substitution and infra services (Postgres, NATS) have **no host port mapping**.
+There is no Compose fallback default: the deploy adapter must write
+`HOST_BIND_ADDRESS` explicitly into `app.env` (for example `127.0.0.1` for
+loopback or a tailnet bind address for edge fronting). Missing or empty values
+abort Docker Compose at substitution time. This section shows the canonical
+DevOps access shapes for each.
 
 ### HTTP UIs (Pattern P5: Host Caddy on the Tailscale IP)
 
@@ -201,8 +205,10 @@ tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
 
 If a future deployment needs a public-internet-reachable HTTP endpoint
 for one of the backends, that is a separate spec. The compose contract
-in this repo stays loopback-by-default, and the deploy adapter is the
-only surface that decides what goes on the public NIC.
+in this repo stays explicit-bind-only: `HOST_BIND_ADDRESS` must be supplied
+by the SST-generated env file or by the deploy adapter, and Compose must fail
+loudly if it is missing. The deploy adapter is the only surface that decides
+what goes on the public NIC.
 
 ## Connector Management
 
@@ -1291,6 +1297,12 @@ The meal plan API provides 12 endpoints for creating, querying, assigning recipe
 
 ## Recipe Features
 
+> Authoritative spec: [`specs/035-recipe-enhancements`](../specs/035-recipe-enhancements/spec.md)
+> (Phase A — Foundation: serving scaler + cook mode, certified `done`).
+> Phase B (LLM agent + tool registry, Scopes 07–16) is gated on
+> [`specs/037-llm-agent-tools`](../specs/037-llm-agent-tools/spec.md) and is
+> not yet wired.
+
 ### Cook Session Timeout
 
 Cook mode provides a step-by-step Telegram walkthrough for any recipe. Sessions time out after the configured duration (default 2 hours):
@@ -1304,6 +1316,15 @@ features:
 ### Serving Scaler
 
 The serving scaler adjusts ingredient quantities for any serving count. Fractions are formatted as kitchen-friendly values (e.g., ½, ¾, ⅓). Scaling is available via the recipe API endpoint and Telegram commands.
+
+### Observability
+
+Recipe operations (serving scaler invocations, cook session lifecycle,
+disambiguation flows) do not currently emit dedicated Prometheus metrics in
+`internal/metrics/metrics.go`. Operators rely on aggregate `internal/telegram`
+and `internal/api` log lines for incident triage. Adding bounded-cardinality
+recipe counters is tracked as a follow-up under the spec 035 backlog
+(see report.md "Round 17 — devops probe" appendix).
 
 ## Troubleshooting — New Features
 

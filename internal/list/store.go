@@ -111,18 +111,26 @@ func (s *Store) GetList(ctx context.Context, listID string) (*ListWithItems, err
 			&item.Status, &item.Substitution, &item.SourceArtifactIDs, &item.IsManual,
 			&item.Quantity, &item.Unit, &item.NormalizedName, &item.SortOrder,
 			&item.CheckedAt, &item.Notes, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			continue
+			return nil, fmt.Errorf("scan list item for list %s: %w", listID, err)
 		}
 		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate list items for list %s: %w", listID, err)
 	}
 
 	return &ListWithItems{List: list, Items: items}, nil
 }
 
 // ListLists returns lists filtered by status and type.
+// Callers MUST supply limit > 0 and offset >= 0; the store rejects invalid pagination
+// inputs explicitly (no silent default-fallback masking — see Gate G028 / requireNoDefaultsNoFallbacks).
 func (s *Store) ListLists(ctx context.Context, statusFilter, typeFilter string, limit, offset int) ([]List, error) {
 	if limit <= 0 {
-		limit = 20
+		return nil, fmt.Errorf("list lists: limit must be > 0, got %d", limit)
+	}
+	if offset < 0 {
+		return nil, fmt.Errorf("list lists: offset must be >= 0, got %d", offset)
 	}
 
 	query := `SELECT id, list_type, title, status, source_artifact_ids, COALESCE(source_query, ''),
@@ -157,14 +165,20 @@ func (s *Store) ListLists(ctx context.Context, statusFilter, typeFilter string, 
 		if err := rows.Scan(&l.ID, &l.ListType, &l.Title, &l.Status, &l.SourceArtifactIDs,
 			&l.SourceQuery, &l.Domain, &l.TotalItems, &l.CheckedItems,
 			&l.CreatedAt, &l.UpdatedAt, &l.CompletedAt); err != nil {
-			continue
+			return nil, fmt.Errorf("scan list row: %w", err)
 		}
 		lists = append(lists, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate lists: %w", err)
 	}
 	return lists, nil
 }
 
-// UpdateItemStatus changes an item's status and updates counters.
+// UpdateItemStatus changes an item's status and updates counters atomically.
+// The item-status update and the checked_items recalculation run in a single
+// transaction so a transient DB failure on the recalc cannot leave checked_items
+// permanently drifted relative to list_items.status.
 func (s *Store) UpdateItemStatus(ctx context.Context, listID, itemID string, status ItemStatus, substitution string) error {
 	now := time.Now()
 
@@ -173,27 +187,39 @@ func (s *Store) UpdateItemStatus(ctx context.Context, listID, itemID string, sta
 		checkedAt = &now
 	}
 
-	_, err := s.Pool.Exec(ctx, `
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin update item status transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE list_items SET status = $3, substitution = $4, checked_at = $5, updated_at = $6
 		WHERE id = $2 AND list_id = $1
 	`, listID, itemID, status, substitution, checkedAt, now)
 	if err != nil {
 		return fmt.Errorf("update item status: %w", err)
 	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("update item status: item %s not found in list %s", itemID, listID)
+	}
 
-	metrics.ListItemStatusChanges.WithLabelValues(string(status)).Inc()
-
-	// Recalculate checked count
-	_, err = s.Pool.Exec(ctx, `
+	// Recalculate checked count in the same transaction so item-status and
+	// list.checked_items either both commit or both roll back.
+	if _, err := tx.Exec(ctx, `
 		UPDATE lists SET
 			checked_items = (SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status IN ('done', 'substituted')),
 			updated_at = $2
 		WHERE id = $1
-	`, listID, now)
-	if err != nil {
-		slog.Warn("failed to update checked count", "list_id", listID, "error", err)
+	`, listID, now); err != nil {
+		return fmt.Errorf("recalculate checked_items for list %s: %w", listID, err)
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit update item status transaction: %w", err)
+	}
+
+	metrics.ListItemStatusChanges.WithLabelValues(string(status)).Inc()
 	return nil
 }
 
@@ -220,8 +246,13 @@ func (s *Store) AddManualItem(ctx context.Context, listID, content, category str
 		return nil, fmt.Errorf("insert manual item: %w", err)
 	}
 
-	// Update total_items counter
-	_, _ = s.Pool.Exec(ctx, `UPDATE lists SET total_items = total_items + 1, updated_at = $2 WHERE id = $1`, listID, now)
+	// Update total_items counter. Failure here means the item exists but the
+	// counter is stale; we surface the warning rather than silently dropping it
+	// so operators can detect and reconcile drift.
+	if _, err := s.Pool.Exec(ctx, `UPDATE lists SET total_items = total_items + 1, updated_at = $2 WHERE id = $1`, listID, now); err != nil {
+		slog.Warn("failed to increment total_items counter after manual item insert",
+			"list_id", listID, "item_id", item.ID, "error", err)
+	}
 
 	return &item, nil
 }
@@ -239,13 +270,23 @@ func (s *Store) CompleteList(ctx context.Context, listID string) error {
 
 	// Publish NATS event for intelligence consumption
 	if s.NATS != nil {
-		// Fetch list stats for the event payload
+		// Fetch list stats for the event payload. Errors here only degrade telemetry,
+		// not list completion correctness, but we MUST log them so silent telemetry
+		// drift is visible to operators (no `_ = ` discards).
 		var listType, domain string
 		var itemsDone, itemsSkipped, itemsSubstituted int
-		_ = s.Pool.QueryRow(ctx, `SELECT list_type, COALESCE(domain, '') FROM lists WHERE id = $1`, listID).Scan(&listType, &domain)
-		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'done'`, listID).Scan(&itemsDone)
-		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'skipped'`, listID).Scan(&itemsSkipped)
-		_ = s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'substituted'`, listID).Scan(&itemsSubstituted)
+		if err := s.Pool.QueryRow(ctx, `SELECT list_type, COALESCE(domain, '') FROM lists WHERE id = $1`, listID).Scan(&listType, &domain); err != nil {
+			slog.Warn("failed to fetch list_type/domain for completion event", "list_id", listID, "error", err)
+		}
+		if err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'done'`, listID).Scan(&itemsDone); err != nil {
+			slog.Warn("failed to fetch items_done count for completion event", "list_id", listID, "error", err)
+		}
+		if err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'skipped'`, listID).Scan(&itemsSkipped); err != nil {
+			slog.Warn("failed to fetch items_skipped count for completion event", "list_id", listID, "error", err)
+		}
+		if err := s.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status = 'substituted'`, listID).Scan(&itemsSubstituted); err != nil {
+			slog.Warn("failed to fetch items_substituted count for completion event", "list_id", listID, "error", err)
+		}
 
 		metrics.ListsCompleted.WithLabelValues(listType).Inc()
 
@@ -279,14 +320,19 @@ func (s *Store) RemoveItem(ctx context.Context, listID, itemID string) error {
 		return fmt.Errorf("item %s not found in list %s", itemID, listID)
 	}
 
-	// Recalculate total and checked counts
-	_, _ = s.Pool.Exec(ctx, `
+	// Recalculate total and checked counts. Failure here means item is deleted
+	// but counters are stale; surface the warning so operators can detect drift
+	// (no silent `_, _ = ` discard).
+	if _, err := s.Pool.Exec(ctx, `
 		UPDATE lists SET
 			total_items = (SELECT COUNT(*) FROM list_items WHERE list_id = $1),
 			checked_items = (SELECT COUNT(*) FROM list_items WHERE list_id = $1 AND status IN ('done', 'substituted')),
 			updated_at = $2
 		WHERE id = $1
-	`, listID, now)
+	`, listID, now); err != nil {
+		slog.Warn("failed to recalculate counters after item delete",
+			"list_id", listID, "item_id", itemID, "error", err)
+	}
 
 	return nil
 }

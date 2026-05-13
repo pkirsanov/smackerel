@@ -760,6 +760,13 @@ func TestSync_ProducesArtifacts(t *testing.T) {
 	if a.Metadata["description"] != "Clear sky" {
 		t.Errorf("metadata description = %v, want %q", a.Metadata["description"], "Clear sky")
 	}
+	// R-009: weather_type and provider metadata must be present on every artifact.
+	if a.Metadata["weather_type"] != "current" {
+		t.Errorf("metadata weather_type = %v, want %q", a.Metadata["weather_type"], "current")
+	}
+	if a.Metadata["provider"] != "open-meteo" {
+		t.Errorf("metadata provider = %v, want %q", a.Metadata["provider"], "open-meteo")
+	}
 	// IMP-016-R4-001: SourceRef must include sub-daily granularity to prevent dedup collision
 	if !strings.Contains(a.SourceRef, "T") {
 		t.Errorf("SourceRef should contain RFC3339 time (sub-daily granularity), got %q", a.SourceRef)
@@ -1259,6 +1266,13 @@ func TestSync_ArtifactEnrichedMetadata(t *testing.T) {
 	}
 	if !strings.Contains(a.RawContent, "feels like") {
 		t.Errorf("RawContent should contain 'feels like', got %q", a.RawContent)
+	}
+	// R-009: weather_type and provider metadata must be present.
+	if a.Metadata["weather_type"] != "current" {
+		t.Errorf("metadata weather_type = %v, want %q", a.Metadata["weather_type"], "current")
+	}
+	if a.Metadata["provider"] != "open-meteo" {
+		t.Errorf("metadata provider = %v, want %q", a.Metadata["provider"], "open-meteo")
 	}
 }
 
@@ -1929,6 +1943,13 @@ func TestSync_ProducesForecastArtifacts(t *testing.T) {
 	if fa.Metadata["forecast_days"] != 2 {
 		t.Errorf("forecast metadata forecast_days = %v, want 2", fa.Metadata["forecast_days"])
 	}
+	// R-009: weather_type and provider metadata must be present on forecast artifacts.
+	if fa.Metadata["weather_type"] != "forecast" {
+		t.Errorf("forecast metadata weather_type = %v, want %q", fa.Metadata["weather_type"], "forecast")
+	}
+	if fa.Metadata["provider"] != "open-meteo" {
+		t.Errorf("forecast metadata provider = %v, want %q", fa.Metadata["provider"], "open-meteo")
+	}
 	if !strings.Contains(fa.RawContent, "Clear sky") {
 		t.Errorf("forecast RawContent should contain weather description, got %q", fa.RawContent)
 	}
@@ -2218,5 +2239,66 @@ func TestDecodeHistorical_InconsistentArrayLengths(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "inconsistent") {
 		t.Errorf("error should mention inconsistent lengths, got: %v", err)
+	}
+}
+
+// IMP-016-R009-001: Sync with alerts enabled produces alert artifacts carrying
+// R-009 metadata fields (weather_type, provider). This test is the unit-level
+// adversarial proof that fetchAndNormalizeAlerts populates the required fields.
+func TestSync_AlertArtifact_R009Metadata(t *testing.T) {
+	// Open-Meteo mock for current conditions.
+	omSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"current":{"temperature_2m":18.0,"relative_humidity_2m":50,"wind_speed_10m":5,"weather_code":0}}`)
+	}))
+	defer omSrv.Close()
+
+	// NWS mock returning one Extreme alert.
+	nwsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"features":[{"properties":{"id":"urn:oid:r009-test","event":"Tornado Warning","severity":"Extreme","headline":"Tornado Warning issued","description":"Take shelter","instruction":"Go to basement","areaDesc":"Test County","effective":"2026-05-12T12:00:00-05:00","expires":"2026-05-12T13:00:00-05:00"}}]}`)
+	}))
+	defer nwsSrv.Close()
+
+	c := New("weather")
+	c.baseURL = omSrv.URL
+	c.SetNWSURL(nwsSrv.URL)
+	_ = c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"enable_alerts": true,
+			"locations": []interface{}{
+				map[string]interface{}{"name": "AlertCity", "latitude": 30.0, "longitude": -97.0},
+			},
+		},
+	})
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("sync error: %v", err)
+	}
+
+	// Find the alert artifact.
+	var alertArtifact *connector.RawArtifact
+	for i := range artifacts {
+		if artifacts[i].ContentType == "weather/alert" {
+			alertArtifact = &artifacts[i]
+			break
+		}
+	}
+	if alertArtifact == nil {
+		t.Fatal("expected a weather/alert artifact, found none")
+	}
+
+	// R-009 required metadata fields.
+	if alertArtifact.Metadata["weather_type"] != "alert" {
+		t.Errorf("alert metadata weather_type = %v, want %q", alertArtifact.Metadata["weather_type"], "alert")
+	}
+	if alertArtifact.Metadata["provider"] != "nws" {
+		t.Errorf("alert metadata provider = %v, want %q", alertArtifact.Metadata["provider"], "nws")
+	}
+	if alertArtifact.Metadata["severity"] != "Extreme" {
+		t.Errorf("alert metadata severity = %v, want %q", alertArtifact.Metadata["severity"], "Extreme")
+	}
+	if alertArtifact.Metadata["processing_tier"] != "full" {
+		t.Errorf("alert metadata processing_tier = %v, want %q", alertArtifact.Metadata["processing_tier"], "full")
 	}
 }

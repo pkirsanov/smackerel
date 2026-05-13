@@ -37,7 +37,7 @@ func (b *Bot) handleList(ctx context.Context, msg *tgbotapi.Message, args string
 func (b *Bot) handleListShow(ctx context.Context, chatID int64) {
 	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active", nil)
 	if err != nil {
-		b.reply(chatID, "Failed to fetch lists: "+err.Error())
+		b.reply(chatID, "? Failed to fetch lists. Try again in a moment.")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 	// Get most recent active list
 	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active&limit=1", nil)
 	if err != nil {
-		b.reply(chatID, "Failed to fetch lists: "+err.Error())
+		b.reply(chatID, "? Failed to fetch lists. Try again in a moment.")
 		return
 	}
 
@@ -83,7 +83,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 	body, _ := json.Marshal(map[string]string{"content": content})
 	_, err = b.callListsAPI(ctx, chatID, "POST", b.listsURL+"/"+result.Lists[0].ID+"/items", body)
 	if err != nil {
-		b.reply(chatID, "Failed to add item: "+err.Error())
+		b.reply(chatID, "? Failed to add item. Try again in a moment.")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (b *Bot) handleListAdd(ctx context.Context, chatID int64, content string) {
 func (b *Bot) handleListDone(ctx context.Context, chatID int64) {
 	resp, err := b.callListsAPI(ctx, chatID, "GET", b.listsURL+"?status=active&limit=1", nil)
 	if err != nil {
-		b.reply(chatID, "Failed to fetch lists: "+err.Error())
+		b.reply(chatID, "? Failed to fetch lists. Try again in a moment.")
 		return
 	}
 
@@ -109,7 +109,7 @@ func (b *Bot) handleListDone(ctx context.Context, chatID int64) {
 	listID := result.Lists[0].ID
 	_, err = b.callListsAPI(ctx, chatID, "POST", b.listsURL+"/"+listID+"/complete", nil)
 	if err != nil {
-		b.reply(chatID, "Failed to complete list: "+err.Error())
+		b.reply(chatID, "? Failed to complete list. Try again in a moment.")
 		return
 	}
 
@@ -134,7 +134,7 @@ func (b *Bot) handleListGenerate(ctx context.Context, chatID int64, args string)
 
 	resp, err := b.callListsAPI(ctx, chatID, "POST", b.listsURL, body)
 	if err != nil {
-		b.reply(chatID, "Failed to generate list: "+err.Error())
+		b.reply(chatID, "? Failed to generate list. Try again in a moment.")
 		return
 	}
 
@@ -336,13 +336,13 @@ func (b *Bot) callListsAPI(ctx context.Context, chatID int64, method, url string
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(data))
+		return nil, fmt.Errorf("lists API error %d", resp.StatusCode)
 	}
 
 	return data, nil

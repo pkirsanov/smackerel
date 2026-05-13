@@ -333,6 +333,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if name, ok := c.propertyNames[pid]; ok {
 				syncCursor.PropertyNames[pid] = name
 			}
+			// SEC-012-011: Cap pruned set to maxPropertyNameCacheSize to prevent
+			// unbounded cursor growth when many unique properties are referenced
+			// in a single sync batch (CWE-770).
+			if len(syncCursor.PropertyNames) >= maxPropertyNameCacheSize {
+				slog.Warn("hospitable: pruned property name cache still exceeds cap, truncating",
+					"referenced", len(referencedProps), "cap", maxPropertyNameCacheSize)
+				break
+			}
 		}
 	}
 	c.mu.RUnlock()

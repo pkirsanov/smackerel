@@ -131,6 +131,37 @@ Regenerate all config: `./smackerel.sh config generate`
 - Prove build freshness through image identity metadata, not timestamps or `latest` tags.
 - Use Compose project names, profiles, and labels for grouping and lifecycle control.
 
+### Deployment Ownership Boundary (NON-NEGOTIABLE)
+
+This repo's deployment surface is **generic and target-agnostic**. It produces
+immutable build artifacts (signed images + per-env config bundles via
+`./smackerel.sh config generate --env <env> --bundle`) and exposes adapter
+contracts. It does NOT hold environment-specific final configuration.
+
+Home-lab and all other environment-specific final configuration — real
+hostnames, real IPs, real Tailscale tailnet identity (tailnet IDs, FQDNs,
+CGNAT IPs), real Caddy/nginx site files, real `ufw` rules, real systemd unit
+names tied to an operator's host, real secret values, and real per-target
+`manifest.yaml` / `params.yaml` — lives in the separate **`knb` deploy-adapter
+overlay repo**. Adding any operator-coupled topology to THIS repo is a
+**blocking policy violation**; that content belongs in `knb`.
+
+| FORBIDDEN in this repo | ALLOWED in this repo |
+|------------------------|----------------------|
+| Real hostnames (`evo-x2`, `homelab-1`, etc.) | Generic placeholders (`<home-lab-host>`, `<deploy-host>`) |
+| Real IP addresses (CGNAT, public, RFC 6598) | `127.0.0.1`, `localhost`, RFC1918 references |
+| Real Tailscale tailnet IDs / FQDNs (`*.ts.net`) | `<tailnet-id>`, `<tailnet-fqdn>` placeholders |
+| Real Caddy/nginx site filenames (`smackerel.evo-x2.ts.net.caddy`) | Generic per-product fragment naming (`<product>.caddy`) |
+| Real systemd unit names that name the operator's host | Generic `<product>-*.service` references |
+| Real secret values in any committed file | `${VAR}` substitution placeholders + sops/age in `knb` |
+| Hand-edited per-target `manifest.yaml` / `params.yaml` | Adapter contract docs + generic env vars |
+
+The line is simple: if a value would change when a different operator deploys
+Smackerel to a different machine, it does NOT belong in this repo. It belongs
+in `knb`. The Smackerel repo MUST stay deployable to ANY target by ANY
+operator — the per-target adapter (in `knb`) is what binds it to a real
+machine.
+
 ### Build-Once Deploy-Many (BLOCKING — bubbles G074)
 
 Smackerel deployments follow the Build-Once Deploy-Many architecture. The same git
@@ -197,17 +228,25 @@ these invariants:
 
 | Service              | Host port mapping                                                            | DevOps access path |
 |----------------------|------------------------------------------------------------------------------|--------------------|
-| `smackerel-core`     | `${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`   | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
-| `smackerel-ml`       | `${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`       | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
+| `smackerel-core`     | `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`   | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
+| `smackerel-ml`       | `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`       | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
 | `postgres`           | **None** (no `ports:` block)                                                  | `tailscale ssh <host> -- docker exec -it smackerel-<env>-postgres psql ...` (Pattern P1) |
 | `nats`               | **None** (no `ports:` block)                                                  | `tailscale ssh <host> -- docker exec -it smackerel-<env>-nats nats ...` (Pattern P1) |
 
 Forbidden — `literal 127.0.0.1: in deploy/compose.deploy.yml is forbidden`
 for the `smackerel-core` and `smackerel-ml` `ports:` entries (this is the
-spec 020 form and is reversed by spec 042). The
-`${HOST_BIND_ADDRESS:-127.0.0.1}:` substitution preserves the
-loopback-by-default behavior while letting a deploy adapter override
-`HOST_BIND_ADDRESS` in the bundled `app.env` for tailnet-edge fronting.
+spec 020 form and is reversed by spec 042). Also forbidden — the
+`${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback form. Gate G028's
+NO-DEFAULTS / fail-loud SST policy requires the fail-loud
+`${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:`
+form. The deploy adapter MUST write `HOST_BIND_ADDRESS` explicitly into the
+bundled `app.env`; if it is missing or empty, Docker Compose MUST abort at
+substitution time with the named error.
+
+When touching config, Compose, deployment docs, instructions, or skills that
+mention runtime defaults, load and follow
+`.github/instructions/smackerel-no-defaults.instructions.md` and
+`.github/skills/smackerel-no-defaults/SKILL.md`.
 
 Forbidden — re-publishing host ports for `postgres` or `nats` in
 `deploy/compose.deploy.yml`. Infra services have no business reason to be
@@ -420,7 +459,7 @@ Environment-specific content (real hostnames, real IPs, real Linux usernames, re
 | Identifier | Reason |
 |------------|--------|
 | The owner's GitHub username | Public, intentional. Used as the registry namespace owner (`ghcr.io/<owner>/...`) and copyright holder. |
-| `${HOST_BIND_ADDRESS:-127.0.0.1}` substitution form | Abstract substitution point — the deploy adapter overrides at apply time. |
+| `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}` substitution form | Abstract substitution point with fail-loud SST enforcement — the deploy adapter must set the value explicitly at apply time. |
 | Generic placeholders (`<deploy-host>`, `<deploy-host-fqdn>`, `<tailnet-id>`, `<tailnet-fqdn>`, `<host-tailnet-ip>`, `<sample-location>`) | Used in docs to describe DevOps shapes without leaking real values. |
 | `127.0.0.1`, `localhost`, RFC1918 private ranges | Generic loopback / private-net references. |
 | Test fixtures with placeholder secrets | Covered by `.gitleaks.toml` allowlist for test paths. |

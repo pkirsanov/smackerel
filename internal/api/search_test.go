@@ -17,6 +17,7 @@ import (
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
 	"github.com/smackerel/smackerel/internal/knowledge"
+	"github.com/smackerel/smackerel/internal/stringutil"
 )
 
 // mockDigestGen implements DigestGenerator for testing.
@@ -1818,4 +1819,62 @@ func TestSearchHandler_LogSearchTopResultIDFromFirstResult(t *testing.T) {
 		t.Errorf("first result should be top-result-123, got %q", resp.Results[0].ArtifactID)
 	}
 	time.Sleep(50 * time.Millisecond)
+}
+
+// SEC-021-003: Ingredient filter LIKE metacharacters must be escaped (CWE-943).
+// vectorSearch builds a LIKE pattern from user-supplied Ingredient values.
+// Without EscapeLikePattern + ESCAPE '\', a caller can send "%" to nullify
+// the filter (matching all ingredient names). This test verifies the escaped
+// SQL string contains the ESCAPE clause and escaped metacharacter sequences.
+func TestSEC021003_IngredientFilterEscapesLikeWildcards(t *testing.T) {
+	// Verify the EscapeLikePattern function handles LIKE metacharacters:
+	// % → \%, _ → \_, \ → \\
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"%", "\\%"},
+		{"_", "\\_"},
+		{"\\", "\\\\"},
+		{"chicken%_breast", "chicken\\%\\_breast"},
+		{"normal ingredient", "normal ingredient"},
+	}
+
+	for _, tc := range cases {
+		got := stringutil.EscapeLikePattern(tc.input)
+		if got != tc.expected {
+			t.Errorf("EscapeLikePattern(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
+}
+
+// TestSearchHandler_ControlCharactersSanitized is an adversarial regression
+// test for chaos finding C-003. Prior to the fix, queries containing NUL
+// (U+0000) or other C0 control characters were forwarded to PostgreSQL
+// which rejected them with a 500. The fix sanitizes control characters at
+// the handler boundary so they are replaced with spaces and the search
+// proceeds normally (or returns EMPTY_QUERY if the sanitized result is
+// blank).
+func TestSearchHandler_ControlCharactersSanitized(t *testing.T) {
+	deps := &Dependencies{
+		DB:        &mockDB{healthy: true},
+		NATS:      &mockNATS{healthy: true},
+		StartTime: time.Now(),
+	}
+
+	// A query that is purely control characters should be treated as empty
+	// after sanitization (NUL + SOH + STX).
+	body := `{"query": "\u0000\u0001\u0002"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/search", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	deps.SearchHandler(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("pure control chars: expected 400, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "EMPTY_QUERY") {
+		t.Fatalf("pure control chars: expected EMPTY_QUERY error code; body=%s", rec.Body.String())
+	}
 }

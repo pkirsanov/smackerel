@@ -332,19 +332,6 @@ func (h *PhotosHandlers) actorIDFromRequest(r *http.Request) string {
 	return "system"
 }
 
-// actorIDFromRequest is the legacy package-level helper retained for
-// call sites that do not have a *PhotosHandlers in scope (none today).
-// Kept as a thin wrapper that always honors the dev/test ergonomic;
-// any production-mode call path MUST go through the method form on
-// *PhotosHandlers so the production gate is enforced.
-//
-// Spec 044 Scope 02: removed. The package-level helper had zero
-// remaining callers, and leaving it in the tree both produced a false
-// positive in the AC-11 grep guard and offered a future maintenance
-// hazard (someone could re-introduce a call site that bypasses the
-// production gate). All callers go through (h *PhotosHandlers).
-// actorIDFromRequest above.
-
 // validatePlanScope enforces UUID format on photo_ids/removal_ids and
 // caps the total scope size at the SST-derived
 // PHOTOS_POLICY_ACTIONS_MAX_SCOPE_SIZE (Spec 040 chaos C-002 + C-006).

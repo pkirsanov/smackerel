@@ -507,15 +507,8 @@ func (writer writer) Delete(ctx context.Context, photo string) error {
 
 func (writer writer) Upload(ctx context.Context, src io.Reader, meta photolib.UploadMeta) (string, error) {
 	// MIT-040-S-006: cap the upload body to the SST-configured photo
-	// binary max (defense-in-depth against attacker-controlled io.Reader
-	// returning unbounded data). Production wiring sets the cap from
-	// `PhotosConfig.IOLimits.PhotoBinaryMaxBytes`; tests that do not set
-	// the limit retain the historical unbounded behavior.
-	var reader io.Reader = src
-	if writer.client.uploadMaxBytes > 0 {
-		reader = io.LimitReader(src, writer.client.uploadMaxBytes)
-	}
-	data, err := io.ReadAll(reader)
+	// binary max via the shared photolib.LimitedUploadReader helper.
+	data, err := io.ReadAll(photolib.LimitedUploadReader(src, writer.client.uploadMaxBytes))
 	if err != nil {
 		return "", err
 	}

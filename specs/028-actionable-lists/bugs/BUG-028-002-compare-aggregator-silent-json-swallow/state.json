@@ -1,0 +1,144 @@
+{
+  "version": 3,
+  "specId": "028-actionable-lists",
+  "bugId": "BUG-028-002-compare-aggregator-silent-json-swallow",
+  "featureDir": "specs/028-actionable-lists/bugs/BUG-028-002-compare-aggregator-silent-json-swallow",
+  "featureName": "BUG-028-002: CompareAggregator silent JSON swallow",
+  "workflowMode": "harden-to-doc",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 8,
+    "totalRounds": 20,
+    "seed": "20520512",
+    "trigger": "harden",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-12T18:00:00Z",
+    "completedPhaseClaims": [
+      "harden",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "chaos",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "harden",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Probed internal/list/... for silent error swallowing and observability gaps. Identified one defect: CompareAggregator.Aggregate in internal/list/reading_aggregator.go silently `continue`d on json.Unmarshal failure, while the parity siblings RecipeAggregator and ReadingAggregator had already been remediated to log+skip in a prior harden round. Rejected as not applicable here: store.go transactions (already use defer tx.Rollback + commit), generator.go (already validates domain consistency), types.go (interface only)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Replaced bare `continue` in CompareAggregator.Aggregate with `slog.Warn(\"compare aggregator: skipping artifact with malformed domain_data\", \"artifact_id\", src.ArtifactID, \"error\", err)` followed by `continue`. Verbatim diff in report.md > Code change diff. log/slog already imported by reading_aggregator.go for ReadingAggregator's use, so no import change required."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added TestCompareAggregator_LogsAndSkipsBadJSON to internal/list/harden_test.go with bytes + log/slog test imports. Test captures slog output to a bytes.Buffer, asserts visibility (warn message + per-artifact-id identification + good-source-not-flagged cross-check) and behavior preservation (1 seed from 2-bad + 1-good input, no bad-source ID leakage). Full test source recorded in report.md > Test code (new)."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Adversarial red-then-green proof recorded in report.md > Adversarial proof. With the slog.Warn removed (bare continue reintroduced) the test fails on 3 visibility assertions; with the slog.Warn restored the test passes. Confirms the test is non-tautological and cannot be satisfied without the harden fix in place. Persistent regression coverage lives in internal/list/harden_test.go alongside the parity tests for RecipeAggregator and ReadingAggregator."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:11:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 2 lines of code (slog.Warn call) plus the explanatory comment block. The new test mirrors the structure of TestRecipeAggregator_LogsAndSkipsBadJSON exactly, so no abstraction or shared helper is warranted at this scale (rule of three not yet satisfied). Confirmed by code review of the diff in report.md > Code change diff."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new test is deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O, no network. slog default-handler swap is wrapped in t.Cleanup so other tests are unaffected by handler state. Verified by repeated invocations: the same red-then-green sequence reproduces deterministically across runs."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No security regression. Logged fields are opaque artifact_id (not PII) and the stdlib encoding/json parser error string (already log-safe; no log-injection vector). The change reduces a hidden-failure class (CWE-391-adjacent silent error swallowing). Recorded in report.md > Audit Evidence > OWASP review and Privacy review."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Full internal/list package suite PASS: `go test -count=1 ./internal/list/...` returns `ok github.com/smackerel/smackerel/internal/list 0.020s`. Verbose parity run of all three malformed-JSON harden tests across recipe/reading/compare aggregators all PASS — see report.md > Validation Evidence. `go vet ./internal/list/...` clean (no output)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Audit checks recorded in report.md > Audit Evidence. No schema migration. No public API change (CompareAggregator.Aggregate signature and return values unchanged). No NATS contract change. No config change. OWASP review: reduces a hidden-failure class (CWE-391-adjacent), no log-injection risk. Privacy review: only opaque artifact_id and stdlib-produced parser error string are logged \u2014 no PII surface introduced."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:14:30Z",
+        "outcome": "completed_owned",
+        "evidence": "Chaos probe recorded in report.md > Chaos Evidence. Race-detector run (`go test -count=1 -race ./internal/list/...`) PASS in 1.053s \u2014 confirms the new slog.Warn path has no race conditions on the package-level default logger. Multi-malformed-input chaos at the unit level: the new test exercises TWO divergent corruption modes (truncated string vs non-JSON garbage) and asserts both are independently surfaced in the captured slog buffer. No new failure modes surfaced; CompareAggregator code path has no shared mutable state and the slog default logger is concurrency-safe by stdlib contract."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow (parent-expanded harden-to-doc)",
+        "timestamp": "2026-05-12T18:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No external doc churn required — this is a parity-only internal observability fix. The class of fix is documented in-source via the explanatory comment block above the new slog.Warn call (matching the convention used by the recipe and reading aggregators). No references to CompareAggregator's malformed-JSON behavior exist in docs/ or README, so no doc update is needed. Recorded in report.md > Docs."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-12T18:15:00Z",
+    "certifiedBy": "bubbles.workflow (parent-expanded harden-to-doc)",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["harden", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "chaos", "docs"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Add visibility for malformed product/comparison domain_data",
+        "status": "Done",
+        "dependsOn": []
+      }
+    ],
+    "lockdownState": {
+      "round": 0,
+      "lastCleanRound": 0,
+      "lockedDown": false
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first-with-adversarial-regression", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "non-tautological-required", "source": "workflow-forced"},
+    "validation": {"value": "validate-certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

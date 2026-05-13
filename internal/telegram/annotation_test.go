@@ -352,3 +352,39 @@ func TestDisambiguationStore_Expiry(t *testing.T) {
 		t.Error("expected nil due to expired timeout")
 	}
 }
+
+// --- Security regression tests (spec 008 security-to-doc) ---
+
+func TestSecurity_CallInternalAPI_ResponseSizeLimit(t *testing.T) {
+	// CWE-400: callInternalAPI must limit response body reads to
+	// maxAPIResponseBytes to prevent memory exhaustion. Previously
+	// it read unbounded; this test proves the limit is enforced.
+	//
+	// We serve a response body larger than maxAPIResponseBytes and
+	// verify the decoder fails rather than consuming unlimited memory.
+	oversized := `{"data":"` + strings.Repeat("x", int(maxAPIResponseBytes)+1024) + `"}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(oversized))
+	}))
+	defer server.Close()
+
+	bot := &Bot{
+		baseURL:    server.URL,
+		httpClient: server.Client(),
+		replyFunc:  func(_ int64, text string) {},
+	}
+
+	// callInternalAPI should read at most maxAPIResponseBytes from the
+	// response body. The oversized JSON should fail to decode cleanly
+	// because the LimitReader truncates the JSON before the closing brace.
+	_, err := bot.callInternalAPI(context.Background(), 123, "GET", server.URL+"/test", nil)
+	if err == nil {
+		t.Fatal("expected error from truncated oversized response, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode response") {
+		t.Errorf("expected decode error from truncated body, got: %v", err)
+	}
+}

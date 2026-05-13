@@ -1,0 +1,174 @@
+{
+  "version": 3,
+  "specId": "042-tailnet-edge-bind-pattern",
+  "bugId": "BUG-042-001-multi-ports-validator-bypass",
+  "featureDir": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-001-multi-ports-validator-bypass",
+  "featureName": "BUG-042-001: Compose contract validator multi-ports bypass",
+  "workflowMode": "chaos-hardening",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 9,
+    "totalRounds": 20,
+    "seed": "20520512",
+    "trigger": "chaos",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-12T19:00:00Z",
+    "completedPhaseClaims": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "chaos",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Out-of-tree chaos probe at /tmp/smackerel-chaos-round9/main.go inlined assertComposeContract + composeDoc + required prefix constants from internal/deploy/compose_contract_test.go and ran 3 adversarial fixtures: (1) MultiPortsBypass with core.ports[1]='0.0.0.0:8443:8080' = ACCEPTED by old validator (DEFECT_CONFIRMED); (2) HostBindAddrEmptyDefault with ${HOST_BIND_ADDRESS-127.0.0.1} (no colon) = correctly rejected; (3) PostgresLongFormPort with long-form host_ip=0.0.0.0 = correctly rejected at yaml.Unmarshal step. Only the multi-ports bypass is a real validator gap — the validator's [0]-only indexing allows a compliant first entry to mask an adversarial second entry."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Replaced both `if !strings.HasPrefix(core.Ports[0], requiredCorePrefix)` and `if !strings.HasPrefix(ml.Ports[0], requiredMLPrefix)` checks in assertComposeContract with `for i, p := range core.Ports` and `for i, p := range ml.Ports` loops respectively. Both error messages now name the violating index (`ports[%d]`), the violating value, the required prefix, and BUG-042-001 attribution. Verbatim diff in report.md > Code change diff. Strings package already imported, no import change required."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added TestComposeContract_AdversarialMultiPortsBypass and TestComposeContract_AdversarialMLMultiPortsBypass to internal/deploy/compose_contract_test.go. Each test asserts (a) err != nil; (b) error mentions the service name; (c) error mentions 'ports[1]' (proves the iterator covers index 1); the core variant additionally asserts (d) error mentions 'BUG-042-001' to lock the regression contract attribution. Full test source recorded in report.md > Test code (new). Targeted suite EXIT=0 (5/5 PASS uncached: LiveFile + 4 adversarial)."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Adversarial red-then-green proof recorded in report.md > Adversarial red-then-green proof. With validator reverted to [0]-only form, both new tests FAIL with explicit 'BUG-042-001 reintroduced' message and exit code 1. With validator restored to iterate-every-port form, all 5 sub-tests PASS and exit code 0. Confirms tests are non-tautological and cannot be satisfied without the loop fix in place. Persistent regression coverage lives in internal/deploy/compose_contract_test.go alongside the existing 3 contract tests for spec 042."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:11:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 2 single-line `[0]` checks replaced with 2 short `for ... range` loops (3 lines each); 2 new test functions structurally identical to the existing TestComposeContract_AdversarialLiteralBind / TestComposeContract_AdversarialInfraHasPorts (rule of three for a shared helper not yet satisfied — 4 adversarial tests share structure but are still readable as standalone). Confirmed by code review of the diff in report.md > Code change diff. No deletions, no extractions, no renames."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond static YAML parse. 15/15 PASS across 3 iterations (5 sub-tests × 3) in 0.014s — zero variance. Recorded in report.md > Stability (anti-flake)."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review recorded in report.md > Audit Evidence > OWASP review. The fix tightens A04 (Insecure Design) and A05 (Security Misconfiguration) by mechanically blocking a future regression class where a multi-ports list could include a non-loopback bind. No new attack surface introduced. No PII handled. The live deploy/compose.deploy.yml is unchanged — no live exposure created or removed today."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Static checks: go vet ./internal/... clean, gofmt -l internal/deploy/ empty. Cross-package smoke: go test -count=1 ./internal/deploy/... ./internal/config/... ./internal/api/... all PASS. Live-file regression: TestComposeContract_LiveFile still PASSES against the real deploy/compose.deploy.yml. Existing adversarial tests (LiteralBind + InfraHasPorts) still PASS. New tests (MultiPortsBypass + MLMultiPortsBypass) PASS. Full evidence in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A01/A04/A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 1 file changed, +76/-4 (loop replacements + 2 new test functions + comments). No production code, compose, config, or doc files modified outside spec 042 bug folder. Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow (parent-expanded chaos-hardening)",
+        "timestamp": "2026-05-12T19:16:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/report/uservalidation/state artifacts authored. No external doc updates required: the existing .github/copilot-instructions.md 'Tailnet-Edge Bind Pattern' subsection forbids 'literal 127.0.0.1: in deploy/compose.deploy.yml' which the multi-ports bypass case is a structural variant of; the new tests mechanically enforce the broader interpretation. The existing docs/Operations.md DevOps Access section is unaffected. Spec 042 scenario-manifest.json is unchanged — the new tests strengthen the protection of SCN-042-001 ('Backend ports use the configurable bind address') without creating a new scenario."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.workflow (parent-expanded chaos-hardening)",
+    "certifiedAt": "2026-05-12T19:15:00Z",
+    "auditorAgent": "bubbles.workflow (parent-expanded chaos-hardening)",
+    "auditedAt": "2026-05-12T19:15:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Chaos round 9 of stochastic-quality-sweep discovered the multi-ports bypass in assertComposeContract via out-of-tree probe. Fix applied (loop replaces [0]-indexed check) and locked with 2 new non-tautological adversarial tests. Red-then-green proof confirms tests would catch the regression. Live deploy/compose.deploy.yml continues to PASS unchanged. No cross-package regression. No flake (15/15 across 3 iterations). No production code, compose, config, or doc files modified outside the bug folder.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Validator iteration fix + adversarial regression tests",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-12T19:15:00Z",
+        "notes": "Loop replaces [0]-indexed prefix check in assertComposeContract for both smackerel-core and smackerel-ml. Two new adversarial sub-tests (MultiPortsBypass + MLMultiPortsBypass) appended. Full DoD evidence inline in scopes.md."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "chaos-hardening",
+      "source": "stochastic-quality-sweep-round-9-2026-05-12"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "chaos-hardening-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "chaos-hardening-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}

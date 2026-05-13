@@ -12,12 +12,14 @@
 #   - All file references are relative to this compose file's own directory
 #     (i.e. <composeDir>/), populated from the extracted bundle.
 #   - Bound host ports come from the extracted env file (./app.env).
-#   - Backend services (smackerel-core, smackerel-ml) bind
-#     ${HOST_BIND_ADDRESS:-127.0.0.1} on the host. The default keeps the deploy
-#     bundle safe-by-default; a deploy adapter MAY override HOST_BIND_ADDRESS
-#     in app.env to bind a specific NIC. External exposure is owned by the host
-#     reverse proxy (Caddy) running outside this stack — see
-#     bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md and
+#   - Backend services (smackerel-core, smackerel-ml) bind ${HOST_BIND_ADDRESS}
+#     on the host. There is NO default — the deploy adapter MUST set
+#     HOST_BIND_ADDRESS explicitly in app.env (e.g. 127.0.0.1 for loopback,
+#     a tailnet IP for tailnet-edge fronting). Compose fails loud at start
+#     time if HOST_BIND_ADDRESS is unset or empty (Gate G028, fail-loud SST
+#     — the `${VAR:-default}` form is FORBIDDEN). External exposure is
+#     owned by the host reverse proxy (Caddy) running outside this stack —
+#     see bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md and
 #     specs/042-tailnet-edge-bind-pattern/.
 #   - Infra services (postgres, nats) have NO host port mapping. DevOps reaches
 #     them via `tailscale ssh <host> -- docker exec -it <container> ...`
@@ -106,7 +108,7 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     env_file:
       - ./app.env
     extra_hosts:
@@ -152,7 +154,7 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     env_file:
       - ./app.env
     environment:
@@ -189,8 +191,8 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      # Spec 042: bind via HOST_BIND_ADDRESS for tailnet-edge override (loopback default).
-      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+      # Spec 042: bind via HOST_BIND_ADDRESS — deploy adapter MUST set it (no default; fail-loud per Gate G028).
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
     volumes:
       - ollama-data:/root/.ollama
     profiles:

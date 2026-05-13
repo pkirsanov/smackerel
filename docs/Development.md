@@ -150,6 +150,7 @@ Rules:
 
 - No hardcoded ports, hostnames, URLs, or secrets in source files.
 - No fallback defaults such as `${VAR:-default}` or `process.env.X || 'fallback'`.
+- Docker Compose and deploy specs use fail-loud required interpolation such as `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`. If loopback is desired, it must be an explicit SST/generated env value, not a Compose fallback.
 - Generated files are derived artifacts, never hand-edited sources of truth.
 - Missing required config must fail loudly.
 

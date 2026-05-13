@@ -3,6 +3,7 @@ package list
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -21,9 +22,14 @@ func (a *ReadingAggregator) Aggregate(sources []AggregationSource) ([]ListItemSe
 	var seeds []ListItemSeed
 
 	for i, src := range sources {
-		// For reading lists, domain_data may be minimal — fall back to artifact metadata
+		// For reading lists, domain_data may be minimal. Falling back to artifact
+		// metadata is intentional, but we MUST log unmarshal failures so silent
+		// JSON corruption is visible to operators (no `_ = json.Unmarshal`).
 		var rd readingData
-		_ = json.Unmarshal(src.DomainData, &rd)
+		if err := json.Unmarshal(src.DomainData, &rd); err != nil {
+			slog.Warn("reading aggregator: malformed domain_data, falling back to placeholder title",
+				"artifact_id", src.ArtifactID, "error", err)
+		}
 
 		title := rd.Title
 		if title == "" {
@@ -102,6 +108,15 @@ func (a *CompareAggregator) Aggregate(sources []AggregationSource) ([]ListItemSe
 	for i, src := range sources {
 		var cd compareData
 		if err := json.Unmarshal(src.DomainData, &cd); err != nil {
+			// Surface malformed domain_data instead of silently dropping the
+			// source. The compare aggregator previously bare-`continue`d on
+			// unmarshal failure, hiding upstream extraction regressions for
+			// product/comparison artifacts (parity with the recipe and reading
+			// aggregators that already log the same class of failure — see
+			// Gate G028 / requireNoDefaultsNoFallbacks). Behavior (skip-the-
+			// bad-source) is preserved; visibility is added.
+			slog.Warn("compare aggregator: skipping artifact with malformed domain_data",
+				"artifact_id", src.ArtifactID, "error", err)
 			continue
 		}
 

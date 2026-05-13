@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -168,6 +169,14 @@ func (d *Dependencies) SearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Query == "" {
+		writeError(w, http.StatusBadRequest, "EMPTY_QUERY", "Query text is required")
+		return
+	}
+
+	// Strip ASCII C0 control characters (NUL, SOH, etc.) that cause
+	// PostgreSQL text-search failures (chaos finding C-003).
+	req.Query = stringutil.SanitizeControlChars(req.Query)
+	if strings.TrimSpace(req.Query) == "" {
 		writeError(w, http.StatusBadRequest, "EMPTY_QUERY", "Query text is required")
 		return
 	}
@@ -573,8 +582,10 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 	if req.Filters.Ingredient != "" {
 		// C026-CHAOS-02: Case-insensitive partial match instead of exact JSONB containment.
 		// LLM-extracted names are mixed-case ("Chicken Breast") while parseDomainIntent lowercases.
-		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.domain_data->'ingredients') elem WHERE LOWER(elem->>'name') LIKE '%%' || LOWER($%d) || '%%')`, argN)
-		args = append(args, req.Filters.Ingredient)
+		// SEC-021-003 (CWE-943): Escape LIKE metacharacters to prevent wildcard injection,
+		// consistent with textSearch which uses EscapeLikePattern + ESCAPE '\'.
+		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.domain_data->'ingredients') elem WHERE LOWER(elem->>'name') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\')`, argN)
+		args = append(args, stringutil.EscapeLikePattern(req.Filters.Ingredient))
 		argN++
 	}
 
