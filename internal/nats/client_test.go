@@ -274,6 +274,69 @@ func TestConnect_EmptyURL(t *testing.T) {
 	}
 }
 
+// TestEnsureStreams_NilCapsRejected — Spec 046 FR-046-003 adversarial
+// regression: EnsureStreams MUST fail loud when streamCaps is nil. If a
+// future regression silently allows nil/missing caps the streams would
+// be created without MaxBytes (unbounded) and the failure condition
+// from spec.md would be in production. This test runs without a real
+// NATS connection because the nil check fires before any JetStream RPC.
+func TestEnsureStreams_NilCapsRejected(t *testing.T) {
+	c := &Client{}
+	err := c.EnsureStreams(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected EnsureStreams to fail when streamCaps is nil — unbounded streams are forbidden per spec 046 FR-046-003")
+	}
+	if !strings.Contains(err.Error(), "streamCaps map is nil") {
+		t.Errorf("expected error to name nil streamCaps, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "spec 046") {
+		t.Errorf("expected error to reference spec 046, got: %v", err)
+	}
+}
+
+// TestEnsureStreams_MissingStreamCapRejected — adversarial regression for
+// the per-stream coverage check. If someone adds a new stream to
+// AllStreams() but forgets to add a matching cap, EnsureStreams MUST
+// fail loud at startup rather than create an unbounded stream.
+func TestEnsureStreams_MissingStreamCapRejected(t *testing.T) {
+	// Build a streamCaps map missing ARTIFACTS.
+	caps := map[string]int64{}
+	for _, sc := range AllStreams() {
+		if sc.Name == "ARTIFACTS" {
+			continue
+		}
+		caps[sc.Name] = 1024 * 1024
+	}
+	c := &Client{}
+	err := c.EnsureStreams(context.Background(), caps)
+	if err == nil {
+		t.Fatal("expected EnsureStreams to fail when a stream has no cap entry")
+	}
+	if !strings.Contains(err.Error(), "ARTIFACTS") {
+		t.Errorf("expected error to name the missing stream ARTIFACTS, got: %v", err)
+	}
+}
+
+// TestEnsureStreams_NonPositiveCapRejected — adversarial regression for
+// the positive-bound check. Zero/negative MaxBytes effectively means
+// unbounded for JetStream's CreateOrUpdateStream RPC; the validator
+// catches this before any RPC is issued.
+func TestEnsureStreams_NonPositiveCapRejected(t *testing.T) {
+	caps := map[string]int64{}
+	for _, sc := range AllStreams() {
+		caps[sc.Name] = 1024 * 1024
+	}
+	caps["ARTIFACTS"] = 0 // pathological: zero == unbounded
+	c := &Client{}
+	err := c.EnsureStreams(context.Background(), caps)
+	if err == nil {
+		t.Fatal("expected EnsureStreams to fail when a stream has non-positive MaxBytes")
+	}
+	if !strings.Contains(err.Error(), "ARTIFACTS") || !strings.Contains(err.Error(), "non-positive") {
+		t.Errorf("expected error to name the offending stream and 'non-positive', got: %v", err)
+	}
+}
+
 func TestAllStreams_NoDuplicateSubjects(t *testing.T) {
 	// Verify no two streams claim the same subject wildcard
 	seen := make(map[string]string) // subject -> stream name

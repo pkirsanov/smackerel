@@ -785,6 +785,63 @@ infrastructure:
   nats:
     client_port: 4222
     monitor_port: 8222
+    # Spec 046 FR-046-002 — NATS server payload and storage ceilings flow
+    # from SST. scripts/commands/config.sh renders these into
+    # config/generated/nats.conf so the broker enforces them at runtime.
+    # Bytes-typed; tune for the deployment target's disk envelope.
+    #   max_payload_bytes — single-message size cap (image/OCR payloads).
+    #   max_file_store_bytes — JetStream file store ceiling on disk.
+    #   max_mem_store_bytes — JetStream in-memory ceiling.
+    # Missing or empty values fail loud via required_value at generate time.
+    max_payload_bytes: 8388608          # 8 MiB
+    max_file_store_bytes: 10737418240   # 10 GiB
+    max_mem_store_bytes: 1073741824     # 1 GiB
+    # Spec 046 FR-046-001 — ML sidecar reconnect contract. The Python
+    # client reads these via NATS_MAX_RECONNECT_ATTEMPTS and
+    # NATS_RECONNECT_TIME_WAIT_SECONDS in ml/app/nats_client.py. -1 means
+    # reconnect forever; the contract is non-negotiable for always-on
+    # deployment operation.
+    client:
+      reconnect_time_wait_seconds: 2
+      max_reconnect_attempts: -1
+    # Spec 046 FR-046-003 — per-stream MaxBytes caps. Every JetStream
+    # stream Smackerel creates MUST have a bounded MaxBytes; unbounded
+    # streams are an explicit failure condition. The Go core reads this
+    # JSON-shaped map via NATS_STREAM_MAX_BYTES_JSON and passes it into
+    # internal/nats.Client.EnsureStreams which fails loud if a stream is
+    # missing from the map. Totals must remain comfortably below
+    # max_file_store_bytes above.
+    stream_max_bytes:
+      - stream: ARTIFACTS
+        bytes: 1073741824    # 1 GiB — primary capture queue
+      - stream: SEARCH
+        bytes: 536870912     # 512 MiB — embedding/rerank
+      - stream: DIGEST
+        bytes: 268435456     # 256 MiB — daily digest
+      - stream: KEEP
+        bytes: 268435456     # 256 MiB — Keep sync
+      - stream: INTELLIGENCE
+        bytes: 536870912     # 512 MiB — multi-domain analysis
+      - stream: ALERTS
+        bytes: 134217728     # 128 MiB — notifications
+      - stream: SYNTHESIS
+        bytes: 536870912     # 512 MiB — cross-source synthesis
+      - stream: DOMAIN
+        bytes: 268435456     # 256 MiB — domain extraction
+      - stream: DRIVE
+        bytes: 536870912     # 512 MiB — cloud-drive events
+      - stream: PHOTOS
+        bytes: 1073741824    # 1 GiB — photo classification batches
+      - stream: ANNOTATIONS
+        bytes: 134217728     # 128 MiB — user annotations
+      - stream: LISTS
+        bytes: 134217728     # 128 MiB — actionable lists
+      - stream: AGENT
+        bytes: 268435456     # 256 MiB — agent traces
+      - stream: WEATHER
+        bytes: 67108864      # 64 MiB — weather enrich
+      - stream: DEADLETTER
+        bytes: 67108864      # 64 MiB — forensic DLQ
   ollama:
     # Default fallback (legacy spec 037 — superseded by per-env ollama_enabled
     # override added by spec 043). Kept so existing readers that ignore the
