@@ -229,6 +229,57 @@ var DriveRuleConflictsTotal = prometheus.NewCounterVec(
 	[]string{"rule_id"},
 )
 
+// --- QF Companion Connector (spec 041) ---
+
+// QFCapabilityMismatch counts capability-handshake mismatches by required vs actual value.
+// Bounded labels: `required` is the value the connector requires (a small fixed set:
+// "v1", "recommendation", "policy_denial", "analysis_note", ">=1"); `actual` is the
+// QF-advertised value or comma-joined list. Cardinality stays low because misconfig
+// surfaces quickly and is corrected — it is not a runtime-hot label.
+var QFCapabilityMismatch = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_capability_mismatch_total",
+		Help: "QF Companion capability handshake mismatches by required vs actual value",
+	},
+	[]string{"required", "actual"},
+)
+
+// QFUnknownDecisionType counts decision events whose decision_type is not in
+// the capability-advertised supported_decision_types list. The connector still
+// emits the event into NATS for diagnostic visibility but flags
+// metadata.unknown_decision_type=true so downstream consumers can filter.
+var QFUnknownDecisionType = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_unknown_decision_type_total",
+		Help: "QF Companion decision events received with unknown decision_type",
+	},
+	[]string{"value"},
+)
+
+// QFCursorLagSeconds reports the QF Companion connector's cursor lag in
+// seconds (now - last_event.server_time). Emitted on every Sync tick so
+// operators can plot drift and breach alerts. NEVER auto-advances; lag
+// recovery is operator-initiated via POST /api/private/smackerel/v1/cursor:fast-forward.
+// SCN-SM-041-007.
+var QFCursorLagSeconds = prometheus.NewGauge(
+	prometheus.GaugeOpts{
+		Name: "smackerel_qf_cursor_lag_seconds",
+		Help: "QF Companion connector cursor lag in seconds (now - last event server_time)",
+	},
+)
+
+// QFCursorFastForwardEventsSkipped counts events skipped by operator-initiated
+// QF cursor fast-forward (POST /api/private/smackerel/v1/cursor:fast-forward).
+// Incremented by the events_skipped value reported in the QF diagnostic event
+// when the connector detects the cursor has advanced beyond a normal page.
+// SCN-SM-041-008.
+var QFCursorFastForwardEventsSkipped = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_cursor_fast_forward_events_skipped_total",
+		Help: "Total events skipped by operator-initiated QF cursor fast-forward",
+	},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -252,6 +303,10 @@ func init() {
 		DriveConfirmationsTotal,
 		DrivePolicyDecisionsTotal,
 		DriveRuleConflictsTotal,
+		QFCapabilityMismatch,
+		QFUnknownDecisionType,
+		QFCursorLagSeconds,
+		QFCursorFastForwardEventsSkipped,
 		// Spec 039 Scope 6 recommendation metrics — defined in
 		// recommendations.go; bounded labels enforced (no watch_id,
 		// no recommendation_id, no request_id).
