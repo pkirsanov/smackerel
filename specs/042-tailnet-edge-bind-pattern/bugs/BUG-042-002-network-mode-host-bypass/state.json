@@ -1,0 +1,167 @@
+{
+  "version": 3,
+  "specId": "042-tailnet-edge-bind-pattern",
+  "bugId": "BUG-042-002-network-mode-host-bypass",
+  "featureDir": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-002-network-mode-host-bypass",
+  "featureName": "BUG-042-002: Compose contract validator network_mode: host bypass",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "round": 11,
+    "totalRounds": 20,
+    "seed": "20520512",
+    "trigger": "test",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-12T20:00:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Out-of-tree probe at /tmp/probe042/main.go inlined assertComposeContract + composeDoc + required prefix constants from internal/deploy/compose_contract_test.go and ran 6 adversarial fixtures: (1) long-form ports object on smackerel-core = correctly rejected; (2) network_mode: host on smackerel-core with compliant ports block = ACCEPTED by old validator (DEFECT_CONFIRMED); (3) ${HOST_BIND_ADDRESS} without :-127.0.0.1 default = correctly rejected; (4) bare container port '8080' = correctly rejected; (5) postgres long-form ports object = correctly rejected; (6) service rename smackerel_core = correctly rejected. Only Probe 2 is a real validator gap — the validator's struct lacked the network_mode field entirely, so yaml.Unmarshal silently dropped the value and the per-service ports: checks could not see it."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added NetworkMode string `yaml:\"network_mode\"` to the inline service struct inside composeDoc. Added per-service `if svc.NetworkMode == \"host\" { return error }` guard blocks for smackerel-core, smackerel-ml, postgres (when present), and nats (when present) inside assertComposeContract, mirroring the existing per-service ports: checks. Each error names the service, the field network_mode, the value \"host\", the spec 042 invariant the bypass defeats, and the BUG-042-002 attribution. Code lives at internal/deploy/compose_contract_test.go lines 60-68 (struct field), 116-128 (smackerel-core block), 145-155 (smackerel-ml block), 163-170 (postgres block), 174-181 (nats block). Verified in report.md > Code Diff Evidence."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added TestComposeContract_AdversarialNetworkModeHostBypass to internal/deploy/compose_contract_test.go as a table-driven test with 4 sub-cases (one per service in the contract set). Each sub-case asserts (a) err != nil; (b) error mentions the service name; (c) error mentions network_mode (proves validator inspected the field); (d) error mentions BUG-042-002 to lock the regression contract attribution. Targeted run: `go test -v -count=1 -run 'TestComposeContract_AdversarialNetworkModeHostBypass' ./internal/deploy/...` exits 0 with all 4 sub-tests PASS. BUG-042-001 regression coverage preserved: the multi-ports adversarial tests still PASS unchanged."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 1 struct-field addition + 4 short per-service guard blocks (3 lines each, mirroring the existing per-service ports: checks) + 1 new table-driven test function (single ~30-line function compresses 4 structurally identical assertions). The per-service guard form is preferred over a single generic loop because spec 042 explicitly excludes ollama (profile-gated) — a generic loop would over-constrain. See design.md > Why per-service checks and not a single generic loop."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:11:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond static YAML parse. All 4 sub-tests PASS in 0.018s with zero variance across re-runs."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review recorded in report.md > Audit Evidence > OWASP review. The fix tightens A04 (Insecure Design) and A05 (Security Misconfiguration) by mechanically blocking a future regression class where a service could bypass spec 042 invariants by sharing the host network namespace. No new attack surface introduced. No PII handled. The live deploy/compose.deploy.yml is unchanged — no live exposure created or removed today."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Static checks: go vet ./internal/... clean (exit 0), gofmt -l internal/deploy/ empty. Cross-package smoke: go test -count=1 ./internal/deploy/... ./internal/config/... ./internal/api/... all PASS (3 ok lines). Live-file regression: TestComposeContract_LiveFile still PASSES against the real deploy/compose.deploy.yml. Existing 4 adversarial tests (LiteralBind + InfraHasPorts + MultiPortsBypass + MLMultiPortsBypass) still PASS. New test (NetworkModeHostBypass with 4 sub-cases) PASS. Full evidence in report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A04/A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 1 file changed (internal/deploy/compose_contract_test.go) — 1 struct-field addition + 4 per-service guard blocks + 1 new table-driven test function. No production code, compose, config, or doc files modified outside the bug folder. Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow (parent-expanded test-to-doc)",
+        "timestamp": "2026-05-12T20:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/report/uservalidation/state/scenario-manifest artifacts authored. No external doc updates required: the existing .github/copilot-instructions.md 'Tailnet-Edge Bind Pattern' subsection states the spec 042 contract abstractly ('backends bind via HOST_BIND_ADDRESS, infra has no host port'); network_mode: host is one mechanism that violates both invariants and is now mechanically blocked by the contract test. Spec 042 scenario-manifest.json is unchanged — the new tests strengthen the protection of every SCN-042-* invariant without creating a new spec scenario. The bug-local scenario-manifest.json declares 4 bug-scoped scenarios (SCN-042-002-A/B/C/D), one per service in the contract set."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.workflow (parent-expanded test-to-doc)",
+    "certifiedAt": "2026-05-12T20:14:00Z",
+    "auditorAgent": "bubbles.workflow (parent-expanded test-to-doc)",
+    "auditedAt": "2026-05-12T20:14:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Test round 11 of stochastic-quality-sweep discovered the network_mode: host bypass in assertComposeContract via out-of-tree probe at /tmp/probe042/main.go (Probe 2). Fix applied (NetworkMode field + 4 per-service guard blocks) and locked with one new non-tautological table-driven adversarial test (4 sub-cases). The compose contract surface is a static-file invariant and the regression suite is the in-tree Go test suite itself — every `go test ./internal/deploy/...` invocation re-runs the regression coverage. Live deploy/compose.deploy.yml continues to PASS unchanged (no service declares network_mode: host). No cross-package regression. No flake. No production code, compose, config, or doc files modified outside the bug folder.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "NetworkMode field + per-service guard + adversarial table-driven regression test",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-12T20:14:00Z",
+        "dodTotal": 13,
+        "dodChecked": 13,
+        "notes": "NetworkMode string `yaml:\"network_mode\"` added to composeDoc inline service struct. Four per-service `if svc.NetworkMode == \"host\" { return error }` guard blocks added to assertComposeContract for smackerel-core, smackerel-ml, postgres (when present), nats (when present). One new table-driven test function TestComposeContract_AdversarialNetworkModeHostBypass with 4 sub-cases appended. Full DoD evidence inline in scopes.md."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "stochastic-quality-sweep-round-11-2026-05-12"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}
