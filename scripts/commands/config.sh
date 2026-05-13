@@ -401,6 +401,15 @@ DB_MAX_CONNS="$(required_value infrastructure.postgres.max_conns)"
 DB_MIN_CONNS="$(required_value infrastructure.postgres.min_conns)"
 NATS_CLIENT_PORT="$(required_value infrastructure.nats.client_port)"
 NATS_MONITOR_PORT="$(required_value infrastructure.nats.monitor_port)"
+# Spec 046 FR-046-001 — ML sidecar reconnect contract (SST-owned).
+NATS_MAX_RECONNECT_ATTEMPTS="$(required_value infrastructure.nats.client.max_reconnect_attempts)"
+NATS_RECONNECT_TIME_WAIT_SECONDS="$(required_value infrastructure.nats.client.reconnect_time_wait_seconds)"
+# Spec 046 FR-046-002 — NATS server payload + JetStream storage ceilings.
+NATS_MAX_PAYLOAD_BYTES="$(required_value infrastructure.nats.max_payload_bytes)"
+NATS_MAX_FILE_STORE_BYTES="$(required_value infrastructure.nats.max_file_store_bytes)"
+NATS_MAX_MEM_STORE_BYTES="$(required_value infrastructure.nats.max_mem_store_bytes)"
+# Spec 046 FR-046-003 — per-stream MaxBytes ceilings (JSON list).
+NATS_STREAM_MAX_BYTES_JSON="$(required_json_value infrastructure.nats.stream_max_bytes)"
 # Spec 043 — Ollama enabled flag uses per-env override so dev/test/home-lab can
 # differ. infrastructure.ollama.enabled remains as the legacy fallback when no
 # per-env value is set.
@@ -887,6 +896,12 @@ NATS_MONITOR_PORT=${NATS_MONITOR_PORT}
 NATS_CLIENT_HOST_PORT=${NATS_CLIENT_HOST_PORT}
 NATS_MONITOR_HOST_PORT=${NATS_MONITOR_HOST_PORT}
 NATS_VOLUME_NAME=${NATS_VOLUME_NAME}
+NATS_MAX_RECONNECT_ATTEMPTS=${NATS_MAX_RECONNECT_ATTEMPTS}
+NATS_RECONNECT_TIME_WAIT_SECONDS=${NATS_RECONNECT_TIME_WAIT_SECONDS}
+NATS_MAX_PAYLOAD_BYTES=${NATS_MAX_PAYLOAD_BYTES}
+NATS_MAX_FILE_STORE_BYTES=${NATS_MAX_FILE_STORE_BYTES}
+NATS_MAX_MEM_STORE_BYTES=${NATS_MAX_MEM_STORE_BYTES}
+NATS_STREAM_MAX_BYTES_JSON=${NATS_STREAM_MAX_BYTES_JSON}
 CORE_CONTAINER_PORT=${CORE_CONTAINER_PORT}
 CORE_HOST_PORT=${CORE_HOST_PORT}
 ML_CONTAINER_PORT=${ML_CONTAINER_PORT}
@@ -1265,8 +1280,15 @@ fi
 NATS_CONF_CONTENT="# Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
 # Regenerate: ./smackerel.sh config generate
 
+# Spec 046 FR-046-002 — payload + JetStream storage ceilings. Bytes-typed;
+# values come from infrastructure.nats.{max_payload_bytes,max_file_store_bytes,
+# max_mem_store_bytes}. Missing values fail loud at generate time.
+max_payload: ${NATS_MAX_PAYLOAD_BYTES}
+
 jetstream {
   store_dir: /data
+  max_file_store: ${NATS_MAX_FILE_STORE_BYTES}
+  max_memory_store: ${NATS_MAX_MEM_STORE_BYTES}
 }
 
 http_port: ${NATS_MONITOR_PORT}${NATS_AUTH_SECTION}"
