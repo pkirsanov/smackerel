@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "bugId": "BUG-002-deploy-doc-drift-and-policy-violation",
+  "parentSpec": "032-documentation-freshness",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-032-D06",
+      "title": "Stale `deploy/home-lab/` paths removed from Deployment.md",
+      "scopeId": "1",
+      "requiredTestType": "docs-static-grep",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOC-009", "T-DOC-010"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "docs/Deployment.md lines 88, 169, 192 (pre-fix)",
+      "redGreenProbe": "grep -nE '\\bdeploy/home-lab/(apply|manifest)|cp -R deploy/home-lab' docs/Deployment.md"
+    },
+    {
+      "scenarioId": "SCN-032-D08",
+      "title": "Home_Lab_Master_Deployment_Plan.md reduced to migration-pointer stub",
+      "scopeId": "1",
+      "requiredTestType": "docs-static-grep",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOC-013", "T-DOC-014"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "docs/Home_Lab_Master_Deployment_Plan.md (427 lines pre-fix)",
+      "redGreenProbe": "wc -l docs/Home_Lab_Master_Deployment_Plan.md && grep -nE '\\bhomelab\\b|wlp195s0|\\*\\*\\*REMOVED\\*\\*\\*|Wi-Fi 7 \\(MediaTek MT7925\\)|knb deploy-adapter overlay' docs/Home_Lab_Master_Deployment_Plan.md"
+    },
+    {
+      "scenarioId": "SCN-032-D09",
+      "title": "docs/Operations.md deployment surface leads with adapter flow",
+      "scopeId": "2",
+      "requiredTestType": "docs-static-grep",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOC-015", "T-DOC-015b"],
+      "evidenceRefs": ["scopes.md#scope-2-test-plan", "report.md#test-evidence"],
+      "specSource": "docs/Operations.md line 7 (pre-fix First-Time Setup placement)",
+      "redGreenProbe": "grep -nE '^### Production Deploy|^### First-Time Setup' docs/Operations.md"
+    },
+    {
+      "scenarioId": "SCN-032-D10",
+      "title": "docs/Deployment.md adds knb-overlay breadcrumb",
+      "scopeId": "2",
+      "requiredTestType": "docs-static-grep",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOC-016"],
+      "evidenceRefs": ["scopes.md#scope-2-test-plan", "report.md#test-evidence"],
+      "specSource": "docs/Deployment.md (no knb breadcrumb pre-fix)",
+      "redGreenProbe": "grep -nE 'knb Deploy-Adapter Overlay Dependency|003-smackerel-home-lab-adapter-readiness' docs/Deployment.md"
+    },
+    {
+      "scenarioId": "SCN-032-D11",
+      "title": "Spec 050 status text refreshed",
+      "scopeId": "2",
+      "requiredTestType": "docs-static-grep",
+      "regressionRequired": true,
+      "linkedTests": ["T-DOC-017"],
+      "evidenceRefs": ["scopes.md#scope-2-test-plan", "report.md#test-evidence"],
+      "specSource": "specs/050-ml-sidecar-health-isolation/spec.md lines 3-5 (pre-fix `In Progress`)",
+      "redGreenProbe": "grep -nE '^Resolved — implemented|^In Progress' specs/050-ml-sidecar-health-isolation/spec.md"
+    }
+  ]
+}
