@@ -399,6 +399,16 @@ PROMETHEUS_SCRAPE_INTERVAL_S="$(required_value monitoring.prometheus.scrape_inte
 PROMETHEUS_EVALUATION_INTERVAL_S="$(required_value monitoring.prometheus.evaluation_interval_seconds)"
 PROMETHEUS_RETENTION_DAYS="$(required_value monitoring.prometheus.retention_days)"
 
+# Spec 048 FR-048-001 / FR-048-002 / FR-048-003 — Backup and Restore
+# Automation SST. Every key is required; missing values fail loud here.
+# The deploy adapter overlay supplies a real off-host destination via
+# ${BACKUP_DESTINATION_URL}; this repo MUST NOT name a real bucket.
+BACKUP_LOCAL_DIR="$(required_value backup.local_dir)"
+BACKUP_STATUS_FILE="$(required_value backup.status_file)"
+BACKUP_RETENTION_DAILY="$(required_value backup.retention_daily)"
+BACKUP_RETENTION_WEEKLY="$(required_value backup.retention_weekly)"
+BACKUP_WATCHER_POLL_SECONDS="$(required_value backup.watcher_poll_seconds)"
+
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
 POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
 # Spec 051 FR-051-005 / SCN-051-S02 — defense-in-depth dev-default rejection.
@@ -435,6 +445,7 @@ NATS_MAX_FILE_STORE_BYTES="$(required_value infrastructure.nats.max_file_store_b
 NATS_MAX_MEM_STORE_BYTES="$(required_value infrastructure.nats.max_mem_store_bytes)"
 # Spec 046 FR-046-003 — per-stream MaxBytes ceilings (JSON list).
 NATS_STREAM_MAX_BYTES_JSON="$(required_json_value infrastructure.nats.stream_max_bytes)"
+
 # Spec 043 — Ollama enabled flag uses per-env override so dev/test/home-lab can
 # differ. infrastructure.ollama.enabled remains as the legacy fallback when no
 # per-env value is set.
@@ -1299,6 +1310,11 @@ PROMETHEUS_EVALUATION_INTERVAL_S=${PROMETHEUS_EVALUATION_INTERVAL_S}
 PROMETHEUS_RETENTION_DAYS=${PROMETHEUS_RETENTION_DAYS}
 PROMETHEUS_CPU_LIMIT=${PROMETHEUS_CPU_LIMIT}
 PROMETHEUS_MEMORY_LIMIT=${PROMETHEUS_MEMORY_LIMIT}
+BACKUP_LOCAL_DIR=${BACKUP_LOCAL_DIR}
+BACKUP_STATUS_FILE=${BACKUP_STATUS_FILE}
+BACKUP_RETENTION_DAILY=${BACKUP_RETENTION_DAILY}
+BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY}
+BACKUP_WATCHER_POLL_SECONDS=${BACKUP_WATCHER_POLL_SECONDS}
 EOF
 
 chmod 0600 "$OUTPUT_FILE"

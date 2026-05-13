@@ -17,6 +17,7 @@ Commands:
   config generate             Generate config/generated/<env>.env from config/smackerel.yaml
   build [--no-cache]          Build docker images for the current environment
   backup                      Create a compressed pg_dump backup in backups/
+  backup-restore-test         Spec 048 — restore a backup into a disposable postgres and verify
   check                       Validate generated config and docker-compose wiring
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
@@ -521,6 +522,11 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     bash "$SCRIPT_DIR/scripts/commands/backup.sh" --env "$TARGET_ENV"
+    ;;
+  backup-restore-test)
+    require_docker
+    smackerel_generate_config "$TARGET_ENV" >/dev/null
+    bash "$SCRIPT_DIR/scripts/commands/restore-test.sh" --env "$TARGET_ENV" "$@"
     ;;
   check)
     require_docker

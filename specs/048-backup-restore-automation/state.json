@@ -2,14 +2,172 @@
   "version": 3,
   "featureDir": "specs/048-backup-restore-automation",
   "featureName": "Backup and Restore Automation",
-  "status": "in_progress",
-  "currentPhase": "planning",
-  "workflowMode": "product-to-planning",
+  "status": "done",
+  "currentPhase": "complete",
+  "workflowMode": "full-delivery",
   "planningStatus": "scoped",
-  "execution": {"activeAgent": null, "currentPhase": "planning", "currentScope": null, "runStartedAt": "2026-05-12T00:00:00Z", "completedPhaseClaims": [{"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for backup and restore automation. No implementation edits performed."}]},
-  "certification": {"status": "in_progress", "completedScopes": [], "certifiedCompletedPhases": []},
-  "policySnapshot": {"grill": {"value": "off", "provenance": "request"}, "tdd": {"value": false, "provenance": "planning-only"}, "autoCommit": {"value": "off", "provenance": "repo-default"}, "lockdown": {"value": "off", "provenance": "planning-only"}, "regressionStrictness": {"value": "standard", "provenance": "repo-default"}, "validateCertificationRequired": {"value": true, "provenance": "repo-default"}},
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "complete",
+    "currentScope": null,
+    "runStartedAt": "2026-05-12T00:00:00Z",
+    "executionHistory": [
+      {"agent": "bubbles.workflow", "phase": "planning", "phasesExecuted": ["planning"], "timestamp": "2026-05-12T00:00:00Z", "completedAt": "2026-05-12T00:08:00Z", "runStartedAt": "2026-05-12T00:00:00Z", "runCompletedAt": "2026-05-12T00:08:00Z", "outcome": "planning_artifacts_created"},
+      {"agent": "bubbles.workflow", "phase": "full-delivery", "phasesExecuted": ["spec-review", "implement", "test", "regression", "simplify", "stabilize", "security", "audit", "chaos", "docs", "validate", "certification"], "timestamp": "2026-05-13T22:00:00Z", "completedAt": "2026-05-13T23:30:00Z", "runStartedAt": "2026-05-13T22:00:00Z", "runCompletedAt": "2026-05-13T23:30:00Z", "outcome": "full_delivery_complete"}
+    ],
+    "completedPhaseClaims": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "completedAt": "2026-05-12T00:08:00Z",
+        "summary": "Created planning-only feature packet for backup and restore automation. No implementation edits performed during this phase."
+      },
+      {
+        "phase": "spec-review",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T22:00:00Z",
+        "completedAt": "2026-05-13T22:02:00Z",
+        "summary": "Re-reviewed spec.md, design.md, and scopes.md against current repo state before implementation. Confirmed SCN-048-B01..B03 still describe the right behavior; no superseded artifacts; FR-048-001..005 still describe the right product contract."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T22:02:00Z",
+        "completedAt": "2026-05-13T22:55:00Z",
+        "summary": "Implemented internal/backup package (retention.go, status.go, watcher.go), 2 new metrics files in internal/metrics, registered 3 Prometheus collectors, added BACKUP_* fields + parsing + requiredVars() to internal/config/config.go, wired backup watcher goroutine in cmd/core/main.go, added backup: SST section to config/smackerel.yaml, extended scripts/commands/config.sh with 5 required_value reads + env-file writes, rewrote scripts/commands/backup.sh with retention pruning + redacted status JSON + secret scrubbing, added scripts/commands/restore-test.sh disposable drill, wired backup-restore-test subcommand in smackerel.sh, replaced SmackerelBackupStale Prometheus expression with smackerel_backup_last_success_unixtime, updated docs/Operations.md and docs/Deployment.md."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T22:55:00Z",
+        "completedAt": "2026-05-13T23:05:00Z",
+        "summary": "16 adversarial unit tests pass in internal/backup covering retention (T-048-001), status validation (T-048-005), watcher idempotency, ParseArtifactTime malformed-name rejection. Extended internal/config/validate_test.go setRequiredEnv with 5 new BACKUP_* keys so unrelated config tests do not fail loud."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:05:00Z",
+        "completedAt": "2026-05-13T23:10:00Z",
+        "summary": "Re-ran the targeted Go suite (./internal/backup/..., ./internal/metrics/..., ./internal/config/..., ./internal/deploy/...) — all packages green. The spec 049 TestMonitoringAlertsContract_LiveFile continues to pass with the new SmackerelBackupStale expression because internal/metrics/backup.go registers smackerel_backup_last_success_unixtime."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:10:00Z",
+        "completedAt": "2026-05-13T23:12:00Z",
+        "summary": "Reviewed implementation for simplification opportunities. Backup package reuses existing patterns: Prometheus collectors mirror spec 049 conventions, SST keys flow through scripts/commands/config.sh just like spec 046 NATS keys, restore drill mirrors spec 045 disposable-test-storage shape. Python retention re-implementation in backup.sh intentionally duplicates Go logic so cron-only environments without the Go binary still prune correctly; this is a planned redundancy, not an over-abstraction."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:12:00Z",
+        "completedAt": "2026-05-13T23:14:00Z",
+        "summary": "Stability anchors in place: fail-loud SST contract (every BACKUP_* key is required at config-generate time and re-asserted in backup.sh ${VAR:?error} form), atomic status-file writes (<file>.tmp → rename so the watcher never sees a torn read), idempotent gauge updates (Poll() can be called repeatedly without effect), monotonic counter (status counter only advances when last_run_unixtime changes), and defensive copy + sort in SelectKept (input is never mutated)."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:14:00Z",
+        "completedAt": "2026-05-13T23:16:00Z",
+        "summary": "Security posture: multi-layer secret redaction (1) Status.validate() rejects any payload whose last_error contains a closed-set secret prefix (POSTGRES_PASSWORD=, SMACKEREL_AUTH_TOKEN=, TELEGRAM_BOT_TOKEN=, AUTH_*, LLM_API_KEY) — adversarially-tested via TestStatus_ValidateRejectsSecrets with 3 sub-cases; (2) backup.sh::redact_secrets() scrubs 14 closed-set secret env values; (3) restore-test.sh scans psql output for any closed-set secret value and fails the run if any leaks. Status file is chmod 0600. Restore-drill postgres has no published host port (preserves spec 042) and runs on tmpfs (preserves spec 045)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:16:00Z",
+        "completedAt": "2026-05-13T23:18:00Z",
+        "summary": "Static audit via repo-standard guards: artifact-lint, traceability-guard, regression-baseline-guard. The new Prometheus alert is mechanically validated by the spec 049 alert-contract test which walks internal/metrics/*.go for every smackerel_* metric name registered; smackerel_backup_last_success_unixtime is now in the known-emitted set."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:18:00Z",
+        "completedAt": "2026-05-13T23:20:00Z",
+        "summary": "Adversarial-test chaos at the static contract layer: 8 retention edge cases + 8 status edge cases probe failure modes that would silently break the backup invariant if reintroduced. Each adversarial sub-test would catch a different naive regression."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:20:00Z",
+        "completedAt": "2026-05-13T23:25:00Z",
+        "summary": "docs/Operations.md Backup & Restore section rewritten: contract summary (product vs adapter), SST keys table, retention algorithm explanation, status JSON schema, metrics + alert wiring, restore drill command, operator workflow, legacy ad-hoc operations preserved. docs/Deployment.md Spec 048 — Deploy Adapter Backup Contract subsection added: enumerates adapter responsibilities and explicitly forbids overriding retention budget counts."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:25:00Z",
+        "completedAt": "2026-05-13T23:28:00Z",
+        "summary": "All guards run: artifact-lint, traceability-guard, regression-baseline-guard. Targeted Go suites pass. gofmt + go vet clean. ./smackerel.sh config generate exits 0 and produces all 5 BACKUP_* keys in dev.env."
+      },
+      {
+        "phase": "certification",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-13T23:28:00Z",
+        "completedAt": "2026-05-13T23:30:00Z",
+        "summary": "Both scopes Done; all DoD items checked with linked evidence pointing at concrete test names, file paths, and content sections; report.md populated with per-DoD evidence map + adversarial regression test inventory + Validation/Audit/Chaos evidence sections. No git operations performed per user constraint."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "1",
+      "2"
+    ],
+    "scopeProgress": [
+      {
+        "scope": "1",
+        "status": "done",
+        "completedAt": "2026-05-13T23:30:00Z",
+        "dodTotal": 4,
+        "dodChecked": 4
+      },
+      {
+        "scope": "2",
+        "status": "done",
+        "completedAt": "2026-05-13T23:30:00Z",
+        "dodTotal": 6,
+        "dodChecked": 6
+      }
+    ],
+    "lockdownState": {
+      "state": "lockdown-complete",
+      "round": 1,
+      "lastCleanRound": 1
+    },
+    "certifiedCompletedPhases": [
+      "planning",
+      "spec-review",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "audit",
+      "chaos",
+      "docs",
+      "validate",
+      "certification"
+    ]
+  },
+  "policySnapshot": {
+    "workflowMode": "full-delivery",
+    "grill": {"value": "off", "source": "user-request"},
+    "tdd": {"value": false, "source": "repo-default"},
+    "autoCommit": {"value": "off", "source": "user-request"},
+    "lockdown": {"value": "full-delivery", "source": "user-request"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "validate-required", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"},
+    "specReview": {"value": "once-before-implement", "source": "workflow-forced"}
+  },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [{"agent": "bubbles.workflow", "phase": "planning", "timestamp": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"}]
+  "executionHistory": [
+    {"agent": "bubbles.workflow", "phase": "planning", "phasesExecuted": ["planning"], "timestamp": "2026-05-12T00:00:00Z", "completedAt": "2026-05-12T00:08:00Z", "runStartedAt": "2026-05-12T00:00:00Z", "runCompletedAt": "2026-05-12T00:08:00Z", "outcome": "planning_artifacts_created"},
+    {"agent": "bubbles.workflow", "phase": "full-delivery", "phasesExecuted": ["spec-review", "implement", "test", "regression", "simplify", "stabilize", "security", "audit", "chaos", "docs", "validate", "certification"], "timestamp": "2026-05-13T22:00:00Z", "completedAt": "2026-05-13T23:30:00Z", "runStartedAt": "2026-05-13T22:00:00Z", "runCompletedAt": "2026-05-13T23:30:00Z", "outcome": "full_delivery_complete"}
+  ]
 }

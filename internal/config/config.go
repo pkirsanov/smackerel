@@ -304,6 +304,32 @@ type Config struct {
 	NATSMaxFileStoreBytes        int64
 	NATSMaxMemStoreBytes         int64
 	NATSStreamMaxBytes           map[string]int64
+
+	// Spec 048 — Backup and Restore Automation. SST-compliant; populated
+	// from BACKUP_* env vars produced by `./smackerel.sh config generate`.
+	// BackupLocalDir is the host-side staging directory `./smackerel.sh
+	// backup` writes pg_dump artifacts to before a deploy adapter ships
+	// them off-host. BackupStatusFile is the JSON status the script
+	// updates after every run; the Go core's internal/backup.Watcher
+	// polls it and republishes `smackerel_backup_*` metrics so spec 049
+	// SmackerelBackupStale alert can fire.
+	//
+	// BackupRetentionDaily / BackupRetentionWeekly encode the product
+	// retention contract (FR-048-001 default: 7 daily + 4 weekly). All
+	// four fields are REQUIRED at the loader boundary — Gate G028
+	// fail-loud forbids hidden defaults.
+	//
+	// BackupWatcherPollSeconds is how often the metrics watcher polls
+	// the status file. 60s is the recommended default; lower values
+	// reduce the stale-metric window but cost more CPU.
+	BackupLocalDir           string
+	BackupStatusFile         string
+	BackupRetentionDailyRaw  string
+	BackupRetentionWeeklyRaw string
+	BackupWatcherPollSecsRaw string
+	BackupRetentionDaily     int
+	BackupRetentionWeekly    int
+	BackupWatcherPollSecs    int
 }
 
 // AuthConfig holds the SST-resolved per-user bearer-auth subsystem
@@ -540,6 +566,15 @@ func Load() (*Config, error) {
 		NATSMaxFileStoreBytesRaw:     os.Getenv("NATS_MAX_FILE_STORE_BYTES"),
 		NATSMaxMemStoreBytesRaw:      os.Getenv("NATS_MAX_MEM_STORE_BYTES"),
 		NATSStreamMaxBytesJSON:       os.Getenv("NATS_STREAM_MAX_BYTES_JSON"),
+
+		// Spec 048 — Backup and Restore Automation. Raw env strings
+		// here; integer parsing happens below so the loader can fail
+		// loud with a precise error naming the offending key.
+		BackupLocalDir:           os.Getenv("BACKUP_LOCAL_DIR"),
+		BackupStatusFile:         os.Getenv("BACKUP_STATUS_FILE"),
+		BackupRetentionDailyRaw:  os.Getenv("BACKUP_RETENTION_DAILY"),
+		BackupRetentionWeeklyRaw: os.Getenv("BACKUP_RETENTION_WEEKLY"),
+		BackupWatcherPollSecsRaw: os.Getenv("BACKUP_WATCHER_POLL_SECONDS"),
 	}
 
 	// Spec 046 — NATS production hardening. Raw env values are parsed
@@ -615,6 +650,41 @@ func Load() (*Config, error) {
 			}
 			cfg.NATSStreamMaxBytes[entry.Stream] = entry.Bytes
 		}
+	}
+
+	// Spec 048 — Backup and Restore Automation. Integer parsing here so
+	// the loader can name the offending env var. requiredVars() catches
+	// the missing/empty case with the same fail-loud single-error
+	// message pattern as spec 045 / 046.
+	if raw := cfg.BackupRetentionDailyRaw; raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("BACKUP_RETENTION_DAILY: invalid integer %q: %w", raw, err)
+		}
+		if v < 1 {
+			return nil, fmt.Errorf("BACKUP_RETENTION_DAILY must be >= 1 (FR-048-001 contract); got %d", v)
+		}
+		cfg.BackupRetentionDaily = v
+	}
+	if raw := cfg.BackupRetentionWeeklyRaw; raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("BACKUP_RETENTION_WEEKLY: invalid integer %q: %w", raw, err)
+		}
+		if v < 0 {
+			return nil, fmt.Errorf("BACKUP_RETENTION_WEEKLY must be >= 0; got %d", v)
+		}
+		cfg.BackupRetentionWeekly = v
+	}
+	if raw := cfg.BackupWatcherPollSecsRaw; raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("BACKUP_WATCHER_POLL_SECONDS: invalid integer %q: %w", raw, err)
+		}
+		if v < 1 {
+			return nil, fmt.Errorf("BACKUP_WATCHER_POLL_SECONDS must be >= 1; got %d", v)
+		}
+		cfg.BackupWatcherPollSecs = v
 	}
 
 	// Spec 045 — Parse ML_MEMORY_LIMIT (compose-style string like "3G",
@@ -1316,6 +1386,15 @@ func (c *Config) requiredVars() []struct {
 		{"NATS_MAX_FILE_STORE_BYTES", c.NATSMaxFileStoreBytesRaw},
 		{"NATS_MAX_MEM_STORE_BYTES", c.NATSMaxMemStoreBytesRaw},
 		{"NATS_STREAM_MAX_BYTES_JSON", c.NATSStreamMaxBytesJSON},
+		// Spec 048 FR-048-001 / FR-048-002 — backup and restore
+		// automation envelope. Every key is required; missing values
+		// fail-loud here with the rest of the envelope. Retention
+		// integers are validated for value ranges in Load() above.
+		{"BACKUP_LOCAL_DIR", c.BackupLocalDir},
+		{"BACKUP_STATUS_FILE", c.BackupStatusFile},
+		{"BACKUP_RETENTION_DAILY", c.BackupRetentionDailyRaw},
+		{"BACKUP_RETENTION_WEEKLY", c.BackupRetentionWeeklyRaw},
+		{"BACKUP_WATCHER_POLL_SECONDS", c.BackupWatcherPollSecsRaw},
 	}
 	// MIT-040-S-004 — SMACKEREL_AUTH_TOKEN is NOT in requiredVars(): it is
 	// required only when SMACKEREL_ENV=production, and the dedicated

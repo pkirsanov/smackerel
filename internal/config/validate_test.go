@@ -828,6 +828,15 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("NATS_MAX_FILE_STORE_BYTES", "10737418240")
 	t.Setenv("NATS_MAX_MEM_STORE_BYTES", "1073741824")
 	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", `[{"stream":"ARTIFACTS","bytes":1073741824},{"stream":"SEARCH","bytes":536870912},{"stream":"DIGEST","bytes":268435456},{"stream":"KEEP","bytes":268435456},{"stream":"INTELLIGENCE","bytes":536870912},{"stream":"ALERTS","bytes":134217728},{"stream":"SYNTHESIS","bytes":536870912},{"stream":"DOMAIN","bytes":268435456},{"stream":"DRIVE","bytes":536870912},{"stream":"PHOTOS","bytes":1073741824},{"stream":"ANNOTATIONS","bytes":134217728},{"stream":"LISTS","bytes":134217728},{"stream":"AGENT","bytes":268435456},{"stream":"WEATHER","bytes":67108864},{"stream":"DEADLETTER","bytes":67108864}]`)
+
+	// Spec 048 — Backup and Restore Automation. Defaults mirror
+	// smackerel.yaml so test Load() succeeds; per-test overrides
+	// exercise fail-loud paths.
+	t.Setenv("BACKUP_LOCAL_DIR", "./backups")
+	t.Setenv("BACKUP_STATUS_FILE", "./backups/.backup-status.json")
+	t.Setenv("BACKUP_RETENTION_DAILY", "7")
+	t.Setenv("BACKUP_RETENTION_WEEKLY", "4")
+	t.Setenv("BACKUP_WATCHER_POLL_SECONDS", "60")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
