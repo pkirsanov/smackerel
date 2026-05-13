@@ -3,16 +3,52 @@
   "featureDir": "specs/051-deployment-secret-auth-contract",
   "featureName": "Deployment Secret and Auth Contract",
   "status": "in_progress",
-  "currentPhase": "planning",
-  "workflowMode": "product-to-planning",
+  "currentPhase": "implement",
+  "workflowMode": "full-delivery",
   "planningStatus": "scoped",
-  "execution": {"activeAgent": null, "currentPhase": "planning", "currentScope": null, "runStartedAt": "2026-05-12T00:00:00Z", "completedPhaseClaims": [{"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for generic deployment secret and auth contract. No implementation edits performed."}]},
-  "certification": {"status": "in_progress", "completedScopes": [], "certifiedCompletedPhases": []},
-  "policySnapshot": {"grill": {"value": "off", "provenance": "request"}, "tdd": {"value": false, "provenance": "planning-only"}, "autoCommit": {"value": "off", "provenance": "repo-default"}, "lockdown": {"value": "off", "provenance": "planning-only"}, "regressionStrictness": {"value": "standard", "provenance": "repo-default"}, "validateCertificationRequired": {"value": true, "provenance": "repo-default"}},
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": "01",
+    "runStartedAt": "2026-05-13T01:00:00Z",
+    "completedPhaseClaims": [
+      {"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for generic deployment secret and auth contract."},
+      {"phase": "design", "agent": "bubbles.workflow", "timestamp": "2026-05-13T01:00:00Z", "summary": "R12 reconciliation: rewrote spec.md and design.md to align with spec 044 PASETO v4 (Ed25519) live contract. Replaced FR-051-001 (hmac_key -> active_private_key) and FR-051-002 (issuer -> active_key_id). Tightened FR-051-005 to defense-in-depth (SST + runtime). Added FR-051-007 (security-static log-redaction). Token Format Decision section added so future contributors cannot reintroduce HMAC/issuer aliases."},
+      {"phase": "plan", "agent": "bubbles.workflow", "timestamp": "2026-05-13T01:00:00Z", "summary": "Restructured scopes.md into 3 scopes (auth gate; DB defense-in-depth; docs + log-redaction). Each scope has concrete test files, test functions, and per-test DoD items. SCN-051-S03 now has explicit DoD coverage in Scope 3. Created scenario-manifest.json with all three scenarios -> linkedTests + evidenceRefs + linkedDoD."}
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scopeId": "01", "status": "not_started", "dodTotal": 0, "dodCompleted": 0},
+      {"scopeId": "02", "status": "not_started", "dodTotal": 0, "dodCompleted": 0},
+      {"scopeId": "03", "status": "not_started", "dodTotal": 0, "dodCompleted": 0}
+    ],
+    "lockdownState": {
+      "active": true,
+      "mode": "full-delivery",
+      "continueOnBlocked": false,
+      "finalGlobalPass": true,
+      "commitOnDoneOnly": true,
+      "forbidPipeOps": true
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "user-request"},
+    "tdd": {"value": false, "source": "user-request"},
+    "autoCommit": {"value": "scope", "source": "workflow-forced"},
+    "lockdown": {"value": "on", "source": "spec-lockdown"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "workflow-forced"},
+    "workflowMode": "full-delivery"
+  },
   "transitionRequests": [],
   "reworkQueue": [],
   "executionHistory": [
     {"agent": "bubbles.workflow", "phase": "planning", "timestamp": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"},
-    {"agent": "bubbles.workflow", "phase": "gaps", "timestamp": "2026-05-13T00:00:00Z", "outcome": "done_with_concerns", "round": 11, "mode": "gaps-to-doc", "parent": "stochastic-quality-sweep", "summary": "Gap probe vs spec 044 implementation. 6 implementation gaps + 5 test gaps recorded in report.md. No source/config edits applied; all material gaps require planning reconciliation or specialist work."}
+    {"agent": "bubbles.workflow", "phase": "gaps", "timestamp": "2026-05-13T00:00:00Z", "outcome": "done_with_concerns", "round": 11, "mode": "gaps-to-doc", "parent": "stochastic-quality-sweep", "summary": "Gap probe vs spec 044 implementation. 6 implementation gaps + 5 test gaps recorded in report.md. No source/config edits applied; all material gaps require planning reconciliation or specialist work."},
+    {"agent": "bubbles.workflow", "phase": "design", "timestamp": "2026-05-13T01:00:00Z", "outcome": "planning_reconciliation_complete", "round": 12, "mode": "full-delivery", "summary": "R12 planning reconciliation: spec.md/design.md/scopes.md/scenario-manifest.json aligned with spec 044 PASETO v4 (Ed25519) live contract. workflowMode advanced from product-to-planning to full-delivery."}
   ]
 }
