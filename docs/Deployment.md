@@ -41,7 +41,8 @@ deployment manifest. Adapters consume images by digest only.
 ## CI pipeline (`.github/workflows/build.yml`)
 
 ```text
-git push (main / tag) → tests → buildx → cosign keyless sign (Sigstore + Rekor)
+git push (main / tag) → tests → buildx → trivy CRITICAL/HIGH scan (FAILS workflow on findings)
+                              → cosign keyless sign (Sigstore + Rekor)
                               → syft SBOM attestation
                               → SLSA provenance attestation
                               → for env in (dev, test, home-lab):
@@ -54,6 +55,34 @@ git push (main / tag) → tests → buildx → cosign keyless sign (Sigstore + R
 
 The CI workflow has **no SSH key**, **no host credentials**, **no `apply` invocation**.
 It cannot mutate any deploy target.
+
+### Vulnerability Gate (Spec 047 — Deployability Prerequisite)
+
+**Every image (`smackerel-core`, `smackerel-ml`) is scanned by Trivy
+BEFORE cosign signing, SBOM attestation, bundle generation, or
+build-manifest publication.** If Trivy reports any CRITICAL or HIGH
+finding (severity `CRITICAL,HIGH`, `exit-code: '1'`), the workflow
+fails immediately and no signed deployable artifact is produced for
+that source SHA.
+
+The build manifest carries a `vulnerabilityScan` attestation block
+naming the scanner, severity threshold, gate-blocking severities, and
+the workflow-artifact ID of the SARIF/JSON scan reports
+(`trivy-scan-reports-<sourceSha>`). Operators MUST NOT promote a build
+manifest to a deploy target unless this attestation is present.
+
+A static contract test
+(`internal/deploy/build_workflow_vuln_gate_contract_test.go`) enforces
+that:
+
+- every image in the build matrix has a matching Trivy scan step,
+- the scan runs **before** the first cosign sign step,
+- severity is `CRITICAL,HIGH` and exit-code is `'1'`,
+- the build manifest carries the vulnerabilityScan attestation block.
+
+Adding a new image to the matrix without a corresponding scan step
+fails the contract test and blocks merge — matrix coverage cannot
+drift silently.
 
 ---
 
