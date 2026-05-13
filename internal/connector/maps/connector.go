@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smackerel/smackerel/internal/connector"
 )
@@ -545,7 +546,7 @@ func findNewFiles(importDir string, processedFiles []string) ([]string, error) {
 // importDir is passed explicitly to avoid reading c.config without lock.
 func archiveFile(filePath string, importDir string) error {
 	archiveDir := filepath.Join(importDir, "archive")
-	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+	if err := os.MkdirAll(archiveDir, 0o750); err != nil {
 		return fmt.Errorf("create archive directory: %w", err)
 	}
 	baseName := filepath.Base(filePath)
@@ -841,7 +842,7 @@ func checkPrivacyConsent(ctx context.Context, pool *pgxpool.Pool, sourceID strin
 	).Scan(&consented)
 	if err != nil {
 		// No row means consent was never granted.
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, fmt.Errorf("query privacy_consent for %s: %w", sourceID, err)

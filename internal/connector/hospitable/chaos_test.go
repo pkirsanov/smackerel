@@ -2579,3 +2579,310 @@ func TestSEC012010_CleanChannelStatusPreserved(t *testing.T) {
 		}
 	}
 }
+
+// --- SEC-012-011: Property name cache pruning must enforce cap (CWE-770) ---
+
+func TestSEC012011_PrunedCacheStillCapped(t *testing.T) {
+	// When the in-memory property name cache exceeds maxPropertyNameCacheSize,
+	// the pruning path collects referenced properties. If there are MORE
+	// referenced properties than the cap, the pruned cursor must still be
+	// capped to prevent unbounded cursor growth.
+	oldCap := maxPropertyNameCacheSize
+	maxPropertyNameCacheSize = 3
+	defer func() { maxPropertyNameCacheSize = oldCap }()
+
+	// Server returns 10 properties and 10 reservations, each referencing a
+	// unique property. With cap=3, the pruned cursor must not exceed 3.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			var props []Property
+			for i := 0; i < 10; i++ {
+				props = append(props, Property{
+					ID: fmt.Sprintf("p-%04d", i), Name: fmt.Sprintf("House %d", i),
+					UpdatedAt: time.Now(),
+				})
+			}
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{Data: props, Total: 10})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			var reservations []Reservation
+			for i := 0; i < 10; i++ {
+				reservations = append(reservations, Reservation{
+					ID: fmt.Sprintf("r-%04d", i), PropertyID: fmt.Sprintf("p-%04d", i),
+					GuestName: fmt.Sprintf("Guest %d", i),
+					CheckIn:   "2026-04-15", CheckOut: "2026-04-18", BookedAt: time.Now(),
+				})
+			}
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: reservations, Total: 10})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 100,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: false,
+		TierProperties: "light", TierReservations: "standard", InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 100)
+	c.health = connector.HealthHealthy
+
+	_, newCursor, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+
+	var cur SyncCursor
+	json.Unmarshal([]byte(newCursor), &cur)
+
+	// Pruned cursor must not exceed maxPropertyNameCacheSize (3).
+	if len(cur.PropertyNames) > maxPropertyNameCacheSize {
+		t.Errorf("SEC-012-011: pruned property name cache (%d) exceeds cap (%d) — unbounded cursor growth (CWE-770)",
+			len(cur.PropertyNames), maxPropertyNameCacheSize)
+	}
+}
+
+// --- SEC-012-012: Monetary value NaN/Inf clamping (CWE-20) ---
+
+func TestSEC012012_ReservationNaNMoneyClampedInContent(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID: "res-nan-money", PropertyID: "p1", GuestName: "Alice",
+		CheckIn: "2026-04-15", CheckOut: "2026-04-18",
+		NightlyRate: math.NaN(), TotalPayout: math.NaN(),
+		BookedAt: time.Now(),
+	}
+
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	// Content must not contain "NaN" — should be $0
+	if strings.Contains(a.RawContent, "NaN") {
+		t.Errorf("SEC-012-012: NaN monetary value leaked into content: %q", a.RawContent)
+	}
+	// Metadata must not contain NaN
+	if rate, ok := a.Metadata["nightly_rate"].(float64); ok {
+		if math.IsNaN(rate) {
+			t.Errorf("SEC-012-012: NaN nightly_rate in metadata")
+		}
+	}
+	if payout, ok := a.Metadata["total_payout"].(float64); ok {
+		if math.IsNaN(payout) {
+			t.Errorf("SEC-012-012: NaN total_payout in metadata")
+		}
+	}
+}
+
+func TestSEC012012_ReservationInfMoneyClampedInContent(t *testing.T) {
+	cfg := HospitableConfig{TierReservations: "standard"}
+	r := Reservation{
+		ID: "res-inf-money", PropertyID: "p1", GuestName: "Bob",
+		CheckIn: "2026-04-15", CheckOut: "2026-04-18",
+		NightlyRate: math.Inf(1), TotalPayout: math.Inf(-1),
+		BookedAt: time.Now(),
+	}
+
+	a := NormalizeReservation(r, "Beach House", cfg)
+
+	// Content must not contain "Inf" or "+Inf" or "-Inf"
+	if strings.Contains(a.RawContent, "Inf") {
+		t.Errorf("SEC-012-012: Inf monetary value leaked into content: %q", a.RawContent)
+	}
+}
+
+// --- Chaos: ListingURLs unsafe scheme rejection ---
+
+func TestChaos_ListingURLsUnsafeSchemes(t *testing.T) {
+	cfg := HospitableConfig{TierProperties: "light"}
+	p := Property{
+		ID:   "prop-xss",
+		Name: "Test Property",
+		ListingURLs: []string{
+			"javascript:alert('xss')",
+			"data:text/html,<h1>pwned</h1>",
+			"vbscript:msgbox",
+			"https://airbnb.com/listing/123",
+			"http://vrbo.com/listing/456",
+			"ftp://evil.com/exfil",
+			"",
+		},
+		UpdatedAt: time.Now(),
+	}
+
+	a := NormalizeProperty(p, cfg)
+
+	// Only http/https URLs should survive
+	urls, ok := a.Metadata["listing_urls"].([]string)
+	if !ok {
+		t.Fatalf("listing_urls metadata is not []string")
+	}
+	for _, u := range urls {
+		if strings.HasPrefix(u, "javascript:") || strings.HasPrefix(u, "data:") ||
+			strings.HasPrefix(u, "vbscript:") || strings.HasPrefix(u, "ftp:") {
+			t.Errorf("CHAOS: unsafe URL scheme passed through filter: %q", u)
+		}
+	}
+	if len(urls) != 2 {
+		t.Errorf("expected 2 safe URLs (https + http), got %d: %v", len(urls), urls)
+	}
+
+	// The artifact URL should be the first safe listing URL
+	if a.URL != "https://airbnb.com/listing/123" {
+		t.Errorf("artifact URL should be first safe listing URL, got %q", a.URL)
+	}
+}
+
+// --- Chaos: Response body size limit enforcement ---
+
+func TestChaos_ResponseBodySizeLimit(t *testing.T) {
+	// Server returns a response just over the 10 MiB limit.
+	// The client must reject it rather than consuming unbounded memory.
+	const oversizeBytes = 10<<20 + 100 // 10 MiB + 100 bytes
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Write a large body that exceeds maxResponseSize
+		w.Write([]byte(`{"data":[{"id":"p1","name":"`))
+		// Fill with padding to exceed limit
+		padding := make([]byte, oversizeBytes)
+		for i := range padding {
+			padding[i] = 'A'
+		}
+		w.Write(padding)
+		w.Write([]byte(`"}],"total":1}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "token", 10)
+	_, err := client.ListProperties(context.Background(), time.Time{})
+	if err == nil {
+		t.Error("CHAOS: oversized response body should be rejected")
+	}
+	if err != nil && !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("CHAOS: expected size limit error, got: %v", err)
+	}
+}
+
+// --- Chaos: parseRetryAfter with HTTP-date format ---
+
+func TestChaos_RetryAfterHTTPDate(t *testing.T) {
+	now := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name    string
+		header  string
+		wantGt0 bool
+	}{
+		{"future_date", "Tue, 12 May 2026 10:01:00 GMT", true},
+		{"past_date", "Mon, 11 May 2026 10:00:00 GMT", false},
+		{"invalid_date", "not-a-date-at-all", false},
+		{"empty", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := parseRetryAfter(tc.header, now)
+			if tc.wantGt0 && d <= 0 {
+				t.Errorf("expected positive duration for %q, got %v", tc.header, d)
+			}
+			if !tc.wantGt0 && d > 0 {
+				t.Errorf("expected zero/negative duration for %q, got %v", tc.header, d)
+			}
+		})
+	}
+}
+
+// --- Chaos: Concurrent SyncMetrics during sync ---
+
+func TestChaos_ConcurrentSyncMetrics(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/properties"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Property]{
+				Data: []Property{{ID: "p1", Name: "House", UpdatedAt: time.Now()}}, Total: 1,
+			})
+		case strings.Contains(r.URL.Path, "/reservations"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Reservation]{Data: []Reservation{}, Total: 0})
+		case strings.Contains(r.URL.Path, "/reviews"):
+			json.NewEncoder(w).Encode(PaginatedResponse[Review]{Data: []Review{}, Total: 0})
+		default:
+			json.NewEncoder(w).Encode(PaginatedResponse[Message]{Data: []Message{}, Total: 0})
+		}
+	}))
+	defer srv.Close()
+
+	c := New("hospitable")
+	c.config = HospitableConfig{
+		AccessToken: "token", BaseURL: srv.URL, PageSize: 10,
+		SyncProperties: true, SyncReservations: true, SyncMessages: false, SyncReviews: true,
+		TierProperties: "light", TierReservations: "standard", TierReviews: "full",
+		InitialLookbackDays: 90,
+	}
+	c.client = NewClient(srv.URL, "token", 10)
+	c.health = connector.HealthHealthy
+
+	var wg sync.WaitGroup
+
+	// Sync in background
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Sync(context.Background(), "")
+	}()
+
+	// Concurrently read SyncMetrics — must not panic or race
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lastSync, counts, errors, consecutive := c.SyncMetrics()
+			_ = lastSync
+			_ = counts
+			_ = errors
+			_ = consecutive
+		}()
+	}
+
+	wg.Wait()
+}
+
+// --- Chaos: Pagination maxPaginationPages cap ---
+
+func TestChaos_PaginationMaxPagesEnforced(t *testing.T) {
+	// Server always returns a next URL (infinite pagination). The client's
+	// maxPaginationPages (1000) cap must stop it.
+	var pageCount atomic.Int64
+	var srvURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := pageCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		resp := PaginatedResponse[Property]{
+			Data:    []Property{{ID: fmt.Sprintf("p%d", n), Name: "House"}},
+			NextURL: fmt.Sprintf("%s/properties?page=%d", srvURL, n+1),
+			Total:   99999,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+	srvURL = srv.URL
+
+	client := NewClient(srv.URL, "token", 10)
+	props, err := client.ListProperties(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pages := pageCount.Load()
+	// Must stop at maxPaginationPages (1000), not continue forever
+	if pages > int64(maxPaginationPages)+1 {
+		t.Errorf("CHAOS: pagination continued beyond maxPaginationPages (%d): %d pages fetched",
+			maxPaginationPages, pages)
+	}
+	if len(props) != int(pages) {
+		t.Errorf("expected %d properties, got %d", pages, len(props))
+	}
+	t.Logf("Pagination capped at %d pages (cap=%d)", pages, maxPaginationPages)
+}

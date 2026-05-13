@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/smackerel/smackerel/internal/drive"
 )
 
@@ -18,10 +21,11 @@ import (
 // assert that the HTTP layer round-trips ANY provider through the neutral
 // surface — i.e. that the endpoint truly is provider-neutral.
 type fakeDriveProvider struct {
-	id    string
-	disp  string
-	caps  drive.Capabilities
-	scope drive.Scope
+	id              string
+	disp            string
+	caps            drive.Capabilities
+	scope           drive.Scope
+	beginConnectErr error
 }
 
 func (f *fakeDriveProvider) ID() string          { return f.id }
@@ -30,6 +34,9 @@ func (f *fakeDriveProvider) Capabilities() drive.Capabilities {
 	return f.caps
 }
 func (f *fakeDriveProvider) BeginConnect(_ context.Context, _ drive.AccessMode, _ drive.Scope) (string, string, error) {
+	if f.beginConnectErr != nil {
+		return "", "", f.beginConnectErr
+	}
 	return "", "", drive.ErrNotImplemented
 }
 func (f *fakeDriveProvider) FinalizeConnect(_ context.Context, _ string, _ string) (string, error) {
@@ -188,4 +195,123 @@ func TestDriveHandlersListConnectorsEmptyRegistryReturnsEmptyArray(t *testing.T)
 	if got := body; got != want+"\n" {
 		t.Fatalf("body = %q, want %q", got, want+"\n")
 	}
+}
+
+// TestDriveHandlersConnectDoesNotLeakInternalErrors is an adversarial
+// regression test for the MIT-038-S-005 error leakage fix. When
+// BeginConnect fails with an internal error containing DB schema details,
+// the HTTP response MUST NOT contain that internal error text. Prior to
+// the fix, err.Error() was passed directly to the JSON response, leaking
+// database constraint names, column names, and internal state.
+//
+// Removing the slog + generic message pattern and reverting to err.Error()
+// would cause this test to fail.
+func TestDriveHandlersConnectDoesNotLeakInternalErrors(t *testing.T) {
+	sensitiveErr := errors.New("pq: duplicate key value violates unique constraint \"drive_oauth_states_pkey\" DETAIL: Key (state_token)=(abc123) already exists")
+	fakeProvider := &fakeDriveProvider{
+		id:              "google",
+		disp:            "Google Drive",
+		caps:            drive.Capabilities{MaxFileSizeBytes: 1024},
+		beginConnectErr: sensitiveErr,
+	}
+	reg := drive.NewRegistry()
+	reg.Register(fakeProvider)
+	h := NewDriveHandlers(reg)
+
+	body := `{"provider_id":"google","owner_user_id":"test-owner","access_mode":"read_only","scope":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/connectors/drive/connect", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.Connect(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", rec.Code)
+	}
+
+	respBody := rec.Body.String()
+
+	// The response MUST NOT contain the internal error details.
+	if strings.Contains(respBody, "drive_oauth_states_pkey") {
+		t.Fatalf("ADVERSARIAL FAILURE: response body contains internal constraint name.\n"+
+			"Error leakage fix may have been reverted.\nBody: %s", respBody)
+	}
+	if strings.Contains(respBody, "state_token") {
+		t.Fatalf("ADVERSARIAL FAILURE: response body contains internal column name.\n"+
+			"Error leakage fix may have been reverted.\nBody: %s", respBody)
+	}
+	if strings.Contains(respBody, "abc123") {
+		t.Fatalf("ADVERSARIAL FAILURE: response body contains internal state token value.\n"+
+			"Error leakage fix may have been reverted.\nBody: %s", respBody)
+	}
+
+	// The response SHOULD contain the generic error code.
+	if !strings.Contains(respBody, "BEGIN_CONNECT_FAILED") {
+		t.Fatalf("response missing expected error code BEGIN_CONNECT_FAILED.\nBody: %s", respBody)
+	}
+}
+
+// TestDriveHandlersGetConnectionRejectsNonUUID is an adversarial regression
+// test for chaos finding C-002. Prior to the fix, passing a non-UUID path
+// parameter caused PostgreSQL to return a 22P02 (invalid input syntax)
+// error which the handler wrapped as a 500 with the raw SQL state message
+// in the response. The fix validates UUID format at the handler boundary
+// and returns 400 with a stable error code.
+func TestDriveHandlersGetConnectionRejectsNonUUID(t *testing.T) {
+	reg := drive.NewRegistry()
+	reg.Register(&fakeDriveProvider{id: "google", disp: "Google Drive"})
+	h := NewDriveHandlersWithPool(reg, nil) // pool is nil — UUID check fires before DB
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/connectors/drive/connection/not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+
+	// chi URL params must be injected for handler tests.
+	rctx := chiRouteContext(t, map[string]string{"id": "not-a-uuid"})
+	req = req.WithContext(rctx)
+
+	h.GetConnection(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "INVALID_CONNECTION_ID") {
+		t.Fatalf("body missing INVALID_CONNECTION_ID error code; body=%s", rec.Body.String())
+	}
+	// Adversarial: raw SQL error must NOT appear.
+	if strings.Contains(rec.Body.String(), "SQLSTATE") || strings.Contains(rec.Body.String(), "invalid input syntax") {
+		t.Fatalf("ADVERSARIAL FAILURE: response leaks raw SQL error; body=%s", rec.Body.String())
+	}
+}
+
+// TestDriveHandlersGetSkippedBlockedRejectsNonUUID mirrors the UUID
+// validation test for the /skipped sibling endpoint (chaos finding C-002).
+func TestDriveHandlersGetSkippedBlockedRejectsNonUUID(t *testing.T) {
+	reg := drive.NewRegistry()
+	reg.Register(&fakeDriveProvider{id: "google", disp: "Google Drive"})
+	h := NewDriveHandlersWithPool(reg, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/connectors/drive/connection/not-a-uuid/skipped", nil)
+	rec := httptest.NewRecorder()
+
+	rctx := chiRouteContext(t, map[string]string{"id": "not-a-uuid"})
+	req = req.WithContext(rctx)
+
+	h.GetSkippedBlocked(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "INVALID_CONNECTION_ID") {
+		t.Fatalf("body missing INVALID_CONNECTION_ID error code; body=%s", rec.Body.String())
+	}
+}
+
+// chiRouteContext builds a chi route context with the given URL params
+// for handler-level unit tests.
+func chiRouteContext(t *testing.T, params map[string]string) context.Context {
+	t.Helper()
+	rctx := chi.NewRouteContext()
+	for k, v := range params {
+		rctx.URLParams.Add(k, v)
+	}
+	return context.WithValue(context.Background(), chi.RouteCtxKey, rctx)
 }

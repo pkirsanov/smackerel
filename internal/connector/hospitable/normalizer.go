@@ -45,6 +45,15 @@ func clampRating(r float64) float64 {
 	return r
 }
 
+// clampMoney replaces NaN/Inf with 0 for monetary values to prevent nonsense
+// strings like "$NaN" or "$+Inf" in content and metadata (CWE-20).
+func clampMoney(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	return v
+}
+
 // NormalizeProperty converts a Hospitable Property to a RawArtifact.
 func NormalizeProperty(p Property, config HospitableConfig) connector.RawArtifact {
 	// SEC-012-005: Sanitize control characters in API-supplied text (CWE-116).
@@ -116,6 +125,11 @@ func NormalizeReservation(r Reservation, propertyName string, config HospitableC
 	// SEC-R82-003: Sanitize date strings from API (CWE-116 defense-in-depth).
 	r.CheckIn = stringutil.SanitizeControlChars(r.CheckIn)
 	r.CheckOut = stringutil.SanitizeControlChars(r.CheckOut)
+
+	// SEC-012-012: Clamp NaN/Inf monetary values to 0 to prevent nonsense
+	// content like "$NaN" flowing into embeddings and digests (CWE-20).
+	r.NightlyRate = clampMoney(r.NightlyRate)
+	r.TotalPayout = clampMoney(r.TotalPayout)
 
 	if propertyName == "" {
 		propertyName = r.PropertyID

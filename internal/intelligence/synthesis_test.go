@@ -2,6 +2,8 @@ package intelligence
 
 import (
 	"math"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -267,4 +269,53 @@ func TestAssembleWeeklySynthesisText_TopicMovementArrows(t *testing.T) {
 	if !strings.Contains(text, "→ Python (7 this week)") {
 		t.Errorf("stable topic should show → arrow with captures, got: %s", text)
 	}
+}
+
+// TestSynthesisFile_NoSilentQueryErrorSwallowing is the adversarial regression
+// anchor for BUG-004-H1. The bug was an `if err == nil { ... }` idiom that
+// silently dropped Postgres query failures in GenerateWeeklySynthesis and
+// detectCapturePatterns — partial weekly syntheses landed with no operator
+// signal that subqueries failed. The fix replaced every site with the
+// canonical `if err != nil { slog.Warn(...) } else { ... }` shape.
+//
+// This test reads synthesis.go on disk and fails if the swallowing pattern
+// returns. It is intentionally structural rather than behavioral because
+// the silent path has no observable side effect — only the absence of one.
+// Without this anchor a reviewer could re-introduce `if err == nil {` and
+// `go vet` would not catch it.
+func TestSynthesisFile_NoSilentQueryErrorSwallowing(t *testing.T) {
+	src, err := os.ReadFile("synthesis.go")
+	if err != nil {
+		t.Fatalf("cannot read synthesis.go: %v", err)
+	}
+	// Match `if err == nil {` patterns that swallow query/helper errors.
+	// Allow `if err == nil &&` compounds (those are deliberate predicates,
+	// not swallowing) by requiring the closing brace on the same logical
+	// line scope.
+	re := regexp.MustCompile(`(?m)^\s*if err == nil \{`)
+	matches := re.FindAllIndex(src, -1)
+	if len(matches) > 0 {
+		var lines []string
+		for _, m := range matches {
+			// Compute 1-based line number of the match.
+			line := strings.Count(string(src[:m[0]]), "\n") + 1
+			lines = append(lines, intToStr(line))
+		}
+		t.Errorf("BUG-004-H1 regression: synthesis.go reintroduced silent query-error swallowing at line(s) %s — replace `if err == nil { ... }` with `if err != nil { slog.Warn(...) } else { ... }` so subquery failures are observable",
+			strings.Join(lines, ", "))
+	}
+}
+
+// intToStr is a tiny no-import helper to format a line number without
+// pulling in fmt or strconv into the test file's import surface.
+func intToStr(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	digits := []byte{}
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
 }

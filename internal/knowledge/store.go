@@ -560,18 +560,7 @@ func (ks *KnowledgeStore) StoreLintReport(ctx context.Context, findings []LintFi
 		return fmt.Errorf("marshal lint findings: %w", err)
 	}
 
-	// Build summary counts
-	summary := LintSummary{Total: len(findings)}
-	for _, f := range findings {
-		switch f.Severity {
-		case "high":
-			summary.High++
-		case "medium":
-			summary.Medium++
-		case "low":
-			summary.Low++
-		}
-	}
+	summary := ComputeLintSummary(findings)
 	summaryJSON, err := json.Marshal(summary)
 	if err != nil {
 		return fmt.Errorf("marshal lint summary: %w", err)

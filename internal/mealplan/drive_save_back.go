@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/smackerel/smackerel/internal/drive/rules"
 	"github.com/smackerel/smackerel/internal/drive/save"
 )
@@ -22,28 +20,28 @@ import (
 // onto the plan via UpdatePlanProviderURL so downstream digest generation
 // can include a "Open meal plan in Drive" link.
 type DriveSaveBack struct {
-	pool   *pgxpool.Pool
 	repo   *rules.Repository
 	engine *rules.Engine
 	svc    *save.Service
 	store  PlanProviderURLStore
 }
 
-// PlanProviderURLStore is the narrow store surface DriveSaveBack needs to
-// persist the provider URL onto a meal plan row. It is satisfied by
-// mealplan.Store via the PostgresStore concrete type.
+// PlanProviderURLStore is the store surface DriveSaveBack needs to load
+// a plan with its slots and to persist the provider URL onto a plan row.
+// It is satisfied by mealplan.Store.
 type PlanProviderURLStore interface {
+	GetPlanWithSlots(ctx context.Context, planID string) (*PlanWithSlots, error)
 	UpdatePlanProviderURL(ctx context.Context, planID, providerURL string) error
 }
 
 // NewDriveSaveBack constructs the helper. All parameters are required;
 // nil arguments produce an explicit panic at startup so the runtime fails
 // loud instead of silently swallowing meal-plan saves.
-func NewDriveSaveBack(pool *pgxpool.Pool, repo *rules.Repository, engine *rules.Engine, svc *save.Service, store PlanProviderURLStore) *DriveSaveBack {
-	if pool == nil || repo == nil || engine == nil || svc == nil || store == nil {
-		panic("mealplan: NewDriveSaveBack requires pool, repo, engine, save service, and store")
+func NewDriveSaveBack(repo *rules.Repository, engine *rules.Engine, svc *save.Service, store PlanProviderURLStore) *DriveSaveBack {
+	if repo == nil || engine == nil || svc == nil || store == nil {
+		panic("mealplan: NewDriveSaveBack requires repo, engine, save service, and store")
 	}
-	return &DriveSaveBack{pool: pool, repo: repo, engine: engine, svc: svc, store: store}
+	return &DriveSaveBack{repo: repo, engine: engine, svc: svc, store: store}
 }
 
 // MealPlanSaveOutcome describes the save-back result for the digest layer.
@@ -72,9 +70,12 @@ func (b *DriveSaveBack) SavePlan(ctx context.Context, planID, artifactID string)
 	if strings.TrimSpace(artifactID) == "" {
 		return MealPlanSaveOutcome{}, errors.New("mealplan: SavePlan: artifact_id required")
 	}
-	pws, err := b.loadPlanWithSlots(ctx, planID)
+	pws, err := b.store.GetPlanWithSlots(ctx, planID)
 	if err != nil {
-		return MealPlanSaveOutcome{}, err
+		return MealPlanSaveOutcome{}, fmt.Errorf("mealplan: SavePlan: load plan: %w", err)
+	}
+	if pws == nil {
+		return MealPlanSaveOutcome{}, fmt.Errorf("mealplan: SavePlan: plan not found: %s", planID)
 	}
 	body := renderPlanMarkdown(pws)
 	tokens := map[string]string{
@@ -158,36 +159,6 @@ func (b *DriveSaveBack) SavePlan(ctx context.Context, planID, artifactID string)
 		RuleID:      rule.ID,
 		Reason:      decision.Selected.Reason,
 	}, nil
-}
-
-func (b *DriveSaveBack) loadPlanWithSlots(ctx context.Context, planID string) (*PlanWithSlots, error) {
-	plan := &Plan{}
-	err := b.pool.QueryRow(ctx, `
-		SELECT id, title, start_date, end_date, status, created_at, updated_at
-		  FROM meal_plans WHERE id = $1`, planID,
-	).Scan(&plan.ID, &plan.Title, &plan.StartDate, &plan.EndDate, &plan.Status, &plan.CreatedAt, &plan.UpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("mealplan: SavePlan: load plan: %w", err)
-	}
-	rows, err := b.pool.Query(ctx, `
-		SELECT id, plan_id, slot_date, meal_type, recipe_artifact_id,
-		       servings, batch_flag, COALESCE(notes, ''), created_at
-		  FROM meal_plan_slots WHERE plan_id = $1
-		ORDER BY slot_date ASC, meal_type ASC`, planID)
-	if err != nil {
-		return nil, fmt.Errorf("mealplan: SavePlan: load slots: %w", err)
-	}
-	defer rows.Close()
-	slots := []Slot{}
-	for rows.Next() {
-		var s Slot
-		if err := rows.Scan(&s.ID, &s.PlanID, &s.SlotDate, &s.MealType, &s.RecipeArtifactID,
-			&s.Servings, &s.BatchFlag, &s.Notes, &s.CreatedAt); err != nil {
-			return nil, fmt.Errorf("mealplan: SavePlan: scan slot: %w", err)
-		}
-		slots = append(slots, s)
-	}
-	return &PlanWithSlots{Plan: *plan, Slots: slots}, nil
 }
 
 func renderPlanMarkdown(pws *PlanWithSlots) string {

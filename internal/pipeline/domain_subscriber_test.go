@@ -4,13 +4,52 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
+
+// mockDomainDB implements pipeline.DomainDB for unit-testing the
+// handleDomainExtracted SQL UPDATE side effects without standing up a
+// real Postgres. Records every Exec call so tests can assert on the
+// SQL text and bound parameters. Optionally returns execErr to simulate
+// DB failures and trigger the Nak / dead-letter path.
+//
+// BUG-026-003: introduced because the prior TestHandleDomainExtracted_*
+// tests only validated the response struct via ValidateDomainExtractResponse
+// and never invoked the receiver method, leaving handleDomainExtracted at
+// 0.0% unit coverage despite five tests with that name.
+type mockDomainDB struct {
+	mu        sync.Mutex
+	execCalls []domainExecCall
+	execErr   error
+}
+
+type domainExecCall struct {
+	sql  string
+	args []any
+}
+
+func (m *mockDomainDB) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.execCalls = append(m.execCalls, domainExecCall{sql: sql, args: args})
+	return pgconn.CommandTag{}, m.execErr
+}
+
+func (m *mockDomainDB) calls() []domainExecCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]domainExecCall, len(m.execCalls))
+	copy(out, m.execCalls)
+	return out
+}
 
 // TestHandleDomainExtracted_SuccessStoresData verifies that a successful domain.extracted
 // message stores domain_data and sets status=completed. (Scope 3, T3-05)
@@ -242,5 +281,234 @@ func TestDomainDeliveryFailure_DeadLetterAndNakBothFail_Logs(t *testing.T) {
 	}
 	if !msg.naked {
 		t.Error("expected Nak attempt even when dead-letter publish fails")
+	}
+}
+
+// --- BUG-026-003: real handler tests that actually invoke handleDomainExtracted ---
+//
+// Prior TestHandleDomainExtracted_* tests in this file only called the response
+// validator. The five tests below directly invoke
+// (*DomainResultSubscriber).handleDomainExtracted with a mockJetStreamMsg and
+// a mockDomainDB so the SQL UPDATE branches, Ack/Nak decisions, and the failure
+// path through handleDomainDeliveryFailure are covered by go test ./...
+// (not only by the live-stack E2E in tests/e2e/domain_e2e_test.go).
+
+// TestHandleDomainExtractedInvocation_Success_UpdatesArtifactAndAcks verifies
+// that on Success=true the handler issues the completed-status UPDATE with
+// domain_data + domain_schema_version and Acks the message. (BUG-026-003)
+func TestHandleDomainExtractedInvocation_Success_UpdatesArtifactAndAcks(t *testing.T) {
+	db := &mockDomainDB{}
+	sub := &DomainResultSubscriber{DB: db}
+
+	resp := DomainExtractResponse{
+		ArtifactID:       "art-success-001",
+		Success:          true,
+		DomainData:       json.RawMessage(`{"domain":"recipe","ingredients":[{"name":"eggs"}]}`),
+		ContractVersion:  "recipe-extraction-v1",
+		ProcessingTimeMs: 1234,
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	msg := &mockJetStreamMsg{data: payload}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if !msg.acked {
+		t.Error("expected Ack on successful UPDATE")
+	}
+	if msg.naked {
+		t.Error("did not expect Nak on success")
+	}
+
+	calls := db.calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly 1 SQL Exec, got %d", len(calls))
+	}
+	got := calls[0]
+	if !strings.Contains(got.sql, "domain_data = $2") {
+		t.Errorf("expected SQL to bind domain_data; got: %s", got.sql)
+	}
+	if !strings.Contains(got.sql, "domain_extraction_status = 'completed'") {
+		t.Errorf("expected SQL to set status=completed; got: %s", got.sql)
+	}
+	if !strings.Contains(got.sql, "domain_schema_version = $3") {
+		t.Errorf("expected SQL to bind schema_version; got: %s", got.sql)
+	}
+	if !strings.Contains(got.sql, "domain_extracted_at = NOW()") {
+		t.Errorf("expected SQL to stamp domain_extracted_at; got: %s", got.sql)
+	}
+	if len(got.args) != 3 {
+		t.Fatalf("expected 3 bound args, got %d", len(got.args))
+	}
+	if got.args[0] != "art-success-001" {
+		t.Errorf("expected $1=artifact_id, got %v", got.args[0])
+	}
+	if got.args[2] != "recipe-extraction-v1" {
+		t.Errorf("expected $3=contract_version, got %v", got.args[2])
+	}
+}
+
+// TestHandleDomainExtractedInvocation_Failure_UpdatesStatusAndStampsTimestamp
+// verifies that on Success=false the handler issues the failed-status UPDATE
+// (with domain_extracted_at = NOW() per S-001 / SCN-026-03) and Acks the
+// message. (BUG-026-003)
+func TestHandleDomainExtractedInvocation_Failure_UpdatesStatusAndStampsTimestamp(t *testing.T) {
+	db := &mockDomainDB{}
+	sub := &DomainResultSubscriber{DB: db}
+
+	resp := DomainExtractResponse{
+		ArtifactID:      "art-failure-001",
+		Success:         false,
+		Error:           "LLM timeout after 3 attempts",
+		ContractVersion: "recipe-extraction-v1",
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	msg := &mockJetStreamMsg{data: payload}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if !msg.acked {
+		t.Error("expected Ack after recording failed status")
+	}
+	if msg.naked {
+		t.Error("did not expect Nak when DB UPDATE on failure path succeeds")
+	}
+
+	calls := db.calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly 1 SQL Exec on failure path, got %d", len(calls))
+	}
+	got := calls[0]
+	if !strings.Contains(got.sql, "domain_extraction_status = 'failed'") {
+		t.Errorf("expected SQL to set status=failed; got: %s", got.sql)
+	}
+	if !strings.Contains(got.sql, "domain_extracted_at = NOW()") {
+		t.Errorf("expected failure SQL to stamp domain_extracted_at (S-001); got: %s", got.sql)
+	}
+	if len(got.args) != 1 || got.args[0] != "art-failure-001" {
+		t.Errorf("expected single arg = artifact_id 'art-failure-001'; got: %v", got.args)
+	}
+}
+
+// TestHandleDomainExtractedInvocation_InvalidJSON_AcksWithoutDB verifies that
+// an unparseable payload is Acked with no DB write so the bad message does
+// not redeliver forever. (BUG-026-003)
+func TestHandleDomainExtractedInvocation_InvalidJSON_AcksWithoutDB(t *testing.T) {
+	db := &mockDomainDB{}
+	sub := &DomainResultSubscriber{DB: db}
+
+	msg := &mockJetStreamMsg{data: []byte(`{not valid json`)}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if !msg.acked {
+		t.Error("expected Ack to drop unparseable payload (avoid infinite redelivery)")
+	}
+	if msg.naked {
+		t.Error("did not expect Nak for unparseable payload")
+	}
+	if got := len(db.calls()); got != 0 {
+		t.Errorf("expected 0 DB writes for unparseable payload, got %d", got)
+	}
+}
+
+// TestHandleDomainExtractedInvocation_MissingArtifactID_AcksWithoutDB verifies
+// that a payload missing the required artifact_id field fails validation,
+// is Acked, and never reaches the DB UPDATE. (BUG-026-003)
+func TestHandleDomainExtractedInvocation_MissingArtifactID_AcksWithoutDB(t *testing.T) {
+	db := &mockDomainDB{}
+	sub := &DomainResultSubscriber{DB: db}
+
+	resp := DomainExtractResponse{
+		Success:         true,
+		DomainData:      json.RawMessage(`{"domain":"recipe"}`),
+		ContractVersion: "recipe-extraction-v1",
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	msg := &mockJetStreamMsg{data: payload}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if !msg.acked {
+		t.Error("expected Ack to drop validation-failing payload")
+	}
+	if got := len(db.calls()); got != 0 {
+		t.Errorf("expected 0 DB writes when validation fails, got %d", got)
+	}
+}
+
+// TestHandleDomainExtractedInvocation_DBExecError_TriggersNakBelowMaxDeliver
+// verifies that when the success-path UPDATE fails, the handler routes through
+// handleDomainDeliveryFailure and Naks (because NumDelivered < domainMaxDeliver),
+// and never Acks the message. (BUG-026-003)
+func TestHandleDomainExtractedInvocation_DBExecError_TriggersNakBelowMaxDeliver(t *testing.T) {
+	db := &mockDomainDB{execErr: fmt.Errorf("simulated DB connection refused")}
+	sub := &DomainResultSubscriber{DB: db}
+
+	resp := DomainExtractResponse{
+		ArtifactID:      "art-db-error-001",
+		Success:         true,
+		DomainData:      json.RawMessage(`{"domain":"recipe"}`),
+		ContractVersion: "recipe-extraction-v1",
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	msg := &mockJetStreamMsg{
+		data:     payload,
+		metadata: &jetstream.MsgMetadata{NumDelivered: 1},
+	}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if msg.acked {
+		t.Error("must NOT Ack when DB UPDATE fails (would silently lose the message)")
+	}
+	if !msg.naked {
+		t.Error("expected Nak when DB UPDATE fails and delivery count is below domainMaxDeliver")
+	}
+	if got := len(db.calls()); got != 1 {
+		t.Errorf("expected 1 (failing) Exec attempt, got %d", got)
+	}
+}
+
+// TestHandleDomainExtractedInvocation_FailurePath_DBError_TriggersNak verifies
+// that when the failure-status UPDATE itself fails, the handler still routes
+// through handleDomainDeliveryFailure (not silent Ack). (BUG-026-003)
+func TestHandleDomainExtractedInvocation_FailurePath_DBError_TriggersNak(t *testing.T) {
+	db := &mockDomainDB{execErr: fmt.Errorf("simulated DB write failure")}
+	sub := &DomainResultSubscriber{DB: db}
+
+	resp := DomainExtractResponse{
+		ArtifactID:      "art-failure-db-001",
+		Success:         false,
+		Error:           "LLM transient error",
+		ContractVersion: "recipe-extraction-v1",
+	}
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	msg := &mockJetStreamMsg{
+		data:     payload,
+		metadata: &jetstream.MsgMetadata{NumDelivered: 1},
+	}
+
+	sub.handleDomainExtracted(context.Background(), msg)
+
+	if msg.acked {
+		t.Error("must NOT Ack when failure-path UPDATE itself fails")
+	}
+	if !msg.naked {
+		t.Error("expected Nak when failure-path UPDATE fails (S-004 contract)")
 	}
 }

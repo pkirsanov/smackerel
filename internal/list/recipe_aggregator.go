@@ -2,6 +2,7 @@ package list
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sort"
 
 	"github.com/smackerel/smackerel/internal/recipe"
@@ -35,6 +36,10 @@ func (a *RecipeAggregator) Aggregate(sources []AggregationSource) ([]ListItemSee
 	for _, src := range sources {
 		var rd recipe.RecipeData
 		if err := json.Unmarshal(src.DomainData, &rd); err != nil {
+			// Surface malformed domain_data instead of silently dropping the source.
+			// A persistent log lets operators detect upstream extraction regressions.
+			slog.Warn("recipe aggregator: skipping artifact with malformed domain_data",
+				"artifact_id", src.ArtifactID, "error", err)
 			continue
 		}
 

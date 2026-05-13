@@ -24,11 +24,13 @@ runtime:
   # auth_token logs a warning and continues (single-tenant dev ergonomics).
   # Test config generation overrides to "test" automatically.
   environment: development
-  # host_bind_address — host interface that backend services (smackerel-core,
-  # smackerel-ml) bind on the host. Default "127.0.0.1" keeps the deploy bundle
-  # safe-by-default: backends are only reachable from the host loopback. A
-  # deploy adapter may override HOST_BIND_ADDRESS in the bundled app.env to
-  # bind a specific NIC when host-level reverse-proxy fronting requires it.
+  # host_bind_address — explicit SST value for the host interface that backend
+  # services (smackerel-core, smackerel-ml) bind on the host. "127.0.0.1" is an
+  # auditable configured value here, not a Compose fallback. Deploy Compose uses
+  # ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}; the
+  # ${HOST_BIND_ADDRESS:-127.0.0.1} fallback form is forbidden by Gate G028.
+  # A deploy adapter may write a different explicit HOST_BIND_ADDRESS into the
+  # bundled app.env when host-level reverse-proxy fronting requires it.
   # Cross-references:
   #   - bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md (canonical pattern)
   #   - specs/042-tailnet-edge-bind-pattern/ (compose contract enforcement)

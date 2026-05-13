@@ -222,6 +222,13 @@ func (s *Service) UpdateSlot(ctx context.Context, planID, slotID string, recipeA
 	}
 
 	if recipeArtifactID != "" {
+		exists, err := s.Store.RecipeArtifactExists(ctx, recipeArtifactID)
+		if err != nil {
+			return nil, fmt.Errorf("check recipe: %w", err)
+		}
+		if !exists {
+			return nil, &ServiceError{Code: "MEAL_PLAN_RECIPE_NOT_FOUND", Message: "recipe artifact not found", Status: 422}
+		}
 		existing.RecipeArtifactID = recipeArtifactID
 	}
 	if servings > 0 {
@@ -255,6 +262,14 @@ func (s *Service) DeleteSlot(ctx context.Context, planID, slotID string) error {
 func (s *Service) AddBatchSlots(ctx context.Context, planID string, startDate, endDate time.Time, mealType, recipeArtifactID string, servings int) ([]Slot, error) {
 	startDate = truncateToDate(startDate)
 	endDate = truncateToDate(endDate)
+
+	if endDate.Before(startDate) {
+		return nil, &ServiceError{
+			Code:    "MEAL_PLAN_VALIDATION",
+			Message: "batch end_date must be on or after start_date",
+			Status:  422,
+		}
+	}
 
 	var slots []Slot
 	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {

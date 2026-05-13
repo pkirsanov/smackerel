@@ -37,17 +37,17 @@ jobs:
       mlDigest: ${{ steps.ml.outputs.digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Resolve source SHA
         id: sha
         run: echo "sourceSha=${{ github.event.inputs.sourceSha || github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -55,7 +55,7 @@ jobs:
 
       - name: Build and push smackerel-core
         id: core
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: Dockerfile
@@ -67,7 +67,7 @@ jobs:
 
       - name: Build and push smackerel-ml
         id: ml
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ml
           file: ml/Dockerfile
@@ -77,7 +77,7 @@ jobs:
           sbom: true
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       - name: Cosign keyless sign — core
         env:
@@ -92,7 +92,7 @@ jobs:
           cosign sign --yes "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
 
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
 
       - name: SBOM attestation — core
         env:
@@ -116,7 +116,7 @@ jobs:
         env: [dev, test, home-lab]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Generate config bundle for ${{ matrix.env }}
         run: |
@@ -135,7 +135,7 @@ jobs:
           echo "bundleSha=$first_sha" >> "$GITHUB_OUTPUT"
 
       - name: Install oras
-        uses: oras-project/setup-oras@v1
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login -u ${{ github.actor }} --password-stdin ${{ env.REGISTRY }}
@@ -178,7 +178,7 @@ jobs:
           cat build-manifest.yaml
 
       - name: Upload build manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: build-manifest-${{ needs.build-images.outputs.sourceSha }}
           path: build-manifest.yaml

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -22,10 +23,22 @@ import (
 // before dead-letter routing. Must match the MaxDeliver in the consumer config.
 const domainMaxDeliver = 5
 
+// DomainDB is the minimal database surface required by handleDomainExtracted.
+// *pgxpool.Pool satisfies this interface in production; test doubles satisfy
+// it for unit tests of the SQL UPDATE side effects in handleDomainExtracted.
+//
+// BUG-026-003: introduced so the domain.extracted handler's DB writes can be
+// exercised in unit tests without standing up a real Postgres. Keeps the
+// production constructor signature backward-compatible because *pgxpool.Pool
+// already implements Exec(ctx, sql, args...) (pgconn.CommandTag, error).
+type DomainDB interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 // DomainResultSubscriber consumes domain.extracted messages from the ML sidecar
 // and stores domain-specific structured data into the artifacts table.
 type DomainResultSubscriber struct {
-	DB      *pgxpool.Pool
+	DB      DomainDB
 	NATS    *smacknats.Client
 	done    chan struct{}
 	wg      sync.WaitGroup
@@ -35,6 +48,8 @@ type DomainResultSubscriber struct {
 }
 
 // NewDomainResultSubscriber creates a subscriber for domain.extracted messages.
+// The constructor still accepts *pgxpool.Pool (which satisfies DomainDB) so
+// existing call sites in cmd/core remain unchanged.
 func NewDomainResultSubscriber(db *pgxpool.Pool, nc *smacknats.Client) *DomainResultSubscriber {
 	return &DomainResultSubscriber{
 		DB:   db,

@@ -58,6 +58,17 @@ Per-target adapters carry **operator-coupled topology** (real FQDNs, real LAN/VP
 
 If the resolved path is missing, the CLI fails with a structured error listing the path it tried, the path it deliberately did NOT try, and the opt-in/opt-out hint for `DEPLOY_TARGETS_ROOT`. Setting `DEPLOY_TARGETS_ROOT` is an explicit operator opt-in: "all my adapters live out-of-tree now". The CLI will NOT fall back to a stale in-tree leftover.
 
+## Required Bind-Address Contract
+
+Deploy Compose uses fail-loud interpolation for host bind addresses:
+
+```yaml
+ports:
+    - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+```
+
+There is no `${HOST_BIND_ADDRESS:-127.0.0.1}` fallback. A deploy adapter MUST write `HOST_BIND_ADDRESS` explicitly into the `app.env` it supplies before running Compose. Use `127.0.0.1` only as an explicit env value when loopback binding is intended; use the target's operator-owned bind address when tailnet-edge fronting requires it. Missing or empty values are expected to abort Compose at substitution time.
+
 ## Adding a new target
 
 The skeleton at [`_example/target-skeleton/`](_example/target-skeleton/) is a fully-stubbed adapter that exits 1 on every action until filled in.

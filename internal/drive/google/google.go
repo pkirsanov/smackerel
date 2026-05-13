@@ -23,7 +23,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -493,7 +492,7 @@ func (p *Provider) GetFile(ctx context.Context, connectionID string, providerFil
 	if err != nil {
 		return drive.FileBytes{}, err
 	}
-	fileURL := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/files/" + path.Clean(providerFileID)
+	fileURL := strings.TrimRight(p.cfg.APIBaseURL, "/") + "/drive/v3/files/" + url.PathEscape(providerFileID)
 	reqURL, err := url.Parse(fileURL)
 	if err != nil {
 		return drive.FileBytes{}, fmt.Errorf("google: parse file URL: %w", err)

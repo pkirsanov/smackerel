@@ -1,0 +1,69 @@
+{
+  "bugId": "BUG-004-H1",
+  "parentSpec": "specs/004-phase3-intelligence",
+  "version": 1,
+  "scenarios": [
+    {
+      "scenarioId": "BUG-004-H1-1",
+      "title": "Topic movement subquery failure is logged",
+      "scopeId": "scope-1-make-all-six-weeklysynthesis-subquery-failures-observable",
+      "regressionTests": [
+        {
+          "type": "structural-unit",
+          "file": "internal/intelligence/synthesis_test.go",
+          "name": "TestSynthesisFile_NoSilentQueryErrorSwallowing",
+          "purpose": "Fails if any `if err == nil {` swallowing pattern is reintroduced in synthesis.go. Adversarially validated."
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "scenarioId": "BUG-004-H1-2",
+      "title": "Capture pattern subquery failure is logged",
+      "scopeId": "scope-1-make-all-six-weeklysynthesis-subquery-failures-observable",
+      "regressionTests": [
+        {
+          "type": "structural-unit",
+          "file": "internal/intelligence/synthesis_test.go",
+          "name": "TestSynthesisFile_NoSilentQueryErrorSwallowing",
+          "purpose": "Same structural anchor — covers the day-of-week and hour-of-day call sites in detectCapturePatterns."
+        },
+        {
+          "type": "unit",
+          "file": "internal/intelligence/engine_test.go",
+          "name": "TestDetectCapturePatterns_NilPool",
+          "purpose": "Pre-existing fail-fast contract on nil pool. Continues to PASS post-patch."
+        }
+      ],
+      "status": "covered"
+    },
+    {
+      "scenarioId": "BUG-004-H1-3",
+      "title": "Inner synthesis failure is observable to operators",
+      "scopeId": "scope-1-make-all-six-weeklysynthesis-subquery-failures-observable",
+      "regressionTests": [
+        {
+          "type": "structural-unit",
+          "file": "internal/intelligence/synthesis_test.go",
+          "name": "TestSynthesisFile_NoSilentQueryErrorSwallowing",
+          "purpose": "Same structural anchor — covers the inner RunSynthesis and inner Resurface call sites in GenerateWeeklySynthesis."
+        },
+        {
+          "type": "unit",
+          "file": "internal/intelligence/engine_test.go",
+          "name": "TestGenerateWeeklySynthesis_NilPool",
+          "purpose": "Pre-existing fail-fast contract on nil pool. Continues to PASS post-patch."
+        }
+      ],
+      "status": "covered"
+    }
+  ],
+  "adversarialValidation": {
+    "performedAt": "2026-05-12T00:00:00Z",
+    "approach": "Reintroduced the swallowing pattern at synthesis.go line 152 (inner RunSynthesis call) and ran the structural regression test in isolation.",
+    "expectedFailure": true,
+    "actualFailure": true,
+    "failureMessage": "BUG-004-H1 regression: synthesis.go reintroduced silent query-error swallowing at line(s) 152 — replace `if err == nil { ... }` with `if err != nil { slog.Warn(...) } else { ... }` so subquery failures are observable",
+    "fixRestoredAndAllTestsPass": true
+  }
+}

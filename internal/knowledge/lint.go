@@ -379,6 +379,31 @@ func (l *Linter) checkUnreferencedClaims(ctx context.Context) ([]LintFinding, er
 	return findings, nil
 }
 
+// classifySynthesisRetry is a pure decision function: given the current retry count and
+// the configured max, it returns "abandon" (at or over limit) or "retry" (under limit).
+func classifySynthesisRetry(retryCount, maxRetries int) string {
+	if retryCount >= maxRetries {
+		return "abandon"
+	}
+	return "retry"
+}
+
+// ComputeLintSummary builds aggregate severity counts from a slice of findings.
+func ComputeLintSummary(findings []LintFinding) LintSummary {
+	s := LintSummary{Total: len(findings)}
+	for _, f := range findings {
+		switch f.Severity {
+		case "high":
+			s.High++
+		case "medium":
+			s.Medium++
+		case "low":
+			s.Low++
+		}
+	}
+	return s
+}
+
 // retrySynthesisBacklog re-publishes failed artifacts with full synthesis request payloads
 // and marks those at max retries as abandoned.
 // The retry builds a complete request matching the SynthesisExtractRequest schema so the
@@ -391,7 +416,7 @@ func (l *Linter) retrySynthesisBacklog(ctx context.Context) {
 	}
 
 	for _, a := range artifacts {
-		if a.RetryCount >= l.cfg.MaxSynthesisRetries {
+		if classifySynthesisRetry(a.RetryCount, l.cfg.MaxSynthesisRetries) == "abandon" {
 			if err := l.store.UpdateArtifactSynthesisStatus(ctx, a.ID, "abandoned", "max retries exceeded"); err != nil {
 				slog.Warn("lint: failed to mark artifact abandoned", "artifact_id", a.ID, "error", err)
 			} else {

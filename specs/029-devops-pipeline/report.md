@@ -319,3 +319,43 @@ This section consolidates the full repo-relative paths of CI/build/compose/deplo
 
 **Residual (not in implement authority):**
 - Scope 3 (Branch Protection Documentation) and Scope 4 (Build Metadata) lack `### Use Cases (Gherkin)` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.
+
+---
+
+## Harden-to-Doc Sweep (2026-05-12)
+
+### Probe Scope
+
+Hardening probe of spec 029 devops-pipeline: supply-chain posture across all CI/CD workflows, artifact integrity (scenario-manifest.json), documentation freshness. Cross-referenced `ci.yml` (already SHA-pinned per SEC-029-001) against `build.yml` (Build-Once Deploy-Many workflow).
+
+### Findings
+
+| # | Severity | Category | Location | Description | Disposition |
+|---|----------|----------|----------|-------------|-------------|
+| HD-029-001 | MEDIUM | Supply chain | `.github/workflows/build.yml` | All 10 GitHub Action references used mutable version tags (`@v4`, `@v3`, `@v6`, `@v0`, `@v1`) while `ci.yml` was already SHA-pinned per SEC-029-001. `build.yml` is the most security-critical workflow (signs images with cosign, attaches SBOM, pushes to GHCR). A compromised upstream tag reassignment could inject code into the signing/attestation pipeline. | **FIXED** — Pinned all 10 action references to immutable SHA digests with version comments. |
+| HD-029-002 | MEDIUM | Artifact integrity | `specs/029-devops-pipeline/scenario-manifest.json` | File contained two concatenated JSON documents (invalid JSON). First object used `scenarioId` field for SCN-029-001 through SCN-029-011. Second object duplicated those 11 entries using `id` field and appended SCN-029-012 through SCN-029-015 using `scenarioId`. Any tooling parsing the file as standard JSON would fail. | **FIXED** — Consolidated into a single valid JSON document with all 15 scenarios using `scenarioId` consistently. Removed 11 duplicate entries from the second object. |
+| HD-029-003 | LOW | Documentation staleness | `specs/029-devops-pipeline/design.md` | Design doc sample YAML showed `go-version: '1.24'` but actual CI uses Go 1.25 and `go.mod` specifies `go 1.25.10`. | **FIXED** — Updated design.md to `go-version: '1.25'`. |
+
+### Fix Details
+
+**HD-029-001 — build.yml SHA pinning:**
+| Action | Old | Pinned SHA | Version |
+|--------|-----|-----------|---------|
+| `actions/checkout` | `@v4` | `@34e114876b0b11c390a56381ad16ebd13914f8d5` | v4.3.1 |
+| `docker/setup-buildx-action` | `@v3` | `@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f` | v3 |
+| `docker/login-action` | `@v3` | `@c94ce9fb468520275223c153574b00df6fe4bcc9` | v3.7.0 |
+| `docker/build-push-action` (×2) | `@v6` | `@10e90e3645eae34f1e60eeb005ba3a3d33f178e8` | v6 |
+| `sigstore/cosign-installer` | `@v3` | `@398d4b0eeef1380460a10c8013a76f728fb906ac` | v3 |
+| `anchore/sbom-action/download-syft` | `@v0` | `@e22c389904149dbc22b58101806040fa8d37a610` | v0 |
+| `oras-project/setup-oras` | `@v1` | `@22ce207df3b08e061f537244349aac6ae1d214f6` | v1 |
+| `actions/upload-artifact` | `@v4` | `@ea165f8d65b6e75b540449e92b4886f43607fa02` | v4 |
+
+### Evidence
+
+| Check | Result |
+|-------|--------|
+| `./smackerel.sh check` | PASS — "Config is in sync with SST" + "env_file drift guard: OK" + "scenario-lint: OK" |
+| `./smackerel.sh test unit --go` | PASS — all Go packages OK |
+| `python3 -c "json.load(...)"` on scenario-manifest.json | PASS — Valid JSON |
+| `grep 'uses:' build.yml` | All 10 refs pinned to 40-char SHA with version comment |
+| `grep 'uses:' ci.yml` | All 4 refs remain pinned (no regression) |

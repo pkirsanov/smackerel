@@ -181,200 +181,48 @@ func TestCheckUnreferencedClaims_FindingShape(t *testing.T) {
 	}
 }
 
-// T5-07: Validates the retry-vs-abandon decision boundary for synthesis backlog processing.
-// NOTE: The full retrySynthesisBacklog() function uses KnowledgeStore + NATS — this tests
-// the decision logic only. See TestRetrySynthesisDecisionLogic for the table-driven coverage.
+// T5-07: Validates the retry decision via the extracted classifySynthesisRetry function.
 func TestRetrySynthesisBacklog_UnderMaxRetries(t *testing.T) {
-	artifact := ArtifactSynthesisStatusRow{
-		ID:              "01JART010",
-		Title:           "Article About Go",
-		SynthesisStatus: "failed",
-		SynthesisError:  "timeout",
-		RetryCount:      1,
-	}
-
-	cfg := LinterConfig{
-		StaleDays:           90,
-		MaxSynthesisRetries: 3,
-	}
-
-	// Verify that retry_count < max_retries means the artifact should be retried (not abandoned)
-	if artifact.RetryCount >= cfg.MaxSynthesisRetries {
-		t.Errorf("artifact with retry_count=%d should be retried (max=%d)", artifact.RetryCount, cfg.MaxSynthesisRetries)
+	got := classifySynthesisRetry(1, 3)
+	if got != "retry" {
+		t.Errorf("classifySynthesisRetry(1, 3) = %q, want \"retry\"", got)
 	}
 }
 
-// T5-08: Validates the abandon path decision boundary for synthesis backlog processing.
-// NOTE: The full retrySynthesisBacklog() function uses KnowledgeStore + NATS — this tests
-// the decision logic only. See TestRetrySynthesisDecisionLogic for the table-driven coverage.
+// T5-08: Validates the abandon decision via the extracted classifySynthesisRetry function.
 func TestRetrySynthesisBacklog_MaxRetriesAbandoned(t *testing.T) {
-	artifact := ArtifactSynthesisStatusRow{
-		ID:              "01JART011",
-		Title:           "Broken Extraction",
-		SynthesisStatus: "failed",
-		SynthesisError:  "schema validation failed",
-		RetryCount:      3,
-	}
-
-	cfg := LinterConfig{
-		StaleDays:           90,
-		MaxSynthesisRetries: 3,
-	}
-
-	// Verify that retry_count >= max_retries means the artifact should be abandoned
-	if artifact.RetryCount < cfg.MaxSynthesisRetries {
-		t.Errorf("artifact with retry_count=%d should be abandoned (max=%d)", artifact.RetryCount, cfg.MaxSynthesisRetries)
-	}
-
-	// Verify the expected status after abandonment
-	expectedStatus := "abandoned"
-	expectedError := "max retries exceeded"
-	if expectedStatus != "abandoned" {
-		t.Errorf("expected status = %q, want abandoned", expectedStatus)
-	}
-	if expectedError != "max retries exceeded" {
-		t.Errorf("expected error = %q, want 'max retries exceeded'", expectedError)
+	got := classifySynthesisRetry(3, 3)
+	if got != "abandon" {
+		t.Errorf("classifySynthesisRetry(3, 3) = %q, want \"abandon\"", got)
 	}
 }
 
-// T5-09: StoreLintReport + GetLatestLintReport round-trip (type structure test).
-func TestStoreLintReport_StructureRoundTrip(t *testing.T) {
+// T5-09: ComputeLintSummary produces correct severity counts from mixed findings.
+func TestComputeLintSummary_MixedFindings(t *testing.T) {
 	findings := []LintFinding{
-		{Type: "orphan_concept", Severity: "low", TargetID: "01JCPT001", TargetType: "concept", TargetTitle: "Cold Email", Description: "No incoming edges", SuggestedAction: "Review"},
-		{Type: "contradiction", Severity: "high", TargetID: "01JART001", TargetType: "artifact", TargetTitle: "Outreach", Description: "Conflicting claims", SuggestedAction: "Compare sources"},
-		{Type: "weak_entity", Severity: "low", TargetID: "01JENT001", TargetType: "entity", TargetTitle: "Jane", Description: "Single mention", SuggestedAction: "Monitor"},
+		{Type: "orphan_concept", Severity: "low"},
+		{Type: "contradiction", Severity: "high"},
+		{Type: "weak_entity", Severity: "low"},
 	}
 
-	// Marshal findings to JSON (simulates what StoreLintReport does)
-	findingsJSON, err := json.Marshal(findings)
-	if err != nil {
-		t.Fatalf("marshal findings: %v", err)
-	}
+	got := ComputeLintSummary(findings)
 
-	// Build summary (simulates what StoreLintReport does)
-	summary := LintSummary{Total: len(findings)}
-	for _, f := range findings {
-		switch f.Severity {
-		case "high":
-			summary.High++
-		case "medium":
-			summary.Medium++
-		case "low":
-			summary.Low++
-		}
+	if got.Total != 3 {
+		t.Errorf("Total = %d, want 3", got.Total)
 	}
-	summaryJSON, err := json.Marshal(summary)
-	if err != nil {
-		t.Fatalf("marshal summary: %v", err)
+	if got.High != 1 {
+		t.Errorf("High = %d, want 1", got.High)
 	}
-
-	// Unmarshal back to verify round-trip
-	var parsedFindings []LintFinding
-	if err := json.Unmarshal(findingsJSON, &parsedFindings); err != nil {
-		t.Fatalf("unmarshal findings: %v", err)
+	if got.Medium != 0 {
+		t.Errorf("Medium = %d, want 0", got.Medium)
 	}
-	if len(parsedFindings) != 3 {
-		t.Errorf("findings count = %d, want 3", len(parsedFindings))
-	}
-
-	var parsedSummary LintSummary
-	if err := json.Unmarshal(summaryJSON, &parsedSummary); err != nil {
-		t.Fatalf("unmarshal summary: %v", err)
-	}
-	if parsedSummary.Total != 3 {
-		t.Errorf("summary.Total = %d, want 3", parsedSummary.Total)
-	}
-	if parsedSummary.High != 1 {
-		t.Errorf("summary.High = %d, want 1", parsedSummary.High)
-	}
-	if parsedSummary.Low != 2 {
-		t.Errorf("summary.Low = %d, want 2", parsedSummary.Low)
+	if got.Low != 2 {
+		t.Errorf("Low = %d, want 2", got.Low)
 	}
 }
 
-// Test LintFinding JSON serialization round-trip.
-func TestLintFinding_JSONRoundTrip(t *testing.T) {
-	original := LintFinding{
-		Type:            "stale_knowledge",
-		Severity:        "medium",
-		TargetID:        "01JCPT005",
-		TargetType:      "concept",
-		TargetTitle:     "Remote Work",
-		Description:     "Not updated in 120 days",
-		SuggestedAction: "Re-run synthesis",
-	}
-
-	data, err := json.Marshal(original)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var parsed LintFinding
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if parsed.Type != original.Type {
-		t.Errorf("Type = %q, want %q", parsed.Type, original.Type)
-	}
-	if parsed.Severity != original.Severity {
-		t.Errorf("Severity = %q, want %q", parsed.Severity, original.Severity)
-	}
-	if parsed.TargetID != original.TargetID {
-		t.Errorf("TargetID = %q, want %q", parsed.TargetID, original.TargetID)
-	}
-	if parsed.TargetType != original.TargetType {
-		t.Errorf("TargetType = %q, want %q", parsed.TargetType, original.TargetType)
-	}
-	if parsed.TargetTitle != original.TargetTitle {
-		t.Errorf("TargetTitle = %q, want %q", parsed.TargetTitle, original.TargetTitle)
-	}
-	if parsed.Description != original.Description {
-		t.Errorf("Description = %q, want %q", parsed.Description, original.Description)
-	}
-	if parsed.SuggestedAction != original.SuggestedAction {
-		t.Errorf("SuggestedAction = %q, want %q", parsed.SuggestedAction, original.SuggestedAction)
-	}
-}
-
-// Test ArtifactSynthesisStatusRow fields.
-func TestArtifactSynthesisStatusRow_Fields(t *testing.T) {
-	a := ArtifactSynthesisStatusRow{
-		ID:              "01JART100",
-		Title:           "Test Article",
-		SynthesisStatus: "failed",
-		SynthesisError:  "timeout",
-		RetryCount:      2,
-	}
-
-	if a.ID != "01JART100" {
-		t.Errorf("ID = %q, want 01JART100", a.ID)
-	}
-	if a.SynthesisStatus != "failed" {
-		t.Errorf("SynthesisStatus = %q, want failed", a.SynthesisStatus)
-	}
-	if a.RetryCount != 2 {
-		t.Errorf("RetryCount = %d, want 2", a.RetryCount)
-	}
-}
-
-// Test LinterConfig holds config values correctly.
-func TestLinterConfig_Values(t *testing.T) {
-	cfg := LinterConfig{
-		StaleDays:           90,
-		MaxSynthesisRetries: 3,
-	}
-
-	if cfg.StaleDays != 90 {
-		t.Errorf("StaleDays = %d, want 90", cfg.StaleDays)
-	}
-	if cfg.MaxSynthesisRetries != 3 {
-		t.Errorf("MaxSynthesisRetries = %d, want 3", cfg.MaxSynthesisRetries)
-	}
-}
-
-// Test LintSummary calculation from findings.
-func TestLintSummary_Calculation(t *testing.T) {
+// Test ComputeLintSummary with all severity levels present.
+func TestComputeLintSummary_AllSeverities(t *testing.T) {
 	findings := []LintFinding{
 		{Severity: "high"},
 		{Severity: "high"},
@@ -384,29 +232,50 @@ func TestLintSummary_Calculation(t *testing.T) {
 		{Severity: "low"},
 	}
 
-	summary := LintSummary{Total: len(findings)}
-	for _, f := range findings {
-		switch f.Severity {
-		case "high":
-			summary.High++
-		case "medium":
-			summary.Medium++
-		case "low":
-			summary.Low++
-		}
-	}
+	got := ComputeLintSummary(findings)
 
-	if summary.Total != 6 {
-		t.Errorf("Total = %d, want 6", summary.Total)
+	if got.Total != 6 {
+		t.Errorf("Total = %d, want 6", got.Total)
 	}
-	if summary.High != 2 {
-		t.Errorf("High = %d, want 2", summary.High)
+	if got.High != 2 {
+		t.Errorf("High = %d, want 2", got.High)
 	}
-	if summary.Medium != 1 {
-		t.Errorf("Medium = %d, want 1", summary.Medium)
+	if got.Medium != 1 {
+		t.Errorf("Medium = %d, want 1", got.Medium)
 	}
-	if summary.Low != 3 {
-		t.Errorf("Low = %d, want 3", summary.Low)
+	if got.Low != 3 {
+		t.Errorf("Low = %d, want 3", got.Low)
+	}
+}
+
+// Test ComputeLintSummary with empty findings.
+func TestComputeLintSummary_Empty(t *testing.T) {
+	got := ComputeLintSummary(nil)
+	if got.Total != 0 || got.High != 0 || got.Medium != 0 || got.Low != 0 {
+		t.Errorf("ComputeLintSummary(nil) = %+v, want all zeros", got)
+	}
+}
+
+// Test ComputeLintSummary ignores unknown severity values.
+func TestComputeLintSummary_UnknownSeverity(t *testing.T) {
+	findings := []LintFinding{
+		{Severity: "high"},
+		{Severity: "critical"}, // unknown — should be counted in Total but not H/M/L
+		{Severity: "low"},
+	}
+	got := ComputeLintSummary(findings)
+	if got.Total != 3 {
+		t.Errorf("Total = %d, want 3", got.Total)
+	}
+	if got.High != 1 {
+		t.Errorf("High = %d, want 1", got.High)
+	}
+	if got.Low != 1 {
+		t.Errorf("Low = %d, want 1", got.Low)
+	}
+	// "critical" is not counted in any bucket
+	if got.High+got.Medium+got.Low != 2 {
+		t.Errorf("H+M+L = %d, want 2 (unknown severity not bucketed)", got.High+got.Medium+got.Low)
 	}
 }
 
@@ -430,42 +299,32 @@ func TestNewLinter_Constructor(t *testing.T) {
 	}
 }
 
-// TestRetrySynthesisDecisionLogic exercises the retry-vs-abandon branching logic
-// that retrySynthesisBacklog uses for each artifact. This tests the decision
-// boundary at MaxSynthesisRetries without requiring a live DB or NATS connection.
-// The actual DB/NATS side effects are validated in integration tests.
-func TestRetrySynthesisDecisionLogic(t *testing.T) {
+// TestClassifySynthesisRetry exercises the extracted retry-vs-abandon decision function
+// that retrySynthesisBacklog uses for each artifact. This calls the real production
+// function rather than re-implementing the decision logic inline.
+func TestClassifySynthesisRetry(t *testing.T) {
 	tests := []struct {
-		name                string
-		retryCount          int
-		maxSynthesisRetries int
-		wantAction          string // "retry" or "abandon"
+		name       string
+		retryCount int
+		maxRetries int
+		want       string
 	}{
-		{name: "first failure retries", retryCount: 0, maxSynthesisRetries: 3, wantAction: "retry"},
-		{name: "second failure retries", retryCount: 1, maxSynthesisRetries: 3, wantAction: "retry"},
-		{name: "last retry before max", retryCount: 2, maxSynthesisRetries: 3, wantAction: "retry"},
-		{name: "at max retries abandons", retryCount: 3, maxSynthesisRetries: 3, wantAction: "abandon"},
-		{name: "over max retries abandons", retryCount: 5, maxSynthesisRetries: 3, wantAction: "abandon"},
-		{name: "zero max retries always abandons", retryCount: 0, maxSynthesisRetries: 0, wantAction: "abandon"},
-		{name: "single retry allowed", retryCount: 0, maxSynthesisRetries: 1, wantAction: "retry"},
-		{name: "single retry exhausted", retryCount: 1, maxSynthesisRetries: 1, wantAction: "abandon"},
+		{name: "first failure retries", retryCount: 0, maxRetries: 3, want: "retry"},
+		{name: "second failure retries", retryCount: 1, maxRetries: 3, want: "retry"},
+		{name: "last retry before max", retryCount: 2, maxRetries: 3, want: "retry"},
+		{name: "at max retries abandons", retryCount: 3, maxRetries: 3, want: "abandon"},
+		{name: "over max retries abandons", retryCount: 5, maxRetries: 3, want: "abandon"},
+		{name: "zero max retries always abandons", retryCount: 0, maxRetries: 0, want: "abandon"},
+		{name: "single retry allowed", retryCount: 0, maxRetries: 1, want: "retry"},
+		{name: "single retry exhausted", retryCount: 1, maxRetries: 1, want: "abandon"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// This replicates the exact decision logic from retrySynthesisBacklog:
-			//   if a.RetryCount >= l.cfg.MaxSynthesisRetries → abandon
-			//   else → retry (re-publish to synthesis.extract)
-			var gotAction string
-			if tc.retryCount >= tc.maxSynthesisRetries {
-				gotAction = "abandon"
-			} else {
-				gotAction = "retry"
-			}
-
-			if gotAction != tc.wantAction {
-				t.Errorf("retryCount=%d, maxRetries=%d: got %q, want %q",
-					tc.retryCount, tc.maxSynthesisRetries, gotAction, tc.wantAction)
+			got := classifySynthesisRetry(tc.retryCount, tc.maxRetries)
+			if got != tc.want {
+				t.Errorf("classifySynthesisRetry(%d, %d) = %q, want %q",
+					tc.retryCount, tc.maxRetries, got, tc.want)
 			}
 		})
 	}
@@ -524,12 +383,26 @@ func TestLintFindingSeverityValues(t *testing.T) {
 
 	for findingType, expectedSeverity := range expectedFindings {
 		t.Run(findingType, func(t *testing.T) {
-			// Verify the canonical mapping matches what the lint checks produce
-			// (as documented in scopes.md Gherkin scenarios)
-			finding := LintFinding{Type: findingType, Severity: expectedSeverity}
-			if finding.Severity != expectedSeverity {
-				t.Errorf("finding type %q: severity = %q, want %q",
-					findingType, finding.Severity, expectedSeverity)
+			// Use ComputeLintSummary to verify findings with the expected severity
+			// are correctly bucketed by the production code.
+			findings := []LintFinding{{Type: findingType, Severity: expectedSeverity}}
+			got := ComputeLintSummary(findings)
+			if got.Total != 1 {
+				t.Errorf("ComputeLintSummary Total = %d, want 1", got.Total)
+			}
+			switch expectedSeverity {
+			case "high":
+				if got.High != 1 {
+					t.Errorf("expected high=1 for %q, got %d", findingType, got.High)
+				}
+			case "medium":
+				if got.Medium != 1 {
+					t.Errorf("expected medium=1 for %q, got %d", findingType, got.Medium)
+				}
+			case "low":
+				if got.Low != 1 {
+					t.Errorf("expected low=1 for %q, got %d", findingType, got.Low)
+				}
 			}
 		})
 	}
@@ -573,8 +446,8 @@ func TestLintFindingTypes_AllSix(t *testing.T) {
 	}
 }
 
-// Test that severity levels cover the expected values.
-func TestLintSeverityLevels(t *testing.T) {
+// TestLintSeverityLevels_ViaComputeLintSummary verifies severity bucketing using the production function.
+func TestLintSeverityLevels_ViaComputeLintSummary(t *testing.T) {
 	severities := map[string]string{
 		"orphan_concept":     "low",
 		"contradiction":      "high",
@@ -584,82 +457,43 @@ func TestLintSeverityLevels(t *testing.T) {
 		"unreferenced_claim": "medium",
 	}
 
-	for findingType, expectedSeverity := range severities {
-		t.Run(findingType, func(t *testing.T) {
-			f := LintFinding{Type: findingType, Severity: expectedSeverity}
-			if f.Severity != expectedSeverity {
-				t.Errorf("Severity for %q = %q, want %q", findingType, f.Severity, expectedSeverity)
-			}
-		})
+	// Build all 6 findings
+	var all []LintFinding
+	for findingType, sev := range severities {
+		all = append(all, LintFinding{Type: findingType, Severity: sev})
+	}
+	got := ComputeLintSummary(all)
+	if got.Total != 6 {
+		t.Errorf("Total = %d, want 6", got.Total)
+	}
+	if got.High != 2 {
+		t.Errorf("High = %d, want 2", got.High)
+	}
+	if got.Medium != 2 {
+		t.Errorf("Medium = %d, want 2", got.Medium)
+	}
+	if got.Low != 2 {
+		t.Errorf("Low = %d, want 2", got.Low)
 	}
 }
 
-// Test that StoreLintReport builds correct summary from empty findings.
-func TestStoreLintReport_EmptyFindings(t *testing.T) {
-	findings := []LintFinding{}
-
-	findingsJSON, err := json.Marshal(findings)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	summary := LintSummary{Total: len(findings)}
-	summaryJSON, err := json.Marshal(summary)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	// Verify empty finds produce correct JSON
-	if string(findingsJSON) != "[]" {
-		t.Errorf("findings JSON = %q, want []", string(findingsJSON))
-	}
-
-	var parsed LintSummary
-	if err := json.Unmarshal(summaryJSON, &parsed); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if parsed.Total != 0 {
-		t.Errorf("summary.Total = %d, want 0", parsed.Total)
+// Test that ComputeLintSummary handles single-severity-only findings.
+func TestComputeLintSummary_SingleSeverity(t *testing.T) {
+	findings := []LintFinding{{Severity: "medium"}, {Severity: "medium"}}
+	got := ComputeLintSummary(findings)
+	if got.Total != 2 || got.Medium != 2 || got.High != 0 || got.Low != 0 {
+		t.Errorf("ComputeLintSummary = %+v, want Total=2, Medium=2", got)
 	}
 }
 
-// T5-07 supplement: Verify retry condition logic for artifacts under max retries.
-func TestRetryCondition_UnderMax(t *testing.T) {
-	_ = context.Background() // ensure context import is used
-
-	tests := []struct {
-		retryCount  int
-		maxRetries  int
-		shouldRetry bool
-	}{
-		{0, 3, true},
-		{1, 3, true},
-		{2, 3, true},
-		{3, 3, false},
-		{4, 3, false},
-		{0, 0, false},
+// T5-08 supplement: Verify abandon boundary via classifySynthesisRetry.
+func TestClassifySynthesisRetry_BoundaryValues(t *testing.T) {
+	// Exact boundary: retryCount == maxRetries → abandon
+	if got := classifySynthesisRetry(3, 3); got != "abandon" {
+		t.Errorf("classifySynthesisRetry(3, 3) = %q, want \"abandon\"", got)
 	}
-
-	for _, tc := range tests {
-		shouldRetry := tc.retryCount < tc.maxRetries
-		if shouldRetry != tc.shouldRetry {
-			t.Errorf("retryCount=%d, maxRetries=%d: shouldRetry=%v, want %v",
-				tc.retryCount, tc.maxRetries, shouldRetry, tc.shouldRetry)
-		}
-	}
-}
-
-// T5-08 supplement: Verify abandon produces correct status values.
-func TestAbandonStatus_Values(t *testing.T) {
-	_ = time.Now() // ensure time import is used
-
-	status := "abandoned"
-	errMsg := "max retries exceeded"
-
-	if status != "abandoned" {
-		t.Errorf("status = %q, want abandoned", status)
-	}
-	if errMsg != "max retries exceeded" {
-		t.Errorf("error = %q, want 'max retries exceeded'", errMsg)
+	// One below boundary: retryCount == maxRetries-1 → retry
+	if got := classifySynthesisRetry(2, 3); got != "retry" {
+		t.Errorf("classifySynthesisRetry(2, 3) = %q, want \"retry\"", got)
 	}
 }

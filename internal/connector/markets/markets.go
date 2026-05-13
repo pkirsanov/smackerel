@@ -380,10 +380,6 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	// Fetch company news for watchlist stocks via Finnhub.
 	// Use today's date as the range for fresh news.
 	newsDate := now.Format("2006-01-02")
-	watchlistSet := make(map[string]bool, len(cfg.Watchlist.Stocks))
-	for _, s := range cfg.Watchlist.Stocks {
-		watchlistSet[s] = true
-	}
 	if len(cfg.Watchlist.Stocks) > 0 {
 		totalProviders++ // REG-018-R01: track news as a provider dimension for health
 	}
@@ -423,6 +419,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				slog.Warn("dropping unsafe news URL", "symbol", symbol, "url_scheme", articleURL)
 				articleURL = ""
 			}
+			// CHAOS-018-R17-002: Sanitize Related field like other text fields.
+			related := stringutil.SanitizeControlChars(article.Related)
 			artifacts = append(artifacts, connector.RawArtifact{
 				SourceID:    "financial-markets",
 				SourceRef:   fmt.Sprintf("news-%s-%d", symbol, article.ID),
@@ -434,7 +432,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					"symbol":          symbol,
 					"source":          source,
 					"category":        category,
-					"related":         article.Related,
+					"related":         related,
 					"datetime":        article.Datetime,
 					"processing_tier": tier,
 				},
@@ -815,6 +813,11 @@ func (c *Connector) fetchFREDLatest(ctx context.Context, seriesID string) (*FRED
 	if err != nil {
 		return nil, fmt.Errorf("parse FRED value %q for series %q: %w", obs.Value, seriesID, err)
 	}
+	// CHAOS-018-R17-001: ParseFloat("NaN"/"Inf") succeeds with nil error but
+	// produces non-finite floats that break JSON serialization downstream.
+	if math.IsNaN(numVal) || math.IsInf(numVal, 0) {
+		return nil, fmt.Errorf("FRED returned non-finite value %q for series %q", obs.Value, seriesID)
+	}
 
 	return &FREDObservation{
 		SeriesID: seriesID,
@@ -950,6 +953,8 @@ func parseStringSlice(wl map[string]interface{}, key string, re *regexp.Regexp, 
 	if !ok {
 		return nil, nil
 	}
+	// CHAOS-018-R17-003: Deduplicate entries to prevent wasting rate limit budget.
+	seen := make(map[string]bool, len(raw))
 	var result []string
 	for i, s := range raw {
 		str, ok := s.(string)
@@ -959,6 +964,10 @@ func parseStringSlice(wl map[string]interface{}, key string, re *regexp.Regexp, 
 		if !re.MatchString(str) {
 			return nil, fmt.Errorf("invalid %s: %q", itemLabel, str)
 		}
+		if seen[str] {
+			continue
+		}
+		seen[str] = true
 		result = append(result, str)
 	}
 	if len(result) > maxWatchlistSymbols {

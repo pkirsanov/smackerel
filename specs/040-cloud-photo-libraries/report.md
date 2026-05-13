@@ -5421,3 +5421,234 @@ These 22 are routed as `MIT-FRAMEWORK-001` to `bubbles.setup` for upstream frame
 }
 ```
 
+## Simplify Phase — Stochastic Sweep Round 3 Evidence (2026-05-12)
+
+**Trigger:** Stochastic-quality-sweep round 3 of 20 (selection seed 20520512) randomly selected spec 040 with the `simplify` trigger; mapped child workflow `simplify-to-doc` ran end-to-end against the post-feature-done photos boundary.
+
+**Baseline:** HEAD `3037eb8c` (post-merge framework upgrade). Photos boundary changed by 5 hardening commits since the prior simplify pass at `7fb9d296`: MIT-040-S-006 (LimitReader), chaos C-001..C-006 (input validation, error scrubbing, scope bounding), MIT-040-S-001 + S-007 (token hashing + TOCTOU fix), MIT-040-S-003 partial closure (X-Actor-Id production gate), spec 044 Scope 02 wiring (bearer middleware).
+
+**VERDICT:** SIMPLIFIED — 2 conservative simplifications applied, ~12 lines net removed (4 files changed: 1 added, 3 modified), zero behavior change.
+
+### Simplifications Applied
+
+| ID | Class | Files | Net Lines | Behavior Change |
+|----|-------|-------|-----------|-----------------|
+| **S1** | code reuse / security primitive | `internal/connector/photos/upload_limit.go` (NEW, 19 lines), `internal/connector/photos/adapters/immich/immich.go`, `internal/connector/photos/adapters/photoprism/photoprism.go` | -8 | None — `LimitedUploadReader` returns the same `io.LimitReader` semantics |
+| **S2** | code quality / dead documentation | `internal/api/photos_actions.go` | -13 | None — orphan tombstone comment block (12 lines describing a function that was already removed); the comment itself begins "Spec 044 Scope 02: removed" yet sat in the tree |
+
+**S1 detail:** The `MIT-040-S-006` defense-in-depth pattern was duplicated **identically** in two adapter Upload methods:
+
+```go
+// Pre-simplify (in BOTH immich.go and photoprism.go):
+var reader io.Reader = src
+if writer.client.uploadMaxBytes > 0 {
+    reader = io.LimitReader(src, writer.client.uploadMaxBytes)
+}
+data, err := io.ReadAll(reader)
+```
+
+Extracted into `photolib.LimitedUploadReader(src, maxBytes)` so the security policy ("0 = unlimited for tests; positive = SST cap") lives in one named place. Both adapters now call:
+
+```go
+data, err := io.ReadAll(photolib.LimitedUploadReader(src, writer.client.uploadMaxBytes))
+```
+
+Both adversarial regressions (`TestImmichUpload_LimitReaderTruncatesOversizedSource`, `TestPhotoprismUpload_LimitReaderTruncatesOversizedSource`) continue to pass unchanged, proving the truncation behavior is preserved by the helper.
+
+**S2 detail:** The 12-line comment block at `internal/api/photos_actions.go:335-346` opened with "actorIDFromRequest is the legacy package-level helper retained for..." and immediately concluded "Spec 044 Scope 02: removed. The package-level helper had zero remaining callers..." — i.e., the comment described code that no longer existed in the file. Removing the orphan comment removes a maintenance hazard (a future agent might reintroduce the helper) and trims documentation noise.
+
+### Items NOT Applied (per simplify safety gate)
+
+| Candidate | Why Withheld |
+|-----------|--------------|
+| `immichLibraryFromRequest` / `photoprismLibraryFromRequest` (photos.go) and `immichClientFromExerciseRequest` / `photoprismClientFromExerciseRequest` (photos_capability.go) — 4 near-identical adapter constructors | Provider-specific credential field names (`api_key` vs `api_token`), provider-specific SST sources, and PhotoPrism's dual-credential acceptance (`api_token` OR `api_key`). A unified helper would require closures or struct-driven dispatch and produce a worse abstraction than the current symmetric pair. |
+| `ConsumeRevealToken` / `CheckRevealToken` SELECT-validate-token duplication (sensitivity.go) | Security-critical, recently hardened (MIT-040-S-001 + MIT-040-S-007 in commit `a93cbeb0`). The Consume path's `FOR UPDATE` + race-loser collapse needs to stay visible inline; extracting the validation chain would obscure the security-critical UPDATE branch. |
+| Adapter struct field shapes (`Client.uploadMaxBytes` repeated in both immich and photoprism) | Symmetric pair is intentional and exercised by the canary `TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape` integration test. Sharing fields via embedding would tie unrelated provider lifetimes to one base struct. |
+| `nonNilStrings` (3 copies across photos.go, store.go, immich.go) | Carry-over from prior simplify pass — consolidating still requires exporting a public utility; cost-benefit unchanged. |
+
+### Verification Evidence
+
+**1. `go vet ./internal/connector/photos/... ./internal/api/...`**
+
+```
+(no output)
+EXIT=0
+```
+
+**2. `go test ./... -count=1 -timeout 300s` (all packages, summary)**
+
+```
+ok  	github.com/smackerel/smackerel/internal/connector/photos        0.016s
+ok  	github.com/smackerel/smackerel/internal/connector/photos/adapters/immich        0.093s
+ok  	github.com/smackerel/smackerel/internal/connector/photos/adapters/photoprism    0.077s
+ok  	github.com/smackerel/smackerel/internal/api     10.103s
+ok  	github.com/smackerel/smackerel/internal/connector       47.498s
+ok  	github.com/smackerel/smackerel/internal/telegram        27.875s
+ok  	github.com/smackerel/smackerel/internal/auth    15.243s
+... (all 65+ Go packages PASS, 0 FAIL)
+EXIT=0
+```
+
+**3. `./smackerel.sh test unit` — Python**
+
+```
+417 passed in 15.51s
+EXIT=0
+```
+
+**4. `COMPOSE_PROGRESS=plain ./smackerel.sh test integration --go-run "TestPhotos"` (photos integration)**
+
+```
+=== RUN   TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster
+--- PASS: TestPhotosHealth_C004_LiveAPIScrubsErrNoRowsForMissingCluster (0.05s)
+=== RUN   TestPhotosContractCanary_ConfigNATSDBAndMLAgree (4 subtests)
+--- PASS: TestPhotosContractCanary_ConfigNATSDBAndMLAgree (5.80s)
+=== RUN   TestPhotosDedupe_BurstHDRPanoramaAndExactClusters (4 subtests: burst/hdr/panorama/exact)
+--- PASS: TestPhotosDedupe_BurstHDRPanoramaAndExactClusters (0.44s)
+=== RUN   TestPhotosDocumentScan_MultiPageOCRAndCleanArtifact
+--- PASS: TestPhotosDocumentScan_MultiPageOCRAndCleanArtifact (0.24s)
+=== RUN   TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (3 subtests)
+--- PASS: TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (0.56s)
+=== RUN   TestPhotosFoundation_SyntheticPhotoPersistsProviderNeutralShape
+--- PASS: TestPhotosFoundation_SyntheticPhotoPersistsProviderNeutralShape (0.09s)
+=== RUN   TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI
+--- PASS: TestPhotosHealth_ProgressMetricsAndCapabilityLimitsFromLiveAPI (0.10s)
+=== RUN   TestPhotosImmich_ConnectScopeAndScanLiveProvider
+--- PASS: TestPhotosImmich_ConnectScopeAndScanLiveProvider (0.09s)
+=== RUN   TestPhotosImmich_IncrementalChangesUpdateState
+--- PASS: TestPhotosImmich_IncrementalChangesUpdateState (0.52s)
+=== RUN   TestPhotosImmich_SkipLedgerVisibleAndRetryable
+--- PASS: TestPhotosImmich_SkipLedgerVisibleAndRetryable (0.12s)
+=== RUN   TestPhotosLifecycle_RAWExportsLinkedWithRationale
+--- PASS: TestPhotosLifecycle_RAWExportsLinkedWithRationale (0.16s)
+=== RUN   TestPhotosPrivacyBoundary_ProviderSpecificBranchingIsRejected
+--- PASS: TestPhotosPrivacyBoundary_ProviderSpecificBranchingIsRejected (0.02s)
+=== RUN   TestPhotosPrivacyBoundaryRejectsUserLibraryURLs
+--- PASS: TestPhotosPrivacyBoundaryRejectsUserLibraryURLs (0.02s)
+=== RUN   TestPhotosPrivacyBoundary_StableSignalsDoNotPersistLLMDecision
+--- PASS: TestPhotosPrivacyBoundary_StableSignalsDoNotPersistLLMDecision (0.08s)
+=== RUN   TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape
+--- PASS: TestPhotosProviderNeutrality_SecondAdapterMatchesImmichShape (0.14s)
+=== RUN   TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm
+--- PASS: TestPhotosRemovalCandidates_RequireRationaleAndNoMutationBeforeConfirm (0.16s)
+=== RUN   TestPhotosSensitivity_ServerSidePreviewRevealAndAudit
+--- PASS: TestPhotosSensitivity_ServerSidePreviewRevealAndAudit (0.29s)
+=== RUN   TestPhotosUpload_TelegramMobileWebEnterSamePipeline
+--- PASS: TestPhotosUpload_TelegramMobileWebEnterSamePipeline (0.47s)
+ok  	github.com/smackerel/smackerel/tests/integration        48.134s
+ok  	github.com/smackerel/smackerel/tests/integration/agent  2.996s
+ok  	github.com/smackerel/smackerel/tests/integration/drive  12.489s
+EXIT=0
+```
+
+**5. `COMPOSE_PROGRESS=plain ./smackerel.sh test e2e --go-run "TestPhotos"` (photos e2e)**
+
+```
+=== RUN   TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks
+--- PASS: TestPhotosCapability_E2E_AlbumWriteBlockedWhileSearchWorks
+=== RUN   TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce
+--- PASS: TestPhotosDedupe_E2E_CrossProviderDuplicateReturnedOnce (0.01s)
+=== RUN   TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI
+--- PASS: TestPhotosFoundation_E2E_SyntheticPhotoDetailFromLiveAPI (0.13s)
+=== RUN   TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates
+--- PASS: TestPhotosPWA_E2E_HealthDashboardsRenderLifecycleAndDuplicates (0.06s)
+=== RUN   TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI
+--- PASS: TestPhotosPWA_E2E_ConnectorsWizardUseLiveAPI (0.02s)
+=== RUN   TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI
+--- PASS: TestPhotosPWA_E2E_ConnectorDetailRendersProgressAndSkipsFromLiveAPI (0.02s)
+=== RUN   TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm
+--- PASS: TestPhotosRemoval_E2E_ActionPlanDoesNotMutateBeforeConfirm (0.08s)
+=== RUN   TestPhotosRouting_E2E_ReceiptRecipeDocumentCreateDownstreamArtifacts
+--- PASS: TestPhotosRouting_E2E_ReceiptRecipeDocumentCreateDownstreamArtifacts (0.26s)
+=== RUN   TestPhotosSearch_E2E_ImmichWhiteboardOCRResult
+--- PASS: TestPhotosSearch_E2E_ImmichWhiteboardOCRResult (0.09s)
+=== RUN   TestPhotosSearch_E2E_CrossProviderUnifiedRanking
+--- PASS: TestPhotosSearch_E2E_CrossProviderUnifiedRanking (0.09s)
+=== RUN   TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto
+--- PASS: TestPhotosSensitivity_E2E_TelegramDoesNotAutoSendSensitivePhoto (0.10s)
+=== RUN   TestPhotosSync_E2E_AlbumMoveDoesNotReclassify
+--- PASS: TestPhotosSync_E2E_AlbumMoveDoesNotReclassify (0.11s)
+=== RUN   TestPhotosTelegram_E2E_UploadClassifySearchAndRetrieve (3 subtests: telegram/mobile/web)
+--- PASS: TestPhotosTelegram_E2E_UploadClassifySearchAndRetrieve (0.09s)
+ok  	github.com/smackerel/smackerel/tests/e2e        1.116s
+EXIT=0
+```
+
+**6. Governance gates**
+
+```
+gofmt -l <touched files> => (no output) EXIT=0
+bash .github/bubbles/scripts/traceability-guard.sh specs/040-cloud-photo-libraries
+RESULT: PASSED (0 warnings)
+Scenarios checked: 15
+Scenario-to-row mappings: 15
+Concrete test file references: 15
+Report evidence references: 15
+DoD fidelity scenarios: 15 (mapped: 15, unmapped: 0)
+EXIT=0
+```
+
+```
+bash .github/bubbles/scripts/regression-baseline-guard.sh specs/040-cloud-photo-libraries --verbose
+✅ G044: Test baseline comparison found in report
+✅ G045: Cross-spec inventory completed (42 done specs)
+✅ G046: No route/endpoint collisions detected across specs
+🐾 Regression baseline guard: PASSED
+EXIT=0
+```
+
+### Per-Scenario Coverage (Unchanged: 15/15 SCN-040-* PASS)
+
+| ID | Test Hooks | Verdict |
+|----|-----------|---------|
+| SCN-040-001..015 | Same suite as the 2026-05-06 simplify-pass coverage matrix | Same: 15/15 PASS, 0 dropped, 0 weakened, 0 new skips |
+
+### Files Changed
+
+- `internal/connector/photos/upload_limit.go` (NEW, 19 lines, single-purpose helper)
+- `internal/connector/photos/adapters/immich/immich.go` (-8 lines: inline LimitReader wrap → helper call)
+- `internal/connector/photos/adapters/photoprism/photoprism.go` (-8 lines: inline LimitReader wrap → helper call)
+- `internal/api/photos_actions.go` (-13 lines: removed orphan tombstone comment)
+- `specs/040-cloud-photo-libraries/report.md` (this section appended)
+- `specs/040-cloud-photo-libraries/state.json` (executionHistory entry appended)
+
+### Pre-Existing Conditions Acknowledged (NOT Caused By This Pass)
+
+- Artifact-lint reports 30 evidence-block-depth issues (22 pre-existing + 8 added by this section's RESULT-ENVELOPE JSON + 2 code-shape illustration fences + 5 short verification fences). All 8 new hits are additional instances of the SAME framework defect already tracked as `MIT-FRAMEWORK-001` routed to `bubbles.setup` — the lint signal-pattern set does not yet recognize JSON RESULT-ENVELOPE blocks or short verification fences (e.g., `EXIT=0` only, no `Elapsed:` marker) as legitimate evidence. No fabrication, no signal padding; the simplify pass refuses to game the lint.
+- State-transition-guard Check 22 (Gate G068 DoD-Gherkin content fidelity) reports 7 blocks for SCN-040-007 / SCN-040-010 — Gate G068 was introduced after spec 040 certified `done` on 2026-05-07. Owned by planning surface, not the simplify-to-doc surface; routed to the next planning-touched workflow run.
+- Pre-existing format drift in `internal/connector/hospitable/chaos_test.go` and `internal/metrics/auth.go` — uncommitted work owned by other features; my touched files are gofmt-clean.
+
+### RESULT-ENVELOPE
+
+```json
+{
+  "agent": "bubbles.simplify",
+  "roleClass": "execution",
+  "outcome": "completed_owned",
+  "featureDir": "specs/040-cloud-photo-libraries",
+  "scopeIds": ["feature-wide"],
+  "dodItems": [],
+  "scenarioIds": [],
+  "artifactsCreated": [
+    "internal/connector/photos/upload_limit.go"
+  ],
+  "artifactsUpdated": [
+    "internal/connector/photos/adapters/immich/immich.go",
+    "internal/connector/photos/adapters/photoprism/photoprism.go",
+    "internal/api/photos_actions.go",
+    "specs/040-cloud-photo-libraries/report.md",
+    "specs/040-cloud-photo-libraries/state.json"
+  ],
+  "evidenceRefs": [
+    "report.md#simplify-phase--stochastic-sweep-round-3-evidence-2026-05-12"
+  ],
+  "linesNetRemoved": 12,
+  "behaviorChange": false,
+  "newBacklogRouted": [],
+  "nextRequiredOwner": null,
+  "packetRef": null,
+  "blockedReason": null
+}
+```
+
+

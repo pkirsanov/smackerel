@@ -1165,3 +1165,173 @@ func TestCopyPlan_ShiftsSlotDates(t *testing.T) {
 		t.Errorf("copied slot date = %v, want %v", copiedDate, expectedSlotDate)
 	}
 }
+
+// --- Chaos R14: UpdateSlot must validate recipe artifact existence ---
+
+func TestUpdateSlot_RejectsNonexistentRecipe(t *testing.T) {
+	ms := newMockPlanStore()
+	ms.recipeArtifactExistsOK = false
+	svc := newTestService(ms)
+	ctx := context.Background()
+
+	plan := &Plan{
+		ID:        "mp-test-1",
+		Title:     "Test Plan",
+		StartDate: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 4, 26, 0, 0, 0, 0, time.UTC),
+		Status:    StatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms.plans[plan.ID] = plan
+
+	existingSlot := &Slot{
+		ID:               "mps-existing",
+		PlanID:           plan.ID,
+		SlotDate:         time.Date(2026, 4, 22, 0, 0, 0, 0, time.UTC),
+		MealType:         "dinner",
+		RecipeArtifactID: "recipe-valid",
+		Servings:         4,
+		CreatedAt:        time.Now(),
+	}
+	ms.slots[existingSlot.ID] = existingSlot
+
+	// Attempt to update to a recipe that does not exist
+	_, err := svc.UpdateSlot(ctx, plan.ID, existingSlot.ID, "recipe-nonexistent", 4, false, "")
+	if err == nil {
+		t.Fatal("expected error when updating slot with nonexistent recipe")
+	}
+	svcErr, ok := err.(*ServiceError)
+	if !ok {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	if svcErr.Code != "MEAL_PLAN_RECIPE_NOT_FOUND" {
+		t.Errorf("error code = %q, want %q", svcErr.Code, "MEAL_PLAN_RECIPE_NOT_FOUND")
+	}
+	if svcErr.Status != 422 {
+		t.Errorf("status = %d, want 422", svcErr.Status)
+	}
+	// Original recipe must remain unchanged
+	if ms.slots[existingSlot.ID].RecipeArtifactID != "recipe-valid" {
+		t.Errorf("recipe_artifact_id was mutated to %q despite validation failure", ms.slots[existingSlot.ID].RecipeArtifactID)
+	}
+}
+
+func TestUpdateSlot_AcceptsExistingRecipe(t *testing.T) {
+	ms := newMockPlanStore()
+	ms.recipeArtifactExistsOK = true
+	svc := newTestService(ms)
+	ctx := context.Background()
+
+	plan := &Plan{
+		ID:        "mp-test-1",
+		Title:     "Test Plan",
+		StartDate: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 4, 26, 0, 0, 0, 0, time.UTC),
+		Status:    StatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms.plans[plan.ID] = plan
+
+	existingSlot := &Slot{
+		ID:               "mps-existing",
+		PlanID:           plan.ID,
+		SlotDate:         time.Date(2026, 4, 22, 0, 0, 0, 0, time.UTC),
+		MealType:         "dinner",
+		RecipeArtifactID: "recipe-old",
+		Servings:         4,
+		CreatedAt:        time.Now(),
+	}
+	ms.slots[existingSlot.ID] = existingSlot
+
+	slot, err := svc.UpdateSlot(ctx, plan.ID, existingSlot.ID, "recipe-new", 6, false, "updated")
+	if err != nil {
+		t.Fatalf("UpdateSlot: unexpected error: %v", err)
+	}
+	if slot.RecipeArtifactID != "recipe-new" {
+		t.Errorf("recipe_artifact_id = %q, want %q", slot.RecipeArtifactID, "recipe-new")
+	}
+	if slot.Servings != 6 {
+		t.Errorf("servings = %d, want 6", slot.Servings)
+	}
+}
+
+func TestUpdateSlot_EmptyRecipeSkipsValidation(t *testing.T) {
+	ms := newMockPlanStore()
+	ms.recipeArtifactExistsOK = false // would fail if checked
+	svc := newTestService(ms)
+	ctx := context.Background()
+
+	plan := &Plan{
+		ID:        "mp-test-1",
+		Title:     "Test Plan",
+		StartDate: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 4, 26, 0, 0, 0, 0, time.UTC),
+		Status:    StatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms.plans[plan.ID] = plan
+
+	existingSlot := &Slot{
+		ID:               "mps-existing",
+		PlanID:           plan.ID,
+		SlotDate:         time.Date(2026, 4, 22, 0, 0, 0, 0, time.UTC),
+		MealType:         "dinner",
+		RecipeArtifactID: "recipe-original",
+		Servings:         4,
+		CreatedAt:        time.Now(),
+	}
+	ms.slots[existingSlot.ID] = existingSlot
+
+	// Empty recipeArtifactID should skip validation and keep original
+	slot, err := svc.UpdateSlot(ctx, plan.ID, existingSlot.ID, "", 0, false, "just notes")
+	if err != nil {
+		t.Fatalf("UpdateSlot with empty recipe: unexpected error: %v", err)
+	}
+	if slot.RecipeArtifactID != "recipe-original" {
+		t.Errorf("recipe should remain %q, got %q", "recipe-original", slot.RecipeArtifactID)
+	}
+}
+
+// --- Chaos R14: AddBatchSlots must reject inverted date range ---
+
+func TestAddBatchSlots_InvertedDateRange(t *testing.T) {
+	ms := newMockPlanStore()
+	svc := newTestService(ms)
+	ctx := context.Background()
+
+	plan := &Plan{
+		ID:        "mp-test-1",
+		Title:     "Test Plan",
+		StartDate: time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 4, 26, 0, 0, 0, 0, time.UTC),
+		Status:    StatusDraft,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms.plans[plan.ID] = plan
+
+	batchStart := time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC)
+	batchEnd := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+
+	_, err := svc.AddBatchSlots(ctx, plan.ID, batchStart, batchEnd, "breakfast", "recipe-1", 2)
+	if err == nil {
+		t.Fatal("expected error for inverted date range (start > end)")
+	}
+	svcErr, ok := err.(*ServiceError)
+	if !ok {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	if svcErr.Code != "MEAL_PLAN_VALIDATION" {
+		t.Errorf("error code = %q, want %q", svcErr.Code, "MEAL_PLAN_VALIDATION")
+	}
+	if svcErr.Status != 422 {
+		t.Errorf("status = %d, want 422", svcErr.Status)
+	}
+	// No slots should have been created
+	if len(ms.slots) != 0 {
+		t.Errorf("store has %d slots, want 0 after inverted range rejection", len(ms.slots))
+	}
+}

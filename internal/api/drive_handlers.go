@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -230,7 +232,8 @@ func (h *DriveHandlers) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	authURL, state, err := provider.BeginConnect(ctx, mode, scope)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "BEGIN_CONNECT_FAILED", err.Error())
+		slog.Error("drive: BeginConnect failed", "provider", req.ProviderID, "error", err)
+		writeError(w, http.StatusBadGateway, "BEGIN_CONNECT_FAILED", "failed to initiate provider authorization")
 		return
 	}
 	writeJSON(w, http.StatusOK, DriveConnectResponse{AuthURL: authURL, State: state})
@@ -257,7 +260,8 @@ func (h *DriveHandlers) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	connID, err := provider.FinalizeConnect(r.Context(), state, code)
 	if err != nil {
-		redirectWithDriveError(w, r, err.Error())
+		slog.Error("drive: FinalizeConnect failed", "error", err)
+		redirectWithDriveError(w, r, "authorization failed")
 		return
 	}
 	q := url.Values{}
@@ -334,13 +338,17 @@ type DriveSkippedBlockedGroup struct {
 // and zero indexed files is rendered by Screen 3 as
 // "Healthy — no in-scope files yet".
 func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
-	if h.pool == nil {
-		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive connection DB pool is not wired")
-		return
-	}
 	id := strings.TrimSpace(chi.URLParam(r, "id"))
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "missing connection id")
+		return
+	}
+	if _, err := uuid.Parse(id); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_CONNECTION_ID", "connection id must be a UUID")
+		return
+	}
+	if h.pool == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive connection DB pool is not wired")
 		return
 	}
 
@@ -361,7 +369,8 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection query failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 
@@ -377,31 +386,36 @@ func (h *DriveHandlers) GetConnection(w http.ResponseWriter, r *http.Request) {
 	if err := h.pool.QueryRow(r.Context(),
 		`SELECT COUNT(*) FROM drive_files WHERE connection_id=$1`, id,
 	).Scan(&indexed); err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection indexed count failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	var skipped int64
 	if err := h.pool.QueryRow(r.Context(),
 		`SELECT COUNT(*) FROM drive_files WHERE connection_id=$1 AND extraction_state IN ('skipped', 'blocked')`, id,
 	).Scan(&skipped); err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection skipped count failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	var retryableWork int64
 	if err := h.pool.QueryRow(r.Context(),
 		`SELECT COUNT(*) FROM drive_provider_work_queue WHERE connection_id=$1 AND status IN ('queued', 'retryable', 'running')`, id,
 	).Scan(&retryableWork); err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection retryable work count failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	progress, err := h.latestDriveProgress(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection progress failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	recentActivity, err := h.recentDriveActivity(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetConnection activity failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 
@@ -448,7 +462,8 @@ func (h *DriveHandlers) GetArtifactDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetArtifactDetail failed", "artifact_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	writeJSON(w, http.StatusOK, detail)
@@ -457,19 +472,36 @@ func (h *DriveHandlers) GetArtifactDetail(w http.ResponseWriter, r *http.Request
 // GetSkippedBlocked handles GET
 // /v1/connectors/drive/connection/{id}/skipped.
 func (h *DriveHandlers) GetSkippedBlocked(w http.ResponseWriter, r *http.Request) {
-	if h.pool == nil {
-		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive connection DB pool is not wired")
-		return
-	}
 	id := strings.TrimSpace(chi.URLParam(r, "id"))
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "missing connection id")
 		return
 	}
+	if _, err := uuid.Parse(id); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_CONNECTION_ID", "connection id must be a UUID")
+		return
+	}
+	if h.pool == nil {
+		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "drive connection DB pool is not wired")
+		return
+	}
+
+	// Verify connection exists so the error contract matches GetConnection (404 for unknown id).
+	var exists bool
+	if err := h.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM drive_connections WHERE id=$1)`, id).Scan(&exists); err != nil {
+		slog.Error("drive: GetSkippedBlocked connection check failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "CONNECTION_NOT_FOUND", "no drive connection with id "+id)
+		return
+	}
 
 	items, err := driveextract.NewPostgresStore(h.pool).ListSkippedBlocked(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		slog.Error("drive: GetSkippedBlocked failed", "connection_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "internal database error")
 		return
 	}
 	writeJSON(w, http.StatusOK, DriveSkippedBlockedResponse{

@@ -5,6 +5,18 @@
 > **CI builds and signs. CI does NOT deploy.** Deploy runs on a different trust
 > boundary, invoked by an operator (or a separate workflow with adapter-only credentials).
 
+> **Boundary:** This guide describes the **generic** build-and-publish pipeline
+> that the Smackerel repo owns. The artifacts produced here (signed images +
+> per-env config bundles) are deployment-target-agnostic. Per-target **final**
+> configuration — home-lab and any other concrete environment, including real
+> hostnames, real IPs, mesh-VPN identity, reverse-proxy site files, `ufw` rules,
+> systemd unit names, secret values, and per-target `manifest.yaml` / `params.yaml`
+> — lives in the separate **`knb` deploy-adapter overlay repo**, NOT in this repo.
+> The formal contract for that split is the adapter-locality rule in
+> [`.github/instructions/bubbles-deployment-target.instructions.md`](../.github/instructions/bubbles-deployment-target.instructions.md)
+> (see "Adapter owns target-specific knowledge" later in this document for the
+> per-adapter responsibilities).
+
 This document is operator-facing. For framework rationale see
 [`.github/instructions/bubbles-deployment-target.instructions.md`](../.github/instructions/bubbles-deployment-target.instructions.md)
 and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](../.github/skills/bubbles-deployment-target-adapter/SKILL.md).

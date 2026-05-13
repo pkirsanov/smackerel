@@ -284,17 +284,24 @@ func (r *PostgresArtifactResolver) ResolveByQuery(ctx context.Context, query str
 type rowScanner interface {
 	Next() bool
 	Scan(dest ...any) error
+	Err() error
 }
 
+// scanSources iterates a row scanner and collects AggregationSource rows.
+// Per-row scan failures and the post-iteration rows.Err() are propagated as
+// errors so partial truncation (e.g. mid-iteration network drop, schema drift)
+// is visible to callers instead of silently producing a shorter result.
 func scanSources(rows rowScanner) ([]AggregationSource, error) {
 	var sources []AggregationSource
 	for rows.Next() {
 		var s AggregationSource
 		if err := rows.Scan(&s.ArtifactID, &s.DomainData); err != nil {
-			slog.Warn("failed to scan artifact domain_data", "error", err)
-			continue
+			return nil, fmt.Errorf("scan artifact domain_data: %w", err)
 		}
 		sources = append(sources, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate artifact rows: %w", err)
 	}
 	return sources, nil
 }

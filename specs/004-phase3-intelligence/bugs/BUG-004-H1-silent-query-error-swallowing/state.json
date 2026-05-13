@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "featureDir": "specs/004-phase3-intelligence/bugs/BUG-004-H1-silent-query-error-swallowing",
+  "parentFeatureDir": "specs/004-phase3-intelligence",
+  "featureName": "BUG-004-H1: Silent query-error swallowing in WeeklySynthesis subqueries",
+  "bugId": "BUG-004-H1",
+  "status": "done",
+  "workflowMode": "harden-to-doc",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-05-12T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "harden",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Stochastic-quality-sweep round 2 of 20 invoked harden trigger against spec 004. Inspection identified 6 silent `if err == nil { ... }` query/helper-failure swallowing sites in internal/intelligence/synthesis.go (4 in GenerateWeeklySynthesis, 2 in detectCapturePatterns). Pattern was the only Query-level outlier in the package — every other Query failure path already logs via slog.Warn."
+      },
+      {
+        "phase": "bug",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Created BUG-004-H1 packet (spec.md, design.md, scopes.md, state.json, report.md, uservalidation.md, scenario-manifest.json) under specs/004-phase3-intelligence/bugs/. Documented root cause, fix design, and 3 Gherkin scenarios (BUG-004-H1-1/-2/-3)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Patched internal/intelligence/synthesis.go to replace all 6 `if err == nil { ... }` blocks with `if err != nil { slog.Warn(...) } else { ... }` shapes. Each warn line names the section (RunSynthesis, topic movement, open loops, Resurface, day-of-week, hour-of-day) so operators can grep failures."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Added TestSynthesisFile_NoSilentQueryErrorSwallowing structural regression test in internal/intelligence/synthesis_test.go that reads synthesis.go and fails if `if err == nil {` reappears. Adversarially validated by reintroducing the bug at line 152 — test failed with the expected message — then restored the fix and verified test passes again. Existing nil-pool guards (TestGenerateWeeklySynthesis_NilPool, TestDetectCapturePatterns_NilPool) already covered the fail-fast contract; no duplicate tests added."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Validated: `go test ./internal/intelligence/... -count=1 -timeout 240s` PASS (all tests including new structural regression). `go vet ./internal/intelligence/...` exit 0. `go build ./...` whole-tree clean. Adversarial reintroduction proved test catches regression."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Audited packet consistency: spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, scenario-manifest.json all agree on Done/Verified/Closed status. Edits confined to the BUG-004-H1 packet plus internal/intelligence/synthesis.go and internal/intelligence/synthesis_test.go. No source files outside the targeted area were modified."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow (parent-expanded child mode)",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "report.md captures the harden trigger origin, the 6 affected sites, the fix shape, the test evidence, and the adversarial validation. uservalidation.md records operator-facing acceptance: the weekly synthesis path is now observably failure-tolerant rather than silently failure-tolerant."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-12T00:00:00Z",
+    "certifiedBy": "bubbles.workflow (parent-expanded child mode)",
+    "completedScopes": ["scope-1-make-all-six-weeklysynthesis-subquery-failures-observable"],
+    "certifiedCompletedPhases": ["harden", "bug", "implement", "test", "validate", "audit", "docs"],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow (parent-expanded child mode)",
+      "phasesExecuted": ["harden", "bug", "implement", "test", "validate", "audit", "docs"],
+      "statusBefore": "not_started",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-12T00:00:00Z",
+      "runCompletedAt": "2026-05-12T00:00:00Z",
+      "summary": "Single-pass parent-expanded harden-to-doc execution. Identified silent query-error swallowing in synthesis.go via harden trigger inspection. Created bug packet, patched 6 call sites, added structural regression test, adversarially validated, restored fix, full test suite green. Origin: stochastic-quality-sweep round 2 of 20."
+    }
+  ],
+  "parent": {
+    "stochasticSweepRound": "2 of 20",
+    "trigger": "harden",
+    "mappedChildMode": "harden-to-doc",
+    "selectionSeed": "20520512",
+    "parentSpec": "specs/004-phase3-intelligence",
+    "executionModel": "parent-expanded-child-mode"
+  }
+}

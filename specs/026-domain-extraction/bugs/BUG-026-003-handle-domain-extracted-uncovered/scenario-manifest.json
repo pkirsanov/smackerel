@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-003-handle-domain-extracted-uncovered",
+  "generatedAt": "2026-05-12T19:01:53Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-026-003-SCN-001",
+      "scope": "scope-1-refactor-db-to-domaindb-interface-and-add-real-handler-invocation-tests",
+      "title": "handleDomainExtracted is covered by real invocation tests",
+      "gherkin": {
+        "given": "the domain.extracted handler refactor exposes a DomainDB interface for the DB field and the test file contains a mockDomainDB implementing Exec",
+        "when": "go test -coverprofile ./internal/pipeline/... runs",
+        "then": "the coverage report shows handleDomainExtracted at >= 80% coverage and every passing test under TestHandleDomainExtractedInvocation_* invokes the real receiver method"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_Success_UpdatesArtifactAndAcks"
+        },
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_Failure_UpdatesStatusAndStampsTimestamp"
+        },
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_InvalidJSON_AcksWithoutDB"
+        },
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_MissingArtifactID_AcksWithoutDB"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence---2026-05-12"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-003-SCN-002",
+      "scope": "scope-1-refactor-db-to-domaindb-interface-and-add-real-handler-invocation-tests",
+      "title": "A regression in the success-path UPDATE is caught by go test",
+      "gherkin": {
+        "given": "a future refactor accidentally drops domain_extracted_at = NOW() from the success-path SQL",
+        "when": "go test ./internal/pipeline/... runs",
+        "then": "TestHandleDomainExtractedInvocation_Success_UpdatesArtifactAndAcks fails with a SQL-content assertion mismatch and the failure points at the missing column"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_Success_UpdatesArtifactAndAcks"
+        },
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_Failure_UpdatesStatusAndStampsTimestamp"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence---2026-05-12"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-003-SCN-003",
+      "scope": "scope-1-refactor-db-to-domaindb-interface-and-add-real-handler-invocation-tests",
+      "title": "A DB error during the success path Naks instead of silent Ack",
+      "gherkin": {
+        "given": "the injected mockDomainDB returns an Exec error on the success-path UPDATE and the message Metadata reports NumDelivered below domainMaxDeliver",
+        "when": "handleDomainExtracted runs",
+        "then": "the message is Nak'd not Ack'd and the test fails loudly if the handler ever silently Acks on DB error"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_DBExecError_TriggersNakBelowMaxDeliver"
+        },
+        {
+          "file": "internal/pipeline/domain_subscriber_test.go",
+          "testId": "TestHandleDomainExtractedInvocation_FailurePath_DBError_TriggersNak"
+        }
+      ],
+      "evidenceRefs": ["report.md#test-evidence---2026-05-12"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "featureDir": "specs/050-ml-sidecar-health-isolation",
+  "featureName": "ML Sidecar Health Isolation",
+  "status": "in_progress",
+  "currentPhase": "planning",
+  "workflowMode": "product-to-planning",
+  "planningStatus": "scoped",
+  "execution": {"activeAgent": null, "currentPhase": "planning", "currentScope": null, "runStartedAt": "2026-05-12T00:00:00Z", "completedPhaseClaims": [{"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for ML sidecar health isolation. No implementation edits performed."}]},
+  "certification": {"status": "in_progress", "completedScopes": [], "certifiedCompletedPhases": []},
+  "policySnapshot": {"grill": {"value": "off", "provenance": "request"}, "tdd": {"value": false, "provenance": "planning-only"}, "autoCommit": {"value": "off", "provenance": "repo-default"}, "lockdown": {"value": "off", "provenance": "planning-only"}, "regressionStrictness": {"value": "standard", "provenance": "repo-default"}, "validateCertificationRequired": {"value": true, "provenance": "repo-default"}},
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [{"agent": "bubbles.workflow", "phase": "planning", "timestamp": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"}]
+}

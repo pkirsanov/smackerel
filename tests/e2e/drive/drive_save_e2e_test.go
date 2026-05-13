@@ -80,7 +80,7 @@ func TestDriveSaveE2E_MealPlanSavedBackAndDigestLinkAvailable(t *testing.T) {
 	registry.Register(provider)
 	saveSvc := save.NewService(pool, e2eResolver{reg: registry}, "https://drive.test/file/d")
 	store := mealplan.NewStore(pool)
-	saveBack := mealplan.NewDriveSaveBack(pool, repo, rules.NewEngine(time.Now), saveSvc, store)
+	saveBack := mealplan.NewDriveSaveBack(repo, rules.NewEngine(time.Now), saveSvc, store)
 	outcome, err := saveBack.SavePlan(ctx, planID, artifactID)
 	if err != nil {
 		t.Fatalf("SavePlan: %v", err)
