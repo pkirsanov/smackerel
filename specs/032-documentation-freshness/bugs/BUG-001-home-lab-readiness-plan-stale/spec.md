@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress - planning packet created
+Resolved — implemented 2026-05-13. Both scopes Done. See [report.md](report.md).
 
 ## Problem Statement
 
