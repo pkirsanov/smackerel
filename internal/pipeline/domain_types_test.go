@@ -149,3 +149,51 @@ func TestDomainExtractResponse_JSONRoundTrip(t *testing.T) {
 		t.Errorf("domain_data mismatch")
 	}
 }
+
+// HARDEN-026-1 adversarial regression: a malformed ML response carrying a
+// negative ProcessingTimeMs MUST be rejected by validation. Reintroducing the
+// pre-hardening behavior (no negative check) would cause Prometheus latency
+// histograms to observe negative values and would let this test pass with
+// nil error, so it directly guards the hardening invariant.
+func TestValidateDomainExtractResponse_RejectsNegativeProcessingTimeMs(t *testing.T) {
+	r := &DomainExtractResponse{
+		ArtifactID:       "a1",
+		Success:          true,
+		DomainData:       json.RawMessage(`{"domain":"recipe"}`),
+		ContractVersion:  "recipe-extraction-v1",
+		ProcessingTimeMs: -1,
+	}
+	err := ValidateDomainExtractResponse(r)
+	if err == nil {
+		t.Fatal("expected error for negative processing_time_ms, got nil")
+	}
+	// Boundary: zero must remain valid (no LLM call counted as 0 ms is legitimate).
+	r.ProcessingTimeMs = 0
+	if err := ValidateDomainExtractResponse(r); err != nil {
+		t.Fatalf("zero processing_time_ms must be accepted, got %v", err)
+	}
+}
+
+// HARDEN-026-2 adversarial regression: a malformed ML response carrying a
+// negative TokensUsed MUST be rejected by validation. Reintroducing the
+// pre-hardening behavior (no negative check) would let bogus token counters
+// reach audit logs and let this test pass with nil error, so it directly
+// guards the hardening invariant.
+func TestValidateDomainExtractResponse_RejectsNegativeTokensUsed(t *testing.T) {
+	r := &DomainExtractResponse{
+		ArtifactID:      "a1",
+		Success:         true,
+		DomainData:      json.RawMessage(`{"domain":"recipe"}`),
+		ContractVersion: "recipe-extraction-v1",
+		TokensUsed:      -42,
+	}
+	err := ValidateDomainExtractResponse(r)
+	if err == nil {
+		t.Fatal("expected error for negative tokens_used, got nil")
+	}
+	// Boundary: zero must remain valid (degraded fallback path returns tokens_used=0).
+	r.TokensUsed = 0
+	if err := ValidateDomainExtractResponse(r); err != nil {
+		t.Fatalf("zero tokens_used must be accepted, got %v", err)
+	}
+}

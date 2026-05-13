@@ -130,12 +130,22 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 
 	// Parse cursor as RFC3339 timestamp; empty means first sync
 	since := cursor
+	var sinceTime time.Time
 	if since != "" {
-		if _, err := time.Parse(time.RFC3339, since); err != nil {
+		parsedSince, err := time.Parse(time.RFC3339, since)
+		if err != nil {
 			c.setHealth(connector.HealthError) // H-013-003: don't leave stale HealthSyncing
 			return nil, cursor, fmt.Errorf("invalid cursor timestamp: %w", err)
 		}
+		sinceTime = parsedSince
 	}
+
+	// CHAOS-013-R20-001: Compute the maximum allowed cursor advancement to defend
+	// against future-cursor poisoning. A misbehaving server returning a far-future
+	// event timestamp (e.g. year 9999) would otherwise advance the cursor past
+	// that timestamp, dropping all subsequent real events forever. The 1h skew
+	// tolerates legitimate clock drift between the local clock and the upstream.
+	maxAllowedCursor := time.Now().Add(1 * time.Hour)
 
 	resp, err := client.FetchActivity(ctx, since, types, 100)
 	if err != nil {
@@ -159,7 +169,17 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 		artifacts = append(artifacts, artifact)
 		// Track the latest event timestamp as the new cursor using proper time comparison
 		eventTime, parseErr := time.Parse(time.RFC3339, event.Timestamp)
-		if parseErr == nil && eventTime.After(latestTime) {
+		if parseErr != nil {
+			continue
+		}
+		// CHAOS-013-R20-001: Refuse to advance cursor past the future-skew cap.
+		if eventTime.After(maxAllowedCursor) {
+			slog.Warn("guesthost: event timestamp exceeds future-skew cap, not advancing cursor",
+				"event_id", event.ID, "timestamp", event.Timestamp,
+				"max_allowed", maxAllowedCursor.Format(time.RFC3339))
+			continue
+		}
+		if eventTime.After(latestTime) {
 			latestTime = eventTime
 			newCursor = event.Timestamp
 		}
@@ -170,13 +190,33 @@ func (c *Connector) Sync(ctx context.Context, cursor string) (arts []connector.R
 	if len(artifacts) == 0 && len(resp.Events) > 0 && normalizeErrors == len(resp.Events) {
 		for _, event := range resp.Events {
 			eventTime, parseErr := time.Parse(time.RFC3339, event.Timestamp)
-			if parseErr == nil && eventTime.After(latestTime) {
+			if parseErr != nil {
+				continue
+			}
+			// CHAOS-013-R20-001: Same future-skew guard inside the circuit-breaker.
+			if eventTime.After(maxAllowedCursor) {
+				continue
+			}
+			if eventTime.After(latestTime) {
 				latestTime = eventTime
 				newCursor = event.Timestamp
 			}
 		}
 		slog.Warn("guesthost: all events failed normalization, advancing cursor to prevent loop",
 			"events", len(resp.Events), "cursor", newCursor)
+	}
+
+	// CHAOS-013-R20-002: Refuse to regress the cursor below the original `since`.
+	// A server returning only events older than the cursor we sent would otherwise
+	// force perpetual re-fetch of stale data on every subsequent Sync, starving
+	// other connectors and flooding downstream dedup with duplicate work.
+	if newCursor != "" && !sinceTime.IsZero() {
+		newCursorTime, parseErr := time.Parse(time.RFC3339, newCursor)
+		if parseErr == nil && newCursorTime.Before(sinceTime) {
+			slog.Warn("guesthost: newCursor would regress before original cursor, keeping original",
+				"newCursor", newCursor, "originalCursor", since)
+			newCursor = ""
+		}
 	}
 
 	if newCursor == "" {

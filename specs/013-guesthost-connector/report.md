@@ -8,7 +8,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [scopes.md](scopes.md) | [u
 
 Feature 013 implements the GuestHost connector for Smackerel, adding hospitality-aware graph intelligence, domain-specific digests, and a context enrichment API. This report tracks execution evidence for each scope.
 
-**Last reconciled:** 2026-04-21 by `bubbles.workflow` (reconcile-to-doc, stochastic-quality-sweep R65)
+**Last reconciled:** 2026-05-13 by `bubbles.workflow` (chaos-hardening, stochastic-quality-sweep R20 final round)
 
 ### Build Evidence
 
@@ -76,6 +76,63 @@ ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.648s
 
 All 3 findings verified with adversarial tests in `regression_test.go` (TestChaos013001, TestChaos013002, TestChaos013003). Tests fail before fix, pass after fix.
 
+#### Chaos Round 20 Findings (2026-05-13, stochastic-quality-sweep FINAL ROUND)
+
+Probe surface: `internal/connector/guesthost/connector.go` `Sync` cursor-advancement logic. Adversarial focus: cursor poisoning vectors that a misbehaving or malicious upstream server could exploit to permanently break the connector or starve other connectors.
+
+| ID | Finding | Severity | Status |
+|----|---------|----------|--------|
+| CHAOS-013-R20-001 | **Future-cursor poisoning**: `Sync` accepted any RFC3339 timestamp from server-supplied events as the new cursor, including timestamps in the year 9999. A single malicious or buggy event with a far-future timestamp permanently advanced the cursor so far that all subsequent real events were dropped forever (server returns nothing for `since=9999-12-31`). No future-skew guard existed. | High | Fixed — `connector.go` (added `maxAllowedCursor = time.Now() + 1h` clamp; events past the cap are still emitted as artifacts but cannot advance the cursor) |
+| CHAOS-013-R20-002 | **Cursor regression**: `Sync` accepted any newer-than-zero timestamp as the new cursor without comparing against the original `since` cursor. A server returning only events older than the cursor we sent could perpetually rewind our cursor to ancient timestamps, forcing re-fetch of stale data on every subsequent sync, starving other connectors and flooding downstream dedup. | High | Fixed — `connector.go` (added explicit `newCursorTime.Before(sinceTime)` check; on regression, `newCursor` is reset and the previous cursor is preserved) |
+
+**Verification (red→green):**
+
+- Before fix: `TestChaos013R20001_FutureCursorNotPoisoned` failed with `cursor poisoned to 9999-12-31T23:59:59Z`. `TestChaos013R20002_CursorDoesNotRegress` failed with `cursor regressed to 2026-01-01`.
+- After fix: both adversarial tests pass; the future-skew warning fires on the year-9999 event, the regression warning fires on the January event, and the cursor stays at the correct value in both cases.
+- 3 belt-and-braces companion tests confirm the guards are not over-aggressive: `FiniteFutureSkewAccepted` (30s clock-skew event still advances), `NewerEventsStillAdvanceCursor` (newer event after original cursor still advances), `MixedOldAndNewAdvancesToNewest` (mixed batch advances to the newest event, not the oldest).
+
+```
+$ go test -count=1 -run 'TestChaos013R20' -v ./internal/connector/guesthost/... 2>&1 | tail -20
+=== RUN   TestChaos013R20001_FutureCursorNotPoisoned
+WARN guesthost: event timestamp exceeds future-skew cap, not advancing cursor event_id=future-event timestamp=9999-12-31T23:59:59Z max_allowed=2026-05-13T07:44:30Z
+INFO GuestHost sync complete id=guesthost events=1 cursor=""
+--- PASS: TestChaos013R20001_FutureCursorNotPoisoned (0.04s)
+--- PASS: TestChaos013R20001_FiniteFutureSkewAccepted (0.01s)
+=== RUN   TestChaos013R20002_CursorDoesNotRegress
+WARN guesthost: newCursor would regress before original cursor, keeping original newCursor=2026-01-01T00:00:00Z originalCursor=2026-04-15T00:00:00Z
+--- PASS: TestChaos013R20002_CursorDoesNotRegress (0.01s)
+--- PASS: TestChaos013R20002_NewerEventsStillAdvanceCursor (0.01s)
+--- PASS: TestChaos013R20002_MixedOldAndNewAdvancesToNewest (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.090s
+
+$ go test -count=1 ./internal/connector/guesthost/... 2>&1 | tail -3
+ok      github.com/smackerel/smackerel/internal/connector/guesthost     0.615s
+
+$ go test -count=1 ./internal/... 2>&1 | grep -E '^FAIL' | wc -l
+0
+```
+
+**Other chaos surfaces probed and confirmed already hardened (no new findings):**
+
+| Surface | Existing guard verified |
+|---------|------------------------|
+| Concurrent Sync + Close race | CHAOS-013-002 (`Sync` checks `c.client == nil` under RLock before `setHealth(HealthHealthy)`) |
+| Stuck cursor (server returns same cursor twice) | CHAOS-013-001 (immediate detection on first repetition, max 2 requests) |
+| Empty events + `HasMore=true` cursor inflation | CHAOS-013-003 (consecutive-empty-pages counter, breaks at 2) |
+| Oversized cursor from server | IMP-013-003 (`maxCursorLen=4096` rejection) |
+| `events: null` JSON response | Outer unmarshal sets nil slice; `len(resp.Events) == 0` branch + early `HasMore` break |
+| `events: [null, {valid}]` (null elements) | `NormalizeEvent` rejects `len(event.Data) == 0` → skipped, error counted |
+| `event.Data: "{}"` for typed events | `json.Unmarshal` to typed struct sets zero values; degenerate but no crash |
+| `event.Data: "[42]"` (array, not object) | `json.Unmarshal` returns "cannot unmarshal array" error → skipped, error counted |
+| Inf/NaN in expense `Amount` and booking `TotalPrice` | IMP-013-002 (`math.IsNaN`/`math.IsInf` rejection) |
+| Cancelled context between pagination pages | H-013-R2-001 (context check at top of pagination loop) |
+| Panic during Sync | R27-H23-01 (panic recovery + health transition to Error) |
+| Bad cursor timestamp | H-013-003 (parse error → HealthError + descriptive error) |
+| Malformed JSON response body | `json.Unmarshal` returns wrapped error |
+| Response body > 10 MiB | `maxResponseSize` cap with `io.LimitReader` |
+| Backoff exhaustion on 429/5xx | `Backoff.Next()` returns `ok=false` → wrapped error |
+
 ### Security Scan Evidence
 
 Executed: YES
@@ -126,13 +183,13 @@ $ ./smackerel.sh test unit 2>&1 | grep -cE '^ok'
 | `internal/connector/guesthost/client_test.go` | Yes | 11 tests |
 | `internal/connector/guesthost/connector_test.go` | Yes | 6 tests |
 | `internal/connector/guesthost/normalizer_test.go` | Yes | 10 tests |
-| `internal/connector/guesthost/regression_test.go` | Yes | 21 tests |
+| `internal/connector/guesthost/regression_test.go` | Yes | 26 tests (21 prior + 5 added in R20 chaos probe) |
 | `internal/digest/hospitality_test.go` | Yes | 20 tests |
 | `internal/api/context_test.go` | Yes | 17 tests |
 | `internal/db/guest_repo_test.go` | Yes | 6 tests |
 | `internal/db/property_repo_test.go` | Yes | 5 tests |
 | `internal/graph/hospitality_linker_test.go` | Yes | 11 tests |
-| **Total unit tests for 013** | | **107 tests** |
+| **Total unit tests for 013** | | **112 tests** (was 107; R20 chaos probe added 5 cursor-poisoning regression tests) |
 
 ### Test Files Verified (Previously Missing, Now Created)
 

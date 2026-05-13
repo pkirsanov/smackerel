@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/smackerel/smackerel/internal/connector"
@@ -907,5 +908,298 @@ func TestNormalizeNormalRawContentUnchanged(t *testing.T) {
 	// Normal-sized raw content should be the full event data
 	if a.RawContent != `{"email":"a@b.com","name":"Alice"}` {
 		t.Errorf("normal RawContent should be unchanged, got %q", a.RawContent)
+	}
+}
+
+// --- CHAOS-013-R20-001: Future-cursor poisoning ---
+//
+// A misbehaving server returning an event with a far-future timestamp
+// (e.g. year 9999) must not be allowed to advance Sync's cursor past
+// that timestamp. Without a guard, a single malicious or buggy event
+// permanently advances the cursor so far that all subsequent real
+// events are dropped forever, because each subsequent Sync sends
+// `since=<year-9999>` to the server and the server returns nothing.
+//
+// Adversarial: this test proves that an event timestamp of 9999 cannot
+// poison the cursor. If the future-skew guard is removed, the cursor
+// becomes the year-9999 timestamp and the test fails. A tautological
+// regression (assert "newCursor != ''" with a normal event) would not
+// detect re-introduction of the bug.
+
+func TestChaos013R20001_FutureCursorNotPoisoned(t *testing.T) {
+	// Server returns a single event with a timestamp 8000 years in the future.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{
+					ID:        "future-event",
+					Type:      "guest.created",
+					Timestamp: "9999-12-31T23:59:59Z",
+					EntityID:  "g1",
+					Data:      json.RawMessage(`{"email":"a@b.com","name":"Future"}`),
+				},
+			},
+			HasMore: false,
+		})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"base_url": srv.URL,
+			"api_key":  "key",
+		},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// First sync with empty cursor.
+	_, newCur, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Without fix: newCur == "9999-12-31T23:59:59Z" → cursor is poisoned.
+	// With fix: newCur stays "" because the future-skew guard refuses to
+	// advance past now+1h, and no other event was newer than the empty
+	// initial latestTime.
+	if newCur == "9999-12-31T23:59:59Z" {
+		t.Errorf("future event timestamp poisoned the cursor: newCursor=%q — "+
+			"a single bad event from a misbehaving server permanently advances the cursor "+
+			"into the year 9999, dropping all subsequent real events forever", newCur)
+	}
+
+	// Belt-and-braces: parse newCur (if non-empty) and confirm it's not absurdly far in the future.
+	if newCur != "" {
+		parsed, perr := time.Parse(time.RFC3339, newCur)
+		if perr != nil {
+			t.Errorf("newCursor %q is not a valid RFC3339 timestamp: %v", newCur, perr)
+		}
+		if parsed.After(time.Now().Add(2 * time.Hour)) {
+			t.Errorf("newCursor %q is %v in the future — future-skew cap should clamp this",
+				newCur, time.Until(parsed))
+		}
+	}
+}
+
+// TestChaos013R20001_FiniteFutureSkewAccepted confirms the guard does NOT
+// reject events with reasonable clock-skew (e.g. server clock is 30s ahead).
+// This proves the fix is not over-aggressive.
+func TestChaos013R20001_FiniteFutureSkewAccepted(t *testing.T) {
+	skewedTimestamp := time.Now().Add(30 * time.Second).UTC().Format(time.RFC3339)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{
+					ID:        "skewed-event",
+					Type:      "guest.created",
+					Timestamp: skewedTimestamp,
+					EntityID:  "g1",
+					Data:      json.RawMessage(`{"email":"a@b.com","name":"Skewed"}`),
+				},
+			},
+			HasMore: false,
+		})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"base_url": srv.URL, "api_key": "key"},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, newCur, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if newCur != skewedTimestamp {
+		t.Errorf("legitimate clock-skew event (30s ahead) was rejected: got newCur=%q, want %q — "+
+			"the future-skew guard must allow real-world clock drift", newCur, skewedTimestamp)
+	}
+}
+
+// --- CHAOS-013-R20-002: Cursor regression ---
+//
+// If a server returns only events with timestamps OLDER than the cursor
+// we sent in `since`, the connector must NOT advance the cursor backwards.
+// Otherwise a misbehaving server can force perpetual re-fetch of stale data
+// by always returning the same old events, starving other connectors and
+// flooding downstream dedup with duplicate work.
+//
+// Adversarial: this test proves a server returning only stale events does
+// NOT cause newCursor to regress before the original `since`. If the guard
+// is removed, newCursor becomes the older timestamp and the test fails.
+
+func TestChaos013R20002_CursorDoesNotRegress(t *testing.T) {
+	originalCursor := "2026-04-15T00:00:00Z"
+	staleTimestamp := "2026-01-01T00:00:00Z"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// Server returns only an old event, ignoring `since`.
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{
+					ID:        "stale-event",
+					Type:      "guest.created",
+					Timestamp: staleTimestamp,
+					EntityID:  "g1",
+					Data:      json.RawMessage(`{"email":"a@b.com","name":"Stale"}`),
+				},
+			},
+			HasMore: false,
+		})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"base_url": srv.URL, "api_key": "key"},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, newCur, err := c.Sync(context.Background(), originalCursor)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+
+	// Without fix: newCur == staleTimestamp ("2026-01-01...") < originalCursor
+	// → next Sync re-fetches January data forever.
+	// With fix: newCur stays at originalCursor.
+	if newCur == staleTimestamp {
+		t.Errorf("cursor regressed from %q to %q — a server returning only old events "+
+			"can force perpetual re-fetch of stale data and starve other connectors",
+			originalCursor, newCur)
+	}
+	if newCur != originalCursor {
+		t.Errorf("expected newCur to stay at originalCursor %q, got %q",
+			originalCursor, newCur)
+	}
+}
+
+// TestChaos013R20002_NewerEventsStillAdvanceCursor confirms the guard does NOT
+// block legitimate forward cursor advancement when the server returns newer events.
+func TestChaos013R20002_NewerEventsStillAdvanceCursor(t *testing.T) {
+	originalCursor := "2026-04-15T00:00:00Z"
+	newerTimestamp := "2026-04-20T12:00:00Z"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{
+					ID:        "newer-event",
+					Type:      "guest.created",
+					Timestamp: newerTimestamp,
+					EntityID:  "g1",
+					Data:      json.RawMessage(`{"email":"a@b.com","name":"Newer"}`),
+				},
+			},
+			HasMore: false,
+		})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"base_url": srv.URL, "api_key": "key"},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, newCur, err := c.Sync(context.Background(), originalCursor)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if newCur != newerTimestamp {
+		t.Errorf("legitimate forward advancement blocked: got newCur=%q, want %q — "+
+			"the no-regression guard must still allow newer events to advance the cursor",
+			newCur, newerTimestamp)
+	}
+}
+
+// TestChaos013R20002_MixedOldAndNewAdvancesToNewest verifies that when a batch
+// contains BOTH stale and newer events, the cursor advances to the newest, not
+// the latest-seen-or-skipped logic. Adversarial: regression would produce the
+// stale timestamp if iteration order or guard logic is wrong.
+func TestChaos013R20002_MixedOldAndNewAdvancesToNewest(t *testing.T) {
+	originalCursor := "2026-04-10T00:00:00Z"
+	staleTimestamp := "2026-01-01T00:00:00Z"
+	newerTimestamp := "2026-04-20T12:00:00Z"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ActivityFeedResponse{
+			Events: []ActivityEvent{
+				{
+					ID:        "stale-event",
+					Type:      "guest.created",
+					Timestamp: staleTimestamp,
+					EntityID:  "g1",
+					Data:      json.RawMessage(`{"email":"a@b.com","name":"Stale"}`),
+				},
+				{
+					ID:        "newer-event",
+					Type:      "guest.created",
+					Timestamp: newerTimestamp,
+					EntityID:  "g2",
+					Data:      json.RawMessage(`{"email":"c@d.com","name":"Newer"}`),
+				},
+			},
+			HasMore: false,
+		})
+	}))
+	defer srv.Close()
+
+	c := New()
+	cfg := connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{"base_url": srv.URL, "api_key": "key"},
+	}
+	if err := c.Connect(context.Background(), cfg); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	_, newCur, err := c.Sync(context.Background(), originalCursor)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if newCur != newerTimestamp {
+		t.Errorf("mixed batch: cursor should advance to newest event %q, got %q",
+			newerTimestamp, newCur)
 	}
 }

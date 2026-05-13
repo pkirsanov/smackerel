@@ -273,3 +273,56 @@ New tests:
   TestChaos_MalformedFileSkippedPermanently  — CHAOS-C06 adversarial: corrupt file enters cursor after first sync, second sync produces 0 new artifacts
   TestChaos_SyncReentrancyGuard              — CHAOS-C07 concurrency: 10 goroutines race on Sync(), guard blocks re-entrant calls
 ```
+
+---
+
+## Stochastic Quality Sweep — DevOps Probe (2026-05-13, round 7/20, seed 20260513)
+
+**Trigger:** devops | **Mode:** devops-to-doc | **Agent:** bubbles.workflow (parent-expanded, runtime lacks nested runSubagent)
+
+### Probe Surface Verified
+
+| DevOps surface | Status | Evidence |
+|---|---|---|
+| CI lint + unit | OK | `.github/workflows/ci.yml` runs `./smackerel.sh lint` and `./smackerel.sh test unit`; the latter exercises `internal/connector/maps/...` (78 tests across 4 files: `connector_test.go`, `maps_test.go`, `normalizer_test.go`, `patterns_test.go`). `go vet ./internal/connector/maps/... — Exit Code: 0`. |
+| CI build + integration | OK | `ci.yml` job `build` runs `./smackerel.sh build` after lint+unit pass; `integration` job runs on `main` with pgvector + nats services. |
+| Build-Once Deploy-Many image signing | OK | `.github/workflows/build.yml` builds `smackerel-core` + `smackerel-ml` by digest, performs cosign keyless signing with id-token write permission, attaches SBOM (syft) and SLSA provenance, publishes to `ghcr.io/${owner}/smackerel-{core,ml}` and per-env config bundles. Maps connector ships inside `smackerel-core`. |
+| Deployment health checks | OK | `deploy/compose.deploy.yml` declares health checks for postgres (`pg_isready` + `SELECT 1`), nats (HTTP `/healthz`), and via the wider compose chain core (HTTP `/api/health`) + ml (HTTP `/health`). Per-connector status (including `google-maps-timeline`) flows through `internal/api/health.go` → `ConnectorHealthLister.ListConnectorHealth(ctx)` → `HealthResponse` JSON. |
+| Observability — sync metrics | OK | Maps inherits `metrics.ConnectorSync.WithLabelValues(id, "success"\|"error").Inc()` from `internal/connector/supervisor.go:268,320`; emits as `smackerel_connector_sync_total{connector="google-maps-timeline",status=...}` (documented in `docs/Operations.md` Key Metrics table line ≈445). |
+| Observability — connector health | OK | `(c *Connector) Health(ctx)` reports `HealthDisconnected` / `HealthHealthy` / `HealthSyncing` / `HealthError` under `c.mu.RLock()`; surfaced through `/api/health`. |
+| Observability — structured logging | OK | `internal/connector/maps/connector.go` uses `slog.Info` / `slog.Warn` / `slog.Error` with bounded keys (`import_dir`, `archive_processed`, `min_distance_m`, `min_duration_min`, `error`, `panic`); no PII / coordinate dumps. |
+| Secret management | N/A (compliant) | Maps connector has zero secrets — file-based import, no API keys, no OAuth. `parseMapsConfig()` reads only paths/numerics/booleans from `connectors.google-maps-timeline` in `config/smackerel.yaml`. No `MAPS_*` env vars in `deploy/compose.deploy.yml`. |
+| SST / no-defaults policy | OK | `parseMapsConfig()` (connector.go:621-) explicitly states "SST: All config values must be provided via smackerel.yaml → env → SourceConfig. No hardcoded Go-side fallback defaults; missing required fields fail loud." `import_dir` returns `fmt.Errorf("import directory is required")` if absent; numeric helpers (`configFloat64NonNeg`, `configFloat64Positive`, `configIntMin`) reject zero/negative inputs. Zero `os.Getenv`, zero `||`/`??` defaults, zero `unwrap_or` patterns. |
+| Tailnet-edge bind invariants | OK | Spec 011 makes no changes to `deploy/compose.deploy.yml` infra service ports; postgres/nats remain unpublished, core/ml continue using fail-loud `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}` form. Compose-contract test (`internal/deploy/compose_contract_test.go`) covers regression. |
+| Rollback procedure | OK | Connector disable: set `connectors.google-maps-timeline.enabled: false` (already the shipped default at `config/smackerel.yaml:238`) → next supervisor sync skips connector. Container rollback: `./smackerel.sh deploy-target <target> rollback` (pointer-swap, no rebuild). Schema rollback: location_clusters table is additive only (no destructive migrations). |
+| Framework file immutability | Honored | No edits to `.github/bubbles/scripts/`, `.github/agents/bubbles_shared/`, `.github/bubbles/workflows.yaml`, `.github/instructions/bubbles-*`. |
+
+### Findings
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| DEVOPS-D01 | low (mechanical) | Spec artifacts (report.md "Files Implemented" table, design.md §"New Migration: 009_maps.sql", scopes.md scope-2 surface list) reference `internal/db/migrations/009_maps.sql` as an active migration. Reality: commit `f6b1ff65` (2026-04-18, post-spec-completion) consolidated 17 migrations into `internal/db/migrations/001_initial_schema.sql` (location_clusters now at lines 321–339) and moved `009_maps.sql` to `internal/db/migrations/archive/` (a directory excluded from `//go:embed *.sql`). The implementation is unchanged; only the file path moved. | Mechanical drift documented inline in this section (no changes to historical scope DoD evidence — those record true state at delivery time). Operators looking for the migration today should consult `001_initial_schema.sql:321-339` or the historical archive at `internal/db/migrations/archive/009_maps.sql`. |
+| DEVOPS-D02 | low (concern) | `docs/Operations.md` mentions `data/maps-import/` only in the Backup table (line 406). There is no operator-facing runbook section explaining the end-to-end Google Takeout → Smackerel ingestion flow (download from Takeout, where to drop the JSON, watch interval, archive behavior, how to verify ingestion succeeded via `/api/health` + `smackerel_connector_sync_total`). The generic "Enable/Disable a Connector" section (line 241) and "Reset a Connector's Sync Cursor" section (line 262) implicitly cover the connector lifecycle, but a Maps-specific operator walkthrough is missing. | Logged as concern. Authoring an operator walkthrough requires content judgment (screenshots, sample Takeout filenames, expected log lines), so this routes to `bubbles.docs` rather than mechanical edit. Spec 011 certification is unaffected. |
+
+### DevOps Probe Evidence
+
+```
+git log --oneline --all -- internal/db/migrations/009_maps.sql internal/db/migrations/archive/009_maps.sql
+  f6b1ff65 consolidate 17 SQL migrations into single init script
+  b4a6780e feat(011): deliver maps connector scopes 2-3 + delivery-lockdown certification
+
+grep -n "location_clusters" internal/db/migrations/001_initial_schema.sql | head -4
+  321:CREATE TABLE IF NOT EXISTS location_clusters (
+  337:CREATE INDEX IF NOT EXISTS idx_location_clusters_route ON location_clusters (start_cluster_lat, start_cluster_lng, end_cluster_lat, end_cluster_lng);
+  338:CREATE INDEX IF NOT EXISTS idx_location_clusters_day ON location_clusters (day_of_week, departure_hour);
+  339:CREATE INDEX IF NOT EXISTS idx_location_clusters_date ON location_clusters (activity_date);
+
+go vet ./internal/connector/maps/... — Exit Code: 0
+```
+
+### Round Outcome
+
+- **Devops surface coverage:** complete and policy-compliant.
+- **Findings closed this round:** DEVOPS-D01 (mechanical doc drift recorded inline; no scope/DoD/certification changes).
+- **Concerns logged for follow-up:** DEVOPS-D02 (Maps-specific operator runbook → `bubbles.docs`).
+- **Spec 011 certification status:** unchanged (`done`).

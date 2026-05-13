@@ -238,6 +238,40 @@
       "startedAt": "2026-05-09T05:00:00Z",
       "completedAt": "2026-05-09T05:10:00Z",
       "summary": "Authored 6 Gherkin scenarios across scopes 03, 05, 06 (SCN-TW-NRM-001/002 normalizer + tier assignment, SCN-TW-LNK-001/002 tweet-link extraction, SCN-TW-API-001/002 Bearer-token API client opt-in) to close trace-guard residuals. Added Use Cases (Gherkin) and Test Plan subsections referencing internal/connector/twitter/twitter_test.go and api_test.go. Added scenario-manifest.json entries for SCN-TW-API-001/002. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "harden"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-13T00:00:00Z",
+      "completedAt": "2026-05-13T00:30:00Z",
+      "summary": "Stochastic-quality-sweep round 6 of 20 (seed 20260513) → child mode harden-to-doc, parent-expanded (nested runSubagent unavailable). Hardening probe against twitter.go (post-certification) found 2 mechanical CWE-770 gaps the prior security R1/R2 + chaos + improve rounds missed. Closed: HARDEN-015-R6-001 (Media entities unbounded — added maxMediaPerTweet=100 cap in normalizeTweet and classifyTweet) and HARDEN-015-R6-002 (parseSignalFile lacked in-loop ctx.Err() check — added per-entry guard). Added 3 adversarial regression tests (TestHardenR6_MediaEntitiesCappedInMetadata, TestHardenR6_MediaScanCappedInClassify, TestHardenR6_ParseSignalFileHonorsCancellationDuringIteration). go test -race PASS in 31.930s; ./smackerel.sh test unit PASS (twitter cached, 0 FAIL across full suite); ./smackerel.sh lint PASS. Two specialist concerns logged: CONCERN-015-R6-A (URL semantic validation owner=bubbles.simplify), CONCERN-015-R6-B (Go fuzz harness owner=bubbles.test). Spec status remains done."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-13T04:00:00Z",
+      "completedAt": "2026-05-13T04:30:00Z",
+      "summary": "Stochastic-quality-sweep round 8 of 20 (seed 20260513) → child mode chaos-hardening, parent-expanded (nested runSubagent unavailable). Chaos probe against parseTweetsJS / parseSignalFile / normalizeTweet / classifyTweet / isSafeURL / buildThreads with 16 adversarial inputs (empty, oversized, unicode-tricky, malformed JS wrapping, missing fields, type confusion, mixed-case obfuscation, URL-encoded scheme, CRLF injection, whitespace prefix, negative counts, C0/C1 controls, branch-precedence, self-reply cycle, high-fanout). All 16 probes PASSED on first run — connector defenses (built across 11 prior sweep passes) hold against every probed class. No code changes needed; all 16 probes retained as adversarial regression tests (TestChaosR8_*) so any future weakening fails immediately. go test -count=1 -race PASS in 29.433s; ./smackerel.sh test unit PASS (0 FAIL across full Go + Python suites — 417 Python tests + all Go packages); ./smackerel.sh lint PASS. One new specialist concern logged: CONCERN-015-R8-A (parseSignalFile does not trim whitespace from tweetId; signal silently lost on crafted archives; owner=bubbles.simplify). CONCERN-015-R6-A and CONCERN-015-R6-B remain open and unchanged. Spec status remains done."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "validate",
+        "reconcile"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-13T06:30:00Z",
+      "completedAt": "2026-05-13T06:35:00Z",
+      "summary": "Stochastic-quality-sweep round 19 of 20 (seed 20260513) → child mode reconcile-to-doc, parent-expanded (nested runSubagent unavailable). Validate-first reconciliation pass: drift detection between claimed scopes/scenarios/tests in specs/015-twitter-connector/ and actual implementation in internal/connector/twitter/. Cross-checked R6 hardening edits (HARDEN-015-R6-001/002 — maxMediaPerTweet=100 cap, parseSignalFile per-iteration ctx.Err()) and R8 chaos probes (16 TestChaosR8_* tests) against current artifacts. All R6/R8 edits properly reflected: 3 TestHardenR6_* + 16 TestChaosR8_* tests present in twitter_test.go (146 total Test* functions, 2799 LOC); twitter.go=877 LOC; report.md sections at lines 747 (R6) and 792 (R8) intact; state.json executionHistory contains both entries (idx 14 R6, idx 15 R8). artifact-lint.sh PASSED (2 advisory deprecation warnings on legacy state.json scopeProgress/scopeLayout fields — schema migration out of scope). traceability-guard.sh PASSED with 0 warnings (12 scenarios, 12 mappings, 12 DoD-fidelity matches via Gate G068). go test -count=1 -run 'TestChaosR8_|TestHardenR6_' PASS in 0.066s. Drift reconciliation matrix recorded in report.md R19 section (8 surface pairs cross-checked, 0 drift). Findings closed this round: 0. The 40 pre-existing state-transition-guard blocks (1 G053 code-diff, 1 G057 manifest schema, 1 G060 TDD markers, 1 G061 reworkQueue, 1 SLA-stress, 2 G022 stabilize, 10 G022 phase-provenance, 18+1 regression E2E, 1 G028 fake-integration, 1 commit-msg, 3 G040 deferral) are framework governance evolution post-dating the 2026-04-17 certification — carried forward as CONCERN-015-BASELINE-* concerns rather than fabricated as new closures. CONCERN-015-R8-A, CONCERN-015-R6-A, CONCERN-015-R6-B remain open and unchanged. No source code edits this round (reconcile-only). Spec status remains done."
     }
   ],
   "policySnapshot": {
@@ -269,7 +303,7 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:01:00Z",
+  "lastUpdatedAt": "2026-05-13T06:35:00Z",
   "certification": {
     "status": "done",
     "certifiedAt": "2026-04-17T00:00:00Z",

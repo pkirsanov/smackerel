@@ -226,3 +226,29 @@ func TestCompareAggregator_MultiProductAlignment(t *testing.T) {
 		t.Errorf("expected Gamma price 149, got %v", seeds[2].Quantity)
 	}
 }
+
+// TestReadingAggregator_InterfaceContract pins the Aggregator-interface getters
+// the generator's selectAggregator path depends on. Keeps SCN-AL-009/010 honest
+// when domain/type constants are renamed.
+func TestReadingAggregator_InterfaceContract(t *testing.T) {
+	a := &ReadingAggregator{}
+	if got := a.Domain(); got != "reading" {
+		t.Errorf("ReadingAggregator.Domain() = %q, want %q", got, "reading")
+	}
+	if got := a.DefaultListType(); got != TypeReading {
+		t.Errorf("ReadingAggregator.DefaultListType() = %q, want %q", got, TypeReading)
+	}
+}
+
+// TestCompareAggregator_InterfaceContract pins the Aggregator-interface getters
+// the generator's selectAggregator path depends on. Keeps SCN-AL-011 honest
+// when domain/type constants are renamed.
+func TestCompareAggregator_InterfaceContract(t *testing.T) {
+	a := &CompareAggregator{}
+	if got := a.Domain(); got != "product" {
+		t.Errorf("CompareAggregator.Domain() = %q, want %q", got, "product")
+	}
+	if got := a.DefaultListType(); got != TypeComparison {
+		t.Errorf("CompareAggregator.DefaultListType() = %q, want %q", got, TypeComparison)
+	}
+}
