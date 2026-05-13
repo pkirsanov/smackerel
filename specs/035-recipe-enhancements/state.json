@@ -287,12 +287,23 @@
       "statusAfter": "done",
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runCompletedAt": "2026-04-23T00:00:00Z",
-      "summary": "Merged UX agent+tools content into spec.md UX Specification (no standalone ux.md). Added in-spec subsections UX-N1 free-form recipe intent routing (BS-021, IP-004) with wireframes for unexpected phrasing, unit conversion, partial scaling with indivisibles; UX-N2 substitution & dietary adaptation flows (BS-022, IP-003) covering single-ingredient swap, equipment swap, whole-recipe dairy-free adaptation, mermaid flow; UX-N3 adversarial UX covering ambiguous recipe disambiguation (BS-024), precision loss with agent-reasoned alternatives (BS-025), unknown ingredient category with confidence indicator (BS-026), unknown unit preserved verbatim (BS-027), recipe deleted mid-cook with cached snapshot (BS-028), plus mermaid flow; UX-N4 trigger-table reframe annotation applied directly to UX-1.1 and UX-2.1 disclaimers (MUST-handle examples, not exhaustive grammar) with wireframe for 'double it'; UX-N5 updated agent-routed interaction state machine; UX-N6 scenario-to-wireframe cross-reference map. UX-1..UX-7 preserved; UX-1.1 and UX-2.1 disclaimers strengthened to bind UX-N4. Open UX questions appended to existing Open Questions list. Standalone ux.md deleted (rm). artifacts.ux key removed from state.json. No certification.* mutations."    }
+      "summary": "Merged UX agent+tools content into spec.md UX Specification (no standalone ux.md). Added in-spec subsections UX-N1 free-form recipe intent routing (BS-021, IP-004) with wireframes for unexpected phrasing, unit conversion, partial scaling with indivisibles; UX-N2 substitution & dietary adaptation flows (BS-022, IP-003) covering single-ingredient swap, equipment swap, whole-recipe dairy-free adaptation, mermaid flow; UX-N3 adversarial UX covering ambiguous recipe disambiguation (BS-024), precision loss with agent-reasoned alternatives (BS-025), unknown ingredient category with confidence indicator (BS-026), unknown unit preserved verbatim (BS-027), recipe deleted mid-cook with cached snapshot (BS-028), plus mermaid flow; UX-N4 trigger-table reframe annotation applied directly to UX-1.1 and UX-2.1 disclaimers (MUST-handle examples, not exhaustive grammar) with wireframe for 'double it'; UX-N5 updated agent-routed interaction state machine; UX-N6 scenario-to-wireframe cross-reference map. UX-1..UX-7 preserved; UX-1.1 and UX-2.1 disclaimers strengthened to bind UX-N4. Open UX questions appended to existing Open Questions list. Standalone ux.md deleted (rm). artifacts.ux key removed from state.json. No certification.* mutations."    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "devops"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-13T00:00:00Z",
+      "runCompletedAt": "2026-05-13T00:00:00Z",
+      "summary": "Stochastic-quality-sweep R17/20 (seed 20260513) devops-to-doc child mode parent-expanded by bubbles.workflow (nested runSubagent unavailable in current runtime). Probed CI/CD coverage (ci.yml lint-and-test + integration jobs cover internal/recipe and internal/telegram), Build-Once Deploy-Many compliance for recipe code (build.yml digest-pins smackerel-core with cosign keyless + SBOM + SLSA + bundle determinism — compliant), third-party dep delta (none — recipe uses only stdlib), deployment health (existing /healthz adequate for single-user Telegram scope), observability (gap: no smackerel_recipe_* or smackerel_cook_* metrics in internal/metrics/metrics.go), runbook coverage (thin — added authoritative-spec pointer + Phase B status + observability current-state note to docs/Operations.md). Mechanical fixes performed: (1) docs/Operations.md § Recipe Features cross-reference + observability current-state note (operator-pointer addition; no behavior change), (2) report.md R17 appendix with probe matrix + concerns + compliance affirmations, (3) this state.json executionHistory entry. Concerns surfaced: DEVOPS-OBS-035-001 (low; missing recipe-specific Prometheus metrics — owner chain bubbles.bug → bubbles.design → bubbles.plan → bubbles.implement) and DEVOPS-OBS-035-002 (low; Operations.md observability subsection update after metrics land — owner bubbles.docs). No certification.* mutations; status, completedScopes, completedPhaseClaims, certifiedCompletedPhases, scopeProgress preserved verbatim. IDE-tool-only mutations (no shell redirection / heredoc / python3 -c open). No framework-file edits. No deploy/CI changes. No git push."
+    }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-23T00:00:00Z",
+  "lastUpdatedAt": "2026-05-13T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

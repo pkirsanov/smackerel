@@ -119,7 +119,7 @@ Scenario: SCN-039-003 Config validation fails loud on missing required keys
 
 ### Definition of Done — Tiered Validation
 
-- [x] Migration `022_recommendations.sql` applies, down-migrates, and re-applies cleanly on a fresh test database (Tier: behavior)
+- [x] [SCN-039-001] Migration `022_recommendations.sql` applies and rolls back cleanly on a fresh test database (down-migrate then re-apply verifies idempotency) (Tier: behavior)
   - **Phase:** implement. **Command:** `./smackerel.sh test integration`. **Exit Code:** 0. **Claim Source:** executed. Evidence: `TestRecommendationMigration_UpDownRoundTripIsIdempotent` passed in the integration suite.
 - [x] SCN-039-002 provider registry is empty by default is proven end-to-end: `/status` lists zero recommendation providers and `POST /api/recommendations/requests` returns `status: "no_providers"` without inventing candidates (Tier: behavior)
   - **Phase:** implement. **Command:** `./smackerel.sh test integration`; `./smackerel.sh test e2e --go-run 'TestOperatorStatus_RecommendationProvidersEmptyByDefault$'`; `./smackerel.sh test e2e`. **Exit Code:** 0 for all three. **Claim Source:** executed. Evidence: `TestRecommendationProviders_EmptyRegistryReturnsNoProvidersAndPersistsTrace` passed, focused E2E `TestOperatorStatus_RecommendationProvidersEmptyByDefault` passed, and the same operator-status test passed inside the broad E2E suite.
@@ -871,7 +871,7 @@ Not applicable: no rename/removal.
   - **Exit Code:** 0
   - **Claim Source:** executed
   - `tests/stress/recommendations_test.go::TestRecommendationsStress_FiftyConcurrentWarmReactiveRequests` drives 50 concurrent goroutines / 5 minutes against the live dev stack via `./smackerel.sh test stress`. Observed: total=344345, ok=344345, accepted_errors=0, server_errors=0 (rate 0.00%), p50=35.26ms, p95=87.98ms, p99=169.95ms, max=536.95ms — NFR budget = 10s warm (spec 039 R-032). NFR met by ~115×.
-- [x] Logs/traces redaction unit test passes (no leak of provider keys, raw payloads, exact GPS, sensitive graph text)
+- [x] [SCN-039-053] Logs and traces never leak secrets or raw location data — redaction unit test verifies no provider keys, exact GPS coordinates, or sensitive graph payloads appear in any log/trace output
   - **Phase:** implement
   - **Command:** `go test -count=1 ./internal/recommendation/store/... -run TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces`
   - **Exit Code:** 0

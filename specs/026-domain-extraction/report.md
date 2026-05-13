@@ -168,7 +168,7 @@ Compared every test plan row (T1-01 through T9-08) from `scopes.md` against actu
 
 | # | Gap | Severity | Scope | Test Plan IDs | Status |
 |---|-----|----------|-------|---------------|--------|
-| TG1 | No unit tests for `DomainResultSubscriber.handleDomainExtracted` or `publishDomainExtractionRequest` | Medium | 3, 7 | T3-01 to T3-07, T7-01 to T7-04 | Fixed — added `domain_subscriber_test.go` |
+| TG1 | No unit tests for `DomainResultSubscriber.handleDomainExtracted` or `publishDomainExtractionRequest` | Medium | 3, 7 | T3-01 to T3-07, T7-01 to T7-04 | Re-opened by [BUG-026-003](bugs/BUG-026-003-handle-domain-extracted-uncovered/) on 2026-05-12 — the originally-claimed `Fixed` covered only `ValidateDomainExtractResponse` on struct literals; `handleDomainExtracted` itself stayed at 0.0% coverage (verified by stochastic-quality-sweep round 10 of 20, regression trigger, seed 20520512). Closed by BUG-026-003 in the same round with real handler-invocation tests in `internal/pipeline/domain_subscriber_test.go` (post-fix coverage on `handleDomainExtracted`: 96.8%). |
 | TG2 | No unit tests for domain search filter serialization or domain intent → filter mapping | Medium | 8 | T8-06, T8-07 | Fixed — added `domain_filter_test.go` |
 | TG3 | No integration test `tests/integration/domain_extraction_test.go` | Low | 7 | T7-05 to T7-07 | Documented — requires live stack |
 
@@ -460,3 +460,81 @@ Four Test Plan rows pointed to test files that do not exist on disk; repointed t
 - `timeout 60 bash .github/bubbles/scripts/traceability-guard.sh specs/026-domain-extraction` — 0 failures.
 
 No source code, test files, or production tests modified. Status / certification fields untouched.
+
+---
+
+## Hardening Probe — 2026-05-13 (stochastic-quality-sweep round 10 of 20, seed 20260513)
+
+**Trigger:** `harden` via parent-expanded `harden-to-doc` child workflow (nested workflow runtime lacks `runSubagent`; mode owner phases executed inline by `bubbles.workflow`).
+**Scope:** Probe domain extraction code surface for hardening gaps in input validation, context cancellation, error classification, bounded retry, audit logging, prompt-injection defense, and structured-output validation. Mechanical fixes applied with adversarial regression tests; non-mechanical findings logged as concerns. Status / certification fields untouched.
+
+### Probe Methodology
+
+Walked the spec 026 surface end-to-end: `internal/pipeline/domain_types.go` (request/response schema + validation), `internal/pipeline/domain_subscriber.go` (NATS consumer, DB writes, dead-letter routing), `internal/pipeline/subscriber.go` lines 510-575 (publisher path), `internal/domain/registry.go` (contract registry), and `ml/app/domain.py` (LLM call, retry, JSON parse, normalization, degraded fallback). Cross-referenced existing unit tests in `internal/pipeline/domain_*_test.go` (1159 lines across types/subscriber/chaos/extraction-edge) to identify already-covered hardening dimensions vs. residual gaps.
+
+### Findings
+
+| # | Hardening Dimension | Risk | Disposition |
+|---|---------------------|------|-------------|
+| H1 | `DomainExtractResponse.ProcessingTimeMs` not validated for negative values; bad ML response would corrupt Prometheus latency histogram observations | Low (internal-only NATS subject; ML sidecar bug pathway) | **Fixed** — HARDEN-026-1 invariant + adversarial regression test |
+| H2 | `DomainExtractResponse.TokensUsed` not validated for negative values; bad ML response would mislead operators reading audit logs | Low (internal-only NATS subject; ML sidecar bug pathway) | **Fixed** — HARDEN-026-2 invariant + adversarial regression test |
+| H3 | `DomainExtractResponse.ContractVersion` not validated for non-empty on response (request validates it) — empty string then used as Prometheus label `WithLabelValues(resp.ContractVersion, "completed")` | Low (label cardinality / observability hygiene; not exploitable since subject is internal) | **Concern** — semantic asymmetry between request/response validation; carried in this round's `concerns[]` as H3 because tightening it would break the documented `TestValidateDomainExtractResponse_FailureAllowsEmptyDomainData` tolerance and requires a paired contract amendment |
+| H4 | Schema-level validation of `domain_data` content (recipe-v1, product-v1) is shallow — only the top-level `domain` key is asserted by the Go side; full extraction-schema enforcement (per-field types, required-keys, value ranges) is not performed | Low (internal-only LLM-produced payload; downstream consumers tolerate missing fields via `nil` checks in `internal/telegram/format.go` and search filter helpers in `internal/api/domain_filter.go`) | **Concern** — already a known design gap noted in spec scopes 5 & 6; full schema enforcement would require a JSON-schema runtime (e.g., `gojsonschema`) and is carried in this round's `concerns[]` as H4 for design-owner attention |
+| H5 | Prompt-injection defense relies on `response_format={"type": "json_object"}` (litellm) and post-parse `json.loads`; title/summary/content fields flow into `_build_user_prompt` unsanitized (no length truncation beyond 15000 char publisher-side cap, no instruction-override neutralization) | Low (LLM is constrained to JSON output by the response_format contract; injected instructions cannot escape the JSON envelope; defense-in-depth opportunity only) | **Concern** — already documented in 2026-04-20 Security Probe as defense-in-depth informational note; carried in this round's `concerns[]` as H5 for security-owner attention |
+
+### Fix Details — H1 (HARDEN-026-1)
+
+Added a `if r.ProcessingTimeMs < 0` invariant in `internal/pipeline/domain_types.go::ValidateDomainExtractResponse` (rejects with `"DomainExtractResponse: processing_time_ms must be >= 0, got %d"` error). The invariant is documented inline as `HARDEN-026-1` for traceability. Adversarial regression test in `internal/pipeline/domain_types_test.go::TestValidateDomainExtractResponse_RejectsNegativeProcessingTimeMs` — sets `ProcessingTimeMs: -1`, asserts non-nil error; boundary check confirms `0` remains valid (degraded-fallback and no-content early-exit paths in `ml/app/domain.py` legitimately emit `processing_time_ms: 0`).
+
+### Fix Details — H2 (HARDEN-026-2)
+
+Added a `if r.TokensUsed < 0` invariant in `internal/pipeline/domain_types.go::ValidateDomainExtractResponse` (rejects with `"DomainExtractResponse: tokens_used must be >= 0, got %d"` error). The invariant is documented inline as `HARDEN-026-2` for traceability. Adversarial regression test in `internal/pipeline/domain_types_test.go::TestValidateDomainExtractResponse_RejectsNegativeTokensUsed` — sets `TokensUsed: -42`, asserts non-nil error; boundary check confirms `0` remains valid (degraded-fallback path returns `tokens_used: 0`).
+
+### Adversarial Proof
+
+To verify the regression tests would actually catch reintroduction of the bugs (not pass tautologically), HARDEN-026-1 invariant was temporarily stripped via `replace_string_in_file` and `TestValidateDomainExtractResponse_RejectsNegativeProcessingTimeMs` was re-run:
+
+```
+$ go test -count=1 -run 'TestValidateDomainExtractResponse_RejectsNegativeProcessingTimeMs' ./internal/pipeline/
+--- FAIL: TestValidateDomainExtractResponse_RejectsNegativeProcessingTimeMs (0.00s)
+    domain_types_test.go:168: expected error for negative processing_time_ms, got nil
+FAIL
+FAIL    github.com/smackerel/smackerel/internal/pipeline        0.033s
+```
+
+Exit Code: 1. Test failed as expected — the regression test is genuinely adversarial. Invariant restored and final green test run confirmed:
+
+```
+$ go test -count=1 ./internal/pipeline/
+ok      github.com/smackerel/smackerel/internal/pipeline        0.378s
+$ go vet ./internal/pipeline/...
+$ go build ./...
+Finished — Exit Code: 0
+```
+
+All three commands (test, vet, build) passed cleanly with 0 errors, 0 warnings. By symmetry (identical structure: `if r.X < 0 { return error }` plus `if err == nil { t.Fatal }`), HARDEN-026-2 has the same adversarial property — stripping the `if r.TokensUsed < 0` block would cause `TestValidateDomainExtractResponse_RejectsNegativeTokensUsed` to fail with `expected error for negative tokens_used, got nil`.
+
+### Hardening Dimensions Already Covered (No Action)
+
+- **Bounded payloads:** `MaxNATSMessageSize = 1MB` post-marshal cap (publisher); `maxDomainContentChars = 15000` content truncation; `maxDomainDataBytes = 512KB` response cap with C026-CHAOS-03 invariant + chaos test. Cross-cap invariant `maxDomainDataBytes <= MaxNATSMessageSize` enforced by `TestChaos_MaxDomainDataBytes_Constant`.
+- **Bounded retry:** Python `MAX_RETRIES = 2` with `RETRY_DELAYS = [2, 5]`; Go `domainMaxDeliver = 5` (asserted by `TestDomainMaxDeliverConstMatchesConsumerConfig` against the JetStream consumer config).
+- **Timeouts:** Python `DOMAIN_EXTRACTION_TIMEOUT = 30s` via `asyncio.wait_for`; litellm per-call `timeout=30`; consumer `Fetch(MaxWait: 5s)`; subscriber `Stop` bounded at 5s.
+- **Context cancellation:** `Start` goroutine selects on both `<-d.done` and `<-ctx.Done()` at the top of every loop iteration AND inside the per-message inner loop; `handleDomainExtracted` propagates `ctx` to all `DB.Exec` calls.
+- **Error classification:** Python differentiates `RateLimitError | ServiceUnavailableError | InternalServerError` (retryable) from `JSONDecodeError | ValueError` (retryable) and `Exception` (permanent, breaks loop). Go differentiates Ack-without-DB (permanent malformed payload) from Nak (transient DB error → retry up to MaxDeliver) from dead-letter (MaxDeliver exhausted, S-003).
+- **Audit logging:** `slog` calls at every decision boundary with structured fields (`artifact_id`, `contract_version`, `error`, `subject`); dead-letter headers carry `Smackerel-Last-Error` (truncated to 256 bytes UTF-8-safe) and `Smackerel-Delivery-Count`.
+- **Concurrent Start/Stop safety:** `DomainResultSubscriber` uses mutex-guarded `started`/`stopped` flags; double-start, start-after-stop, and stop-before-start all return errors or no-op cleanly. Covered by `TestDomainResultSubscriber_DoubleStartFails`, `TestDomainResultSubscriber_StartAfterStopFails`, `TestDomainResultSubscriber_StopBeforeStart`.
+- **Fail-loud SST:** `_domain_degraded_fallback_enabled` reads `os.environ["ML_PROCESSING_DEGRADED_FALLBACK_ENABLED"]` — KeyError if unset, RuntimeError if not exactly `"true"|"false"`. No silent default.
+- **Failed-status timestamp stamping:** S-001 ensures failure path writes `domain_extracted_at = NOW()` so failed extractions are observable in DB queries (covered by `TestHandleDomainExtractedInvocation_Failure_UpdatesStatusAndStampsTimestamp`).
+- **Pending-status revert on publish failure:** S-002 reverts `domain_extraction_status = NULL` when `NATS.Publish` fails so artifacts don't get stuck in `pending` forever.
+
+### Verification
+
+- `go test -count=1 ./internal/pipeline/` — passed (full pipeline package, includes all 7 existing `TestValidateDomainExtractResponse_*` tests + 2 new HARDEN-026-* tests + 5 chaos tests + 20+ subscriber tests).
+- `go vet ./...` — clean.
+- `go build ./...` — clean.
+
+### Concerns Forwarded
+
+- **H3** — ContractVersion non-empty validation on response. Severity: low. Owner: bubbles.harden (next round). Action: split `ValidateDomainExtractResponse` into success-path and failure-path validators, OR amend the response contract to require `ContractVersion` echo on all paths.
+- **H4** — Full extraction-schema enforcement for `domain_data` content. Severity: low. Owner: bubbles.design (cross-cut with spec scopes 5 & 6 design intent). Action: design decision on whether to introduce a JSON-schema runtime (`gojsonschema` or equivalent) and where to place enforcement (Python pre-publish vs. Go pre-DB-write).
+- **H5** — Prompt-injection defense-in-depth. Severity: low. Owner: bubbles.security (next security round). Action: evaluate adding instruction-override neutralization (e.g., reject responses where the parsed JSON contains keys like `__proto__`, `system`, or returns text outside the schema).

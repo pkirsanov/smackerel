@@ -389,7 +389,17 @@ func (n *VendorNormalizer) put(key, value string) {
 			entries = append(entries, entry{k, seq})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].seq < entries[j].seq })
+		// HARDEN R13 (stochastic-quality-sweep round 13, 2026-05-13):
+		// At capacity, always evict at least one entry. Without this floor,
+		// maxSize <= 1 yielded evictCount = 0 (integer division), so the
+		// cache grew unbounded one entry at a time despite the capacity gate
+		// firing on every put. Adversarial regression in
+		// TestVendorNormalizer_CacheEvictionMinSize covers maxSize=1 and
+		// maxSize=2 to lock this in.
 		evictCount := n.maxSize / 2
+		if evictCount < 1 {
+			evictCount = 1
+		}
 		for i := 0; i < evictCount && i < len(entries); i++ {
 			delete(n.cache, entries[i].key)
 			delete(n.accessSeq, entries[i].key)

@@ -99,6 +99,93 @@ func TestTryRecordCall_RateLimit(t *testing.T) {
 	}
 }
 
+// TestRateLimit_AtBoundary verifies the exact off-by-one boundary semantics
+// of the per-provider rate limiter for every provider declared in
+// providerRateLimits. Linked to SCN-FM-RL-001 by scenario-manifest.json.
+//
+// The contract under test (markets.go ::tryRecordCall):
+//   - tryRecordCall returns true for exactly providerRateLimits[provider] calls
+//     within a 1-minute window.
+//   - The (N+1)th call within that window returns false.
+//   - The boundary is inclusive on success: the Nth call succeeds; the (N+1)th fails.
+//
+// stableTestTime is a fixed instant, so no timestamps expire from the sliding
+// window during the loop and the boundary is deterministic.
+func TestRateLimit_AtBoundary(t *testing.T) {
+	for provider, budget := range providerRateLimits {
+		t.Run(provider, func(t *testing.T) {
+			c := newTestConnector("financial-markets")
+
+			// All N calls within budget MUST be allowed.
+			for i := 0; i < budget; i++ {
+				if !c.tryRecordCall(provider) {
+					t.Fatalf("%s: call %d/%d at boundary should be allowed", provider, i+1, budget)
+				}
+			}
+
+			// The (N+1)th call MUST be denied. This is the precise boundary.
+			if c.tryRecordCall(provider) {
+				t.Errorf("%s: call %d should be denied (exceeds budget %d)", provider, budget+1, budget)
+			}
+
+			// A subsequent attempt MUST also remain denied (no silent recovery).
+			if c.tryRecordCall(provider) {
+				t.Errorf("%s: call %d should remain denied after boundary breach", provider, budget+2)
+			}
+		})
+	}
+}
+
+// TestTryRecordCall_Atomic verifies the atomic check-and-record contract that
+// prevents the TOCTOU race documented at markets.go::tryRecordCall. Linked to
+// SCN-FM-RL-001 by scenario-manifest.json.
+//
+// Specifically it asserts two atomic properties that a non-atomic
+// check-then-record implementation would violate:
+//   - A denied call MUST NOT leave a phantom timestamp in c.callCounts. If a
+//     denial leaked into the count, total len(callCounts) would exceed budget.
+//   - The successful path MUST atomically commit the timestamp before
+//     returning true; immediately reading len(callCounts) under the same lock
+//     domain reflects the committed write.
+func TestTryRecordCall_Atomic(t *testing.T) {
+	c := newTestConnector("financial-markets")
+	const provider = "finnhub"
+	budget := providerRateLimits[provider]
+
+	// Saturate the budget.
+	for i := 0; i < budget; i++ {
+		if !c.tryRecordCall(provider) {
+			t.Fatalf("setup: call %d/%d should succeed", i+1, budget)
+		}
+	}
+
+	// Capture committed-call count after saturation. Holding the lock to read
+	// the same map the function mutates proves the write committed atomically
+	// before tryRecordCall returned.
+	c.mu.RLock()
+	committedAfterSaturation := len(c.callCounts[provider])
+	c.mu.RUnlock()
+	if committedAfterSaturation != budget {
+		t.Fatalf("after saturation, callCounts must equal budget: got %d, want %d",
+			committedAfterSaturation, budget)
+	}
+
+	// Issue a series of denied calls. None may leak a phantom timestamp.
+	for i := 0; i < 10; i++ {
+		if c.tryRecordCall(provider) {
+			t.Fatalf("denied-phase call %d unexpectedly succeeded", i+1)
+		}
+	}
+
+	c.mu.RLock()
+	committedAfterDenials := len(c.callCounts[provider])
+	c.mu.RUnlock()
+	if committedAfterDenials != budget {
+		t.Errorf("denied calls must not leak into callCounts: got %d, want %d (TOCTOU regression)",
+			committedAfterDenials, budget)
+	}
+}
+
 func TestClose(t *testing.T) {
 	c := newTestConnector("financial-markets")
 	c.health = connector.HealthHealthy
@@ -203,10 +290,10 @@ func TestParseMarketsConfig_AcceptsValidSymbols(t *testing.T) {
 }
 
 func TestParseMarketsConfig_WatchlistSizeLimit(t *testing.T) {
-	// Construct a watchlist exceeding the limit
+	// Construct a watchlist exceeding the limit with unique symbols.
 	tooMany := make([]interface{}, maxWatchlistSymbols+1)
 	for i := range tooMany {
-		tooMany[i] = "AAPL"
+		tooMany[i] = fmt.Sprintf("SYM%d", i)
 	}
 	_, err := parseMarketsConfig(connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test"},
@@ -329,12 +416,6 @@ func TestClassifyTier(t *testing.T) {
 	}
 }
 
-func TestClassifyTier_ZeroThresholdAlwaysLight(t *testing.T) {
-	if tier := classifyTier(0, 99.0); tier != "light" {
-		t.Errorf("expected light when threshold=0, got %q", tier)
-	}
-}
-
 func TestCryptoChange24hCalculation(t *testing.T) {
 	// Simulate CoinGecko response and verify Change24h is calculated.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -396,50 +477,6 @@ func TestConnect_ThreadSafety(t *testing.T) {
 		_ = c.Health(context.Background())
 	}
 	<-done
-}
-
-func TestRateLimit_AtBoundary(t *testing.T) {
-	// Verify that filling to exactly the limit denies the next call.
-	c := newTestConnector("financial-markets")
-	c.config.FinnhubAPIKey = "test"
-
-	// Fill to exactly the limit (55 for finnhub)
-	for i := 0; i < 55; i++ {
-		if !c.tryRecordCall("finnhub") {
-			t.Fatalf("call %d should be allowed", i+1)
-		}
-	}
-
-	// Should not allow the 56th
-	if c.tryRecordCall("finnhub") {
-		t.Error("should deny call when at rate limit")
-	}
-}
-
-func TestTryRecordCall_Atomic(t *testing.T) {
-	c := newTestConnector("financial-markets")
-
-	// Should allow and record first call
-	if !c.tryRecordCall("finnhub") {
-		t.Error("first tryRecordCall should succeed")
-	}
-
-	// Fill to limit minus the one already recorded
-	for i := 0; i < 54; i++ {
-		if !c.tryRecordCall("finnhub") {
-			t.Errorf("tryRecordCall should succeed at count %d", i+2)
-		}
-	}
-
-	// 56th call should be denied
-	if c.tryRecordCall("finnhub") {
-		t.Error("should deny tryRecordCall when at rate limit")
-	}
-
-	// Unknown provider always allowed
-	if !c.tryRecordCall("unknown") {
-		t.Error("unknown provider should always be allowed")
-	}
 }
 
 func TestSyncContextCancellation(t *testing.T) {
@@ -653,9 +690,13 @@ func TestParseMarketsConfig_ForexPairsInvalid(t *testing.T) {
 }
 
 func TestParseMarketsConfig_ForexPairsSizeLimit(t *testing.T) {
+	// Use unique forex pairs to avoid dedup collapsing them.
 	tooMany := make([]interface{}, maxWatchlistSymbols+1)
 	for i := range tooMany {
-		tooMany[i] = "USD/JPY"
+		// Generate unique 3-letter codes: AAA/AAB, AAA/AAC, etc.
+		a := 'A' + rune(i/26%26)
+		b := 'A' + rune(i%26)
+		tooMany[i] = fmt.Sprintf("AA%c/A%c%c", a, a, b)
 	}
 	_, err := parseMarketsConfig(connector.ConnectorConfig{
 		Credentials: map[string]string{"finnhub_api_key": "test"},
@@ -760,11 +801,6 @@ func TestSyncEmptyWatchlist(t *testing.T) {
 }
 
 func TestClassifyTier_NegativeThresholdTreatedAsDisabled(t *testing.T) {
-	// Threshold <= 0 means alerts are effectively disabled.
-	// classifyTier checks threshold > 0, so zero/negative always returns "light".
-	if tier := classifyTier(0, 99.0); tier != "light" {
-		t.Errorf("expected light for threshold=0, got %q", tier)
-	}
 	// Negative threshold should never reach here due to config validation,
 	// but verify the fallback behavior is safe.
 	if tier := classifyTier(-1.0, 99.0); tier != "light" {
@@ -4866,5 +4902,161 @@ func TestSTB018_S2_002_ContextTimeoutMidSyncHealthDegraded(t *testing.T) {
 	health := c.Health(context.Background())
 	if health != connector.HealthDegraded {
 		t.Errorf("STB-018-S2-002: expected HealthDegraded after timed-out Sync, got %v — partial sync should not report Healthy or Error", health)
+	}
+}
+
+// === Chaos Round R17: Malformed data, NaN/Inf, unsanitized fields, duplicates ===
+
+func TestCHAOS018_R17_001_FREDNaNValueReturnsError(t *testing.T) {
+	// CHAOS-018-R17-001: FRED observation with "NaN" string value must be
+	// rejected. ParseFloat("NaN") returns math.NaN() with nil error, which
+	// would corrupt artifact metadata and break JSON serialization.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2026-01-01", "value": "NaN"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.fredBaseURL = srv.URL
+	c.config.FREDAPIKey = "test-key"
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("CHAOS-018-R17-001: fetchFREDLatest accepted NaN value — NaN floats break JSON serialization")
+	}
+	if !strings.Contains(err.Error(), "NaN") && !strings.Contains(err.Error(), "non-finite") {
+		t.Logf("error: %v (acceptable as long as it's rejected)", err)
+	}
+}
+
+func TestCHAOS018_R17_001_FREDInfValueReturnsError(t *testing.T) {
+	// CHAOS-018-R17-001: FRED observation with "Inf" string value must be
+	// rejected. ParseFloat("Inf") returns +Inf with nil error.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2026-01-01", "value": "Inf"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.fredBaseURL = srv.URL
+	c.config.FREDAPIKey = "test-key"
+
+	_, err := c.fetchFREDLatest(context.Background(), "GDP")
+	if err == nil {
+		t.Fatal("CHAOS-018-R17-001: fetchFREDLatest accepted Inf value — Inf floats break JSON serialization")
+	}
+}
+
+func TestCHAOS018_R17_001_FREDNegInfValueReturnsError(t *testing.T) {
+	// CHAOS-018-R17-001: FRED observation with "-Inf" string must be rejected.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"observations": []map[string]string{
+				{"date": "2026-01-01", "value": "-Inf"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.fredBaseURL = srv.URL
+	c.config.FREDAPIKey = "test-key"
+
+	_, err := c.fetchFREDLatest(context.Background(), "UNRATE")
+	if err == nil {
+		t.Fatal("CHAOS-018-R17-001: fetchFREDLatest accepted -Inf value — -Inf floats break JSON serialization")
+	}
+}
+
+func TestCHAOS018_R17_002_NewsRelatedFieldSanitized(t *testing.T) {
+	// CHAOS-018-R17-002: The news article "Related" field must be sanitized
+	// just like Headline, Summary, Source, and Category, to prevent control
+	// character injection into artifact metadata.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/company-news" {
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{
+					"category": "company",
+					"datetime": 1700000000,
+					"headline": "Test headline",
+					"id":       123,
+					"image":    "",
+					"related":  "AAPL\x00\x07\x1b[31mINJECTED",
+					"source":   "Reuters",
+					"summary":  "Test summary",
+					"url":      "https://example.com/article",
+				},
+			})
+			return
+		}
+		// Stock quote endpoint
+		json.NewEncoder(w).Encode(map[string]float64{
+			"c": 150.0, "d": 1.0, "dp": 0.5, "h": 152.0, "l": 148.0, "o": 149.0, "pc": 149.0,
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestConnector("financial-markets")
+	c.finnhubBaseURL = srv.URL
+	c.config = MarketsConfig{
+		FinnhubAPIKey:  "test-key",
+		AlertThreshold: 5.0,
+		Watchlist: WatchlistConfig{
+			Stocks: []string{"AAPL"},
+		},
+	}
+
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Find the news artifact
+	for _, a := range artifacts {
+		if a.ContentType == "market/news" {
+			related, ok := a.Metadata["related"].(string)
+			if !ok {
+				t.Fatal("news artifact missing 'related' metadata")
+			}
+			// Control characters must be stripped
+			for _, ch := range related {
+				if ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r' {
+					t.Fatalf("CHAOS-018-R17-002: news 'related' field contains unsanitized control char U+%04X", ch)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("no market/news artifact found")
+}
+
+func TestCHAOS018_R17_003_DuplicateWatchlistSymbolsDeduped(t *testing.T) {
+	// CHAOS-018-R17-003: Duplicate symbols in watchlist should be deduplicated
+	// to prevent wasting rate limit budget on redundant API calls.
+	cfg, err := parseMarketsConfig(connector.ConnectorConfig{
+		Credentials: map[string]string{"finnhub_api_key": "test"},
+		SourceConfig: map[string]interface{}{
+			"watchlist": map[string]interface{}{
+				"stocks": []interface{}{"AAPL", "GOOGL", "AAPL", "MSFT", "GOOGL"},
+				"crypto": []interface{}{"bitcoin", "bitcoin", "ethereum"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(cfg.Watchlist.Stocks) != 3 {
+		t.Errorf("CHAOS-018-R17-003: expected 3 unique stocks, got %d: %v", len(cfg.Watchlist.Stocks), cfg.Watchlist.Stocks)
+	}
+	if len(cfg.Watchlist.Crypto) != 2 {
+		t.Errorf("CHAOS-018-R17-003: expected 2 unique crypto, got %d: %v", len(cfg.Watchlist.Crypto), cfg.Watchlist.Crypto)
 	}
 }

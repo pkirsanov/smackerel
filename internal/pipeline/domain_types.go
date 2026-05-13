@@ -60,5 +60,17 @@ func ValidateDomainExtractResponse(r *DomainExtractResponse) error {
 	if len(r.DomainData) > maxDomainDataBytes {
 		return fmt.Errorf("DomainExtractResponse: domain_data too large: %d bytes exceeds max %d", len(r.DomainData), maxDomainDataBytes)
 	}
+	// HARDEN-026-1: ProcessingTimeMs is a wall-clock duration; negative values are
+	// physically impossible and would corrupt Prometheus latency histograms if
+	// observed. Reject them at the validation boundary.
+	if r.ProcessingTimeMs < 0 {
+		return fmt.Errorf("DomainExtractResponse: processing_time_ms must be >= 0, got %d", r.ProcessingTimeMs)
+	}
+	// HARDEN-026-2: TokensUsed is a counter from the LLM provider; negative values
+	// are impossible and would mislead operators reading audit logs. Reject them
+	// at the validation boundary.
+	if r.TokensUsed < 0 {
+		return fmt.Errorf("DomainExtractResponse: tokens_used must be >= 0, got %d", r.TokensUsed)
+	}
 	return nil
 }

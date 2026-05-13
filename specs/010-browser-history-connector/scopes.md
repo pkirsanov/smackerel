@@ -74,8 +74,8 @@ type BrowserHistoryConfig struct {
 
 | # | Scope | Surfaces | Key Tests | DoD Summary | Status |
 |---|---|---|---|---|---|
-| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~16 unit (integration/E2E deferred — no live stack) | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end, URL+date dedup | In Progress |
-| 2 | Social Media Aggregation, Repeat Visits & Privacy Gate | Go core (`browser/connector.go`) | ~10 unit (integration/E2E deferred — no live stack) | Social aggregation, repeat detection, privacy gate, content fetch failure handling | In Progress |
+| 1 | Connector Implementation, Config & Registration | Go core (`browser/connector.go`, `browser/browser.go`), Config, `cmd/core/main.go` | ~16 unit (integration/E2E deferred — no live stack) | Connector interface complete, cursor-based query works, config validated, registration wired, basic sync end-to-end, URL+date dedup | Done |
+| 2 | Social Media Aggregation, Repeat Visits & Privacy Gate | Go core (`browser/connector.go`) | ~10 unit (integration/E2E deferred — no live stack) | Social aggregation, repeat detection, privacy gate, content fetch failure handling | Done |
 
 ---
 
