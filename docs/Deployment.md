@@ -23,6 +23,60 @@ and [`.github/skills/bubbles-deployment-target-adapter/SKILL.md`](../.github/ski
 
 ---
 
+## Generic Pre-Apply Prerequisites (Product Contract)
+
+These prerequisites are **product-owned** and apply to ANY deploy target
+that intends to run Smackerel in a production-class posture
+(`runtime.environment=production` AND/OR `auth.enabled=true`). The
+deploy-adapter overlay is responsible for **populating** these values
+from the target's secret store; this repo does not embed any real
+value. Skipping any prerequisite below causes the runtime to fail loud
+at startup with an explicit error per Spec 051's defense-in-depth
+contract.
+
+| Required config key (dotted YAML path) | Source / How to populate | Failure mode if missing |
+|----------------------------------------|--------------------------|-------------------------|
+| `auth.signing.active_private_key` | `smackerel-core auth keygen` (PASETO v4.public, one per target). Surfaced as env var `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`. | `internal/config/loadAuthConfig` rejects the load when `SMACKEREL_ENV=production` AND `auth.enabled=true`. |
+| `auth.signing.active_key_id` | Operator-chosen short identifier (e.g. `key-2026-05`). Surfaced as env var `AUTH_SIGNING_ACTIVE_KEY_ID`. | Config-load fails alongside `active_private_key`. |
+| `auth.at_rest_hashing_key` | `openssl rand -hex 32`. MUST differ from `active_private_key` (Spec 044 OQ-8). Surfaced as env var `AUTH_AT_REST_HASHING_KEY`. | Config-load fails; runtime additionally rejects the case where the two values are equal. |
+| `auth.bootstrap_token` | One-shot secret (`openssl rand -hex 24`). Required only on a fresh production deployment with zero enrolled users. Surfaced as env var `AUTH_BOOTSTRAP_TOKEN`. Cleared after the first user enrolls. | Config-load fails per Spec 051 FR-051-004 / SCN-051-S01. |
+| `infrastructure.postgres.password` (non-default) | Generated per-target via the deploy-adapter overlay's secret store. Surfaced as env var `POSTGRES_PASSWORD`. The dev default literal `smackerel` is **rejected** at the SST loader for any `home-lab`-class target AND at the runtime when `SMACKEREL_ENV=production` (Spec 051 FR-051-005, SCN-051-S02 — layered rejection). | The bundle generator and the runtime both refuse to start, naming the field. |
+
+These five values MUST be populated by the deploy-adapter overlay
+before `apply` is invoked. The product repo's bundle generator
+(`./smackerel.sh config generate --env <env> --bundle`) emits
+empty-string placeholders for the four `auth.*` values per Bubbles
+gate G074 (secrets MUST NOT live in the bundle).
+
+### Connector Live-Stack Evidence Caveat
+
+Connector spec status fields (`spec.md::Status`,
+`scopes.md::Status`, `state.json::status`) reflect the certification
+of the connector's product-side runtime contract — handler wiring,
+config validation, normalizer behavior, error taxonomy, unit + static
+coverage. Connector status does **NOT** by itself guarantee that the
+connector has been exercised end-to-end against the live external
+provider on every target.
+
+| Evidence class | What it proves | Where it lives |
+|----------------|---------------|----------------|
+| Unit / static | Pure-Go behavior, error taxonomy, normalizer correctness, fail-loud config validation. | `internal/connector/<provider>/*_test.go` |
+| Integration (test stack) | The connector compiles into the runtime, the SST keys validate, the handler wires into the connector framework. | `tests/integration/<provider>_*` |
+| Live-stack (e2e against real external provider on the target) | The connector authenticates against the real provider (OAuth round-trip or API-key flow), pulls real artifacts, and writes them through the live runtime stack on a specific target. | Per-target operator validation, **not** asserted by Smackerel CI. The deploy-adapter overlay records this on a per-target basis. |
+
+Operators MUST treat connector "done" status as a proof of the first
+two evidence classes only. The live-stack class MUST be re-verified
+on every new target as part of the deploy-adapter overlay's
+target-readiness checklist (in the knb deploy-adapter overlay,
+specifically spec `003-smackerel-home-lab-adapter-readiness` for the
+home-lab target). This product repo deliberately does NOT host a
+target-coupled "connector live-stack readiness" checklist — that
+material would entangle product-side and target-side evidence and is
+the kind of mix that BUG-001 (`specs/032-documentation-freshness/bugs/BUG-001-home-lab-readiness-plan-stale/`)
+removed.
+
+---
+
 ## Three artifacts produced per source SHA
 
 | Artifact | Identifier | Mutable? | Producer |
