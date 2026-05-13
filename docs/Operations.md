@@ -192,6 +192,75 @@ tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats \
     nats stream ls
 ```
 
+### NATS Production Hardening (spec 046)
+
+Spec 046 makes every NATS payload and storage ceiling explicit via SST. The
+broker, the ML sidecar reconnect contract, and the Go core's JetStream
+stream caps all originate from a single source under
+`infrastructure.nats` in [config/smackerel.yaml](../config/smackerel.yaml):
+
+| SST key | Default | Purpose |
+|---------|---------|---------|
+| `infrastructure.nats.max_payload_bytes` | `8388608` (8 MiB) | Single-message size ceiling. Connectors with larger payloads (e.g., wide-screen OCR uploads) MUST justify a raise. |
+| `infrastructure.nats.max_file_store_bytes` | `10737418240` (10 GiB) | JetStream on-disk store ceiling. Sum of per-stream caps must remain comfortably below this. |
+| `infrastructure.nats.max_mem_store_bytes` | `1073741824` (1 GiB) | JetStream in-memory store ceiling. |
+| `infrastructure.nats.client.reconnect_time_wait_seconds` | `2` | ML sidecar interval between reconnect attempts. |
+| `infrastructure.nats.client.max_reconnect_attempts` | `-1` | ML sidecar reconnect ceiling. `-1` means indefinite — the only operationally supported value. |
+| `infrastructure.nats.stream_max_bytes[]` | list of 15 entries (≈ 5.6 GiB total) | Per-stream MaxBytes. **Every JetStream stream Smackerel creates MUST have an entry.** |
+
+The values flow:
+
+1. `./smackerel.sh config generate` reads them via `required_value` /
+   `required_json_value` in [scripts/commands/config.sh](../scripts/commands/config.sh).
+   Missing values abort generation.
+2. The generator writes `NATS_MAX_PAYLOAD_BYTES`, `NATS_MAX_FILE_STORE_BYTES`,
+   `NATS_MAX_MEM_STORE_BYTES`, `NATS_MAX_RECONNECT_ATTEMPTS`,
+   `NATS_RECONNECT_TIME_WAIT_SECONDS`, and `NATS_STREAM_MAX_BYTES_JSON`
+   into `config/generated/{env}.env`, and also renders `max_payload`,
+   `max_file_store`, `max_memory_store` directives into
+   `config/generated/nats.conf`.
+3. The Go core's `requiredVars()` chain in
+   [internal/config/config.go](../internal/config/config.go) fails loud at
+   startup if any of the 6 envelope env vars is missing, malformed, or
+   non-positive.
+4. `internal/nats.Client.EnsureStreams(ctx, streamCaps)` refuses to start
+   if a JetStream stream listed in `AllStreams()` is missing from the cap
+   map, or has a non-positive cap. The ML sidecar's `connect()` raises if
+   `NATS_MAX_RECONNECT_ATTEMPTS` or `NATS_RECONNECT_TIME_WAIT_SECONDS`
+   is missing or not an integer.
+
+#### Tuning the envelope
+
+- **Disk pressure** — lower `infrastructure.nats.max_file_store_bytes` to
+  the disk headroom you can actually spare; ensure
+  `sum(stream_max_bytes[].bytes) ≤ max_file_store_bytes`.
+- **Backpressure** — lower individual entries in `stream_max_bytes[]` to
+  apply the pressure where backlog actually builds (typically `ARTIFACTS`
+  or `PHOTOS`).
+- **Single-payload size** — raise `max_payload_bytes` only when a
+  connector legitimately needs it. Larger messages slow JetStream
+  propagation.
+- **Sidecar reconnect interval** — raise
+  `client.reconnect_time_wait_seconds` only when the deployment target
+  has known NATS-restart blackout windows longer than the default
+  2-second backoff.
+
+After any change, run `./smackerel.sh config generate` then restart the
+stack (`./smackerel.sh down && ./smackerel.sh up`) so the new envelope
+takes effect.
+
+#### Adding a new JetStream stream
+
+When introducing a new stream to `internal/nats.AllStreams()`:
+
+1. Add a matching `{stream: <NAME>, bytes: <N>}` entry to
+   `infrastructure.nats.stream_max_bytes` in `config/smackerel.yaml`.
+2. Re-check the sum stays below `max_file_store_bytes`.
+3. Run `./smackerel.sh config generate` then `go test ./internal/nats/...`
+   — the adversarial unit tests
+   (`TestEnsureStreams_MissingStreamCapRejected`) will catch a missing
+   entry before runtime.
+
 ### Why this pattern
 
 - Closes the host network footgun: no operator or agent can accidentally

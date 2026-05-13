@@ -334,7 +334,14 @@ class TestConnect:
         mock_connect.return_value = mock_nc
 
         with patch("app.nats_client.nats.connect", mock_connect):
-            with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": "secret-token"}):
+            with patch.dict(
+                "os.environ",
+                {
+                    "SMACKEREL_AUTH_TOKEN": "secret-token",
+                    "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
+                    "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
+                },
+            ):
                 asyncio.run(client.connect())
 
         call_kwargs = mock_connect.call_args[1]
@@ -351,8 +358,122 @@ class TestConnect:
         mock_connect.return_value = mock_nc
 
         with patch("app.nats_client.nats.connect", mock_connect):
-            with patch.dict("os.environ", {"SMACKEREL_AUTH_TOKEN": ""}, clear=False):
+            with patch.dict(
+                "os.environ",
+                {
+                    "SMACKEREL_AUTH_TOKEN": "",
+                    "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
+                    "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
+                },
+                clear=False,
+            ):
                 asyncio.run(client.connect())
 
         call_kwargs = mock_connect.call_args[1]
         assert "token" not in call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Spec 046 FR-046-001 — ML sidecar indefinite reconnect contract
+# ---------------------------------------------------------------------------
+
+
+class TestConnectReconnectContract:
+    """Spec 046 FR-046-001 — ML sidecar reconnect behavior is SST-driven and indefinite.
+
+    These tests prove the env-driven SST plumbing for NATS_MAX_RECONNECT_ATTEMPTS
+    and NATS_RECONNECT_TIME_WAIT_SECONDS. They are adversarial regression tests:
+    if anyone reverts to a hardcoded finite value (e.g. max_reconnect_attempts=60
+    which existed before spec 046), test_connect_passes_indefinite_reconnect_from_env
+    fails because the env value would no longer reach nats.connect().
+    """
+
+    _BASE_ENV = {
+        "SMACKEREL_AUTH_TOKEN": "",
+        "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
+        "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
+    }
+
+    def _mock_nats(self):
+        mock_connect = AsyncMock()
+        mock_nc = MagicMock()
+        mock_nc.is_connected = True
+        mock_nc.jetstream.return_value = object()
+        mock_connect.return_value = mock_nc
+        return mock_connect
+
+    def test_connect_passes_indefinite_reconnect_from_env(self):
+        """SST value of -1 MUST be propagated to nats.connect()."""
+        client = NATSClient("nats://localhost:4222")
+        mock_connect = self._mock_nats()
+
+        with patch("app.nats_client.nats.connect", mock_connect):
+            with patch.dict("os.environ", self._BASE_ENV, clear=False):
+                asyncio.run(client.connect())
+
+        call_kwargs = mock_connect.call_args[1]
+        assert call_kwargs["max_reconnect_attempts"] == -1, (
+            "ML sidecar MUST configure indefinite reconnect "
+            "(max_reconnect_attempts=-1) per spec 046 FR-046-001 — "
+            "regression detected: hardcoded finite value at module level. "
+            f"Got: {call_kwargs['max_reconnect_attempts']!r}"
+        )
+
+    def test_connect_passes_reconnect_time_wait_from_env(self):
+        """SST value for reconnect_time_wait_seconds MUST be propagated."""
+        client = NATSClient("nats://localhost:4222")
+        mock_connect = self._mock_nats()
+
+        env = dict(self._BASE_ENV)
+        env["NATS_RECONNECT_TIME_WAIT_SECONDS"] = "5"
+        with patch("app.nats_client.nats.connect", mock_connect):
+            with patch.dict("os.environ", env, clear=False):
+                asyncio.run(client.connect())
+
+        call_kwargs = mock_connect.call_args[1]
+        assert call_kwargs["reconnect_time_wait"] == 5
+
+    def test_connect_honors_env_value_not_module_constant(self):
+        """Adversarial: even an unusual env value must reach nats.connect.
+
+        This catches regressions where someone hardcodes a value at module
+        scope. If the env says 99 but the code passes 60, this test fails.
+        """
+        client = NATSClient("nats://localhost:4222")
+        mock_connect = self._mock_nats()
+
+        env = dict(self._BASE_ENV)
+        env["NATS_MAX_RECONNECT_ATTEMPTS"] = "99"
+        with patch("app.nats_client.nats.connect", mock_connect):
+            with patch.dict("os.environ", env, clear=False):
+                asyncio.run(client.connect())
+
+        assert mock_connect.call_args[1]["max_reconnect_attempts"] == 99
+
+    def test_connect_fails_loud_when_max_reconnect_attempts_missing(self, monkeypatch):
+        """Missing env var → RuntimeError naming the key. NO silent default."""
+        client = NATSClient("nats://localhost:4222")
+        monkeypatch.delenv("NATS_MAX_RECONNECT_ATTEMPTS", raising=False)
+        monkeypatch.setenv("NATS_RECONNECT_TIME_WAIT_SECONDS", "2")
+        monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "")
+
+        with pytest.raises(RuntimeError, match="NATS_MAX_RECONNECT_ATTEMPTS"):
+            asyncio.run(client.connect())
+
+    def test_connect_fails_loud_when_reconnect_time_wait_missing(self, monkeypatch):
+        client = NATSClient("nats://localhost:4222")
+        monkeypatch.setenv("NATS_MAX_RECONNECT_ATTEMPTS", "-1")
+        monkeypatch.delenv("NATS_RECONNECT_TIME_WAIT_SECONDS", raising=False)
+        monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "")
+
+        with pytest.raises(RuntimeError, match="NATS_RECONNECT_TIME_WAIT_SECONDS"):
+            asyncio.run(client.connect())
+
+    def test_connect_fails_loud_on_non_integer_max_reconnect_attempts(self, monkeypatch):
+        client = NATSClient("nats://localhost:4222")
+        monkeypatch.setenv("NATS_MAX_RECONNECT_ATTEMPTS", "not-a-number")
+        monkeypatch.setenv("NATS_RECONNECT_TIME_WAIT_SECONDS", "2")
+        monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "")
+
+        with pytest.raises(RuntimeError, match="NATS_MAX_RECONNECT_ATTEMPTS"):
+            asyncio.run(client.connect())

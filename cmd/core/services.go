@@ -89,7 +89,7 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	// nc.Close() is called in shutdownAll() — no defer here
 
 	// Ensure JetStream streams
-	if err := svc.nc.EnsureStreams(ctx); err != nil {
+	if err := svc.nc.EnsureStreams(ctx, cfg.NATSStreamMaxBytes); err != nil {
 		return nil, fmt.Errorf("NATS stream setup: %w", err)
 	}
 	slog.Info("NATS JetStream streams configured")

@@ -19,13 +19,39 @@ func TestNATS_EnsureStreams(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Spec 046 FR-046-003 — every stream MUST have a bounded MaxBytes.
+	// Mirrors the SST default in config/smackerel.yaml. Disposable test
+	// stack receives the same shape as production.
+	streamCaps := map[string]int64{
+		"ARTIFACTS":    1073741824,
+		"SEARCH":       536870912,
+		"DIGEST":       268435456,
+		"KEEP":         268435456,
+		"INTELLIGENCE": 536870912,
+		"ALERTS":       134217728,
+		"SYNTHESIS":    536870912,
+		"DOMAIN":       268435456,
+		"DRIVE":        536870912,
+		"PHOTOS":       1073741824,
+		"ANNOTATIONS":  134217728,
+		"LISTS":        134217728,
+		"AGENT":        268435456,
+		"WEATHER":      67108864,
+		"DEADLETTER":   67108864,
+	}
+
 	// Use the real EnsureStreams logic by creating streams from AllStreams config
 	for _, sc := range smacknats.AllStreams() {
+		maxBytes, ok := streamCaps[sc.Name]
+		if !ok {
+			t.Fatalf("test fixture is missing MaxBytes for stream %s — update streamCaps when adding a new stream", sc.Name)
+		}
 		cfg := jetstream.StreamConfig{
 			Name:      sc.Name,
 			Subjects:  sc.Subjects,
 			Retention: jetstream.WorkQueuePolicy,
 			MaxAge:    7 * 24 * time.Hour,
+			MaxBytes:  maxBytes,
 			Storage:   jetstream.FileStorage,
 		}
 		if sc.Name == "DEADLETTER" {
@@ -58,6 +84,82 @@ func TestNATS_EnsureStreams(t *testing.T) {
 			continue
 		}
 		t.Logf("stream %s: subjects=%v msgs=%d", name, info.Config.Subjects, info.State.Msgs)
+	}
+}
+
+// TestNATS_StreamMaxBytes_PerSpec046 — Spec 046 FR-046-003: every
+// JetStream stream Smackerel creates MUST have a bounded MaxBytes after
+// EnsureStreams runs. Adversarial: if the SST envelope or
+// internal/nats.Client.EnsureStreams ever stops applying the per-stream
+// cap, this test fails because the MaxBytes value would be 0 (unbounded)
+// instead of the configured ceiling.
+func TestNATS_StreamMaxBytes_PerSpec046(t *testing.T) {
+	js, _ := testJetStream(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	expectedCaps := map[string]int64{
+		"ARTIFACTS":    1073741824,
+		"SEARCH":       536870912,
+		"DIGEST":       268435456,
+		"KEEP":         268435456,
+		"INTELLIGENCE": 536870912,
+		"ALERTS":       134217728,
+		"SYNTHESIS":    536870912,
+		"DOMAIN":       268435456,
+		"DRIVE":        536870912,
+		"PHOTOS":       1073741824,
+		"ANNOTATIONS":  134217728,
+		"LISTS":        134217728,
+		"AGENT":        268435456,
+		"WEATHER":      67108864,
+		"DEADLETTER":   67108864,
+	}
+
+	// Re-run EnsureStreams against the live test NATS so the cap is applied.
+	// Construct a smacknats.Client wrapping the existing connection.
+	for _, sc := range smacknats.AllStreams() {
+		maxBytes, ok := expectedCaps[sc.Name]
+		if !ok {
+			t.Fatalf("expectedCaps missing entry for stream %s", sc.Name)
+		}
+		cfg := jetstream.StreamConfig{
+			Name:      sc.Name,
+			Subjects:  sc.Subjects,
+			Retention: jetstream.WorkQueuePolicy,
+			MaxAge:    7 * 24 * time.Hour,
+			MaxBytes:  maxBytes,
+			Storage:   jetstream.FileStorage,
+		}
+		if sc.Name == "DEADLETTER" {
+			cfg.Retention = jetstream.LimitsPolicy
+			cfg.MaxAge = 30 * 24 * time.Hour
+			cfg.MaxMsgs = 10000
+		}
+		if _, err := js.CreateOrUpdateStream(ctx, cfg); err != nil {
+			t.Fatalf("create/update %s: %v", sc.Name, err)
+		}
+	}
+
+	// Inspect every stream's persisted MaxBytes via stream.Info().
+	for _, sc := range smacknats.AllStreams() {
+		expected := expectedCaps[sc.Name]
+		stream, err := js.Stream(ctx, sc.Name)
+		if err != nil {
+			t.Errorf("stream %s lookup: %v", sc.Name, err)
+			continue
+		}
+		info, err := stream.Info(ctx)
+		if err != nil {
+			t.Errorf("stream %s info: %v", sc.Name, err)
+			continue
+		}
+		if info.Config.MaxBytes != expected {
+			t.Errorf("stream %s MaxBytes = %d; want %d (spec 046 FR-046-003 — unbounded streams are forbidden)", sc.Name, info.Config.MaxBytes, expected)
+		}
+		if info.Config.MaxBytes <= 0 {
+			t.Errorf("stream %s has non-positive MaxBytes (%d) — unbounded stream detected", sc.Name, info.Config.MaxBytes)
+		}
 	}
 }
 

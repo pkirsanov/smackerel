@@ -279,6 +279,31 @@ type Config struct {
 	OllamaCPULimit        string
 	OllamaMemoryLimit     string
 	MLModelMemoryProfiles map[string]int // model name → required MiB
+
+	// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
+	// hardening. SST-compliant; populated from NATS_* env vars produced
+	// by `./smackerel.sh config generate`. The Validate() chain rejects
+	// missing or out-of-range values. NATSStreamMaxBytes MUST contain a
+	// positive entry for every stream returned by
+	// internal/nats.AllStreams(); internal/nats.Client.EnsureStreams
+	// fails loud if any stream is absent so unbounded streams are
+	// caught at startup, not after disk is full.
+	//
+	// The Raw* fields hold the on-the-wire env strings so requiredVars()
+	// can emit one consolidated missing-key error in the existing
+	// fail-loud SST pattern; the typed fields below are used at runtime.
+	NATSMaxReconnectAttemptsRaw  string
+	NATSReconnectTimeWaitSecsRaw string
+	NATSMaxPayloadBytesRaw       string
+	NATSMaxFileStoreBytesRaw     string
+	NATSMaxMemStoreBytesRaw      string
+	NATSStreamMaxBytesJSON       string
+	NATSMaxReconnectAttempts     int
+	NATSReconnectTimeWaitSecs    int
+	NATSMaxPayloadBytes          int64
+	NATSMaxFileStoreBytes        int64
+	NATSMaxMemStoreBytes         int64
+	NATSStreamMaxBytes           map[string]int64
 }
 
 // AuthConfig holds the SST-resolved per-user bearer-auth subsystem
@@ -507,6 +532,89 @@ func Load() (*Config, error) {
 		MLMemoryLimit:       os.Getenv("ML_MEMORY_LIMIT"),
 		OllamaCPULimit:      os.Getenv("OLLAMA_CPU_LIMIT"),
 		OllamaMemoryLimit:   os.Getenv("OLLAMA_MEMORY_LIMIT"),
+
+		// Spec 046 — NATS production hardening (raw env strings; parsed below).
+		NATSMaxReconnectAttemptsRaw:  os.Getenv("NATS_MAX_RECONNECT_ATTEMPTS"),
+		NATSReconnectTimeWaitSecsRaw: os.Getenv("NATS_RECONNECT_TIME_WAIT_SECONDS"),
+		NATSMaxPayloadBytesRaw:       os.Getenv("NATS_MAX_PAYLOAD_BYTES"),
+		NATSMaxFileStoreBytesRaw:     os.Getenv("NATS_MAX_FILE_STORE_BYTES"),
+		NATSMaxMemStoreBytesRaw:      os.Getenv("NATS_MAX_MEM_STORE_BYTES"),
+		NATSStreamMaxBytesJSON:       os.Getenv("NATS_STREAM_MAX_BYTES_JSON"),
+	}
+
+	// Spec 046 — NATS production hardening. Raw env values are parsed
+	// here so the loader can fail fast with a precise error naming the
+	// offending key. Validate() then enforces the requiredness contract
+	// for the string-form fail-loud check that mirrors the rest of the
+	// SST envelope.
+	if raw := cfg.NATSMaxReconnectAttemptsRaw; raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("NATS_MAX_RECONNECT_ATTEMPTS: invalid integer %q: %w", raw, err)
+		}
+		cfg.NATSMaxReconnectAttempts = v
+	}
+	if raw := cfg.NATSReconnectTimeWaitSecsRaw; raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("NATS_RECONNECT_TIME_WAIT_SECONDS: invalid integer %q: %w", raw, err)
+		}
+		if v <= 0 {
+			return nil, fmt.Errorf("NATS_RECONNECT_TIME_WAIT_SECONDS must be > 0; got %d", v)
+		}
+		cfg.NATSReconnectTimeWaitSecs = v
+	}
+	if raw := cfg.NATSMaxPayloadBytesRaw; raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("NATS_MAX_PAYLOAD_BYTES: invalid integer %q: %w", raw, err)
+		}
+		if v <= 0 {
+			return nil, fmt.Errorf("NATS_MAX_PAYLOAD_BYTES must be > 0; got %d", v)
+		}
+		cfg.NATSMaxPayloadBytes = v
+	}
+	if raw := cfg.NATSMaxFileStoreBytesRaw; raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("NATS_MAX_FILE_STORE_BYTES: invalid integer %q: %w", raw, err)
+		}
+		if v <= 0 {
+			return nil, fmt.Errorf("NATS_MAX_FILE_STORE_BYTES must be > 0; got %d", v)
+		}
+		cfg.NATSMaxFileStoreBytes = v
+	}
+	if raw := cfg.NATSMaxMemStoreBytesRaw; raw != "" {
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("NATS_MAX_MEM_STORE_BYTES: invalid integer %q: %w", raw, err)
+		}
+		if v <= 0 {
+			return nil, fmt.Errorf("NATS_MAX_MEM_STORE_BYTES must be > 0; got %d", v)
+		}
+		cfg.NATSMaxMemStoreBytes = v
+	}
+	if raw := cfg.NATSStreamMaxBytesJSON; raw != "" {
+		var entries []struct {
+			Stream string `json:"stream"`
+			Bytes  int64  `json:"bytes"`
+		}
+		if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+			return nil, fmt.Errorf("NATS_STREAM_MAX_BYTES_JSON: invalid JSON: %w", err)
+		}
+		cfg.NATSStreamMaxBytes = make(map[string]int64, len(entries))
+		for _, entry := range entries {
+			if entry.Stream == "" {
+				return nil, fmt.Errorf("NATS_STREAM_MAX_BYTES_JSON: entry has empty stream name")
+			}
+			if entry.Bytes <= 0 {
+				return nil, fmt.Errorf("NATS_STREAM_MAX_BYTES_JSON: stream %q has non-positive bytes (%d) — every stream MUST have a bounded MaxBytes per spec 046 FR-046-003", entry.Stream, entry.Bytes)
+			}
+			if _, dup := cfg.NATSStreamMaxBytes[entry.Stream]; dup {
+				return nil, fmt.Errorf("NATS_STREAM_MAX_BYTES_JSON: duplicate stream entry %q", entry.Stream)
+			}
+			cfg.NATSStreamMaxBytes[entry.Stream] = entry.Bytes
+		}
 	}
 
 	// Spec 045 — Parse ML_MEMORY_LIMIT (compose-style string like "3G",
@@ -1198,6 +1306,16 @@ func (c *Config) requiredVars() []struct {
 		{"ML_MEMORY_LIMIT", c.MLMemoryLimit},
 		{"OLLAMA_CPU_LIMIT", c.OllamaCPULimit},
 		{"OLLAMA_MEMORY_LIMIT", c.OllamaMemoryLimit},
+		// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
+		// hardening envelope. Bytes/integer parsing is done in Load();
+		// missing string-form values are caught here with the same
+		// fail-loud single-error-message pattern as spec 045 above.
+		{"NATS_MAX_RECONNECT_ATTEMPTS", c.NATSMaxReconnectAttemptsRaw},
+		{"NATS_RECONNECT_TIME_WAIT_SECONDS", c.NATSReconnectTimeWaitSecsRaw},
+		{"NATS_MAX_PAYLOAD_BYTES", c.NATSMaxPayloadBytesRaw},
+		{"NATS_MAX_FILE_STORE_BYTES", c.NATSMaxFileStoreBytesRaw},
+		{"NATS_MAX_MEM_STORE_BYTES", c.NATSMaxMemStoreBytesRaw},
+		{"NATS_STREAM_MAX_BYTES_JSON", c.NATSStreamMaxBytesJSON},
 	}
 	// MIT-040-S-004 — SMACKEREL_AUTH_TOKEN is NOT in requiredVars(): it is
 	// required only when SMACKEREL_ENV=production, and the dedicated

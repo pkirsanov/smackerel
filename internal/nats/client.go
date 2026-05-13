@@ -176,13 +176,31 @@ func Connect(ctx context.Context, url string, authToken string) (*Client, error)
 }
 
 // EnsureStreams creates or updates all required JetStream streams.
-func (c *Client) EnsureStreams(ctx context.Context) error {
+//
+// Spec 046 FR-046-003 — every Smackerel-created stream MUST have a
+// bounded MaxBytes. The caller passes streamCaps (built from the SST
+// envelope NATS_STREAM_MAX_BYTES_JSON via internal/config) and this
+// function fails loud if any stream returned by AllStreams() is missing
+// from the map. Unbounded streams are forbidden so disk exhaustion
+// during an ML outage cannot silently take the system down.
+func (c *Client) EnsureStreams(ctx context.Context, streamCaps map[string]int64) error {
+	if streamCaps == nil {
+		return fmt.Errorf("EnsureStreams: streamCaps map is nil — spec 046 FR-046-003 forbids unbounded streams; pass cfg.NATSStreamMaxBytes")
+	}
 	for _, sc := range AllStreams() {
+		maxBytes, ok := streamCaps[sc.Name]
+		if !ok {
+			return fmt.Errorf("EnsureStreams: stream %q has no MaxBytes entry in streamCaps — every stream MUST be bounded per spec 046 FR-046-003 (check infrastructure.nats.stream_max_bytes in config/smackerel.yaml)", sc.Name)
+		}
+		if maxBytes <= 0 {
+			return fmt.Errorf("EnsureStreams: stream %q has non-positive MaxBytes (%d) — spec 046 FR-046-003 requires a positive bound", sc.Name, maxBytes)
+		}
 		cfg := jetstream.StreamConfig{
 			Name:      sc.Name,
 			Subjects:  sc.Subjects,
 			Retention: jetstream.WorkQueuePolicy,
 			MaxAge:    7 * 24 * time.Hour, // 7 days — prevent message loss during extended ML outages
+			MaxBytes:  maxBytes,
 			Storage:   jetstream.FileStorage,
 		}
 
@@ -197,7 +215,7 @@ func (c *Client) EnsureStreams(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("create/update stream %s: %w", sc.Name, err)
 		}
-		slog.Info("ensured NATS stream", "name", sc.Name, "subjects", sc.Subjects)
+		slog.Info("ensured NATS stream", "name", sc.Name, "subjects", sc.Subjects, "max_bytes", maxBytes)
 	}
 	return nil
 }

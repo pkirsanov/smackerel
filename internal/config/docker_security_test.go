@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -255,6 +256,72 @@ func TestNATSConf_GeneratedFile_TokenProperlyQuoted(t *testing.T) {
 	for i := 0; i < len(inner); i++ {
 		if inner[i] == '"' && (i == 0 || inner[i-1] != '\\') {
 			t.Errorf("NATS token value contains unescaped double-quote at position %d: %s", i, inner)
+		}
+	}
+}
+
+// --- Spec 046 FR-046-002: NATS server limits are explicit in nats.conf ---
+
+// TestNATSConf_HasPayloadAndStorageLimits — Spec 046 FR-046-002 adversarial
+// regression. The generated config/generated/nats.conf MUST declare
+// max_payload, jetstream.max_file_store, and jetstream.max_memory_store
+// directives so the broker enforces the SST envelope at runtime. If any
+// directive is missing the broker would default to unbounded limits and
+// the failure condition from spec.md ("unbounded NATS payload/storage
+// settings") would ship to production.
+func TestNATSConf_HasPayloadAndStorageLimits(t *testing.T) {
+	path := "config/generated/nats.conf"
+	content := readRepoFile(t, path)
+
+	// Each directive must appear at line start (NATS conf is indentation-
+	// sensitive but tolerant of leading whitespace inside blocks; we
+	// check substring presence to catch the regression cheaply).
+	requiredDirectives := []struct {
+		name     string
+		fragment string
+	}{
+		{"max_payload", "max_payload:"},
+		{"jetstream.max_file_store", "max_file_store:"},
+		{"jetstream.max_memory_store", "max_memory_store:"},
+	}
+	for _, d := range requiredDirectives {
+		if !strings.Contains(content, d.fragment) {
+			t.Errorf("nats.conf missing required directive %q (fragment %q) per spec 046 FR-046-002 — regenerate with `./smackerel.sh config generate`", d.name, d.fragment)
+		}
+	}
+
+	// Verify each directive carries a positive integer (the SST renderer
+	// resolves these from infrastructure.nats.{max_payload_bytes,
+	// max_file_store_bytes, max_mem_store_bytes}). A directive present
+	// but with a zero/empty value is just as broken as missing — catch it.
+	lines := strings.Split(content, "\n")
+	directiveValue := func(prefix string) string {
+		for _, l := range lines {
+			t := strings.TrimSpace(l)
+			if strings.HasPrefix(t, prefix) {
+				return strings.TrimSpace(strings.TrimPrefix(t, prefix))
+			}
+		}
+		return ""
+	}
+
+	for _, d := range []string{"max_payload:", "max_file_store:", "max_memory_store:"} {
+		val := directiveValue(d)
+		if val == "" {
+			t.Errorf("nats.conf directive %s has empty value", d)
+			continue
+		}
+		// Strip optional trailing comment
+		if idx := strings.Index(val, "#"); idx >= 0 {
+			val = strings.TrimSpace(val[:idx])
+		}
+		n, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			t.Errorf("nats.conf directive %s value %q is not an integer: %v", d, val, err)
+			continue
+		}
+		if n <= 0 {
+			t.Errorf("nats.conf directive %s value %d must be positive (spec 046 FR-046-002 — no unbounded server limits)", d, n)
 		}
 	}
 }

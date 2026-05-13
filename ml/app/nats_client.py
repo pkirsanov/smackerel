@@ -129,12 +129,54 @@ class NATSClient:
         return self._nc is not None and self._nc.is_connected
 
     async def connect(self) -> None:
-        """Connect to NATS and initialize JetStream."""
+        """Connect to NATS and initialize JetStream.
+
+        Spec 046 FR-046-001 — reconnect parameters MUST flow from SST. The
+        ML sidecar runs in always-on deployment and MUST survive transient
+        NATS restarts indefinitely, so ``max_reconnect_attempts`` is set to
+        ``-1`` in ``infrastructure.nats.client.max_reconnect_attempts`` in
+        ``config/smackerel.yaml``. Missing or non-integer SST values fail
+        loud here; there is no hidden default.
+        """
+        # Read SST-resolved reconnect contract. Both keys are REQUIRED — the
+        # generator (scripts/commands/config.sh) writes them into the env
+        # file. Empty/missing values would be a deployment misconfiguration.
+        try:
+            raw_max = os.environ["NATS_MAX_RECONNECT_ATTEMPTS"]
+        except KeyError as exc:
+            raise RuntimeError(
+                "NATS_MAX_RECONNECT_ATTEMPTS is required (spec 046 FR-046-001) — "
+                "set infrastructure.nats.client.max_reconnect_attempts in "
+                "config/smackerel.yaml (use -1 for indefinite reconnect) and "
+                "run `./smackerel.sh config generate`."
+            ) from exc
+        try:
+            max_reconnect_attempts = int(raw_max)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"NATS_MAX_RECONNECT_ATTEMPTS must be an integer; got {raw_max!r}"
+            ) from exc
+
+        try:
+            raw_wait = os.environ["NATS_RECONNECT_TIME_WAIT_SECONDS"]
+        except KeyError as exc:
+            raise RuntimeError(
+                "NATS_RECONNECT_TIME_WAIT_SECONDS is required (spec 046 FR-046-001) — "
+                "set infrastructure.nats.client.reconnect_time_wait_seconds in "
+                "config/smackerel.yaml and run `./smackerel.sh config generate`."
+            ) from exc
+        try:
+            reconnect_time_wait = int(raw_wait)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"NATS_RECONNECT_TIME_WAIT_SECONDS must be an integer; got {raw_wait!r}"
+            ) from exc
+
         connect_opts: dict = dict(
             servers=[self.url],
             name="smackerel-ml",
-            reconnect_time_wait=2,
-            max_reconnect_attempts=60,
+            reconnect_time_wait=reconnect_time_wait,
+            max_reconnect_attempts=max_reconnect_attempts,
             disconnected_cb=self._on_disconnect,
             reconnected_cb=self._on_reconnect,
         )
@@ -145,7 +187,12 @@ class NATSClient:
 
         self._nc = await nats.connect(**connect_opts)
         self._js = self._nc.jetstream()
-        logger.info("Connected to NATS at %s", self.url)
+        logger.info(
+            "Connected to NATS at %s (max_reconnect_attempts=%d, reconnect_time_wait=%ds)",
+            self.url,
+            max_reconnect_attempts,
+            reconnect_time_wait,
+        )
 
     async def subscribe_all(self) -> None:
         """Subscribe to all processing subjects and start consumer loops.

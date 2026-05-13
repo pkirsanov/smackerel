@@ -124,6 +124,177 @@ func TestValidate_TelegramChatIDs(t *testing.T) {
 	}
 }
 
+// --- Spec 046 — NATS production hardening fail-loud envelope ---
+
+func TestValidate_NATS_MaxReconnectAttempts_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_MAX_RECONNECT_ATTEMPTS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_MAX_RECONNECT_ATTEMPTS")
+	}
+	if !strings.Contains(err.Error(), "NATS_MAX_RECONNECT_ATTEMPTS") {
+		t.Errorf("error should name NATS_MAX_RECONNECT_ATTEMPTS, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_ReconnectTimeWait_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_RECONNECT_TIME_WAIT_SECONDS", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_RECONNECT_TIME_WAIT_SECONDS")
+	}
+	if !strings.Contains(err.Error(), "NATS_RECONNECT_TIME_WAIT_SECONDS") {
+		t.Errorf("error should name NATS_RECONNECT_TIME_WAIT_SECONDS, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_MaxPayloadBytes_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_MAX_PAYLOAD_BYTES", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_MAX_PAYLOAD_BYTES")
+	}
+	if !strings.Contains(err.Error(), "NATS_MAX_PAYLOAD_BYTES") {
+		t.Errorf("error should name NATS_MAX_PAYLOAD_BYTES, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_MaxFileStoreBytes_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_MAX_FILE_STORE_BYTES", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_MAX_FILE_STORE_BYTES")
+	}
+	if !strings.Contains(err.Error(), "NATS_MAX_FILE_STORE_BYTES") {
+		t.Errorf("error should name NATS_MAX_FILE_STORE_BYTES, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_MaxMemStoreBytes_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_MAX_MEM_STORE_BYTES", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_MAX_MEM_STORE_BYTES")
+	}
+	if !strings.Contains(err.Error(), "NATS_MAX_MEM_STORE_BYTES") {
+		t.Errorf("error should name NATS_MAX_MEM_STORE_BYTES, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_StreamMaxBytesJSON_Missing(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", "")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for missing NATS_STREAM_MAX_BYTES_JSON")
+	}
+	if !strings.Contains(err.Error(), "NATS_STREAM_MAX_BYTES_JSON") {
+		t.Errorf("error should name NATS_STREAM_MAX_BYTES_JSON, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_StreamMaxBytesJSON_InvalidJSON(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", "{not valid json")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid NATS_STREAM_MAX_BYTES_JSON")
+	}
+	if !strings.Contains(err.Error(), "invalid JSON") {
+		t.Errorf("error should mention invalid JSON, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_StreamMaxBytesJSON_NonPositiveBytes(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", `[{"stream":"ARTIFACTS","bytes":0}]`)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for non-positive bytes value")
+	}
+	if !strings.Contains(err.Error(), "non-positive") {
+		t.Errorf("error should mention non-positive, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "ARTIFACTS") {
+		t.Errorf("error should name the offending stream ARTIFACTS, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_StreamMaxBytesJSON_DuplicateStream(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", `[{"stream":"ARTIFACTS","bytes":1024},{"stream":"ARTIFACTS","bytes":2048}]`)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for duplicate stream entry")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Errorf("error should mention duplicate, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_MaxPayloadBytes_NonInteger(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_MAX_PAYLOAD_BYTES", "not-a-number")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for non-integer NATS_MAX_PAYLOAD_BYTES")
+	}
+	if !strings.Contains(err.Error(), "NATS_MAX_PAYLOAD_BYTES") {
+		t.Errorf("error should name NATS_MAX_PAYLOAD_BYTES, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_ReconnectTimeWait_NonPositive(t *testing.T) {
+	setRequiredEnv(t)
+	t.Setenv("NATS_RECONNECT_TIME_WAIT_SECONDS", "0")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for non-positive NATS_RECONNECT_TIME_WAIT_SECONDS")
+	}
+	if !strings.Contains(err.Error(), "NATS_RECONNECT_TIME_WAIT_SECONDS") {
+		t.Errorf("error should name NATS_RECONNECT_TIME_WAIT_SECONDS, got: %v", err)
+	}
+}
+
+func TestValidate_NATS_EnvelopeAcceptedWhenComplete(t *testing.T) {
+	setRequiredEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if cfg.NATSMaxReconnectAttempts != -1 {
+		t.Errorf("expected NATSMaxReconnectAttempts=-1 (indefinite), got %d", cfg.NATSMaxReconnectAttempts)
+	}
+	if cfg.NATSReconnectTimeWaitSecs != 2 {
+		t.Errorf("expected NATSReconnectTimeWaitSecs=2, got %d", cfg.NATSReconnectTimeWaitSecs)
+	}
+	if cfg.NATSMaxPayloadBytes != 8388608 {
+		t.Errorf("expected NATSMaxPayloadBytes=8388608, got %d", cfg.NATSMaxPayloadBytes)
+	}
+	if cfg.NATSMaxFileStoreBytes != 10737418240 {
+		t.Errorf("expected NATSMaxFileStoreBytes=10737418240, got %d", cfg.NATSMaxFileStoreBytes)
+	}
+	if cfg.NATSMaxMemStoreBytes != 1073741824 {
+		t.Errorf("expected NATSMaxMemStoreBytes=1073741824, got %d", cfg.NATSMaxMemStoreBytes)
+	}
+	// Every stream returned by AllStreams must have a positive cap.
+	for _, sc := range []string{"ARTIFACTS", "SEARCH", "DIGEST", "KEEP", "INTELLIGENCE", "ALERTS", "SYNTHESIS", "DOMAIN", "DRIVE", "PHOTOS", "ANNOTATIONS", "LISTS", "AGENT", "WEATHER", "DEADLETTER"} {
+		v, ok := cfg.NATSStreamMaxBytes[sc]
+		if !ok {
+			t.Errorf("NATSStreamMaxBytes missing stream %q", sc)
+			continue
+		}
+		if v <= 0 {
+			t.Errorf("NATSStreamMaxBytes[%s] = %d; want positive", sc, v)
+		}
+	}
+}
+
 func TestValidate_QFDecisionsDisabledAllowsEmptyValues(t *testing.T) {
 	setRequiredEnv(t)
 	t.Setenv("QF_DECISIONS_ENABLED", "false")
@@ -647,6 +818,16 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("OLLAMA_CPU_LIMIT", "4.0")
 	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G")
 	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","memory_mib":2048},{"model":"all-MiniLM-L6-v2","memory_mib":256},{"model":"gpt-4o-mini","memory_mib":512}]`)
+
+	// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
+	// hardening envelope. Defaults mirror smackerel.yaml so test loads
+	// succeed; per-test overrides exercise fail-loud paths.
+	t.Setenv("NATS_MAX_RECONNECT_ATTEMPTS", "-1")
+	t.Setenv("NATS_RECONNECT_TIME_WAIT_SECONDS", "2")
+	t.Setenv("NATS_MAX_PAYLOAD_BYTES", "8388608")
+	t.Setenv("NATS_MAX_FILE_STORE_BYTES", "10737418240")
+	t.Setenv("NATS_MAX_MEM_STORE_BYTES", "1073741824")
+	t.Setenv("NATS_STREAM_MAX_BYTES_JSON", `[{"stream":"ARTIFACTS","bytes":1073741824},{"stream":"SEARCH","bytes":536870912},{"stream":"DIGEST","bytes":268435456},{"stream":"KEEP","bytes":268435456},{"stream":"INTELLIGENCE","bytes":536870912},{"stream":"ALERTS","bytes":134217728},{"stream":"SYNTHESIS","bytes":536870912},{"stream":"DOMAIN","bytes":268435456},{"stream":"DRIVE","bytes":536870912},{"stream":"PHOTOS","bytes":1073741824},{"stream":"ANNOTATIONS","bytes":134217728},{"stream":"LISTS","bytes":134217728},{"stream":"AGENT","bytes":268435456},{"stream":"WEATHER","bytes":67108864},{"stream":"DEADLETTER","bytes":67108864}]`)
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {

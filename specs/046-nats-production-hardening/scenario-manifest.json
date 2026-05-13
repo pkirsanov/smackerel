@@ -1,0 +1,107 @@
+{
+  "version": 2,
+  "specId": "046",
+  "featureDir": "specs/046-nats-production-hardening",
+  "generatedBy": "bubbles.workflow (full-delivery)",
+  "generatedAt": "2026-05-13T18:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-046-N01",
+      "name": "ML sidecar survives NATS restart",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_passes_indefinite_reconnect_from_env"},
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_passes_reconnect_time_wait_from_env"},
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_honors_env_value_not_module_constant"},
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_fails_loud_when_max_reconnect_attempts_missing"},
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_fails_loud_when_reconnect_time_wait_missing"},
+        {"file": "ml/tests/test_nats_client.py", "function": "TestConnectReconnectContract::test_connect_fails_loud_on_non_integer_max_reconnect_attempts"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_passes_indefinite_reconnect_from_env"},
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_passes_reconnect_time_wait_from_env"},
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_honors_env_value_not_module_constant"},
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_fails_loud_when_max_reconnect_attempts_missing"},
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_fails_loud_when_reconnect_time_wait_missing"},
+        {"type": "unit-test", "location": "ml/tests/test_nats_client.py::TestConnectReconnectContract::test_connect_fails_loud_on_non_integer_max_reconnect_attempts"},
+        {"type": "source", "location": "ml/app/nats_client.py::connect"},
+        {"type": "source", "location": "config/smackerel.yaml::infrastructure.nats.client.{reconnect_time_wait_seconds,max_reconnect_attempts}"},
+        {"type": "source", "location": "scripts/commands/config.sh — NATS_MAX_RECONNECT_ATTEMPTS / NATS_RECONNECT_TIME_WAIT_SECONDS env emission"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-046-N01: T-046-001 passes and proves ML client reconnect attempts are indefinite",
+        "Scope 1 DoD: SCN-046-N01: T-046-002 passes and proves reconnect behavior against a disposable NATS restart",
+        "Scope 1 DoD: SCN-046-N01: ml/app/nats_client.py connect() reads NATS_MAX_RECONNECT_ATTEMPTS=-1 and NATS_RECONNECT_TIME_WAIT_SECONDS=2 from SST envelope and the sidecar keeps reconnecting until NATS returns"
+      ]
+    },
+    {
+      "scenarioId": "SCN-046-N02",
+      "name": "NATS server limits are explicit",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "contract"],
+      "linkedTests": [
+        {"file": "internal/config/docker_security_test.go", "function": "TestNATSConf_HasPayloadAndStorageLimits"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_MaxPayloadBytes_Missing"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_MaxFileStoreBytes_Missing"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_MaxMemStoreBytes_Missing"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_MaxPayloadBytes_NonInteger"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_EnvelopeAcceptedWhenComplete"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/config/docker_security_test.go::TestNATSConf_HasPayloadAndStorageLimits"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_MaxPayloadBytes_Missing"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_MaxFileStoreBytes_Missing"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_MaxMemStoreBytes_Missing"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_MaxPayloadBytes_NonInteger"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_EnvelopeAcceptedWhenComplete"},
+        {"type": "source", "location": "config/smackerel.yaml::infrastructure.nats.{max_payload_bytes,max_file_store_bytes,max_mem_store_bytes}"},
+        {"type": "source", "location": "scripts/commands/config.sh — required_value extraction + nats.conf rendering of max_payload/max_file_store/max_memory_store"},
+        {"type": "source", "location": "internal/config/config.go — Load() parsing of NATS envelope + requiredVars() enforcement"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: SCN-046-N02: T-046-003 passes and proves NATS server limits are required (max_payload, max_file_store, max_mem_store are present in config/generated/nats.conf and missing values fail configuration validation)",
+        "Scope 2 DoD: SCN-046-N02: T-046-006 passes and this planning packet remains lint-clean"
+      ]
+    },
+    {
+      "scenarioId": "SCN-046-N03",
+      "name": "Streams cannot grow without bound",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        {"file": "internal/nats/client_test.go", "function": "TestEnsureStreams_NilCapsRejected"},
+        {"file": "internal/nats/client_test.go", "function": "TestEnsureStreams_MissingStreamCapRejected"},
+        {"file": "internal/nats/client_test.go", "function": "TestEnsureStreams_NonPositiveCapRejected"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_StreamMaxBytesJSON_Missing"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_StreamMaxBytesJSON_InvalidJSON"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_StreamMaxBytesJSON_NonPositiveBytes"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_NATS_StreamMaxBytesJSON_DuplicateStream"},
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_EnsureStreams"},
+        {"file": "tests/integration/nats_stream_test.go", "function": "TestNATS_StreamMaxBytes_PerSpec046"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/nats/client_test.go::TestEnsureStreams_NilCapsRejected"},
+        {"type": "unit-test", "location": "internal/nats/client_test.go::TestEnsureStreams_MissingStreamCapRejected"},
+        {"type": "unit-test", "location": "internal/nats/client_test.go::TestEnsureStreams_NonPositiveCapRejected"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_StreamMaxBytesJSON_Missing"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_StreamMaxBytesJSON_InvalidJSON"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_StreamMaxBytesJSON_NonPositiveBytes"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_NATS_StreamMaxBytesJSON_DuplicateStream"},
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_EnsureStreams"},
+        {"type": "integration-test", "location": "tests/integration/nats_stream_test.go::TestNATS_StreamMaxBytes_PerSpec046"},
+        {"type": "source", "location": "internal/nats/client.go::EnsureStreams"},
+        {"type": "source", "location": "config/smackerel.yaml::infrastructure.nats.stream_max_bytes"},
+        {"type": "source", "location": "internal/config/config.go — NATSStreamMaxBytes map parsing + requiredVars() enforcement"},
+        {"type": "source", "location": "cmd/core/services.go — passes cfg.NATSStreamMaxBytes into EnsureStreams call site"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: SCN-046-N03: T-046-004 passes and proves every JetStream stream has a MaxBytes cap and bounded retention policy (DEADLETTER LimitsPolicy/MaxAge/MaxMsgs preserved; all other streams WorkQueuePolicy with per-stream MaxBytes from SST)",
+        "Scope 2 DoD: SCN-046-N03: T-046-005 passes against disposable NATS state and proves streams cannot grow without bound"
+      ]
+    }
+  ]
+}
