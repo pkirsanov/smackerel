@@ -355,6 +355,14 @@ ML_CONTAINER_PORT="$(required_value services.ml.container_port)"
 ML_HEALTH_CACHE_TTL_S="$(required_value services.ml.health_cache_ttl_s)"
 ML_READINESS_TIMEOUT_S="$(required_value services.ml.readiness_timeout_s)"
 ML_PROCESSING_DEGRADED_FALLBACK_ENABLED="$(env_override_value ml_processing_degraded_fallback_enabled services.ml.processing_degraded_fallback_enabled)"
+# Spec 050 FR-050-001/002/003/005 — ML sidecar health/worker isolation contract.
+# All three values are SST-owned and required. The Python ML sidecar consumes
+# them in ml/app/main.py::_check_required_config and ml/app/embedder.py to
+# bound the dedicated embedding ThreadPoolExecutor (FR-050-002), document the
+# health latency SLA (FR-050-003), and emit worker/queue metrics (FR-050-005).
+ML_EMBEDDING_WORKERS="$(required_value services.ml.embedding_workers)"
+ML_EMBEDDING_QUEUE_MAX="$(required_value services.ml.embedding_queue_max)"
+ML_HEALTH_LATENCY_SLA_MS="$(required_value services.ml.health_latency_sla_ms)"
 
 # Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
 # memory profile extraction. Every key is required (fail-loud SST). The
@@ -1159,6 +1167,9 @@ SHUTDOWN_TIMEOUT_S=${SHUTDOWN_TIMEOUT_S}
 ML_HEALTH_CACHE_TTL_S=${ML_HEALTH_CACHE_TTL_S}
 ML_READINESS_TIMEOUT_S=${ML_READINESS_TIMEOUT_S}
 ML_PROCESSING_DEGRADED_FALLBACK_ENABLED=${ML_PROCESSING_DEGRADED_FALLBACK_ENABLED}
+ML_EMBEDDING_WORKERS=${ML_EMBEDDING_WORKERS}
+ML_EMBEDDING_QUEUE_MAX=${ML_EMBEDDING_QUEUE_MAX}
+ML_HEALTH_LATENCY_SLA_MS=${ML_HEALTH_LATENCY_SLA_MS}
 KNOWLEDGE_ENABLED=${KNOWLEDGE_ENABLED}
 KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS=${KNOWLEDGE_SYNTHESIS_TIMEOUT_SECONDS}
 KNOWLEDGE_LINT_CRON=${KNOWLEDGE_LINT_CRON}

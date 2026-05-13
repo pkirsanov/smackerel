@@ -551,6 +551,49 @@ The NATS monitoring endpoint at `http://127.0.0.1:42003` provides:
 - `/jsz` — JetStream stream and consumer status
 - `/healthz` — health status
 
+### ML Sidecar Health Isolation (Spec 050)
+
+The ML sidecar isolates CPU-bound embedding work from the FastAPI async
+event loop using a dedicated bounded `ThreadPoolExecutor`. This keeps
+`/health` responsive even when the model is saturated with embedding
+requests, which is what the Go core health probe relies on for its
+graceful-degradation behavior (text search fallback when ML is
+unreachable).
+
+**SST keys** (required — no defaults, no fallbacks):
+
+| Key | Default in `config/smackerel.yaml` | Purpose |
+|-----|-------------------------------------|---------|
+| `services.ml.embedding_workers` | `2` | Caps active CPU-bound embedding threads. |
+| `services.ml.embedding_queue_max` | `3` | Caps in-flight + queued embedding tasks; excess work is rejected with HTTP 503-equivalent backpressure error. Must be `>= embedding_workers`. |
+| `services.ml.health_latency_sla_ms` | `500` | Observable SLA budget for `/health` (milliseconds). |
+
+If any of these keys is missing, empty, non-integer, or non-positive the
+sidecar refuses to start (`sys.exit(1)`) with a named ERROR log. To
+change a value, edit `config/smackerel.yaml`, regenerate the env file
+(`./smackerel.sh config generate`), and restart the stack
+(`./smackerel.sh down && ./smackerel.sh up`).
+
+**Prometheus metrics**:
+
+- `smackerel_ml_embedding_workers_configured` (Gauge) — set to
+  `embedding_workers` on executor construction.
+- `smackerel_ml_embedding_inflight` (Gauge) — current number of
+  in-flight embedding tasks.
+- `smackerel_ml_embedding_rejected_total` (Counter) — total embedding
+  tasks rejected due to `embedding_queue_max` backpressure.
+
+**Tuning guidance**: on hardware with `n` cores reserved for embedding
+(see `deploy_resources.smackerel_ml.cpus` in
+`config/smackerel.yaml`), set `embedding_workers` to `n`. Set
+`embedding_queue_max` to `2 * embedding_workers` for steady-state load
+and reduce it to `embedding_workers` for stricter backpressure. The
+`health_latency_sla_ms` default of `500` is generous for a healthy
+sidecar; if your observability platform should alert on sustained
+breaches, point your alert at `histogram_quantile(0.95,
+rate(smackerel_ml_request_latency_seconds_bucket{endpoint="/health"}[5m]))`
+and compare against the SLA value.
+
 ## TLS Setup
 
 Smackerel services bind to `127.0.0.1` by default (localhost only). To expose the stack over a network with HTTPS, use a reverse proxy.
