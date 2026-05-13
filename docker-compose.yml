@@ -69,6 +69,12 @@ services:
         COMMIT_HASH: ${SMACKEREL_COMMIT:-unknown}
         BUILD_TIME: ${SMACKEREL_BUILD_TIME:-unknown}
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # Mirrors deploy/compose.deploy.yml so dev stack runs hardened and
+    # surfaces issues (e.g. unexpected writes to `/`) before deploy.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -133,6 +139,13 @@ services:
         BUILD_TIME: ${SMACKEREL_BUILD_TIME:-unknown}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # HF cache + sentence-transformers cache + uvicorn temp files all live
+    # under /tmp via the HF_HOME and SENTENCE_TRANSFORMERS_HOME overrides
+    # in `environment:` below. Mirrors deploy/compose.deploy.yml.
+    read_only: true
+    tmpfs:
+      - /tmp:size=768m,mode=1777,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -144,6 +157,10 @@ services:
     environment:
       # Override: container-internal path for prompt contracts (mounted via volume)
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
+      # Spec 045 FR-045-003 — redirect HuggingFace + sentence-transformers
+      # caches into the read-only-root tmpfs at /tmp.
+      HF_HOME: /tmp/hf-cache
+      SENTENCE_TRANSFORMERS_HOME: /tmp/st-cache
     volumes:
       - ./config/prompt_contracts:/app/prompt_contracts:ro
       - ./config/nats_contract.json:/config/nats_contract.json:ro
@@ -170,6 +187,13 @@ services:
     # for dev/home-lab and infrastructure.ollama.test.image for the test stack.
     image: ${OLLAMA_IMAGE}
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # Persistent model store stays on the named volume `ollama-data`
+    # mounted at /root/.ollama. Mirrors deploy/compose.deploy.yml.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
+      - /.ollama_tmp:size=64m,mode=1777,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     ports:

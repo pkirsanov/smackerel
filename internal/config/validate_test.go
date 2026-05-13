@@ -632,6 +632,21 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("AUTH_TELEMETRY_ENABLED", "true")
 	t.Setenv("AUTH_TELEMETRY_METRIC_PREFIX", "smackerel_auth")
 	t.Setenv("AUTH_BOOTSTRAP_TOKEN", "")
+
+	// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and
+	// ML model memory profile. Defaults mirror smackerel.yaml so test
+	// loads succeed; per-test overrides exercise fail-loud paths.
+	t.Setenv("POSTGRES_CPU_LIMIT", "1.0")
+	t.Setenv("POSTGRES_MEMORY_LIMIT", "1G")
+	t.Setenv("NATS_CPU_LIMIT", "0.5")
+	t.Setenv("NATS_MEMORY_LIMIT", "512M")
+	t.Setenv("CORE_CPU_LIMIT", "2.0")
+	t.Setenv("CORE_MEMORY_LIMIT", "1G")
+	t.Setenv("ML_CPU_LIMIT", "2.0")
+	t.Setenv("ML_MEMORY_LIMIT", "3G")
+	t.Setenv("OLLAMA_CPU_LIMIT", "4.0")
+	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G")
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","memory_mib":2048},{"model":"all-MiniLM-L6-v2","memory_mib":256},{"model":"gpt-4o-mini","memory_mib":512}]`)
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
