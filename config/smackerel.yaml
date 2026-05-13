@@ -839,6 +839,38 @@ monitoring:
     # home-lab-class machine. Tune via SST without code changes.
     retention_days: 15
 
+# Spec 048 — Backup and Restore Automation (FR-048-001 / FR-048-002 /
+# FR-048-003).
+#
+# Smackerel owns the PRODUCT contract: which artifacts are produced, what
+# retention policy applies, and how restore is verified. The deploy
+# adapter owns SCHEDULING (systemd timer / cron) and DESTINATION (S3 /
+# rclone / NFS — set by the adapter via ${BACKUP_DESTINATION_URL} in
+# its own overlay; this repo MUST NOT name a real bucket or hostname).
+#
+# All keys are required (fail-loud SST). Missing values fail at
+# `./smackerel.sh config generate` and `config.Load()` per Gate G028.
+backup:
+  # Host-side staging directory the script writes pg_dump artifacts to
+  # before the deploy adapter ships them off-host. Relative paths resolve
+  # against the repo root; the deploy adapter overlay should set an
+  # absolute path under its own data partition.
+  local_dir: "./backups"
+  # Status file the script updates after every run. The Go core's
+  # internal/backup.Watcher polls this file and republishes
+  # `smackerel_backup_last_success_unixtime`, `smackerel_backup_size_bytes`,
+  # and `smackerel_backup_runs_total{status}` for spec 049 alerting.
+  status_file: "./backups/.backup-status.json"
+  # FR-048-001 retention contract. 7 daily + 4 weekly is the product
+  # default. Operators can adjust via SST; the script prunes anything
+  # outside the resolved window after each successful run.
+  retention_daily: 7
+  retention_weekly: 4
+  # How often the metrics watcher re-reads the status file. 60s is the
+  # recommended default; lower values reduce the stale-metric window at
+  # the cost of more file IO. The SmackerelBackupStale alert fires on a
+  # multi-hour window so 60s is well within the contract.
+  watcher_poll_seconds: 60
 
 infrastructure:
   postgres:
@@ -859,9 +891,9 @@ infrastructure:
     #   max_file_store_bytes — JetStream file store ceiling on disk.
     #   max_mem_store_bytes — JetStream in-memory ceiling.
     # Missing or empty values fail loud via required_value at generate time.
-    max_payload_bytes: 8388608          # 8 MiB
-    max_file_store_bytes: 10737418240   # 10 GiB
-    max_mem_store_bytes: 1073741824     # 1 GiB
+    max_payload_bytes: 8388608 # 8 MiB
+    max_file_store_bytes: 10737418240 # 10 GiB
+    max_mem_store_bytes: 1073741824 # 1 GiB
     # Spec 046 FR-046-001 — ML sidecar reconnect contract. The Python
     # client reads these via NATS_MAX_RECONNECT_ATTEMPTS and
     # NATS_RECONNECT_TIME_WAIT_SECONDS in ml/app/nats_client.py. -1 means
@@ -878,36 +910,36 @@ infrastructure:
     # missing from the map. Totals must remain comfortably below
     # max_file_store_bytes above.
     stream_max_bytes:
-      - stream: ARTIFACTS
-        bytes: 1073741824    # 1 GiB — primary capture queue
-      - stream: SEARCH
-        bytes: 536870912     # 512 MiB — embedding/rerank
-      - stream: DIGEST
-        bytes: 268435456     # 256 MiB — daily digest
-      - stream: KEEP
-        bytes: 268435456     # 256 MiB — Keep sync
-      - stream: INTELLIGENCE
-        bytes: 536870912     # 512 MiB — multi-domain analysis
-      - stream: ALERTS
-        bytes: 134217728     # 128 MiB — notifications
-      - stream: SYNTHESIS
-        bytes: 536870912     # 512 MiB — cross-source synthesis
-      - stream: DOMAIN
-        bytes: 268435456     # 256 MiB — domain extraction
-      - stream: DRIVE
-        bytes: 536870912     # 512 MiB — cloud-drive events
-      - stream: PHOTOS
-        bytes: 1073741824    # 1 GiB — photo classification batches
-      - stream: ANNOTATIONS
-        bytes: 134217728     # 128 MiB — user annotations
-      - stream: LISTS
-        bytes: 134217728     # 128 MiB — actionable lists
-      - stream: AGENT
-        bytes: 268435456     # 256 MiB — agent traces
-      - stream: WEATHER
-        bytes: 67108864      # 64 MiB — weather enrich
-      - stream: DEADLETTER
-        bytes: 67108864      # 64 MiB — forensic DLQ
+    - stream: ARTIFACTS
+      bytes: 1073741824 # 1 GiB — primary capture queue
+    - stream: SEARCH
+      bytes: 536870912 # 512 MiB — embedding/rerank
+    - stream: DIGEST
+      bytes: 268435456 # 256 MiB — daily digest
+    - stream: KEEP
+      bytes: 268435456 # 256 MiB — Keep sync
+    - stream: INTELLIGENCE
+      bytes: 536870912 # 512 MiB — multi-domain analysis
+    - stream: ALERTS
+      bytes: 134217728 # 128 MiB — notifications
+    - stream: SYNTHESIS
+      bytes: 536870912 # 512 MiB — cross-source synthesis
+    - stream: DOMAIN
+      bytes: 268435456 # 256 MiB — domain extraction
+    - stream: DRIVE
+      bytes: 536870912 # 512 MiB — cloud-drive events
+    - stream: PHOTOS
+      bytes: 1073741824 # 1 GiB — photo classification batches
+    - stream: ANNOTATIONS
+      bytes: 134217728 # 128 MiB — user annotations
+    - stream: LISTS
+      bytes: 134217728 # 128 MiB — actionable lists
+    - stream: AGENT
+      bytes: 268435456 # 256 MiB — agent traces
+    - stream: WEATHER
+      bytes: 67108864 # 64 MiB — weather enrich
+    - stream: DEADLETTER
+      bytes: 67108864 # 64 MiB — forensic DLQ
   ollama:
     # Default fallback (legacy spec 037 — superseded by per-env ollama_enabled
     # override added by spec 043). Kept so existing readers that ignore the

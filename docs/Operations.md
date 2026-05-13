@@ -410,17 +410,115 @@ curl http://127.0.0.1:42003/jsz
 
 ## Backup & Restore
 
-### PostgreSQL Backup
+Smackerel ships a product-owned backup and restore contract (spec 048). The
+runtime owns the dump command, retention pruning, and a JSON status file
+the metrics watcher republishes as Prometheus gauges; the deploy adapter
+overlay owns scheduling (systemd timer or cron) and any off-host shipping
+destination (S3, BackBlaze, rclone-to-NFS, etc.).
 
-The CLI provides a one-command backup:
+### Contract Summary
 
-```bash
-./smackerel.sh backup
+| Concern | Owner | Surface |
+|---------|-------|---------|
+| Dump command + retention + status file | Smackerel runtime | `./smackerel.sh backup` |
+| Disposable restore drill | Smackerel runtime | `./smackerel.sh backup-restore-test` |
+| Status JSON schema | Smackerel runtime | `${BACKUP_STATUS_FILE}` (default `./backups/.backup-status.json`) |
+| Metrics + alert | Smackerel runtime | `smackerel_backup_last_success_unixtime`, `smackerel_backup_size_bytes`, `smackerel_backup_runs_total{status}`; alert `SmackerelBackupStale` |
+| Schedule (timer/cron) | Deploy adapter | `<adapter>/timers/smackerel-backup.timer` |
+| Off-host destination | Deploy adapter | `${BACKUP_DESTINATION_URL}` written by adapter to `app.env`; never committed here |
+
+### SST Keys
+
+All five keys are required (`./smackerel.sh config generate` fails loud if any are missing):
+
+| Key | smackerel.yaml path | Default | Meaning |
+|-----|---------------------|---------|---------|
+| `BACKUP_LOCAL_DIR` | `backup.local_dir` | `./backups` | Directory where artifacts and the status file live. |
+| `BACKUP_STATUS_FILE` | `backup.status_file` | `./backups/.backup-status.json` | JSON file written by `backup.sh` and polled by the core watcher. |
+| `BACKUP_RETENTION_DAILY` | `backup.retention_daily` | `7` | Distinct-day daily slots (newest of each day kept). |
+| `BACKUP_RETENTION_WEEKLY` | `backup.retention_weekly` | `4` | Distinct-ISO-week weekly slots claimed past the daily window. |
+| `BACKUP_WATCHER_POLL_SECONDS` | `backup.watcher_poll_seconds` | `60` | Core poll interval for the status file. |
+
+### Retention Policy (FR-048-001)
+
+`./smackerel.sh backup` keeps:
+
+- The newest backup for each of the last `BACKUP_RETENTION_DAILY` distinct calendar days (default 7).
+- Then, the newest backup in each of the next `BACKUP_RETENTION_WEEKLY` distinct ISO weeks past the daily cutoff (default 4). Weekly slots never overlap weeks already covered by daily slots — when the history is dense (one artifact per day), the weekly slots advance until a fresh ISO week is found.
+- Multiple backups on the same calendar day collapse to one daily slot (the newest); older same-day copies are pruned immediately.
+
+Pure retention logic lives in `internal/backup/retention.go` (unit-tested by `retention_test.go`); the script `scripts/commands/backup.sh` re-implements the same algorithm in Python so cron-only environments without the Go binary still prune correctly.
+
+### Status File Schema
+
+`scripts/commands/backup.sh` writes JSON atomically (`<file>.tmp` → rename) after every run:
+
+```json
+{
+  "schema_version": 1,
+  "last_run_unixtime": 1747169400,
+  "last_success_unixtime": 1747169400,
+  "last_status": "success",
+  "last_duration_ms": 4123,
+  "last_size_bytes": 18432123,
+  "last_artifact_name": "smackerel-2026-05-13-233000.sql.gz",
+  "last_error": ""
+}
 ```
 
-This creates a compressed `pg_dump` file in the `backups/` directory.
+On failure `last_status` becomes `"failed"`, `last_success_unixtime` keeps the prior success value, and `last_error` carries a redacted error string — `POSTGRES_PASSWORD`, `SMACKEREL_AUTH_TOKEN`, `TELEGRAM_BOT_TOKEN`, and other secret env values are scrubbed by `redact_secrets()` before the file is written (FR-048-003).
 
-For manual backups (e.g., custom format or piping to remote storage):
+### Metrics & Alert
+
+`internal/backup.Watcher` polls `${BACKUP_STATUS_FILE}` every `${BACKUP_WATCHER_POLL_SECONDS}` and republishes:
+
+| Metric | Type | Source field |
+|--------|------|--------------|
+| `smackerel_backup_last_success_unixtime` | Gauge | `last_success_unixtime` |
+| `smackerel_backup_size_bytes` | Gauge | `last_size_bytes` |
+| `smackerel_backup_runs_total{status="success"\|"failed"}` | Counter | incremented on every new `last_run_unixtime` |
+
+When no status file exists yet, the gauges read 0 — the `SmackerelBackupStale` alert (`config/prometheus/alerts.yml`) fires because `time() - 0 > 90000`, which is the correct behavior on a brand-new host that has never produced a backup.
+
+### Restore Drill (FR-048-002)
+
+```bash
+./smackerel.sh backup-restore-test --backup-file backups/smackerel-2026-05-13-233000.sql.gz
+```
+
+The drill:
+
+1. Starts a disposable `pgvector/pgvector:pg16` container with `--tmpfs /var/lib/postgresql/data` (no published host port, no named volume).
+2. Pipes the gunzipped backup through `psql` inside the container.
+3. Asserts `schema_migrations` is non-empty, `sync_state` is reachable (the canonical connector cursor store), and the `vector` extension is present.
+4. Scans psql stdout/stderr for any secret-shaped value from the closed redaction set and fails the run if any leaks through.
+5. Tears the container down unconditionally on exit (success, failure, or `Ctrl-C`).
+
+If you do not pass `--backup-file`, the drill picks the newest `smackerel-*.sql.gz` in `${BACKUP_LOCAL_DIR}`.
+
+### Operator Workflow
+
+```bash
+# Create a fresh backup (writes artifact + updates status file + applies retention).
+./smackerel.sh backup
+
+# Verify the artifact actually restores cleanly into a throwaway postgres.
+./smackerel.sh backup-restore-test
+
+# Inspect the status file the metrics watcher reads.
+cat backups/.backup-status.json
+
+# In Prometheus, the staleness alert fires when no success has landed in 25h.
+# Replay the alert query directly:
+curl -s 'http://127.0.0.1:42007/api/v1/query?query=(time()%20-%20smackerel_backup_last_success_unixtime)'
+```
+
+### Manual / Ad-Hoc Backup Operations
+
+For one-off operator workflows outside the spec 048 automated path (custom
+formats, piping to remote storage, partial-table dumps), use the underlying
+`pg_dump` directly. The automated path above remains the supported
+production contract.
 
 ```bash
 # Plain SQL (while stack is running)
