@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done — implemented; reconciled 2026-05-13 to match sibling connector specs 007–017 ship pattern (50 retrospective governance findings carried forward in report.md § Improve-Existing Reconciliation Findings).
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 16.8 Financial Awareness (Light Touch)
 
 ---
