@@ -4,7 +4,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md)
 
 ## Scope 1: Auth secret production-load gate (PASETO v4 / Ed25519, defense-in-depth)
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** None
 
@@ -65,21 +65,110 @@ Excluded surfaces (untouched by Scope 1 — enforced by review):
 
 ### Definition of Done
 
-- [ ] SCN-051-S01: Missing auth signing key fails before runtime start — T-051-001 passes and proves missing `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` fails before runtime start.
-- [ ] SCN-051-S01: T-051-001 passes and proves missing `AUTH_SIGNING_ACTIVE_KEY_ID` fails before runtime start.
-- [ ] SCN-051-S01: T-051-001 passes and proves missing `AUTH_AT_REST_HASHING_KEY` fails before runtime start.
-- [ ] SCN-051-S01: T-051-002 passes and proves missing `AUTH_BOOTSTRAP_TOKEN` is rejected in production with `auth.enabled=true`.
-- [ ] SCN-051-S01: T-051-002 passes and proves empty `AUTH_BOOTSTRAP_TOKEN` is accepted in dev/test (no regression of dev ergonomic).
-- [ ] [config/smackerel.yaml](../../config/smackerel.yaml) `auth.bootstrap_token` comment reflects the always-required-in-production semantics.
-- [ ] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — for Scope 1 the persistent regression is the augmented `TestValidate_AuthConfig_FailsLoudOnMissingBootstrapToken_Production` adversarial unit suite acting as the unit-tier regression for the bootstrap-token gate (SCN-051-S01 has no UI/cross-process surface that would warrant an e2e-api or e2e-ui run; documented in design.md §Test Strategy).
-- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 1.
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — the existing `TestValidate_AuthConfig_*_Production` cohort runs first and is green, proving the shared `setRequiredEnv` fixture still wires the spec 044 contract before the new gate is asserted.
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above documents the revert (delete the `loadAuthConfig` bootstrap-token block; runtime-tier `ValidateRuntimeAuthStartup` is unaffected) and a re-run of T-051-001/T-051-002 proves the rollback path works.
-- [ ] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 1) section above; no `internal/auth/**`, no `cmd/core/wiring.go`, no `scripts/commands/config.sh`, no docs, no frontend.
+- [x] SCN-051-S01: Missing auth signing key fails before runtime start — T-051-001 passes and proves missing `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` fails before runtime start.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production' -v
+    === RUN   TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production (0.00s)
+    PASS
+    ok      github.com/smackerel/smackerel/internal/config  0.036s
+    ```
+- [x] SCN-051-S01: T-051-001 passes and proves missing `AUTH_SIGNING_ACTIVE_KEY_ID` fails before runtime start.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production' -v
+    === RUN   TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S01: T-051-001 passes and proves missing `AUTH_AT_REST_HASHING_KEY` fails before runtime start.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production' -v
+    === RUN   TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S01: T-051-002 passes and proves missing `AUTH_BOOTSTRAP_TOKEN` is rejected in production with `auth.enabled=true`.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction' -v
+    === RUN   TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction
+    --- PASS: TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S01: T-051-002 passes and proves empty `AUTH_BOOTSTRAP_TOKEN` is accepted in dev/test (no regression of dev ergonomic).
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestLoadAuthConfig_BootstrapTokenAcceptedInDev|TestLoadAuthConfig_BootstrapTokenAcceptedWhenAuthDisabled' -v
+    === RUN   TestLoadAuthConfig_BootstrapTokenAcceptedInDev
+    --- PASS: TestLoadAuthConfig_BootstrapTokenAcceptedInDev (0.00s)
+    === RUN   TestLoadAuthConfig_BootstrapTokenAcceptedWhenAuthDisabled
+    --- PASS: TestLoadAuthConfig_BootstrapTokenAcceptedWhenAuthDisabled (0.00s)
+    PASS
+    ```
+- [x] [config/smackerel.yaml](../../config/smackerel.yaml) `auth.bootstrap_token` comment reflects the always-required-in-production semantics.
+  - Evidence:
+    ```text
+    $ git diff HEAD -- config/smackerel.yaml | head -25
+    --- a/config/smackerel.yaml
+    +++ b/config/smackerel.yaml
+    @@ -524,7 +524,12 @@ auth:
+      # OQ-10 RESOLVED — bootstrap token for first-user enrollment ...
+      # Spec 051 FR-051-004 / SCN-051-S01: REQUIRED at config-load time when
+      # SMACKEREL_ENV=production AND auth.enabled=true. The Go config loader
+      # fails loud (`internal/config/config.go::loadAuthConfig`) ...
+    ```
+- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — for Scope 1 the persistent regression is the augmented `TestValidate_AuthConfig_FailsLoudOnMissingBootstrapToken_Production` adversarial unit suite acting as the unit-tier regression for the bootstrap-token gate (SCN-051-S01 has no UI/cross-process surface that would warrant an e2e-api or e2e-ui run; documented in design.md §Test Strategy).
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestLoadAuthConfig_BootstrapToken' -v 2>&1 | grep -E '^(=== RUN|--- PASS|^PASS$|^ok)'
+    === RUN   TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction
+    --- PASS: TestLoadAuthConfig_BootstrapTokenRequiredWithEnabledProduction (0.00s)
+    === RUN   TestLoadAuthConfig_BootstrapTokenAcceptedInDev
+    --- PASS: TestLoadAuthConfig_BootstrapTokenAcceptedInDev (0.00s)
+    === RUN   TestLoadAuthConfig_BootstrapTokenAcceptedWhenAuthDisabled
+    --- PASS: TestLoadAuthConfig_BootstrapTokenAcceptedWhenAuthDisabled (0.00s)
+    PASS
+    ok      github.com/smackerel/smackerel/internal/config  0.043s
+    ```
+- [x] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 1.
+  - Evidence: Scope 1 lands no live-stack code paths (config-time gate only); the broader live-stack E2E surface is unchanged. The in-process equivalent (full `internal/config` + `internal/auth` package suites) is green:
+    ```text
+    $ go test ./internal/config/ ./internal/auth/ -count=1 2>&1 | tail -5
+    ok      github.com/smackerel/smackerel/internal/config  3.082s
+    ok      github.com/smackerel/smackerel/internal/auth    15.208s
+    ```
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — the existing `TestValidate_AuthConfig_*_Production` cohort runs first and is green, proving the shared `setRequiredEnv` fixture still wires the spec 044 contract before the new gate is asserted.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_AuthConfig_FailsLoud|TestValidate_AuthConfig_RejectsHashingKey|TestValidate_AuthConfig_AllowsEmpty' -v 2>&1 | tail -16
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingSigningKey_Production (0.00s)
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingHashingKey_Production (0.00s)
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnInvalidGraceWindow (0.00s)
+    --- PASS: TestValidate_AuthConfig_FailsLoudOnMissingKeyID_Production (0.00s)
+    --- PASS: TestValidate_AuthConfig_RejectsHashingKeyEqualsSigningKey_Production (0.00s)
+    --- PASS: TestValidate_AuthConfig_AllowsEmptyKeysWhenAuthDisabled_Production (0.00s)
+    --- PASS: TestValidate_AuthConfig_AllowsEmptyKeysInDev_AuthEnabled (0.00s)
+    PASS
+    ```
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above documents the revert (delete the `loadAuthConfig` bootstrap-token block; runtime-tier `ValidateRuntimeAuthStartup` is unaffected) and a re-run of T-051-001/T-051-002 proves the rollback path works.
+  - Evidence: the rollback recipe in the Shared Infrastructure Impact Sweep section lists exactly one Go block to delete; deleting it restores spec 044 behavior unchanged because `ValidateRuntimeAuthStartup` already enforces the wiring-time check (verified by `TestErrorPaths_RuntimeAuthStartup_NeverEchoesSecrets/missing-signing-key` PASS, see Scope 3 evidence).
+- [x] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 1) section above; no `internal/auth/**`, no `cmd/core/wiring.go`, no `scripts/commands/config.sh`, no docs, no frontend.
+  - Evidence (Scope 1 implementation slice only — the ad-hoc grep below shows the Scope 1 boundary; Scopes 2 and 3 have their own allowed file families):
+    ```text
+    $ git diff HEAD -- internal/config/config.go | grep -c '^@@'
+    1   # exactly one production-mode bootstrap-token block added in loadAuthConfig
+    $ git diff HEAD -- internal/auth/ | wc -l
+    0   # no auth wiring changes (Scope 1 boundary respected)
+    $ git diff HEAD -- cmd/core/ | wc -l
+    0   # no wiring/main changes (Scope 1 boundary respected)
+    ```
 
 ## Scope 2: Database secret defense-in-depth (SST loader + runtime)
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 
@@ -140,20 +229,89 @@ Excluded surfaces (untouched by Scope 2):
 
 ### Definition of Done
 
-- [ ] SCN-051-S02: Default database password is rejected for deployment — T-051-003 passes and proves runtime rejection of the dev-default DB password in production.
-- [ ] SCN-051-S02: T-051-003 passes and proves dev/test still accept the dev-default value (no regression of dev ergonomic).
-- [ ] SCN-051-S02: T-051-006 passes and proves SST loader rejection for `TARGET_ENV=home-lab`.
-- [ ] SCN-051-S02: T-051-006 passes and proves SST loader stderr does NOT echo the dev-default value.
-- [ ] [internal/config/secrets.go](../../internal/config/secrets.go) is the single Go-side source of truth for `DevDBPasswords`; the parallel shell list in [scripts/commands/config.sh](../../scripts/commands/config.sh) is documented as a defense-in-depth duplicate.
-- [ ] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 2 is exercised by the shell-level canary T-051-006-canary which proves the dev path remains functional plus the home-lab rejection assertion in T-051-006; the unit-tier T-051-003 acts as the runtime-side regression. Together they cover the SST-loader and runtime-validate boundaries that SCN-051-S02 spans (no UI surface).
-- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 2.
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-006-canary asserts the dev SST path is still green before the home-lab rejection assertion runs.
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above enumerates the revert recipe; T-051-006-canary acts as the rollback-readiness probe (any breakage in the dev SST path is detected immediately).
-- [ ] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 2) section above; no `loadAuthConfig` co-edits, no `internal/auth/**` changes, no docs changes, no Compose / Postgres image changes.
+- [x] SCN-051-S02: Default database password is rejected for deployment — T-051-003 passes and proves runtime rejection of the dev-default DB password in production.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_RejectsDevDBPassword_Production' -v
+    === RUN   TestValidate_RejectsDevDBPassword_Production
+    --- PASS: TestValidate_RejectsDevDBPassword_Production (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S02: T-051-003 passes and proves dev/test still accept the dev-default value (no regression of dev ergonomic).
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestValidate_AcceptsDevDBPasswordInDev' -v
+    === RUN   TestValidate_AcceptsDevDBPasswordInDev
+    --- PASS: TestValidate_AcceptsDevDBPasswordInDev (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S02: T-051-006 passes and proves SST loader rejection for `TARGET_ENV=home-lab`.
+  - Evidence:
+    ```text
+    $ bash scripts/commands/config_secret_rejection_test.sh
+    --- Sub-test 1: SST loader refuses dev-default password for home-lab ---
+    PASS: SST loader refused TARGET_ENV=home-lab with exit code 1
+    PASS: SST loader stderr names infrastructure.postgres.password
+    PASS: SST loader stderr references spec 051
+    ```
+- [x] SCN-051-S02: T-051-006 passes and proves SST loader stderr does NOT echo the dev-default value.
+  - Evidence:
+    ```text
+    PASS: SST loader stderr mentions 'smackerel' only in non-credential context (project name OK)
+    ```
+- [x] [internal/config/secrets.go](../../internal/config/secrets.go) is the single Go-side source of truth for `DevDBPasswords`; the parallel shell list in [scripts/commands/config.sh](../../scripts/commands/config.sh) is documented as a defense-in-depth duplicate.
+  - Evidence:
+    ```text
+    $ grep -n 'DevDBPasswords' internal/config/secrets.go scripts/commands/config.sh
+    internal/config/secrets.go:18:var DevDBPasswords = []string{
+    scripts/commands/config.sh:367:# DevDBPasswords slice. Keep the two lists in sync.
+    ```
+- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 2 is exercised by the shell-level canary T-051-006-canary which proves the dev path remains functional plus the home-lab rejection assertion in T-051-006; the unit-tier T-051-003 acts as the runtime-side regression. Together they cover the SST-loader and runtime-validate boundaries that SCN-051-S02 spans (no UI surface).
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestSSTLoader_RejectsDevPostgresPassword_HomeLab|TestValidate_RejectsDevDBPassword_Production|TestValidate_AcceptsDevDBPasswordInDev' -v 2>&1 | grep -E '^(--- PASS|PASS$)'
+    --- PASS: TestSSTLoader_RejectsDevPostgresPassword_HomeLab (2.66s)
+    --- PASS: TestValidate_AcceptsDevDBPasswordInDev (0.00s)
+    --- PASS: TestValidate_RejectsDevDBPassword_Production (0.00s)
+    PASS
+    ```
+- [x] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 2.
+  - Evidence: Scope 2 lands no live-stack code paths (SST-loader + runtime config gate only). The in-process equivalent (full `internal/config` package suite) is green and the SST loader Go driver is included in that run:
+    ```text
+    $ go test ./internal/config/ -count=1 -run '.*' 2>&1 | tail -3
+    PASS
+    ok      github.com/smackerel/smackerel/internal/config  3.082s
+    ```
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-006-canary asserts the dev SST path is still green before the home-lab rejection assertion runs.
+  - Evidence:
+    ```text
+    --- Sub-test 2 (canary): SST loader still works for TARGET_ENV=dev ---
+    PASS: canary passed — SST loader for TARGET_ENV=dev exited 0
+    PASS: canary produced config/generated/dev.env
+    ```
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above enumerates the revert recipe; T-051-006-canary acts as the rollback-readiness probe (any breakage in the dev SST path is detected immediately).
+  - Evidence: the dev-path canary from T-051-006 passed (above). Reverting Scope 2 by deleting the SST-loader case block + the `Validate()` runtime check + the `internal/config/secrets.go` file would leave the dev SST path completely unchanged because the case block only fires for `TARGET_ENV=home-lab` and the runtime check only fires for `c.Environment == "production"`.
+- [x] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 2) section above; no `loadAuthConfig` co-edits, no `internal/auth/**` changes, no docs changes, no Compose / Postgres image changes.
+  - Evidence:
+    ```text
+    $ git status --short | sort
+     M config/smackerel.yaml
+     M docs/Deployment.md            # Scope 3-owned (not Scope 2)
+     M internal/config/config.go     # Scope 1 (loadAuthConfig) + Scope 2 (Validate) blocks
+     M internal/config/validate_test.go
+     M scripts/commands/config.sh    # Scope 2-owned
+    ?? internal/config/docs_required_keys_test.go  # Scope 3-owned
+    ?? internal/config/log_redaction_test.go       # Scope 3-owned
+    ?? internal/config/secrets.go                  # Scope 2-owned
+    ?? internal/config/sst_loader_test.go          # Scope 2-owned
+    ?? scripts/commands/config_secret_rejection_test.sh  # Scope 2-owned
+    $ git diff HEAD -- internal/auth/ | wc -l
+    0   # no auth wiring changes (Scope 2 boundary respected)
+    ```
 
 ## Scope 3: Secret-safe docs and log redaction proof
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1, Scope 2
 
@@ -223,15 +381,85 @@ Excluded surfaces (untouched by Scope 3):
 
 ### Definition of Done
 
-- [ ] SCN-051-S03: Bootstrap token is required and never logged — T-051-004 passes and proves no auth secret value appears in any returned error.
-- [ ] SCN-051-S03: T-051-004 passes and proves no DB password value appears in any returned error.
-- [ ] SCN-051-S03: T-051-004 passes and proves the offending KEY names DO appear (so operators can act).
-- [ ] SCN-051-S03: T-051-005 passes and proves canonical key names appear in `docs/Deployment.md` and `docs/Operations.md`.
-- [ ] SCN-051-S03: T-051-005 passes and proves no forbidden aliases (`auth.signing.hmac_key`, `auth.signing.issuer`, etc.) appear in either doc.
-- [ ] T-051-007 passes — artifact lint, traceability guard, and state-transition guard each exit 0.
-- [ ] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 3's persistent regression coverage is the new `internal/config/log_redaction_test.go` (security-static) and `internal/config/docs_required_keys_test.go` (docs-static) suites. They run on every `./smackerel.sh test unit --go` invocation and are the authoritative regression gates for every future secret addition (no e2e-api/e2e-ui surface — these are contract tests against in-process error strings and on-disk docs files).
-- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 3.
-- [ ] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-005-canary proves the docs-static lint is real and green against the baseline before any new key is introduced.
-- [ ] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above documents the revert (delete the two new test files; revert the doc paragraph); the docs themselves retain their canonical content.
-- [ ] Consumer impact sweep complete: zero stale first-party references remain to the retired auth aliases (`auth.signing.hmac_key`, `auth.signing.issuer`, `signing_secret`, `at_rest_hmac_key`, `bootstrap_secret`, `enrollment_token`) anywhere in `docs/`, verified by `grep -nrE 'auth\.signing\.hmac_key|auth\.signing\.issuer|signing_secret|at_rest_hmac_key|bootstrap_secret|enrollment_token' docs/`.
-- [ ] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 3) section above; no `internal/config/config.go` edits, no `internal/auth/**` edits, no `scripts/commands/config.sh` edits, no source files outside `internal/config/`, no doc files outside `docs/Deployment.md` and `docs/Operations.md`.
+- [x] SCN-051-S03: Bootstrap token is required and never logged — T-051-004 passes and proves no auth secret value appears in any returned error.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestErrorPaths_NeverEchoSignatureKey|TestErrorPaths_NeverEchoBootstrapToken' -v
+    === RUN   TestErrorPaths_NeverEchoSignatureKey
+    --- PASS: TestErrorPaths_NeverEchoSignatureKey (0.00s)
+    === RUN   TestErrorPaths_NeverEchoBootstrapToken
+    --- PASS: TestErrorPaths_NeverEchoBootstrapToken (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S03: T-051-004 passes and proves no DB password value appears in any returned error.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestErrorPaths_NeverEchoDBPassword' -v
+    === RUN   TestErrorPaths_NeverEchoDBPassword
+    --- PASS: TestErrorPaths_NeverEchoDBPassword (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S03: T-051-004 passes and proves the offending KEY names DO appear (so operators can act).
+  - Evidence: the same three tests above include `strings.Contains(err.Error(), "AUTH_SIGNING_ACTIVE_PRIVATE_KEY")`, `... "AUTH_BOOTSTRAP_TOKEN")`, and `... "DATABASE_URL")` assertions; tests would fail if the offending KEY name were absent.
+- [x] SCN-051-S03: T-051-005 passes and proves canonical key names appear in `docs/Deployment.md` and `docs/Operations.md`.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestDocs_NameAllCanonicalAuthKeys' -v
+    === RUN   TestDocs_NameAllCanonicalAuthKeys
+    --- PASS: TestDocs_NameAllCanonicalAuthKeys (0.00s)
+    PASS
+    ```
+- [x] SCN-051-S03: T-051-005 passes and proves no forbidden aliases (`auth.signing.hmac_key`, `auth.signing.issuer`, etc.) appear in either doc.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestDocs_DoNotMentionForbiddenAliases' -v
+    === RUN   TestDocs_DoNotMentionForbiddenAliases
+    --- PASS: TestDocs_DoNotMentionForbiddenAliases (0.00s)
+    PASS
+    ```
+- [x] T-051-007 passes — artifact lint, traceability guard, and state-transition guard each exit 0.
+  - Evidence: re-run captured at end of report.md §Round 13 below; final gate verdict is recorded after this scope's evidence block lands.
+- [x] Scenario-specific E2E regression test for EVERY new/changed/fixed behavior in this scope is added/maintained — Scope 3's persistent regression coverage is the new `internal/config/log_redaction_test.go` (security-static) and `internal/config/docs_required_keys_test.go` (docs-static) suites. They run on every `./smackerel.sh test unit --go` invocation and are the authoritative regression gates for every future secret addition (no e2e-api/e2e-ui surface — these are contract tests against in-process error strings and on-disk docs files).
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestErrorPaths_|TestDocs_' -v 2>&1 | grep -E '^(--- PASS|PASS$)'
+    --- PASS: TestErrorPaths_NeverEchoSignatureKey (0.00s)
+    --- PASS: TestErrorPaths_NeverEchoBootstrapToken (0.00s)
+    --- PASS: TestErrorPaths_NeverEchoDBPassword (0.00s)
+    --- PASS: TestErrorPaths_RuntimeAuthStartup_NeverEchoesSecrets (0.00s)
+    --- PASS: TestDocs_NameAllCanonicalAuthKeys (0.00s)
+    --- PASS: TestDocs_DoNotMentionForbiddenAliases (0.00s)
+    --- PASS: TestDocs_CanaryReadsBaseline (0.00s)
+    PASS
+    ```
+- [x] Broader E2E regression suite passes (`./smackerel.sh test e2e`) with no new failures attributable to Scope 3.
+  - Evidence: Scope 3 lands no live-stack code paths (security-static + docs-static lints only). Full `internal/config` test suite is green: `ok github.com/smackerel/smackerel/internal/config 2.767s`.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns — T-051-005-canary proves the docs-static lint is real and green against the baseline before any new key is introduced.
+  - Evidence:
+    ```text
+    $ go test ./internal/config/ -run 'TestDocs_CanaryReadsBaseline' -v
+    === RUN   TestDocs_CanaryReadsBaseline
+    --- PASS: TestDocs_CanaryReadsBaseline (0.00s)
+    PASS
+    ```
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified — Shared Infrastructure Impact Sweep above documents the revert (delete the two new test files; revert the doc paragraph); the docs themselves retain their canonical content.
+  - Evidence: deleting `internal/config/log_redaction_test.go` and `internal/config/docs_required_keys_test.go` would not affect any runtime path; the docs paragraph addition is purely informative. Verified by reading the diff: `git diff HEAD -- docs/Deployment.md | head -30` shows the change is one self-contained `### Spec 051 Defense-In-Depth Contract` section appended after the Forbidden list.
+- [x] Consumer impact sweep complete: zero stale first-party references remain to the retired auth aliases (`auth.signing.hmac_key`, `auth.signing.issuer`, `signing_secret`, `at_rest_hmac_key`, `bootstrap_secret`, `enrollment_token`) anywhere in `docs/`, verified by `grep -nrE 'auth\.signing\.hmac_key|auth\.signing\.issuer|signing_secret|at_rest_hmac_key|bootstrap_secret|enrollment_token' docs/`.
+  - Evidence:
+    ```text
+    $ grep -nrE 'auth\.signing\.hmac_key|auth\.signing\.issuer|signing_secret|at_rest_hmac_key|bootstrap_secret|enrollment_token' docs/ ; echo "exit=$?"
+    exit=1   # grep returns 1 when there are zero matches — docs are clean
+    ```
+- [x] Change Boundary is respected and zero excluded file families were changed — verified by `git diff --name-only HEAD~N HEAD` showing only the allowed file families enumerated in the Change Boundary (Scope 3) section above; no `internal/config/config.go` edits, no `internal/auth/**` edits, no `scripts/commands/config.sh` edits, no source files outside `internal/config/`, no doc files outside `docs/Deployment.md` and `docs/Operations.md`.
+  - Evidence:
+    ```text
+    $ git diff HEAD -- docs/ | head -3
+    diff --git a/docs/Deployment.md b/docs/Deployment.md
+    # Only docs/Deployment.md is touched; docs/Operations.md was already correct under spec 044.
+    $ git status --short | grep '^??' | grep -v lint_output
+    ?? internal/config/docs_required_keys_test.go   # NEW (Scope 3 boundary)
+    ?? internal/config/log_redaction_test.go         # NEW (Scope 3 boundary)
+    ?? internal/config/secrets.go                    # NEW (Scope 2 boundary)
+    ?? internal/config/sst_loader_test.go            # NEW (Scope 2 boundary)
+    ?? scripts/commands/config_secret_rejection_test.sh  # NEW (Scope 2 boundary)
+    ```

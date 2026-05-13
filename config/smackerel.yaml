@@ -522,7 +522,14 @@ auth:
   # OQ-10 RESOLVED — bootstrap token for first-user enrollment on a fresh
   # production deployment. Consumed exactly once via
   # `./smackerel.sh auth bootstrap` and then cleared by the operator.
-  # REQUIRED in production with auth.enabled=true AND zero enrolled users.
+  #
+  # Spec 051 FR-051-004 / SCN-051-S01: REQUIRED at config-load time when
+  # SMACKEREL_ENV=production AND auth.enabled=true. The Go config loader
+  # fails loud (`internal/config/config.go::loadAuthConfig`) and refuses
+  # to even produce a Config object that names AUTH_BOOTSTRAP_TOKEN as
+  # missing. The wiring-time check in `internal/auth/startup.go` remains
+  # as defense-in-depth. Dev/test environments retain the empty-string
+  # default so local workflows do not require a bootstrap token.
   bootstrap_token: ""
 
 agent:

@@ -1060,6 +1060,14 @@ func loadAuthConfig(cfg *Config) error {
 		if cfg.Auth.AtRestHashingKey == "" {
 			authErrors = append(authErrors, "AUTH_AT_REST_HASHING_KEY (REQUIRED in production with auth.enabled=true)")
 		}
+		// Spec 051 FR-051-004 / SCN-051-S01 — bootstrap token is required
+		// at config-load time when running in production with auth enabled.
+		// The wiring-time check in internal/auth/startup.go remains as
+		// defense-in-depth; this loader-time gate refuses to even produce
+		// a Config object that would need to be repaired later.
+		if cfg.Auth.BootstrapToken == "" {
+			authErrors = append(authErrors, "AUTH_BOOTSTRAP_TOKEN (REQUIRED in production with auth.enabled=true — spec 051 FR-051-004)")
+		}
 		// At-rest hashing key MUST differ from the signing key (OQ-8).
 		if cfg.Auth.AtRestHashingKey != "" && cfg.Auth.SigningActivePrivateKey != "" &&
 			cfg.Auth.AtRestHashingKey == cfg.Auth.SigningActivePrivateKey {
@@ -1150,6 +1158,17 @@ func (c *Config) Validate() error {
 	// single error and tests can assert the production mode by message.
 	if c.Environment == "production" && c.AuthToken == "" {
 		return fmt.Errorf("SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
+	}
+
+	// Spec 051 FR-051-005 / SCN-051-S02 — defense-in-depth: even if the
+	// SST loader misses the dev-default Postgres password, refuse it at
+	// runtime when SMACKEREL_ENV=production. The error names the env var
+	// without echoing the value (FR-051-007 redaction contract).
+	if c.Environment == "production" {
+		dbPassword := extractDatabasePassword(c.DatabaseURL)
+		if IsDevDBPassword(dbPassword) {
+			return fmt.Errorf("DATABASE_URL password component is set to a known dev-default value — generate a strong random Postgres password (POSTGRES_PASSWORD) before deploying with SMACKEREL_ENV=production (spec 051 FR-051-005)")
+		}
 	}
 
 	// AUTH_TOKEN format checks only apply when a token is set. In

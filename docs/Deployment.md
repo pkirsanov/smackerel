@@ -298,6 +298,34 @@ Forbidden:
 - Leaving `AUTH_BOOTSTRAP_TOKEN` populated in the deploy overlay after the
   first user has been enrolled (the runbook clears it).
 
+### Spec 051 Defense-In-Depth Contract
+
+Spec 051 (`specs/051-deployment-secret-auth-contract/`) ratifies the deployment
+secret contract that this section describes and adds two cross-cutting hard
+gates that fire even if a future operator skips a step above:
+
+1. **Layered secret rejection.** The dev-default Postgres password
+   (`infrastructure.postgres.password: smackerel`) is refused at BOTH the SST
+   loader (`scripts/commands/config.sh` for `TARGET_ENV=home-lab` and any
+   future production-class target) AND the runtime (`internal/config/Validate`
+   when `SMACKEREL_ENV=production`). Either layer alone protects the
+   deployment; both layers together give defense-in-depth (FR-051-005,
+   SCN-051-S02).
+2. **Log-redaction guarantee.** Every error path that could plausibly receive
+   a secret value is covered by the security-static adversarial test
+   `internal/config/log_redaction_test.go`. The test seeds canary substrings
+   and asserts no canary appears in any returned error. Adding a new secret
+   env var to `loadAuthConfig` or `Validate` MUST extend this test to cover
+   the new error path (FR-051-007, SCN-051-S03).
+
+The canonical key names in the table above are also pinned by
+`internal/config/docs_required_keys_test.go`: every name in this section MUST
+appear at least once in this doc and in [Operations.md](Operations.md), and
+the pre-spec-044 HMAC-based auth aliases listed in the test's
+`forbiddenAuthAliases` slice MUST NOT appear anywhere. The test runs on every
+`./smackerel.sh test unit` invocation and prevents silent contract drift
+(FR-051-006).
+
 ### API-Consumer Migration (Scope 02)
 
 A target that flips `auth_enabled=true` for the first time gains the per-user

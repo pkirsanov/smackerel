@@ -357,6 +357,25 @@ ML_READINESS_TIMEOUT_S="$(required_value services.ml.readiness_timeout_s)"
 ML_PROCESSING_DEGRADED_FALLBACK_ENABLED="$(env_override_value ml_processing_degraded_fallback_enabled services.ml.processing_degraded_fallback_enabled)"
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
 POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
+# Spec 051 FR-051-005 / SCN-051-S02 — defense-in-depth dev-default rejection.
+# When the SST loader runs for a non-dev/test target (currently: home-lab; any
+# future production-class target should be added to the case below), the
+# Postgres password MUST NOT match a known dev-default value. The list below
+# is the parallel grep-friendly mirror of internal/config/secrets.go's
+# DevDBPasswords slice. Keep the two lists in sync.
+#
+# The error message MUST name the offending KEY without echoing the VALUE
+# (FR-051-007 redaction contract).
+case "$TARGET_ENV" in
+  home-lab)
+    case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
+      smackerel|postgres|password|changeme|change-me|default)
+        echo "ERROR: infrastructure.postgres.password is a known dev-default value — refusing to generate config for TARGET_ENV=$TARGET_ENV (spec 051 FR-051-005). Set a strong random password in config/smackerel.yaml or via the POSTGRES_PASSWORD env override before running config generate." >&2
+        exit 1
+        ;;
+    esac
+    ;;
+esac
 POSTGRES_DB="$(required_value infrastructure.postgres.database)"
 POSTGRES_CONTAINER_PORT="$(required_value infrastructure.postgres.container_port)"
 DB_MAX_CONNS="$(required_value infrastructure.postgres.max_conns)"
