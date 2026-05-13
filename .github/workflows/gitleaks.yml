@@ -31,7 +31,7 @@ jobs:
         fetch-depth: 0
 
     - name: Run gitleaks (pinned action; uses .gitleaks.toml at repo root)
-      uses: gitleaks/gitleaks-action@7df8511fe8c2f4d56d80f48e94f15eb1d23c7e6f # v2.3.7
+      uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # The action auto-discovers .gitleaks.toml at the repo root.
