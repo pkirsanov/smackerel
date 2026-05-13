@@ -9,8 +9,8 @@ name: build
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       sourceSha:
@@ -20,7 +20,7 @@ on:
 permissions:
   contents: read
   packages: write
-  id-token: write   # required for cosign keyless
+  id-token: write # required for cosign keyless
 
 env:
   REGISTRY: ghcr.io
@@ -36,154 +36,216 @@ jobs:
       coreDigest: ${{ steps.core.outputs.digest }}
       mlDigest: ${{ steps.ml.outputs.digest }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Resolve source SHA
-        id: sha
-        run: echo "sourceSha=${{ github.event.inputs.sourceSha || github.sha }}" >> "$GITHUB_OUTPUT"
+    - name: Resolve source SHA
+      id: sha
+      run: echo "sourceSha=${{ github.event.inputs.sourceSha || github.sha }}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Log in to GHCR
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push smackerel-core
-        id: core
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: Dockerfile
-          target: core
-          push: true
-          tags: ${{ env.IMAGE_CORE }}:${{ steps.sha.outputs.sourceSha }}
-          provenance: true
-          sbom: true
+    - name: Build and push smackerel-core
+      id: core
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      with:
+        context: .
+        file: Dockerfile
+        target: core
+        push: true
+        tags: ${{ env.IMAGE_CORE }}:${{ steps.sha.outputs.sourceSha }}
+        provenance: true
+        sbom: true
 
-      - name: Build and push smackerel-ml
-        id: ml
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: ml
-          file: ml/Dockerfile
-          push: true
-          tags: ${{ env.IMAGE_ML }}:${{ steps.sha.outputs.sourceSha }}
-          provenance: true
-          sbom: true
+    - name: Build and push smackerel-ml
+      id: ml
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      with:
+        context: ml
+        file: ml/Dockerfile
+        push: true
+        tags: ${{ env.IMAGE_ML }}:${{ steps.sha.outputs.sourceSha }}
+        provenance: true
+        sbom: true
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+    # ─────────────────────────────────────────────────────────────────
+    # Spec 047 — CI Image Vulnerability Gate
+    #
+    # Trivy scans EVERY image in the matrix (smackerel-core, smackerel-ml).
+    # CRITICAL or HIGH findings fail the workflow BEFORE cosign signing,
+    # SBOM attestation, bundle generation, or build-manifest publication.
+    #
+    # Threshold rationale (design.md §Drift Prevention):
+    #   - CRITICAL/HIGH = block. Operators must remediate or accept-risk
+    #     via a separate documented spec before bypass.
+    #   - MEDIUM/LOW/UNKNOWN = report only (visible in workflow log,
+    #     does NOT block). A future spec can tighten if needed.
+    #
+    # Drift prevention: tests/workflows/build_workflow_contract_test.go
+    # statically asserts that EVERY image built in this job has a matching
+    # Trivy scan step that runs BEFORE the first cosign sign step. If a
+    # new image is added to the matrix without a scan, the contract test
+    # fails and blocks merge.
+    #
+    # Evidence: each scan emits a SARIF + JSON report uploaded as a
+    # workflow artifact named `trivy-scan-<image>-<sha>` and referenced
+    # by digest in build-manifest.yaml under attestations.vulnerabilityScan.
+    # ─────────────────────────────────────────────────────────────────
+    - name: Trivy vulnerability scan — smackerel-core
+      id: trivy-core
+      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+      with:
+        image-ref: ${{ env.IMAGE_CORE }}@${{ steps.core.outputs.digest }}
+        format: sarif
+        output: trivy-core.sarif
+        severity: CRITICAL,HIGH
+        exit-code: '1'
+        ignore-unfixed: false
+        vuln-type: os,library
 
-      - name: Cosign keyless sign — core
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          cosign sign --yes "${IMAGE_CORE}@${{ steps.core.outputs.digest }}"
+    - name: Trivy vulnerability scan — smackerel-ml
+      id: trivy-ml
+      uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
+      with:
+        image-ref: ${{ env.IMAGE_ML }}@${{ steps.ml.outputs.digest }}
+        format: sarif
+        output: trivy-ml.sarif
+        severity: CRITICAL,HIGH
+        exit-code: '1'
+        ignore-unfixed: false
+        vuln-type: os,library
 
-      - name: Cosign keyless sign — ml
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          cosign sign --yes "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
+    - name: Upload Trivy scan reports as workflow artifacts
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: trivy-scan-reports-${{ steps.sha.outputs.sourceSha }}
+        path: |
+          trivy-core.sarif
+          trivy-ml.sarif
+        if-no-files-found: error
 
-      - name: Install syft
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+    - name: Install cosign
+      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
-      - name: SBOM attestation — core
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          syft "${IMAGE_CORE}@${{ steps.core.outputs.digest }}" -o spdx-json > core.sbom.spdx.json
-          cosign attest --yes --predicate core.sbom.spdx.json --type spdxjson "${IMAGE_CORE}@${{ steps.core.outputs.digest }}"
+    - name: Cosign keyless sign — core
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        cosign sign --yes "${IMAGE_CORE}@${{ steps.core.outputs.digest }}"
 
-      - name: SBOM attestation — ml
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          syft "${IMAGE_ML}@${{ steps.ml.outputs.digest }}" -o spdx-json > ml.sbom.spdx.json
-          cosign attest --yes --predicate ml.sbom.spdx.json --type spdxjson "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
+    - name: Cosign keyless sign — ml
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        cosign sign --yes "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
+
+    - name: Install syft
+      uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+
+    - name: SBOM attestation — core
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        syft "${IMAGE_CORE}@${{ steps.core.outputs.digest }}" -o spdx-json > core.sbom.spdx.json
+        cosign attest --yes --predicate core.sbom.spdx.json --type spdxjson "${IMAGE_CORE}@${{ steps.core.outputs.digest }}"
+
+    - name: SBOM attestation — ml
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        syft "${IMAGE_ML}@${{ steps.ml.outputs.digest }}" -o spdx-json > ml.sbom.spdx.json
+        cosign attest --yes --predicate ml.sbom.spdx.json --type spdxjson "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
 
   build-bundles:
     needs: build-images
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [dev, test, home-lab]
+        env: [ dev, test, home-lab ]
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Generate config bundle for ${{ matrix.env }}
-        run: |
-          ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
+    - name: Generate config bundle for ${{ matrix.env }}
+      run: |
+        ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 
-      - name: Verify bundle determinism
-        run: |
-          first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
-          rm -rf dist/config-bundles/
-          ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
-          second_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
-          if [[ "$first_sha" != "$second_sha" ]]; then
-            echo "ERROR: bundle generation is non-deterministic for env=${{ matrix.env }}" >&2
-            exit 1
-          fi
-          echo "bundleSha=$first_sha" >> "$GITHUB_OUTPUT"
+    - name: Verify bundle determinism
+      run: |
+        first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
+        rm -rf dist/config-bundles/
+        ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
+        second_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
+        if [[ "$first_sha" != "$second_sha" ]]; then
+          echo "ERROR: bundle generation is non-deterministic for env=${{ matrix.env }}" >&2
+          exit 1
+        fi
+        echo "bundleSha=$first_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Install oras
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
+    - name: Install oras
+      uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1
 
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login -u ${{ github.actor }} --password-stdin ${{ env.REGISTRY }}
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login -u ${{ github.actor }} --password-stdin ${{ env.REGISTRY }}
 
-      - name: Push bundle to OCI registry
-        run: |
-          cd dist/config-bundles
-          oras push "${{ env.BUNDLE_REGISTRY }}:${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}" \
-            "config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz:application/vnd.smackerel.config-bundle.v1+gzip"
+    - name: Push bundle to OCI registry
+      run: |
+        cd dist/config-bundles
+        oras push "${{ env.BUNDLE_REGISTRY }}:${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}" \
+          "config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz:application/vnd.smackerel.config-bundle.v1+gzip"
 
   publish-build-manifest:
-    needs: [build-images, build-bundles]
+    needs: [ build-images, build-bundles ]
     runs-on: ubuntu-latest
     steps:
-      - name: Write build-manifest-${{ needs.build-images.outputs.sourceSha }}.yaml
-        run: |
-          cat > build-manifest.yaml <<EOF
-          manifestVersion: 1
-          sourceSha: ${{ needs.build-images.outputs.sourceSha }}
-          builtAt: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-          ciRunUrl: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          images:
-            - name: smackerel-core
-              ref: ${{ env.IMAGE_CORE }}@${{ needs.build-images.outputs.coreDigest }}
-            - name: smackerel-ml
-              ref: ${{ env.IMAGE_ML }}@${{ needs.build-images.outputs.mlDigest }}
-          configBundles:
-            - env: dev
-              ref: ${{ env.BUNDLE_REGISTRY }}:dev-${{ needs.build-images.outputs.sourceSha }}
-            - env: test
-              ref: ${{ env.BUNDLE_REGISTRY }}:test-${{ needs.build-images.outputs.sourceSha }}
-            - env: home-lab
-              ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}
-          attestations:
-            scheme: cosign-keyless
-            transparencyLog: rekor
-            sbom: spdx-json
-            provenance: slsa
-          EOF
-          cat build-manifest.yaml
+    - name: Write build-manifest-${{ needs.build-images.outputs.sourceSha }}.yaml
+      run: |
+        cat > build-manifest.yaml <<EOF
+        manifestVersion: 1
+        sourceSha: ${{ needs.build-images.outputs.sourceSha }}
+        builtAt: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+        ciRunUrl: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        images:
+          - name: smackerel-core
+            ref: ${{ env.IMAGE_CORE }}@${{ needs.build-images.outputs.coreDigest }}
+          - name: smackerel-ml
+            ref: ${{ env.IMAGE_ML }}@${{ needs.build-images.outputs.mlDigest }}
+        configBundles:
+          - env: dev
+            ref: ${{ env.BUNDLE_REGISTRY }}:dev-${{ needs.build-images.outputs.sourceSha }}
+          - env: test
+            ref: ${{ env.BUNDLE_REGISTRY }}:test-${{ needs.build-images.outputs.sourceSha }}
+          - env: home-lab
+            ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}
+        attestations:
+          scheme: cosign-keyless
+          transparencyLog: rekor
+          sbom: spdx-json
+          provenance: slsa
+          vulnerabilityScan:
+            scanner: trivy
+            severityThreshold: CRITICAL,HIGH
+            gateBlocksOn: CRITICAL,HIGH
+            evidenceArtifact: trivy-scan-reports-${{ needs.build-images.outputs.sourceSha }}
+            specReference: specs/047-ci-image-vulnerability-gate/spec.md
+        EOF
+        cat build-manifest.yaml
 
-      - name: Upload build manifest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: build-manifest-${{ needs.build-images.outputs.sourceSha }}
-          path: build-manifest.yaml
-          if-no-files-found: error
-
+    - name: Upload build manifest
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: build-manifest-${{ needs.build-images.outputs.sourceSha }}
+        path: build-manifest.yaml
+        if-no-files-found: error
   # NOTE: this workflow stops here. Deploy is downstream of CI on a different trust boundary.
   # An operator (or a separate, manually triggered workflow) runs:
   #   ./smackerel.sh deploy-target home-lab apply --image-core=<digest> --image-ml=<digest> --config-bundle=<bundle>
