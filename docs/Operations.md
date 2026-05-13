@@ -4,7 +4,42 @@ This guide covers deployment, daily operations, connector management, troublesho
 
 ## Deployment
 
-### First-Time Setup
+### Production Deploy (Build-Once Deploy-Many)
+
+For a production-class deploy on any target — self-hosted home lab,
+staging, or production — **start here, not in First-Time Setup**.
+
+Smackerel uses the Build-Once Deploy-Many architecture: this repo's CI
+publishes immutable signed images, SBOM + SLSA attestations, and
+per-environment config bundles; a per-target deploy adapter (in-tree
+under `deploy/<target>/` for generic targets, or out-of-tree under
+`${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled
+targets like the home-lab adapter that lives in the knb deploy-adapter
+overlay) consumes those artifacts and applies them by digest.
+
+Read the production guide first:
+
+- [`docs/Deployment.md`](Deployment.md) — full operator workflow,
+  artifact contract, adapter contract, knb deploy-adapter overlay
+  dependency, and Generic Pre-Apply Prerequisites
+- [`deploy/README.md`](../deploy/README.md) — adapter locality rule
+  (in-tree vs out-of-tree) and `DEPLOY_TARGETS_ROOT` resolution
+- [`docs/Home_Lab_Deployment_Plan.md`](Home_Lab_Deployment_Plan.md) —
+  60-line migration-pointer stub naming the knb deploy-adapter overlay
+  as the owner of the home-lab adapter
+
+Production secret prerequisites are enumerated in
+[`docs/Deployment.md`](Deployment.md) §"Generic Pre-Apply
+Prerequisites (Product Contract)" — confirm them before invoking any
+adapter `apply.sh`.
+
+### First-Time Setup (Local Dev)
+
+> **Production-class operators:** see Production Deploy (Build-Once
+> Deploy-Many) above. The steps below stand up a **dev-only** Smackerel
+> stack from a local clone using the `./smackerel.sh up` profile.
+> They are NOT a substitute for the signed-artifact, adapter-driven
+> production flow.
 
 1. **Clone the repository:**
    ```bash
