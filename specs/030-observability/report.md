@@ -394,3 +394,66 @@ This section consolidates the full repo-relative paths of test files that back e
 
 **Residual (not in implement authority):**
 - Scope 3 (Connector Sync Metrics) and Scope 4 (ML Sidecar Metrics) lack `### Gherkin Scenarios` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.
+
+---
+
+## R15 Improve Probe — Stochastic Quality Sweep (2026-05-13)
+
+**Sweep context:** stochastic-quality-sweep parent, round 15 of 20, seed 20260513, trigger `improve` → child mode `improve-existing`. Spec status before/after: `done` / `done`. Certification fields untouched.
+
+**Probe scope:** improvement-opportunity discovery against the live observability surface — `internal/metrics/`, `internal/api/health.go`, `ml/app/metrics.py`, `docs/Operations.md` "Key Metrics" subsection, and recent connector/feature surfaces that scrape via the spec 030 `/metrics` endpoint contract.
+
+### Current-Truth Findings
+
+The `internal/metrics/` package now has five files registering Prometheus collectors against the default registerer, all exposed via the spec 030 Scope 1 `/metrics` endpoint:
+
+| File | Surface | Series | Cross-Spec | Annotated In 030 History? |
+|------|---------|--------|------------|--------------------------|
+| `internal/metrics/metrics.go` | spec 030 base | 8 (capture, ingestion, search, domain extraction, connector sync, NATS dead-letter, DB connections, digest gen) | spec 030 own | n/a (own surface) |
+| `internal/metrics/metrics.go` (intel/alerts) | spec 021 | 5 (intelligence latency, intelligence errors, alerts delivered, alert delivery failures, alerts produced) | spec 021 | NO |
+| `internal/metrics/metrics.go` (lists) | spec 028 | 4 (`smackerel_lists_generated_total`, `smackerel_list_generation_latency_seconds`, `smackerel_list_item_status_changes_total`, `smackerel_lists_completed_total`) | spec 028 | NO |
+| `internal/metrics/metrics.go` (drive subset) | spec 038 | 3 (`smackerel_drive_confirmations_total`, `smackerel_drive_policy_decisions_total`, `smackerel_drive_rule_conflicts_total`) | spec 038 | NO |
+| `internal/drive/observability/metrics.go` | spec 038 | 5 (drive scan, extract, save, retrieve decisions, provider errors) | spec 038 | NO |
+| `internal/metrics/auth.go` | spec 044 Scope 04 | 7 (`smackerel_auth_*`) | spec 044 | YES (2026-05-11) |
+| `internal/metrics/recommendations.go` | spec 039 Scope 6 | 8 (`smackerel_recommendation_*`) | spec 039 | NEW — annotated this round |
+| `internal/metrics/photos.go` | spec 040 Scope 5 | 7 (`smackerel_photos_*`) | spec 040 | NEW — annotated this round |
+
+`internal/api/health.go` was inspected; no metric emissions live in that file (the `/api/health` endpoint owns liveness/readiness only — it does not double-publish metric series).
+
+`ml/app/metrics.py` was inspected (42 lines); the ML sidecar surface remains the two-series spec 030 Scope 4 contract (`smackerel_llm_tokens_used_total`, `smackerel_ml_processing_latency_seconds`) — no drift.
+
+### Mechanical Action Performed (this round)
+
+**Cross-spec annotation in `state.json` `executionHistory`** for the spec 039 recommendations and spec 040 photos surfaces, parallel in shape to the existing spec 044 cross-spec annotation (2026-05-11). Annotation records: cross-spec id, the new series families, the registration site, the registry, the documentation home in `docs/Operations.md`, and the explicit assertion that no spec 030 source/test/scope-DoD/scenario/certification field is touched. Spec 030 stays `done`; only `execution.executionHistory` appended and `lastUpdatedAt` bumped to 2026-05-13.
+
+No source / test / config / Compose / scope-DoD / scenario / certification field touched in this round.
+
+### Concerns (deeper improvements requiring specialist work — NOT performed this round)
+
+| # | Concern | Suggested Owner | Severity |
+|---|---------|-----------------|----------|
+| C1 | Full operator-facing tables for spec 028 lists, spec 038 drive, spec 021 intelligence/alerts surfaces are missing from `docs/Operations.md` "Key Metrics" subsection. Recommendations and auth surfaces have full tables; lists/drive/intel/alerts do not. | bubbles.docs (per-spec, owned by 028/038/021 docs phases) | Medium |
+| C2 | Spec 040 photos surface has only one passing mention in `docs/Operations.md` (line 1577) — the full 7-series table parallel to the recommendations and auth blocks is missing from the "Key Metrics" subsection. | bubbles.docs (owned by spec 040 docs phase) | Medium |
+| C3 | No `prometheus/alerts/*.yml` alert rule files are committed in the repo for ANY of the operator-facing latency or error-budget series (search latency, intelligence latency, auth validation latency, drive provider errors, recommendation provider errors, dead-letter rate, etc.). Real alert authoring needs SRE judgment on thresholds and severities. | bubbles.design + bubbles.plan + bubbles.docs (new spec or scope-extension) | High |
+| C4 | No Grafana dashboard JSONs are committed for any of the surfaces. Operators must construct ad-hoc PromQL each session. | bubbles.docs + bubbles.design (judgment-heavy) | Medium |
+| C5 | No SLI/SLO definitions exist for the latency/error series. Spec 030 design.md defines metrics emission but not service-level objectives or burn-rate alerting. | bubbles.design + bubbles.plan | High |
+| C6 | OTEL trace propagation is W3C `traceparent` header injection only at NATS edges (`internal/metrics/trace.go`, 50 lines). There is no full OTEL SDK integration: no span emission from HTTP handlers, no span emission from connector loops, no OTLP exporter wired, no tracer provider initialization. Implementing real spans is non-trivial cross-cutting work. | bubbles.design + bubbles.implement (spec 030 scope-extension or new spec) | High |
+| C7 | No log enrichment for `trace_id` / `span_id` / `request_id`. Slog handlers in the Go core do not inject trace context fields into log records, so logs cannot be correlated with the W3C traceparent values that DO traverse NATS headers. Mechanically possible (slog handler wrapper) but cross-cutting. | bubbles.design + bubbles.implement | Medium |
+| C8 | No per-metric runbook links exist. `docs/Operations.md` "Key Metrics" tables describe what the metric measures but do not link to a per-metric runbook that explains expected ranges, common breakage modes, or remediation steps. | bubbles.docs (judgment-heavy) | Low |
+| C9 | `smackerel_db_connections_active` is a single Gauge with no labels — no distinction between read/write/idle pool partitions, no per-database labels for the case where multiple logical pools exist. Splitting requires real connection-pool refactoring. | bubbles.design + bubbles.implement (potentially spec 022 or spec 030 scope-extension) | Low |
+| C10 | The OTEL "opt-in" config (`observability.otel_enabled`, `observability.otel_exporter_endpoint`) is documented in `docs/Operations.md` but the spec 030 `state.json` does NOT track OTEL-enabled vs OTEL-disabled E2E test coverage as separate certification surfaces. There is no automated test asserting that with `OTEL_ENABLED=true` a span actually traverses Go core → NATS → ML sidecar end-to-end. | bubbles.test + bubbles.validate (E2E-level) | Medium |
+
+### What Was NOT Touched (per round guidance — `concerns[]` discipline)
+
+- No source code under `internal/metrics/` modified.
+- No `docs/Operations.md` modified (deeper docs change is `bubbles.docs` ownership routed via the owning spec's docs phase, not via spec 030 R15 sweep).
+- No `spec.md` / `design.md` / `scopes.md` content modified.
+- No new Gherkin scenarios authored.
+- No new tests added.
+- No `certification.*`, `scopeProgress`, `completedScopes`, `certifiedCompletedPhases`, or `status` fields modified.
+- No framework files modified.
+- No SST / no-defaults / tailnet-edge bind invariants touched.
+
+### Verdict
+
+**Spec 030 surface is structurally healthy after R15 probe.** Two new cross-spec metrics families (recommendations, photos) are now correctly annotated in spec 030's executionHistory, parallel to the existing spec 044 annotation pattern. Ten deeper improvement opportunities are logged as `concerns[]` for owner routing in subsequent workflow rounds. Spec 030 status stays `done`. No regressions, no code drift, no certification field tampering.

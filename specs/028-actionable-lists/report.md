@@ -446,3 +446,79 @@ This section consolidates the full repo-relative paths of test files that back e
 | 6 — REST API Endpoints | internal/api/lists_test.go |
 | 7 — Telegram /list Command & Inline Keyboard | internal/telegram/list_test.go |
 | 8 — Intelligence Integration | internal/intelligence/lists_test.go |
+
+---
+
+## Test-to-Doc Sweep (Round 5 — 2026-05-13)
+
+Stochastic-quality-sweep parent (seed 20260513), round 5 of 20, trigger `test` → child mode `test-to-doc`. Spec 028 is already certified `done`; this round re-probes the spec's domain test surface, fixes mechanical coverage gaps, and records concerns for structural gaps.
+
+### Test Probe Results
+
+Commands executed (spec 028 domain code surface):
+
+```text
+go test -count=1 -v ./internal/list/...
+ok  github.com/smackerel/smackerel/internal/list  0.018s   (53 tests, all PASS)
+
+go test -count=1 -v -run 'List|list_' ./internal/api/... ./internal/telegram/... ./internal/intelligence/...
+ok  github.com/smackerel/smackerel/internal/api          0.056s   (lists handler tests, all PASS)
+ok  github.com/smackerel/smackerel/internal/telegram     0.191s   (list command + callback tests, all PASS)
+ok  github.com/smackerel/smackerel/internal/intelligence 0.023s   (lists subscriber tests, all PASS)
+
+go test -count=1 -cover ./internal/list/...
+ok  github.com/smackerel/smackerel/internal/list  coverage: 49.7% of statements   (baseline)
+```
+
+All spec 028 domain tests pass. No flakes observed.
+
+### Coverage Gap Analysis
+
+`go tool cover -func=` against `internal/list/` baseline showed two gap classes:
+
+| Function(s) | Coverage | Class | Action |
+|---|---|---|---|
+| `RecipeAggregator.Domain()` / `DefaultListType()` | 0.0% | Mechanical (trivial getter, no test call) | **Closed in this round** |
+| `ReadingAggregator.Domain()` / `DefaultListType()` | 0.0% | Mechanical (trivial getter, no test call) | **Closed in this round** |
+| `CompareAggregator.Domain()` / `DefaultListType()` | 0.0% | Mechanical (trivial getter, no test call) | **Closed in this round** |
+| `Store.NewStore` / `CreateList` / `GetList` / `ListLists` / `UpdateItemStatus` / `AddManualItem` / `RemoveItem` / `CompleteList` / `ArchiveList` | 0.0% | **Structural** — pgx-backed methods exercised by `tests/integration/artifact_crud_test.go::TestList_CreateAndUpdateStatus` and `TestList_Chaos_CascadeDeleteDuringConcurrentUpdates`, not by unit suite | Logged as concern (existing integration coverage is the design contract) |
+| `PostgresArtifactResolver.NewPostgresArtifactResolver` / `ResolveByIDs` / `ResolveByTag` / `ResolveByQuery` | 0.0% | **Structural** — pgx-backed resolver exercised behind the live-stack boundary | Logged as concern |
+
+### Tests Added (Mechanical Gap Closure)
+
+- `TestRecipeAggregator_InterfaceContract` in [internal/list/recipe_aggregator_test.go](internal/list/recipe_aggregator_test.go) — pins `Domain() == "recipe"` and `DefaultListType() == TypeShopping` (backs SCN-AL-007).
+- `TestReadingAggregator_InterfaceContract` in [internal/list/reading_aggregator_test.go](internal/list/reading_aggregator_test.go) — pins `Domain() == "reading"` and `DefaultListType() == TypeReading` (backs SCN-AL-009 / SCN-AL-010).
+- `TestCompareAggregator_InterfaceContract` in [internal/list/reading_aggregator_test.go](internal/list/reading_aggregator_test.go) — pins `Domain() == "product"` and `DefaultListType() == TypeComparison` (backs SCN-AL-011).
+
+These tests pin the Aggregator-interface contract that `internal/list/generator.go::selectAggregator` depends on at runtime — silent rename of any constant would now fail unit tests instead of slipping through.
+
+### Verification
+
+```text
+go test -count=1 -run 'InterfaceContract' -v ./internal/list/...
+=== RUN   TestReadingAggregator_InterfaceContract
+--- PASS: TestReadingAggregator_InterfaceContract (0.00s)
+=== RUN   TestCompareAggregator_InterfaceContract
+--- PASS: TestCompareAggregator_InterfaceContract (0.00s)
+=== RUN   TestRecipeAggregator_InterfaceContract
+--- PASS: TestRecipeAggregator_InterfaceContract (0.00s)
+PASS
+
+go test -count=1 -coverprofile=/tmp/list_cov2.out ./internal/list/... && go tool cover -func=/tmp/list_cov2.out | tail -1
+total: (statements)  51.2%   (was 49.7% — +1.5pp)
+
+go test -count=1 ./internal/list/... ./internal/api/... ./internal/telegram/... ./internal/intelligence/...
+ok  github.com/smackerel/smackerel/internal/list          0.039s
+ok  github.com/smackerel/smackerel/internal/api           9.323s
+ok  github.com/smackerel/smackerel/internal/telegram      27.896s
+ok  github.com/smackerel/smackerel/internal/intelligence  0.031s
+
+go vet ./internal/list/...
+(clean)
+```
+
+### Outcome
+
+- Round-relevant work: **complete**. Probe ran, all green, mechanical gaps closed, structural gaps logged as concerns.
+- Spec 028 certification status: unchanged (`done`). This round adds proof to an already-certified spec; it does not re-promote or re-validate.
+- No source-code changes outside test files. No framework, config, or scope file changes. No git push.

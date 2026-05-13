@@ -164,13 +164,47 @@ type NATSDigestGeneratedPayload struct {
 	ModelUsed  string `json:"model_used,omitempty"`
 }
 
-// ValidateDigestGeneratedPayload checks required fields on an incoming digest result.
+// Hardening bounds for ValidateDigestGeneratedPayload (HARD-004-R14-001).
+// These cap untrusted ML-sidecar output at the wire boundary so a malformed
+// or hostile result cannot persist arbitrary-size text, negative/absurd word
+// counts, or arbitrarily long model identifiers in the digests table.
+//
+// Architectural ceilings: R-302 caps weekly synthesis at 250 words; the
+// daily digest target is "phone-screen-fit" (Product Principle 7). 64 KiB
+// of text and 100,000 words are each ~100x that ceiling, so legitimate
+// payloads always pass while clearly corrupted/hostile ones are rejected.
+const (
+	maxDigestTextBytes = 64 * 1024
+	maxDigestWordCount = 100000
+	maxDigestModelLen  = 256
+	digestDateFormat   = "2006-01-02"
+)
+
+// ValidateDigestGeneratedPayload checks required fields and enforces safety
+// bounds on an incoming digest result published by the ML sidecar. The wire
+// boundary is the last place we can reject corrupted or hostile payloads
+// before they reach HandleDigestResult and get persisted.
 func ValidateDigestGeneratedPayload(p *NATSDigestGeneratedPayload) error {
 	if p.DigestDate == "" {
 		return fmt.Errorf("NATSDigestGeneratedPayload: digest_date is required")
 	}
+	if _, err := time.Parse(digestDateFormat, p.DigestDate); err != nil {
+		return fmt.Errorf("NATSDigestGeneratedPayload: digest_date must be YYYY-MM-DD: %w", err)
+	}
 	if p.Text == "" {
 		return fmt.Errorf("NATSDigestGeneratedPayload: text is required")
+	}
+	if len(p.Text) > maxDigestTextBytes {
+		return fmt.Errorf("NATSDigestGeneratedPayload: text exceeds %d byte cap (got %d)", maxDigestTextBytes, len(p.Text))
+	}
+	if p.WordCount < 0 {
+		return fmt.Errorf("NATSDigestGeneratedPayload: word_count must be non-negative (got %d)", p.WordCount)
+	}
+	if p.WordCount > maxDigestWordCount {
+		return fmt.Errorf("NATSDigestGeneratedPayload: word_count exceeds %d cap (got %d)", maxDigestWordCount, p.WordCount)
+	}
+	if len(p.ModelUsed) > maxDigestModelLen {
+		return fmt.Errorf("NATSDigestGeneratedPayload: model_used exceeds %d byte cap (got %d)", maxDigestModelLen, len(p.ModelUsed))
 	}
 	return nil
 }

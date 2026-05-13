@@ -2,34 +2,20 @@
   "version": 3,
   "featureDir": "specs/018-financial-markets-connector",
   "featureName": "Financial Markets Connector",
-  "status": "done",
-  "workflowMode": "full-delivery",
+  "status": "in_progress",
+  "workflowMode": "improve-existing",
   "execution": {
     "activeAgent": null,
-    "currentPhase": "finalize",
+    "currentPhase": "validate",
     "currentScope": null,
     "runStartedAt": "2026-04-09T00:00:00Z",
     "completedPhaseClaims": [
-      "select",
-      "bootstrap",
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "gaps",
-      "harden",
-      "stabilize",
-      "security",
-      "validate",
-      "audit",
-      "chaos",
-      "docs",
-      "spec-review"
+      "analyze"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
     "completedScopes": [
       "1",
       "2",
@@ -38,23 +24,7 @@
       "5",
       "6"
     ],
-    "certifiedCompletedPhases": [
-      "select",
-      "bootstrap",
-      "implement",
-      "test",
-      "regression",
-      "simplify",
-      "gaps",
-      "harden",
-      "stabilize",
-      "security",
-      "validate",
-      "audit",
-      "chaos",
-      "docs",
-      "spec-review"
-    ],
+    "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
         "scope": 1,
@@ -160,12 +130,60 @@
       "runStartedAt": "2026-04-16T00:00:00Z",
       "runFinishedAt": "2026-04-16T00:00:00Z",
       "summary": "Governance artifact remediation: restored 3 orphaned DoD checkboxes (scopes 1/2/4), fixed Validation Checkpoints integration\u2192unit label, fixed stale FRED evidence, removed duplicate JSON in scenario-manifest.json, enriched report.md. artifact-lint PASSED. 119/119 tests pass."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "analyze",
+        "validate"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-12T00:00:00Z",
+      "runFinishedAt": "2026-05-12T00:00:00Z",
+      "summary": "improve-existing reconciliation (parent: stochastic-quality-sweep R04, trigger=improve, executionModel=parent-expanded-child-mode). Code health verified: 149/149 unit tests pass. State-transition-guard reports 50 BLOCKING failures against current governance gates that fired retrospectively (G016 18\u00d7 regression E2E planning, G022 15\u00d7 phase impersonation, G040 10\u00d7 deferral language, G053 1\u00d7 code diff evidence, G053-related 3\u00d7 consumer impact sweep, G060 1\u00d7 TDD red\u2192green markers, G068 4\u00d7 DoD-Gherkin fidelity, SLA-stress 1\u00d7, structured-commit 1\u00d7). Per Gate G041 anti-manipulation, status honestly demoted done\u2192in_progress. completedPhaseClaims trimmed to phases with executionHistory provenance. Findings catalogued in report.md \u00a7 Improve-Existing Reconciliation. Routed to bubbles.workflow (mode: full-delivery) for full specialist remediation cycle."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "select",
+        "simplify"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-13T00:00:00Z",
+      "runFinishedAt": "2026-05-13T00:00:00Z",
+      "summary": "simplify-to-doc probe (parent: stochastic-quality-sweep R03 seed 20260513, trigger=simplify, executionModel=parent-expanded-child-mode). Re-probed internal/connector/markets/ for new simplification opportunities since the R88 (2026-04-21) sweep that already extracted httpErrorWithSnippet, doFinnhubQuote, parseStringSlice helpers. Findings: 0 actionable mechanical simplifications. Code grew 1146\u21921228 LOC since R88 due to subsequent CHAOS/SEC/REG hardening rounds (NaN/Inf guards, slice-copy aliasing safety, atomic TOCTOU claims, CWE-116/20/532 defenses) — all essential complexity. go vet clean, 149/149 unit tests pass. One non-mechanical refactor candidate identified (Sync function ~250 LOC could be split into per-provider helpers) but classified as concern[]: requires specialist execution by bubbles.simplify with full red\u2192green proof per requireRedGreenProofWhenBehaviorChanges, not appropriate for inline sweep round. Pre-existing 50 governance findings from R04 reconciliation remain catalogued in report.md \u00a7 Improve-Existing Reconciliation, already routed to full-delivery — out of simplify-domain scope. No artifact mutations beyond this executionHistory entry. Status preserved as in_progress (the broader R04 reconciliation remains the active workflow); no scope completion or DoD changes claimed by this round."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "select",
+        "test"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-13T01:00:00Z",
+      "runFinishedAt": "2026-05-13T01:00:00Z",
+      "summary": "test-to-doc probe (parent: stochastic-quality-sweep R09 seed 20260513, trigger=test, executionModel=parent-expanded-child-mode). Builds on R03 simplify baseline. Probe: go test ./internal/connector/markets/... -count=1 -cover \u2192 ok 2.149s, 97.2% statement coverage, 0 failures. Cross-checked scenario-manifest.json linkedTests against actual test inventory: 71 declared, 149 present, 2 declared-but-missing under SCN-FM-RL-001 (Rate limiter prevents exceeding budget). Authored both as mechanical fixes per documented contract: TST-018-R09-001 TestRateLimit_AtBoundary asserts exact off-by-one boundary at providerRateLimits[provider] for finnhub/coingecko/fred (table-driven sub-tests); TST-018-R09-002 TestTryRecordCall_Atomic asserts denied calls do not leak phantom timestamps into c.callCounts (TOCTOU non-regression). Adversarial verification per G021: temporarily mutated markets.go:861 from len(valid)>=maxPerMin to len(valid)>maxPerMin; both new tests failed with expected mode (off-by-one detected by all 3 sub-tests + atomic-leak detected); mutation reverted. Final state: 151 PASS top-level (149+2 new), 97.2% coverage, go vet clean. No production-code changes. Per-function coverage gaps remaining (Sync 97.2%, isSafeURL 87.5%, tryClaimDailySummary 89.5%, fetch* 91.7-95.7%) logged as concerns[] for bubbles.test specialist (require fresh httptest fixtures for narrow defensive branches, not mechanical for sweep round). Status preserved as in_progress; no scope completion or DoD changes claimed by this round."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "select",
+        "regression"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-13T02:00:00Z",
+      "runFinishedAt": "2026-05-13T02:00:00Z",
+      "summary": "regression-to-doc probe (parent: stochastic-quality-sweep R12 seed 20260513, trigger=regression, executionModel=parent-expanded-child-mode). Builds on R03 simplify and R09 test baselines. Regression-specific probes only \u2014 did NOT re-do simplify or test work. Baseline test regression: go test ./internal/connector/markets/... -count=1 -cover \u2192 ok 2.760s, 97.2% coverage, 151 PASS, 0 FAIL \u2014 EXACT match vs R09 baseline (151/151 PASS, 97.2% coverage), no test-count or coverage regression. go vet clean. R09 adversarial mutation properly reverted (markets.go:861 still has len(valid)>=maxPerMin). Scenario-manifest drift: 0 declared-but-missing tests (R09 closed both gaps). Self-citation accuracy: spec 018's own R09 evidence cites markets.go:861 \u2014 confirmed accurate. Cross-spec consumer scan: only cmd/core/connectors.go imports markets package (standard wiring, healthy). Cross-spec line-number drift: spec 019 (status=done) cites markets.go:920 for 'fred_enabled is true but fred_api_key is empty' in scopes.md:132 and report.md:108-109; actual line is now 923 (drifted +3 lines from interleaving CHAOS/SEC hardening since spec 019 was certified). Cited at markets.go:172 ('finnhub_api_key is required') still accurate. SST consistency check: FINANCIAL_MARKETS_FRED_ENABLED, FINANCIAL_MARKETS_FRED_SERIES, FINANCIAL_MARKETS_COINGECKO_ENABLED all present in config/generated/dev.env per spec 019 design \u2014 no SST regression. BUG-001-parseFloatEnv-accepts-inf-nan (spec 019, status=done) does not conflict with markets NaN/Inf guards (CHAOS-018-R02-001/002). Findings: 1 cross-spec line-drift logged as concern (REG-018-R12-001) \u2014 routed to spec 019 owner (bubbles.harden); foreign-surface, not inline-fixable from regression sweep round per Standard Round Guidance ('No specialist substitution for judgment-requiring work; log as concerns[]'). Pre-existing 50 governance findings from R04 reconciliation remain catalogued in report.md \u00a7 Improve-Existing Reconciliation, already routed to full-delivery \u2014 out of regression-domain scope. No artifact mutations beyond this executionHistory entry and a regression probe section appended to report.md. Status preserved as in_progress (the broader R04 reconciliation remains the active workflow); no scope completion or DoD changes claimed by this round."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-16T12:00:00Z",
+  "lastUpdatedAt": "2026-05-13T02:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -207,5 +225,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Initialized by bubbles.analyst greenfield analysis."
+  "notes": "Initialized by bubbles.analyst greenfield analysis. Reconciled 2026-05-12 by bubbles.workflow improve-existing pass (parent: stochastic-quality-sweep R04): demoted done\u2192in_progress per Gate G041 honest reconciliation; 50 governance gaps catalogued in report.md \u00a7 Improve-Existing Reconciliation Findings; route to bubbles.workflow mode: full-delivery for proper specialist remediation cycle."
 }

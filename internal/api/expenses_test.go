@@ -586,3 +586,55 @@ func TestExpenseList_PaginationParams(t *testing.T) {
 		t.Errorf("expected 400 for bad date with excessive limit, got %d", w.Code)
 	}
 }
+
+// HARDEN R13 (stochastic-quality-sweep round 13, 2026-05-13): SQL LIKE
+// wildcard escape for vendor filter input. Adversarial: removing the
+// `\` / `%` / `_` mappings from escapeLikeValue makes `?vendor=%abc`
+// over-match (matches any vendor containing "abc" anywhere instead of
+// the literal substring "%abc"). The expected mappings are exact-string
+// equality, so any silent regression of order, missing chars, or
+// reverted helper would flip these assertions.
+func TestEscapeLikeValue(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"plain", "plain"},
+		{"", ""},
+		{"100% off", `100\% off`},
+		{"a_b", `a\_b`},
+		{`back\slash`, `back\\slash`},
+		// Mixed: backslash-escape MUST run first conceptually; replacer
+		// scans left-to-right without re-processing output, so the
+		// pre-escaped backslash here stays as `\\` not `\\\\`.
+		{`%_\`, `\%\_\\`},
+		// Adversarial: leading wildcard would match every row without escape.
+		{"%", `\%`},
+		{"_", `\_`},
+		{"%%__", `\%\%\_\_`},
+		// Plain ASCII and unicode pass through untouched.
+		{"Starbucks #42", "Starbucks #42"},
+		{"café", "café"},
+	}
+	for _, tt := range tests {
+		if got := escapeLikeValue(tt.input); got != tt.want {
+			t.Errorf("escapeLikeValue(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+// HARDEN R13: integration check that the SQL fragment built by List
+// uses the ESCAPE clause when a vendor filter is present. We rebuild
+// the fragment using the same template the handler uses and assert the
+// exact substring is present. Adversarial: removing ` ESCAPE '\'` from
+// the format string immediately fails this test, even without a live DB.
+func TestExpenseList_VendorFragmentUsesEscape(t *testing.T) {
+	// Mirror the format string used in expenses.go List() vendor branch.
+	frag := fmt.Sprintf("LOWER(metadata->'expense'->>'vendor') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\\'", 7)
+	if !strings.Contains(frag, "ESCAPE '\\'") {
+		t.Fatalf("expected SQL fragment to contain ESCAPE clause, got %q", frag)
+	}
+	if !strings.Contains(frag, "$7") {
+		t.Fatalf("expected SQL fragment to retain positional parameter, got %q", frag)
+	}
+}

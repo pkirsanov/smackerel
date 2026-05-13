@@ -116,6 +116,17 @@
         "runStartedAt": "2026-04-21T00:00:00Z",
         "runEndedAt": "2026-04-21T00:00:00Z",
         "summary": "Security-to-doc (stochastic sweep child): Full security scan of guesthost connector, context API, normalizer, client, router. Verified: bearer auth with constant-time compare, parameterized SQL, MaxBytesReader on POST, entity ID length cap, URL scheme validation, SanitizeControlChars on text fields, UTF-8 safe truncation, Inf/NaN rejection, pagination caps, response size limits, security headers, no leaked secrets. Verdict: CLEAN \u2014 no actionable findings. report.md updated with security evidence."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": [
+          "chaos"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-13T00:00:00Z",
+        "runEndedAt": "2026-05-13T00:00:00Z",
+        "summary": "Chaos-hardening R20 (stochastic-quality-sweep FINAL ROUND, seed 20260513): Probed Sync cursor-advancement adversarially. Found 2 high-severity cursor poisoning vectors not covered by prior CHAOS-013-001/002/003. CHAOS-013-R20-001: future-cursor poisoning (single year-9999 event permanently advanced cursor, dropping all real subsequent events). CHAOS-013-R20-002: cursor regression (server returning only stale events rewound cursor backwards, forcing perpetual re-fetch). Both fixed in connector.go with maxAllowedCursor=now+1h clamp and explicit before-sinceTime regression guard. 5 adversarial regression tests added (2 red\u2192green failure-mode tests + 3 belt-and-braces non-over-aggressiveness tests). All 26 regression_test.go tests pass; 0 internal/ regressions. report.md updated with R20 chaos section and other-surfaces-probed table."
       }
     ]
   },
@@ -202,6 +213,6 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T00:00:00Z",
-  "notes": "2026-04-21: Security-to-doc sweep (stochastic child). Full OWASP scan of guesthost connector surface (client, connector, normalizer, types, context API, router auth). All controls verified: AuthN, input validation, SQL injection, output encoding, DoS limits, security headers, numeric safety, concurrency, secrets hygiene. Verdict: CLEAN. report.md updated with security evidence table."
+  "lastUpdatedAt": "2026-05-13T00:00:00Z",
+  "notes": "2026-05-13: Chaos-hardening R20 (stochastic-quality-sweep FINAL ROUND, seed 20260513). Adversarial probe of Sync cursor logic uncovered 2 high-severity cursor poisoning vectors (future-cursor poisoning via year-9999 event; cursor regression via stale events). Both fixed mechanically in connector.go with maxAllowedCursor clamp and sinceTime-regression guard. 5 adversarial regression tests added. All internal/ packages green. 2026-04-21: Security-to-doc sweep (stochastic child). Full OWASP scan of guesthost connector surface. All controls verified. Verdict: CLEAN."
 }

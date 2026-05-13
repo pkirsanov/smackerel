@@ -37,12 +37,13 @@ const (
 	// that individually pass the file-size check (CWE-770).
 	maxTweetCount = 500_000
 
-	// maxEntitiesPerTweet caps the number of URL, hashtag, and mention entities
-	// processed per tweet. Prevents child-artifact amplification and unbounded
-	// metadata arrays from crafted archives (CWE-770).
+	// maxEntitiesPerTweet caps the number of URL, hashtag, mention, and media
+	// entities processed per tweet. Prevents child-artifact amplification and
+	// unbounded metadata arrays from crafted archives (CWE-770).
 	maxURLsPerTweet     = 100
 	maxHashtagsPerTweet = 100
 	maxMentionsPerTweet = 100
+	maxMediaPerTweet    = 100
 )
 
 // tweetIDPattern validates that a tweet ID contains only digits.
@@ -488,6 +489,11 @@ func (c *Connector) parseSignalFile(ctx context.Context, filename, signalType st
 	}
 
 	for _, entry := range entries {
+		// Honor cancellation inside the iteration so large signal files
+		// (up to maxArchiveFileSize) cannot block sync teardown (CWE-400/CWE-770).
+		if ctx.Err() != nil {
+			return ids
+		}
 		raw, ok := entry[signalType]
 		if !ok {
 			continue
@@ -656,13 +662,18 @@ func normalizeTweet(tweet ArchiveTweet, bookmarked, liked bool, thread *Thread) 
 	metadata["url_count"] = len(urls)
 
 	// Media type summary for downstream processing.
-	if len(tweet.Entities.Media) > 0 {
-		mediaTypes := make([]string, len(tweet.Entities.Media))
-		for i, m := range tweet.Entities.Media {
+	// Cap media entities to prevent unbounded metadata from crafted archives (CWE-770).
+	mediaSource := tweet.Entities.Media
+	if len(mediaSource) > maxMediaPerTweet {
+		mediaSource = mediaSource[:maxMediaPerTweet]
+	}
+	if len(mediaSource) > 0 {
+		mediaTypes := make([]string, len(mediaSource))
+		for i, m := range mediaSource {
 			mediaTypes[i] = m.Type
 		}
 		metadata["media_types"] = mediaTypes
-		metadata["media_count"] = len(tweet.Entities.Media)
+		metadata["media_count"] = len(mediaSource)
 	}
 
 	if thread != nil {
@@ -711,7 +722,13 @@ func classifyTweet(tweet ArchiveTweet, thread *Thread) string {
 		return "tweet/quote"
 	}
 	// Check for media attachments (photo, video, animated_gif) per R-004.
-	for _, m := range tweet.Entities.Media {
+	// Cap iteration to maxMediaPerTweet so a crafted tweet with millions of
+	// non-matching media entries cannot cause unbounded scanning (CWE-770).
+	mediaScan := tweet.Entities.Media
+	if len(mediaScan) > maxMediaPerTweet {
+		mediaScan = mediaScan[:maxMediaPerTweet]
+	}
+	for _, m := range mediaScan {
 		switch m.Type {
 		case "video", "animated_gif":
 			return "tweet/video"

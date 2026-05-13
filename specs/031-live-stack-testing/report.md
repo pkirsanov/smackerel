@@ -378,3 +378,90 @@ This section consolidates the full repo-relative paths of test files that back e
 
 **Residual (not in implement authority):**
 - Scope 1 (Integration Test Infrastructure), Scope 3 (NATS Stream Integration Tests), and Scope 4 (Artifact CRUD + Vector Search) lack `### Gherkin Scenarios` subsections in scopes.md. Adding new Gherkin scenarios is bubbles.plan ownership (per agent rule: "MUST NOT add new Gherkin scenarios"). Routing to bubbles.plan recommended.
+
+---
+
+## DevOps Probe R18 (2026-05-13)
+
+**Trigger:** Stochastic quality sweep R18 of 20 (seed 20260513) — devops (child workflow `devops-to-doc`)
+**Scope:** Live-stack testing infrastructure devops surface — CI/CD coverage for E2E/integration test execution, test-environment isolation enforcement, Docker compose test bootstrap reliability, test data cleanup, parallel-test infrastructure, test-stack lifecycle commands in `./smackerel.sh`, test fixture freshness, leaked test resources.
+
+### Probe Methodology
+
+Read-only inspection of:
+- `.github/workflows/ci.yml` — CI job topology and live-stack coverage
+- `.github/workflows/build.yml` — Build-Once Deploy-Many pipeline (orthogonal to live-stack testing — included only to confirm separation of concerns)
+- `smackerel.sh` (`test integration|e2e|stress` targets) — orchestrator-owned lifecycle
+- `scripts/runtime/go-{integration,e2e,stress}.sh` — Go test runners invoked from inside the toolchain container
+- `tests/integration/test_runtime_health.sh` — shell health probe + KEEP_STACK_UP=1 contract (spec 037 Scope 10)
+- `tests/integration/helpers_test.go` — `t.Cleanup`/`testID(t)`/`cleanup{Artifact,List,Annotation}` helpers
+- `config/smackerel.yaml` `environments.test` — SST-derived test isolation (compose project `smackerel-test`, ports 47001-47004, named volumes `smackerel-test-*`)
+- `.github/instructions/bubbles-test-environment-isolation.instructions.md` — required topology and policy
+
+### Findings (all gated as specialist work — `concerns[]`)
+
+| ID | Finding | Severity | Mechanical / Specialist | Resolution |
+|----|---------|----------|------------------------|------------|
+| DEVOPS-031-001 | CI workflow `.github/workflows/ci.yml` does not run `./smackerel.sh test e2e`. Spec 031 spec.md success signal "`./smackerel.sh test e2e` verifies: capture a URL via API → wait for processing → search by content → get result" is not exercised in CI on push, PR, or `main`. The repo has 12 E2E Go test files under `tests/e2e/` (`capture_process_search_test.go`, `domain_e2e_test.go`, `knowledge_*_test.go`, etc.) and a fully-wired `./smackerel.sh test e2e` surface, but no CI job invokes them. | MEDIUM | Specialist | Logged as `concerns[]`. The existing `integration` job comment (lines 136-139) already documents that GitHub Actions service containers conflict with Compose-managed lifecycles. Adding an E2E job in CI is a tradeoff — Ollama image (`ollama/ollama:0.23.2`) plus the test stack model (`qwen2.5:0.5b-instruct`) require pulling significant binary content per run, and the spec-043 test-env auto-pulls Ollama at startup. Designing a CI E2E lane (workflow_dispatch only? cached Ollama image? mocked LLM at NATS boundary?) is a CI architecture decision owned by `bubbles.design`/`bubbles.plan`, not a mechanical CI step. |
+| DEVOPS-031-002 | The `integration` job in `.github/workflows/ci.yml` is gated by `if: github.ref == 'refs/heads/main'`. PRs do not run live-stack integration tests, so live-stack regressions can only be detected after merge. | LOW | Specialist | Logged as `concerns[]`. Removing the gate roughly doubles PR CI duration (current `lint-and-test` budget is 10 min; integration adds another 10-15 min). The cost/coverage tradeoff is a CI architecture decision that should evaluate developer feedback latency, GitHub Actions minutes budget, and whether selective triggers (paths, labels) make sense before unilaterally flipping the gate. |
+| DEVOPS-031-003 | Integration tests run with `-p 1` (serialized) per `scripts/runtime/go-integration.sh`, and the test stack uses a single static Compose project name (`smackerel-test`) and static host ports (47001-47004) per `config/smackerel.yaml` `environments.test`. Parallel test runs (multiple developers, CI matrix) would collide on volumes, container names, and ports. The `e2e` lane has `smackerel_acquire_e2e_suite_lock` (flock-based) to serialize concurrent suites, but `integration` has no equivalent guard. | MEDIUM | Specialist | Logged as `concerns[]`. True parallel-test infrastructure requires per-run unique Compose project names, dynamic SST-driven port allocation, and per-run unique volume names. This is an architectural test-infrastructure refactor (`bubbles.design` → `bubbles.plan` → `bubbles.implement`), not a mechanical config edit. The existing flock-on-suite pattern already prevents collision between concurrent invocations on the same host, which is the immediate operator-protection concern. |
+| DEVOPS-031-004 | `tests/integration/test_runtime_health.sh` and the orchestrator's `integration_cleanup` trap in `smackerel.sh` both run `./smackerel.sh --env test down --volumes` with output redirected to `/dev/null` and exit status masked by `\|\| true`. Cleanup runs reliably as a defense-in-depth pattern, but no automated leak-detector subsequently asserts the absence of `smackerel-test-*` containers, volumes, or networks after teardown. A silent `down --volumes` failure under load (e.g., container with stuck mount) would leak state across runs. | LOW | Specialist | Logged as `concerns[]`. A `./smackerel.sh test integration --verify-clean` flag, or a post-test CI step that runs `docker volume ls --filter name=smackerel-test- --quiet \| xargs -r docker volume inspect` and fails if anything remains, is the right shape — but where the assertion lives (orchestrator vs. CI vs. health probe) is a design call about which surface owns the leak-detector. |
+
+### Verified Healthy
+
+The following devops-relevant invariants were verified as already correct and require no remediation:
+
+1. **Test environment isolation** — `config/smackerel.yaml` `environments.test` sets `compose_project: smackerel-test`, ports 47001-47004 (separate from dev's 42001-42004 and 40001-40002), and named volumes `smackerel-test-*` distinct from dev's `smackerel-*`. Compliant with `bubbles-test-environment-isolation` topology requirements ("named volumes destroyed at the end of the test run" pattern, since `down --volumes` runs in the cleanup trap).
+2. **Test fixture freshness** — `tests/integration/test_runtime_health.sh` runs `down --volumes` BEFORE bringing the stack up, ensuring a clean baseline. The orchestrator's `integration_cleanup` trap then re-runs `down --volumes` after the Go test container exits.
+3. **`KEEP_STACK_UP=1` ownership contract** — Spec 037 Scope 10 closure (documented inline at `tests/integration/test_runtime_health.sh` lines 8-27) correctly delegates final teardown ownership: the orchestrator that sets `KEEP_STACK_UP=1` MUST install its own teardown trap. `smackerel.sh test integration` does install that trap.
+4. **Test data identifiability** — `tests/integration/helpers_test.go` `testID(t)` returns `test-{TestName}-{UnixNano}`-style IDs, satisfying the policy that "test data MUST be created with identifiable synthetic prefixes". Cleanup helpers register `t.Cleanup` callbacks and log (not swallow) DELETE failures (closed by CHAOS-031-001 in R1).
+5. **Build-Once Deploy-Many separation** — `.github/workflows/build.yml` correctly stops at registry push and does not invoke `deploy-target` (per bubbles G074). The build pipeline is orthogonal to live-stack testing devops.
+6. **CI reads the contract correctly** — The `integration` CI job documents (lines 136-139) why it uses raw `go test -tags=integration` instead of `./smackerel.sh test integration` (GitHub Actions service containers conflict with Compose-owned lifecycles). This is a deliberate, documented divergence — not a drift.
+
+### Quality Gate Results
+
+| Gate | Result | Notes |
+|------|--------|-------|
+| Test-environment isolation policy compliance | PASS | SST drives compose project, ports, volumes, networks |
+| Build-Once Deploy-Many separation | PASS | Build workflow does not deploy |
+| Tailnet-edge bind invariants (deploy compose) | PASS | Verified by `internal/deploy/compose_contract_test.go` (out-of-scope for this probe but adjacent — confirmed live) |
+| SST/no-defaults policy on test stack | PASS | `environments.test` resolves all values from SST |
+
+### Evidence
+
+```
+$ ls .github/workflows/
+build.yml
+ci.yml
+gitleaks.yml
+$ grep -nE '^\s+(unit|integration|e2e|stress)' .github/workflows/ci.yml
+16:  lint-and-test:
+91:  integration:
+$ grep -nE 'github.ref|main' .github/workflows/ci.yml | head -3
+8:    branches: [ main ]
+12:    branches: [ main ]
+92:    if: github.ref == 'refs/heads/main'
+$ ls tests/e2e/*.go | wc -l
+12
+$ grep -E 'compose_project:|host_port:|volume_name:' config/smackerel.yaml | grep -E 'test|smackerel-test'
+    compose_project: smackerel-test
+    postgres_host_port: 47001
+    nats_client_host_port: 47002
+    nats_monitor_host_port: 47003
+    core_host_port: 45001
+    ml_host_port: 45002
+    ollama_host_port: 47004
+    postgres_volume_name: smackerel-test-postgres-data
+    nats_volume_name: smackerel-test-nats-data
+    ollama_volume_name: smackerel-test-ollama-data
+$ grep -c '^func Test' tests/integration/*.go tests/e2e/*.go | tail -5
+tests/e2e/recommendations_clarification_test.go:1
+tests/e2e/recommendations_why_test.go:1
+tests/e2e/weather_alerts_e2e_test.go:1
+tests/e2e/weather_enrich_e2e_test.go:1
+tests/integration/artifact_crud_test.go:23
+```
+
+### Outcome
+
+**`done_with_concerns`** — devops probe identified 4 specialist-class findings; zero mechanical fixes were in scope for this round. Spec status remains `done`. All 4 findings logged as `concerns[]` for downstream `bubbles.design`/`bubbles.plan` triage. No source/test/config/framework changes; this round is doc-only per the round guidance ("If they require deep specialist work … log as concerns[]").

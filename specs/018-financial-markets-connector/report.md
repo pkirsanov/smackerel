@@ -582,3 +582,466 @@ $ wc -l internal/connector/markets/markets.go internal/connector/markets/markets
 ```
 
 No compile errors. Test suite executing via `./smackerel.sh test unit --go` (Docker compilation in progress due to modified source files — WSL2 bind mount I/O overhead).
+
+---
+
+## Improve-Existing Reconciliation Findings: 2026-05-12
+
+**Trigger:** stochastic-quality-sweep R04 (parent) → improve-existing (child)
+**Agent:** bubbles.workflow (parent-expanded child workflow mode)
+**Selection seed:** 20520512
+**Scope:** spec/design/scopes/state.json governance reconciliation
+
+### Reconciliation Trigger
+
+Per `improve-existing` mode constraints `validateClaimsBeforeImplementation: true`, `requireArtifactStateReconciliation: true`, and `resetStaleStateBeforeImplement: true`, the first action of this round was to validate the spec's `done` claim against current artifact governance. The state-transition-guard reported 50 BLOCKING failures, all driven by retrospective gate tightening that occurred after this spec was last marked done (G016, G022, G040, G053, G060, G068, plus structured-commit and SLA-stress checks).
+
+### Code Health (verified clean)
+
+```
+$ go test -count=1 ./internal/connector/markets/...
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.618s
+$ go test -v -count=1 ./internal/connector/markets/... 2>&1 | grep -cE '^--- PASS:'
+149
+$ go test -v -count=1 ./internal/connector/markets/... 2>&1 | grep -cE '^--- FAIL:'
+0
+$ wc -l internal/connector/markets/markets.go internal/connector/markets/markets_test.go
+ 1228 internal/connector/markets/markets.go
+ 4975 internal/connector/markets/markets_test.go
+ 6203 total
+```
+
+Result: 149/149 unit tests pass. Zero compile/lint regressions. The connector implementation itself is sound. The reconciliation that follows targets ARTIFACT GOVERNANCE only — no production code changes were necessary or made in this round.
+
+### Validate-First Reconciliation Evidence
+
+```
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/018-financial-markets-connector 2>&1 | tail -8
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🔴 TRANSITION BLOCKED: 50 failure(s), 2 warning(s)
+
+state.json status MUST NOT be set to 'done'.
+Fix ALL blocking failures above before attempting promotion.
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/018-financial-markets-connector 2>&1 | tail -2
+
+Artifact lint PASSED.
+```
+
+`artifact-lint.sh` PASSES — the per-artifact structural lint is clean. The 50 blockers come from `state-transition-guard.sh`, which enforces stricter cross-artifact, agent-provenance, and governance-evolution checks.
+
+### Findings Catalogue (50 blockers + 2 warnings)
+
+| # | Finding | Owner | Tier | Resolvable This Round? |
+|---|---------|-------|------|------------------------|
+| IE-018-G022-01 | Phase `select` in completedPhaseClaims has no `bubbles.select` executionHistory entry | bubbles.select | T3 — needs specialist run | No — requires actual specialist invocation |
+| IE-018-G022-02 | Phase `bootstrap` in completedPhaseClaims has no `bubbles.bootstrap` executionHistory entry | bubbles.bootstrap | T3 | No |
+| IE-018-G022-03 | Phase `implement` in completedPhaseClaims has no `bubbles.implement` executionHistory entry (only `bubbles.iterate` did implement+test) | bubbles.implement | T3 | No |
+| IE-018-G022-04 | Phase `test` in completedPhaseClaims has no `bubbles.test` executionHistory entry | bubbles.test | T3 | No |
+| IE-018-G022-05 | Phase `regression` in completedPhaseClaims has no `bubbles.regression` executionHistory entry | bubbles.regression | T3 | No |
+| IE-018-G022-06 | Phase `simplify` in completedPhaseClaims has no `bubbles.simplify` executionHistory entry | bubbles.simplify | T3 | No |
+| IE-018-G022-07 | Phase `gaps` in completedPhaseClaims has no `bubbles.gaps` executionHistory entry | bubbles.gaps | T3 | No |
+| IE-018-G022-08 | Phase `harden` in completedPhaseClaims has no `bubbles.harden` executionHistory entry | bubbles.harden | T3 | No |
+| IE-018-G022-09 | Phase `stabilize` in completedPhaseClaims has no `bubbles.stabilize` executionHistory entry | bubbles.stabilize | T3 | No |
+| IE-018-G022-10 | Phase `security` in completedPhaseClaims has no `bubbles.security` executionHistory entry | bubbles.security | T3 | No |
+| IE-018-G022-11 | Phase `validate` in completedPhaseClaims has no `bubbles.validate` executionHistory entry | bubbles.validate | T3 | No |
+| IE-018-G022-12 | Phase `audit` in completedPhaseClaims has no `bubbles.audit` executionHistory entry | bubbles.audit | T3 | No |
+| IE-018-G022-13 | Phase `chaos` in completedPhaseClaims has no `bubbles.chaos` executionHistory entry | bubbles.chaos | T3 | No |
+| IE-018-G022-14 | Phase `docs` in completedPhaseClaims has no `bubbles.docs` executionHistory entry | bubbles.docs | T3 | No |
+| IE-018-G022-15 | Phase `spec-review` in completedPhaseClaims has no `bubbles.spec-review` executionHistory entry | bubbles.spec-review | T3 | No |
+| IE-018-G016-01 | Scope 01 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No — requires real E2E test creation; current tests are httptest unit tests |
+| IE-018-G016-02 | Scope 01 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-03 | Scope 01 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G016-04 | Scope 02 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-05 | Scope 02 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-06 | Scope 02 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G016-07 | Scope 03 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-08 | Scope 03 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-09 | Scope 03 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G016-10 | Scope 04 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-11 | Scope 04 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-12 | Scope 04 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G016-13 | Scope 05 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-14 | Scope 05 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-15 | Scope 05 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G016-16 | Scope 06 missing scenario-specific regression E2E DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-17 | Scope 06 missing broader E2E regression suite DoD item | bubbles.plan + bubbles.test | T2 | No |
+| IE-018-G016-18 | Scope 06 Test Plan missing scenario-specific regression E2E rows | bubbles.plan | T2 | No |
+| IE-018-G068-01 | DoD-Gherkin fidelity: SCN-FM-FH-001 "Fetch stock quote" not faithfully mirrored in Scope 01 DoD (current items use `fetches` plural; need 3 of {`scn`,`001`,`fetch`,`stock`,`quote`} matched in single DoD line) | bubbles.plan | T1 | Yes — pure DoD wording fix; deferred to remediation cycle so plan owner authors it |
+| IE-018-G068-02 | DoD-Gherkin fidelity: SCN-FM-RL-001 "Rate limiter prevents exceeding budget" not faithfully mirrored in Scope 01 DoD (need 4 of 7 keyword matches) | bubbles.plan | T1 | Yes — same as above |
+| IE-018-G068-03 | DoD-Gherkin fidelity: SCN-FM-CG-001 "Fetch crypto prices in batch" not faithfully mirrored in Scope 02 DoD (`batches` vs `batch`, `getprices` vs `prices`/`fetch`) | bubbles.plan | T1 | Yes |
+| IE-018-G068-04 | DoD-Gherkin fidelity: SCN-FM-SYM-002 "Company name mapped to ticker" not faithfully mirrored in Scope 06 DoD | bubbles.plan | T1 | Yes |
+| IE-018-G040-01 | scopes.md contains 2 deferral language hits — `> Removed DoD items (justification): … Tracked as future work in spec.md.` Per Gate G040, "spec cannot be done with deferred work"; deferred items must either move to a new spec or the spec must remain non-done | bubbles.plan + bubbles.harden | T1 | Partial — wording can be rephrased but the deferred work itself remains real; full resolution requires extracting Future Work to spec 061 (or similar) |
+| IE-018-G040-02 | report.md contains 8 deferral language hits — historical sweep findings reference deferred work | bubbles.harden | T1 | Yes (rewording) |
+| IE-018-G053-01 | Implementation-bearing workflow requires `### Code Diff Evidence` section in report.md | bubbles.implement + bubbles.docs | T1 | Yes |
+| IE-018-G053-02 | Scope 06 renames/removes interfaces but has no Consumer Impact Sweep section | bubbles.plan + bubbles.harden | T1 | Yes |
+| IE-018-G053-03 | Scope 06 missing DoD item for consumer impact sweep | bubbles.plan + bubbles.harden | T1 | Yes |
+| IE-018-G053-04 | Scope 06 does not enumerate affected consumer surfaces | bubbles.plan + bubbles.harden | T1 | Yes |
+| IE-018-G060-01 | Effective TDD mode is scenario-first but no red→green evidence markers in scope/report artifacts | bubbles.test | T2 | No — requires red-before-green rerun evidence |
+| IE-018-G026-01 | SLA-sensitive scope (2-min sync NFR for 50-symbol watchlist) missing explicit stress coverage in scopes.md Test Plan | bubbles.plan + bubbles.stabilize | T2 | No — requires actual stress test creation |
+| IE-018-COM-01 | full-delivery requires at least one structured commit message for spec 018 (expected prefix: `spec(018):` or `bubbles(018/...)`); 21 historical commits exist but none use the structured prefix | operator | T1 | Yes — addressable on next commit |
+| IE-018-WARN-01 | No `completedAt` timestamps found in state.json (warning) | bubbles.workflow | T1 | Yes — schema migration |
+| IE-018-WARN-02 | No concrete test file paths found in Test Plan across resolved scope files (all may be placeholders, warning) | bubbles.plan | T1 | Yes — wording fix |
+
+Tier legend:
+- **T1** — Pure artifact remediation (DoD wording, missing sections, structured commit). Achievable in a focused harden+plan+docs cycle. ~13 findings.
+- **T2** — Requires real test or evidence creation (E2E regression tests, TDD red→green markers, SLA stress). Achievable in a full-delivery cycle with bubbles.plan+bubbles.test+bubbles.stabilize. ~21 findings.
+- **T3** — Requires actual specialist phase invocations (15 named agents) to create executionHistory provenance. Only resolvable by running the full `improve-existing` or `full-delivery` phaseOrder with proper `runSubagent` delegation. ~15 findings.
+
+### Why This Round Did Not Mass-Edit Artifacts
+
+Per Gate G041 (NON-NEGOTIABLE anti-manipulation policy):
+- Adding mirror DoD items that don't reflect actually-implemented behavior is fabrication.
+- Adding regression E2E DoD rows that point to non-existent E2E tests is fabrication (this connector is intentionally tested via `httptest` unit tests; there is no live E2E surface — the spec's Test Plan correctly classifies all tests as `unit`).
+- Adding fake `bubbles.test`/`bubbles.audit`/`bubbles.chaos` executionHistory entries to satisfy G022 is the textbook impersonation pattern G022 was added to detect.
+- Removing deferral language without addressing the underlying deferred work (forex-travel artifact linking and pipeline symbol-detection hook — both intentionally out of scope per the spec's `Change Boundary` and `Future Work` sections) is laundering Gate G040.
+
+The honest action is to demote `state.json` from `done` to `in_progress`, document the gaps, and route to a proper remediation cycle that invokes each specialist by name.
+
+### Reconciliation Actions Taken This Round
+
+1. **`state.json` demoted** `status: done` → `status: in_progress`; `certification.status: done` → `in_progress`; `completedPhaseClaims` trimmed from 15 fictitious entries to `["analyze"]` (the only phase actually executed by a properly named agent in this round); `certifiedCompletedPhases` cleared; `lastUpdatedAt` advanced.
+2. **`state.json.executionHistory`** appended new entry for this `bubbles.workflow` improve-existing pass with full reconciliation summary.
+3. **`state.json.notes`** updated with reconciliation provenance pointer.
+4. **`report.md`** appended this Improve-Existing Reconciliation Findings section (no rewriting of existing reports — historical evidence preserved).
+5. **No edits to `spec.md`, `design.md`, `scopes.md`, `scenario-manifest.json`, or any source code under `internal/connector/markets/`** — those changes are owned by the proper specialist chain (bubbles.plan, bubbles.test, bubbles.harden, bubbles.docs) invoked by the recommended follow-up workflow.
+
+### Recommended Next Action (route_required)
+
+Parent stochastic-quality-sweep should escalate this spec to a dedicated full-delivery cycle:
+
+```
+/bubbles.workflow specs/018-financial-markets-connector mode: full-delivery
+```
+
+Suggested phase ordering for full remediation:
+
+1. `bubbles.spec-review` (one-shot, per `specReviewDefault: once-before-implement`) — re-verify Future Work classification for forex-travel + pipeline symbol-detection hook items (Gate G040 root cause).
+2. `bubbles.plan` — add DoD-Gherkin mirror items (G068×4), regression E2E planning rows (G016×18, even if implementation step decides not to add E2E tests, the planning-vs-decision must be explicit), Consumer Impact Sweep for Scope 06 (G053×3), SLA stress planning rows (G026×1), concrete test file paths in Test Plans (WARN-02).
+3. `bubbles.harden` — rephrase deferral language without losing the underlying acknowledgment (G040×10); promote intentional deferrals into a follow-up spec if Gate G040 cannot accept them as Future Work.
+4. `bubbles.implement` — only if planning identifies real code work (current expectation: none — code is healthy).
+5. `bubbles.test` — author scenario-first red→green proofs with explicit markers (G060×1); decide and document whether E2E regression tests are within the connector's allowed change boundary or are out-of-scope foreign work.
+6. `bubbles.regression`, `bubbles.simplify`, `bubbles.stabilize`, `bubbles.security`, `bubbles.validate`, `bubbles.audit`, `bubbles.chaos`, `bubbles.docs` — each invoked by name to populate proper executionHistory provenance (G022×15).
+7. Operator commit with `spec(018): …` prefix (IE-018-COM-01).
+
+Until that cycle runs, this spec remains honestly `in_progress`. No further state promotion should be attempted by automation that does not invoke the named specialists.
+
+### Evidence
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/018-financial-markets-connector 2>&1 | tail -2
+
+Artifact lint PASSED.
+$ python3 -m json.tool specs/018-financial-markets-connector/state.json > /dev/null && echo JSON_VALID
+JSON_VALID
+$ git log --oneline -- specs/018-financial-markets-connector | wc -l
+21
+$ git log --oneline --grep='^spec(018)' --grep='^bubbles(018' | wc -l
+0
+```
+
+---
+
+## Simplification Re-Probe: 2026-05-13
+
+**Trigger:** stochastic-quality-sweep R03 (seed 20260513) → simplify-to-doc (executionModel=parent-expanded-child-mode)
+**Scope:** `internal/connector/markets/markets.go`, `internal/connector/markets/markets_test.go`
+
+### Probe Summary
+
+Re-probed the markets package for new simplification opportunities since the R88 (2026-04-21) simplify sweep that already extracted three reuse helpers (`httpErrorWithSnippet`, `doFinnhubQuote`, `parseStringSlice`).
+
+| Dimension | Result |
+|-----------|--------|
+| Static analysis (`go vet`) | clean |
+| Lint (`./smackerel.sh lint`) | passed |
+| Unit tests | 149/149 PASS |
+| LOC delta vs. R88 baseline | 1146 → 1228 (+82 LOC from subsequent CHAOS/SEC/REG hardening) |
+| Mechanical simplification candidates found | **0** |
+| Specialist-required refactor candidates | 1 (logged as concern, see below) |
+
+### Findings
+
+| # | Finding | Type | Decision |
+|---|---------|------|----------|
+| SIMP-018-R03-001 | `Sync()` is ~250 LOC orchestrating five provider flows (stocks/ETFs, crypto, forex, news, FRED) sharing `failCount`/`totalProviders`/`partialSkip` counters | Structural | **Concern, not remediated this round.** Splitting into per-provider helpers would either fan out the shared counter state across function signatures (4-tuple returns) or require a new aggregate struct + reduce step. Either path is a behavior-adjacent refactor that requires red→green proof per `requireRedGreenProofWhenBehaviorChanges`. Out of scope for an inline sweep round. Routed as `concerns[]` for `bubbles.simplify` specialist execution. |
+| SIMP-018-R03-002 | Two near-identical "build all-watchlist symbols" slice constructions (one in `Sync` for Finnhub stocks+ETFs iteration, one in `enrichArtifactsWithSymbols` for stocks+ETFs+uppercased-crypto) | Code reuse | **Rejected.** Differ in inputs (crypto inclusion) and post-processing (uppercase). Extracting a shared helper with conditional flags would be more complex than the duplication it removes. |
+| SIMP-018-R03-003 | `enrichArtifactsWithSymbols(artifacts, cfg)` parameter takes the full `MarketsConfig` but only reads `cfg.Watchlist` | Signature narrowing | **Rejected.** Mechanical change with zero functional benefit; the broader signature gives future scope room to enrich with thresholds/series metadata without breaking callers. |
+
+### Why No Inline Edits This Round
+
+The R88 simplify sweep already extracted the three obvious deduplication helpers. Subsequent code growth (+82 LOC) is essential complexity from hardening:
+
+- CHAOS-018-001 / CHAOS-018-R02-001/002 / CHAOS-018-R17-001/002/003 / CHAOS-018-002 — race-safe health (`configGen` guard), TOCTOU-safe daily summary claim, NaN/Inf guards, slice-copy aliasing safety, control-char sanitization
+- SEC-018-002 / IMP-018-SQS-001 — URL scheme allowlist (CWE-20), control-char sanitization (CWE-116), `redactHTTPError` (CWE-532)
+- REG-018-R01 — news-as-distinct-provider health accounting
+- H-018-R60-001/003 — Sync rejection without Connect, news-per-symbol cap
+
+None of these are accidental complexity — each guards a real chaos/security/regression failure mode covered by tests.
+
+### Concerns Carried Forward
+
+| Concern | Severity | Follow-up Owner | Follow-up Action |
+|---------|----------|-----------------|------------------|
+| SIMP-018-R03-001 (Sync method per-provider extraction) | low | bubbles.simplify | Schedule a focused refactor round with red→green proof; not blocking. |
+| Pre-existing 50 governance findings from R04 reconciliation | medium | bubbles.workflow (mode: full-delivery) | Already routed; out of simplify-domain scope. Still active. |
+
+### Evidence
+
+```
+$ go vet ./internal/connector/markets/...
+(no output — clean)
+$ go test ./internal/connector/markets/... -count=1
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.590s
+$ go test ./internal/connector/markets/... -count=1 -v 2>&1 | grep -cE "^--- PASS"
+149
+$ wc -l internal/connector/markets/markets.go internal/connector/markets/markets_test.go
+  1228 internal/connector/markets/markets.go
+  4975 internal/connector/markets/markets_test.go
+  6203 total
+$ python3 -c "import json; json.load(open('specs/018-financial-markets-connector/state.json'))" && echo JSON_OK
+JSON_OK
+```
+
+---
+
+## Stochastic Quality Sweep — Round 9 (Test Probe, 2026-05-13)
+
+**Parent:** stochastic-quality-sweep, seed `20260513`, round 9 of 20.
+**Trigger:** `test` → child mode `test-to-doc`.
+**Execution model:** parent-expanded child mode (no nested `runSubagent`).
+**Baseline:** Round 3 (R03) simplify-to-doc found no actionable mechanical edits; this round builds on that baseline, focused on test coverage of declared scenarios.
+
+### Test Probe Result
+
+| Metric | Value |
+|--------|-------|
+| Command | `go test ./internal/connector/markets/... -count=1 -cover` |
+| Result | `ok ... 2.149s coverage: 97.2% of statements` |
+| Top-level tests before round | 149 |
+| Top-level tests after round | 151 |
+| New PASS lines (top + sub) added by R09 | +5 (`TestRateLimit_AtBoundary` + 3 sub-tests, `TestTryRecordCall_Atomic`) |
+| Failures | 0 |
+| `go vet ./internal/connector/markets/...` | clean |
+
+### Per-function coverage (functions below 100%)
+
+| Function | Coverage | Note |
+|----------|----------|------|
+| `Sync` | 97.2% | Large orchestrator; uncovered paths are non-mechanical (R03 SIMP-018-R03-001 already routed). |
+| `redactHTTPError` | 95.2% | Defensive branches against malformed `*url.Error` wrapping. |
+| `isSafeURL` | 87.5% | Edge URL parsing branches. |
+| `doFinnhubQuote` | 95.7% | Per-call fetch helper. |
+| `fetchCoinGeckoPrices` | 95.2% | Defensive branches around malformed batch payloads. |
+| `fetchFinnhubCompanyNews` | 91.7% | News-per-symbol cap and provider error edges. |
+| `fetchFREDLatest` | 94.3% | Defensive branches around missing-data marker. |
+| `tryClaimDailySummary` | 89.5% | TOCTOU-safe atomic claim helper. |
+
+All other 18 listed functions are at **100%**.
+
+### Scenario-Manifest Cross-Check
+
+Cross-checked every `linkedTests[].function` in `scenario-manifest.json` against the actual `markets_test.go` test inventory:
+
+| Status | Count |
+|--------|-------|
+| Declared linked-test functions | 71 |
+| Test functions present in `markets_test.go` | 149 (now 151) |
+| Declared but **missing** before R09 | 2 |
+| Declared but missing after R09 | 0 |
+
+**Two declared linked tests under `SCN-FM-RL-001` ("Rate limiter prevents exceeding budget") were missing.** They were mechanically authorable from the documented `tryRecordCall` contract:
+
+| ID | Test | Authored | Why mechanical |
+|----|------|----------|----------------|
+| TST-018-R09-001 | `TestRateLimit_AtBoundary` | ✅ | Asserts the off-by-one boundary at `providerRateLimits[provider]` for every declared provider (`finnhub=55`, `coingecko=25`, `fred=100`). Boundary semantics are already part of the `linkedDoD` contract; the test exercises documented constants only. |
+| TST-018-R09-002 | `TestTryRecordCall_Atomic` | ✅ | Asserts that denied calls do NOT leak phantom timestamps into `c.callCounts[provider]` (TOCTOU non-regression). Atomic check-and-record is already the documented contract per `tryRecordCall`'s godoc comment; the test reads committed state under the same lock domain. |
+
+### Adversarial Verification (G021 anti-fabrication)
+
+To prove the new tests are not tautological, the production code at `markets.go:861` was temporarily mutated from `len(valid) >= maxPerMin` to `len(valid) > maxPerMin` (classic off-by-one). Both new tests failed with the expected mode:
+
+```text
+--- FAIL: TestRateLimit_AtBoundary/finnhub
+    markets_test.go:128: finnhub: call 56 should be denied (exceeds budget 55)
+--- FAIL: TestRateLimit_AtBoundary/coingecko
+    markets_test.go:128: coingecko: call 26 should be denied (exceeds budget 25)
+--- FAIL: TestRateLimit_AtBoundary/fred
+    markets_test.go:128: fred: call 101 should be denied (exceeds budget 100)
+--- FAIL: TestTryRecordCall_Atomic
+    markets_test.go:176: denied-phase call 1 unexpectedly succeeded
+```
+
+The mutation was reverted before finalizing the round. Final state matches pre-mutation state with the two new tests added (151 PASS, 97.2% coverage).
+
+### Findings Closed This Round
+
+| ID | Finding | Closed by |
+|----|---------|-----------|
+| TST-018-R09-001 | `SCN-FM-RL-001` linked test `TestRateLimit_AtBoundary` declared in scenario manifest but absent from `markets_test.go` | Authored test in `markets_test.go` after `TestTryRecordCall_RateLimit`. |
+| TST-018-R09-002 | `SCN-FM-RL-001` linked test `TestTryRecordCall_Atomic` declared in scenario manifest but absent from `markets_test.go` | Authored test in `markets_test.go` after `TestRateLimit_AtBoundary`. |
+
+### Concerns Carried Forward
+
+| Concern | Severity | Follow-up Owner | Follow-up Action |
+|---------|----------|-----------------|------------------|
+| Per-function coverage gaps in `Sync`, `tryClaimDailySummary`, defensive `fetch*` branches | low | `bubbles.test` | Authoring focused error/edge tests for these branches requires fresh `httptest` fixtures (e.g., truncated chunked-encoding bodies, FRED `.` missing-data interleavings) — not mechanical for a sweep round. Coverage already at 97.2%; remaining 2.8% is narrow-band defensive code. |
+| SIMP-018-R03-001 (Sync per-provider extraction) | low | `bubbles.simplify` | Carried from R03; unchanged by this round. |
+| Pre-existing 50 governance findings from R04 reconciliation | medium | `bubbles.workflow` (mode: full-delivery) | Already routed; out of test-domain scope. Still active. |
+
+### Evidence
+
+```text
+$ go test ./internal/connector/markets/... -count=1 -run 'TestRateLimit_AtBoundary|TestTryRecordCall_Atomic' -v
+=== RUN   TestRateLimit_AtBoundary
+=== RUN   TestRateLimit_AtBoundary/coingecko
+=== RUN   TestRateLimit_AtBoundary/fred
+=== RUN   TestRateLimit_AtBoundary/finnhub
+--- PASS: TestRateLimit_AtBoundary (0.00s)
+    --- PASS: TestRateLimit_AtBoundary/coingecko (0.00s)
+    --- PASS: TestRateLimit_AtBoundary/fred (0.00s)
+    --- PASS: TestRateLimit_AtBoundary/finnhub (0.00s)
+=== RUN   TestTryRecordCall_Atomic
+--- PASS: TestTryRecordCall_Atomic (0.00s)
+PASS
+
+$ go test ./internal/connector/markets/... -count=1 -cover
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.149s coverage: 97.2% of statements
+
+$ go test ./internal/connector/markets/... -count=1 -v 2>&1 | grep -cE '^--- PASS:'
+151
+
+$ go vet ./internal/connector/markets/...
+(no output — clean)
+```
+
+---
+
+## Stochastic Quality Sweep — Round 12 (Regression Probe, 2026-05-13)
+
+**Parent:** stochastic-quality-sweep, seed `20260513`, round 12 of 20.
+**Trigger:** `regression` → child mode `regression-to-doc`.
+**Execution model:** parent-expanded child mode (no nested `runSubagent`).
+**Baselines built on:** R03 simplify-to-doc (no actionable mechanical edits) and R09 test-to-doc (151 PASS, 97.2% coverage, 0 declared-but-missing tests). This round did NOT re-do simplify or test work.
+
+### Regression Probe Result vs R09 Baseline
+
+| Metric | R09 Baseline | R12 Result | Delta |
+|--------|--------------|------------|-------|
+| Top-level PASS | 151 | 151 | **0** ✅ |
+| Failures | 0 | 0 | **0** ✅ |
+| Statement coverage | 97.2% | 97.2% | **0.0%** ✅ |
+| `go vet ./internal/connector/markets/...` | clean | clean | unchanged ✅ |
+| Wall time | 2.149s | 2.760s | +0.611s (build cache cold; non-regression) |
+
+No regression in test count, pass/fail balance, coverage, or static analysis. R09's adversarial mutation at `markets.go:861` was properly reverted (`len(valid) >= maxPerMin` still in place — verified below).
+
+### R09 Mutation-Revert Verification
+
+```text
+$ grep -n "len(valid)" internal/connector/markets/markets.go
+861:    if len(valid) >= maxPerMin {
+```
+
+The single rate-limit boundary check is `>=` (correct). R09's adversarial probe mutation to `>` was reverted as documented.
+
+### Scenario-Manifest Drift Check
+
+Re-ran the R09 cross-check between `scenario-manifest.json.linkedTests[].function` and the actual test inventory in `markets_test.go`:
+
+```text
+$ jq -r '.scenarios[].linkedTests[].function' specs/018-financial-markets-connector/scenario-manifest.json | sort -u | wc -l
+71
+$ grep -E "^func Test" internal/connector/markets/markets_test.go | sed -E 's/^func (Test[A-Za-z0-9_]+).*/\1/' | sort -u | wc -l
+151
+$ comm -23 <(jq -r '.scenarios[].linkedTests[].function' specs/018-financial-markets-connector/scenario-manifest.json | sort -u) <(grep -E "^func Test" internal/connector/markets/markets_test.go | sed -E 's/^func (Test[A-Za-z0-9_]+).*/\1/' | sort -u)
+(no output — zero declared-but-missing)
+```
+
+R09 closed both previously-missing tests under `SCN-FM-RL-001`. No new drift introduced since R09. ✅
+
+### Self-Citation Accuracy Check (own spec)
+
+| Citation | Location | Expected | Actual | Status |
+|----------|----------|----------|--------|--------|
+| `markets.go:861` for `len(valid) >= maxPerMin` | report.md:864 (R09 adversarial mutation evidence) | line 861 | line 861 | ✅ accurate |
+
+### Cross-Spec Consumer Scan
+
+```text
+$ grep -rln "internal/connector/markets" --include="*.go" | grep -v "_test.go" | grep -v "internal/connector/markets/"
+cmd/core/connectors.go
+```
+
+Only `cmd/core/connectors.go` imports the markets package — the standard wiring entry point (`marketsConnector.New("financial-markets")`, `Connect()`, `SetConfig`, `StartConnector`). No other Go consumers; no broken or stale references.
+
+### Cross-Spec Reference Scan (foreign-owned artifacts)
+
+Searched all spec folders for references to the markets package or `financial-markets` connector identity:
+
+| Spec | Status | Reference Type | Regression-Relevant? |
+|------|--------|----------------|----------------------|
+| `019-connector-wiring` | done | Wiring spec, line-number citations | **Yes** — see REG-018-R12-001 below |
+| `019-connector-wiring/bugs/BUG-001-parseFloatEnv-accepts-inf-nan` | done | Sibling NaN/Inf bug | No conflict (markets has explicit NaN/Inf guards from CHAOS-018-R02-001/002) |
+| `024-design-doc-reconciliation` | — | Design doc only | No |
+| `041-qf-companion-connector` | — | Sibling connector spec | No (no markets-internal refs) |
+| `044-per-user-bearer-auth` | — | Auth report | No (no markets-internal refs) |
+
+### SST Cross-Consistency Check
+
+Spec 019 design.md lists three FRED/CoinGecko env vars added during 019's IMP-019-R28 sweep:
+
+```text
+$ grep -E "FINANCIAL_MARKETS_(COINGECKO_ENABLED|FRED_ENABLED|FRED_SERIES)" config/generated/dev.env
+240:FINANCIAL_MARKETS_FRED_ENABLED=true
+241:FINANCIAL_MARKETS_FRED_SERIES=["GDP","UNRATE","CPIAUCSL","DFF","FEDFUNDS"]
+242:FINANCIAL_MARKETS_COINGECKO_ENABLED=true
+```
+
+All three env vars present in the SST-generated config — no SST regression vs spec 019's wiring contract.
+
+### Findings Closed This Round
+
+None — no regressions in code, tests, coverage, scenario manifest, or own-spec evidence required closure.
+
+### Regression Findings (cross-spec, foreign-surface)
+
+| ID | Finding | Owner | Severity | Disposition |
+|----|---------|-------|----------|-------------|
+| REG-018-R12-001 | `specs/019-connector-wiring/scopes.md:132` and `specs/019-connector-wiring/report.md:108-109` cite `internal/connector/markets/markets.go:920` for the error string `fred_enabled is true but fred_api_key is empty`; the actual line is now **923** (drifted +3 lines from interleaved CHAOS/SEC/REG hardening to markets.go since spec 019 was certified). The cited error string text itself is still accurate; only the line number is stale. The other co-cited line (`markets.go:172` for `finnhub_api_key is required`) remains accurate. | bubbles.harden / bubbles.docs (spec 019 owners) | low | **Concern, not remediated this round.** Spec 019 has `status: done`. Modifying its `scopes.md`/`report.md` line numbers from this regression sweep round on spec 018 would be foreign-surface specialist substitution (judgment-requiring update of evidence belonging to a certified foreign spec). Per Standard Round Guidance, logged as `concerns[]` and routed. |
+
+### Probe Verification (no internal regressions)
+
+```text
+$ go test ./internal/connector/markets/... -count=1 -cover
+ok      github.com/smackerel/smackerel/internal/connector/markets       2.760s coverage: 97.2% of statements
+
+$ go test ./internal/connector/markets/... -count=1 -v 2>&1 | grep -cE '^--- PASS:'
+151
+
+$ go test ./internal/connector/markets/... -count=1 -v 2>&1 | grep -cE '^--- FAIL:'
+0
+
+$ go vet ./internal/connector/markets/...
+(no output — clean)
+
+$ grep -n "finnhub_api_key is required\|fred_enabled is true but fred_api_key is empty" internal/connector/markets/markets.go
+172:            return fmt.Errorf("finnhub_api_key is required")
+923:                    return MarketsConfig{}, fmt.Errorf("fred_enabled is true but fred_api_key is empty")
+
+$ python3 -c "import json; json.load(open('specs/018-financial-markets-connector/state.json'))" && echo JSON_OK
+JSON_OK
+```
+
+### Concerns Carried Forward
+
+| Concern | Severity | Follow-up Owner | Follow-up Action |
+|---------|----------|-----------------|------------------|
+| REG-018-R12-001 (spec 019 line-number drift to markets.go:920 → :923) | low | bubbles.harden / bubbles.docs (spec 019) | When spec 019 is next touched (or via a focused docs/harden round on spec 019), update the two cited line numbers in `specs/019-connector-wiring/scopes.md:132` and `specs/019-connector-wiring/report.md:109`. Foreign-surface; not blocking spec 018. |
+| SIMP-018-R03-001 (Sync per-provider extraction) | low | bubbles.simplify | Carried from R03 → R09 → R12; unchanged by this round. |
+| Per-function coverage gaps in Sync, tryClaimDailySummary, defensive `fetch*` branches | low | bubbles.test | Carried from R09; unchanged. |
+| Pre-existing 50 governance findings from R04 reconciliation | medium | bubbles.workflow (mode: full-delivery) | Already routed; out of regression-domain scope. Still active. |
+
+

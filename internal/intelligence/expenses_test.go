@@ -441,3 +441,52 @@ func TestSlicesContains_EdgeCases(t *testing.T) {
 		t.Error("expected false for case mismatch (case-sensitive)")
 	}
 }
+
+// HARDEN R13 (stochastic-quality-sweep round 13, 2026-05-13): Cache
+// eviction at small maxSize boundary. Without the `if evictCount < 1`
+// floor in put(), maxSize <= 1 makes evictCount = 0 (integer division)
+// and no entries are removed when at capacity, so the cache grows
+// unbounded one entry per put despite the capacity gate firing every
+// time. Adversarial: the assertions below use strict `>` comparisons,
+// so reverting the floor immediately fails len(cache) > maxSize.
+func TestVendorNormalizer_CacheEvictionMinSize(t *testing.T) {
+	// maxSize=1: every put past the first must evict the previous entry.
+	n1 := NewVendorNormalizer(nil, 1)
+	n1.put("a", "A")
+	n1.put("b", "B")
+	n1.put("c", "C")
+	n1.mu.RLock()
+	got1 := len(n1.cache)
+	n1.mu.RUnlock()
+	if got1 > 1 {
+		t.Errorf("maxSize=1: cache grew unbounded, got len=%d (want <=1)", got1)
+	}
+
+	// maxSize=2: third put must trigger eviction of the oldest entry.
+	n2 := NewVendorNormalizer(nil, 2)
+	n2.put("x", "X")
+	n2.put("y", "Y")
+	n2.put("z", "Z")
+	n2.mu.RLock()
+	got2 := len(n2.cache)
+	_, hasZ := n2.cache["z"]
+	n2.mu.RUnlock()
+	if got2 > 2 {
+		t.Errorf("maxSize=2: cache exceeded capacity, got len=%d (want <=2)", got2)
+	}
+	if !hasZ {
+		t.Error("maxSize=2: most recently inserted entry 'z' should survive")
+	}
+
+	// Repeated puts at maxSize=1 must keep cache at size 1, not grow.
+	n3 := NewVendorNormalizer(nil, 1)
+	for i := 0; i < 50; i++ {
+		n3.put(strings.Repeat("k", i+1), "v")
+	}
+	n3.mu.RLock()
+	got3 := len(n3.cache)
+	n3.mu.RUnlock()
+	if got3 > 1 {
+		t.Errorf("maxSize=1 after 50 puts: cache grew unbounded, got len=%d (want <=1)", got3)
+	}
+}

@@ -406,3 +406,16 @@ func TestRecipeAggregator_ThreeRecipeMerge(t *testing.T) {
 	}
 	t.Error("garlic item not found in merged results")
 }
+
+// TestRecipeAggregator_InterfaceContract pins the Aggregator-interface getters
+// the generator's selectAggregator path depends on. Keeps SCN-AL-007 honest
+// when domain/type constants are renamed.
+func TestRecipeAggregator_InterfaceContract(t *testing.T) {
+	a := &RecipeAggregator{}
+	if got := a.Domain(); got != "recipe" {
+		t.Errorf("RecipeAggregator.Domain() = %q, want %q", got, "recipe")
+	}
+	if got := a.DefaultListType(); got != TypeShopping {
+		t.Errorf("RecipeAggregator.DefaultListType() = %q, want %q", got, TypeShopping)
+	}
+}

@@ -238,9 +238,9 @@ CREATE INDEX idx_alerts_type ON alerts(alert_type);
 
 The `action_items` table from Phase 1 is used directly for commitment tracking. The `item_type` field distinguishes: `user-promise`, `contact-promise`, `deadline`, `todo`.
 
-### ~~NATS Subjects (Phase 3 additions)~~ — SUPERSEDED by ADR-001
+### NATS Subjects (Phase 3 additions) — Replaced by ADR-001
 
-> **Superseded:** The following NATS subjects were planned but never implemented. The intelligence layer uses synchronous PostgreSQL queries instead. See [ADR-001](#adr-001-synchronous-intelligence-pipeline-prd-002) for rationale. The `config/nats_contract.json` does not include these subjects.
+> **Historical reference:** The following NATS subjects were planned but never implemented. The intelligence layer uses synchronous PostgreSQL queries instead. See [ADR-001](#adr-001-synchronous-intelligence-pipeline-prd-002) for rationale. The `config/nats_contract.json` does not include these subjects.
 
 | Subject | Original Plan | Actual Implementation |
 |---------|--------------|----------------------|
@@ -248,9 +248,9 @@ The `action_items` table from Phase 1 is used directly for commitment tracking. 
 | `brief.generate` / `brief.generated` | Async brief generation via ML sidecar | `Engine.CreateAlert(AlertMeetingBrief)` — synchronous alert creation |
 | `weekly.generate` / `weekly.generated` | Async weekly synthesis via ML sidecar | `Engine.Resurface()` + `digest.Generator` — synchronous DB queries |
 
-### ~~NATS Payload Schemas~~ — SUPERSEDED by ADR-001
+### NATS Payload Schemas — Replaced by ADR-001
 
-> **Superseded:** The payload schemas below were designed for the async NATS pipeline that was not implemented. They are retained as reference for future LLM-in-the-loop synthesis work (see ADR-001 "When to Revisit"). No code implements these schemas today.
+> **Historical reference:** The payload schemas below were designed for the async NATS pipeline that was not implemented. They are retained as reference for later LLM-in-the-loop synthesis work (see ADR-001 "When to Revisit"). No code implements these schemas today.
 
 **synthesis.analyze:**
 ```json

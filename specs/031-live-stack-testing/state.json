@@ -157,12 +157,23 @@
       "runStartedAt": "2026-05-09T05:00:00Z",
       "runEndedAt": "2026-05-09T05:10:00Z",
       "summary": "Authored 8 Gherkin scenarios across scopes 1, 3, 4 (SCN-LST-005/006 integration test stack isolation + cleanup helpers, SCN-LST-007/008/009 EnsureStreams + pub/sub + Nak redelivery, SCN-LST-010/011/012 pgvector similarity + annotation aggregation + JSONB containment) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing tests/integration/helpers_test.go, nats_stream_test.go, artifact_crud_test.go. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "devops"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-13T00:00:00Z",
+      "runEndedAt": "2026-05-13T00:00:00Z",
+      "summary": "Stochastic-quality-sweep R18/20 (seed 20260513) — devops-to-doc child workflow probe of live-stack testing infrastructure. Verified test-environment isolation (SST drives compose_project=smackerel-test, ports 47001-47004, named volumes smackerel-test-*), test fixture freshness (down --volumes pre+post), KEEP_STACK_UP=1 ownership contract (spec 037 Scope 10), test data identifiability (testID(t)=test-{TestName}-{UnixNano}), Build-Once Deploy-Many separation (build.yml stops at registry push), and CI integration job's deliberate raw-go-test divergence (documented in ci.yml lines 136-139). Identified 4 specialist-class findings (DEVOPS-031-001 missing E2E in CI, DEVOPS-031-002 integration job main-only, DEVOPS-031-003 no parallel-test infra for integration lane, DEVOPS-031-004 no leak-detector after down --volumes); all logged as concerns[] in report.md R18 section. Outcome: done_with_concerns. No source/test/config/framework changes; report.md and state.json executionHistory only."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-18T00:00:00Z",
+  "lastUpdatedAt": "2026-05-13T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

@@ -687,3 +687,124 @@ internal/intelligence/expenses_test.go has Test functions present
 ### Verdict
 
 Spec is genuinely done. No drift between `spec.md`, `scopes.md`, `state.json`, and the on-disk implementation. Only artifact-format drift (lint-marker style) was repaired.
+
+---
+
+## Hardening Probe — 2026-05-13 (harden-to-doc, stochastic-quality-sweep R13)
+
+**Trigger:** Child workflow of stochastic-quality-sweep round 13 of 20 (seed 20260513).
+**Mode:** harden-to-doc
+**Phase Agent:** bubbles.workflow (orchestrating bubbles.harden probe + bubbles.implement-shaped mechanical fixes inline)
+**Verdict:** 2 mechanical findings FIXED with adversarial regression tests; 4 judgment-bearing concerns logged.
+
+### Probe Surface
+
+| Surface | Verdict | Notes |
+|---------|---------|-------|
+| `internal/api/expenses.go` — input validation (amount/currency/date/vendor/notes/category/classification) | CLEAN | Already covered by amountPattern/currencyPattern/datePattern, max-length constants, classification enum, category lookup, MaxBytesReader 64KB body cap |
+| `internal/api/expenses.go` — `Correct` / `ClassifyEndpoint` body limits | CLEAN | `http.MaxBytesReader(w, r.Body, maxExpenseBodySize)` on both; tests `TestExpenseCorrect_OversizedBody` and `TestClassifyEndpoint_OversizedBody` already adversarial |
+| `internal/api/expenses.go` — `List` vendor LIKE filter | **FIXED HARDEN-R13-B** | Raw user input flowed into `LIKE '%' || LOWER($n) || '%'` without escaping `%`/`_` — wildcard over-match (not SQL injection, since the parameter is positional) |
+| `internal/api/expenses.go` — `Export` CSV streaming | CLEAN with concern C-4 | Sanitizes formula chars, escapes content-disposition filename, validates date range. `rows.Scan` failures `continue` silently — see C-4 |
+| `internal/api/expenses.go` — `AcceptSuggestion` / `DismissSuggestion` | CLEAN | Wrapped in DB tx with `FOR UPDATE`, nil-pool guards, `ON CONFLICT` deduplicated suppression insert |
+| `internal/intelligence/expenses.go` — `Classify` 7-rule chain | CLEAN | Word-boundary `containsWord` avoids substring false-positives; nil/empty config branches don't panic (`TestClassify_NilConfigFields`) |
+| `internal/intelligence/expenses.go` — `VendorNormalizer.put` cache eviction | **FIXED HARDEN-R13-A** | `evictCount := n.maxSize / 2` produced 0 for `maxSize <= 1` — cache grew unbounded one entry per put |
+| `internal/intelligence/expenses.go` — `VendorNormalizer.Normalize` LIKE escape on user input | CLEAN with concern C-3 | User input is escaped (`escapedKey` with `\%` and `\_`), but the pattern side `LOWER(REPLACE(alias, '*', '')) || '%'` still trusts alias content — see C-3 |
+| `internal/intelligence/expenses.go` — `GenerateSuggestions` confidence thresholds | CLEAN with concern C-1 | Confidence is computed (0.6/0.7/0.8) but `MinConfidence` config field is read into the struct and never compared — see C-1 |
+| `internal/intelligence/expenses.go` — `ReclassifyVendor` batch limit | CLEAN | Uses `LIMIT $3` with config-controlled batch size; respects `user_corrected IS NOT TRUE` |
+
+### Finding HARDEN-R13-A — VendorNormalizer Cache Eviction At maxSize ≤ 1 Boundary
+
+**Severity:** Low (resource leak, only at small/edge config values)
+**Category:** Hardening / boundary correctness
+**Location:** [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go#L391-L407)
+
+**Description:** The cache eviction path computed `evictCount := n.maxSize / 2`, which yields `0` for `maxSize == 1` and `maxSize == 0`. With `evictCount == 0` the for-loop runs zero iterations, no entries are deleted, and the subsequent `n.cache[key] = value` grows the cache past `maxSize`. The capacity gate `len(n.cache) >= n.maxSize` then fires on every subsequent put, but each put still adds one and evicts zero — the cache grows unbounded one entry per put. Existing eviction tests covered `maxSize == 4` only, so the boundary regressions slipped through.
+
+**Adversarial Trigger:** Set `ExpensesVendorCacheSize = 1` in `config/smackerel.yaml`. Each new vendor lookup adds an entry, none are evicted, memory grows linearly with vendor cardinality.
+
+**Fix:** Floor `evictCount` to at least `1` whenever the capacity gate fires:
+
+```go
+evictCount := n.maxSize / 2
+if evictCount < 1 {
+    evictCount = 1
+}
+```
+
+**Adversarial Regression:** `TestVendorNormalizer_CacheEvictionMinSize` in `internal/intelligence/expenses_test.go` covers:
+- `maxSize=1`: three sequential puts must keep `len(cache) <= 1`
+- `maxSize=2`: third put must evict oldest, `len(cache) <= 2`, most-recent entry survives
+- `maxSize=1` with 50 sequential puts: `len(cache) <= 1` after the loop
+
+Reverting the floor flips the strict-inequality assertions immediately.
+
+### Finding HARDEN-R13-B — `?vendor=` LIKE Wildcard Over-Match
+
+**Severity:** Low (over-match / unintended behavior, NOT SQL injection)
+**Category:** Hardening / defense-in-depth
+**Location:** [internal/api/expenses.go](../../internal/api/expenses.go#L131-L141)
+
+**Description:** The `List` handler appended `LOWER(metadata->'expense'->>'vendor') LIKE '%' || LOWER($n) || '%'` with the raw `?vendor=` query parameter as the positional argument. The argument is parameterized so SQL injection is not possible, but `%` and `_` inside the user-supplied value are still treated as LIKE wildcards by PostgreSQL. A request like `?vendor=%abc` would match any vendor literally containing the substring `abc` anywhere — much broader than the user intended (or than a malicious caller could exploit to enumerate vendor data faster than expected).
+
+**Adversarial Trigger:** `GET /api/expenses?vendor=%25` (URL-encoded `%`) returns every expense whose vendor contains anything; `?vendor=_xy` returns vendors of any length whose last two chars are `xy`.
+
+**Fix:** Escape `\`, `%`, `_` in the user value via a new `escapeLikeValue` helper and add an explicit `ESCAPE '\'` clause to the LIKE pattern:
+
+```go
+func escapeLikeValue(s string) string {
+    return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+```
+
+```go
+conditions = append(conditions, fmt.Sprintf("LOWER(metadata->'expense'->>'vendor') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\\'", argIdx))
+args = append(args, escapeLikeValue(vendor))
+```
+
+`strings.NewReplacer` scans left-to-right without re-processing its own output, so the `\` → `\\` mapping does not over-escape `\%` or `\_` outputs.
+
+**Adversarial Regression:** Two tests in `internal/api/expenses_test.go`:
+- `TestEscapeLikeValue` — table-driven, asserts exact-string equality across `%`, `_`, `\`, mixed, leading wildcards, and pass-through for ASCII + unicode (`café`)
+- `TestExpenseList_VendorFragmentUsesEscape` — rebuilds the SQL fragment template and asserts both the `ESCAPE '\'` clause and `$N` positional parameter survive any future format-string edit
+
+Removing the `\` / `%` / `_` mappings from the helper, or stripping the `ESCAPE` clause from the format string, fails these tests immediately.
+
+### Concerns Logged (Judgment-Required, Not Auto-Fixed)
+
+| ID | Area | Description | Why Not Auto-Fixed |
+|----|------|-------------|--------------------|
+| C-1 | `internal/intelligence/expenses.go` `GenerateSuggestions` | `ec.MinConfidence` (from `ExpensesSuggestionsMinConfidence` config) is set on the struct but never compared against the computed confidence (0.6 / 0.7 / 0.8) before inserting suggestions. Either the config field is dead, or a `if confidence < ec.MinConfidence { continue }` filter is missing. | Requires design intent: is the threshold meant to filter, or is the past-business-count threshold (`MinPastBusiness`) the only gate? Filtering would change observable suggestion count for any deployer that set `MinConfidence` above 0.6. |
+| C-2 | `internal/api/expenses.go` `Correct` currency validation | `currencyPattern = ^[A-Z]{3}$` accepts any three-uppercase-letter string including non-currencies (`ZZZ`, `XXX`). | ISO 4217 list addition has maintenance burden (currencies appear/disappear, codes like `XXX` are reserved). Worth an explicit decision rather than a unilateral hardening. |
+| C-3 | `internal/intelligence/expenses.go` `VendorNormalizer.Normalize` prefix-alias query | The pattern side `LOWER(REPLACE(alias, '*', '')) || '%' ESCAPE '\'` does not escape `%` / `_` from the alias text. Aliases come from controlled sources today (vendor seeds, user PATCH via `CreateVendorAlias`), but defense-in-depth would escape both sides. | Defense-in-depth, not a current vulnerability. SQL-side escape construction (`REPLACE(REPLACE(...))`) is ugly; cleaner fix would compute the escaped pattern in Go and pass it as a separate arg, which changes the query shape. Worth a small design follow-up. |
+| C-4 | `internal/api/expenses.go` `Export` row streaming | `if err := rows.Scan(...); err != nil { continue }` silently drops rows from the CSV without writing a comment line, log entry, or `X-Smackerel-Export-Skipped` header. Operators cannot distinguish "exported all rows" from "exported all decodable rows". | Adding observability requires deciding on the surface (response header? trailing comment? log line with row count?), which is a design call rather than a mechanical fix. |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| [internal/intelligence/expenses.go](../../internal/intelligence/expenses.go) | Floored `evictCount` to `>=1` in `VendorNormalizer.put()`; added inline comment citing HARDEN R13 and the regression test |
+| [internal/api/expenses.go](../../internal/api/expenses.go) | Added `escapeLikeValue` helper with HARDEN R13 comment; rewrote `List` handler vendor branch to call helper and append `ESCAPE '\'` to LIKE clause |
+| [internal/intelligence/expenses_test.go](../../internal/intelligence/expenses_test.go) | Added `TestVendorNormalizer_CacheEvictionMinSize` (3 sub-cases: maxSize=1 small, maxSize=2 with eviction-of-oldest, maxSize=1 with 50-put loop) |
+| [internal/api/expenses_test.go](../../internal/api/expenses_test.go) | Added `TestEscapeLikeValue` (10 cases including `\`, `%`, `_`, mixed, leading wildcards, ASCII, unicode) and `TestExpenseList_VendorFragmentUsesEscape` (asserts SQL fragment shape) |
+| [specs/034-expense-tracking/state.json](state.json) | Appended `bubbles.harden` entry to top-level `executionHistory`; bumped `lastUpdatedAt` to 2026-05-13 |
+
+### CLI Verification
+
+**Executed:** YES
+**Phase Agent:** bubbles.workflow
+**Command:** `./smackerel.sh test unit --go && ./smackerel.sh lint`
+
+| Command | Result |
+|---------|--------|
+| `./smackerel.sh test unit --go` | exit 0 — `internal/intelligence` ok 0.047s, `internal/api` ok 6.516s, all other Go packages ok |
+| `./smackerel.sh lint` | exit 0 — extension manifests OK, JS syntax OK, version consistency OK, web validation passed |
+| `go test -count=1 -run "TestVendorNormalizer_CacheEvictionMinSize\|TestVendorNormalizer_CacheEviction\|TestVendorNormalizer_LRUPromotion\|TestVendorNormalizer_LIKEEscaping" ./internal/intelligence/ -v` | PASS (8/8 VendorNormalizer tests, including new boundary test) |
+| `go test -count=1 -run "TestEscapeLikeValue\|TestExpenseList" ./internal/api/ -v` | PASS (7/7 List + escape tests, including new fragment-shape test) |
+
+### Compliance
+
+- **Terminal discipline:** All file mutations via `replace_string_in_file` IDE tool. No shell redirection, heredoc, `tee`, or `python3 -c "open(...,w)..."` used. Read-only commands (`go test`, `wc -l`, `grep`, `python3 -c "json.load(...)"`) used for verification only.
+- **SST / NO-DEFAULTS:** No new config keys introduced. `ExpensesVendorCacheSize` already SST-driven; the floor is implemented in code, not as a config default.
+- **Tailnet-edge bind / Compose:** Not touched.
+- **Framework files:** No edits under `.github/bubbles/` or `.specify/memory/`.
+- **No git push** during this round.

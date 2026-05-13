@@ -350,3 +350,47 @@ The traceability guard's per-row check requires that every concrete test file pa
 These references resolve the guard's "report is missing evidence reference for concrete test file" failures for the four Phase A files above (one row per failure occurrence — `internal/api/domain_test.go` accounts for three guard failures because it is referenced by three Test Plan rows in Scope 03; total resolved = 1 + 3 + 1 + 1 = 6).
 
 The remaining traceability-guard failures after this appendix are all out-of-boundary — they require authoring Phase B production test files that do not yet exist on disk (35 Phase B Not Started rows + 1 Scope 01 SCN-035-006 row whose coverage exists indirectly in `internal/config/validate_test.go`). They are explicitly classified as `deferred-blocked-on-Phase-B-implementation` in [bugs/BUG-035-002-dod-scenario-fidelity-gap/report.md](bugs/BUG-035-002-dod-scenario-fidelity-gap/report.md#failure-decomposition) and are not within the boundary of BUG-035-002.
+
+---
+
+## Round 17 — devops probe (stochastic-quality-sweep, 2026-05-13)
+
+> **Phase agent:** bubbles.workflow (parent-expanded `devops-to-doc` child mode; nested `runSubagent` unavailable in current runtime — see Tool-Availability Escalation in `bubbles.workflow` contract).
+> **Trigger:** stochastic-quality-sweep round 17 of 20, seed `20260513`, trigger `devops` → child mode `devops-to-doc`.
+> **Scope:** CI/CD coverage, build pipeline compliance, image-scan footprint, deployment health, observability hooks, runbook coverage for spec 035 (Phase A — Foundation, certified `done`).
+
+### Probe Coverage Matrix
+
+| Dimension | Asset checked | Outcome |
+|-----------|---------------|---------|
+| CI lint+unit coverage of `internal/recipe/` | `.github/workflows/ci.yml` `lint-and-test` job runs `./smackerel.sh test unit` | Covered — recipe package and telegram package included in standard suite |
+| CI lint+unit coverage of `internal/telegram/{recipe_commands,cook_session,cook_format}.go` | Same job | Covered |
+| CI integration coverage | `ci.yml` `integration` job runs `tests/integration/...` after `lint-and-test` on main | Covered (recipe API endpoint `GET /domains/:id?servings=N` falls under the existing integration path) |
+| Build-Once Deploy-Many compliance for recipe code | `.github/workflows/build.yml` digest-pins `smackerel-core` (which compiles `internal/recipe`) with cosign keyless + SBOM (syft) + SLSA provenance; bundle determinism verified per env | Compliant — no mutable tags introduced; recipe code rides the standard `smackerel-core` image lifecycle |
+| Third-party dep delta from spec 035 | `go.mod` / `requirements.txt` deltas | None — `internal/recipe` uses only stdlib (`regexp`, `math`, `sync`, `io`); nothing for image scanners to learn |
+| Deployment health checks for recipe surface | Existing core `/healthz` endpoint covers binary liveness; Telegram bot reachability proven by webhook receipt | Adequate — single-user Telegram bot scope; no dedicated synthetic recipe probe required |
+| Observability — Prometheus metrics for recipe operations in `internal/metrics/metrics.go` | Searched `internal/metrics/metrics.go` and recipe + cook_session + recipe_commands sources | **Gap** — no `smackerel_recipe_*` or `smackerel_cook_*` counters/histograms; recipe operations are silent in `/metrics` |
+| Observability — structured logs for cook session lifecycle | `cook_session.go` sweep goroutine logs visible via core stdout | Adequate for single-user scope (no spec 035 requirement for structured cook-session logging) |
+| Operations runbook coverage in `docs/Operations.md` § Recipe Features | Cross-referenced spec 035 + spec 037 dependency + observability current-state note added in this round | Improved (mechanical docs cross-reference added) |
+| `Connector_Development.md` / `Deployment.md` impact | Recipe is not a connector; no deploy-target-specific knobs introduced | Not applicable |
+
+### Mechanical Fixes Performed (this round)
+
+1. Added an authoritative-spec pointer + Phase B status note + observability current-state note to `docs/Operations.md` § Recipe Features (operator-pointer addition; no behavior change).
+2. Added this Round 17 devops probe appendix to `specs/035-recipe-enhancements/report.md`.
+3. Recorded the round in `state.json.executionHistory` (top-level array) without mutating `status`, `certification.status`, `completedScopes`, `completedPhaseClaims`, `certifiedCompletedPhases`, or `scopeProgress`.
+
+### Concerns Surfaced (judgment-required; not mechanical)
+
+- **DEVOPS-OBS-035-001 (low):** No recipe-specific Prometheus metrics. Adding bounded-cardinality counters such as `smackerel_recipe_scale_total{outcome}`, `smackerel_cook_sessions_active`, `smackerel_cook_session_resolution_total{outcome}`, and `smackerel_recipe_disambiguation_total{result}` requires (a) registering them in `internal/metrics/metrics.go` `init()`, (b) instrumenting `internal/recipe/scaler.go`, `internal/telegram/recipe_commands.go`, and `internal/telegram/cook_session.go` hot paths, and (c) deciding label cardinality bounds consistent with the metrics package's "bounded label cardinality" contract. Spec 035 is certified `done`; this is post-certification observability work and belongs to a tracked bug or follow-up spec, not a silent edit during a stochastic round. **Owner chain:** `bubbles.bug` (file BUG-035-003-recipe-observability-gap) → `bubbles.design` (label cardinality decisions) → `bubbles.plan` (scope) → `bubbles.implement`.
+- **DEVOPS-OBS-035-002 (low):** Once DEVOPS-OBS-035-001 lands, `docs/Operations.md` § Recipe Features → Observability subsection should be updated to enumerate the new metric names, label sets, and alert thresholds (currently the subsection only states the absence of metrics). **Owner chain:** `bubbles.docs` after the metrics implementation merges.
+
+### Compliance Affirmations
+
+- **IDE-tool-only mutations.** All three file edits in this round used `replace_string_in_file` (no shell redirection, no heredoc, no `python3 -c open(...)`). Terminal commands run during the probe were read-only (`wc -l`).
+- **No framework-file edits.** No mutations to `.github/bubbles/scripts/`, `.github/agents/`, `.github/prompts/`, `bubbles/workflows.yaml`, `hooks.json`, or `.github/instructions/bubbles-*`.
+- **No Build-Once Deploy-Many regressions.** `build.yml` and `ci.yml` were inspected, not modified; immutable-digest pinning, cosign keyless signing, SBOM and SLSA attestations remain in place.
+- **No SST/no-defaults regressions.** `config/smackerel.yaml` and Compose were not touched.
+- **No tailnet-edge bind-pattern regressions.** `deploy/compose.deploy.yml` was not touched.
+- **No certification mutations.** `state.json.status`, `state.json.certification.*`, `completedScopes`, `completedPhaseClaims`, `certifiedCompletedPhases`, and `scopeProgress` were preserved verbatim.
+- **No git push.** Per round guidance.

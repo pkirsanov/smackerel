@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/db"
@@ -530,6 +531,118 @@ func TestValidateDigestGeneratedPayload_BothEmpty(t *testing.T) {
 	err := ValidateDigestGeneratedPayload(p)
 	if err == nil {
 		t.Fatal("expected error for fully empty payload")
+	}
+}
+
+// HARD-004-R14-001: Adversarial — malformed digest_date string is rejected.
+// Without YYYY-MM-DD enforcement, a hostile sidecar could publish a payload
+// with garbage in digest_date that would still be persisted via
+// HandleDigestResult and break date-keyed lookups.
+func TestHARD004R14001_ValidateDigestGeneratedPayload_RejectsMalformedDate(t *testing.T) {
+	cases := []string{
+		"NOT-A-DATE",
+		"2026/04/10",
+		"April 10, 2026",
+		"2026-13-01", // invalid month
+		"2026-04-32", // invalid day
+		"20260410",
+	}
+	for _, dateStr := range cases {
+		p := &NATSDigestGeneratedPayload{
+			DigestDate: dateStr,
+			Text:       "ok",
+		}
+		err := ValidateDigestGeneratedPayload(p)
+		if err == nil {
+			t.Errorf("expected rejection of malformed digest_date %q, got nil", dateStr)
+			continue
+		}
+		if !containsStr(err.Error(), "digest_date") {
+			t.Errorf("error for %q should mention digest_date, got: %v", dateStr, err)
+		}
+	}
+}
+
+// HARD-004-R14-001: Adversarial — text exceeding the 64 KiB byte cap is
+// rejected. Without this bound a hostile or buggy sidecar could persist
+// arbitrary-size payloads to the digests table.
+func TestHARD004R14001_ValidateDigestGeneratedPayload_RejectsOversizeText(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       strings.Repeat("a", maxDigestTextBytes+1),
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected rejection of oversize text payload")
+	}
+	if !containsStr(err.Error(), "text exceeds") {
+		t.Errorf("error should mention text byte cap, got: %v", err)
+	}
+}
+
+// HARD-004-R14-001: Adversarial — text exactly at the 64 KiB cap is accepted
+// (boundary check — proves the validator is not off-by-one strict).
+func TestHARD004R14001_ValidateDigestGeneratedPayload_AcceptsTextAtCap(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       strings.Repeat("a", maxDigestTextBytes),
+	}
+	if err := ValidateDigestGeneratedPayload(p); err != nil {
+		t.Errorf("expected text at cap to be accepted, got: %v", err)
+	}
+}
+
+// HARD-004-R14-001: Adversarial — negative word_count is rejected. A negative
+// value is a clear contract violation (a count cannot be negative) and
+// without this guard would silently land in the digests.word_count column.
+func TestHARD004R14001_ValidateDigestGeneratedPayload_RejectsNegativeWordCount(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       "ok",
+		WordCount:  -1,
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected rejection of negative word_count")
+	}
+	if !containsStr(err.Error(), "word_count") {
+		t.Errorf("error should mention word_count, got: %v", err)
+	}
+}
+
+// HARD-004-R14-001: Adversarial — word_count exceeding the 100,000 cap is
+// rejected. Architectural ceiling is 250 words (R-302); 100,000 is ~400x
+// that, so any value above this is unambiguously corrupted/hostile.
+func TestHARD004R14001_ValidateDigestGeneratedPayload_RejectsAbsurdWordCount(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       "ok",
+		WordCount:  maxDigestWordCount + 1,
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected rejection of absurd word_count")
+	}
+	if !containsStr(err.Error(), "word_count") {
+		t.Errorf("error should mention word_count, got: %v", err)
+	}
+}
+
+// HARD-004-R14-001: Adversarial — model_used exceeding the 256 byte cap is
+// rejected. Real LLM model identifiers are well under 64 bytes; a value
+// above 256 indicates a malformed or hostile payload.
+func TestHARD004R14001_ValidateDigestGeneratedPayload_RejectsOversizeModelUsed(t *testing.T) {
+	p := &NATSDigestGeneratedPayload{
+		DigestDate: "2026-04-10",
+		Text:       "ok",
+		ModelUsed:  strings.Repeat("m", maxDigestModelLen+1),
+	}
+	err := ValidateDigestGeneratedPayload(p)
+	if err == nil {
+		t.Fatal("expected rejection of oversize model_used")
+	}
+	if !containsStr(err.Error(), "model_used") {
+		t.Errorf("error should mention model_used, got: %v", err)
 	}
 }
 

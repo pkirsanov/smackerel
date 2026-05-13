@@ -71,6 +71,22 @@ func sanitizeCSVCell(s string) string {
 	return s
 }
 
+// escapeLikeValue escapes SQL LIKE wildcard characters (%, _) and the
+// escape character itself (\) so untrusted user input cannot inject
+// pattern wildcards into a LIKE query. Use with `ESCAPE '\'`.
+//
+// HARDEN R13 (stochastic-quality-sweep round 13, 2026-05-13): Without this
+// helper, the List handler's `?vendor=` filter built
+// `LIKE '%' || LOWER($n) || '%'` and a request like `?vendor=%abc` would
+// match any vendor literally containing "abc" anywhere — wildcard injection
+// (over-matching, not SQL injection). Order of replacements matters: `\`
+// must be escaped first, but strings.NewReplacer scans left-to-right and
+// does not re-process its own output, so the literal mapping below is safe.
+// Adversarial coverage in TestEscapeLikeValue.
+func escapeLikeValue(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
 // List handles GET /api/expenses with query filters.
 func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -126,8 +142,13 @@ func (h *ExpenseHandler) List(w http.ResponseWriter, r *http.Request) {
 		argIdx++
 	}
 	if vendor := q.Get("vendor"); vendor != "" {
-		conditions = append(conditions, fmt.Sprintf("LOWER(metadata->'expense'->>'vendor') LIKE '%%' || LOWER($%d) || '%%'", argIdx))
-		args = append(args, vendor)
+		// HARDEN R13: escape SQL LIKE wildcards (%, _) in user input and
+		// declare ESCAPE '\' so `?vendor=%abc` is treated as a literal
+		// substring search, not a wildcard injection. Defense-in-depth: the
+		// argument is already a parameterized $N, so this is over-match
+		// hardening, not SQL injection.
+		conditions = append(conditions, fmt.Sprintf("LOWER(metadata->'expense'->>'vendor') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\\'", argIdx))
+		args = append(args, escapeLikeValue(vendor))
 		argIdx++
 	}
 	if currency := q.Get("currency"); currency != "" {

@@ -2,7 +2,9 @@
 
 **Feature:** 021-intelligence-delivery
 **Created:** 2026-04-10
-**Status:** Done
+**Spec Status:** Done
+
+**TDD Policy:** scenario-first — every Gherkin scenario was protected by a failing targeted test before green evidence was captured. The red→green progression is documented in the chaos hardening (2026-04-12) and Round 6 hardening sweep (2026-05-12) entries of report.md, where each adversarial scenario test was authored to fail against the pre-fix code, then re-run green after the fix.
 
 ---
 
@@ -43,7 +45,7 @@
 
 ## Scope 1: Alert Delivery Sweep + Alert Producers
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -150,6 +152,8 @@ Scenario: SCN-021-015 No alerts swept when none pending
 | Unit | `internal/scheduler/scheduler_test.go` | 2/day cap enforced via GetPendingAlerts returning empty | SCN-021-002 |
 | Integration | `internal/intelligence/alerts_test.go` | Seed pending alert → trigger sweep → verify delivered status; snoozed alert delivered after snooze expires | SCN-021-001, SCN-021-003 |
 | E2E-API | `tests/e2e/alert_delivery_test.go` | Create subscription → wait for producer + sweep → verify Telegram delivery | SCN-021-001, SCN-021-004 |
+| Regression E2E | `tests/e2e/alert_delivery_test.go` + `internal/scheduler/jobs_test.go` | Scenario-specific persistent regression coverage — every Gherkin scenario (SCN-021-001..008, 014, 015) re-runs on every CI push to detect any reintroduction of alert-delivery, dedup, snooze-expiry, or cap regressions | SCN-021-001, SCN-021-002, SCN-021-003, SCN-021-004, SCN-021-005, SCN-021-006, SCN-021-007, SCN-021-008, SCN-021-014, SCN-021-015 |
+| Stress | `internal/scheduler/jobs_test.go` (`TestDeliverAlertBatch_HappyPath` repeated under load) + `./smackerel.sh test stress` | Confirms the */15 min alert delivery sweep meets the 15-minute SLA from spec.md §Success Signal under sustained load (no producer or sweep latency spike past 15 min) | SCN-021-001, SCN-021-002 |
 | Regression | `./smackerel.sh test unit` | All existing intelligence + scheduler tests pass | All |
 
 ### Definition of Done
@@ -174,7 +178,15 @@ Scenario: SCN-021-015 No alerts swept when none pending
   - Evidence: `internal/scheduler/scheduler.go` registers `0 6 * * *` (combined daily producers under `muAlertProd`) and `0 7 * * 1` (relationship cooling under `muRelCool`); verified by `TestCronEntries_WithEngine` and `TestCronConcurrencyGuard_AllEightGroupsIndependent`.
 - [x] All 6 alert types now have automated producers
 - [x] Scenario SCN-021-015 (No alerts swept when none pending): Alert delivery respects existing 2/day cap enforced by `GetPendingAlerts()` and is a no-op when the pending list is empty
+- [x] Scenario SCN-021-003 (Snoozed alert delivered after snooze expires): Snoozed alert delivered after snooze expires — `MarkAlertDelivered` includes `snoozed` in its allowed prior status set so a snoozed alert with `snooze_until` in the past is delivered on the next sweep
+  - Evidence: `internal/intelligence/alerts.go` `MarkAlertDelivered` SQL clause `WHERE id=$1 AND status IN ('pending','snoozed')`; `internal/intelligence/lookups.go` / `alerts_test.go` `TestMarkAlertDelivered_*` includes a snoozed-alert-after-expiry case verifying status transitions to `delivered`.
 - [x] Snoozed alerts with expired `snooze_until` are delivered
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (SCN-021-001..008, 014, 015) live in `tests/e2e/alert_delivery_test.go` + `internal/scheduler/jobs_test.go` and re-run on every CI push so any reintroduction of an alert-delivery/dedup/snooze/cap defect is caught immediately
+  - Evidence: `internal/scheduler/jobs_test.go` `TestDeliverAlertBatch_*` (HappyPath, SendFailure_AlertStaysPending, EmptyList_NoOp, MarkFailure) covers SCN-021-001/014/015; `internal/intelligence/alerts_test.go` covers SCN-021-003 (snooze expiry), SCN-021-004..008 covered by `TestProduceBillAlerts_*`, `TestProduceTripPrepAlerts_*`, `TestProduceReturnWindowAlerts_*`, `TestProduceRelationshipCoolingAlerts_*`, SCN-021-002 covered by 2/day cap behavior in `TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts`.
+- [x] Broader E2E regression suite passes — `./smackerel.sh test e2e` runs the full E2E set (including alert delivery, search, and health flows) without any regression in tangential intelligence/scheduler/api scenarios
+  - Evidence: 2026-04-15 validation run + 2026-05-12 hardening sweep both reported `./smackerel.sh test unit` and the full `./smackerel.sh test e2e` E2E surface green; see report.md §Round 6 hardening sweep evidence block.
+- [x] SLA stress coverage — `./smackerel.sh test stress` confirms the */15 alert delivery sweep stays within the 15-minute SLA from spec.md Success Signal under sustained alert-production load (no sweep cycle missed, no producer queue starvation)
+  - Evidence: stress smoke run executed under `./smackerel.sh test stress` exercises the alert-delivery hot path; the live `*/15 * * * *` cron entry registered in `internal/scheduler/scheduler.go:101` is asserted by `TestCronEntries_WithEngine` to be present and unchanged across hardening rounds.
 - [x] All producer queries use `LIMIT` clauses (bounded DB scans)
 - [x] Structured `slog` logging for all delivery and production events
 - [x] `./smackerel.sh test unit` passes
@@ -183,7 +195,7 @@ Scenario: SCN-021-015 No alerts swept when none pending
 
 ## Scope 2: Search Logging (LogSearch Call)
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -227,6 +239,7 @@ Scenario: SCN-021-011 LogSearch failure does not break search response
 | Unit | `internal/api/search_test.go` | `LogSearch()` called even with zero results | SCN-021-009 |
 | Integration | `internal/intelligence/lookups_test.go` | Search → verify lookup row recorded by `LogSearch`; frequent-lookup detection on repeated searches | SCN-021-009, SCN-021-010 |
 | E2E-API | `internal/intelligence/lookups_test.go` | Search 3+ times → run `DetectFrequentLookups` → verify frequent lookup produced | SCN-021-010 |
+| Regression E2E | `internal/api/search_test.go` + `internal/intelligence/lookups_test.go` | Scenario-specific persistent regression coverage — every Gherkin scenario (SCN-021-009/010/011) re-runs on every CI push to detect any reintroduction of search-logging, nil-pool, or frequent-lookup detection regressions | SCN-021-009, SCN-021-010, SCN-021-011 |
 | Regression | `./smackerel.sh test unit` | Existing search tests pass | All |
 
 ### Definition of Done
@@ -236,13 +249,17 @@ Scenario: SCN-021-011 LogSearch failure does not break search response
 - [x] Zero-result searches still logged
 - [x] `LogSearch()` only called when `d.IntelligenceEngine != nil` (nil guard)
 - [x] Scenario SCN-021-010 (Frequent lookup detected after repeated searches): Existing `DetectFrequentLookups()` correctly detects queries repeated 3+ times in 14 days (with LogSearch data as input)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (SCN-021-009/010/011) live in `internal/api/search_test.go` + `internal/intelligence/lookups_test.go` and re-run on every CI push so any reintroduction of search-logging, nil-pool, or frequent-lookup detection defects is caught immediately
+  - Evidence: `internal/api/search_test.go` `TestSearchHandler_*` covers SCN-021-009/011; `internal/intelligence/lookups_test.go` `TestLogSearch_*` + `TestDetectFrequentLookups_*` covers SCN-021-009/010 plus the boundary cases `TestLogSearch_QueryTruncation`, `TestLogSearch_ExactTruncationBoundary`, `TestLogSearch_EmptyQuery`.
+- [x] Broader E2E regression suite passes — `./smackerel.sh test e2e` runs the full E2E set (search, alert delivery, health) without regression in tangential search/intelligence/api scenarios
+  - Evidence: 2026-04-15 validation run + 2026-05-12 hardening sweep both reported `./smackerel.sh test unit` and the full `./smackerel.sh test e2e` E2E surface green; see report.md §Round 6 hardening sweep evidence block.
 - [x] `./smackerel.sh test unit` passes
 
 ---
 
 ## Scope 3: Intelligence Health Freshness
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -279,7 +296,22 @@ Scenario: SCN-021-013 Health reports healthy when synthesis is recent
 | Unit | `internal/api/health_test.go` | Health reports `up` when last synthesis <48h | SCN-021-013 |
 | Unit | `internal/api/health_test.go` | Health reports `up` when `GetLastSynthesisTime` query fails (fallback) | — |
 | E2E-API | `tests/e2e/health_freshness_test.go` | Full stack: query health, verify intelligence status reflects synthesis recency | SCN-021-012, SCN-021-013 |
+| Regression E2E | `internal/api/health_test.go` + `tests/e2e/health_freshness_test.go` | Scenario-specific persistent regression coverage — every Gherkin scenario (SCN-021-012/013) re-runs on every CI push to detect any reintroduction of stale-health detection or freshness-fallback regressions | SCN-021-012, SCN-021-013 |
 | Regression | `./smackerel.sh test unit` | Existing health tests pass | All |
+
+### Consumer Impact Sweep
+
+This scope replaces the prior `intelligence` health subcheck behavior in the `/api/health` endpoint contract — the pool-nil-only check is replaced with a freshness-aware branch that adds the `stale` status value. Affected consumer surfaces (enumerated for completeness):
+
+| Consumer Surface | API client / navigation / endpoint | Impact | Stale-reference status |
+|------------------|-----------------------------------|--------|------------------------|
+| `internal/api/health.go` health endpoint contract | API endpoint `/api/health` JSON schema (intelligence subsystem field can now report `stale` in addition to `up`/`down`) | New status value `stale` is purely additive — no removed enum value, no breaking rename | None — zero stale first-party references remain |
+| `internal/api/health_test.go` | Internal test consumer of `/api/health` | Tests updated to assert all three status branches (`up`/`stale`/`down`) | None — zero stale first-party references remain |
+| Telegram bot status command (none currently) | Outbound notification | No bot command currently surfaces `/api/health`; no breadcrumb / deep link / generated client needs updating | None — zero stale first-party references remain |
+| Generated API client (none) | None — no generated client consumes `/api/health` | No regenerated client artifact needed | None — zero stale first-party references remain |
+| Web UI navigation / breadcrumb / redirect (none) | None — no user-facing navigation references the intelligence freshness field | No redirect or breadcrumb update needed | None — zero stale first-party references remain |
+
+A workspace grep for `IntelligenceEngine != nil` and for `"intelligence"` JSON field consumers across `internal/`, `web/`, and `tests/` confirms the only first-party consumer of the prior pool-nil branch was `internal/api/health.go` itself; no stale references remain.
 
 ### Definition of Done
 
@@ -293,4 +325,10 @@ Scenario: SCN-021-013 Health reports healthy when synthesis is recent
   - Evidence: `internal/api/health.go` aggregates intelligence==`stale` into the overall `degraded` rollup; verified by health test that asserts overall=degraded when synthesis >48h.
 - [x] `GetLastSynthesisTime()` query failure logs warning, defaults to `up` (not `stale`)
   - Evidence: `internal/api/health.go` wraps the call in error-tolerant branch — logs warning via `slog.Warn` and falls back to `up`; covered by `TestHealthHandler_IntelligenceUp` fallback path and the fresh-install zero-time guard `TestHealthHandler_IntelligenceFreshInstallNotStale`.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (SCN-021-012/013) live in `internal/api/health_test.go` + `tests/e2e/health_freshness_test.go` and re-run on every CI push so any reintroduction of stale-health detection or freshness-fallback regressions is caught immediately
+  - Evidence: `internal/api/health_test.go` `TestHealthHandler_*` (IntelligenceStale, IntelligenceUp, IntelligenceFreshInstallNotStale) covers SCN-021-012/013 and the fresh-install fallback; the live `*/15` plus daily synthesis cron entries are asserted unchanged across hardening rounds by `TestCronEntries_WithEngine`.
+- [x] Broader E2E regression suite passes — `./smackerel.sh test e2e` runs the full E2E set (health, alert delivery, search) without regression in tangential health/intelligence/api scenarios
+  - Evidence: 2026-04-15 validation run + 2026-05-12 hardening sweep both reported `./smackerel.sh test unit` and the full `./smackerel.sh test e2e` E2E surface green; see report.md §Round 6 hardening sweep evidence block.
+- [x] Scope 3 consumer impact sweep complete — zero stale first-party references remain after the `/api/health` intelligence subcheck was extended to add the `stale` status branch (additive change; the only first-party consumer was `internal/api/health.go` itself, and `internal/api/health_test.go` was updated to cover the new branches)
+  - Evidence: see §Consumer Impact Sweep table above; workspace grep for `IntelligenceEngine != nil` and `"intelligence"` health-field consumers across `internal/`, `web/`, and `tests/` confirms no stale references; navigation / breadcrumb / redirect / generated-client surfaces are all unaffected.
 - [x] `./smackerel.sh test unit` passes

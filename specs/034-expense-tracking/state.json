@@ -305,12 +305,23 @@
       "runStartedAt": "2026-04-23T00:00:00Z",
       "runCompletedAt": "2026-04-23T00:00:00Z",
       "summary": "Documentation pass: report.md updated with Summary, Test Evidence, Completion Statement, Validation Evidence, Audit Evidence, and Chaos Evidence sections containing real captured terminal output (test unit 263 passed in 14.37s, lint extension/JS/version/PWA OK, check Config is in sync with SST, race detector across 4 packages all OK). Narrative summary phrases ('all checks passed', 'all pass', 'all tests pass') reworded to 'exit 0' and explicit per-command results so anti-fabrication lint passes. state.json certification.completedScopes converted from numeric to canonical string identifiers. completedPhaseClaims and certifiedCompletedPhases extended with audit, chaos, docs to reflect this re-certification round."
+    },
+    {
+      "agent": "bubbles.harden",
+      "phasesExecuted": [
+        "harden"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-13T00:00:00Z",
+      "runCompletedAt": "2026-05-13T00:00:00Z",
+      "summary": "Stochastic-quality-sweep round 13 (seed 20260513) — child mode harden-to-doc against specs/034-expense-tracking. Probed input validation, classifier rules, vendor normalizer cache, CSV export, LIKE-clause construction, and request-body limits. Two mechanical hardening fixes landed with adversarial regression tests: (1) HARDEN-R13-A — VendorNormalizer.put() now floors evictCount to >=1 when at capacity; previously evictCount = maxSize/2 yielded 0 for maxSize <= 1 so the cache grew unbounded one entry per put despite the capacity gate firing. New TestVendorNormalizer_CacheEvictionMinSize covers maxSize=1, maxSize=2 with eviction assertion, and a 50-put loop at maxSize=1. (2) HARDEN-R13-B — ExpenseHandler.List vendor filter now uses escapeLikeValue() and ESCAPE '\\\\' clause; previously raw user input flowed into LIKE '%' || LOWER($n) || '%' so ?vendor=%abc over-matched (any vendor literally containing 'abc'), a wildcard-injection over-match, not SQL injection. New TestEscapeLikeValue covers \\, %, _, mixed, leading wildcards, ASCII, unicode; new TestExpenseList_VendorFragmentUsesEscape asserts the SQL fragment shape contains ESCAPE clause. Logged four judgment-bearing concerns rather than fixing without design intent: C-1 ExpensesSuggestionsMinConfidence config field set but never compared in GenerateSuggestions; C-2 currency validated only as ^[A-Z]{3}$ not against ISO 4217; C-3 prefix-alias LIKE pattern doesn't escape %/_ in alias text (defense-in-depth); C-4 CSV Export silently skips rows on rows.Scan failure with no warning written. Verification: ./smackerel.sh test unit --go exit 0 (internal/intelligence ok 0.047s, internal/api ok 6.516s); ./smackerel.sh lint exit 0. No file edits via shell redirection — all mutations via IDE replace_string_in_file tools."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-04-23T00:00:00Z",
+  "lastUpdatedAt": "2026-05-13T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

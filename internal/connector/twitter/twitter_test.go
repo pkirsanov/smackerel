@@ -2353,3 +2353,447 @@ func TestSecurity_EntityCapsPreserveNormalTweets(t *testing.T) {
 		t.Errorf("expected 2 mentions for normal tweet, got %d", len(mentionMeta))
 	}
 }
+
+func TestHardenR6_MediaEntitiesCappedInMetadata(t *testing.T) {
+	// HARDEN-015-R6-001 (CWE-770): A crafted tweet with more than
+	// maxMediaPerTweet media entries must produce metadata media_types
+	// arrays capped at maxMediaPerTweet, matching the URL/hashtag/mention
+	// caps. Adversarial: without the cap, the metadata array would echo the
+	// crafted entity count and amplify memory usage downstream.
+	media := make([]TweetMedia, maxMediaPerTweet+50)
+	for i := range media {
+		media[i] = TweetMedia{Type: "photo"}
+	}
+	tweet := ArchiveTweet{
+		ID:        "9001",
+		FullText:  "crafted media payload",
+		CreatedAt: "Wed Mar 15 14:30:00 +0000 2026",
+		Entities:  TweetEntities{Media: media},
+	}
+
+	artifact := normalizeTweet(tweet, false, false, nil)
+
+	mediaTypesRaw, ok := artifact.Metadata["media_types"]
+	if !ok {
+		t.Fatal("media_types must be present when media entities exist")
+	}
+	mediaTypes, ok := mediaTypesRaw.([]string)
+	if !ok {
+		t.Fatalf("media_types must be []string, got %T", mediaTypesRaw)
+	}
+	if len(mediaTypes) > maxMediaPerTweet {
+		t.Errorf("media_types must be capped at %d, got %d", maxMediaPerTweet, len(mediaTypes))
+	}
+	if len(mediaTypes) != maxMediaPerTweet {
+		t.Errorf("expected exactly %d media entries (capped), got %d", maxMediaPerTweet, len(mediaTypes))
+	}
+	mediaCount, ok := artifact.Metadata["media_count"].(int)
+	if !ok {
+		t.Fatalf("media_count must be int, got %T", artifact.Metadata["media_count"])
+	}
+	if mediaCount != maxMediaPerTweet {
+		t.Errorf("media_count must reflect capped slice (%d), got %d", maxMediaPerTweet, mediaCount)
+	}
+}
+
+func TestHardenR6_MediaScanCappedInClassify(t *testing.T) {
+	// HARDEN-015-R6-001 (CWE-770) companion: classifyTweet must not iterate
+	// past maxMediaPerTweet entries. A crafted tweet with millions of
+	// non-matching media entries must still classify in O(maxMediaPerTweet).
+	// Adversarial: without the cap, classify would walk every crafted entry
+	// before falling through to the URL/text branches.
+	const crafted = maxMediaPerTweet + 5_000
+	media := make([]TweetMedia, crafted)
+	for i := range media {
+		media[i] = TweetMedia{Type: "unknown_type"}
+	}
+	tweet := ArchiveTweet{
+		ID:        "9002",
+		FullText:  "crafted media classify probe",
+		CreatedAt: "Wed Mar 15 14:30:00 +0000 2026",
+		Entities:  TweetEntities{Media: media},
+	}
+
+	got := classifyTweet(tweet, nil)
+	if got != "tweet/text" {
+		t.Errorf("expected tweet/text fallback when no recognized media types, got %q", got)
+	}
+}
+
+func TestHardenR6_ParseSignalFileHonorsCancellationDuringIteration(t *testing.T) {
+	// HARDEN-015-R6-002: parseSignalFile previously checked ctx.Err() only
+	// before unmarshalling. A signal file near maxArchiveFileSize with many
+	// entries iterated to completion even after the caller cancelled.
+	// This test cancels mid-flight and asserts the function bails out
+	// without producing the full ID set.
+	// Adversarial: without the in-loop ctx check, len(ids) == entryCount.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	const entryCount = 5_000
+	var b strings.Builder
+	b.WriteString("window.YTD.like.part0 = [")
+	for i := 0; i < entryCount; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, `{"like":{"tweetId":"%d"}}`, i)
+	}
+	b.WriteByte(']')
+	if err := os.WriteFile(filepath.Join(dataDir, "like.js"), []byte(b.String()), 0o600); err != nil {
+		t.Fatalf("write signal file: %v", err)
+	}
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before invocation; the in-loop guard must trip on first iteration
+
+	ids := c.parseSignalFile(ctx, "like.js", "like")
+	if len(ids) >= entryCount {
+		t.Errorf("expected partial/empty result on cancelled ctx, got %d (full set)", len(ids))
+	}
+}
+
+// === Round 8 Chaos Probes (Stochastic Sweep, seed 20260513) ===
+//
+// These probes exercise the connector's parsing and normalization surfaces
+// against malformed, edge-case, and adversarial inputs to expose brittle
+// paths that prior security/harden/improve rounds did not specifically
+// target. Each probe doubles as an adversarial regression test that would
+// fail if the underlying defense were weakened or removed.
+
+func TestChaosR8_ParseTweetsJS_EmptyInput(t *testing.T) {
+	// Adversarial: a zero-byte or near-empty archive file must fail loudly
+	// rather than silently producing an empty tweet slice that a caller
+	// could interpret as "no new tweets". Without the bytes.Index guard,
+	// an empty input would slip into json.Unmarshal with junk offsets.
+	_, err := parseTweetsJS([]byte{})
+	if err == nil {
+		t.Fatal("expected error on empty input, got nil")
+	}
+	if !strings.Contains(err.Error(), "no JSON array") {
+		t.Errorf("expected 'no JSON array' sentinel, got %q", err.Error())
+	}
+}
+
+func TestChaosR8_ParseTweetsJS_BracketInsideJSComment(t *testing.T) {
+	// Adversarial: a crafted archive whose JS preamble contains a stray '['
+	// (e.g., inside a comment or string literal) confuses bytes.Index, which
+	// finds the FIRST '[' in the file. The defense is that json.Unmarshal
+	// then fails on the malformed prefix rather than silently producing a
+	// partial tweet set. Without this defense, an attacker could splice junk
+	// before the real array and bypass parsing.
+	data := []byte(`/* backup of [primary] */
+window.YTD.tweets.part0 = [{"tweet":{"id":"1","full_text":"hi","created_at":"Wed Mar 15 14:30:00 +0000 2026"}}]`)
+	_, err := parseTweetsJS(data)
+	if err == nil {
+		t.Fatal("expected json.Unmarshal failure when '[' is in a comment, got nil")
+	}
+}
+
+func TestChaosR8_ParseTweetsJS_TruncatedAfterArrayStart(t *testing.T) {
+	// Adversarial: a truncated archive (e.g., interrupted download or
+	// corrupt signal file) must not produce a partial tweet set or panic.
+	// Defense is json.Unmarshal returning a syntax error.
+	data := []byte(`window.YTD.tweets.part0 = [{"tweet":{"id":"1","full_text":"unfin`)
+	_, err := parseTweetsJS(data)
+	if err == nil {
+		t.Fatal("expected json error on truncated input, got nil")
+	}
+}
+
+func TestChaosR8_ParseTweetsJS_NonTweetSchema(t *testing.T) {
+	// Adversarial: an archive whose JSON is structurally valid but does NOT
+	// match the {tweet:{...}} shape (e.g., wrong file type, schema drift)
+	// must produce zero-valued ArchiveTweet entries that downstream sync
+	// code skips at the timestamp-parse stage. Without that downstream skip,
+	// every junk entry would emit a zero-ID artifact and pollute the graph.
+	data := []byte(`window.YTD.tweets.part0 = [{"foo":"bar"},{"baz":42}]`)
+	tweets, err := parseTweetsJS(data)
+	if err != nil {
+		t.Fatalf("expected silent zero-tweet on schema mismatch, got error: %v", err)
+	}
+	if len(tweets) != 2 {
+		t.Fatalf("expected 2 zero-value entries, got %d", len(tweets))
+	}
+	for i, tw := range tweets {
+		if tw.ID != "" {
+			t.Errorf("tweet[%d] should have empty ID on schema miss, got %q", i, tw.ID)
+		}
+		// Downstream guarantee: parseTweetTime("") MUST return an error so
+		// syncArchive's skippedTimestamps counter increments and the entry
+		// never reaches the artifact slice.
+		if _, terr := parseTweetTime(tw.CreatedAt); terr == nil {
+			t.Errorf("parseTweetTime must reject zero-value CreatedAt to keep junk tweets out of the artifact stream")
+		}
+	}
+}
+
+func TestChaosR8_ParseSignalFile_MismatchedSignalType(t *testing.T) {
+	// Adversarial: a like.js whose entries are scanned with the wrong
+	// signalType key ("bookmark") must silently return an empty map rather
+	// than panicking or returning the like IDs under the wrong tier label.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := `window.YTD.like.part0 = [{"like":{"tweetId":"100"}},{"like":{"tweetId":"200"}}]`
+	if err := os.WriteFile(filepath.Join(dataDir, "like.js"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write like.js: %v", err)
+	}
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+	ids := c.parseSignalFile(context.Background(), "like.js", "bookmark")
+	if len(ids) != 0 {
+		t.Errorf("mismatched signal type must return empty map, got %d entries", len(ids))
+	}
+}
+
+func TestChaosR8_ParseSignalFile_TweetIDTypeConfusion(t *testing.T) {
+	// Adversarial: a signal file where tweetId is a number, object, or null
+	// rather than a string must not be added to the ID set. The inner
+	// json.Unmarshal into a struct{TweetID string} fails for non-string
+	// values and the entry is skipped. Without that per-entry recovery the
+	// whole file would be discarded or the loop would crash.
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Mix valid string IDs with type-confused entries.
+	content := `window.YTD.like.part0 = [` +
+		`{"like":{"tweetId":"valid1"}},` +
+		`{"like":{"tweetId":12345}},` +
+		`{"like":{"tweetId":null}},` +
+		`{"like":{"tweetId":{"nested":"x"}}},` +
+		`{"like":{"tweetId":["arr"]}},` +
+		`{"like":{"tweetId":"valid2"}}` +
+		`]`
+	if err := os.WriteFile(filepath.Join(dataDir, "like.js"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write like.js: %v", err)
+	}
+
+	c := New("twitter")
+	c.config = TwitterConfig{SyncMode: SyncModeArchive, ArchiveDir: dir}
+	ids := c.parseSignalFile(context.Background(), "like.js", "like")
+	if len(ids) != 2 {
+		t.Errorf("expected exactly 2 valid string IDs, got %d (type-confused entries leaked)", len(ids))
+	}
+	if !ids["valid1"] || !ids["valid2"] {
+		t.Errorf("expected valid1 and valid2 in result, got %v", ids)
+	}
+}
+
+func TestChaosR8_IsSafeURL_RejectsMixedCaseObfuscation(t *testing.T) {
+	// Adversarial: case-folded scheme variants of dangerous URIs must be
+	// rejected because safeURLSchemes is checked after strings.ToLower on
+	// the parsed scheme. Without lowercasing, "JaVaScRiPt:" would slip past
+	// the http/https gate.
+	probes := []string{
+		"JaVaScRiPt:alert(1)",
+		"DATA:text/html,<script>x</script>",
+		"VBScript:MsgBox(1)",
+		"FILE:///etc/passwd",
+		"GOPHER://evil/",
+	}
+	for _, p := range probes {
+		if isSafeURL(p) {
+			t.Errorf("isSafeURL(%q) should reject case-folded dangerous scheme, but accepted it", p)
+		}
+	}
+}
+
+func TestChaosR8_IsSafeURL_RejectsURLEncodedScheme(t *testing.T) {
+	// Adversarial: URL-encoded scheme bytes (e.g., %6A for 'j') must NOT
+	// be decoded by url.Parse before the scheme is matched against the
+	// safelist. Defense: url.Parse reads the literal bytes up to ':' as
+	// the scheme, so "%6Aavascript:..." has scheme "%6Aavascript" which
+	// fails the http/https check.
+	probes := []string{
+		"%6Aavascript:alert(1)", // %6A = 'j'
+		"%64ata:text/html,<x>",  // %64 = 'd'
+	}
+	for _, p := range probes {
+		if isSafeURL(p) {
+			t.Errorf("isSafeURL(%q) must not decode URL-encoded scheme bytes, but accepted it", p)
+		}
+	}
+}
+
+func TestChaosR8_IsSafeURL_RejectsCRLFInjection(t *testing.T) {
+	// Adversarial: URLs with embedded CR/LF could enable response-splitting
+	// or log-injection if rendered downstream. Go's url.Parse rejects URLs
+	// containing ASCII control characters; this probe locks in that defense.
+	probes := []string{
+		"https://example.com\r\nSet-Cookie: pwn=1",
+		"https://example.com\nX-Injected: 1",
+		"https://example.com\rX-Injected: 1",
+		"http://example.com/path\x00null",
+	}
+	for _, p := range probes {
+		if isSafeURL(p) {
+			t.Errorf("isSafeURL(%q) must reject control-character-injected URL, but accepted it", p)
+		}
+	}
+}
+
+func TestChaosR8_IsSafeURL_HandlesWhitespacePrefix(t *testing.T) {
+	// Adversarial: leading/trailing whitespace and tabs must not allow a
+	// dangerous scheme to bypass the safelist. Go's url.Parse may treat
+	// leading whitespace as part of the path (no scheme), which yields an
+	// empty scheme and is rejected by safeURLSchemes lookup. This probe
+	// locks in the "either reject or treat as relative" behavior — neither
+	// outcome may produce true.
+	probes := []string{
+		" javascript:alert(1)",
+		"\tjavascript:alert(1)",
+		"javascript:alert(1) ",
+		"\nhttps://example.com",
+	}
+	for _, p := range probes {
+		if isSafeURL(p) {
+			t.Errorf("isSafeURL(%q) must not accept whitespace-wrapped dangerous scheme", p)
+		}
+	}
+}
+
+func TestChaosR8_NormalizeTweet_NegativeCounts(t *testing.T) {
+	// Adversarial: corrupt or crafted archives could carry negative engagement
+	// counts. normalizeTweet must not panic; assignTweetTier must fall through
+	// to the length-based defaults rather than treating negatives as "viral".
+	tweet := ArchiveTweet{
+		ID:            "12345",
+		FullText:      "short",
+		CreatedAt:     "Wed Mar 15 14:30:00 +0000 2026",
+		FavoriteCount: -100,
+		RetweetCount:  -1,
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	tier, ok := artifact.Metadata["processing_tier"].(string)
+	if !ok {
+		t.Fatalf("processing_tier missing or wrong type: %T", artifact.Metadata["processing_tier"])
+	}
+	if tier == "standard" || tier == "full" {
+		t.Errorf("negative favorite count must not promote tier; got %q", tier)
+	}
+}
+
+func TestChaosR8_NormalizeTweet_TitleSanitizesC0AndC1Controls(t *testing.T) {
+	// Adversarial: an archive could embed C0 (0x00-0x1F) and C1 (0x80-0x9F)
+	// control characters in tweet text to break log parsers, terminal
+	// rendering, or downstream JSON consumers. sanitizeControlChars must
+	// replace ALL such bytes with spaces and preserve printable Unicode.
+	tweet := ArchiveTweet{
+		ID:        "12345",
+		FullText:  "hello\x00\x01\x07\x1B\x7F\x80\x9Fworld🎉",
+		CreatedAt: "Wed Mar 15 14:30:00 +0000 2026",
+	}
+	artifact := normalizeTweet(tweet, false, false, nil)
+	for i, r := range artifact.Title {
+		if r < 0x20 || (r >= 0x7F && r <= 0x9F) {
+			t.Errorf("title contains unsanitized control rune %#x at byte offset %d", r, i)
+		}
+	}
+	if !strings.Contains(artifact.Title, "🎉") {
+		t.Errorf("printable Unicode (emoji) was stripped; title=%q", artifact.Title)
+	}
+}
+
+func TestChaosR8_ClassifyTweet_ThreadOverridesRetweetPrefix(t *testing.T) {
+	// Adversarial: a tweet whose full_text begins with "RT @" but is part of
+	// a reconstructed thread (root tweet IS in archive) must classify as
+	// tweet/thread, NOT tweet/retweet. The thread check runs first and
+	// supersedes the prefix heuristic. Locking this in prevents a future
+	// reorder of classifyTweet branches from misclassifying threaded RTs.
+	tweet := ArchiveTweet{
+		ID:        "999",
+		FullText:  "RT @someone: this looks like a retweet but is actually a thread root",
+		CreatedAt: "Wed Mar 15 14:30:00 +0000 2026",
+	}
+	thread := &Thread{RootID: "999", Tweets: []ArchiveTweet{tweet}}
+	if got := classifyTweet(tweet, thread); got != "tweet/thread" {
+		t.Errorf("thread precedence broken: expected tweet/thread, got %q", got)
+	}
+}
+
+func TestChaosR8_ClassifyTweet_QuoteOverridesMediaButNotThread(t *testing.T) {
+	// Adversarial: precedence regression probe. A quote tweet (quoted_status_id_str
+	// set) with attached photo media must classify as tweet/quote, not tweet/image,
+	// because quote precedes media in classifyTweet. Locks in branch order.
+	tweet := ArchiveTweet{
+		ID:             "888",
+		FullText:       "check this",
+		CreatedAt:      "Wed Mar 15 14:30:00 +0000 2026",
+		QuotedStatusID: "111",
+		Entities:       TweetEntities{Media: []TweetMedia{{Type: "photo"}}},
+	}
+	if got := classifyTweet(tweet, nil); got != "tweet/quote" {
+		t.Errorf("quote precedence over media broken: expected tweet/quote, got %q", got)
+	}
+}
+
+func TestChaosR8_BuildThreads_SelfReplySingleTweet(t *testing.T) {
+	// Adversarial: a single tweet whose InReplyToStatusID points at itself
+	// (corrupt archive or crafted attack) must not infinite-loop in the
+	// reply-walk and must not emit a single-tweet "thread" (threads require
+	// >=2 tweets per the existing contract). The cycle-detection break in
+	// the root walk is the defense.
+	tweets := []ArchiveTweet{
+		{ID: "self-loop", InReplyToStatusID: "self-loop", FullText: "i reply to myself"},
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = buildThreads(tweets) // must terminate
+		close(done)
+	}()
+	select {
+	case <-done:
+		// terminated as expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("buildThreads did not terminate on self-reply tweet within 2s — cycle break missing")
+	}
+	threads := buildThreads(tweets)
+	if len(threads) != 0 {
+		t.Errorf("self-reply single tweet must not emit a thread (need >=2 tweets); got %d threads", len(threads))
+	}
+}
+
+func TestChaosR8_BuildThreads_HighFanout(t *testing.T) {
+	// Adversarial: a root tweet with 5 000 direct child replies must
+	// reconstruct as a single thread without quadratic blowup. Stress-tests
+	// the prebuilt childOf index (S2 simplify fix). 2-second wall budget.
+	const fanout = 5_000
+	tweets := make([]ArchiveTweet, 0, fanout+1)
+	tweets = append(tweets, ArchiveTweet{ID: "root", FullText: "root tweet"})
+	for i := 0; i < fanout; i++ {
+		tweets = append(tweets, ArchiveTweet{
+			ID:                fmt.Sprintf("child-%d", i),
+			InReplyToStatusID: "root",
+			FullText:          fmt.Sprintf("reply %d", i),
+		})
+	}
+	done := make(chan struct{})
+	var threads []Thread
+	go func() {
+		threads = buildThreads(tweets)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("buildThreads on fanout=5000 did not terminate within 2s — possible quadratic regression")
+	}
+	if len(threads) != 1 {
+		t.Fatalf("expected exactly 1 thread for high-fanout root, got %d", len(threads))
+	}
+	if got := len(threads[0].Tweets); got != fanout+1 {
+		t.Errorf("expected %d tweets in thread, got %d", fanout+1, got)
+	}
+}
