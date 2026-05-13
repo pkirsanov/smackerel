@@ -355,6 +355,25 @@ ML_CONTAINER_PORT="$(required_value services.ml.container_port)"
 ML_HEALTH_CACHE_TTL_S="$(required_value services.ml.health_cache_ttl_s)"
 ML_READINESS_TIMEOUT_S="$(required_value services.ml.readiness_timeout_s)"
 ML_PROCESSING_DEGRADED_FALLBACK_ENABLED="$(env_override_value ml_processing_degraded_fallback_enabled services.ml.processing_degraded_fallback_enabled)"
+
+# Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope + ML model
+# memory profile extraction. Every key is required (fail-loud SST). The
+# memory limit values are emitted both with their `compose-style` string
+# (e.g. "1G", "512M") for direct compose substitution AND in MiB integer
+# form for the Go core ML model envelope check. The envelope check is
+# wired in internal/config/config.go::validateMLModelEnvelope.
+POSTGRES_CPU_LIMIT="$(required_value deploy_resources.postgres.cpus)"
+POSTGRES_MEMORY_LIMIT="$(required_value deploy_resources.postgres.memory)"
+NATS_CPU_LIMIT="$(required_value deploy_resources.nats.cpus)"
+NATS_MEMORY_LIMIT="$(required_value deploy_resources.nats.memory)"
+CORE_CPU_LIMIT="$(required_value deploy_resources.smackerel_core.cpus)"
+CORE_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_core.memory)"
+ML_CPU_LIMIT="$(required_value deploy_resources.smackerel_ml.cpus)"
+ML_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_ml.memory)"
+OLLAMA_CPU_LIMIT="$(required_value deploy_resources.ollama.cpus)"
+OLLAMA_MEMORY_LIMIT="$(required_value deploy_resources.ollama.memory)"
+ML_MODEL_MEMORY_PROFILES_JSON="$(required_json_value services.ml.model_memory_profiles)"
+
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
 POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
 # Spec 051 FR-051-005 / SCN-051-S02 — defense-in-depth dev-default rejection.
@@ -1208,6 +1227,17 @@ AGENT_PROVIDER_VISION_PROVIDER=${AGENT_PROVIDER_VISION_PROVIDER}
 AGENT_PROVIDER_VISION_MODEL=${AGENT_PROVIDER_VISION_MODEL}
 AGENT_PROVIDER_OCR_PROVIDER=${AGENT_PROVIDER_OCR_PROVIDER}
 AGENT_PROVIDER_OCR_MODEL=${AGENT_PROVIDER_OCR_MODEL}
+POSTGRES_CPU_LIMIT=${POSTGRES_CPU_LIMIT}
+POSTGRES_MEMORY_LIMIT=${POSTGRES_MEMORY_LIMIT}
+NATS_CPU_LIMIT=${NATS_CPU_LIMIT}
+NATS_MEMORY_LIMIT=${NATS_MEMORY_LIMIT}
+CORE_CPU_LIMIT=${CORE_CPU_LIMIT}
+CORE_MEMORY_LIMIT=${CORE_MEMORY_LIMIT}
+ML_CPU_LIMIT=${ML_CPU_LIMIT}
+ML_MEMORY_LIMIT=${ML_MEMORY_LIMIT}
+OLLAMA_CPU_LIMIT=${OLLAMA_CPU_LIMIT}
+OLLAMA_MEMORY_LIMIT=${OLLAMA_MEMORY_LIMIT}
+ML_MODEL_MEMORY_PROFILES_JSON=${ML_MODEL_MEMORY_PROFILES_JSON}
 EOF
 
 chmod 0600 "$OUTPUT_FILE"

@@ -255,6 +255,30 @@ type Config struct {
 	// (preserves SMACKEREL_AUTH_TOKEN ergonomic) but rejected at startup
 	// when Environment == "production" AND Auth.Enabled == true.
 	Auth AuthConfig
+
+	// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and ML
+	// model memory profile. SST-compliant; populated from
+	// {SERVICE}_CPU_LIMIT, {SERVICE}_MEMORY_LIMIT, and
+	// ML_MODEL_MEMORY_PROFILES_JSON env vars produced by
+	// `./smackerel.sh config generate`. The Validate() chain rejects any
+	// configured ML model whose profile memory_mib exceeds
+	// MLMemoryLimitMiB (parsed from ML_MEMORY_LIMIT) and rejects
+	// configured models that have no profile entry. Hand-edited compose
+	// memory/cpu literals are forbidden — the
+	// internal/deploy/compose_contract_test.go assertResourceContract()
+	// blocks regression at build time.
+	PostgresCPULimit      string
+	PostgresMemoryLimit   string
+	NATSCPULimit          string
+	NATSMemoryLimit       string
+	CoreCPULimit          string
+	CoreMemoryLimit       string
+	MLCPULimit            string
+	MLMemoryLimit         string // raw compose-style string, e.g. "3G"
+	MLMemoryLimitMiB      int    // parsed from MLMemoryLimit
+	OllamaCPULimit        string
+	OllamaMemoryLimit     string
+	MLModelMemoryProfiles map[string]int // model name → required MiB
 }
 
 // AuthConfig holds the SST-resolved per-user bearer-auth subsystem
@@ -466,6 +490,60 @@ func Load() (*Config, error) {
 		HospitableTierReviews:         os.Getenv("HOSPITABLE_TIER_REVIEWS"),
 		HospitableTierReservations:    os.Getenv("HOSPITABLE_TIER_RESERVATIONS"),
 		HospitableTierProperties:      os.Getenv("HOSPITABLE_TIER_PROPERTIES"),
+
+		// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and
+		// ML model memory profile. Raw env-var values are loaded here;
+		// MLMemoryLimit is parsed into MiB and MLModelMemoryProfiles is
+		// JSON-decoded BELOW (after the cfg literal closes) because both
+		// require error handling. Validate() then enforces the envelope
+		// contract.
+		PostgresCPULimit:    os.Getenv("POSTGRES_CPU_LIMIT"),
+		PostgresMemoryLimit: os.Getenv("POSTGRES_MEMORY_LIMIT"),
+		NATSCPULimit:        os.Getenv("NATS_CPU_LIMIT"),
+		NATSMemoryLimit:     os.Getenv("NATS_MEMORY_LIMIT"),
+		CoreCPULimit:        os.Getenv("CORE_CPU_LIMIT"),
+		CoreMemoryLimit:     os.Getenv("CORE_MEMORY_LIMIT"),
+		MLCPULimit:          os.Getenv("ML_CPU_LIMIT"),
+		MLMemoryLimit:       os.Getenv("ML_MEMORY_LIMIT"),
+		OllamaCPULimit:      os.Getenv("OLLAMA_CPU_LIMIT"),
+		OllamaMemoryLimit:   os.Getenv("OLLAMA_MEMORY_LIMIT"),
+	}
+
+	// Spec 045 — Parse ML_MEMORY_LIMIT (compose-style string like "3G",
+	// "512M") into MiB. Empty string leaves MLMemoryLimitMiB=0 so
+	// Validate() can name MLMemoryLimit as missing rather than failing
+	// here with a less informative parse error.
+	if cfg.MLMemoryLimit != "" {
+		mib, err := parseComposeMemoryToMiB(cfg.MLMemoryLimit)
+		if err != nil {
+			return nil, fmt.Errorf("ML_MEMORY_LIMIT: %w", err)
+		}
+		cfg.MLMemoryLimitMiB = mib
+	}
+
+	// Spec 045 — Parse ML_MODEL_MEMORY_PROFILES_JSON. The generator
+	// emits a JSON array of {"model": "...", "memory_mib": N} objects
+	// (list-of-objects form because the SST flatten/JSON pipeline cannot
+	// safely parse YAML map keys that contain ":"). Convert to the
+	// internal map[modelName]MiB representation.
+	if rawProfiles := os.Getenv("ML_MODEL_MEMORY_PROFILES_JSON"); rawProfiles != "" {
+		var profileList []struct {
+			Model     string `json:"model"`
+			MemoryMiB int    `json:"memory_mib"`
+		}
+		if err := json.Unmarshal([]byte(rawProfiles), &profileList); err != nil {
+			return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: invalid JSON: %w", err)
+		}
+		cfg.MLModelMemoryProfiles = make(map[string]int, len(profileList))
+		for _, entry := range profileList {
+			if entry.Model == "" {
+				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry has empty model name")
+			}
+			if entry.MemoryMiB <= 0 {
+				return nil, fmt.Errorf("ML_MODEL_MEMORY_PROFILES_JSON: entry %q has non-positive memory_mib (%d)", entry.Model, entry.MemoryMiB)
+			}
+			cfg.MLModelMemoryProfiles[entry.Model] = entry.MemoryMiB
+		}
 	}
 
 	// Parse CORS allowed origins (comma-separated)
@@ -1107,6 +1185,19 @@ func (c *Config) requiredVars() []struct {
 		{"PORT", c.Port},
 		{"ML_SIDECAR_URL", c.MLSidecarURL},
 		{"CORE_API_URL", c.CoreAPIURL},
+		// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope is
+		// required at every load. Missing values fail-loud here so the
+		// operator gets one error message naming all missing env vars.
+		{"POSTGRES_CPU_LIMIT", c.PostgresCPULimit},
+		{"POSTGRES_MEMORY_LIMIT", c.PostgresMemoryLimit},
+		{"NATS_CPU_LIMIT", c.NATSCPULimit},
+		{"NATS_MEMORY_LIMIT", c.NATSMemoryLimit},
+		{"CORE_CPU_LIMIT", c.CoreCPULimit},
+		{"CORE_MEMORY_LIMIT", c.CoreMemoryLimit},
+		{"ML_CPU_LIMIT", c.MLCPULimit},
+		{"ML_MEMORY_LIMIT", c.MLMemoryLimit},
+		{"OLLAMA_CPU_LIMIT", c.OllamaCPULimit},
+		{"OLLAMA_MEMORY_LIMIT", c.OllamaMemoryLimit},
 	}
 	// MIT-040-S-004 — SMACKEREL_AUTH_TOKEN is NOT in requiredVars(): it is
 	// required only when SMACKEREL_ENV=production, and the dedicated
@@ -1223,6 +1314,18 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Spec 045 FR-045-002 — ML model envelope check. Requires
+	// MLMemoryLimitMiB and MLModelMemoryProfiles to be populated; both
+	// are surfaced by the requiredVars() check above when ML_MEMORY_LIMIT
+	// or ML_MODEL_MEMORY_PROFILES_JSON is missing. With the envelope
+	// known, reject any configured Ollama model whose profile exceeds
+	// the envelope OR whose profile entry is missing entirely. The
+	// fail-loud error names every offender in one message so the
+	// operator can fix all problems in one pass.
+	if err := c.validateMLModelEnvelope(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1320,6 +1423,144 @@ func parseIntEnv(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return v
+}
+
+// parseComposeMemoryToMiB parses a docker-compose-style memory string
+// (e.g. "512M", "1G", "3GB", "768MiB") into integer MiB. Returns an
+// error when the input is unparseable so the caller can name the offending
+// env var. Used by Load() for ML_MEMORY_LIMIT (spec 045 FR-045-002) so
+// the Validate() chain can compare model profile MiB against the envelope.
+//
+// Recognized suffixes (case-insensitive):
+//   - "k" / "kb" / "kib" — kibibytes
+//   - "m" / "mb" / "mib" — mebibytes
+//   - "g" / "gb" / "gib" — gibibytes
+//   - "t" / "tb" / "tib" — tebibytes
+//
+// Compose treats both decimal (kB, MB, GB) and binary (KiB, MiB, GiB)
+// suffixes as binary by convention (1G = 1024MiB), matching `docker info`
+// and the deploy.resources.limits.memory contract. parseComposeMemoryToMiB
+// follows the same convention.
+func parseComposeMemoryToMiB(raw string) (int, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0, fmt.Errorf("empty memory value")
+	}
+	// Find the boundary between the numeric prefix and the unit suffix.
+	cut := -1
+	for i, r := range s {
+		if (r >= '0' && r <= '9') || r == '.' {
+			continue
+		}
+		cut = i
+		break
+	}
+	if cut == -1 {
+		// All digits — bytes.
+		bytesVal, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, fmt.Errorf("invalid byte count %q: %w", raw, err)
+		}
+		return bytesVal / (1024 * 1024), nil
+	}
+	numPart := s[:cut]
+	unit := strings.ToLower(strings.TrimSpace(s[cut:]))
+	num, err := strconv.ParseFloat(numPart, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid memory numeric prefix %q: %w", numPart, err)
+	}
+	if num < 0 {
+		return 0, fmt.Errorf("memory value %q must be non-negative", raw)
+	}
+	var multiplierMiB float64
+	switch unit {
+	case "k", "kb", "kib":
+		multiplierMiB = 1.0 / 1024.0
+	case "m", "mb", "mib":
+		multiplierMiB = 1.0
+	case "g", "gb", "gib":
+		multiplierMiB = 1024.0
+	case "t", "tb", "tib":
+		multiplierMiB = 1024.0 * 1024.0
+	default:
+		return 0, fmt.Errorf("unrecognized memory unit %q in %q (expected k/m/g/t with optional b/ib suffix)", unit, raw)
+	}
+	mib := int(num * multiplierMiB)
+	if mib <= 0 {
+		return 0, fmt.Errorf("memory value %q resolves to non-positive MiB", raw)
+	}
+	return mib, nil
+}
+
+// validateMLModelEnvelope enforces spec 045 FR-045-002:
+//   - Every Ollama model name configured for runtime use MUST have an
+//     entry in the model_memory_profiles map.
+//   - Every used model's required memory MUST fit within the configured
+//     ML deploy memory envelope (MLMemoryLimitMiB).
+//
+// "Used models" are sourced from the SST runtime config. The set covers
+// every model field this Config struct surfaces that the Go core or ML
+// sidecar will load at runtime. Empty values are skipped (some routes
+// are optional in dev/test). Returns nil when every used model has a
+// fitting profile, OR a fail-loud error naming every offender so the
+// operator can fix all problems in one pass.
+func (c *Config) validateMLModelEnvelope() error {
+	if c.MLMemoryLimitMiB == 0 {
+		// MLMemoryLimit being missing is already named by Validate()'s
+		// requiredVars() check; nothing to do here.
+		return nil
+	}
+	if c.MLModelMemoryProfiles == nil {
+		// Profile map missing is also named by requiredVars() / Load()'s
+		// JSON parse step. Defensive nil-guard.
+		return nil
+	}
+
+	// Gather the set of model names actually consumed by this runtime
+	// configuration. Order matters only for deterministic error
+	// messages; use a stable sequence of fields.
+	type modelRef struct {
+		envVar string
+		model  string
+	}
+	used := []modelRef{
+		{"LLM_MODEL", c.LLMModel},
+		{"OLLAMA_MODEL", c.OllamaModel},
+		{"EMBEDDING_MODEL", c.EmbeddingModel},
+	}
+
+	var missing []string
+	var oversized []string
+	seen := make(map[string]struct{})
+	for _, ref := range used {
+		if ref.model == "" {
+			continue
+		}
+		if _, dup := seen[ref.model]; dup {
+			continue
+		}
+		seen[ref.model] = struct{}{}
+		profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
+		if !ok {
+			missing = append(missing, fmt.Sprintf("%s=%q has no entry in services.ml.model_memory_profiles", ref.envVar, ref.model))
+			continue
+		}
+		if profileMiB > c.MLMemoryLimitMiB {
+			oversized = append(oversized, fmt.Sprintf("%s=%q requires %d MiB but ML_MEMORY_LIMIT=%q resolves to %d MiB", ref.envVar, ref.model, profileMiB, c.MLMemoryLimit, c.MLMemoryLimitMiB))
+		}
+	}
+
+	if len(missing) > 0 || len(oversized) > 0 {
+		var parts []string
+		if len(missing) > 0 {
+			parts = append(parts, "missing model memory profile(s): "+strings.Join(missing, "; "))
+		}
+		if len(oversized) > 0 {
+			parts = append(parts, "ML model envelope exceeded: "+strings.Join(oversized, "; "))
+		}
+		return fmt.Errorf("ML model envelope validation failed (spec 045 FR-045-002): %s", strings.Join(parts, " | "))
+	}
+	return nil
 }
 
 // parseTelegramUserMapping parses a TELEGRAM_USER_MAPPING env value

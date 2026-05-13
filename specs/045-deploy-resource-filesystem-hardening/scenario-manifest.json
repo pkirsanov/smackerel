@@ -12,16 +12,16 @@
       "status": "active",
       "requiredTestType": ["unit", "contract"],
       "linkedTests": [
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_LiveFile"},
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingCPU"},
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingMemory"},
-        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsMissingMLMemoryLimit"}
+        {"file": "internal/deploy/compose_resource_contract_test.go", "function": "TestComposeResourceContract_LiveFile"},
+        {"file": "internal/deploy/compose_resource_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingCPU"},
+        {"file": "internal/deploy/compose_resource_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingMemory"},
+        {"file": "internal/config/validate_ml_envelope_test.go", "function": "TestValidate_RejectsMissingMLMemoryLimit"}
       ],
       "evidenceRefs": [
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_LiveFile"},
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_AdversarialMissingCPU"},
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_AdversarialMissingMemory"},
-        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsMissingMLMemoryLimit"},
+        {"type": "contract-test", "location": "internal/deploy/compose_resource_contract_test.go::TestComposeResourceContract_LiveFile"},
+        {"type": "contract-test", "location": "internal/deploy/compose_resource_contract_test.go::TestComposeResourceContract_AdversarialMissingCPU"},
+        {"type": "contract-test", "location": "internal/deploy/compose_resource_contract_test.go::TestComposeResourceContract_AdversarialMissingMemory"},
+        {"type": "unit-test", "location": "internal/config/validate_ml_envelope_test.go::TestValidate_RejectsMissingMLMemoryLimit"},
         {"type": "source", "location": "config/smackerel.yaml::deploy_resources.* + services.ml.model_memory_profiles"},
         {"type": "source", "location": "scripts/commands/config.sh — required_value extraction + env-var emission"},
         {"type": "source", "location": "deploy/compose.deploy.yml — ${SERVICE_CPU_LIMIT:?...} / ${SERVICE_MEMORY_LIMIT:?...} substitution"}
@@ -41,14 +41,14 @@
       "status": "active",
       "requiredTestType": ["unit"],
       "linkedTests": [
-        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsOversizedMLModel"},
-        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsMissingModelProfileEntry"},
-        {"file": "internal/config/validate_test.go", "function": "TestValidate_AcceptsModelWithinEnvelope"}
+        {"file": "internal/config/validate_ml_envelope_test.go", "function": "TestValidate_RejectsOversizedMLModel"},
+        {"file": "internal/config/validate_ml_envelope_test.go", "function": "TestValidate_RejectsMissingModelProfileEntry"},
+        {"file": "internal/config/validate_ml_envelope_test.go", "function": "TestValidate_AcceptsModelWithinEnvelope"}
       ],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsOversizedMLModel"},
-        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsMissingModelProfileEntry"},
-        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_AcceptsModelWithinEnvelope"},
+        {"type": "unit-test", "location": "internal/config/validate_ml_envelope_test.go::TestValidate_RejectsOversizedMLModel"},
+        {"type": "unit-test", "location": "internal/config/validate_ml_envelope_test.go::TestValidate_RejectsMissingModelProfileEntry"},
+        {"type": "unit-test", "location": "internal/config/validate_ml_envelope_test.go::TestValidate_AcceptsModelWithinEnvelope"},
         {"type": "source", "location": "internal/config/config.go::validateMLModelEnvelope"},
         {"type": "source", "location": "config/smackerel.yaml::services.ml.model_memory_profiles"}
       ],
@@ -66,16 +66,18 @@
       "status": "active",
       "requiredTestType": ["contract"],
       "linkedTests": [
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_LiveFile"},
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialMissingReadOnly"},
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialPostgresReadOnly"},
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialUnauthorizedTmpfs"}
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_LiveFile"},
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_AdversarialMissingReadOnly"},
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_AdversarialPostgresReadOnly"},
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_AdversarialUnauthorizedTmpfs"}
       ],
       "evidenceRefs": [
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_LiveFile"},
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialMissingReadOnly"},
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialPostgresReadOnly"},
-        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialUnauthorizedTmpfs"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_LiveFile"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_AdversarialMissingReadOnly"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_AdversarialPostgresReadOnly"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_AdversarialUnauthorizedTmpfs"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_AdversarialNATSReadOnly"},
+        {"type": "contract-test", "location": "internal/deploy/compose_filesystem_contract_test.go::TestFilesystemContract_LiveFile_DevCompose"},
         {"type": "source", "location": "deploy/compose.deploy.yml — read_only: true on smackerel-core/smackerel-ml/ollama with tmpfs allowlist"},
         {"type": "source", "location": "docker-compose.yml — mirrored read_only + tmpfs blocks for dev stack"}
       ],
@@ -95,7 +97,7 @@
       "status": "active",
       "requiredTestType": ["live-stack-smoke"],
       "linkedTests": [
-        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_LiveFile"}
+        {"file": "internal/deploy/compose_filesystem_contract_test.go", "function": "TestFilesystemContract_LiveFile"}
       ],
       "evidenceRefs": [
         {"type": "smoke", "location": "report.md::Scope 2 evidence — ./smackerel.sh up + curl /api/health 200"}

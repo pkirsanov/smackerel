@@ -54,7 +54,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          # Spec 045 FR-045-001 — SST-derived from
+          # deploy_resources.postgres.{cpus,memory} via
+          # config/generated/<env>.env. Fail-loud per Gate G028:
+          # the `${VAR:-default}` form is FORBIDDEN — the deploy
+          # adapter MUST emit POSTGRES_CPU_LIMIT and
+          # POSTGRES_MEMORY_LIMIT in app.env or compose aborts.
+          cpus: "${POSTGRES_CPU_LIMIT:?POSTGRES_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${POSTGRES_MEMORY_LIMIT:?POSTGRES_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: postgres
       com.smackerel.lifecycle: persistent
@@ -90,7 +97,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          # Spec 045 FR-045-001 — SST-derived; fail-loud per Gate G028.
+          cpus: "${NATS_CPU_LIMIT:?NATS_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${NATS_MEMORY_LIMIT:?NATS_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: nats
       com.smackerel.lifecycle: ephemeral
@@ -103,6 +112,14 @@ services:
   smackerel-core:
     image: ${SMACKEREL_CORE_IMAGE}
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # The Go binary writes nothing under `/`; only `/tmp` (log buffering)
+    # is needed. The contract test
+    # internal/deploy/compose_filesystem_contract_test.go
+    # blocks regression at build time.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -135,7 +152,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          # Spec 045 FR-045-001 — SST-derived; fail-loud per Gate G028.
+          cpus: "${CORE_CPU_LIMIT:?CORE_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${CORE_MEMORY_LIMIT:?CORE_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: core
       com.smackerel.lifecycle: ephemeral
@@ -149,6 +168,15 @@ services:
     image: ${SMACKEREL_ML_IMAGE}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # The HuggingFace caches AND sentence-transformers caches AND uvicorn
+    # temp files all live under `/tmp/...` thanks to HF_HOME and
+    # SENTENCE_TRANSFORMERS_HOME overrides set in `environment:` below;
+    # one 768M tmpfs at `/tmp` absorbs them all and survives container
+    # restart with the model re-downloaded on first request.
+    read_only: true
+    tmpfs:
+      - /tmp:size=768m,mode=1777,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -159,6 +187,12 @@ services:
       - ./app.env
     environment:
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
+      # Spec 045 FR-045-003 — redirect HuggingFace + sentence-transformers
+      # caches into the read-only-root tmpfs at /tmp. Without these
+      # overrides the libraries default to `~/.cache/huggingface/...`
+      # which would attempt to write under `/` and fail at first request.
+      HF_HOME: /tmp/hf-cache
+      SENTENCE_TRANSFORMERS_HOME: /tmp/st-cache
     volumes:
       - ./prompt_contracts:/app/prompt_contracts:ro
       - ./nats_contract.json:/config/nats_contract.json:ro
@@ -175,7 +209,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3G
+          # Spec 045 FR-045-001 / FR-045-002 — SST-derived; fail-loud
+          # per Gate G028. The Go core Validate() chain ALSO enforces
+          # ML_MEMORY_LIMIT against ML_MODEL_MEMORY_PROFILES_JSON so
+          # an oversized model can never silently OOM under this cap.
+          cpus: "${ML_CPU_LIMIT:?ML_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${ML_MEMORY_LIMIT:?ML_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: ml
       com.smackerel.lifecycle: ephemeral
@@ -188,6 +227,15 @@ services:
   ollama:
     image: ollama/ollama:0.23.2
     restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # Persistent model store stays on the named volume `ollama-data`
+    # mounted at /root/.ollama so model downloads survive restarts.
+    # Two small tmpfs entries cover the runtime scratch paths the
+    # ollama server uses outside that volume.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
+      - /.ollama_tmp:size=64m,mode=1777,nosuid,nodev
     security_opt:
       - no-new-privileges:true
     ports:
@@ -212,7 +260,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          # Spec 045 FR-045-001 — SST-derived; fail-loud per Gate G028.
+          cpus: "${OLLAMA_CPU_LIMIT:?OLLAMA_CPU_LIMIT must be set by deploy adapter}"
+          memory: "${OLLAMA_MEMORY_LIMIT:?OLLAMA_MEMORY_LIMIT must be set by deploy adapter}"
     labels:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent

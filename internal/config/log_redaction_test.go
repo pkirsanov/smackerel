@@ -22,12 +22,12 @@ import (
 // is a contract violation under spec 051.
 
 const (
-	canarySigningKey   = "LEAKCANARY-signing-key-9b72b1cd"   // gitleaks:allow — LEAKCANARY-* sentinel; not a real key
-	canaryHashingKey   = "LEAKCANARY-hashing-key-21f9f49f"   // gitleaks:allow — LEAKCANARY-* sentinel; not a real key
+	canarySigningKey   = "LEAKCANARY-signing-key-9b72b1cd"     // gitleaks:allow — LEAKCANARY-* sentinel; not a real key
+	canaryHashingKey   = "LEAKCANARY-hashing-key-21f9f49f"     // gitleaks:allow — LEAKCANARY-* sentinel; not a real key
 	canaryBootstrap    = "LEAKCANARY-bootstrap-token-e0c14c34" // gitleaks:allow — LEAKCANARY-* sentinel; not a real token
-	canaryAuthToken    = "LEAKCANARY-shared-token-5b8a3211"   // gitleaks:allow — LEAKCANARY-* sentinel; not a real token
-	canaryDBPassword   = "LEAKCANARY-db-password-77c0a06e"    // gitleaks:allow — LEAKCANARY-* sentinel; not a real password
-	canarySharedSecret = "LEAKCANARY-shared-secret-d3a5e8b1"  // gitleaks:allow — LEAKCANARY-* sentinel; not a real secret
+	canaryAuthToken    = "LEAKCANARY-shared-token-5b8a3211"    // gitleaks:allow — LEAKCANARY-* sentinel; not a real token
+	canaryDBPassword   = "LEAKCANARY-db-password-77c0a06e"     // gitleaks:allow — LEAKCANARY-* sentinel; not a real password
+	canarySharedSecret = "LEAKCANARY-shared-secret-d3a5e8b1"   // gitleaks:allow — LEAKCANARY-* sentinel; not a real secret
 	// canaryFullDBURL is built by tests on the fly via string concat
 	// so gitleaks does not see an inline-credential URL literal.
 )

@@ -709,6 +709,70 @@ services:
     health_cache_ttl_s: 30
     readiness_timeout_s: 60
     processing_degraded_fallback_enabled: false
+    # Spec 045 FR-045-002 — model memory envelope. Each entry maps an Ollama
+    # model name to its RUN-TIME memory requirement in MiB (matching what
+    # `ollama ps` reports as resident size when the model is loaded). The Go
+    # core Validate() chain rejects any configured model whose profile
+    # exceeds ML_MEMORY_LIMIT (deploy_resources.smackerel_ml.memory).
+    #
+    # Operator MUST add an entry here for every model name referenced by
+    # llm.ollama_model, llm.ollama_vision_model, llm.ollama_ocr_model,
+    # llm.ollama_reasoning_model, llm.ollama_fast_model,
+    # runtime.embedding_model, agent.provider_routing.*.model,
+    # photos.intelligence.*_model, and infrastructure.ollama.test.model.
+    # A missing entry for any used model fails Validate() loudly so the
+    # operator can size the envelope before runtime start.
+    #
+    # Memory figures derived from ollama public model card resident-size
+    # measurements at default quantization (q4_K_M for gemma/gpt-oss,
+    # q4_K_S for deepseek). They are CEILINGS for envelope sizing — actual
+    # resident size depends on context length and concurrent requests.
+    #
+    # Format: list of {model, memory_mib} objects. List form (not a map) is
+    # required because the SST flatten/JSON pipeline cannot parse YAML map
+    # keys that contain ":" (e.g. "gemma4:26b") — they would be split on
+    # the first ":" and corrupt both key and value. The list-of-objects
+    # form is the same shape used by expenses.categories elsewhere in this
+    # file.
+    model_memory_profiles:
+    - model: "gemma4:26b"
+      memory_mib: 18432 # 18 GiB MoE 26B at q4 + 256K context buffer
+    - model: "deepseek-ocr:3b"
+      memory_mib: 2560 # 2.5 GiB
+    - model: "deepseek-r1:32b"
+      memory_mib: 22528 # 22 GiB at q4
+    - model: "gpt-oss:20b"
+      memory_mib: 14336 # 14 GiB at q4
+    - model: "nomic-embed-text"
+      memory_mib: 768 # 0.75 GiB embedding model
+    - model: "qwen2.5:0.5b-instruct"
+      memory_mib: 1024 # 1 GiB tiny test model
+
+# Spec 045 FR-045-001 — deploy resource envelopes (CPU + memory) per service.
+# Every value is required (fail-loud SST). The deploy adapter consumes these
+# via env vars (SERVICE_CPU_LIMIT, SERVICE_MEMORY_LIMIT) substituted into
+# deploy/compose.deploy.yml ${VAR:?...} placeholders. Hand-edited literals
+# in compose are forbidden — see internal/deploy/compose_contract_test.go
+# assertResourceContract().
+#
+# Memory string format follows compose conventions (e.g. "1G", "512M", "8G").
+# CPU string format is decimal cores (e.g. "1.0", "0.5", "2.0").
+deploy_resources:
+  postgres:
+    cpus: "1.0"
+    memory: "1G"
+  nats:
+    cpus: "0.5"
+    memory: "512M"
+  smackerel_core:
+    cpus: "2.0"
+    memory: "1G"
+  smackerel_ml:
+    cpus: "2.0"
+    memory: "3G"
+  ollama:
+    cpus: "4.0"
+    memory: "8G"
 
 infrastructure:
   postgres:
