@@ -1,0 +1,67 @@
+{
+  "version": 2,
+  "specId": "050",
+  "featureDir": "specs/050-ml-sidecar-health-isolation",
+  "generatedBy": "bubbles.workflow (full-delivery)",
+  "generatedAt": "2026-05-15T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-050-H01",
+      "name": "Health remains responsive during embedding load",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["integration", "stress"],
+      "linkedTests": [
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_health_handler_unblocked_by_busy_executor"},
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_backpressure_rejects_at_queue_max"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_health_handler_unblocked_by_busy_executor"},
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_backpressure_rejects_at_queue_max"},
+        {"type": "source", "location": "ml/app/embedder.py::_ensure_executor (dedicated ThreadPoolExecutor isolates embedding from FastAPI async loop)"},
+        {"type": "source", "location": "ml/app/embedder.py::generate_embedding (admission control + inflight tracking)"},
+        {"type": "source", "location": "config/smackerel.yaml::services.ml.{embedding_workers,embedding_queue_max,health_latency_sla_ms}"},
+        {"type": "source", "location": "scripts/commands/config.sh — ML_EMBEDDING_WORKERS / ML_EMBEDDING_QUEUE_MAX / ML_HEALTH_LATENCY_SLA_MS env emission"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-050-H01: T-050-002 passes and proves health stays responsive under embedding load",
+        "Scope 1 DoD: SCN-050-H01: T-050-003 passes and proves sustained CPU pressure does not starve health checks"
+      ]
+    },
+    {
+      "scenarioId": "SCN-050-H02",
+      "name": "Worker concurrency is bounded",
+      "scope": "scope-1",
+      "status": "active",
+      "requiredTestType": ["unit", "metrics"],
+      "linkedTests": [
+        {"file": "ml/tests/test_main.py", "function": "test_spec050_missing_required_key_is_fatal"},
+        {"file": "ml/tests/test_main.py", "function": "test_spec050_non_integer_value_is_fatal"},
+        {"file": "ml/tests/test_main.py", "function": "test_spec050_non_positive_integer_is_fatal"},
+        {"file": "ml/tests/test_main.py", "function": "test_spec050_queue_max_below_workers_is_fatal"},
+        {"file": "ml/tests/test_main.py", "function": "test_spec050_happy_path_returns_validated_values"},
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_bounded_executor_size_matches_ml_embedding_workers"},
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_inflight_metric_tracks_admitted_count"},
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_rejected_counter_increments_on_backpressure"},
+        {"file": "ml/tests/test_embedder.py", "function": "test_spec050_workers_configured_metric_published"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_spec050_missing_required_key_is_fatal"},
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_spec050_non_integer_value_is_fatal"},
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_spec050_non_positive_integer_is_fatal"},
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_spec050_queue_max_below_workers_is_fatal"},
+        {"type": "unit-test", "location": "ml/tests/test_main.py::test_spec050_happy_path_returns_validated_values"},
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_bounded_executor_size_matches_ml_embedding_workers"},
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_inflight_metric_tracks_admitted_count"},
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_rejected_counter_increments_on_backpressure"},
+        {"type": "unit-test", "location": "ml/tests/test_embedder.py::test_spec050_workers_configured_metric_published"},
+        {"type": "source", "location": "ml/app/main.py::_check_required_config (startup validation of 3 SST keys)"},
+        {"type": "source", "location": "ml/app/metrics.py::{embedding_workers_configured,embedding_inflight,embedding_rejected_total}"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-050-H02: T-050-001 passes and proves worker concurrency is explicit and validated",
+        "Scope 1 DoD: SCN-050-H02: T-050-004 passes and proves worker/queue metrics are emitted"
+      ]
+    }
+  ]
+}

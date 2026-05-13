@@ -90,9 +90,9 @@ description = "Absolute Linux home path (/home/<username>/) leaks the local user
 regex = '''(?:^|[^A-Za-z0-9_])/home/[a-z][a-z0-9_-]{1,32}/'''
 tags  = ["pii", "username", "path"]
 [[rules.allowlists]]
-description = "Generic CI/container usernames are not personal identifiers"
+description = "Generic CI/container usernames and product-as-user identifiers are not personal identifiers"
 regexes = [
-  '''(?i)/home/(runner|ubuntu|vscode|root|vagrant|dev|user|users|ec2-user|codespace|builder|jenkins|github|gitlab|app|node|pi|admin|nobody|appuser|service|deploy|docker|test|tester|example|sample|nonexistent)/''',
+  '''(?i)/home/(runner|ubuntu|vscode|root|vagrant|dev|user|users|ec2-user|codespace|builder|jenkins|github|gitlab|app|node|pi|admin|nobody|appuser|service|deploy|docker|test|tester|example|sample|nonexistent|smackerel)/''',
 ]
 
 [[rules]]
