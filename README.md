@@ -125,6 +125,25 @@ new prompt that composes existing tools, not by adding new Go business logic.
 
 The ML sidecar has a 120-second startup period (`start_period`) for model loading. Expect first requests to take longer while models warm up.
 
+## Deployment & Configuration Boundary
+
+This repo is **deployment-target-agnostic**. Its deployment surface produces only
+immutable build artifacts — signed container images and per-environment config
+bundles generated via `./smackerel.sh config generate --env <env> --bundle` — and
+publishes adapter contracts that any operator can consume.
+
+**No environment-specific final configuration lives in this repo.** Real
+hostnames, real IPs, mesh-VPN identity (e.g. Tailscale tailnet IDs and FQDNs),
+reverse-proxy site files (Caddy/nginx), `ufw` rules, systemd unit names tied to
+an operator's host, and real secret values all live in the separate **`knb`
+deploy-adapter overlay repo**, which binds Smackerel's generic artifacts to a
+specific machine via per-target `apply.sh` / `rollback.sh` / `verify.sh` scripts.
+
+If you are wiring up a home-lab (or any other concrete) deployment, do that work
+in the `knb` overlay, not here. For the full Build-Once Deploy-Many operator
+workflow that this repo's deployment surface implements, see
+[docs/Deployment.md](docs/Deployment.md).
+
 ## Docs
 
 - [Design Document](docs/smackerel.md)

@@ -175,6 +175,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			Title:       fmt.Sprintf("Weather: %s — %s", loc.Name, current.Description),
 			RawContent:  fmt.Sprintf("%s — Temperature: %.1f°C (feels like %.1f°C), Humidity: %d%%, Wind: %.1f km/h", current.Description, current.Temperature, current.ApparentTemp, current.Humidity, current.WindSpeed),
 			Metadata: map[string]interface{}{
+				"weather_type":         "current",
+				"provider":             "open-meteo",
 				"location":             loc.Name,
 				"latitude":             lat,
 				"longitude":            lon,
@@ -218,6 +220,8 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				Title:       fmt.Sprintf("Forecast: %s — %d days", loc.Name, len(forecast)),
 				RawContent:  fmt.Sprintf("Forecast for %s:\n%s", loc.Name, strings.Join(forecastLines, "\n")),
 				Metadata: map[string]interface{}{
+					"weather_type":  "forecast",
+					"provider":      "open-meteo",
 					"location":      loc.Name,
 					"latitude":      lat,
 					"longitude":     lon,
@@ -370,6 +374,8 @@ func (c *Connector) fetchAndNormalizeAlerts(ctx context.Context, loc LocationCon
 			Title:       fmt.Sprintf("Weather Alert: %s — %s", loc.Name, a.Event),
 			RawContent:  fmt.Sprintf("%s\n\n%s\n\nInstruction: %s", a.Headline, a.Description, a.Instruction),
 			Metadata: map[string]interface{}{
+				"weather_type":    "alert",
+				"provider":        "nws",
 				"location":        loc.Name,
 				"latitude":        lat,
 				"longitude":       lon,

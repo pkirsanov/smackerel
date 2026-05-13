@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "featureDir": "specs/032-documentation-freshness/bugs/BUG-001-home-lab-readiness-plan-stale",
+  "parentFeatureDir": "specs/032-documentation-freshness",
+  "featureName": "BUG-001: Home-lab readiness docs belong outside product repo",
+  "bugId": "BUG-001-home-lab-readiness-plan-stale",
+  "status": "in_progress",
+  "currentPhase": "planning",
+  "workflowMode": "product-to-planning",
+  "planningStatus": "scoped",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-12T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "planning",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-12T00:00:00Z",
+        "summary": "Created planning-only bug packet for migrating home-lab-specific readiness docs out of Smackerel. No runtime, source, config, CI, compose, or documentation implementation edits performed."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": []
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "request"},
+    "tdd": {"value": false, "provenance": "planning-only"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "planning-only"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phase": "planning",
+      "timestamp": "2026-05-12T00:00:00Z",
+      "outcome": "planning_artifacts_created",
+      "summary": "Converted review findings into bug planning artifacts only."
+    }
+  ]
+}

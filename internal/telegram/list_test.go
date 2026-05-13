@@ -367,3 +367,115 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
+
+// --- Security regression tests (spec 008 security-to-doc) ---
+
+func TestSecurity_ListsAPIError_NoInfoLeakage(t *testing.T) {
+	// CWE-209: Internal API error details must NOT be forwarded to the
+	// Telegram user. If the lists API returns an error body containing
+	// internal details (SQL errors, stack traces, internal URLs), the
+	// user must see only a generic message.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"pq: relation \"lists\" does not exist","trace":"goroutine 42 [running]:\nmain.go:123"}`))
+	}))
+	defer server.Close()
+
+	var replied string
+	bot := &Bot{
+		listsURL:   server.URL,
+		httpClient: server.Client(),
+		replyFunc:  func(_ int64, text string) { replied = text },
+	}
+
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
+	bot.handleList(context.Background(), msg, "")
+
+	// The reply MUST NOT contain internal API details
+	if containsStr(replied, "pq:") {
+		t.Errorf("internal SQL error leaked to user: %s", replied)
+	}
+	if containsStr(replied, "goroutine") {
+		t.Errorf("stack trace leaked to user: %s", replied)
+	}
+	if containsStr(replied, "relation") {
+		t.Errorf("internal error detail leaked to user: %s", replied)
+	}
+	if containsStr(replied, "500") {
+		t.Errorf("HTTP status code leaked to user: %s", replied)
+	}
+	// It MUST contain a generic error message
+	if !containsStr(replied, "Try again") {
+		t.Errorf("expected generic retry message, got: %s", replied)
+	}
+}
+
+func TestSecurity_ListsAPI_ResponseSizeLimit(t *testing.T) {
+	// CWE-400: callListsAPI must limit response body reads to prevent
+	// memory exhaustion from oversized responses.
+	//
+	// We verify that callListsAPI reads at most maxAPIResponseBytes.
+	// The server returns a body larger than the limit. If the limit
+	// is enforced, only maxAPIResponseBytes bytes are read.
+	oversized := make([]byte, maxAPIResponseBytes+1024)
+	for i := range oversized {
+		oversized[i] = 'x'
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(oversized)
+	}))
+	defer server.Close()
+
+	bot := &Bot{
+		listsURL:   server.URL,
+		httpClient: server.Client(),
+		replyFunc:  func(_ int64, text string) {},
+	}
+
+	data, err := bot.callListsAPI(context.Background(), 123, "GET", server.URL, nil)
+	if err != nil {
+		t.Fatalf("callListsAPI returned error: %v", err)
+	}
+	if int64(len(data)) > maxAPIResponseBytes {
+		t.Errorf("callListsAPI read %d bytes, exceeds limit %d", len(data), maxAPIResponseBytes)
+	}
+}
+
+func TestSecurity_ListsAddError_NoInfoLeakage(t *testing.T) {
+	// CWE-209: "add item" error path must not leak internals.
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			json.NewEncoder(w).Encode(map[string]any{
+				"lists": []listSummary{{ID: "l1", Title: "Groceries"}},
+			})
+		} else {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"permission denied for user 'internal_svc'"}`))
+		}
+	}))
+	defer server.Close()
+
+	var replied string
+	bot := &Bot{
+		listsURL:   server.URL,
+		httpClient: server.Client(),
+		replyFunc:  func(_ int64, text string) { replied = text },
+	}
+
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
+	bot.handleList(context.Background(), msg, "add milk")
+
+	if containsStr(replied, "permission denied") {
+		t.Errorf("internal error detail leaked to user: %s", replied)
+	}
+	if containsStr(replied, "internal_svc") {
+		t.Errorf("internal username leaked to user: %s", replied)
+	}
+}

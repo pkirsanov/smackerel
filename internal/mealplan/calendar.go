@@ -80,25 +80,17 @@ func (b *CalendarBridge) DeletePlanEvents(ctx context.Context, plan PlanWithSlot
 // slotStartTime combines slot date with the configured meal time.
 func (b *CalendarBridge) slotStartTime(slot Slot) time.Time {
 	date := truncateToDate(slot.SlotDate)
+	noon := date.Add(12 * time.Hour)
 
 	timeStr, ok := b.MealTimes[strings.ToLower(slot.MealType)]
 	if !ok {
-		// Fallback: no configured time, use noon
-		return date.Add(12 * time.Hour)
+		return noon
 	}
 
-	parts := strings.SplitN(timeStr, ":", 2)
-	if len(parts) != 2 {
-		return date.Add(12 * time.Hour)
+	t, err := time.Parse("15:04", timeStr)
+	if err != nil {
+		return noon
 	}
 
-	var hour, min int
-	if _, err := fmt.Sscanf(parts[0], "%d", &hour); err != nil {
-		return date.Add(12 * time.Hour)
-	}
-	if _, err := fmt.Sscanf(parts[1], "%d", &min); err != nil {
-		return date.Add(12 * time.Hour)
-	}
-
-	return date.Add(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute)
+	return date.Add(time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute)
 }

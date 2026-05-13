@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.24' }
+        with: { go-version: '1.25' }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: ./smackerel.sh lint

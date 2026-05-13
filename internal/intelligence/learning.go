@@ -84,6 +84,7 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 			SELECT topic_id FROM topic_resources GROUP BY topic_id HAVING COUNT(*) >= 5
 		)
 		ORDER BY topic_id, position, title
+		LIMIT 500
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query learning resources: %w", err)
@@ -91,6 +92,11 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 	defer rows.Close()
 
 	pathMap := make(map[string]*LearningPath)
+	// Cap NATS classification requests to bound API latency. Each request
+	// has a 10s timeout, so 20 requests = 200s worst case. Resources beyond
+	// the cap fall back to the local heuristic which is instant.
+	const maxNATSClassifyRequests = 20
+	natsClassifyCount := 0
 	for rows.Next() {
 		var topicID, topicName, artifactID, title, contentType string
 		var position int
@@ -120,7 +126,7 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 		diff := classifyDifficultyHeuristic(title, contentType, position)
 		if difficulty != "" {
 			diff = LearningDifficulty(difficulty)
-		} else if e.NATS != nil {
+		} else if e.NATS != nil && natsClassifyCount < maxNATSClassifyRequests {
 			// BUG-003: ask the ML sidecar for an LLM-derived difficulty
 			// label per resource. 10-second per-resource timeout from
 			// Scope 01 DoD. Persisted learning_progress.difficulty
@@ -134,6 +140,7 @@ func (e *Engine) GetLearningPaths(ctx context.Context) ([]LearningPath, error) {
 				"position":     position,
 			}
 			if data, err := json.Marshal(payload); err == nil {
+				natsClassifyCount++
 				reply, reqErr := e.NATS.Request(ctx, smacknats.SubjectLearningClassify, data, learningClassifyLLMTimeout)
 				if reqErr != nil {
 					slog.Warn("NATS learning classify request failed, using heuristic", "artifact_id", artifactID, "error", reqErr)
