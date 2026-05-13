@@ -114,6 +114,21 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 				return fmt.Errorf("contract violation: trivy step %q has exit-code=%q (expected '1' so CRITICAL/HIGH fails the workflow)",
 					step.Name, exitCode)
 			}
+			// Threshold-tuning enforcement (spec 047 design.md §Threshold Tuning):
+			// every trivy scan step MUST set ignore-unfixed: true. This blocks
+			// regressions where an operator silently flips the gate back to
+			// blocking on advisory CVEs in base images that have no upstream
+			// fix — which is non-actionable and makes the deploy non-runnable.
+			ignoreUnfixedRaw, present := step.With["ignore-unfixed"]
+			if !present {
+				return fmt.Errorf("contract violation: trivy step %q missing required `ignore-unfixed: true` (spec 047 design.md §Threshold Tuning)",
+					step.Name)
+			}
+			ignoreUnfixed, ok := ignoreUnfixedRaw.(bool)
+			if !ok || !ignoreUnfixed {
+				return fmt.Errorf("contract violation: trivy step %q has ignore-unfixed=%v (expected true per spec 047 design.md §Threshold Tuning — block on FIXABLE CRITICAL/HIGH only)",
+					step.Name, ignoreUnfixedRaw)
+			}
 			// Map the trivy step to its image by matching the image-ref env var.
 			for _, img := range imageMatrix {
 				if strings.Contains(imageRef, "${{ env."+img.expectedDigest+" }}") {
@@ -153,13 +168,14 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 		"vulnerabilityScan:",
 		"scanner: trivy",
 		"severityThreshold: CRITICAL,HIGH",
-		"gateBlocksOn: CRITICAL,HIGH",
+		"gateBlocksOn: CRITICAL,HIGH-with-upstream-fix",
+		"ignoreUnfixed: true",
 		"evidenceArtifact: trivy-scan-reports-",
 		"specReference: specs/047-ci-image-vulnerability-gate/spec.md",
 	}
 	for _, key := range requiredManifestKeys {
 		if !strings.Contains(rawStr, key) {
-			return fmt.Errorf("contract violation: build-manifest heredoc missing required vulnerabilityScan field %q (FR-047-003)",
+			return fmt.Errorf("contract violation: build-manifest heredoc missing required vulnerabilityScan field %q (FR-047-003 + spec 047 design.md §Threshold Tuning)",
 				key)
 		}
 	}
@@ -208,9 +224,10 @@ func TestVulnGateContract_AdversarialMissingScan(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref": "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":  "CRITICAL,HIGH",
-							"exit-code": "1",
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
 						},
 					},
 					// NO trivy scan for smackerel-ml — adversarial.
@@ -220,7 +237,7 @@ func TestVulnGateContract_AdversarialMissingScan(t *testing.T) {
 			},
 		},
 	}
-	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
 	err := assertVulnGateContract(doc, raw)
 	if err == nil {
 		t.Fatal("expected adversarial doc (missing trivy scan for smackerel-ml) to fail contract, but it passed")
@@ -261,25 +278,27 @@ func TestVulnGateContract_AdversarialScanAfterSign(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref": "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":  "CRITICAL,HIGH",
-							"exit-code": "1",
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
 						},
 					},
 					{
 						Name: "Trivy vulnerability scan — smackerel-ml",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref": "${{ env.IMAGE_ML }}@sha256:def",
-							"severity":  "CRITICAL,HIGH",
-							"exit-code": "1",
+							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
 						},
 					},
 				},
 			},
 		},
 	}
-	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
 	err := assertVulnGateContract(doc, raw)
 	if err == nil {
 		t.Fatal("expected adversarial doc (scan after sign) to fail contract, but it passed")
@@ -328,7 +347,7 @@ func TestVulnGateContract_AdversarialWeakSeverity(t *testing.T) {
 			},
 		},
 	}
-	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
 	err := assertVulnGateContract(doc, raw)
 	if err == nil {
 		t.Fatal("expected adversarial doc (weak severity) to fail contract, but it passed")
@@ -376,7 +395,7 @@ func TestVulnGateContract_AdversarialNonBlockingExitCode(t *testing.T) {
 			},
 		},
 	}
-	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
 	err := assertVulnGateContract(doc, raw)
 	if err == nil {
 		t.Fatal("expected adversarial doc (non-blocking exit-code) to fail contract, but it passed")
@@ -415,18 +434,20 @@ func TestVulnGateContract_AdversarialMissingManifestEvidence(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref": "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":  "CRITICAL,HIGH",
-							"exit-code": "1",
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
 						},
 					},
 					{
 						Name: "Trivy vulnerability scan — smackerel-ml",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref": "${{ env.IMAGE_ML }}@sha256:def",
-							"severity":  "CRITICAL,HIGH",
-							"exit-code": "1",
+							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
 						},
 					},
 					{Name: "Cosign keyless sign — core"},
@@ -444,4 +465,191 @@ func TestVulnGateContract_AdversarialMissingManifestEvidence(t *testing.T) {
 		t.Fatalf("expected manifest-evidence violation, got: %v", err)
 	}
 	t.Logf("adversarial OK: missing manifest vulnerabilityScan evidence is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialIgnoreUnfixedFlipped proves that the
+// contract test would catch a regression where an operator silently flips
+// the threshold-tuning flag from `ignore-unfixed: true` back to `false`
+// (i.e., reverts spec 047 design.md §Threshold Tuning) on either trivy step.
+func TestVulnGateContract_AdversarialIgnoreUnfixedFlipped(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": false, // adversarial: flipped back to false
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": false, // adversarial: flipped back to false
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (ignore-unfixed: false) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "ignore-unfixed=false") {
+		t.Fatalf("expected ignore-unfixed-flipped violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: ignore-unfixed: false on a trivy step is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialMissingIgnoreUnfixedField proves that the
+// contract test would catch a regression where an operator removes the
+// ignore-unfixed key entirely from a trivy step's `with:` block (relying on
+// the action's default behavior instead of explicit policy declaration).
+func TestVulnGateContract_AdversarialMissingIgnoreUnfixedField(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref": "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":  "CRITICAL,HIGH",
+							"exit-code": "1",
+							// adversarial: ignore-unfixed key entirely absent
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref": "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":  "CRITICAL,HIGH",
+							"exit-code": "1",
+							// adversarial: ignore-unfixed key entirely absent
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (ignore-unfixed missing) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "missing required `ignore-unfixed: true`") {
+		t.Fatalf("expected missing-ignore-unfixed-field violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: trivy step with no ignore-unfixed field is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey proves
+// that the contract test would catch a regression where the workflow steps
+// keep `ignore-unfixed: true` but the build-manifest heredoc forgets the
+// `ignoreUnfixed: true` declaration — leaving the attestation record
+// inconsistent with the actual gate behavior.
+func TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	// Adversarial raw: manifest heredoc has gateBlocksOn updated but is
+	// MISSING the `ignoreUnfixed: true` declaration that proves the
+	// attestation record matches the workflow's actual gate behavior.
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (missing ignoreUnfixed manifest key) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "ignoreUnfixed: true") {
+		t.Fatalf("expected missing-ignoreUnfixed-manifest-key violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: build-manifest heredoc missing ignoreUnfixed: true is rejected with: %v", err)
 }

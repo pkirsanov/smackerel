@@ -10,10 +10,11 @@ require (
 	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.37.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_model v0.6.2
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	golang.org/x/text v0.32.0
@@ -42,7 +43,6 @@ require (
 	github.com/nats-io/nkeys v0.4.9 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

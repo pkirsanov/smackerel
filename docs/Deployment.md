@@ -114,16 +114,30 @@ It cannot mutate any deploy target.
 
 **Every image (`smackerel-core`, `smackerel-ml`) is scanned by Trivy
 BEFORE cosign signing, SBOM attestation, bundle generation, or
-build-manifest publication.** If Trivy reports any CRITICAL or HIGH
-finding (severity `CRITICAL,HIGH`, `exit-code: '1'`), the workflow
-fails immediately and no signed deployable artifact is produced for
-that source SHA.
+build-manifest publication.** If Trivy reports any **fixable**
+CRITICAL or HIGH finding (severity `CRITICAL,HIGH`, `exit-code: '1'`,
+`ignore-unfixed: true`), the workflow fails immediately and no signed
+deployable artifact is produced for that source SHA.
+
+**Threshold tuning (spec 047 design.md §"Threshold Tuning:
+ignore-unfixed Policy"):** the gate blocks deployment ONLY on
+CRITICAL/HIGH CVEs that have an upstream fix available. Advisory CVEs
+in the base images (`debian:bookworm-slim`, `python:3.12-slim`) that
+have no upstream fix yet are still surfaced in the SARIF artifact for
+operator visibility, but they do NOT block deploy. This matches the
+"Risk Controls" policy in the design doc: *"Do not treat advisory or
+informational findings as deploy blockers."*
 
 The build manifest carries a `vulnerabilityScan` attestation block
-naming the scanner, severity threshold, gate-blocking severities, and
-the workflow-artifact ID of the SARIF/JSON scan reports
-(`trivy-scan-reports-<sourceSha>`). Operators MUST NOT promote a build
-manifest to a deploy target unless this attestation is present.
+naming the scanner, severity threshold (`severityThreshold:
+CRITICAL,HIGH`), the gate-blocking criterion (`gateBlocksOn:
+CRITICAL,HIGH-with-upstream-fix`), the threshold-tuning declaration
+(`ignoreUnfixed: true`), the rationale (`ignoreUnfixedRationale:
+"..."`), and the workflow-artifact ID of the SARIF/JSON scan reports
+(`trivy-scan-reports-<sourceSha>`). Operators MUST NOT promote a
+build manifest to a deploy target unless this attestation is present
+AND the `ignoreUnfixed: true` declaration is consistent with the
+workflow's actual `ignore-unfixed` flag value.
 
 A static contract test
 (`internal/deploy/build_workflow_vuln_gate_contract_test.go`) enforces
@@ -132,11 +146,17 @@ that:
 - every image in the build matrix has a matching Trivy scan step,
 - the scan runs **before** the first cosign sign step,
 - severity is `CRITICAL,HIGH` and exit-code is `'1'`,
-- the build manifest carries the vulnerabilityScan attestation block.
+- **every Trivy step sets `ignore-unfixed: true`** (block on FIXABLE
+  CRITICAL/HIGH only — flipping to `false` is rejected),
+- the build manifest carries the full vulnerabilityScan attestation
+  block including `gateBlocksOn: CRITICAL,HIGH-with-upstream-fix` and
+  `ignoreUnfixed: true`.
 
-Adding a new image to the matrix without a corresponding scan step
-fails the contract test and blocks merge — matrix coverage cannot
-drift silently.
+Adding a new image to the matrix without a corresponding scan step,
+or flipping `ignore-unfixed` back to `false` on either Trivy step, or
+omitting the `ignoreUnfixed: true` line from the build-manifest
+heredoc — any of these fails the contract test and blocks merge.
+Matrix coverage AND threshold-tuning policy cannot drift silently.
 
 ---
 
