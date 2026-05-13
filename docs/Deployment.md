@@ -546,3 +546,71 @@ OAuth2 providers (Google) require HTTPS callback URLs in production. When switch
 | 42002 | NATS client | **No** — internal only |
 | 42003 | NATS monitoring | **No** — internal only |
 | 42004 | Ollama | **No** — internal only |
+| 42005 | Prometheus (monitoring profile, dev) | **No** — operator-only on dev; deploy adapter chooses overlay exposure |
+
+## Monitoring Profile (Spec 049 — Optional)
+
+Smackerel ships a self-contained Prometheus monitoring stack as an
+OPT-IN Docker Compose profile. The default deploy compose file
+exists but `prometheus` does NOT start unless the operator passes
+`--profile monitoring` to `docker compose up`.
+
+```bash
+# On the deploy host (after the deploy adapter has extracted the
+# bundle and written app.env)
+docker compose --env-file app.env -f compose.deploy.yml \
+  --profile monitoring up -d
+```
+
+### What This Repo Ships
+
+| Artifact | Source | Purpose |
+|----------|--------|---------|
+| Prometheus scrape config template | `config/prometheus/prometheus.yml.tmpl` | envsubst-rendered to `config/generated/prometheus.yml` and bundled into the deploy artifact |
+| Alert rules | `config/prometheus/alerts.yml` | Committed as-is, mounted read-only at `/etc/prometheus/alerts.yml` |
+| Prometheus service definition | `deploy/compose.deploy.yml::services.prometheus` | Inherits spec 042 fail-loud bind + spec 045 read-only + resource envelope |
+| Dashboard inventory | `docs/Operations.md::Monitoring Stack` | Names the 10 dashboards the runtime metrics support |
+| Alert runbook | `docs/Operations.md::Alert Runbook` | One row per alert: name, severity, firing action |
+| SST keys | `config/smackerel.yaml::monitoring.prometheus.* + environments.<env>.prometheus_*` | Single source of truth for image, port, retention, intervals |
+
+### What The Deploy Adapter Owns
+
+Anything operator-specific is out of scope for this repo. The deploy
+adapter overlay (e.g. the `knb` repo) MUST provide:
+
+- `HOST_BIND_ADDRESS` substitution value (tailnet IP or loopback)
+- Reverse-proxy / TLS fronting for the Prometheus UI (if needed)
+- Alertmanager configuration (receivers: Telegram, PagerDuty, email)
+- Grafana provisioning (datasource config + dashboard JSON)
+- Retention beyond the SST default (remote-write, long-term storage)
+- Secret rotation for any Alertmanager receivers it adds
+
+### Verifying The Profile
+
+```bash
+# After enabling the profile, confirm Prometheus is up and scraping
+curl -s http://${HOST_BIND_ADDRESS}:${PROMETHEUS_HOST_PORT}/-/healthy
+curl -s http://${HOST_BIND_ADDRESS}:${PROMETHEUS_HOST_PORT}/api/v1/targets \
+  | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+
+# Expected: both `smackerel-core` and `smackerel-ml` targets show
+# health: "up". If a target is `down`, the failure surfaces in
+# Prometheus's logs (`docker logs <prometheus-container>`).
+```
+
+### Disabling The Profile
+
+```bash
+# Stop only the prometheus service, leaving the runtime stack
+docker compose --env-file app.env -f compose.deploy.yml \
+  --profile monitoring stop prometheus
+
+# Or omit the --profile flag entirely on next `up` — Compose will
+# only start services in the default profile set.
+```
+
+The named volume `${PROMETHEUS_VOLUME_NAME}` (e.g.
+`smackerel-home-lab-prometheus-data`) survives `down`/`up` cycles
+so historical metrics persist for the configured
+`PROMETHEUS_RETENTION_DAYS` (default 15 days).
+

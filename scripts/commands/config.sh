@@ -380,7 +380,24 @@ ML_CPU_LIMIT="$(required_value deploy_resources.smackerel_ml.cpus)"
 ML_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_ml.memory)"
 OLLAMA_CPU_LIMIT="$(required_value deploy_resources.ollama.cpus)"
 OLLAMA_MEMORY_LIMIT="$(required_value deploy_resources.ollama.memory)"
+# Spec 049 FR-049-005(c) — Prometheus resource envelope. Fail-loud SST;
+# the deploy adapter MUST emit PROMETHEUS_CPU_LIMIT and
+# PROMETHEUS_MEMORY_LIMIT in app.env or compose aborts at substitution
+# time when the `monitoring` profile is enabled.
+PROMETHEUS_CPU_LIMIT="$(required_value deploy_resources.prometheus.cpus)"
+PROMETHEUS_MEMORY_LIMIT="$(required_value deploy_resources.prometheus.memory)"
 ML_MODEL_MEMORY_PROFILES_JSON="$(required_json_value services.ml.model_memory_profiles)"
+
+# Spec 049 — Monitoring stack SST (FR-049-001 / FR-049-003).
+# Every key is required (fail-loud). PROMETHEUS_IMAGE is pinned in
+# config/smackerel.yaml monitoring.prometheus.image. Container port,
+# scrape/evaluation interval, and retention come from the same SST
+# block. Host port + volume name are per-environment (read below).
+PROMETHEUS_IMAGE="$(required_value monitoring.prometheus.image)"
+PROMETHEUS_CONTAINER_PORT="$(required_value monitoring.prometheus.container_port)"
+PROMETHEUS_SCRAPE_INTERVAL_S="$(required_value monitoring.prometheus.scrape_interval_seconds)"
+PROMETHEUS_EVALUATION_INTERVAL_S="$(required_value monitoring.prometheus.evaluation_interval_seconds)"
+PROMETHEUS_RETENTION_DAYS="$(required_value monitoring.prometheus.retention_days)"
 
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
 POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
@@ -642,9 +659,18 @@ NATS_MONITOR_HOST_PORT="$(required_value environments.$TARGET_ENV.nats_monitor_h
 CORE_HOST_PORT="$(required_value environments.$TARGET_ENV.core_host_port)"
 ML_HOST_PORT="$(required_value environments.$TARGET_ENV.ml_host_port)"
 OLLAMA_HOST_PORT="$(required_value environments.$TARGET_ENV.ollama_host_port)"
+# Spec 049 — per-environment Prometheus host port. Used only when the
+# `monitoring` Compose profile is enabled; the service is off by
+# default. Fail-loud SST: every supported environment in
+# config/smackerel.yaml MUST declare prometheus_host_port.
+PROMETHEUS_HOST_PORT="$(required_value environments.$TARGET_ENV.prometheus_host_port)"
 POSTGRES_VOLUME_NAME="$(required_value environments.$TARGET_ENV.postgres_volume_name)"
 NATS_VOLUME_NAME="$(required_value environments.$TARGET_ENV.nats_volume_name)"
 OLLAMA_VOLUME_NAME="$(required_value environments.$TARGET_ENV.ollama_volume_name)"
+# Spec 049 — per-environment Prometheus TSDB volume name. Keeps dev,
+# test, and home-lab data fully separated even when the same image is
+# reused; also satisfies spec 045's docker-lifecycle isolation contract.
+PROMETHEUS_VOLUME_NAME="$(required_value environments.$TARGET_ENV.prometheus_volume_name)"
 
 DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_CONTAINER_PORT}/${POSTGRES_DB}?sslmode=disable"
 NATS_URL="nats://nats:${NATS_CLIENT_PORT}"
@@ -1264,6 +1290,15 @@ ML_MEMORY_LIMIT=${ML_MEMORY_LIMIT}
 OLLAMA_CPU_LIMIT=${OLLAMA_CPU_LIMIT}
 OLLAMA_MEMORY_LIMIT=${OLLAMA_MEMORY_LIMIT}
 ML_MODEL_MEMORY_PROFILES_JSON=${ML_MODEL_MEMORY_PROFILES_JSON}
+PROMETHEUS_IMAGE=${PROMETHEUS_IMAGE}
+PROMETHEUS_CONTAINER_PORT=${PROMETHEUS_CONTAINER_PORT}
+PROMETHEUS_HOST_PORT=${PROMETHEUS_HOST_PORT}
+PROMETHEUS_VOLUME_NAME=${PROMETHEUS_VOLUME_NAME}
+PROMETHEUS_SCRAPE_INTERVAL_S=${PROMETHEUS_SCRAPE_INTERVAL_S}
+PROMETHEUS_EVALUATION_INTERVAL_S=${PROMETHEUS_EVALUATION_INTERVAL_S}
+PROMETHEUS_RETENTION_DAYS=${PROMETHEUS_RETENTION_DAYS}
+PROMETHEUS_CPU_LIMIT=${PROMETHEUS_CPU_LIMIT}
+PROMETHEUS_MEMORY_LIMIT=${PROMETHEUS_MEMORY_LIMIT}
 EOF
 
 chmod 0600 "$OUTPUT_FILE"
@@ -1310,6 +1345,40 @@ chmod 0600 "$NATS_CONF_FILE"
 echo "Generated $NATS_CONF_FILE"
 
 # ─────────────────────────────────────────────────────────────────────
+# Spec 049 — Monitoring stack (FR-049-001).
+#
+# Render config/prometheus/prometheus.yml.tmpl into
+# config/generated/prometheus.yml via envsubst. Substituted variables
+# (PROMETHEUS_SCRAPE_INTERVAL_S, PROMETHEUS_EVALUATION_INTERVAL_S,
+# CORE_CONTAINER_PORT, ML_CONTAINER_PORT) come from the SST resolution
+# above. The contract test
+# internal/deploy/monitoring_scrape_contract_test.go parses the
+# template directly so a regression that drops a job is caught at
+# build time even before config-generate runs.
+# ─────────────────────────────────────────────────────────────────────
+PROM_TMPL_FILE="$REPO_ROOT/config/prometheus/prometheus.yml.tmpl"
+PROM_OUT_FILE="$REPO_ROOT/config/generated/prometheus.yml"
+
+[[ -f "$PROM_TMPL_FILE" ]] || {
+  echo "ERROR: Prometheus template not found: $PROM_TMPL_FILE" >&2
+  exit 1
+}
+
+# Use envsubst to substitute ONLY the named variables. This avoids
+# accidental expansion of '$' characters in the template that happen
+# to look like env vars but aren't.
+PROM_SUBST_VARS='${PROMETHEUS_SCRAPE_INTERVAL_S} ${PROMETHEUS_EVALUATION_INTERVAL_S} ${CORE_CONTAINER_PORT} ${ML_CONTAINER_PORT}'
+PROMETHEUS_SCRAPE_INTERVAL_S="$PROMETHEUS_SCRAPE_INTERVAL_S" \
+  PROMETHEUS_EVALUATION_INTERVAL_S="$PROMETHEUS_EVALUATION_INTERVAL_S" \
+  CORE_CONTAINER_PORT="$CORE_CONTAINER_PORT" \
+  ML_CONTAINER_PORT="$ML_CONTAINER_PORT" \
+  envsubst "$PROM_SUBST_VARS" < "$PROM_TMPL_FILE" > "$PROM_OUT_FILE"
+
+chmod 0644 "$PROM_OUT_FILE"
+
+echo "Generated $PROM_OUT_FILE"
+
+# ─────────────────────────────────────────────────────────────────────
 # Build-Once Deploy-Many: emit deterministic config bundle (per bubbles G074)
 #
 # When --bundle is set, package the generated env file + nats.conf into a
@@ -1330,21 +1399,26 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   #   ./nats.conf                  — NATS server config
   #   ./docker-compose.yml         — deployment compose (no `build:` blocks)
   #   ./nats_contract.json         — schema registry consumed by ML sidecar
+  #   ./prometheus.yml             — rendered Prometheus scrape config (spec 049)
+  #   ./alerts.yml                 — Prometheus alert rules (spec 049)
   #   ./prompt_contracts/*.yaml    — prompt YAMLs mounted into core + ml
   #   ./bundle-manifest.yaml       — manifest of files in this bundle
   #
   # Determinism: same (sourceSha, env, smackerel.yaml content,
-  # deploy/compose.deploy.yml, config/prompt_contracts/, config/nats_contract.json)
-  # MUST produce the same bundle bytes (and therefore the same sha256). Volatile
-  # content (the `Generated:` timestamp comment in the env file) is stripped
-  # from the bundle copy.
+  # deploy/compose.deploy.yml, config/prompt_contracts/, config/nats_contract.json,
+  # config/prometheus/) MUST produce the same bundle bytes (and therefore the
+  # same sha256). Volatile content (the `Generated:` timestamp comment in the
+  # env file) is stripped from the bundle copy.
   COMPOSE_TEMPLATE="$REPO_ROOT/deploy/compose.deploy.yml"
   NATS_CONTRACT_FILE="$REPO_ROOT/config/nats_contract.json"
   PROMPT_CONTRACTS_DIR="$REPO_ROOT/config/prompt_contracts"
+  PROMETHEUS_ALERTS_FILE="$REPO_ROOT/config/prometheus/alerts.yml"
 
   [[ -f "$COMPOSE_TEMPLATE" ]] || { echo "ERROR: deploy compose template not found: $COMPOSE_TEMPLATE" >&2; exit 1; }
   [[ -f "$NATS_CONTRACT_FILE" ]] || { echo "ERROR: nats contract not found: $NATS_CONTRACT_FILE" >&2; exit 1; }
   [[ -d "$PROMPT_CONTRACTS_DIR" ]] || { echo "ERROR: prompt contracts dir not found: $PROMPT_CONTRACTS_DIR" >&2; exit 1; }
+  [[ -f "$PROM_OUT_FILE" ]] || { echo "ERROR: rendered prometheus.yml not found: $PROM_OUT_FILE" >&2; exit 1; }
+  [[ -f "$PROMETHEUS_ALERTS_FILE" ]] || { echo "ERROR: prometheus alerts file not found: $PROMETHEUS_ALERTS_FILE" >&2; exit 1; }
 
   # Strip the volatile `Generated:` line so the bundle is reproducible.
   # Renamed to app.env so the deploy compose can reference it generically.
@@ -1352,10 +1426,13 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   cp "$NATS_CONF_FILE" "$STAGE_DIR/nats.conf"
   cp "$COMPOSE_TEMPLATE" "$STAGE_DIR/docker-compose.yml"
   cp "$NATS_CONTRACT_FILE" "$STAGE_DIR/nats_contract.json"
+  cp "$PROM_OUT_FILE" "$STAGE_DIR/prometheus.yml"
+  cp "$PROMETHEUS_ALERTS_FILE" "$STAGE_DIR/alerts.yml"
   mkdir -p "$STAGE_DIR/prompt_contracts"
   cp "$PROMPT_CONTRACTS_DIR"/*.yaml "$STAGE_DIR/prompt_contracts/"
   chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/nats.conf" \
     "$STAGE_DIR/docker-compose.yml" "$STAGE_DIR/nats_contract.json" \
+    "$STAGE_DIR/prometheus.yml" "$STAGE_DIR/alerts.yml" \
     "$STAGE_DIR/prompt_contracts"/*.yaml
 
   # Deterministic file list for bundle-manifest.yaml (sorted).
@@ -1366,10 +1443,12 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     echo "sourceSha: ${BUNDLE_SOURCE_SHA}"
     echo "environment: ${TARGET_ENV}"
     echo "files:"
+    echo "  - alerts.yml"
     echo "  - app.env"
     echo "  - nats.conf"
     echo "  - docker-compose.yml"
     echo "  - nats_contract.json"
+    echo "  - prometheus.yml"
     while IFS= read -r f; do
       echo "  - $f"
     done <<< "$PROMPT_FILES_LIST"
@@ -1382,11 +1461,13 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   # prompt_contracts directory automatically, so we only list it once. Top-level
   # files are listed in LC_ALL=C name order to make the argv deterministic too.
   TAR_FILES=(
+    "alerts.yml"
     "app.env"
     "bundle-manifest.yaml"
     "docker-compose.yml"
     "nats.conf"
     "nats_contract.json"
+    "prometheus.yml"
     "prompt_contracts"
   )
 

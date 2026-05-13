@@ -225,6 +225,60 @@ services:
       com.smackerel.component: ollama
       com.smackerel.lifecycle: persistent
 
+  # Spec 049 — Monitoring stack. Off by default; enable with
+  # `docker compose --profile monitoring up -d`. Prometheus scrapes
+  # smackerel-core:${CORE_CONTAINER_PORT}/metrics and
+  # smackerel-ml:${ML_CONTAINER_PORT}/metrics over the compose
+  # network using service names (no IPs or hostnames). The rendered
+  # /etc/prometheus/prometheus.yml comes from
+  # config/generated/prometheus.yml (regenerate via
+  # `./smackerel.sh config generate`). Alert rules are static at
+  # config/prometheus/alerts.yml. The contract tests in
+  # internal/deploy/monitoring_*_contract_test.go enforce these
+  # invariants at build time.
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    restart: unless-stopped
+    # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
+    # The TSDB lives on a named volume mounted at /prometheus. Only /tmp
+    # is allowed as writable tmpfs (Prometheus uses it for query buffers).
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: nobody
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_DAYS}d"
+      - "--web.listen-address=:${PROMETHEUS_CONTAINER_PORT}"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      - "127.0.0.1:${PROMETHEUS_HOST_PORT}:${PROMETHEUS_CONTAINER_PORT}"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./config/generated/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    profiles:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_CONTAINER_PORT}/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      com.smackerel.component: prometheus
+      com.smackerel.lifecycle: ephemeral
+
 volumes:
   postgres-data:
     name: ${POSTGRES_VOLUME_NAME}
@@ -232,3 +286,5 @@ volumes:
     name: ${NATS_VOLUME_NAME}
   ollama-data:
     name: ${OLLAMA_VOLUME_NAME}
+  prometheus-data:
+    name: ${PROMETHEUS_VOLUME_NAME}
