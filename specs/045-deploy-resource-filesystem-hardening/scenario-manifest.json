@@ -1,0 +1,108 @@
+{
+  "version": 2,
+  "specId": "045",
+  "featureDir": "specs/045-deploy-resource-filesystem-hardening",
+  "generatedBy": "bubbles.workflow (full-delivery)",
+  "generatedAt": "2026-05-13T08:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-045-A01",
+      "name": "Operator sees bounded service resources",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit", "contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_LiveFile"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingCPU"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_AdversarialMissingMemory"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsMissingMLMemoryLimit"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_LiveFile"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_AdversarialMissingCPU"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestComposeResourceContract_AdversarialMissingMemory"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsMissingMLMemoryLimit"},
+        {"type": "source", "location": "config/smackerel.yaml::deploy_resources.* + services.ml.model_memory_profiles"},
+        {"type": "source", "location": "scripts/commands/config.sh — required_value extraction + env-var emission"},
+        {"type": "source", "location": "deploy/compose.deploy.yml — ${SERVICE_CPU_LIMIT:?...} / ${SERVICE_MEMORY_LIMIT:?...} substitution"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-045-A01: config/smackerel.yaml contains deploy_resources.<service>.{cpus,memory}",
+        "Scope 1 DoD: SCN-045-A01: scripts/commands/config.sh extracts and emits the env vars",
+        "Scope 1 DoD: SCN-045-A01: deploy/compose.deploy.yml substitutes the env vars; zero hardcoded literals remain",
+        "Scope 1 DoD: SCN-045-A01: T-045-002 passes",
+        "Scope 1 DoD: SCN-045-A01: T-045-006a adversarial passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-045-A02",
+      "name": "ML model selection fits the memory envelope",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsOversizedMLModel"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsMissingModelProfileEntry"},
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_AcceptsModelWithinEnvelope"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsOversizedMLModel"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_RejectsMissingModelProfileEntry"},
+        {"type": "unit-test", "location": "internal/config/validate_test.go::TestValidate_AcceptsModelWithinEnvelope"},
+        {"type": "source", "location": "internal/config/config.go::validateMLModelEnvelope"},
+        {"type": "source", "location": "config/smackerel.yaml::services.ml.model_memory_profiles"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD: SCN-045-A02: config/smackerel.yaml contains services.ml.model_memory_profiles",
+        "Scope 1 DoD: SCN-045-A02: internal/config/config.go Validate() rejects oversized model",
+        "Scope 1 DoD: SCN-045-A02: T-045-001 passes",
+        "Scope 1 DoD: SCN-045-A02: T-045-003 passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-045-A03",
+      "name": "Container roots are read-only except explicit mounts",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["contract"],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_LiveFile"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialMissingReadOnly"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialPostgresReadOnly"},
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestFilesystemContract_AdversarialUnauthorizedTmpfs"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_LiveFile"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialMissingReadOnly"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialPostgresReadOnly"},
+        {"type": "contract-test", "location": "internal/deploy/compose_contract_test.go::TestFilesystemContract_AdversarialUnauthorizedTmpfs"},
+        {"type": "source", "location": "deploy/compose.deploy.yml — read_only: true on smackerel-core/smackerel-ml/ollama with tmpfs allowlist"},
+        {"type": "source", "location": "docker-compose.yml — mirrored read_only + tmpfs blocks for dev stack"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: SCN-045-A03: deploy/compose.deploy.yml read_only + tmpfs blocks",
+        "Scope 2 DoD: SCN-045-A03: postgres + nats do NOT have read_only",
+        "Scope 2 DoD: SCN-045-A03: docker-compose.yml mirrors the contract",
+        "Scope 2 DoD: SCN-045-A03: T-045-004 passes",
+        "Scope 2 DoD: SCN-045-A03: T-045-005 passes",
+        "Scope 2 DoD: SCN-045-A03: T-045-006b adversarial passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-045-A04",
+      "name": "Hardened stack still passes live health checks",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["live-stack-smoke"],
+      "linkedTests": [
+        {"file": "internal/deploy/compose_contract_test.go", "function": "TestComposeResourceContract_LiveFile"}
+      ],
+      "evidenceRefs": [
+        {"type": "smoke", "location": "report.md::Scope 2 evidence — ./smackerel.sh up + curl /api/health 200"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD: SCN-045-A04: T-045-007 passes — live-stack smoke proves /api/health returns 200"
+      ]
+    }
+  ]
+}

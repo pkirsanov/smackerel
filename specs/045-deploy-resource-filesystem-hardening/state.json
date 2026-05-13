@@ -3,28 +3,35 @@
   "featureDir": "specs/045-deploy-resource-filesystem-hardening",
   "featureName": "Deploy Resource and Filesystem Hardening",
   "status": "in_progress",
-  "currentPhase": "planning",
-  "workflowMode": "product-to-planning",
+  "currentPhase": "implement",
+  "workflowMode": "full-delivery",
   "planningStatus": "scoped",
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "planning",
-    "currentScope": null,
-    "runStartedAt": "2026-05-12T00:00:00Z",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "implement",
+    "currentScope": "Scope 1",
+    "runStartedAt": "2026-05-13T00:00:00Z",
     "completedPhaseClaims": [
-      {"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for resource and filesystem hardening. No implementation edits performed."}
+      {"phase": "planning", "agent": "bubbles.workflow", "timestamp": "2026-05-12T00:00:00Z", "summary": "Created planning-only feature packet for resource and filesystem hardening. No implementation edits performed."},
+      {"phase": "design", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "summary": "Expanded design.md with concrete SST schema, compose substitution plan, ML model envelope validation, and read-only-root allowlist. Coordinated with spec 042 (tailnet-edge) and spec 051 (secret-auth)."},
+      {"phase": "scope", "agent": "bubbles.workflow", "timestamp": "2026-05-13T00:00:00Z", "summary": "Expanded scopes.md with concrete DoD items, test IDs, and adversarial test plan."}
     ]
   },
   "certification": {"status": "in_progress", "completedScopes": [], "certifiedCompletedPhases": []},
   "policySnapshot": {
     "grill": {"value": "off", "provenance": "request"},
-    "tdd": {"value": false, "provenance": "planning-only"},
-    "autoCommit": {"value": "off", "provenance": "repo-default"},
-    "lockdown": {"value": "off", "provenance": "planning-only"},
+    "tdd": {"value": false, "provenance": "user-request"},
+    "autoCommit": {"value": "off", "provenance": "user-request"},
+    "lockdown": {"value": "off", "provenance": "user-request"},
     "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
-    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"},
+    "workflowMode": {"value": "full-delivery", "provenance": "user-request"}
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "executionHistory": [{"agent": "bubbles.workflow", "phase": "planning", "timestamp": "2026-05-12T00:00:00Z", "outcome": "planning_artifacts_created"}]
+  "executionHistory": [
+    {"agent": "bubbles.workflow", "phase": "planning", "runStartedAt": "2026-05-12T00:00:00Z", "runCompletedAt": "2026-05-12T00:30:00Z", "outcome": "planning_artifacts_created"},
+    {"agent": "bubbles.workflow", "phase": "design", "runStartedAt": "2026-05-13T00:00:00Z", "runCompletedAt": "2026-05-13T00:15:00Z", "outcome": "design_expanded"},
+    {"agent": "bubbles.workflow", "phase": "scope", "runStartedAt": "2026-05-13T00:15:00Z", "runCompletedAt": "2026-05-13T00:30:00Z", "outcome": "scopes_expanded"}
+  ]
 }

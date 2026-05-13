@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress - planning packet created
+In Progress - implementation underway
 
 ## Review Findings
 
@@ -27,11 +27,12 @@ In Progress - planning packet created
 
 ## Requirements
 
-- **FR-045-001:** Product configuration MUST expose service-level resource limits or deploy-contract fields for CPU and memory.
-- **FR-045-002:** ML-sidecar model configuration MUST validate the configured model against a documented memory envelope.
-- **FR-045-003:** Runtime compose/deploy surfaces MUST express read-only root filesystem intent for services that do not require root writes.
-- **FR-045-004:** Every writable path required by core, ML, PostgreSQL, NATS, or Ollama MUST be named explicitly.
-- **FR-045-005:** Tests MUST fail if read-only-root or resource limit invariants regress.
+- **FR-045-001:** Product configuration MUST expose service-level resource limits (CPU and memory) for every deploy.compose.yml service via the `deploy_resources.<service>` SST block in `config/smackerel.yaml`. Hand-edited compose memory/cpu literals are forbidden.
+- **FR-045-002:** ML-sidecar model configuration MUST validate the configured Ollama model against a documented memory profile in `services.ml.model_memory_profiles`. The Go core `Validate()` chain MUST fail-loud at startup when the model's required memory exceeds the configured ML deploy memory envelope.
+- **FR-045-003:** Runtime compose/deploy surfaces MUST set `read_only: true` on every container that does not require persistent root writes (smackerel-core, smackerel-ml, ollama). Postgres and NATS are exempt because their data directories require writes; their persistence is bound to named volumes.
+- **FR-045-004:** Every writable path required by a read-only-root container MUST be backed by an explicit `tmpfs:` mount or a named bind mount. The compose contract test MUST list every allowed writable path for read-only services.
+- **FR-045-005:** The compose contract test MUST fail if ANY of: (a) any contract service is missing `deploy.resources.limits.cpus` or `deploy.resources.limits.memory`, (b) any read-only-root-required service is missing `read_only: true`, (c) any read-only service introduces a writable mount outside its allowed-writable allowlist, (d) any service regresses the existing tailnet-edge HOST_BIND_ADDRESS contract.
+- **FR-045-006:** All resource and filesystem hardening MUST preserve the spec 042 tailnet-edge invariants (HOST_BIND_ADDRESS fail-loud form on smackerel-core/smackerel-ml; postgres/nats unpublished) and the spec 051 secret-auth defense-in-depth (env-var-loaded secrets MUST still resolve under read-only root).
 
 ## User Scenarios (Gherkin)
 
