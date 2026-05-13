@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "bugId": "BUG-042-002-network-mode-host-bypass",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-042-002-A",
+      "title": "smackerel-core network_mode: host bypass rejected",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": ["TestComposeContract_AdversarialNetworkModeHostBypass/smackerel-core_uses_network_mode_host"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go (pre-fix struct lacked NetworkMode field)",
+      "redGreenProbe": "go test -v -count=1 -run 'TestComposeContract_AdversarialNetworkModeHostBypass/smackerel-core' ./internal/deploy/..."
+    },
+    {
+      "scenarioId": "SCN-042-002-B",
+      "title": "smackerel-ml network_mode: host bypass rejected",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": ["TestComposeContract_AdversarialNetworkModeHostBypass/smackerel-ml_uses_network_mode_host"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go (pre-fix ml block omitted network_mode check)",
+      "redGreenProbe": "go test -v -count=1 -run 'TestComposeContract_AdversarialNetworkModeHostBypass/smackerel-ml' ./internal/deploy/..."
+    },
+    {
+      "scenarioId": "SCN-042-002-C",
+      "title": "postgres network_mode: host bypass rejected (Pattern P1 preserved)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": ["TestComposeContract_AdversarialNetworkModeHostBypass/postgres_uses_network_mode_host"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go (pre-fix postgres block omitted network_mode check)",
+      "redGreenProbe": "go test -v -count=1 -run 'TestComposeContract_AdversarialNetworkModeHostBypass/postgres' ./internal/deploy/..."
+    },
+    {
+      "scenarioId": "SCN-042-002-D",
+      "title": "nats network_mode: host bypass rejected (Pattern P1 preserved)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": ["TestComposeContract_AdversarialNetworkModeHostBypass/nats_uses_network_mode_host"],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go (pre-fix nats block omitted network_mode check)",
+      "redGreenProbe": "go test -v -count=1 -run 'TestComposeContract_AdversarialNetworkModeHostBypass/nats' ./internal/deploy/..."
+    }
+  ]
+}
