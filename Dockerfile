@@ -25,7 +25,10 @@ RUN if [ -n "${GO_BUILD_TAGS}" ]; then \
 # --- Runtime stage ---
 # Named "core" so build.yml can target it with `--target core`.
 # This is the deployable image consumed by deploy/<target>/apply.sh per G074.
-FROM alpine:3.20 AS core
+# alpine:3.22 = current LTS (alpine:3.20 reached EOL 2026-04-30 — trivy WARN'd
+# the deprecated OS family which the trivy-action wrapper treats as a deploy
+# blocker; spec 047 R5 bumps to a supported release).
+FROM alpine:3.22 AS core
 
 ARG VERSION=dev
 ARG COMMIT_HASH=unknown
