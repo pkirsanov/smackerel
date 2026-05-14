@@ -192,6 +192,34 @@ jobs:
         timeout 30 bash -c 'until wget -qO- http://localhost:8222/healthz >/dev/null 2>&1; do sleep 1; done'
         echo "NATS is ready with auth enforcement and JetStream enabled"
 
+    # spec-047 R12: apply migrations via the idempotent Go runner
+    # (cmd/dbmigrate, which calls internal/db.Migrate). The R11
+    # commit removed the raw-psql pre-apply step entirely, but the
+    # R11 CI run revealed that ~28 tests (TestArtifact_*, TestList_*,
+    # TestAnnotation_CRUD, TestAnnotation_Chaos_*, etc.) DON'T call
+    # db.Migrate themselves and assume the schema already exists.
+    # The R10 baseline behaviour for those tests was "schema present
+    # because raw psql pre-applied" — that part was correct and
+    # must be restored. R12 restores the schema-pre-apply but
+    # routes it through the SAME idempotent migration runner that
+    # the auth-test helpers use, so schema_migrations IS populated
+    # and subsequent in-test db.Migrate calls correctly no-op
+    # instead of trying to re-apply 001 from scratch.
+    #
+    # Why a tiny standalone binary (`cmd/dbmigrate`) instead of
+    # `./smackerel.sh up` or `cmd/core`? Because we MUST NOT bring
+    # up NATS / scenario loader / HTTP server / metrics here. CI's
+    # integration job sets up its own NATS via raw docker run; the
+    # full smackerel-core boot sequence would conflict with that
+    # service-container topology and would also re-introduce
+    # cross-service timing failures that spec 047 has been chasing.
+    # cmd/dbmigrate is intentionally minimal: connect → migrate → exit.
+    - name: Apply database migrations via db.Migrate (idempotent + tracking)
+      env:
+        # local CI service-container creds, identical to the existing R10 line ~270 below
+        DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable # gitleaks:allow
+      run: go run ./cmd/dbmigrate
+
     # spec-047 R11: do NOT pre-apply migrations via raw psql.
     # The Go integration test helpers (db.Migrate, embedded in
     # internal/db/migrate.go) are fully idempotent — they track
