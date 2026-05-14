@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "bugId": "BUG-042-005-prometheus-default-fallback-bind-adversarial-coverage",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "title": "Compose contract test missing adversarial coverage for literal-bind / default-fallback bind on prometheus",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-042-005-A",
+      "title": "assertComposeContract rejects prometheus with literal 127.0.0.1: bind (spec 020 form)",
+      "given": "a compose fixture where prometheus.ports[0] = `127.0.0.1:${PROMETHEUS_HOST_PORT}:9090`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `prometheus` AND at least one of [spec 049, spec 042, fail-loud, ${HOST_BIND_ADDRESS:?, ${HOST_BIND_ADDRESS:-127.0.0.1}, literal 127.0.0.1:]; the test docstring carries HL-RESCAN-010 attribution",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go new TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms function (pre-fix had no adversarial coverage for the literal 127.0.0.1: form on prometheus)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms$' ./internal/deploy/... covers the literal-bind sub-case",
+      "adversarial": "YES — fails RED if the prometheus prefix check in assertComposeContract is relaxed to a too-loose substring that admits the literal-bind form"
+    },
+    {
+      "scenarioId": "SCN-042-005-B",
+      "title": "assertComposeContract rejects prometheus with ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind (forbidden by Gate G028)",
+      "given": "a compose fixture where prometheus.ports[0] = `${HOST_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_HOST_PORT}:9090`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `prometheus` AND at least one of [spec 049, spec 042, fail-loud, ${HOST_BIND_ADDRESS:?, ${HOST_BIND_ADDRESS:-127.0.0.1}, literal 127.0.0.1:]; the literal-bind sub-case is unaffected by softening the assertion to substring-contains (positive cross-check)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go new TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms function (pre-fix had no adversarial coverage for the default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: form on prometheus)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms$' ./internal/deploy/... covers the default-fallback sub-case; relaxing strings.HasPrefix to strings.Contains(p, \"${HOST_BIND_ADDRESS:\") in the prometheus branch causes ONLY this sub-case to FAIL (literal-bind sub-case still PASSes — positive cross-check)",
+      "adversarial": "YES — fails RED if the prometheus prefix check in assertComposeContract is relaxed to a too-loose substring that admits the default-fallback form"
+    }
+  ]
+}
