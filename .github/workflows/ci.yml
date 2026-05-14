@@ -40,11 +40,52 @@ jobs:
     # exposes step-level pass/fail metadata, not log content). Combined
     # with `set -euxo pipefail` in scripts/runtime/{go,python}-unit.sh,
     # this gives operators step-name attribution even without log access.
+    #
+    # spec-047 R8: capture each leg's combined stdout+stderr to a log
+    # file via `tee` and upload as a workflow artifact. Workflow
+    # artifacts on public repos are reachable through the REST artifacts
+    # API without admin auth, so this restores observability for
+    # operators who lack log-content read permission. Both legs run
+    # under `continue-on-error: true` so a Go failure does not skip the
+    # Python leg; a final step fails the job if either leg failed.
     - name: Unit tests (Go)
-      run: ./smackerel.sh test unit --go
+      id: gotest_step
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -o pipefail
+        ./smackerel.sh test unit --go 2>&1 | tee go-unit-test.log
 
     - name: Unit tests (Python)
-      run: ./smackerel.sh test unit --python
+      id: pytest_step
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -o pipefail
+        ./smackerel.sh test unit --python 2>&1 | tee python-unit-test.log
+
+    - name: Upload Go unit test log
+      if: always() && hashFiles('go-unit-test.log') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: go-unit-test-log
+        path: go-unit-test.log
+        retention-days: 7
+
+    - name: Upload Python unit test log
+      if: always() && hashFiles('python-unit-test.log') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: python-unit-test-log
+        path: python-unit-test.log
+        retention-days: 7
+
+    - name: Fail job if any unit tests failed
+      if: steps.gotest_step.outcome == 'failure' || steps.pytest_step.outcome == 'failure'
+      run: |
+        echo "Go test outcome:     ${{ steps.gotest_step.outcome }}"
+        echo "Python test outcome: ${{ steps.pytest_step.outcome }}"
+        exit 1
 
   build:
     needs: lint-and-test
