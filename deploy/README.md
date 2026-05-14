@@ -98,7 +98,8 @@ See [`bubbles-deployment-target.instructions.md`](../.github/instructions/bubble
 ./smackerel.sh deploy-target home-lab apply \
     --image-core=sha256:abc123... \
     --image-ml=sha256:def456... \
-    --config-bundle=home-lab-9f8a7b6c
+    --config-bundle=home-lab-9f8a7b6c \
+    --config-bundle-sha=<sha256-hex>   # BUG-047-001 / DEVOPS-HL-002 — copy from configBundles[env=home-lab].sha256 in the build manifest
 
 # 3) Verify
 ./smackerel.sh deploy-target home-lab verify

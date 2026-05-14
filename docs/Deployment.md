@@ -11,7 +11,7 @@
 > configuration — home-lab and any other concrete environment, including real
 > hostnames, real IPs, mesh-VPN identity, reverse-proxy site files, `ufw` rules,
 > systemd unit names, secret values, and per-target `manifest.yaml` / `params.yaml`
-> — lives in the separate **`knb` deploy-adapter overlay repo**, NOT in this repo.
+> — lives in the operator-private deploy-adapter overlay repo, NOT in this repo.
 > The formal contract for that split is the adapter-locality rule in
 > [`.github/instructions/bubbles-deployment-target.instructions.md`](../.github/instructions/bubbles-deployment-target.instructions.md)
 > (see "Adapter owns target-specific knowledge" later in this document for the
@@ -67,9 +67,8 @@ provider on every target.
 Operators MUST treat connector "done" status as a proof of the first
 two evidence classes only. The live-stack class MUST be re-verified
 on every new target as part of the deploy-adapter overlay's
-target-readiness checklist (in the knb deploy-adapter overlay,
-specifically spec `003-smackerel-home-lab-adapter-readiness` for the
-home-lab target). This product repo deliberately does NOT host a
+target-readiness checklist. The concrete overlay artifact path is recorded in
+the operator-private deploy-adapter overlay for that target. This product repo deliberately does NOT host a
 target-coupled "connector live-stack readiness" checklist — that
 material would entangle product-side and target-side evidence and is
 the kind of mix that BUG-001 (`specs/032-documentation-freshness/bugs/BUG-001-home-lab-readiness-plan-stale/`)
@@ -85,7 +84,7 @@ removed.
 | Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` |
 | Config bundle (per env)              | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No (immutable, deterministic) | `./smackerel.sh config generate --env <env> --bundle` |
 | Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | CI workflow artifact |
-| Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like the home-lab adapter that lives in the knb deploy-adapter overlay). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates to the adapter's `apply.sh`. |
+| Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like home-lab adapters). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates to the adapter's `apply.sh`. |
 
 Image tags like `:latest`, `:main`, `:staging-latest` MUST NOT be used in any
 deployment manifest. Adapters consume images by digest only.
@@ -173,7 +172,8 @@ bash scripts/deploy/promote.sh --target home-lab --build-manifest /tmp/sm-releas
 ./smackerel.sh deploy-target home-lab apply \
     --image-core=sha256:abc123... \
     --image-ml=sha256:def456... \
-    --config-bundle=home-lab-9f8a7b6c
+    --config-bundle=home-lab-9f8a7b6c \
+    --config-bundle-sha=<sha256-hex>
 
 # 3) Verify
 ./smackerel.sh deploy-target home-lab verify
@@ -182,9 +182,18 @@ bash scripts/deploy/promote.sh --target home-lab --build-manifest /tmp/sm-releas
 ./smackerel.sh deploy-target home-lab rollback
 ```
 
+> BUG-047-001 / DEVOPS-HL-002 — `--config-bundle-sha` is the operator's
+> source of truth for adapter-side bundle hash verification. The build
+> workflow emits the value as `configBundles[*].sha256` in
+> `build-manifest-<sourceSha>.yaml`; `scripts/deploy/promote.sh` reads it
+> from there automatically. When invoking `apply` directly, copy the
+> `sha256:` field for the target environment out of the build manifest.
+> Without this flag the adapter cannot verify the bundle hash, collapsing
+> the bundle-tamper defense-in-depth gate.
+
 ---
 
-## knb Deploy-Adapter Overlay Dependency
+## Deploy-Adapter Overlay Dependency
 
 Some deploy targets shipped by Smackerel are **operator-coupled** —
 they require a real hostname, a real Tailscale tailnet identity, real
@@ -198,31 +207,30 @@ the `deploy/_example/target-skeleton`, and the strict
 `DEPLOY_TARGETS_ROOT` resolution rule in
 [`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh).
 
-The operator-coupled adapter implementations live in the **knb
-deploy-adapter overlay repo** alongside any host-specific topology
-they bind. Today the home-lab target is the canonical example.
+The operator-coupled adapter implementations live in the operator-private
+deploy-adapter overlay repo alongside any host-specific topology they bind.
+Today the home-lab target is the canonical example.
 
 ### Operator verification step
 
 Before invoking `./smackerel.sh deploy-target <target> apply` for an
 operator-coupled target, the operator MUST:
 
-1. Confirm the knb deploy-adapter overlay's adapter-readiness spec for
-   the target is shipped and certified — for the home-lab target this
-   is the knb overlay spec `003-smackerel-home-lab-adapter-readiness`
-   (see the knb overlay's own README for the canonical path).
+1. Confirm the deploy-adapter overlay's adapter-readiness artifact for
+  the target is shipped and certified (see that overlay's own README for
+  the canonical path).
 2. Confirm `DEPLOY_TARGETS_ROOT` is set in the operator's environment
    per the resolution rule in
    [`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh)
    so the dispatcher resolves the out-of-tree adapter without silent
    fallback.
 3. Confirm the Generic Pre-Apply Prerequisites below are satisfied;
-   the knb overlay adapter MUST NOT mask or work around any of them.
+  the deploy-adapter overlay MUST NOT mask or work around any of them.
 
 The verification step is described generically here. This product
 repo names no real hostnames, no real IPs, no real tailnet
 identifiers, no real reverse-proxy site files, no real systemd unit
-names, and no real secret values. The knb overlay owns those.
+names, and no real secret values. The deploy-adapter overlay owns those.
 
 ---
 
@@ -240,9 +248,8 @@ adapter lives in-tree under `deploy/<target>/` or out-of-tree under
 4. Pull the config bundle by `<env>-<sourceSha>` tag and verify its sha256
 5. Write the new pointer into `manifest.yaml` (preserving the prior pointer in
    `previousManifest`) BEFORE starting any container
-6. Run the rollout strategy declared in `params.yaml` (the home-lab adapter in
-   the knb deploy-adapter overlay declares `recreate`; `blue-green` is also
-   available)
+6. Run the rollout strategy declared in `params.yaml` (home-lab adapters usually
+  declare `recreate`; `blue-green` is also available)
 7. On verify failure, invoke the adapter's `rollback.sh` (pointer-swap, no rebuild)
 
 Each adapter's `rollback.sh` MUST:
@@ -264,8 +271,8 @@ rule in [`deploy/README.md`](../deploy/README.md#adapter-locality-in-tree-vs-out
 # In-tree (generic, shareable, safe for public repos):
 cp -R deploy/_example/target-skeleton deploy/<new-target>
 
-# Out-of-tree (operator-coupled, public-repo-safe; e.g. how the home-lab
-# adapter is provided via the knb deploy-adapter overlay):
+# Out-of-tree (operator-coupled, public-repo-safe; e.g. how home-lab
+# adapters are provided via an operator-private deploy-adapter overlay):
 mkdir -p "${DEPLOY_TARGETS_ROOT}/smackerel"
 cp -R deploy/_example/target-skeleton "${DEPLOY_TARGETS_ROOT}/smackerel/<new-target>"
 ```
@@ -670,7 +677,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ### Spec 048 — Deploy Adapter Backup Contract
 
-The Smackerel runtime owns the dump, retention, status file, and restore drill. The deploy adapter overlay (e.g., `knb` for the home-lab target) owns scheduling and off-host shipping. Adapter responsibilities:
+The Smackerel runtime owns the dump, retention, status file, and restore drill. The deploy adapter overlay owns scheduling and off-host shipping. Adapter responsibilities:
 
 | Responsibility | Adapter contract |
 |----------------|------------------|
@@ -758,7 +765,7 @@ docker compose --env-file app.env -f compose.deploy.yml \
 ### What The Deploy Adapter Owns
 
 Anything operator-specific is out of scope for this repo. The deploy
-adapter overlay (e.g. the `knb` repo) MUST provide:
+adapter overlay MUST provide:
 
 - `HOST_BIND_ADDRESS` substitution value (tailnet IP or loopback)
 - Reverse-proxy / TLS fronting for the Prometheus UI (if needed)

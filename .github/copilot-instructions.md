@@ -54,7 +54,7 @@ Use `./smackerel.sh` for runtime work and the committed Bubbles commands for fra
 | Logs | `./smackerel.sh logs` | 5 min |
 | Clean smart | `./smackerel.sh clean smart` | 3 min |
 | Config bundle | `./smackerel.sh config generate --env <env> --bundle --source-sha <sha>` | 1 min |
-| Deploy target apply | `./smackerel.sh deploy-target <target> apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=<env>-<sha>` | 5 min |
+| Deploy target apply | `./smackerel.sh deploy-target <target> apply --image-core=sha256:<d> --image-ml=sha256:<d> --config-bundle=<env>-<sha> --config-bundle-sha=<sha256-hex>` | 5 min |
 | Deploy target rollback | `./smackerel.sh deploy-target <target> rollback` | 1 min |
 | Deploy target verify | `./smackerel.sh deploy-target <target> verify` | 1 min |
 | Promote build manifest | `bash scripts/deploy/promote.sh --target <target> --build-manifest <path>` | 5 min |
@@ -142,25 +142,24 @@ Home-lab and all other environment-specific final configuration — real
 hostnames, real IPs, real Tailscale tailnet identity (tailnet IDs, FQDNs,
 CGNAT IPs), real Caddy/nginx site files, real `ufw` rules, real systemd unit
 names tied to an operator's host, real secret values, and real per-target
-`manifest.yaml` / `params.yaml` — lives in the separate **`knb` deploy-adapter
-overlay repo**. Adding any operator-coupled topology to THIS repo is a
-**blocking policy violation**; that content belongs in `knb`.
+`manifest.yaml` / `params.yaml` — lives in the operator-private deploy-adapter
+overlay repo. Adding any operator-coupled topology to THIS repo is a
+**blocking policy violation**; that content belongs in the deploy adapter.
 
 | FORBIDDEN in this repo | ALLOWED in this repo |
 |------------------------|----------------------|
-| Real hostnames (`evo-x2`, `homelab-1`, etc.) | Generic placeholders (`<home-lab-host>`, `<deploy-host>`) |
+| Real hostnames | Generic placeholders (`<home-lab-host>`, `<deploy-host>`) |
 | Real IP addresses (CGNAT, public, RFC 6598) | `127.0.0.1`, `localhost`, RFC1918 references |
 | Real Tailscale tailnet IDs / FQDNs (`*.ts.net`) | `<tailnet-id>`, `<tailnet-fqdn>` placeholders |
-| Real Caddy/nginx site filenames (`smackerel.evo-x2.ts.net.caddy`) | Generic per-product fragment naming (`<product>.caddy`) |
+| Real Caddy/nginx site filenames | Generic per-product fragment naming (`<product>.caddy`) |
 | Real systemd unit names that name the operator's host | Generic `<product>-*.service` references |
-| Real secret values in any committed file | `${VAR}` substitution placeholders + sops/age in `knb` |
+| Real secret values in any committed file | `${VAR}` substitution placeholders + sops/age in the deploy adapter |
 | Hand-edited per-target `manifest.yaml` / `params.yaml` | Adapter contract docs + generic env vars |
 
 The line is simple: if a value would change when a different operator deploys
 Smackerel to a different machine, it does NOT belong in this repo. It belongs
-in `knb`. The Smackerel repo MUST stay deployable to ANY target by ANY
-operator — the per-target adapter (in `knb`) is what binds it to a real
-machine.
+in the deploy adapter. The Smackerel repo MUST stay deployable to ANY target by
+ANY operator; the per-target adapter is what binds it to a real machine.
 
 ### Build-Once Deploy-Many (BLOCKING — bubbles G074)
 
@@ -206,7 +205,8 @@ SHA produces immutable artifacts that any environment consumes:
 ```bash
 ./smackerel.sh deploy-target home-lab apply \
     --image-core=sha256:<digest> --image-ml=sha256:<digest> \
-    --config-bundle=home-lab-<sourceSha>
+    --config-bundle=home-lab-<sourceSha> \
+    --config-bundle-sha=<sha256-hex>
 ./smackerel.sh deploy-target home-lab verify
 ./smackerel.sh deploy-target home-lab rollback
 bash scripts/deploy/promote.sh --target home-lab --build-manifest <path>

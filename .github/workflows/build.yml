@@ -192,6 +192,7 @@ jobs:
         ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 
     - name: Verify bundle determinism
+      id: bundle-sha
       run: |
         first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
         rm -rf dist/config-bundles/
@@ -215,11 +216,74 @@ jobs:
         oras push "${{ env.BUNDLE_REGISTRY }}:${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}" \
           "config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz:application/vnd.smackerel.config-bundle.v1+gzip"
 
+    # BUG-047-001 / DEVOPS-HL-002 — emit the per-env bundle sha256 as a build
+    # artifact so the publish-build-manifest job can write it into the
+    # `configBundles[*].sha256` field of build-manifest-<sourceSha>.yaml. The
+    # adapter `apply.sh` MUST verify the bundle hash byte-for-byte against this
+    # value before mounting the bundle (Build-Once Deploy-Many invariant; see
+    # docs/Deployment.md "Missing bundle hash verification | Allows tampered
+    # config"). Without this artifact + the manifest field, the operator has
+    # no source of truth for the expected hash, collapsing bundle-tamper
+    # defense-in-depth.
+    - name: Write bundle-sha artifact for build-manifest consumption
+      run: |
+        mkdir -p dist/bundle-shas
+        printf '%s' "${{ steps.bundle-sha.outputs.bundleSha }}" > "dist/bundle-shas/${{ matrix.env }}.sha"
+        echo "bundle-sha for ${{ matrix.env }}: $(cat dist/bundle-shas/${{ matrix.env }}.sha)"
+
+    - name: Upload bundle-sha artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: bundle-sha-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}
+        path: dist/bundle-shas/${{ matrix.env }}.sha
+        if-no-files-found: error
+
   publish-build-manifest:
     needs: [ build-images, build-bundles ]
     runs-on: ubuntu-latest
     steps:
+    # BUG-047-001 / DEVOPS-HL-002 — pull the per-env bundle-sha artifacts that
+    # build-bundles uploaded so the build manifest can declare the expected
+    # bundle hash for each environment. Without these, the manifest's
+    # `configBundles[*]` entries name only the OCI ref (which is mutable on
+    # the registry side) and the adapter has no source of truth for hash
+    # verification — collapsing the Build-Once Deploy-Many bundle-tamper gate.
+    - name: Download bundle-sha artifacts
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        pattern: bundle-sha-*-${{ needs.build-images.outputs.sourceSha }}
+        path: bundle-shas
+        merge-multiple: false
+
+    - name: Resolve per-env bundle hashes
+      id: resolve-bundle-shas
+      run: |
+        # Each artifact lands at bundle-shas/<artifact-name>/<env>.sha
+        # The artifact-name pattern is bundle-sha-<env>-<sourceSha>; the inner
+        # file is named <env>.sha. We prefer reading by env name to be robust
+        # to any layout drift in the upload step.
+        for env in dev test home-lab; do
+          sha_file="$(find bundle-shas -type f -name "${env}.sha" | head -1)"
+          if [[ -z "${sha_file}" ]] || [[ ! -s "${sha_file}" ]]; then
+            echo "ERROR: missing or empty bundle-sha file for env=${env}" >&2
+            exit 1
+          fi
+          sha_value="$(cat "${sha_file}")"
+          if ! [[ "${sha_value}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "ERROR: bundle-sha for env=${env} is not a valid sha256 hex digest: ${sha_value}" >&2
+            exit 1
+          fi
+          # Normalize env name to a shell-var-friendly form (home-lab -> HOME_LAB)
+          var_name="BUNDLE_SHA_$(echo "${env}" | tr 'a-z-' 'A-Z_')"
+          echo "${var_name}=${sha_value}" >> "$GITHUB_OUTPUT"
+          echo "Resolved ${var_name}=${sha_value}"
+        done
+
     - name: Write build-manifest-${{ needs.build-images.outputs.sourceSha }}.yaml
+      env:
+        BUNDLE_SHA_DEV: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_DEV }}
+        BUNDLE_SHA_TEST: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_TEST }}
+        BUNDLE_SHA_HOME_LAB: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_HOME_LAB }}
       run: |
         cat > build-manifest.yaml <<EOF
         manifestVersion: 1
@@ -234,10 +298,13 @@ jobs:
         configBundles:
           - env: dev
             ref: ${{ env.BUNDLE_REGISTRY }}:dev-${{ needs.build-images.outputs.sourceSha }}
+            sha256: ${BUNDLE_SHA_DEV}
           - env: test
             ref: ${{ env.BUNDLE_REGISTRY }}:test-${{ needs.build-images.outputs.sourceSha }}
+            sha256: ${BUNDLE_SHA_TEST}
           - env: home-lab
             ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}
+            sha256: ${BUNDLE_SHA_HOME_LAB}
         attestations:
           scheme: cosign-keyless
           transparencyLog: rekor

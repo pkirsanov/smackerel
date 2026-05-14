@@ -105,6 +105,7 @@ Actions:
                    args: --image-core=sha256:<digest>
                          --image-ml=sha256:<digest>
                          --config-bundle=<env>-<sourceSha>
+                         --config-bundle-sha=<sha256-hex>
                          [--source-sha=<sha>]
   rollback         Pointer-swap to previousManifest (no rebuild)
   verify           Post-deploy health checks (read-only)
