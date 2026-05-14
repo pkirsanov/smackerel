@@ -1,0 +1,94 @@
+{
+  "scenarios": [
+    {
+      "scenarioId": "SCN-044-001-A",
+      "name": "resolveBroadcasterInstanceID exists as a package-private helper",
+      "description": "cmd/core/wiring.go declares a package-private helper resolveBroadcasterInstanceID with signature () (string, error), placed before buildAPIDeps. The broadcaster construction block calls the helper instead of inlining os.Getenv(HOSTNAME) + literal-fallback.",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestResolveBroadcasterInstanceID_NonEmpty (compilation alone proves the helper symbol exists)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#code-diff-evidence", "report.md#test-evidence"],
+      "specSource": "design.md DD-1 (extract a helper, do not inline the fail-loud check)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestResolveBroadcasterInstanceID_NonEmpty' ./cmd/core/...",
+      "adversarial": "NO (positive guard rail — proves the helper symbol exists; the symbol-resolution failure mode is caught at go build time before any test runs)"
+    },
+    {
+      "scenarioId": "SCN-044-001-B",
+      "name": "non-empty HOSTNAME returns the value, nil error",
+      "description": "When HOSTNAME is set to a non-empty string (e.g. smackerel-core-replica-7), resolveBroadcasterInstanceID returns the value verbatim with a nil error. Locks the going-forward behavior contract for the happy path.",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestResolveBroadcasterInstanceID_NonEmpty"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "design.md DD-5 (three test methods — positive + 2 adversarial)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestResolveBroadcasterInstanceID_NonEmpty' ./cmd/core/...",
+      "adversarial": "NO (positive guard rail — guards against an over-zealous rewrite that mistakenly errors on every read)"
+    },
+    {
+      "scenarioId": "SCN-044-001-C",
+      "name": "empty HOSTNAME returns fail-loud error referencing 5 anchor tokens",
+      "description": "When HOSTNAME is set to the empty string, resolveBroadcasterInstanceID returns (empty-string, non-nil error). The error message must contain ALL FIVE anchor tokens: HOSTNAME, HL-RESCAN-008, Gate G028, spec 044, deduplication. The test asserts via a strings.Contains loop over the 5 tokens.",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestResolveBroadcasterInstanceID_Empty_FailsLoud"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "design.md DD-4 (error message must name multiple anchors)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestResolveBroadcasterInstanceID_Empty_FailsLoud' ./cmd/core/...",
+      "adversarial": "YES — temporarily reverting the helper body to a silent-fallback form (return \"smackerel-core\", nil on empty) FAILS this test with the exact mismatch message id=\"smackerel-core\" err=nil. The 5-token assertion loop also catches partial reverts that drop the attribution tokens."
+    },
+    {
+      "scenarioId": "SCN-044-001-D",
+      "name": "unset HOSTNAME returns the same fail-loud error as empty HOSTNAME",
+      "description": "When HOSTNAME is genuinely unset (os.Unsetenv with cleanup restore), resolveBroadcasterInstanceID returns (empty-string, non-nil error) with the same shape as the empty-set case. Distinguishes from the empty-set case to guard against a future os.LookupEnv refactor that mishandles the unset branch.",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestResolveBroadcasterInstanceID_UnsetEnv"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "design.md DD-5 (three test methods — positive + 2 adversarial)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestResolveBroadcasterInstanceID_UnsetEnv' ./cmd/core/...",
+      "adversarial": "YES — same silent-fallback revert as SCN-044-001-C also FAILS this test with id=\"smackerel-core\" err=nil. Distinct from SCN-044-001-C in that this test exercises the genuinely-unset branch (os.Unsetenv) instead of the empty-string branch (t.Setenv KEY \"\")."
+    },
+    {
+      "scenarioId": "SCN-044-001-E",
+      "name": "broadcaster wiring block refuses construction when helper returns an error",
+      "description": "When resolveBroadcasterInstanceID returns (empty-string, non-nil error), the wiring block at the helper call site refuses to call revocation.NewBroadcaster, leaves svc.authRevocationBroadcaster nil, and emits slog.Error with the error AND the NATS subject. Verified by source inspection of the nested-switch block in cmd/core/wiring.go (Code Diff Evidence in report.md).",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "indirect via TestResolveBroadcasterInstanceID_Empty_FailsLoud + Code Diff Evidence inspection of the nested-switch block in cmd/core/wiring.go"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#code-diff-evidence"],
+      "specSource": "design.md DD-2 (fail-loud-but-non-fatal at the broadcaster site) + DD-3 (switch+default+switch instead of nested if/else)",
+      "redGreenProbe": "grep -B 1 -A 6 'auth revocation broadcaster construction refused' cmd/core/wiring.go",
+      "adversarial": "NO (verified by source inspection — no integration test required because the helper IS the unit, and the wiring block's nested-switch consumes the helper's (value, error) contract by construction)"
+    },
+    {
+      "scenarioId": "SCN-044-001-F",
+      "name": "broadcaster wiring block proceeds normally when helper returns a valid instance ID",
+      "description": "When resolveBroadcasterInstanceID returns (some-hostname, nil), the wiring block invokes revocation.NewBroadcaster(svc.nc.Conn, cfg.Auth.RevocationNATSSubject, revocationCache, instanceID) exactly as before. The existing non-fatal handling for NewBroadcaster errors and Subscribe errors is preserved. Verified by source inspection + pre-existing integration tests in tests/integration/auth_revocation_test.go which exercise the Broadcaster lifecycle end-to-end with synthetic instance IDs (unaffected by this fix).",
+      "scopeId": "BUG-044-001-scope-1",
+      "requiredTestType": "go-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "indirect via TestResolveBroadcasterInstanceID_NonEmpty + tests/integration/auth_revocation_test.go (pre-existing, exercises Broadcaster end-to-end)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#code-diff-evidence", "report.md#audit-evidence"],
+      "specSource": "design.md DD-2 (preserve happy-path behavior unchanged)",
+      "redGreenProbe": "grep -B 1 -A 4 'revocation.NewBroadcaster' cmd/core/wiring.go",
+      "adversarial": "NO (positive guard rail — proves the happy path is unchanged; the non-fatal error handling for NewBroadcaster construction errors and Subscribe errors is preserved unchanged from the pre-fix block)"
+    }
+  ]
+}

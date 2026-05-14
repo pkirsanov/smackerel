@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "044-per-user-bearer-auth",
+  "bugId": "BUG-044-001-revocation-broadcaster-hostname-fail-loud",
+  "featureDir": "specs/044-per-user-bearer-auth/bugs/BUG-044-001-revocation-broadcaster-hostname-fail-loud",
+  "featureName": "BUG-044-001: auth revocation broadcaster falls back to literal \"smackerel-core\" when HOSTNAME is empty",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "trigger": "system-review-finding",
+    "executionModel": "direct-per-finding-dispatch"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-14T00:35:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Searched cmd/core/ and internal/ for `os.Getenv` followed by `if .* == \"\"` + literal-string assignment; found one violation at cmd/core/wiring.go line 243 (`instanceID := os.Getenv(\"HOSTNAME\")` followed by `if instanceID == \"\" { instanceID = \"smackerel-core\" }`). Cross-referenced .github/instructions/smackerel-no-defaults.instructions.md Gate G028 wording: Go must be `os.Getenv` + empty check → fatal/refuse, never a silent literal fallback. Cross-referenced `git log -S 'os.Getenv(\"HOSTNAME\")'` to confirm the pre-fix form was introduced by spec 044 Scope 02 commit `5f4ceb98` (the broadcaster wiring landed there). Direct HL-RESCAN-008 finding from the home-lab readiness re-scan against c586f912."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:38:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Modified two files: (1) cmd/core/wiring.go: added new package-private helper `resolveBroadcasterInstanceID() (string, error)` at line 91 (before `buildAPIDeps`); the helper reads `os.Getenv(\"HOSTNAME\")` and returns `(\"\", error)` when empty with the error message naming HOSTNAME, HL-RESCAN-008, Gate G028, spec 044, AND deduplication. Replaced the inline silent-fallback at the broadcaster construction block (formerly lines 243–246) with a nested-switch consumer: outer switch on `hostnameErr != nil` (case: slog.Error + skip construction; default: proceed); inner switch on `err != nil` from `revocation.NewBroadcaster` (preserving the existing non-fatal handling for construction errors and Subscribe errors). Added explanatory comment block at lines 260–268 above the call site naming HL-RESCAN-008 / Gate G028 / spec 044 and showing the pre-fix shape for archaeology. (2) cmd/core/wiring_revocation_test.go: created new test file (95 lines) in package main with 3 test methods: TestResolveBroadcasterInstanceID_NonEmpty (positive guard rail; t.Setenv with synthetic value `\"smackerel-core-replica-7\"`), TestResolveBroadcasterInstanceID_Empty_FailsLoud (adversarial; t.Setenv with empty string + 5-anchor-token strings.Contains assertion loop), TestResolveBroadcasterInstanceID_UnsetEnv (adversarial; os.Unsetenv with cleanup restore). Total diff: 47 insertions / 14 deletions in wiring.go + 95 lines new test file."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Targeted suite for new helper tests: `go test -count=1 -v -run '^TestResolveBroadcasterInstanceID' ./cmd/core/...` returns `ok 0.035s` with all 3 tests PASS GREEN. Full cmd/core/ Go unit suite: `go test -count=1 ./cmd/core/...` returns `ok 0.401s` with every test in the cmd/core package (including pre-existing TestAllConnectorsRegistered) PASS unchanged. Full repo-CLI Go unit lane: `./smackerel.sh test unit --go` returns `[go-unit] go test ./... finished OK` — every Go package across the repo passes. New tests run as part of the persistent in-tree adversarial suite — every `./smackerel.sh test unit --go` invocation (CI + developer pre-push) re-validates the contract. The pre-existing integration tests for the Broadcaster (tests/integration/auth_revocation_test.go, tests/integration/auth_chaos_*_test.go) all use synthetic instance IDs and are unaffected by this wiring-site change."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:41:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 1 production file modified (cmd/core/wiring.go, +47 / -14 lines including helper extraction + nested-switch rewrite + explanatory comment block), 1 new test file (cmd/core/wiring_revocation_test.go, 95 lines covering 3 test methods). The helper extraction (DD-1) is justified because it makes the read directly unit-testable without mocking the full ~50-dependency buildDeps tree; without the extraction the test would have to either spin up a real coreServices fixture (over-engineering for a 4-line check) or skip the adversarial RED→GREEN proof entirely. The nested-switch rewrite (DD-3) is preferred over if/else if/else per the gocritic linter's ifElseChain check. The error-message anchor tokens (DD-4) are deliberately chosen to cover (a) what variable is missing, (b) which finding tracks this, (c) which policy is violated, (d) which spec owns the broader surface, and (e) what behavioral consequence is at stake."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:42:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond patched in-process env-var reads. All 3 new tests + every pre-existing cmd/core test PASS in 0.401s with zero variance across re-runs. The lazy-resolution design (helper called once at startup on the optional broadcaster path, gated on `cfg.Auth.Enabled && svc.nc != nil && svc.nc.Conn != nil && cfg.Auth.RevocationNATSSubject != \"\"`) preserves the production fast-path performance — the helper's HOSTNAME env-read is paid only once per smackerel-core process startup, on the optional revocation-broadcast wiring path."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:43:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review: A05 Security Misconfiguration — the fix STRENGTHENS the existing spec 044 / Gate G028 SST policy by mechanically replacing a silent-default literal-string fallback with a fail-loud read at the broadcaster wiring site. The pre-fix fallback collided every replica's broadcaster identity to the same literal `\"smackerel-core\"` string, which silently broke the cross-replica deduplication contract on the NATS revocation subject — meaning if multiple smackerel-core replicas were running and one revoked a token, the consumer code's deduplication assumption would fail open. The post-fix helper either returns a unique container-injected HOSTNAME (correct) or refuses to construct the broadcaster (loud refusal, no silent collision). No new attack surface introduced. No PII handled (HOSTNAME is the container hostname, not a user identifier). The fix is the broadcaster-side primitive that prevents accidental cross-replica revocation-broadcast deduplication failures via SST drift."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:44:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Static checks: `go vet ./cmd/core/... ./internal/auth/...` exits 0; no shadow, no nil-deref, no struct-tag issues introduced. Cross-test smoke: `./smackerel.sh test unit --go` returns `[go-unit] go test ./... finished OK` (full repo Go unit lane, every package). RED→GREEN proof: temporarily reverted the helper body at cmd/core/wiring.go lines 91–97 to a silent-fallback form (`return \"smackerel-core\", nil` on empty) via replace_string_in_file, kept the new tests in place, re-ran the helper suite — exactly TWO sub-tests FAILED with the explicit `wiring_revocation_test.go:58: expected non-nil error for empty HOSTNAME (HL-RESCAN-008 silent fallback regression), got id=\"smackerel-core\" err=nil` and `wiring_revocation_test.go:90: expected non-nil error for unset HOSTNAME, got id=\"smackerel-core\" err=nil` mismatch messages; the positive NonEmpty test PASSED unchanged. Restored the production fix via replace_string_in_file → all 3 PASS GREEN. The 1 positive guard rail (NonEmpty) PASSES on both pre-fix and post-fix code by coincidence — it is intentionally non-adversarial and locks the going-forward behavior contract for the happy path. Full evidence in report.md > Validation Evidence + > Test Evidence > Red→Green proof (scenario-first TDD)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:45:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 2 files modified (cmd/core/wiring.go production helper + nested-switch + cmd/core/wiring_revocation_test.go new test file). No production runtime Python code modified. No deploy/compose.deploy.yml change. No docker-compose.yml change. No config/smackerel.yaml change. No SST loader script change. No Dockerfile change. No CI workflow change. No internal/auth/revocation/broadcaster.go change. No other cmd/core files (main.go, services.go, cmd_*.go, helpers.go, wiring_agent.go, etc.) changed. Cross-test smoke clean (`[go-unit] go test ./... finished OK`). All canaries (TestAllConnectorsRegistered, integration broadcaster tests) PASS unchanged. Generic-only constraint preserved (no real hostnames/IPs/tailnet identifiers; test fixture uses synthetic literal `smackerel-core-replica-7` chosen to be obviously non-real). Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:46:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/scenario-manifest/report/uservalidation/state artifacts authored at specs/044-per-user-bearer-auth/bugs/BUG-044-001-revocation-broadcaster-hostname-fail-loud/. No external doc updates required: the fix is purely a runtime env-read site change at one wiring-site location; no operator workflow change, no Deployment.md change, no copilot-instructions.md change, no README change. The bug-local scenario-manifest.json declares 6 scenarios (SCN-044-001-A through SCN-044-001-F)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.devops",
+    "certifiedAt": "2026-05-14T00:46:00Z",
+    "auditorAgent": "bubbles.devops",
+    "auditedAt": "2026-05-14T00:46:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-008 (P2). The auth-revocation broadcaster's per-replica instance-ID read at cmd/core/wiring.go lines 243–246 (pre-fix) used `os.Getenv(\"HOSTNAME\")` followed by `if instanceID == \"\" { instanceID = \"smackerel-core\" }` — a silent fallback to a literal string explicitly forbidden by .github/instructions/smackerel-no-defaults.instructions.md Gate G028 (Go must be `os.Getenv` + empty check → fatal/refuse, never a silent literal fallback). The pre-fix fallback collided every replica's broadcaster identity to the same literal `\"smackerel-core\"` string — defeating the cross-replica deduplication contract built into the consumer the moment more than one smackerel-core replica was running. Fix extracts the read into a small `(value, error)`-returning helper `resolveBroadcasterInstanceID()` placed at cmd/core/wiring.go line 91 (before buildAPIDeps); the helper returns `(hostname, nil)` on the happy path and `(\"\", error)` when HOSTNAME is empty with the error message naming HOSTNAME, HL-RESCAN-008, Gate G028, spec 044, AND deduplication. Rewrote the broadcaster construction block as a nested-switch: outer switch on `hostnameErr != nil` (case: slog.Error + skip construction; default: proceed); inner switch preserves the existing non-fatal handling for `revocation.NewBroadcaster` construction errors and `Subscribe` errors. New cmd/core/wiring_revocation_test.go test file (95 lines) declares 3 test methods (TestResolveBroadcasterInstanceID_NonEmpty positive guard rail + TestResolveBroadcasterInstanceID_Empty_FailsLoud adversarial empty-string + TestResolveBroadcasterInstanceID_UnsetEnv adversarial os.Unsetenv); 2 of 3 are adversarial. The Empty_FailsLoud test asserts the error message contains all 5 anchor tokens via a strings.Contains loop. RED→GREEN proven via temporary revert of helper body to silent-fallback form (`return \"smackerel-core\", nil` on empty): exactly TWO new sub-tests FAIL with the explicit `id=\"smackerel-core\" err=nil` mismatch message; the positive NonEmpty test PASSES unchanged. Restoration via replace_string_in_file returns the targeted suite to all-PASS GREEN (3/3 in 35ms) and the full repo-CLI Go unit lane to `[go-unit] go test ./... finished OK`. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced; test fixture uses synthetic literal `\"smackerel-core-replica-7\"` chosen to be obviously non-real. Two-file code change: only cmd/core/wiring.go (+47/-14) and cmd/core/wiring_revocation_test.go (95 lines new). Bug-packet artifacts contained in specs/044-per-user-bearer-auth/bugs/BUG-044-001-revocation-broadcaster-hostname-fail-loud/. Foreign-owned spec 044 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "HOSTNAME fail-loud helper at broadcaster wiring site + adversarial RED→GREEN coverage",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-14T00:46:00Z",
+        "dodTotal": 21,
+        "dodChecked": 21,
+        "notes": "2 files modified (cmd/core/wiring.go production helper + nested-switch rewrite at the broadcaster construction site + cmd/core/wiring_revocation_test.go new test file with 3 test methods). New resolveBroadcasterInstanceID helper + 5-anchor-token error message + 5-anchor-token strings.Contains assertion loop in the Empty_FailsLoud test. Full cmd/core/ Go unit suite PASSES GREEN in 401ms. Full repo-CLI Go unit lane (`./smackerel.sh test unit --go`) returns `[go-unit] go test ./... finished OK`. RED proof: 2 expected FAILs (Empty_FailsLoud, UnsetEnv) when production helper reverted to silent-fallback form; positive NonEmpty PASSES unchanged. GREEN proof: restoration returns all 3 helper tests + the full Go unit lane to PASS. Cross-test smoke (full repo `go test ./...`) PASS. Full DoD evidence inline in scopes.md."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "home-lab-readiness-rescan-2026-05-14"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}
