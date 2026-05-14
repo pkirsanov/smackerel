@@ -1,6 +1,9 @@
 # Pinned production dependencies for smackerel-ml sidecar.
 # Generated from pyproject.toml — update when dependencies change.
-fastapi==0.115.0
+# spec-047 R12.2: bumped fastapi to 0.115.6 to pull starlette>=0.40.0,
+# resolving CVE-2024-47874 (Starlette DoS via multipart/form-data).
+# fastapi 0.115.6 transitively requires starlette>=0.40.0,<0.42.0.
+fastapi==0.115.6
 uvicorn[standard]==0.32.0
 nats-py==2.9.0
 pydantic==2.12.5

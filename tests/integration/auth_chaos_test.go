@@ -54,6 +54,13 @@ import (
 // test.env points at the container DNS name `nats:4222`, which is not
 // reachable from the host shell that runs `go test`. The chaos-phase
 // runner exports CHAOS_NATS_URL=nats://127.0.0.1:<NATS_CLIENT_HOST_PORT>.
+//
+// spec-047 R12.2: also append nats.Token(SMACKEREL_AUTH_TOKEN) when
+// the env var is set, matching the pattern in testNATSConn (helpers_test.go
+// line 60). CI's NATS service container is started with
+// `--auth ci-test-token-integration` and exposes the same value via
+// SMACKEREL_AUTH_TOKEN; without the token, every chaos-test
+// nats.Connect call fails with `nats: Authorization Violation`.
 func chaosNATSConn(t *testing.T) *nats.Conn {
 	t.Helper()
 	url := os.Getenv("CHAOS_NATS_URL")
@@ -63,7 +70,11 @@ func chaosNATSConn(t *testing.T) *nats.Conn {
 	if url == "" {
 		t.Fatal("auth chaos test requires CHAOS_NATS_URL or NATS_URL — point at the live test stack NATS host port (typically nats://127.0.0.1:47002 for env=test)")
 	}
-	nc, err := nats.Connect(url, nats.Timeout(5*time.Second))
+	opts := []nats.Option{nats.Timeout(5 * time.Second)}
+	if tok := os.Getenv("SMACKEREL_AUTH_TOKEN"); tok != "" {
+		opts = append(opts, nats.Token(tok))
+	}
+	nc, err := nats.Connect(url, opts...)
 	if err != nil {
 		t.Fatalf("connect NATS %q: %v", url, err)
 	}

@@ -4855,7 +4855,7 @@ PII_EXIT=0
 — zero findings.**
 
 ```text
-$ patterns='philipk|/home/[a-z]+/|10\.0\.0\.[0-9]+|192\.168\.[0-9]+\.[0-9]+|wandered|smackerel\.tail|@gmail\.com|@outlook\.com|BEGIN.*PRIVATE.*KEY|sk-[a-zA-Z0-9]{20,}'
+$ patterns='<owner-username>|/home/[a-z]+/|10\.0\.0\.[0-9]+|192\.168\.[0-9]+\.[0-9]+|wandered|smackerel\.tail|@gmail\.com|@outlook\.com|BEGIN.*PRIVATE.*KEY|sk-[a-zA-Z0-9]{20,}'
 $ git diff 2d483842~1..a4bd82d0 -- internal/ web/ tests/ specs/044-per-user-bearer-auth/ scripts/ config/smackerel.yaml | grep -E '^\+[^+]' | grep -E "$patterns" | grep -v '^\+\s*//'
 (no output — zero real-PII signals)
 ```

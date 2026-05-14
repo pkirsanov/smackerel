@@ -243,8 +243,22 @@ jobs:
     # lint-and-test; R10 unmasked that the integration job was equally
     # affected. The renderer is pure-bash (scripts/commands/config.sh) and
     # runs in <1s with no docker/network/host-state deps.
+    # spec-047 R12.2: ALSO generate test.env. R11/R12 only ran
+    # `./smackerel.sh config generate` which defaults to --env=dev and
+    # produces config/generated/dev.env. Several integration tests
+    # (TestOllamaConfigGenerateAndRuntimeValidationStayInSync,
+    # TestOllamaImagePinIsPublished_LiveTag,
+    # TestPhotosContractCanary_ConfigNATSDBAndMLAgree (config subtest),
+    # TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (config subtest),
+    # TestPhotosPrivacyBoundaryRejectsUserLibraryURLs,
+    # TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList,
+    # TestDriveFoundationCanary_ConfigNATSAndMigrationContracts (config subtest))
+    # explicitly read config/generated/test.env and t.Fatalf on ENOENT.
+    # The renderer is pure-bash and runs in <1s per env.
     - name: Generate SST config files for integration tests
-      run: ./smackerel.sh config generate
+      run: |
+        ./smackerel.sh config generate
+        ./smackerel.sh config generate --env test
 
     # NOTE: CI integration uses raw go test because GitHub Actions service
     # containers replace the Docker Compose stack that ./smackerel.sh test

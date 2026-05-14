@@ -14,6 +14,14 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# spec-047 R12.2: upgrade setuptools to fix CVE-2025-47273
+# (Path Traversal Vulnerability in setuptools PackageIndex).
+# python:3.12-slim ships with setuptools 70.2.0; CVE fix is in 78.1.1+.
+# This MUST run AFTER `pip install -r requirements.txt` because some
+# pinned packages constrain setuptools transitively; pinning here is
+# the explicit final-state pin.
+RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
+
 # Preload the embedding model during the image build so live processing does
 # not depend on a first-request network/cache write under the non-root user.
 RUN mkdir -p "$HF_HOME" "$SENTENCE_TRANSFORMERS_HOME" \
