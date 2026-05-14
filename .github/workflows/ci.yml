@@ -205,10 +205,40 @@ jobs:
     # containers replace the Docker Compose stack that ./smackerel.sh test
     # integration manages. The CLI command expects to bring up/down its own
     # Compose project, which conflicts with Actions service lifecycle.
+    #
+    # spec-047 R10: capture combined stdout+stderr to integration-test.log
+    # via tee and upload as a workflow artifact (same pattern as R8 for
+    # unit tests). R9 unmasked the chronic integration failure that the
+    # lint-and-test gate had been hiding (build was conditional on
+    # lint-and-test pass; integration was conditional on build pass).
+    # Without log capture the failure is opaque to operators because the
+    # GitHub Actions step log requires admin auth. Artifact upload uses
+    # `if: always() && hashFiles(...) != ''` so the log is captured even
+    # on test failure. continue-on-error: true ensures the upload step
+    # runs; a final aggregator step exits non-zero if the test step
+    # outcome is failure so the integration job still fails the build.
     - name: Run integration tests
+      id: itest_step
+      continue-on-error: true
       env:
         DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable
         NATS_URL: nats://localhost:4222
         SMACKEREL_AUTH_TOKEN: ci-test-token-integration
+      shell: bash
       run: |
-        go test -tags=integration ./tests/integration/... -v -count=1 -timeout 10m
+        set -o pipefail
+        go test -tags=integration ./tests/integration/... -v -count=1 -timeout 10m 2>&1 | tee integration-test.log
+
+    - name: Upload integration test log
+      if: always() && hashFiles('integration-test.log') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: integration-test-log
+        path: integration-test.log
+        retention-days: 7
+
+    - name: Fail job if integration tests failed
+      if: steps.itest_step.outcome == 'failure'
+      run: |
+        echo "Integration test outcome: ${{ steps.itest_step.outcome }}"
+        exit 1
