@@ -688,3 +688,100 @@ func TestComposeContract_AdversarialDefaultFallbackBind(t *testing.T) {
 		})
 	}
 }
+
+// TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms proves
+// the contract function catches a regression where the prometheus service
+// publishes its host port via the literal `127.0.0.1:` spec 020 form OR via
+// the forbidden default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` form.
+//
+// Before HL-RESCAN-010, no synthetic adversarial test existed for
+// prometheus — the live-file test (TestComposeContract_LiveFile) would
+// catch a regression in the live deploy/compose.deploy.yml today, but a
+// silent relaxation of `requiredPrometheusPrefix` (e.g. softening the
+// strings.HasPrefix check to a strings.Contains check on the substring
+// `${HOST_BIND_ADDRESS:`) would defeat the live-file guard AND there was
+// no synthetic fixture proving the rejection lands. This test closes that
+// gap by feeding two adversarial fixtures into assertComposeContract
+// directly and asserting both are rejected with prometheus-attributed
+// errors.
+//
+// The default-fallback form is forbidden by Gate G028 (NO-DEFAULTS /
+// fail-loud SST policy): when HOST_BIND_ADDRESS is unset, it would
+// silently bind to 127.0.0.1 instead of failing the compose substitution
+// loud — defeating the deploy adapter's contractual obligation to inject
+// the real bind address explicitly. The literal `127.0.0.1:` form is the
+// pre-spec-042 (spec 020) shape that is reversed by spec 042 / 049.
+//
+// Two sub-cases:
+//   - prometheus uses literal `127.0.0.1:` bind (spec 020 form)
+//   - prometheus uses `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback bind
+//
+// Each MUST return a non-nil error mentioning 'prometheus' and at least
+// one anchor token from the assertComposeContract rejection text
+// ("spec 049", "spec 042", "fail-loud", "${HOST_BIND_ADDRESS:?...}",
+// "${HOST_BIND_ADDRESS:-127.0.0.1}", "literal 127.0.0.1:") — those
+// terms collectively prove the rejection lands on the right contract.
+//
+// Discovered: home-lab readiness re-scan finding HL-RESCAN-010 (P3),
+// 2026-05-14. Coverage gap classified P3 because the live file is correct
+// today; the risk is regression-only (live-file test catches a regression
+// in the file, but only this synthetic adversarial test catches a
+// relaxation of the assertion itself).
+func TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms(t *testing.T) {
+	cases := []struct {
+		name string
+		port string
+	}{
+		{
+			name: "literal 127.0.0.1 bind (spec 020 form)",
+			port: `127.0.0.1:${PROMETHEUS_HOST_PORT}:9090`,
+		},
+		{
+			name: "default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} bind (forbidden by Gate G028)",
+			port: `${HOST_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_HOST_PORT}:9090`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := fmt.Sprintf(`services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+  prometheus:
+    ports:
+      - %q
+`, tc.port)
+			err := assertComposeContract([]byte(fixture))
+			if err == nil {
+				t.Fatalf("adversarial contract test failed: prometheus port %q was accepted (the contract is tautological — it would NOT catch a regression to the spec 020 literal form or to the default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} form for prometheus; HL-RESCAN-010 prometheus literal-bind / default-fallback coverage gap is reintroduced)", tc.port)
+			}
+			if !strings.Contains(err.Error(), "prometheus") {
+				t.Fatalf("adversarial contract test failed: error did not mention 'prometheus' (the violating service): %v", err)
+			}
+			// The assertComposeContract rejection message for prometheus
+			// includes "spec 049", "spec 042", "fail-loud",
+			// "${HOST_BIND_ADDRESS:?...}", "${HOST_BIND_ADDRESS:-127.0.0.1}",
+			// and "literal 127.0.0.1:" — match any of them to prove the
+			// rejection lands on the right contract. Listing all six anchors
+			// makes the assertion robust to harmless wording tweaks in the
+			// contract error message while still proving the right gate fired.
+			haveAnyAnchor := false
+			for _, anchor := range []string{"spec 049", "spec 042", "fail-loud", "${HOST_BIND_ADDRESS:?", "${HOST_BIND_ADDRESS:-127.0.0.1}", "literal 127.0.0.1:"} {
+				if strings.Contains(err.Error(), anchor) {
+					haveAnyAnchor = true
+					break
+				}
+			}
+			if !haveAnyAnchor {
+				t.Fatalf("adversarial contract test failed: error did not mention any of [spec 049, spec 042, fail-loud, ${HOST_BIND_ADDRESS:?, ${HOST_BIND_ADDRESS:-127.0.0.1}, literal 127.0.0.1:] (the regression target this HL-RESCAN-010 guard locks): %v", err)
+			}
+			t.Logf("adversarial OK: prometheus port %q is rejected with: %v", tc.port, err)
+		})
+	}
+}
