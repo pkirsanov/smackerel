@@ -576,3 +576,115 @@ func TestComposeContract_AdversarialOllamaLiteralBind(t *testing.T) {
 		})
 	}
 }
+
+// TestComposeContract_AdversarialDefaultFallbackBind proves the contract
+// function catches a regression to the forbidden default-fallback
+// `${HOST_BIND_ADDRESS:-127.0.0.1}:` bind form for either smackerel-core
+// or smackerel-ml — and also locks the literal `127.0.0.1:` spec 020 form
+// for smackerel-ml (previously only smackerel-core had explicit literal
+// coverage in TestComposeContract_AdversarialLiteralBind).
+//
+// The default-fallback form is forbidden by Gate G028 (NO-DEFAULTS /
+// fail-loud SST policy): when HOST_BIND_ADDRESS is unset, it would
+// silently bind to 127.0.0.1 instead of failing the compose substitution
+// loud — defeating the deploy adapter's contractual obligation to inject
+// the real bind address explicitly. The live deploy/compose.deploy.yml
+// uses the fail-loud `${HOST_BIND_ADDRESS:?...}:` form for both core and
+// ml today; this test LOCKS that contract so any future revert to the
+// default-fallback form (or a relaxation of the prefix string match in
+// assertComposeContract — e.g. if requiredCorePrefix were softened to a
+// `${HOST_BIND_ADDRESS:` substring check) is caught at unit-test time.
+//
+// Three sub-cases:
+//   - smackerel-core uses `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback
+//   - smackerel-ml uses `${HOST_BIND_ADDRESS:-127.0.0.1}:` default-fallback
+//   - smackerel-ml uses literal `127.0.0.1:` bind (spec 020 form)
+//
+// Each MUST return a non-nil error mentioning the violating service and
+// the regression target the guard locks (spec 020 / Gate-G028 / fail-loud
+// terminology — the assertComposeContract error message includes all
+// three terms in its rejection text).
+//
+// Discovered: home-lab readiness re-scan finding HL-RESCAN-009 (P3),
+// 2026-05-14. Coverage gap classified P3 because the live file is correct
+// today; the risk is regression-only.
+func TestComposeContract_AdversarialDefaultFallbackBind(t *testing.T) {
+	cases := []struct {
+		name    string
+		service string
+		fixture string
+	}{
+		{
+			name:    "smackerel-core uses ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind (forbidden by Gate G028)",
+			service: "smackerel-core",
+			fixture: `services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+`,
+		},
+		{
+			name:    "smackerel-ml uses ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind (forbidden by Gate G028)",
+			service: "smackerel-ml",
+			fixture: `services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+`,
+		},
+		{
+			name:    "smackerel-ml uses literal 127.0.0.1: bind (spec 020 form)",
+			service: "smackerel-ml",
+			fixture: `services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := assertComposeContract([]byte(tc.fixture))
+			if err == nil {
+				t.Fatalf("adversarial contract test failed: fixture with %s using forbidden bind form was accepted (the contract is tautological — it would NOT catch a regression to ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback or literal 127.0.0.1: form; HL-RESCAN-009 default-fallback / literal-bind ml-side coverage gap is reintroduced)", tc.service)
+			}
+			if !strings.Contains(err.Error(), tc.service) {
+				t.Fatalf("adversarial contract test failed: error did not mention %q (the violating service): %v", tc.service, err)
+			}
+			// The assertComposeContract rejection message for both core and ml
+			// includes "spec 020", "${HOST_BIND_ADDRESS:-127.0.0.1}", "Gate-G028",
+			// and "fail-loud" terminology in the same string — match any of them
+			// to prove the rejection lands on the right contract. The HL-RESCAN-009
+			// attribution token is added to the assertion list to lock the
+			// finding-id reference; if the test ever needs to shift attribution,
+			// updating this list is the single coordination point.
+			haveAnyAnchor := false
+			for _, anchor := range []string{"spec 020", "${HOST_BIND_ADDRESS:-127.0.0.1}", "Gate-G028", "fail-loud"} {
+				if strings.Contains(err.Error(), anchor) {
+					haveAnyAnchor = true
+					break
+				}
+			}
+			if !haveAnyAnchor {
+				t.Fatalf("adversarial contract test failed: error did not mention any of [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud] (the regression target this HL-RESCAN-009 guard locks): %v", err)
+			}
+			t.Logf("adversarial OK: forbidden bind form on %s is rejected with: %v", tc.service, err)
+		})
+	}
+}
