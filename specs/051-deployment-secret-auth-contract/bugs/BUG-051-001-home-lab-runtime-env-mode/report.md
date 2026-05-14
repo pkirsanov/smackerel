@@ -93,7 +93,7 @@ The change is a single edit to `scripts/commands/config.sh` (1 file, +28/-3 line
 
 ```text
 $ cd ~/smackerel && ls -la scripts/commands/config_home_lab_runtime_env_test.sh
--rwxr-xr-x 1 philipk philipk 8706 May 13 23:33 scripts/commands/config_home_lab_runtime_env_test.sh
+-rwxr-xr-x 1 <owner> <owner> 8706 May 13 23:33 scripts/commands/config_home_lab_runtime_env_test.sh
 $ cd ~/smackerel && wc -l scripts/commands/config_home_lab_runtime_env_test.sh
 202 scripts/commands/config_home_lab_runtime_env_test.sh
 ```
@@ -115,7 +115,7 @@ Structure of the new shell driver:
 
 ```text
 $ cd ~/smackerel && ls -la internal/config/sst_loader_home_lab_runtime_env_test.go
--rw-r--r-- 1 philipk philipk 2447 May 13 23:34 internal/config/sst_loader_home_lab_runtime_env_test.go
+-rw-r--r-- 1 <owner> <owner> 2447 May 13 23:34 internal/config/sst_loader_home_lab_runtime_env_test.go
 $ cd ~/smackerel && wc -l internal/config/sst_loader_home_lab_runtime_env_test.go
 57 internal/config/sst_loader_home_lab_runtime_env_test.go
 ```
