@@ -69,11 +69,20 @@ SOURCE_SHA="$(awk '/^sourceSha:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
 CORE_REF="$(awk '/^[[:space:]]*- name: smackerel-core/ { found=1; next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
 ML_REF="$(awk '/^[[:space:]]*- name: smackerel-ml/ { found=1; next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
 BUNDLE_REF="$(awk -v env="$TARGET_ENV" '/^[[:space:]]*- env: / { found=($3==env); next } found && /^[[:space:]]*ref:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
+# BUG-047-001 / DEVOPS-HL-002 — pluck the per-env bundle sha256 alongside the
+# bundle ref. The build manifest emits both `ref:` and `sha256:` for each
+# configBundles entry; the adapter `apply.sh` MUST verify the pulled bundle's
+# sha256 byte-for-byte against this value before mounting. Fail-loud if the
+# value is missing — refusing to promote is safer than promoting an
+# unverifiable bundle (which is the bundle-tamper bypass DEVOPS-HL-002 closed).
+BUNDLE_SHA="$(awk -v env="$TARGET_ENV" '/^[[:space:]]*- env: / { found=($3==env); next } found && /^[[:space:]]*sha256:/ { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }' "$MANIFEST")"
 
 [[ -n "$SOURCE_SHA" ]] || { echo "ERROR: sourceSha missing in $MANIFEST" >&2; exit 1; }
 [[ -n "$CORE_REF" ]]   || { echo "ERROR: smackerel-core ref missing in $MANIFEST" >&2; exit 1; }
 [[ -n "$ML_REF" ]]     || { echo "ERROR: smackerel-ml ref missing in $MANIFEST" >&2; exit 1; }
 [[ -n "$BUNDLE_REF" ]] || { echo "ERROR: bundle ref for env=$TARGET_ENV missing in $MANIFEST" >&2; exit 1; }
+[[ -n "$BUNDLE_SHA" ]] || { echo "ERROR: bundle sha256 for env=$TARGET_ENV missing in $MANIFEST (BUG-047-001 / DEVOPS-HL-002 — every configBundles entry MUST carry a sha256 field for adapter-side hash verification; refusing to promote without it)" >&2; exit 1; }
+[[ "$BUNDLE_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "ERROR: bundle sha256 for env=$TARGET_ENV is not a valid sha256 hex digest in $MANIFEST: $BUNDLE_SHA" >&2; exit 1; }
 
 # Extract just the digest portion (after @)
 CORE_DIGEST="${CORE_REF##*@}"
@@ -82,12 +91,14 @@ ML_DIGEST="${ML_REF##*@}"
 BUNDLE_TAG="${BUNDLE_REF##*:}"
 
 echo "▶ promote: target=$TARGET env=$TARGET_ENV sourceSha=$SOURCE_SHA"
-echo "  coreDigest:    $CORE_DIGEST"
-echo "  mlDigest:      $ML_DIGEST"
-echo "  configBundle:  $BUNDLE_TAG"
+echo "  coreDigest:       $CORE_DIGEST"
+echo "  mlDigest:         $ML_DIGEST"
+echo "  configBundle:     $BUNDLE_TAG"
+echo "  configBundleSha:  $BUNDLE_SHA"
 
 exec "$REPO_ROOT/smackerel.sh" deploy-target "$TARGET" apply \
   --image-core="$CORE_DIGEST" \
   --image-ml="$ML_DIGEST" \
   --config-bundle="$BUNDLE_TAG" \
+  --config-bundle-sha="$BUNDLE_SHA" \
   --source-sha="$SOURCE_SHA"
