@@ -35,6 +35,23 @@ jobs:
     - name: Lint
       run: ./smackerel.sh lint
 
+    # spec-047 R9: generate the SST-derived config files
+    # (config/generated/{dev.env,nats.conf,prometheus.yml}) before unit
+    # tests run. R8 artifact-upload diagnostics revealed the chronic Go
+    # CI failure root cause: 2 tests in internal/config/docker_security_test.go
+    # (TestNATSConf_GeneratedFile_TokenProperlyQuoted and
+    # TestNATSConf_HasPayloadAndStorageLimits, spec 046 FR-046-002 adversarial
+    # regression coverage) read config/generated/nats.conf via t.Fatalf()
+    # if the file does not exist. Locally the file is always present
+    # because operators run `./smackerel.sh config generate` during normal
+    # workflow; in CI the file is never generated before unit tests run, so
+    # the tests fail consistently. The SST-derived config generator is a
+    # pure-bash script (scripts/commands/config.sh) with no docker
+    # dependency and no host-side state requirement; it is safe to run
+    # ahead of unit tests on the GitHub Actions runner.
+    - name: Generate SST config files for unit tests
+      run: ./smackerel.sh config generate
+
     # spec-047 R7: split combined "Unit tests" step into Go+Python so the
     # next CI run surfaces which leg fails (the public REST API only
     # exposes step-level pass/fail metadata, not log content). Combined
