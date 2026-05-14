@@ -79,6 +79,23 @@ func configureLogging(cfg *config.Config) error {
 	return nil
 }
 
+// resolveBroadcasterInstanceID returns the auth-revocation broadcaster's
+// per-replica instance identifier derived from the HOSTNAME env var.
+//
+// Returns an error when HOSTNAME is unset or empty. This is the Gate G028
+// fail-loud read closing HL-RESCAN-008: the prior form silently fell back
+// to the literal string "smackerel-core", which collided every replica's
+// broadcaster identity to the same name and defeated per-replica
+// deduplication on the NATS subject. The helper is package-private and
+// unit-tested in wiring_revocation_test.go.
+func resolveBroadcasterInstanceID() (string, error) {
+	hostname := os.Getenv("HOSTNAME")
+	if hostname == "" {
+		return "", fmt.Errorf("HOSTNAME env var is empty — refusing to construct revocation broadcaster (HL-RESCAN-008 / Gate G028 / spec 044: silent fallback to a literal instance name would defeat per-replica deduplication)")
+	}
+	return hostname, nil
+}
+
 // buildAPIDeps assembles the api.Dependencies struct including annotation and
 // actionable-list handlers (specs 027 and 028). It returns the deps plus the
 // list resolver and store so callers can reuse them when wiring meal planning.
@@ -240,20 +257,36 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 	deps.RevocationCache = revocationCache
 
 	if cfg.Auth.Enabled && svc.nc != nil && svc.nc.Conn != nil && cfg.Auth.RevocationNATSSubject != "" {
-		instanceID := os.Getenv("HOSTNAME")
-		if instanceID == "" {
-			instanceID = "smackerel-core"
-		}
-		broadcaster, err := revocation.NewBroadcaster(svc.nc.Conn, cfg.Auth.RevocationNATSSubject, revocationCache, instanceID)
-		if err != nil {
-			slog.Error("auth revocation broadcaster construction failed", "error", err)
-		} else if subErr := broadcaster.Subscribe(); subErr != nil {
-			slog.Error("auth revocation broadcaster subscribe failed", "error", subErr)
-		} else {
-			slog.Info("auth revocation broadcaster subscribed",
-				"subject", cfg.Auth.RevocationNATSSubject,
-				"instance_id", instanceID)
-			svc.authRevocationBroadcaster = broadcaster
+		// HL-RESCAN-008 / Gate G028 / spec 044 (no-defaults SST policy):
+		// the prior form was `instanceID := os.Getenv("HOSTNAME")` followed by
+		// `if instanceID == "" { instanceID = "smackerel-core" }`. The literal
+		// fallback collided every replica's broadcaster identity to the same
+		// string, defeating per-replica deduplication on the NATS subject.
+		// Per Gate G028 the read must be `os.Getenv` + empty check → loud
+		// refusal, never a hidden default. Helper is unit-tested in
+		// wiring_revocation_test.go (truthy returns hostname; empty returns
+		// error with HL-RESCAN-008 attribution).
+		instanceID, hostnameErr := resolveBroadcasterInstanceID()
+		switch {
+		case hostnameErr != nil:
+			slog.Error("auth revocation broadcaster construction refused",
+				"error", hostnameErr,
+				"subject", cfg.Auth.RevocationNATSSubject)
+		default:
+			broadcaster, err := revocation.NewBroadcaster(svc.nc.Conn, cfg.Auth.RevocationNATSSubject, revocationCache, instanceID)
+			switch {
+			case err != nil:
+				slog.Error("auth revocation broadcaster construction failed", "error", err)
+			default:
+				if subErr := broadcaster.Subscribe(); subErr != nil {
+					slog.Error("auth revocation broadcaster subscribe failed", "error", subErr)
+				} else {
+					slog.Info("auth revocation broadcaster subscribed",
+						"subject", cfg.Auth.RevocationNATSSubject,
+						"instance_id", instanceID)
+					svc.authRevocationBroadcaster = broadcaster
+				}
+			}
 		}
 	}
 
