@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "bugId": "BUG-042-004-default-fallback-bind-adversarial-coverage",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "title": "Compose contract test missing adversarial coverage for default-fallback bind on smackerel-core/ml",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-042-004-A",
+      "title": "assertComposeContract rejects smackerel-core with ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind",
+      "given": "a compose fixture where smackerel-core.ports[0] = `${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `smackerel-core` AND at least one of [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud]; the test docstring carries HL-RESCAN-009 attribution",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialDefaultFallbackBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go new TestComposeContract_AdversarialDefaultFallbackBind function (pre-fix had no adversarial coverage for the default-fallback form on smackerel-core)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestComposeContract_AdversarialDefaultFallbackBind$' ./internal/deploy/... covers the smackerel-core sub-case",
+      "adversarial": "YES — fails RED if the smackerel-core prefix check in assertComposeContract is relaxed from strings.HasPrefix to a too-loose substring like strings.Contains"
+    },
+    {
+      "scenarioId": "SCN-042-004-B",
+      "title": "assertComposeContract rejects smackerel-ml with ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind",
+      "given": "a compose fixture where smackerel-ml.ports[0] = `${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `smackerel-ml` AND at least one of [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud]",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialDefaultFallbackBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go new TestComposeContract_AdversarialDefaultFallbackBind function (pre-fix had no adversarial coverage for the default-fallback form on smackerel-ml)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestComposeContract_AdversarialDefaultFallbackBind$' ./internal/deploy/... covers the smackerel-ml default-fallback sub-case",
+      "adversarial": "YES — fails RED if the smackerel-ml prefix check in assertComposeContract is relaxed"
+    },
+    {
+      "scenarioId": "SCN-042-004-C",
+      "title": "assertComposeContract rejects smackerel-ml with literal 127.0.0.1: bind (spec 020 form)",
+      "given": "a compose fixture where smackerel-ml.ports[0] = `127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `smackerel-ml` AND at least one of [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud]; the smackerel-core branch is unaffected (positive cross-check)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialDefaultFallbackBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go new TestComposeContract_AdversarialDefaultFallbackBind function (pre-fix had no adversarial coverage for the literal 127.0.0.1: form on smackerel-ml; only smackerel-core literal-bind was covered by TestComposeContract_AdversarialLiteralBind)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestComposeContract_AdversarialDefaultFallbackBind$' ./internal/deploy/... covers the smackerel-ml literal sub-case",
+      "adversarial": "YES — fails RED if the smackerel-ml prefix check in assertComposeContract is relaxed"
+    }
+  ]
+}
