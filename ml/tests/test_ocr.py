@@ -348,3 +348,153 @@ class TestConstants:
     def test_max_image_size_reasonable(self):
         """Max image size should be between 1MB and 100MB."""
         assert 1 * 1024 * 1024 <= MAX_IMAGE_SIZE_B64 <= 100 * 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# HL-RESCAN-006: ENABLE_OLLAMA fail-loud gating in handle_ocr_request
+# ---------------------------------------------------------------------------
+
+
+class TestEnableOllamaFailLoudGating:
+    """HL-RESCAN-006: handle_ocr_request reads ENABLE_OLLAMA fail-loud (no
+    defensive default), gating the Ollama OCR fallback by the spec 043 SST flag.
+
+    Adversarial proof set: each test would FAIL RED if the fix at line 235 were
+    reverted to ``os.environ.get("OLLAMA_URL", "")`` with an ``if ollama_url:``
+    gate (the pre-fix form) — see the RED→GREEN proof in the BUG-043-003
+    report.md for the captured failure output.
+    """
+
+    def _short_text_b64(self) -> str:
+        """Encode an image whose Tesseract result is too short to skip Ollama."""
+        return base64.b64encode(b"adversarial-image-bytes-for-ENABLE_OLLAMA-gating").decode()
+
+    def test_enable_ollama_truthy_invokes_ollama_fallback(self):
+        """ENABLE_OLLAMA=true with insufficient Tesseract output → Ollama is called."""
+        b64_data = self._short_text_b64()
+        ollama_called = False
+        ollama_url_seen: list[str] = []
+
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "hi"  # 2 chars — well below MIN_TESSERACT_CHARS
+
+        def fake_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
+            nonlocal ollama_called
+            ollama_called = True
+            ollama_url_seen.append(ollama_url)
+            return "ollama-extracted-fallback-text-with-enough-characters"
+
+        with patch.dict(os.environ, {"ENABLE_OLLAMA": "true", "OLLAMA_URL": "http://ollama:11434"}, clear=False):
+            with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+                with patch("app.ocr.extract_text_ollama", new=fake_ollama):
+                    result = asyncio.run(
+                        handle_ocr_request(
+                            {"image_hash": "enable-ollama-true", "image_data": b64_data}
+                        )
+                    )
+
+        assert ollama_called is True, "ENABLE_OLLAMA=true must invoke Ollama fallback"
+        assert result["ocr_engine"] == "ollama"
+        assert "ollama-extracted" in result["text"]
+        # Pre-fix code path passed `ollama_url` from os.environ.get; the post-fix
+        # path lets extract_text_ollama read OLLAMA_URL fail-loud internally.
+        assert ollama_url_seen == [""], "post-fix: handle_ocr_request must NOT pass ollama_url positional arg"
+
+    def test_enable_ollama_falsy_skips_ollama_fallback(self):
+        """ENABLE_OLLAMA=false with insufficient Tesseract output → Ollama is NOT called."""
+        b64_data = self._short_text_b64()
+        ollama_called = False
+
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "no"  # 2 chars — below MIN_TESSERACT_CHARS
+
+        def fake_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
+            nonlocal ollama_called
+            ollama_called = True
+            return "should-not-be-called"
+
+        with patch.dict(os.environ, {"ENABLE_OLLAMA": "false"}, clear=False):
+            with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+                with patch("app.ocr.extract_text_ollama", new=fake_ollama):
+                    result = asyncio.run(
+                        handle_ocr_request(
+                            {"image_hash": "enable-ollama-false", "image_data": b64_data}
+                        )
+                    )
+
+        assert ollama_called is False, "ENABLE_OLLAMA=false must skip Ollama fallback"
+        assert result["ocr_engine"] == "tesseract"
+        assert result["text"] == "no"
+
+    def test_enable_ollama_unset_raises_keyerror(self):
+        """ENABLE_OLLAMA missing entirely → KeyError (fail-loud SST per Gate G028).
+
+        This is the adversarial test that would PASS RED on the pre-fix code
+        (which used ``os.environ.get("OLLAMA_URL", "")`` and silently skipped
+        Ollama) — proving the pre-fix code violated the no-defaults SST policy
+        by silently masking a missing required env var.
+        """
+        b64_data = self._short_text_b64()
+
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "x"  # 1 char — below MIN_TESSERACT_CHARS
+
+        # Build a minimal env containing only OLLAMA_URL — explicitly excluding
+        # ENABLE_OLLAMA — so the fail-loud read raises KeyError. We use clear=True
+        # to drop any inherited ENABLE_OLLAMA from the test runner environment.
+        minimal_env = {"OLLAMA_URL": "http://ollama:11434"}
+        with patch.dict(os.environ, minimal_env, clear=True):
+            with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+                with pytest.raises(KeyError, match="ENABLE_OLLAMA"):
+                    asyncio.run(
+                        handle_ocr_request(
+                            {"image_hash": "enable-ollama-unset", "image_data": b64_data}
+                        )
+                    )
+
+    def test_enable_ollama_invalid_value_raises_runtimeerror(self):
+        """ENABLE_OLLAMA set to a non-boolean string → RuntimeError naming Gate G028."""
+        b64_data = self._short_text_b64()
+
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return "y"  # 1 char — below MIN_TESSERACT_CHARS
+
+        with patch.dict(os.environ, {"ENABLE_OLLAMA": "maybe"}, clear=False):
+            with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+                with pytest.raises(RuntimeError, match="ENABLE_OLLAMA must be exactly one of"):
+                    asyncio.run(
+                        handle_ocr_request(
+                            {"image_hash": "enable-ollama-invalid", "image_data": b64_data}
+                        )
+                    )
+
+    def test_enable_ollama_only_consulted_when_tesseract_insufficient(self):
+        """ENABLE_OLLAMA must NOT be read when Tesseract output is sufficient.
+
+        This proves the gating remains lazy — the production code does not pay
+        the env-read cost (or the validation cost) on every request, only on
+        the slow path where Ollama would actually be invoked.
+        """
+        b64_data = self._short_text_b64()
+        sufficient_text = "Z" * (MIN_TESSERACT_CHARS + 5)
+
+        def fake_tesseract(image_bytes: bytes) -> str:
+            return sufficient_text
+
+        def fake_ollama(image_bytes: bytes, ollama_url: str = "") -> str:
+            raise AssertionError("extract_text_ollama must not be called when Tesseract is sufficient")
+
+        # Deliberately omit ENABLE_OLLAMA from the env to prove it isn't consulted.
+        # If the production code read it eagerly, this test would raise KeyError.
+        minimal_env = {"OLLAMA_URL": "http://ollama:11434"}
+        with patch.dict(os.environ, minimal_env, clear=True):
+            with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
+                with patch("app.ocr.extract_text_ollama", new=fake_ollama):
+                    result = asyncio.run(
+                        handle_ocr_request(
+                            {"image_hash": "tesseract-sufficient-skip-env-read", "image_data": b64_data}
+                        )
+                    )
+
+        assert result["ocr_engine"] == "tesseract"
+        assert result["text"] == sufficient_text

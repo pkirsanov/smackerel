@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "bugId": "BUG-043-003-ml-ocr-ollama-fail-loud",
+  "parentSpec": "043-ollama-test-infrastructure",
+  "title": "ML OCR fallback reads OLLAMA_URL with silent default, bypassing the spec 043 ENABLE_OLLAMA SST gate",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-043-003-A",
+      "title": "handle_ocr_request reads ENABLE_OLLAMA fail-loud (no positional default)",
+      "given": "ml/app/ocr.py handle_ocr_request reaches the slow path (Tesseract output < MIN_TESSERACT_CHARS)",
+      "when": "the function consults the OCR-fallback gate",
+      "then": "it reads `os.environ[\"ENABLE_OLLAMA\"]` (raises KeyError when missing) and does NOT call `os.environ.get(KEY, default)` or `os.getenv(KEY, default)` for ENABLE_OLLAMA or any other gate variable",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_unset_raises_keyerror"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "ml/app/ocr.py line 235 (pre-fix had `os.environ.get(\"OLLAMA_URL\", \"\")` silent-default; post-fix has `os.environ[\"ENABLE_OLLAMA\"]` fail-loud)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "YES — fails RED if `os.environ[\"ENABLE_OLLAMA\"]` is replaced with positional default"
+    },
+    {
+      "scenarioId": "SCN-043-003-B",
+      "title": "ENABLE_OLLAMA truthy invokes Ollama fallback",
+      "given": "ENABLE_OLLAMA is set to one of `true`/`1`/`yes`/`on` (case-insensitive, whitespace-trimmed) and Tesseract output is shorter than MIN_TESSERACT_CHARS",
+      "when": "handle_ocr_request runs",
+      "then": "extract_text_ollama is invoked and the returned ocr_engine field equals `ollama` if Ollama returned a longer result than Tesseract",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_truthy_invokes_ollama_fallback"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "specs/043-ollama-test-infrastructure/spec.md line 331 + design.md line 91 (per-env ENABLE_OLLAMA SST flag controls Ollama fallback gating)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "YES — fails RED if pre-fix call site shape (positional `ollama_url`) is restored"
+    },
+    {
+      "scenarioId": "SCN-043-003-C",
+      "title": "ENABLE_OLLAMA falsy skips Ollama fallback",
+      "given": "ENABLE_OLLAMA is set to one of `false`/`0`/`no`/`off`/`\"\"` (case-insensitive, whitespace-trimmed) and Tesseract output is shorter than MIN_TESSERACT_CHARS",
+      "when": "handle_ocr_request runs",
+      "then": "extract_text_ollama is NOT invoked and the returned ocr_engine field equals `tesseract` with the original Tesseract result text",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_falsy_skips_ollama_fallback"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "specs/043-ollama-test-infrastructure/design.md line 91 (per-env ENABLE_OLLAMA defaults to false for dev and home-lab)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "NO (positive guard rail — passes on both pre-fix and post-fix; locks the behavior contract going forward)"
+    },
+    {
+      "scenarioId": "SCN-043-003-D",
+      "title": "ENABLE_OLLAMA missing raises KeyError on the slow path",
+      "given": "ENABLE_OLLAMA is not present in the environment and Tesseract output is shorter than MIN_TESSERACT_CHARS",
+      "when": "handle_ocr_request runs",
+      "then": "it raises KeyError naming `ENABLE_OLLAMA`",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_unset_raises_keyerror"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#audit-evidence"],
+      "specSource": ".github/instructions/smackerel-no-defaults.instructions.md (Gate G028 — `os.getenv(KEY, default)` and `os.environ.get(KEY, default)` are explicitly banned in Python)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "YES — fails RED if production code has any defensive default for ENABLE_OLLAMA"
+    },
+    {
+      "scenarioId": "SCN-043-003-E",
+      "title": "ENABLE_OLLAMA invalid value raises RuntimeError naming Gate G028",
+      "given": "ENABLE_OLLAMA is set to a non-canonical token (e.g. `maybe`, `enabled`, `disabled`) and Tesseract output is shorter than MIN_TESSERACT_CHARS",
+      "when": "handle_ocr_request runs",
+      "then": "it raises RuntimeError mentioning `ENABLE_OLLAMA must be exactly one of` AND naming the invalid value",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_invalid_value_raises_runtimeerror"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#audit-evidence"],
+      "specSource": "design.md DD-3 (strict tokens, no defensive coercion) + .github/instructions/smackerel-no-defaults.instructions.md (Gate G028)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "YES — fails RED if production code has no validation block"
+    },
+    {
+      "scenarioId": "SCN-043-003-F",
+      "title": "ENABLE_OLLAMA only consulted on the slow path (lazy gating)",
+      "given": "Tesseract output is sufficient (>= MIN_TESSERACT_CHARS) and ENABLE_OLLAMA is NOT present in the environment (which would raise KeyError if read)",
+      "when": "handle_ocr_request runs",
+      "then": "handle_ocr_request returns successfully with ocr_engine=`tesseract` and ENABLE_OLLAMA is never read (no KeyError raised)",
+      "scopeId": "1",
+      "requiredTestType": "python-unit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestEnableOllamaFailLoudGating::test_enable_ollama_only_consulted_when_tesseract_insufficient"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "design.md DD-2 (lazy-read on the slow path only)",
+      "redGreenProbe": "./smackerel.sh test unit --python -k 'TestEnableOllamaFailLoudGating'",
+      "adversarial": "NO (positive guard rail — proves the gate is not hoisted to module load or to the top of handle_ocr_request)"
+    }
+  ]
+}
