@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "bugId": "BUG-029-003-docker-compose-default-fallback-no-defaults-sweep",
+  "parentSpec": "029-devops-pipeline",
+  "title": "Dev `docker-compose.yml` violates Gate G028 NO-DEFAULTS via 14 `${VAR:-default}` substitutions",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-029-003-A",
+      "title": "config generate emits build-metadata + image-ref vars into dev.env / test.env",
+      "given": "a developer invokes `bash scripts/commands/config.sh --env dev` (or --env test) on a clean shell",
+      "when": "the SST generator runs against config/smackerel.yaml",
+      "then": "config/generated/<env>.env contains lines for SMACKEREL_VERSION, SMACKEREL_COMMIT, SMACKEREL_BUILD_TIME, SMACKEREL_CORE_IMAGE, SMACKEREL_ML_IMAGE plus the pre-existing SMACKEREL_ENV_FILE; the values are safe placeholders (`dev` / `unknown` / `unknown` / empty / empty) when no shell env override is present; shell env overrides (e.g., CI's SMACKEREL_VERSION=v1.2.3) take precedence",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: bash scripts/commands/config.sh --env dev → grep -nE '^SMACKEREL_(VERSION|COMMIT|BUILD_TIME|CORE_IMAGE|ML_IMAGE|ENV_FILE)=' config/generated/dev.env"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence", "report.md#code-diff-evidence"],
+      "specSource": "scripts/commands/config.sh new 5-block resolution + 5 emission lines (HL-RESCAN-012)",
+      "redGreenProbe": "removing any one of the 5 emission lines from the heredoc causes the corresponding grep to return one fewer line; restoration returns the count to 6",
+      "adversarial": "NO (positive emission contract)"
+    },
+    {
+      "scenarioId": "SCN-029-003-B",
+      "title": "Compose substitution succeeds for the regenerated env file (GREEN)",
+      "given": "config/generated/dev.env (or test.env) contains the 5 new SST-emitted vars + the pre-existing SMACKEREL_ENV_FILE line",
+      "when": "`docker compose --env-file config/generated/dev.env -f docker-compose.yml config -q` runs (and same for test.env)",
+      "then": "it exits 0 (the new fail-loud `${X:?...}` and `${X?...}` substitution forms are satisfied by the SST-emitted env file); the sanctioned developer workflow `./smackerel.sh up` is unbroken",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: docker compose --env-file config/generated/dev.env -f docker-compose.yml config -q"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "docker-compose.yml fail-loud substitution forms (HL-RESCAN-012)",
+      "redGreenProbe": "removing one of the 5 SST-emitted lines from dev.env causes Compose to abort with the named-var error",
+      "adversarial": "NO (positive end-to-end SST→Compose plumbing contract)"
+    },
+    {
+      "scenarioId": "SCN-029-003-C",
+      "title": "Compose fails loud when the env file is missing or empty (RED proof of fail-loud)",
+      "given": "a developer invokes `docker compose --env-file /dev/null -f docker-compose.yml config -q` (no SST plumbing)",
+      "when": "Compose attempts variable substitution",
+      "then": "it exits non-zero; the error message names at least one of [SMACKEREL_VERSION, SMACKEREL_COMMIT, SMACKEREL_BUILD_TIME, SMACKEREL_ENV_FILE, SMACKEREL_CORE_IMAGE, SMACKEREL_ML_IMAGE] AS missing; the error message contains a fix-path token (e.g., `./smackerel.sh config generate` or `./smackerel.sh up`)",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: docker compose --env-file /dev/null -f docker-compose.yml config -q"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "docker-compose.yml fail-loud substitution forms (HL-RESCAN-012 / Gate G028)",
+      "redGreenProbe": "reverting any one of the 10 converted vars to `${X:-default}` form causes Compose to silently substitute the default instead of aborting (silent failure mode regresses)",
+      "adversarial": "YES — exits non-zero with a Compose error message naming at least one of the new fail-loud-substituted vars; relaxing any one of the 10 forms to `:-default` causes Compose substitution to silently succeed against the missing env file"
+    },
+    {
+      "scenarioId": "SCN-029-003-D",
+      "title": "TestDevComposeContract_NoUnauthorizedDefaultFallbacks rejects regression of any build-metadata / env-file / image-ref var to `:-` form",
+      "given": "the live docker-compose.yml is bit-identical to the post-fix state",
+      "when": "`go test -run TestDevComposeContract_NoUnauthorizedDefaultFallbacks ./internal/deploy/...` runs",
+      "then": "it PASSes (zero unauthorized matches); reverting any one of SMACKEREL_VERSION/COMMIT/BUILD_TIME/ENV_FILE/CORE_IMAGE/ML_IMAGE to `${X:-default}` form causes the test to FAIL with a message naming the regressed var, the line number, the violating form, the fix path, and the HL-RESCAN-012 breadcrumb",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_NoUnauthorizedDefaultFallbacks",
+        "TestDevComposeContract_AdversarialUnauthorizedDefaultFallback"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#red-green-proof-scenario-first-tdd"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go new TestDevComposeContract_NoUnauthorizedDefaultFallbacks function (HL-RESCAN-012)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestDevComposeContract_NoUnauthorizedDefaultFallbacks$' ./internal/deploy/... PASSes against the live file; temporarily reverting line 75 from `${SMACKEREL_VERSION:?...}` to `${SMACKEREL_VERSION:-dev}` causes the test to FAIL with `docker-compose.yml violates Gate G028 (NO-DEFAULTS / fail-loud SST policy) — HL-RESCAN-012:\\n  - 75:${SMACKEREL_VERSION:-dev} (use ${VAR:?error} fail-loud form, or add VAR to devComposeDefaultFallbackAllowlist with justification)`; restoration returns the test to PASS",
+      "adversarial": "YES — fails RED if any of the 10 converted vars are reverted to `:-` form"
+    },
+    {
+      "scenarioId": "SCN-029-003-E",
+      "title": "Adversarial test catches a novel non-allowlisted var in `:-` form",
+      "given": "a synthetic compose YAML fixture where a novel var (e.g., FAKE_VAR) appears in `${FAKE_VAR:-fallback}` form",
+      "when": "findDevComposeUnauthorizedDefaultFallbacks runs against the fixture",
+      "then": "it returns a non-empty unauthorized list naming FAKE_VAR (and the violating line number)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_AdversarialUnauthorizedDefaultFallback"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go novel-var sub-case in TestDevComposeContract_AdversarialUnauthorizedDefaultFallback (HL-RESCAN-012)",
+      "redGreenProbe": "removing the regex-match condition from findDevComposeUnauthorizedDefaultFallbacks causes the helper to always return empty; the adversarial test then FAILs with `(HL-RESCAN-012 regression: <fixture-name> — fixture %q produced empty unauthorized list; the lint helper is over-permissive)`",
+      "adversarial": "YES — fails RED if the helper is silently over-permissive (e.g., always returns empty)"
+    },
+    {
+      "scenarioId": "SCN-029-003-F",
+      "title": "Adversarial test enforces per-var (not per-line) allowlist gating",
+      "given": "a synthetic compose YAML fixture where an allowlisted var (e.g., BOOKMARKS_IMPORT_DIR) appears in `:-` form on the same line as a non-allowlisted var (e.g., ROGUE_VAR) in `:-` form",
+      "when": "findDevComposeUnauthorizedDefaultFallbacks runs against the fixture",
+      "then": "it returns an unauthorized list naming ROGUE_VAR (not BOOKMARKS_IMPORT_DIR); proves the allowlist filter operates per-var (matching the captured var name from the regex group), not per-line",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_AdversarialAllowlistRespected"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go new TestDevComposeContract_AdversarialAllowlistRespected function (HL-RESCAN-012)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestDevComposeContract_AdversarialAllowlistRespected$' ./internal/deploy/... PASSes; relaxing the allowlist filter from per-var to per-line (e.g., `if any allowlisted var on line, skip line`) causes the rogue var to be silently allowed, and the adversarial test FAILs",
+      "adversarial": "YES — fails RED if allowlist gating is loosened to per-line (which would silently mask a real regression on a multi-var line)"
+    },
+    {
+      "scenarioId": "SCN-029-003-G",
+      "title": "Comment-line skip prevents false positives from Gate G028 documentation",
+      "given": "a synthetic compose YAML fixture with a comment line `# Gate G028 forbids ${VAR:-default} form`",
+      "when": "findDevComposeUnauthorizedDefaultFallbacks runs against the fixture",
+      "then": "it returns an empty unauthorized list (the comment line is correctly skipped via leading `#` detection); proves the deferral comment block at lines 115-125 in the live `docker-compose.yml` (which contains `${X:-./data/...}` text in a comment) does not produce false positives",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_AdversarialCommentLinesIgnored"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go new TestDevComposeContract_AdversarialCommentLinesIgnored function (HL-RESCAN-012)",
+      "redGreenProbe": "go test -count=1 -v -run '^TestDevComposeContract_AdversarialCommentLinesIgnored$' ./internal/deploy/... PASSes; removing the comment-line skip from findDevComposeUnauthorizedDefaultFallbacks causes the live-file test (TestDevComposeContract_NoUnauthorizedDefaultFallbacks) to FAIL with a false positive on the documentation comment block at line 120, AND the adversarial test FAILs because it expects an empty unauthorized list",
+      "adversarial": "YES — fails RED if the comment-line skip is removed (would produce false positive on the live deferral comment block)"
+    }
+  ]
+}

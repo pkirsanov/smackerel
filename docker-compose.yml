@@ -60,14 +60,21 @@ services:
       com.smackerel.lifecycle: ephemeral
 
   smackerel-core:
-    image: ${SMACKEREL_CORE_IMAGE:-}
+    # HL-RESCAN-012 / Gate G028 — fail-loud SST form. Empty value is
+    # allowed (build-from-source dev pattern); unset is forbidden.
+    image: ${SMACKEREL_CORE_IMAGE?must be set in env file (run ./smackerel.sh config generate); empty value is allowed for build-from-source dev}
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION: ${SMACKEREL_VERSION:-dev}
-        COMMIT_HASH: ${SMACKEREL_COMMIT:-unknown}
-        BUILD_TIME: ${SMACKEREL_BUILD_TIME:-unknown}
+        # HL-RESCAN-012 / Gate G028 — build metadata is SST-managed; the
+        # generator (scripts/commands/config.sh) emits SMACKEREL_VERSION /
+        # SMACKEREL_COMMIT / SMACKEREL_BUILD_TIME into the env file with
+        # CI overrides resolved. Fail-loud here defends against env-file
+        # drift.
+        VERSION: ${SMACKEREL_VERSION:?must be set in env file (run ./smackerel.sh config generate)}
+        COMMIT_HASH: ${SMACKEREL_COMMIT:?must be set in env file (run ./smackerel.sh config generate)}
+        BUILD_TIME: ${SMACKEREL_BUILD_TIME:?must be set in env file (run ./smackerel.sh config generate)}
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # Mirrors deploy/compose.deploy.yml so dev stack runs hardened and
@@ -82,7 +89,10 @@ services:
     ports:
       - "127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
     env_file:
-      - ${SMACKEREL_ENV_FILE:-config/generated/dev.env}
+      # HL-RESCAN-012 / Gate G028 — fail-loud. Use ./smackerel.sh up
+      # which exports SMACKEREL_ENV_FILE via --env-file, or set it
+      # explicitly before invoking docker compose.
+      - ${SMACKEREL_ENV_FILE:?must be set — use ./smackerel.sh up or export SMACKEREL_ENV_FILE=config/generated/dev.env}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -106,6 +116,17 @@ services:
       nats:
         condition: service_healthy
     volumes:
+      # HL-RESCAN-012 — the 4 connector-fixture mount paths below remain
+      # `${X:-./data/...}` form because the env file emits them empty by
+      # default (empty value = "no import" signal consumed by the
+      # connectors via the `${X:+/container/path}` env override block
+      # above). Converting them to fail-loud `${X:?...}` requires
+      # decoupling the mount path from the import-enabled signal (e.g.
+      # always populate the path in the env file and add a separate
+      # `<connector>_import_enabled` boolean) — tracked under a separate
+      # follow-up bug-packet. The build-metadata / env-file / image
+      # default-fallbacks above were the high-value targets for this
+      # sweep and are now fail-loud.
       - ${BOOKMARKS_IMPORT_DIR:-./data/bookmarks-import}:/data/bookmarks-import:ro
       - ${MAPS_IMPORT_DIR:-./data/maps-import}:/data/maps-import:ro
       - ${BROWSER_HISTORY_PATH:-./data/browser-history/History}:/data/browser-history/History:ro
@@ -129,14 +150,18 @@ services:
       com.smackerel.lifecycle: ephemeral
 
   smackerel-ml:
-    image: ${SMACKEREL_ML_IMAGE:-}
+    # HL-RESCAN-012 / Gate G028 — fail-loud SST form. Empty value is
+    # allowed (build-from-source dev pattern); unset is forbidden.
+    image: ${SMACKEREL_ML_IMAGE?must be set in env file (run ./smackerel.sh config generate); empty value is allowed for build-from-source dev}
     build:
       context: ./ml
       dockerfile: Dockerfile
       args:
-        VERSION: ${SMACKEREL_VERSION:-dev}
-        COMMIT_HASH: ${SMACKEREL_COMMIT:-unknown}
-        BUILD_TIME: ${SMACKEREL_BUILD_TIME:-unknown}
+        # HL-RESCAN-012 / Gate G028 — build metadata is SST-managed; see
+        # smackerel-core comment above for the resolution chain.
+        VERSION: ${SMACKEREL_VERSION:?must be set in env file (run ./smackerel.sh config generate)}
+        COMMIT_HASH: ${SMACKEREL_COMMIT:?must be set in env file (run ./smackerel.sh config generate)}
+        BUILD_TIME: ${SMACKEREL_BUILD_TIME:?must be set in env file (run ./smackerel.sh config generate)}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${ML_CONTAINER_PORT}"]
     restart: unless-stopped
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
@@ -153,7 +178,9 @@ services:
     ports:
       - "127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
     env_file:
-      - ${SMACKEREL_ENV_FILE:-config/generated/dev.env}
+      # HL-RESCAN-012 / Gate G028 — fail-loud. See smackerel-core for
+      # the same enforcement.
+      - ${SMACKEREL_ENV_FILE:?must be set — use ./smackerel.sh up or export SMACKEREL_ENV_FILE=config/generated/dev.env}
     environment:
       # Override: container-internal path for prompt contracts (mounted via volume)
       PROMPT_CONTRACTS_DIR: /app/prompt_contracts
