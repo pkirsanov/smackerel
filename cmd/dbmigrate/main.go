@@ -1,4 +1,3 @@
-package main
 // Package main is a small standalone migration runner used by CI.
 //
 // Spec 047 R12: CI's integration job needs to apply database
