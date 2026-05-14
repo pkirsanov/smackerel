@@ -15,7 +15,9 @@ permissions:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # spec-047 R7: bumped 10→20 to rule out timing as a possible cause
+    # while we diagnose the chronic CI Unit tests failure (see report.md).
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -33,8 +35,16 @@ jobs:
     - name: Lint
       run: ./smackerel.sh lint
 
-    - name: Unit tests
-      run: ./smackerel.sh test unit
+    # spec-047 R7: split combined "Unit tests" step into Go+Python so the
+    # next CI run surfaces which leg fails (the public REST API only
+    # exposes step-level pass/fail metadata, not log content). Combined
+    # with `set -euxo pipefail` in scripts/runtime/{go,python}-unit.sh,
+    # this gives operators step-name attribution even without log access.
+    - name: Unit tests (Go)
+      run: ./smackerel.sh test unit --go
+
+    - name: Unit tests (Python)
+      run: ./smackerel.sh test unit --python
 
   build:
     needs: lint-and-test
