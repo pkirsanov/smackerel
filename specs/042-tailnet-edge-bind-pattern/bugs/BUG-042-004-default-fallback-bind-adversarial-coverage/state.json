@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "042-tailnet-edge-bind-pattern",
+  "bugId": "BUG-042-004-default-fallback-bind-adversarial-coverage",
+  "featureDir": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-004-default-fallback-bind-adversarial-coverage",
+  "featureName": "BUG-042-004: Compose contract test missing adversarial coverage for default-fallback bind on smackerel-core/ml",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "trigger": "system-review-finding",
+    "executionModel": "direct-per-finding-dispatch"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-14T20:00:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Inspected internal/deploy/compose_contract_test.go and observed: (1) TestComposeContract_AdversarialLiteralBind covers smackerel-core literal-127.0.0.1 bind only — no smackerel-ml coverage; (2) NO adversarial coverage exists for the forbidden default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: form on smackerel-core OR smackerel-ml. The runtime behavior of assertComposeContract is correct (it rejects all three forms today via strict strings.HasPrefix against requiredCorePrefix / requiredMLPrefix), but the test surface has a coverage gap that would let a future maintainer accidentally relax the prefix check (e.g., to a too-loose strings.Contains substring match) without any test failing RED. Direct HL-RESCAN-009 finding from the home-lab readiness re-scan against 7482fb24."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Modified internal/deploy/compose_contract_test.go (only file changed): appended new persistent in-tree test function TestComposeContract_AdversarialDefaultFallbackBind at end of file (after TestComposeContract_AdversarialOllamaLiteralBind). Function uses a table-driven sweep with three sub-cases: (1) smackerel-core uses ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind; (2) smackerel-ml uses ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind; (3) smackerel-ml uses literal 127.0.0.1: bind (spec 020 form). Each sub-case builds a compose YAML fixture, calls assertComposeContract, asserts non-nil error, asserts error mentions the violating service name, and asserts error mentions at least one of the anchor terms [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud] via a Contains loop. HL-RESCAN-009 attribution in docstring (line 608) + failure-case t.Fatalf message (line 665) + anchor-list assertion failure message (line 685) + inline rationale (line 673). Total diff: 112 insertions / 0 deletions. NO change to assertComposeContract function body, NO change to requiredCorePrefix/requiredMLPrefix/requiredPrometheusPrefix/requiredOllamaPrefix constants, NO change to deploy/compose.deploy.yml."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Targeted contract suite GREEN: go test -count=1 -v -run '^TestComposeContract$|^TestComposeContract_Adversarial...|^TestComposeContract_LiveFile$|^TestVulnGateContract_LiveFile$|^TestBundleHashContract' ./internal/deploy/... PASS in 0.038s — all 8 top-level TestComposeContract_* tests + all sub-tests + TestVulnGateContract_LiveFile + TestBundleHashContract_LiveFile + 4 BundleHash adversarial sub-tests. Cross-package smoke: ./smackerel.sh test unit --go returns [go-unit] go test ./... finished OK — every internal/* and cmd/* package returns ok. New tests run as part of the persistent in-tree adversarial suite — every ./smackerel.sh test unit --go invocation (CI + developer pre-push) re-validates the contract."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 1 file modified, 112 insertions / 0 deletions. The table-driven sub-case pattern is reused from TestComposeContract_AdversarialNetworkModeHostBypass (5 sub-cases) and TestComposeContract_AdversarialOllamaLiteralBind (2 sub-cases) — established convention in this file. Sub-case count is exactly three (no duplicate of smackerel-core literal-bind which is already covered by TestComposeContract_AdversarialLiteralBind). Anchor-list assertion uses Contains loop over four terms (not a single exact-string match) to stay flexible to future cosmetic error-message wording changes."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:11:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond static YAML parse on small fixture strings. All 3 sub-tests PASS in 0.009s with zero variance across re-runs."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review: A05 Security Misconfiguration — the fix STRENGTHENS the existing spec 042 / Gate G028 SST policy by mechanically locking smackerel-core AND smackerel-ml compliance against future drift. No new attack surface introduced. No PII handled (the contract test operates on YAML structure only). The fix is the smackerel-side primitive that prevents accidental publication of an insecure compose file (literal-bind to 0.0.0.0 via the spec 020 form, or silent fallback to 127.0.0.1 via the forbidden default-fallback form) for the smackerel-core API and smackerel-ml ML sidecar — the two operator-facing services."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Static checks: gofmt -l internal/deploy/ empty (exit 0); go vet ./internal/deploy/... exit 0. Cross-package smoke: ./smackerel.sh test unit --go returns [go-unit] go test ./... finished OK — every internal/* and cmd/* package PASS. RED→GREEN proof: temporarily replaced the smackerel-core branch's strings.HasPrefix(p, requiredCorePrefix) with a too-loose strings.Contains(p, \"${HOST_BIND_ADDRESS:\") substring check via replace_string_in_file (the most realistic accidental relaxation a maintainer might introduce — would silently accept BOTH the fail-loud and the forbidden default-fallback form), kept the new tests in place, re-ran. Observed: smackerel-core sub-case FAILS with the expected `the contract is tautological — it would NOT catch a regression to ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback or literal 127.0.0.1: form; HL-RESCAN-009 default-fallback / literal-bind ml-side coverage gap is reintroduced` message; the two smackerel-ml sub-cases PASS unchanged because the relaxation only touched the core branch (positive cross-check that the new test correctly attributes failures to the specific service branch). Restored the strict HasPrefix check via replace_string_in_file → all 3 sub-cases PASS GREEN. Existing TestComposeContract_LiveFile + 8 pre-existing TestComposeContract_* adversarial tests + TestVulnGateContract_LiveFile + TestBundleHashContract_* all PASS unchanged. Full evidence in report.md > Test Evidence + > Audit Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 1 file modified (internal/deploy/compose_contract_test.go only, +112 / -0 lines). No production runtime Go/Python code modified. No assertComposeContract function body edited. No constant declaration edited. No deploy/compose.deploy.yml change. No docker-compose.yml change. No config/smackerel.yaml change. No Dockerfile change. No CI workflow change. No script change. Cross-package smoke clean. All canaries (8 pre-existing TestComposeContract_* + LiveFile + VulnGate + BundleHash) PASS unchanged. Generic-only constraint preserved (no real hostnames/IPs/tailnet identifiers; uses SST substitution forms exclusively). Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T20:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/scenario-manifest/report/uservalidation/state artifacts authored at specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-004-default-fallback-bind-adversarial-coverage/. No external doc updates required: the fix is purely a contract-test extension; no operator workflow change, no Deployment.md change, no copilot-instructions.md change, no README change. The bug-local scenario-manifest.json declares 3 scenarios (SCN-042-004-A, SCN-042-004-B, SCN-042-004-C). Foreign-owned spec 042 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.devops",
+    "certifiedAt": "2026-05-14T20:15:00Z",
+    "auditorAgent": "bubbles.devops",
+    "auditedAt": "2026-05-14T20:15:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD 7482fb24) finding HL-RESCAN-009 (P3). The compose contract test internal/deploy/compose_contract_test.go enforced the spec 042 / Gate G028 fail-loud SST contract correctly at runtime via assertComposeContract, but the test surface had a coverage gap: (1) NO adversarial sub-case proved rejection of the forbidden default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: bind form on smackerel-core OR smackerel-ml; (2) NO adversarial sub-case proved rejection of the literal 127.0.0.1: spec 020 form on smackerel-ml (only smackerel-core was covered by the pre-existing TestComposeContract_AdversarialLiteralBind). A future maintainer who accidentally relaxes the strict strings.HasPrefix prefix check (e.g., to a too-loose strings.Contains substring match) on either branch would slip past every existing test. Fix adds new persistent in-tree TestComposeContract_AdversarialDefaultFallbackBind function with 3 table-driven sub-cases covering the three coverage gaps, anchor-list assertion over [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud], HL-RESCAN-009 attribution in docstring + failure-case messages. RED→GREEN proven via temporary substring-softening of the smackerel-core branch in assertComposeContract: smackerel-core sub-case FAILS with the expected the contract is tautological message; the two smackerel-ml sub-cases continue to PASS unchanged (positive cross-check that the new test correctly attributes failures to the specific service branch). Restoration via replace_string_in_file returns the suite to all-PASS GREEN. Cross-package smoke (./smackerel.sh test unit --go) PASS — every internal/* and cmd/* package returns ok. Spec 042 BUG-042-001 + BUG-042-002 + BUG-042-003 canaries + spec 047 vuln-gate canary + BUG-047-001 bundle-hash canary all PASS unchanged. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Single-file code change: only internal/deploy/compose_contract_test.go (+112 / -0 lines). Bug-packet artifacts contained in specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-004-default-fallback-bind-adversarial-coverage/. Foreign-owned spec 042 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Add adversarial coverage for default-fallback and ml-side literal bind regressions",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-14T20:15:00Z",
+        "dodTotal": 20,
+        "dodChecked": 20,
+        "notes": "1 file modified (internal/deploy/compose_contract_test.go, +112 / -0 lines). New persistent in-tree TestComposeContract_AdversarialDefaultFallbackBind function with 3 table-driven sub-cases: (a) smackerel-core ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind, (b) smackerel-ml ${HOST_BIND_ADDRESS:-127.0.0.1}: default-fallback bind, (c) smackerel-ml literal 127.0.0.1: bind (spec 020 form). Each sub-case asserts non-nil error AND error mentions the violating service AND error mentions at least one of [spec 020, ${HOST_BIND_ADDRESS:-127.0.0.1}, Gate-G028, fail-loud]. HL-RESCAN-009 attribution in docstring + failure-case t.Fatalf + inline rationale + anchor-list assertion failure. All 3 sub-cases PASS GREEN in 0.009s. RED proof: 1 expected FAIL on smackerel-core sub-case when smackerel-core branch is substring-softened; 2 PASS on smackerel-ml sub-cases (positive cross-check). GREEN proof: restoration returns all 3 PASS. Targeted contract suite + cross-package smoke clean. Full DoD evidence inline in scopes.md."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "home-lab-readiness-rescan-2026-05-14"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}
