@@ -12,29 +12,39 @@ project: smackerel
 
 # Application images this project builds. Each image is pulled by digest only.
 images:
-  - name: smackerel-core
-    description: Go runtime (HTTP API, NATS bridge, scheduler, graph)
-    registry: ghcr.io/pkirsanov/smackerel-core
-  - name: smackerel-ml
-    description: Python ML sidecar (embeddings, LLM gateway, transcript)
-    registry: ghcr.io/pkirsanov/smackerel-ml
+- name: smackerel-core
+  description: Go runtime (HTTP API, NATS bridge, scheduler, graph)
+  registry: ghcr.io/pkirsanov/smackerel-core
+- name: smackerel-ml
+  description: Python ML sidecar (embeddings, LLM gateway, transcript)
+  registry: ghcr.io/pkirsanov/smackerel-ml
 
 # Third-party images pinned for reproducibility. NOT built by this project.
 externalImages:
-  - name: postgres
-    image: pgvector/pgvector:pg16
-  - name: nats
-    image: nats:2.10-alpine
-  - name: ollama
-    image: ollama/ollama:0.23.2
+- name: postgres
+  image: pgvector/pgvector:pg16
+- name: nats
+  image: nats:2.10-alpine
+- name: ollama
+  image: ollama/ollama:0.23.2
 
 # Config bundle environments. CI emits one bundle per env, identified by <env>-<sourceSha>.
+# Per BUG-047-001 / DEVOPS-HL-002, the published build-manifest-<sourceSha>.yaml
+# carries a `sha256:` field next to each `ref:` for adapter-side hash
+# verification (Build-Once Deploy-Many: "Missing bundle hash verification |
+# Allows tampered config to deploy" in docs/Deployment.md). The adapter
+# `apply.sh` MUST verify the pulled bundle's sha256 byte-for-byte against the
+# manifest's `sha256:` value before mounting the bundle.
 configBundles:
   registry: ghcr.io/pkirsanov/smackerel-config-bundles
+  manifestSchema:
+    refField: ref
+    hashField: sha256
+    hashAlgorithm: sha256
   environments:
-    - dev
-    - test
-    - home-lab
+  - dev
+  - test
+  - home-lab
 
 # Signing requirements — adapter `apply` MUST verify these before container start.
 signing:
@@ -42,12 +52,12 @@ signing:
   scheme: cosign-keyless
   transparencyLog: rekor
   attestations:
-    - sbom        # syft-generated SPDX SBOM
-    - provenance  # SLSA provenance
+  - sbom # syft-generated SPDX SBOM
+  - provenance # SLSA provenance
 
 # Rollout strategies the project supports. Each adapter declares its strategy in params.yaml.
 rolloutStrategies:
-  - name: recreate
-    description: Stop old, start new — brief downtime acceptable
-  - name: blue-green
-    description: Run new alongside old, switch traffic when healthy
+- name: recreate
+  description: Stop old, start new — brief downtime acceptable
+- name: blue-green
+  description: Run new alongside old, switch traffic when healthy
