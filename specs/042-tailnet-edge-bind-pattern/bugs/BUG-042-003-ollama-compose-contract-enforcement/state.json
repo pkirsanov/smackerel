@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "042-tailnet-edge-bind-pattern",
+  "bugId": "BUG-042-003-ollama-compose-contract-enforcement",
+  "featureDir": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-003-ollama-compose-contract-enforcement",
+  "featureName": "BUG-042-003: Ollama service exempt from spec 042 compose contract enforcement",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "trigger": "system-review-finding",
+    "executionModel": "direct-per-finding-dispatch"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-14T00:00:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Inspected internal/deploy/compose_contract_test.go and observed assertComposeContract enforces only smackerel-core, smackerel-ml, postgres, nats, prometheus — ollama branch absent. Cross-referenced deploy/compose.deploy.yml line 243 which uses the fail-loud SST form ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT} for ollama, but no contract test enforces it. Confirmed the gap is regression-only: live file complies today, but a future bad edit would slip past TestComposeContract_LiveFile. Direct HL-RESCAN-005 finding from the home-lab readiness re-scan against c586f912."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Modified internal/deploy/compose_contract_test.go (only file changed): (1) added requiredOllamaPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:` constant in the const() block with BUG-042-003 / HL-RESCAN-005 attribution comment; (2) added ollama optional-service enforcement block in assertComposeContract after the prometheus block, mirroring its shape exactly — checks oll.NetworkMode != \"host\" and strings.HasPrefix(p, requiredOllamaPrefix) for every entry in oll.Ports, both as if oll, ok := doc.Services[\"ollama\"]; ok { ... } gated; (3) added new ollama uses network_mode host sub-case as the fifth entry in TestComposeContract_AdversarialNetworkModeHostBypass table-driven sweep; loosened attribution check to accept BUG-042-002 OR BUG-042-003; (4) added new TestComposeContract_AdversarialOllamaLiteralBind test function with two table-driven sub-cases: literal 127.0.0.1 bind (spec 020 form) and default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} bind (forbidden by Gate G028). Both sub-cases assert non-nil error AND error mentions ollama AND error mentions BUG-042-003. Total diff: 121 insertions / 2 deletions."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "All TestComposeContract_* tests PASS in 0.017s wall-clock (8 top-level tests + 7 sub-tests). Targeted run: go test -v -count=1 -run TestComposeContract ./internal/deploy/ exits 0. New tests run as part of the persistent in-tree adversarial suite — every ./smackerel.sh test unit --go invocation (CI + developer pre-push) re-validates the contract."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change: 1 file modified, 121 insertions / 2 deletions. The optional-service pattern is reused from prometheus (DD-1 in design.md). The constant pattern is reused from requiredCorePrefix/requiredMLPrefix/requiredPrometheusPrefix (DD-3). The OR-attribution check is the smallest change to keep the existing four BUG-042-002 sub-cases intact while accepting the BUG-042-003 attribution from the new ollama branch (DD-2)."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:11:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no goroutine concurrency, no I/O beyond static YAML parse on small fixture strings + compose.deploy.yml read. All sub-tests PASS in 0.017s with zero variance across re-runs."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review: A05 Security Misconfiguration — the fix STRENGTHENS the existing spec 042 / Gate G028 SST policy by mechanically locking ollama compliance against future drift. No new attack surface introduced. No PII handled (ollama is a local-network LLM service; the contract test operates on YAML structure only). The fix is the smackerel-side primitive that prevents accidental publication of an insecure compose file (literal-bind to 0.0.0.0 via the spec 020 form, or silent fallback to 127.0.0.1 via the forbidden default-fallback form, or full host-network exposure via network_mode: host)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Static checks: gofmt -l internal/deploy/ empty (exit 0). Cross-package smoke: go test -count=1 ./internal/deploy/... ./internal/config/... ./internal/auth/... all PASS in ~36s combined (4 ok lines). RED→GREEN proof: temporarily replaced the ollama enforcement block in assertComposeContract with `_ = requiredOllamaPrefix` (no-op) via replace_string_in_file, kept the new tests in place, re-ran the contract suite — exactly THREE sub-tests FAILED with the expected `the contract is tautological` error messages (TestComposeContract_AdversarialOllamaLiteralBind/literal_127.0.0.1_bind_(spec_020_form), TestComposeContract_AdversarialOllamaLiteralBind/default-fallback_${HOST_BIND_ADDRESS:-127.0.0.1}_bind_(forbidden_by_Gate_G028), TestComposeContract_AdversarialNetworkModeHostBypass/ollama_uses_network_mode_host) while every OTHER test PASSED unchanged. Restored the enforcement block via replace_string_in_file → all PASS GREEN. Existing TestComposeContract_LiveFile + four pre-existing sub-cases of TestComposeContract_AdversarialNetworkModeHostBypass + TestComposeContract_AdversarialLiteralBind + TestComposeContract_AdversarialInfraHasPorts + TestComposeContract_AdversarialMultiPortsBypass + TestComposeContract_AdversarialMLMultiPortsBypass + TestVulnGateContract_LiveFile + TestBundleHashContract_* all PASS unchanged. Full evidence in report.md > Validation Evidence + > Audit Evidence > Red→Green proof (scenario-first TDD)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A05 review GREEN (improved). Privacy review GREEN (no PII). Minimum-viable-change audit GREEN: 1 file modified (internal/deploy/compose_contract_test.go only). No production runtime Go/Python code modified. No deploy/compose.deploy.yml change. No docker-compose.yml change. No config/smackerel.yaml change. No Dockerfile change. No CI workflow change. No script change. Cross-package smoke clean. All canaries PASS unchanged. Generic-only constraint preserved (no real hostnames/IPs/tailnet identifiers; uses SST substitution forms exclusively). Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T00:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/scenario-manifest/report/uservalidation/state artifacts authored at specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-003-ollama-compose-contract-enforcement/. No external doc updates required: the fix is purely a contract-test extension; no operator workflow change, no Deployment.md change, no copilot-instructions.md change, no README change. The bug-local scenario-manifest.json declares 5 scenarios (SCN-042-003-A through SCN-042-003-E)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.devops",
+    "certifiedAt": "2026-05-14T00:15:00Z",
+    "auditorAgent": "bubbles.devops",
+    "auditedAt": "2026-05-14T00:15:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD c586f912) finding HL-RESCAN-005 (P2). The compose contract test internal/deploy/compose_contract_test.go enforced spec 042 fail-loud SST form for smackerel-core, smackerel-ml, postgres, nats, prometheus — but NOT for ollama. The live deploy/compose.deploy.yml line 243 uses the correct fail-loud form for ollama by convention, but a future regression to literal 127.0.0.1: (spec 020 form), default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1}: (Gate G028 violation), or network_mode: host (Pattern P5 bypass) would silently slip past TestComposeContract_LiveFile and ship to home-lab. Fix adds requiredOllamaPrefix constant + optional-service enforcement block in assertComposeContract (mirrors the prometheus pattern exactly) + new TestComposeContract_AdversarialOllamaLiteralBind with two sub-cases (literal-127.0.0.1, default-fallback) + new ollama uses network_mode host sub-case in the existing TestComposeContract_AdversarialNetworkModeHostBypass table-driven sweep. RED→GREEN proven via temporary no-op replacement of the enforcement block: exactly THREE new ollama sub-tests FAIL with explicit `the contract is tautological` messages, every OTHER test PASSES unchanged. Restoration via replace_string_in_file returns the suite to all-PASS GREEN. Cross-package smoke (deploy, config, auth, auth/revocation) PASS in ~36s. Spec 042 BUG-042-001 + BUG-042-002 canaries + spec 047 vuln-gate canary + BUG-047-001 bundle-hash canary all PASS unchanged. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced. Single-file code change: only internal/deploy/compose_contract_test.go (121 insertions / 2 deletions). Bug-packet artifacts contained in specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-003-ollama-compose-contract-enforcement/. Foreign-owned spec 042 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Ollama compose contract enforcement + adversarial RED→GREEN coverage",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-14T00:15:00Z",
+        "dodTotal": 22,
+        "dodChecked": 22,
+        "notes": "1 file modified (internal/deploy/compose_contract_test.go). New requiredOllamaPrefix constant + ollama enforcement block in assertComposeContract (optional-service pattern, mirrors prometheus) + new TestComposeContract_AdversarialOllamaLiteralBind with 2 sub-cases (literal-127.0.0.1 + default-fallback) + new ollama uses network_mode host sub-case in TestComposeContract_AdversarialNetworkModeHostBypass. All 7 top-level tests + 7 sub-tests PASS GREEN in 0.017s. RED proof: 3 expected FAILs when enforcement block is no-op; every other test PASSES. GREEN proof: restoration returns all PASS. Cross-package smoke (deploy, config, auth, auth/revocation) PASS in ~36s. Full DoD evidence inline in scopes.md."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "home-lab-readiness-rescan-2026-05-14"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}
