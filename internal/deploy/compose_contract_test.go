@@ -83,6 +83,16 @@ const (
 	requiredCorePrefix       = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:`
 	requiredMLPrefix         = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:`
 	requiredPrometheusPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${PROMETHEUS_HOST_PORT}:`
+	// BUG-042-003 (home-lab readiness re-scan, finding HL-RESCAN-005, 2026-05-14).
+	// Ollama is profile-gated (`profiles: [ollama]`) and the live deploy compose
+	// file at deploy/compose.deploy.yml line 243 uses the fail-loud SST form
+	// today, but no contract assertion existed before this constant was added.
+	// A future edit reverting ollama to literal `127.0.0.1:` or to the forbidden
+	// `${HOST_BIND_ADDRESS:-127.0.0.1}` default-fallback form would slip past
+	// TestComposeContract_LiveFile and ship to home-lab. The home-lab readiness
+	// re-scan classified this gap P2 because the live file is correct today; the
+	// risk is regression-only.
+	requiredOllamaPrefix = `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:`
 )
 
 // repoRoot returns the repository root by climbing two directories up from
@@ -197,6 +207,27 @@ func assertComposeContract(yamlBytes []byte) error {
 			for i, p := range prom.Ports {
 				if !strings.HasPrefix(p, requiredPrometheusPrefix) {
 					return fmt.Errorf("contract violation: services.prometheus.ports[%d]=%q does not start with required prefix %q (spec 049 inherits the spec 042 tailnet-edge bind contract; Prometheus host port MUST use the fail-loud ${HOST_BIND_ADDRESS:?...} SST substitution so compose aborts at start time if HOST_BIND_ADDRESS is unset — no literal 127.0.0.1: prefix, no default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} form)", i, p, requiredPrometheusPrefix)
+				}
+			}
+		}
+	}
+
+	// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+	// Ollama is profile-gated (`profiles: [ollama]`) but its service definition
+	// still exists in the compose document. When present, its host port MUST
+	// inherit the spec 042 fail-loud HOST_BIND_ADDRESS substitution like other
+	// operator-facing services (smackerel-core, smackerel-ml, prometheus).
+	// network_mode: host is rejected for the same reason. If the service block
+	// is absent (e.g. in a test fixture that scopes down), the check is skipped
+	// — mirrors the pattern used for postgres + nats + prometheus above.
+	if oll, ok := doc.Services["ollama"]; ok {
+		if oll.NetworkMode == "host" {
+			return fmt.Errorf("contract violation: services.ollama.network_mode=%q — `network_mode: host` is forbidden by spec 042 (host networking exposes Ollama on every host NIC and defeats the HOST_BIND_ADDRESS-substituted port mapping; BUG-042-003 closes the ollama enforcement gap discovered by the home-lab readiness re-scan)", oll.NetworkMode)
+		}
+		if len(oll.Ports) > 0 {
+			for i, p := range oll.Ports {
+				if !strings.HasPrefix(p, requiredOllamaPrefix) {
+					return fmt.Errorf("contract violation: services.ollama.ports[%d]=%q does not start with required prefix %q (BUG-042-003 closes the ollama enforcement gap; ollama host port MUST use the fail-loud ${HOST_BIND_ADDRESS:?...} SST substitution so compose aborts at start time if HOST_BIND_ADDRESS is unset — no literal 127.0.0.1: prefix, no default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} form)", i, p, requiredOllamaPrefix)
 				}
 			}
 		}
@@ -436,6 +467,29 @@ func TestComposeContract_AdversarialNetworkModeHostBypass(t *testing.T) {
     network_mode: host
 `,
 		},
+		// BUG-042-003 (home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14).
+		// Adds ollama to the network_mode: host bypass guard. The contract
+		// function MUST reject ollama.network_mode=host with an error mentioning
+		// the service name and BUG-042-003 attribution, matching the pattern
+		// used for the other four services in this table-driven sweep.
+		{
+			name:    "ollama uses network_mode host",
+			service: "ollama",
+			fixture: `services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+  ollama:
+    network_mode: host
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+`,
+		},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -450,10 +504,75 @@ func TestComposeContract_AdversarialNetworkModeHostBypass(t *testing.T) {
 			if !strings.Contains(err.Error(), "network_mode") {
 				t.Fatalf("adversarial contract test failed: error did not mention 'network_mode' (the violating field): %v", err)
 			}
-			if !strings.Contains(err.Error(), "BUG-042-002") {
-				t.Fatalf("adversarial contract test failed: error did not mention BUG-042-002 attribution (the test-discovered defect this guard locks): %v", err)
+			// BUG-042-002 attribution is the original network_mode guard; the
+			// ollama sub-case adds BUG-042-003 attribution because the ollama
+			// branch was added later. Either attribution satisfies the
+			// adversarial proof that the regression would be caught.
+			if !strings.Contains(err.Error(), "BUG-042-002") && !strings.Contains(err.Error(), "BUG-042-003") {
+				t.Fatalf("adversarial contract test failed: error did not mention BUG-042-002 or BUG-042-003 attribution (the defect this guard locks): %v", err)
 			}
 			t.Logf("adversarial OK: network_mode: host on %s is rejected with: %v", tc.service, err)
+		})
+	}
+}
+
+// TestComposeContract_AdversarialOllamaLiteralBind proves the contract
+// function catches a regression where ollama publishes its host port via
+// the literal 127.0.0.1: spec 020 form OR the forbidden
+// ${HOST_BIND_ADDRESS:-127.0.0.1} default-fallback form. Before BUG-042-003
+// no assertion existed for ollama at all — the live compose file used the
+// fail-loud form by convention but the contract test would silently accept
+// any regression.
+//
+// Two sub-cases: literal 127.0.0.1: bind, and the default-fallback form.
+// Each MUST return a non-nil error mentioning 'ollama' and the BUG-042-003
+// attribution.
+//
+// Discovered: home-lab readiness re-scan finding HL-RESCAN-005, 2026-05-14.
+func TestComposeContract_AdversarialOllamaLiteralBind(t *testing.T) {
+	cases := []struct {
+		name    string
+		port    string
+		wantSub string
+	}{
+		{
+			name:    "literal 127.0.0.1 bind (spec 020 form)",
+			port:    `127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}`,
+			wantSub: "BUG-042-003",
+		},
+		{
+			name:    "default-fallback ${HOST_BIND_ADDRESS:-127.0.0.1} bind (forbidden by Gate G028)",
+			port:    `${HOST_BIND_ADDRESS:-127.0.0.1}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}`,
+			wantSub: "BUG-042-003",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := fmt.Sprintf(`services:
+  smackerel-core:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  smackerel-ml:
+    ports:
+      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  postgres: {}
+  nats: {}
+  ollama:
+    ports:
+      - %q
+`, tc.port)
+			err := assertComposeContract([]byte(fixture))
+			if err == nil {
+				t.Fatalf("adversarial contract test failed: ollama port %q was accepted (the contract is tautological — it would NOT catch a regression to the spec 020 literal form or to the default-fallback form for ollama)", tc.port)
+			}
+			if !strings.Contains(err.Error(), "ollama") {
+				t.Fatalf("adversarial contract test failed: error did not mention 'ollama': %v", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Fatalf("adversarial contract test failed: error did not mention %q attribution: %v", tc.wantSub, err)
+			}
+			t.Logf("adversarial OK: ollama port %q is rejected with: %v", tc.port, err)
 		})
 	}
 }

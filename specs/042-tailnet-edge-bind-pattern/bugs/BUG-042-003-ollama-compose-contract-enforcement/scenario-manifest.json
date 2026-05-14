@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "bugId": "BUG-042-003-ollama-compose-contract-enforcement",
+  "parentSpec": "042-tailnet-edge-bind-pattern",
+  "title": "Ollama service exempt from spec 042 compose contract enforcement",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-042-003-A",
+      "title": "requiredOllamaPrefix constant declared with fail-loud SST form",
+      "given": "internal/deploy/compose_contract_test.go has a const block declaring required service-prefix constants",
+      "when": "the source file is parsed by the Go compiler",
+      "then": "a `requiredOllamaPrefix` constant exists with value `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:` matching the live deploy/compose.deploy.yml line 243 form character-for-character",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_LiveFile",
+        "TestComposeContract_AdversarialOllamaLiteralBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go const block (pre-fix had no requiredOllamaPrefix declaration; only requiredCorePrefix, requiredMLPrefix, requiredPrometheusPrefix existed)",
+      "redGreenProbe": "./smackerel.sh test unit --go --segment deploy (covers TestComposeContract_LiveFile + TestComposeContract_AdversarialOllamaLiteralBind)",
+      "adversarial": "TestComposeContract_AdversarialOllamaLiteralBind (proves the constant is ENFORCED, not just declared)"
+    },
+    {
+      "scenarioId": "SCN-042-003-B",
+      "title": "assertComposeContract rejects ollama with literal 127.0.0.1: prefix (spec 020 form)",
+      "given": "a compose fixture where ollama.ports[0] = `127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `ollama` AND `BUG-042-003` AND the literal violating prefix",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialOllamaLiteralBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#audit-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go assertComposeContract function (pre-fix had no ollama enforcement branch)",
+      "redGreenProbe": "./smackerel.sh test unit --go --segment deploy (covers TestComposeContract_AdversarialOllamaLiteralBind/literal_127.0.0.1_bind_(spec_020_form))",
+      "adversarial": "YES — fails RED if the ollama enforcement block is removed from assertComposeContract"
+    },
+    {
+      "scenarioId": "SCN-042-003-C",
+      "title": "assertComposeContract rejects ollama with default-fallback `${HOST_BIND_ADDRESS:-127.0.0.1}:` form (Gate G028 violation)",
+      "given": "a compose fixture where ollama.ports[0] = `${HOST_BIND_ADDRESS:-127.0.0.1}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `ollama` AND `BUG-042-003` AND the literal violating prefix; the `:?` (fail-loud) substitution form is the ONLY accepted form per Gate G028",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialOllamaLiteralBind"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#audit-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go assertComposeContract function (pre-fix had no Gate G028 default-fallback rejection for ollama)",
+      "redGreenProbe": "./smackerel.sh test unit --go --segment deploy (covers TestComposeContract_AdversarialOllamaLiteralBind/default-fallback_${HOST_BIND_ADDRESS:-127.0.0.1}_bind_(forbidden_by_Gate_G028))",
+      "adversarial": "YES — fails RED if the ollama enforcement block is removed from assertComposeContract"
+    },
+    {
+      "scenarioId": "SCN-042-003-D",
+      "title": "assertComposeContract rejects ollama.network_mode=host (Pattern P5 bypass)",
+      "given": "a compose fixture where ollama declares `network_mode: host`",
+      "when": "assertComposeContract is called with the fixture",
+      "then": "it returns a non-nil error mentioning `ollama` AND `network_mode` AND either `BUG-042-002` or `BUG-042-003` attribution",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_AdversarialNetworkModeHostBypass"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#audit-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go TestComposeContract_AdversarialNetworkModeHostBypass table-driven sweep (pre-fix had only 4 sub-cases for core/ml/postgres/nats; ollama was missing)",
+      "redGreenProbe": "./smackerel.sh test unit --go --segment deploy (covers TestComposeContract_AdversarialNetworkModeHostBypass/ollama_uses_network_mode_host)",
+      "adversarial": "YES — fails RED if the ollama network_mode check is removed from assertComposeContract"
+    },
+    {
+      "scenarioId": "SCN-042-003-E",
+      "title": "TestComposeContract_LiveFile preserved — live deploy/compose.deploy.yml satisfies the extended contract",
+      "given": "the live deploy/compose.deploy.yml at HEAD",
+      "when": "TestComposeContract_LiveFile reads the file and calls assertComposeContract",
+      "then": "the function returns nil and the test PASSES — confirming the live file already complies with the new ollama enforcement (the fix locks compliance against future regression, it does not require the live file to change)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_LiveFile"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#validation-evidence"],
+      "specSource": "deploy/compose.deploy.yml (live file at HEAD already complies with the extended contract; the additive ollama enforcement does not require any live-file change)",
+      "redGreenProbe": "./smackerel.sh test unit --go --segment deploy (covers TestComposeContract_LiveFile)",
+      "adversarial": "NO (positive canary — proves the additive change does not break the existing baseline)"
+    }
+  ]
+}
