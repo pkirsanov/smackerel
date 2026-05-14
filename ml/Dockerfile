@@ -22,6 +22,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # the explicit final-state pin.
 RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
 
+# spec-047 R12.3: force starlette to >=0.49.1,<1.0.0 to fix
+# CVE-2025-62727 (Starlette DoS via Range header merging in
+# FileResponse parsing). Range cap `<1.0.0` is required because
+# starlette 1.0.0 introduced breaking changes that fastapi 0.115.6
+# does not support (Router.__init__ no longer accepts `on_startup`).
+# fastapi 0.115.6 transitively pins `starlette>=0.40.0,<0.42.0`,
+# which locks starlette to 0.41.x \u2014 still vulnerable. We
+# force-upgrade after the requirements install. CVE fix landed in
+# 0.49.1; the 0.49.x line is the safe target for fastapi 0.115.6.
+RUN pip install --no-cache-dir --upgrade "starlette>=0.49.1,<1.0.0"
+
 # Preload the embedding model during the image build so live processing does
 # not depend on a first-request network/cache write under the non-root user.
 RUN mkdir -p "$HF_HOME" "$SENTENCE_TRANSFORMERS_HOME" \
