@@ -517,6 +517,26 @@ LOG_LEVEL="$(required_value runtime.log_level)"
 # overridden to "test" so integration/e2e/stress runs preserve the dev-mode
 # warn-and-continue ergonomic for empty auth_token even when smackerel.yaml is
 # configured for production.
+#
+# BUG-051-001 — TARGET_ENV=home-lab MUST also override SMACKEREL_ENV to
+# "production" so the runtime defense-in-depth fires on the home-lab tailnet
+# bundle. Without this override, a home-lab bundle generated against the
+# default smackerel.yaml (runtime.environment: development) emits
+# SMACKEREL_ENV=development, which silently disables:
+#   - internal/auth/startup.go::ValidateRuntimeAuthStartup (returns nil unless
+#     environment=="production"),
+#   - internal/config/config.go production-mode auth + DB-password fail-fast
+#     (gated on cfg.Environment=="production"),
+#   - the spec 044 production-mode signing-material requirements,
+#   - the spec 051 FR-051-005 dev-default Postgres password rejection at
+#     runtime (the generator-side guard at lines ~415-433 still fires, but
+#     the runtime-side guard becomes a no-op).
+# The resulting bundle would auth-bypass on the home-lab tailnet endpoint and
+# collapse spec 044 + spec 051 defense-in-depth to bundle-generator-only,
+# violating the SEC-HL-001 finding from the home-lab readiness review
+# 2026-05-13. The per-target case below is the single fix point: it preserves
+# the existing TARGET_ENV=test override and adds the home-lab→production
+# override required by BUG-051-001.
 SMACKEREL_ENV="$(required_value runtime.environment)"
 case "$SMACKEREL_ENV" in
   development|test|production) ;;
@@ -525,9 +545,14 @@ case "$SMACKEREL_ENV" in
     exit 1
     ;;
 esac
-if [[ "$TARGET_ENV" == "test" ]]; then
-  SMACKEREL_ENV="test"
-fi
+case "$TARGET_ENV" in
+  test)
+    SMACKEREL_ENV="test"
+    ;;
+  home-lab)
+    SMACKEREL_ENV="production"
+    ;;
+esac
 TELEGRAM_BOT_TOKEN="$(required_value telegram.bot_token)"
 TELEGRAM_CHAT_IDS="$(required_value telegram.chat_ids)"
 # Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram bridge.
