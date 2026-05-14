@@ -230,14 +230,30 @@ async def handle_ocr_request(data: dict) -> dict:
     text = extract_text_tesseract(image_bytes)
     engine = "tesseract"
 
-    # If Tesseract produced insufficient text, try Ollama (optional fallback)
+    # If Tesseract produced insufficient text, try Ollama (optional fallback).
+    #
+    # HL-RESCAN-006 / Gate G028 / spec 049 (no-defaults SST policy): the prior
+    # `os.environ.get("OLLAMA_URL", "")` form silently swallowed a missing OLLAMA_URL
+    # by skipping the Ollama fallback — a defensive default that is forbidden by the
+    # repo-wide no-defaults rule (`os.getenv("KEY", "default")` is banned in Python).
+    # The intentional optional behavior is now explicitly gated on the spec 043
+    # `ENABLE_OLLAMA` per-env feature flag, read fail-loud (KeyError if unset).
+    # When the flag is truthy, OLLAMA_URL is read fail-loud inside `extract_text_ollama`
+    # (see line 91); when the flag is falsy, the Ollama fallback is skipped entirely.
     if len(text) < MIN_TESSERACT_CHARS:
-        ollama_url = os.environ.get("OLLAMA_URL", "")
-        if ollama_url:
-            ollama_text = extract_text_ollama(image_bytes, ollama_url)
+        enable_ollama = os.environ["ENABLE_OLLAMA"].strip().lower()
+        if enable_ollama in ("true", "1", "yes", "on"):
+            ollama_text = extract_text_ollama(image_bytes)
             if len(ollama_text) > len(text):
                 text = ollama_text
                 engine = "ollama"
+        elif enable_ollama in ("false", "0", "no", "off", ""):
+            pass  # Ollama fallback explicitly disabled — Tesseract result stands.
+        else:
+            raise RuntimeError(
+                f"ENABLE_OLLAMA must be exactly one of true/1/yes/on/false/0/no/off, "
+                f"got {enable_ollama!r} (HL-RESCAN-006 / Gate G028 — no-defaults SST policy)"
+            )
 
     # Cache result
     await store_cache(image_hash, text, engine)

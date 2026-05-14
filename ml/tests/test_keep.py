@@ -145,15 +145,20 @@ class TestOCR:
         ).decode()
 
         with patch("app.ocr.extract_text_tesseract", return_value=""):
-            result = asyncio.run(
-                handle_ocr_request(
-                    {
-                        "image_hash": "test-fail",
-                        "image_data": tiny_png,
-                    }
+            # HL-RESCAN-006: handle_ocr_request now reads ENABLE_OLLAMA fail-loud
+            # (no defensive default). Set ENABLE_OLLAMA=false explicitly so the
+            # Ollama fallback is skipped — this test exercises the both-engines-fail
+            # path with Tesseract returning empty and Ollama explicitly disabled.
+            with patch.dict(os.environ, {"ENABLE_OLLAMA": "false"}, clear=False):
+                result = asyncio.run(
+                    handle_ocr_request(
+                        {
+                            "image_hash": "test-fail",
+                            "image_data": tiny_png,
+                        }
+                    )
                 )
-            )
-            assert result["status"] == "ok"
+                assert result["status"] == "ok"
 
     def test_store_and_check_cache(self):
         """Store and retrieve from cache."""
@@ -173,7 +178,10 @@ class TestOCR:
 
         tiny_png = base64.b64encode(b"fake image data").decode()
 
-        with patch.dict(os.environ, {"OLLAMA_URL": "http://localhost:11434"}):
+        # HL-RESCAN-006: handle_ocr_request now reads ENABLE_OLLAMA fail-loud
+        # (no defensive default). This test exercises the Ollama fallback path,
+        # so ENABLE_OLLAMA must be explicitly set to a truthy value.
+        with patch.dict(os.environ, {"OLLAMA_URL": "http://localhost:11434", "ENABLE_OLLAMA": "true"}):
             result = asyncio.run(
                 handle_ocr_request(
                     {
