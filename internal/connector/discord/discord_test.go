@@ -2529,6 +2529,7 @@ func TestSyncEndToEnd_WithMessagesAndPins(t *testing.T) {
 		Credentials: map[string]string{"bot_token": testBotToken},
 		SourceConfig: map[string]interface{}{
 			"api_url":         ts.URL,
+			"enable_gateway":  false, // disable poller to avoid race with Sync (test verifies REST sync of messages+pins only)
 			"include_pins":    true,
 			"include_threads": false,
 			"monitored_channels": []interface{}{
@@ -2542,6 +2543,7 @@ func TestSyncEndToEnd_WithMessagesAndPins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
 	}
+	defer c.Close()
 
 	artifacts, cursor, err := c.Sync(context.Background(), "")
 	if err != nil {
