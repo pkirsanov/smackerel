@@ -943,6 +943,32 @@ AGENT_PROVIDER_VISION_MODEL="$(required_value agent.provider_routing.vision.mode
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 AGENT_PROVIDER_OCR_MODEL="$(required_value agent.provider_routing.ocr.model)"
 
+# HL-RESCAN-012 / Gate G028 — build-metadata SST resolution.
+# Source-of-truth precedence at config-generate time:
+#   1. Shell environment (CI exports SMACKEREL_VERSION / SMACKEREL_COMMIT
+#      via .github/workflows/ci.yml; release pipeline exports
+#      SMACKEREL_BUILD_TIME / SMACKEREL_CORE_IMAGE / SMACKEREL_ML_IMAGE
+#      with digest pins from the build manifest).
+#   2. Hard-coded ad-hoc-dev defaults below (dev / unknown / empty).
+# Emitting these into the env file lets docker-compose.yml use the
+# fail-loud ${X:?...} substitution form (no `:-default` fallbacks),
+# so the policy is enforced at compose substitution time.
+if [[ -z "${SMACKEREL_VERSION+set}" ]]; then
+  SMACKEREL_VERSION="dev"
+fi
+if [[ -z "${SMACKEREL_COMMIT+set}" ]]; then
+  SMACKEREL_COMMIT="unknown"
+fi
+if [[ -z "${SMACKEREL_BUILD_TIME+set}" ]]; then
+  SMACKEREL_BUILD_TIME="unknown"
+fi
+if [[ -z "${SMACKEREL_CORE_IMAGE+set}" ]]; then
+  SMACKEREL_CORE_IMAGE=""
+fi
+if [[ -z "${SMACKEREL_ML_IMAGE+set}" ]]; then
+  SMACKEREL_ML_IMAGE=""
+fi
+
 mkdir -p "$REPO_ROOT/config/generated"
 
 OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
@@ -953,6 +979,15 @@ cat > "$OUTPUT_FILE" <<EOF
 # Environment: ${TARGET_ENV}
 # Generated: $(date -u +%Y-%m-%dT%H:%M:%S+00:00)
 SMACKEREL_ENV_FILE=config/generated/${TARGET_ENV}.env
+# HL-RESCAN-012 / Gate G028 — build metadata flowed through SST so
+# docker-compose.yml can use the fail-loud \${X:?...} form (no \`:-default\`
+# fallbacks). CI / release pipelines override these via shell env at
+# config-generate time; ad-hoc dev runs see the safe placeholders below.
+SMACKEREL_VERSION=${SMACKEREL_VERSION}
+SMACKEREL_COMMIT=${SMACKEREL_COMMIT}
+SMACKEREL_BUILD_TIME=${SMACKEREL_BUILD_TIME}
+SMACKEREL_CORE_IMAGE=${SMACKEREL_CORE_IMAGE}
+SMACKEREL_ML_IMAGE=${SMACKEREL_ML_IMAGE}
 PROJECT_NAME=${PROJECT_NAME}
 COMPOSE_PROJECT=${COMPOSE_PROJECT}
 POSTGRES_USER=${POSTGRES_USER}
