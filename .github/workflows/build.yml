@@ -120,6 +120,14 @@ jobs:
         exit-code: '1'
         ignore-unfixed: true
         vuln-type: os,library
+        # MUST be true: trivy-action v0.36.0 entrypoint.sh unsets TRIVY_SEVERITY
+        # by default when format=sarif ("Building SARIF report with all severities"),
+        # which makes --exit-code=1 fire on MEDIUM/LOW findings even though severity
+        # is set to CRITICAL,HIGH. With limit-severities-for-sarif: true, the action
+        # honors the severity filter for both the SARIF output and the exit-code
+        # computation. Spec 047 R13. Enforced by
+        # internal/deploy/build_workflow_vuln_gate_contract_test.go.
+        limit-severities-for-sarif: true
 
     - name: Trivy vulnerability scan — smackerel-ml
       # See trivy-core step above for the §Threshold Tuning rationale —
@@ -134,6 +142,9 @@ jobs:
         exit-code: '1'
         ignore-unfixed: true
         vuln-type: os,library
+        # See trivy-core step above for the limit-severities-for-sarif rationale.
+        # Spec 047 R13.
+        limit-severities-for-sarif: true
 
     - name: Upload Trivy scan reports as workflow artifacts
       if: always()

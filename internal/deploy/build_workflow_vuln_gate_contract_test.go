@@ -129,6 +129,25 @@ func assertVulnGateContract(doc *workflowDoc, raw []byte) error {
 				return fmt.Errorf("contract violation: trivy step %q has ignore-unfixed=%v (expected true per spec 047 design.md §Threshold Tuning — block on FIXABLE CRITICAL/HIGH only)",
 					step.Name, ignoreUnfixedRaw)
 			}
+			// Spec 047 R13: limit-severities-for-sarif MUST be true.
+			// Without this flag, trivy-action v0.36.0 entrypoint.sh unsets
+			// TRIVY_SEVERITY when format=sarif ("Building SARIF report with all
+			// severities"). That makes --exit-code=1 trigger on MEDIUM/LOW
+			// findings even though `severity` is set to CRITICAL,HIGH —
+			// which is the silent-false-positive root cause we hit in CI run
+			// 25876101377 on commit ded2fe5d. Setting limit-severities-for-sarif: true
+			// preserves the severity filter for SARIF output AND for exit-code
+			// computation, restoring the contracted gate behavior.
+			limitSeveritiesRaw, present := step.With["limit-severities-for-sarif"]
+			if !present {
+				return fmt.Errorf("contract violation: trivy step %q missing required `limit-severities-for-sarif: true` (spec 047 R13 — without this, trivy-action exits 1 on MEDIUM/LOW)",
+					step.Name)
+			}
+			limitSeverities, ok := limitSeveritiesRaw.(bool)
+			if !ok || !limitSeverities {
+				return fmt.Errorf("contract violation: trivy step %q has limit-severities-for-sarif=%v (expected true per spec 047 R13 — preserves severity filter for exit-code)",
+					step.Name, limitSeveritiesRaw)
+			}
 			// Map the trivy step to its image by matching the image-ref env var.
 			for _, img := range imageMatrix {
 				if strings.Contains(imageRef, "${{ env."+img.expectedDigest+" }}") {
@@ -224,10 +243,11 @@ func TestVulnGateContract_AdversarialMissingScan(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					// NO trivy scan for smackerel-ml — adversarial.
@@ -278,20 +298,22 @@ func TestVulnGateContract_AdversarialScanAfterSign(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					{
 						Name: "Trivy vulnerability scan — smackerel-ml",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 				},
@@ -434,20 +456,22 @@ func TestVulnGateContract_AdversarialMissingManifestEvidence(t *testing.T) {
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					{
 						Name: "Trivy vulnerability scan — smackerel-ml",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					{Name: "Cosign keyless sign — core"},
@@ -619,20 +643,22 @@ func TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey(t *testing.
 						Name: "Trivy vulnerability scan — smackerel-core",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					{
 						Name: "Trivy vulnerability scan — smackerel-ml",
 						Uses: "aquasecurity/trivy-action@v0.29.0",
 						With: map[string]interface{}{
-							"image-ref":      "${{ env.IMAGE_ML }}@sha256:def",
-							"severity":       "CRITICAL,HIGH",
-							"exit-code":      "1",
-							"ignore-unfixed": true,
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
 						},
 					},
 					{Name: "Cosign keyless sign — core"},
@@ -652,4 +678,148 @@ func TestVulnGateContract_AdversarialMissingIgnoreUnfixedManifestKey(t *testing.
 		t.Fatalf("expected missing-ignoreUnfixed-manifest-key violation, got: %v", err)
 	}
 	t.Logf("adversarial OK: build-manifest heredoc missing ignoreUnfixed: true is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialMissingLimitSeveritiesForSarif proves that
+// the contract test catches the spec 047 R13 regression: a trivy step that
+// uses `format: sarif` without `limit-severities-for-sarif: true`.
+//
+// trivy-action v0.36.0 entrypoint.sh contains:
+//
+//	if [ "${TRIVY_FORMAT:-}" = "sarif" ]; then
+//	  if [ "${INPUT_LIMIT_SEVERITIES_FOR_SARIF:-false,,}" != "true" ]; then
+//	    echo "Building SARIF report with all severities"
+//	    unset TRIVY_SEVERITY    # ← the bug
+//	  fi
+//	fi
+//
+// Unsetting TRIVY_SEVERITY makes `--exit-code 1` trip on ANY vulnerability
+// (MEDIUM/LOW included), even though the user passed
+// `severity: CRITICAL,HIGH`. This caused CI run 25876101377 step 9 to fail
+// on commit ded2fe5d (image `sha256:3756cbdb...`) with 22 MEDIUM + 4 LOW
+// findings and 0 HIGH/CRITICAL. The fix is to set
+// `limit-severities-for-sarif: true` on every trivy step.
+//
+// Without this regression test, an operator could silently revert the R13
+// fix and reintroduce the false-positive failure mode.
+func TestVulnGateContract_AdversarialMissingLimitSeveritiesForSarif(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":      "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":       "CRITICAL,HIGH",
+							"exit-code":      "1",
+							"ignore-unfixed": true,
+							// limit-severities-for-sarif missing — adversarial.
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (missing limit-severities-for-sarif on core) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "limit-severities-for-sarif") {
+		t.Fatalf("expected limit-severities-for-sarif violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: trivy step with no limit-severities-for-sarif is rejected with: %v", err)
+}
+
+// TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse proves that
+// the contract test catches the case where an operator explicitly sets
+// `limit-severities-for-sarif: false`. This is just as broken as omitting it
+// (trivy-action v0.36.0 still unsets TRIVY_SEVERITY) — both must be rejected.
+func TestVulnGateContract_AdversarialLimitSeveritiesForSarifFalse(t *testing.T) {
+	doc := &workflowDoc{
+		Jobs: map[string]struct {
+			Steps []struct {
+				Name string                 `yaml:"name"`
+				ID   string                 `yaml:"id"`
+				Uses string                 `yaml:"uses"`
+				With map[string]interface{} `yaml:"with"`
+				Run  string                 `yaml:"run"`
+			} `yaml:"steps"`
+		}{
+			"build-images": {
+				Steps: []struct {
+					Name string                 `yaml:"name"`
+					ID   string                 `yaml:"id"`
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+					Run  string                 `yaml:"run"`
+				}{
+					{Name: "Build and push smackerel-core"},
+					{Name: "Build and push smackerel-ml"},
+					{
+						Name: "Trivy vulnerability scan — smackerel-core",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_CORE }}@sha256:abc",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": false, // adversarial: explicit false
+						},
+					},
+					{
+						Name: "Trivy vulnerability scan — smackerel-ml",
+						Uses: "aquasecurity/trivy-action@v0.29.0",
+						With: map[string]interface{}{
+							"image-ref":                  "${{ env.IMAGE_ML }}@sha256:def",
+							"severity":                   "CRITICAL,HIGH",
+							"exit-code":                  "1",
+							"ignore-unfixed":             true,
+							"limit-severities-for-sarif": true,
+						},
+					},
+					{Name: "Cosign keyless sign — core"},
+				},
+			},
+		},
+	}
+	raw := []byte("vulnerabilityScan:\n  scanner: trivy\n  severityThreshold: CRITICAL,HIGH\n  gateBlocksOn: CRITICAL,HIGH-with-upstream-fix\n  ignoreUnfixed: true\n  evidenceArtifact: trivy-scan-reports-abc\n  specReference: specs/047-ci-image-vulnerability-gate/spec.md\n")
+	err := assertVulnGateContract(doc, raw)
+	if err == nil {
+		t.Fatal("expected adversarial doc (limit-severities-for-sarif: false) to fail contract, but it passed")
+	}
+	if !strings.Contains(err.Error(), "limit-severities-for-sarif=false") {
+		t.Fatalf("expected limit-severities-for-sarif=false violation, got: %v", err)
+	}
+	t.Logf("adversarial OK: trivy step with limit-severities-for-sarif: false is rejected with: %v", err)
 }
