@@ -192,14 +192,31 @@ jobs:
         timeout 30 bash -c 'until wget -qO- http://localhost:8222/healthz >/dev/null 2>&1; do sleep 1; done'
         echo "NATS is ready with auth enforcement and JetStream enabled"
 
-    - name: Apply database migrations
-      env:
-        PGPASSWORD: smackerel
-      run: |
-        for f in internal/db/migrations/*.sql; do
-          echo "Applying $f..."
-          psql -h localhost -U smackerel -d smackerel_test -f "$f"
-        done
+    # spec-047 R11: do NOT pre-apply migrations via raw psql.
+    # The Go integration test helpers (db.Migrate, embedded in
+    # internal/db/migrate.go) are fully idempotent — they track
+    # applied migrations in a `schema_migrations` table and skip
+    # any migration whose version is already recorded. The previous
+    # raw-psql pre-apply step bypassed that tracking table, so when
+    # test helpers later called db.Migrate they re-applied 001
+    # from scratch and crashed on `chk_rating_range` already-exists
+    # (SQLSTATE 42710). Removing the pre-apply lets the embedded
+    # migration runner be the single source of truth and resolves
+    # ~33 auth tests + TestMigrations_SchemaVersionCount.
+
+    # spec-047 R11: generate SST config files for integration tests.
+    # The integration job runs `go test -tags=integration ./tests/integration/...`
+    # against the real DB+NATS stack, but several integration tests
+    # (drive_config_contract_test.go, drive_connectors_endpoint_test.go,
+    # drive_foundation_canary_test.go config subtest, photos_foundation_test.go,
+    # photos_privacy_boundary_test.go, ollama_config_contract_test.go,
+    # ollama_image_availability_test.go) read config/generated/{test,dev}.env
+    # via shared helpers and t.Fatalf on ENOENT. R9 added this same step to
+    # lint-and-test; R10 unmasked that the integration job was equally
+    # affected. The renderer is pure-bash (scripts/commands/config.sh) and
+    # runs in <1s with no docker/network/host-state deps.
+    - name: Generate SST config files for integration tests
+      run: ./smackerel.sh config generate
 
     # NOTE: CI integration uses raw go test because GitHub Actions service
     # containers replace the Docker Compose stack that ./smackerel.sh test
