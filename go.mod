@@ -4,7 +4,7 @@ go 1.25.10
 
 require (
 	aidanwoods.dev/go-paseto v1.6.0
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/httprate v0.15.0
 	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
