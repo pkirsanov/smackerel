@@ -3,6 +3,7 @@ package qfdecisions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -275,5 +276,270 @@ func assertJSONKeys(t *testing.T, raw []byte, keys []string) {
 		if _, ok := decoded[key]; !ok {
 			t.Fatalf("missing JSON key %q in %s", key, raw)
 		}
+	}
+}
+
+// --- ClampPageSize (spec 041 Scope 2 Round 2A) ---
+
+func TestClient_ClampPageSize_WithinBounds(t *testing.T) {
+	client := NewClient("http://example.test", "token", 1, 50)
+	if got := client.ClampPageSize(50, 200); got != 50 {
+		t.Fatalf("ClampPageSize(50, 200) = %d, want 50", got)
+	}
+}
+
+func TestClient_ClampPageSize_AboveMax(t *testing.T) {
+	client := NewClient("http://example.test", "token", 1, 50)
+	if got := client.ClampPageSize(500, 200); got != 200 {
+		t.Fatalf("ClampPageSize(500, 200) = %d, want 200 (clamped to capability max)", got)
+	}
+}
+
+func TestClient_ClampPageSize_BelowMin(t *testing.T) {
+	client := NewClient("http://example.test", "token", 1, 50)
+	if got := client.ClampPageSize(0, 200); got != 1 {
+		t.Fatalf("ClampPageSize(0, 200) = %d, want 1 (floor)", got)
+	}
+	if got := client.ClampPageSize(-5, 200); got != 1 {
+		t.Fatalf("ClampPageSize(-5, 200) = %d, want 1 (floor)", got)
+	}
+}
+
+func TestClient_ClampPageSize_UnfetchedCapability(t *testing.T) {
+	client := NewClient("http://example.test", "token", 1, 50)
+	// capabilityMax == 0 means handshake has not been performed yet; fall back
+	// to the connector-configured request value verbatim.
+	if got := client.ClampPageSize(25, 0); got != 25 {
+		t.Fatalf("ClampPageSize(25, 0) = %d, want 25 (unfetched fallback)", got)
+	}
+}
+
+// TestClientClampsPageSizeToCapabilityRange (SCN-SM-041-005) is an umbrella
+// table-driven test that exercises Client.ClampPageSize across the full
+// range scenario set the spec describes:
+//
+//   - within bounds → return requested verbatim
+//   - above capability_max → clamp to capability_max
+//   - below 1 (zero/negative) → clamp to floor of 1
+//   - unfetched capability (max == 0) → return requested verbatim
+//
+// The existing TestClient_ClampPageSize_{WithinBounds,AboveMax,BelowMin,
+// UnfetchedCapability} tests exercise each branch in isolation; this
+// umbrella was added in Round 2K to match the scopes.md Test Plan declared
+// name without removing the granular existing tests. No behavior changes.
+func TestClientClampsPageSizeToCapabilityRange(t *testing.T) {
+	client := NewClient("http://example.test", "token", 1, 50)
+
+	cases := []struct {
+		name          string
+		requested     int
+		capabilityMax int
+		want          int
+	}{
+		{name: "within bounds", requested: 50, capabilityMax: 200, want: 50},
+		{name: "at lower bound", requested: 1, capabilityMax: 200, want: 1},
+		{name: "at upper bound", requested: 200, capabilityMax: 200, want: 200},
+		{name: "above capability_max clamps down", requested: 500, capabilityMax: 200, want: 200},
+		{name: "below floor (zero) clamps up to 1", requested: 0, capabilityMax: 200, want: 1},
+		{name: "below floor (negative) clamps up to 1", requested: -5, capabilityMax: 200, want: 1},
+		{name: "unfetched capability returns requested verbatim", requested: 25, capabilityMax: 0, want: 25},
+		{name: "unfetched capability also passes through small requested", requested: 7, capabilityMax: 0, want: 7},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := client.ClampPageSize(tc.requested, tc.capabilityMax)
+			if got != tc.want {
+				t.Fatalf("ClampPageSize(%d, %d) = %d, want %d", tc.requested, tc.capabilityMax, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- FetchDecisionEvents page-size clamping + PAGE_SIZE_OUT_OF_RANGE retry
+// (spec 041 Scope 2 Round 2F) ---
+
+// TestClient_FetchDecisionEvents_ClampsAboveCapabilityMax proves the client
+// clamps the connector-configured page_size DOWN to capability.max_page_size
+// when SetCapability records a CapabilityStatusCompatible handshake.
+//
+// Scenario: configured=500, capability.MaxPageSize=200, status=compatible
+// Expected: request URL contains limit=200 (NOT limit=500).
+func TestClient_FetchDecisionEvents_ClampsAboveCapabilityMax(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(DecisionEventsResponse{
+			Events:     []QFDecisionEvent{},
+			NextCursor: "qf-smackerel-v1:0",
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "qf-service-token", 1, 500)
+	client.SetCapability(&QFBridgeCapability{MaxPageSize: 200}, CapabilityStatusCompatible)
+
+	if _, err := client.FetchDecisionEvents(context.Background(), ""); err != nil {
+		t.Fatalf("FetchDecisionEvents: %v", err)
+	}
+	if !strings.Contains(gotQuery, "limit=200") {
+		t.Fatalf("expected request to clamp to limit=200, got query=%q", gotQuery)
+	}
+	if strings.Contains(gotQuery, "limit=500") {
+		t.Fatalf("clamp failed; query unexpectedly contained limit=500: %q", gotQuery)
+	}
+}
+
+// TestClient_FetchDecisionEvents_ClampsConfiguredZeroToFloor proves the
+// client clamps an invalid configured page_size UP to the floor of 1 when
+// the capability is compatible. The configured-zero case is treated as an
+// operator misconfiguration that should fail loud via a structured warn log,
+// not silently substitute a default — but the request itself still ships
+// with a valid value so the poll completes.
+//
+// Scenario: configured=0, capability.MaxPageSize=200, status=compatible
+// Expected: request URL contains limit=1.
+func TestClient_FetchDecisionEvents_ClampsConfiguredZeroToFloor(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(DecisionEventsResponse{})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "qf-service-token", 1, 0)
+	client.SetCapability(&QFBridgeCapability{MaxPageSize: 200}, CapabilityStatusCompatible)
+
+	if _, err := client.FetchDecisionEvents(context.Background(), ""); err != nil {
+		t.Fatalf("FetchDecisionEvents: %v", err)
+	}
+	if !strings.Contains(gotQuery, "limit=1") {
+		t.Fatalf("expected floor-clamped limit=1, got query=%q", gotQuery)
+	}
+}
+
+// TestClient_FetchDecisionEvents_IncompatibleStatusBypassesClamp proves the
+// client does NOT clamp when the handshake declared the capability
+// incompatible. The connector is responsible for blocking polling in that
+// state; the client's job is only to ensure any in-flight request before
+// tear-down stays well-formed, which means using the configured value as-is.
+//
+// Scenario: configured=500, capability.MaxPageSize=200, status=incompatible
+// Expected: request URL contains limit=500 (no clamp applied).
+func TestClient_FetchDecisionEvents_IncompatibleStatusBypassesClamp(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(DecisionEventsResponse{})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "qf-service-token", 1, 500)
+	client.SetCapability(&QFBridgeCapability{MaxPageSize: 200}, CapabilityStatusIncompatible)
+
+	if _, err := client.FetchDecisionEvents(context.Background(), ""); err != nil {
+		t.Fatalf("FetchDecisionEvents: %v", err)
+	}
+	if !strings.Contains(gotQuery, "limit=500") {
+		t.Fatalf("incompatible status must not clamp; query=%q", gotQuery)
+	}
+	if strings.Contains(gotQuery, "limit=200") {
+		t.Fatalf("unexpected clamp under incompatible status; query=%q", gotQuery)
+	}
+}
+
+// TestClient_FetchDecisionEvents_RetriesOnPageSizeOutOfRange proves the
+// client retries exactly once when QF returns 400 PAGE_SIZE_OUT_OF_RANGE,
+// using the capability-clamped page size on retry. Two attempts MUST be
+// observed at the test server; the second attempt succeeds.
+//
+// The retry path also exercises the structured WARN log (visible to operators
+// in container stdout) — assertion is on the request count + retry success,
+// not on slog output (which is plumbed through the global default handler).
+func TestClient_FetchDecisionEvents_RetriesOnPageSizeOutOfRange(t *testing.T) {
+	var attempts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts = append(attempts, r.URL.RawQuery)
+		if len(attempts) == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(BridgeErrorResponse{
+				Code:    "PAGE_SIZE_OUT_OF_RANGE",
+				Message: "requested page_size 500 exceeds max_page_size 200",
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(DecisionEventsResponse{
+			Events:     []QFDecisionEvent{},
+			NextCursor: "qf-smackerel-v1:after-retry",
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "qf-service-token", 1, 500)
+	client.SetCapability(&QFBridgeCapability{MaxPageSize: 200}, CapabilityStatusCompatible)
+
+	resp, err := client.FetchDecisionEvents(context.Background(), "")
+	if err != nil {
+		t.Fatalf("FetchDecisionEvents after retry: %v", err)
+	}
+	if resp.NextCursor != "qf-smackerel-v1:after-retry" {
+		t.Fatalf("expected retry success NextCursor=%q, got %q", "qf-smackerel-v1:after-retry", resp.NextCursor)
+	}
+	if len(attempts) != 2 {
+		t.Fatalf("expected exactly 2 attempts (initial + retry), got %d: %v", len(attempts), attempts)
+	}
+	// Both attempts ship the capability-clamped limit=200; the test server's
+	// first response simulates a stale-capability rejection that resolves on
+	// the second try.
+	for i, q := range attempts {
+		if !strings.Contains(q, "limit=200") {
+			t.Fatalf("attempt %d did not use clamped limit=200: %q", i+1, q)
+		}
+	}
+}
+
+// TestClient_FetchDecisionEvents_PageSizeOutOfRangePersistsAfterRetry proves
+// the retry does NOT loop infinitely. When QF returns PAGE_SIZE_OUT_OF_RANGE
+// on both the initial poll AND the retry, the client surfaces the wrapped
+// error to the caller (no third attempt).
+func TestClient_FetchDecisionEvents_PageSizeOutOfRangePersistsAfterRetry(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(BridgeErrorResponse{
+			Code:    "PAGE_SIZE_OUT_OF_RANGE",
+			Message: "page_size still out of range",
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "qf-service-token", 1, 500)
+	client.SetCapability(&QFBridgeCapability{MaxPageSize: 200}, CapabilityStatusCompatible)
+
+	_, err := client.FetchDecisionEvents(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected PAGE_SIZE_OUT_OF_RANGE error after retry, got nil")
+	}
+	if attempts != 2 {
+		t.Fatalf("expected exactly 2 attempts before surfacing error, got %d", attempts)
+	}
+	if !strings.Contains(err.Error(), "page_size_out_of_range persisted after retry") {
+		t.Fatalf("expected wrapped retry-persistence error, got: %v", err)
+	}
+	// The underlying typed error must still be reachable via errors.As so
+	// upstream callers can branch on the contract violation if needed.
+	var oor PageSizeOutOfRangeError
+	if !errors.As(err, &oor) {
+		t.Fatalf("expected wrapped error to be unwrappable as PageSizeOutOfRangeError, got: %v", err)
+	}
+	if oor.Code != "PAGE_SIZE_OUT_OF_RANGE" {
+		t.Fatalf("expected error code PAGE_SIZE_OUT_OF_RANGE, got %q", oor.Code)
 	}
 }

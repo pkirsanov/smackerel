@@ -280,6 +280,23 @@ var QFCursorFastForwardEventsSkipped = prometheus.NewCounter(
 	},
 )
 
+// QFFreshnessP95Seconds reports the rolling-window p95 freshness latency of the
+// QF Companion connector per pipeline stage. Bounded labels: `stage` is one of
+// "ingest" (QF event server_time → smackerel artifact persisted), "render"
+// (artifact persisted → render surface emit), or "total" (server_time → render
+// emit). Republished by Connector.recordFreshness() each time a window has
+// enough samples to compute p95. Negative observations are clamped to zero so
+// clock skew between QF and smackerel hosts cannot produce a misleading
+// negative gauge value. Consumed by design.md §F12 freshness budget alerts.
+// SCN-SM-041-009.
+var QFFreshnessP95Seconds = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "smackerel_qf_freshness_p95_seconds",
+		Help: "QF Companion connector freshness latency p95 in seconds, per pipeline stage (ingest|render|total)",
+	},
+	[]string{"stage"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -307,6 +324,7 @@ func init() {
 		QFUnknownDecisionType,
 		QFCursorLagSeconds,
 		QFCursorFastForwardEventsSkipped,
+		QFFreshnessP95Seconds,
 		// Spec 039 Scope 6 recommendation metrics — defined in
 		// recommendations.go; bounded labels enforced (no watch_id,
 		// no recommendation_id, no request_id).

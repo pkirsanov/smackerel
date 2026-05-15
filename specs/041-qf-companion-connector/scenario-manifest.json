@@ -3,7 +3,7 @@
   "specId": "041",
   "featureDir": "specs/041-qf-companion-connector",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-05-07T02:05:06Z",
+  "generatedAt": "2026-05-13T00:00:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-SM-041-001",
@@ -57,6 +57,186 @@
       "linkedDoD": [
         "SCN-SM-041-002 connector marks schema mismatch degraded/error and publishes no trusted artifacts",
         "Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-003",
+      "name": "Capability Handshake Before Polling",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/capability_test.go",
+          "function": "TestParseCapabilityResponseFields"
+        },
+        {
+          "file": "tests/integration/qf_decisions_capability_test.go",
+          "function": "TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect"
+        },
+        {
+          "file": "tests/integration/qf_decisions_capability_test.go",
+          "function": "TestQFDecisionsConnectorReReadsCapabilityOnRestart"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence",
+        "report.md#scope-2-integration-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-003 connector calls capability endpoint before any decision-event poll",
+        "SCN-SM-041-003 unit test parses full capability response field set",
+        "SCN-SM-041-003 integration test handshake on connect against live stack",
+        "SCN-SM-041-003 integration test handshake on restart against live stack"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-004",
+      "name": "Incompatible Capability Response Blocks Polling",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/capability_test.go",
+          "function": "TestCapabilityMismatchDetectsRequiredPacketVersion"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "function": "TestQFDecisionsIncompatibleCapabilityBlocksPolling"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence",
+        "report.md#scope-2-e2e-api-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-004 incompatible capability blocks polling and emits capability-mismatch metric",
+        "SCN-SM-041-004 unit test required-field mismatch detection",
+        "SCN-SM-041-004 E2E API regression test prevents polling and preserves zero trusted-artifact publication"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-005",
+      "name": "Page Size Clamped To Capability Range",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/client_test.go",
+          "function": "TestClientClampsPageSizeToCapabilityRange"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence",
+        "report.md#scope-2-integration-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-005 page-size requests clamped to capability range",
+        "SCN-SM-041-005 unit test page-size clamping and PAGE_SIZE_OUT_OF_RANGE rejection"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-006",
+      "name": "Unknown Decision Type Ingested With Metadata Flag",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/normalizer_test.go",
+          "function": "TestNormalizerMarksUnknownDecisionTypeWithMetadata"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_connector_api_test.go",
+          "function": "TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence",
+        "report.md#scope-2-e2e-api-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-006 unknown decision-type ingested with metadata flag and metric increment",
+        "SCN-SM-041-006 unit test unknown decision-type metadata without inventing content type",
+        "SCN-SM-041-006 E2E API regression test end-to-end unknown decision-type ingestion"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-007",
+      "name": "Cursor Lag Breach Logged Without Auto Fast Forward",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/connector_test.go",
+          "function": "TestConnectorEmitsLagBreachEventAboveThreshold"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-007 lag-breach event emitted without auto fast-forward",
+        "SCN-SM-041-007 unit test lag-breach event formatting and no-auto-fast-forward invariant"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-008",
+      "name": "Operator-Initiated Fast Forward Recovery",
+      "scope": "02-capability-handshake-cursor-sync-normalization-and-storage",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "stress"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/normalizer_test.go",
+          "function": "TestNormalizerPersistsResponseLevelNextCursor"
+        },
+        {
+          "file": "tests/integration/qf_decisions_sync_test.go",
+          "function": "TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped"
+        },
+        {
+          "file": "tests/stress/qf_decision_event_replay_test.go",
+          "function": "TestQFDecisionsFreshnessSLAP95IngestRender"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-unit-evidence",
+        "report.md#scope-2-integration-evidence",
+        "report.md#scope-2-stress-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-008 connector picks up events_skipped and transitions to degraded_recovered",
+        "SCN-SM-041-008 unit test response-level next_cursor persistence and per-event cursor diagnostic-only",
+        "SCN-SM-041-008 integration test fast-forward recovery against live stack",
+        "SCN-SM-041-008 stress test freshness SLA p95 ingest render combined budget"
       ]
     }
   ]
