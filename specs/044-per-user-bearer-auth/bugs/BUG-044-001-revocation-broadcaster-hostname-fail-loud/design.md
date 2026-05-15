@@ -15,7 +15,7 @@ Replace the inline silent-fallback env-read at `cmd/core/wiring.go` line 243 wit
 **Alternatives rejected:**
 - Inline check + log.Fatal on empty: rejected because (a) `log.Fatal` aborts the entire process, which is harsher than the existing non-fatal-but-loud pattern in the same block (where `NewBroadcaster` errors are non-fatal), and (b) inline is not unit-testable without mocking the full wiring tree.
 - Inline check + slog.Error + skip-construction: rejected because the inline form is not directly unit-testable; only the integration test would catch a regression to the silent-fallback form.
-- Move the helper to `cmd/core/helpers.go`: rejected because `helpers.go` is targeted by HL-RESCAN-014 for cleanup of unused fail-soft helpers (`parseFloatEnv` etc.), and adding a new fail-loud helper there would muddy the HL-RESCAN-014 scope. Co-locating the helper with its sole caller in `wiring.go` is the cleaner design.
+- Move the helper to `cmd/core/helpers.go`: rejected because `helpers.go` was targeted by HL-RESCAN-014 (closed by [`specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`](../../../020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/)) for cleanup of unused fail-soft helpers (`parseFloatEnv` etc.), and adding a new fail-loud helper there would muddy that scope. Co-locating the helper with its sole caller in `wiring.go` is the cleaner design.
 
 ### DD-2: Fail-loud-but-non-fatal at the broadcaster site
 

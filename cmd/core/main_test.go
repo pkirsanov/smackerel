@@ -161,177 +161,6 @@ func TestParseJSONArray_NotAnArray(t *testing.T) {
 	}
 }
 
-// --- parseJSONObject tests ---
-
-func TestParseJSONObject_ValidObject(t *testing.T) {
-	result := parseJSONObject(`{"key": "value", "count": 42}`)
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	if result["key"] != "value" {
-		t.Errorf("expected key=value, got %v", result["key"])
-	}
-	if result["count"] != float64(42) {
-		t.Errorf("expected count=42, got %v", result["count"])
-	}
-}
-
-func TestParseJSONObject_EmptyString(t *testing.T) {
-	result := parseJSONObject("")
-	if result != nil {
-		t.Errorf("expected nil for empty string, got %v", result)
-	}
-}
-
-func TestParseJSONObject_EmptyObject(t *testing.T) {
-	result := parseJSONObject("{}")
-	if result == nil {
-		t.Fatal("expected non-nil for empty JSON object")
-	}
-	if len(result) != 0 {
-		t.Errorf("expected 0 keys, got %d", len(result))
-	}
-}
-
-func TestParseJSONObject_InvalidJSON(t *testing.T) {
-	result := parseJSONObject("[not valid")
-	if result != nil {
-		t.Errorf("expected nil for invalid JSON, got %v", result)
-	}
-}
-
-func TestParseJSONObject_NotAnObject(t *testing.T) {
-	// A JSON array is not a valid JSON object
-	result := parseJSONObject(`["a", "b"]`)
-	if result != nil {
-		t.Errorf("expected nil for JSON array input, got %v", result)
-	}
-}
-
-func TestParseJSONObject_NestedObject(t *testing.T) {
-	result := parseJSONObject(`{"outer": {"inner": "value"}}`)
-	if result == nil {
-		t.Fatal("expected non-nil result")
-	}
-	inner, ok := result["outer"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected nested map, got %T", result["outer"])
-	}
-	if inner["inner"] != "value" {
-		t.Errorf("expected inner=value, got %v", inner["inner"])
-	}
-}
-
-// --- parseFloatEnv tests ---
-
-func TestParseFloatEnv_ValidFloat(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "3.14")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 3.14 {
-		t.Errorf("expected 3.14, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_Integer(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "42")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 42.0 {
-		t.Errorf("expected 42.0, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_EmptyString(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for empty string, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_UnsetVar(t *testing.T) {
-	// Ensure the var does not exist
-	t.Setenv("TEST_FLOAT_UNSET", "")
-	result := parseFloatEnv("TEST_FLOAT_UNSET")
-	if result != 0 {
-		t.Errorf("expected 0 for unset var, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_InvalidFloat(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "not-a-number")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for invalid float, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_NegativeFloat(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "-1.5")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != -1.5 {
-		t.Errorf("expected -1.5, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_Zero(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "0")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_ScientificNotation(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "1.5e2")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 150.0 {
-		t.Errorf("expected 150.0, got %f", result)
-	}
-}
-
-// --- CHAOS-019-001: parseFloatEnv must reject IEEE 754 special values ---
-
-func TestParseFloatEnv_Inf(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "Inf")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for Inf, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_NegInf(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "-Inf")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for -Inf, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_PosInf(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "+Inf")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for +Inf, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_NaN(t *testing.T) {
-	t.Setenv("TEST_FLOAT_VAR", "NaN")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for NaN, got %f", result)
-	}
-}
-
-func TestParseFloatEnv_NaN_Lowercase(t *testing.T) {
-	// strconv.ParseFloat is case-insensitive for NaN
-	t.Setenv("TEST_FLOAT_VAR", "nan")
-	result := parseFloatEnv("TEST_FLOAT_VAR")
-	if result != 0 {
-		t.Errorf("expected 0 for nan, got %f", result)
-	}
-}
-
 // --- IMP-022-001: runWithTimeout overall deadline enforcement ---
 
 func TestRunWithTimeout_CompletesBeforeBudget(t *testing.T) {
@@ -400,69 +229,12 @@ func TestRunWithTimeout_StepBudgetWinsOverDeadlineWhenShorter(t *testing.T) {
 	}
 }
 
-// --- H-019-002: parseJSONArrayEnv / parseJSONObjectEnv include key in logs ---
-
-func TestParseJSONArrayEnv_ValidArray(t *testing.T) {
-	t.Setenv("TEST_JSON_ARRAY", `["x","y"]`)
-	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
-	if len(result) != 2 {
-		t.Fatalf("expected 2 elements, got %d", len(result))
-	}
-}
-
-func TestParseJSONArrayEnv_EmptyVar(t *testing.T) {
-	t.Setenv("TEST_JSON_ARRAY", "")
-	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
-	if result != nil {
-		t.Errorf("expected nil for empty env var, got %v", result)
-	}
-}
-
-func TestParseJSONArrayEnv_InvalidJSON(t *testing.T) {
-	t.Setenv("TEST_JSON_ARRAY", "{broken")
-	result := parseJSONArrayEnv("TEST_JSON_ARRAY")
-	if result != nil {
-		t.Errorf("expected nil for invalid JSON, got %v", result)
-	}
-}
-
-func TestParseJSONObjectEnv_ValidObject(t *testing.T) {
-	t.Setenv("TEST_JSON_OBJ", `{"k":"v"}`)
-	result := parseJSONObjectEnv("TEST_JSON_OBJ")
-	if result == nil || result["k"] != "v" {
-		t.Errorf("expected {k:v}, got %v", result)
-	}
-}
-
-func TestParseJSONObjectEnv_EmptyVar(t *testing.T) {
-	t.Setenv("TEST_JSON_OBJ", "")
-	result := parseJSONObjectEnv("TEST_JSON_OBJ")
-	if result != nil {
-		t.Errorf("expected nil for empty env var, got %v", result)
-	}
-}
-
-func TestParseJSONObjectEnv_InvalidJSON(t *testing.T) {
-	t.Setenv("TEST_JSON_OBJ", "not-json")
-	result := parseJSONObjectEnv("TEST_JSON_OBJ")
-	if result != nil {
-		t.Errorf("expected nil for invalid JSON, got %v", result)
-	}
-}
-
-// --- H-019-002: backward compatibility — old parseJSONArray/parseJSONObject still work ---
+// --- H-019-002: backward compatibility — old parseJSONArray still works ---
 
 func TestParseJSONArray_BackwardCompat(t *testing.T) {
 	result := parseJSONArray(`[1,2,3]`)
 	if len(result) != 3 {
 		t.Fatalf("expected 3 elements, got %d", len(result))
-	}
-}
-
-func TestParseJSONObject_BackwardCompat(t *testing.T) {
-	result := parseJSONObject(`{"a":1}`)
-	if result == nil || result["a"] != float64(1) {
-		t.Errorf("expected {a:1}, got %v", result)
 	}
 }
 
@@ -524,10 +296,9 @@ func TestGovAlertsSourceEarthquakeWiring_UnsetDefaultsFalse(t *testing.T) {
 	}
 }
 
-// --- IMP-019-R27-002: Weather enable_alerts/forecast_days/precision SST end-to-end ---
-// These three config fields were readable by the weather connector after R23 fix
-// but never wired through main.go SourceConfig. Operators could not enable weather
-// alerts, change forecast horizon, or adjust coordinate precision.
+// --- IMP-019-R27-002: Weather enable_alerts SST end-to-end ---
+// The enable_alerts toggle was readable by the weather connector after R23 fix
+// but never wired through main.go SourceConfig. Operators could not enable weather alerts.
 
 func TestWeatherEnableAlertsWiring(t *testing.T) {
 	t.Setenv("WEATHER_ENABLE_ALERTS", "true")
@@ -565,38 +336,9 @@ func TestWeatherEnableAlertsWiring_Disabled(t *testing.T) {
 	}
 }
 
-func TestWeatherForecastDaysWiring(t *testing.T) {
-	t.Setenv("WEATHER_FORECAST_DAYS", "14")
-	result := parseFloatEnv("WEATHER_FORECAST_DAYS")
-	if result != 14.0 {
-		t.Errorf("expected 14.0, got %f", result)
-	}
-}
-
-func TestWeatherPrecisionWiring(t *testing.T) {
-	t.Setenv("WEATHER_PRECISION", "4")
-	result := parseFloatEnv("WEATHER_PRECISION")
-	if result != 4.0 {
-		t.Errorf("expected 4.0, got %f", result)
-	}
-}
-
-func TestWeatherForecastDaysWiring_ZeroOnEmpty(t *testing.T) {
-	// When env var is empty/unset, parseFloatEnv returns 0.
-	// The weather connector should use its internal default (7 days) when
-	// SourceConfig has 0 — this verifies the wiring doesn't inject a non-zero
-	// false-positive that would override the connector's range guard.
-	t.Setenv("WEATHER_FORECAST_DAYS", "")
-	result := parseFloatEnv("WEATHER_FORECAST_DAYS")
-	if result != 0 {
-		t.Errorf("expected 0 for empty env var, got %f", result)
-	}
-}
-
-// --- IMP-019-R28: Financial Markets fred_enabled / fred_series SST end-to-end ---
-// Before this fix, fred_enabled and fred_series were readable by parseMarketsConfig
-// but never set by main.go, meaning operators could not disable FRED data when an
-// API key was present, and could not customize which FRED series to track.
+// --- IMP-019-R28: Financial Markets fred_enabled SST end-to-end ---
+// Before this fix, fred_enabled was readable by parseMarketsConfig but never set
+// by main.go, meaning operators could not disable FRED data when an API key was present.
 
 func TestMarketsFreddEnabledWiring_True(t *testing.T) {
 	t.Setenv("FINANCIAL_MARKETS_FRED_ENABLED", "true")
@@ -637,27 +379,6 @@ func TestMarketsFreddEnabledWiring_UnsetDefaultsFalse(t *testing.T) {
 	val := os.Getenv("FINANCIAL_MARKETS_FRED_ENABLED") == "true"
 	if val {
 		t.Error("absent/empty FINANCIAL_MARKETS_FRED_ENABLED should evaluate to false via == 'true'")
-	}
-}
-
-func TestMarketsFredSeriesWiring(t *testing.T) {
-	t.Setenv("FINANCIAL_MARKETS_FRED_SERIES", `["GDP","UNRATE","DFF"]`)
-	result := parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES")
-	if len(result) != 3 {
-		t.Fatalf("expected 3 FRED series, got %d", len(result))
-	}
-	if result[0] != "GDP" || result[1] != "UNRATE" || result[2] != "DFF" {
-		t.Errorf("unexpected series values: %v", result)
-	}
-}
-
-func TestMarketsFredSeriesWiring_Empty(t *testing.T) {
-	// When env var is absent, parseJSONArrayEnv returns nil.
-	// parseMarketsConfig should fall back to defaultFREDSeries.
-	t.Setenv("FINANCIAL_MARKETS_FRED_SERIES", "")
-	result := parseJSONArrayEnv("FINANCIAL_MARKETS_FRED_SERIES")
-	if result != nil {
-		t.Errorf("expected nil for empty env var, got %v", result)
 	}
 }
 

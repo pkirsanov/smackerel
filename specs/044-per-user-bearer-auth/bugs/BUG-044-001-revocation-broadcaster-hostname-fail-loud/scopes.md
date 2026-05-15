@@ -206,7 +206,7 @@ This bug fix does **not** rename or remove any externally-visible interface, rou
 **Excluded surfaces (this fix MUST NOT touch):**
 
 - `cmd/core/main.go`, `cmd/core/services.go`, `cmd/core/cmd_*.go`, `cmd/core/wiring_agent.go`, `cmd/core/wiring_recommendation_watches.go`, `cmd/core/connectors.go`, `cmd/core/shutdown.go`, `cmd/core/agent_e2e_tools.go` — adjacent cmd/core files; outside HL-RESCAN-008's scope
-- `cmd/core/helpers.go` — out-of-scope unused fail-soft helpers (`parseFloatEnv`/`parseJSONArrayEnv`/`parseJSONObjectEnv`); HL-RESCAN-014 covers these separately
+- `cmd/core/helpers.go` — out-of-scope unused fail-soft helpers (`parseFloatEnv`/`parseJSONArrayEnv`/`parseJSONObjectEnv`); closed by [`specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`](../../../020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/) (HL-RESCAN-014).
 - `internal/auth/revocation/broadcaster.go` — the Broadcaster struct's existing constructor signature is preserved; only the wiring-site read of HOSTNAME changes
 - `tests/integration/auth_revocation_test.go`, `tests/integration/auth_chaos_*_test.go` — pre-existing integration tests; they construct the Broadcaster with synthetic instance IDs and are unaffected
 - `config/smackerel.yaml` — the SST source-of-truth values are unchanged; HOSTNAME is a Docker runtime env var, not an SST-managed value

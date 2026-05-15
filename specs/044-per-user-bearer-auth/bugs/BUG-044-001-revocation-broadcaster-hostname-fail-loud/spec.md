@@ -59,6 +59,6 @@ The defect is the bypass of the SST gate AND the silent collision of replica ide
 - Editing `cfg.Auth.Enabled`, `cfg.Auth.RevocationNATSSubject`, or any other config gate that controls whether the broadcaster block runs.
 - Editing `config/smackerel.yaml` or the SST loader (`scripts/commands/config.sh`) — `HOSTNAME` is a runtime env var injected by the container orchestrator, not an SST-managed value.
 - Editing `Dockerfile` or `docker-compose.yml` to set `HOSTNAME` explicitly (Docker already injects `HOSTNAME` for every container by default; the fix is bounded to the runtime read site).
-- Editing `cmd/core/helpers.go` `parseFloatEnv` / `parseJSONArrayEnv` / `parseJSONObjectEnv` — those are out-of-scope unused fail-soft helpers tracked separately by HL-RESCAN-014.
+- Editing `cmd/core/helpers.go` `parseFloatEnv` / `parseJSONArrayEnv` / `parseJSONObjectEnv` — those are out-of-scope unused fail-soft helpers closed by [`specs/020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/`](../../../020-security-hardening/bugs/BUG-020-003-helpers-unused-fail-soft-cleanup/) (HL-RESCAN-014).
 - Editing `specs/044-per-user-bearer-auth/spec.md`, `design.md`, `scopes.md`, `state.json`, `report.md`, or `uservalidation.md` (foreign-owned parent-spec content; outside `bubbles.devops` mode edit scope).
 - Adding fail-loud reads for OTHER env vars in `cmd/core/wiring.go` (only the `HOSTNAME` read site is in HL-RESCAN-008's scope; other defaults are tracked by HL-RESCAN-012/013/014 separately).
