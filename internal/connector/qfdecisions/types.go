@@ -52,6 +52,12 @@ type QFDecisionEvent struct {
 	PacketURL       string `json:"packet_url"`
 	SourceSurface   string `json:"source_surface"`
 	CreatedAt       string `json:"created_at"`
+	// EventsSkipped is populated only on a QF-issued cursor fast-forward
+	// diagnostic event (spec 041 SCN-SM-041-008 / QF spec 063 F13). When
+	// non-zero the connector treats this event as a recovery marker:
+	// increments the fast-forward counter, transitions to
+	// HealthDegradedRecovered, and skips normalization of the event itself.
+	EventsSkipped int `json:"events_skipped,omitempty"`
 }
 
 type DecisionEventsResponse struct {
