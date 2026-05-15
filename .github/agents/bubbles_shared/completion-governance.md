@@ -338,6 +338,17 @@ concerns:
 
 The schema, severity rules, and follow-up-action vocabulary above MUST stay in sync with [`bubbles/workflows.yaml#outcome-states`](../../bubbles/workflows.yaml). When updating one, update the other in the same change.
 
+### Mechanical Enforcement Note (Gate G040 — Check 18)
+
+`state-transition-guard.sh` Check 18 (Deferral Language Scan) understands the `done_with_concerns` schema and treats it correctly. Specifically:
+
+1. **Status-conditional skip:** When `state.json.status == "done_with_concerns"`, Check 18 emits an INFO line and skips entirely. The follow-up narrative permitted by this outcome state would otherwise trip the deferral-language pattern (e.g. "deferred", "follow-up", "out of scope"), so the check defers to the schema contract.
+2. **Schema field exclusion:** When `status == "done"`, Check 18 still runs but excludes lines containing the schema-canonical follow-up field names: `followUpOwner`, `followUpAction`, `followUpTarget`, `followUps` (case-insensitive). These are the structured tracking mechanism, not deferred-work prose.
+3. **Section heading exclusion:** The canonical section heading `## Follow-Up Narrative` (and `## Follow-Up Section`) is excluded from the scan. The container heading itself is schema-allowed.
+4. **Sentinel markers:** Authors may wrap quoted historical material in `<!-- bubbles:g040-skip-begin -->` … `<!-- bubbles:g040-skip-end -->` to exempt it from the scan. Marker lines themselves are stripped before scanning. This complements the existing code-fence exemption.
+
+These exemptions exist because the `done_with_concerns` schema requires authors to write the very tokens the deferral pattern was designed to catch. The exclusions are intentional and narrow — raw deferred-work prose under `status == "done"` is still blocked.
+
 ## Related Modules
 
 - [evidence-rules.md](evidence-rules.md) — evidence format, attribution, and anti-fabrication requirements
