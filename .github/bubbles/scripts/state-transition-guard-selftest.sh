@@ -92,6 +92,21 @@ assert_log_contains() {
   fi
 }
 
+assert_log_not_contains() {
+  local log_file="$1"
+  local needle="$2"
+  local label="$3"
+
+  if grep -Fq "$needle" "$log_file"; then
+    fail "$label"
+    echo "--- offending log excerpt: $log_file ---"
+    grep -F "$needle" "$log_file" || true
+    echo "--- end offending log excerpt ---"
+  else
+    pass "$label"
+  fi
+}
+
 emit_base_fixture() {
   local feature_dir="$1"
   local scenario_test="$feature_dir/tests/docs-scenario-regression.e2e.spec.ts"
@@ -645,6 +660,79 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+emit_g040_fixture() {
+  # G040 / Check 18 selftest fixture builder.
+  #
+  # Args:
+  #   feature_dir            — destination directory
+  #   status                 — "done" or "done_with_concerns"
+  #   prose                  — narrative line to inject into report.md OUTSIDE
+  #                            the existing fenced code block
+  #   use_skip_markers       — "yes" to wrap prose in
+  #                            <!-- bubbles:g040-skip-begin/end -->; "no" otherwise
+  #   include_followup_yaml  — "yes" to also append a worked done_with_concerns
+  #                            schema example with followUpOwner/Action/Target/Follows
+  local feature_dir="$1"
+  local status="$2"
+  local prose="$3"
+  local use_skip_markers="$4"
+  local include_followup_yaml="$5"
+
+  emit_base_fixture "$feature_dir"
+
+  # Mutate status only. We deliberately keep workflowMode as docs-only (the
+  # base default) so that Check 17's full-delivery git-log probe is skipped
+  # entirely (it gates on workflowMode == "full-delivery"). Check 17 with
+  # full-delivery + a /tmp feature_dir would invoke `git log -- /tmp/...`
+  # which fails with exit 128 inside the bubbles repo and aborts the script
+  # under set -euo pipefail BEFORE Check 18 can run. Check 18 itself is
+  # workflowMode-agnostic — it only cares about state.status — so the
+  # docs-only/done mismatch (Check 3 ceiling fail) is harmless to our
+  # assertions here. The unrelated checks may emit failures, but the script
+  # continues and Check 18 runs to completion.
+  python3 - "$feature_dir/state.json" "$status" <<'PY'
+import json
+import sys
+
+path, new_status = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+data["status"] = new_status
+cert = data.setdefault("certification", {})
+cert["status"] = new_status
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+
+  {
+    echo ""
+    echo "## Follow-Up Narrative"
+    if [[ "$use_skip_markers" == "yes" ]]; then
+      echo "<!-- bubbles:g040-skip-begin -->"
+      echo "$prose"
+      echo "<!-- bubbles:g040-skip-end -->"
+    else
+      echo "$prose"
+    fi
+    if [[ "$include_followup_yaml" == "yes" ]]; then
+      echo ""
+      echo "concerns:"
+      echo "  - id: CONCERN-1"
+      echo "    severity: low"
+      echo "    description: Selftest concern shape only."
+      echo "    followUpOwner: bubbles.bug"
+      echo "    followUpAction: new-spec"
+      echo "    followUpTarget: BUG-099"
+      echo "followUps:"
+      echo "  - target: BUG-099"
+      echo "    owner: bubbles.bug"
+    fi
+  } >> "$feature_dir/report.md"
+}
+
 mutate_execution_history_implausible() {
   local state_file="$1"
 
@@ -757,6 +845,14 @@ index_parity_negative_feature_dir="$tmp_root/specs/907-transition-guard-selftest
 phantom_scope_negative_feature_dir="$tmp_root/specs/908-transition-guard-selftest-phantom-scope"
 execution_history_negative_feature_dir="$tmp_root/specs/909-transition-guard-selftest-execution-history"
 lockdown_round_negative_feature_dir="$tmp_root/specs/910-transition-guard-selftest-lockdown-round"
+g040_pos_deferred_dir="$tmp_root/specs/920-g040-positive-deferred-prose"
+g040_pos_skip_for_now_dir="$tmp_root/specs/921-g040-positive-skip-for-now"
+g040_neg_followup_fields_dir="$tmp_root/specs/922-g040-negative-schema-yaml-only"
+g040_neg_done_with_concerns_dir="$tmp_root/specs/923-g040-negative-done-with-concerns"
+g040_neg_skip_markers_dir="$tmp_root/specs/924-g040-negative-skip-markers"
+g040_pos_skip_marker_outside_dir="$tmp_root/specs/925-g040-positive-skip-marker-outside"
+g040_neg_spec_063_excerpt_dir="$tmp_root/specs/926-g040-negative-spec-063-excerpt"
+g040_pos_strict_done_mixed_dir="$tmp_root/specs/927-g040-positive-strict-done-mixed"
 g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-illegal-child-workflow"
 mkdir -p "$tmp_root/specs"
@@ -774,6 +870,47 @@ cp -R "$positive_feature_dir" "$execution_history_negative_feature_dir"
 mutate_execution_history_implausible "$execution_history_negative_feature_dir/state.json"
 cp -R "$positive_feature_dir" "$lockdown_round_negative_feature_dir"
 mutate_lockdown_round_mismatch "$lockdown_round_negative_feature_dir/state.json"
+
+# G040 / Check 18 fixtures (spec 001-stg-check18-deferral-regex-refinement)
+emit_g040_fixture "$g040_pos_deferred_dir" "done" \
+  "Several action items were deferred to next sprint per planning notes." \
+  "no" "no"
+emit_g040_fixture "$g040_pos_skip_for_now_dir" "done" \
+  "Decision: skip for now and revisit in a follow-up cycle." \
+  "no" "no"
+emit_g040_fixture "$g040_neg_followup_fields_dir" "done" \
+  "Schema worked example follows in YAML form below." \
+  "no" "yes"
+emit_g040_fixture "$g040_neg_done_with_concerns_dir" "done_with_concerns" \
+  "Concern routed to bubbles.bug for follow-up tracking; nothing was deferred." \
+  "no" "yes"
+emit_g040_fixture "$g040_neg_skip_markers_dir" "done" \
+  "The historical narrative below is bracketed because it discusses content that was deferred to next sprint in a prior release." \
+  "yes" "no"
+emit_g040_fixture "$g040_pos_skip_marker_outside_dir" "done" \
+  "First sentence sits inside markers and is fine." \
+  "yes" "no"
+# Append a SECOND deferral-prose paragraph OUTSIDE the marker pair so the
+# guard must still BLOCK on the unbracketed content.
+{
+  echo ""
+  echo "## Trailing Outside-Marker Section"
+  echo "Despite the bracketed narrative above, this paragraph admits work was deferred to next sprint and remains unmarked."
+} >> "$g040_pos_skip_marker_outside_dir/report.md"
+
+emit_g040_fixture "$g040_neg_spec_063_excerpt_dir" "done_with_concerns" \
+  "Audit narrative: each concern listed in the followUps section was tracked separately under bubbles.bug ownership." \
+  "no" "yes"
+emit_g040_fixture "$g040_pos_strict_done_mixed_dir" "done" \
+  "The schema field name followUpOwner appears here intentionally as part of the mixed-content fixture, but real deferral prose follows." \
+  "no" "yes"
+# Append unambiguous deferral prose OUTSIDE markers so Check 18 must still BLOCK.
+{
+  echo ""
+  echo "## Genuinely Deferred Item"
+  echo "We punted to Phase 3 the entire migration of legacy adapters; that work was not done in this scope."
+} >> "$g040_pos_strict_done_mixed_dir/report.md"
+
 clone_framework_surface "$g064_framework_root"
 mkdir -p "$g064_framework_root/specs"
 emit_base_fixture "$g064_feature_dir"
@@ -931,6 +1068,64 @@ else
 fi
 assert_log_contains "$g064_log" "only orchestrators may enable child workflows" "Negative fixture triggers the G064 orchestrator-only child-workflow check"
 assert_log_contains "$g064_log" "G042/G063/G064 cannot be certified" "Negative fixture surfaces the framework contract failure through guard Check 3G"
+
+# ----------------------------------------------------------------------------
+# G040 / Check 18 — deferral regex refinement (spec 001)
+# ----------------------------------------------------------------------------
+# These selftests exercise the refined Check 18 deferral-language scan. They
+# verify that:
+#   1. Real deferred-work prose under status=done still BLOCKS.
+#   2. Schema-canonical followUp* field names (per completion-governance.md)
+#      do NOT trigger Check 18 by themselves.
+#   3. status=done_with_concerns short-circuits Check 18 with an INFO line.
+#   4. <!-- bubbles:g040-skip-begin/end --> sentinel markers exclude only the
+#      bracketed prose; deferral prose outside the markers still BLOCKS.
+#
+# Each fixture's overall guard exit may be non-zero for OTHER reasons (the
+# fixture is shaped from a docs-only base). We only assert on Check 18 log
+# content via assert_log_contains / assert_log_not_contains.
+
+echo "Running G040 Check 18 — positive: deferred-work prose BLOCKs..."
+g040_pos_deferred_log="$tmp_root/g040-pos-deferred.log"
+run_capture "$g040_pos_deferred_log" bash "$GUARD_SCRIPT" "$g040_pos_deferred_dir" >/dev/null
+assert_log_contains "$g040_pos_deferred_log" "deferral language hit" "G040 Check 18 BLOCKs on raw 'deferred to next sprint' prose"
+
+echo "Running G040 Check 18 — positive: 'skip for now' BLOCKs..."
+g040_pos_skip_log="$tmp_root/g040-pos-skip.log"
+run_capture "$g040_pos_skip_log" bash "$GUARD_SCRIPT" "$g040_pos_skip_for_now_dir" >/dev/null
+assert_log_contains "$g040_pos_skip_log" "deferral language hit" "G040 Check 18 BLOCKs on 'skip for now' prose"
+
+echo "Running G040 Check 18 — negative: schema followUp* fields do NOT trigger..."
+g040_neg_followup_log="$tmp_root/g040-neg-followup.log"
+run_capture "$g040_neg_followup_log" bash "$GUARD_SCRIPT" "$g040_neg_followup_fields_dir" >/dev/null
+assert_log_not_contains "$g040_neg_followup_log" "deferral language hit" "G040 Check 18 ignores schema followUpOwner/followUpAction/followUpTarget/followUps tokens"
+
+echo "Running G040 Check 18 — negative: status=done_with_concerns short-circuits..."
+g040_neg_dwc_log="$tmp_root/g040-neg-dwc.log"
+run_capture "$g040_neg_dwc_log" bash "$GUARD_SCRIPT" "$g040_neg_done_with_concerns_dir" >/dev/null
+assert_log_contains "$g040_neg_dwc_log" "Check 18 skipped" "G040 Check 18 emits INFO skip line under done_with_concerns"
+assert_log_not_contains "$g040_neg_dwc_log" "deferral language hit" "G040 Check 18 does NOT BLOCK under done_with_concerns even when 'deferred' language appears"
+
+echo "Running G040 Check 18 — negative: skip-marker brackets exclude prose..."
+g040_neg_markers_log="$tmp_root/g040-neg-markers.log"
+run_capture "$g040_neg_markers_log" bash "$GUARD_SCRIPT" "$g040_neg_skip_markers_dir" >/dev/null
+assert_log_not_contains "$g040_neg_markers_log" "deferral language hit" "G040 Check 18 ignores 'deferred' prose wrapped in bubbles:g040-skip-begin/end markers"
+
+echo "Running G040 Check 18 — positive: marker pair does not protect prose outside..."
+g040_pos_outside_log="$tmp_root/g040-pos-outside.log"
+run_capture "$g040_pos_outside_log" bash "$GUARD_SCRIPT" "$g040_pos_skip_marker_outside_dir" >/dev/null
+assert_log_contains "$g040_pos_outside_log" "deferral language hit" "G040 Check 18 BLOCKs on deferral prose OUTSIDE the marker pair"
+
+echo "Running G040 Check 18 — negative: spec-063-shaped excerpt under done_with_concerns..."
+g040_neg_063_log="$tmp_root/g040-neg-063.log"
+run_capture "$g040_neg_063_log" bash "$GUARD_SCRIPT" "$g040_neg_spec_063_excerpt_dir" >/dev/null
+assert_log_contains "$g040_neg_063_log" "Check 18 skipped" "G040 Check 18 emits INFO skip on spec-063-shaped done_with_concerns excerpt"
+assert_log_not_contains "$g040_neg_063_log" "deferral language hit" "G040 Check 18 does NOT BLOCK on spec-063-shaped excerpt"
+
+echo "Running G040 Check 18 — positive: status=done with mixed schema tokens AND real deferral..."
+g040_pos_mixed_log="$tmp_root/g040-pos-mixed.log"
+run_capture "$g040_pos_mixed_log" bash "$GUARD_SCRIPT" "$g040_pos_strict_done_mixed_dir" >/dev/null
+assert_log_contains "$g040_pos_mixed_log" "deferral language hit" "G040 Check 18 BLOCKs under status=done when real deferral prose ('punted to Phase 3') accompanies schema followUp* tokens"
 
 echo "----------------------------------------"
 if [[ "$failures" -gt 0 ]]; then

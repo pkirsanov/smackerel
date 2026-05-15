@@ -2376,68 +2376,95 @@ fi
 echo ""
 
 # =============================================================================
-# CHECK 18: Deferral Language Scan (Gate G036)
+# CHECK 18: Deferral Language Scan (Gate G040)
 # =============================================================================
 # Scans scope artifacts for deferral language that indicates incomplete work.
 # Agents that write deferral language and then mark specs "done" produce
 # fabricated completion. This is the mechanical enforcement layer.
+#
+# Refined per spec 001-stg-check18-deferral-regex-refinement:
+#   (i)  Schema-canonical follow-up field names (followUpOwner,
+#        followUpAction, followUpTarget, followUps) are added to the
+#        exclusion pattern. They are mandated by completion-governance.md
+#        and must never count as deferral prose.
+#   (ii) When state.json status is "done_with_concerns" the entire check
+#        is skipped — that status explicitly authorizes follow-up
+#        narrative per the schema, so running the deferral grep against
+#        authorized narrative is a category error.
+#   (iii) Content between <!-- bubbles:g040-skip-begin --> and
+#        <!-- bubbles:g040-skip-end --> HTML-comment markers is excluded
+#        from the scan, letting governance docs / post-mortems quote
+#        follow-up narrative inline without flipping spec status.
 # =============================================================================
-echo "--- Check 18: Deferral Language Scan (Gate G036) ---"
-deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|placeholder|temporary workaround'
-deferral_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred|no issues deferred or skipped'
-total_deferral_hits=0
+echo "--- Check 18: Deferral Language Scan (Gate G040) ---"
 
-for scope_path in "${scope_files[@]}"; do
-  [[ -f "$scope_path" ]] || continue
+if [[ "$state_status" == "done_with_concerns" ]]; then
+  info "Check 18 skipped: state.json status is 'done_with_concerns' — follow-up narrative is permitted by completion-governance.md schema (Gate G040)"
+else
+  deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|placeholder|temporary workaround'
+  # Strategy (i): exclude schema-canonical follow-up field names mandated
+  # by completion-governance.md AND the canonical "Follow-Up Narrative"
+  # section heading itself. Both are schema-structural usage, not deferred-
+  # work prose. grep -ivE is case-insensitive so all case variants
+  # (followupowner, FollowUpOwner, follow-up narrative, FOLLOW-UP
+  # NARRATIVE, etc.) are covered.
+  deferral_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred|no issues deferred or skipped|followUpOwner|followUpAction|followUpTarget|followUps|follow-up narrative|follow-up section'
+  total_deferral_hits=0
 
-  # Count deferral language hits (case-insensitive), excluding inside code fence blocks
-  # We scan outside code blocks only to avoid false positives from test descriptions or docs
-  deferral_hits="$({
-    awk '
-      /^```/ || /^    ```/ {in_block = !in_block; next}
-      !in_block {print}
-    ' "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
-  } || true)"
+  # Strategy (iii): the awk filter strips fenced code AND content between
+  # bubbles:g040-skip-begin / bubbles:g040-skip-end sentinel markers.
+  # Marker lines themselves are dropped via `next` so they are never fed
+  # to the grep.
+  deferral_strip_awk='
+    /^```/ || /^    ```/ { in_block = !in_block; next }
+    /<!-- bubbles:g040-skip-begin -->/ { skip = 1; next }
+    /<!-- bubbles:g040-skip-end -->/ { skip = 0; next }
+    !in_block && !skip { print }
+  '
 
-  if [[ "$deferral_hits" -gt 0 ]]; then
-    fail "Scope artifact contains $deferral_hits deferral language hit(s): ${scope_path#$feature_dir/} — SPEC CANNOT BE DONE WITH DEFERRED WORK (Gate G040)"
-    fun_message deferral_blocks_done
-    total_deferral_hits=$((total_deferral_hits + deferral_hits))
+  for scope_path in "${scope_files[@]}"; do
+    [[ -f "$scope_path" ]] || continue
 
-    # Show first 5 matching lines for visibility
-    shown_lines=0
-    while IFS= read -r deferral_line; do
-      [[ -n "$deferral_line" ]] || continue
-      echo "   → $deferral_line"
-      shown_lines=$((shown_lines + 1))
-      if [[ "$shown_lines" -ge 5 ]]; then
-        break
-      fi
-    done < <(awk '
-      /^```/ || /^    ```/ {in_block = !in_block; next}
-      !in_block {print}
-    ' "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" || true)
+    # Count deferral language hits (case-insensitive), excluding inside code fence blocks
+    # We scan outside code blocks only to avoid false positives from test descriptions or docs
+    deferral_hits="$({
+      awk "$deferral_strip_awk" "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
+    } || true)"
+
+    if [[ "$deferral_hits" -gt 0 ]]; then
+      fail "Scope artifact contains $deferral_hits deferral language hit(s): ${scope_path#$feature_dir/} — SPEC CANNOT BE DONE WITH DEFERRED WORK (Gate G040)"
+      fun_message deferral_blocks_done
+      total_deferral_hits=$((total_deferral_hits + deferral_hits))
+
+      # Show first 5 matching lines for visibility
+      shown_lines=0
+      while IFS= read -r deferral_line; do
+        [[ -n "$deferral_line" ]] || continue
+        echo "   → $deferral_line"
+        shown_lines=$((shown_lines + 1))
+        if [[ "$shown_lines" -ge 5 ]]; then
+          break
+        fi
+      done < <(awk "$deferral_strip_awk" "$scope_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" || true)
+    fi
+  done
+
+  # Also scan report files for deferral language
+  for rpt_path in "${report_files[@]}"; do
+    [[ -f "$rpt_path" ]] || continue
+    report_deferral_hits="$({
+      awk "$deferral_strip_awk" "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
+    } || true)"
+
+    if [[ "$report_deferral_hits" -gt 0 ]]; then
+      fail "Report artifact contains $report_deferral_hits deferral language hit(s): ${rpt_path#$feature_dir/} — evidence of deferred work (Gate G040)"
+      total_deferral_hits=$((total_deferral_hits + report_deferral_hits))
+    fi
+  done
+
+  if [[ "$total_deferral_hits" -eq 0 ]]; then
+    pass "Zero deferral language found in scope and report artifacts (Gate G040)"
   fi
-done
-
-# Also scan report files for deferral language
-for rpt_path in "${report_files[@]}"; do
-  [[ -f "$rpt_path" ]] || continue
-  report_deferral_hits="$({
-    awk '
-      /^```/ || /^    ```/ {in_block = !in_block; next}
-      !in_block {print}
-    ' "$rpt_path" | grep -iE "$deferral_pattern" | grep -viE "$deferral_exclusion_pattern" | wc -l || true
-  } || true)"
-
-  if [[ "$report_deferral_hits" -gt 0 ]]; then
-    fail "Report artifact contains $report_deferral_hits deferral language hit(s): ${rpt_path#$feature_dir/} — evidence of deferred work (Gate G040)"
-    total_deferral_hits=$((total_deferral_hits + report_deferral_hits))
-  fi
-done
-
-if [[ "$total_deferral_hits" -eq 0 ]]; then
-  pass "Zero deferral language found in scope and report artifacts (Gate G040)"
 fi
 echo ""
 

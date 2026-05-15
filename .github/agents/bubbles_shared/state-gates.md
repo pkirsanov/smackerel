@@ -39,7 +39,11 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 
 ## Pseudo-Completion Language Gate (G040)
 
-Scope and report artifacts must not contain unresolved pseudo-completion language when the spec/bug status is `done` or transitioning to `done`.
+Scope and report artifacts must not contain unresolved pseudo-completion language or unresolved deferred-work prose when the spec/bug status is `done` or transitioning to `done`.
+
+G040 has two enforcement points in `state-transition-guard.sh`:
+
+### Enforcement Point 1: Pseudo-completion narrative scan
 
 Blocking phrases (outside quoted historical evidence blocks):
 - `Next Steps` (as heading or bullet leader)
@@ -50,7 +54,18 @@ Blocking phrases (outside quoted historical evidence blocks):
 
 Enforced by: `artifact-lint.sh` (report.md scan) and `state-transition-guard.sh` (report.md scan).
 
-If any match is found, the transition to `done` is blocked.
+### Enforcement Point 2: Deferral Language Scan (Check 18)
+
+Scope and report artifacts MUST NOT contain raw deferred-work prose (e.g. "deferred to next sprint", "skip for now", "punted to Phase 3", "out of scope for this iteration") when status is `done`. The check excludes:
+
+1. **Schema-canonical follow-up field names** mandated by completion-governance.md: `followUpOwner`, `followUpAction`, `followUpTarget`, `followUps` (case-insensitive). These are the structured mechanism for tracking concerns under `done_with_concerns`, not deferred work.
+2. **The canonical section heading** `## Follow-Up Narrative` (and `## Follow-Up Section`). The schema-allowed container heading is exempt.
+3. **Code-fenced content** (```` ``` ```` blocks). Test descriptions, examples, and historical evidence inside fences are not scanned.
+4. **Sentinel-marker-bracketed regions**. Authors may wrap prose between `<!-- bubbles:g040-skip-begin -->` and `<!-- bubbles:g040-skip-end -->` markers to exempt schema-allowed quoted material that would otherwise trip the deferral pattern. Marker lines themselves are stripped before scanning.
+
+**`done_with_concerns` skip:** When `state.json.status == "done_with_concerns"`, Check 18 is skipped entirely with an INFO line. The completion-governance schema explicitly permits follow-up narrative under that outcome state, and the structured `concerns:`/`followUps:` schema fields are the contract for tracking those follow-ups.
+
+If any unmatched deferral hit is found under `status == "done"`, the transition is blocked.
 
 ## Analysis-As-Execution Gate (G071)
 

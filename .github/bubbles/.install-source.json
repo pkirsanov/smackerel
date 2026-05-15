@@ -1,8 +1,8 @@
 {
   "installedVersion": "3.8.0",
-  "installMode": "remote-ref",
+  "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "ee524bbf30f44a7444a708b33c47a32997ca39d3",
-  "sourceDirty": false,
-  "installedAt": "2026-05-10T13:41:20Z"
+  "sourceGitSha": "69e18710c5b757e818f63c2b1ffd958985d6c679",
+  "sourceDirty": true,
+  "installedAt": "2026-05-15T06:55:00Z"
 }
