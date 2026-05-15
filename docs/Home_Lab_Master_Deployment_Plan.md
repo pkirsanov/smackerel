@@ -22,19 +22,19 @@
 
 ## Where the operator-coupled content lives now
 
-The home-lab cross-product coordination plan now lives in the **knb
-deploy-adapter overlay repo**, alongside the home-lab adapter
+The home-lab cross-product coordination plan now lives in the operator-private
+deploy-adapter overlay repo, alongside the home-lab adapter
 implementation (`apply.sh`, `bootstrap.sh`, `params.yaml`,
 `manifest.yaml`, `verify.sh`, `rollback.sh`, `teardown.sh`,
 `preconditions.sh`). Per the deployment ownership boundary recorded in
 [`.github/copilot-instructions.md`](../.github/copilot-instructions.md),
-home-lab adapter content is owned by the knb overlay, not by this
+home-lab adapter content is owned by the deploy-adapter overlay, not by this
 product repo.
 
 | What you are looking for | Where it lives now |
 |--------------------------|--------------------|
-| The home-lab cross-product coordination plan (hardware, OS, networking, reverse-proxy contract, backup destinations, port allocation, rollout schedule, Uptime-Kuma monitor catalog, Tailscale ↔ Docker bridge mitigations) | knb deploy-adapter overlay — home-lab cross-product Master Plan |
-| The home-lab adapter implementation for Smackerel (`apply.sh`, `params.yaml`, `manifest.yaml`, etc.) | knb deploy-adapter overlay, home-lab adapter spec `003-smackerel-home-lab-adapter-readiness` |
+| The home-lab cross-product coordination plan (hardware, OS, networking, reverse-proxy contract, backup destinations, port allocation, rollout schedule, Uptime-Kuma monitor catalog, Tailscale ↔ Docker bridge mitigations) | Operator-private deploy-adapter overlay — home-lab cross-product Master Plan |
+| The home-lab adapter implementation for Smackerel (`apply.sh`, `params.yaml`, `manifest.yaml`, etc.) | Operator-private deploy-adapter overlay, home-lab adapter readiness artifact |
 | The generic deployment guide for Smackerel (CI pipeline, build-once-deploy-many, cosign keyless, signed bundles, adapter contract, Pre-Apply Prerequisites, Connector Live-Stack Evidence Caveat) | This repo — [`docs/Deployment.md`](Deployment.md) |
 | The Smackerel-side per-product home-lab plan (also migrated to a pointer stub) | This repo — [`docs/Home_Lab_Deployment_Plan.md`](Home_Lab_Deployment_Plan.md) (60-line migration-pointer stub) |
 | The product-side runbook (operator-facing daily ops, lifecycle, monitoring, backup, auth, connectors) | This repo — [`docs/Operations.md`](Operations.md) |
@@ -58,14 +58,13 @@ splits responsibility:
   attestations, and per-environment config bundles. It owns the
   generic adapter contract that ANY operator can implement for ANY
   target.
-- **The knb deploy-adapter overlay** owns target-specific knowledge
+- **The deploy-adapter overlay** owns target-specific knowledge
   (real hostnames, real IPs, real Tailscale identifiers, real
   reverse-proxy site files, real ufw rules, real systemd unit names,
   real secret values) and consumes the published artifacts.
 
 If you need the historical cross-product Master Plan, it has been
-preserved in the knb deploy-adapter overlay's home-lab adapter
-documentation. If you operate Smackerel on a target other than
+preserved in the deploy-adapter overlay's home-lab adapter documentation. If you operate Smackerel on a target other than
 home-lab, this file is intentionally not relevant to you — see
 [`docs/Deployment.md`](Deployment.md) and
 [`deploy/README.md`](../deploy/README.md) for the generic adapter
