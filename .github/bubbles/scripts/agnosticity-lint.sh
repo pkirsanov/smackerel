@@ -82,7 +82,7 @@ is_portable_surface() {
   local file="$1"
 
   case "$file" in
-    agents/bubbles*.agent.md|agents/bubbles_shared/*.md|prompts/bubbles*.prompt.md|instructions/bubbles*.instructions.md|README.md|docs/CHEATSHEET.md|docs/recipes/framework-ops.md|docs/recipes/setup-project.md|docs/examples/*.md|bubbles/scripts/*.sh|.github/workflows/*.yml)
+    agents/bubbles*.agent.md|agents/bubbles_shared/*.md|prompts/bubbles*.prompt.md|instructions/bubbles*.instructions.md|skills/bubbles-*/SKILL.md|templates/*.tmpl|templates/*.template|README.md|docs/CHEATSHEET.md|docs/recipes/framework-ops.md|docs/recipes/setup-project.md|docs/examples/*.md|bubbles/scripts/*.sh|.github/workflows/*.yml)
       return 0
       ;;
     *)
