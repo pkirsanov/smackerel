@@ -178,15 +178,19 @@ else
 fi
 
 echo "--- Sub-test 4: FR-051-005 generator-side Postgres dev-default check still fires for home-lab ---"
-# Use the LIVE yaml (NOT the patched copy) so the dev-default password
-# "smackerel" is present and the FR-051-005 generator-side rejection fires.
-SUB4_OUT="$(run_generator home-lab "$LIVE_YAML")"
+# Spec 052 evolution: under Scope 2, TARGET_ENV=home-lab now emits a
+# placeholder marker for POSTGRES_PASSWORD when the resolved value would
+# come from the yaml. To preserve SCN-051-S04 coverage, drive the
+# FR-051-005 check via the env-override path (POSTGRES_PASSWORD=smackerel
+# in the environment beats the yaml AND skips placeholder mode AND must
+# pass the dev-default gate per BS-052-006).
+SUB4_OUT="$(POSTGRES_PASSWORD=smackerel run_generator home-lab "$LIVE_YAML")"
 SUB4_RC=$?
 if [[ $SUB4_RC -ne 0 ]] && \
    echo "$SUB4_OUT" | grep -qi 'spec 051\|FR-051-005\|dev-default\|password' ; then
-  echo "PASS: FR-051-005 generator-side guard still fires for home-lab (refused with spec 051 attribution)"
+  echo "PASS: FR-051-005 generator-side guard still fires for home-lab via env-override (refused with spec 051 attribution)"
 else
-  echo "FAIL: FR-051-005 generator-side guard did NOT fire for home-lab (rc=$SUB4_RC)"
+  echo "FAIL: FR-051-005 generator-side guard did NOT fire for home-lab via env-override (rc=$SUB4_RC)"
   echo "      Captured output:"
   echo "$SUB4_OUT" | sed 's/^/        /'
   FAIL=$((FAIL+1))
