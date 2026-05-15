@@ -91,18 +91,18 @@ class TestMLStartupS004ProductionFailLoud:
         with pytest.raises(SystemExit) as exc_info:
             _run_lifespan("", "production", caplog)
 
-        assert (
-            exc_info.value.code == 1
-        ), f"Expected sys.exit(1) on empty SMACKEREL_AUTH_TOKEN in production, got code={exc_info.value.code!r}"
+        assert exc_info.value.code == 1, (
+            f"Expected sys.exit(1) on empty SMACKEREL_AUTH_TOKEN in production, got code={exc_info.value.code!r}"
+        )
 
         error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
         joined = " ".join(r.message for r in error_records)
-        assert (
-            "SMACKEREL_AUTH_TOKEN" in joined
-        ), f"Expected ERROR log naming SMACKEREL_AUTH_TOKEN, got: {[(r.levelname, r.message) for r in caplog.records]}"
-        assert (
-            "production" in joined
-        ), f"Expected ERROR log mentioning production, got: {[(r.levelname, r.message) for r in caplog.records]}"
+        assert "SMACKEREL_AUTH_TOKEN" in joined, (
+            f"Expected ERROR log naming SMACKEREL_AUTH_TOKEN, got: {[(r.levelname, r.message) for r in caplog.records]}"
+        )
+        assert "production" in joined, (
+            f"Expected ERROR log mentioning production, got: {[(r.levelname, r.message) for r in caplog.records]}"
+        )
 
 
 class TestMLStartupS004DevModeBypass:
@@ -116,14 +116,8 @@ class TestMLStartupS004DevModeBypass:
     def test_warns_and_continues_when_token_empty_in_development(self, caplog):
         records = _run_lifespan("", "development", caplog)
 
-        warning_records = [
-            r
-            for r in records
-            if r.levelno == logging.WARNING and "SMACKEREL_AUTH_TOKEN" in r.message
-        ]
-        assert (
-            warning_records
-        ), f"Expected dev-mode bypass WARN log, got: {[(r.levelname, r.message) for r in records]}"
+        warning_records = [r for r in records if r.levelno == logging.WARNING and "SMACKEREL_AUTH_TOKEN" in r.message]
+        assert warning_records, f"Expected dev-mode bypass WARN log, got: {[(r.levelname, r.message) for r in records]}"
 
 
 class TestMLStartupNoWarningWithToken:
@@ -137,9 +131,7 @@ class TestMLStartupNoWarningWithToken:
     def test_no_warning_when_token_set(self, caplog):
         records = _run_lifespan("real-secret-token", "development", caplog)
 
-        auth_warnings = [
-            r for r in records if "SMACKEREL_AUTH_TOKEN is empty" in r.message
-        ]
-        assert (
-            len(auth_warnings) == 0
-        ), f"Expected no auth warning with token set, got: {[r.message for r in auth_warnings]}"
+        auth_warnings = [r for r in records if "SMACKEREL_AUTH_TOKEN is empty" in r.message]
+        assert len(auth_warnings) == 0, (
+            f"Expected no auth warning with token set, got: {[r.message for r in auth_warnings]}"
+        )

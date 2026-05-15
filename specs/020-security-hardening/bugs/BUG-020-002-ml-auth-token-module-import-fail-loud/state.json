@@ -1,0 +1,164 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-020-002-ml-auth-token-module-import-fail-loud",
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-002-ml-auth-token-module-import-fail-loud",
+  "featureName": "BUG-020-002: ml/app/auth.py reads SMACKEREL_AUTH_TOKEN at module-import time using the silent-default os.environ.get(KEY, \"\") form, violating Gate G028 (NO-DEFAULTS / fail-loud SST policy)",
+  "workflowMode": "test-to-doc",
+  "parentWorkflow": {
+    "mode": "home-lab-readiness-rescan-2026-05-14",
+    "trigger": "system-review-finding",
+    "executionModel": "direct-per-finding-dispatch"
+  },
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-14T22:00:00Z",
+    "completedPhaseClaims": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "test",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Inspected ml/app/auth.py at HEAD eec1437c and observed line 11 silent-default read `_AUTH_TOKEN = os.environ.get(\"SMACKEREL_AUTH_TOKEN\", \"\")` in violation of Gate G028 (NO-DEFAULTS / fail-loud SST policy — `.github/copilot-instructions.md` Secrets Management table). The pre-fix pattern coerced UNSET into the empty string at module-import time, which silently succeeded module loading and downstream relied on a runtime production-vs-dev branch in `ml/app/main.py:_check_required_config` (lines 147-150) to surface the misconfiguration at lifespan startup. The Gate G028 contract requires the boundary read itself to be fail-loud; the production fail-fast at lifespan is a defense-in-depth layer, not a substitute. Direct HL-RESCAN-013 finding from the home-lab readiness re-scan against eec1437c. The Go-side equivalent (cmd/core HOSTNAME at auth-revocation broadcaster wiring site) was already converted to fail-loud at HL-RESCAN-008 / commit 7482fb24."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Three coordinated source changes that close one Gate G028 violation and lock the contract with infrastructure + persistent adversarial test. (1) ml/app/auth.py: replaced line 11 silent-default read with try/except KeyError → raise RuntimeError(...) from exc block (lines 11-29). The RuntimeError message names the variable (`SMACKEREL_AUTH_TOKEN`), names the fix path (`run ./smackerel.sh config generate`), and includes the breadcrumb tokens `Gate G028` and `HL-RESCAN-013`. The `from exc` re-raise preserves the original KeyError in the traceback chain. The empty-string value is still tolerated as a dev-mode auth-bypass signal. Net: +18 / -1 lines on auth.py. (2) ml/tests/conftest.py (NEW FILE, 28 lines): module docstring explains HL-RESCAN-013 / Gate G028 rationale + the cross-file import chain (ml/tests/test_main.py:19 `from app.main import _check_required_config, health` → app.main line 12 `from .auth import verify_auth`) that would otherwise crash pytest collection. Body: `import os` then `os.environ.setdefault(\"SMACKEREL_AUTH_TOKEN\", \"\")`. The setdefault form preserves any externally-provided value (so `./smackerel.sh test python_unit` with the env file loaded gets the real value). (3) ml/tests/test_auth_module_import_fail_loud.py (NEW FILE, 87 lines): declares `_reload_auth_module()` helper that does `del sys.modules['app.auth']` followed by `importlib.import_module('app.auth')`, plus 3 test functions: test_module_import_raises_when_env_var_unset (adversarial — uses monkeypatch.delenv with raising=False, asserts pytest.raises RuntimeError with match=r'SMACKEREL_AUTH_TOKEN'), test_module_import_succeeds_with_empty_value (positive contract — asserts _AUTH_TOKEN == ''), test_module_import_succeeds_with_real_value (positive contract — asserts _AUTH_TOKEN == 'test-secret-real-value'). NO change to ml/app/main.py, NO change to ml/app/nats_client.py, NO change to ml/app/embedder.py, NO change to existing ml/tests/test_*.py files, NO change to scripts/, NO change to config/, NO change to docker-compose.yml, NO change to deploy/."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Targeted adversarial suite GREEN: pytest ml/tests/test_auth_module_import_fail_loud.py -v reports `3 passed in 0.29s` (test_module_import_raises_when_env_var_unset PASSED, test_module_import_succeeds_with_empty_value PASSED, test_module_import_succeeds_with_real_value PASSED). Targeted canary suites GREEN: pytest ml/tests/test_auth.py -v reports `10 passed in 0.61s` (every TestMLSidecarAuthWithToken / TestMLSidecarAuthDevMode / TestMLSidecarAuthAdversarial test PASSes); pytest ml/tests/test_main.py -v reports `26 passed in 0.51s` (every test_check_required_config_* / test_main_s004_* / test_health_endpoint_* / test_scn002* / test_spec050_* PASSes — including the spec 040 MIT-040-S-004 production-vs-dev branching test test_main_s004_production_env_fails_fast_when_auth_token_empty); pytest ml/tests/test_startup_warning.py -v reports `3 passed in 0.40s` (every TestMLStartupS004ProductionFailLoud / TestMLStartupS004DevModeBypass / TestMLStartupNoWarningWithToken test PASSes). The new tests run as part of the persistent in-tree adversarial suite — every ./smackerel.sh test python_unit invocation (CI + developer pre-push) re-validates the module-import-time fail-loud contract."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:23:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunities surfaced. The fix is the minimum viable change at three layers: (1) +18 / -1 lines on ml/app/auth.py — the try/except KeyError → RuntimeError block is the canonical Python fail-loud pattern from `.github/copilot-instructions.md` Secrets Management table; the message + breadcrumbs are the minimum information density required to make the operator's troubleshooting actionable. The bare-except form (which the conversation summary's DD-2 explicitly rejects) would mask other unrelated KeyError exceptions raised inside the os.environ access path. (2) ml/tests/conftest.py is 28 lines because the docstring documents the cross-file import chain and the rationale for setdefault-vs-assignment (5 lines of code + 23 lines of justification comment); the code itself is a single setdefault call. (3) ml/tests/test_auth_module_import_fail_loud.py declares one helper + 3 test functions; the cases mirror exactly the AC matrix (UNSET / EMPTY / REAL). The helper is needed because Python module imports are cached in sys.modules and pytest does not reload between tests by default."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:24:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No flaky-test or stability concerns surfaced. The new tests are deterministic: no time.Now, no random IDs, no concurrency, no I/O beyond Python's built-in os.environ + importlib + sys.modules. The monkeypatch fixture provides automatic teardown so test_module_import_raises_when_env_var_unset cannot leak SMACKEREL_AUTH_TOKEN-deletion into the next test's environment. The conftest setdefault call is idempotent (calling it twice has the same effect as calling it once) and the empty-string seed is a no-op when a real value is already exported. All 4 test suites PASS on first run with zero variance across 3 re-runs (0.29s / 0.61s / 0.51s / 0.40s wall-clock)."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Security review: A05 Security Misconfiguration — the fix STRENGTHENS Gate G028 NO-DEFAULTS / fail-loud SST policy at the module-import boundary for the ML sidecar's auth secret. No new attack surface introduced. No PII handled (the fail-loud message names the variable name and the fix path; the secret value itself is never echoed). The fix closes a real-world misconfiguration risk: pre-fix, any operator who forgot to set SMACKEREL_AUTH_TOKEN in `smackerel.yaml` before `./smackerel.sh config generate` would see the ML sidecar import successfully, then the production fail-fast at ml/app/main.py:147-150 would catch it at lifespan startup IF SMACKEREL_ENV=production. In dev / test environments the silent-default would have masked the misconfiguration entirely (the empty value coerces verify_auth into dev-mode bypass — accidentally allowing all requests through). Post-fix, the import itself crashes loudly with an actionable error before lifespan begins, restoring the boundary-level fail-loud guarantee Gate G028 mandates. The empty-string dev-mode bypass is still preserved when EXPLICITLY set; only the unset-vs-empty distinction is now enforced."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Module-import RED proof against real environment (no monkeypatch): docker-isolated `python -c 'import os; os.environ.pop(\"SMACKEREL_AUTH_TOKEN\", None); from app import auth'` exits 1 with chained traceback showing original `KeyError: 'SMACKEREL_AUTH_TOKEN'` at ml/app/auth.py:22 + wrapping `RuntimeError: ml/app/auth.py: SMACKEREL_AUTH_TOKEN must be set in the env file (run ./smackerel.sh config generate); empty value is allowed for dev-mode auth bypass when SMACKEREL_ENV=development|test (HL-RESCAN-013 / Gate G028 fail-loud SST contract)` at ml/app/auth.py:24. RED→GREEN proof of the adversarial test (scenario-first TDD): used `sed -i` to surgically revert ml/app/auth.py line 22 from `os.environ[\"SMACKEREL_AUTH_TOKEN\"]` back to `os.environ.get(\"SMACKEREL_AUTH_TOKEN\", \"\")`; re-ran pytest ml/tests/test_auth_module_import_fail_loud.py::test_module_import_raises_when_env_var_unset — observed `1 failed in 0.30s` with `Failed: DID NOT RAISE <class 'RuntimeError'>` at ml/tests/test_auth_module_import_fail_loud.py:58; restored via inverse sed → re-ran same test → observed `1 passed in 0.39s`. This proves the test is non-tautological and will mechanically catch any regression on line 22. Cross-package smoke (Go core): NOT RUN — the change set is confined to ml/ Python files; cmd/core/ and internal/ are untouched. The Go-side equivalent fail-loud read was verified separately at HL-RESCAN-008 / commit 7482fb24. Full evidence inline in report.md > Validation Evidence + > Test Evidence + > Audit Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:35:00Z",
+        "outcome": "completed_owned",
+        "evidence": "OWASP A05 review GREEN (improved). Privacy review GREEN (no PII; no real hostnames/IPs/tailnet identifiers in any of the 7 packet artifacts; the username string `<operator>` from the staging machine's `ls -la` output was redacted to `dev` before staging). Minimum-viable-change audit GREEN: 3 source files modified (ml/app/auth.py +18 / -1, NEW ml/tests/conftest.py 28 lines, NEW ml/tests/test_auth_module_import_fail_loud.py 87 lines). NO production runtime Go code modified. NO existing ml/tests/test_*.py files edited. NO change to ml/app/main.py, ml/app/nats_client.py, ml/app/embedder.py. NO change to scripts/, config/, docker-compose.yml, deploy/, or .github/. NO foreign-owned spec content edited (specs/020-security-hardening/spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md untouched per bubbles.devops mode artifact-ownership rules). Cross-package boundary: the change is entirely inside the Python ML sidecar boundary; the Go core is untouched. Generic-only constraint preserved: the only string literals introduced are the variable name (SMACKEREL_AUTH_TOKEN), the fix-path command (`run ./smackerel.sh config generate`), the dev-mode env values (`development|test`), and the breadcrumbs (Gate G028, HL-RESCAN-013) — all 100% generic and operator-agnostic. Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.devops",
+        "timestamp": "2026-05-14T22:40:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug spec/design/scopes/scenario-manifest/report/uservalidation/state artifacts authored at specs/020-security-hardening/bugs/BUG-020-002-ml-auth-token-module-import-fail-loud/. The bug-local scenario-manifest.json declares 5 scenarios (SCN-020-002-A through SCN-020-002-E covering UNSET → RuntimeError adversarial / EMPTY → succeeds / REAL → succeeds / conftest pre-seed under collection / pre-existing canary suites unchanged). No external doc updates required: the fix is purely a Python-sidecar module-import-time contract conversion + pytest collection seed + 3 new pytest unit tests; no operator workflow change, no Deployment.md change, no copilot-instructions.md change (the Secrets Management table already documents the canonical Python fail-loud pattern), no README change, no CI workflow change. Foreign-owned spec 020 content untouched per bubbles.devops mode artifact-ownership rules."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "test",
+      "implement",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.devops",
+    "certifiedAt": "2026-05-14T22:40:00Z",
+    "auditorAgent": "bubbles.devops",
+    "auditedAt": "2026-05-14T22:40:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Home-lab readiness re-scan (system review session 2026-05-14, against HEAD eec1437c) finding HL-RESCAN-013 (P3). The ML sidecar's auth-token boundary read at ml/app/auth.py line 11 used the silent-default form `os.environ.get(\"SMACKEREL_AUTH_TOKEN\", \"\")` in violation of Gate G028 (NO-DEFAULTS / fail-loud SST policy — `.github/copilot-instructions.md` Secrets Management table mandates `os.environ[\"KEY\"]` for required Python secrets). The production fail-fast at ml/app/main.py:147-150 (which converts empty + SMACKEREL_ENV=production to sys.exit(1)) is a defense-in-depth layer that already exists, but Gate G028 mandates the boundary itself be fail-loud — the layered guarantee is broken if dev/test environments silently accept UNSET-coerced-to-empty. Fix has three coordinated layers: (1) ml/app/auth.py converts the silent-default to try/except KeyError → raise RuntimeError(...) from exc with a message naming the variable + fix path + Gate G028 + HL-RESCAN-013 breadcrumbs; (2) NEW ml/tests/conftest.py pre-seeds SMACKEREL_AUTH_TOKEN via os.environ.setdefault so pytest collection succeeds from a clean shell (the cross-file import chain ml/tests/test_main.py:19 → app.main line 12 → app.auth would otherwise crash collection); (3) NEW ml/tests/test_auth_module_import_fail_loud.py adds 3 adversarial test cases that mechanically lock the contract (UNSET → RuntimeError, EMPTY → succeeds, REAL → succeeds). RED→GREEN proven via surgical sed revert of line 22: test_module_import_raises_when_env_var_unset FAILS with `Failed: DID NOT RAISE <class 'RuntimeError'>` against the silent-default form; restoration returns the test to PASS. Module-import RED proof captured against real environment via direct `python -c 'from app import auth'` invocation — exits 1 with chained traceback. All 39 pre-existing tests in ml/tests/test_auth.py (10) + ml/tests/test_main.py (26) + ml/tests/test_startup_warning.py (3) PASS unchanged after the fix. The spec 040 MIT-040-S-004 production-vs-dev branching is exercised by test_main_s004_production_env_fails_fast_when_auth_token_empty and PASSes unchanged — proving the two layers (boundary fail-loud + production fail-fast) compose correctly. Generic-only constraint preserved: zero real hostnames/IPs/tailnet identifiers introduced; the staging machine's `ls -la` output `<operator> <operator>` was redacted to `dev dev` before staging the report.md evidence block. Three-source-file change boundary: ml/app/auth.py (M), ml/tests/conftest.py (NEW), ml/tests/test_auth_module_import_fail_loud.py (NEW). Bug-packet artifacts contained in specs/020-security-hardening/bugs/BUG-020-002-ml-auth-token-module-import-fail-loud/. Foreign-owned spec 020 content (spec.md, design.md, scopes.md, state.json, uservalidation.md, parent report.md) untouched per bubbles.devops mode artifact-ownership rules. Promotion decision: SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Convert the module-import-time read of SMACKEREL_AUTH_TOKEN in ml/app/auth.py to the canonical Python fail-loud pattern, pre-seed the env via ml/tests/conftest.py so pytest collection still works, and add a persistent in-tree adversarial test that mechanically locks the contract against future drift",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-14T22:40:00Z",
+        "dodTotal": 20,
+        "dodChecked": 20,
+        "notes": "3 source files: ml/app/auth.py (+18 / -1 lines, line 11 silent-default → lines 11-29 try/except KeyError → RuntimeError(...) from exc), NEW ml/tests/conftest.py (28 lines, os.environ.setdefault pre-seed at pytest collection boundary), NEW ml/tests/test_auth_module_import_fail_loud.py (87 lines, 3 tests + _reload_auth_module helper). All 4 test suites GREEN: targeted adversarial suite (3 passed in 0.29s) + canary suites (10 passed in 0.61s + 26 passed in 0.51s + 3 passed in 0.40s = 39 pre-existing tests PASS unchanged). RED→GREEN proven via surgical sed revert/restore of line 22: adversarial test FAILS with `Failed: DID NOT RAISE <class 'RuntimeError'>` against the silent-default form, PASSes against the restored fail-loud form. Module-import RED proof captured against real environment via `python -c 'from app import auth'` direct invocation — exits 1 with chained traceback containing original KeyError + wrapping RuntimeError naming the variable + fix path + Gate G028 + HL-RESCAN-013 breadcrumbs. The conftest setdefault preserves any externally-provided value (so `./smackerel.sh test python_unit` with the env file loaded gets the real value); the empty-string seed is honoured by verify_auth() as a dev-mode bypass signal (consistent with spec 040 MIT-040-S-004 contract). Spec 040 production-vs-dev branching at ml/app/main.py:147-150 is exercised by test_main_s004_production_env_fails_fast_when_auth_token_empty and PASSes unchanged. Cross-package smoke (Go): not run — change set confined to ml/ Python files; cmd/core/ HOSTNAME boundary already converted to fail-loud at HL-RESCAN-008 / commit 7482fb24. Full DoD evidence inline in scopes.md (20 of 20 [x] items)."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "test-to-doc",
+      "source": "home-lab-readiness-rescan-2026-05-14"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "test-to-doc-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "test-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  }
+}
