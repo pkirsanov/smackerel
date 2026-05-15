@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "bugId": "BUG-020-002-ml-auth-token-module-import-fail-loud",
+  "parentSpec": "020-security-hardening",
+  "title": "ml/app/auth.py reads SMACKEREL_AUTH_TOKEN at module import using the silent-default os.environ.get(KEY, \"\") form, violating Gate G028 (NO-DEFAULTS / fail-loud SST policy)",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-020-002-A",
+      "title": "Module import raises RuntimeError when env var is unset",
+      "given": "the SMACKEREL_AUTH_TOKEN env var is not present in os.environ (deleted via monkeypatch.delenv with raising=False)",
+      "when": "a fresh `import app.auth` is forced (via `del sys.modules['app.auth']` then `importlib.import_module('app.auth')`) on the post-fix `ml/app/auth.py`",
+      "then": "the import raises a RuntimeError whose message names the variable `SMACKEREL_AUTH_TOKEN`, names the fix path `run ./smackerel.sh config generate`, and includes the breadcrumb tokens `Gate G028` and `HL-RESCAN-013`; the original `KeyError` is preserved in the traceback chain via `raise RuntimeError(...) from exc`",
+      "scopeId": "1",
+      "requiredTestType": "python-unit-module-import-contract",
+      "regressionRequired": true,
+      "linkedTests": [
+        "ml/tests/test_auth_module_import_fail_loud.py::test_module_import_raises_when_env_var_unset"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#code-diff-evidence"],
+      "specSource": "ml/app/auth.py line 22 try/except KeyError -> RuntimeError(...) from exc fail-loud read (HL-RESCAN-013)",
+      "redGreenProbe": "pytest ml/tests/test_auth_module_import_fail_loud.py::test_module_import_raises_when_env_var_unset -v PASSes against the post-fix code; reverting line 22 of ml/app/auth.py from `os.environ['SMACKEREL_AUTH_TOKEN']` back to `os.environ.get('SMACKEREL_AUTH_TOKEN', '')` causes the test to FAIL with `Failed: DID NOT RAISE <class 'RuntimeError'>` (the import would silently succeed and pytest.raises would not trigger)",
+      "adversarial": "YES — fails RED if line 22 is reverted to the silent-default os.environ.get form; the test mechanically catches any such regression"
+    },
+    {
+      "scenarioId": "SCN-020-002-B",
+      "title": "Module import succeeds when env var is empty",
+      "given": "SMACKEREL_AUTH_TOKEN is set to an empty string in os.environ (via monkeypatch.setenv with empty value)",
+      "when": "a fresh `import app.auth` is forced on the post-fix `ml/app/auth.py`",
+      "then": "the import succeeds and the module-level `_AUTH_TOKEN` attribute equals the empty string; the dev-mode auth-bypass behavior of `verify_auth()` is preserved (`if not _AUTH_TOKEN: return` short-circuit at the function head allows all requests through)",
+      "scopeId": "1",
+      "requiredTestType": "python-unit-module-import-contract",
+      "regressionRequired": true,
+      "linkedTests": [
+        "ml/tests/test_auth_module_import_fail_loud.py::test_module_import_succeeds_with_empty_value"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "ml/app/auth.py line 22 module-level read with empty value preserved as dev-mode bypass signal (HL-RESCAN-013 / Gate G028 + MIT-040-S-004 contract)",
+      "redGreenProbe": "pytest ml/tests/test_auth_module_import_fail_loud.py::test_module_import_succeeds_with_empty_value -v PASSes against the post-fix code; converting line 22 to a hard-fail-on-empty form (e.g., `if not _AUTH_TOKEN: raise RuntimeError(...)`) would break dev-mode bypass and cause this test to FAIL",
+      "adversarial": "NO — positive contract test that the empty-string dev-mode bypass remains intact"
+    },
+    {
+      "scenarioId": "SCN-020-002-C",
+      "title": "Module import succeeds when env var holds a real token value",
+      "given": "SMACKEREL_AUTH_TOKEN is set to the literal string `test-secret-real-value` in os.environ (via monkeypatch.setenv)",
+      "when": "a fresh `import app.auth` is forced on the post-fix `ml/app/auth.py`",
+      "then": "the import succeeds and the module-level `_AUTH_TOKEN` attribute equals the exact literal string `test-secret-real-value` (no transformation, no truncation, no whitespace stripping)",
+      "scopeId": "1",
+      "requiredTestType": "python-unit-module-import-contract",
+      "regressionRequired": true,
+      "linkedTests": [
+        "ml/tests/test_auth_module_import_fail_loud.py::test_module_import_succeeds_with_real_value"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "ml/app/auth.py line 22 module-level read with non-empty value preserved as production token (HL-RESCAN-013 / Gate G028)",
+      "redGreenProbe": "pytest ml/tests/test_auth_module_import_fail_loud.py::test_module_import_succeeds_with_real_value -v PASSes against the post-fix code; introducing any value transformation in the read (e.g., `.strip()` or `.lower()`) would break the literal-equality assertion and cause this test to FAIL",
+      "adversarial": "NO — positive contract test that the production token round-trips through the module-level constant unchanged"
+    },
+    {
+      "scenarioId": "SCN-020-002-D",
+      "title": "pytest conftest pre-seeds env var before collection",
+      "given": "a developer runs `pytest ml/tests/test_main.py` from a clean shell with no env file loaded (SMACKEREL_AUTH_TOKEN not in os.environ)",
+      "when": "pytest starts and loads `ml/tests/conftest.py` BEFORE collecting any test module",
+      "then": "the conftest calls `os.environ.setdefault('SMACKEREL_AUTH_TOKEN', '')` and the variable is added to os.environ with empty value; the subsequent `from app.main import _check_required_config, health` import in `ml/tests/test_main.py:19` succeeds (the transitive `from .auth import verify_auth` finds SMACKEREL_AUTH_TOKEN already in os.environ); pytest collection completes without crashing",
+      "scopeId": "1",
+      "requiredTestType": "python-unit-pytest-collection-contract",
+      "regressionRequired": true,
+      "linkedTests": [
+        "ml/tests/conftest.py (proven by every other test module continuing to import cleanly under pytest collection)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence", "report.md#code-diff-evidence"],
+      "specSource": "ml/tests/conftest.py NEW pytest collection seed (HL-RESCAN-013 / Gate G028)",
+      "redGreenProbe": "pytest ml/tests/ -v from a clean shell PASSes against the post-fix conftest; removing the conftest pre-seed causes pytest collection to crash with `RuntimeError: ml/app/auth.py: SMACKEREL_AUTH_TOKEN must be set...` at the import of test_main.py:19",
+      "adversarial": "NO — positive infrastructure contract that pytest collection succeeds even without an env file"
+    },
+    {
+      "scenarioId": "SCN-020-002-E",
+      "title": "Existing test suites pass unchanged after the fix",
+      "given": "the post-fix ml/app/auth.py + ml/tests/conftest.py + ml/tests/test_auth_module_import_fail_loud.py",
+      "when": "`pytest ml/tests/test_auth.py ml/tests/test_main.py ml/tests/test_startup_warning.py -v` runs against the post-fix tree",
+      "then": "test_auth.py reports 10 tests passed; test_main.py reports 26 tests passed; test_startup_warning.py reports 3 tests passed; zero pre-existing tests regress as a side effect of the new fail-loud read or the new conftest seed",
+      "scopeId": "1",
+      "requiredTestType": "python-unit-canary",
+      "regressionRequired": true,
+      "linkedTests": [
+        "ml/tests/test_auth.py (entire pre-existing suite, 10 tests)",
+        "ml/tests/test_main.py (entire pre-existing suite, 26 tests)",
+        "ml/tests/test_startup_warning.py (entire pre-existing suite, 3 tests)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "Pre-existing test suites; preserved unchanged under HL-RESCAN-013",
+      "redGreenProbe": "pytest invocations PASS unchanged against the post-fix tree; reverting the conftest pre-seed AND keeping the new fail-loud read would cause test_main.py collection to crash, which the canary suite would catch immediately",
+      "adversarial": "NO — positive canary that the broader test suite is unaffected by the fail-loud conversion"
+    }
+  ]
+}
