@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read",
+  "generatedAt": "2026-05-15T12:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-020-004-A",
+      "scope": "BUG-020-004-scope-1",
+      "title": "NATS client passes auth token to nats.connect when _AUTH_TOKEN is non-empty",
+      "gherkin": {
+        "given": "the canonical fail-loud-read constant `app.nats_client._AUTH_TOKEN` is patched to \"secret-token\"",
+        "when": "`NATSClient(url=\"nats://localhost:4222\").connect()` is awaited",
+        "then": "`nats.connect` is called exactly once with kwargs that include `token=\"secret-token\"`, and the kwargs do NOT contain any other auth-related parameter, and the kwargs include `servers=[\"nats://localhost:4222\"]` and `name=\"smackerel-ml\"`"
+      },
+      "gherkinHash": "sha256:bug-020-004-scn-a-frozen-contract",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit-python",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "TestConnect::test_connect_passes_auth_token"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial behavioural assertion — would FAIL if a future regression removed the `if _AUTH_TOKEN: connect_opts[\"token\"] = _AUTH_TOKEN` block from `ml/app/nats_client.py`. Patch path `app.nats_client._AUTH_TOKEN` ONLY exists if the canonical constant is imported via `from .auth import _AUTH_TOKEN` at the top of `nats_client.py` — so this test also implicitly verifies the import is present."
+    },
+    {
+      "scenarioId": "SCN-020-004-B",
+      "scope": "BUG-020-004-scope-1",
+      "title": "NATS client omits auth token kwarg when _AUTH_TOKEN is the empty-string dev-mode signal",
+      "gherkin": {
+        "given": "the canonical fail-loud-read constant `app.nats_client._AUTH_TOKEN` is patched to \"\"",
+        "when": "`NATSClient(url=\"nats://localhost:4222\").connect()` is awaited",
+        "then": "`nats.connect` is called exactly once with kwargs that do NOT contain a `token=` key, and the dev-mode auth bypass semantics are preserved (NATS server accepts the connection without auth)"
+      },
+      "gherkinHash": "sha256:bug-020-004-scn-b-frozen-contract",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit-python",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "TestConnect::test_connect_no_token_when_env_empty"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial behavioural assertion — would FAIL if a future regression always set `connect_opts[\"token\"]` regardless of `_AUTH_TOKEN` truthiness (e.g., `connect_opts[\"token\"] = _AUTH_TOKEN or \"\"`). Preserves the dev-mode auth-bypass semantics established by the pre-fix block."
+    },
+    {
+      "scenarioId": "SCN-020-004-C",
+      "scope": "BUG-020-004-scope-1",
+      "title": "ml/app/nats_client.py contains no FORBIDDEN silent-default read of SMACKEREL_AUTH_TOKEN",
+      "gherkin": {
+        "given": "the working tree has the BUG-020-004 fix applied",
+        "when": "`grep -nE 'os\\.(environ\\.get|getenv)\\(\"SMACKEREL_AUTH_TOKEN\"' ml/app/nats_client.py` is run",
+        "then": "exit code is 1 (no matches found), and the file imports `_AUTH_TOKEN` from `.auth` at the top of the module, and the file uses `if _AUTH_TOKEN:` followed by `connect_opts[\"token\"] = _AUTH_TOKEN` at exactly one call site inside `NATSClient.connect()`"
+      },
+      "gherkinHash": "sha256:bug-020-004-scn-c-frozen-contract",
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "unit-python",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_nats_client.py",
+          "testId": "TestSecretReadContract::test_no_environ_get_smackerel_auth_token_in_nats_client_source"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence",
+        "report.md#plan-specialist-evidence-bubbles-plan-2026-05-15"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Grep-contract regression test — would FAIL if a future regression re-introduced `os.environ.get(\"SMACKEREL_AUTH_TOKEN\", ...)` or `os.getenv(\"SMACKEREL_AUTH_TOKEN\", ...)` anywhere in `ml/app/nats_client.py`. Test-class location decided by `design.md` DD-9 (Open Question Q-1 resolution): in-file `TestSecretReadContract` class in `ml/tests/test_nats_client.py` (NOT a shared `ml/tests/test_sst_audit.py` module). Per-file scoping wins because the test asserts substring absence in exactly one source file; co-location with the behavioural tests for the same source file aids maintainability. Plan-phase reconciliation by `bubbles.plan` 2026-05-15 keeps `linkedTests[0].testId` on the FROZEN `TestSecretReadContract::test_no_environ_get_smackerel_auth_token_in_nats_client_source` identifier, matching the current implementation state supplied for this repair."
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -53,6 +54,7 @@ def test_check_required_config_allows_ollama_without_api_key(monkeypatch):
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "false")
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setenv("SMACKEREL_ENV", "test")
     # Spec 050 — ML sidecar health/worker isolation SST contract.
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
@@ -79,6 +81,7 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
     monkeypatch.setenv("OLLAMA_URL", "http://ollama:11434")
     monkeypatch.setenv("ML_PROCESSING_DEGRADED_FALLBACK_ENABLED", "sometimes")
     monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", "unit-test-auth-token")
+    monkeypatch.setattr("app.main._AUTH_TOKEN", "unit-test-auth-token")
     monkeypatch.setenv("SMACKEREL_ENV", "test")
     monkeypatch.setenv("ML_EMBEDDING_WORKERS", "2")
     monkeypatch.setenv("ML_EMBEDDING_QUEUE_MAX", "3")
@@ -99,9 +102,7 @@ def test_check_required_config_rejects_invalid_degraded_fallback_flag(monkeypatc
 # ml/app/main.py::_check_required_config().
 
 
-def _set_required_env_minus(
-    monkeypatch, environment: str, *, auth_token: str | None
-) -> None:
+def _set_required_env_minus(monkeypatch, environment: str, *, auth_token: str | None) -> None:
     """Helper — set every required env var except SMACKEREL_AUTH_TOKEN, then
     optionally set the auth token to the given value (or leave it unset)."""
     monkeypatch.setenv("NATS_URL", "nats://nats:4222")
@@ -116,8 +117,38 @@ def _set_required_env_minus(
     monkeypatch.setenv("ML_HEALTH_LATENCY_SLA_MS", "500")
     if auth_token is None:
         monkeypatch.delenv("SMACKEREL_AUTH_TOKEN", raising=False)
+        monkeypatch.setattr("app.main._AUTH_TOKEN", "")
     else:
         monkeypatch.setenv("SMACKEREL_AUTH_TOKEN", auth_token)
+        monkeypatch.setattr("app.main._AUTH_TOKEN", auth_token)
+
+
+def test_main_source_contract_uses_canonical_auth_token_constant():
+    """main.py must consume auth._AUTH_TOKEN without a silent env default."""
+    source_path = Path(__file__).resolve().parents[1] / "app" / "main.py"
+    source_text = source_path.read_text()
+
+    forbidden_patterns = [
+        'os.environ.get("SMACKEREL_AUTH_TOKEN"',
+        "os.environ.get('SMACKEREL_AUTH_TOKEN'",
+        'os.getenv("SMACKEREL_AUTH_TOKEN"',
+        "os.getenv('SMACKEREL_AUTH_TOKEN'",
+    ]
+    for forbidden_pattern in forbidden_patterns:
+        assert forbidden_pattern not in source_text, (
+            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+            "ml/app/main.py must consume the canonical _AUTH_TOKEN constant "
+            f"instead of silently reading {forbidden_pattern!r}."
+        )
+
+    assert "from .auth import _AUTH_TOKEN, verify_auth" in source_text, (
+        "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+        "ml/app/main.py must import _AUTH_TOKEN from auth.py alongside verify_auth."
+    )
+    assert "auth_token = _AUTH_TOKEN" in source_text, (
+        "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+        "_check_required_config() must use the canonical _AUTH_TOKEN value."
+    )
 
 
 def test_main_s004_production_env_fails_fast_when_auth_token_empty(monkeypatch, caplog):
@@ -137,17 +168,11 @@ def test_main_s004_production_env_fails_fast_when_auth_token_empty(monkeypatch, 
     assert exc_info.value.code == 1
     error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
     joined = " ".join(error_messages)
-    assert (
-        "production" in joined
-    ), f"expected ERROR log naming production, got: {error_messages}"
-    assert (
-        "SMACKEREL_AUTH_TOKEN" in joined
-    ), f"expected ERROR log naming SMACKEREL_AUTH_TOKEN, got: {error_messages}"
+    assert "production" in joined, f"expected ERROR log naming production, got: {error_messages}"
+    assert "SMACKEREL_AUTH_TOKEN" in joined, f"expected ERROR log naming SMACKEREL_AUTH_TOKEN, got: {error_messages}"
 
 
-def test_main_s004_development_env_allows_empty_auth_token_with_warning(
-    monkeypatch, caplog
-):
+def test_main_s004_development_env_allows_empty_auth_token_with_warning(monkeypatch, caplog):
     """SMACKEREL_ENV=development + empty SMACKEREL_AUTH_TOKEN → no exception, warning logged.
 
     Adversarial proof: making AUTH_TOKEN unconditionally required (i.e.
@@ -163,12 +188,10 @@ def test_main_s004_development_env_allows_empty_auth_token_with_warning(
 
     assert config["SMACKEREL_ENV"] == "development"
     assert config["SMACKEREL_AUTH_TOKEN"] == ""
-    warning_messages = [
-        r.message for r in caplog.records if r.levelno == logging.WARNING
-    ]
-    assert any(
-        "SMACKEREL_AUTH_TOKEN is empty" in m for m in warning_messages
-    ), f"expected dev-mode bypass warning, got: {warning_messages}"
+    warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("SMACKEREL_AUTH_TOKEN is empty" in m for m in warning_messages), (
+        f"expected dev-mode bypass warning, got: {warning_messages}"
+    )
 
 
 def test_main_s004_unknown_environment_value_is_fatal(monkeypatch, caplog):
@@ -189,12 +212,10 @@ def test_main_s004_unknown_environment_value_is_fatal(monkeypatch, caplog):
     assert exc_info.value.code == 1
     error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
     joined = " ".join(error_messages)
-    assert (
-        "staging" in joined
-    ), f"expected ERROR log naming the offending value 'staging', got: {error_messages}"
-    assert (
-        "development|test|production" in joined
-    ), f"expected ERROR log naming allowlist 'development|test|production', got: {error_messages}"
+    assert "staging" in joined, f"expected ERROR log naming the offending value 'staging', got: {error_messages}"
+    assert "development|test|production" in joined, (
+        f"expected ERROR log naming allowlist 'development|test|production', got: {error_messages}"
+    )
 
 
 def test_health_endpoint_reports_disconnected_without_nats_client():
@@ -269,9 +290,7 @@ def test_nats_subject_response_map():
     from app.nats_client import SUBJECT_RESPONSE_MAP, SUBSCRIBE_SUBJECTS
 
     for subject in SUBSCRIBE_SUBJECTS:
-        assert (
-            subject in SUBJECT_RESPONSE_MAP
-        ), f"Missing response mapping for {subject}"
+        assert subject in SUBJECT_RESPONSE_MAP, f"Missing response mapping for {subject}"
 
 
 # Spec 050 FR-050-002 — ML sidecar health/worker isolation adversarial regression.
@@ -310,9 +329,7 @@ def test_spec050_missing_required_key_is_fatal(monkeypatch, caplog, missing_key)
     assert exc_info.value.code == 1
     error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
     joined = " ".join(error_messages)
-    assert (
-        missing_key in joined
-    ), f"expected ERROR log naming {missing_key}, got: {error_messages}"
+    assert missing_key in joined, f"expected ERROR log naming {missing_key}, got: {error_messages}"
 
 
 @pytest.mark.parametrize(
@@ -397,12 +414,8 @@ def test_spec050_queue_max_below_workers_is_fatal(monkeypatch, caplog):
     assert exc_info.value.code == 1
     error_messages = [r.message for r in caplog.records if r.levelno >= logging.ERROR]
     joined = " ".join(error_messages)
-    assert (
-        "ML_EMBEDDING_QUEUE_MAX" in joined
-    ), f"expected ERROR log naming the cap, got: {error_messages}"
-    assert (
-        "ML_EMBEDDING_WORKERS" in joined
-    ), f"expected ERROR log naming the worker count, got: {error_messages}"
+    assert "ML_EMBEDDING_QUEUE_MAX" in joined, f"expected ERROR log naming the cap, got: {error_messages}"
+    assert "ML_EMBEDDING_WORKERS" in joined, f"expected ERROR log naming the worker count, got: {error_messages}"
 
 
 def test_spec050_happy_path_returns_validated_values(monkeypatch):

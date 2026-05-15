@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from .auth import verify_auth
+from .auth import _AUTH_TOKEN, verify_auth
 from .embedder import _model
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
@@ -143,7 +143,7 @@ def _check_required_config() -> dict[str, str]:
     # empty token logs a warning and the sidecar continues in dev-mode
     # bypass (auth.py allows all requests through verify_auth when the
     # module-level _AUTH_TOKEN is empty).
-    auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    auth_token = _AUTH_TOKEN
     if not auth_token and environment == "production":
         logger.error("SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production")
         sys.exit(1)
