@@ -39,6 +39,22 @@ When `TARGET_ENV` ∈ `{home-lab}` (SST boundary) OR `runtime.environment=produc
 
 - `infrastructure.postgres.password` (and the resolved `POSTGRES_PASSWORD` env var, and the `DATABASE_URL` password component) MUST NOT equal the local-dev value `smackerel` or any other documented dev-default value (FR-051-005).
 
+> **Footnote (spec 052 cross-reference):** Spec 052 (Bundle Secret Injection
+> Contract) introduces a production-class placeholder mode in which the SST
+> loader emits the deterministic marker `__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__`
+> for `home-lab`/`production` targets and the deploy adapter substitutes the
+> real value at apply time. FR-051-005 is **not weakened** — its dev-default
+> rejection still fires for any literal env-override path (e.g. an operator
+> manually exporting `POSTGRES_PASSWORD=smackerel` before running `apply`).
+> The spec 052 placeholder marker is **not** itself a dev-default literal:
+> Layer 3 in spec 052 (`internal/config/config.go::Validate()` FR-052-007 loop)
+> rejects the placeholder with a distinct error
+> (`<KEY> still equals placeholder marker — adapter substitution failed`),
+> separate from the FR-051-005 dev-default error path. The two checks are
+> orthogonal — both fire under their respective conditions, neither
+> supersedes the other (BS-052-006 layered-rejection contract).
+
+
 ### Defense-In-Depth Enforcement Layers
 
 ```

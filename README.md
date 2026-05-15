@@ -133,15 +133,15 @@ bundles generated via `./smackerel.sh config generate --env <env> --bundle` — 
 publishes adapter contracts that any operator can consume.
 
 **No environment-specific final configuration lives in this repo.** Real
-hostnames, real IPs, mesh-VPN identity (e.g. Tailscale tailnet IDs and FQDNs),
-reverse-proxy site files (Caddy/nginx), `ufw` rules, systemd unit names tied to
-an operator's host, and real secret values all live in the separate **`knb`
-deploy-adapter overlay repo**, which binds Smackerel's generic artifacts to a
-specific machine via per-target `apply.sh` / `rollback.sh` / `verify.sh` scripts.
+hostnames, real IPs, mesh-VPN identity, reverse-proxy site files (Caddy/nginx),
+`ufw` rules, systemd unit names tied to an operator's host, and real secret
+values all live in the operator-private deploy-adapter overlay repo, which binds
+Smackerel's generic artifacts to a specific machine via per-target `apply.sh` /
+`rollback.sh` / `verify.sh` scripts.
 
 If you are wiring up a home-lab (or any other concrete) deployment, do that work
-in the `knb` overlay, not here. For the full Build-Once Deploy-Many operator
-workflow that this repo's deployment surface implements, see
+in the deploy-adapter overlay, not here. For the full Build-Once Deploy-Many
+operator workflow that this repo's deployment surface implements, see
 [docs/Deployment.md](docs/Deployment.md).
 
 ## Docs
@@ -258,7 +258,82 @@ See [`docs/Operations.md`](docs/Operations.md#per-user-bearer-authentication-spe
 for the operator runbook (key generation, bootstrap, enrollment, rotation,
 revocation, the four caller surfaces, and the admin UI), and
 [`docs/Deployment.md`](docs/Deployment.md#per-user-bearer-auth-spec-044--production-posture)
-for the deploy-time secrets checklist and API-consumer migration steps.### LLM Provider
+for the deploy-time secrets checklist and API-consumer migration steps.
+
+#### Managed Secrets & Bundle Substitution (spec 052) — 3-Layer Defense
+
+For production-class deployments (anything that goes through `--env home-lab`
+or another non-dev/non-test target), Smackerel's secrets pipeline is governed
+by spec 052's **bundle secret-injection contract**. The full design lives in
+[`specs/052-bundle-secret-injection-contract/design.md`](specs/052-bundle-secret-injection-contract/design.md);
+the operator-facing summary is below.
+
+**Canonical secret-key manifest** (declared in `config/smackerel.yaml` under
+`infrastructure.secret_keys`, mirrored in `internal/config/secret_keys.go` and
+`scripts/commands/config.sh`; drift is caught by
+`internal/deploy/bundle_secret_contract_test.go`):
+
+| Key | Consumer | Fail-loud surface |
+|-----|----------|-------------------|
+| `POSTGRES_PASSWORD` | DATABASE_URL credential component | `Validate()` (FR-051-005 dev-default check + FR-052-007 placeholder check) |
+| `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` | PASETO v4.public signing material | `Validate()` (FR-052-007) + `auth.ValidateRuntimeAuthStartup()` (FR-052-007 wiring-time) |
+| `AUTH_AT_REST_HASHING_KEY` | At-rest hashing of revocation entries | `Validate()` (FR-052-007) + `auth.ValidateRuntimeAuthStartup()` (FR-052-007) |
+| `AUTH_BOOTSTRAP_TOKEN` | One-time per-user enrollment | `loadAuthConfig()` (spec 051 FR-051-004) + `Validate()` (FR-052-007) |
+
+**Three layers of defense** (any one of which catches a missing secret on its own):
+
+1. **L1 — SST loader** (`./smackerel.sh config generate --env home-lab --bundle`):
+   For production-class targets, the bundle materializes the deterministic
+   marker `__SECRET_PLACEHOLDER__<KEY>__` for every managed key instead of
+   refusing to render. The marker is byte-identical across runs (FR-052-002 —
+   no nonce, no timestamp, no source-SHA mixing) so identical inputs produce
+   identical bundle bytes (NFR "Determinism"). Dev/test bundles continue to
+   ship literal values; the placeholder mode is opt-in by environment, not
+   opt-in by flag.
+2. **L2 — Deploy adapter** (knb's per-target `apply.sh` script): Reads
+   the bundle's `secret-keys.yaml` manifest, substitutes each placeholder
+   with the real value pulled from the operator-private encrypted store
+   (`secrets/<target>.enc.env`, sops/age), writes the resulting `app.env`
+   onto the target host with `chmod 0600`, and starts the container. The
+   contract: every key in `secret-keys.yaml` MUST be substituted before
+   container start. The substitution log records "substituted N of N keys"
+   and is the audit trail.
+3. **L3 — Go runtime** (`config.Validate()` and `auth.ValidateRuntimeAuthStartup()`):
+   At process startup, every managed key is checked exactly against its
+   placeholder marker. A placeholder reaching the runtime means L2
+   substitution failed (or was skipped) — the runtime refuses to boot
+   with `<KEY> still equals placeholder marker — adapter substitution
+   failed (spec 052 FR-052-007)`. The error names the offending KEY only
+   and never echoes the placeholder marker literal or the resolved
+   value (FR-051-007 redaction contract).
+
+**To add a new managed secret:**
+
+1. Add the KEY to `infrastructure.secret_keys` in `config/smackerel.yaml`.
+2. Add the same KEY to `secretKeys` in `internal/config/secret_keys.go`
+   (same order as the yaml).
+3. Add the same KEY to the shell mirror in `scripts/commands/config.sh`
+   (same order).
+4. Wire the runtime consumer to read the resolved value from `os.Getenv(key)`
+   or from a `Config` struct field populated by `Load()`.
+5. If the key is consumed by `internal/auth/startup.go`, extend the
+   `ValidateRuntimeAuthStartup` placeholder check (mirror the existing
+   AUTH_SIGNING_ACTIVE_PRIVATE_KEY / AUTH_AT_REST_HASHING_KEY pattern).
+6. Provide the real value through the deploy adapter overlay
+   (`<knb-repo>/smackerel/secrets/<target>.enc.env` for sops/age targets;
+   inline in `.env.secrets` for local dev only).
+7. Run `./smackerel.sh test unit --go` — the contract test
+   (`internal/deploy/bundle_secret_contract_test.go`) catches yaml↔Go↔shell
+   drift before merge.
+
+**Operator note:** `POSTGRES_PASSWORD=smackerel` (and the other dev defaults
+in `internal/config/secrets.go::DevDBPasswords`) are accepted in
+`SMACKEREL_ENV=development` and `=test` but rejected at `=production` start
+even if the placeholder bypass succeeded — see FR-051-005. The two checks
+(dev-default + placeholder) operate independently to maximize defense
+coverage.
+
+### LLM Provider
 
 The ML sidecar uses [litellm](https://docs.litellm.ai/) to route to any LLM. Configure in `config/smackerel.yaml`:
 

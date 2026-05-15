@@ -1459,6 +1459,47 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Spec 052 FR-052-007 — defense-in-depth: refuse to start if any
+	// SST-managed secret key has reached the runtime still equal to its
+	// placeholder marker. The placeholder marker is emitted by the SST
+	// loader for production-class targets (see internal/config/secret_keys.go
+	// + scripts/commands/config.sh) and MUST be substituted by the deploy
+	// adapter (knb) before the bundle env-files are loaded into the
+	// container. If a placeholder reaches Validate(), the adapter
+	// substitution failed (or was skipped) — the runtime MUST refuse to
+	// start to avoid a process that thinks it has secrets but actually
+	// has the marker string. The error names the offending KEY only —
+	// never the placeholder marker literal and never the resolved value
+	// (FR-051-007 redaction contract extended). Fires unconditionally
+	// (defense-in-depth across every environment) because a placeholder
+	// is never a legitimate secret value in any environment per
+	// FR-052-011 (dev/test bundles ship literals; production-class
+	// bundles ship placeholders that the adapter substitutes). For each
+	// declared key in SecretKeys(), read its resolved value from the
+	// matching authoritative source — POSTGRES_PASSWORD comes from the
+	// DATABASE_URL credential component (already parsed into c.DatabaseURL
+	// by Load()); AUTH_* keys come straight from os.Getenv because
+	// loadAuthConfig() runs AFTER Validate() in Load() so c.Auth.*
+	// fields are still empty at this point. Reading from os.Getenv for
+	// AUTH_* mirrors the env-var pipeline that the deploy adapter
+	// substitution targets and is consistent with how the existing
+	// FR-051-005 dev-default check operates against DATABASE_URL.
+	for _, key := range SecretKeys() {
+		var value string
+		switch key {
+		case "POSTGRES_PASSWORD":
+			value = extractDatabasePassword(c.DatabaseURL)
+		default:
+			// AUTH_SIGNING_ACTIVE_PRIVATE_KEY, AUTH_AT_REST_HASHING_KEY,
+			// AUTH_BOOTSTRAP_TOKEN, plus any future managed secret key
+			// not mapped into a Config struct field at Validate() time.
+			value = os.Getenv(key)
+		}
+		if IsPlaceholder(value) {
+			return fmt.Errorf("%s still equals placeholder marker — adapter substitution failed (spec 052 FR-052-007)", key)
+		}
+	}
+
 	// AUTH_TOKEN format checks only apply when a token is set. In
 	// development/test with an empty token, the dev-mode bypass governs.
 	if c.AuthToken != "" {

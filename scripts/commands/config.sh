@@ -348,6 +348,70 @@ case "$TARGET_ENV" in
     ;;
 esac
 
+# ─────────────────────────────────────────────────────────────────────
+# Spec 052 FR-052-001 / FR-052-002 — SST secret-key manifest shell mirror.
+#
+# This array enumerates the env-var keys whose values are NEVER inlined
+# into bundles for production-class targets. For those targets the SST
+# loader emits __SECRET_PLACEHOLDER__<KEY>__ markers in app.env; the knb
+# deploy adapter substitutes real values at apply time from a sops-encrypted
+# secrets file (knb/smackerel/secrets/<target>.enc.env).
+#
+# 3-mirror system (drift detected by Scope 3 contract test
+# internal/deploy/bundle_secret_contract_test.go):
+#   1. yaml: config/smackerel.yaml::infrastructure.secret_keys
+#   2. Go:   internal/config/secret_keys.go::SecretKeys()
+#   3. shell: SHELL_SECRET_KEYS below
+#
+# To add a new managed secret: update all three mirrors AND ship a real
+# value via the knb deploy adapter at knb/smackerel/secrets/<target>.enc.env.
+SHELL_SECRET_KEYS=(
+  POSTGRES_PASSWORD
+  AUTH_SIGNING_ACTIVE_PRIVATE_KEY
+  AUTH_AT_REST_HASHING_KEY
+  AUTH_BOOTSTRAP_TOKEN
+)
+
+# Spec 052 FR-052-002 — production-class target mirror.
+# When TARGET_ENV is in this list, the SST loader emits placeholders for
+# every key in SHELL_SECRET_KEYS above. dev/test environments are NEVER
+# in this list (they keep inline values for local-dev convenience per
+# FR-052-011). Mirrors config/smackerel.yaml::infrastructure.production_class_targets.
+SHELL_PRODUCTION_CLASS_TARGETS=(
+  home-lab
+)
+
+# Returns the SHELL_SECRET_KEYS list one-per-line.
+secret_keys_list() {
+  printf '%s\n' "${SHELL_SECRET_KEYS[@]}"
+}
+
+# Returns the SHELL_PRODUCTION_CLASS_TARGETS list one-per-line.
+production_class_targets_list() {
+  printf '%s\n' "${SHELL_PRODUCTION_CLASS_TARGETS[@]}"
+}
+
+# Returns 0 if the argument matches a production-class target, 1 otherwise.
+is_production_class_target() {
+  local candidate="$1"
+  local t
+  for t in "${SHELL_PRODUCTION_CLASS_TARGETS[@]}"; do
+    [[ "$t" == "$candidate" ]] && return 0
+  done
+  return 1
+}
+
+# Returns 0 if the argument matches a managed secret key, 1 otherwise.
+in_secret_keys() {
+  local candidate="$1"
+  local k
+  for k in "${SHELL_SECRET_KEYS[@]}"; do
+    [[ "$k" == "$candidate" ]] && return 0
+  done
+  return 1
+}
+# ─────────────────────────────────────────────────────────────────────
+
 PROJECT_NAME="$(required_value project.name)"
 CORE_CONTAINER_PORT="$(required_value services.core.container_port)"
 SHUTDOWN_TIMEOUT_S="$(required_value services.core.shutdown_timeout_s)"
@@ -410,8 +474,36 @@ BACKUP_RETENTION_WEEKLY="$(required_value backup.retention_weekly)"
 BACKUP_WATCHER_POLL_SECONDS="$(required_value backup.watcher_poll_seconds)"
 
 POSTGRES_USER="$(required_value infrastructure.postgres.user)"
-POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
+# Spec 052 FR-052-007 / FR-052-010 — POSTGRES_PASSWORD resolution with
+# placeholder substitution + env-override fallback. Resolution order:
+#   1. If POSTGRES_PASSWORD env var is set (non-empty), use it as override.
+#      Env override beats yaml AND skips placeholder mode (the operator is
+#      explicitly providing a literal). The FR-051-005 dev-default check
+#      still fires on the env-override literal (BS-052-006 regression).
+#   2. Else if TARGET_ENV is a production-class target AND POSTGRES_PASSWORD
+#      is in SHELL_SECRET_KEYS, emit __SECRET_PLACEHOLDER__POSTGRES_PASSWORD__
+#      and short-circuit the FR-051-005 dev-default check (the placeholder
+#      is not a credential — defense in depth moves to the knb adapter
+#      substitution gate AND the Go-runtime placeholder rejection).
+#   3. Else (dev/test, or non-production-class targets), use the yaml value.
+#      The FR-051-005 dev-default check fires only for production-class
+#      targets that opt out of placeholder mode (currently none — kept for
+#      future-proofing).
+POSTGRES_PASSWORD_SOURCE=""
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  # POSTGRES_PASSWORD already set in env → env-override path. Do not reassign.
+  POSTGRES_PASSWORD_SOURCE="env"
+elif is_production_class_target "$TARGET_ENV" && in_secret_keys "POSTGRES_PASSWORD"; then
+  POSTGRES_PASSWORD="__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__"
+  POSTGRES_PASSWORD_SOURCE="placeholder"
+else
+  POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
+  POSTGRES_PASSWORD_SOURCE="yaml"
+fi
 # Spec 051 FR-051-005 / SCN-051-S02 — defense-in-depth dev-default rejection.
+# Fires only when emitting a literal value (env override or yaml). Placeholder
+# mode short-circuits the check because the placeholder marker is not a
+# credential and is rejected by the knb adapter + Go runtime if it leaks.
 # When the SST loader runs for a non-dev/test target (currently: home-lab; any
 # future production-class target should be added to the case below), the
 # Postgres password MUST NOT match a known dev-default value. The list below
@@ -420,16 +512,18 @@ POSTGRES_PASSWORD="$(required_value infrastructure.postgres.password)"
 #
 # The error message MUST name the offending KEY without echoing the VALUE
 # (FR-051-007 redaction contract).
-case "$TARGET_ENV" in
-  home-lab)
-    case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
-      smackerel|postgres|password|changeme|change-me|default)
-        echo "ERROR: infrastructure.postgres.password is a known dev-default value — refusing to generate config for TARGET_ENV=$TARGET_ENV (spec 051 FR-051-005). Set a strong random password in config/smackerel.yaml or via the POSTGRES_PASSWORD env override before running config generate." >&2
-        exit 1
-        ;;
-    esac
-    ;;
-esac
+if [[ "$POSTGRES_PASSWORD_SOURCE" != "placeholder" ]]; then
+  case "$TARGET_ENV" in
+    home-lab)
+      case "$(printf '%s' "$POSTGRES_PASSWORD" | tr '[:upper:]' '[:lower:]')" in
+        smackerel|postgres|password|changeme|change-me|default)
+          echo "ERROR: infrastructure.postgres.password is a known dev-default value — refusing to generate config for TARGET_ENV=$TARGET_ENV (spec 051 FR-051-005). Set a strong random password in config/smackerel.yaml or via the POSTGRES_PASSWORD env override before running config generate." >&2
+          exit 1
+          ;;
+      esac
+      ;;
+  esac
+fi
 POSTGRES_DB="$(required_value infrastructure.postgres.database)"
 POSTGRES_CONTAINER_PORT="$(required_value infrastructure.postgres.container_port)"
 DB_MAX_CONNS="$(required_value infrastructure.postgres.max_conns)"
@@ -896,7 +990,16 @@ OTEL_EXPORTER_ENDPOINT="$(yaml_get observability.otel_exporter_endpoint 2>/dev/n
 # fail-loud authority for production-mode validation.
 AUTH_ENABLED="$(env_override_value auth_enabled auth.enabled)"
 AUTH_TOKEN_FORMAT="$(required_value auth.token_format)"
-AUTH_SIGNING_ACTIVE_PRIVATE_KEY="$(yaml_get auth.signing.active_private_key 2>/dev/null)" || AUTH_SIGNING_ACTIVE_PRIVATE_KEY=""
+# Spec 052 FR-052-007 — placeholder substitution for managed secret keys.
+# When TARGET_ENV is a production-class target, the SST loader emits
+# __SECRET_PLACEHOLDER__<KEY>__ instead of the literal yaml value; the knb
+# deploy adapter substitutes the real value at apply time. dev/test keep
+# the inline yaml-or-empty pattern (FR-052-011, SCN-AUTH-005).
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "AUTH_SIGNING_ACTIVE_PRIVATE_KEY"; then
+  AUTH_SIGNING_ACTIVE_PRIVATE_KEY="__SECRET_PLACEHOLDER__AUTH_SIGNING_ACTIVE_PRIVATE_KEY__"
+else
+  AUTH_SIGNING_ACTIVE_PRIVATE_KEY="$(yaml_get auth.signing.active_private_key 2>/dev/null)" || AUTH_SIGNING_ACTIVE_PRIVATE_KEY=""
+fi
 AUTH_SIGNING_ACTIVE_KEY_ID="$(yaml_get auth.signing.active_key_id 2>/dev/null)" || AUTH_SIGNING_ACTIVE_KEY_ID=""
 AUTH_SIGNING_PRIOR_PUBLIC_KEY="$(yaml_get auth.signing.prior_public_key 2>/dev/null)" || AUTH_SIGNING_PRIOR_PUBLIC_KEY=""
 AUTH_SIGNING_PRIOR_KEY_ID="$(yaml_get auth.signing.prior_key_id 2>/dev/null)" || AUTH_SIGNING_PRIOR_KEY_ID=""
@@ -905,11 +1008,21 @@ AUTH_ROTATION_GRACE_WINDOW_HOURS="$(required_value auth.rotation_grace_window_ho
 AUTH_CLOCK_SKEW_TOLERANCE_SECONDS="$(required_value auth.clock_skew_tolerance_seconds)"
 AUTH_REVOCATION_CACHE_REFRESH_INTERVAL_SECONDS="$(required_value auth.revocation_cache_refresh_interval_seconds)"
 AUTH_REVOCATION_NATS_SUBJECT="$(required_value auth.revocation_nats_subject)"
-AUTH_AT_REST_HASHING_KEY="$(yaml_get auth.at_rest_hashing_key 2>/dev/null)" || AUTH_AT_REST_HASHING_KEY=""
+# Spec 052 FR-052-007 — placeholder substitution (see comment above).
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "AUTH_AT_REST_HASHING_KEY"; then
+  AUTH_AT_REST_HASHING_KEY="__SECRET_PLACEHOLDER__AUTH_AT_REST_HASHING_KEY__"
+else
+  AUTH_AT_REST_HASHING_KEY="$(yaml_get auth.at_rest_hashing_key 2>/dev/null)" || AUTH_AT_REST_HASHING_KEY=""
+fi
 AUTH_PRODUCTION_SHARED_TOKEN_FALLBACK_ENABLED="$(required_value auth.production_shared_token_fallback_enabled)"
 AUTH_TELEMETRY_ENABLED="$(required_value auth.telemetry_enabled)"
 AUTH_TELEMETRY_METRIC_PREFIX="$(required_value auth.telemetry_metric_prefix)"
-AUTH_BOOTSTRAP_TOKEN="$(yaml_get auth.bootstrap_token 2>/dev/null)" || AUTH_BOOTSTRAP_TOKEN=""
+# Spec 052 FR-052-007 — placeholder substitution (see comment above).
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "AUTH_BOOTSTRAP_TOKEN"; then
+  AUTH_BOOTSTRAP_TOKEN="__SECRET_PLACEHOLDER__AUTH_BOOTSTRAP_TOKEN__"
+else
+  AUTH_BOOTSTRAP_TOKEN="$(yaml_get auth.bootstrap_token 2>/dev/null)" || AUTH_BOOTSTRAP_TOKEN=""
+fi
 
 # Agent (spec 037 — LLM Scenario Agent & Tool Registry). SST zero-defaults:
 # every value is REQUIRED. Missing keys → config generate exits non-zero.
@@ -1511,6 +1624,27 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     "$STAGE_DIR/prometheus.yml" "$STAGE_DIR/alerts.yml" \
     "$STAGE_DIR/prompt_contracts"/*.yaml
 
+  # Spec 052 FR-052-003 / FR-052-006 — sibling secret-keys manifest.
+  # Enumerates the canonical list of env-var keys whose values were emitted
+  # as __SECRET_PLACEHOLDER__<KEY>__ markers (for production-class targets)
+  # OR will be substituted by the deploy adapter at apply time. The knb
+  # adapter parses this file post-extraction and validates that every key
+  # has been substituted before container start; the Go runtime rejects any
+  # placeholder marker that leaks through. Determinism: file content is
+  # purely key-derived (no timestamp, source-sha, or environment data).
+  {
+    echo "# Spec 052 FR-052-003 — keys substituted at apply time."
+    echo "# Mirrors:"
+    echo "#   shell:  scripts/commands/config.sh::SHELL_SECRET_KEYS"
+    echo "#   yaml:   config/smackerel.yaml::infrastructure.secret_keys"
+    echo "#   Go:     internal/config/secret_keys.go::SecretKeys()"
+    echo "secretKeys:"
+    for key in "${SHELL_SECRET_KEYS[@]}"; do
+      echo "  - $key"
+    done
+  } > "$STAGE_DIR/secret-keys.yaml"
+  chmod 0644 "$STAGE_DIR/secret-keys.yaml"
+
   # Deterministic file list for bundle-manifest.yaml (sorted).
   PROMPT_FILES_LIST="$(cd "$STAGE_DIR" && find prompt_contracts -maxdepth 1 -type f -name '*.yaml' | LC_ALL=C sort)"
 
@@ -1525,6 +1659,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     echo "  - docker-compose.yml"
     echo "  - nats_contract.json"
     echo "  - prometheus.yml"
+    echo "  - secret-keys.yaml"
     while IFS= read -r f; do
       echo "  - $f"
     done <<< "$PROMPT_FILES_LIST"
@@ -1545,6 +1680,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     "nats_contract.json"
     "prometheus.yml"
     "prompt_contracts"
+    "secret-keys.yaml"
   )
 
   # Deterministic tar: sorted entries, fixed owner/group, fixed mtime, no extended attrs.
