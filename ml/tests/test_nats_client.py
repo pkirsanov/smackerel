@@ -14,6 +14,7 @@ import asyncio
 import json
 import sys
 import types
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -323,8 +324,22 @@ class TestHandleSearchEmbed:
 class TestConnect:
     """NATSClient.connect auth token handling."""
 
+    _RECONNECT_ENV = {
+        "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
+        "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
+    }
+
     def test_connect_passes_auth_token(self):
-        """When SMACKEREL_AUTH_TOKEN is set, it is passed to nats.connect."""
+        """When SMACKEREL_AUTH_TOKEN is set, it is passed to nats.connect.
+
+        HL-RESCAN-013 / Gate G028: auth token now reads from the
+        module-level constant ``app.nats_client._AUTH_TOKEN`` (which is
+        re-exported from ``app.auth`` and fail-loud-read at module
+        import), not from ``os.environ`` at connect time. The test
+        therefore patches the constant directly via
+        ``patch("app.nats_client._AUTH_TOKEN", ...)``
+        instead of mutating ``os.environ``.
+        """
         client = NATSClient("nats://localhost:4222")
 
         mock_connect = AsyncMock()
@@ -333,22 +348,23 @@ class TestConnect:
         mock_nc.jetstream.return_value = object()
         mock_connect.return_value = mock_nc
 
-        with patch("app.nats_client.nats.connect", mock_connect):
-            with patch.dict(
-                "os.environ",
-                {
-                    "SMACKEREL_AUTH_TOKEN": "secret-token",
-                    "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
-                    "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
-                },
-            ):
-                asyncio.run(client.connect())
+        with (
+            patch("app.nats_client.nats.connect", mock_connect),
+            patch("app.nats_client._AUTH_TOKEN", "secret-token"),
+            patch.dict("os.environ", self._RECONNECT_ENV),
+        ):
+            asyncio.run(client.connect())
 
         call_kwargs = mock_connect.call_args[1]
         assert call_kwargs["token"] == "secret-token"
 
     def test_connect_no_token_when_env_empty(self):
-        """When SMACKEREL_AUTH_TOKEN is empty, no token kwarg is passed."""
+        """When SMACKEREL_AUTH_TOKEN is empty, no token kwarg is passed.
+
+        HL-RESCAN-013 / Gate G028: see ``test_connect_passes_auth_token``
+        for the rationale on patching ``app.nats_client._AUTH_TOKEN``
+        instead of ``os.environ``.
+        """
         client = NATSClient("nats://localhost:4222")
 
         mock_connect = AsyncMock()
@@ -357,20 +373,70 @@ class TestConnect:
         mock_nc.jetstream.return_value = object()
         mock_connect.return_value = mock_nc
 
-        with patch("app.nats_client.nats.connect", mock_connect):
-            with patch.dict(
-                "os.environ",
-                {
-                    "SMACKEREL_AUTH_TOKEN": "",
-                    "NATS_MAX_RECONNECT_ATTEMPTS": "-1",
-                    "NATS_RECONNECT_TIME_WAIT_SECONDS": "2",
-                },
-                clear=False,
-            ):
-                asyncio.run(client.connect())
+        with (
+            patch("app.nats_client.nats.connect", mock_connect),
+            patch("app.nats_client._AUTH_TOKEN", ""),
+            patch.dict("os.environ", self._RECONNECT_ENV, clear=False),
+        ):
+            asyncio.run(client.connect())
 
         call_kwargs = mock_connect.call_args[1]
         assert "token" not in call_kwargs
+
+
+class TestSecretReadContract:
+    """HL-RESCAN-013-secondary / Gate G028 / BUG-020-004 — adversarial
+    grep-contract regression that mechanically locks the absence of
+    the FORBIDDEN silent-default os.environ.get("SMACKEREL_AUTH_TOKEN", "")
+    form (and the os.getenv equivalent) from ml/app/nats_client.py source.
+
+    Reverting the fix in ml/app/nats_client.py — i.e. re-introducing
+    `auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")` anywhere
+    in the file — would cause this test to FAIL with the failure
+    message naming BUG-020-004, so a future maintainer can navigate
+    back to this packet for context. The canonical fail-loud pattern
+    is `from .auth import _AUTH_TOKEN` followed by `if _AUTH_TOKEN:
+    connect_opts["token"] = _AUTH_TOKEN` (per design.md DD-1, DD-2).
+    """
+
+    def test_no_environ_get_smackerel_auth_token_in_nats_client_source(self):
+        """Open ml/app/nats_client.py from disk and assert the FORBIDDEN
+        substrings ``os.environ.get("SMACKEREL_AUTH_TOKEN"`` and
+        ``os.getenv("SMACKEREL_AUTH_TOKEN"`` are BOTH absent. Source is
+        read via ``pathlib.Path(...).read_text()`` (not ``inspect.getsource``)
+        so the check catches comments and docstrings too. Failure message
+        names HL-RESCAN-013-secondary, Gate G028, and BUG-020-004 so a
+        future maintainer can navigate back to this packet (per FROZEN
+        design DD-4 + DD-7 + DD-9).
+        """
+        source_path = Path(__file__).resolve().parents[1] / "app" / "nats_client.py"
+        source_text = source_path.read_text()
+
+        forbidden_patterns = [
+            'os.environ.get("SMACKEREL_AUTH_TOKEN"',
+            "os.environ.get('SMACKEREL_AUTH_TOKEN'",
+            'os.getenv("SMACKEREL_AUTH_TOKEN"',
+            "os.getenv('SMACKEREL_AUTH_TOKEN'",
+        ]
+        for forbidden_pattern in forbidden_patterns:
+            assert forbidden_pattern not in source_text, (
+                "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+                "ml/app/nats_client.py must consume the canonical _AUTH_TOKEN "
+                f"constant instead of silently reading {forbidden_pattern!r}."
+            )
+
+        assert source_text.count("from .auth import _AUTH_TOKEN") == 1, (
+            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+            "ml/app/nats_client.py must import the canonical fail-loud _AUTH_TOKEN once."
+        )
+        assert source_text.count("if _AUTH_TOKEN:") == 1, (
+            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+            "NATS auth branching must be driven by _AUTH_TOKEN."
+        )
+        assert source_text.count('connect_opts["token"] = _AUTH_TOKEN') == 1, (
+            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
+            "NATS connect options must pass the canonical _AUTH_TOKEN value."
+        )
 
 
 # ---------------------------------------------------------------------------

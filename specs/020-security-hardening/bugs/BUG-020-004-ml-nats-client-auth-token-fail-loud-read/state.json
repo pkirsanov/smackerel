@@ -1,0 +1,308 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-020-004-ml-nats-client-auth-token-fail-loud-read",
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-004-ml-nats-client-auth-token-fail-loud-read",
+  "featureName": "BUG-020-004 ML NATS client SMACKEREL_AUTH_TOKEN fail-loud read",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "parentWorkflow": {
+    "mode": "home-lab-readiness-rescan-external-2026-05-15",
+    "executionModel": "direct-per-finding-dispatch",
+    "findingId": "HL-RESCAN-013-secondary",
+    "findingLens": "SST defaults / Gate G028",
+    "findingSurface": "ml/app/nats_client.py",
+    "findingHead": "ad512fc6b47fc0b6edf349786df1775c334a3f85",
+    "siblingPackets": [
+      "BUG-020-002-ml-auth-token-module-import-fail-loud",
+      "BUG-042-006-state-json-stale-audit-text"
+    ]
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "done",
+    "currentScope": "BUG-020-004-scope-1",
+    "runStartedAt": "2026-05-15T21:10:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "BUG-020-004-scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "certifierAgent": "bubbles.validate",
+    "certifiedAt": "2026-05-15T22:10:00Z",
+    "auditorAgent": "bubbles.audit",
+    "auditedAt": "2026-05-15T22:20:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Final audit independently verified the scoped nats_client.py source contract, adjacent main.py no-defaults cleanup, frozen scenario/test identifiers, artifact lint, traceability guard, implementation reality scan, regression-quality guard, and repo-standard Python unit lane. The only pre-audit state-transition blockers were the audit phase record and non-empty transitionRequests queue; audit records its phase and clears the queue without touching source files or unrelated dirty worktree files.",
+    "scopeProgress": [
+      {
+        "scope": "BUG-020-004-scope-1",
+        "name": "NATS client fail-loud auth-token read",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-15T21:05:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "phase": "plan",
+      "agent": "bubbles.plan",
+      "action": "repair-planning-artifact-shape-and-status",
+      "timestamp": "2026-05-15T12:00:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Planning artifacts reconciled to the supplied current implementation state. Production source was not edited by this planning pass. Scope remains In Progress until raw evidence is recorded for the scoped NATS client source/test contract and repo-standard Python unit command."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "action": "verify-canonical-fix-and-record-mutation-cycle",
+      "timestamp": "2026-05-15T18:00:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "ml/app/nats_client.py confirmed at canonical fail-loud-read pattern (line 21 import + lines 194-195 conditional+assignment). ml/tests/test_nats_client.py FROZEN test contract present (TestConnect.* and TestSecretReadContract.* per DD-7). Adversarial mutation cycle: GREEN(450) -> mutation -> RED(2 failed, 448 passed) -> revert -> GREEN(450). Whitelist verified per DD-8. See report.md 'Implementation Evidence — 2026-05-15 (FROZEN-aligned rerun)' section. NO commit per FROZEN Implementation Plan Step 9."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "action": "verify-frozen-scoped-tests-and-reverify-mutation-cycle",
+      "timestamp": "2026-05-15T19:40:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "FROZEN scoped 3 tests PASS (TestConnect::test_connect_passes_auth_token, TestConnect::test_connect_no_token_when_env_empty, TestSecretReadContract::test_no_environ_get_smackerel_auth_token_in_nats_client_source). Cross-package smoke: Python 450/450 PASS, Go all packages PASS. Independent adversarial mutation cycle re-verified the implement-phase claim verbatim: GREEN(3) -> mutation -> RED(2 failed, 1 vacuous pass) -> revert -> GREEN(3). Post-revert grep confirms canonical fix restored byte-for-byte. regression-quality-guard.sh --bugfix reports adversarial signal detected. artifact-lint passes (1 pre-existing warning on deprecated scopeProgress field, not test-phase introduced). DoD A-H checkboxes left as marked by implement per dispatch directive. See report.md 'Test Specialist Evidence — bubbles.test — 2026-05-15' section."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "action": "gate-matrix-honest-blocked",
+      "timestamp": "2026-05-15T20:00:00Z",
+      "outcome": "blocked",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Validate phase ran the dispatched gate matrix (G023, G024, G025, G027, G028, G041, G021) against current artifact reality. Gate G028 PASS (independently re-verified canonical _AUTH_TOKEN plumbing at ml/app/nats_client.py:21+194-195; forbidden silent-default forms absent — grep exit 1; canonical form present — grep exit 0; state-transition-guard Check 16 reports implementation reality scan PASS). Gate G041 PASS (artifact-lint confirms all DoD bullets use canonical checkbox syntax; no manipulation attempted by validate). Gate G021 PASS (validate did NOT add validate to completedPhaseClaims, did NOT flip scopeProgress[0].status to done, did NOT add TR-006, did NOT set certification.completedScopes). Gate G023 FAIL (state-transition-guard reports 12 blockers, 3 warnings — see report.md). Gate G024 FAIL (scope BUG-020-004-scope-1 status='In Progress'; certification.completedScopes=[]; 8 of 15 DoD items still unchecked). Gate G025 FAIL-PARTIAL (7 of 15 checked items satisfy raw-evidence requirement per state-transition-guard Check 9; 8 of 15 unchecked items lack inline evidence). Gate G027 FAIL (state-transition-guard Check 15 reports phase-scope coherence fabrication — phases claim implement/test but completedScopes is empty and zero scopes are Done). Dispatch directive of 'dodChecked: 8 of 8' is mechanically false against artifact reality (15-item DoD form, 7 checked) and validate is forbidden by dispatch directive from editing scopes.md to reconcile. Bugfix-fastlane requires phases regression/simplify/stabilize/security/audit not yet executed against this packet. Validate marked TR-BUG-020-004-005 accepted and advanced execution.currentPhase to 'validate' because validate IS running; validate did NOT mark itself completed because it did not complete cleanly. See report.md 'Validate Specialist Evidence — bubbles.validate — 2026-05-15' section. Routing: orchestrator (home-lab-readiness-rescan-external-2026-05-15) must dispatch the 5 missing bugfix-fastlane phases AND bubbles.plan must reconcile DoD shape (or add raw evidence + flip the 8 currently-unchecked DoD items per FROZEN design DD-7) before validate can re-run cleanly."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "action": "verify-regression-owned-bugfix-surface",
+      "timestamp": "2026-05-15T20:05:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Regression phase verified adversarial signal via regression-quality-guard.sh --bugfix ml/tests/test_nats_client.py (0 violations, 0 warnings), confirmed scenario-manifest linked tests use the FROZEN TestConnect/TestSecretReadContract identifiers, confirmed stale legacy identifiers are absent from active scenario/source and first-party consumer surfaces, and re-ran ./smackerel.sh test unit --python with 450 passed. Regression did not edit unrelated dirty source files. See report.md 'Regression Phase Evidence — bubbles.regression — 2026-05-15'."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "action": "dod-evidence-completion-remediation",
+      "timestamp": "2026-05-15T20:55:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "DoD evidence completion remediation pass. Validate had blocked at 2026-05-15T20:00:00Z citing 8 of 15 DoD items as lacking inline raw evidence; subsequent regression-phase pass flipped all 15 boxes to [x] but attached only phrase-level Evidence: report.md#anchor references for the 8 items in question. This implement-phase remediation appended inline raw-output evidence blocks (>= 5 lines each) directly under every previously phrase-only DoD bullet so validate can re-evaluate Gate G025 with explicit inline evidence and not just anchor lookups. Re-verification runs captured in this remediation pass: artifact-lint.sh exit 0 (PASSED, single non-blocking deprecated 'scopeProgress' warning); ./smackerel.sh test unit --python 450 passed in 15.21s; git diff --stat HEAD -- ml/ internal/ tests/ cmd/ scripts/ .github/ shows 10 files changed (190 insertions, 132 deletions); fresh consumer-impact grep confirms zero stale silent-default reads in ml/app/nats_client.py (matches at lines 17, 190 are documentation comments). NO production source modified by this remediation pass. NO FROZEN files modified per design DD-1 / DD-7 / DD-8. NO new DoD items added. NO items unchecked. NO transitionRequests added. NO completedPhaseClaims modified. NO failures status modified. NO scope flipped to Done. See report.md 'Implementation Remediation — DoD Evidence Completion — bubbles.implement — 2026-05-15' section. Files modified by this remediation: scopes.md, report.md, state.json (all within the BUG-020-004 packet). Next required owner: bubbles.validate (re-evaluation of Gate G025 + remaining gate matrix)."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "action": "simplify-scoped-nats-client-diff",
+      "timestamp": "2026-05-15T20:56:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Simplify phase reviewed the scoped diff for ml/app/nats_client.py and ml/tests/test_nats_client.py. Applied narrow cleanup inside the allowed source/test surfaces only: restored two nats_client.py RuntimeError raises to the surrounding multiline style, extracted TestConnect._RECONNECT_ENV, and flattened the two connect-test patch contexts without renaming FROZEN tests or changing assertions. Scoped whitespace check passed via git diff --check, and repo-standard verification passed via ./smackerel.sh test unit --python (450 passed). No unrelated dirty files were modified or claimed. See report.md 'Simplify Phase Evidence — bubbles.simplify — 2026-05-15'."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "action": "stabilize-scoped-auth-token-source-contract",
+      "timestamp": "2026-05-15T20:13:26Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Stabilize phase verified runtime stability implications for the ML sidecar auth-token source contract. nats_client.py consumes the canonical _AUTH_TOKEN import and assigns connect_opts[\"token\"] from _AUTH_TOKEN under the existing truthiness guard; main.py's related production fail-fast cleanup also consumes _AUTH_TOKEN instead of re-reading SMACKEREL_AUTH_TOKEN; auth.py remains the single canonical fail-loud os.environ[\"SMACKEREL_AUTH_TOKEN\"] read. Forbidden SMACKEREL_AUTH_TOKEN silent-default reads are absent from ml/app/nats_client.py and ml/app/main.py. Scoped status/diff checks show no config, deploy, Compose, generated-config source, service lifecycle, or config-generation surface changes are needed for BUG-020-004. Repo-standard ./smackerel.sh test unit --python passed with 450 tests. Stabilize did not edit production source, did not touch unrelated dirty files, did not mark scope Done, and did not promote certification. See report.md 'Stabilize Phase Evidence — bubbles.stabilize — 2026-05-15'."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "action": "gate-matrix-rerun-after-dod-evidence-completion-honest-blocked",
+      "timestamp": "2026-05-15T20:15:00Z",
+      "outcome": "blocked",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Validate re-run after implement-remediation pass (DoD inline evidence completion, 2026-05-15T20:55Z). Gate matrix executed against current artifact reality via repo-approved scripts. PASS gates: G025 (state-transition-guard Check 9: 15/15 DoD items have inline raw-evidence blocks, exit 0); G028 (state-transition-guard Check 16 implementation reality scan PASS, exit 0; independent grep on ml/app/nats_client.py confirms forbidden silent-default forms absent at line-level — `os.environ.get(\"SMACKEREL_AUTH_TOKEN` and `os.getenv(\"SMACKEREL_AUTH_TOKEN` grep exits 1; canonical _AUTH_TOKEN plumbing present at lines 21+198+199 — `from .auth import _AUTH_TOKEN`, `if _AUTH_TOKEN:`, `connect_opts[\"token\"] = _AUTH_TOKEN` grep exits 0); G041 (state-transition-guard Check 4A no DoD format manipulation; Check 4B all scope statuses canonical); G021 (validate honesty preserved — did NOT add validate to completedPhaseClaims, did NOT flip scopeProgress[0].status to done, did NOT fabricate security/audit phase claims); G053 (state-transition-guard Check 13B implementation delta evidence present with git-backed proof and non-artifact runtime/source paths). FAIL gates: G023 (state-transition-guard exit 1, 9 blocking failures, 3 warnings — composite of all FAIL gates below); G024 (state-transition-guard Check 5: 1 scope still 'In Progress' in scopes.md and certification.completedScopes is []; cannot flip without modifying scopes.md which dispatch directive forbids); G027 (state-transition-guard Check 15: phase-scope coherence fabrication — completedPhaseClaims includes implement/test/regression/simplify/stabilize but completedScopes is [] and zero scopes are 'Done'; resolves automatically when scope flips Done legitimately); G022 (state-transition-guard Check 6: required bugfix-fastlane phases security/validate/audit are missing from execution/certification phase records — validate cannot fabricate phases it did not execute); G040 (state-transition-guard Check 18: 3 deferral language hits in scopes.md at lines 465/466/472 — un-fenced 'placeholders' phrases inside the lint-verdict prose paragraph that quotes artifact-lint output; needs code-fence wrap or bubbles:g040-skip markers since the phrases are quoting artifact-lint output, not declaring deferred work); G061 (Check 3F: transitionRequests array contains 2 entries — TR-005 accepted, new TR-006 pending). Validate added TR-006 (validate → plan) routing the artifact repair to bubbles.plan and did NOT advance certification, did NOT advance currentPhase, did NOT modify scopes.md / spec.md / design.md / scenario-manifest.json. Routing: bubbles.plan to flip Scope 1 status to Done (line 38 + Scope Summary table line 36) and wrap the 3 G040 deferral-hit prose paragraphs in scopes.md (lines 465-472) as code-fenced blocks or with bubbles:g040-skip markers. After plan completes, orchestrator (home-lab-readiness-rescan-external-2026-05-15) must dispatch the 3 missing bugfix-fastlane phases (security, validate, audit) before validate can re-run cleanly. See report.md 'Validate Specialist Evidence — Re-run — bubbles.validate — 2026-05-15' section."
+    },
+    {
+      "phase": "plan",
+      "agent": "bubbles.plan",
+      "action": "consume-tr-006-scope-status-and-g040-cleanup",
+      "timestamp": "2026-05-15T21:05:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Planning cleanup consumed TR-BUG-020-004-006. Scope 1 status was flipped to Done in scopes.md and mirrored in state.json scopeProgress/completedScopes because all 15 DoD items are checked with inline raw evidence and validate/stabilize already recorded G025/G028 PASS. The quoted artifact-lint/state-transition verdict prose in scopes.md was wrapped with bubbles:g040-skip markers so G040 treats the words as evidence, not deferred work. No production source files were edited; no security, validate, or audit phase completion was claimed. Remaining owner chain is security -> validate -> audit, with transitionRequests still non-empty until later owners drain them. See report.md 'Plan Cleanup Evidence — bubbles.plan — 2026-05-15'."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "action": "scoped-auth-token-security-review",
+      "timestamp": "2026-05-15T21:10:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Security phase completed the scoped BUG-020-004 review. Threat model covered the ML NATS auth-token source contract, adjacent main.py startup validation, token logging/exposure risk, and deployment/config boundary. Current-session scans verified no os.environ.get/os.getenv(\"SMACKEREL_AUTH_TOKEN\"...) reads in ml/app/nats_client.py or ml/app/main.py (grep exit 1); canonical _AUTH_TOKEN import/use is present in nats_client.py and main.py (grep exit 0); token logging scan found only a static variable-name error message; report/scopes/test token-literal scan found only accepted dummy secret-token and empty SMACKEREL_AUTH_TOKEN= evidence; scoped git status showed no deploy/config/Compose/config-generation/build-workflow dirty paths. Repo-standard ./smackerel.sh test unit --python passed with 450 tests. implementation-reality-scan passed with 0 violations and 1 advisory warning. artifact-lint passed with one deprecated scopeProgress warning. No source remediation required. Security phase claim added; route to validate for certification rerun, with audit remaining later-owner work."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "action": "re-verify-prior-security-evidence-no-drift",
+      "timestamp": "2026-05-15T22:00:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Re-dispatched by orchestrator home-lab-readiness-rescan-external-2026-05-15 after the prior security pass at 2026-05-15T21:10:00Z had already recorded completedPhaseClaims:'security' and opened TR-BUG-020-004-007 (security -> validate, status: pending). To honor the dispatch without fabricating duplicate state, this re-run executed every prior security scan against the CURRENT working tree and confirmed zero drift: forbidden silent-default reads still absent in ml/app/nats_client.py and ml/app/main.py (grep exit 1); canonical _AUTH_TOKEN plumbing intact at nats_client.py:21,198,199 + main.py:12,146 + auth.py:22 (grep exit 0); auth.py:22-24 still raises RuntimeError at import on missing env; token logging scan still finds only the static variable-name error message at main.py:148; scoped 3 security tests (TestSecretReadContract::test_no_environ_get_smackerel_auth_token_in_nats_client_source, TestConnect::test_connect_passes_auth_token, TestConnect::test_connect_no_token_when_env_empty) all PASSED via repo-image pytest; cross-package smoke ./smackerel.sh test unit --python returned 450 passed; pii-scan.sh reported no leaks found; direct PII grep on packet for non-allowlisted /home/<user>/ paths returned exit 1 (clean); direct grep for token-shaped literals (>=16 chars) on packet returned exit 1 (clean); deploy/config/Compose boundary git status still clean. NO new findings, NO duplicate phase claim added to completedPhaseClaims (security already present), NO duplicate transition request opened (TR-BUG-020-004-007 already pending bubbles.validate acceptance), NO production source/config/deploy/Compose file modified. Only this state.json executionHistory entry and a 'Security Specialist Evidence — bubbles.security — 2026-05-15 (re-dispatch re-verification)' section appended to report.md. Next required owner remains bubbles.validate via the existing TR-007."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "action": "post-security-validation-rerun-route-audit",
+      "timestamp": "2026-05-15T22:10:00Z",
+      "outcome": "success",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Post-security validate rerun executed the packet guard matrix via terminal commands. artifact-lint exited 0; traceability-guard exited 0; implementation-reality-scan exited 0 with 0 violations and 1 advisory warning; artifact-freshness-guard exited 0; done-spec-audit --profile changed exited 0 for the in-progress packet; packet no-defaults grep over ml/app/nats_client.py and ml/app/main.py returned no forbidden SMACKEREL_AUTH_TOKEN silent-default reads (grep_exit=1); canonical _AUTH_TOKEN plumbing grep returned matches in nats_client.py and main.py (grep_exit=0); ./smackerel.sh test unit --python exited 0 with 450 passed. state-transition-guard before validation completion reported G024/G025/G027/G028/G040 PASS and blockers only for G061 plus missing validate/audit phases; validate now records its own phase and routes TR-BUG-020-004-008 to bubbles.audit. Final status remains in_progress because audit has not executed and transitionRequests remains non-empty by design."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "action": "final-audit-and-transition-queue-closure",
+      "timestamp": "2026-05-15T22:20:00Z",
+      "outcome": "SHIP_IT",
+      "scope": "BUG-020-004-scope-1",
+      "evidence": "Final audit independently executed the packet checks in the current session: pre-audit state-transition-guard blocked only on G061 transitionRequests plus missing audit phase; artifact-lint exited 0; forbidden SMACKEREL_AUTH_TOKEN silent-default grep over ml/app/nats_client.py and ml/app/main.py printed grep_exit=1; canonical _AUTH_TOKEN plumbing grep matched nats_client.py/main.py/auth.py; stale legacy TestGateG028Audit/test_no_silent_default_auth_token_read grep over active source/test/manifest printed grep_exit=1; frozen TestSecretReadContract/TestConnect identifiers matched active tests and scenario-manifest; skip-marker grep printed grep_exit=1; regression-quality-guard normal and --bugfix both exited 0 with adversarial signal detected; ./smackerel.sh test unit --python exited 0 with 450 passed; traceability-guard exited 0; implementation-reality-scan exited 0 with 0 violations and 1 advisory warning. Audit touched only state.json and report.md in the bug packet, did not edit source files, and did not claim unrelated dirty worktree files."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [
+    "BUG-020-004-ml-nats-client-auth-token-fail-loud-read"
+  ],
+  "failures": [
+    {
+      "gate": "G061",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.audit final pass: TR-BUG-020-004-008 was consumed by the audit phase after independent verification, and transitionRequests is now empty. Prior transition history remains preserved in report.md and executionHistory."
+    },
+    {
+      "gate": "G023",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.audit final pass: the only pre-audit G023 blockers were the missing audit phase record and non-empty transitionRequests. Audit recorded its phase, cleared the queue, and left scope/DoD/G024/G025/G027/G028/G040 already-passing packet checks intact."
+    },
+    {
+      "gate": "G025",
+      "status": "resolved",
+      "summary": "DoD status after regression evidence update: 15 items total, 15 checked with inline evidence blocks. State-transition guard Check 4 and Check 9 pass for DoD completion/evidence. Final promotion remains blocked by scope status, transitionRequests, missing later phases, and phase-scope coherence until validate/audit certification completes."
+    },
+    {
+      "gate": "G024",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.plan cleanup 2026-05-15T21:05:00Z: Scope BUG-020-004-scope-1 is now Done in scopes.md and state.json scopeProgress, and certification.completedScopes includes BUG-020-004-scope-1. DoD completion/evidence had already passed for all 15 checked items per state-transition-guard Check 9 (verified by validate re-run 2026-05-15T20:15Z)."
+    },
+    {
+      "gate": "G022",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.audit final pass: audit is now recorded in execution.completedPhaseClaims, certification.certifiedCompletedPhases, completedPhases, and executionHistory after current-session independent verification."
+    },
+    {
+      "gate": "G027",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.plan cleanup 2026-05-15T21:05:00Z: Scope BUG-020-004-scope-1 is now Done in scopes.md and recorded in certification.completedScopes. No unsupported security/validate/audit completion claims were added."
+    },
+    {
+      "gate": "G040",
+      "status": "resolved",
+      "summary": "Resolved by bubbles.plan cleanup 2026-05-15T21:05:00Z: the quoted artifact-lint/state-transition verdict block and its prose in scopes.md are wrapped with bubbles:g040-skip markers so the guard treats the terms as evidence, not deferred work."
+    },
+    {
+      "gate": "G028",
+      "status": "resolved",
+      "summary": "NO-DEFAULTS / fail-loud SST policy on ml/app/nats_client.py was re-verified by stabilize. Forbidden silent-default forms are absent from ml/app/nats_client.py and ml/app/main.py; canonical _AUTH_TOKEN plumbing is present in nats_client.py and main.py; state-transition-guard Check 16 (Implementation Reality Scan) reports PASS. Per FROZEN design DD-1, DD-2, DD-9 satisfied for nats_client.py."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-15T22:20:00Z",
+  "completedScopes": [
+    "BUG-020-004-scope-1"
+  ],
+  "completedPhases": [
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit"
+  ],
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "notes": "BUG-020-004 is scoped to nats_client.py and test_nats_client.py. Implement/test/regression/simplify/stabilize/security/validate/audit evidence verifies the canonical _AUTH_TOKEN import and connect_opts token assignment, absence of forbidden SMACKEREL_AUTH_TOKEN silent-default reads in nats_client.py and adjacent main.py, FROZEN TestSecretReadContract coverage, adversarial regression signal, repo-standard Python unit success, scenario-manifest FROZEN linked tests, active-surface stale identifier absence, scoped diff/status evidence, narrow simplification of the scoped source/test diff, stabilize confirmation that no config/deploy/Compose/generated-config/service-lifecycle changes are needed, and security confirmation that no token value is logged or exposed beyond literal variable names and dummy secret-token test evidence. The related ml/app/main.py cleanup now consumes _AUTH_TOKEN and is treated as a stability/security-positive adjacent observation, not a BUG-020-004 production-source claim. Planning cleanup accepted TR-BUG-020-004-006, marked the single scope Done, mirrored that in completedScopes, and wrapped quoted artifact-lint/state-transition wording for G040. Final audit accepted TR-BUG-020-004-008, cleared transitionRequests, and marked the packet done after current-session artifact lint, source contract checks, regression-quality guards, traceability guard, implementation-reality scan, and ./smackerel.sh test unit --python all passed. Unrelated dirty worktree files are excluded from this packet's claims."
+}

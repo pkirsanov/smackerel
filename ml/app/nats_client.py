@@ -11,6 +11,14 @@ import nats
 from nats.aio.client import Client as NATSConn
 from nats.js.client import JetStreamContext
 
+# HL-RESCAN-013 / Gate G028 (NO-DEFAULTS / fail-loud SST policy) — re-use
+# the canonical fail-loud-read module-level constant from auth.py instead
+# of re-reading os.environ here. auth.py raises RuntimeError at import
+# time if SMACKEREL_AUTH_TOKEN is unset, so by the time this module is
+# imported the constant is guaranteed to be defined (empty string is the
+# dev-mode auth-bypass signal honoured by both verify_auth() and the
+# NATS server's no-auth dev mode).
+from .auth import _AUTH_TOKEN
 from .metrics import llm_tokens_used, processing_latency, sanitize_model
 from .url_validator import validate_fetch_url
 from .validation import (
@@ -180,10 +188,15 @@ class NATSClient:
             disconnected_cb=self._on_disconnect,
             reconnected_cb=self._on_reconnect,
         )
-        # Token authentication — mirrors Go core's NATS auth enforcement
-        auth_token = os.environ.get("SMACKEREL_AUTH_TOKEN", "")
-        if auth_token:
-            connect_opts["token"] = auth_token
+        # Token authentication — mirrors Go core's NATS auth enforcement.
+        # HL-RESCAN-013 / Gate G028: re-use the canonical fail-loud-read
+        # _AUTH_TOKEN constant from auth.py (which raises RuntimeError at
+        # import if SMACKEREL_AUTH_TOKEN is unset). Empty-string here is
+        # the legitimate dev-mode auth-bypass signal — the NATS connect
+        # call simply omits the `token` kwarg and the dev NATS server
+        # accepts the connection without auth.
+        if _AUTH_TOKEN:
+            connect_opts["token"] = _AUTH_TOKEN
 
         self._nc = await nats.connect(**connect_opts)
         self._js = self._nc.jetstream()
