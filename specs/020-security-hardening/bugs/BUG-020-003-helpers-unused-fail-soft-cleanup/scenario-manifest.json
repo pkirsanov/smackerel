@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "bugId": "BUG-020-003-helpers-unused-fail-soft-cleanup",
+  "parentSpec": "020-security-hardening",
+  "title": "cmd/core/helpers.go env-reading helpers (parseFloatEnv, parseJSONArrayEnv, parseJSONObjectEnv) silently fall back to 0 / nil on missing or malformed env vars, codifying the FORBIDDEN fail-soft pattern under Gate G028 (NO-DEFAULTS / fail-loud SST policy)",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-020-003-A",
+      "title": "Dead-set helper symbols no longer exist anywhere in the repo",
+      "given": "the post-fix tree (after the design + plan + implement specialists have decided which helpers to delete vs convert vs keep)",
+      "when": "grep_search across all *.go files for the dead-set symbols (parseFloatEnv, parseJSONArrayEnv, parseJSONObjectEnv, parseJSONObject, parseJSONObjectVal — the 5 functions whose only callers were tests in cmd/core/main_test.go)",
+      "then": "the search returns ZERO matches anywhere in the repo (no source definitions in cmd/core/helpers.go, no test references in cmd/core/main_test.go, no comment mentions, no build-tagged stubs)",
+      "scopeId": "1",
+      "requiredTestType": "go-symbol-removal-audit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "Verified post-fix by grep_search of cmd/core/helpers.go + cmd/core/main_test.go + cmd/core/connectors.go for the 5 dead-set symbols; refined by design specialist into a concrete in-tree audit script (e.g., a Go test that invokes go/parser to walk cmd/core/ AST for the symbol set, OR a build-time script under scripts/ invoked from ./smackerel.sh test unit --go)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#code-diff-evidence", "report.md#audit-evidence"],
+      "specSource": "spec.md AC-2 (post-fix grep returns zero matches for the 5 dead-set symbols)",
+      "redGreenProbe": "Pre-fix: grep_search returns 24 test references + 5 source definitions = 29 hits. Post-fix: grep_search returns zero hits. Reverting any of the deletions causes the symbol-removal audit to FAIL with a non-zero hit count.",
+      "adversarial": "YES — re-introducing any of the 5 dead-set symbols (e.g., a future maintainer adding `func parseFloatEnv(key string) float64 { ... }` back to helpers.go to support a new connector) MUST cause this scenario to FAIL with the explicit symbol-name + line number of the offending re-introduction."
+    },
+    {
+      "scenarioId": "SCN-020-003-B",
+      "title": "cmd/core/helpers.go contains no os.Getenv silent-fallback patterns",
+      "given": "the post-fix tree",
+      "when": "grep_search of cmd/core/helpers.go for any function whose body contains os.Getenv(key) followed by a return-on-empty path that does not propagate an error",
+      "then": "the search returns ZERO matches; any env reads remaining in cmd/core/helpers.go (e.g., from helpers transitively kept alive by live string-form callers) MUST follow the Gate G028 canonical Go pattern (os.Getenv(KEY) + empty/parse-error → log.Fatal OR (value, error) propagation)",
+      "scopeId": "1",
+      "requiredTestType": "go-pattern-audit",
+      "regressionRequired": true,
+      "linkedTests": [
+        "Refined by design specialist into a concrete in-tree audit (Go test that walks cmd/core/helpers.go AST for the silent-fallback pattern signature)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#code-diff-evidence", "report.md#audit-evidence"],
+      "specSource": "spec.md AC-3 (no silent-fallback patterns in cmd/core/helpers.go) + Gate G028 / .github/instructions/smackerel-no-defaults.instructions.md REQUIRED Go column",
+      "redGreenProbe": "Pre-fix: cmd/core/helpers.go contains 3 functions matching the silent-fallback shape (parseFloatEnv lines 65-83, parseJSONArrayEnv lines 19-22, parseJSONObjectEnv lines 45-48). Post-fix: zero matches. Re-introducing the silent-fallback pattern in any helper causes the audit to FAIL.",
+      "adversarial": "YES — adding ANY new function to cmd/core/helpers.go that matches `os.Getenv(KEY)` followed by `return <literal> | return nil` without propagating an error MUST cause the pattern audit to FAIL. The audit catches both the original 3 dead-set helpers AND any future copy-paste re-introduction."
+    },
+    {
+      "scenarioId": "SCN-020-003-C",
+      "title": "Persistent in-tree adversarial regression guard catches future re-introduction of the FORBIDDEN pattern",
+      "given": "the post-fix tree includes a persistent regression guard (Go test, build-tag check, or go vet analyzer) committed in cmd/core/ or scripts/",
+      "when": "the regression guard runs as part of every ./smackerel.sh test unit --go invocation",
+      "then": "the guard PASSES against the post-fix tree, AND fails RED if a future maintainer re-introduces ANY of the dead-set symbols OR any new function matching the silent-fallback signature shape; the failure message names the offending file + line + symbol",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-regression-guard",
+      "regressionRequired": true,
+      "linkedTests": [
+        "Refined by design + plan specialists into a concrete test name + file path (e.g., cmd/core/helpers_no_defaults_test.go::TestNoSilentFallbackHelpers)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "spec.md AC-5 (adversarial regression guard mechanically catches future re-introduction)",
+      "redGreenProbe": "Pre-fix (with the dead-set helpers still in place + the new guard added): the guard FAILS, reporting the 3 silent-fallback helpers by name + line. Post-fix (helpers deleted): the guard PASSES. Re-introducing any of the deleted helpers causes the guard to FAIL again with the same message shape — proving the guard mechanically catches the regression.",
+      "adversarial": "YES — this scenario IS the persistent regression guard. Its failure mode is the canonical signal that a Gate G028 violation re-entered the codebase via cmd/core/helpers.go."
+    },
+    {
+      "scenarioId": "SCN-020-003-D",
+      "title": "Existing Go unit test suite passes unchanged after the deletion",
+      "given": "the post-fix tree with the 5 dead-set helpers and their tests deleted",
+      "when": "./smackerel.sh test unit --go runs against the post-fix tree",
+      "then": "every Go test in the cmd/core package PASSes; the test count drops by 24 (the 16 + 5 + 3 = 24 test functions that exercised parseFloatEnv / parseJSONArrayEnv / parseJSONObjectEnv) plus 7 (parseJSONObject tests) = 31 deleted test functions; ZERO pre-existing tests for unrelated cmd/core code regress",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-canary",
+      "regressionRequired": true,
+      "linkedTests": [
+        "All pre-existing cmd/core/main_test.go tests for non-deleted helpers (parseJSONArray test cases at lines 109, 119, 126, 136, 143, 150, 158)",
+        "All pre-existing cmd/core test files (TestAllConnectorsRegistered etc.)",
+        "Repo-wide Go suite under ./smackerel.sh test unit --go"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "spec.md AC-6 (existing Go unit tests pass after deletion; live callers untouched)",
+      "redGreenProbe": "Pre-fix: ./smackerel.sh test unit --go reports N tests PASS. Post-fix: ./smackerel.sh test unit --go reports (N - 31) tests PASS. Any test count delta beyond the planned -31 indicates an unintended regression.",
+      "adversarial": "NO — positive canary that the broader Go test suite is unaffected by the deletion. Adversarial coverage lives in SCN-020-003-A through SCN-020-003-C."
+    },
+    {
+      "scenarioId": "SCN-020-003-E",
+      "title": "Live production callers of parseJSONArray remain untouched and continue to behave identically",
+      "given": "the post-fix tree (the 5 dead-set helpers deleted, but parseJSONArray + parseJSONArrayVal preserved because they have live production callers)",
+      "when": "cmd/core/connectors.go compiles and runs",
+      "then": "lines 76 (`parseJSONArray(cfg.BookmarksExcludeDomains)`) and 103 (`parseJSONArray(cfg.BrowserHistoryCustomSkipDomains)`) compile unchanged; the bookmarks + browser-history connector wiring blocks produce identical params maps as the pre-fix tree (verified by grep_search confirming no diff in those call sites + by passing connector wiring tests)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-canary",
+      "regressionRequired": true,
+      "linkedTests": [
+        "Pre-existing cmd/core/main_test.go tests for parseJSONArray (lines 109, 119, 126, 136, 143, 150, 158)",
+        "Pre-existing connector wiring tests (TestAllConnectorsRegistered)"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#audit-evidence"],
+      "specSource": "spec.md Out of Scope (parseJSONArray + parseJSONArrayVal are LIVE; not touched in this packet)",
+      "redGreenProbe": "Pre-fix and post-fix: grep_search of cmd/core/connectors.go for parseJSONArray returns identical line numbers + identical surrounding context. The 7 parseJSONArray test cases in cmd/core/main_test.go continue to PASS unchanged.",
+      "adversarial": "NO — positive canary that the bounded-deletion contract is honoured. Adversarial coverage for the live-symbol preservation lives in the broader Go build (compile failure is the failure mode if parseJSONArray is accidentally deleted)."
+    }
+  ]
+}
