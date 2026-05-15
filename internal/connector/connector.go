@@ -9,12 +9,19 @@ import (
 type HealthStatus string
 
 const (
-	HealthHealthy      HealthStatus = "healthy"
-	HealthSyncing      HealthStatus = "syncing"
-	HealthDegraded     HealthStatus = "degraded"
-	HealthFailing      HealthStatus = "failing"
-	HealthError        HealthStatus = "error"
-	HealthDisconnected HealthStatus = "disconnected"
+	HealthHealthy  HealthStatus = "healthy"
+	HealthSyncing  HealthStatus = "syncing"
+	HealthDegraded HealthStatus = "degraded"
+	// HealthDegradedRecovered marks a connector that observed an
+	// operator-initiated recovery action (e.g. QF cursor fast-forward,
+	// spec 041 SCN-SM-041-008) during the most recent Sync. The connector
+	// is technically caught up but operators must know events were
+	// skipped. Cleared on the next clean Sync where no recovery action
+	// was observed.
+	HealthDegradedRecovered HealthStatus = "degraded_recovered"
+	HealthFailing           HealthStatus = "failing"
+	HealthError             HealthStatus = "error"
+	HealthDisconnected      HealthStatus = "disconnected"
 )
 
 // HealthFromErrorCount returns a health status based on consecutive error count

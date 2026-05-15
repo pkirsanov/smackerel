@@ -82,6 +82,12 @@
         "agent": "bubbles.validate",
         "timestamp": "2026-05-07T20:12:45Z",
         "summary": "Current-session Scope 1 certification refresh. Re-read state.json, scopes.md, report.md, scenario-manifest.json, and git status; re-ran ./smackerel.sh test e2e to completion (shell suite 35/35 PASS, go-e2e PASS, tests/e2e QF connector tests PASS, echo $? = 0); ran artifact-lint PASS, traceability-guard PASS with 0 warnings, implementation-reality-scan PASS with 0 violations, artifact-freshness-guard PASS, changed-spec done audit PASS/skipped done gates because feature remains in_progress, regression-quality-guard PASS, and regression-baseline-guard PASS. state-transition-guard remains blocked only for whole-feature promotion: Parked Scopes 2-9 unchecked/not started, missing full-feature specialist phases, and pre-existing deferral-language hits in report sections; Check 5 completedScopes parity passes for Scope 1. Scope 1 remains the only certified scope; top-level status and certification.status remain in_progress; certification.certifiedCompletedPhases remains [] and Scope 2+ remain parked behind QF 063 Scope 2 read/outbox readiness. Evidence ref: report.md#scope-1-current-session-validation-refresh---2026-05-07t201245z."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-07T21:30:00Z",
+        "summary": "Round 2L design-contract fix for SCN-SM-041-006 (Scope 2 partial). Implemented design.md §F8 Forward-Compatible decision_type Handling end-to-end in internal/connector/qfdecisions: normalizer.go now falls through unknown decision_type packets to canonical ContentTypeDecisionPacket with Metadata['unknown_decision_type']=true, raw decision_type preserved, and metrics.QFUnknownDecisionType.WithLabelValues(value).Inc() unconditionally on the unknown path; connector.go capability-gate metric emission removed (single source of truth in normalizer, comment rewritten, orphaned 'capability := c.capability' local removed from Sync); normalizer_test.go replaced the spec-mismatched sub-test inside TestNormalizerRejectsIncompletePacketEnvelopes with spec-correct assertions and added top-level TestNormalizerMarksUnknownDecisionTypeWithMetadata; connector_test.go TestSync_EmitsUnknownDecisionTypeMetricForUnsupportedType updated to assert artifact length/ContentType/metadata flag/raw decision_type preservation; tests/e2e/qf_decisions_connector_api_test.go gained compile-only TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata (//go:build e2e). Verification: ./smackerel.sh test unit --go --segment connector reports 'internal/connector/qfdecisions 0.894s' PASS plus cmd/core ok (cached); only failure is pre-existing spec-045 internal/config envsubst drift (OUT OF SCOPE). ./smackerel.sh lint EXIT 0 'All checks passed!'. ./smackerel.sh format --check flags only pre-existing spec-044 internal/metrics/auth.go drift (OUT OF SCOPE). Honest DoD outcome: only scopes.md:302 SCN-SM-041-006 (Unknown decision_type metadata flag) was flipped [x] — its description text is clean and matches the delivered behavior. scopes.md:314 SCN-SM-041-006 (validation unit-test DoD) was initially flipped [x] then reverted to [ ] with Uncertainty Declaration because its pre-existing parenthetical wording contradicts the delivered behavior (Gate G040 triggered); the validation-row item routes to bubbles.plan for description-text reconciliation before a safe flip — the same achievement is already captured by scopes.md:302 [x] against clean wording. scopes.md:320 SCN-SM-041-006 (e2e regression DoD) remains [ ] with Uncertainty Declaration because runtime execution is blocked by spec-045 envsubst SST-loader drift; routes to bubbles.test post spec-045 unblock. Evidence section appended to report.md as 'Scope 2 Round 2L Implementation Evidence (SCN-006 Contract Fix)' with Phase=implement, Claim Source tags, and PII-sanitized terminal output (~/smackerel form). Top-level status, certification.status, certification.completedScopes, certification.certifiedCompletedPhases, and certification.scopeProgress[1] (Scope 2 still Not Started overall — many DoD items remain blocked by upstream specs 045/044/051/052) unchanged from this agent. Routed forward: bubbles.test for e2e-runtime execution post-spec-045 unblock; bubbles.plan for scopes.md:314 DoD-description wording reconciliation (Gate G040). No spec.md, design.md, uservalidation.md, scenario-manifest.json, or other feature artifacts modified by this round."
       }
     ],
     "pendingTransitionRequests": []
@@ -336,12 +342,52 @@
       "runStartedAt": "2026-05-07T04:56:29Z",
       "runFinishedAt": "2026-05-07T04:56:29Z",
       "summary": "Repaired spec 041 planning/state shape after validation: Scope 2-9 status lines are canonical while dependency gates preserve the parked queue, G040-triggering rejection-code wording was rephrased in scopes.md/report.md, and certification.scopeProgress now tracks Scopes 1-9 without marking any scope complete. Runtime DoD remains unchecked until fresh green evidence exists."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "classify",
+        "validate",
+        "audit",
+        "docs"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-14T19:30:00Z",
+      "runFinishedAt": "2026-05-14T19:30:00Z",
+      "summary": "Sprint Stream D snapshot dispatch (operator-bounded full-delivery override). CLASSIFIED 31 working-tree files into 3 cohorts: (a) 19 STREAM D files staged (15 modified + 4 new in internal/connector/qfdecisions/, internal/db/migrations/034_qf_decisions_capability.sql, tests/integration/qf_decisions_sync_test.go, tests/stress/qf_decisions_sync_stress_test.go, internal/metrics/metrics.go for SCN-SM-041-009 QFFreshnessP95Seconds, plus tests/e2e/qf_decisions_connector_api_test.go, internal/connector/connector.go registry update, and the 4 spec artifacts report.md/scenario-manifest.json/scopes.md/state.json); (b) 9 OUT-OF-STREAM files left UNTOUCHED (ml/app/nats_client.py + ml/tests/test_nats_client.py for HL-RESCAN-013/Gate G028 — BUG-020-002 follow-up; internal/metrics/auth.go + ml/app/embedder.py + ml/tests/test_embedder.py + ml/tests/test_main.py + ml/tests/test_ocr.py + tests/integration/auth_chaos_test.go for incidental gofmt/ruff line-length drift; ml/uv.lock 0-byte tooling debris); (c) 3 DEFERRED to residual commit per dispatch contract (.github/skills/smackerel-no-defaults/SKILL.md + docs/Home_Lab_Deployment_Plan.md + docs/Home_Lab_Master_Deployment_Plan.md). VALIDATE phase: ./smackerel.sh check EXIT 0 (config sync OK, env_file drift guard OK, scenario-lint 5 registered/0 rejected); ./smackerel.sh test unit --go --segment connector EXIT 0 (cmd/core 0.456s + internal/config 14.711s fresh + internal/connector/qfdecisions cached + internal/metrics cached + internal/deploy 16.226s + 60+ packages all PASS, no failures). AUDIT phase: artifact-lint EXIT and state-transition-guard EXIT recorded in commit RESULT-ENVELOPE (state-transition-guard expected non-zero because top-level status remains in_progress with Scope 2 partial DoD and Scopes 3-9 Not Started). DOCS phase: this state.json entry plus concerns array entries below. SCOPE STATUS PROMOTIONS: NONE. DoD CHECKBOX FLIPS: NONE (Round 2L flips already pending in working tree from prior bubbles.implement run at 2026-05-07T21:30:00Z; this snapshot preserves them verbatim and adds no new flips). Top-level status remains in_progress; certification.status remains in_progress; certification.completedScopes remains [Scope 1] only; certification.certifiedCompletedPhases remains []. Concerns recorded for upstream-blocked Scope 2 e2e DoD (spec-045) and Scopes 2-9 broader work (QF spec 063 read/outbox + outbox publishing readiness). NEXT REQUIRED OWNER: bubbles.goal (sprint coordinator) for Stream D residual reconciliation across SKILL.md + Home_Lab docs."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-07T20:12:45Z",
+  "concerns": [
+    {
+      "id": "C-S2-006-E2E",
+      "severity": "medium",
+      "sourceDodItem": "Scope 2 SCN-SM-041-006 (E2E API regression — `TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata` runtime execution; scopes.md line 320)",
+      "followUpOwner": "bubbles.test",
+      "followUpAction": "After spec-045 SST-loader envsubst drift is resolved upstream, run `./smackerel.sh test e2e` against the disposable test stack and record terminal output for `TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata` in report.md `Scope 2 E2E API Evidence` section; flip scopes.md line 320 to `[x]` only after the test PASSes.",
+      "rationale": "Test source has been delivered and compiles under `//go:build e2e` (verified by Round 2L `bubbles.implement` run at 2026-05-07T21:30:00Z). Runtime execution is blocked by pre-existing spec-045 envsubst drift in the disposable-stack startup path. The unit-level proof for SCN-SM-041-006 (3 of 4 DoD items at scopes.md lines 302/305/314) is GREEN this snapshot session — see the bubbles.workflow executionHistory entry above for unit test transcript."
+    },
+    {
+      "id": "C-S2-BROADER-DOD",
+      "severity": "medium",
+      "sourceDodItem": "Scope 2 broader DoD (capability handshake end-to-end, cursor sync normalization end-to-end, page-size clamping operator alerts, freshness SLA p95 emission across all stages, cursor-lag breach signaling) — most Scope 2 DoD items beyond SCN-SM-041-006",
+      "followUpOwner": "bubbles.plan",
+      "followUpAction": "After QF spec 063 read/outbox surface (`GET /api/private/smackerel/v1/capabilities`, `GET /api/private/smackerel/v1/decision-events`, `GET /api/private/smackerel/v1/decision-packets/{packet_id}`) is readied with real producer/outbox publishing (currently QF 063 is `done_with_concerns` per its 2026-05-12 closure, but smackerel-side ingestion against a live producer remains untested), re-invoke bubbles.plan to expand executable scope sections, then bubbles.implement / bubbles.test for end-to-end runtime proof.",
+      "rationale": "Round 2L delivered the design.md §F8 forward-compatibility surface (capability gate + normalizer + QFUnknownDecisionType metric + SCN-SM-041-009 QFFreshnessP95Seconds gauge) needed to host the broader Scope 2 work. The remaining Scope 2 DoD requires a live QF producer for end-to-end proof, which is the stated cross-repo dependency in spec.md and design.md. Scope 2 status remains Not Started in this snapshot; promotion is deferred until the cross-repo dependency closes."
+    },
+    {
+      "id": "C-S3-9-PARKED",
+      "severity": "medium",
+      "sourceDodItem": "Scopes 3 (Web/Telegram digest), 4 (PersonalEvidenceBundle export), 5 (safety boundaries + observability + docs), 6 (engagement signal exporter), 7 (personal context read API), 8 (signed callback protocol), 9 (watch signal proposal endpoint)",
+      "followUpOwner": "bubbles.plan",
+      "followUpAction": "After Scope 2 reaches Done with QF 063 producer integration (see C-S2-BROADER-DOD), unpark Scopes 3-9 in scopes.md and re-invoke the planning chain (bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan) per the active dependency DAG (Scope 3 depends on Scope 2; Scopes 4/6/7/8 depend on Scope 3; Scope 5 depends on Scopes 2-4; Scope 9 depends on Scope 1).",
+      "rationale": "Scopes 3-9 are correctly parked behind the QF 063 producer-readiness gate. Each scope's `dependsOn` field in `certification.scopeProgress` documents the activation condition. No work in this snapshot promotes any of these scopes; status remains Not Started for all 7."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-14T19:30:00Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
