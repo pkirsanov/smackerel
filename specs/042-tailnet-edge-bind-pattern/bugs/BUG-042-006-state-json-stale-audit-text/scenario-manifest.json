@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "bugId": "BUG-042-006-state-json-stale-audit-text",
+  "specId": "042-tailnet-edge-bind-pattern",
+  "scenarios": [
+    {
+      "scopeId": "BUG-042-006-scope-1",
+      "scenarioId": "SCN-042-006-A",
+      "title": "A reconciliation entry documents the policy reversal",
+      "summary": "The spec 042 audit history file contains a single reconciliation entry whose phase identifier names the policy-reversal source bug, and whose narrative names the binding policy authority, the now-required fail-loud form, and the now-forbidden substitution form.",
+      "requiredTestType": "static-json-contract",
+      "regressionRequired": true,
+      "adversarial": "YES — proven non-tautological by SCN-042-006-C: a synthetic copy with the reconciliation entry stripped MUST cause the contract test to FAIL RED with a named error.",
+      "owningArtifacts": {
+        "spec": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/spec.md",
+        "design": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/design.md",
+        "scopes": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/scopes.md"
+      },
+      "testFile": "internal/deploy/state_audit_reconciliation_test.go",
+      "testName": "TestSpec042_StateJsonHasReconciliationEntry_PostBUG029003/A_live_file_has_reconciliation_entry_and_all_9_markers"
+    },
+    {
+      "scopeId": "BUG-042-006-scope-1",
+      "scenarioId": "SCN-042-006-B",
+      "title": "Every stale narrative carries a leading supersession marker",
+      "summary": "Every notes / reason / closeReason string in the spec 042 audit history file whose substance praises the now-forbidden substitution form starts with the supersession marker that names the policy-reversal source bug. The original narrative substance is preserved verbatim immediately after the marker.",
+      "requiredTestType": "static-json-contract",
+      "regressionRequired": true,
+      "adversarial": "YES — proven non-tautological by SCN-042-006-D: a synthetic copy with the leading marker stripped from any one of the 9 affected fields MUST cause the table-driven contract test to FAIL RED with a named-field error.",
+      "owningArtifacts": {
+        "spec": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/spec.md",
+        "design": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/design.md",
+        "scopes": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/scopes.md"
+      },
+      "testFile": "internal/deploy/state_audit_reconciliation_test.go",
+      "testName": "TestSpec042_StateJsonHasReconciliationEntry_PostBUG029003/A_live_file_has_reconciliation_entry_and_all_9_markers"
+    },
+    {
+      "scopeId": "BUG-042-006-scope-1",
+      "scenarioId": "SCN-042-006-C",
+      "title": "Removing the reconciliation entry causes the contract test to fail RED",
+      "summary": "Adversarial mutation test: when the reconciliation entry is removed from a synthetic in-memory copy of the audit history file, the contract validator returns a non-nil error whose message names the missing reconciliation entry. The test PASSES (i.e. correctly rejects the mutated copy) in the post-fix state; the original assertion is that the validator MUST NOT silently accept a mutated copy with the reconciliation entry stripped.",
+      "requiredTestType": "static-json-contract-adversarial",
+      "regressionRequired": true,
+      "adversarial": "YES — this scenario IS the adversarial proof for SCN-042-006-A. It uses an in-memory mutation of the live file (no on-disk write); the test asserts the validator's error message names 'reconciliation entry missing' (or equivalent) so a maintainer who silently removes the entry in a future PR will see this test FAIL RED.",
+      "owningArtifacts": {
+        "spec": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/spec.md",
+        "design": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/design.md",
+        "scopes": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/scopes.md"
+      },
+      "testFile": "internal/deploy/state_audit_reconciliation_test.go",
+      "testName": "TestSpec042_StateJsonHasReconciliationEntry_PostBUG029003/B_adversarial_reconciliation_entry_stripped_fails_red"
+    },
+    {
+      "scopeId": "BUG-042-006-scope-1",
+      "scenarioId": "SCN-042-006-D",
+      "title": "Stripping a supersession marker from any affected narrative causes the contract test to fail RED",
+      "summary": "Adversarial mutation test (table-driven, parameterized over the 9 affected narrative fields): when the leading supersession marker is stripped from any one affected narrative string field in a synthetic in-memory copy of the audit history file, the contract validator returns a non-nil error whose message names the affected field path. Each of the 9 sub-cases independently asserts the validator MUST NOT silently accept a mutated copy missing the marker on its respective field.",
+      "requiredTestType": "static-json-contract-adversarial",
+      "regressionRequired": true,
+      "adversarial": "YES — this scenario IS the adversarial proof for SCN-042-006-B. It is table-driven across the 9 fields enumerated in spec.md → 'Stale Audit Lines (Evidence)' table; each sub-case independently mutates ONE field's marker and asserts the validator rejects the mutated copy with a named-field error. A maintainer who silently strips a single marker in a future PR will see exactly that one sub-case FAIL RED, pinning the regression to the affected field.",
+      "owningArtifacts": {
+        "spec": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/spec.md",
+        "design": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/design.md",
+        "scopes": "specs/042-tailnet-edge-bind-pattern/bugs/BUG-042-006-state-json-stale-audit-text/scopes.md"
+      },
+      "testFile": "internal/deploy/state_audit_reconciliation_test.go",
+      "testName": "TestSpec042_StateJsonHasReconciliationEntry_PostBUG029003/C_adversarial_marker_stripped_fails_red"
+    }
+  ]
+}
