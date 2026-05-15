@@ -21,17 +21,17 @@ in the deploy-adapter overlay, not in this product repo.
 
 | Old content | New owner |
 |-------------|-----------|
-| Home-lab adapter readiness checklist (apply / verify / rollback / bootstrap / host singleton / operator-host details / Caddy / tailnet exposure / host monitoring / backup timer paths) | knb deploy-adapter overlay → spec `003-smackerel-home-lab-adapter-readiness` |
+| Home-lab adapter readiness checklist (apply / verify / rollback / bootstrap / host singleton / operator-host details / Caddy / tailnet exposure / host monitoring / backup timer paths) | Operator-private deploy-adapter overlay readiness artifact |
 | Generic Smackerel CI Build-Once Deploy-Many pipeline behavior | [`docs/Deployment.md`](Deployment.md) |
 | Generic Smackerel runtime config contracts (SST, fail-loud auth provisioning, non-default DB credentials) | [`docs/Deployment.md`](Deployment.md) and [`docs/Operations.md`](Operations.md) |
 | Generic Smackerel backup contract (dump, retention, status file, restore drill) | [`docs/Deployment.md`](Deployment.md) §"Spec 048 — Deploy Adapter Backup Contract" + [`docs/Operations.md`](Operations.md#backup--restore) |
 | Connector framework + per-connector specs | [`specs/`](../specs/) (one folder per connector spec) |
-| Obsolete OPS-HOMELAB-1xx planning rows that were never created as artifacts | Removed. No replacement; the work either lives under a real Smackerel spec already, or is target-adapter work in knb. |
+| Obsolete OPS-HOMELAB-1xx planning rows that were never created as artifacts | Removed. No replacement; the work either lives under a real Smackerel spec already, or is target-adapter work in the deploy-adapter overlay. |
 
 ## Why this repo no longer hosts a home-lab plan
 
 - This product repo MUST stay deployable to ANY target by ANY operator.
-- The per-target adapter (in the knb deploy-adapter overlay) binds Smackerel
+- The per-target adapter (in the deploy-adapter overlay) binds Smackerel
   to a specific machine. That binding includes hostnames, IP addresses,
   Tailscale tailnet identity, reverse-proxy site files, host firewall rules,
   systemd unit names, secret values, and the per-target `manifest.yaml` /
@@ -42,11 +42,11 @@ in the deploy-adapter overlay, not in this product repo.
 
 ## Where to go
 
-- Operator deploying Smackerel to home-lab: read the knb deploy-adapter
-  overlay's spec `003-smackerel-home-lab-adapter-readiness` for the
-  target-specific apply / verify / rollback / bootstrap / monitoring /
-  backup-shipping plan. That spec composes the generic product contracts
-  documented here with the operator's concrete host topology.
+- Operator deploying Smackerel to home-lab: read the operator-private
+  deploy-adapter overlay's target-readiness artifact for the target-specific
+  apply / verify / rollback / bootstrap / monitoring / backup-shipping plan.
+  That artifact composes the generic product contracts documented here with
+  the operator's concrete host topology.
 - Operator wanting to understand what Smackerel itself produces and
   contracts on (independent of any target): read
   [`docs/Deployment.md`](Deployment.md). It covers the Build-Once
