@@ -1,0 +1,213 @@
+{
+  "version": 2,
+  "specId": "052",
+  "featureDir": "specs/052-bundle-secret-injection-contract",
+  "generatedBy": "bubbles.plan (full-delivery, F-052-PLAN-01..08 reconciliation)",
+  "generatedAt": "2026-05-13T06:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-052-S01",
+      "name": "Manifest declares the canonical secret-key set",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/secret_keys_test.go", "function": "TestSecretKeysMirror"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/secret_keys_test.go::TestSecretKeysMirror"},
+        {"type": "source", "location": "config/smackerel.yaml::infrastructure.secret_keys (POSTGRES_PASSWORD, AUTH_SIGNING_ACTIVE_PRIVATE_KEY, AUTH_AT_REST_HASHING_KEY, AUTH_BOOTSTRAP_TOKEN)"},
+        {"type": "source", "location": "internal/config/secret_keys.go::SecretKeys() canonical mirror"},
+        {"type": "report", "location": "report.md#scope-1-tests (T-052-001 evidence block)"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD A1: config/smackerel.yaml declares infrastructure.secret_keys with the 4 canonical entries",
+        "Scope 1 DoD A2: internal/config/secret_keys.go SecretKeys() mirror matches yaml ordering exactly",
+        "Scope 1 DoD A4: DoD scenario validator SCN-052-S01 (yaml + Go mirror parity)",
+        "Scope 1 DoD B1: T-052-001 (TestSecretKeysMirror) passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S02",
+      "name": "Placeholder marker format is locked and round-trips",
+      "scope": "scope-01",
+      "status": "active",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/secret_keys_test.go", "function": "TestPlaceholderFormat"},
+        {"file": "internal/config/secret_keys_test.go", "function": "TestIsPlaceholder"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-test", "location": "internal/config/secret_keys_test.go::TestPlaceholderFormat"},
+        {"type": "unit-test", "location": "internal/config/secret_keys_test.go::TestIsPlaceholder"},
+        {"type": "source", "location": "internal/config/secret_keys.go::PlaceholderFor + IsPlaceholder helpers"},
+        {"type": "report", "location": "report.md#scope-1-tests (T-052-002 + T-052-003 evidence blocks)"}
+      ],
+      "linkedDoD": [
+        "Scope 1 DoD A3: PlaceholderFor returns __SECRET_PLACEHOLDER__<KEY>__ AND IsPlaceholder is the inverse",
+        "Scope 1 DoD A5: DoD scenario validator SCN-052-S02 (round-trip identity)",
+        "Scope 1 DoD B2: T-052-002 (TestPlaceholderFormat) passes",
+        "Scope 1 DoD B3: T-052-003 (TestIsPlaceholder) passes — adversarial inputs covered (empty, no-prefix, no-suffix, mismatched key, lowercase)"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S03",
+      "name": "home-lab loader emits placeholders for declared secret keys",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit-bash", "integration"],
+      "linkedTests": [
+        {"file": "tests/config/placeholder_emit_test.sh", "function": "sub-case home-lab"},
+        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "main bundle determinism + sibling-yaml + placeholder-count check"},
+        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "regression: bundle determinism (T-052-007-REG)"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-bash", "location": "tests/config/placeholder_emit_test.sh — TARGET_ENV=home-lab sub-case asserts 4 __SECRET_PLACEHOLDER__<KEY>__ lines in staged app.env"},
+        {"type": "integration-bash", "location": "tests/config/bundle_home_lab_integration_test.sh — two consecutive --env home-lab --bundle invocations produce byte-identical sha256 AND tar.gz contains sibling secret-keys.yaml"},
+        {"type": "source", "location": "scripts/commands/config.sh — placeholder-emit block per design.md §4 step 3 (managed-key resolution wrap) + sibling secret-keys.yaml emission per step 4"},
+        {"type": "report", "location": "report.md#scope-2-tests (T-052-004 + T-052-006 + T-052-007-REG evidence blocks)"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD A1: SHELL_SECRET_KEYS array declared with 4 canonical entries + helper functions defined",
+        "Scope 2 DoD A2: managed-key resolution wraps with placeholder logic when TARGET_ENV is in production_class_targets",
+        "Scope 2 DoD A3: bundle staging emits sibling secret-keys.yaml chmod 0644, listed in TAR_FILES + bundle-manifest.yaml",
+        "Scope 2 DoD A5: DoD scenario validator SCN-052-S03",
+        "Scope 2 DoD B1: T-052-004 passes",
+        "Scope 2 DoD B3: T-052-006 passes",
+        "Scope 2 DoD B4: T-052-007-REG persistent regression passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S04",
+      "name": "dev and test loader runs preserve inline values (FR-052-011)",
+      "scope": "scope-02",
+      "status": "active",
+      "requiredTestType": ["unit-bash"],
+      "linkedTests": [
+        {"file": "tests/config/placeholder_emit_test.sh", "function": "sub-case dev"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-bash", "location": "tests/config/placeholder_emit_test.sh — TARGET_ENV=dev sub-case asserts POSTGRES_PASSWORD=smackerel literal AND zero __SECRET_PLACEHOLDER__ markers"},
+        {"type": "source", "location": "scripts/commands/config.sh — placeholder-mode short-circuit guard preserves FR-051-005 dev-default check on env-override path; dev/test bypass placeholder mode entirely because home-lab is the only production_class_target"},
+        {"type": "report", "location": "report.md#scope-2-tests (T-052-005 evidence block)"}
+      ],
+      "linkedDoD": [
+        "Scope 2 DoD A4: dev/test bundles byte-identical when generated twice; FR-052-011 inline-value preservation",
+        "Scope 2 DoD A6: DoD scenario validator SCN-052-S04",
+        "Scope 2 DoD B2: T-052-005 passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S05",
+      "name": "Adversarial sub-tests catch every regression class enumerated in design.md §8",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["contract", "integration"],
+      "linkedTests": [
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_NoLiteralSecretsInHomeLab"},
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA1_DriftDetector"},
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA2_LeakageDetector"},
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA3_DeterminismDetector"},
+        {"file": "internal/deploy/bundle_secret_contract_test.go", "function": "TestBundleSecretContract_AdversarialA4_OptOutDetector"},
+        {"file": "tests/config/bundle_home_lab_integration_test.sh", "function": "extension: placeholder-count + zero DevDBPasswords match"}
+      ],
+      "evidenceRefs": [
+        {"type": "contract-go", "location": "internal/deploy/bundle_secret_contract_test.go — happy-path + 4 adversarial sub-tests using t.TempDir() copies of scripts/commands/config.sh and config/smackerel.yaml"},
+        {"type": "integration-bash", "location": "tests/config/bundle_home_lab_integration_test.sh — extension asserts ≥4 placeholder lines AND zero DevDBPasswords matches in extracted app.env"},
+        {"type": "source", "location": "internal/config/secret_keys.go::SecretKeys() consumed by happy-path test"},
+        {"type": "report", "location": "report.md#scope-3-tests (T-052-007 through T-052-012 evidence blocks)"}
+      ],
+      "linkedDoD": [
+        "Scope 3 DoD A1: bundle_secret_contract_test.go exists with 5 test functions in deploy package",
+        "Scope 3 DoD A2: 4 adversarial sub-tests use TEMP COPIES; each FAILS the contract when the regression scenario is simulated",
+        "Scope 3 DoD A4: DoD scenario validator SCN-052-S05",
+        "Scope 3 DoD B1-B5: T-052-007 through T-052-011 pass",
+        "Scope 3 DoD B6: T-052-012 integration passes",
+        "Scope 3 DoD B8: T-052-013 + T-052-014 + T-052-015 jointly cover the persistent regression set"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S06",
+      "name": "Spec 051 FR-051-005 env-override rejection still fires (BS-052-006)",
+      "scope": "scope-03",
+      "status": "active",
+      "requiredTestType": ["regression-bash"],
+      "linkedTests": [
+        {"file": "tests/config/postgres_dev_default_env_override_test.sh", "function": "main env-override drive"}
+      ],
+      "evidenceRefs": [
+        {"type": "regression-bash", "location": "tests/config/postgres_dev_default_env_override_test.sh — POSTGRES_PASSWORD=smackerel TARGET_ENV=home-lab ./smackerel.sh config generate --env home-lab --bundle exits non-zero with stderr naming infrastructure.postgres.password and never echoing 'smackerel' literal"},
+        {"type": "source", "location": "scripts/commands/config.sh — placeholder-mode short-circuit guard does NOT bypass FR-051-005 dev-default check on env-override path"},
+        {"type": "source", "location": "scripts/commands/config_secret_rejection_test.sh — spec 051 regression asserted unchanged at Scope 3 exit"},
+        {"type": "report", "location": "report.md#scope-3-tests (T-052-013 evidence block)"}
+      ],
+      "linkedDoD": [
+        "Scope 3 DoD A3: postgres_dev_default_env_override_test.sh is long-lived BS-052-006 regression",
+        "Scope 3 DoD A5: DoD scenario validator SCN-052-S06",
+        "Scope 3 DoD B7: T-052-013 passes — non-zero exit, key-named, value-redacted (FR-051-007 preserved)",
+        "Scope 3 DoD C1: scripts/commands/config_secret_rejection_test.sh (spec 051) continues to pass"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S07",
+      "name": "Runtime defense rejects placeholder values at startup",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["unit", "smoke"],
+      "linkedTests": [
+        {"file": "internal/config/validate_test.go", "function": "TestValidate_RejectsPlaceholderValues"},
+        {"file": "internal/auth/startup_test.go", "function": "TestValidateRuntimeAuthStartup_RejectsPlaceholderValues"},
+        {"file": "internal/config/validate_test.go", "function": "TestRuntimeRejection_NameKeyOnly_NoValueLeakage"},
+        {"file": "internal/auth/startup_test.go", "function": "TestRuntimeRejection_NameKeyOnly_NoValueLeakage"}
+      ],
+      "evidenceRefs": [
+        {"type": "unit-go", "location": "internal/config/config.go::Validate — placeholder rejection block per design.md §5 File 1, AFTER FR-051-005 check, BEFORE auth-token format checks"},
+        {"type": "unit-go", "location": "internal/auth/startup.go::ValidateRuntimeAuthStartup — placeholder rejection per design.md §5 File 2 for each AUTH_* key"},
+        {"type": "unit-go", "location": "redaction sentinel test mirrors spec 051 Scope 3 log_redaction_test.go pattern"},
+        {"type": "smoke-live", "location": "./smackerel.sh up && ./smackerel.sh status (TARGET_ENV=dev) — backend Up; no 'still equals placeholder marker' error in container logs"},
+        {"type": "report", "location": "report.md#scope-4-tests (T-052-014 + T-052-015 + T-052-016 + T-052-018 + T-052-018-REG evidence blocks)"}
+      ],
+      "linkedDoD": [
+        "Scope 4 DoD A1: Validate() includes FR-052-007 placeholder rejection block",
+        "Scope 4 DoD A2: ValidateRuntimeAuthStartup includes FR-052-007 placeholder rejection",
+        "Scope 4 DoD A3: error paths name KEY only (FR-051-007 redaction extended)",
+        "Scope 4 DoD A10: DoD scenario validator SCN-052-S07",
+        "Scope 4 DoD A12: Canary TARGET_ENV=dev startup verified — no false-positive rejection (FR-052-011)",
+        "Scope 4 DoD A13: Rollback plan documented",
+        "Scope 4 DoD B1-B3: T-052-014 + T-052-015 + T-052-016 pass",
+        "Scope 4 DoD B5: T-052-018-REG persistent smoke regression passes"
+      ]
+    },
+    {
+      "scenarioId": "SCN-052-S08",
+      "name": "End-to-end CI bundle pipeline lands the close-out commit",
+      "scope": "scope-04",
+      "status": "active",
+      "requiredTestType": ["integration-ci", "docs"],
+      "linkedTests": [
+        {"file": ".github/workflows/build.yml", "function": "build-bundles matrix (env: dev, test, home-lab)"},
+        {"file": ".github/workflows/build.yml", "function": "publish-build-manifest job"}
+      ],
+      "evidenceRefs": [
+        {"type": "integration-ci", "location": "GitHub Actions build.yml run on the new HEAD SHA — build-bundles matrix green for dev + test + home-lab; publish-build-manifest produces build-manifest-<HEAD-SHA>.yaml with 3 configBundles entries"},
+        {"type": "docs", "location": "README.md Configuration / Secrets section — placeholder discipline + 3-layer defense-in-depth + how to add a new managed secret recipe"},
+        {"type": "docs", "location": "docs/Deployment.md — Bundle Secret Injection subsection under Build-Once Deploy-Many"},
+        {"type": "docs", "location": "docs/Architecture.md — Secret Boundary paragraph (CI / knb adapter / runtime trust boundary)"},
+        {"type": "docs", "location": "docs/Operations.md — Auditor Inspection (UC-052-005) + secret rotation (UC-052-004) + post-commit smoke check (T-052-018-REG)"},
+        {"type": "spec-cross-ref", "location": "specs/051-deployment-secret-auth-contract/design.md — footnote near FR-051-005 pointing to spec 052 (no FR change)"},
+        {"type": "spec-cross-ref", "location": "specs/047-ci-image-vulnerability-gate/report.md F-047-B — RESOLVED by spec 052 close-out commit <SHA>"},
+        {"type": "report", "location": "report.md#scope-4-tests (T-052-017 evidence block)"}
+      ],
+      "linkedDoD": [
+        "Scope 4 DoD A4: README.md placeholder-discipline + 3-layer defense + recipe",
+        "Scope 4 DoD A5: docs/Deployment.md Bundle Secret Injection subsection",
+        "Scope 4 DoD A6: docs/Architecture.md Secret Boundary paragraph",
+        "Scope 4 DoD A7: docs/Operations.md Auditor Inspection + secret rotation",
+        "Scope 4 DoD A8: spec 051 design.md footnote near FR-051-005 (no FR change)",
+        "Scope 4 DoD A9: spec 047 F-047-B marked RESOLVED with close-out commit SHA",
+        "Scope 4 DoD A11: DoD scenario validator SCN-052-S08",
+        "Scope 4 DoD B4: T-052-017 passes (CI green + manifest yaml + F-047-B close-out)"
+      ]
+    }
+  ]
+}

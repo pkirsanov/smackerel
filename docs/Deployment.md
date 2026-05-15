@@ -44,9 +44,131 @@ contract.
 
 These five values MUST be populated by the deploy-adapter overlay
 before `apply` is invoked. The product repo's bundle generator
-(`./smackerel.sh config generate --env <env> --bundle`) emits
-empty-string placeholders for the four `auth.*` values per Bubbles
-gate G074 (secrets MUST NOT live in the bundle).
+(`./smackerel.sh config generate --env <env> --bundle`) emits the
+deterministic placeholder marker `__SECRET_PLACEHOLDER__<KEY>__` for
+every managed key on production-class targets (`home-lab`,
+`production`); dev/test bundles continue to ship literal values
+inline. Per Bubbles gate G074 and Spec 052, secrets MUST NOT live in
+the bundle — substitution is the deploy adapter's responsibility,
+verified at runtime by Layer 3 (FR-052-007). See
+[Bundle Secret Injection](#bundle-secret-injection-spec-052) below for
+the full 3-layer contract and the operator workflow.
+
+### Bundle Secret Injection (spec 052)
+
+For production-class targets (`home-lab`, `production`, and any future
+non-dev/non-test environment), Smackerel's secrets pipeline implements a
+three-layer defense-in-depth contract defined in Spec 052
+([`specs/052-bundle-secret-injection-contract/`](../specs/052-bundle-secret-injection-contract/)).
+Each layer catches a missing secret on its own; the three layers together
+make it impossible for a process to start with a placeholder value masquerading
+as a secret.
+
+**Canonical managed-secret manifest** (single source of truth: `infrastructure.secret_keys`
+in `config/smackerel.yaml`; mirrored in `internal/config/secret_keys.go::secretKeys`
+and the shell mirror in `scripts/commands/config.sh`; drift caught by
+`internal/deploy/bundle_secret_contract_test.go`):
+
+| Key | Surfaced as env var | Consumer |
+|-----|---------------------|----------|
+| `POSTGRES_PASSWORD` | `POSTGRES_PASSWORD` | DATABASE_URL credential component |
+| `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` | `AUTH_SIGNING_ACTIVE_PRIVATE_KEY` | PASETO v4.public signing material |
+| `AUTH_AT_REST_HASHING_KEY` | `AUTH_AT_REST_HASHING_KEY` | At-rest hashing of revocation entries |
+| `AUTH_BOOTSTRAP_TOKEN` | `AUTH_BOOTSTRAP_TOKEN` | One-time per-user enrollment seed |
+
+**Layer 1 — SST loader** (`./smackerel.sh config generate --env <env> --bundle`):
+
+For production-class targets, the bundle generator emits the marker
+`__SECRET_PLACEHOLDER__<KEY>__` for every managed key (FR-052-001..006).
+The marker format is **deterministic** (FR-052-002): no nonce, no timestamp,
+no source-SHA mixing. Identical inputs produce byte-identical bundle bytes
+(verified by `internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA3_DeterminismDetector`
+re-running the bundle generator and comparing sha256 digests). The bundle
+also carries a `secret-keys.yaml` manifest declaring exactly which keys the
+adapter MUST substitute (FR-052-005).
+
+For `dev` and `test` environments, the bundle continues to ship literal
+secret values inline (FR-052-011) — there is no placeholder mode for local
+development. The placeholder mode is opt-in **by environment**, never by flag.
+
+**Layer 2 — Deploy adapter** (`<knb-repo>/smackerel/<target>/apply.sh`):
+
+The per-target adapter is the single layer responsible for substituting
+real secret values into the bundle. The adapter:
+
+1. Pulls the bundle by sha256 digest from the OCI registry.
+2. Reads `secret-keys.yaml` to discover which keys need substitution.
+3. Decrypts the operator-private secret store (sops/age, e.g.
+   `<knb-repo>/smackerel/secrets/<target>.enc.env`).
+4. For each declared key, replaces every occurrence of
+   `__SECRET_PLACEHOLDER__<KEY>__` in the bundle's `app.env` with
+   the real value.
+5. Writes the resulting `app.env` to the target host with `chmod 0600`.
+6. Logs `substituted N of N keys` to the apply audit log
+   (`/var/log/smackerel/apply.log`).
+7. Starts the container against the substituted env file.
+
+The substitution is the adapter's contract; the product repo does not
+ship adapter code. See `<knb-repo>/smackerel/<target>/apply.sh` and
+[`<knb-repo>/AGENTS.md`](#)
+for adapter-author rules.
+
+**Layer 3 — Go runtime** (`config.Validate()` + `auth.ValidateRuntimeAuthStartup()`):
+
+At process startup, the runtime checks every managed key against its
+exact placeholder marker (FR-052-007). Implementation:
+
+- `internal/config/config.go::Validate()` iterates `SecretKeys()` and rejects
+  any key whose resolved value equals `IsPlaceholder(value)` exactly.
+  POSTGRES_PASSWORD is read from the parsed DATABASE_URL credential
+  component; AUTH_* keys are read from `os.Getenv(key)` because
+  `loadAuthConfig()` runs after `Validate()` in `Load()`.
+- `internal/auth/startup.go::ValidateRuntimeAuthStartup()` is the
+  wiring-time second pass. It checks `cfg.SigningActivePrivateKey` and
+  `cfg.AtRestHashingKey` against the placeholder format
+  (`__SECRET_PLACEHOLDER__<KEY>__`) inlined as constants, with a parity
+  test (`internal/auth/startup_placeholder_test.go::TestValidateRuntimeAuthStartup_PlaceholderFormatParity`)
+  that drift-detects any mismatch with the canonical
+  `internal/config/secret_keys.go::Placeholder()` format.
+
+The error message format is fixed: `<KEY> still equals placeholder marker — adapter substitution failed (spec 052 FR-052-007)`.
+The error names the offending KEY only — the placeholder marker literal
+is **never** echoed in error messages, logs, or telemetry (FR-051-007
+redaction contract extended). The leakage detector test
+(`internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA2_LeakageDetector`)
+asserts no canary value appears in any error path.
+
+**Operator workflow — adding a new managed secret:**
+
+1. Add the KEY to `infrastructure.secret_keys` in `config/smackerel.yaml`.
+2. Add the same KEY (same order) to `secretKeys` in `internal/config/secret_keys.go`.
+3. Add the same KEY (same order) to the shell mirror in `scripts/commands/config.sh`.
+4. Wire the runtime consumer to read the resolved value from `os.Getenv(key)`
+   or from a `Config` struct field populated by `Load()`.
+5. If the key is consumed by `internal/auth/startup.go`, extend the
+   placeholder check there too (mirror the existing
+   AUTH_SIGNING_ACTIVE_PRIVATE_KEY / AUTH_AT_REST_HASHING_KEY pattern).
+6. Provide the real value through the deploy adapter overlay
+   (`<knb-repo>/smackerel/secrets/<target>.enc.env` for sops/age targets;
+   inline in `.env.secrets` for local dev only).
+7. Run `./smackerel.sh test unit --go` — the contract test
+   (`internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab`)
+   catches yaml↔Go↔shell drift before merge.
+
+**Operator workflow — rotating a managed secret:**
+
+1. Update the value in `<knb-repo>/smackerel/secrets/<target>.enc.env`
+   (sops/age encrypt: `sops --encrypt --in-place ...`).
+2. Re-run `./smackerel.sh deploy-target <target> apply` — the adapter
+   re-pulls the bundle (unchanged sha256 because secrets are not in the
+   bundle), re-reads the secret store, re-substitutes, and restarts
+   the container with the new value.
+3. Verify via `<knb-repo>/smackerel/<target>/verify.sh` and the apply
+   audit log on the target.
+
+**Auditor inspection:** The full operator runbook for inspecting placeholder
+substitution success and the runtime fail-loud path lives in
+[Operations.md → "Bundle Secret Substitution (spec 052)"](Operations.md#bundle-secret-substitution-spec-052).
 
 ### Connector Live-Stack Evidence Caveat
 

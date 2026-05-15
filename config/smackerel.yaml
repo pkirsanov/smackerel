@@ -873,6 +873,36 @@ backup:
   watcher_poll_seconds: 60
 
 infrastructure:
+  # Spec 052 FR-052-001 — SST-owned secret-key manifest.
+  # Keys listed here are NEVER inlined into bundles for targets in
+  # production_class_targets below. Instead, the SST loader emits
+  # __SECRET_PLACEHOLDER__<KEY>__ in app.env and the deploy adapter
+  # substitutes the real value at apply time from a sops-encrypted
+  # secrets file (knb/smackerel/secrets/<target>.enc.env).
+  #
+  # Mirror locations (drift detected by contract test):
+  #   - Go: internal/config/secret_keys.go::SecretKeys()
+  #   - Shell: scripts/commands/config.sh placeholder-emit block
+  #
+  # To add a new managed secret: (1) add to this list, (2) add to Go
+  # mirror, (3) add to shell mirror, (4) ship a real value in
+  # knb/smackerel/secrets/<target>.enc.env. The contract test catches
+  # the gap if any of (1)/(2)/(3) is forgotten.
+  secret_keys:
+  - POSTGRES_PASSWORD
+  - AUTH_SIGNING_ACTIVE_PRIVATE_KEY
+  - AUTH_AT_REST_HASHING_KEY
+  - AUTH_BOOTSTRAP_TOKEN
+
+  # Spec 052 FR-052-002 — explicit opt-in for placeholder emission.
+  # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
+  # every key in secret_keys above. dev/test environments are NEVER in
+  # this list (they keep inline values for local-dev convenience per
+  # FR-052-011). Adding a new production target = explicit one-line
+  # change here AND adapter follow-up in the knb repo.
+  production_class_targets:
+  - home-lab
+
   postgres:
     user: smackerel
     password: smackerel

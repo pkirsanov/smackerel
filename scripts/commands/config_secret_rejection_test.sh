@@ -1,22 +1,33 @@
 #!/usr/bin/env bash
 # Spec 051 SCN-051-S02 / FR-051-005 — SST-loader dev-default rejection
-# adversarial test. Invokes scripts/commands/config.sh against the live
-# config/smackerel.yaml as the home-lab target. Asserts:
+# adversarial test, evolved by spec 052 to drive the dev-default check
+# via the POSTGRES_PASSWORD env-override path (placeholder mode now
+# short-circuits the yaml-default path for production-class targets).
 #
-#   1. The loader exits non-zero (the dev-default Postgres password in
-#      config/smackerel.yaml is refused for non-dev/test targets).
-#   2. The stderr output names "infrastructure.postgres.password"
-#      (operators can act on the failure).
-#   3. The stderr output references "spec 051" (links the failure to the
-#      authoritative requirement).
-#   4. The stderr output does NOT echo the literal dev-default value
-#      "smackerel" as a free-standing token (FR-051-007 redaction).
+# Sub-test 1 (env-override path): with POSTGRES_PASSWORD=smackerel set in
+# the environment AND TARGET_ENV=home-lab, the SST loader MUST exit
+# non-zero because the env-override literal triggers the FR-051-005
+# dev-default rejection (spec 052 BS-052-006 — env override beats yaml
+# AND skips placeholder mode AND must pass the dev-default gate).
 #
-# Canary sub-test:
+# Sub-test 2 (placeholder mode, spec 052): with NO env override and
+# TARGET_ENV=home-lab, the SST loader MUST exit 0 AND the resulting
+# config/generated/home-lab.env MUST contain
+# POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__ AND MUST
+# NOT contain the literal dev-default value 'smackerel' as the password
+# value. This validates that placeholder mode shields the bundle from
+# accidental literal leakage even when the yaml has a dev-default value.
 #
-#   5. The same loader run for TARGET_ENV=dev still produces a usable
-#      env file with the same dev-default value (proves we did not
-#      accidentally break the dev path).
+# Sub-test 3 (canary): the same loader run for TARGET_ENV=dev still
+# produces a usable env file with the inline yaml value (proves the
+# dev path is preserved per FR-052-011).
+#
+# Asserts on sub-test 1 stderr:
+#   1a. exit non-zero
+#   1b. stderr names "infrastructure.postgres.password"
+#   1c. stderr references "spec 051"
+#   1d. stderr does NOT echo the literal dev-default value as a
+#       password value (FR-051-007 redaction)
 #
 # Exits 0 on full pass, 1 on any failure. Designed to be invoked from
 # internal/config/sst_loader_test.go which captures repo path and
@@ -35,20 +46,20 @@ fi
 failures=0
 
 # -----------------------------------------------------------------------------
-# Sub-test 1: home-lab target with dev-default password MUST be refused.
+# Sub-test 1: env-override path drives FR-051-005 dev-default rejection.
 # -----------------------------------------------------------------------------
-echo "--- Sub-test 1: SST loader refuses dev-default password for home-lab ---"
-home_lab_output="$(bash "$CONFIG_SH" --env home-lab 2>&1)"
+echo "--- Sub-test 1: SST loader refuses env-override dev-default for home-lab ---"
+home_lab_output="$(POSTGRES_PASSWORD=smackerel bash "$CONFIG_SH" --env home-lab 2>&1)"
 home_lab_exit=$?
 
 if [[ "$home_lab_exit" -eq 0 ]]; then
-  echo "FAIL: SST loader returned exit 0 for TARGET_ENV=home-lab with dev-default Postgres password (expected non-zero)"
+  echo "FAIL: SST loader returned exit 0 for POSTGRES_PASSWORD=smackerel + TARGET_ENV=home-lab (expected non-zero)"
   echo "----- captured output -----"
   echo "$home_lab_output"
   echo "----- end output -----"
   failures=$((failures + 1))
 else
-  echo "PASS: SST loader refused TARGET_ENV=home-lab with exit code $home_lab_exit"
+  echo "PASS: SST loader refused env-override dev-default with exit code $home_lab_exit"
 fi
 
 if ! echo "$home_lab_output" | grep -q "infrastructure.postgres.password"; then
@@ -66,29 +77,56 @@ else
 fi
 
 # Redaction assertion: the stderr MUST NOT contain the literal dev-default
-# value as a free-standing token. We check the canonical primary default
-# value used by this repo's config/smackerel.yaml.
-if echo "$home_lab_output" | grep -qwF "smackerel"; then
-  # The error message is allowed to mention the project name "smackerel"
-  # in passing — but the dev-default password value must not appear as a
-  # standalone word in the error. Distinguish: the offending pattern is
-  # the password value appearing as the *value* of any KEY=VALUE field.
-  # Use a stricter regex that looks for KEY=smackerel or =smackerel or
-  # any explicit echo of the value.
-  if echo "$home_lab_output" | grep -qE '(POSTGRES_PASSWORD|password)[[:space:]=:]+["'\''[:space:]]*smackerel[[:space:]"'\''$]'; then
-    echo "FAIL: SST loader stderr echoes dev-default value 'smackerel' as a password value"
-    failures=$((failures + 1))
-  else
-    echo "PASS: SST loader stderr mentions 'smackerel' only in non-credential context (project name OK)"
-  fi
+# value as a free-standing password value. The error message is allowed to
+# mention the project name "smackerel" in passing — but not as a credential.
+if echo "$home_lab_output" | grep -qE '(POSTGRES_PASSWORD|password)[[:space:]=:]+["'\''[:space:]]*smackerel[[:space:]"'\''$]'; then
+  echo "FAIL: SST loader stderr echoes dev-default value 'smackerel' as a password value"
+  failures=$((failures + 1))
 else
-  echo "PASS: SST loader stderr does not contain free-standing 'smackerel' token"
+  echo "PASS: SST loader stderr does not echo 'smackerel' as a password value"
 fi
 
 # -----------------------------------------------------------------------------
-# Sub-test 2 (canary): dev target still produces a usable env file.
+# Sub-test 2 (spec 052): yaml-default path → placeholder mode shields bundle.
 # -----------------------------------------------------------------------------
-echo "--- Sub-test 2 (canary): SST loader still works for TARGET_ENV=dev ---"
+echo "--- Sub-test 2 (spec 052): SST loader emits placeholder for home-lab ---"
+placeholder_output="$(bash "$CONFIG_SH" --env home-lab 2>&1)"
+placeholder_exit=$?
+
+if [[ "$placeholder_exit" -ne 0 ]]; then
+  echo "FAIL: SST loader returned exit $placeholder_exit for TARGET_ENV=home-lab (expected 0 in placeholder mode)"
+  echo "----- captured output -----"
+  echo "$placeholder_output"
+  echo "----- end output -----"
+  failures=$((failures + 1))
+else
+  echo "PASS: SST loader exited 0 for TARGET_ENV=home-lab (placeholder mode active)"
+fi
+
+HOME_LAB_ENV="$REPO_ROOT/config/generated/home-lab.env"
+if [[ ! -f "$HOME_LAB_ENV" ]]; then
+  echo "FAIL: SST loader did not produce $HOME_LAB_ENV"
+  failures=$((failures + 1))
+else
+  if grep -qE '^POSTGRES_PASSWORD=__SECRET_PLACEHOLDER__POSTGRES_PASSWORD__$' "$HOME_LAB_ENV"; then
+    echo "PASS: home-lab.env contains POSTGRES_PASSWORD placeholder marker"
+  else
+    echo "FAIL: home-lab.env does NOT contain POSTGRES_PASSWORD placeholder marker"
+    failures=$((failures + 1))
+  fi
+
+  if grep -qE '^POSTGRES_PASSWORD=smackerel$' "$HOME_LAB_ENV"; then
+    echo "FAIL: home-lab.env contains literal POSTGRES_PASSWORD=smackerel (placeholder mode failed to shield)"
+    failures=$((failures + 1))
+  else
+    echo "PASS: home-lab.env does NOT contain literal POSTGRES_PASSWORD=smackerel"
+  fi
+fi
+
+# -----------------------------------------------------------------------------
+# Sub-test 3 (canary): dev target still produces a usable env file.
+# -----------------------------------------------------------------------------
+echo "--- Sub-test 3 (canary): SST loader still works for TARGET_ENV=dev ---"
 dev_output="$(bash "$CONFIG_SH" --env dev 2>&1)"
 dev_exit=$?
 
@@ -117,3 +155,4 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 echo "All sub-tests passed"
 exit 0
+

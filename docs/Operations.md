@@ -14,18 +14,18 @@ publishes immutable signed images, SBOM + SLSA attestations, and
 per-environment config bundles; a per-target deploy adapter (in-tree
 under `deploy/<target>/` for generic targets, or out-of-tree under
 `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled
-targets like the home-lab adapter that lives in the knb deploy-adapter
-overlay) consumes those artifacts and applies them by digest.
+targets like home-lab adapters) consumes those artifacts and applies them by
+digest.
 
 Read the production guide first:
 
 - [`docs/Deployment.md`](Deployment.md) — full operator workflow,
-  artifact contract, adapter contract, knb deploy-adapter overlay
+  artifact contract, adapter contract, deploy-adapter overlay
   dependency, and Generic Pre-Apply Prerequisites
 - [`deploy/README.md`](../deploy/README.md) — adapter locality rule
   (in-tree vs out-of-tree) and `DEPLOY_TARGETS_ROOT` resolution
 - [`docs/Home_Lab_Deployment_Plan.md`](Home_Lab_Deployment_Plan.md) —
-  60-line migration-pointer stub naming the knb deploy-adapter overlay
+  migration-pointer stub naming the deploy-adapter overlay
   as the owner of the home-lab adapter
 
 Production secret prerequisites are enumerated in
@@ -313,6 +313,189 @@ in this repo stays explicit-bind-only: `HOST_BIND_ADDRESS` must be supplied
 by the SST-generated env file or by the deploy adapter, and Compose must fail
 loudly if it is missing. The deploy adapter is the only surface that decides
 what goes on the public NIC.
+
+## Bundle Secret Substitution (spec 052)
+
+For production-class targets (`home-lab`, `production`, and any future
+non-dev/non-test environment), Smackerel uses a 3-layer defense-in-depth
+secret pipeline (Spec 052). The bundle generator emits the deterministic
+placeholder marker `__SECRET_PLACEHOLDER__<KEY>__` for every managed
+secret; the deploy adapter substitutes real values at apply time; the Go
+runtime fails loud if any placeholder reaches startup. Full architectural
+context: [`docs/Architecture.md` → Secret Boundary (spec 052)](Architecture.md#secret-boundary-spec-052).
+Full deployment context: [`docs/Deployment.md` → Bundle Secret Injection (spec 052)](Deployment.md#bundle-secret-injection-spec-052).
+
+This section is the **operator runbook** for the two recurring workflows.
+
+### UC-052-004 Operator Secret Rotation
+
+Rotate any of the four canonical managed secrets (`POSTGRES_PASSWORD`,
+`AUTH_SIGNING_ACTIVE_PRIVATE_KEY`, `AUTH_AT_REST_HASHING_KEY`,
+`AUTH_BOOTSTRAP_TOKEN`) without a code change or a re-deploy of the
+container image.
+
+**Pre-conditions:**
+
+- Operator has age private key for the target's secret store
+  (`~/.config/sops/age/keys.txt` on the operator workstation).
+- Target host is reachable over Tailscale.
+- A current cosign-signed bundle for the target is already in the
+  registry (any recent build manifest will do — bundle bytes are
+  unchanged because secrets are not in the bundle).
+
+**Procedure:**
+
+1. **Generate the new value.** Use the canonical generator for the key
+   class (per `docs/Deployment.md` row table):
+   - `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`: rotate via
+     `smackerel-core auth keygen` (PASETO v4.public).
+   - `AUTH_AT_REST_HASHING_KEY`: `openssl rand -hex 32`.
+   - `AUTH_BOOTSTRAP_TOKEN`: `openssl rand -hex 24`.
+   - `POSTGRES_PASSWORD`: per the target's password policy.
+
+2. **Update the operator-private secret store.** From the operator
+   workstation, edit the encrypted env file with sops in place
+   (sops handles age encrypt/decrypt automatically):
+
+   ```bash
+   sops <knb-repo>/smackerel/secrets/<target>.enc.env
+   # Replace the line for the rotated KEY with the new value.
+   # Save and exit — sops re-encrypts in place.
+   ```
+
+3. **Re-apply.** From the operator workstation:
+
+   ```bash
+   ./smackerel.sh deploy-target <target> apply
+   ```
+
+   The adapter:
+   - Re-pulls the bundle (sha256 unchanged → no-op pull from cache).
+   - Re-decrypts `<target>.enc.env` with the operator's age key.
+   - Re-substitutes every `__SECRET_PLACEHOLDER__<KEY>__` in `app.env`.
+   - Restarts the container with the new env file.
+   - Appends an audit record to `/var/log/smackerel/apply.log` on the
+     target with `secrets_substituted=4 placeholders_remaining=0`.
+
+4. **Verify the substitution.** From the operator workstation:
+
+   ```bash
+   ./smackerel.sh deploy-target <target> verify
+   ```
+
+   This runs the post-apply health check and exercises an authenticated
+   path to confirm the new key material is live (relevant only for the
+   AUTH_* keys; POSTGRES_PASSWORD rotation is verified by container
+   start success).
+
+5. **Rotation audit log.** Record the rotation in the operator-private
+   audit log (outside this repo). The rotation is also implicitly
+   recorded by:
+   - The `sops <target>.enc.env` commit in the deploy adapter overlay
+     (sops_lastmodified, sops_version metadata).
+   - The `/var/log/smackerel/apply.log` entry on the target host.
+
+**Rollback:** If the new value is wrong, repeat steps 1–4 with the
+previous value. The bundle does not need to be regenerated.
+
+**Failure modes:**
+
+| Failure | Fail-loud surface | Recovery |
+|---------|-------------------|----------|
+| New value left empty in `<target>.enc.env` | L2 adapter pre-flight check (step 7 of `apply.sh`): `assert every declared key has real value in tmpfile` → exits non-zero, container does not start | Re-edit `<target>.enc.env`, re-run `apply` |
+| New value accidentally set to placeholder marker | L2 adapter pre-flight check: `non-empty AND not equal to its placeholder marker` → exits non-zero | Re-edit `<target>.enc.env`, re-run `apply` |
+| Adapter substitution skipped entirely (e.g. compose `--env-file` missing) | L3 runtime check: `Validate()` returns `<KEY> still equals placeholder marker — adapter substitution failed (spec 052 FR-052-007)` → process exits 1 | Inspect adapter logs; re-run `apply` |
+
+### UC-052-005 Auditor Inspection
+
+Verify, without operator-private credentials, that the deployed
+container started with real secret values (not placeholders) and that
+no placeholder ever leaks to logs, telemetry, or error paths.
+
+**Pre-conditions:**
+
+- Auditor has `tailscale ssh` access to the target host (read-only via
+  Tailscale ACL).
+- Auditor does **not** need the age private key — substitution can be
+  verified post-hoc through the audit log and the live process state.
+
+**Procedure:**
+
+1. **Inspect the apply audit log.** From the target host:
+
+   ```bash
+   tailscale ssh <home-lab-host>
+   sudo tail -n 50 /var/log/smackerel/apply.log
+   ```
+
+   Each apply emits a single line with the form:
+
+   ```
+   <iso8601-timestamp> action=apply target=<target> source_sha=<sha> bundle_sha256=<sha> secrets_substituted=N placeholders_remaining=0
+   ```
+
+   `placeholders_remaining=0` is the auditor's confirmation that L2
+   substitution succeeded for every declared key. **If
+   `placeholders_remaining > 0`, the apply was aborted and no container
+   started.**
+
+2. **Inspect the resolved Compose env (live).** From the target host:
+
+   ```bash
+   tailscale ssh <home-lab-host>
+   sudo docker compose -f <COMPOSE_DIR>/docker-compose.yml config | grep '__SECRET_PLACEHOLDER__'
+   ```
+
+   This MUST return zero matches. The adapter's step 9 pre-flight check
+   already ran this before container start; this is the auditor's
+   independent post-hoc confirmation.
+
+3. **Inspect the live process env (no value extraction).** From the
+   target host:
+
+   ```bash
+   tailscale ssh <home-lab-host>
+   sudo docker exec smackerel-<env>-core sh -c 'env | cut -d= -f1 | sort'
+   ```
+
+   Confirm that `POSTGRES_PASSWORD`, `AUTH_SIGNING_ACTIVE_PRIVATE_KEY`,
+   `AUTH_AT_REST_HASHING_KEY`, `AUTH_BOOTSTRAP_TOKEN` (or their
+   currently-canonical names per `internal/config/secret_keys.go`) are
+   present in the process environment. Auditors MUST NOT extract the
+   values themselves; key-name presence is sufficient evidence.
+
+4. **Inspect runtime logs for redaction compliance.** From the target
+   host:
+
+   ```bash
+   tailscale ssh <home-lab-host>
+   sudo docker logs smackerel-<env>-core 2>&1 | grep -E '__SECRET_PLACEHOLDER__|<known-canary-fragment>'
+   ```
+
+   This MUST return zero matches. The runtime's redaction contract
+   (FR-051-007 extended by FR-052-007) names only the offending KEY in
+   error messages, never the value or the placeholder marker. The
+   contract test
+   `internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_AdversarialA2_LeakageDetector`
+   asserts this property in CI; this step is the auditor's
+   per-deployment confirmation.
+
+5. **Cross-reference with the canonical manifest.** From the target
+   host or any clone of the operator's overlay repo:
+
+   ```bash
+   git -C <smackerel-repo-clone> show HEAD:internal/config/secret_keys.go | grep -A20 'secretKeys = '
+   git -C <smackerel-repo-clone> show HEAD:config/smackerel.yaml | grep -A10 'secret_keys:'
+   ```
+
+   The two lists MUST match exactly (same keys, same order). The unit
+   test `internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab`
+   enforces this in CI; auditors MAY re-verify post-hoc.
+
+**No-credential-required scope.** The full audit can be performed without
+the age private key, without sops decryption, and without seeing any
+secret value. The audit verifies: substitution happened, no placeholders
+remain, no canary leaked to logs, manifest is consistent across surfaces.
 
 ## Connector Management
 
@@ -778,8 +961,7 @@ email distribution) is deploy-adapter overlay scope.
 
 Per the constitution's "No env-specific content in this repo"
 rule, the product repo is target-agnostic and the deploy-adapter
-overlay (e.g. the `knb` repo) owns all operator-specific
-exposure decisions.
+overlay owns all operator-specific exposure decisions.
 
 | Concern | Owner | Notes |
 |---------|-------|-------|
