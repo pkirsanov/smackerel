@@ -67,6 +67,11 @@ func TestQFDecisionsSyncThroughStateStoreAndArtifactPublisherWithStablePacketIDs
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == qfdecisions.CapabilitiesPath:
+			// Connector performs a capability handshake before any decision-events
+			// call. Serve a valid capability so CompatibilityCheck() passes and the
+			// connector proceeds to the existing event + packet fetch flow.
+			_ = json.NewEncoder(w).Encode(validQFIntegrationCapability())
 		case r.URL.Path == qfdecisions.DecisionEventsPath:
 			state.eventCalls.Add(1)
 			cursor := r.URL.Query().Get("cursor")
