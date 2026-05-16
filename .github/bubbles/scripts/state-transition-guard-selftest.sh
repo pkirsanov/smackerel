@@ -660,6 +660,37 @@ with open(path, "w", encoding="utf-8") as handle:
 PY
 }
 
+mutate_planning_mode_status() {
+  local state_file="$1"
+  local status="$2"
+  local plan_maturity_only="$3"
+
+  python3 - "$state_file" "$status" "$plan_maturity_only" <<'PY'
+import json
+import sys
+
+path, status, plan_maturity_only = sys.argv[1:4]
+with open(path, encoding="utf-8") as handle:
+  data = json.load(handle)
+
+data["status"] = status
+data["workflowMode"] = "product-to-planning"
+data["planMaturityOnly"] = plan_maturity_only == "true"
+
+snapshot = data.get("policySnapshot")
+if isinstance(snapshot, dict):
+  snapshot["workflowMode"] = "product-to-planning"
+
+cert = data.get("certification")
+if isinstance(cert, dict):
+  cert["status"] = status
+
+with open(path, "w", encoding="utf-8") as handle:
+  json.dump(data, handle, indent=2)
+  handle.write("\n")
+PY
+}
+
 emit_g040_fixture() {
   # G040 / Check 18 selftest fixture builder.
   #
@@ -845,6 +876,8 @@ index_parity_negative_feature_dir="$tmp_root/specs/907-transition-guard-selftest
 phantom_scope_negative_feature_dir="$tmp_root/specs/908-transition-guard-selftest-phantom-scope"
 execution_history_negative_feature_dir="$tmp_root/specs/909-transition-guard-selftest-execution-history"
 lockdown_round_negative_feature_dir="$tmp_root/specs/910-transition-guard-selftest-lockdown-round"
+planning_done_negative_feature_dir="$tmp_root/specs/911-transition-guard-selftest-product-planning-done"
+planning_specs_hardened_positive_feature_dir="$tmp_root/specs/912-transition-guard-selftest-product-planning-specs-hardened"
 g040_pos_deferred_dir="$tmp_root/specs/920-g040-positive-deferred-prose"
 g040_pos_skip_for_now_dir="$tmp_root/specs/921-g040-positive-skip-for-now"
 g040_neg_followup_fields_dir="$tmp_root/specs/922-g040-negative-schema-yaml-only"
@@ -863,6 +896,10 @@ emit_shared_infra_fixture "$shared_positive_feature_dir"
 emit_shared_infra_negative_fixture "$shared_negative_feature_dir"
 cp -R "$positive_feature_dir" "$workflow_mode_negative_feature_dir"
 mutate_workflow_mode_contradiction "$workflow_mode_negative_feature_dir/state.json"
+cp -R "$positive_feature_dir" "$planning_done_negative_feature_dir"
+mutate_planning_mode_status "$planning_done_negative_feature_dir/state.json" "done" "true"
+cp -R "$positive_feature_dir" "$planning_specs_hardened_positive_feature_dir"
+mutate_planning_mode_status "$planning_specs_hardened_positive_feature_dir/state.json" "specs_hardened" "true"
 emit_per_scope_fixture "$per_scope_positive_feature_dir" "Done" "scope-1-index-parity-proof"
 emit_per_scope_fixture "$index_parity_negative_feature_dir" "In Progress" "scope-1-index-parity-proof"
 emit_per_scope_fixture "$phantom_scope_negative_feature_dir" "Done" "scope-15-stochastic-sweep-remediation"
@@ -1000,6 +1037,39 @@ else
   sed -n '1,220p' "$workflow_mode_log"
 fi
 assert_log_contains "$workflow_mode_log" "workflowMode contradiction" "Negative fixture triggers Check 2B"
+
+echo "Running product-to-planning ceiling selftest..."
+planning_negative_log="$tmp_root/product-planning-negative.log"
+planning_negative_status="$(run_capture "$planning_negative_log" bash "$GUARD_SCRIPT" "$planning_done_negative_feature_dir")"
+if [[ "$planning_negative_status" -ne 0 ]]; then
+  pass "product-to-planning/done fixture fails the transition guard as expected"
+else
+  fail "product-to-planning/done fixture should fail the transition guard"
+  sed -n '1,220p' "$planning_negative_log"
+fi
+assert_log_contains "$planning_negative_log" "Workflow mode 'product-to-planning' ceiling is 'specs_hardened', NOT 'done'" "Planning-only mode blocks done status using registry ceiling"
+assert_log_contains "$planning_negative_log" "planMaturityOnly=true is incompatible with status 'done'" "planMaturityOnly blocks delivery-done status"
+
+planning_lint_log="$tmp_root/product-planning-artifact-lint-negative.log"
+planning_lint_status="$(run_capture "$planning_lint_log" bash "$SCRIPT_DIR/artifact-lint.sh" "$planning_done_negative_feature_dir")"
+if [[ "$planning_lint_status" -ne 0 ]]; then
+  pass "artifact-lint blocks product-to-planning/done fixture as expected"
+else
+  fail "artifact-lint should block product-to-planning/done fixture"
+  sed -n '1,220p' "$planning_lint_log"
+fi
+assert_log_contains "$planning_lint_log" "Workflow mode 'product-to-planning' ceiling is 'specs_hardened', NOT 'done'" "Artifact lint uses registry ceiling for product-to-planning"
+
+planning_positive_log="$tmp_root/product-planning-positive.log"
+planning_positive_status="$(run_capture "$planning_positive_log" bash "$GUARD_SCRIPT" "$planning_specs_hardened_positive_feature_dir")"
+if [[ "$planning_positive_status" -eq 0 ]]; then
+  pass "product-to-planning/specs_hardened fixture passes the transition guard"
+else
+  fail "product-to-planning/specs_hardened fixture should pass the transition guard"
+  sed -n '1,260p' "$planning_positive_log"
+fi
+assert_log_contains "$planning_positive_log" "Workflow mode 'product-to-planning' permits current status 'specs_hardened'" "Planning-only mode permits specs_hardened status"
+assert_log_contains "$planning_positive_log" "planMaturityOnly=true is not claiming delivery-done status" "planMaturityOnly is allowed below done"
 
 echo "Running positive per-scope parity selftest..."
 per_scope_positive_log="$tmp_root/per-scope-positive.log"

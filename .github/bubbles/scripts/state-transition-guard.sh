@@ -85,6 +85,36 @@ json_first_string() {
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"([^"]+)"/\1/'
 }
 
+json_first_bool() {
+  local key="$1"
+  local file="$2"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  grep -Eo '"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)' "$file" \
+    | head -n 1 \
+    | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)/\1/'
+}
+
+resolve_workflow_status_ceiling() {
+  local workflow_mode="$1"
+  local resolver="$SCRIPT_DIR/mode-resolver.sh"
+  local resolved=""
+  local status_ceiling=""
+
+  [[ -n "$workflow_mode" ]] || return 1
+  [[ -f "$resolver" ]] || return 1
+
+  if ! resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null)"; then
+    return 1
+  fi
+
+  status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
+  [[ -n "$status_ceiling" ]] || return 1
+  printf '%s\n' "$status_ceiling"
+}
+
 json_nested_string() {
   local parent_key="$1"
   local child_key="$2"
@@ -334,6 +364,7 @@ fi
 
 state_status="$({ grep -Eo '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" | head -n 1 | sed -E 's/.*"([^"]+)"/\1/'; } || true)"
 state_workflow_mode="$({ grep -Eo '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" | head -n 1 | sed -E 's/.*"([^"]+)"/\1/'; } || true)"
+state_plan_maturity_only="$(json_first_bool "planMaturityOnly" "$state_file" || true)"
 wi_canonical_count="$({ grep -Eo '"canonicalCount"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" | head -n 1 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'; } || true)"
 wi_provisional_count="$({ grep -Eo '"provisionalIntakeCount"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" | head -n 1 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'; } || true)"
 wi_post_migration_target="$({ grep -Eo '"postMigrationTargetCount"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" | head -n 1 | sed -E 's/.*:[[:space:]]*([0-9]+)/\1/'; } || true)"
@@ -351,6 +382,9 @@ fi
 
 info "Current state.json status: ${state_status:-MISSING}"
 info "Current workflowMode: ${state_workflow_mode:-MISSING}"
+if [[ "$state_plan_maturity_only" == "true" ]]; then
+  info "Current planMaturityOnly: true"
+fi
 echo ""
 
 # =============================================================================
@@ -434,61 +468,24 @@ echo ""
 # =============================================================================
 echo "--- Check 3: Status Ceiling Enforcement ---"
 if [[ -n "$state_workflow_mode" ]]; then
-  case "$state_workflow_mode" in
-    fix)
-      if [[ "$state_status" == "done" ]]; then
-        pass "Legacy workflow mode 'fix' allows status 'done'"
-      else
-        info "Legacy workflow mode 'fix' allows status 'done'; current status is '$state_status'"
-      fi
-      ;;
-    full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|stabilize-to-doc|security-to-doc|regression-to-doc|simplify-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing|redesign-existing|iterate|stochastic-quality-sweep)
-      if [[ "$state_status" == "done" ]]; then
-        pass "Workflow mode '$state_workflow_mode' allows status 'done'"
-      else
-        info "Workflow mode '$state_workflow_mode' allows status 'done'; current status is '$state_status'"
-      fi
-      ;;
-    spec-scope-hardening|product-discovery)
-      if [[ "$state_status" == "done" ]]; then
-        fail "Workflow mode '$state_workflow_mode' ceiling is 'specs_hardened', NOT 'done'"
-      elif [[ "$state_status" == "specs_hardened" ]]; then
-        pass "Workflow mode '$state_workflow_mode' correctly stops at status 'specs_hardened'"
-      else
-        info "Workflow mode '$state_workflow_mode' ceiling is 'specs_hardened'; current status is '$state_status'"
-      fi
-      ;;
-    docs-only|spec-review-to-doc)
-      if [[ "$state_status" == "done" ]]; then
-        fail "Workflow mode 'docs-only' ceiling is 'docs_updated', NOT 'done'"
-      elif [[ "$state_status" == "docs_updated" ]]; then
-        pass "Workflow mode 'docs-only' correctly stops at status 'docs_updated'"
-      else
-        info "Workflow mode 'docs-only' ceiling is 'docs_updated'; current status is '$state_status'"
-      fi
-      ;;
-    validate-only|audit-only|validate-to-doc)
-      if [[ "$state_status" == "done" ]]; then
-        fail "Workflow mode '$state_workflow_mode' ceiling is 'validated', NOT 'done'"
-      elif [[ "$state_status" == "validated" ]]; then
-        pass "Workflow mode '$state_workflow_mode' correctly stops at status 'validated'"
-      else
-        info "Workflow mode '$state_workflow_mode' ceiling is 'validated'; current status is '$state_status'"
-      fi
-      ;;
-    resume-only)
-      if [[ "$state_status" == "done" ]]; then
-        fail "Workflow mode 'resume-only' ceiling is 'in_progress', NOT 'done'"
-      elif [[ "$state_status" == "in_progress" ]]; then
-        pass "Workflow mode 'resume-only' correctly stops at status 'in_progress'"
-      else
-        info "Workflow mode 'resume-only' ceiling is 'in_progress'; current status is '$state_status'"
-      fi
-      ;;
-    *)
-      fail "Unknown workflow mode '$state_workflow_mode' — cannot verify ceiling"
-      ;;
-  esac
+  state_status_ceiling="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
+  if [[ -z "$state_status_ceiling" ]]; then
+    fail "Unknown workflow mode '$state_workflow_mode' — cannot verify status ceiling from workflows.yaml"
+  elif [[ "$state_status" == "$state_status_ceiling" ]]; then
+    pass "Workflow mode '$state_workflow_mode' permits current status '$state_status' (ceiling: $state_status_ceiling)"
+  elif [[ "$state_status" == "done" && "$state_status_ceiling" != "done" ]]; then
+    fail "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling', NOT 'done'"
+  elif [[ "$state_status_ceiling" == "done" ]]; then
+    info "Workflow mode '$state_workflow_mode' allows status 'done'; current status is '$state_status'"
+  else
+    info "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling'; current status is '$state_status'"
+  fi
+fi
+
+if [[ "$state_plan_maturity_only" == "true" && "$state_status" == "done" ]]; then
+  fail "state.json planMaturityOnly=true is incompatible with status 'done' — planning maturity must stop at the workflow status ceiling"
+elif [[ "$state_plan_maturity_only" == "true" ]]; then
+  pass "state.json planMaturityOnly=true is not claiming delivery-done status"
 fi
 echo ""
 
@@ -499,24 +496,10 @@ echo "--- Check 3B: Source Code Edit Lockout (Gate G073) ---"
 
 # Determine if the current mode forbids source code edits
 ceiling_forbids_code="false"
-case "$state_workflow_mode" in
-  spec-scope-hardening|product-discovery|product-to-planning)
-    ceiling_forbids_code="true"
-    ceiling_label="specs_hardened"
-    ;;
-  docs-only|spec-review-to-doc)
-    ceiling_forbids_code="true"
-    ceiling_label="docs_updated"
-    ;;
-  validate-only|audit-only|validate-to-doc)
-    ceiling_forbids_code="true"
-    ceiling_label="validated"
-    ;;
-  resume-only)
-    ceiling_forbids_code="true"
-    ceiling_label="in_progress"
-    ;;
-esac
+ceiling_label="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
+if [[ -n "$ceiling_label" && "$ceiling_label" != "done" ]]; then
+  ceiling_forbids_code="true"
+fi
 
 if [[ "$ceiling_forbids_code" == "true" ]]; then
   git_repo_root=""
@@ -2898,22 +2881,13 @@ else
     fun_summary pass
   fi
   echo ""
-  case "$state_workflow_mode:$state_status" in
-    spec-scope-hardening:specs_hardened)
-      echo "state.json is correctly set to 'specs_hardened' for workflowMode 'spec-scope-hardening'."
-      ;;
-    docs-only:docs_updated)
-      echo "state.json is correctly set to 'docs_updated' for workflowMode 'docs-only'."
-      ;;
-    validate-only:validated|audit-only:validated)
-      echo "state.json is correctly set to 'validated' for workflowMode '$state_workflow_mode'."
-      ;;
-    resume-only:in_progress)
-      echo "state.json is correctly set to 'in_progress' for workflowMode 'resume-only'."
-      ;;
-    *)
-      echo "state.json status may be set to 'done'."
-      ;;
-  esac
+  final_status_ceiling="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
+  if [[ -n "$final_status_ceiling" && "$state_status" == "$final_status_ceiling" && "$final_status_ceiling" != "done" ]]; then
+    echo "state.json is correctly set to '$state_status' for workflowMode '$state_workflow_mode'."
+  elif [[ "$final_status_ceiling" == "done" ]]; then
+    echo "state.json status may be set to 'done'."
+  else
+    echo "state.json status '$state_status' is permitted for workflowMode '$state_workflow_mode'."
+  fi
   exit 0
 fi
