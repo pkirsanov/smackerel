@@ -97,10 +97,7 @@ def _ensure_executor() -> ThreadPoolExecutor:
         workers = _read_positive_int_env("ML_EMBEDDING_WORKERS")
         queue_max = _read_positive_int_env("ML_EMBEDDING_QUEUE_MAX")
         if queue_max < workers:
-            raise RuntimeError(
-                f"ML_EMBEDDING_QUEUE_MAX ({queue_max}) must be >= "
-                f"ML_EMBEDDING_WORKERS ({workers})"
-            )
+            raise RuntimeError(f"ML_EMBEDDING_QUEUE_MAX ({queue_max}) must be >= ML_EMBEDDING_WORKERS ({workers})")
         executor = ThreadPoolExecutor(
             max_workers=workers,
             thread_name_prefix="smackerel-ml-embed",
@@ -146,9 +143,7 @@ def _load_model():
 
         logger.info("Loading embedding model: %s", _model_name)
         _model = SentenceTransformer(_model_name)
-        logger.info(
-            "Embedding model loaded (dim=%d)", _model.get_sentence_embedding_dimension()
-        )
+        logger.info("Embedding model loaded (dim=%d)", _model.get_sentence_embedding_dimension())
     return _model
 
 
@@ -196,9 +191,7 @@ async def generate_embedding(text: str) -> list[float]:
         embedding_inflight.set(remaining)
 
 
-async def generate_artifact_embedding(
-    title: str, summary: str, key_ideas: list[str]
-) -> list[float]:
+async def generate_artifact_embedding(title: str, summary: str, key_ideas: list[str]) -> list[float]:
     """Generate embedding from artifact's title + summary + key ideas."""
     parts = [title]
     if summary:

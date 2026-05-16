@@ -161,9 +161,7 @@ class NATSClient:
         try:
             max_reconnect_attempts = int(raw_max)
         except ValueError as exc:
-            raise RuntimeError(
-                f"NATS_MAX_RECONNECT_ATTEMPTS must be an integer; got {raw_max!r}"
-            ) from exc
+            raise RuntimeError(f"NATS_MAX_RECONNECT_ATTEMPTS must be an integer; got {raw_max!r}") from exc
 
         try:
             raw_wait = os.environ["NATS_RECONNECT_TIME_WAIT_SECONDS"]
@@ -176,9 +174,7 @@ class NATSClient:
         try:
             reconnect_time_wait = int(raw_wait)
         except ValueError as exc:
-            raise RuntimeError(
-                f"NATS_RECONNECT_TIME_WAIT_SECONDS must be an integer; got {raw_wait!r}"
-            ) from exc
+            raise RuntimeError(f"NATS_RECONNECT_TIME_WAIT_SECONDS must be an integer; got {raw_wait!r}") from exc
 
         connect_opts: dict = dict(
             servers=[self.url],

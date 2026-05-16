@@ -817,7 +817,26 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ML_MEMORY_LIMIT", "3G")
 	t.Setenv("OLLAMA_CPU_LIMIT", "4.0")
 	t.Setenv("OLLAMA_MEMORY_LIMIT", "8G")
-	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","memory_mib":2048},{"model":"all-MiniLM-L6-v2","memory_mib":256},{"model":"gpt-4o-mini","memory_mib":512}]`)
+	t.Setenv("ML_MODEL_MEMORY_PROFILES_JSON", `[{"model":"llama3.2","memory_mib":2048},{"model":"all-MiniLM-L6-v2","memory_mib":256},{"model":"gpt-4o-mini","memory_mib":512},{"model":"gemma4:26b","memory_mib":3072},{"model":"nomic-embed-text","memory_mib":256},{"model":"deepseek-ocr:3b","memory_mib":2560}]`)
+
+	// BUG-045-001 — Per-service envelope routing requires the SST
+	// emission of every ollama-routed and ml-sidecar-routed model env
+	// var. Defaults below mirror smackerel.yaml HEAD so tests run
+	// green; per-test overrides exercise the per-bucket fail-loud
+	// paths in validateModelEnvelopes(). OLLAMA_OCR_MODEL,
+	// OLLAMA_REASONING_MODEL, and OLLAMA_FAST_MODEL are intentionally
+	// absent below because config.sh does not emit them today.
+	t.Setenv("OLLAMA_VISION_MODEL", "gemma4:26b")
+	t.Setenv("PHOTOS_INTELLIGENCE_CLASSIFY_MODEL", "gemma4:26b")
+	t.Setenv("PHOTOS_INTELLIGENCE_EMBED_MODEL", "nomic-embed-text")
+	t.Setenv("PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL", "gemma4:26b")
+	t.Setenv("PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", "gemma4:26b")
+	t.Setenv("PHOTOS_INTELLIGENCE_OCR_MODEL", "deepseek-ocr:3b")
+	t.Setenv("AGENT_PROVIDER_DEFAULT_MODEL", "gemma4:26b")
+	t.Setenv("AGENT_PROVIDER_REASONING_MODEL", "gemma4:26b")
+	t.Setenv("AGENT_PROVIDER_FAST_MODEL", "gemma4:26b")
+	t.Setenv("AGENT_PROVIDER_VISION_MODEL", "gemma4:26b")
+	t.Setenv("AGENT_PROVIDER_OCR_MODEL", "deepseek-ocr:3b")
 
 	// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
 	// hardening envelope. Defaults mirror smackerel.yaml so test loads

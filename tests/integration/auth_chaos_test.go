@@ -567,10 +567,10 @@ func TestAuthChaos_BroadcasterMalformedPayloads_CacheIntact(t *testing.T) {
 		{},
 		[]byte("not-json"),
 		[]byte("{"),
-		[]byte(`{"version":"v1"}`),                                   // missing token_id
-		[]byte(`{"version":"v1","token_id":""}`),                     // empty token_id
-		[]byte(`{"version":"v999","token_id":"x"}`),                  // unknown version (cache still loads — ID present)
-		[]byte(`{"token_id":12345}`),                                 // wrong type
+		[]byte(`{"version":"v1"}`),               // missing token_id
+		[]byte(`{"version":"v1","token_id":""}`), // empty token_id
+		[]byte(`{"version":"v999","token_id":"x"}`),                            // unknown version (cache still loads — ID present)
+		[]byte(`{"token_id":12345}`),                                           // wrong type
 		[]byte(`{"version":"v1","token_id":` + strings.Repeat("a", 100) + `}`), // unterminated string-style garbage
 	}
 	beforeSize := cache.Size()

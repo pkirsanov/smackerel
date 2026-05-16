@@ -35,10 +35,10 @@ import "github.com/prometheus/client_golang/prometheus"
 //
 // Allowed `source` values (closed set):
 //   - "admin_api"        — POST /v1/auth/users (enrollment) +
-//                          POST /v1/auth/users/{id}/rotate (rotation)
+//     POST /v1/auth/users/{id}/rotate (rotation)
 //   - "bootstrap_cli"    — `./smackerel.sh auth bootstrap`
 //   - "telegram_bridge"  — `internal/telegram/per_user_token.go`
-//                          mint per inbound Telegram message
+//     mint per inbound Telegram message
 var AuthIssuance = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "smackerel_auth_issuance_total",

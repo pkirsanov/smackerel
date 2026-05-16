@@ -2161,3 +2161,70 @@ Sensitive photo previews are gated server-side. The reveal token lifecycle:
 ### Photo Database Tables
 
 Migration `025_photo_libraries.sql` plus `029_photo_scope3_lifecycle_dedupe_removal.sql` and `031_photo_scope4_capture_routing_sensitivity.sql` provide: `photo_lifecycle_links`, `photo_clusters`, `photo_cluster_members`, `photo_removal_candidates`, `photo_capabilities`, `photo_sync_state`, `photo_face_links`, `photo_embeddings`, `photo_action_tokens`, `photo_audit_events`, `photo_raw_export_links`, `photo_routing_decisions`, `photo_document_groups`. All are covered by the standard `./smackerel.sh backup` and the disposable test stack.
+
+## Model Envelope Sizing (Spec 045 / BUG-045-001)
+
+Smackerel's local-inference model selection MUST fit two independent memory envelopes:
+
+| Envelope | Source value (`config/smackerel.yaml`) | Default | Bucket members |
+|----------|----------------------------------------|---------|----------------|
+| Ollama envelope | `deploy_resources.ollama.memory_limit` → `OLLAMA_MEMORY_LIMIT_MIB` | `8G` (8192 MiB) | All `llm.*` model fields + `extract.local.model` + `synthesizer.local.model` + `topics.label.model` + `topics.summary.model` + `recipe.*.local_model` + `meal_plan.*.local_model` (15 ollama-routed model_ref slots) |
+| ML-sidecar envelope | `deploy_resources.ml.memory_limit` → `ML_MEMORY_LIMIT_MIB` | `3G` (3072 MiB) | `embedder.local.model` + `ocr.local.model` (2 ml-sidecar-routed model_ref slots) |
+
+### Why two envelopes
+
+The Go core's `internal/config/config.go::validateModelEnvelopes` (post-BUG-045-001) splits the validation into two `envelopeBucket` structures so that the ml-sidecar memory ceiling cannot be exceeded by ollama-routed models and vice versa. Before BUG-045-001 the validator conflated both buckets under `ML_MEMORY_LIMIT`, which let a 30+ GB ollama model pass through dev sandboxes and crash ollama at first inference on deploy targets.
+
+### Default-model rebalance (DD-5)
+
+To restore default startup health on the 8 GiB ollama envelope, BUG-045-001 Scope 3 rebalanced the default-model selection across every ollama-routed model_ref slot:
+
+| Slot | Before | After | Resident size |
+|------|--------|-------|---------------|
+| `llm.model` (default-mode LLM gateway) | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `llm.fast_mode_models[0..3]` | `gemma4:26b` (mixed with `gemma3:4b`) | `gemma3:4b` | 4096 MiB |
+| `llm.reasoning_model` | `deepseek-r1:32b` | `deepseek-r1:7b` | 4864 MiB |
+| `extract.local.model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `synthesizer.local.model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `topics.label.model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `topics.summary.model` | `gpt-oss:20b` | `gemma3:4b` | 4096 MiB |
+| `recipe.import.local_model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `recipe.enrichment.local_model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+| `meal_plan.suggestion.local_model` | `gemma4:26b` | `gemma3:4b` | 4096 MiB |
+
+The ml-sidecar envelope is unchanged: `embedder.local.model` = `nomic-embed-text` (350 MiB) and `ocr.local.model` = `deepseek-ocr:3b` (3072 MiB) both fit the 3 GiB ml-sidecar ceiling.
+
+### Model memory profiles catalog
+
+The `model_memory_profiles` map in `config/smackerel.yaml` declares the resident-size ceiling for every model name a validator may encounter. BUG-045-001 added two new entries to support the rebalance:
+
+| Model name | Resident size (MiB) | Library card |
+|------------|---------------------|--------------|
+| `gemma3:4b` | 4096 | <https://ollama.com/library/gemma3> |
+| `deepseek-r1:7b` | 4864 | <https://ollama.com/library/deepseek-r1> |
+
+Pre-existing entries for `gemma4:26b` (30720 MiB), `deepseek-r1:32b` (24576 MiB), `gpt-oss:20b` (16384 MiB), and all other catalogued models remain in place. They are NOT removed because the operator opt-up path (see below) still needs to validate them.
+
+### Operator opt-up path
+
+An operator with more RAM headroom (e.g., a 24 GiB ollama envelope) can opt up to a heavier default model without editing this repo:
+
+1. In the operator's deploy-adapter overlay, set `deploy_resources.ollama.memory_limit: 24G` (or whatever fits).
+2. In the same overlay (or via env var injection at apply time), override the relevant `llm.*` / `topics.*` / `synthesizer.*` / `recipe.*` / `meal_plan.*` model fields with a model name whose `model_memory_profiles` entry fits the new envelope.
+3. Run `./smackerel.sh deploy-target <target> apply ...`. The build manifest's `config/smackerel.yaml` is the upstream default; the overlay's resolved values take precedence inside the operator's bundle.
+
+The overlay MUST keep the per-service envelope invariant: the sum of resident sizes for models routed to ollama MUST NOT exceed `OLLAMA_MEMORY_LIMIT_MIB`, and the sum routed to the ml-sidecar MUST NOT exceed `ML_MEMORY_LIMIT_MIB`. The validator rejects any overlay that violates this.
+
+### Pre-emit gate as the structural safety net
+
+The `./smackerel.sh config generate --env <env>` pipeline now runs `cmd/config-validate` against the rendered env file BEFORE atomic-promoting `<env>.env.tmp` → `<env>.env` (DD-2). The atomic-promote sequence (`scripts/commands/config.sh::smackerel_generate_config`):
+
+1. `<env>.env.tmp` is written via heredoc.
+2. `chmod 0600 <env>.env.tmp` clamps permissions before validation.
+3. `cmd/config-validate --env-file=<env>.env.tmp` exit code is consulted.
+4. On exit 0: `mv -f <env>.env.tmp <env>.env` (promote).
+5. On non-zero: `rm -f <env>.env.tmp` (no leak; previous `<env>.env` is preserved).
+
+This means an envelope-violating override (whether authored by an operator, an upstream merge, or a runtime experiment) cannot land in `config/generated/<env>.env`. The stack will fail to start with a clear validator error instead of crashing ollama at first inference on the deploy target. The pre-emit gate is honored by every codepath that lands on `smackerel_generate_config` — including `./smackerel.sh check` (Compose render preflight), `./smackerel.sh up` (which runs `config generate` first), and `./smackerel.sh test integration` (which runs `config generate --env test` first).
+
+The integration harness can substitute a precompiled validator binary by setting `SMACKEREL_CONFIG_VALIDATE_BIN` before invoking `smackerel_generate_config`; the default path falls back to `go run ./cmd/config-validate`. The gate also skips when `SHELL_PRODUCTION_CLASS_TARGETS` is empty (i.e., not a production-class generation run).

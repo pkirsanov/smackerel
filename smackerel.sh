@@ -22,7 +22,7 @@ Commands:
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
   package extension           Package browser extension for Chrome and Firefox distribution
-  test unit [--go|--python]   Run unit tests
+  test unit [--go|--python] [--go-run <regex>] [--verbose]   Run unit tests; --go-run / --verbose require --go and apply focused subtest selection
   test integration            Run live-stack integration validation
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress                 Run live-stack stress smoke test
@@ -614,9 +614,70 @@ case "$COMMAND" in
     shift || true
     case "$SUBCOMMAND" in
       unit)
-        if [[ "${1:-}" == "--go" ]]; then
-          run_go_tooling /workspace/scripts/runtime/go-unit.sh
-        elif [[ "${1:-}" == "--python" ]]; then
+        # Spec 045 / BUG-045-001 — accept optional --go-run / --verbose
+        # so report evidence can capture focused subtest output via the
+        # repo-standard CLI (matches `test e2e --go-run` pattern).
+        UNIT_GO_RUN_SELECTOR=""
+        UNIT_VERBOSE=""
+        UNIT_LANG_FILTER=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --go|--python)
+              if [[ -n "$UNIT_LANG_FILTER" ]]; then
+                echo "ERROR: only one of --go or --python may be specified" >&2
+                exit 1
+              fi
+              UNIT_LANG_FILTER="$1"
+              shift
+              ;;
+            --go-run)
+              if [[ $# -lt 2 ]] || [[ -z "$2" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              UNIT_GO_RUN_SELECTOR="$2"
+              shift 2
+              ;;
+            --go-run=*)
+              UNIT_GO_RUN_SELECTOR="${1#*=}"
+              if [[ -z "$UNIT_GO_RUN_SELECTOR" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              shift
+              ;;
+            --verbose|-v)
+              UNIT_VERBOSE="--verbose"
+              shift
+              ;;
+            *)
+              echo "Unknown test unit option: $1" >&2
+              exit 1
+              ;;
+          esac
+        done
+
+        if [[ -n "$UNIT_GO_RUN_SELECTOR" || -n "$UNIT_VERBOSE" ]] && [[ "$UNIT_LANG_FILTER" != "--go" ]]; then
+          # --go-run / --verbose are Go-runtime concepts; require --go
+          # so the operator's intent is unambiguous and python-unit.sh
+          # is never invoked with Go-runtime flags.
+          if [[ -z "$UNIT_LANG_FILTER" ]]; then
+            echo "ERROR: --go-run / --verbose require --go (Go-runtime focused selection)" >&2
+            exit 1
+          fi
+        fi
+
+        unit_go_args=()
+        if [[ -n "$UNIT_VERBOSE" ]]; then
+          unit_go_args+=("$UNIT_VERBOSE")
+        fi
+        if [[ -n "$UNIT_GO_RUN_SELECTOR" ]]; then
+          unit_go_args+=(--run "$UNIT_GO_RUN_SELECTOR")
+        fi
+
+        if [[ "$UNIT_LANG_FILTER" == "--go" ]]; then
+          run_go_tooling /workspace/scripts/runtime/go-unit.sh "${unit_go_args[@]}"
+        elif [[ "$UNIT_LANG_FILTER" == "--python" ]]; then
           run_python_tooling /workspace/scripts/runtime/python-unit.sh
         else
           run_go_tooling /workspace/scripts/runtime/go-unit.sh

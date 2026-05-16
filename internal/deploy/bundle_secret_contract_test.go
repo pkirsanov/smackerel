@@ -66,6 +66,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/smackerel/smackerel/internal/config"
@@ -75,6 +76,16 @@ import (
 // bundleSecretSourceSha is the deterministic --source-sha used by every
 // invocation in this file. Forty zeros (no git lookup, fully reproducible).
 const bundleSecretSourceSha = "0000000000000000000000000000000000000000"
+
+// Spec 045 BUG-045-001 Scope 2 collateral — cached pre-compiled
+// cmd/config-validate binary path used by every loader invocation in this
+// file so the loader's pre-emit gate has a stable binary to call without
+// needing the cmd/ + go.mod tree inside the sandboxed REPO_ROOT.
+var (
+	bundleSecretBinOnce sync.Once
+	bundleSecretBinPath string
+	bundleSecretBinErr  error
+)
 
 // bundleSecretRepoRoot resolves the repo root by walking up from this file's
 // location (mirrors the pattern in internal/config/secret_keys_test.go).
@@ -189,7 +200,13 @@ func runConfigGenerate(t *testing.T, repoRoot, env, outputDir string, extraEnv .
 		"--output-dir", outputDir,
 		"--source-sha", bundleSecretSourceSha,
 	)
-	cmd.Env = append(os.Environ(), extraEnv...)
+	// Spec 045 BUG-045-001 Scope 2 collateral — pre-build cmd/config-validate
+	// once per test invocation and pass its path via SMACKEREL_CONFIG_VALIDATE_BIN
+	// so the loader's new pre-emit gate (when fired for non-placeholder targets,
+	// e.g. the A4 opt-out test) can run without needing cmd/ + go.mod + internal/
+	// in the sandbox repo root.
+	binEnv := []string{"SMACKEREL_CONFIG_VALIDATE_BIN=" + bundleSecretConfigValidateBin(t)}
+	cmd.Env = append(append(os.Environ(), binEnv...), extraEnv...)
 	out, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {
@@ -200,6 +217,41 @@ func runConfigGenerate(t *testing.T, repoRoot, env, outputDir string, extraEnv .
 		}
 	}
 	return string(out), exitCode
+}
+
+// bundleSecretConfigValidateBin pre-builds cmd/config-validate against the
+// LIVE repo root once per `go test` process and returns the absolute path to
+// the compiled binary. Subsequent calls return the cached path. The build
+// runs in the live module so all internal/ imports resolve correctly; the
+// path is then passed to the sandboxed loader via SMACKEREL_CONFIG_VALIDATE_BIN
+// so the loader skips its `go run` fallback and uses the precompiled binary.
+func bundleSecretConfigValidateBin(t *testing.T) string {
+	t.Helper()
+	bundleSecretBinOnce.Do(func() {
+		repoRoot := bundleSecretRepoRoot(t)
+		tmpDir, err := os.MkdirTemp("", "bug045-config-validate-bin-")
+		if err != nil {
+			bundleSecretBinErr = fmt.Errorf("mkdir tmp: %w", err)
+			return
+		}
+		binPath := filepath.Join(tmpDir, "config-validate")
+		// -buildvcs=false because `./smackerel.sh test unit` may run from a
+		// cwd where VCS stamping fails (exit 128). The binary's behavior
+		// is identical with or without VCS metadata for this test purpose.
+		buildCmd := exec.Command("go", "build", "-buildvcs=false", "-o", binPath, "./cmd/config-validate")
+		buildCmd.Dir = repoRoot
+		buildCmd.Env = os.Environ()
+		out, buildErr := buildCmd.CombinedOutput()
+		if buildErr != nil {
+			bundleSecretBinErr = fmt.Errorf("go build cmd/config-validate: %w\n--- output ---\n%s\n--- end ---", buildErr, out)
+			return
+		}
+		bundleSecretBinPath = binPath
+	})
+	if bundleSecretBinErr != nil {
+		t.Fatalf("bundleSecretConfigValidateBin: %v", bundleSecretBinErr)
+	}
+	return bundleSecretBinPath
 }
 
 // extractTarGz reads a .tar.gz from disk and returns a map of relative path
@@ -587,6 +639,37 @@ func TestBundleSecretContract_AdversarialA4_OptOutDetector(t *testing.T) {
 	if bytes.Equal(yamlA4, liveYaml) {
 		t.Fatal("A4 yaml mutation 1 (password swap) had no effect — yaml shape changed")
 	}
+	// yaml mutation 1b (BUG-045-001 Scope 2 collateral): provide a literal
+	// runtime.auth_token sentinel so the new pre-emit Validate() gate does
+	// not trip on "SMACKEREL_AUTH_TOKEN must be set when SMACKEREL_ENV=production".
+	// In opt-out mode home-lab behaves like dev/test (literal values required);
+	// the operator who opts out also accepts responsibility for providing all
+	// required literals. The sentinel choice is non-DevDBPassword and
+	// non-placeholder so the opt-out assertion logic below is unaffected.
+	authTokenAnchor := []byte(`auth_token: ""`)
+	if !bytes.Contains(yamlA4, authTokenAnchor) {
+		t.Fatalf("A4 yaml mutation 1b precondition failed: live yaml does not contain %q (auth_token shape changed?)", authTokenAnchor)
+	}
+	yamlA4 = bytes.Replace(yamlA4,
+		authTokenAnchor,
+		[]byte(`auth_token: "test-optout-auth-token-sentinel-49382716"`),
+		1)
+	// yaml mutation 1c (BUG-045-001 Scope 2 collateral): flip the home-lab
+	// per-env `auth_enabled` override from true to false so the pre-emit
+	// Validate() gate does not require AUTH_SIGNING_ACTIVE_PRIVATE_KEY /
+	// AUTH_SIGNING_ACTIVE_KEY_ID / AUTH_AT_REST_HASHING_KEY / AUTH_BOOTSTRAP_TOKEN
+	// (those are gated on `production && auth.enabled`). A4 tests the opt-out
+	// mechanism for placeholder mode, not the auth secret contract; disabling
+	// auth in the same opt-out mutation keeps the test focused on its
+	// hypothesis (sentinel literal flows through when opt-out is active).
+	authEnabledAnchor := []byte("    auth_enabled: true")
+	if !bytes.Contains(yamlA4, authEnabledAnchor) {
+		t.Fatalf("A4 yaml mutation 1c precondition failed: live yaml does not contain %q (home-lab auth_enabled shape changed?)", authEnabledAnchor)
+	}
+	yamlA4 = bytes.Replace(yamlA4,
+		authEnabledAnchor,
+		[]byte("    auth_enabled: false"),
+		1)
 	// yaml mutation 2 (mirror-side documentation): drop home-lab from
 	// production_class_targets in yaml so the yaml mirror reflects the opt-out.
 	dropYamlTarget := []byte("\n  - home-lab")

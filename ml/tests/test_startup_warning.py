@@ -63,10 +63,13 @@ def _run_lifespan(auth_token: str, environment: str, caplog) -> list[logging.Log
         importlib.reload(main_mod)
 
         # Patch module bindings AFTER reload so imported constants/classes are overridden.
-        with patch.object(main_mod, "_AUTH_TOKEN", auth_token), patch.object(
-            main_mod,
-            "NATSClient",
-            return_value=nats_mock,
+        with (
+            patch.object(main_mod, "_AUTH_TOKEN", auth_token),
+            patch.object(
+                main_mod,
+                "NATSClient",
+                return_value=nats_mock,
+            ),
         ):
 
             async def _drive():

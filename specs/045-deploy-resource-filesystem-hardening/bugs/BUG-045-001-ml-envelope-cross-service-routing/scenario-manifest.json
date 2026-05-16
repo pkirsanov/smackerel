@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "featureDir": "specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing",
+  "generatedAt": "2026-05-16T16:35:00Z",
+  "scaffoldOwner": "bubbles.bug",
+  "planOwner": "bubbles.plan",
+  "planCompletedAt": "2026-05-16T17:25:00Z",
+  "scaffoldNote": "Plan-phase update (2026-05-16): bubbles.plan assigned scope numbers per the 4-scope decomposition in scopes.md. gherkinHash, linkedTests[*].testId, and evidenceRefs file/section IDs remain pending bubbles.implement (computed against the actual test function names and the report.md scope evidence section IDs at implement time).",
+  "implementPhaseNote": "Implement-phase update (2026-05-16): bubbles.implement populated SCN-045-001-A and SCN-045-001-B with the actual Go test function names from internal/config/validate_ml_envelope_test.go and gherkinHash computed by SHA-256 over the 'given|when|then' canonical join (UTF-8 input, hex-encoded lowercase digest, sha256: prefix). Scope 1 §1.K honestly unchecked due to essential collateral modification of internal/config/validate_test.go (setRequiredEnv helper) — see scopes.md §1.K Uncertainty Declaration. SCN-045-001-C and SCN-045-001-D remain TBD pending Scope 2 and Scope 3 implementation.",
+  "implementPhaseNoteScope2": "Implement-phase update Scope 2 (2026-05-16T20:55Z): bubbles.implement populated SCN-045-001-C with the actual Go test function names from cmd/config-validate/main_test.go (TestRun_OversizedModel_ExitsOne) + tests/integration/config_validate_test.go (TestConfigValidate_AC5c_BinaryRejectsOversizedModel + TestConfigValidate_AC5c_WrapperPropagatesRejection); gherkinHash computed by SHA-256 over the 'given|when|then' canonical join (UTF-8 input, hex-encoded lowercase digest, sha256: prefix) = sha256:fd9ff90df83592266753a52f51b647b8d5dd185d3fb2a589252c63ffcd477a3b; evidenceRefs extended with report.md Scope 2 anchor. Scope 2 §2.G/§2.L intentionally LEFT OPEN — `./smackerel.sh check` and `./smackerel.sh test integration` now correctly fail-loud on the broken gemma4:26b > 8G YAML because the Scope 2 pre-emit gate is doing its job; close-out deferred to Scope 3 (TR-BUG-045-001-006). SCN-045-001-D remains TBD pending Scope 3 implementation (YAML default-model rebalance).",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-045-001-A",
+      "scope": "1",
+      "title": "Validator routes ollama-served LLM model against ollama envelope, not ml-sidecar envelope",
+      "gherkin": {
+        "given": "Config has LLM_MODEL=bug-045-fixture-llm-6gib (profile 6144 MiB), OLLAMA_MEMORY_LIMIT=8G (8192 MiB), ML_MEMORY_LIMIT=3G (3072 MiB), and bug-045-fixture-llm-6gib is in services.ml.model_memory_profiles",
+        "when": "Config.Validate() runs (or the underlying validateModelEnvelopes function)",
+        "then": "Validate returns nil — the ollama bucket accepts the LLM_MODEL because 6144 < 8192, and the ml-sidecar bucket is not checked against LLM_MODEL"
+      },
+      "gherkinHash": "sha256:882b5403d7326ee1644f1062806f127a2062a350a941247aea67f899e74e0622",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/config/validate_ml_envelope_test.go",
+          "testId": "TestValidateModelEnvelopes_AC5a_OllamaRoutedFitsOllamaEnvelopeAccepted"
+        }
+      ],
+      "evidenceRefs": [
+        "spec.md#acceptance-criteria",
+        "report.md#evidence-1-validator-source-confirms-cross-service-routing-bug",
+        "report.md#scope-1-per-service-envelope-routing-in-validatemodelenvelopes-status-done"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Maps to AC-5(a). ADVERSARIAL: this case would have FAILED on HEAD de49b2f9 because the single-bucket validator would compare 6000 against MLMemoryLimitMiB=3072 and reject; under the post-fix contract it MUST PASS. This is the case that proves regression detectability per AC-5 § Adversarial signal requirement."
+    },
+    {
+      "scenarioId": "SCN-045-001-B",
+      "scope": "1",
+      "title": "Validator rejects oversized ollama-routed model with error naming OLLAMA_MEMORY_LIMIT (not ML_MEMORY_LIMIT)",
+      "gherkin": {
+        "given": "Config has LLM_MODEL=bug-045-fixture-llm-20gib (profile 20480 MiB), OLLAMA_MEMORY_LIMIT=10G (10240 MiB), ML_MEMORY_LIMIT=3G (3072 MiB)",
+        "when": "Config.Validate() runs",
+        "then": "Validate returns an error whose message names OLLAMA_MEMORY_LIMIT=\"10G\" and the offending model bug-045-fixture-llm-20gib and its required 20480 MiB; the segment of the error naming the offender MUST NOT mention ML_MEMORY_LIMIT as the offending envelope"
+      },
+      "gherkinHash": "sha256:8c245c36f534a08db7604e70a952dffc82e9090308736f99cf752b18a9958e73",
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/config/validate_ml_envelope_test.go",
+          "testId": "TestValidateModelEnvelopes_AC5b_OllamaRoutedExceedsOllamaEnvelopeRejectedWithCorrectEnvelopeName"
+        }
+      ],
+      "evidenceRefs": [
+        "spec.md#acceptance-criteria",
+        "report.md#evidence-2-default-config-confirms-internal-inconsistency",
+        "report.md#scope-1-per-service-envelope-routing-in-validatemodelenvelopes-status-done"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Maps to AC-5(b). Proves the new correct envelope is named in error messages. On HEAD de49b2f9 the error would name ML_MEMORY_LIMIT=\"3G\" — under the post-fix contract it MUST name OLLAMA_MEMORY_LIMIT=\"10G\"."
+    },
+    {
+      "scenarioId": "SCN-045-001-C",
+      "scope": "2",
+      "title": "Config-generate-time self-consistency check rejects misconfigured smackerel.yaml before env file is emitted",
+      "gherkin": {
+        "given": "A test fixture config/smackerel.yaml has llm.model=gemma4:26b (profile 18432 MiB) and deploy_resources.ollama.memory=\"8G\" (8192 MiB)",
+        "when": "`./smackerel.sh config generate --env dev` runs against the fixture",
+        "then": "The command exits non-zero with an error message naming llm.model, gemma4:26b, deploy_resources.ollama.memory, and the profile-vs-envelope gap; no env file is written for the failed environment"
+      },
+      "gherkinHash": "sha256:fd9ff90df83592266753a52f51b647b8d5dd185d3fb2a589252c63ffcd477a3b",
+      "behaviorClass": "cli",
+      "changeType": "feature",
+      "requiredTestType": "integration-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/config_validate_test.go",
+          "testId": "TestConfigValidate_AC5c_BinaryRejectsOversizedModel"
+        },
+        {
+          "file": "tests/integration/config_validate_test.go",
+          "testId": "TestConfigValidate_AC5c_WrapperPropagatesRejection"
+        },
+        {
+          "file": "cmd/config-validate/main_test.go",
+          "testId": "TestRun_OversizedModel_ExitsOne"
+        }
+      ],
+      "evidenceRefs": [
+        "spec.md#acceptance-criteria",
+        "report.md#evidence-3-ollama_memory_limit-is-already-emitted-as-sst-variable-but-not-parsed-to-mib",
+        "report.md#scope-2--cmdconfig-validate-binary--scriptscommandsconfigsh-pre-emit-gate-status-implemented-2g--2l-pending-scope-3-yaml-fix"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Maps to AC-5(c). Scope 2 implementation chose Go-side check via cmd/config-validate binary invoked from scripts/commands/config.sh as pre-emit gate (DD-2 atomic-promote pattern). The binary loads the TEMP env file into os.Environ-equivalent, calls internal/config.Load() + Validate(), exits 1 on envelope mismatch. Wrapper test (TestConfigValidate_AC5c_WrapperPropagatesRejection) proves the operator-facing ./smackerel.sh config generate pathway propagates the binary rejection. RED→GREEN proof captured in report.md Scope 2 evidence via controlled git stash push/pop of the wiring in scripts/commands/config.sh."
+    },
+    {
+      "scenarioId": "SCN-045-001-D",
+      "scope": "3",
+      "title": "Default config/smackerel.yaml is self-consistent — ./smackerel.sh up succeeds on default config out of the box",
+      "gherkin": {
+        "given": "A fresh clone of the repo at the post-fix commit, no operator-level config overrides applied",
+        "when": "`./smackerel.sh config generate --env dev` and then `./smackerel.sh up` run sequentially",
+        "then": "Both commands exit 0, all services (smackerel-core, smackerel-ml, ollama, postgres, nats) reach healthy state within standard health-check timeout, and `./smackerel.sh status` reports all services healthy"
+      },
+      "gherkinHash": "sha256:ec78eebd2e99846a3a1bf1c376302b0ee401227145c61233732a2e4792a590bb",
+      "behaviorClass": "deployment",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "smackerel.sh::up smoke + status canary (post-Scope-3)",
+          "testId": "scope-3-up-smoke-run-2026-05-16"
+        }
+      ],
+      "evidenceRefs": [
+        "spec.md#acceptance-criteria",
+        "report.md#evidence-2-default-config-confirms-internal-inconsistency",
+        "report.md#scope-3--dd-5-model-rebalance-in-configsmackerelyaml-status-implemented-3d-requires-foreign-qf-connector-routing--see-routed-findings"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Maps to AC-6 + AC-7. End-to-end out-of-the-box deployment scenario. Post-Scope-3 verification: ./smackerel.sh build + up + status + down all exit 0 on default config/smackerel.yaml (forced fresh build required to invalidate stale Docker layer with single-bucket validateModelEnvelopes; documented in report.md Scope 3 §3.E note). AC-6 close on the FULL integration suite remains pending RQ-QF-001 (2 pre-existing foreign spec 041 QF-connector handshake failures introduced in commit e53ee406)."
+    }
+  ]
+}

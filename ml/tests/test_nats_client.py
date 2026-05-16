@@ -430,8 +430,7 @@ class TestSecretReadContract:
             "ml/app/nats_client.py must import the canonical fail-loud _AUTH_TOKEN once."
         )
         assert source_text.count("if _AUTH_TOKEN:") == 1, (
-            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "
-            "NATS auth branching must be driven by _AUTH_TOKEN."
+            "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: NATS auth branching must be driven by _AUTH_TOKEN."
         )
         assert source_text.count('connect_opts["token"] = _AUTH_TOKEN') == 1, (
             "HL-RESCAN-013-secondary / Gate G028 / BUG-020-004: "

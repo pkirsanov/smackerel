@@ -1247,6 +1247,46 @@ Per-file footprint mapping to Implementation Plan items:
 
 The `git diff --name-only` and `git diff --stat` for Scope 4 will be appended here once the goal runtime / bubbles.workflow lands the close-out commit (per the user's session-level "Do NOT touch git" constraint).
 
+#### Scope 4 Close-Out Addendum — 2026-05-16 — BUG-045-001 Cross-Spec Resolution
+
+**Phase:** implement
+**Claim Source:** executed (validation chain on BUG-045-001 Scope 3 surface; spec 052 source unchanged)
+**Authored by:** bubbles.implement on the BUG-045-001 fastlane (cross-spec metadata-only close-out per DD-4)
+
+This addendum closes out the three operator-owned deferred concerns C-A12 / C-B5 / C-B6 that were preserved as `done_with_concerns` on 2026-05-15. All three were blocked on the same pre-existing root cause: the dev sandbox could not host `gemma4:26b` (18.4 GiB needed, 11.7 GiB available) because the default `config/smackerel.yaml` model selection violated the ollama 8 GiB envelope (the spec 045 FR-045-002 ML model envelope check rejected `./smackerel.sh up`). That root cause was independently surfaced and fixed by BUG-045-001 in spec 045.
+
+**Cross-spec resolution evidence (BUG-045-001 Scope 3, validated 2026-05-16T23:30Z):**
+
+1. **Default-model rebalance (DD-5 in BUG-045-001 design.md):** `config/smackerel.yaml` updated with 12 swaps to fit the 8 GiB ollama envelope: `gemma4:26b` → `gemma3:4b` (4096 MiB) across `llm.model`, `llm.fast_mode_models[*]`, `extract.local.model`, `synthesizer.local.model`, `topics.label.model`, `recipe.import.local_model`, `recipe.enrichment.local_model`, `meal_plan.suggestion.local_model`; `deepseek-r1:32b` → `deepseek-r1:7b` (4864 MiB) for `llm.reasoning_model`; `gpt-oss:20b` → `gemma3:4b` for `topics.summary.model`. New `model_memory_profiles` entries added for `gemma3:4b` and `deepseek-r1:7b`. OCR and embedding routes are unchanged (still fit the 3 GiB ml-sidecar envelope).
+2. **Validator now distinguishes two envelopes (BUG-045-001 Scope 1 + design.md DD-1/DD-3):** `internal/config/config.go::validateModelEnvelopes` is per-service: an ollama-bucket sums against `OLLAMA_MEMORY_LIMIT_MIB` (8 GiB) and an ml-sidecar-bucket sums against `ML_MEMORY_LIMIT_MIB` (3 GiB). The pre-fix conflation that let an ollama-routed model leak into the ml-sidecar envelope check is gone.
+3. **Pre-emit gate added (BUG-045-001 Scope 2):** `cmd/config-validate` + `scripts/commands/config.sh` now validate the rendered env file BEFORE atomic-promoting `<env>.env.tmp` → `<env>.env`. Any future operator override that violates either envelope is rejected at `./smackerel.sh config generate` time with a clear error, not at `./smackerel.sh up` crash time.
+
+**Live canary evidence (the exact loop C-A12 + C-B5 + C-B6 were blocked on):**
+
+- `./smackerel.sh check` exit 0 (config in sync with SST; env_file drift guard OK)
+- `./smackerel.sh config generate --env dev` exit 0
+- `./smackerel.sh config generate --env test` exit 0
+- `./smackerel.sh build` exit 0 (forced fresh build for fairness; cosign-verifiable digests)
+- `./smackerel.sh up` exit 0 with **all 4 services healthy**: `smackerel-core` Up, `smackerel-ml` Up, `postgres` Up, `nats` Up
+- `./smackerel.sh status` exit 0 with the healthy-services line confirming the same 4 services
+- `./smackerel.sh down` exit 0 (clean teardown)
+
+The Scope 4 A12 + B5 + B6 primary assertion ("`./smackerel.sh up` succeeds AND `./smackerel.sh status` reports the core service Up AND no `still equals placeholder marker` error appears in container logs") is now executable end-to-end on the dev sandbox. The spec 052 placeholder rejection branch continues to NOT false-positive on dev (the FR-052-011 inline-literal-values bundle for dev keeps `Validate()` matching zero secret-keys).
+
+**Concern status transitions (METADATA-ONLY per DD-4 in BUG-045-001 design.md; zero spec 052 source code modified):**
+
+| Concern | 2026-05-15 status | 2026-05-16 status | Resolution |
+|---------|-------------------|-------------------|------------|
+| C-A12 | `done_with_concerns` | `resolved` | BUG-045-001 Scope 3 default-model rebalance unblocks dev-sandbox live canary |
+| C-B5 | `done_with_concerns` | `resolved` | Same |
+| C-B6 | `done_with_concerns` | `resolved` | T-052-018-REG live-stack leg now executable; T-052-016 unit leg remains green |
+
+`specs/052-bundle-secret-injection-contract/state.json` concerns array updated with `status: resolved` + `resolvedAt: 2026-05-16T23:30:00Z` + `resolvedBy: BUG-045-001 Scope 3` + `resolutionRationale` for each of C-A12 / C-B5 / C-B6. `specs/052-bundle-secret-injection-contract/scopes.md` Scope 4 A12 + B5 + B6 entries have a `**RESOLVED 2026-05-16 by BUG-045-001 Scope 3 (METADATA-ONLY per DD-4):**` annotation appended after the existing `**CERTIFIED done_with_concerns 2026-05-15:**` annotation.
+
+**Remaining operator-owned concerns:** C-A11, C-B4, C-B7 (all about post-push CI `build-bundles` matrix evidence) remain `done_with_concerns` and require a separate operator action (`gh auth login` window + CI matrix observation on the new HEAD SHA). They are NOT addressed by BUG-045-001 — that was never the bug's scope. Refer to those concerns' individual `followUpAction` fields in `state.json` for the operator next step.
+
+**Cross-reference:** Full executed validation chain transcripts (including exit codes, healthy-service lines, and forced-fresh-build cache invalidation evidence) live in `specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/report.md` Scope 3 section.
+
 ---
 
 ## Code Diff Evidence
