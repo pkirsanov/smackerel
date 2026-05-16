@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "bugId": "BUG-029-004-ci-yml-parallel-publish-bypasses-bodm",
+  "specId": "029-devops-pipeline",
+  "featureDir": "specs/029-devops-pipeline/bugs/BUG-029-004-ci-yml-parallel-publish-bypasses-bodm",
+  "generatedAt": "2026-05-15T23:00:00Z",
+  "scenarios": [
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-A",
+      "title": "ci.yml contains zero docker push, zero cross-image docker tag, and zero ghcr.io docker/login-action — adversarial workflow-yaml grep contract",
+      "summary": "The post-fix .github/workflows/ci.yml contains zero `docker push` lines anywhere, zero `docker tag <local>:<tag> <foreign-registry>/<image>:<tag>` cross-image tag-mints anywhere, and zero `docker/login-action` step entries that target the ghcr.io registry. A new persistent in-tree adversarial Go contract test parses the live ci.yml file via go-yaml and asserts these three properties; the test follows the static-file workflow contract pattern established by `internal/deploy/build_workflow_vuln_gate_contract_test.go` and `internal/deploy/build_workflow_bundle_hash_contract_test.go`.",
+      "gherkin": {
+        "given": "the working tree has the BUG-029-004 fix applied (the three parallel publish steps at .github/workflows/ci.yml lines 125-159 are removed) and the new in-tree workflow-yaml grep contract test is present",
+        "when": "the new contract test parses the live `.github/workflows/ci.yml` file and walks every job's `steps:` block",
+        "then": "the validator returns nil error AND the live file contains zero `docker push` shell-command lines AND zero cross-image `docker tag <local-image>:<tag> <foreign-registry>/<image>:<tag>` shell-command lines AND zero `uses: docker/login-action@<sha> # vN.N.N` step entries whose `with.registry` resolves to `ghcr.io` (literal or via the `${{ env.REGISTRY }}` indirection used by build.yml)"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-a-frozen-contract",
+      "behaviorClass": "static-file-contract",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_NoParallelPublishPath_PostBUG029004/A_no_docker_push_in_ci_yml"
+        },
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_NoParallelPublishPath_PostBUG029004/B_no_ghcr_tagging_in_ci_yml"
+        },
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_NoParallelPublishPath_PostBUG029004/C_no_ghcr_login_in_ci_yml"
+        },
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialDockerPushReintroduced"
+        },
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialGhcrTaggingReintroduced"
+        },
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialGhcrLoginReintroduced"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Test file path, parent function name, sub-test names, and adversarial top-level test names are FROZEN by bubbles.design DD-8 (design.md 2026-05-15) and locked here by bubbles.plan 2026-05-15. Three sub-tests (A_no_docker_push_in_ci_yml, B_no_ghcr_tagging_in_ci_yml, C_no_ghcr_login_in_ci_yml) of the parent TestCIWorkflow_NoParallelPublishPath_PostBUG029004 cover the three forbidden-construct dimensions independently against the live file; three top-level adversarial mutation tests (TestCIWorkflow_AdversarialDockerPushReintroduced, TestCIWorkflow_AdversarialGhcrTaggingReintroduced, TestCIWorkflow_AdversarialGhcrLoginReintroduced) prove the validator itself is non-tautological by mutating an in-memory workflowDoc to re-introduce each forbidden construct independently. Comment-line skip enforced (a `# docker push ...` line in a YAML comment is exempt). The cross-image docker tag check is scoped to retags that target a foreign-registry destination prefix (ghcr.io, gcr.io, quay.io, docker.io); locally-named retags (e.g., `docker tag smackerel-smackerel-core:latest smackerel-core:latest` with no registry prefix) are exempt because they are a build-side smoke pattern, not a publish action."
+    },
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-B",
+      "title": "ci.yml's integration job continues to start NATS, run db migrations, and execute integration tests — no-regression canary on adjacent surface",
+      "summary": "Removing the three parallel publish steps must NOT inadvertently damage the rest of the ci.yml workflow. The adjacent integration job (currently at .github/workflows/ci.yml line 161 onward) must continue to start its NATS and PostgreSQL services, run the dbmigrate step, and execute the integration test command unchanged. The lint-and-test job and the build job's `Build Docker images` step must also remain unchanged.",
+      "gherkin": {
+        "given": "the working tree has the BUG-029-004 fix applied (the three parallel publish steps at lines 125-159 are removed)",
+        "when": "the new in-tree workflow-yaml integration-job-preservation contract test parses the live `.github/workflows/ci.yml` file and walks the workflow structure",
+        "then": "the validator confirms the `lint-and-test` job is present unchanged AND the `build` job is present and contains the `Build Docker images` step (which calls `./smackerel.sh build`) AND the `integration` job is present AND the `integration` job's `services:` block names a NATS service AND a PostgreSQL service AND the `integration` job's `steps:` block contains a step that runs db migrations AND the `integration` job's `steps:` block contains a step that executes the integration test command"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-b-frozen-contract",
+      "behaviorClass": "static-file-contract",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_NoParallelPublishPath_PostBUG029004"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial guard against over-reaching deletion. The structural-preservation invariants (lint-and-test job present, build job present + contains `Build Docker images` step, integration job present + services block names a postgres service + steps block contains a db-migration step + steps block contains an integration-test command step) are asserted by the same parent test TestCIWorkflow_NoParallelPublishPath_PostBUG029004 (FROZEN by bubbles.design DD-8) — the validator's structural pre-check runs first inside `assertNoParallelPublishPath` and short-circuits with a structural error if any required job/step is missing. The exact assertion shape is FROZEN by bubbles.design DD-8 (design.md 2026-05-15) and locked here by bubbles.plan 2026-05-15."
+    },
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-C",
+      "title": "build.yml continues to produce signed, attested, digest-pinned core + ml images — no-regression canary on the canonical publish surface",
+      "summary": "Removing the parallel ci.yml publish path must NOT touch `.github/workflows/build.yml`. The pre-existing static-file workflow contract tests (`TestVulnGateContract_LiveFile` in `internal/deploy/build_workflow_vuln_gate_contract_test.go` and `TestBundleHashContract_LiveFile` in `internal/deploy/build_workflow_bundle_hash_contract_test.go`) — both of which parse the live `build.yml` and lock its canonical Build-Once Deploy-Many shape — must continue to PASS GREEN unchanged.",
+      "gherkin": {
+        "given": "the working tree has the BUG-029-004 fix applied (the three parallel publish steps in ci.yml are removed) AND `.github/workflows/build.yml` is unchanged by this packet",
+        "when": "`./smackerel.sh test unit --go -run 'TestVulnGateContract_LiveFile|TestBundleHashContract_LiveFile'` is run",
+        "then": "exit code is 0 (PASS) AND the test output names both `TestVulnGateContract_LiveFile` and `TestBundleHashContract_LiveFile` as PASS AND no test in the `internal/deploy` package failed"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-c-frozen-contract",
+      "behaviorClass": "regression",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/build_workflow_vuln_gate_contract_test.go",
+          "testId": "TestVulnGateContract_LiveFile"
+        },
+        {
+          "file": "internal/deploy/build_workflow_bundle_hash_contract_test.go",
+          "testId": "TestBundleHashContract_LiveFile"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Pure no-regression canary over pre-existing tests. AC-5 in spec.md. These tests already exist and already PASS at HEAD 765adddb — this scenario simply locks that they continue to PASS after the fix. If `build.yml` were inadvertently edited by the fix, one or both of these tests would FAIL RED with a contract-violation error message."
+    },
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-D",
+      "title": "Adversarial: re-introducing a `docker push` line to ci.yml fails the contract RED — proves the validator catches the docker-push dimension non-tautologically",
+      "summary": "An in-memory mutated `workflowDoc` that re-introduces a `docker push ghcr.io/<owner>/smackerel-core:vX.Y.Z` line in any step's `run:` block MUST cause the validator to return a non-nil error whose message names BUG-029-004 and the offending step. This proves the validator's docker-push-detection branch is non-tautological independent of the live-file content.",
+      "gherkin": {
+        "given": "an in-memory `workflowDoc` mutated to include a step whose `run:` block contains `docker push ghcr.io/<owner>/smackerel-core:vX.Y.Z`",
+        "when": "the contract validator `assertNoParallelPublishPath` is called against the mutated doc (via `TestCIWorkflow_AdversarialDockerPushReintroduced`)",
+        "then": "the validator returns a non-nil error AND the error message contains the substring `BUG-029-004` AND the error message names the offending step and job"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-d-frozen-contract",
+      "behaviorClass": "adversarial",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialDockerPushReintroduced"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial in-memory mutation test FROZEN by bubbles.design DD-8 (design.md 2026-05-15) and locked here by bubbles.plan 2026-05-15. Proves the docker-push-detection branch of `assertNoParallelPublishPath` is non-tautological. Runs alongside the live-file contract test on every `./smackerel.sh test unit --go` invocation. Persistent in-tree regression coverage that would FAIL RED if the bug were reintroduced via that dimension."
+    },
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-E",
+      "title": "Adversarial: re-introducing a cross-registry `docker tag` line to ci.yml fails the contract RED — proves the validator catches the docker-tag dimension non-tautologically",
+      "summary": "An in-memory mutated `workflowDoc` that re-introduces a `docker tag smackerel-core:latest ghcr.io/<owner>/smackerel-core:vX.Y.Z` line in any step's `run:` block MUST cause the validator to return a non-nil error whose message names BUG-029-004 and the offending step. This proves the validator's cross-registry-tag-detection branch is non-tautological independent of the live-file content.",
+      "gherkin": {
+        "given": "an in-memory `workflowDoc` mutated to include a step whose `run:` block contains `docker tag smackerel-core:latest ghcr.io/<owner>/smackerel-core:vX.Y.Z`",
+        "when": "the contract validator `assertNoParallelPublishPath` is called against the mutated doc (via `TestCIWorkflow_AdversarialGhcrTaggingReintroduced`)",
+        "then": "the validator returns a non-nil error AND the error message contains the substring `BUG-029-004` AND the error message names the offending step and job"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-e-frozen-contract",
+      "behaviorClass": "adversarial",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialGhcrTaggingReintroduced"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial in-memory mutation test FROZEN by bubbles.design DD-8 (design.md 2026-05-15) and locked here by bubbles.plan 2026-05-15. Proves the cross-registry-tag-detection branch of `assertNoParallelPublishPath` is non-tautological. Detection is scoped to retags whose destination prefix is a foreign registry (ghcr.io, gcr.io, quay.io, docker.io); locally-named retags without a foreign-registry destination prefix are exempt because they are a build-side smoke pattern, not a publish action. Runs alongside the live-file contract test on every `./smackerel.sh test unit --go` invocation."
+    },
+    {
+      "scopeId": "BUG-029-004-scope-1",
+      "scenarioId": "SCN-029-004-F",
+      "title": "Adversarial: re-introducing a `docker/login-action` against ghcr.io to ci.yml fails the contract RED — proves the validator catches the docker-login dimension non-tautologically",
+      "summary": "An in-memory mutated `workflowDoc` that re-introduces a step `uses: docker/login-action@<sha>` with `with.registry: ghcr.io` (or `${{ env.REGISTRY }}` indirection) MUST cause the validator to return a non-nil error whose message names BUG-029-004 and the offending step. This proves the validator's docker-login-detection branch is non-tautological independent of the live-file content.",
+      "gherkin": {
+        "given": "an in-memory `workflowDoc` mutated to include a step `uses: docker/login-action@<sha>` with `with.registry: ghcr.io`",
+        "when": "the contract validator `assertNoParallelPublishPath` is called against the mutated doc (via `TestCIWorkflow_AdversarialGhcrLoginReintroduced`)",
+        "then": "the validator returns a non-nil error AND the error message contains the substring `BUG-029-004` AND the error message names the offending step and job"
+      },
+      "gherkinHash": "sha256:bug-029-004-scn-f-frozen-contract",
+      "behaviorClass": "adversarial",
+      "changeType": "regression",
+      "requiredTestType": "unit-go",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/ci_workflow_no_parallel_publish_test.go",
+          "testId": "TestCIWorkflow_AdversarialGhcrLoginReintroduced"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "notes": "Adversarial in-memory mutation test FROZEN by bubbles.design DD-8 (design.md 2026-05-15) and locked here by bubbles.plan 2026-05-15. Proves the docker-login-detection branch of `assertNoParallelPublishPath` is non-tautological. Detection covers both literal `with.registry: ghcr.io` and the `${{ env.REGISTRY }}` indirection used by build.yml. Runs alongside the live-file contract test on every `./smackerel.sh test unit --go` invocation."
+    }
+  ]
+}
