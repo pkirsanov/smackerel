@@ -388,9 +388,7 @@ class TestEnableOllamaFailLoudGating:
             with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
                 with patch("app.ocr.extract_text_ollama", new=fake_ollama):
                     result = asyncio.run(
-                        handle_ocr_request(
-                            {"image_hash": "enable-ollama-true", "image_data": b64_data}
-                        )
+                        handle_ocr_request({"image_hash": "enable-ollama-true", "image_data": b64_data})
                     )
 
         assert ollama_called is True, "ENABLE_OLLAMA=true must invoke Ollama fallback"
@@ -417,9 +415,7 @@ class TestEnableOllamaFailLoudGating:
             with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
                 with patch("app.ocr.extract_text_ollama", new=fake_ollama):
                     result = asyncio.run(
-                        handle_ocr_request(
-                            {"image_hash": "enable-ollama-false", "image_data": b64_data}
-                        )
+                        handle_ocr_request({"image_hash": "enable-ollama-false", "image_data": b64_data})
                     )
 
         assert ollama_called is False, "ENABLE_OLLAMA=false must skip Ollama fallback"
@@ -446,11 +442,7 @@ class TestEnableOllamaFailLoudGating:
         with patch.dict(os.environ, minimal_env, clear=True):
             with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
                 with pytest.raises(KeyError, match="ENABLE_OLLAMA"):
-                    asyncio.run(
-                        handle_ocr_request(
-                            {"image_hash": "enable-ollama-unset", "image_data": b64_data}
-                        )
-                    )
+                    asyncio.run(handle_ocr_request({"image_hash": "enable-ollama-unset", "image_data": b64_data}))
 
     def test_enable_ollama_invalid_value_raises_runtimeerror(self):
         """ENABLE_OLLAMA set to a non-boolean string → RuntimeError naming Gate G028."""
@@ -462,11 +454,7 @@ class TestEnableOllamaFailLoudGating:
         with patch.dict(os.environ, {"ENABLE_OLLAMA": "maybe"}, clear=False):
             with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
                 with pytest.raises(RuntimeError, match="ENABLE_OLLAMA must be exactly one of"):
-                    asyncio.run(
-                        handle_ocr_request(
-                            {"image_hash": "enable-ollama-invalid", "image_data": b64_data}
-                        )
-                    )
+                    asyncio.run(handle_ocr_request({"image_hash": "enable-ollama-invalid", "image_data": b64_data}))
 
     def test_enable_ollama_only_consulted_when_tesseract_insufficient(self):
         """ENABLE_OLLAMA must NOT be read when Tesseract output is sufficient.
@@ -491,9 +479,7 @@ class TestEnableOllamaFailLoudGating:
             with patch("app.ocr.extract_text_tesseract", new=fake_tesseract):
                 with patch("app.ocr.extract_text_ollama", new=fake_ollama):
                     result = asyncio.run(
-                        handle_ocr_request(
-                            {"image_hash": "tesseract-sufficient-skip-env-read", "image_data": b64_data}
-                        )
+                        handle_ocr_request({"image_hash": "tesseract-sufficient-skip-env-read", "image_data": b64_data})
                     )
 
         assert result["ocr_engine"] == "tesseract"

@@ -351,7 +351,11 @@
       "sourceDodItem": "Scope 4 A12 (independent canary suite for shared fixture/bootstrap contracts)",
       "followUpOwner": "operator",
       "followUpAction": "Live-stack canary for the L2 (knb adapter substitution) + L3 (Go runtime defense per design.md \u00a73 3-layer defense-in-depth) deferred to home-lab apply via the knb adapter.",
-      "rationale": "Per operator decision 3c, dev box cannot host LLM gemma4:26b (18.4 GiB needed, 11.7 GiB available \u2014 pre-existing spec 045 ML envelope mismatch unrelated to spec 052). Concrete next-step owner for the spec 045 unblock: ml-config maintainer / spec 045 owner."
+      "rationale": "Per operator decision 3c, dev box cannot host LLM gemma4:26b (18.4 GiB needed, 11.7 GiB available \u2014 pre-existing spec 045 ML envelope mismatch unrelated to spec 052). Concrete next-step owner for the spec 045 unblock: ml-config maintainer / spec 045 owner.",
+      "status": "resolved",
+      "resolvedAt": "2026-05-16T23:30:00Z",
+      "resolvedBy": "BUG-045-001 Scope 3 (DD-5 default-model rebalance) at HEAD post-Scope-3",
+      "resolutionRationale": "BUG-045-001 Scope 3 rebalanced the default ollama-routed model selection (gemma4:26b -> gemma3:4b @ 4096 MiB; deepseek-r1:32b -> deepseek-r1:7b @ 4864 MiB; gpt-oss:20b -> gemma3:4b) so the default config/smackerel.yaml now fits the 8 GiB ollama envelope on the dev sandbox. Scope 3 evidence: ./smackerel.sh up exits 0 with all 4 services healthy on default YAML (smackerel-core, smackerel-ml, postgres, nats all Up). The L3 Go runtime defense canary that C-A12 was blocked on (the up + status loop against a running smackerel-core container) is now executable on the dev sandbox without the spec 045 ML envelope mismatch. Per DD-4, this resolution is METADATA-ONLY for spec 052 (no spec 052 source code touched). See specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/report.md Scope 3 section for the executed validation chain evidence."
     },
     {
       "id": "C-B4",
@@ -367,7 +371,11 @@
       "sourceDodItem": "Scope 4 B5 (T-052-018-REG live smoke regression)",
       "followUpOwner": "operator",
       "followUpAction": "Same as C-A12: T-052-018-REG live smoke deferred to home-lab apply via the knb adapter.",
-      "rationale": "Same as C-A12. The unit-level proxy `tests/config/postgres_dev_default_env_override_test.sh` IS green (RESULT PASS this validate session \u2014 see report.md Validate Phase Evidence section)."
+      "rationale": "Same as C-A12. The unit-level proxy `tests/config/postgres_dev_default_env_override_test.sh` IS green (RESULT PASS this validate session \u2014 see report.md Validate Phase Evidence section).",
+      "status": "resolved",
+      "resolvedAt": "2026-05-16T23:30:00Z",
+      "resolvedBy": "BUG-045-001 Scope 3 (DD-5 default-model rebalance) at HEAD post-Scope-3",
+      "resolutionRationale": "Same as C-A12. BUG-045-001 Scope 3 unblocks the live-stack canary loop on the dev sandbox: ./smackerel.sh up exit 0 + ./smackerel.sh status exit 0 + ./smackerel.sh down exit 0 on default YAML. Per DD-4, METADATA-ONLY for spec 052."
     },
     {
       "id": "C-B6",
@@ -375,7 +383,11 @@
       "sourceDodItem": "Scope 4 B6 (scenario-specific E2E regression)",
       "followUpOwner": "operator",
       "followUpAction": "T-052-018-REG live-stack portion deferred to home-lab via knb adapter per C-A12. T-052-016 unit-level redaction regression IS already green this validate session.",
-      "rationale": "T-052-016 sentinel scan passed in `internal/config 14.313s` aggregate. The live-stack portion follows the same operator decision as C-A12."
+      "rationale": "T-052-016 sentinel scan passed in `internal/config 14.313s` aggregate. The live-stack portion follows the same operator decision as C-A12.",
+      "status": "resolved",
+      "resolvedAt": "2026-05-16T23:30:00Z",
+      "resolvedBy": "BUG-045-001 Scope 3 (DD-5 default-model rebalance) at HEAD post-Scope-3",
+      "resolutionRationale": "Same as C-A12 + C-B5. The live-stack portion of T-052-018-REG (./smackerel.sh up smoke) is now executable on the dev sandbox after BUG-045-001 Scope 3 rebalanced the default models to fit the 8 GiB ollama envelope. T-052-016 unit-level redaction regression remains green. Per DD-4, METADATA-ONLY for spec 052."
     },
     {
       "id": "C-B7",

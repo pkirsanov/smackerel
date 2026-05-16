@@ -277,8 +277,38 @@ type Config struct {
 	MLMemoryLimit         string // raw compose-style string, e.g. "3G"
 	MLMemoryLimitMiB      int    // parsed from MLMemoryLimit
 	OllamaCPULimit        string
-	OllamaMemoryLimit     string
+	OllamaMemoryLimit     string         // raw compose-style string, e.g. "8G"
+	OllamaMemoryLimitMiB  int            // parsed from OllamaMemoryLimit
 	MLModelMemoryProfiles map[string]int // model name → required MiB
+
+	// BUG-045-001 — Per-service envelope routing for model env vars.
+	// The 15 fields below name every ollama-routed model env var the
+	// SST emits today plus three forward-compatible env vars
+	// (OLLAMA_OCR_MODEL, OLLAMA_REASONING_MODEL, OLLAMA_FAST_MODEL)
+	// that DD-3 enumerates but scripts/commands/config.sh does NOT
+	// currently emit; non-emitted env vars resolve to empty via
+	// os.Getenv() and are skipped by the validator's skip-empty branch.
+	// validateModelEnvelopes() routes every non-empty value in this
+	// bucket against c.OllamaMemoryLimitMiB.
+	OllamaVisionModel                  string
+	OllamaOcrModel                     string
+	OllamaReasoningModel               string
+	OllamaFastModel                    string
+	PhotosIntelligenceClassifyModel    string
+	PhotosIntelligenceSensitivityModel string
+	PhotosIntelligenceAestheticModel   string
+	PhotosIntelligenceOcrModel         string
+	AgentProviderDefaultModel          string
+	AgentProviderReasoningModel        string
+	AgentProviderFastModel             string
+	AgentProviderVisionModel           string
+	AgentProviderOcrModel              string
+	// The 1 field below names the ml-sidecar-routed image-embedding
+	// model emitted by scripts/commands/config.sh. EMBEDDING_MODEL is
+	// already in the Config struct (text-embedding route); the photos
+	// pipeline's embed_model loads in the smackerel_ml container and
+	// must route against c.MLMemoryLimitMiB.
+	PhotosIntelligenceEmbedModel string
 
 	// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
 	// hardening. SST-compliant; populated from NATS_* env vars produced
@@ -559,6 +589,28 @@ func Load() (*Config, error) {
 		OllamaCPULimit:      os.Getenv("OLLAMA_CPU_LIMIT"),
 		OllamaMemoryLimit:   os.Getenv("OLLAMA_MEMORY_LIMIT"),
 
+		// BUG-045-001 — Per-service envelope routing model env vars.
+		// Every value below is loaded from the SST-emitted env var
+		// when set (scripts/commands/config.sh emits 12 ollama-routed
+		// + 2 ml-sidecar-routed vars today; OLLAMA_OCR_MODEL,
+		// OLLAMA_REASONING_MODEL, OLLAMA_FAST_MODEL are forward-
+		// compatible — empty today). validateModelEnvelopes() routes
+		// every non-empty value against the correct service envelope.
+		OllamaVisionModel:                  os.Getenv("OLLAMA_VISION_MODEL"),
+		OllamaOcrModel:                     os.Getenv("OLLAMA_OCR_MODEL"),
+		OllamaReasoningModel:               os.Getenv("OLLAMA_REASONING_MODEL"),
+		OllamaFastModel:                    os.Getenv("OLLAMA_FAST_MODEL"),
+		PhotosIntelligenceClassifyModel:    os.Getenv("PHOTOS_INTELLIGENCE_CLASSIFY_MODEL"),
+		PhotosIntelligenceSensitivityModel: os.Getenv("PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL"),
+		PhotosIntelligenceAestheticModel:   os.Getenv("PHOTOS_INTELLIGENCE_AESTHETIC_MODEL"),
+		PhotosIntelligenceOcrModel:         os.Getenv("PHOTOS_INTELLIGENCE_OCR_MODEL"),
+		AgentProviderDefaultModel:          os.Getenv("AGENT_PROVIDER_DEFAULT_MODEL"),
+		AgentProviderReasoningModel:        os.Getenv("AGENT_PROVIDER_REASONING_MODEL"),
+		AgentProviderFastModel:             os.Getenv("AGENT_PROVIDER_FAST_MODEL"),
+		AgentProviderVisionModel:           os.Getenv("AGENT_PROVIDER_VISION_MODEL"),
+		AgentProviderOcrModel:              os.Getenv("AGENT_PROVIDER_OCR_MODEL"),
+		PhotosIntelligenceEmbedModel:       os.Getenv("PHOTOS_INTELLIGENCE_EMBED_MODEL"),
+
 		// Spec 046 — NATS production hardening (raw env strings; parsed below).
 		NATSMaxReconnectAttemptsRaw:  os.Getenv("NATS_MAX_RECONNECT_ATTEMPTS"),
 		NATSReconnectTimeWaitSecsRaw: os.Getenv("NATS_RECONNECT_TIME_WAIT_SECONDS"),
@@ -697,6 +749,22 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("ML_MEMORY_LIMIT: %w", err)
 		}
 		cfg.MLMemoryLimitMiB = mib
+	}
+
+	// BUG-045-001 — Parse OLLAMA_MEMORY_LIMIT (compose-style string
+	// like "8G", "1024M") into MiB. Mirrors the ML_MEMORY_LIMIT parse
+	// step above byte-for-byte so the ollama bucket of
+	// validateModelEnvelopes() can route every configured ollama-
+	// resident model against c.OllamaMemoryLimitMiB. Empty string
+	// leaves OllamaMemoryLimitMiB=0 so Validate() can name
+	// OllamaMemoryLimit as missing via requiredVars() rather than
+	// failing here with a less informative parse error.
+	if cfg.OllamaMemoryLimit != "" {
+		mib, err := parseComposeMemoryToMiB(cfg.OllamaMemoryLimit)
+		if err != nil {
+			return nil, fmt.Errorf("OLLAMA_MEMORY_LIMIT: %w", err)
+		}
+		cfg.OllamaMemoryLimitMiB = mib
 	}
 
 	// Spec 045 — Parse ML_MODEL_MEMORY_PROFILES_JSON. The generator
@@ -1376,6 +1444,26 @@ func (c *Config) requiredVars() []struct {
 		{"ML_MEMORY_LIMIT", c.MLMemoryLimit},
 		{"OLLAMA_CPU_LIMIT", c.OllamaCPULimit},
 		{"OLLAMA_MEMORY_LIMIT", c.OllamaMemoryLimit},
+		// BUG-045-001 — Per-service envelope routing requires the
+		// SST emission of every ollama-routed and ml-sidecar-routed
+		// model env var. Names below MUST match the emitted set in
+		// scripts/commands/config.sh (12 ollama + 2 ml-sidecar today).
+		// OLLAMA_OCR_MODEL, OLLAMA_REASONING_MODEL, and
+		// OLLAMA_FAST_MODEL are forward-compatible Config struct
+		// fields but are NOT yet emitted by config.sh so they are
+		// NOT named here. Once config.sh starts emitting them the
+		// entries below MUST be extended in the same PR.
+		{"OLLAMA_VISION_MODEL", c.OllamaVisionModel},
+		{"PHOTOS_INTELLIGENCE_CLASSIFY_MODEL", c.PhotosIntelligenceClassifyModel},
+		{"PHOTOS_INTELLIGENCE_EMBED_MODEL", c.PhotosIntelligenceEmbedModel},
+		{"PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL", c.PhotosIntelligenceSensitivityModel},
+		{"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", c.PhotosIntelligenceAestheticModel},
+		{"PHOTOS_INTELLIGENCE_OCR_MODEL", c.PhotosIntelligenceOcrModel},
+		{"AGENT_PROVIDER_DEFAULT_MODEL", c.AgentProviderDefaultModel},
+		{"AGENT_PROVIDER_REASONING_MODEL", c.AgentProviderReasoningModel},
+		{"AGENT_PROVIDER_FAST_MODEL", c.AgentProviderFastModel},
+		{"AGENT_PROVIDER_VISION_MODEL", c.AgentProviderVisionModel},
+		{"AGENT_PROVIDER_OCR_MODEL", c.AgentProviderOcrModel},
 		// Spec 046 FR-046-001 / FR-046-002 / FR-046-003 — NATS production
 		// hardening envelope. Bytes/integer parsing is done in Load();
 		// missing string-form values are caught here with the same
@@ -1552,15 +1640,18 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Spec 045 FR-045-002 — ML model envelope check. Requires
-	// MLMemoryLimitMiB and MLModelMemoryProfiles to be populated; both
-	// are surfaced by the requiredVars() check above when ML_MEMORY_LIMIT
-	// or ML_MODEL_MEMORY_PROFILES_JSON is missing. With the envelope
-	// known, reject any configured Ollama model whose profile exceeds
-	// the envelope OR whose profile entry is missing entirely. The
-	// fail-loud error names every offender in one message so the
-	// operator can fix all problems in one pass.
-	if err := c.validateMLModelEnvelope(); err != nil {
+	// Spec 045 FR-045-002 — Per-service model envelope check (BUG-045-001).
+	// validateModelEnvelopes routes each configured model env var into
+	// either the ollama bucket (checked against c.OllamaMemoryLimitMiB)
+	// or the ml-sidecar bucket (checked against c.MLMemoryLimitMiB).
+	// MLMemoryLimitMiB, OllamaMemoryLimitMiB, and MLModelMemoryProfiles
+	// are all surfaced by the requiredVars() check above when their
+	// SST env vars are missing. With the envelopes known, reject any
+	// configured model whose profile exceeds its bucket's envelope OR
+	// whose profile entry is missing entirely. The fail-loud error
+	// names every offender in one message so the operator can fix all
+	// problems in one pass.
+	if err := c.validateModelEnvelopes(); err != nil {
 		return err
 	}
 
@@ -1730,61 +1821,122 @@ func parseComposeMemoryToMiB(raw string) (int, error) {
 	return mib, nil
 }
 
-// validateMLModelEnvelope enforces spec 045 FR-045-002:
-//   - Every Ollama model name configured for runtime use MUST have an
+// validateModelEnvelopes enforces spec 045 FR-045-002 with the
+// per-service envelope routing introduced by BUG-045-001:
+//   - Every model env var configured for runtime use MUST have an
 //     entry in the model_memory_profiles map.
-//   - Every used model's required memory MUST fit within the configured
-//     ML deploy memory envelope (MLMemoryLimitMiB).
+//   - Every used model's required memory MUST fit within the
+//     envelope of the deploy service that actually loads the model
+//     at runtime — ollama-resident models against
+//     c.OllamaMemoryLimitMiB (8 GiB on default home-lab config) and
+//     ml-sidecar-resident models against c.MLMemoryLimitMiB (3 GiB
+//     on default home-lab config).
 //
-// "Used models" are sourced from the SST runtime config. The set covers
-// every model field this Config struct surfaces that the Go core or ML
-// sidecar will load at runtime. Empty values are skipped (some routes
-// are optional in dev/test). Returns nil when every used model has a
-// fitting profile, OR a fail-loud error naming every offender so the
-// operator can fix all problems in one pass.
-func (c *Config) validateMLModelEnvelope() error {
-	if c.MLMemoryLimitMiB == 0 {
-		// MLMemoryLimit being missing is already named by Validate()'s
-		// requiredVars() check; nothing to do here.
-		return nil
-	}
+// "Used models" are sourced from the SST runtime config. Buckets
+// below cover every model field this Config struct surfaces that
+// the Go core or ML sidecar will load at runtime. Empty values are
+// skipped (some routes are optional and forward-compatible env
+// vars resolve to empty until config.sh starts emitting them).
+// Returns nil when every used model has a fitting profile, OR a
+// fail-loud error naming every offender (with the correct envelope
+// env var named per offender) so the operator can fix all problems
+// in one pass.
+func (c *Config) validateModelEnvelopes() error {
 	if c.MLModelMemoryProfiles == nil {
-		// Profile map missing is also named by requiredVars() / Load()'s
+		// Profile map missing is named by requiredVars() / Load()'s
 		// JSON parse step. Defensive nil-guard.
 		return nil
 	}
+	if c.MLMemoryLimitMiB == 0 && c.OllamaMemoryLimitMiB == 0 {
+		// Both envelopes missing is named by requiredVars(); nothing
+		// to do here.
+		return nil
+	}
 
-	// Gather the set of model names actually consumed by this runtime
-	// configuration. Order matters only for deterministic error
-	// messages; use a stable sequence of fields.
+	// Per-service routing: every model env var belongs to exactly one
+	// deploy service. The bucket carries the envelope env-var name
+	// (e.g. "OLLAMA_MEMORY_LIMIT"), its raw on-the-wire value (e.g.
+	// "8G"), and the parsed MiB integer used for the fit check.
 	type modelRef struct {
 		envVar string
 		model  string
 	}
-	used := []modelRef{
-		{"LLM_MODEL", c.LLMModel},
-		{"OLLAMA_MODEL", c.OllamaModel},
-		{"EMBEDDING_MODEL", c.EmbeddingModel},
+	type envelopeBucket struct {
+		serviceName string // human-readable for the error message
+		envelopeKey string // env var name of the envelope
+		envelopeRaw string // raw compose-style envelope value
+		envelopeMiB int    // parsed envelope MiB
+		members     []modelRef
+	}
+
+	buckets := []envelopeBucket{
+		{
+			serviceName: "ollama",
+			envelopeKey: "OLLAMA_MEMORY_LIMIT",
+			envelopeRaw: c.OllamaMemoryLimit,
+			envelopeMiB: c.OllamaMemoryLimitMiB,
+			members: []modelRef{
+				{"LLM_MODEL", c.LLMModel},
+				{"OLLAMA_MODEL", c.OllamaModel},
+				{"OLLAMA_VISION_MODEL", c.OllamaVisionModel},
+				{"OLLAMA_OCR_MODEL", c.OllamaOcrModel},
+				{"OLLAMA_REASONING_MODEL", c.OllamaReasoningModel},
+				{"OLLAMA_FAST_MODEL", c.OllamaFastModel},
+				{"PHOTOS_INTELLIGENCE_CLASSIFY_MODEL", c.PhotosIntelligenceClassifyModel},
+				{"PHOTOS_INTELLIGENCE_SENSITIVITY_MODEL", c.PhotosIntelligenceSensitivityModel},
+				{"PHOTOS_INTELLIGENCE_AESTHETIC_MODEL", c.PhotosIntelligenceAestheticModel},
+				{"PHOTOS_INTELLIGENCE_OCR_MODEL", c.PhotosIntelligenceOcrModel},
+				{"AGENT_PROVIDER_DEFAULT_MODEL", c.AgentProviderDefaultModel},
+				{"AGENT_PROVIDER_REASONING_MODEL", c.AgentProviderReasoningModel},
+				{"AGENT_PROVIDER_FAST_MODEL", c.AgentProviderFastModel},
+				{"AGENT_PROVIDER_VISION_MODEL", c.AgentProviderVisionModel},
+				{"AGENT_PROVIDER_OCR_MODEL", c.AgentProviderOcrModel},
+			},
+		},
+		{
+			serviceName: "smackerel_ml",
+			envelopeKey: "ML_MEMORY_LIMIT",
+			envelopeRaw: c.MLMemoryLimit,
+			envelopeMiB: c.MLMemoryLimitMiB,
+			members: []modelRef{
+				{"EMBEDDING_MODEL", c.EmbeddingModel},
+				{"PHOTOS_INTELLIGENCE_EMBED_MODEL", c.PhotosIntelligenceEmbedModel},
+			},
+		},
 	}
 
 	var missing []string
 	var oversized []string
 	seen := make(map[string]struct{})
-	for _, ref := range used {
-		if ref.model == "" {
-			continue
-		}
-		if _, dup := seen[ref.model]; dup {
-			continue
-		}
-		seen[ref.model] = struct{}{}
-		profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
-		if !ok {
-			missing = append(missing, fmt.Sprintf("%s=%q has no entry in services.ml.model_memory_profiles", ref.envVar, ref.model))
-			continue
-		}
-		if profileMiB > c.MLMemoryLimitMiB {
-			oversized = append(oversized, fmt.Sprintf("%s=%q requires %d MiB but ML_MEMORY_LIMIT=%q resolves to %d MiB", ref.envVar, ref.model, profileMiB, c.MLMemoryLimit, c.MLMemoryLimitMiB))
+	for _, bucket := range buckets {
+		for _, ref := range bucket.members {
+			if ref.model == "" {
+				continue
+			}
+			// De-duplicate by (envVar, model) so two routes onto the
+			// same model still surface each route's envVar in the
+			// error message but don't double-count the profile lookup.
+			key := bucket.envelopeKey + "|" + ref.envVar + "|" + ref.model
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			profileMiB, ok := c.MLModelMemoryProfiles[ref.model]
+			if !ok {
+				missing = append(missing, fmt.Sprintf("%s=%q has no entry in services.ml.model_memory_profiles", ref.envVar, ref.model))
+				continue
+			}
+			if bucket.envelopeMiB == 0 {
+				// This bucket's envelope is missing; requiredVars()
+				// names the envelope env var. Skip the fit check for
+				// this bucket so the operator gets one clean missing-
+				// envelope error instead of confusing per-model
+				// "exceeds 0 MiB" noise.
+				continue
+			}
+			if profileMiB > bucket.envelopeMiB {
+				oversized = append(oversized, fmt.Sprintf("%s=%q requires %d MiB but %s=%q resolves to %d MiB", ref.envVar, ref.model, profileMiB, bucket.envelopeKey, bucket.envelopeRaw, bucket.envelopeMiB))
+			}
 		}
 	}
 
@@ -1794,9 +1946,9 @@ func (c *Config) validateMLModelEnvelope() error {
 			parts = append(parts, "missing model memory profile(s): "+strings.Join(missing, "; "))
 		}
 		if len(oversized) > 0 {
-			parts = append(parts, "ML model envelope exceeded: "+strings.Join(oversized, "; "))
+			parts = append(parts, "model envelope exceeded: "+strings.Join(oversized, "; "))
 		}
-		return fmt.Errorf("ML model envelope validation failed (spec 045 FR-045-002): %s", strings.Join(parts, " | "))
+		return fmt.Errorf("model envelope validation failed (spec 045 FR-045-002): %s", strings.Join(parts, " | "))
 	}
 	return nil
 }

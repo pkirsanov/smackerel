@@ -48,16 +48,23 @@ cors:
   # Example: ["https://smackerel.example.com", "http://localhost:3000"]
   allowed_origins: []
 
+# Spec 045 BUG-045-001 (resolved 2026-05-16) — Default model choices fit
+# the default deploy_resources.ollama.memory = "8G" envelope. Home-lab and
+# production operators with >= 16 GiB free for ollama may opt UP to
+# gemma4:26b / deepseek-r1:32b / gpt-oss:20b by RAISING the envelope FIRST
+# in deploy_resources.ollama.memory, THEN swapping the model fields here.
+# See docs/Operations.md "Model Envelope Sizing" for the per-service
+# envelope contract and the dev / home-lab / production trade-off matrix.
 llm:
   provider: "ollama" # REQUIRED: set to ollama, openai, or anthropic
-  model: gemma4:26b
+  model: gemma3:4b # Spec 045 BUG-045-001 default — fits 8G ollama envelope
   api_key: "dev-not-needed-for-ollama"
   ollama_url: http://ollama:11434
-  ollama_model: gemma4:26b # Primary: MoE 26B, 52tok/s, vision+tools+256K context
-  ollama_vision_model: gemma4:26b # Built-in vision — no separate model needed
+  ollama_model: gemma3:4b # Spec 045 BUG-045-001 default (4 GiB resident; fits 8G envelope)
+  ollama_vision_model: gemma3:4b # Spec 045 BUG-045-001 default (gemma3:4b is multimodal: text+vision)
   ollama_ocr_model: deepseek-ocr:3b # Fast OCR specialist for receipts/documents
-  ollama_reasoning_model: deepseek-r1:32b # Deep reasoning fallback for complex analysis
-  ollama_fast_model: gpt-oss:20b # Fast general tasks when MoE is loaded with another model
+  ollama_reasoning_model: deepseek-r1:7b # Spec 045 BUG-045-001 default (4.75 GiB resident; fits 8G envelope)
+  ollama_fast_model: gemma3:4b # Spec 045 BUG-045-001 default (4 GiB resident; fits 8G envelope)
 
 telegram:
   bot_token: ""
@@ -558,18 +565,20 @@ agent:
     per_tool_timeout_ms_ceiling: 30000 # REQUIRED
   provider_routing:
     # Maps scenario.model_preference → ml/app/agent.py provider/model. SST.
+    # Spec 045 BUG-045-001 (resolved 2026-05-16) — defaults below fit the
+    # 8G ollama envelope; operators with larger envelopes may opt up.
     default:
       provider: "ollama"
-      model: "gemma4:26b"
+      model: "gemma3:4b"
     reasoning:
       provider: "ollama"
-      model: "deepseek-r1:32b"
+      model: "deepseek-r1:7b"
     fast:
       provider: "ollama"
-      model: "gpt-oss:20b"
+      model: "gemma3:4b"
     vision:
       provider: "ollama"
-      model: "gemma4:26b"
+      model: "gemma3:4b"
     ocr:
       provider: "ollama"
       model: "deepseek-ocr:3b"
@@ -680,10 +689,12 @@ photos:
     # count). Applies to scope.photo_ids; removal_ids share the same cap.
     actions_max_scope_size: 50
   intelligence:
-    classify_model: gemma4:26b
+    # Spec 045 BUG-045-001 (resolved 2026-05-16) — defaults below fit the
+    # 8G ollama envelope; operators with larger envelopes may opt up.
+    classify_model: gemma3:4b
     embed_model: nomic-embed-text
-    sensitivity_model: gemma4:26b
-    aesthetic_model: gemma4:26b
+    sensitivity_model: gemma3:4b
+    aesthetic_model: gemma3:4b
     ocr_model: deepseek-ocr:3b
     max_inflight_per_connector: 2
   providers:
@@ -764,13 +775,17 @@ services:
     # file.
     model_memory_profiles:
     - model: "gemma4:26b"
-      memory_mib: 18432 # 18 GiB MoE 26B at q4 + 256K context buffer
+      memory_mib: 18432 # 18 GiB MoE 26B at q4 + 256K context buffer (operator opt-up; requires raising deploy_resources.ollama.memory first)
+    - model: "gemma3:4b"
+      memory_mib: 4096 # 4.0 GiB multimodal (text+vision) at q4_K_M; 3.3 GiB download + ~25% context buffer at 4K context. Source: https://ollama.com/library/gemma3 (4b tag). Spec 045 BUG-045-001 default; ceiling is conservative published value; live `ollama ps` verification deferred to operator-host run (dev sandbox has no ollama daemon).
     - model: "deepseek-ocr:3b"
       memory_mib: 2560 # 2.5 GiB
     - model: "deepseek-r1:32b"
-      memory_mib: 22528 # 22 GiB at q4
+      memory_mib: 22528 # 22 GiB at q4 (operator opt-up; requires raising deploy_resources.ollama.memory first)
+    - model: "deepseek-r1:7b"
+      memory_mib: 4864 # 4.75 GiB reasoning (distilled-from-Qwen-2.5) at q4_K_M; 4.7 GiB download + ~5% context buffer at 4K context. Source: https://ollama.com/library/deepseek-r1 (7b tag). Spec 045 BUG-045-001 default; ceiling is conservative published value; live `ollama ps` verification deferred to operator-host run (dev sandbox has no ollama daemon).
     - model: "gpt-oss:20b"
-      memory_mib: 14336 # 14 GiB at q4
+      memory_mib: 14336 # 14 GiB at q4 (operator opt-up; requires raising deploy_resources.ollama.memory first)
     - model: "nomic-embed-text"
       memory_mib: 768 # 0.75 GiB embedding model
     - model: "qwen2.5:0.5b-instruct"
@@ -798,6 +813,14 @@ deploy_resources:
   smackerel_ml:
     cpus: "2.0"
     memory: "3G"
+  # Spec 045 BUG-045-001 (resolved 2026-05-16) — `8G` is the default ollama
+  # envelope chosen so the default model choices (gemma3:4b + deepseek-r1:7b
+  # + deepseek-ocr:3b) all fit on commodity hardware. Operators who want
+  # gemma4:26b / deepseek-r1:32b / gpt-oss:20b MUST RAISE this envelope
+  # FIRST (e.g. "16G" or "24G") in their deploy-overlay, THEN swap the
+  # llm.* / agent.provider_routing.* / photos.intelligence.* model fields
+  # above. See docs/Operations.md "Model Envelope Sizing" for the per-
+  # service envelope contract and the dev / home-lab / production matrix.
   ollama:
     cpus: "4.0"
     memory: "8G"

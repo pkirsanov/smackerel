@@ -484,20 +484,14 @@ Both governance guards pass cleanly. Each of the 4 Gherkin scenarios (SCN-045-A0
 
 **Executed:** YES
 **Phase Agent:** bubbles.chaos
-**Command:** `go test ./internal/deploy/... -count=1 -timeout 60s -run 'Adversarial' -v`
+**Command:** `./smackerel.sh test unit --go --go-run 'TestComposeResourceContract_Adversarial|TestFilesystemContract_Adversarial' --verbose`
 
-Adversarial test coverage acts as built-in chaos: each contract test ships with mutated-fixture sub-tests that prove the contract would FAIL if a regression reintroduced the broken state. Eight adversarial sub-tests across two contract suites cover the full mutation surface.
+Adversarial test coverage acts as built-in chaos: each contract test ships with mutated-fixture sub-tests that prove the contract would FAIL if a regression reintroduced the broken state. Eight adversarial sub-tests across two contract suites cover the full mutation surface. The repo-standard CLI surface was extended (BUG-045-001 Scope 4) with `--go-run <regex>` and `--verbose` flags on `./smackerel.sh test unit --go` so report evidence can capture focused subtest output without bypassing into raw `go test`.
 
 ```text
-$ go test ./internal/deploy/... -count=1 -timeout 60s -run 'Adversarial' -v 2>&1 | grep -E '^(=== RUN|--- (PASS|FAIL))'
-=== RUN   TestComposeResourceContract_AdversarialMissingCPU
---- PASS: TestComposeResourceContract_AdversarialMissingCPU (0.00s)
-=== RUN   TestComposeResourceContract_AdversarialMissingMemory
---- PASS: TestComposeResourceContract_AdversarialMissingMemory (0.00s)
-=== RUN   TestComposeResourceContract_AdversarialHardcodedLiteral
---- PASS: TestComposeResourceContract_AdversarialHardcodedLiteral (0.00s)
-=== RUN   TestComposeResourceContract_AdversarialDefaultFallback
---- PASS: TestComposeResourceContract_AdversarialDefaultFallback (0.00s)
+$ ./smackerel.sh test unit --go --go-run 'TestComposeResourceContract_Adversarial|TestFilesystemContract_Adversarial' --verbose 2>&1 | grep -E '^(\[go-unit\]|=== RUN|--- (PASS|FAIL)|ok\s+github\.com/smackerel/smackerel/internal/deploy)'
+[go-unit] applying -run selector: TestComposeResourceContract_Adversarial|TestFilesystemContract_Adversarial
+[go-unit] starting go test ./...
 === RUN   TestFilesystemContract_AdversarialMissingReadOnly
 --- PASS: TestFilesystemContract_AdversarialMissingReadOnly (0.00s)
 === RUN   TestFilesystemContract_AdversarialPostgresReadOnly
@@ -506,8 +500,16 @@ $ go test ./internal/deploy/... -count=1 -timeout 60s -run 'Adversarial' -v 2>&1
 --- PASS: TestFilesystemContract_AdversarialUnauthorizedTmpfs (0.00s)
 === RUN   TestFilesystemContract_AdversarialNATSReadOnly
 --- PASS: TestFilesystemContract_AdversarialNATSReadOnly (0.00s)
-PASS
-ok      github.com/smackerel/smackerel/internal/deploy  0.005s
+=== RUN   TestComposeResourceContract_AdversarialMissingCPU
+--- PASS: TestComposeResourceContract_AdversarialMissingCPU (0.00s)
+=== RUN   TestComposeResourceContract_AdversarialMissingMemory
+--- PASS: TestComposeResourceContract_AdversarialMissingMemory (0.00s)
+=== RUN   TestComposeResourceContract_AdversarialHardcodedLiteral
+--- PASS: TestComposeResourceContract_AdversarialHardcodedLiteral (0.00s)
+=== RUN   TestComposeResourceContract_AdversarialDefaultFallback
+--- PASS: TestComposeResourceContract_AdversarialDefaultFallback (0.00s)
+[go-unit] go test ./... finished OK
+ok      github.com/smackerel/smackerel/internal/deploy  0.034s
 ```
 
 Mutation surface covered: missing CPU limit, missing memory limit, hardcoded literal, default-fallback substitution form, missing read_only on a hardened service, postgres acquiring read_only, NATS acquiring read_only, and unauthorized tmpfs path on a hardened service. Plus the live-stack smoke (validation evidence above) acts as runtime chaos by stressing the actual ML container's HF/sentence-transformers cache relocation under real model startup pressure.

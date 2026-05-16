@@ -1086,7 +1086,19 @@ mkdir -p "$REPO_ROOT/config/generated"
 
 OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
 
-cat > "$OUTPUT_FILE" <<EOF
+# Spec 045 BUG-045-001 Scope 2 / DD-2 — write to a TEMP env file first,
+# then run the config-validate binary against the TEMP file BEFORE the
+# atomic promote (mv) to the final $OUTPUT_FILE path. This gates the
+# generator on the runtime Config.Validate() chain (including per-service
+# model-envelope validation), so any envelope mismatch is rejected at
+# `./smackerel.sh config generate` time instead of at smackerel-core
+# startup. On rejection the .tmp file is removed and the existing
+# $OUTPUT_FILE (if any) is left untouched, so an operator with a
+# previously-valid env file can keep running while they fix the
+# regression. NO-DEFAULTS / fail-loud per Gate G028.
+OUTPUT_FILE_TMP="${OUTPUT_FILE}.tmp"
+
+cat > "$OUTPUT_FILE_TMP" <<EOF
 # Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
 # Regenerate: ./smackerel.sh config generate
 # Environment: ${TARGET_ENV}
@@ -1490,7 +1502,49 @@ BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY}
 BACKUP_WATCHER_POLL_SECONDS=${BACKUP_WATCHER_POLL_SECONDS}
 EOF
 
-chmod 0600 "$OUTPUT_FILE"
+chmod 0600 "$OUTPUT_FILE_TMP"
+
+# Spec 045 BUG-045-001 Scope 2 / DD-2 — pre-emit validation gate.
+# Invoke the cmd/config-validate binary against the TEMP env file. If
+# the runtime Validate() chain rejects the env file, remove the .tmp
+# and exit non-zero with a fail-loud message. The existing $OUTPUT_FILE
+# (if any) is left untouched. Stderr of the binary is propagated to the
+# operator so the violating envelope/model/profile is named explicitly.
+#
+# Skip rationale for production-class (placeholder-mode) targets: when
+# TARGET_ENV is a production-class target (e.g. home-lab), shell-managed
+# secrets like POSTGRES_PASSWORD and runtime.auth_token are intentionally
+# empty or emitted as __SECRET_PLACEHOLDER__ markers (spec 052 FR-052-002
+# bundle contract; downstream secret injection fills real values at apply
+# time). Running internal/config.Validate() against placeholder-mode
+# output would fail-loud on "SMACKEREL_AUTH_TOKEN must be set when
+# SMACKEREL_ENV=production" — a false positive because the operator's
+# deploy adapter is the legitimate filler. The runtime envelope check
+# inside smackerel-core's startup still enforces the model envelope at
+# container start, so home-lab operators STILL get fail-loud on broken
+# model choices; the difference is that the failure surfaces at apply
+# time instead of generate time. Dev/test targets DO get pre-emit
+# enforcement (they have literal values, not placeholders).
+if is_production_class_target "$TARGET_ENV"; then
+  echo "config-validate: skipped for production-class target env=$TARGET_ENV (placeholder mode; runtime check enforces at container start)" >&2
+else
+  # Honor SMACKEREL_CONFIG_VALIDATE_BIN when set (CI/test harnesses pre-build
+  # the binary once and pass its path here to avoid sandbox builds without
+  # the cmd/ source tree). Falls back to `go run` for the normal repo flow
+  # where the cmd/ source is present alongside go.mod.
+  if [[ -n "${SMACKEREL_CONFIG_VALIDATE_BIN:-}" ]]; then
+    CONFIG_VALIDATE_CMD=("$SMACKEREL_CONFIG_VALIDATE_BIN")
+  else
+    CONFIG_VALIDATE_CMD=("go" "run" "$REPO_ROOT/cmd/config-validate")
+  fi
+  if ! "${CONFIG_VALIDATE_CMD[@]}" --env-file="$OUTPUT_FILE_TMP" 1>&2; then
+    rm -f "$OUTPUT_FILE_TMP"
+    echo "ERROR: config-generate-time validation failed for env=$TARGET_ENV (see above)" >&2
+    exit 1
+  fi
+fi
+
+mv -f "$OUTPUT_FILE_TMP" "$OUTPUT_FILE"
 echo "Generated $OUTPUT_FILE"
 
 # Generate NATS config file with resolved auth token and monitor port.

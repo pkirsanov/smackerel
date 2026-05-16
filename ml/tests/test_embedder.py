@@ -53,14 +53,8 @@ def test_ml_dockerfile_provisions_writable_embedding_cache():
     assert "SentenceTransformer('all-MiniLM-L6-v2')" in contents
     assert "ENV HOME=/home/smackerel" in contents
     assert "ENV HF_HOME=/home/smackerel/.cache/huggingface" in contents
-    assert (
-        "ENV SENTENCE_TRANSFORMERS_HOME=/home/smackerel/.cache/sentence-transformers"
-        in contents
-    )
-    assert (
-        "COPY --from=builder --chown=smackerel:smackerel /opt/hf-cache /home/smackerel/.cache"
-        in contents
-    )
+    assert "ENV SENTENCE_TRANSFORMERS_HOME=/home/smackerel/.cache/sentence-transformers" in contents
+    assert "COPY --from=builder --chown=smackerel:smackerel /opt/hf-cache /home/smackerel/.cache" in contents
 
 
 # Spec 050 FR-050-002 — bounded worker pool admission control.
@@ -73,9 +67,7 @@ def test_ml_dockerfile_provisions_writable_embedding_cache():
 class _BlockingModel:
     """Stand-in for SentenceTransformer that blocks encode() on an Event."""
 
-    def __init__(
-        self, release_event: threading.Event, started_event: threading.Event = None
-    ):
+    def __init__(self, release_event: threading.Event, started_event: threading.Event = None):
         self.release_event = release_event
         self.started_event = started_event
         self.encode_calls = 0
@@ -130,10 +122,7 @@ def test_spec050_backpressure_rejects_at_queue_max(monkeypatch):
     async def fill_and_reject():
         # Spawn three concurrent embed tasks — they will all be admitted
         # because queue_max=3. The fourth one must be rejected.
-        tasks = [
-            asyncio.create_task(embedder.generate_embedding(f"text-{i}"))
-            for i in range(3)
-        ]
+        tasks = [asyncio.create_task(embedder.generate_embedding(f"text-{i}")) for i in range(3)]
         # Wait for at least one encode to start so we know the executor is
         # busy; the rest are queued inside the executor.
         await asyncio.get_event_loop().run_in_executor(None, started.wait, 5.0)
@@ -181,12 +170,8 @@ def test_spec050_inflight_metric_tracks_admitted_count(monkeypatch):
     inflight_during = asyncio.run(run_with_inflight_observation())
     inflight_after = metrics.embedding_inflight._value.get()
 
-    assert (
-        inflight_during >= 1
-    ), f"expected inflight gauge >= 1 while encode was running, got {inflight_during}"
-    assert (
-        inflight_after == 0
-    ), f"expected inflight gauge == 0 after task completion, got {inflight_after}"
+    assert inflight_during >= 1, f"expected inflight gauge >= 1 while encode was running, got {inflight_during}"
+    assert inflight_after == 0, f"expected inflight gauge == 0 after task completion, got {inflight_after}"
 
 
 def test_spec050_rejected_counter_increments_on_backpressure(monkeypatch):
@@ -217,9 +202,7 @@ def test_spec050_rejected_counter_increments_on_backpressure(monkeypatch):
     asyncio.run(trigger_reject())
 
     after = metrics.embedding_rejected_total._value.get()
-    assert (
-        after == before + 1
-    ), f"expected rejected counter to increment by 1, before={before} after={after}"
+    assert after == before + 1, f"expected rejected counter to increment by 1, before={before} after={after}"
 
 
 def test_spec050_health_handler_unblocked_by_busy_executor(monkeypatch):
@@ -281,7 +264,7 @@ def test_spec050_health_handler_unblocked_by_busy_executor(monkeypatch):
     # this guards against an executor-routed regression.
     assert max(latencies_ms) < 5 * sla_ms, (
         f"FR-050-001 isolation breach: max /health latency {max(latencies_ms):.1f}ms "
-        f"exceeded 5x SLA ({5*sla_ms}ms). Health probe was likely waiting "
+        f"exceeded 5x SLA ({5 * sla_ms}ms). Health probe was likely waiting "
         f"behind embedding executor."
     )
 
