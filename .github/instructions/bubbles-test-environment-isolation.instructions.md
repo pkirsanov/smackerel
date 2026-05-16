@@ -115,10 +115,10 @@ done
 ./<project>.sh config generate
 grep -E 'port|PORT' config/generated/*.env | sort -u
 
-# 4. After every test run, no leaked test rows remain in dev DB
+# 4. After every test run, no leaked test rows remain in the dev data store
 # (Should be impossible if tests use ephemeral storage. This is a defense-in-depth check.)
-psql -h <dev-db-host> -U <dev-db-user> -d <dev-db-name> \
-  -c "SELECT count(*) FROM users WHERE email LIKE 'test-%@%';"
+# Use the dev data store's native query CLI to count rows whose key matches your test-data prefix.
+# Expectation: 0
 
 # 5. After tests complete, the test stack no longer exists
 ./<project>.sh test integration status

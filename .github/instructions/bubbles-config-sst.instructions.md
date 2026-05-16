@@ -95,7 +95,7 @@ The SST is **target-agnostic**. Target-specific values MUST live in the per-targ
 | Value Type | Lives In | Forbidden In |
 |------------|----------|--------------|
 | Service list, internal ports, internal DNS names, env key NAMES, health endpoints, persistent volume names, image names | SST (`config/<project>.yaml`) | per-target params |
-| Target FQDN, target host IP, Tailscale machine name, target user/group, target storage paths, target TLS cert directory, cloud account/region/project IDs | per-target params (`deploy/<target>/params.yaml`) | SST |
+| Target FQDN, target host IP, mesh-VPN node identity, target user/group, target storage paths, target TLS cert directory, cloud account/region/project IDs | per-target params (`deploy/<target>/params.yaml`) | SST |
 | Public host port assignments | SST per-environment overlay (test/dev/prod blocks) | per-target params |
 | Secret VALUES | external secret manager OR encrypted secrets file | SST + per-target params |
 
