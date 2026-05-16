@@ -1,6 +1,6 @@
 ---
 name: bubbles-deployment-target-adapter
-description: Enforce per-target deployment adapters that consume an SST-derived contract and own ALL target-specific knowledge. Use when adding or changing how a project is deployed to a real machine, cluster, cloud, or home lab; when authoring `deploy/<target>/` scripts; when reviewing changes that touch host singletons (Caddy, Docker daemon, ufw, systemd, Tailscale, mDNS); when designing CLI surfaces for `deploy <target> <action>`. Triggers include new deployment target proposals, home-lab / cloud / staging deployment work, host-config changes, idempotency reviews, and `docs/Deployment*.md` edits.
+description: Enforce per-target deployment adapters that consume an SST-derived contract and own ALL target-specific knowledge. Use when adding or changing how a project is deployed to a real machine, cluster, cloud, or home lab; when authoring `deploy/<target>/` scripts; when reviewing changes that touch host singletons (reverse proxies, container runtimes, host firewalls, init systems, mesh-VPN identity, mDNS); when designing CLI surfaces for `deploy <target> <action>`. Triggers include new deployment target proposals, home-lab / cloud / staging deployment work, host-config changes, idempotency reviews, and `docs/Deployment*.md` edits.
 ---
 
 # Bubbles Deployment Target Adapter
@@ -9,13 +9,13 @@ description: Enforce per-target deployment adapters that consume an SST-derived 
 
 Make a project deployable to **multiple, simultaneous targets** (home lab, cloud, staging VPS, dev laptop) without leaking target-specific values into the project's SST or main docs, and without any one target's bootstrap destroying another target's state on a shared host.
 
-The pattern is: **SST → generated contract → per-target adapter**. The contract describes WHAT to deploy (services, ports, volumes, env keys). The adapter describes WHERE and HOW (FQDNs, IPs, TLS dirs, ufw rules, systemd unit names, host-singleton drop-ins).
+The pattern is: **SST → generated contract → per-target adapter**. The contract describes WHAT to deploy (services, ports, volumes, env keys). The adapter describes WHERE and HOW (FQDNs, IPs, TLS dirs, host-firewall rules, init-system unit names, host-singleton drop-ins).
 
 ## Use This Skill When
 
 - Adding a new deployment target (home-lab, AWS, Fly.io, GCP, staging VPS, on-prem K8s).
 - Modifying any file under `deploy/`.
-- Modifying anything that mutates host state (Caddy, `/etc/docker/daemon.json`, ufw, systemd units, hostnames, Tailscale ACLs).
+- Modifying anything that mutates host state (reverse-proxy config, container-runtime daemon config, host firewall, init-system units, hostnames, mesh-VPN ACLs).
 - Editing or reviewing `docs/Deployment*.md`.
 - Reviewing PRs that introduce a new service, persistent volume, public port, or background worker.
 - Designing or extending a project CLI's `deploy` subcommand.
@@ -98,9 +98,9 @@ A single operator may keep all of their projects' out-of-tree adapters under one
 ├── <project-B>/home-lab/...
 ├── <project-C>/home-lab/...
 └── shared/                               ← cross-project host-singleton coordination
-    ├── caddy-port-allocations.md         (which project owns which 4xxxx port)
-    ├── ufw-tag-registry.md               (which `# project=...` tags exist)
-    └── systemd-unit-namespaces.md        (which `<project>-<target>-<purpose>` units exist)
+    ├── port-allocations.md               (which project owns which port range)
+    ├── host-firewall-tag-registry.md     (which `# project=...` tags exist)
+    └── init-system-unit-namespaces.md    (which `<project>-<target>-<purpose>` units exist)
 ```
 
 ### CLI Resolution Rule (STRICT — no silent fallback)
@@ -134,7 +134,7 @@ test -z "$(find deploy -mindepth 2 -name params.yaml ! -path 'deploy/_example/*'
 # 2. No real LAN/VPN IPs anywhere under deploy/
 ! grep -rE '100\.[0-9]+\.[0-9]+\.[0-9]+|192\.168\.|10\.[0-9]+\.[0-9]+\.[0-9]+' deploy/
 
-# 3. No real tailnet names, real hostnames, real proxy site names
+# 3. No real mesh-VPN node FQDNs, real hostnames, real proxy site names
 ! grep -rE '[a-z0-9-]+\.ts\.net' deploy/
 ! grep -rE '<a-real-host>' deploy/   # replace pattern with operator's known host suffixes
 
@@ -183,10 +183,10 @@ The `apply` and `rollback` actions MUST be idempotent: re-running with the same 
 | Value Type | Lives In |
 |------------|----------|
 | Service list, ports, internal DNS names, env key names, health endpoints, persistent volumes | `deploy/contract.yaml` (generated from SST, in-tree) |
-| Target FQDN, target host IP, Tailscale machine name, target-specific TLS cert dir, target user/group, target storage paths | `<adapter-root>/<target>/params.yaml` (in-tree for generic targets, out-of-tree for operator-owned targets — see Adapter Locality) |
-| Caddy site config for target | `<adapter-root>/<target>/conf.d/<project>-<target>.caddy` (dropped in by bootstrap) |
-| ufw rule set for target | bootstrap script, tagged with `# project=<name> target=<target>` |
-| systemd unit names | `<project>-<target>-<purpose>.service` |
+| Target FQDN, target host IP, mesh-VPN node identity, target-specific TLS cert dir, target user/group, target storage paths | `<adapter-root>/<target>/params.yaml` (in-tree for generic targets, out-of-tree for operator-owned targets — see Adapter Locality) |
+| Reverse-proxy site config for target | `<adapter-root>/<target>/<reverse-proxy-snippet>` (dropped in by bootstrap) |
+| Host-firewall rule set for target | bootstrap script, tagged with `# project=<name> target=<target>` |
+| Init-system unit names | `<project>-<target>-<purpose>.service` |
 | Container names | `${PROJECT}-${TARGET}-${SERVICE}` |
 | Network names | `${PROJECT}_${TARGET}_default` |
 | Volume names | `${PROJECT}_${TARGET}_${VOLUME}` |
@@ -194,17 +194,21 @@ The `apply` and `rollback` actions MUST be idempotent: re-running with the same 
 
 Any value in `<adapter-root>/<target>/params.yaml` MUST NOT also live in the SST. Any value in the SST MUST NOT also live in `params.yaml`. Operator-coupled values (real FQDN, real VPN IP, real reverse-proxy site name, cross-project workspace notes) MUST live in an out-of-tree adapter when the project repo is or will be public.
 
+## DevOps Access Surface
+
+An adapter that deploys services to a target MUST decide how operators reach each service category and document that choice in the adapter `README.md`. The framework does not prescribe specific access mechanisms; concrete patterns (e.g., reverse-proxy fronting, mesh-VPN SSH, port forwarding, container-runtime exec) belong in project-specific or overlay-specific skills, not in this framework skill. Whatever mechanism the adapter chooses MUST be documented per service category, idempotently provisioned in `bootstrap.sh`/`apply.sh`, and cleanly removed in `teardown.sh`.
+
 ## Host Singleton Pattern
 
 Some host resources permit only one canonical owner per host. Adapters MUST coexist via drop-in / namespace / assert:
 
 | Singleton | Drop-In Pattern | Bootstrap Assertion |
 |-----------|----------------|---------------------|
-| Caddy | `/etc/caddy/conf.d/<project>-<target>.caddy` (main `Caddyfile` does `import conf.d/*.caddy`) | `caddy validate` |
-| Docker daemon.json | Read JSON, deep-merge required keys, write back | Re-merge MUST be a no-op on second run |
-| ufw | Tagged rules with `# project=<name> target=<target>`; teardown removes only these | `ufw status numbered` parsed for own tag |
-| systemd | Namespaced unit names: `<project>-<target>-<purpose>.service` | `systemctl status` for each own unit |
-| Hostname / Tailscale tag | Operator owns; adapter consumes via params.yaml | bootstrap fails if hostname/Tailscale identity mismatch |
+| Reverse proxy | `<reverse-proxy-conf-dir>/<project>-<target>.<ext>` (main config imports the drop-in directory) | `<reverse-proxy validate>` |
+| Container-runtime daemon config | Read JSON, deep-merge required keys, write back | Re-merge MUST be a no-op on second run |
+| Host firewall | Tagged rules with `# project=<name> target=<target>`; teardown removes only these | `<host-firewall status>` parsed for own tag |
+| Init system | Namespaced unit names: `<project>-<target>-<purpose>.service` | `<init-system status>` for each own unit |
+| Hostname / mesh-VPN identity | Operator owns; adapter consumes via params.yaml | bootstrap fails if hostname/mesh-VPN identity mismatch |
 
 The bootstrap script MUST add an explicit assertion step that re-runs the singleton write logic and proves zero changes the second time (idempotency assertion).
 
@@ -217,7 +221,7 @@ Every adapter MUST satisfy ALL of these:
 [ ] Second bootstrap immediately after → zero diffs, exit 0
 [ ] verify.sh after bootstrap → all health checks pass
 [ ] teardown.sh removes all adapter resources
-[ ] After teardown, host singletons (Caddy main, daemon.json, ufw default, hostname) unchanged
+[ ] After teardown, host singletons (reverse-proxy main config, container-runtime daemon config, host-firewall default, hostname) unchanged
 [ ] After teardown, peer adapters (other targets on same host) unaffected
 [ ] Bootstrap after teardown → succeeds with no manual intervention
 [ ] Two adapters for different targets coexist on one host without collision
@@ -250,10 +254,10 @@ persistentVolumes:
     requiredDir: /var/lib/postgresql/data
 
 hostSingletons:
-  caddy:
+  reverseProxy:
     required: true
-    dropInDir: /etc/caddy/conf.d
-  ufw:
+    dropInDir: <reverse-proxy-conf-dir>
+  hostFirewall:
     required: true
     rules:
       - { proto: tcp, from: any, to: any, port: 443, action: allow }
@@ -403,8 +407,8 @@ Adapters MAY support multiple rollout strategies. The strategy is declared in `p
 
 | Strategy | When | Mechanism | Downtime |
 |----------|------|-----------|----------|
-| **recreate** | Now / single-host home-lab | `docker compose down && up -d` per service | 2-30 sec per service |
-| **blue-green** | Pre-MVP / multi-instance | Run `<service>-blue` and `<service>-green`; flip Caddy upstream after health-check passes | Zero |
+| **recreate** | Now / single-host home-lab | Stop and start the container-runtime stack per service | 2-30 sec per service |
+| **blue-green** | Pre-MVP / multi-instance | Run `<service>-blue` and `<service>-green`; flip reverse-proxy upstream after health-check passes | Zero |
 | **canary** | 1.0+ / multi-instance + observability rich | Roll new image to N% of replicas, watch metrics, advance/rollback | Zero |
 | **flag-gated rollout** | Dangerous changes regardless of replica count | Image deploys with feature OFF; flag flipped after manual verification | Zero (image side); flag flip is the cutover |
 
@@ -413,7 +417,7 @@ Adapters MAY support multiple rollout strategies. The strategy is declared in `p
 | Strategy | Rollback Action |
 |----------|----------------|
 | recreate | Re-pull `previousManifest.image.digest`, re-mount prior bundle, restart services |
-| blue-green | Flip Caddy upstream back to prior color (no image pull required) |
+| blue-green | Flip reverse-proxy upstream back to prior color (no image pull required) |
 | canary | Reduce new-image replica % to 0, route traffic back to old image |
 | flag-gated | Flip flag OFF (image stays deployed) |
 
@@ -480,9 +484,9 @@ git diff --exit-code deploy/contract.yaml
 
 # 8. Teardown is precise (host singletons untouched)
 ./<project>.sh deploy <target> teardown
-diff -q /etc/caddy/Caddyfile.snapshot.before /etc/caddy/Caddyfile     # unchanged
-diff -q /etc/docker/daemon.json.snapshot.before /etc/docker/daemon.json  # unchanged
-sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 matches
+diff -q <reverse-proxy-config>.snapshot.before <reverse-proxy-config>     # unchanged
+diff -q <container-runtime-daemon-config>.snapshot.before <container-runtime-daemon-config>  # unchanged
+<host-firewall list> | grep "project=<project> target=<target>"      # 0 matches
 
 # 9. Bootstrap after teardown succeeds
 ./<project>.sh deploy <target> bootstrap
@@ -493,12 +497,12 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 
 | Anti-Pattern | Why It's Wrong | Fix |
 |--------------|---------------|-----|
-| Hardcoded host IP (e.g. `<a real Tailscale or LAN IP>`) in SST | Target leakage | Move to `deploy/<target>/params.yaml` |
-| `bootstrap.sh` writes `/etc/caddy/Caddyfile` | Destroys peer adapters | Drop file in `conf.d/`, assert main file imports it |
+| Hardcoded host IP (e.g. `<a real mesh-VPN or LAN IP>`) in SST | Target leakage | Move to `deploy/<target>/params.yaml` |
+| `bootstrap.sh` writes the reverse-proxy main config | Destroys peer adapters | Drop file in the reverse-proxy drop-in directory, assert main config imports it |
 | Container named `gateway` (no namespace) | Collides with peer adapter for another target | `${PROJECT}-${TARGET}-gateway` |
-| `teardown.sh` runs `docker system prune -af` | Destroys peer adapters' images | Remove only this adapter's labelled resources |
+| `teardown.sh` runs container-runtime system-wide prune | Destroys peer adapters' images | Remove only this adapter's labelled resources |
 | `docs/Deployment.md` describes one target step-by-step | New targets force doc rewrite | Main doc explains contract; per-target docs in `deploy/<target>/README.md` |
-| Bootstrap requires manual `systemctl daemon-reload` | Not idempotent in CI | Bootstrap runs the reload itself |
+| Bootstrap requires manual init-system reload | Not idempotent in CI | Bootstrap runs the reload itself |
 | Two adapters share the same volume name | Data corruption when both run on same host | `${PROJECT}_${TARGET}_${VOLUME}` |
 | `params.yaml` references a value also in SST | Dual source of truth | Move to one location only |
 | **CI workflow runs `./<project>.sh deploy`, builds and deploys in same job** | Conflates build with deploy; same SHA can produce different deployed state | CI publishes artifacts only; deploy is a separate operator/automation step |
@@ -513,7 +517,10 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 | **Same Compose file used for build and deploy** | Build context bloats deploy spec; image rebuilds on every deploy | Separate `docker-compose.build.yml` (CI only) and `docker-compose.runtime.yml` (deploy) |
 | **Operator-coupled adapter (`deploy/<my-host>/`) committed to a public project repo, even with placeholder values** | Topology + identity reconnaissance; placeholders silently collect real values via copy-paste; cross-correlates the operator's other public repos via shared host-singleton notes | Move adapter to `${DEPLOY_TARGETS_ROOT}/<project>/<target>/` (operator-private repo). In-tree `deploy/<target>/` is reserved for generic / shareable targets only (`_example`, `local-dev`, vendor templates) |
 | **CLI silently falls back from out-of-tree to in-tree adapter when `DEPLOY_TARGETS_ROOT` is set but the requested target is missing under it** | Operator may have migrated and deleted the in-tree leftover; silent fallback risks deploying a stale adapter | Fail-fast with both attempted paths in the error message |
-| **Cross-project host-singleton coordination notes (port allocations, ufw tag registry, systemd unit namespaces) committed to any project repo** | Cross-correlates the operator's projects publicly; encourages tight coupling between project repos | Lives only under operator-private `${DEPLOY_TARGETS_ROOT}/shared/` |
+| **Cross-project host-singleton coordination notes (port allocations, host-firewall tag registry, init-system unit namespaces) committed to any project repo** | Cross-correlates the operator's projects publicly; encourages tight coupling between project repos | Lives only under operator-private `${DEPLOY_TARGETS_ROOT}/shared/` |
+| **Adapter publishes a stateful infra service (database, queue, cache, object store, vector store, model server, search) on a public host interface in a single-operator/private-network target** | Bypasses any centralized edge auth/TLS; widens the attack surface for services that have no business being externally reachable | Bind infra to the loopback / configurable bind address; expose operator access via the chosen access mechanism (documented per service in the adapter `README.md`) |
+| **Adapter overwrites a host-singleton config file (reverse-proxy main config, container-runtime daemon config, host firewall main rule set, init-system unit-file directory) instead of dropping into its own per-adapter scope** | Destroys peer adapters' configuration on the same host | Use the host-singleton drop-in pattern documented in this skill; assert ownership of only the per-adapter scope |
+| **Adapter's TLS issuance strategy is incompatible with the target's network position (e.g., public ACME on a host that is not publicly reachable; self-signed root on a target whose clients will not trust it)** | TLS handshake fails or browsers/agents reject the cert; outage on first run | Choose a TLS strategy reachable from the target's network position (public ACME for public targets, private ACME / mesh-VPN-issued / operator-supplied for private targets) and document it in the adapter `README.md` per the framework `bubbles-deployment-target.instructions.md` "TLS Issuance Contract" section |
 
 ## Integration With Bubbles Governance
 
@@ -521,7 +528,7 @@ sudo ufw status numbered | grep "project=<project> target=<target>"      # 0 mat
 |--------------|-------------------|
 | Implementation Reality Scan (G028) | Detects target-specific values leaking into source/SST |
 | Integration Completeness (G029) | New service must be added to contract AND wired into ≥1 adapter |
-| Vertical Slice (G035) | Deployment artifact (Caddy site, systemd unit, etc.) must exist for every target the service is deployed to |
+| Vertical Slice (G035) | Deployment artifact (reverse-proxy site, init-system unit, etc.) must exist for every target the service is deployed to |
 | Pre-Completion Self-Audit | `deploy <target> bootstrap` re-run idempotency proof must be in evidence |
 | Docker Lifecycle Governance | Adapter teardown must not destroy peer adapters' state |
 | **Build-Once-Deploy-Many Integrity (G079)** | Production deployment manifests MUST pin image by digest, MUST have a CI-signed signature, and MUST consume a CI-published config bundle. No mutable tags. No deploy-time rebuilds. |

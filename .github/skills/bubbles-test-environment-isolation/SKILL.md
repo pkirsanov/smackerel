@@ -131,14 +131,12 @@ done
 ./<project>.sh config generate
 grep -E 'port|PORT' config/generated/*.env | sort -u | head -50
 
-# 4. After every test run, no leaked test rows remain in dev DB
-psql -h <dev-db-host> -U <dev-db-user> -d <dev-db-name> -c \
-  "SELECT count(*) FROM users WHERE email LIKE 'test-%@%';"
-# Expectation: 0
+# 4. After every test run, no leaked test rows remain in the dev data store
+#    Use the dev data store's native query CLI to count rows whose key matches your test-data prefix.
+#    Expectation: 0
 
 # 5. After tests complete, the test Compose project no longer exists
-docker compose --project-name <project>-test-integration ps
-# Expectation: no services
+#    (Verify via your container-runtime's compose project list — expectation: no services running for the test project)
 ```
 
 ## Anti-Patterns (BLOCKING)
@@ -149,7 +147,7 @@ docker compose --project-name <project>-test-integration ps
 | `try/finally` truncate-tables script run between tests on dev DB | Tests share state with dev; cleanup misses cases | Use ephemeral test DB per test run |
 | Test compose file with no `name:` field | Defaults to dir name; collides with dev compose project | Add `name: <project>-test-<category>:` at top |
 | Named persistent volume `pgdata:` in test compose | Test data accumulates between runs | `tmpfs: - /var/lib/postgresql/data` |
-| Test code reads `localhost:5432` directly | Hardcoded; collides with dev DB | Read `TEST_DB_URL` from generated test env |
+| Test code reads a hardcoded host:port for backing services | Hardcoded; collides with dev data store | Read `TEST_DB_URL` (or equivalent test-stack URL) from generated test env |
 | `e2e` and `stress` share the same Compose project | Stress thrash corrupts e2e state | Separate Compose project per category |
 | Test data without identifiable prefix | Leaks invisible | Mandatory `test-<run-id>-` prefix |
 | "As long as it cleans up" exception in any policy doc | First failure leaves residue | Forbidden — ephemeral per-category stack |

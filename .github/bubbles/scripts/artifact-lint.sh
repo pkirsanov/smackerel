@@ -70,6 +70,17 @@ pass() {
   echo "✅ $message"
 }
 
+info() {
+  # Informational output (no pass/fail/warn impact). Mirrors the helper
+  # defined in regression-baseline-guard.sh / traceability-guard.sh /
+  # agnosticity-lint.sh — without this definition the calls at lines
+  # ~578/580 below would fall through to the GNU `info` documentation
+  # reader on PATH and crash with `No menu item ... in node '(dir)Top'`.
+  # Tracked as RQ-BUBBLES-ARTIFACT-LINT-INFO-001 (see BUG-045-001 report).
+  local message="$1"
+  echo "ℹ️  $message"
+}
+
 json_first_string() {
   local key="$1"
   local file="$2"
@@ -92,6 +103,36 @@ json_first_number() {
   grep -Eo '"'"$key"'"[[:space:]]*:[[:space:]]*[0-9]+' "$file" \
     | head -n 1 \
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*([0-9]+)/\1/'
+}
+
+json_first_bool() {
+  local key="$1"
+  local file="$2"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  grep -Eo '"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)' "$file" \
+    | head -n 1 \
+    | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)/\1/'
+}
+
+resolve_workflow_status_ceiling() {
+  local workflow_mode="$1"
+  local resolver="$SCRIPT_DIR/mode-resolver.sh"
+  local resolved=""
+  local status_ceiling=""
+
+  [[ -n "$workflow_mode" ]] || return 1
+  [[ -f "$resolver" ]] || return 1
+
+  if ! resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null)"; then
+    return 1
+  fi
+
+  status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
+  [[ -n "$status_ceiling" ]] || return 1
+  printf '%s\n' "$status_ceiling"
 }
 
 json_nested_string() {
@@ -392,6 +433,7 @@ state_version=""
 state_status=""
 state_certification_status=""
 state_workflow_mode=""
+state_plan_maturity_only=""
 state_completed_phases_block=""
 state_execution_phase_claims_block=""
 state_certified_completed_phases_block=""
@@ -412,6 +454,7 @@ if [[ -f "$state_file" ]]; then
   } || true)"
 
   state_certification_status="$(json_nested_string "certification" "status" "$state_file" || true)"
+  state_plan_maturity_only="$(json_first_bool "planMaturityOnly" "$state_file" || true)"
 
   state_workflow_mode="$({
     grep -Eo '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]+"' "$state_file" \
@@ -515,6 +558,12 @@ if [[ -f "$state_file" ]]; then
       fi
     fi
 
+    if [[ "$state_plan_maturity_only" == "true" && "$state_status" == "done" ]]; then
+      fail "state.json planMaturityOnly=true is incompatible with status 'done' — planning maturity must stop at the workflow status ceiling"
+    elif [[ "$state_plan_maturity_only" == "true" ]]; then
+      pass "state.json planMaturityOnly=true is not claiming delivery-done status"
+    fi
+
     if [[ "$state_workflow_mode" == "full-delivery" ]] && [[ "$state_status" == "done" ]]; then
       strict_required_phases=("validate" "audit" "chaos")
       for strict_phase in "${strict_required_phases[@]}"; do
@@ -529,27 +578,17 @@ if [[ -f "$state_file" ]]; then
     # ============================================================
     # STATUS CEILING ENFORCEMENT (Anti-Fabrication)
     # ============================================================
-    if [[ "$state_status" == "done" ]]; then
-      case "$state_workflow_mode" in
-          fix|full-delivery|value-first-e2e-batch|feature-bootstrap|bugfix-fastlane|chaos-hardening|harden-to-doc|gaps-to-doc|harden-gaps-to-doc|reconcile-to-doc|test-to-doc|chaos-to-doc|batch-implement|batch-harden|batch-gaps|batch-harden-gaps|batch-improve-existing|batch-reconcile-to-doc|product-to-delivery|improve-existing)
-          pass "Workflow mode '$state_workflow_mode' allows status 'done'"
-          ;;
-        spec-scope-hardening)
-          fail "Workflow mode 'spec-scope-hardening' ceiling is 'specs_hardened', NOT 'done' — FABRICATION"
-          ;;
-        docs-only)
-          fail "Workflow mode 'docs-only' ceiling is 'docs_updated', NOT 'done' — FABRICATION"
-          ;;
-        validate-only|audit-only|validate-to-doc)
-          fail "Workflow mode '$state_workflow_mode' ceiling is 'validated', NOT 'done' — FABRICATION"
-          ;;
-        resume-only)
-          fail "Workflow mode 'resume-only' ceiling is 'in_progress', NOT 'done' — FABRICATION"
-          ;;
-        *)
-          fail "Unknown workflow mode '$state_workflow_mode' with status 'done' — cannot verify ceiling"
-          ;;
-      esac
+    state_status_ceiling="$(resolve_workflow_status_ceiling "$state_workflow_mode" || true)"
+    if [[ -z "$state_status_ceiling" ]]; then
+      fail "Unknown workflow mode '$state_workflow_mode' — cannot verify status ceiling from workflows.yaml"
+    elif [[ "$state_status" == "$state_status_ceiling" ]]; then
+      pass "Workflow mode '$state_workflow_mode' permits current status '$state_status' (ceiling: $state_status_ceiling)"
+    elif [[ "$state_status" == "done" && "$state_status_ceiling" != "done" ]]; then
+      fail "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling', NOT 'done' — FABRICATION"
+    elif [[ "$state_status_ceiling" == "done" ]]; then
+      info "Workflow mode '$state_workflow_mode' allows status 'done'; current status is '$state_status'"
+    else
+      info "Workflow mode '$state_workflow_mode' ceiling is '$state_status_ceiling'; current status is '$state_status'"
     fi
 
     # ============================================================
@@ -1327,7 +1366,7 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
         fi
 
         # File paths with extensions (e.g., src/foo.rs, tests/bar.py, ./path/to/file)
-        if echo "$code_block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)'; then
+        if echo "$code_block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|yml|json|proto|md)|\./)'; then
           terminal_signals=$((terminal_signals + 1))
         fi
 
