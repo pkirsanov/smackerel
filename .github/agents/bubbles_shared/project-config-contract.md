@@ -32,7 +32,7 @@ Every project using Bubbles MUST have these files:
 | `.specify/memory/agents.md` | **Command registry** — CLI entrypoint, build/test/lint/format commands, file organization, naming conventions, tech stack declaration | **YES** |
 | `.specify/memory/constitution.md` | **Governance principles** — project-specific principles layered on top of universal governance | **YES** |
 | `.github/copilot-instructions.md` | **Project policies** — project-specific rules, testing requirements, Docker config, port allocation, command tables | **YES** |
-| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, and custom gates (G100+) | **OPTIONAL** |
+| `.github/bubbles-project.yaml` | **Project-owned framework extensions** — scan-pattern overrides, managed-doc registry overrides, impact-aware validation maps, trace contracts, and custom gates (G100+) | **OPTIONAL** |
 | `.vscode/mcp.json` | **MCP server configuration** — team-shared AI tool access (cross-repo search, issue trackers, etc.) | **OPTIONAL** |
 | `.vscode/extensions.json` | **Recommended extensions** — team-consistent AI tooling (Copilot, etc.) | **OPTIONAL** |
 
@@ -257,6 +257,52 @@ docsRegistryOverrides:
   classification:
     featureRoot: specs
     opsRoot: specs/_ops
+
+# Impact-aware validation planning (G079)
+testImpact:
+  alwaysRun:
+    - artifact-lint
+    - state-transition-guard
+  fullSuiteTriggers:
+    - "proto/**"
+    - "migrations/**"
+  components:
+    api:
+      paths:
+        - "backend/api/**"
+        - "services/gateway/**"
+      testCategories:
+        - unit
+        - integration
+        - e2e-api
+      alwaysRun:
+        - contract-check
+    web:
+      paths:
+        - "web/**"
+        - "frontend/**"
+      testCategories:
+        - ui-unit
+        - e2e-ui
+
+# Trace/log evidence contracts (G080)
+traceContracts:
+  workflows:
+    booking.create:
+      requiredSpans:
+        - name: http.request
+          attributes:
+            - trace_id
+            - booking.id
+      requiredAttributes:
+        - tenant.id
+      requiredInvariants:
+        - booking emitted exactly one confirmation event
+      redFlags:
+        error:
+          - Missing trace_id
+        warning:
+          - slow span
 ```
 
 ### Design Principles
@@ -272,6 +318,42 @@ docsRegistryOverrides:
 `regressionQuality.*` follows the standard override model: if provided, those lists replace the generic fallback patterns used by `regression-quality-guard.sh`.
 
 `docsRegistryOverrides.*` follows the same ownership model: framework defaults remain in `bubbles/docs-registry.yaml`, while projects can override managed doc entries or classification values from `.github/bubbles-project.yaml`.
+
+### `testImpact` Contract (G079)
+
+`testImpact` lets a project map changed files to a first-pass validation plan without weakening final completion gates. It is consumed by `bubbles/scripts/test-impact-plan.sh`.
+
+| Field | Meaning |
+|-------|---------|
+| `alwaysRun` | Global checks that should run for any impacted change, such as artifact lint or state transition guard. |
+| `fullSuiteTriggers` | Glob patterns that force broad validation because the changed surface has high blast radius. |
+| `components.<name>.paths` | Glob patterns owned by a component. |
+| `components.<name>.testCategories` | Canonical test taxonomy categories to prioritize when a changed file matches the component. |
+| `components.<name>.alwaysRun` | Component-specific checks that should accompany the matched categories. |
+
+Rules:
+- `testImpact` is optional. Missing config is a clean no-op unless a caller explicitly uses `--require-config`.
+- It can accelerate the first validation pass, but it NEVER removes required final gates, scenario-specific E2E coverage, regression obligations, stress tests required by SLA scopes, or broader validation requested by the user or repo policy.
+- Glob patterns are Bash-style path globs evaluated against repo-relative paths.
+- Keep the map project-owned. Bubbles upgrades must not rewrite it.
+
+### `traceContracts` Contract (G080)
+
+`traceContracts` lets a project describe the runtime trace/log evidence expected for important workflows. It is consumed by `bubbles/scripts/trace-contract-guard.sh`.
+
+| Field | Meaning |
+|-------|---------|
+| `workflows.<name>.requiredSpans` | Span names or required strings that must appear in trace evidence. |
+| `requiredSpans[].attributes` | Attributes expected alongside a span or anywhere in the trace output. |
+| `workflows.<name>.requiredAttributes` | Workflow-level required attributes that must appear. |
+| `workflows.<name>.requiredInvariants` / `invariants` | Workflow-level evidence strings proving business/runtime invariants. |
+| `workflows.<name>.redFlags.error` | Strings that must NOT appear; presence fails the guard. |
+| `workflows.<name>.redFlags.warning` | Strings surfaced as warnings for review. |
+
+Rules:
+- `traceContracts` is optional. Missing config is a clean no-op unless a caller explicitly uses `--require-config`.
+- The guard validates actual trace/log output only. It is not a replacement for tests, implementation evidence, or outcome-contract verification.
+- Analyst-owned Success Signals stay business-observable and tech-agnostic; design, test, and validate agents translate those signals into trace spans, attributes, and invariants where trace evidence is useful.
 
 ---
 

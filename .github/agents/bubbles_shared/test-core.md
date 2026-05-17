@@ -22,6 +22,8 @@ Purpose: mandatory testing rules for `bubbles.test` and test-facing checks perfo
 - Red before green for changed behavior.
 - Regression verification after narrow fixes.
 - Consumer-facing stale-reference checks for rename/removal work.
+- When project config defines `testImpact`, use `bubbles/scripts/test-impact-plan.sh` to choose the narrow-first test order and always-run checks for changed paths, then still execute any required final broad suites.
+- When project config defines `traceContracts`, preserve actual trace/log output for configured workflows so validation can run `bubbles/scripts/trace-contract-guard.sh` against evidence rather than predictions.
 
 ## References
 - `evidence-rules.md`

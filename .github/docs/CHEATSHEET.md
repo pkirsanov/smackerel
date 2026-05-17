@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 65 Gates · 35 Workflow Modes · 26 Phases**
+> **37 Agents · 67 Gates · 35 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -249,11 +249,13 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `vision restatement` | Every phase's `vision.md` MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline. |
 | `cross-product coordination` | When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule. |
 | `surfaced principle` | A product principle drafted from existing repo evidence by the `bubbles-product-principle-discovery` skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not. |
+| `test impact map` | Optional project-owned `testImpact` config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates. |
+| `trace contract` | Optional project-owned `traceContracts` config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions. |
 
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 65 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 67 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
@@ -331,6 +333,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G068 | DoD-Gherkin content fidelity | DoD items must faithfully represent the behavioral claims of their source Gherkin scenarios; no silent rewrites to match delivery |
 | G069 | Collateral change containment | Narrow repairs and risky refactors must declare a Change Boundary; opportunistic cleanups bundled into repair paths are blocking |
 | G070 | Outcome contract | spec.md must have Outcome Contract (Intent, Success Signal, Hard Constraints, Failure Condition); validate verifies the outcome was actually achieved |
+| G079 | Impact-aware validation plan | Project `testImpact` maps changed paths to first-pass categories/checks and full-suite triggers; never weakens final gates |
+| G080 | Trace contract evidence | Project `traceContracts` validate actual trace/log evidence for required spans, attributes, invariants, and red-flag absence |
 
 ---
 
@@ -590,6 +594,8 @@ The super resolves intent and generates commands. Workflow delegates to it autom
 | Situation | Command |
 |-----------|---------|
 | Run the workflow test pass | `/bubbles.workflow  <feature> mode: test-to-doc` |
+| Plan narrow-first tests from changed paths | `bash bubbles/scripts/test-impact-plan.sh --changed-file-list changed-files.txt` |
+| Validate workflow trace/log evidence | `bash bubbles/scripts/trace-contract-guard.sh --workflow <name> --trace-output trace-output.log` |
 | Validate gates and publish the finishing packet | `/bubbles.workflow  <feature> mode: validate-to-doc` |
 | Full audit | `/bubbles.audit` |
 | Chaos testing | `/bubbles.chaos` |

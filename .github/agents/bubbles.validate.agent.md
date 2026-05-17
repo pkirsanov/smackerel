@@ -164,6 +164,8 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 | 2.16 | Implementation Reality Scan (G028) | `implementation-reality-scan.sh` | 0 violations |
 | 2.17 | Artifact Freshness Guard (G052) | `artifact-freshness-guard.sh` | Superseded content isolated; superseded scopes non-executable |
 | 2.18 | Implementation Delta Evidence (G053) | Guard script Check 13B | Report artifacts include git-backed implementation proof with non-artifact file paths |
+| 2.19 | Impact-Aware Validation Plan (G079) | `test-impact-plan.sh` when project config exists | Changed paths map to expected first-pass test categories/checks; full-suite triggers honored |
+| 2.20 | Trace Contract Evidence (G080) | `trace-contract-guard.sh` when project config exists and trace output is available | Required workflow spans/attributes/invariants present; error red flags absent |
 
 All commands from `agents.md`. Run each step, record output in validation report.
 
@@ -243,7 +245,33 @@ bash bubbles/scripts/traceability-guard.sh {FEATURE_DIR}
 - This is a mechanical minimum bar for scenario → plan → test file → evidence traceability
 - Record the full output in the validation report
 
-#### 2C.4: Changed-Spec Done Audit (Prospective Cross-Feature)
+#### 2C.4: Impact-Aware Validation Plan (Gate G079, if configured)
+
+If `.github/bubbles-project.yaml` or `bubbles-project.yaml` defines `testImpact`, run the impact planner against the changed file list used for validation:
+
+```bash
+bash bubbles/scripts/test-impact-plan.sh --changed-file-list <changed-files.txt>
+```
+
+- Verify matched components and categories are represented in the selected validation plan
+- Honor any `fullSuiteTriggers` by running broad validation even if narrow-first checks also run
+- Missing config is a clean no-op unless the workflow explicitly requires `--require-config`
+- Record full output in the validation report
+
+#### 2C.5: Trace Contract Guard (Gate G080, if configured)
+
+If `.github/bubbles-project.yaml` or `bubbles-project.yaml` defines `traceContracts` for a workflow touched by the scope and trace/log output exists, run the guard against actual evidence:
+
+```bash
+bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-output <trace-log-path>
+```
+
+- Required spans, attributes, and invariants must appear in the trace/log output
+- Error red flags must be absent; warnings must be surfaced for review
+- If trace contracts apply but no trace/log evidence exists, record a concrete validation gap rather than substituting code inspection
+- Missing config is a clean no-op unless the workflow explicitly requires `--require-config`
+
+#### 2C.6: Changed-Spec Done Audit (Prospective Cross-Feature)
 
 Routine validation audits changed, reopened, or newly promoted specs against the current gates. It MUST NOT require every historical `done` spec in the repository to pass current-policy gates by default; historical done specs remain grandfathered under their closure epoch until they are touched, reopened, used as current authority, or explicitly recertified.
 
@@ -264,7 +292,7 @@ bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}
 - `--fix` is a deprecated alias for explicit reopen behavior and still requires `--recertify-all`.
 - Record the summary (changed specs scanned, done specs scanned, current-policy failures, advisory findings if any) in the validation report.
 
-#### 2C.5: Implementation Reality Scan (Gate G028)
+#### 2C.7: Implementation Reality Scan (Gate G028)
 
 For implementation modes, run the source code reality scan to detect stub/fake/hardcoded data:
 
@@ -278,7 +306,7 @@ bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
 - If violations found → validation FAILS for implementation completeness
 - Record the full output in the validation report
 
-#### 2C.6: Artifact Freshness Guard (Gate G052)
+#### 2C.8: Artifact Freshness Guard (Gate G052)
 
 Run the freshness guard on the feature directory:
 
@@ -290,7 +318,7 @@ bash bubbles/scripts/artifact-freshness-guard.sh {FEATURE_DIR}
 - Verifies superseded scope sections do not retain executable markers such as status blocks, Test Plan tables, DoD headings, or DoD checkboxes
 - Record the full output in the validation report
 
-#### 2C.7: Implementation Delta Evidence (Gate G053)
+#### 2C.9: Implementation Delta Evidence (Gate G053)
 
 For implementation-bearing workflow modes, verify report artifacts include code-diff evidence:
 
@@ -303,7 +331,7 @@ bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
 - That section must contain executed git-backed proof and at least one non-artifact runtime/source/config/contract file path
 - Docs-only or artifact-only deltas cannot satisfy delivered implementation claims
 
-#### 2C.8: Handoff Cycle Check (if applicable)
+#### 2C.10: Handoff Cycle Check (if applicable)
 
 If the handoff cycle checker exists, run it:
 
@@ -324,6 +352,8 @@ bash bubbles/scripts/handoff-cycle-check.sh {FEATURE_DIR}
 | State Transition Guard | `bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Artifact Lint | `bash bubbles/scripts/artifact-lint.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
 | Traceability Guard | `bash bubbles/scripts/traceability-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |
+| Impact-Aware Validation Plan | `bash bubbles/scripts/test-impact-plan.sh --changed-file-list <changed-files.txt>` | [actual] | ✅/❌/⚪ |
+| Trace Contract Guard | `bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-output <trace-log-path>` | [actual] | ✅/❌/⚪ |
 | Changed-Spec Done Audit | `bash bubbles/scripts/done-spec-audit.sh --profile changed {changed-spec-dirs...}` | [actual] | ✅/❌/⚪ |
 | Implementation Reality Scan | `bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose` | [actual] | ✅/❌ |
 | Artifact Freshness Guard | `bash bubbles/scripts/artifact-freshness-guard.sh {FEATURE_DIR}` | [actual] | ✅/❌ |

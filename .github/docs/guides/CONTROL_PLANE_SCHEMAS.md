@@ -11,7 +11,7 @@ The version 3 state model, `policySnapshot`, `certification.*`, and `scenario-ma
 
 ## Schema Set
 
-The control plane needs thirteen concrete schema surfaces:
+The control plane needs fifteen concrete schema surfaces:
 
 1. Agent capability registry
 2. Execution policy registry
@@ -26,6 +26,8 @@ The control plane needs thirteen concrete schema surfaces:
 11. Workflow run-state record
 12. Framework event log entry
 13. Action risk classification registry
+14. Project test impact map
+15. Project trace contract registry
 
 The newer surfaces above are active runtime or framework surfaces:
 
@@ -33,6 +35,8 @@ The newer surfaces above are active runtime or framework surfaces:
 - `workflow run-state` is active at `.specify/runtime/workflow-runs.json`
 - `framework event log` is active at `.specify/runtime/framework-events.jsonl`
 - `action risk classification registry` is active at `bubbles/action-risk-registry.yaml`
+- `project test impact map` is optional project-owned config under `.github/bubbles-project.yaml` or `bubbles-project.yaml` and is consumed by `bubbles/scripts/test-impact-plan.sh`
+- `project trace contract registry` is optional project-owned config under `.github/bubbles-project.yaml` or `bubbles-project.yaml` and is consumed by `bubbles/scripts/trace-contract-guard.sh`
 - `framework-validate` and `release-check` are operational command surfaces that sit on top of these schemas rather than replacing them
 
 ## Extension Surface Notes
@@ -71,6 +75,74 @@ bubbles framework-events --type runtime_lease_acquired
 Registry file: `bubbles/action-risk-registry.yaml`
 
 Purpose: give framework commands and packets a stable risk vocabulary such as `read_only`, `owned_mutation`, `destructive_mutation`, `external_side_effect`, and `runtime_teardown`.
+
+### Project Test Impact Map
+
+Project file: `.github/bubbles-project.yaml` or `bubbles-project.yaml`
+
+Purpose: let a project declare which changed paths imply which canonical test categories, always-run checks, and full-suite triggers. The map powers G079 impact-aware validation planning.
+
+Minimal schema:
+
+```yaml
+testImpact:
+  alwaysRun:
+    - artifact-lint
+  fullSuiteTriggers:
+    - "proto/**"
+  components:
+    api:
+      paths:
+        - "backend/api/**"
+      testCategories:
+        - unit
+        - integration
+        - e2e-api
+      alwaysRun:
+        - contract-check
+```
+
+Invariants:
+
+- optional by default; missing config is a clean no-op unless a caller uses `--require-config`
+- narrows or prioritizes the first validation pass only; never removes final workflow gates, mandatory E2E, stress obligations, or user-requested broad validation
+- patterns are repo-relative Bash globs
+- framework upgrades must not overwrite this project-owned file
+
+### Project Trace Contract Registry
+
+Project file: `.github/bubbles-project.yaml` or `bubbles-project.yaml`
+
+Purpose: let a project declare expected trace/log evidence for important workflows so validation can check runtime observability claims. The registry powers G080 trace-contract evidence checks.
+
+Minimal schema:
+
+```yaml
+traceContracts:
+  workflows:
+    booking.create:
+      requiredSpans:
+        - name: http.request
+          attributes:
+            - trace_id
+            - booking.id
+      requiredAttributes:
+        - tenant.id
+      requiredInvariants:
+        - booking emitted exactly one confirmation event
+      redFlags:
+        error:
+          - Missing trace_id
+        warning:
+          - slow span
+```
+
+Invariants:
+
+- optional by default; missing config is a clean no-op unless a caller uses `--require-config`
+- validates actual trace/log output; file inspection or predicted trace output is not evidence
+- complements outcome contracts and tests; it does not replace implementation, E2E, or validation proof
+- analyst-owned Success Signals remain tech-agnostic, while design/test/validate translate them into trace spans, attributes, and invariants when trace proof is useful
 
 ## 1. Agent Capability Registry
 

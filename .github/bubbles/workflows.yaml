@@ -227,6 +227,14 @@ gates:
     name: batch_promotion_limit_gate
     description: >-
       BLOCKING CI gate. A single git commit (or push range) MUST NOT promote more than one spec's `state.json` `status` to "done" without explicit override. Mass promotions are a documented fabrication pattern (QF 2026-03-15 batch promoted 33 specs in commit 4dde8526; QF 2026-03-31 batch promoted 17 specs in commit ec7fba88). Enforced by `bubbles/scripts/batch-promotion-lint.sh` and the `state-transition-guard` GitHub Actions workflow.
+  G079:
+    name: impact_aware_validation_plan_gate
+    description: >-
+      ADVISORY-UNTIL-CONFIGURED gate. When a project supplies `.github/bubbles-project.yaml` or `bubbles-project.yaml` with `testImpact`, planning and test phases MUST use `bubbles/scripts/test-impact-plan.sh` to derive impacted components, required test categories, always-run checks, and full-suite triggers from changed paths. The plan may narrow the first validation pass, but it NEVER removes final completion gates, scenario-specific E2E obligations, full-suite requirements declared by the scope, or any user-requested broader validation. Missing project config is a clean no-op unless the caller uses `--require-config`.
+  G080:
+    name: trace_contract_evidence_gate
+    description: >-
+      ADVISORY-UNTIL-CONFIGURED gate. When a project supplies `.github/bubbles-project.yaml` or `bubbles-project.yaml` with `traceContracts`, validation phases SHOULD run `bubbles/scripts/trace-contract-guard.sh` against actual trace/log evidence for the relevant workflow. The guard checks required span strings, attributes, invariants, and red-flag absence. Missing trace contracts are a clean no-op unless the caller uses `--require-config`; missing required trace evidence is a validation gap, not a substitute for implementation or test proof.
 
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
@@ -669,13 +677,13 @@ phases:
     requiredGates: [ G002, G033, G047, G048 ]
   test:
     owner: bubbles.test
-    requiredGates: [ G003, G004, G005, G051 ]
+    requiredGates: [ G003, G004, G005, G051, G079 ]
   docs:
     owner: bubbles.docs
     requiredGates: [ G006 ]
   validate:
     owner: bubbles.validate
-    requiredGates: [ G007 ]
+    requiredGates: [ G007, G080 ]
   audit:
     owner: bubbles.audit
     requiredGates: [ G008 ]
@@ -760,7 +768,7 @@ modeDefaults:
     requireSmallWellDefinedScopes: true
     requireRedGreenEvidence: true
     enableMicroFixLoops: true
-    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077 ]
+    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080 ]
 
 # Batch Execution Parameter (NON-NEGOTIABLE)
 #

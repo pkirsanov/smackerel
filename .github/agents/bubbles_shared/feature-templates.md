@@ -65,7 +65,7 @@ Flows, layouts, states, and user-visible validation/error handling.
 Auth, privacy, access control, and data handling constraints.
 
 ## Observability
-Logs, metrics, traces, and failure visibility.
+Logs, metrics, traces, and failure visibility. If the project defines `traceContracts`, identify which workflow names, spans, attributes, invariants, and red flags should prove the business Success Signal without leaking implementation detail into `spec.md`.
 
 ## Testing Strategy
 Map test types to exact requirements and Gherkin scenarios. Require explicit coverage for unit, integration, e2e, and stress (plus other applicable taxonomy types), with live-test execution evidence and no skipped required tests.
@@ -128,6 +128,12 @@ Regression tests are previously missed tests: add them to feature/component-spec
 
 If the scope declares latency/performance SLAs, add explicit `stress` rows to the Test Plan.
 
+### Impact-Aware Validation (Optional Project Config)
+If the project defines `testImpact` in `.github/bubbles-project.yaml` or `bubbles-project.yaml`, record the command and planned output from `bubbles/scripts/test-impact-plan.sh` for the scope's changed paths. This is a first-pass validation accelerator only; it does not remove required final gates, scenario-specific E2E rows, or broader regression suites.
+
+### Trace Contract Evidence (Optional Project Config)
+If the project defines `traceContracts` for any workflow touched by this scope, list the relevant workflow name(s), expected trace/log evidence source, and the `trace-contract-guard.sh` command that will validate actual evidence. Trace evidence complements tests; it never replaces them.
+
 ### Definition of Done
 Use the Tiered DoD template from scope-workflow.md:
 - Core Items: scope-specific implementation and scenario validation items
@@ -145,6 +151,10 @@ If the scope changes shared fixtures, harnesses, or bootstrap/auth/session/stora
 
 If the scope is a narrow repair or risky refactor, the Core Items MUST also include:
 - `- [ ] Change Boundary is respected and zero excluded file families were changed`
+
+If `testImpact` or `traceContracts` apply, the Core Items MUST also include:
+- `- [ ] Impact-aware validation plan reviewed and any full-suite trigger honored`
+- `- [ ] Trace contract evidence guard passes for configured workflows`
 
 All DoD entries MUST be markdown checkboxes (`- [ ]` or `- [x]`). Non-checkbox DoD items are invalid.
 Record raw execution evidence in the matching report file:

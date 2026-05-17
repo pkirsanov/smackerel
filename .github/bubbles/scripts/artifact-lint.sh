@@ -70,17 +70,6 @@ pass() {
   echo "✅ $message"
 }
 
-info() {
-  # Informational output (no pass/fail/warn impact). Mirrors the helper
-  # defined in regression-baseline-guard.sh / traceability-guard.sh /
-  # agnosticity-lint.sh — without this definition the calls at lines
-  # ~578/580 below would fall through to the GNU `info` documentation
-  # reader on PATH and crash with `No menu item ... in node '(dir)Top'`.
-  # Tracked as RQ-BUBBLES-ARTIFACT-LINT-INFO-001 (see BUG-045-001 report).
-  local message="$1"
-  echo "ℹ️  $message"
-}
-
 json_first_string() {
   local key="$1"
   local file="$2"
@@ -1366,7 +1355,7 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
         fi
 
         # File paths with extensions (e.g., src/foo.rs, tests/bar.py, ./path/to/file)
-        if echo "$code_block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|yml|json|proto|md)|\./)'; then
+        if echo "$code_block_content" | grep -qE '([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+\.(rs|py|ts|tsx|js|go|sh|sql|toml|yaml|json|proto|md)|\./)'; then
           terminal_signals=$((terminal_signals + 1))
         fi
 

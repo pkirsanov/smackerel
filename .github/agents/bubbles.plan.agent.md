@@ -18,6 +18,7 @@ handoffs:
 - Default to small, well-defined, isolated scopes. A scope should represent one primary outcome, not a grab-bag of unrelated work.
 - Tests MUST be derived from spec/design requirements (spec-first), not from current behavior.
 - Enforce `planning-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, and `evidence-rules.md` when writing scope artifacts.
+- If project config defines `testImpact` or `traceContracts`, incorporate those maps into Test Plan rows and DoD evidence requirements while keeping analyst-owned Success Signals tech-agnostic.
 - Honor optional sizing hints (`maxScopeMinutes`, `maxDodMinutes`) when provided, but keep scopes small even when no time boundary is given.
 - Treat shared fixtures, harnesses, bootstrap/auth/session/storage infrastructure, and other high-fan-out helper surfaces as protected planning targets: require blast-radius planning, canary coverage, rollback, and explicit change boundaries before downstream execution.
 - Follow tiered context loading and loop limits (below) to avoid read loops.
@@ -187,6 +188,7 @@ Core requirements:
   - use cases (Gherkin)
   - implementation plan
   - test plan
+  - optional impact-aware validation and trace-contract evidence sections when project config defines them
   - an optional backlog export section when `backlogExport: tasks|issues` is requested
   - Definition of Done
   - status tracking per scope (Not started / In progress / Done / Blocked)
@@ -223,6 +225,8 @@ Template reference: [feature-templates.md](bubbles_shared/feature-templates.md)
   - Web/other frontends
   - Monitoring/observability
   - Scripts/CLI (if present and relevant)
+- If `.github/bubbles-project.yaml` or `bubbles-project.yaml` defines `testImpact`, run `bubbles/scripts/test-impact-plan.sh` against the known or planned changed paths when available; otherwise add an explicit placeholder-free planning note that the impact plan must be regenerated once concrete paths are known.
+- If project config defines `traceContracts`, identify relevant workflow names from design/observability sections and add trace evidence rows without moving span/attribute details into `spec.md`.
 
 If `design.md` is missing or stale, invoke `bubbles.design` via `runSubagent` with `mode: non-interactive design: reconcile` before planning.
 
@@ -280,6 +284,8 @@ Each scope must include:
 
 4) **Test Plan (Required)**
 - `Gherkin-to-test mapping`: each scenario must map to one or more tests.
+- **Impact-aware validation (G079):** if project config defines `testImpact`, include the generated first-pass categories, always-run checks, and any full-suite triggers for the scope's changed paths.
+- **Trace contract evidence (G080):** if project config defines `traceContracts`, include the workflow contract name and `trace-contract-guard.sh` proof row for actual trace/log evidence.
 - **E2E test entries MUST be scenario-specific** — list the actual Gherkin scenario ID, the actual test file path, and the actual expected `test()` title. Generic E2E placeholders like `[UI workflow]` or `[API workflow]` are FORBIDDEN.
 - **Every feature/fix/change MUST include persistent regression E2E planning** — for each new/changed/fixed behavior, add at least one explicit `Regression:` E2E row tied to the exact scenario or bug behavior it protects.
 - **Renames/removals require consumer-trace coverage** — when a scope renames/removes any route, path, contract, identifier, or UI target, add explicit consumer-facing rows for the affected navigation, breadcrumb, redirect, API client, and stale-reference-scan flows instead of a generic "update callers" note.

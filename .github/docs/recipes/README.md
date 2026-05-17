@@ -96,6 +96,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | [DevOps + Release Coordination](devops-release-coordination.md) | "I just shipped a devops change and the phase release packet's `deployment.md` is now stale" |
 | [Ops Packet Work](ops-packet-work.md) | "I need cross-cutting infra or platform work tracked outside a feature spec" |
 | [Regression Check](regression-check.md) | "I need to make sure new changes didn't break existing features" |
+| [Impact-Aware Validation + Trace Contracts](impact-aware-validation.md) | "I want changed paths to suggest the right first-pass tests, and important workflows to prove trace/log evidence" |
 | [Post-Implementation Hardening](post-impl-hardening.md) | "I want code cleaned up, stable, secure, and regression-free before shipping" |
 | [Chaos Testing](chaos-testing.md) | "I need to break things to find weaknesses" |
 | [Security Review](security-review.md) | "I need to check for security vulnerabilities" |
