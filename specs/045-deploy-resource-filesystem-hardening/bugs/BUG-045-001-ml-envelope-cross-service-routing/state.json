@@ -707,6 +707,17 @@
     }
   ],
   "concerns": [],
+  "subsequentResolutions": [
+    {
+      "id": "BUG-045-002",
+      "path": "specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/",
+      "discoveredAt": "2026-05-16",
+      "discoveredBy": "bubbles.workflow mode: bugfix-fastlane on HEAD 5c8d857e",
+      "rationale": "BUG-045-001 was certified done with passed-with-known-drift on the claim that it resolved the chronic CI integration failure (10+ consecutive runs failing on main). Post-push verification revealed BUG-045-001 fixed a real ML envelope cross-service routing validator defect (genuine bug, scope correctly fixed), but did NOT address the underlying chronic CI failure. BUG-045-001 report.md line 222 already carried an Uncertainty Declaration acknowledging the CI-attribution gap. BUG-045-002 fixes the actual chronic CI failure via Path A (Parity): route CI through ./smackerel.sh test integration against the full Compose stack, eliminating the postgres+nats-only CI service surface that was masking 5 integration tests requiring ollama/core/ml.",
+      "certificationImplication": "BUG-045-001 certification is NOT reopened — its actual scope (validator routing defect) was correctly fixed and remains valid. This cross-reference is the honesty trail per BUG-045-002 spec.md AC-6.",
+      "honestyTrailLink": "bubbles.audit-passed-with-known-drift → bubbles.workflow-bugfix-fastlane discovery"
+    }
+  ],
   "createdAt": "2026-05-16T16:30:00Z",
   "lastUpdatedAt": "2026-05-17T07:00:00Z"
 }

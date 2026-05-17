@@ -1,0 +1,307 @@
+{
+  "version": 3,
+  "specId": "045-deploy-resource-filesystem-hardening",
+  "bugId": "BUG-045-002-ci-integration-failure-persists",
+  "featureDir": "specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists",
+  "featureName": "BUG-045-002 Chronic CI integration job failure on main persists despite BUG-045-001 validator routing fix",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "parentWorkflow": {
+    "mode": "post-push-ci-failure-rca-2026-05-16",
+    "executionModel": "parent-expanded-bugfix-fastlane",
+    "findingId": "POSTPUSH-CI-FAIL-001",
+    "findingLens": "CI workflow ci.yml integration job chronic failure on main",
+    "findingSurface": ".github/workflows/ci.yml integration job + tests/integration/* topology mismatch with CI runner",
+    "findingHead": "5c8d857e80a07f59600f51b9e9bce906814a6311",
+    "discoveryAgent": "bubbles.bug",
+    "discoverySession": "2026-05-16 post-push RCA after ./smackerel.sh push origin main of 3 commits ad512fc6..5c8d857e",
+    "rootCauseRelationship": "Continuation of BUG-045-001 work: BUG-045-001 fixed validateMLModelEnvelope cross-service routing defect but did NOT address the actual chronic CI integration failure; BUG-045-001 report.md line 222 explicitly recorded an Uncertainty Declaration that root-cause attribution to CI was unverified."
+  },
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "scope-3",
+    "runStartedAt": "2026-05-16T22:30:00Z",
+    "lastUpdatedAt": "2026-05-17T02:00:00Z",
+    "completedScopes": ["scope-1", "scope-2", "scope-3"],
+    "completedPhaseClaims": ["discovery", "design", "plan", "implement"],
+    "completedPhaseClaimsByScope": {},
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery"],
+        "runStartedAt": "2026-05-16T22:30:00Z",
+        "runEndedAt": "2026-05-16T22:55:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 1 discovery: created spec.md (6 ACs), report.md (Evidences 1-5b + 8 + cross-reference + Honesty Statement), design.md skeleton, state.json v3, scopes.md (Scope 1+2), uservalidation.md. Captured AC-2 blocking gate in pendingTransitionRequests (TR-001)."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-16T22:55:00Z",
+        "runEndedAt": "2026-05-16T23:25:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 2 design: resolved AC-2 Uncertainty Declaration via CI-environment local reproduction (anonymous artifact endpoint blocked HTTP 401; substituted methodology produced equivalent verbatim attribution). Captured Evidence 6 (5 failing tests verbatim) and Evidence 7 (per-test source inspection + service-dependency map). Recorded Decision DD-1 (Path A: route CI through ./smackerel.sh test integration) with rationale grounded in spec 031 live-stack-testing contract + spec 023 adversarial-regression mandate + bubbles-test-environment-isolation skill. Rejected Path B (no e2e-api job exists; no enforcement mechanism for classification discipline; doesn't fix the 2 -p 1 failures) and Path C (forbidden by user mandate + integration suite no-skip contract). Designed AC-4 build-time guard (internal/deploy/ci_integration_topology_contract_test.go with 6 live assertions + 3 adversarial sub-tests). Documented DD-2 (guard location), DD-3 (timeout 15→30 min), DD-4 (no test partition), DD-5 (-p 1 inherited from CLI), and OQ-1 (image reuse from build job, deferred)."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "runStartedAt": "2026-05-16T23:25:00Z",
+        "runEndedAt": "2026-05-16T23:55:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 3 plan: decomposed BUG-045-002 into 4 sequential scopes per design.md DD-1 Path A. Scope 1 — refactor .github/workflows/ci.yml to Path A topology (remove postgres services block + docker-run nats step + raw go test step; add explicit smackerel.sh --env test up/status/down lifecycle; replace test command with smackerel.sh test integration; raise timeout 15→30). Scope 2 — add build-time guard internal/deploy/ci_integration_topology_contract_test.go with 1 live assertion (6 AC-4 invariants) + 3 adversarial sub-tests with synthetic in-memory YAML fixtures + bailout-pattern audit. Scope 3 — local Path-A reproduction: down → up → status → test integration (verbatim PASS evidence for all 5 previously-failing tests by name: TestKnowledgeStats_EmptyStoreReturnsZeroValues, TestPhotosContractCanary_ConfigNATSDBAndMLAgree/ml_sidecar_photos_contract_response, TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList, TestDriveFoundationCanary_ConfigNATSAndMigrationContracts/nats_DRIVE_stream_in_jetstream, TestDriveScanFixturePreservesHierarchyAndMetadata) → down + 4 quality gates exit 0. Scope 4 — validation + CI green + close-out: commit + push (NO --no-verify; Go source in diff), capture AC-1 post-fix CI run JSON inline, wait for 3 consecutive main pushes after fix HEAD + capture AC-5 curl, add BUG-045-001 state.json subsequentResolutions[] cross-reference (AC-6), tick uservalidation items, set this packet certification.status=done. Strict sequential gating S1→S2→S3→S4. scenario-manifest.json remapped: A/B→scope-1, E/E2/E3/F→scope-2, G/H→scope-3, C/D/I→scope-4 (3 new scenarios E2/E3/F/G/H/I added)."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-17T00:00:00Z",
+        "runEndedAt": "2026-05-17T00:35:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 4 implement (PARTIAL — 2 of 3 assigned scopes DONE, 1 BLOCKED on Discovered Planning Gap routed back to bubbles.plan). Scope 1 DONE per its 9 DoD items: refactored .github/workflows/ci.yml to Path A topology in a single replace_string_in_file (147 lines changed, 39+, 108-) — removed services.postgres block, removed Start NATS docker-run step, removed Apply database migrations cmd/dbmigrate step, dropped DATABASE_URL/NATS_URL/SMACKEREL_AUTH_TOKEN env vars from the test step, added Bring up test stack (./smackerel.sh --env test up) + Stack status snapshot + Tear down test stack (if: always() --env test down --volumes) steps, replaced the test command with `set -o pipefail; ./smackerel.sh test integration 2>&1 | tee integration-test.log`, raised timeout-minutes 15→30 with multi-line DD-3 comment. YAML parses; 6 AC-4 invariants verified by grep; format --check + lint exit 0; preserved checkout, setup-go, Generate SST config, id: itest_step, continue-on-error: true, upload integration-test.log, Fail job if integration tests failed. Scope 2 DONE per its 5 DoD items: added internal/deploy/ci_integration_topology_contract_test.go (299 lines, untracked) with 4 test functions (1 live: TestCIIntegrationTopologyContract; 3 adversarial: TestCIIntegrationTopology_AdversarialRejectsReintroducedServiceBlock / RejectsDockerRunInfraSidecar / RejectsRawGoTest). Added TimeoutMinutes int field to existing ciJobDoc in ci_workflow_no_parallel_publish_test.go (additive 5-line diff; existing assertions unchanged). Targeted `go test -run '^TestCIIntegrationTopology' -v` exits 0 with all 4 PASS. Bailout-pattern grep returns empty. Each adversarial sub-test contains a `t.Fatalf(\"guard FALSE NEGATIVE: ...\")` proving it would catch a synthetic regression. Scope 3 BLOCKED: full `./smackerel.sh test unit --go` exits non-zero with exactly ONE failure in a foreign-owned, now-obsolete BUG-029-004 / HL-RESCAN-011 contract test (TestCIWorkflow_NoParallelPublishPath_PostBUG029004 — its assertCIWorkflowStructure pre-check at ci_workflow_no_parallel_publish_test.go:144-161 requires services.postgres + cmd/dbmigrate step, both of which BUG-045-002 DD-1 intentionally removes). Per agent-common.md rule 'Do NOT repair undocumented work ad hoc', bubbles.implement cannot silently extend the Scope 1 change boundary to modify a foreign-owned test — routed back to bubbles.plan via new pendingTransitionRequest TR-BUG-045-002-004. Full Discovered Planning Gap documented in scopes.md § Discovered Planning Gap and report.md § Implement Phase Evidence. Scope 3 local Path-A integration repro (DoD-G) NOT executed to avoid burning a 15-25 min validation that would need to be redone after the test update lands. Scope 4 remains DEFERRED to bubbles.validate per user instruction (CI green + 3-consecutive-pass proof)."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "runStartedAt": "2026-05-17T01:00:00Z",
+        "runEndedAt": "2026-05-17T01:10:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 3 plan RE-ENTRY to resolve TR-BUG-045-002-004 boundary + G068 Gherkin→DoD fidelity. Task 1 (Option A — extend existing Scope 1): (a) Scope 1 status flipped from done to in_progress; original 9 DoD items remain ticked; 3 net-new DoD items appended (DoD-10: update assertCIWorkflowStructure body to retire obsolete services.postgres + cmd/dbmigrate invariants while preserving A/B/C invariants + integration-job-exists + canonical-CLI + build-job structural check; DoD-11: BUG-045-002 DD-1 provenance comment near updated body; DoD-12: ./smackerel.sh test unit exit 0 with full suite). (b) Scope 1's Shared Infrastructure Impact Sweep rewritten from 'Not applicable' to enumerate internal/deploy/ci_workflow_no_parallel_publish_test.go as a transitively-affected sibling with explicit affected/UNAFFECTED blast-radius lists, 3 canary tests, and rollback proof. (c) Scope 1's Change Boundary table extended with internal/deploy/ci_workflow_no_parallel_publish_test.go (body of assertCIWorkflowStructure lines 144-161 ONLY) and explicit exclusion list naming every function/struct/regex that MUST remain untouched. (d) Scope 1 Test Plan extended with 2 new rows (BUG-029-004 contract preservation canary + full unit suite). (e) Scope 3 status flipped from blocked to not_started with prior-block-cleared rationale. (f) § Discovered Planning Gap status flipped from OPEN to RESOLVED 2026-05-17 with cross-reference to plan re-entry. Task 2 (Gate G068 — trace ID anchor approach): all 11 SCN-045-002-* scenarios now have a literal (SCN-045-002-X) trace ID embedded in at least one DoD item of their owning scope; specifically Scope 1 anchors 9 existing + 3 new DoD items with A/B; Scope 2 anchors 5 existing DoD items with E/E2/E3/F; Scope 3 anchors 9 existing DoD items with G/H; Scope 4 anchors 10 existing DoD items with C/D/I. Trace-ID approach chosen over prose rewrite per user direction — mechanical anchor is the long-term solution and never drifts. NO Gherkin scenario text or scenario-manifest.json modified — only DoD items in scopes.md were touched. Task 3 (state.json + supporting artifacts): scope-1.status flipped done→in_progress with dodCheckboxCount 9→12 and dodCheckedCount kept at 9; scope-3.status flipped blocked→not_started with blockedAt/blockedBy/blockReason cleared; execution.completedScopes downgraded from ['scope-1','scope-2'] to ['scope-2'] (scope-1 no longer 100% complete); execution.completedPhaseClaims downgraded from ['discovery','design','plan'] to ['discovery','design'] (plan is now re-entered and still in-progress until plan-phase Tier-2 validation passes); execution.activeAgent set to bubbles.plan; execution.currentPhase set to plan. TR-BUG-045-002-004 resolved into transitionRequests[] with resolution citing both Task 1 and Task 2 outcomes. New TR-BUG-045-002-005 (plan→implement re-entry) opened with nextRequiredOwner: bubbles.implement and updated evidenceRequired listing the 3 new DoD items + Scope 3 execution + G068 re-verification. uservalidation.md gained a Plan Re-entry checked item; report.md gained a § Plan Re-entry Note paragraph."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-17T01:30:00Z",
+        "runEndedAt": "2026-05-17T02:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Phase 4 implement RE-ENTRY to consume TR-BUG-045-002-005. Scope 1 closed out (12/12 DoD): (a) DoD-10 — retired the two obsolete BUG-029-004 / HL-RESCAN-011 pre-check invariants (services.postgres requirement + cmd/dbmigrate step requirement) from internal/deploy/ci_workflow_no_parallel_publish_test.go::assertCIWorkflowStructure body via a single replace_string_in_file edit. Diff stat: 54 lines changed (44 insertions, 10 deletions — net +34 dominated by the provenance comment block). Body delta REMOVED: `if _, ok := intJob.Services[\"postgres\"]; !ok { return ... }` (3 lines), `hasMigrate := false` (1 line), `if strings.Contains(step.Run, \"cmd/dbmigrate\") { hasMigrate = true }` (3 lines), `if !hasMigrate { return ... }` (3 lines). Body delta ADDED: 4-line inline comment explaining the DD-1 retirement. All other helpers UNCHANGED — assertNoDockerPush, assertNoGhcrTagging, assertNoGhcrLogin, assertNoParallelPublishPath, TestCIWorkflow_NoParallelPublishPath_PostBUG029004, the 3 adversarial tests, the build-job structural check (lines 130-141 of pre-edit), the ciWorkflowDoc/ciJobDoc/ciStepDoc struct fields (modulo additive TimeoutMinutes from Scope 2), and the regex definitions all remain untouched (confirmed by git diff scope). (b) DoD-11 — 35-line provenance comment block added immediately above the updated assertCIWorkflowStructure body (lines 122-156): cites BUG-045-002 DD-1 by name, explains the retirement rationale, enumerates surviving invariants, enumerates unchanged forbidden-construct helpers, names the complementary topology contract test, and references both design.md § Decision DD-1 and scopes.md § Scope 1 DoD-10..12. (c) DoD-12 — ./smackerel.sh test unit exits 0 with full suite: 74 Go `ok` packages, 0 `FAIL` packages, 450 Python pytest cases passed. internal/deploy package ran un-cached at 33.132s (proving both ci_workflow_no_parallel_publish_test.go AND ci_integration_topology_contract_test.go executed in the full run). Targeted -v re-run of `^TestCIWorkflow_NoParallelPublishPath_PostBUG029004$|^TestCIWorkflow_Adversarial|^TestCIIntegrationTopology` exit 0 with all 8 functions PASS (BUG-029-004 structural + A + B + C + 3 BUG-029-004 adversarials + BUG-045-002 live + 3 BUG-045-002 adversarials). Scope 3 closed out (9/9 DoD): (a) DoD-G — down(clean)/up/status/test integration/down(final) all exit 0 against the smackerel-test-* Compose project (postgres + nats + ollama + smackerel-core + smackerel-ml all show STATUS `Up ... (healthy)`); /tmp/bug-045-002-local-repro.log captures verbatim PASS lines for all 5 previously-failing tests by name (TestKnowledgeStats_EmptyStoreReturnsZeroValues at line 2822; TestPhotosContractCanary_ConfigNATSDBAndMLAgree parent at line 2924 + ml_sidecar_photos_contract_response sub-test at line 2928; TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList at line 3190; TestDriveFoundationCanary_ConfigNATSAndMigrationContracts parent at line 3215 + nats_DRIVE_stream_in_jetstream sub-test at line 3217; TestDriveScanFixturePreservesHierarchyAndMetadata at line 3262); both required integration packages show `ok` summary lines (`tests/integration` 47.263s + `tests/integration/drive` 12.052s, plus bonus `tests/integration/agent` 3.758s); docker ps after final down shows zero leftover smackerel-test-* containers (clean teardown confirmed). (b) DoD-H — all 4 quality gates exit 0 (./smackerel.sh check, format --check, lint, test unit) with verbatim trailing-line evidence captured inline. Scope 4 remains DEFERRED to bubbles.validate per the user's original bugfix-fastlane invocation. TR-BUG-045-002-005 closed and routed to bubbles.validate via new TR-BUG-045-002-006 (implement → validate) for CI green + 3-consecutive-success + AC-6 cross-reference + final commit/push/audit/certification."
+      }
+    ],
+    "findings": [
+      {
+        "findingId": "BUG-045-002-FIND-001",
+        "capturedBy": "bubbles.design",
+        "capturedAt": "2026-05-16T23:25:00Z",
+        "summary": "5 verified failing tests in CI-environment local reproduction: TestKnowledgeStats_EmptyStoreReturnsZeroValues (test-isolation: needs -p 1), TestPhotosContractCanary_.../ml_sidecar_photos_contract_response (needs smackerel-ml), TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList (needs smackerel-core HTTP), TestDriveFoundationCanary_.../nats_DRIVE_stream_in_jetstream (needs smackerel-core EnsureStreams), TestDriveScanFixturePreservesHierarchyAndMetadata (test-isolation: needs -p 1). All 5 collapse to a single fix: route CI through ./smackerel.sh test integration.",
+        "evidenceRef": "report.md § Evidence 6 + Evidence 7"
+      },
+      {
+        "findingId": "BUG-045-002-FIND-002",
+        "capturedBy": "bubbles.design",
+        "capturedAt": "2026-05-16T23:25:00Z",
+        "summary": "The CI integration job's documented `services + docker-run sidecar + raw go test` pattern omits BOTH the full Compose stack (smackerel-core, smackerel-ml, ollama) AND the `-p 1` flag the local runner sets. Both omissions are required to bring CI to local parity. Path A (route through canonical CLI) fixes both with one change. Build-time AC-4 guard (parsing .github/workflows/ci.yml) prevents regression.",
+        "evidenceRef": "design.md § Decision DD-1 + § Test Strategy"
+      }
+    ],
+    "pendingTransitionRequests": [
+      {
+        "transitionRequestId": "TR-BUG-045-002-006",
+        "from": "implement",
+        "to": "validate",
+        "owner": "bubbles.validate",
+        "openedAt": "2026-05-17T02:00:00Z",
+        "openedBy": "bubbles.implement",
+        "blockingGate": "Implement re-entry produced verified-clean evidence for Scope 1 (12/12 DoD) and Scope 3 (9/9 DoD). All implementation surfaces of the BUG-045-002 fix (CI workflow Path-A topology + AC-4 build-time guard + BUG-029-004 contract-test update + provenance comment) are landed in the working tree and proven against the full unit suite (74 Go ok packages, 0 FAIL packages, 450 Python pass) AND a live local Compose-stack integration run (all 5 previously-failing tests verbatim PASS, both integration packages ok). The remaining work belongs to validate: (a) Scope 4 commit + push (NO --no-verify; Go source in diff), (b) AC-1 evidence capture (post-fix-HEAD CI run JSON inline showing integration job conclusion=success), (c) AC-5 evidence capture (3 consecutive main runs after fix HEAD show conclusion=success), (d) AC-6 cross-reference (add subsequentResolutions[] entry to BUG-045-001 state.json), (e) tick uservalidation.md AC-1/3/4/5/6 items, (f) update this packet's state.json status=done + certification.status=done, (g) run artifact-lint + traceability-guard exit 0.",
+        "evidenceRequired": [
+          "Scope 4 DoD items 1-10 all ticked with verbatim evidence inline per the scopes.md § Scope 4 implementation plan and DoD blocks",
+          "AC-1: post-fix CI run conclusion=success captured verbatim via curl against the actions API",
+          "AC-5: 3/3 most recent main runs show conclusion=success captured verbatim via curl",
+          "AC-6: subsequentResolutions[] entry written to specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/state.json with bugId=BUG-045-002-ci-integration-failure-persists, resolvedAt=ISO8601, relationship=ci-environment-fix-of-bug-001-uncertainty-declaration, plus a 2-3 sentence resolutionNote. BUG-045-001 certification.status MUST remain unchanged (still done, passed-with-known-drift)",
+          "artifact-lint.sh on this bug folder exits 0",
+          "traceability-guard.sh on this bug folder exits 0",
+          "After Scope 4 closes: this packet's certification.scopeProgress[scope-4].status flipped to done; status flipped to done; certification.status flipped to done; certifiedCompletedPhases populated"
+        ],
+        "discoveryEvidence": "scopes.md (Scope 1 12/12 + Scope 2 5/5 + Scope 3 9/9 all ticked with verbatim evidence inline; Scope 4 10/10 PENDING bubbles.validate); state.json (this entry); report.md § Implement Re-entry Evidence; uservalidation.md § Implementation Phase (re-entry tick)"
+      }
+    ]
+  },
+  "transitionRequests": [
+    {
+      "transitionRequestId": "TR-BUG-045-002-001",
+      "from": "discovery",
+      "to": "design",
+      "owner": "bubbles.design",
+      "resolvedAt": "2026-05-16T23:25:00Z",
+      "resolvedBy": "bubbles.design",
+      "status": "resolved",
+      "resolutionNote": "AC-2 gate satisfied via CI-environment local reproduction (anonymous artifact endpoint blocked HTTP 401; substituted methodology by running CI's exact service topology + test command locally produced equivalent verbatim failing-test attribution). Evidence 6 + 7 now CAPTURED in report.md. Uncertainty Declaration in spec.md is RESOLVED."
+    },
+    {
+      "transitionRequestId": "TR-BUG-045-002-002",
+      "from": "design",
+      "to": "plan",
+      "owner": "bubbles.plan",
+      "resolvedAt": "2026-05-16T23:55:00Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
+      "resolutionNote": "scopes.md is ACTIVE with 4 sequential scopes (scope-1..scope-4) derived from design.md DD-1 Path A. Each scope has Gherkin scenarios, an implementation plan grounded in design.md decisions, a Change Boundary, a test plan mapping each Gherkin scenario to one or more named tests / commands, and a DoD with raw-output-evidence placeholders inline under every checkbox. scenario-manifest.json remapped from 5 entries to 12 entries (added E2/E3/F/G/H/I for the new scopes); every entry has owningScope=scope-N. report.md gained a § Plan Phase Note paragraph. uservalidation.md Plan Phase items ticked. AC-to-scenario mapping aligns with design.md § Test Strategy → Scenario-to-test mapping. Plan deliberately preserves DD-4 (no test partition) and DD-5 (-p 1 inherited from CLI) — neither scope reintroduces a test build tag or alters -p concurrency. OQ-1 (image reuse) and R-6 (latent -p 1 dependency) explicitly marked Out of scope for this packet under § Follow-up Work."
+    },
+    {
+      "transitionRequestId": "TR-BUG-045-002-003",
+      "from": "plan",
+      "to": "implement",
+      "owner": "bubbles.implement",
+      "resolvedAt": "2026-05-17T00:35:00Z",
+      "resolvedBy": "bubbles.implement",
+      "status": "resolved-partial",
+      "resolutionNote": "bubbles.implement was invoked and produced verified-clean evidence for Scope 1 (9 of 9 DoD items) and Scope 2 (5 of 5 DoD items). Scope 3 was NOT executed in this invocation — it is BLOCKED on a Discovered Planning Gap surfaced during Scope 2 validation: a foreign-owned BUG-029-004 / HL-RESCAN-011 build-time contract test codifies the OLD integration-job topology that BUG-045-002 DD-1 intentionally removes, causing ./smackerel.sh test unit --go to exit non-zero. Per agent-common.md 'Do NOT repair undocumented work ad hoc', this is routed back to bubbles.plan via new pendingTransitionRequest TR-BUG-045-002-004. Once plan reworks (adds the test-update DoD item to Scope 1 OR creates Scope 1b), bubbles.implement is re-invoked to apply the test update and execute Scope 3's local Path-A reproduction."
+    },
+    {
+      "transitionRequestId": "TR-BUG-045-002-004",
+      "from": "implement",
+      "to": "plan",
+      "owner": "bubbles.plan",
+      "openedAt": "2026-05-17T00:35:00Z",
+      "openedBy": "bubbles.implement",
+      "resolvedAt": "2026-05-17T01:10:00Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
+      "resolutionNote": "Plan re-entry (Phase 3) resolved both blocking concerns. Task 1 — Change-boundary extension via Option A: Scope 1 extended in-place rather than splitting into a Scope 1b. (a) Scope 1's Shared Infrastructure Impact Sweep rewritten from 'Not applicable' to enumerate internal/deploy/ci_workflow_no_parallel_publish_test.go::assertCIWorkflowStructure lines 144-161 as the transitively-affected sibling, with explicit affected (services.postgres requirement; cmd/dbmigrate step requirement) vs UNAFFECTED (A/B/C invariants; build-job structural check; assertCIWorkflowStructure function signature; ci_workflow_no_parallel_publish_test.go test-function names and TestCIWorkflow_HasIntegrationTestsJob_PostBUG045002) lists, 3 canary tests (BUG-029-004 contract preservation; ./smackerel.sh test unit full suite; targeted TestCIIntegrationTopologyContract still PASS), and rollback proof (git revert single-file change). (b) Scope 1's Change Boundary table extended with internal/deploy/ci_workflow_no_parallel_publish_test.go (body of assertCIWorkflowStructure lines 144-161 ONLY) and an explicit Excluded list naming every function and identifier that must remain untouched. (c) Scope 1 DoD grew from 9 items to 12 items: DoD-10 (update assertCIWorkflowStructure body to remove obsolete invariants while preserving A/B/C + integration-job-exists + canonical-CLI + build-job structural check); DoD-11 (BUG-045-002 DD-1 provenance comment near the updated body); DoD-12 (./smackerel.sh test unit exit 0 with full suite). (d) Scope 1 Test Plan extended with 2 canary rows. (e) § Discovered Planning Gap status flipped from OPEN to RESOLVED 2026-05-17. (f) Scope 3 status flipped from blocked to not_started with prior-block-cleared rationale. Task 2 — Gate G068 (Gherkin → DoD Content Fidelity) resolved via the trace-ID anchor approach (Option b per the TR evidenceRequired alternative): all 11 SCN-045-002-* scenarios now have a literal (SCN-045-002-X) trace ID embedded in at least one DoD item of their owning scope. Scope 1 anchors A/B across 9 existing + 3 new DoD items; Scope 2 anchors E/E2/E3/F across 5 existing DoD items; Scope 3 anchors G/H across 9 existing DoD items; Scope 4 anchors C/D/I across 10 existing DoD items. NO Gherkin scenario text or scenario-manifest.json modified — only DoD items in scopes.md were touched, which avoids the 'DoD rewritten to match delivery instead of spec' anti-pattern explicitly called out in the TR. Next required owner: bubbles.implement (re-entered via TR-BUG-045-002-005 to apply Scope 1 DoD-10..12 and execute Scope 3 DoD-G/H)."
+    },
+    {
+      "transitionRequestId": "TR-BUG-045-002-005",
+      "from": "plan",
+      "to": "implement",
+      "owner": "bubbles.implement",
+      "openedAt": "2026-05-17T01:10:00Z",
+      "openedBy": "bubbles.plan",
+      "resolvedAt": "2026-05-17T02:00:00Z",
+      "resolvedBy": "bubbles.implement",
+      "status": "resolved",
+      "resolutionNote": "Implement re-entry consumed TR-005 fully. Scope 1 closed 12/12: (a) DoD-10 — internal/deploy/ci_workflow_no_parallel_publish_test.go::assertCIWorkflowStructure body retired the services.postgres + cmd/dbmigrate invariants via a single replace_string_in_file edit (54-line diff: 44+/10-, dominated by the provenance comment block; body delta removed 10 lines, added 4-line inline comment). Forbidden-construct helpers (assertNoDockerPush, assertNoGhcrTagging, assertNoGhcrLogin, assertNoParallelPublishPath), TestCIWorkflow_NoParallelPublishPath_PostBUG029004, the 3 adversarial tests, the build-job structural check, and all struct/regex definitions remain untouched (confirmed by git diff scope). (b) DoD-11 — 35-line provenance comment block added immediately above the updated function (lines 122-156) citing BUG-045-002 DD-1, enumerating surviving + unchanged-forbidden helpers, naming the complementary BUG-045-002 topology contract test, and providing design.md/scopes.md path references. (c) DoD-12 — ./smackerel.sh test unit exit 0 with full suite: 74 Go ok packages, 0 FAIL packages, 450 Python pytest cases passed; internal/deploy ran un-cached at 33.132s. Targeted -v re-run of the BUG-029-004 + BUG-045-002 contract tests exits 0 with all 8 functions PASS. Scope 3 closed 9/9: (a) DoD-G — down/up/status/test integration/down all exit 0 against smackerel-test-* Compose (postgres + nats + ollama + smackerel-core + smackerel-ml all healthy); /tmp/bug-045-002-local-repro.log captures verbatim PASS lines at exact line numbers for all 5 previously-failing tests by name (TestKnowledgeStats:2822, TestPhotosContractCanary parent:2924 + ml_sidecar sub:2928, TestDriveConnectorsEndpoint:3190, TestDriveFoundationCanary parent:3215 + nats_DRIVE sub:3217, TestDriveScanFixture:3262); both required integration packages show ok (tests/integration 47.263s, tests/integration/drive 12.052s, plus bonus tests/integration/agent 3.758s); docker ps after final teardown shows zero leftover smackerel-test-* containers. (b) DoD-H — all 4 quality gates exit 0 (check, format --check, lint, test unit) with verbatim trailing-line evidence inline. Routed to bubbles.validate via TR-BUG-045-002-006 for Scope 4 commit/push/CI green/AC-1/AC-5/AC-6/audit."
+    }
+  ],
+  "reworkQueue": [],
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1",
+        "title": "Refactor .github/workflows/ci.yml to Path A topology",
+        "status": "done",
+        "reopenedAt": "2026-05-17T01:10:00Z",
+        "reopenedBy": "bubbles.plan",
+        "reopenReason": "Scope 1 reopened by bubbles.plan re-entry (TR-BUG-045-002-004 resolution, Option A). Original 9 DoD items remain ticked with their captured implement-phase evidence (unchanged). 3 net-new DoD items appended (DoD-10: update assertCIWorkflowStructure body to retire obsolete BUG-029-004 invariants while preserving A/B/C + integration-job-exists + canonical-CLI + build-job structural check; DoD-11: BUG-045-002 DD-1 provenance comment; DoD-12: ./smackerel.sh test unit exit 0 with full suite). Re-entered bubbles.implement (TR-BUG-045-002-005) ticked the new items and this scope is now back to done.",
+        "completedAt": "2026-05-17T02:00:00Z",
+        "completedBy": "bubbles.implement",
+        "dependsOn": [],
+        "owner": "bubbles.implement",
+        "acceptanceCriteria": ["AC-3", "AC-4"],
+        "scenarioIds": ["SCN-045-002-A", "SCN-045-002-B"],
+        "dodCheckboxCount": 12,
+        "dodCheckedCount": 12,
+        "evidenceRef": "scopes.md § Scope 1 DoD (12/12 items ticked with verbatim grep / format-check / lint / git-diff-stat / targeted-test-PASS / full-unit-suite-exit-0 evidence inline); report.md § Implement Phase Evidence > Scope 1 close-out; report.md § Implement Re-entry Evidence (DoD-10/11/12 close-out: assertCIWorkflowStructure body diff +44/-10, 35-line provenance comment lines 122-156, ./smackerel.sh test unit exit 0 74 Go ok / 0 FAIL / 450 Python pass)."
+      },
+      {
+        "scopeId": "scope-2",
+        "title": "Build-time topology contract test (internal/deploy/ci_integration_topology_contract_test.go) with 1 live + 3 adversarial sub-tests",
+        "status": "done",
+        "completedAt": "2026-05-17T00:25:00Z",
+        "completedBy": "bubbles.implement",
+        "dependsOn": ["scope-1"],
+        "owner": "bubbles.implement",
+        "acceptanceCriteria": ["AC-4"],
+        "scenarioIds": ["SCN-045-002-E", "SCN-045-002-E2", "SCN-045-002-E3", "SCN-045-002-F"],
+        "dodCheckboxCount": 5,
+        "dodCheckedCount": 5,
+        "evidenceRef": "scopes.md § Scope 2 DoD (5 items ticked with verbatim go test -v output / FALSE NEGATIVE grep / bailout audit / git status evidence inline); report.md § Implement Phase Evidence > Scope 2 close-out",
+        "note": "DONE per the CURRENT Scope 2 DoD. The 4 new test functions all PASS via targeted `go test -run '^TestCIIntegrationTopology' -v` exit 0. Full ./smackerel.sh test unit now exit 0 after Scope 1 DoD-10 retired the obsolete BUG-029-004 / HL-RESCAN-011 pre-check invariants."
+      },
+      {
+        "scopeId": "scope-3",
+        "title": "Local Path-A reproduction (5 previously-failing tests PASS verbatim + 4 quality gates exit 0)",
+        "status": "done",
+        "unblockedAt": "2026-05-17T01:10:00Z",
+        "unblockedBy": "bubbles.plan",
+        "unblockReason": "Prior block cleared by bubbles.plan re-entry (TR-BUG-045-002-004 resolution): Scope 1 DoD now includes the BUG-029-004 contract-test update (DoD-10) + provenance comment (DoD-11) + full unit-suite exit 0 (DoD-12), which collectively unblock the ./smackerel.sh test unit exit 0 prerequisite that previously blocked Scope 3 DoD-H. Re-entered bubbles.implement (TR-BUG-045-002-005) executed Scope 3 DoD-G + DoD-H to completion.",
+        "completedAt": "2026-05-17T02:00:00Z",
+        "completedBy": "bubbles.implement",
+        "dependsOn": ["scope-1", "scope-2"],
+        "owner": "bubbles.implement",
+        "acceptanceCriteria": ["AC-3", "AC-4"],
+        "scenarioIds": ["SCN-045-002-G", "SCN-045-002-H"],
+        "dodCheckboxCount": 9,
+        "dodCheckedCount": 9,
+        "evidenceRef": "scopes.md § Scope 3 DoD (9/9 items ticked with verbatim PASS lines for 5 previously-failing tests + 4 quality gates exit 0 inline; /tmp/bug-045-002-local-repro.log captures the full integration run trace); report.md § Implement Re-entry Evidence (DoD-G + DoD-H close-out: 5 named tests PASS by line number 2822/2924/2928/3190/3215/3217/3262; integration packages tests/integration ok 47.263s + tests/integration/drive ok 12.052s; quality gates check/format/lint/test unit all exit 0; clean teardown via docker ps zero leftover smackerel-test-* containers)."
+      },
+      {
+        "scopeId": "scope-4",
+        "title": "Validation + CI green + close-out (AC-1 + AC-5 + AC-6 evidence; final compliance)",
+        "status": "not_started",
+        "dependsOn": ["scope-1", "scope-2", "scope-3"],
+        "owner": "bubbles.validate",
+        "acceptanceCriteria": ["AC-1", "AC-3", "AC-4", "AC-5", "AC-6"],
+        "scenarioIds": ["SCN-045-002-C", "SCN-045-002-D", "SCN-045-002-I"],
+        "dodCheckboxCount": 10
+      }
+    ],
+    "certifierAgent": null,
+    "certifiedAt": null,
+    "auditorAgent": null,
+    "auditedAt": null,
+    "auditVerdict": null,
+    "auditNote": "Phase 1 (discovery) RCA captured by bubbles.bug on 2026-05-16T22:55Z. Phase 2 (design) captured by bubbles.design on 2026-05-16T23:25Z with Evidence 6 (verbatim failing-test attribution via CI-environment local reproduction) and Evidence 7 (per-test source inspection). AC-2 Uncertainty Declaration RESOLVED. Decision DD-1 (Path A: route CI through ./smackerel.sh test integration) recorded in design.md with full rationale. No certification possible until: (1) bubbles.plan finalizes scopes.md DoD; (2) bubbles.implement lands the workflow YAML change + AC-4 guard test; (3) bubbles.validate captures post-fix-HEAD CI run JSON inline (AC-1) and 3-consecutive-success curl after 3 main pushes (AC-5); (4) bubbles.audit verifies. BUG-045-001 status (done, passed-with-known-drift) is NOT changed by this packet — BUG-045-001 fixed a real but DIFFERENT bug and stays certified. This packet's close-out adds a subsequentResolutions cross-reference to BUG-045-001's state.json per spec.md AC-6.",
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "workflowMode": "bugfix-fastlane"
+  },
+  "crossReferences": {
+    "predecessor": {
+      "bugId": "BUG-045-001-ml-envelope-cross-service-routing",
+      "relationship": "BUG-045-001 fixed validateMLModelEnvelope routing defect; BUG-045-001 report.md line 222 deferred CI log inspection under Uncertainty Declaration; BUG-045-002 closes that deferred work and addresses the actual chronic CI failure that BUG-045-001's local-only validation could not have proven was fixed."
+    },
+    "peer": {
+      "bugId": "BUG-047-002-trivy-ml-fixable-cve-regression",
+      "relationship": "Co-discovered in the same Phase 1 RCA session. Independent root cause (image vulnerability gate vs CI environment topology). Independent fix. No cross-blocking."
+    },
+    "ciRunEvidence": {
+      "failingRunId": "25974673514",
+      "failingJobId": "76352925791",
+      "failingJobUrl": "https://github.com/pkirsanov/smackerel/actions/runs/25974673514/job/76352925791",
+      "failingStep": "Fail job if integration tests failed (triggered by Run integration tests outcome=failure under continue-on-error: true)",
+      "failingArtifactId": "7037283464",
+      "failingArtifactName": "integration-test-log",
+      "failingArtifactExpiresAt": "2026-05-23T22:37:49Z",
+      "chronicPatternLength": 20,
+      "chronicPatternFirstFailingSha": "e809ff9a",
+      "chronicPatternFirstFailingAt": "2026-05-14T17:20:54Z",
+      "chronicPatternMostRecentFailingSha": "5c8d857e80a07f59600f51b9e9bce906814a6311",
+      "chronicPatternMostRecentFailingAt": "2026-05-16T22:30:36Z"
+    }
+  }
+}
