@@ -68,7 +68,16 @@ Bootstrap-owned Bubbles artifacts must come from one of these two paths only:
 
 Do not hand-create or hand-copy Bubbles bootstrap artifacts in downstream repos. If `.specify/memory/bubbles.config.json` is missing, rerun the installer with `--bootstrap` instead of adding the file manually.
 
-Downstream repos must not directly edit framework-managed Bubbles files after install. The installer now writes `.github/bubbles/.checksums`, and consumer repos should use `bubbles framework-write-guard` or `bubbles doctor` to verify that their local framework layer still matches the installed upstream snapshot. If you need a framework change, record it in `.github/bubbles-project/proposals/` with `bubbles framework-proposal <slug>`, then implement the actual change in the Bubbles source repo and refresh downstream installs.
+Downstream repos must not directly edit framework-managed Bubbles files after install. The installer writes `.github/bubbles/.checksums`, and consumer repos should use `bubbles framework-write-guard` or `bubbles doctor` to verify that their local framework layer still matches the installed upstream snapshot.
+
+Treat every desired downstream change as one of two things before editing:
+
+| Desired change | Put it here |
+|----------------|-------------|
+| Reusable framework behavior, shared script, shared agent prompt, shared instruction, shared skill, gate, workflow, or framework doc | First record a project-owned proposal in `.github/bubbles-project/proposals/` with `bubbles framework-proposal <slug>`, then implement the actual change in the Bubbles source repo and refresh downstream installs. |
+| Repo-specific commands, policies, docs, config, test impact map, trace contracts, or local helper logic | Project-owned files such as `.github/copilot-instructions.md`, `.specify/memory/agents.md`, `.specify/memory/constitution.md`, `.github/bubbles-project.yaml`, `scripts/**`, `docs/**`, or `specs/**`. |
+
+Never "just patch" `.github/bubbles/**`, `.github/agents/bubbles*`, `.github/prompts/bubbles*`, `.github/instructions/bubbles-*`, or `.github/skills/bubbles-*` in a consumer repo. Those paths are install artifacts and the next upgrade is allowed to replace them.
 
 Every install now also writes two trust artifacts into the installed framework layer:
 - `.github/bubbles/release-manifest.json` — the upstream release manifest with version, git SHA, supported profile set, supported interop sources, validated surfaces, and framework-managed checksum inventory.

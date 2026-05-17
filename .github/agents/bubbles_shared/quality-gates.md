@@ -63,7 +63,7 @@ Block completion when any of these occur:
 - **analysis-as-execution (Gate G071):** reading files that a script would check, performing equivalent pattern matching, and reporting predicted findings as command output — even when predictions are accurate (see evidence-rules.md)
 - **provenance fabrication:** labeling evidence as `executed` when the DoD claim requires interpretation of the output
 - **missing provenance:** evidence blocks without `**Claim Source:**` tags (treated as `interpreted` by default)
-- **build-once-deploy-many violation (Gate G079, advisory in framework / blocking in opted-in product repos):** deployment manifests pinned by mutable tag instead of `sha256:<digest>`, CI workflows that fuse build with deploy, adapter `apply.sh` that builds locally or skips signature verification (see state-gates.md and bubbles-deployment-target-adapter skill)
+- **build-once-deploy-many violation (Gate G081, advisory in framework / blocking in opted-in product repos):** deployment manifests pinned by mutable tag instead of `sha256:<digest>`, CI workflows that fuse build with deploy, adapter `apply.sh` that builds locally or skips signature verification (see state-gates.md and bubbles-deployment-target-adapter skill)
 
 ## Test Execution Gate
 
