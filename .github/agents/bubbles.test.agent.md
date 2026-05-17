@@ -24,6 +24,8 @@ handoffs:
 - No skips/xfails/disabled tests; fix the implementation (or docs when truly wrong)
 - When upstream workflow context includes `tdd: true`, preserve the red → green → broader-regression sequence explicitly: capture the failing targeted proof first, make the smallest change that turns it green, then keep or add persistent regression coverage for the same scenario.
 - Enforce `test-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, `evidence-rules.md`, and `state-gates.md`.
+- If project config defines `testImpact`, use `bubbles/scripts/test-impact-plan.sh` to order narrow-first test execution and to honor always-run/full-suite triggers before reporting the selected suite complete.
+- If project config defines `traceContracts`, preserve actual trace/log evidence needed by `bubbles.validate`; do not fabricate trace results from code inspection.
 - End every invocation with a `## RESULT-ENVELOPE`. Use `completed_owned` when test/code changes and evidence were produced under this agent's execution surface, `route_required` when planning/docs/implementation follow-up is required, or `blocked` when a concrete blocker prevents clean test completion.
 
 ## RESULT-ENVELOPE
@@ -210,6 +212,26 @@ Minimum required checks in compliance mode:
 - Bug-fix scopes include at least one adversarial regression case that would fail if the bug were reintroduced
 - Scenario specificity: required E2E tests map to concrete Gherkin/UI scenarios (not generic placeholders)
 - Evidence quality: raw execution evidence requirements (≥10 lines per required section) are satisfiable and consistent with current policy
+
+### E) Impact-Aware Test Ordering (G079)
+
+If `.github/bubbles-project.yaml` or `bubbles-project.yaml` defines `testImpact`, run or consume `bubbles/scripts/test-impact-plan.sh` before selecting the narrow-first test order.
+
+Rules:
+- Matched `testCategories` identify what should run first, not what may be skipped.
+- Global and component `alwaysRun` checks must be represented in the evidence plan.
+- `fullSuiteTriggers` force broad validation even when only a small file list changed.
+- Missing config is a no-op unless the user or workflow explicitly requires it.
+
+### F) Trace Evidence Preservation (G080)
+
+If project config defines `traceContracts`, collect or preserve the actual trace/log output for relevant workflow names so validation can run:
+
+```bash
+bash bubbles/scripts/trace-contract-guard.sh --workflow <workflow-name> --trace-output <trace-log-path>
+```
+
+Trace evidence complements tests. It does not replace scenario-specific E2E, regression, red-green proof, or outcome-contract validation.
 
 ---
 

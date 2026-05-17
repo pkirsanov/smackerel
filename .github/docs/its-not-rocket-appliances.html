@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v3.8.0</div>
+  <div class="subtitle">Agent Orchestration System v3.9.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1208,6 +1208,14 @@
     <div class="wf-desc">Safety label for operations such as read-only, owned mutation, destructive mutation, external side effect, or runtime teardown.</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">test impact map</div>
+    <div class="wf-desc">Optional project-owned <code>testImpact</code> config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">trace contract</div>
+    <div class="wf-desc">Optional project-owned <code>traceContracts</code> config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions.</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
     <div class="wf-desc">Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from <code>bubbles.validate</code> certification.</div>
   </div>
@@ -1653,6 +1661,14 @@
     <span class="quote-text">"Mr. Lahey, the tests aren't passing!"</span>
   </div>
   <div class="line">
+    <span class="situation">Plan first-pass tests from changed paths</span>
+    <span class="quote-text"><code>bash bubbles/scripts/test-impact-plan.sh --changed-file-list changed-files.txt</code></span>
+  </div>
+  <div class="line">
+    <span class="situation">Validate workflow trace/log evidence</span>
+    <span class="quote-text"><code>bash bubbles/scripts/trace-contract-guard.sh --workflow &lt;name&gt; --trace-output trace-output.log</code></span>
+  </div>
+  <div class="line">
     <span class="situation">Any gate failure</span>
     <span class="quote-text">"Something's fucky."</span>
   </div>
@@ -1809,8 +1825,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 65 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 65 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 67 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 67 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -1835,7 +1851,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "65 gates, boys. That's more security than the trailer park has ever had.
+  "67 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -1848,10 +1864,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v3.8.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v3.9.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>65 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>67 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>
