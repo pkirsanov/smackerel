@@ -13,6 +13,12 @@
       "regressionType": "topology-contract",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-3", "AC-4"],
+      "requiredTestType": "functional",
+      "linkedTests": [
+        "bash::AC-4 invariants 1..6 via per-invariant grep against .github/workflows/ci.yml",
+        "./smackerel.sh lint",
+        "./smackerel.sh format --check"
+      ],
       "tests": [
         {
           "type": "manual-structural-grep",
@@ -42,6 +48,10 @@
       "regressionType": "syntax-contract",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-3"],
+      "requiredTestType": "functional",
+      "linkedTests": [
+        "python3 -c yaml.safe_load(.github/workflows/ci.yml)"
+      ],
       "tests": [
         {
           "type": "yaml-syntax",
@@ -61,6 +71,10 @@
       "regressionType": "adversarial-guard",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-4"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/deploy/ci_integration_topology_contract_test.go::TestCIIntegrationTopology_AdversarialRejectsReintroducedServiceBlock"
+      ],
       "tests": [
         {
           "type": "unit-go",
@@ -81,6 +95,10 @@
       "regressionType": "adversarial-guard",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-4"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/deploy/ci_integration_topology_contract_test.go::TestCIIntegrationTopology_AdversarialRejectsDockerRunInfraSidecar"
+      ],
       "tests": [
         {
           "type": "unit-go",
@@ -101,6 +119,10 @@
       "regressionType": "adversarial-guard",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-4"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/deploy/ci_integration_topology_contract_test.go::TestCIIntegrationTopology_AdversarialRejectsRawGoTest"
+      ],
       "tests": [
         {
           "type": "unit-go",
@@ -121,6 +143,10 @@
       "regressionType": "live-assertion",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-4"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/deploy/ci_integration_topology_contract_test.go::TestCIIntegrationTopologyContract"
+      ],
       "tests": [
         {
           "type": "unit-go",
@@ -141,6 +167,14 @@
       "regressionType": "live-reproduction",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-3"],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration::TestKnowledgeStats_EmptyStoreReturnsZeroValues",
+        "tests/integration::TestPhotosContractCanary_ConfigNATSDBAndMLAgree/ml_sidecar_photos_contract_response",
+        "tests/integration::TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList",
+        "tests/integration::TestDriveFoundationCanary_ConfigNATSAndMigrationContracts/nats_DRIVE_stream_in_jetstream",
+        "tests/integration::TestDriveScanFixturePreservesHierarchyAndMetadata"
+      ],
       "tests": [
         {
           "type": "integration-live-stack",
@@ -167,6 +201,13 @@
       "regressionType": "quality-gate",
       "owner": "bubbles.implement",
       "acceptanceCriteria": ["AC-3", "AC-4"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "./smackerel.sh check",
+        "./smackerel.sh format --check",
+        "./smackerel.sh lint",
+        "./smackerel.sh test unit"
+      ],
       "tests": [
         {
           "type": "check",
@@ -201,6 +242,10 @@
       "regressionType": "live-system-observation",
       "owner": "bubbles.validate",
       "acceptanceCriteria": ["AC-1"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "curl https://api.github.com/repos/pkirsanov/smackerel/actions/runs/<FIX_RUN_ID>/jobs (.github/workflows/ci.yml subject)"
+      ],
       "tests": [
         {
           "type": "live-rest-observation",
@@ -220,6 +265,10 @@
       "regressionType": "live-system-observation",
       "owner": "bubbles.validate",
       "acceptanceCriteria": ["AC-5"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "curl https://api.github.com/repos/pkirsanov/smackerel/actions/workflows/ci.yml/runs?branch=main&per_page=3 (.github/workflows/ci.yml subject)"
+      ],
       "tests": [
         {
           "type": "live-rest-observation",
@@ -239,6 +288,10 @@
       "regressionType": "cross-artifact-contract",
       "owner": "bubbles.validate",
       "acceptanceCriteria": ["AC-6"],
+      "requiredTestType": "functional",
+      "linkedTests": [
+        "git diff specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/state.json"
+      ],
       "tests": [
         {
           "type": "cross-artifact-diff",
