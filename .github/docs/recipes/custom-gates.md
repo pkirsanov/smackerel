@@ -2,7 +2,7 @@
 
 > *"I AM the liquor, Randy. And now there's more liquor."*
 
-Add project-specific quality checks that run alongside Bubbles' built-in 64 gates.
+Add project-specific quality checks that run alongside Bubbles' built-in gate registry.
 
 ## Add a Gate via Agent
 
@@ -50,7 +50,7 @@ The state transition guard automatically discovers and runs these gates. Blockin
 
 ## Gate IDs
 
-- Built-in gates: G001–G064
+- Built-in gates: G001–G099 range, with active IDs listed in `bubbles/workflows.yaml`
 - Custom gates: G100+ (auto-assigned)
 - Custom gates survive Bubbles upgrades — `bubbles-project.yaml` is never overwritten
 

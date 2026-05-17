@@ -21,6 +21,8 @@ Purpose: mandatory planning-time rules for `bubbles.plan` and other planning-ori
 - Shared fixtures, harnesses, bootstrap/auth/session infrastructure, or storage/bootstrap contract changes must include a Shared Infrastructure Impact Sweep, an independent canary test row, and a rollback or restore path.
 - Narrow repairs and risky refactors must include a Change Boundary listing allowed file families plus excluded surfaces that must remain untouched.
 - UI work must include a UI scenario matrix.
+- If project config defines `testImpact`, run or reference `bubbles/scripts/test-impact-plan.sh` for the planned changed paths and include the resulting first-pass categories/checks in the Test Plan. This never downgrades final validation obligations.
+- If project config defines `traceContracts`, preserve tech-agnostic analyst Success Signals in `spec.md` and let design/test/validate translate them into trace workflow names, spans, attributes, and invariants in design/scopes/report evidence.
 
 ## Load Discipline
 - Prefer feature artifacts first.
@@ -96,3 +98,24 @@ This file enables structured handoff to `bubbles.test` — tests are discovered 
 - The JSON and Markdown Test Plan tables MUST stay in sync — divergence is a planning-core violation
 - `test-plan.json` is committed alongside `scopes.md` — never deferred
 - If `test-plan.json` does not exist when `bubbles.test` runs, test falls back to parsing Markdown Test Plan tables (backward compatibility)
+
+## Impact-Aware Planning Handoff (G079)
+
+When `.github/bubbles-project.yaml` or `bubbles-project.yaml` contains `testImpact`, `bubbles.plan` should use the impact map as a planning aid:
+
+- changed paths map to component names and canonical test categories
+- `alwaysRun` checks become explicit validation rows or Build Quality Gate notes
+- `fullSuiteTriggers` override narrow-first validation and must be called out in the plan
+
+The map is not an excuse to omit scenario-specific E2E, regression, stress, or final validation. It answers "what should run first for this changed surface?" not "what can be skipped?"
+
+## Trace Contract Planning Handoff (G080)
+
+When project config contains `traceContracts`, `bubbles.plan` should include trace evidence rows for relevant workflows. The rows should identify:
+
+- workflow contract name
+- trace/log artifact or command that will produce evidence
+- guard command (`bubbles/scripts/trace-contract-guard.sh --workflow <name> --trace-output <path>`)
+- expected business invariant demonstrated by the trace
+
+Analyst-owned `Success Signal` text remains business-observable and implementation-neutral. Technical trace details belong in `design.md`, `scopes.md`, `test-plan.json`, and report evidence.

@@ -258,3 +258,34 @@ capabilities:
     freshnessTargets:
     - agents/bubbles_shared/workflow-mode-resolution.md
     - bubbles/workflows.yaml
+
+  impact-aware-validation-trace-contracts:
+    label: Impact-aware validation and trace contracts
+    state: shipped
+    summary: >
+      Projects can now declare optional `testImpact` and `traceContracts` sections in `.github/bubbles-project.yaml` or `bubbles-project.yaml`. `test-impact-plan.sh` maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers (G079). `trace-contract-guard.sh` validates actual trace/log evidence against required spans, attributes, invariants, and red flags (G080). Both are no-op when unconfigured unless invoked with `--require-config`, and neither weakens final completion gates.
+    ownerSurface: bubbles/scripts/test-impact-plan.sh
+    releaseIntroduced: v3.9.0
+    docsRefs:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/impact-aware-validation.md
+    - agents/bubbles_shared/project-config-contract.md
+    - agents/bubbles_shared/planning-core.md
+    - agents/bubbles_shared/test-core.md
+    - agents/bubbles_shared/validation-core.md
+    evidenceRefs:
+    - bubbles/scripts/test-impact-plan.sh
+    - bubbles/scripts/test-impact-plan-selftest.sh
+    - bubbles/scripts/trace-contract-guard.sh
+    - bubbles/scripts/trace-contract-guard-selftest.sh
+    - bubbles/scripts/framework-validate.sh
+    - bubbles/workflows.yaml
+    competitorTags:
+    - test-impact-analysis
+    - observability-contracts
+    - trace-validation
+    freshnessTargets:
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/impact-aware-validation.md
+    - agents/bubbles_shared/project-config-contract.md
+    - bubbles/workflows.yaml

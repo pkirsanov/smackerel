@@ -72,6 +72,10 @@ bubbles/scripts/state-snapshot.sh
 bubbles/scripts/state-transition-guard-selftest.sh
 bubbles/scripts/state-transition-guard.sh
 bubbles/scripts/super-surface-selftest.sh
+bubbles/scripts/test-impact-plan-selftest.sh
+bubbles/scripts/test-impact-plan.sh
+bubbles/scripts/trace-contract-guard-selftest.sh
+bubbles/scripts/trace-contract-guard.sh
 bubbles/scripts/traceability-guard-selftest.sh
 bubbles/scripts/traceability-guard.sh
 bubbles/scripts/trajectory-inspector-selftest.sh
@@ -142,6 +146,7 @@ docs/recipes/fix-a-bug.md
 docs/recipes/framework-ops.md
 docs/recipes/grill-an-idea.md
 docs/recipes/idea-to-release.md
+docs/recipes/impact-aware-validation.md
 docs/recipes/just-tell-bubbles.md
 docs/recipes/new-feature.md
 docs/recipes/ops-packet-work.md
