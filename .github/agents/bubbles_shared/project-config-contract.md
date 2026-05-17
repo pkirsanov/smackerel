@@ -20,6 +20,19 @@ This document defines:
 4. **What is portable** — skills, instructions, agents, and governance that copy unchanged across projects
 5. **What is project-specific** — the configuration that each project must customize
 
+## Downstream Authorship Boundary
+
+Downstream repos consume Bubbles framework files; they do not author them. Any installed file under `.github/bubbles/**`, `.github/agents/bubbles.*.agent.md`, `.github/agents/bubbles_shared/**`, `.github/prompts/bubbles.*.prompt.md`, `.github/instructions/bubbles-*`, or `.github/skills/bubbles-*` is a framework-managed install artifact.
+
+If a downstream repo needs a behavior change in one of those files, classify it before editing:
+
+| Classification | Required action |
+|----------------|-----------------|
+| Reusable Bubbles behavior, bug fix, script, gate, workflow, shared instruction, shared skill, or shared doc | Create a project-owned proposal with `bubbles framework-proposal <slug>` or `.github/bubbles-project/proposals/**`, implement the change in the Bubbles source repo, then upgrade downstream installs. |
+| Repo-specific policy, command, config, test mapping, trace contract, docs layout, or local enforcement | Put it in project-owned files such as `.github/copilot-instructions.md`, `.specify/memory/agents.md`, `.specify/memory/constitution.md`, `.github/bubbles-project.yaml`, `scripts/**`, `docs/**`, or `specs/**`. |
+
+Never commit a local patch to framework-managed files in a consumer repo. `framework-write-guard` and `doctor` compare installed files to `.github/bubbles/.checksums`; drift means either "move this to a project-owned surface" or "fix Bubbles upstream and reinstall," not "repair the checksum."
+
 ---
 
 ## Required Project Configuration Files

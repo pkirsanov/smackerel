@@ -205,7 +205,7 @@ Conflicts detected:
    - Tests changed from strict to permissive (e.g., `toEqual` → `toBeDefined`)
    - New `skip`/`ignore`/`pending` markers added to existing tests
 
-### Step 5: Deployment Regression Detection (Build-Once Deploy-Many — Gate G079)
+### Step 5: Deployment Regression Detection (Build-Once Deploy-Many — Gate G081)
 
 **Goal:** Detect Build-Once Deploy-Many regressions before they reach a target host.
 
@@ -255,7 +255,7 @@ When invoked on a target spec or PR:
 
 - Skill: `bubbles-deployment-target-adapter` — Build-Once Deploy-Many Pattern, Idempotency Checklist, CI ↔ Adapter Handshake
 - Skill: `bubbles-config-sst` — Config Bundle Artifact section
-- State gate **G079 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
+- State gate **G081 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
 - Adversarial regression policy — already enforced by `bubbles-test-integrity` skill; deployment regressions follow the same "would the prior bug be reintroduced?" test
 
 ---
@@ -409,7 +409,7 @@ Before reporting verdict, this agent MUST run Tier 1 universal checks from [vali
 | R5 | Regression coverage added | Every regression found has a corresponding regression test |
 | R6 | No silent-pass patterns | Required E2E files pass anti-false-positive scans, including redirect/login bailout checks |
 | R7 | Adversarial bugfix coverage | Bug-fix regressions include at least one adversarial case instead of only tautological fixtures |
-| R8 | Deployment regression scan executed | When deployment surface (`deploy/`, `.github/workflows/build.yml`, `config/<project>.yaml`, `scripts/deploy/`) changed, all Step 5 detection greps were run with raw output evidence; bundle determinism + idempotency checks completed when applicable; severity-classified findings routed per Gate G079 |
+| R8 | Deployment regression scan executed | When deployment surface (`deploy/`, `.github/workflows/build.yml`, `config/<project>.yaml`, `scripts/deploy/`) changed, all Step 5 detection greps were run with raw output evidence; bundle determinism + idempotency checks completed when applicable; severity-classified findings routed per Gate G081 |
 
 If any required check fails, do not report a regression verdict. Fix the issue first.
 
