@@ -155,33 +155,33 @@
 
 ### Validation Phase (bubbles.validate — pending)
 
-- [ ] **What:** AC-1 — CI `integration` job conclusion is `success` on the fix HEAD.
+- [x] **What:** AC-1 — CI `integration` job conclusion is `success` on the fix HEAD.
   - **Steps:**
     1. After fix lands, get the resulting CI run id from `git log` / push output.
     2. `curl -s https://api.github.com/repos/pkirsanov/smackerel/actions/runs/<FIX_RUN_ID>/jobs | python3 -m json.tool | grep -E '"(name|conclusion)"' | head -50`.
     3. Confirm `integration` job conclusion = `success`.
   - **Expected:** Fix HEAD CI is green.
   - **Verify:** Anonymous REST API.
-  - **Evidence:** report.md Scope 2 close-out.
-  - **Notes:** Pending fix.
+  - **Evidence:** [report.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md) § Validation Evidence > Command — FIX_HEAD CI run (AC-1); [scopes.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/scopes.md) § Scope 4 DoD-1; CI run id 25978673800 on FIX_HEAD 885fc190.
+  - **Notes:** **TICKED** by `bubbles.validate` 2026-05-17T04:00Z per explicit user mandate. FIX_HEAD CI run 25978673800 integration job conclusion=success; all 11 integration job steps green; `Run integration tests` step conclusion=success; `Fail job if integration tests failed` step conclusion=skipped per the success-path conditional design. Run URL: <https://github.com/pkirsanov/smackerel/actions/runs/25978673800>.
 
-- [ ] **What:** AC-5 — Chronic-failure pattern broken (3 consecutive main runs after fix HEAD show success).
+- [x] **What:** AC-5 — Chronic-failure pattern broken (3 consecutive main runs after fix HEAD show success). **FULLY VERIFIED** — 4 consecutive green runs on record (exceeds 3-of-3 bar by 1).
   - **Steps:**
     1. After 3 main pushes following fix HEAD, run the chronic-history curl.
     2. Confirm 3/3 most recent runs show conclusion = success.
   - **Expected:** Pattern broken.
   - **Verify:** Anonymous REST API.
-  - **Evidence:** report.md Scope 2 close-out.
-  - **Notes:** Pending fix + 3 pushes.
+  - **Evidence:** [report.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md) § Validation Evidence > Command — 4-consecutive-success curl on main (AC-5); [scopes.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/scopes.md) § Scope 4 DoD-5; verbatim curl table with 4 success rows after FIX_HEAD followed by 6 failure rows preceding FIX_HEAD.
+  - **Notes:** **TICKED** by `bubbles.validate` 2026-05-17T04:00Z per explicit user mandate. 4 consecutive green CI runs on main since FIX_HEAD — EXCEEDS the 3-of-3 bar by 1: 885fc190 → 75bb1611 → d20157a3 → abf7615f. Pre-fix pattern: 6 consecutive failures immediately preceding FIX_HEAD (5c8d857e, ad512fc6, e53ee406, 0c67122e, 3472f603, 501b91c3). The 20-consecutive-failure pattern recorded in state.json § crossReferences.ciRunEvidence.chronicPatternLength is decisively broken. Run URLs: <https://github.com/pkirsanov/smackerel/actions/runs/25978673800> + 3 successors.
 
 ### Cross-Reference Phase (bubbles.validate — pending)
 
-- [ ] **What:** AC-6 — BUG-045-001 state.json updated with subsequentResolutions entry pointing to BUG-045-002.
+- [x] **What:** AC-6 — BUG-045-001 state.json updated with subsequentResolutions entry pointing to BUG-045-002.
   - **Steps:**
     1. Read BUG-045-001's state.json.
     2. Confirm new field `subsequentResolutions` with entry pointing to BUG-045-002.
     3. Confirm BUG-045-001's certification status is unchanged (still `done, passed-with-known-drift`).
   - **Expected:** Cross-reference added; BUG-045-001 certification unchanged.
   - **Verify:** `read_file` of BUG-045-001 state.json.
-  - **Evidence:** BUG-045-001 state.json + this packet's report.md Scope 2 close-out.
-  - **Notes:** Pending fix.
+  - **Evidence:** BUG-045-001 [state.json](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/state.json) § subsequentResolutions[] + this packet's [report.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md) § Validation Evidence > Per-AC verification (AC-6 row) + [scopes.md](specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/scopes.md) § Scope 4 DoD-6.
+  - **Notes:** **TICKED** by `bubbles.validate` 2026-05-17T04:00Z per explicit user mandate. BUG-045-001 state.json subsequentResolutions[] entry committed in FIX_HEAD 885fc190 with id=BUG-045-002, path cross-reference to this packet, full rationale + certificationImplication + honestyTrailLink fields. BUG-045-001 certification.status unchanged at `done`; auditVerdict unchanged at `passed-with-known-drift`; NOT reopened. Verified via python3 -c json.load output captured in scopes.md § Scope 4 DoD-6 evidence block.
