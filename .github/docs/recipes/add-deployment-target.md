@@ -137,7 +137,7 @@ Skip this step and the adapter is not real — it is a wishlist that has not bee
 |--------|------------|
 | Greenfield target on a fresh host | `/bubbles.devops focus: deployment-target add a new target named <name>` |
 | Mirror an existing target (second machine, same env) | `/bubbles.devops focus: deployment-target mirror <existing-target> as <new-target>` |
-| Migrate an old hand-rolled deploy script to the per-target adapter layout | `/bubbles.devops focus: deployment-target migrate legacy <name> deploy script to G079 adapter layout` |
+| Migrate an old hand-rolled deploy script to the per-target adapter layout | `/bubbles.devops focus: deployment-target migrate legacy <name> deploy script to G081 adapter layout` |
 | Add a target that consumes a brand-new env | `/bubbles.devops focus: deployment-target add target <name> with new env <env>` |
 
 ## Idempotency Checklist (Canonical)
@@ -157,9 +157,9 @@ These are the most-violated invariants. A new target is not green until ALL of t
 
 ## Forbidden Patterns
 
-What makes the new target invalid. Cite Gate **G079 (Build-Once Deploy-Many Integrity)** when rejecting any of these.
+What makes the new target invalid. Cite Gate **G081 (Build-Once Deploy-Many Integrity)** when rejecting any of these.
 
-| Forbidden | Why It Breaks G079 | Use Instead |
+| Forbidden | Why It Breaks G081 | Use Instead |
 |-----------|--------------------|-------------|
 | Mutable image tag in the new target's `manifest.yaml` (`:latest`, `:main`, env-named tags) | Loses digest pinning; same tag drifts to different bytes over time | Pin `image: <registry>/<project>/<service>@sha256:<digest>` |
 | New target's `apply.sh` invokes a build command for any language toolchain | Defeats the build-once invariant; the deployed bytes are not the CI-tested bytes | Pull pre-built image by digest from registry |
@@ -234,4 +234,4 @@ Capture the raw output of each command in `report.md` per the per-DoD-item evide
 
 ## Related Gate
 
-- **G079 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
+- **G081 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`

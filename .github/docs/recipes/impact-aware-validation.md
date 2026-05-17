@@ -94,9 +94,11 @@ Run without `--workflow` to check all configured contracts against the same evid
 ## Workflow Rules
 
 - `testImpact` answers what should run first, not what can be skipped.
+- Narrow-first validation is an ordering choice only. It is useful for fast feedback and triage; it is never a closeout shortcut.
 - Full-suite triggers always win over narrow-first planning.
 - Scenario-specific E2E, regression, stress, outcome-contract, and state-transition gates still apply.
 - `traceContracts` validate actual trace/log output only. Code inspection is not trace evidence.
+- Trace evidence means captured runtime trace/log output from the workflow under validation. Planned spans, source inspection, or screenshots of instrumentation code do not satisfy G080.
 - Analyst-owned Success Signals stay business-observable and tech-agnostic. Design, test, and validate translate those signals into spans, attributes, and invariants.
 
 ## When It Helps

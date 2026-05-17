@@ -40,7 +40,7 @@ Tommy does NOT touch `docs/releases/<phase>/deployment.md`. That is a packet doc
 
 **Step B — Sonny refreshes ONLY the `deployment.md` packet doc.**
 
-`bubbles.releases` is invoked with `refresh <phase>` scoped to the deployment doc. He reads the new technical surface, drafts the narrative, and cites the canonical surfaces (`bubbles-deployment-target-adapter` skill, state-gate G079, the new adapter directory). He does NOT touch deploy adapter code. That is technical implementation and it belongs to Tommy.
+`bubbles.releases` is invoked with `refresh <phase>` scoped to the deployment doc. He reads the new technical surface, drafts the narrative, and cites the canonical surfaces (`bubbles-deployment-target-adapter` skill, state-gate G081, the new adapter directory). He does NOT touch deploy adapter code. That is technical implementation and it belongs to Tommy.
 
 **Validation handshake.**
 
@@ -82,7 +82,7 @@ For multi-phase impact, repeat the invocation per phase:
 Sonny reads the new technical surface (the changed adapter directory, the updated CI workflow, the new bundle layout), drafts the narrative inside `docs/releases/<phase>/deployment.md`, and cites the canonical surfaces:
 
 - The `bubbles-deployment-target-adapter` skill (link to the section that documents the change)
-- State-gate **G079 (Build-Once Deploy-Many Integrity)** (in `agents/bubbles_shared/state-gates.md`)
+- State-gate **G081 (Build-Once Deploy-Many Integrity)** (in `agents/bubbles_shared/state-gates.md`)
 - The new or changed adapter directory (`deploy/<target>/`)
 - The new or changed CI job (if applicable)
 
@@ -109,7 +109,7 @@ Only after Tommy returns `completed_owned` does Sonny mark the packet doc done.
 | `bubbles.devops` editing `docs/releases/<phase>/deployment.md` directly | ROLE VIOLATION — Tommy is the technical owner; packet docs are Sonny's surface. Tommy editing the packet doc means there is no independent narrative review. |
 | `bubbles.releases` editing deploy adapter code (anything under `deploy/<target>/`, `.github/workflows/build.yml`, `scripts/deploy/`) | ROLE VIOLATION — Sonny is the narrative owner; technical surfaces are Tommy's. Sonny editing adapter code means there is no independent technical review. |
 | Refreshing the packet without devops technical-accuracy validation | BLOCKING — the narrative may describe a deployment story that no longer matches reality. The validation handshake is what catches this. |
-| Refreshing the packet doc with marketing language about "secure deploys" without citing G079 | Fails the honest-capability rule. "Secure deploys" is unverifiable copy; "G079-compliant pipeline with cosign keyless signing, SBOM + SLSA attestations, and per-target adapter pointer-swap rollback" is verifiable copy. |
+| Refreshing the packet doc with marketing language about "secure deploys" without citing G081 | Fails the honest-capability rule. "Secure deploys" is unverifiable copy; "G081-compliant pipeline with cosign keyless signing, SBOM + SLSA attestations, and per-target adapter pointer-swap rollback" is verifiable copy. |
 | Skipping Step A and refreshing the packet doc first to "get ahead" | The narrative will describe the OLD technical surface; you will rewrite it once Tommy ships the change. Always Step A first. |
 | Running both invocations in the same agent session without the validation handshake | The handshake is the gate. Without it, the packet ships unreviewed. |
 
@@ -140,4 +140,4 @@ Only after Tommy returns `completed_owned` does Sonny mark the packet doc done.
 
 ## Related Gate
 
-- **G079 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
+- **G081 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`

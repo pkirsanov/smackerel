@@ -243,7 +243,7 @@ For each doc in scope (`docs:` arg restricts; default all 8), write or refresh:
 - Rollback strategy
 - Health check + observability requirements
 
-**Cross-agent handoff — bubbles.devops:** When `deployment.md` documents signed-image promotion, per-target adapters, cosign verification, config bundle artifacts, manifest pointers, or any Build-Once Deploy-Many invariant (Gate G079), `bubbles.releases` MUST cite the canonical surface (`bubbles-deployment-target-adapter` skill + state-gates.md G079) and MUST recommend `runSubagent(bubbles.devops): focus: deployment-target` for technical-accuracy validation before the packet is published. Sonny writes the narrative; Tommy Bean owns the technical claim.
+**Cross-agent handoff — bubbles.devops:** When `deployment.md` documents signed-image promotion, per-target adapters, cosign verification, config bundle artifacts, manifest pointers, or any Build-Once Deploy-Many invariant (Gate G081), `bubbles.releases` MUST cite the canonical surface (`bubbles-deployment-target-adapter` skill + state-gates.md G081) and MUST recommend `runSubagent(bubbles.devops): focus: deployment-target` for technical-accuracy validation before the packet is published. Sonny writes the narrative; Tommy Bean owns the technical claim.
 
 #### `marketing.md`
 - Audience segments + messaging per segment

@@ -53,7 +53,7 @@ Use when:
 
 ## Build-Once Deploy-Many Work
 
-When the project ships images to multiple environments and Gate **G079** is in scope, every change MUST keep these invariants intact:
+When the project ships images to multiple environments and Gate **G081** is in scope, every change MUST keep these invariants intact:
 
 | Invariant | What |
 |-----------|------|

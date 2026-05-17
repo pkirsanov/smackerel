@@ -235,6 +235,10 @@ gates:
     name: trace_contract_evidence_gate
     description: >-
       ADVISORY-UNTIL-CONFIGURED gate. When a project supplies `.github/bubbles-project.yaml` or `bubbles-project.yaml` with `traceContracts`, validation phases SHOULD run `bubbles/scripts/trace-contract-guard.sh` against actual trace/log evidence for the relevant workflow. The guard checks required span strings, attributes, invariants, and red-flag absence. Missing trace contracts are a clean no-op unless the caller uses `--require-config`; missing required trace evidence is a validation gap, not a substitute for implementation or test proof.
+  G081:
+    name: build_once_deploy_many_integrity_gate
+    description: >-
+      ADVISORY-UNLESS-DEPLOYMENT-SCOPE gate. When a project ships immutable artifacts to multiple environments, deployment surfaces MUST preserve Build-Once Deploy-Many invariants: image references pin by digest, CI stops at registry/config-bundle publication, per-target adapters consume artifacts without rebuilding, signatures and bundle hashes are verified before apply, rollback is pointer-swap only, bundles are deterministic, and each target owns its own manifest pointer. Framework docs and deployment-target skills define the portable invariant; downstream product repos decide when it is blocking in project policy.
 
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
@@ -768,7 +772,7 @@ modeDefaults:
     requireSmallWellDefinedScopes: true
     requireRedGreenEvidence: true
     enableMicroFixLoops: true
-    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080 ]
+    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080, G081 ]
 
 # Batch Execution Parameter (NON-NEGOTIABLE)
 #

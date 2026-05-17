@@ -22,7 +22,7 @@ Build-Once Deploy-Many fixes this with the **three-artifact model**:
 | Config bundle | `<env>-<bundle-hash>` (one per env, deterministic) | Immutable per `(env, sourceSha)` | CI build job | Adapter `apply` on the matching env's target |
 | Deployment manifest | `deploy/<target>/manifest.yaml` (image digest + bundle hash pointer pair) | Mutable (operator-controlled) | Adapter `apply` action on the target | Adapter `status`, `verify`, `rollback` |
 
-Gate **G079 (Build-Once Deploy-Many Integrity)** enforces this — advisory in the framework, blocking in opted-in product repos.
+Gate **G081 (Build-Once Deploy-Many Integrity)** enforces this — advisory in the framework, blocking in opted-in product repos.
 
 ## Pipeline Shape
 
@@ -125,7 +125,7 @@ bash scripts/deploy/rollback.sh --target <target>
 | Add `scripts/deploy/promote.sh` / `rollback.sh` | `/bubbles.devops focus: release-automation` |
 | Add config bundle generation to SST | `/bubbles.devops focus: config-sst` |
 | Update the deployment.md doc inside a phase release packet | `/bubbles.workflow mode: release-planning-to-doc <phase> mode: refresh` (Sonny edits the deployment.md packet doc) |
-| Audit a deployment surface for G079 violations | `/bubbles.security` (supply-chain section) and `/bubbles.regression` (deployment regression scan) |
+| Audit a deployment surface for G081 violations | `/bubbles.security` (supply-chain section) and `/bubbles.regression` (deployment regression scan) |
 | Detect deployment regressions | `/bubbles.regression` (looks for digest drift, bundle drift, mutable-tag reintroduction, removed cosign calls) |
 
 ## Verification Checklist
@@ -156,6 +156,6 @@ Use this before merging any change that touches `deploy/`, `.github/workflows/bu
 - Instructions: [`bubbles-docker-lifecycle-governance.instructions.md`](../../instructions/bubbles-docker-lifecycle-governance.instructions.md)
 - Instructions: [`bubbles-docker-ports.instructions.md`](../../instructions/bubbles-docker-ports.instructions.md)
 - Instructions: [`bubbles-test-environment-isolation.instructions.md`](../../instructions/bubbles-test-environment-isolation.instructions.md)
-- State Gate: **G079 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
+- State Gate: **G081 (Build-Once Deploy-Many Integrity)** — `agents/bubbles_shared/state-gates.md`
 - Related recipe: [DevOps Work](devops-work.md) — focused devops execution lane
 - Related recipe: [Release Planning](release-planning.md) — Sonny's release packet authoring (deployment.md packet doc)

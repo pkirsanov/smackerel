@@ -307,10 +307,10 @@ bash bubbles/scripts/implementation-reality-scan.sh {FEATURE_DIR} --verbose
 - Decode error logged but swallowed (log + continue) → **MEDIUM** (data loss still possible)
 - Decode error propagated as Result::Err or exception → **PASS**
 
-#### 3.7 Build-Once Deploy-Many Supply-Chain Security (Gate G079)
+#### 3.7 Build-Once Deploy-Many Supply-Chain Security (Gate G081)
 
 When a project ships container images to multiple environments via the
-Build-Once Deploy-Many pattern (state-gate **G079 — Build-Once Deploy-Many
+Build-Once Deploy-Many pattern (state-gate **G081 — Build-Once Deploy-Many
 Integrity** in [state-gates.md](bubbles_shared/state-gates.md)), the
 supply-chain attack surface expands sharply. CI builds and signs once;
 operators (or separately credentialed automation) deploy by digest. Any
@@ -383,13 +383,13 @@ Map all findings to OWASP Top 10 (2021) categories:
 | Category | ID | What to Check |
 |----------|-----|--------------|
 | Broken Access Control | A01 | Auth bypass, privilege escalation, **IDOR (body identity extraction — Gate G047)**, CORS misconfig |
-| Cryptographic Failures | A02 | Weak hashing, plaintext secrets, insecure TLS config, **plaintext secrets inside config bundle artifacts (Gate G079)** |
+| Cryptographic Failures | A02 | Weak hashing, plaintext secrets, insecure TLS config, **plaintext secrets inside config bundle artifacts (Gate G081)** |
 | Injection | A03 | SQL, OS command, LDAP, XSS, template injection |
 | Insecure Design | A04 | Missing threat model, inadequate trust boundaries |
-| Security Misconfiguration | A05 | Default credentials, verbose errors, unnecessary features, **CI/deploy fusion (Gate G079)**, single-manifest collision across deployment targets |
-| Vulnerable Components | A06 | Known CVEs in dependencies, outdated libraries, **Trivy CRITICAL/HIGH gate disabled (Gate G079)**, **mutable image tags in deployment manifest (Gate G079)** |
+| Security Misconfiguration | A05 | Default credentials, verbose errors, unnecessary features, **CI/deploy fusion (Gate G081)**, single-manifest collision across deployment targets |
+| Vulnerable Components | A06 | Known CVEs in dependencies, outdated libraries, **Trivy CRITICAL/HIGH gate disabled (Gate G081)**, **mutable image tags in deployment manifest (Gate G081)** |
 | Auth Failures | A07 | Weak passwords, session fixation, credential stuffing |
-| Data Integrity Failures | A08 | Insecure deserialization, unsigned updates, **silent decode failures (Gate G048)**, **missing cosign verification on container images (Gate G079)**, **missing SBOM/SLSA attestations (Gate G079)**, **adapter-side rebuild fallback (Gate G079)**, **non-deterministic config bundles (Gate G079)** |
+| Data Integrity Failures | A08 | Insecure deserialization, unsigned updates, **silent decode failures (Gate G048)**, **missing cosign verification on container images (Gate G081)**, **missing SBOM/SLSA attestations (Gate G081)**, **adapter-side rebuild fallback (Gate G081)**, **non-deterministic config bundles (Gate G081)** |
 | Logging Failures | A09 | Missing security event logs, log injection, **silently discarded decode errors (Gate G048)** |
 | SSRF | A10 | Server-side request forgery via user-controlled URLs |
 

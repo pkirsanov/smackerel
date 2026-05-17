@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 67 Gates · 35 Workflow Modes · 26 Phases**
+> **37 Agents · 68 Gates · 35 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -228,6 +228,8 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `adoption profile` | Maturity-tier onboarding posture such as `foundation`, `delivery`, or `assured`. It changes guidance and early guardrail messaging, not certification rigor. |
 | `release manifest` | Upstream trust bundle that states what version shipped, which profiles and interop sources are supported, what surfaces were validated, and which managed files belong to the release. |
 | `install provenance` | The install record that explains where a downstream framework copy came from and whether local-source risk exists before upgrade or doctor guidance is trusted. |
+| `framework-managed boundary` | Downstream `.github/bubbles/**`, `bubbles.*` agents/prompts, shared Bubbles instructions, and shared Bubbles skills are install artifacts. Do not patch them in a consumer repo; propose upstream or move the change to a project-owned file. |
+| `project-owned extension` | Repo-specific Bubbles customization that belongs outside the framework layer: `.github/bubbles-project.yaml`, `.github/bubbles-project/proposals/**`, project docs, project scripts, project specs, and repo-local policy files. |
 | `source-native refresh` | In the Bubbles source repo, maintain the framework directly and use `bash bubbles/scripts/cli.sh ...` validation surfaces. `install.sh` is for downstream repos, not for installing Bubbles into the Bubbles checkout itself. |
 | `trust preview` | Upgrade dry-run output that compares the current installed provenance and manifest to the target release before any framework-managed files are replaced. |
 | `review-only interop intake` | Project-owned import path that snapshots and normalizes Claude Code, Roo Code, Cursor, or Cline assets without mutating framework-managed Bubbles files. |
@@ -250,12 +252,15 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `cross-product coordination` | When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule. |
 | `surfaced principle` | A product principle drafted from existing repo evidence by the `bubbles-product-principle-discovery` skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not. |
 | `test impact map` | Optional project-owned `testImpact` config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates. |
+| `narrow-first validation` | Run the impact-mapped focused checks first so feedback is fast, then still run every required closeout gate and broad suite. |
+| `full-suite trigger` | A high-blast-radius path pattern in `testImpact` that forces broad validation even when the direct change looks small. |
 | `trace contract` | Optional project-owned `traceContracts` config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions. |
+| `trace evidence` | Captured runtime trace/log output used by G080. Code inspection, expected spans, or planned instrumentation do not count. |
 
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 67 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 68 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
@@ -335,6 +340,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G070 | Outcome contract | spec.md must have Outcome Contract (Intent, Success Signal, Hard Constraints, Failure Condition); validate verifies the outcome was actually achieved |
 | G079 | Impact-aware validation plan | Project `testImpact` maps changed paths to first-pass categories/checks and full-suite triggers; never weakens final gates |
 | G080 | Trace contract evidence | Project `traceContracts` validate actual trace/log evidence for required spans, attributes, invariants, and red-flag absence |
+| G081 | Build-Once Deploy-Many integrity | Deployment surfaces preserve immutable artifacts, digest pinning, CI/deploy separation, verified adapters, deterministic bundles, and pointer-swap rollback |
 
 ---
 

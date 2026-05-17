@@ -121,7 +121,7 @@ These four gates harden `state.json` against the most common fabrication pattern
 
 These gates have no associated agent prose elsewhere — `bubbles/workflows.yaml` and this section are the authoritative description.
 
-## Build-Once Deploy-Many Integrity Gate (G079)
+## Build-Once Deploy-Many Integrity Gate (G081)
 
 **Status in framework:** Advisory. Becomes BLOCKING when a downstream product repo opts in via its own `copilot-instructions.md`.
 
@@ -143,4 +143,4 @@ Blocked patterns:
 
 Enforced by: `bubbles-deployment-target-adapter` skill (Build-Once Deploy-Many Pattern, CI ↔ Adapter Handshake, Anti-Patterns table), `bubbles-deployment-target.instructions.md` (Build-Once Deploy-Many section), `bubbles-config-sst` skill (Config Bundle Artifact section).
 
-Downstream enforcement (when a product repo declares G079 BLOCKING in its `copilot-instructions.md`): pre-push hook scans for mutable-tag patterns in deployment manifests; CI workflow lint scans for build/deploy fusion; adapter `apply.sh` audit confirms cosign verification call site exists.
+Downstream enforcement (when a product repo declares G081 BLOCKING in its `copilot-instructions.md`): pre-push hook scans for mutable-tag patterns in deployment manifests; CI workflow lint scans for build/deploy fusion; adapter `apply.sh` audit confirms cosign verification call site exists.

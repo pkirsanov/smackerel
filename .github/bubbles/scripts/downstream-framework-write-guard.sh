@@ -83,7 +83,7 @@ if [[ ! -f "$CHECKSUM_FILE" ]]; then
   fail_line "Missing framework checksum snapshot: .github/bubbles/.checksums"
   [[ "$quiet" == "true" ]] || {
     echo "   Remediation: rerun the Bubbles installer or /bubbles.setup mode: refresh from the upstream Bubbles repo."
-    echo "   Do not create or patch framework-managed files by hand in a consumer repo."
+    echo "   Do not create, patch, or checksum-repair framework-managed files by hand in a consumer repo."
   }
   exit 1
 fi
@@ -161,9 +161,11 @@ if [[ "$violations" -gt 0 ]]; then
   [[ "$quiet" == "true" ]] || {
     echo ""
     echo "Downstream repos must not directly author changes in framework-managed Bubbles files."
-    echo "Use a project-owned proposal instead: .github/bubbles-project/proposals/"
-    echo "Suggested flow: bubbles framework-proposal <slug>"
-    echo "Then implement the change in the Bubbles source repo and refresh this repo's framework install."
+    echo "Classify the desired change instead:"
+    echo "  - Reusable framework behavior -> create .github/bubbles-project/proposals/<slug>.md or run: bubbles framework-proposal <slug>"
+    echo "    Then implement the change in the Bubbles source repo and refresh this repo's framework install."
+    echo "  - Repo-specific policy/config/docs/test mapping -> move it to project-owned files such as .github/copilot-instructions.md, .specify/memory/agents.md, .github/bubbles-project.yaml, scripts/**, docs/**, or specs/**."
+    echo "Never repair this by editing .github/bubbles/.checksums downstream."
   }
   exit 1
 fi

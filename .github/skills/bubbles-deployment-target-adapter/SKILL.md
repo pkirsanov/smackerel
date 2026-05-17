@@ -531,7 +531,7 @@ diff -q <container-runtime-daemon-config>.snapshot.before <container-runtime-dae
 | Vertical Slice (G035) | Deployment artifact (reverse-proxy site, init-system unit, etc.) must exist for every target the service is deployed to |
 | Pre-Completion Self-Audit | `deploy <target> bootstrap` re-run idempotency proof must be in evidence |
 | Docker Lifecycle Governance | Adapter teardown must not destroy peer adapters' state |
-| **Build-Once-Deploy-Many Integrity (G079)** | Production deployment manifests MUST pin image by digest, MUST have a CI-signed signature, and MUST consume a CI-published config bundle. No mutable tags. No deploy-time rebuilds. |
+| **Build-Once-Deploy-Many Integrity (G081)** | Production deployment manifests MUST pin image by digest, MUST have a CI-signed signature, and MUST consume a CI-published config bundle. No mutable tags. No deploy-time rebuilds. |
 
 ## References
 

@@ -1212,8 +1212,20 @@
     <div class="wf-desc">Optional project-owned <code>testImpact</code> config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates.</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">narrow-first validation</div>
+    <div class="wf-desc">Run the impact-mapped focused checks first so feedback is fast, then still run every required closeout gate and broad suite.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">full-suite trigger</div>
+    <div class="wf-desc">A high-blast-radius path pattern in <code>testImpact</code> that forces broad validation even when the direct change looks small.</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">trace contract</div>
     <div class="wf-desc">Optional project-owned <code>traceContracts</code> config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">trace evidence</div>
+    <div class="wf-desc">Captured runtime trace/log output used by G080. Code inspection, expected spans, or planned instrumentation do not count.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
@@ -1230,6 +1242,14 @@
   <div class="workflow-card">
     <div class="wf-name">install provenance</div>
     <div class="wf-desc">Installed-source record that tells you where the framework copy came from and whether local-source upgrade risk exists before you trust doctor or upgrade output.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">framework-managed boundary</div>
+    <div class="wf-desc">Downstream <code>.github/bubbles/**</code>, <code>bubbles.*</code> agents/prompts, shared Bubbles instructions, and shared Bubbles skills are install artifacts. Do not patch them in a consumer repo; propose upstream or move the change to a project-owned file.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">project-owned extension</div>
+    <div class="wf-desc">Repo-specific Bubbles customization that belongs outside the framework layer: <code>.github/bubbles-project.yaml</code>, <code>.github/bubbles-project/proposals/**</code>, project docs, project scripts, project specs, and repo-local policy files.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">source-native refresh</div>
@@ -1825,8 +1845,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 67 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 67 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 68 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 68 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -1851,7 +1871,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "67 gates, boys. That's more security than the trailer park has ever had.
+  "68 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -1867,7 +1887,7 @@
   <p>Bubbles Agent System v3.9.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>67 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>68 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>
