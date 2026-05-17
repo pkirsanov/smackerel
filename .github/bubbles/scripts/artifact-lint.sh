@@ -70,6 +70,11 @@ pass() {
   echo "✅ $message"
 }
 
+info() {
+  local message="$1"
+  echo "ℹ️  $message"
+}
+
 json_first_string() {
   local key="$1"
   local file="$2"
