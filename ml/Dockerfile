@@ -60,6 +60,19 @@ LABEL org.opencontainers.image.created="${BUILD_TIME}"
 LABEL org.opencontainers.image.title="smackerel-ml"
 LABEL org.opencontainers.image.source="https://github.com/smackerel/smackerel"
 
+# spec-047 R14 (BUG-047-002 close-out 2026-05-16): apply Debian Security
+# updates to OS packages shipped by the python:3.12-slim base image.
+# python:3.12-slim is rebuilt on Python releases, not on Debian Security
+# advisories, so OS packages lag by weeks. CVEs addressed at this close-out:
+#   CVE-2026-4878  libcap2     1:2.75-10+b8     -> 1:2.75-10+deb13u1
+#   CVE-2026-29111 libsystemd0 257.9-1~deb13u1  -> 257.13-1~deb13u1
+#   CVE-2026-29111 libudev1    257.9-1~deb13u1  -> 257.13-1~deb13u1
+# This step absorbs future Debian Security updates automatically on every
+# rebuild; the spec 047 R13 Trivy gate catches anything left behind.
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 ENV HOME=/home/smackerel
