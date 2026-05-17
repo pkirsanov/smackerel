@@ -125,19 +125,17 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: smackerel
-          POSTGRES_PASSWORD: smackerel
-          POSTGRES_DB: smackerel_test
-        ports:
-        - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U smackerel -d smackerel_test" --health-interval 5s --health-timeout 5s --health-retries 5
+    # spec-045 BUG-045-002 DD-3: raise 15 → 30 to absorb the cold-cache Ollama
+    # image pull (~4 GB) + test model pull (~3 GB for gemma3:4b) + Compose
+    # build of smackerel-core / smackerel-ml that the full local stack
+    # requires when brought up by ./smackerel.sh --env test up. See
+    # specs/045-deploy-resource-filesystem-hardening/bugs/
+    # BUG-045-002-ci-integration-failure-persists/design.md § Decision DD-3.
+    # The build-time topology contract test
+    # (internal/deploy/ci_integration_topology_contract_test.go) asserts
+    # `timeout-minutes >= 30` so a future revert below this floor fails the
+    # build before merge.
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -146,112 +144,40 @@ jobs:
       with:
         go-version: '1.25'
 
-    - name: Start NATS with auth and JetStream
-      run: |
-        docker run -d --name nats-ci \
-          --network host \
-          nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927 \
-          --auth ci-test-token-integration \
-          --http_port 8222 \
-          --jetstream
-        timeout 30 bash -c 'until wget -qO- http://localhost:8222/healthz >/dev/null 2>&1; do sleep 1; done'
-        echo "NATS is ready with auth enforcement and JetStream enabled"
-
-    # spec-047 R12: apply migrations via the idempotent Go runner
-    # (cmd/dbmigrate, which calls internal/db.Migrate). The R11
-    # commit removed the raw-psql pre-apply step entirely, but the
-    # R11 CI run revealed that ~28 tests (TestArtifact_*, TestList_*,
-    # TestAnnotation_CRUD, TestAnnotation_Chaos_*, etc.) DON'T call
-    # db.Migrate themselves and assume the schema already exists.
-    # The R10 baseline behaviour for those tests was "schema present
-    # because raw psql pre-applied" — that part was correct and
-    # must be restored. R12 restores the schema-pre-apply but
-    # routes it through the SAME idempotent migration runner that
-    # the auth-test helpers use, so schema_migrations IS populated
-    # and subsequent in-test db.Migrate calls correctly no-op
-    # instead of trying to re-apply 001 from scratch.
-    #
-    # Why a tiny standalone binary (`cmd/dbmigrate`) instead of
-    # `./smackerel.sh up` or `cmd/core`? Because we MUST NOT bring
-    # up NATS / scenario loader / HTTP server / metrics here. CI's
-    # integration job sets up its own NATS via raw docker run; the
-    # full smackerel-core boot sequence would conflict with that
-    # service-container topology and would also re-introduce
-    # cross-service timing failures that spec 047 has been chasing.
-    # cmd/dbmigrate is intentionally minimal: connect → migrate → exit.
-    - name: Apply database migrations via db.Migrate (idempotent + tracking)
-      env:
-        # local CI service-container creds, identical to the existing R10 line ~270 below
-        DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable # gitleaks:allow
-      run: go run ./cmd/dbmigrate
-
-    # spec-047 R11: do NOT pre-apply migrations via raw psql.
-    # The Go integration test helpers (db.Migrate, embedded in
-    # internal/db/migrate.go) are fully idempotent — they track
-    # applied migrations in a `schema_migrations` table and skip
-    # any migration whose version is already recorded. The previous
-    # raw-psql pre-apply step bypassed that tracking table, so when
-    # test helpers later called db.Migrate they re-applied 001
-    # from scratch and crashed on `chk_rating_range` already-exists
-    # (SQLSTATE 42710). Removing the pre-apply lets the embedded
-    # migration runner be the single source of truth and resolves
-    # ~33 auth tests + TestMigrations_SchemaVersionCount.
-
-    # spec-047 R11: generate SST config files for integration tests.
-    # The integration job runs `go test -tags=integration ./tests/integration/...`
-    # against the real DB+NATS stack, but several integration tests
-    # (drive_config_contract_test.go, drive_connectors_endpoint_test.go,
-    # drive_foundation_canary_test.go config subtest, photos_foundation_test.go,
-    # photos_privacy_boundary_test.go, ollama_config_contract_test.go,
-    # ollama_image_availability_test.go) read config/generated/{test,dev}.env
-    # via shared helpers and t.Fatalf on ENOENT. R9 added this same step to
-    # lint-and-test; R10 unmasked that the integration job was equally
-    # affected. The renderer is pure-bash (scripts/commands/config.sh) and
-    # runs in <1s with no docker/network/host-state deps.
-    # spec-047 R12.2: ALSO generate test.env. R11/R12 only ran
-    # `./smackerel.sh config generate` which defaults to --env=dev and
-    # produces config/generated/dev.env. Several integration tests
-    # (TestOllamaConfigGenerateAndRuntimeValidationStayInSync,
-    # TestOllamaImagePinIsPublished_LiveTag,
-    # TestPhotosContractCanary_ConfigNATSDBAndMLAgree (config subtest),
-    # TestPhotosFoundation_ConfigNATSAndSchemaLiveStack (config subtest),
-    # TestPhotosPrivacyBoundaryRejectsUserLibraryURLs,
-    # TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList,
-    # TestDriveFoundationCanary_ConfigNATSAndMigrationContracts (config subtest))
-    # explicitly read config/generated/test.env and t.Fatalf on ENOENT.
-    # The renderer is pure-bash and runs in <1s per env.
+    # spec-045 BUG-045-002 Path A (Decision DD-1): route CI through the
+    # canonical CLI so the integration job exercises byte-for-byte the same
+    # full-stack topology + sequential `-p 1` test-binary execution that
+    # `./smackerel.sh test integration` uses locally. The CLI brings up the
+    # FULL Compose stack (postgres + nats + ollama + smackerel-core +
+    # smackerel-ml) via tests/integration/test_runtime_health.sh with
+    # KEEP_STACK_UP=1, runs `go test -p 1 -tags integration -v -count=1
+    # -timeout 300s ./tests/integration/...` in a golang:1.25.10-bookworm
+    # container, and tears down via trap-driven cleanup. The previous CI
+    # topology (GH services.postgres + docker-run nats sidecar + raw
+    # `go test -tags=integration`) omitted ollama / smackerel-core /
+    # smackerel-ml AND the `-p 1` flag, which caused 20 consecutive chronic
+    # failures on main between 2026-05-14 and 2026-05-16 (see report.md
+    # § Evidence 3 in the BUG-045-002 packet). The build-time topology
+    # contract test in internal/deploy/ci_integration_topology_contract_test.go
+    # locks this contract to prevent regression.
     - name: Generate SST config files for integration tests
       run: |
         ./smackerel.sh config generate
         ./smackerel.sh config generate --env test
 
-    # NOTE: CI integration uses raw go test because GitHub Actions service
-    # containers replace the Docker Compose stack that ./smackerel.sh test
-    # integration manages. The CLI command expects to bring up/down its own
-    # Compose project, which conflicts with Actions service lifecycle.
-    #
-    # spec-047 R10: capture combined stdout+stderr to integration-test.log
-    # via tee and upload as a workflow artifact (same pattern as R8 for
-    # unit tests). R9 unmasked the chronic integration failure that the
-    # lint-and-test gate had been hiding (build was conditional on
-    # lint-and-test pass; integration was conditional on build pass).
-    # Without log capture the failure is opaque to operators because the
-    # GitHub Actions step log requires admin auth. Artifact upload uses
-    # `if: always() && hashFiles(...) != ''` so the log is captured even
-    # on test failure. continue-on-error: true ensures the upload step
-    # runs; a final aggregator step exits non-zero if the test step
-    # outcome is failure so the integration job still fails the build.
+    - name: Bring up test stack
+      run: ./smackerel.sh --env test up
+
+    - name: Stack status snapshot
+      run: ./smackerel.sh --env test status
+
     - name: Run integration tests
       id: itest_step
       continue-on-error: true
-      env:
-        DATABASE_URL: postgres://smackerel:smackerel@localhost:5432/smackerel_test?sslmode=disable
-        NATS_URL: nats://localhost:4222
-        SMACKEREL_AUTH_TOKEN: ci-test-token-integration
       shell: bash
       run: |
         set -o pipefail
-        go test -tags=integration ./tests/integration/... -v -count=1 -timeout 10m 2>&1 | tee integration-test.log
+        ./smackerel.sh test integration 2>&1 | tee integration-test.log
 
     - name: Upload integration test log
       if: always() && hashFiles('integration-test.log') != ''
@@ -266,3 +192,8 @@ jobs:
       run: |
         echo "Integration test outcome: ${{ steps.itest_step.outcome }}"
         exit 1
+
+    - name: Tear down test stack
+      if: always()
+      run: |
+        ./smackerel.sh --env test down --volumes || true

@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "specId": "045-deploy-resource-filesystem-hardening",
+  "bugId": "BUG-045-002-ci-integration-failure-persists",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-045-002-A",
+      "title": "Workflow YAML removes divergent service topology (services-block / docker-run-nats / raw-go-test absent; canonical CLI present; timeout >= 30)",
+      "phase": "implement",
+      "owningScope": "scope-1",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-1",
+      "regressionType": "topology-contract",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-3", "AC-4"],
+      "tests": [
+        {
+          "type": "manual-structural-grep",
+          "title": "AC-4 invariants 1..6 via per-invariant grep against .github/workflows/ci.yml",
+          "expectedRunner": "bash"
+        },
+        {
+          "type": "lint",
+          "title": "./smackerel.sh lint",
+          "expectedRunner": "./smackerel.sh lint"
+        },
+        {
+          "type": "format",
+          "title": "./smackerel.sh format --check",
+          "expectedRunner": "./smackerel.sh format --check"
+        }
+      ],
+      "evidenceRefs": ["report.md § Evidence 6", "report.md § Evidence 7", "design.md § Decision DD-1"]
+    },
+    {
+      "scenarioId": "SCN-045-002-B",
+      "title": "Workflow YAML stays syntactically valid (yaml.safe_load + format --check + lint exit 0)",
+      "phase": "implement",
+      "owningScope": "scope-1",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-1",
+      "regressionType": "syntax-contract",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-3"],
+      "tests": [
+        {
+          "type": "yaml-syntax",
+          "title": "python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\"",
+          "expectedRunner": "python3"
+        }
+      ],
+      "evidenceRefs": ["design.md § Decision DD-1"]
+    },
+    {
+      "scenarioId": "SCN-045-002-E",
+      "title": "Adversarial: build-time guard rejects reintroduced postgres services block",
+      "phase": "implement",
+      "owningScope": "scope-2",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-2",
+      "regressionType": "adversarial-guard",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-4"],
+      "tests": [
+        {
+          "type": "unit-go",
+          "file": "internal/deploy/ci_integration_topology_contract_test.go",
+          "title": "TestCIIntegrationTopology_AdversarialRejectsReintroducedServiceBlock",
+          "expectedRunner": "./smackerel.sh test unit --go"
+        }
+      ],
+      "evidenceRefs": ["design.md § Test Strategy"]
+    },
+    {
+      "scenarioId": "SCN-045-002-E2",
+      "title": "Adversarial: build-time guard rejects reintroduced docker-run infra sidecar (nats/postgres/ollama)",
+      "phase": "implement",
+      "owningScope": "scope-2",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-2",
+      "regressionType": "adversarial-guard",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-4"],
+      "tests": [
+        {
+          "type": "unit-go",
+          "file": "internal/deploy/ci_integration_topology_contract_test.go",
+          "title": "TestCIIntegrationTopology_AdversarialRejectsDockerRunInfraSidecar",
+          "expectedRunner": "./smackerel.sh test unit --go"
+        }
+      ],
+      "evidenceRefs": ["design.md § Test Strategy"]
+    },
+    {
+      "scenarioId": "SCN-045-002-E3",
+      "title": "Adversarial: build-time guard rejects raw go test -tags=integration ./tests/integration step",
+      "phase": "implement",
+      "owningScope": "scope-2",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-2",
+      "regressionType": "adversarial-guard",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-4"],
+      "tests": [
+        {
+          "type": "unit-go",
+          "file": "internal/deploy/ci_integration_topology_contract_test.go",
+          "title": "TestCIIntegrationTopology_AdversarialRejectsRawGoTest",
+          "expectedRunner": "./smackerel.sh test unit --go"
+        }
+      ],
+      "evidenceRefs": ["design.md § Test Strategy"]
+    },
+    {
+      "scenarioId": "SCN-045-002-F",
+      "title": "Build-time guard passes against the just-fixed real .github/workflows/ci.yml (6 AC-4 invariants hold)",
+      "phase": "implement",
+      "owningScope": "scope-2",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-2",
+      "regressionType": "live-assertion",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-4"],
+      "tests": [
+        {
+          "type": "unit-go",
+          "file": "internal/deploy/ci_integration_topology_contract_test.go",
+          "title": "TestCIIntegrationTopologyContract",
+          "expectedRunner": "./smackerel.sh test unit --go"
+        }
+      ],
+      "evidenceRefs": ["design.md § Test Strategy", "design.md § Decision DD-2"]
+    },
+    {
+      "scenarioId": "SCN-045-002-G",
+      "title": "Local ./smackerel.sh test integration exits 0 with verbatim PASS evidence for all 5 previously-failing tests (Path-A local reproduction)",
+      "phase": "implement",
+      "owningScope": "scope-3",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-3",
+      "regressionType": "live-reproduction",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-3"],
+      "tests": [
+        {
+          "type": "integration-live-stack",
+          "title": "./smackerel.sh test integration (full Compose stack, -p 1, --env test)",
+          "expectedRunner": "./smackerel.sh test integration",
+          "namedSubTests": [
+            "TestKnowledgeStats_EmptyStoreReturnsZeroValues",
+            "TestPhotosContractCanary_ConfigNATSDBAndMLAgree/ml_sidecar_photos_contract_response",
+            "TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList",
+            "TestDriveFoundationCanary_ConfigNATSAndMigrationContracts/nats_DRIVE_stream_in_jetstream",
+            "TestDriveScanFixturePreservesHierarchyAndMetadata"
+          ]
+        }
+      ],
+      "evidenceRefs": ["report.md § Evidence 6", "report.md § Evidence 7"]
+    },
+    {
+      "scenarioId": "SCN-045-002-H",
+      "title": "All 4 local quality gates exit 0 (./smackerel.sh check + format --check + lint + test unit) including the new TestCIIntegrationTopologyContract guard",
+      "phase": "implement",
+      "owningScope": "scope-3",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-3",
+      "regressionType": "quality-gate",
+      "owner": "bubbles.implement",
+      "acceptanceCriteria": ["AC-3", "AC-4"],
+      "tests": [
+        {
+          "type": "check",
+          "title": "./smackerel.sh check",
+          "expectedRunner": "./smackerel.sh check"
+        },
+        {
+          "type": "format",
+          "title": "./smackerel.sh format --check",
+          "expectedRunner": "./smackerel.sh format --check"
+        },
+        {
+          "type": "lint",
+          "title": "./smackerel.sh lint",
+          "expectedRunner": "./smackerel.sh lint"
+        },
+        {
+          "type": "unit",
+          "title": "./smackerel.sh test unit (includes TestCIIntegrationTopologyContract + 3 adversarial sub-tests)",
+          "expectedRunner": "./smackerel.sh test unit"
+        }
+      ],
+      "evidenceRefs": ["design.md § Test Strategy"]
+    },
+    {
+      "scenarioId": "SCN-045-002-C",
+      "title": "Fix-HEAD CI integration job conclusion is success (AC-1 satisfied on origin/main fix HEAD)",
+      "phase": "validate",
+      "owningScope": "scope-4",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-4",
+      "regressionType": "live-system-observation",
+      "owner": "bubbles.validate",
+      "acceptanceCriteria": ["AC-1"],
+      "tests": [
+        {
+          "type": "live-rest-observation",
+          "title": "curl https://api.github.com/repos/pkirsanov/smackerel/actions/runs/<FIX_RUN_ID>/jobs",
+          "expectedRunner": "curl + python3 -m json.tool"
+        }
+      ],
+      "evidenceRefs": ["report.md § Scope 4 close-out (placeholder)"]
+    },
+    {
+      "scenarioId": "SCN-045-002-D",
+      "title": "Chronic-failure pattern broken (3 consecutive main runs after fix HEAD show conclusion=success)",
+      "phase": "validate",
+      "owningScope": "scope-4",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-4",
+      "regressionType": "live-system-observation",
+      "owner": "bubbles.validate",
+      "acceptanceCriteria": ["AC-5"],
+      "tests": [
+        {
+          "type": "live-rest-observation",
+          "title": "curl https://api.github.com/repos/pkirsanov/smackerel/actions/workflows/ci.yml/runs?branch=main&per_page=3",
+          "expectedRunner": "curl + python3 -m json.tool"
+        }
+      ],
+      "evidenceRefs": ["report.md § Scope 4 close-out (placeholder)"]
+    },
+    {
+      "scenarioId": "SCN-045-002-I",
+      "title": "BUG-045-001 state.json gains subsequentResolutions[] entry pointing to BUG-045-002 (AC-6) with BUG-045-001 certification verdict UNCHANGED",
+      "phase": "validate",
+      "owningScope": "scope-4",
+      "status": "pending",
+      "gherkinSource": "scopes.md#scope-4",
+      "regressionType": "cross-artifact-contract",
+      "owner": "bubbles.validate",
+      "acceptanceCriteria": ["AC-6"],
+      "tests": [
+        {
+          "type": "cross-artifact-diff",
+          "title": "git diff specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-001-ml-envelope-cross-service-routing/state.json (additive only; no change to certification.status)",
+          "expectedRunner": "git diff"
+        }
+      ],
+      "evidenceRefs": ["report.md § Scope 4 close-out (placeholder)"]
+    }
+  ]
+}

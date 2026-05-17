@@ -57,6 +57,11 @@ type ciJobDoc struct {
 	Needs    interface{}            `yaml:"needs"`
 	Services map[string]interface{} `yaml:"services"`
 	Steps    []ciStepDoc            `yaml:"steps"`
+	// TimeoutMinutes maps `timeout-minutes:` at the job level. Added by
+	// spec-045 BUG-045-002 Scope 2 so ci_integration_topology_contract_test.go
+	// can assert DD-3 (timeout-minutes >= 30 on jobs.integration). Optional /
+	// additive — existing assertions in this file do not read it.
+	TimeoutMinutes int `yaml:"timeout-minutes"`
 }
 
 type ciStepDoc struct {
@@ -114,6 +119,41 @@ func isCommentLine(line string) bool {
 // contain the lint-and-test, build, and integration jobs with their
 // expected child structure. Removing the parallel publish steps must
 // NOT inadvertently damage adjacent surfaces (DoD B / SCN-029-004-B).
+//
+// BUG-045-002 DD-1 update (2026-05-17): the obsolete BUG-029-004 /
+// HL-RESCAN-011 pre-check invariants that required the integration job
+// to declare a `services.postgres` block and a `cmd/dbmigrate` step were
+// removed from this function body on 2026-05-17. The BUG-045-002 fix
+// adopts Path A (Parity): the entire integration job is routed through
+// the canonical `./smackerel.sh test integration` CLI, which brings up
+// the full Compose stack (postgres + nats + ollama + smackerel-core +
+// smackerel-ml) via Docker Compose and runs database migrations
+// transitively on smackerel-core boot. A GitHub Actions `services:`
+// container and a separate `go run ./cmd/dbmigrate` step would directly
+// contradict that contract, so retaining the two retired invariants here
+// would force a permanent conflict between the BUG-029-004 / HL-RESCAN-011
+// contract and the BUG-045-002 / DD-1 contract.
+//
+// The surviving invariants — integration-job-exists, canonical-CLI
+// invocation check (`smackerel.sh test integration` or legacy
+// `go test -tags=integration` form), build-job structural check,
+// `lint-and-test` / `build` / `integration` job-existence checks — are
+// unchanged and continue to protect BUG-029-004's "no over-reach into
+// adjacent surfaces" guarantee. The A / B / C forbidden-construct
+// invariants (`assertNoDockerPush`, `assertNoGhcrTagging`,
+// `assertNoGhcrLogin`) are NOT touched by this update; they live in
+// their own helper functions below and remain the sole guardians of
+// the no-parallel-publish-path contract.
+//
+// The complementary BUG-045-002 build-time topology contract lives in
+// `internal/deploy/ci_integration_topology_contract_test.go` and asserts
+// the affirmative Path-A shape (no services block, no docker-run infra
+// sidecar, no raw `go test -tags=integration`, `timeout-minutes >= 30`,
+// canonical-CLI invocation present).
+//
+// References:
+//   - specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/design.md § Decision DD-1
+//   - specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/scopes.md § Scope 1 DoD-10..12
 func assertCIWorkflowStructure(doc *ciWorkflowDoc) error {
 	if _, ok := doc.Jobs["lint-and-test"]; !ok {
 		return fmt.Errorf("BUG-029-004 / HL-RESCAN-011 contract violation: required job %q missing from ci.yml", "lint-and-test")
@@ -136,21 +176,15 @@ func assertCIWorkflowStructure(doc *ciWorkflowDoc) error {
 	if !ok {
 		return fmt.Errorf("BUG-029-004 / HL-RESCAN-011 contract violation: required job %q missing from ci.yml", "integration")
 	}
-	if _, ok := intJob.Services["postgres"]; !ok {
-		return fmt.Errorf("BUG-029-004 / HL-RESCAN-011 contract violation: integration job's `services:` block must name a %q service", "postgres")
-	}
-	hasMigrate := false
+	// BUG-045-002 DD-1: retired the `services.postgres` and `cmd/dbmigrate`
+	// pre-check invariants here. The canonical-CLI invocation check below
+	// (the `smackerel.sh test integration` arm of the OR) is the surviving
+	// proof that the integration job runs integration tests.
 	hasIntegrationTest := false
 	for _, step := range intJob.Steps {
-		if strings.Contains(step.Run, "cmd/dbmigrate") {
-			hasMigrate = true
-		}
 		if strings.Contains(step.Run, "go test -tags=integration") || strings.Contains(step.Run, "smackerel.sh test integration") {
 			hasIntegrationTest = true
 		}
-	}
-	if !hasMigrate {
-		return fmt.Errorf("BUG-029-004 / HL-RESCAN-011 contract violation: integration job must contain a step that runs db migrations (run: containing %q)", "cmd/dbmigrate")
 	}
 	if !hasIntegrationTest {
 		return fmt.Errorf("BUG-029-004 / HL-RESCAN-011 contract violation: integration job must contain a step that executes the integration test command (run: containing %q or %q)", "go test -tags=integration", "smackerel.sh test integration")
