@@ -387,3 +387,191 @@ func TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped(t *testing.T) {
 			nextCursor2, nextCursorAfterFF)
 	}
 }
+
+// TestQFDecisionsConnectorPersistsCapabilityAndCursor (SCN-SM-041-003 +
+// SCN-SM-041-008, spec 041 Scope 2) proves the QF Companion connector's
+// capability handshake and sync-cursor advance both reach durable
+// storage in the `sync_state` row owned by the connector. This is the
+// contract test for the new StateStore.SaveCapability /
+// Supervisor.SaveCapability methods AND the cursor-persistence path
+// already wired through Supervisor.Save.
+//
+// Adversarial trip-wires:
+//
+//  1. capability_response IS NULL before Connect() runs (the row should
+//     not exist yet); the test asserts a clean baseline by deleting the
+//     row in t.Cleanup setup. If a future migration pre-seeds the row,
+//     the baseline check will fail.
+//  2. After Connect() + SaveCapability, capability_response MUST be a
+//     valid JSON document containing the canonical max_page_size and
+//     supported_packet_versions fields. capability_status MUST be
+//     "compatible" and capability_fetched_at MUST be within the last
+//     minute. If a future regression persists nil/empty values or stores
+//     the raw struct as text, JSON parsing or the field check will fail.
+//  3. After persisting a synthetic cursor advance, sync_cursor MUST
+//     equal that exact string. If a future regression overwrites the
+//     cursor on capability save (or vice-versa), the read-back will
+//     return the wrong value and the test will fail.
+//  4. The capability row MUST survive a second SaveCapability for a
+//     different status value (UPSERT on conflict). If a future
+//     regression replaces UPSERT with INSERT-only, the second call will
+//     fail and the test will fail.
+func TestQFDecisionsConnectorPersistsCapabilityAndCursor(t *testing.T) {
+	pool := testPool(t)
+	_ = qfDecisionsNATSClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	sourceID := "qf-decisions-it-cap-persist-" + uniqueSuffix()
+	cleanupQFDecisionsRows(t, pool, sourceID)
+	t.Cleanup(func() { cleanupQFDecisionsRows(t, pool, sourceID) })
+
+	// --- Adversarial baseline: ensure no row exists for sourceID before
+	// the connector wires up.
+	var preCount int
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM sync_state WHERE source_id = $1`,
+		sourceID).Scan(&preCount); err != nil {
+		t.Fatalf("baseline count: %v", err)
+	}
+	if preCount != 0 {
+		t.Fatalf("baseline sync_state rows for %s = %d, want 0", sourceID, preCount)
+	}
+
+	// --- Stand up a stub that serves a valid capability so Connect()
+	// succeeds and the connector caches the capability struct.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case qfdecisions.CapabilitiesPath:
+			_ = json.NewEncoder(w).Encode(validQFIntegrationCapability())
+		case qfdecisions.DecisionEventsPath:
+			_ = json.NewEncoder(w).Encode(qfdecisions.DecisionEventsResponse{
+				Events:     []qfdecisions.QFDecisionEvent{},
+				NextCursor: "qf-persist-cursor-1",
+				HasMore:    false,
+				ServerTime: "2026-05-20T00:00:00Z",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	conn := qfdecisions.New(sourceID)
+	if err := conn.Connect(ctx, qfIntegrationConfig(server.URL, 1)); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	// --- Drive the production wiring path: snapshot the in-memory
+	// capability and persist it via the StateStore, mirroring what
+	// cmd/core/connectors.go does at startup.
+	stateStore := connector.NewStateStore(pool)
+	responseJSON, fetchedAt, status, snapErr := conn.CapabilitySnapshot()
+	if snapErr != nil {
+		t.Fatalf("CapabilitySnapshot: %v", snapErr)
+	}
+	if status != qfdecisions.CapabilityStatusCompatible {
+		t.Fatalf("CapabilitySnapshot status = %q, want %q",
+			status, qfdecisions.CapabilityStatusCompatible)
+	}
+	if responseJSON == "" {
+		t.Fatalf("CapabilitySnapshot responseJSON is empty after successful handshake")
+	}
+	if fetchedAt.IsZero() {
+		t.Fatalf("CapabilitySnapshot fetchedAt is zero after successful handshake")
+	}
+	if err := stateStore.SaveCapability(ctx, sourceID, responseJSON, fetchedAt, status); err != nil {
+		t.Fatalf("SaveCapability: %v", err)
+	}
+
+	// --- Adversarial trip-wire 2: read columns back and decode JSON.
+	type readback struct {
+		Response  string
+		FetchedAt time.Time
+		Status    string
+	}
+	var got readback
+	if err := pool.QueryRow(ctx, `
+		SELECT capability_response::text, capability_fetched_at, capability_status
+		FROM sync_state WHERE source_id = $1
+	`, sourceID).Scan(&got.Response, &got.FetchedAt, &got.Status); err != nil {
+		t.Fatalf("read back capability columns: %v", err)
+	}
+	if got.Status != qfdecisions.CapabilityStatusCompatible {
+		t.Fatalf("persisted capability_status = %q, want %q",
+			got.Status, qfdecisions.CapabilityStatusCompatible)
+	}
+	if time.Since(got.FetchedAt) > time.Minute {
+		t.Fatalf("persisted capability_fetched_at = %s, want within last minute",
+			got.FetchedAt)
+	}
+	var decoded qfdecisions.QFBridgeCapability
+	if err := json.Unmarshal([]byte(got.Response), &decoded); err != nil {
+		t.Fatalf("persisted capability_response is not valid JSON: %v\nraw: %s",
+			err, got.Response)
+	}
+	if decoded.MaxPageSize <= 0 {
+		t.Fatalf("persisted capability decoded.MaxPageSize = %d, want > 0",
+			decoded.MaxPageSize)
+	}
+	if len(decoded.SupportedPacketVersions) == 0 {
+		t.Fatalf("persisted capability decoded.SupportedPacketVersions empty")
+	}
+
+	// --- Adversarial trip-wire 3: persist a synthetic cursor via the
+	// same StateStore (this mirrors what Supervisor.runSyncLoop does
+	// after every successful Sync) and read it back. cursor persistence
+	// MUST NOT clobber the capability columns and vice-versa.
+	cursorValue := "qf-persist-cursor-final"
+	saveState := &connector.SyncState{
+		SourceID:    sourceID,
+		Enabled:     true,
+		LastSync:    time.Now().UTC().Format(time.RFC3339),
+		SyncCursor:  cursorValue,
+		ItemsSynced: 7,
+		ErrorsCount: 0,
+		LastError:   "",
+	}
+	if err := stateStore.Save(ctx, saveState); err != nil {
+		t.Fatalf("Save (cursor advance): %v", err)
+	}
+	var cursorBack string
+	var capRespAfter string
+	if err := pool.QueryRow(ctx, `
+		SELECT sync_cursor, capability_response::text
+		FROM sync_state WHERE source_id = $1
+	`, sourceID).Scan(&cursorBack, &capRespAfter); err != nil {
+		t.Fatalf("read back cursor + capability: %v", err)
+	}
+	if cursorBack != cursorValue {
+		t.Fatalf("persisted sync_cursor = %q, want %q", cursorBack, cursorValue)
+	}
+	if capRespAfter == "" {
+		t.Fatalf("capability_response was cleared by cursor save (UPSERT regression)")
+	}
+
+	// --- Adversarial trip-wire 4: a second SaveCapability with a
+	// different status MUST succeed (UPSERT) and overwrite only the
+	// capability columns.
+	if err := stateStore.SaveCapability(ctx, sourceID, responseJSON,
+		fetchedAt, qfdecisions.CapabilityStatusUnfetched); err != nil {
+		t.Fatalf("SaveCapability (second call): %v", err)
+	}
+	var statusAfter, cursorAfterSecond string
+	if err := pool.QueryRow(ctx, `
+		SELECT capability_status, sync_cursor
+		FROM sync_state WHERE source_id = $1
+	`, sourceID).Scan(&statusAfter, &cursorAfterSecond); err != nil {
+		t.Fatalf("read back after second SaveCapability: %v", err)
+	}
+	if statusAfter != qfdecisions.CapabilityStatusUnfetched {
+		t.Fatalf("post-second-save capability_status = %q, want %q",
+			statusAfter, qfdecisions.CapabilityStatusUnfetched)
+	}
+	if cursorAfterSecond != cursorValue {
+		t.Fatalf("post-second-save sync_cursor = %q, want %q (capability save MUST NOT touch cursor)",
+			cursorAfterSecond, cursorValue)
+	}
+}

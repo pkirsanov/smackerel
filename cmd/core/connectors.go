@@ -225,12 +225,40 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			},
 		}
 		svc.supervisor.SetConfig("qf-decisions", qfCfg)
+		connected := false
 		if err := qfDecisionsConn.Connect(ctx, qfCfg); err == nil {
+			connected = true
 			slog.Info("qf-decisions connector started", "packet_version", cfg.QFDecisionsPacketVersion)
 		} else {
 			slog.Warn("qf-decisions connector failed contract validation", "error", err)
 		}
-		svc.supervisor.StartConnector(ctx, "qf-decisions")
+		capabilityPersisted := false
+		// Persist capability handshake into sync_state so a subsequent
+		// restart can fail loud on missing capability and so operator
+		// surfaces can render the stored compatibility verdict without
+		// re-issuing the handshake. Spec 041 Scope 2, SCN-SM-041-003.
+		if responseJSON, fetchedAt, status, snapErr := qfDecisionsConn.CapabilitySnapshot(); snapErr == nil {
+			if persistErr := svc.supervisor.SaveCapability(ctx, "qf-decisions", responseJSON, fetchedAt, status); persistErr != nil {
+				slog.Warn("qf-decisions capability persistence failed",
+					"error", persistErr,
+					"status", status)
+			} else {
+				slog.Info("qf-decisions capability persisted",
+					"status", status,
+					"fetched_at", fetchedAt,
+					"response_bytes", len(responseJSON))
+				capabilityPersisted = true
+			}
+		} else {
+			slog.Warn("qf-decisions capability snapshot failed", "error", snapErr)
+		}
+		if connected && capabilityPersisted {
+			svc.supervisor.StartConnector(ctx, "qf-decisions")
+		} else {
+			slog.Warn("qf-decisions connector not started because capability handshake is not durably persisted",
+				"connected", connected,
+				"capability_persisted", capabilityPersisted)
+		}
 	}
 
 	// Auto-start Discord connector (token-based)

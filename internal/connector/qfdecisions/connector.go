@@ -2,6 +2,7 @@ package qfdecisions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -403,6 +404,30 @@ func (c *Connector) Health(context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.health
+}
+
+// CapabilitySnapshot returns the in-memory capability handshake state
+// suitable for durable persistence into sync_state via
+// StateStore.SaveCapability. The response is a canonical JSON encoding
+// of the QFBridgeCapability the connector currently holds. When the
+// capability has never been fetched (status == Unfetched) the response
+// is the empty string and fetchedAt is the zero time; callers MUST still
+// persist the status so a subsequent restart can distinguish "never
+// fetched" from "fetched but row missing". Spec 041 Scope 2,
+// SCN-SM-041-003.
+func (c *Connector) CapabilitySnapshot() (responseJSON string, fetchedAt time.Time, status string, err error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	status = c.capabilityStatus
+	fetchedAt = c.capabilityFetchedAt
+	if c.capabilityFetchedAt.IsZero() && c.capabilityStatus == CapabilityStatusUnfetched {
+		return "", time.Time{}, status, nil
+	}
+	encoded, mErr := json.Marshal(c.capability)
+	if mErr != nil {
+		return "", c.capabilityFetchedAt, status, fmt.Errorf("marshal capability: %w", mErr)
+	}
+	return string(encoded), c.capabilityFetchedAt, status, nil
 }
 
 func (c *Connector) Close() error {
