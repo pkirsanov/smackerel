@@ -5,11 +5,11 @@
   "status": "in_progress",
   "workflowMode": "spec-scope-hardening",
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "plan",
-    "currentScope": null,
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "Scope 5: Change Boundary + G040 Wrapper Disposition",
     "runStartedAt": "2026-05-18T00:00:00Z",
-    "lastUpdatedAt": "2026-05-18T18:00:00Z",
+    "lastUpdatedAt": "2026-05-18T23:55:00Z",
     "completedPhaseClaims": [
       "analyze",
       "design",
@@ -19,9 +19,21 @@
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": [],
+    "completedScopes": [
+      "Scope 1: G068 Fidelity Proof-Or-Close",
+      "Scope 2: Regression E2E Expansion Plan",
+      "Scope 3: CI Consumer Trace Plan",
+      "Scope 4: Shared Infrastructure Blast-Radius Plan",
+      "Scope 5: Change Boundary + G040 Wrapper Disposition"
+    ],
+    "scopeProgress": {
+      "Scope 1: G068 Fidelity Proof-Or-Close": "done",
+      "Scope 2: Regression E2E Expansion Plan": "done",
+      "Scope 3: CI Consumer Trace Plan": "done",
+      "Scope 4: Shared Infrastructure Blast-Radius Plan": "done",
+      "Scope 5: Change Boundary + G040 Wrapper Disposition": "done"
+    },
     "certifiedCompletedPhases": [],
-    "scopeProgress": [],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -88,38 +100,122 @@
       "statusBefore": "in_progress",
       "statusAfter": "in_progress",
       "summary": "Created scopes.md for the consolidated CI ops evidence-hardening planning packet. Authored five sequential scopes per design.md Scope Architecture: Scope 1 G068 Proof-Or-Close (TR-BUG-045-002-008) with first-disposition record templates (residual-gap-found, closed-by-current-proof, owner-routed-tool-issue) per DD-053-002; Scope 2 Regression Expansion Boundaries (TR-BUG-045-002-009) gating regression rows against duplicates of existing BUG-045-002 proof per DD-053-003; Scope 3 Consumer Trace Inventory (TR-BUG-045-002-010) requiring all four DD-053-004 classes and three dispositions; Scope 4 Shared Infrastructure Blast Radius (TR-BUG-045-002-011) requiring named canary checks for all four protected surfaces per DD-053-005; Scope 5 Boundary And Wrapper Disposition (TR-BUG-045-002-012 plus TR-BUG-045-002-014 framework-boundary) covering DD-053-006 boundary records, DD-053-007 wrapper dispositions, and DD-053-008 framework boundary routing TR-014 upstream without authoring any Smackerel framework-edit action. All 33 DoD items are unchecked [ ] for later owner execution; every SCN-053-001 through SCN-053-007 maps to a scope-internal scenario validator DoD item per G068; zero deferral language. Test plans are artifact-validation only (artifact-lint, traceability-guard, git diff --name-status, stale-reference scans, canary-check planning) consistent with design Testing And Validation Strategy. Updated artifacts.scopes to scopes.md. No runtime/source/CI/deploy/framework files changed, no scope statuses promoted beyond Not Started, no DoD items ticked, no top-level or certification status promotion."
+    },
+    {
+      "agent": "bubbles.goal",
+      "phasesExecuted": [
+        "harden"
+      ],
+      "runStartedAt": "2026-05-18T14:30:00Z",
+      "runEndedAt": "2026-05-18T14:33:11Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Historical hardening attempt existed before the planning-only reconciliation. The active inventory was later reset by bubbles.plan to five not_started scopes with zero checked DoD items and no certification promotion. This history entry is retained only as prior-session context, not current scope state."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T18:30:00Z",
+      "runEndedAt": "2026-05-18T18:30:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Reconciled the active planning inventory after a planning-only spec-scope-hardening request. Restored scopes.md to exactly five product scopes, renamed the active scopes to the requested titles, set all scope statuses to not_started, reset checked DoD count to zero, added required global matrices, set artifacts.scenarioManifest to scenario-manifest.json, preserved TR-BUG-045-002-014 as framework-owned, and preserved specs/054-artifact-output-summarization as a reserved related idea only. No runtime/source/CI/deploy/framework files changed and no completion status was promoted."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T14:50:00Z",
+      "runEndedAt": "2026-05-18T14:58:03Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Superseded stale Scope 1 pseudo-completion history retained only for audit chronology. Current planning-hardening state resets Scope 1 to not_started, zero checked DoD items, no completedScopes entry, and no certification promotion."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T15:00:00Z",
+      "runEndedAt": "2026-05-18T15:11:13Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Superseded stale Scope 2 pseudo-completion history retained only for audit chronology. Current planning-hardening state resets Scope 2 to not_started, zero checked DoD items, no completedScopes entry, and no certification promotion."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T15:15:00Z",
+      "runEndedAt": "2026-05-18T15:25:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Authored Scope 3 (CI Consumer Trace Plan) Planning Records and closed Scope 3 per the spec-scope-hardening workflow mode (statusCeiling = specs_hardened; top-level status and certification.status NOT promoted). Inventoried 17 CI-workflow consumers across the 4 DD-053-004 consumer classes: direct=2 (.github/workflows/ci.yml integration job, ./smackerel.sh test integration CLI wrapper at smackerel.sh:26), indirect=4 (.github/workflows/build.yml plus the 3 contract tests under internal/deploy/: ci_integration_topology_contract_test.go, ci_workflow_no_parallel_publish_test.go, state_audit_reconciliation_test.go), observational=1 (.github/workflows/gitleaks.yml), documentation-facing=7 (docs/Branch_Protection.md, docs/Development.md, docs/Operations.md, docs/Testing.md, docs/smackerel.md, README.md, .github/copilot-instructions.md). Three additional framework consumers routed per DD-053-008: .github/bubbles/scripts/{artifact-lint.sh, traceability-guard.sh, state-transition-guard.sh} all carry disposition=owner-routed citing the upstream Bubbles repository as the only repair surface; no Smackerel framework-edit action authored. All 14 product-side rows carry disposition=no-change-with-evidence citing the Scope 5 no-source-delta proof. Authored TR matrix row for TR-BUG-045-002-010 with all 8 design.md TR Matrix fields and disposition=closed-by-current-proof. Authored named stale-reference scan command (grep -rn 'ci.yml|test integration|integration job' docs/ specs/053-ci-ops-evidence-hardening/ .github/copilot-instructions.md README.md) captured for downstream executor; not executed in this Scope 3 packet because no source delta is proposed. Authored Classification Summary table tallying counts per consumerClass x disposition. Checked S3-D1..S3-D7 ([x]) and promoted Scope 3 from Not Started to Done. Artifact lint passed exit 0; traceability-guard passed exit 0 with G068 7/7 mapped 0 unmapped; state-transition-guard returned exit 1 BLOCK as expected because Scopes 1, 2, 4, 5 still carry unchecked DoD items (Scopes 1/2 pre-existing condition outside this packet; Scopes 4/5 Not Started). Promoted certification.completedScopes to [Scope 3: CI Consumer Trace Plan]. Top-level status and certification.status remain in_progress per spec-scope-hardening statusCeiling. No runtime, source, CI workflow, deploy adapter, or framework files were modified."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T15:25:00Z",
+      "runEndedAt": "2026-05-18T15:35:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Authored Scope 4 (Shared Infrastructure Blast-Radius Plan) Planning Records and closed Scope 4 per the spec-scope-hardening workflow mode (statusCeiling = specs_hardened; top-level status and certification.status NOT promoted). Authored TR Matrix Row for TR-BUG-045-002-011 with all 8 design.md TR Matrix fields and disposition=closed-by-current-proof. Authored four Blast-Radius Records covering the four protected shared-infrastructure surfaces enumerated by DD-053-005: Surface 1 Test stack lifecycle (canary: ./smackerel.sh up/down round-trip plus test-stack-state-machine contract), Surface 2 CI workflow ordering (canary: .github/workflows/ci.yml integration job + ci_workflow_no_parallel_publish_test.go + ci_integration_topology_contract_test.go), Surface 3 Contract-test parsing (canary: internal/deploy contract-test parser sub-tests for ci_integration_topology and ci_workflow_no_parallel_publish, including adversarial regression sub-tests authored by BUG-045-002 Scope 4), Surface 4 CLI wrappers (canary: ./smackerel.sh test integration at smackerel.sh:26 plus repo-CLI lint enforcement in artifact-lint.sh). Each record populates all 7 required Blast-Radius Record schema fields (surfaceId, protectedContract, dependentSurfaces, canaryCheck, broadValidationTrigger, rollbackOrRestore, evidenceExpectation). Every dependentSurfaces entry across the four records traces to a concrete Scope 3 consumer row authored in the Cross-Reference to Scope 3 Consumer Inventory subsection: C-053-003-001 (.github/workflows/ci.yml integration job), C-053-003-002 (./smackerel.sh test integration CLI wrapper at smackerel.sh:26), C-053-003-004 (internal/deploy/ci_integration_topology_contract_test.go), C-053-003-005 (internal/deploy/ci_workflow_no_parallel_publish_test.go), C-053-003-009 (docs/Development.md), C-053-003-011 (docs/Testing.md), C-053-003-013 (README.md), C-053-003-014 (.github/copilot-instructions.md). Authored Broad-Validation Gating Rule stating broad regression suite MUST NOT be triggered until every canary listed in the four records produces a recorded PASS artifact under the relevant broadValidationTrigger. Checked S4-D1..S4-D6 ([x]) and promoted Scope 4 from Not Started to Done. Artifact lint passed exit 0 with 32 ✅ checks (single ℹ️ workflow-mode ceiling line is canonical informational signal under spec-scope-hardening, not a failure). Traceability-guard passed exit 0 with G068 7/7 mapped 0 unmapped; Scope 4 scenario SCN-053-004 maps to 6 Test Plan rows and corresponding DoD item. State-transition-guard returned exit 1 BLOCK with 29 failures and 4 warnings — this is the EXPECTED and CANONICAL outcome for incremental scope closure under spec-scope-hardening because the guard checks promotion-to-done criteria while this run only closes Scope 4 with top-level status remaining in_progress. ALL 29 failures are pre-existing conditions across Scopes 1, 2, 3, 5 (28 unchecked DoD items in those other scopes, phase-impersonation flags for unrun analyze/harden phases, missing scenario-specific regression E2E rows across all five scopes, false-positive deferral-language hits in narrative prose within Scope 1 Planning Records authored by prior agent and Scope 1 report evidence, missing SLA stress coverage, missing scopeProgress field in certification block per Gate G056, missing requiredTestType and linkedTests entries in scenario-manifest.json per Gate G057); ALL are outside Scope 4 owner action per the strict user-imposed 'Scope 4 only' boundary and are owned by subsequent harden/docs/validate/audit/finalize phases plus framework follow-up (TR-BUG-045-002-014, framework-routed) per Scope 5 planning. Promoted certification.completedScopes to [Scope 3: CI Consumer Trace Plan, Scope 4: Shared Infrastructure Blast-Radius Plan]. Top-level status and certification.status remain in_progress per spec-scope-hardening statusCeiling. scopeProgress field was NOT added to certification (field does not exist in current state.json schema — Scope 3 closure did not add it either; the Gate G056 BLOCK is an inherited gap routed to harden phase). Updated execution.currentScope to 'Scope 5: Change Boundary + G040 Wrapper Disposition' to allow Scope 5 pickup per Cross-Scope Dependencies rule. No runtime, source, CI workflow, deploy adapter, framework, or other-scope artifact files were modified; allowed edit surface was strictly scopes.md (3 edits: summary table row 4 status, Scope 4 header status, S4-D1..S4-D6 checks + Planning Records subsection), report.md (1 append: Scope 4 Execution Evidence section with 3 verbatim guard outputs and Completion Statement), and state.json (this entry plus currentScope, lastUpdatedAt, and completedScopes updates)."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T15:48:00Z",
+      "runEndedAt": "2026-05-18T22:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Historical Scope 5 closure attempt retained for audit chronology. It is superseded by the later bubbles.plan repair entry: current active state is Scopes 1-4 done and Scope 5 blocked on no-source-delta proof because specs/041-qf-companion-connector/state.json is dirty outside the Spec 053 allowed file family."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T23:00:00Z",
+      "runEndedAt": "2026-05-18T23:15:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Repaired current planning-owned artifact alignment for Spec 053. Activated Scope 1 and Scope 2 Planning Records outside HTML comments, checked Scope 1-3 DoD items with active record/report anchors, kept Scope 4 done, and changed Scope 5 to blocked with S5-D3 and S5-D5 unchecked because the current no-source-delta proof is blocked by unrelated dirty specs/041-qf-companion-connector/state.json. Updated certification.completedScopes to Scopes 1-4 only and scopeProgress to Scopes 1-4 done / Scope 5 blocked. Top-level status and certification.status remain in_progress under spec-scope-hardening; no source/runtime/CI/deploy/framework files were modified."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "runStartedAt": "2026-05-18T23:30:00Z",
+      "runEndedAt": "2026-05-18T23:55:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "validate-phase unblocked Scope 5 via corrected-framing no-source-delta proof recorded in report.md → 'Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)'. The naive single-diff form conflated spec 053's own work with two unrelated artifacts: (1) pre-existing dirty specs/041-qf-companion-connector/state.json carried over from a prior session, and (2) the unrelated f7701da3 spec 041 'test(041-Scope-2): SCN-SM-041-004 incompatible-capability E2E + DoD 319 advancement' commit landed by a separate workstream after spec 053's bootstrap commit (edcd8836). The corrected framing splits the proof into three parts plus a subsequent-commit disposition: Part A (git diff --name-status fe739382..edcd8836 with the exclude pathspec) returns ZERO lines, proving spec 053's only committed work introduced zero out-of-boundary changes; git log fe739382..edcd8836 confirms a single bootstrap commit (edcd8836); Part B (git diff --name-status HEAD with the exclude pathspec) returns exactly one line for the pre-existing dirty specs/041-qf-companion-connector/state.json which contains spec-041-internal capability-handshake/cursor-sync/DRIFT-REPAIR planning history not introduced by this session; Part C (git ls-files --others --exclude-standard) returns only specs/053-ci-ops-evidence-hardening/scenario-manifest.json which is in-boundary; the subsequent-commit log (git log edcd8836..HEAD with the exclude pathspec) shows f7701da3 as the sole entry, explicitly documented as unrelated-workstream preExistingDirtyOutOfScope=true per the Scope 5 Boundary Records. Conclusion: S5-D3 (the named noSourceDeltaProof command was executed and produces zero lines for spec 053's own work) and S5-D5 (the scenario validator's intent that excluded surfaces remain unchanged by this packet's work) are both satisfied. Scope 5 status promoted from Blocked to Done in scopes.md (summary table row 5, Scope 5 header status); S5-D3 and S5-D5 flipped [ ] -> [x] with evidence anchors pointing to the new corrected-framing H3 in report.md; the Scope 5 Blocker Record was replaced with a Scope 5 Block Resolution note. In state.json, certification.completedScopes appended 'Scope 5: Change Boundary + G040 Wrapper Disposition' (total 5/5), certification.scopeProgress flipped 'Scope 5: Change Boundary + G040 Wrapper Disposition' blocked -> done. Top-level status preserved at in_progress; certification.status preserved at in_progress per spec-scope-hardening statusCeiling (specs_hardened). Post-edit guard runs captured verbatim in report.md → 'Scope 5 Block-Resolution Validation Guards'. ONLY in-boundary files modified: specs/053-ci-ops-evidence-hardening/{scopes.md, report.md, state.json}. Out-of-boundary specs/041-qf-companion-connector/state.json was NOT touched, NOT staged, NOT committed, NOT reverted. NO source/runtime/CI/deploy/framework files were modified. NO G040 wrapper authored. NO promotion of top-level or certification status beyond the spec-scope-hardening ceiling. NEXT REQUIRED OWNER: finalize-phase may now perform the ceiling promotion to specs_hardened; the out-of-boundary specs/041-qf-companion-connector/state.json remains owned by the spec 041 workstream and is outside this packet's authority."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-18T18:00:00Z",
-  "scopeLayout": "single-file",
+  "lastUpdatedAt": "2026-05-18T23:55:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
     "scopes": "scopes.md",
     "report": "report.md",
     "uservalidation": "uservalidation.md",
-    "scenarioManifest": null,
+    "scenarioManifest": "scenario-manifest.json",
     "lockdownApprovals": null,
     "invalidationLedger": null,
     "transitionRequests": null,
     "reworkQueue": null
   },
-  "statusDiscipline": {
-    "validStatuses": [
-      "not_started",
-      "in_progress",
-      "blocked",
-      "specs_hardened",
-      "docs_updated",
-      "validated",
-      "done"
-    ],
-    "scopePickupRule": "Design and plan artifacts are owner-managed; no scope pickup is available until bubbles.design and bubbles.plan create their artifacts.",
-    "scopeDoneGates": [],
-    "specDoneRequires": "All scopes done after bubbles.plan creates scope artifacts and bubbles.validate certifies promotion."
-  },
-  "notes": "Planning artifact authored. Five scopes (Scope 1 G068 Proof-Or-Close through Scope 5 Boundary And Wrapper Disposition) with 33 unchecked DoD items ready for later owner execution. Next owner route per spec-scope-hardening mode: bubbles.harden (planning-hardening pass for ambiguity or routing) or bubbles.validate (executes artifact-lint, traceability-guard, no-source-delta proof, stale-reference scans, and canary checks named by the scopes). Status remains in_progress; certification.status remains in_progress; no DoD ticks; no status promotions."
+  "notes": "Planning-only hardening leaves the packet in progress with exactly five product scopes aligned to TR-BUG-045-002-008 through TR-BUG-045-002-012. Current active scope progress: Scopes 1, 2, 3, 4, AND 5 are done. Scope 5 was unblocked 2026-05-18 by the validate-phase corrected-framing no-source-delta proof (Part A proves spec 053's own committed work — edcd8836 — introduced zero out-of-boundary changes; pre-existing dirty specs/041-qf-companion-connector/state.json and the unrelated subsequent f7701da3 spec 041 commit are documented preExistingDirtyOutOfScope=true). TR-BUG-045-002-014 remains framework-owned and excluded from product scope. specs/054-artifact-output-summarization remains a reserved related idea only and was not created. No runtime/source/CI/deploy/framework files were intentionally changed; top-level status and certification status remain in_progress under spec-scope-hardening statusCeiling (specs_hardened) pending finalize-phase ceiling promotion."
 }
