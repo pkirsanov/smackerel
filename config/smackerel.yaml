@@ -821,6 +821,13 @@ deploy_resources:
   # llm.* / agent.provider_routing.* / photos.intelligence.* model fields
   # above. See docs/Operations.md "Model Envelope Sizing" for the per-
   # service envelope contract and the dev / home-lab / production matrix.
+  #
+  # Per-environment opt-up (preferred): set
+  #   environments.<env>.ollama_memory_limit: "20G"
+  #   environments.<env>.llm_model: "gemma4:26b"
+  #   environments.<env>.ollama_model: "gemma4:26b"
+  #   environments.<env>.ollama_vision_model: "gemma4:26b"
+  # The home-lab environment (lines below) already uses this pattern.
   ollama:
     cpus: "4.0"
     memory: "8G"
@@ -916,7 +923,6 @@ infrastructure:
   - AUTH_SIGNING_ACTIVE_PRIVATE_KEY
   - AUTH_AT_REST_HASHING_KEY
   - AUTH_BOOTSTRAP_TOKEN
-
   # Spec 052 FR-052-002 — explicit opt-in for placeholder emission.
   # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
   # every key in secret_keys above. dev/test environments are NEVER in
@@ -1108,3 +1114,17 @@ environments:
     # populate auth.signing.* and auth.at_rest_hashing_key (and
     # auth.bootstrap_token on a fresh deploy) before the runtime starts.
     auth_enabled: true
+    # Spec 045 BUG-045-001 (home-lab opt-up) — the home-lab host has
+    # ~109 GiB RAM available, so we opt UP from the commodity-host
+    # gemma3:4b default to the larger
+    # gemma4:26b primary chat / vision model. Envelope raised FIRST
+    # (ollama_memory_limit) to satisfy model_memory_profiles.gemma4:26b
+    # ceiling (18432 MiB) with ~1.5 GiB headroom for KV cache growth.
+    # Dev / test / MacBook / local environments inherit the smaller
+    # gemma3:4b default from the base llm.* block. Reasoning + OCR keep
+    # their per-task specialists (deepseek-r1:7b, deepseek-ocr:3b) — those
+    # env vars are forward-compat and not emitted by config.sh today.
+    ollama_memory_limit: "20G"
+    llm_model: "gemma4:26b"
+    ollama_model: "gemma4:26b"
+    ollama_vision_model: "gemma4:26b"
