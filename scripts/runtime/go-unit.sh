@@ -5,20 +5,16 @@
 # invocations — so command tracing is safe to leave on in CI.
 set -euxo pipefail
 
-# spec-047 R2R-CI: TestSSTLoader_RejectsDevPostgresPassword_HomeLab in
-# internal/config invokes scripts/commands/config.sh which calls envsubst
-# (provided by gettext-base on Debian/Ubuntu). The golang:bookworm test
-# image used by run_go_tooling does not include gettext-base by default.
-# Install it once per invocation if missing — keeps the test container
-# image standard while satisfying the SST loader contract.
-if ! command -v envsubst >/dev/null 2>&1; then
-  echo "[go-unit] envsubst missing — installing gettext-base"
-  apt-get update -qq
-  apt-get install -y --no-install-recommends gettext-base
-  echo "[go-unit] gettext-base install OK"
-else
-  echo "[go-unit] envsubst already present"
-fi
+# spec-047 R2R-CI / spec-052 chaos finding: TestSSTLoader_RejectsDevPostgresPassword_HomeLab
+# in internal/config (and any other test that shells out to
+# scripts/commands/config.sh) calls envsubst (provided by gettext-base
+# on Debian/Ubuntu). The golang:bookworm test image does not include
+# gettext-base by default. The shared helper installs it idempotently
+# so go-unit, go-integration, go-e2e, and go-stress all share one
+# implementation.
+# shellcheck source=scripts/runtime/_ensure_envsubst.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
+ensure_envsubst "go-unit"
 
 cd /workspace
 

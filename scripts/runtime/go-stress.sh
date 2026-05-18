@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# spec-052 chaos finding: stress tests that may shell out to
+# scripts/commands/config.sh require envsubst (gettext-base) which
+# is not present in the golang:bookworm base image. Use the shared
+# helper so all four go-*.sh wrappers share one envsubst-install
+# implementation.
+# shellcheck source=scripts/runtime/_ensure_envsubst.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
+ensure_envsubst "go-stress"
+
 workspace_dir="${SMACKEREL_STRESS_WORKSPACE:-/workspace}"
 cd "$workspace_dir"
 

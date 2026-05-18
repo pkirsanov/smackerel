@@ -1520,5 +1520,36 @@ the SCN-052-S01..S08 G060 table above.
 
 _Populated upon spec 052 finalization._
 
+### Post-Certification Cross-Spec Note — Envsubst Test-Wrapper Unblock
+
+Date observed: post-spec-052 certification. Source change set landed
+outside this spec's scope envelope (does not reopen spec-052).
+
+This spec's chaos-phase observation flagged that bare
+`go test ./internal/deploy/...` (bypassing the `go-unit.sh` wrapper)
+FAILED with exit 127 `envsubst: command not found` against the
+`golang:1.25.10-bookworm` test image. That observation also applied to
+the `go-integration.sh`, `go-e2e.sh`, and `go-stress.sh` wrappers,
+which did NOT carry the install logic that `go-unit.sh` carried
+(per spec-047 R2R-CI).
+
+The structural fix — independent of this spec's certification, applied
+to unblock spec-041 Scope 2 and to remove the wrapper-only-protection
+asymmetry — promoted the envsubst install logic into a shared library
+at `scripts/runtime/_ensure_envsubst.sh` and updated all four
+`scripts/runtime/go-*.sh` wrappers to source the helper and call
+`ensure_envsubst <tag>` before any `go test` invocation. The
+invariant is enforced by
+`internal/deploy/envsubst_wrapper_contract_test.go` (1 live + 3
+adversarial sub-tests, all PASS this session).
+
+This note is informational only — spec 052 remains at
+`done_with_concerns` per the operator decision 3c block above. No
+DoD checkbox flips and no certification edits are made by this note.
+The chaos-phase observation about envsubst asymmetry is now resolved
+in the working tree (helper landed, contract test PASSes); the C-A12
+and C-B5 home-lab live-smoke concerns are unaffected by this fix and
+remain operator-owned.
+
 <!-- bubbles:g040-skip-end -->
 
