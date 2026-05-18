@@ -7022,4 +7022,99 @@ config-validate: ~/smackerel/config/generated/test.env.tmp OK
 
 **Claim Source: executed** for the test command, the wrapper exit code, the captured terminal output (PII-sanitised but otherwise verbatim), the git working-tree state at start and end, the concurrent-run process inspection (PIDs 1117093 / 873438 confirmed via `ps` and `fuser` before that process exited), and the docker container lifecycle output. **Claim Source: interpreted** for the behavioural-proof bullets (derived from the test output combined with the test source structure and the design.md §F8 contract) and for the artifact-mutation reconciliation narrative (derived from `git status` and targeted `grep` comparison of the concurrent run's edits versus the dispatcher's prescribed mutations).
 
+## Scope 2 SCN-004 E2E Evidence (DoD 319 -- bubbles.implement + bubbles.test, 2026-05-18T15:05:03Z, Round 5)
+
+**Phase:** implement + test (bubbles.iterate Round 5 dispatch chain).
+
+**DoD target:** scopes.md line 319 — Validation E2E API row for `TestQFDecisionsIncompatibleCapabilityBlocksPolling`.
+
+**Dispatch sequence:**
+
+1. **bubbles.implement (Round 5, phase 1)** authored `TestQFDecisionsIncompatibleCapabilityBlocksPolling` at the end of `tests/e2e/qf_decisions_connector_api_test.go` (+135 lines appended; function declaration at line 864). `go vet ./tests/e2e/...` exit 0 (empty stdout/stderr). `go test -tags e2e -c -o /tmp/round5-e2e-bin ./tests/e2e/` exit 0 (compile-only verification, no test execution). No imports modified, no other tests modified — confirmed via `git diff --stat tests/e2e/qf_decisions_connector_api_test.go` reporting `135 insertions(+), 0 deletions(-)`.
+
+2. **bubbles.test (Round 5, phase 2)** ran the focused selector against the live disposable test stack.
+
+**Test command:** `./smackerel.sh --env test test e2e --go-run '^TestQFDecisionsIncompatibleCapabilityBlocksPolling$'`
+
+**Test execution start:** 2026-05-18T15:03:45Z
+
+**Wrapper exit code:** 0
+
+**Pre-flight stack health (verbatim):**
+
+```text
+2026-05-18T15:03:29Z
+config-validate: ~/smackerel/config/generated/test.env.tmp OK
+NAME                              IMAGE                           COMMAND                  SERVICE          CREATED          STATUS                    PORTS
+smackerel-test-nats-1             nats:2.10-alpine                "docker-entrypoint.s…"   nats             27 seconds ago   Up 26 seconds (healthy)   6222/tcp, 127.0.0.1:47002->4222/tcp, 127.0.0.1:47003->8222/tcp
+smackerel-test-ollama-1           ollama/ollama:0.23.2            "/bin/ollama serve"      ollama           27 seconds ago   Up 26 seconds (healthy)   127.0.0.1:47004->11434/tcp
+smackerel-test-postgres-1         pgvector/pgvector:pg16          "docker-entrypoint.s…"   postgres         27 seconds ago   Up 26 seconds (healthy)   127.0.0.1:47001->5432/tcp
+smackerel-test-smackerel-core-1   smackerel-test-smackerel-core   "smackerel-core"         smackerel-core   27 seconds ago   Up 16 seconds (healthy)   127.0.0.1:45001->8080/tcp
+smackerel-test-smackerel-ml-1     smackerel-test-smackerel-ml     "uvicorn app.main:ap…"   smackerel-ml     27 seconds ago   Up 16 seconds (healthy)   127.0.0.1:45002->8081/tcp
+```
+
+All 5 services Healthy. (`{"status":"degraded"}` from `/api/health` reflects the 14 disconnected connectors with no credentials in the test env — expected; no container is unhealthy.)
+
+**Test execution evidence (verbatim, PII-redacted, untruncated test-relevant portion):**
+
+```text
+go-e2e: applying -run selector: ^TestQFDecisionsIncompatibleCapabilityBlocksPolling$
+=== RUN   TestQFDecisionsIncompatibleCapabilityBlocksPolling
+2026/05/18 15:05:03 INFO connected to NATS url=nats://75620a85dca2cffd45fcf6d41633f491078ebb7ab059030b@127.0.0.1:47002
+    qf_decisions_connector_api_test.go:893: cleanup query artifacts for qf-decisions-e2e-incompat-1779116703569840466: closed pool
+--- PASS: TestQFDecisionsIncompatibleCapabilityBlocksPolling (0.08s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.139s
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/agent  0.057s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/auth   0.037s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e/drive  0.076s [no tests to run]
+PASS: go-e2e
+```
+
+**Test duration:** 0.08s (Go test runner). Package-level wall: 0.139s for `tests/e2e`. Duration > 0 (HTTP capability handshake + NATS connect + postgres pool open/cleanup) confirms real-stack interaction.
+
+**Adversarial verification (false-positive prevention):**
+
+| Check | Result |
+|---|---|
+| Test name appears in run output (not skipped) | PASS — `=== RUN   TestQFDecisionsIncompatibleCapabilityBlocksPolling` present |
+| Explicit `--- PASS:` line for this test name | PASS — `--- PASS: TestQFDecisionsIncompatibleCapabilityBlocksPolling (0.08s)` |
+| Duration > 0.00s | PASS — 0.08s (80 ms) includes NATS connect + HTTP capability round-trip to live `smackerel-core` at `127.0.0.1:45001` + postgres pool open + cleanup query at `127.0.0.1:47001` |
+| Selector applied correctly (no silent skip) | PASS — wrapper echoed `go-e2e: applying -run selector: ^TestQFDecisionsIncompatibleCapabilityBlocksPolling$`; sibling packages reported `[no tests to run]` as expected for a focused regex |
+| Wrapper exit code | PASS — `EXIT_CODE=0` |
+| Live-system evidence | PASS — NATS connection line + postgres pool cleanup line confirm real-stack interaction (not all-mock) |
+
+**Behavioural proofs (asserted by the test):**
+
+- (a) `Connect()` returns `CapabilityMismatchError` with `Field == "supported_packet_versions"` and `Required == "v1"` — proves the connector refuses to start polling when the QF capability response is missing the required packet version v1.
+- (b) `smackerel_qf_capability_mismatch_total{required="v1",actual="v2"}` increments to exactly 1 — proves the operator-facing mismatch metric is emitted per design.md §Capability Discovery contract.
+- (c) Trip-wire on `qfdecisions.DecisionEventsPath` and `qfdecisions.DecisionPacketsPath` (any prefix match) fires `t.Errorf("polling MUST NOT occur after incompatible capability; saw request to %s", r.URL.Path)` plus `http.StatusInternalServerError` if the connector polls. Test PASSED, proving the trip-wire was NEVER fired — the connector correctly refused to poll after the incompatible capability response.
+- (d) `SELECT COUNT(*) FROM artifacts WHERE source_id = $1` against the live test PostgreSQL returns `0` for the unique e2e source ID — proves zero trusted-artifact publication.
+
+**DoD impact (this round):**
+
+- scopes.md line 319 (Validation E2E API row for SCN-SM-041-004) flipped `[ ]` -> `[x]` by `bubbles.iterate` after this evidence section was committed.
+- scopes.md line 300 (Core behaviour row for SCN-SM-041-004) **deliberately NOT flipped** in this round. The line includes the assertion text "mark connector health `mismatched`". The test asserts the `Connect()` return type (`CapabilityMismatchError`) which is only returned by the source code at `internal/connector/qfdecisions/connector.go:191-198` AFTER `c.setHealth(connector.HealthDegraded)` executes — so the test transitively covers the health-state assertion, but does not directly call `conn.Health()` to verify the in-memory state. To honour the strict letter of the Core DoD wording and avoid any risk of fabricated completion, line 300 remains `[ ]`. A future `bubbles.implement` round may add an explicit `if got := conn.Health(); got != connector.HealthDegraded { t.Fatalf(...) }` assertion after the existing `Connect()` failure assertion; once that lands and a fresh `bubbles.test` pass is captured, line 300 may be flipped without ambiguity.
+
+**Scope-status impact:** Scope 2 status remains `Not Started` overall — remaining `[ ]` items: SCN-SM-041-003 capability handshake integration (×2 functions), SCN-SM-041-005 page-size clamping integration, SCN-SM-041-008 fast-forward `events_skipped` integration, SCN-SM-041-003+008 freshness stress, SCN-SM-041-004 Core behaviour line 300 (this round's documented carry-forward), Change-Boundary planning evidence, no-fallback-defaults check, zero-warnings build/lint/test, Scope 2-owned metrics docs in design.md, and Broader E2E suite. Top-level spec status remains `in_progress`. `certification.status` remains `in_progress`.
+
+**Concern impact:** No new concern opened. The carry-forward on line 300 is structurally tracked by the leave-at-`[ ]` decision plus this evidence section's documented gap; no separate concern object is needed because the gap is mechanical (add one health-state assertion) and is naturally picked up by the next Scope 2 round.
+
+**Honesty declarations:**
+
+- `bubbles.implement` (Round 5 phase 1) modified exactly ONE file: `tests/e2e/qf_decisions_connector_api_test.go` (+135 lines appended). Confirmed via `git diff --name-only` — the other working-tree modifications (`specs/053-ci-ops-evidence-hardening/*`) were pre-existing parallel-session changes not touched by this round.
+- `bubbles.test` (Round 5 phase 2) did NOT modify any source code. Stack was brought up via `./smackerel.sh --env test up` and auto-torn-down by the wrapper after the focused test run.
+- DoD flip in this round is limited to scopes.md line 319 ONLY. Line 300 is deliberately left at `[ ]` with the gap documented above to avoid silently substituting transitive coverage for explicit assertion.
+- No `--no-verify` used. No shell redirection used to write artifacts (all writes via IDE `replace_string_in_file` / `multi_replace_string_in_file`). No spec 053 territory touched by this iteration.
+- The bubbles.test wrapper auto-installed `gettext-base` on first use (envsubst helper) — one-time setup, exit 0. Captured in the wrapper output as `[go-e2e] envsubst missing — installing gettext-base ... [go-e2e] gettext-base install OK`.
+- `bubbles.iterate` Round 5 commits this iteration's artifacts (new e2e test source + scopes.md line 319 flip + this report.md evidence section + state.json executionHistory entry). Does NOT push — operator-gated.
+
+**Claim Source: executed** for the test command, the wrapper exit code, the live-stack health snapshot, the captured test stdout/stderr (PII-redacted but otherwise verbatim), the `go vet` + compile exit codes, and the `git diff --stat` output for the new test file. **Claim Source: interpreted** for the four behavioural-proof bullets (derived from the PASS verdict combined with the test source assertions enumerated in the task prompt) and for the health-state transitive-coverage analysis on line 300 (derived from inspection of `internal/connector/qfdecisions/connector.go:191-198` source code).
+
 
