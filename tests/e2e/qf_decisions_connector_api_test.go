@@ -844,3 +844,138 @@ func qfDecisionsCleanupSource(t *testing.T, pool *pgxpool.Pool, sourceID string)
 		t.Logf("cleanup sync_state for %s: %v", sourceID, err)
 	}
 }
+
+// TestQFDecisionsIncompatibleCapabilityBlocksPolling is the live-stack
+// counterpart to TestConnect_CapabilityIncompatibleReturnsError
+// (internal/connector/qfdecisions/connector_test.go). It proves that when
+// the QF bridge advertises an INCOMPATIBLE capability — here
+// supported_packet_versions = ["v2"] which omits the required "v1" —
+// Connect() MUST fail with a CapabilityMismatchError on the
+// supported_packet_versions field, the
+// smackerel_qf_capability_mismatch_total{required="v1",actual="v2"} metric
+// MUST be incremented exactly once, and the connector MUST NOT poll any
+// decision-events or decision-packets endpoint. The /decision-events and
+// /decision-packets handlers below are adversarial trip-wires that fail the
+// test via t.Errorf if any polling request reaches them.
+//
+// This closes the Scope 2 DoD line for SCN-SM-041-004
+// "Incompatible Capability Response Blocks Polling" in
+// specs/041-qf-companion-connector/scopes.md.
+func TestQFDecisionsIncompatibleCapabilityBlocksPolling(t *testing.T) {
+	cfg := loadE2EConfig(t)
+	waitForHealth(t, cfg, 2*time.Minute)
+
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("e2e: DATABASE_URL not set — live stack DB not available")
+	}
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		t.Skip("e2e: NATS_URL not set — live stack not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect e2e database: %v", err)
+	}
+	defer pool.Close()
+
+	natsClient, err := smacknats.Connect(ctx, natsURL, cfg.AuthToken)
+	if err != nil {
+		t.Fatalf("connect e2e NATS: %v", err)
+	}
+	defer natsClient.Close()
+
+	sourceID := fmt.Sprintf("qf-decisions-e2e-incompat-%d", time.Now().UnixNano())
+	t.Cleanup(func() { qfDecisionsCleanupSource(t, pool, sourceID) })
+	qfDecisionsCleanupSource(t, pool, sourceID)
+
+	// Reset the metric so the increment assertion isolates this test from
+	// other e2e tests in the same package.
+	metrics.QFCapabilityMismatch.Reset()
+
+	// Fake QF bridge that advertises an INCOMPATIBLE capability —
+	// supported_packet_versions = ["v2"] omits the required "v1". The
+	// /decision-events and /decision-packets handlers are trip-wires: if
+	// Connect() does NOT short-circuit on capability mismatch, polling
+	// will hit one of them and t.Errorf will fail the test.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == qfdecisions.CapabilitiesPath:
+			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
+				SupportedPacketVersions:        []string{"v2"}, // INCOMPATIBLE — missing "v1"
+				SupportedEventTypes:            []string{"packet_created"},
+				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
+				MaxPageSize:                    100,
+				MinPageSize:                    1,
+				SupportedTargetContextTypes:    []string{"trip"},
+				EvidenceMaxBundleSizeBytes:     1048576,
+				EvidenceMaxClaimsPerBundle:     50,
+				EvidenceRateLimitPerMinute:     60,
+				FreshnessSLAP95Seconds:         60,
+				AuditEnvelopeVersion:           "v1",
+				WatchSignalDirection:           "qf_to_smackerel",
+				EligibleSmackerelSourceClasses: []string{"watch"},
+			})
+		case r.URL.Path == qfdecisions.DecisionEventsPath,
+			strings.HasPrefix(r.URL.Path, qfdecisions.DecisionPacketsPath):
+			t.Errorf("polling MUST NOT occur after incompatible capability; saw request to %s", r.URL.Path)
+			http.Error(w, "polling forbidden after incompatible capability", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	conn := qfdecisions.New(sourceID)
+	err = conn.Connect(ctx, connector.ConnectorConfig{
+		AuthType:     "token",
+		Credentials:  map[string]string{"credential_ref": "qf-service-token"},
+		Enabled:      true,
+		SyncSchedule: "*/5 * * * *",
+		SourceConfig: map[string]any{
+			"base_url":       server.URL,
+			"packet_version": 1,
+			"page_size":      25,
+		},
+	})
+	if err == nil {
+		t.Fatal("Connect() succeeded against incompatible capability; SCN-SM-041-004 requires Connect to fail")
+	}
+
+	var mismatchErr qfdecisions.CapabilityMismatchError
+	if !errors.As(err, &mismatchErr) {
+		t.Fatalf("Connect() error type = %T (%v), want CapabilityMismatchError", err, err)
+	}
+	if mismatchErr.Field != "supported_packet_versions" {
+		t.Fatalf("CapabilityMismatchError.Field = %q, want %q", mismatchErr.Field, "supported_packet_versions")
+	}
+	if mismatchErr.Required != "v1" {
+		t.Fatalf("CapabilityMismatchError.Required = %q, want %q", mismatchErr.Required, "v1")
+	}
+
+	// Mismatch metric MUST be incremented exactly once with the canonical
+	// {required="v1",actual="v2"} label combination. The CompatibilityCheck
+	// joins SupportedPacketVersions with "," when emitting the actual label;
+	// with a single-element ["v2"] slice that join is just "v2".
+	gotMetric := testutil.ToFloat64(metrics.QFCapabilityMismatch.WithLabelValues("v1", "v2"))
+	if gotMetric != 1 {
+		t.Fatalf("smackerel_qf_capability_mismatch_total{required=\"v1\",actual=\"v2\"} = %v, want 1", gotMetric)
+	}
+
+	// Live DB MUST show zero artifacts for this sourceID — Sync was never
+	// invoked because Connect() failed on capability mismatch. If polling
+	// somehow occurred the trip-wire above will have already failed; this
+	// assertion guards the persistence side of the contract.
+	var artifacts int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM artifacts WHERE source_id = $1`, sourceID).Scan(&artifacts); err != nil {
+		t.Fatalf("count qf artifacts after incompatible capability: %v", err)
+	}
+	if artifacts != 0 {
+		t.Fatalf("incompatible capability MUST NOT publish qf artifacts; found %d", artifacts)
+	}
+}
