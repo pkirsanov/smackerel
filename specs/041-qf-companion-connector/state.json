@@ -156,6 +156,19 @@
           "cmd/core/connectors.go (+30/-2 LOC startup wiring)",
           "tests/integration/qf_decisions_capability_test.go (+188 LOC TestQFDecisionsConnectorPersistsCapabilityAndCursor)"
         ]
+      },
+      {
+        "phase": "plan",
+        "claimedAt": "2026-05-18T23:00:00Z",
+        "claimedBy": "bubbles.iterate (Round 13 dispatch of bubbles.plan)",
+        "summary": "Round 13 zero-runtime Build Quality Gate DoD reconciliation: flipped scopes.md L331 (Change Boundary respected), L332 (no hidden defaults / hardcoded creds-URLs / config hand edits), L333 (build/lint/tests zero warnings) using Round 12 Phase 1 evidence reuse.",
+        "evidencePointers": [
+          "specs/041-qf-companion-connector/scopes.md line 331 (Change Boundary DoD flipped)",
+          "specs/041-qf-companion-connector/scopes.md line 332 (no hidden defaults DoD flipped)",
+          "specs/041-qf-companion-connector/scopes.md line 333 (build/lint zero warnings DoD flipped)",
+          "specs/041-qf-companion-connector/report.md section 'Scope 2 Build Quality Gate DoD Reconciliation (DoDs 331/332/333, 2026-05-18T23:00:00Z)'",
+          "specs/041-qf-companion-connector/report.md section 'Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297, 2026-05-18T22:00:00Z)' (the R12 evidence anchor reused this round)"
+        ]
       }
     ],
     "pendingTransitionRequests": []
@@ -599,6 +612,17 @@
       "phasesExecuted": ["implement", "test", "plan"],
       "scopesCompleted": [],
       "summary": "Round 12: closed the architectural Scope 2 blocker (DoD 297 - capability + cursor persistence wiring). Phase 1 bubbles.implement read-only boundary validation: 5 files clean (no spurious changes, no Scope 3-9 contamination, no spec-053 contamination, no NO-DEFAULTS violations, all static checks PASS including vet/check/lint/test-compile/build); 2 boundary WARNs surfaced (cmd/core/connectors.go and internal/connector/supervisor.go faithful to Round 2R F1 intent but not literally in allow-list - amended in Phase 3). Phase 2 bubbles.test live-stack integration run: TestQFDecisionsConnectorPersistsCapabilityAndCursor PASS 0.10s exit 0 against live PostgreSQL + live NATS, 4/4 adversarial trip-wires asserted (baseline-row absence, JSON round-trip + field validation, cursor+capability column independence, UPSERT-on-second-call). Phase 3 bubbles.plan: flipped DoD 297 [ ]->[x], amended Scope 2 Change Boundary to add cmd/core/connectors.go + internal/connector/supervisor.go with scope-of-change annotations, authored Scope 2 Capability + Cursor Persistence Integration Evidence section in report.md. 6 files committed (5 code/test +345 LOC, 1 design.md doc enhancement). No certification mutations. No push."
+    },
+    {
+      "agent": "bubbles.iterate",
+      "workflowMode": "full-delivery",
+      "startedAt": "2026-05-18T23:00:00Z",
+      "completedAt": "2026-05-18T23:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["plan"],
+      "scopesCompleted": [],
+      "summary": "Round 13: zero-runtime planning-honesty round that flips three Build Quality Gate DoDs (scopes.md lines 331/332/333) using evidence already captured in Round 12 Phase 1 boundary validation. No new code, no new tests, no new live-stack runs. DoDs flipped: 331 Change Boundary respected, 332 no hidden defaults / hardcoded creds-URLs / generated config hand edits, 333 build/lint/tests zero warnings. Every cited evidence command was executed during Round 12 and is anchored in the Round 12 report.md evidence section. No certification mutations. No push."
     }
   ],
   "activeBugs": [],
@@ -723,7 +747,7 @@
     }
 
   ],
-  "lastUpdatedAt": "2026-05-18T22:00:00Z",
+  "lastUpdatedAt": "2026-05-18T23:00:00Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
