@@ -1,0 +1,146 @@
+{
+  "version": 3,
+  "specId": "029-devops-pipeline",
+  "bugId": "BUG-029-005-connector-volume-mount-fail-loud-sweep",
+  "featureDir": "specs/029-devops-pipeline/bugs/BUG-029-005-connector-volume-mount-fail-loud-sweep",
+  "featureName": "BUG-029-005: Decouple connector enable-signal from volume-mount-path emptiness; convert the 4 remaining dev-compose `${VAR:-default}` volume-mount substitutions to fail-loud SST",
+  "workflowMode": "bugfix-fastlane",
+  "parentWorkflow": {
+    "mode": "deferred-followup-from-bug-029-003",
+    "trigger": "predecessor-bug-deferral",
+    "executionModel": "direct-per-finding-dispatch"
+  },
+  "status": "done",
+  "status_reason": "All 29 DoD items satisfied with inline raw evidence; RED→GREEN proof captured; full Go unit suite GREEN; static checks clean; SST emission verified for dev + test envs; Compose substitution GREEN dev + test; Compose substitution RED proof verbatim with Gate G028 / HL-RESCAN-012 attribution; .gitkeep fixtures committed past data/ ignore via .gitignore exception lines.",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "audit",
+    "runStartedAt": "2026-05-15T00:00:00Z",
+    "completedPhaseClaims": ["bootstrap", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "executionHistory": [
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.goal",
+        "timestamp": "2026-05-15T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Packet artifacts authored at specs/029-devops-pipeline/bugs/BUG-029-005-connector-volume-mount-fail-loud-sweep/: spec.md (11 ACs), design.md (6 coordinated changes DD-1..DD-6), scopes.md (1 scope + 12 Gherkin scenarios SCN-029-005-A..L), scenario-manifest.json (12 scenarios), state.json."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:00:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "5 source files modified (scripts/commands/config.sh 4-block SST fallback, docker-compose.yml 4 fail-loud volume-mounts + 4 bare-literal env overrides + 6-line BUG-029-005 contract comment, cmd/core/connectors.go 3 redundant guards dropped, internal/deploy/dev_compose_default_fallback_test.go empty allowlist + 2 new test functions + adversarial fixture update, .gitignore 4 exception lines), 1 new test file (cmd/core/connectors_startup_gate_test.go 150 lines), 4 .gitkeep anchor files (sha e69de29bb2d1d6434b8b29ae775ad8c2e48c5391). See report.md > Implementation Code Diff for all 9 sub-section diffs."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:30:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "Targeted dev-compose contract suite (TestDevComposeContract_* PASS internal/deploy 0.110s), targeted connectors startup-gate suite (TestConnectorStartupGate_* PASS cmd/core 0.070s), targeted prod-compose canary suite (TestComposeContract_* 9 tests PASS unchanged), cross-package smoke (./smackerel.sh test unit --go finished OK). RED→GREEN proof: regression of line 127 to ${BOOKMARKS_IMPORT_DIR:-./data/bookmarks-import} triggered both dev_compose_default_fallback_test.go:139 FAIL and dev_compose_default_fallback_test.go:381 FAIL with named-var Gate G028 / HL-RESCAN-012 messages; restoration returned both to PASS. See report.md > Test Evidence > Red→Green proof for verbatim trace."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:40:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "3 persistent in-tree adversarial Go tests now guard the new contract on every ./smackerel.sh test unit --go invocation: TestDevComposeContract_FailLoudVolumeMounts + 3 adversarial sub-cases (${X:-default}, ${X?msg}, bare ${X}); TestComposeEnvOverrides_ContainerInternalConstants + 1 adversarial (${X:+/data/...} re-introduction); TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal + 1 adversarial (synthetic guard re-introduction). Pre-existing BUG-029-003 canary TestDevComposeContract_NoUnauthorizedDefaultFallbacks now runs against empty allowlist. Pre-existing spec 042 + BUG-042-001..005 prod-compose canaries unaffected and PASS unchanged. See report.md > Audit Evidence > Regression Evidence."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:45:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "Minimum-viable-change verified: 5 source files + 1 new test file + 4 .gitkeep + 7 packet artifacts; zero foreign-spec content touched; zero CI workflow changes; zero ML sidecar changes; zero production runtime Go code changes outside the 3 connector guard simplifications; zero config/smackerel.yaml schema changes. See report.md > Audit Evidence > OWASP A05 / Privacy / Minimum-viable-change."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:50:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "Static checks clean: ./smackerel.sh check exit=0 (Config is in sync with SST, env_file drift guard OK, scenarios registered 5 rejected 0), ./smackerel.sh lint exit=0 (Web validation passed), go vet ./internal/deploy/... ./cmd/core/... exit=0, gofmt -l internal/deploy/ cmd/core/ empty. SST emission stable across dev + test envs (lines 178/186/202/229 identical). Compose substitution GREEN both envs exit=0. See report.md > Validation Evidence > Static checks + SST emission + Compose substitution GREEN."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T22:55:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "OWASP A05 (Security Misconfiguration): fix strengthens security posture by converting 4 silent-default-fallback substitutions into fail-loud ones — operators attempting to bring up dev stack without SST-generated env file now see clear named-var error pointing at operator fix path instead of silent wrong-path connectors. Privacy: zero PII / connector-content / user-data exposure changes; 4 .gitkeep anchors empty; data/<connector>/ remain gitignored. See report.md > Audit Evidence > OWASP A05 / Privacy / Minimum-viable-change."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T23:00:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "Compose substitution RED proof captured verbatim: SMACKEREL_ENV_FILE=config/generated/dev.env docker compose --env-file <(grep -vE '^(BOOKMARKS_IMPORT_DIR|MAPS_IMPORT_DIR|BROWSER_HISTORY_PATH|TWITTER_ARCHIVE_DIR)=' config/generated/dev.env) -f docker-compose.yml config -q → 'error while interpolating services.smackerel-core.volumes.[]: required variable BOOKMARKS_IMPORT_DIR is missing a value: Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up'. Error message names regressed var, contains explicit Gate G028 / HL-RESCAN-012 attribution, and names operator fix path. Compose GREEN dev + test envs exit 0. Targeted suites all PASS. Gitkeep bootstrap: git check-ignore -v confirms 4 exception lines (.gitignore:34..37). See report.md > Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-17T23:15:00Z",
+        "outcome": "completed_owned",
+        "executionModel": "parent-expanded-specialist",
+        "evidence": "All 29 DoD items satisfied with inline raw evidence (≥10 lines per item where applicable). Scope 1 status flipped Not Started → Done. State transition guard expected EXIT=0 (mechanical Gate G023 enforcement before status flip to done). No knownDrift, no G040 skip markers, no done_with_concerns shortcut. SHIP_IT."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["bootstrap", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit"],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1",
+        "title": "Apply SST repo-default fallback + convert 4 dev-compose volume-mount substitutions to fail-loud + decouple connector startup gate from path-emptiness + lock new contract with 3 static-file tests + commit `.gitkeep` fixture anchor files",
+        "status": "done",
+        "dodTotal": 29,
+        "dodCompleted": 29,
+        "dodPending": 0
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "deferred-followup-from-bug-029-003"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "bugfix-fastlane-mode-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "findings": [],
+  "reworkQueue": [],
+  "transitionRequests": []
+}

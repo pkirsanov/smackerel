@@ -58,7 +58,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	slog.Info("connector registry initialized", "count", svc.registry.Count())
 
 	// Auto-start bookmarks connector (no OAuth needed — file-based import)
-	if cfg.BookmarksEnabled && cfg.BookmarksImportDir != "" {
+	// BUG-029-005: BookmarksEnabled boolean is the SOLE load-bearing signal.
+	// BookmarksImportDir is SST-guaranteed non-empty (resolved via shell-env >
+	// yaml > repo-default in scripts/commands/config.sh).
+	if cfg.BookmarksEnabled {
 		processingTier := cfg.BookmarksProcessingTier
 		if processingTier == "" {
 			processingTier = "full"
@@ -86,7 +89,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start browser history connector (no OAuth needed — file-based)
-	if cfg.BrowserHistoryEnabled && cfg.BrowserHistoryPath != "" {
+	// BUG-029-005: BrowserHistoryEnabled boolean is the SOLE load-bearing signal.
+	// BrowserHistoryPath is SST-guaranteed non-empty (resolved via shell-env >
+	// yaml > repo-default in scripts/commands/config.sh).
+	if cfg.BrowserHistoryEnabled {
 		browserCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,
@@ -119,7 +125,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	}
 
 	// Auto-start Google Maps Timeline connector (no OAuth needed — file-based Takeout import)
-	if cfg.MapsEnabled && cfg.MapsImportDir != "" {
+	// BUG-029-005: MapsEnabled boolean is the SOLE load-bearing signal.
+	// MapsImportDir is SST-guaranteed non-empty (resolved via shell-env >
+	// yaml > repo-default in scripts/commands/config.sh).
+	if cfg.MapsEnabled {
 		mapsCfg := connector.ConnectorConfig{
 			AuthType:     "none",
 			Enabled:      true,

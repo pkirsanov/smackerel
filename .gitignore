@@ -17,7 +17,24 @@ venv/
 config/generated/
 
 # Runtime data directories (user import data)
-data/
+# BUG-029-005: track .gitkeep anchors at the 4 connector-fixture mount
+# paths so fresh-clone bootstrap satisfies fail-loud Compose substitution
+# without operator setup. Pattern uses `data/*` + un-excluded parent dirs
+# because git cannot re-include a file inside an excluded directory.
+data/*
+!data/bookmarks-import/
+!data/maps-import/
+!data/browser-history/
+!data/browser-history/History/
+!data/twitter-archive/
+data/bookmarks-import/*
+data/maps-import/*
+data/browser-history/History/*
+data/twitter-archive/*
+!data/bookmarks-import/.gitkeep
+!data/maps-import/.gitkeep
+!data/browser-history/History/.gitkeep
+!data/twitter-archive/.gitkeep
 
 # Database backups (contain full DB content including tokens)
 backups/
