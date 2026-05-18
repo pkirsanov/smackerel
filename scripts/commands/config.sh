@@ -822,10 +822,17 @@ if [[ "$CORS_ALLOWED_ORIGINS_JSON" != "[]" && -n "$CORS_ALLOWED_ORIGINS_JSON" ]]
   CORS_ALLOWED_ORIGINS="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$CORS_ALLOWED_ORIGINS_JSON" 2>/dev/null)" || CORS_ALLOWED_ORIGINS=""
 fi
 
-# Connector import paths (optional — empty string is valid default)
+# Connector import paths — SST repo-default fallback (BUG-029-005 / HL-RESCAN-012 / Gate G028).
+# Each of the 4 mount-path vars (BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH,
+# TWITTER_ARCHIVE_DIR) resolves with precedence: (1) shell env value, (2) yaml value via yaml_get,
+# (3) repo-default host fixture path. The defaults are SST emission-time placeholders — visible in
+# config/generated/<env>.env and auditable — not Compose-substitution-time defaults (which Gate
+# G028 forbids per the BUG-029-003 DD-2 precedent). The connector starts iff <Connector>_ENABLED is
+# true; the path is consumed by the connector to locate fixture files (gitkept empty dirs by default).
 BOOKMARKS_ENABLED="$(yaml_get connectors.bookmarks.enabled 2>/dev/null)" || BOOKMARKS_ENABLED="false"
 BOOKMARKS_SYNC_SCHEDULE="$(yaml_get connectors.bookmarks.sync_schedule 2>/dev/null)" || BOOKMARKS_SYNC_SCHEDULE=""
 BOOKMARKS_IMPORT_DIR="$(yaml_get connectors.bookmarks.import_dir 2>/dev/null)" || BOOKMARKS_IMPORT_DIR=""
+if [[ -z "$BOOKMARKS_IMPORT_DIR" ]]; then BOOKMARKS_IMPORT_DIR="./data/bookmarks-import"; fi
 BOOKMARKS_WATCH_INTERVAL="$(yaml_get connectors.bookmarks.watch_interval 2>/dev/null)" || BOOKMARKS_WATCH_INTERVAL=""
 BOOKMARKS_ARCHIVE_PROCESSED="$(yaml_get connectors.bookmarks.archive_processed 2>/dev/null)" || BOOKMARKS_ARCHIVE_PROCESSED=""
 BOOKMARKS_PROCESSING_TIER="$(yaml_get connectors.bookmarks.processing_tier 2>/dev/null)" || BOOKMARKS_PROCESSING_TIER=""
@@ -834,6 +841,7 @@ BOOKMARKS_EXCLUDE_DOMAINS="$(yaml_get connectors.bookmarks.exclude_domains 2>/de
 MAPS_ENABLED="$(yaml_get connectors.google-maps-timeline.enabled 2>/dev/null)" || MAPS_ENABLED="false"
 MAPS_SYNC_SCHEDULE="$(yaml_get connectors.google-maps-timeline.sync_schedule 2>/dev/null)" || MAPS_SYNC_SCHEDULE=""
 MAPS_IMPORT_DIR="$(yaml_get connectors.google-maps-timeline.import_dir 2>/dev/null)" || MAPS_IMPORT_DIR=""
+if [[ -z "$MAPS_IMPORT_DIR" ]]; then MAPS_IMPORT_DIR="./data/maps-import"; fi
 MAPS_WATCH_INTERVAL="$(yaml_get connectors.google-maps-timeline.watch_interval 2>/dev/null)" || MAPS_WATCH_INTERVAL=""
 MAPS_ARCHIVE_PROCESSED="$(yaml_get connectors.google-maps-timeline.archive_processed 2>/dev/null)" || MAPS_ARCHIVE_PROCESSED=""
 MAPS_MIN_DISTANCE_M="$(yaml_get connectors.google-maps-timeline.min_distance_m 2>/dev/null)" || MAPS_MIN_DISTANCE_M=""
@@ -850,6 +858,7 @@ MAPS_LINK_PROXIMITY_RADIUS_M="$(yaml_get connectors.google-maps-timeline.linking
 BROWSER_HISTORY_ENABLED="$(yaml_get connectors.browser-history.enabled 2>/dev/null)" || BROWSER_HISTORY_ENABLED="false"
 BROWSER_HISTORY_SYNC_SCHEDULE="$(yaml_get connectors.browser-history.sync_schedule 2>/dev/null)" || BROWSER_HISTORY_SYNC_SCHEDULE=""
 BROWSER_HISTORY_PATH="$(yaml_get connectors.browser-history.chrome.history_path 2>/dev/null)" || BROWSER_HISTORY_PATH=""
+if [[ -z "$BROWSER_HISTORY_PATH" ]]; then BROWSER_HISTORY_PATH="./data/browser-history/History"; fi
 BROWSER_HISTORY_ACCESS_STRATEGY="$(yaml_get connectors.browser-history.chrome.access_strategy 2>/dev/null)" || BROWSER_HISTORY_ACCESS_STRATEGY=""
 BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS="$(yaml_get connectors.browser-history.processing.initial_lookback_days 2>/dev/null)" || BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS=""
 BROWSER_HISTORY_DWELL_FULL_MIN="$(yaml_get connectors.browser-history.processing.dwell_full_min 2>/dev/null)" || BROWSER_HISTORY_DWELL_FULL_MIN=""
@@ -910,6 +919,7 @@ DISCORD_MONITORED_CHANNELS="$(yaml_get_json connectors.discord.monitored_channel
 TWITTER_ENABLED="$(yaml_get connectors.twitter.enabled 2>/dev/null)" || TWITTER_ENABLED="false"
 TWITTER_SYNC_MODE="$(yaml_get connectors.twitter.sync_mode 2>/dev/null)" || TWITTER_SYNC_MODE=""
 TWITTER_ARCHIVE_DIR="$(yaml_get connectors.twitter.archive_dir 2>/dev/null)" || TWITTER_ARCHIVE_DIR=""
+if [[ -z "$TWITTER_ARCHIVE_DIR" ]]; then TWITTER_ARCHIVE_DIR="./data/twitter-archive"; fi
 TWITTER_BEARER_TOKEN="$(yaml_get connectors.twitter.bearer_token 2>/dev/null)" || TWITTER_BEARER_TOKEN=""
 TWITTER_SYNC_SCHEDULE="$(yaml_get connectors.twitter.sync_schedule 2>/dev/null)" || TWITTER_SYNC_SCHEDULE=""
 

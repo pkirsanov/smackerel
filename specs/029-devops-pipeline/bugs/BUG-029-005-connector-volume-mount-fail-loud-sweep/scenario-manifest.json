@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "bugId": "BUG-029-005-connector-volume-mount-fail-loud-sweep",
+  "parentSpec": "029-devops-pipeline",
+  "title": "Decouple connector enable-signal from volume-mount-path emptiness; convert the 4 remaining dev-compose `${VAR:-default}` volume-mount substitutions to fail-loud SST",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-029-005-A",
+      "title": "SST emits non-empty repo-default host path when yaml is empty",
+      "given": "config/smackerel.yaml has `connectors.bookmarks.import_dir: \"\"` (empty) and no shell env override for BOOKMARKS_IMPORT_DIR is set",
+      "when": "`bash scripts/commands/config.sh --env dev` runs",
+      "then": "config/generated/dev.env contains the line `BOOKMARKS_IMPORT_DIR=./data/bookmarks-import` (and equivalent SST-default emissions for MAPS_IMPORT_DIR / BROWSER_HISTORY_PATH / TWITTER_ARCHIVE_DIR)",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: bash scripts/commands/config.sh --env dev → grep -nE '^(BOOKMARKS_IMPORT_DIR|MAPS_IMPORT_DIR|BROWSER_HISTORY_PATH|TWITTER_ARCHIVE_DIR)=' config/generated/dev.env"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence", "report.md#code-diff-evidence"],
+      "specSource": "scripts/commands/config.sh new 4-block fallback resolution after yaml_get (BUG-029-005 / HL-RESCAN-012)",
+      "redGreenProbe": "removing the `if [[ -z ... ]]; then ... fi` fallback block for BOOKMARKS_IMPORT_DIR causes the corresponding emission line to render with an empty value (`BOOKMARKS_IMPORT_DIR=`); restoration returns the non-empty repo-default",
+      "adversarial": "NO (positive SST-emission contract)"
+    },
+    {
+      "scenarioId": "SCN-029-005-B",
+      "title": "Yaml value wins over SST repo-default",
+      "given": "config/smackerel.yaml has `connectors.bookmarks.import_dir: \"/srv/data/bookmarks\"` and no shell env override for BOOKMARKS_IMPORT_DIR is set",
+      "when": "`bash scripts/commands/config.sh --env dev` runs",
+      "then": "config/generated/dev.env contains the line `BOOKMARKS_IMPORT_DIR=/srv/data/bookmarks` (yaml value preserved; SST default is NOT applied because the yaml value is non-empty)",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: edit smackerel.yaml + bash scripts/commands/config.sh --env dev + grep dev.env"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "scripts/commands/config.sh yaml_get-then-fallback resolution order (BUG-029-005)",
+      "redGreenProbe": "inverting the fallback condition (apply repo-default even when yaml is non-empty) causes the operator's `/srv/data/bookmarks` value to be silently overwritten; the assertion catches the regression",
+      "adversarial": "NO (positive precedence contract)"
+    },
+    {
+      "scenarioId": "SCN-029-005-C",
+      "title": "Shell env wins over yaml and SST repo-default",
+      "given": "config/smackerel.yaml has `connectors.bookmarks.import_dir: \"/srv/data/bookmarks\"` and the shell exports `BOOKMARKS_IMPORT_DIR=/srv/exports/bookmarks` before invoking config.sh",
+      "when": "`bash scripts/commands/config.sh --env dev` runs",
+      "then": "config/generated/dev.env contains the line `BOOKMARKS_IMPORT_DIR=/srv/exports/bookmarks` (shell env wins over yaml; yaml wins over SST default)",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: export BOOKMARKS_IMPORT_DIR=... + bash scripts/commands/config.sh --env dev + grep dev.env"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "scripts/commands/config.sh shell-env-overrides-yaml resolution order (preserved from pre-existing yaml_get semantics)",
+      "redGreenProbe": "swapping the resolution order to apply yaml_get unconditionally even when shell env is non-empty causes the operator's `/srv/exports/bookmarks` value to be silently overwritten; the assertion catches the regression",
+      "adversarial": "NO (positive precedence contract)"
+    },
+    {
+      "scenarioId": "SCN-029-005-D",
+      "title": "Compose substitution GREEN against SST-emitted env file",
+      "given": "config/generated/dev.env contains non-empty values for the 4 mount-path vars (per SCN-029-005-A)",
+      "when": "`docker compose --env-file config/generated/dev.env -f docker-compose.yml config -q` runs (and same for test.env)",
+      "then": "it exits 0 (the new fail-loud `${X:?...}` substitution forms are satisfied by the SST-emitted env file); the sanctioned developer workflow `./smackerel.sh up` is unbroken",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: docker compose --env-file config/generated/dev.env -f docker-compose.yml config -q"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "docker-compose.yml fail-loud volume-mount substitution forms (BUG-029-005 / HL-RESCAN-012)",
+      "redGreenProbe": "removing one of the 4 SST-emitted mount-path lines from dev.env causes Compose to abort with the named-var error",
+      "adversarial": "NO (positive end-to-end SST→Compose plumbing contract)"
+    },
+    {
+      "scenarioId": "SCN-029-005-E",
+      "title": "Compose fails loud when env file is missing or empty (RED proof of fail-loud)",
+      "given": "a developer invokes `docker compose --env-file /dev/null -f docker-compose.yml config -q` (no SST plumbing)",
+      "when": "Compose attempts variable substitution for the 4 volume-mount vars",
+      "then": "it exits non-zero; the error message names at least one of [BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH, TWITTER_ARCHIVE_DIR] AS missing; the error message contains a fix-path token (e.g., `./smackerel.sh config generate` or `./smackerel.sh up`)",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: docker compose --env-file /dev/null -f docker-compose.yml config -q"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "docker-compose.yml fail-loud volume-mount substitution forms (BUG-029-005 / HL-RESCAN-012 / Gate G028)",
+      "redGreenProbe": "reverting any one of the 4 converted vars to `${X:-default}` form causes Compose to silently substitute the default instead of aborting (silent failure mode regresses)",
+      "adversarial": "YES — exits non-zero with a Compose error message naming at least one of the new fail-loud-substituted vars; relaxing any one of the 4 forms to `:-default` causes Compose substitution to silently succeed against the missing env file"
+    },
+    {
+      "scenarioId": "SCN-029-005-F",
+      "title": "TestDevComposeContract_FailLoudVolumeMounts asserts live file has all 4 fail-loud forms with required attribution",
+      "given": "the live docker-compose.yml is bit-identical to the post-fix state",
+      "when": "`go test -run TestDevComposeContract_FailLoudVolumeMounts ./internal/deploy/...` runs",
+      "then": "it PASSes (all 4 volume-mount lines have `${X:?...}` form with error messages containing `Gate G028`, `HL-RESCAN-012`, and `./smackerel.sh config generate`); reverting any of the 4 to `${X:-...}` or `${X?...}` or bare `${X}` form causes the test to FAIL with a message naming the regressed var",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_FailLoudVolumeMounts",
+        "TestDevComposeContract_FailLoudVolumeMounts/regression_to_colon_dash_form",
+        "TestDevComposeContract_FailLoudVolumeMounts/regression_to_question_no_colon_form",
+        "TestDevComposeContract_FailLoudVolumeMounts/regression_to_bare_substitution"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence", "report.md#red-green-proof-scenario-first-tdd"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go new TestDevComposeContract_FailLoudVolumeMounts function (BUG-029-005 / HL-RESCAN-012)",
+      "redGreenProbe": "temporarily reverting `${BOOKMARKS_IMPORT_DIR:?...}` to `${BOOKMARKS_IMPORT_DIR:-./data/bookmarks-import}` in docker-compose.yml causes both TestDevComposeContract_FailLoudVolumeMounts (missing-fail-loud-form) AND TestDevComposeContract_NoUnauthorizedDefaultFallbacks (unauthorized-fallback) to FAIL with named-var messages; restoration returns both to PASS",
+      "adversarial": "YES — fails RED if any of the 4 fail-loud forms is reverted to `:-` or `?` (no-colon) or bare `${X}` form"
+    },
+    {
+      "scenarioId": "SCN-029-005-G",
+      "title": "TestComposeEnvOverrides_ContainerInternalConstants asserts the 4 env overrides are bare-literal",
+      "given": "the live docker-compose.yml is bit-identical to the post-fix state",
+      "when": "`go test -run TestComposeEnvOverrides_ContainerInternalConstants ./internal/deploy/...` runs",
+      "then": "it PASSes (the 4 environment-block lines for BOOKMARKS_IMPORT_DIR / MAPS_IMPORT_DIR / BROWSER_HISTORY_PATH / TWITTER_ARCHIVE_DIR are bare-literal `/data/<connector>` paths matching the AGENT_SCENARIO_DIR pattern); reverting any of the 4 to `${X:+/data/...}` or `${X:-/data/...}` form causes the test to FAIL",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeEnvOverrides_ContainerInternalConstants",
+        "TestComposeEnvOverrides_ContainerInternalConstants/regression_to_substitution_form"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go new TestComposeEnvOverrides_ContainerInternalConstants function (BUG-029-005 / HL-RESCAN-012)",
+      "redGreenProbe": "temporarily reverting `BOOKMARKS_IMPORT_DIR: /data/bookmarks-import` to `BOOKMARKS_IMPORT_DIR: ${BOOKMARKS_IMPORT_DIR:+/data/bookmarks-import}` causes the test to FAIL with a message naming the regressed var; restoration returns it to PASS",
+      "adversarial": "YES — fails RED if any of the 4 bare-literal forms is reverted to a `${X}` substitution"
+    },
+    {
+      "scenarioId": "SCN-029-005-H",
+      "title": "TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal asserts cmd/core/connectors.go drops the redundant `&& cfg.<X> != \"\"` clause",
+      "given": "cmd/core/connectors.go is bit-identical to the post-fix state",
+      "when": "`go test -run TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal ./cmd/core/...` runs",
+      "then": "it PASSes (zero occurrences of `BookmarksEnabled && cfg.BookmarksImportDir != \"\"`, `BrowserHistoryEnabled && cfg.BrowserHistoryPath != \"\"`, `MapsEnabled && cfg.MapsImportDir != \"\"`, `TwitterEnabled && cfg.TwitterArchiveDir != \"\"`); reintroducing any one of those patterns causes the test to FAIL",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal",
+        "TestConnectorStartupGate_BooleanIsSoleLoadBearingSignal/regression_via_synthetic_fixture"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "cmd/core/connectors_startup_gate_test.go NEW static-file lint test (BUG-029-005 / HL-RESCAN-012)",
+      "redGreenProbe": "temporarily reverting `if cfg.BookmarksEnabled {` to `if cfg.BookmarksEnabled && cfg.BookmarksImportDir != \"\" {` causes the test to FAIL with a message naming the regressed pattern; restoration returns it to PASS",
+      "adversarial": "YES — fails RED if any of the 4 forbidden patterns is reintroduced in connectors.go"
+    },
+    {
+      "scenarioId": "SCN-029-005-I",
+      "title": "TestDevComposeContract_NoUnauthorizedDefaultFallbacks PASSes with empty allowlist",
+      "given": "the live docker-compose.yml is at its post-fix state AND devComposeDefaultFallbackAllowlist is empty (zero allowlisted vars)",
+      "when": "`go test -run TestDevComposeContract_NoUnauthorizedDefaultFallbacks ./internal/deploy/...` runs",
+      "then": "it PASSes (zero `${X:-default}` occurrences in the live file — the BUG-029-003 sweep is now complete)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_NoUnauthorizedDefaultFallbacks"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go devComposeDefaultFallbackAllowlist reduced to empty (BUG-029-005)",
+      "redGreenProbe": "temporarily reverting any one of the 4 mount-path vars to `${X:-default}` form causes the test to FAIL with a Gate G028 violation message naming the regressed var",
+      "adversarial": "NO (positive empty-allowlist canary against live file)"
+    },
+    {
+      "scenarioId": "SCN-029-005-J",
+      "title": "Pre-existing dev-compose adversarial tests from BUG-029-003 continue PASS GREEN with empty-allowlist semantics",
+      "given": "the changes from this fix are applied",
+      "when": "`go test -count=1 -v -run '^TestDevComposeContract' ./internal/deploy/...` runs",
+      "then": "TestDevComposeContract_NoUnauthorizedDefaultFallbacks PASSes (positive canary); TestDevComposeContract_AdversarialUnauthorizedDefaultFallback PASSes (the 4 BUG-029-003 sub-cases all still work); TestDevComposeContract_AdversarialAllowlistRespected PASSes (updated to use synthetic non-allowlisted vars on both sides — still proves per-var-not-per-line gating); TestDevComposeContract_AdversarialCommentLinesIgnored PASSes (no change required)",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestDevComposeContract_NoUnauthorizedDefaultFallbacks",
+        "TestDevComposeContract_AdversarialUnauthorizedDefaultFallback",
+        "TestDevComposeContract_AdversarialAllowlistRespected",
+        "TestDevComposeContract_AdversarialCommentLinesIgnored"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#test-evidence"],
+      "specSource": "internal/deploy/dev_compose_default_fallback_test.go pre-existing BUG-029-003 tests + updated AdversarialAllowlistRespected fixture (BUG-029-005)",
+      "redGreenProbe": "removing the per-var allowlist filter from findDevComposeUnauthorizedDefaultFallbacks causes TestDevComposeContract_AdversarialAllowlistRespected to FAIL — the test still exercises the same gating logic even though the allowlist itself is empty (the fixture injects rogue vars that must be caught)",
+      "adversarial": "YES (canaries)"
+    },
+    {
+      "scenarioId": "SCN-029-005-K",
+      "title": "Prod-compose contract tests preserved (BUG-042-001..005 canary)",
+      "given": "the changes from this fix are applied",
+      "when": "`go test -count=1 -v -run '^TestComposeContract' ./internal/deploy/...` runs",
+      "then": "all 9 pre-existing prod-compose tests (TestComposeContract_LiveFile + 8 adversarials) PASS unchanged — this fix is purely additive against a different file (`docker-compose.yml`), so the canaries cannot regress as a side effect",
+      "scopeId": "1",
+      "requiredTestType": "go-unit-static-file-lint",
+      "regressionRequired": true,
+      "linkedTests": [
+        "TestComposeContract_LiveFile",
+        "TestComposeContract_AdversarialLiteralBind",
+        "TestComposeContract_AdversarialInfraHasPorts",
+        "TestComposeContract_AdversarialMultiPortsBypass",
+        "TestComposeContract_AdversarialMLMultiPortsBypass",
+        "TestComposeContract_AdversarialNetworkModeHostBypass",
+        "TestComposeContract_AdversarialOllamaLiteralBind",
+        "TestComposeContract_AdversarialDefaultFallbackBind",
+        "TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": "internal/deploy/compose_contract_test.go pre-existing spec 042 + BUG-042-001..005 contract (preserved unchanged)",
+      "redGreenProbe": "no change is made to deploy/compose.deploy.yml or internal/deploy/compose_contract_test.go in this fix; any regression in either file would fail one of the 9 prod-compose tests",
+      "adversarial": "YES (canaries — pre-existing BUG-042-001..005 adversarial tests preserved)"
+    },
+    {
+      "scenarioId": "SCN-029-005-L",
+      "title": "Fresh-clone bootstrap: `.gitkeep` files preserve fail-loud Compose substitution out-of-the-box",
+      "given": "a fresh `git clone` of the smackerel repo",
+      "when": "the developer runs `./smackerel.sh config generate --env dev` then `./smackerel.sh up`",
+      "then": "the 4 host paths exist on disk (`./data/bookmarks-import/`, `./data/maps-import/`, `./data/browser-history/History/`, `./data/twitter-archive/`); `docker compose config -q` exits 0; the 4 volume mounts bind to existing-but-empty directories without permission errors",
+      "scopeId": "1",
+      "requiredTestType": "execution-evidence",
+      "regressionRequired": true,
+      "linkedTests": [
+        "manual: git ls-files data/bookmarks-import/ data/maps-import/ data/browser-history/History/ data/twitter-archive/",
+        "manual: git check-ignore -v data/bookmarks-import/.gitkeep"
+      ],
+      "evidenceRefs": ["scopes.md#scope-1-test-plan", "report.md#validation-evidence"],
+      "specSource": ".gitignore 4 `!data/<dir>/.gitkeep` exception lines + 4 force-added `.gitkeep` files (BUG-029-005)",
+      "redGreenProbe": "removing any one of the 4 `.gitkeep` exception lines from .gitignore causes `git status` to mark the corresponding `.gitkeep` file as ignored; removing the `.gitkeep` files themselves causes a fresh clone to omit the directories",
+      "adversarial": "NO (positive fresh-clone bootstrap contract)"
+    }
+  ]
+}
