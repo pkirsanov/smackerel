@@ -958,6 +958,21 @@ func TestQFDecisionsIncompatibleCapabilityBlocksPolling(t *testing.T) {
 		t.Fatalf("CapabilityMismatchError.Required = %q, want %q", mismatchErr.Required, "v1")
 	}
 
+	// Connector health MUST be flipped to HealthDegraded at the moment
+	// CompatibilityCheck fails (see internal/connector/qfdecisions/connector.go
+	// :194-197 — capabilityStatus = CapabilityStatusIncompatible immediately
+	// followed by setHealth(connector.HealthDegraded) BEFORE Connect returns
+	// the wrapped CapabilityMismatchError). SCN-SM-041-004 Core behaviour
+	// DoD (scopes.md line 300) requires this explicitly: incompatible
+	// required capability fields MUST mark connector health "mismatched"
+	// (mapped to connector.HealthDegraded in this codebase — the existing
+	// constant set has no separate "mismatched" value; HealthDegraded is
+	// the canonical degraded-runtime signal that callers and observability
+	// surfaces consume).
+	if got := conn.Health(ctx); got != connector.HealthDegraded {
+		t.Fatalf("Health() after capability mismatch = %q, want %q", got, connector.HealthDegraded)
+	}
+
 	// Mismatch metric MUST be incremented exactly once with the canonical
 	// {required="v1",actual="v2"} label combination. The CompatibilityCheck
 	// joins SupportedPacketVersions with "," when emitting the actual label;
