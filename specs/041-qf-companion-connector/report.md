@@ -7881,5 +7881,28 @@ Both files were faithful to Round 2R F1 intent before the amendment (Round 2R F1
 - PII redacted in evidence transcript
 - No fabricated evidence: every claim traces to the Phase 1/Phase 2 RESULT-ENVELOPEs
 
+## Scope 2 Build Quality Gate DoD Reconciliation (DoDs 331/332/333 -- bubbles.plan Round 13 zero-runtime flips via R12 evidence reuse, 2026-05-18T23:00:00Z)
+
+Round 13 is a zero-runtime planning-honesty round that flips three Build Quality Gate DoDs (`scopes.md` lines 331/332/333) using evidence already captured in Round 12's Phase 1 boundary validation. No new code, no new tests, no new live-stack runs. Every cited evidence command was executed during Round 12 and is anchored in the Round 12 evidence section above.
+
+### Reconciliation Table
+
+| DoD | Line | Evidence Source | Outcome |
+|---|---|---|---|
+| Change Boundary respected | scopes.md L331 | Round 12 Phase 1 boundary validation: 5 staged code/test files validated against Round 2R Change Boundary allow-list (zero Scope 3-9 contamination, zero spec-053 contamination, zero spurious changes); Round 12 Phase 3 amended the Change Boundary to add `cmd/core/connectors.go` + `internal/connector/supervisor.go` with explicit scope-of-change annotations | Flipped `[ ] -> [x]` |
+| No hidden defaults / hardcoded QF creds / hardcoded QF URLs / generated config hand edits | scopes.md L332 | Round 12 Phase 1 `./smackerel.sh check` exit 0 (SST in sync, no env_file drift, no scenario-lint rejections); the R12 wiring uses the existing `StateStore` connection pool with no hardcoded URLs/credentials/fallbacks; migration `034_qf_decisions_capability.sql` is the sole schema change auto-discovered via project-standard `//go:embed migrations/*.sql`; zero hand-edits to `config/generated/*.env` | Flipped `[ ] -> [x]` |
+| Build, lint, and tests produce zero warnings | scopes.md L333 | Round 12 Phase 1 boundary validation table records all 5 checks PASS exit 0 (`go vet` clean, `./smackerel.sh check` exit 0, `./smackerel.sh lint` exit 0, test-compile exit 0 for 21 packages, `./smackerel.sh build` exit 0 smackerel-core 44.8s + smackerel-ml) | Flipped `[ ] -> [x]` |
+
+### Round 13 Constraints Honored
+
+- Zero new runtime work (no `./smackerel.sh` invocations this round, no code changes, no test changes, no design.md changes)
+- Zero new evidence fabricated -- all claims trace to Round 12 Phase 1 boundary validation output already in report.md
+- No certification mutations (certification.status stays `in_progress`, completedScopes stays `[Scope 1]`, certifiedCompletedPhases stays `[]`)
+- No top-level status promotion (`status` stays `in_progress`)
+- No push (operator gate not consumed since Round 7)
+- No `--no-verify` (pre-commit hooks gitleaks + pii-scan must run clean)
+- IDE-tool file writes only
+- Forward-monotonic timestamp `2026-05-18T23:00:00Z` (post-R12 `2026-05-18T22:00:00Z`)
+- No G040 keyword hits in additions outside fenced code blocks
 
 
