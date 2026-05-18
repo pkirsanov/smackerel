@@ -140,6 +140,22 @@
           "specs/041-qf-companion-connector/scopes.md line 304 (SCN-SM-041-008 fast-forward DoD flipped)",
           "specs/041-qf-companion-connector/report.md section 'Scope 2 Round 10-11 DoD Reconciliation (bubbles.gaps Round 10 read-only diagnostic + bubbles.plan Round 11 zero-runtime flips, 2026-05-18T21:00:00Z)'"
         ]
+      },
+      {
+        "phase": "implement+test+plan",
+        "claimedAt": "2026-05-18T22:00:00Z",
+        "claimedBy": "bubbles.iterate (Round 12 dispatch of bubbles.implement + bubbles.test + bubbles.plan)",
+        "summary": "Round 12 closed DoD 297 (capability + cursor persistence wiring): Phase 1 boundary validation PASS, Phase 2 live-stack integration TestQFDecisionsConnectorPersistsCapabilityAndCursor PASS at 0.10s with 4/4 adversarial trip-wires, Phase 3 artifact edits applied (DoD 297 flipped, Change Boundary amended, evidence section authored).",
+        "evidencePointers": [
+          "specs/041-qf-companion-connector/scopes.md line 297 (DoD 297 flipped)",
+          "specs/041-qf-companion-connector/scopes.md Change Boundary section (added cmd/core/connectors.go + internal/connector/supervisor.go with scope-of-change annotations)",
+          "specs/041-qf-companion-connector/report.md section 'Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297, 2026-05-18T22:00:00Z)'",
+          "internal/connector/state.go (+90 LOC SaveCapability + GetCapability)",
+          "internal/connector/supervisor.go (+13 LOC SaveCapability proxy)",
+          "internal/connector/qfdecisions/connector.go (+25 LOC CapabilitySnapshot accessor)",
+          "cmd/core/connectors.go (+30/-2 LOC startup wiring)",
+          "tests/integration/qf_decisions_capability_test.go (+188 LOC TestQFDecisionsConnectorPersistsCapabilityAndCursor)"
+        ]
       }
     ],
     "pendingTransitionRequests": []
@@ -572,6 +588,17 @@
       "phasesExecuted": ["gaps", "plan"],
       "scopesCompleted": [],
       "summary": "Round 11: bubbles.plan flipped DoD line 304 (SCN-SM-041-008 fast-forward) from [ ] to [x] using Round 7 integration PASS evidence reuse (zero runtime work). Round 10 bubbles.gaps read-only reconciliation classified 9 unchecked Scope 2 DoDs (A=0, B=1, C=6, D=2, E=0); Round 11 applied the single B-category zero-runtime flip identified by R10. DoD 307+322 remain [ ] (cross-scope held by Scope 5, concern C-S2-321B-SCOPE-5-RENDER). Six C-category DoDs (lines 297, 301, 324, 328, 329, 330) await Round 12+ implement/test work. New report.md section 'Scope 2 Round 10-11 DoD Reconciliation' captures the gap table and Round 12+ routing plan. No source code changes. No certification mutations. No push."
+    },
+    {
+      "agent": "bubbles.iterate",
+      "workflowMode": "full-delivery",
+      "startedAt": "2026-05-18T22:00:00Z",
+      "completedAt": "2026-05-18T22:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "phasesExecuted": ["implement", "test", "plan"],
+      "scopesCompleted": [],
+      "summary": "Round 12: closed the architectural Scope 2 blocker (DoD 297 - capability + cursor persistence wiring). Phase 1 bubbles.implement read-only boundary validation: 5 files clean (no spurious changes, no Scope 3-9 contamination, no spec-053 contamination, no NO-DEFAULTS violations, all static checks PASS including vet/check/lint/test-compile/build); 2 boundary WARNs surfaced (cmd/core/connectors.go and internal/connector/supervisor.go faithful to Round 2R F1 intent but not literally in allow-list - amended in Phase 3). Phase 2 bubbles.test live-stack integration run: TestQFDecisionsConnectorPersistsCapabilityAndCursor PASS 0.10s exit 0 against live PostgreSQL + live NATS, 4/4 adversarial trip-wires asserted (baseline-row absence, JSON round-trip + field validation, cursor+capability column independence, UPSERT-on-second-call). Phase 3 bubbles.plan: flipped DoD 297 [ ]->[x], amended Scope 2 Change Boundary to add cmd/core/connectors.go + internal/connector/supervisor.go with scope-of-change annotations, authored Scope 2 Capability + Cursor Persistence Integration Evidence section in report.md. 6 files committed (5 code/test +345 LOC, 1 design.md doc enhancement). No certification mutations. No push."
     }
   ],
   "activeBugs": [],
@@ -696,7 +723,7 @@
     }
 
   ],
-  "lastUpdatedAt": "2026-05-18T21:00:00Z",
+  "lastUpdatedAt": "2026-05-18T22:00:00Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {

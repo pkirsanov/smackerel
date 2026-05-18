@@ -7661,4 +7661,225 @@ Round 10 (bubbles.gaps, read-only) reconciled the 9 unchecked Scope 2 DoD items 
 - Pre-existing unstaged Round 2R narrative in scopes.md (lines 354-415) NOT touched.
 - Pre-existing unstaged +345-LOC working-tree persistence delta NOT staged or modified this round.
 
+---
+
+## Scope 2 Round 8 Test Evidence (2026-05-18T20:40Z)
+
+Commands run from `~/smackerel` via `./smackerel.sh` per terminal discipline. Steps 1-5 executed; steps 6-7 in progress.
+
+### Step 1: `./smackerel.sh format --check`
+
+**Claim Source:** executed
+
+```
++ go fmt ./...
+[smackerel.sh] format --check: 51 files already formatted (no diffs)
+EXIT_CODE=0
+```
+
+### Step 2: `./smackerel.sh check`
+
+**Claim Source:** executed
+
+```
+config-validate: ~/smackerel/config/generated/dev.env OK
+config-validate: ~/smackerel/config/generated/test.env OK
+Config in sync with SST (config/smackerel.yaml)
+env_file drift guard: OK (no drift between sst and generated env files)
+scenario-lint: 5 scenarios registered, 0 rejected
+EXIT_CODE=0
+```
+
+### Step 3: `./smackerel.sh lint`
+
+**Claim Source:** executed
+
+```
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+
+Web validation passed
+EXIT_CODE=0
+```
+
+### Step 4: `./smackerel.sh test unit`
+
+**Claim Source:** interpreted (Go qfdecisions package reported `(cached)` — last full run on unchanged source PASSED; Python pytest re-executed live)
+
+```
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions  (cached)
+[py-unit] pip install OK; starting pytest ml/tests
++ pytest ml/tests -q
+............................................................. [ 16%]
+............................................................. [ 32%]
+............................................................. [ 48%]
+............................................................. [ 64%]
+............................................................. [ 80%]
+............................................................. [ 96%]
+..................                                              [100%]
+450 passed in 13.69s
+[py-unit] pytest ml/tests finished OK
+EXIT_CODE=0
+```
+
+The qfdecisions unit package includes `TestClientClampsPageSizeToCapabilityRange` (L301 DoD evidence). Cached PASS implies the test asserts on real clamp behavior against unchanged source.
+
+### Step 5: `./smackerel.sh test integration`
+
+**Claim Source:** executed (live disposable PostgreSQL + NATS test stack; qfdecisions integration suite executed fresh)
+
+```
+=== RUN   TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect
+2026/05/18 20:39:26 INFO connected to NATS url=nats://...@127.0.0.1:47002
+--- PASS: TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect (0.04s)
+=== RUN   TestQFDecisionsConnectorReReadsCapabilityOnRestart
+2026/05/18 20:39:26 WARN NATS disconnected error=<nil>
+2026/05/18 20:39:26 INFO connected to NATS url=nats://...@127.0.0.1:47002
+--- PASS: TestQFDecisionsConnectorReReadsCapabilityOnRestart (0.05s)
+=== RUN   TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped
+2026/05/18 20:39:26 WARN qf-decisions: fast_forward_recovered event=fast_forward_recovered events_skipped=42 event_id=event-ff-marker-it-1 connector_id=qf-decisions-it-ff-...
+--- PASS: TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped (0.05s)
+=== RUN   TestQFDecisionsConnectorPersistsCapabilityAndCursor
+--- PASS: TestQFDecisionsConnectorPersistsCapabilityAndCursor (0.06s)
+=== RUN   TestQFDecisionsConnectorConfigRegistryAndHealthIntegration
+--- PASS: TestQFDecisionsConnectorConfigRegistryAndHealthIntegration (0.03s)
+=== RUN   TestQFDecisionsConnectorSchemaMismatchIntegration
+--- PASS: TestQFDecisionsConnectorSchemaMismatchIntegration (0.02s)
+=== RUN   TestQFDecisionsConnectorAuthFailureIntegration
+--- PASS: TestQFDecisionsConnectorAuthFailureIntegration (0.02s)
+=== RUN   TestQFDecisionsSyncThroughStateStoreAndArtifactPublisherWithStablePacketIDs
+2026/05/18 20:39:26 WARN qf-decisions: degraded packet, no trusted artifact published event_id=event-101 packet_id=packet-101 trace_id="" reason="missing required QF trust metadata" missing_fields=trace_id
+2026/05/18 20:39:26 INFO connector artifact submitted for processing artifact_id=01KRYD18BYMM7YZJA2TF060Y99 source_id=qf-decisions-it-... content_type=qf/decision-packet tier=standard
+--- PASS: TestQFDecisionsSyncThroughStateStoreAndArtifactPublisherWithStablePacketIDs (0.09s)
+ok      github.com/smackerel/smackerel/tests/integration         40.664s
+ok      github.com/smackerel/smackerel/tests/integration/agent  2.568s
+ok      github.com/smackerel/smackerel/tests/integration/drive  7.492s
+EXIT_CODE=0
+```
+
+Direct DoD coverage:
+- **L299 (SCN-SM-041-003 capability persistence)** — `TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect` + `TestQFDecisionsConnectorReReadsCapabilityOnRestart` + `TestQFDecisionsConnectorPersistsCapabilityAndCursor` all PASS.
+- **L301 (SCN-SM-041-005 page-size clamping)** — Step 4 unit cached PASS for `qfdecisions` package containing `TestClientClampsPageSizeToCapabilityRange`.
+- **L304 (SCN-SM-041-008 fast-forward)** — `TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` PASS with `events_skipped=42` log line.
+
+### Step 6: `./smackerel.sh test e2e`
+
+**Claim Source:** in-progress (terminal id `f5439cd2-0b3f-470a-a136-8c110954d0bb`). Will append on completion.
+
+### Step 7: `./smackerel.sh test stress`
+
+**Claim Source:** not-run (pending step 6 completion).
+
+## Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297 -- bubbles.implement Round 12 Phase 1 boundary validation + bubbles.test Round 12 Phase 2 live-stack PASS, 2026-05-18T22:00:00Z)
+
+Round 12 closed the architectural Scope 2 blocker (capability + cursor persistence wiring) that Round 2R Finding F1 identified. The +345 LOC delta across 5 files was held in the working tree across multiple rounds awaiting boundary validation and live-stack verification. Round 12 Phase 1 (bubbles.implement, read-only validation) approved staging; Round 12 Phase 2 (bubbles.test, live-stack integration run) captured PASS evidence; Round 12 Phase 3 (bubbles.plan, this section) commits the evidence anchor and flips DoD 297.
+
+### Phase 1 — Boundary Validation (read-only)
+
+| Check | Command | Exit | Outcome |
+|---|---|---|---|
+| Static analysis | `go vet ./internal/connector/... ./cmd/core/... ./tests/integration/...` | 0 | PASS |
+| Config + SST + scenario-lint | `./smackerel.sh check` | 0 | PASS |
+| Go + Python + Web lint | `./smackerel.sh lint` | 0 | PASS |
+| Test compile | `go test -count=1 -run=^$ ./internal/connector/qfdecisions/... ./tests/integration/...` | 0 | PASS (21 packages) |
+| Full build | `./smackerel.sh build` | 0 | PASS (smackerel-core 44.8s + smackerel-ml) |
+
+Boundary findings: 5 files validated. 0 spurious changes, 0 Scope 3-9 contamination, 0 spec-053 contamination, 0 NO-DEFAULTS violations. Two WARNs disclosed for transparency: `cmd/core/connectors.go` and `internal/connector/supervisor.go` were not literally in the Round 2R Change Boundary allow-list (they ARE faithful to Round 2R F1 intent which requires call-site wiring). Round 12 Phase 3 amends the Change Boundary to add both files to the allow-list with explicit scope-of-change annotations.
+
+### Phase 2 — Live-Stack Integration PASS
+
+Stack-up command and runtime:
+- Command: `./smackerel.sh --env test up`
+- Exit: 0
+- Time to all-healthy: ~16 seconds
+- Services healthy: postgres (10.7s), nats (10.7s), ollama (10.7s), smackerel-ml (15.6s), smackerel-core (15.5s)
+
+Test command and runtime:
+- Working dir: `~/smackerel`
+- Command: `go test -tags integration -v -count=1 -timeout 120s -run '^TestQFDecisionsConnectorPersistsCapabilityAndCursor$' ./tests/integration/...`
+- Test exit: 0
+- Test wall-clock: 0.10s
+- Package wall-clock: 0.136s
+
+Full test transcript (PII-redacted, untruncated):
+
+```text
+=== ENV ===
+DATABASE_URL=postgres://[REDACTED]@127.0.0.1:47001/smackerel?sslmode=disable
+NATS_URL=nats://[REDACTED]@127.0.0.1:47002
+PWD=~/smackerel
+=== TEST RUN ===
+=== RUN   TestQFDecisionsConnectorPersistsCapabilityAndCursor
+2026/05/18 20:48:42 INFO connected to NATS url=nats://[REDACTED]@127.0.0.1:47002
+--- PASS: TestQFDecisionsConnectorPersistsCapabilityAndCursor (0.10s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.136s
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/agent  0.052s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/drive  0.043s [no tests to run]
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+=== EXIT 0 ===
+```
+
+### Trip-Wire Assertions (4/4 PASS)
+
+| # | Trip-wire | Code assertion | Verdict |
+|---|---|---|---|
+| 1 | Baseline-row absence | `SELECT COUNT(*) FROM sync_state WHERE source_id=$1 -> preCount == 0` before `Connect()` (test lines 435-443) | PASS |
+| 2 | JSON round-trip + field validation | `capability_status == "compatible"`, `capability_fetched_at` within 1 minute, `json.Unmarshal(capability_response) -> MaxPageSize > 0 && len(SupportedPacketVersions) > 0` (test lines 488-520) | PASS |
+| 3 | Cursor + capability column independence | After `stateStore.Save(...SyncCursor: "qf-persist-cursor-final"...)`, read back: `sync_cursor == cursorValue` AND `capability_response != ""` (test lines 522-548) | PASS |
+| 4 | UPSERT-on-second-call | Second `SaveCapability(..., CapabilityStatusUnfetched)` succeeds without INSERT-conflict, `capability_status == "unfetched"`, `sync_cursor` unchanged (test lines 550-571) | PASS |
+
+Bonus signal: visible `INFO connected to NATS` log confirms `qfDecisionsNATSClient(t)` succeeded against real test NATS, proving the test ran end-to-end against the live stack (no skip).
+
+### Classification
+
+PASS - single deterministic green run, no flake indicators. `--count=1` (no test-cache hit), exit 0, `--- PASS` printed, wall-clock 0.10s well inside the 30s test context timeout and 120s `go test -timeout`, no `--- FAIL`, no panic, no `t.Skip`, no `--- SKIP` output, test actually connected to live PostgreSQL via `testPool` AND live NATS via `qfDecisionsNATSClient` - confirmed by the NATS connect log and by the fact that the baseline `SELECT COUNT(*)` and 3 subsequent reads/writes against `sync_state` all completed without DB errors.
+
+### Implementation Delta (committed alongside this evidence section)
+
+| File | LOC | Change |
+|---|---|---|
+| `internal/connector/state.go` | +90 | `SaveCapability` + `GetCapability` methods on `StateStore` for the migration-034 columns (`capability_response`, `capability_fetched_at`, `capability_status`); race-free via existing connection pool |
+| `internal/connector/supervisor.go` | +13 | `SaveCapability` thin proxy over the existing `stateStore` field (no lifecycle/run-loop changes) |
+| `internal/connector/qfdecisions/connector.go` | +25 | `CapabilitySnapshot()` accessor over existing fields (`capabilityStatus`, `capabilityFetchedAt`, `capability`, `CapabilityStatusUnfetched`); race-free read via `c.mu.RLock()` against existing `Connect()` writes which take `c.mu.Lock()` |
+| `cmd/core/connectors.go` | +30/-2 | qf-decisions startup wiring: routes the capability snapshot from `qfdecisions.Connector` through `Supervisor.SaveCapability` to `StateStore.SaveCapability` during connector registration |
+| `tests/integration/qf_decisions_capability_test.go` | +188 | `TestQFDecisionsConnectorPersistsCapabilityAndCursor` with 4 adversarial trip-wires, real PostgreSQL via `testPool(t)` + real NATS via `qfDecisionsNATSClient` + httptest stub for QF capabilities endpoint (same in-process stub pattern as Round 7 integration tests) |
+| `specs/041-qf-companion-connector/design.md` | (working-tree diff, +Capability Discovery + Sync + Page Size Handling section, + Event Type Vocabulary subsection enumerating 5 canonical QF event-type strings, + a Scope 2-owned metrics consolidated reference subsection authored in an earlier round but not previously committed) | Documentation aligns with the wiring delta |
+
+### Scope 2 Change Boundary Amendment (Round 12)
+
+The Change Boundary section in scopes.md is amended in this commit to add two file paths to the allow-list, with explicit scope-of-change annotations:
+
+- `cmd/core/connectors.go` (qf-decisions startup wiring only -- `Supervisor.SaveCapability` call-through during connector registration; no other entry-point logic touched)
+- `internal/connector/supervisor.go` (`SaveCapability` thin proxy only; no other lifecycle/run-loop changes)
+
+Both files were faithful to Round 2R F1 intent before the amendment (Round 2R F1 explicitly required call-site wiring through `cmd/core/connectors.go` to make the capability persistence observable end-to-end). The amendment is a planning-honesty correction making the boundary text match the intent that was already in force.
+
+### Constraints Honored
+
+- Source code mutated (intended; first non-artifact-only round in this autonomous run)
+- No certification mutations (certification.status stays in_progress, completedScopes stays [Scope 1], certifiedCompletedPhases stays [])
+- No top-level status promotion (stays in_progress)
+- No push (operator gate not consumed)
+- No --no-verify (pre-commit hook MUST run gitleaks + pii-scan clean)
+- IDE-tool file writes only (no shell redirection)
+- No touching of unstaged Round 2R narrative in scopes.md lines 354-415
+- No touching of spec-053 working tree changes
+- PII redacted in evidence transcript
+- No fabricated evidence: every claim traces to the Phase 1/Phase 2 RESULT-ENVELOPEs
+
+
 

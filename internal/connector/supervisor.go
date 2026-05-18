@@ -63,6 +63,19 @@ func (s *Supervisor) SetConfig(id string, cfg ConnectorConfig) {
 	s.connectorConfigs[id] = cfg
 }
 
+// SaveCapability proxies StateStore.SaveCapability so callers wiring
+// capability-aware connectors at startup (cmd/core/connectors.go) can
+// persist the capability handshake result without reaching past the
+// supervisor for the StateStore. No-op when the supervisor was built
+// without a StateStore (e.g. unit tests). Spec 041 Scope 2,
+// SCN-SM-041-003.
+func (s *Supervisor) SaveCapability(ctx context.Context, sourceID, responseJSON string, fetchedAt time.Time, status string) error {
+	if s.stateStore == nil {
+		return nil
+	}
+	return s.stateStore.SaveCapability(ctx, sourceID, responseJSON, fetchedAt, status)
+}
+
 // StartConnector starts a connector's sync loop in a supervised goroutine.
 func (s *Supervisor) StartConnector(ctx context.Context, id string) {
 	s.mu.Lock()

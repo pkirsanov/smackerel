@@ -123,8 +123,8 @@ Required checks:
 - `base_url` is syntactically valid and has no trailing slash in the client.
 - Credential reference resolves through generated configuration or runtime environment.
 - Requested packet contract version is non-empty.
-- Page size is explicit and within QF's accepted limit (validated against capability response `min_page_size`/`max_page_size`).
-- Capability response is fetched, parsed, and stored before the first packet sync.
+- Page size is explicit, positive, and finite; the effective event-poll `limit` is derived only after the capability response has been fetched and persisted.
+- Capability response is fetched, parsed, validated, and durably stored before `Connect()` returns success; supervised polling for `qf-decisions` starts only after this persisted capability is available.
 - QF bridge responds with compatible schema metadata if the health/schema endpoint is present.
 
 ### Capability Discovery
@@ -136,7 +136,7 @@ Required capability fields parsed and persisted:
 | Field | Use |
 |-------|-----|
 | `supported_packet_versions` | Compared against the connector's compiled `packet_version`. Mismatch refuses startup. |
-| `supported_event_types` | Allowlist for normalizer event-type routing. |
+| `supported_event_types` | Canonical QF event-type allowlist for normalizer routing: `packet_created`, `packet_updated`, `packet_trust_changed`, `packet_archived`, `packet_action_boundary_attempted`. |
 | `supported_decision_types` | Allowlist for content-type mapping. |
 | `max_page_size` / `min_page_size` | Cursor pagination clamp `[min, max]`. |
 | `supported_target_context_types` | Evidence builder limits `target_context_type` selection to this list. |
@@ -168,6 +168,21 @@ Re-check policy:
 - Re-fetch on every supervisor-initiated restart and on credential rotation start.
 - Persist the most recent capability response in connector state for diagnostic visibility on `/settings` and `/status`.
 - Persisted capabilities also inform the operator-facing capability diff displayed in `QFConnectorStatusPanel`.
+- Failure to persist the capability response is a failed handshake. The connector MUST NOT poll `decision-events` with an in-memory-only capability value.
+
+### Event Type Vocabulary
+
+The authoritative event vocabulary is the `QFDecisionEvent.event_type` enum in `quantitativeFinance/specs/063-smackerel-companion-bridge/design.md`. Smackerel's pre-MVP wire contract accepts only these exact QF values:
+
+| QF `event_type` | Smackerel normalization behavior |
+|-----------------|----------------------------------|
+| `packet_created` | Fetch or consume the referenced packet envelope and create or upsert the source-qualified `RawArtifact` keyed by `packet_id`. |
+| `packet_updated` | Re-fetch or consume the updated packet envelope and update the existing source-qualified packet view without changing the QF `packet_id`. |
+| `packet_trust_changed` | Re-fetch or consume the packet envelope and refresh QF-owned trust metadata (`CalibrationBadge`, `DataProvenanceBadge`, approval state, signed link fields) without reconstructing trust locally. |
+| `packet_archived` | Preserve the event as an archival diagnostic and remove the packet from trusted render queues only when QF supplies an explicit archived/tombstone state; never delete local provenance or cursor history based on the event type alone. |
+| `packet_action_boundary_attempted` | Record a non-actionable diagnostic and audit-envelope entry; never create approval, execution, mandate, EmergencyStop, or watch controls. |
+
+Short event aliases such as `created`, `updated`, or `badge_changed` are not part of the pre-MVP production wire contract. Local fixtures or historical state that use those names are stale and should be updated by the implementation/test owner rather than silently normalized. If QF later needs backwards-compatible aliases, QF must publish a new bridge contract version or capability-declared compatibility map; Smackerel may then preserve both `Metadata.event_type_original` and `Metadata.event_type_canonical`. Until that explicit versioned compatibility rule exists, unsupported `event_type` values produce connector diagnostics/degraded health, never advance trusted packet rendering, and must not be retried through an invented local mapping; cursor progression remains governed only by QF's response-level `next_cursor` after the diagnostic is persisted.
 
 ### Sync
 
@@ -176,7 +191,7 @@ Re-check policy:
 Sync steps:
 
 1. Set health to `syncing`.
-2. Call QF decision event list with cursor, page size (clamped per capability response), and packet version.
+2. Call QF decision event list with cursor, packet version, and an explicit page size limit derived from the persisted capability response.
 3. For each event, fetch the full packet envelope when the event list does not inline it.
 4. Validate packet IDs, trace ID, badge objects, approval state, deep link, signed deep link, and signature expiry.
 5. Normalize valid packet envelopes into `RawArtifact`s.
@@ -188,11 +203,13 @@ The connector must not advance local approval state or produce action commands d
 
 ### Page Size Handling (F9)
 
-The connector clamps `limit` for `GET /decision-events` to the inclusive range `[min_page_size, max_page_size]` from the capability response. Default fallback when the capability response is missing or has not yet completed (e.g. handshake error) is 200, matching QF's pre-MVP `max_page_size`.
+The connector sends `limit` for `GET /decision-events` only after the capability handshake has completed and the capability response has been durably persisted. The configured `connectors.qf-decisions.page_size` value is explicit configuration; missing, zero, negative, non-integer, or otherwise invalid values fail `Connect()` before any QF poll.
+
+The effective request limit is computed by clamping the explicit configured `page_size` to the inclusive `[min_page_size, max_page_size]` range from the successfully persisted capability response. This clamp is a capability-bound calculation, not a hidden default. There is no fallback page size: if the capability response is missing, unavailable, unreadable, stale for the active credential, or not durably saved, the connector MUST NOT poll `decision-events`. If this happens during `Connect()`, startup fails loud with reason `capability_unavailable`; if it happens after a previously successful connect, the connector marks itself `degraded`, emits an operator-visible capability diagnostic, and waits for a successful re-handshake before polling again.
 
 - A `PAGE_SIZE_OUT_OF_RANGE` 4xx response from QF MUST trigger a connector-level alert (`smackerel_qf_packet_validation_failures_total{reason="page_size_out_of_range"}`) and mark the connector `degraded`.
-- The connector MUST NOT silently auto-correct an out-of-range page size; the operator must reconfigure or wait for the capability response to refresh.
-- `min_page_size`/`max_page_size` mismatches between the capability response and the configured `page_size` block startup with reason `capability_mismatch_page_size`.
+- The connector MUST NOT retry the same sync cycle with a guessed, smaller, or hardcoded limit after `PAGE_SIZE_OUT_OF_RANGE`. The operator must reconfigure the explicit `page_size` or wait for a refreshed capability response that makes the clamped value valid.
+- `min_page_size`/`max_page_size` capability ranges that are missing, nonsensical, or impossible to apply fail the handshake with reason `capability_mismatch_page_size`; polling remains blocked until capability discovery succeeds.
 
 ### Cursor Semantics
 
@@ -1165,7 +1182,7 @@ This design has been re-reviewed against the updated `quantitativeFinance/specs/
 | F4 Idempotency 200 vs 409 semantics undefined | "Idempotency Response Handling (F4)" subsection added under Evidence Bundle Export Design: explicit table for HTTP 200, 201, 409 (`EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD`, `EXPORT_ID_PREVIOUSLY_REJECTED`), 4xx, 5xx connector behavior. Engagement signal exporter applies the same 200/201/409 contract. |
 | F6 Trust object rendering contract undefined | "Trust Object Rendering" subsection added: per-badge rendering contract for `CalibrationBadge`, `DataProvenanceBadge`, `QuantifiedImpact`, `ExpertAnalysisBundle` with label, severity, summary, detail, and links rules. |
 | F8 Forward-compatible decision_type | "Forward-Compatible decision_type Handling (F8)" subsection added: unknown values normalize to `qf/decision-packet` with `unknown_decision_type=true`, never break ingestion, never appear as actionable. "no_action Decision Semantics (F8/F17)" added to make the no-action capability gate explicit. |
-| F9 Page-size handling undefined | "Page Size Handling (F9)" subsection added under Sync Lifecycle: capability-declared `event_poll_max_page_size`, `PAGE_SIZE_OUT_OF_RANGE` rejection, connector clamps to capability max. |
+| F9 Page-size handling undefined | "Page Size Handling (F9)" subsection added under Sync Lifecycle: explicit configured `page_size`, no hidden fallback, capability-persisted `[min_page_size, max_page_size]` clamp, missing capability blocks polling, and `PAGE_SIZE_OUT_OF_RANGE` rejection marks degraded without retrying a guessed limit. |
 | F11 Symmetric metric naming | "Symmetric Metric Set" subsection added under Operations: full table of `smackerel_qf_*` metrics with label keys and value vocabularies that mirror QF's `qf_smackerel_*` series exactly. |
 | F12 Freshness SLA | "Freshness SLA (F12)" subsection added: p95 ingest ≤30s, render ≤30s, total ≤60s; 5-minute breach → `degraded`; emits `smackerel_qf_freshness_p95_seconds{stage}`. |
 | F13 Cursor fast-forward consumer behavior | "Cursor Fast-Forward Consumer (F13)" subsection added: connector logs `lag_breach`, never fast-forwards itself, applies operator-issued fast-forward via in-band `cursor_fast_forward_advice`, increments skipped counter, flips to `degraded_recovered`. |
@@ -1216,3 +1233,26 @@ This reconciliation pass touched ONLY `specs/041-qf-companion-connector/design.m
 - All operational documentation under `docs/`
 
 No certification fields, scope DoD checkboxes, execution evidence, runtime code, configuration, or operational documentation were modified by this design-only reconciliation pass.
+
+## Scope 2-owned metrics (consolidated reference)
+
+This subsection consolidates the 5 metrics owned by Scope 2 (QF Decisions
+connector core behaviour). It exists to satisfy the Scope 2 Build
+Quality Gate DoD item "New Scope 2-owned metrics are documented in
+`design.md` and exposed via the Prometheus registry without altering
+the Scope 5-owned full 12-metric symmetric set commitments."
+
+| Metric | Type | Labels | Emitted from | Purpose |
+|--------|------|--------|--------------|---------|
+| `smackerel_qf_capability_mismatch_total` | counter | `required`, `actual` | `internal/connector/qfdecisions/connector.go` `Connect()` capability handshake (cf. §Capability Discovery above and line 163) | One increment per mismatched dimension when the QF-side capability response is incompatible with the connector's required packet version / required event types. Drives operator-visible `mismatched` health state. |
+| `smackerel_qf_unknown_decision_type_total` | counter | `value` (raw `decision_type` string from the QF event) | `internal/connector/qfdecisions/connector.go` `Sync()` decision-type normalization (cf. line 302) | One increment per unknown `decision_type` value observed; canonical `qf/decision-packet` content type is preserved and `Metadata.unknown_decision_type = true` is set on the persisted artifact. User-visible rendering belongs to Scope 3. |
+| `smackerel_qf_cursor_lag_seconds` | gauge | (none) | `internal/connector/qfdecisions/connector.go` `Sync()` lag computation | Current observed cursor lag in seconds. Crossing the configured threshold (default 1h) emits a structured `lag_breach` event for the operator dashboard; the connector does NOT auto-fast-forward. |
+| `smackerel_qf_cursor_fast_forward_events_skipped_total` | counter | (none) | `internal/connector/qfdecisions/connector.go` `Sync()` fast-forward handling | Incremented by `events_skipped` whenever the QF response carries a `fast_forward_recovered` event. Connector persists the advanced `next_cursor`, marks health `degraded_recovered`, and resumes polling. |
+| `smackerel_qf_freshness_p95_seconds` | gauge | `stage` (`ingest`, `render`) | `internal/connector/qfdecisions/connector.go` instrumentation + Scope 3 render path | p95 freshness latency per stage. Stress scenario asserts p95 ingest ≤ 30s, render ≤ 30s, combined ≤ 60s (see Freshness SLA references to `~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md` §Freshness SLA). |
+
+These 5 metrics are scoped strictly to Scope 2 core-behaviour
+observability. They are independent of the Scope 5-owned full
+12-metric symmetric set commitment (which covers credential
+rotation / liveness instrumentation) and do not modify, rename, or
+re-label any Scope 5 metric. Adding a 6th metric to this list
+requires a planning round.
