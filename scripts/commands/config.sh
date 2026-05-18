@@ -443,7 +443,11 @@ CORE_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_core.memory)"
 ML_CPU_LIMIT="$(required_value deploy_resources.smackerel_ml.cpus)"
 ML_MEMORY_LIMIT="$(required_value deploy_resources.smackerel_ml.memory)"
 OLLAMA_CPU_LIMIT="$(required_value deploy_resources.ollama.cpus)"
-OLLAMA_MEMORY_LIMIT="$(required_value deploy_resources.ollama.memory)"
+# Spec 045 BUG-045-001 — ollama envelope is per-environment overridable so a
+# big-RAM host (e.g. home-lab) can opt-up to gemma4:26b / gpt-oss:20b /
+# deepseek-r1:32b without forcing the same envelope on dev/test/laptop.
+# Override by setting environments.<env>.ollama_memory_limit in smackerel.yaml.
+OLLAMA_MEMORY_LIMIT="$(env_override_value ollama_memory_limit deploy_resources.ollama.memory)"
 # Spec 049 FR-049-005(c) — Prometheus resource envelope. Fail-loud SST;
 # the deploy adapter MUST emit PROMETHEUS_CPU_LIMIT and
 # PROMETHEUS_MEMORY_LIMIT in app.env or compose aborts at substitution
@@ -569,11 +573,15 @@ else
   OLLAMA_TEST_REQUEST_NUM_PREDICT=""
 fi
 LLM_PROVIDER="$(required_value llm.provider)"
-LLM_MODEL="$(required_value llm.model)"
+# Spec 045 BUG-045-001 — LLM model selections are per-environment overridable.
+# Operator raises envelope (environments.<env>.ollama_memory_limit) FIRST, then
+# swaps the model fields under the same environments.<env>.* block. The base
+# llm.* values remain the safe commodity-host defaults (gemma3:4b family).
+LLM_MODEL="$(env_override_value llm_model llm.model)"
 LLM_API_KEY="$(required_value llm.api_key)"
 OLLAMA_URL="$(required_value llm.ollama_url)"
-OLLAMA_MODEL="$(required_value llm.ollama_model)"
-OLLAMA_VISION_MODEL="$(required_value llm.ollama_vision_model)"
+OLLAMA_MODEL="$(env_override_value ollama_model llm.ollama_model)"
+OLLAMA_VISION_MODEL="$(env_override_value ollama_vision_model llm.ollama_vision_model)"
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 # Auto-generate a disposable test token when the SST value is empty and TARGET_ENV=test.
 # Dev/prod environments still require manual configuration (fail-loud at service startup).
