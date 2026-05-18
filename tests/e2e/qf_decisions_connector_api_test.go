@@ -634,6 +634,27 @@ func TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata(t *testing.T
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == qfdecisions.CapabilitiesPath:
+			// Round 2N capability handshake — Connect() probes this path
+			// before Sync() is permitted. Canonical shape mirrors
+			// defaultValidCapability() in internal/connector/qfdecisions/
+			// connector_test.go (audit_envelope_version=v1, packet_version
+			// v1, the three required decision_types, max_page_size>=1).
+			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
+				SupportedPacketVersions:        []string{"v1"},
+				SupportedEventTypes:            []string{"packet_created"},
+				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
+				MaxPageSize:                    100,
+				MinPageSize:                    1,
+				SupportedTargetContextTypes:    []string{"trip"},
+				EvidenceMaxBundleSizeBytes:     1048576,
+				EvidenceMaxClaimsPerBundle:     50,
+				EvidenceRateLimitPerMinute:     60,
+				FreshnessSLAP95Seconds:         60,
+				AuditEnvelopeVersion:           "v1",
+				WatchSignalDirection:           "qf_to_smackerel",
+				EligibleSmackerelSourceClasses: []string{"watch"},
+			})
 		case r.URL.Path == qfdecisions.DecisionEventsPath:
 			if r.URL.Query().Get("cursor") != "" {
 				_ = json.NewEncoder(w).Encode(qfdecisions.DecisionEventsResponse{
