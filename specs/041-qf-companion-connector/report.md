@@ -6559,3 +6559,60 @@ Each new concern below has been written into `state.json::concerns[]` with sever
 
 **Claim Source: executed** for CMD H-1, H-2, H-3, H-4. **Claim Source: interpreted** for CMD H-5 (audit trail drift analysis — derived from reading scopes.md inline Round 2L/2N/2P/2Q annotations and cross-referencing state.json executionHistory). **Claim Source: interpreted** for CMD H-6 (per-DoD advanceability — derived from reading scopes.md DoD list, scopes.md Round 2P table, state.json concerns, and spec-045 BUG-045-002 status). **Claim Source: implementer-decision** for CMD H-7 concern severities (all medium except `C-FRAMEWORK-G028-FALSE-POSITIVES` low) and follow-up owner assignments.
 
+### Round 2R — Envsubst Test-Wrapper Infra Unblock (Cross-Spec)
+
+**Date:** post-Round-H session continuation.
+**Trigger:** parent goal mandate "work on open & deferred items, use best solutions for long term".
+**Scope:** infrastructure-only change set landed OUTSIDE spec 041's source-tree envelope (touches only `scripts/runtime/_ensure_envsubst.sh` + `scripts/runtime/go-{unit,integration,e2e,stress}.sh` + new `internal/deploy/envsubst_wrapper_contract_test.go`). Does NOT modify any spec-041-owned source, does NOT flip any spec-041 DoD checkbox, does NOT promote spec 041 status.
+
+**Change Set Summary**
+
+1. Created `scripts/runtime/_ensure_envsubst.sh` — shared library exporting `ensure_envsubst <tag>` (idempotent: no-op when `envsubst` already present, else `apt-get install -y --no-install-recommends gettext-base`).
+2. Updated `scripts/runtime/go-unit.sh` to source the helper instead of carrying inline install logic (DRY refactor — net behavior identical).
+3. Updated `scripts/runtime/go-integration.sh`, `scripts/runtime/go-e2e.sh`, `scripts/runtime/go-stress.sh` to source the helper and call `ensure_envsubst <wrapper-tag>` BEFORE `cd <workspace>`. Previously only `go-unit.sh` ensured envsubst was present — the other three wrappers would fail with exit 127 `envsubst: command not found` when shelling into `scripts/commands/config.sh` from any test in their respective layers.
+4. Added long-lived contract test `internal/deploy/envsubst_wrapper_contract_test.go` enforcing 4 invariants: helper exists and is executable; helper defines `ensure_envsubst()`; helper installs `gettext-base` via `apt-get`; each of the 4 tracked wrappers sources the helper and calls `ensure_envsubst` BEFORE any `go test`. Includes 3 adversarial sub-tests (missing-source, source-without-call, call-after-go-test) — all 7 tests PASS this session.
+
+**Verification Evidence (this session)**
+
+```
+$ ./smackerel.sh test unit --go --go-run '^TestEnvsubstWrapperContract' --verbose
+--- PASS: TestEnvsubstWrapperContract_HelperExistsAndIsExecutable (0.00s)
+--- PASS: TestEnvsubstWrapperContract_LiveWrappers (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-unit.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-integration.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-e2e.sh (0.00s)
+    --- PASS: TestEnvsubstWrapperContract_LiveWrappers/go-stress.sh (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsMissingSource (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsSourceWithoutCall (0.00s)
+--- PASS: TestEnvsubstWrapperContract_AdversarialRejectsCallAfterGoTest (0.00s)
+```
+
+Adjacent contract-test suites (`^TestComposeContract|^TestCIIntegrationTopology|^TestMonitoringBindContract|^TestMLDockerfileOSUpgrade`) also re-executed clean (22 PASS, 0 FAIL) — refactor caused zero regression.
+
+**Impact on Spec 041 Scope 2 DoD**
+
+| Round 2P table item | Was Blocked By | Still Blocked? | Now Blocked By |
+|---|---|---|---|
+| 1a SCN-SM-041-003 capability handshake integration (scopes.md:301, 319, 320) | spec-045 envsubst (test-wrapper layer) + BUG-045-002 (CI integration) | YES | BUG-045-002 (CI integration topology) — wrapper-side blocker removed by Round 2R but CI integration job stand-up not yet validated |
+| 1b SCN-SM-041-003 + 008 capability re-read integration | same | YES | BUG-045-002 |
+| 2 SCN-SM-041-006 E2E API (`TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata` per scopes.md:323) | spec-045 envsubst + BUG-045-002 | YES | BUG-045-002 |
+| 3 SCN-SM-041-004 incompatible-capability E2E (scopes.md:303, 322) | same | YES | BUG-045-002 |
+| 4+5 SCN-SM-041-003 + 008 freshness stress p95 (scopes.md:308, 324) | same | YES | BUG-045-002 |
+
+**Routing Disposition**
+
+Round 2R is a partial unblock of the per-spec-041 Round 2P table. The test-wrapper-layer half of the dual blocker is removed (any `./smackerel.sh test {integration,e2e,stress}` invocation will now succeed at the envsubst gate). The CI integration-topology half (BUG-045-002) remains in-progress and is the sole remaining structural blocker for the 5 outstanding Scope 2 DoD items. NO DoD checkbox flips this round — `bubbles.test` must execute the live-stack runs and capture PASS evidence before any flip happens, per the Round 2P concern routing (`C-S2-003-INT`, `C-S2-004-E2E`, `C-S2-008-INT`, `C-S2-FRESHNESS-STRESS`).
+
+**Honesty Declarations (Round 2R)**
+
+- Did NOT flip any DoD checkbox in `scopes.md`.
+- Did NOT promote any scope or spec status.
+- Did NOT modify any spec-041-owned source (`internal/connector/qfdecisions/**`, `tests/{integration,e2e,stress}/qf_decisions*`).
+- DID modify shared infra (`scripts/runtime/go-*.sh`) and added one new contract test (`internal/deploy/envsubst_wrapper_contract_test.go`) — these touch cross-spec infra owned by the foundation/devops envelope, not by spec 041 per se.
+- Did NOT use any bypass flag, did NOT use shell redirection for any artifact write.
+- Did NOT invoke any specialist via `runSubagent` — this round's edits were applied via direct IDE tools per the parent goal runtime's tool surface. The infra change is small enough that a specialist round-trip is not justified (Option A "shared helper" was chosen over Option B "rebuild base image" and Option C "duplicate inline" per the parent's long-term-fix mandate).
+- Did NOT commit or push. Working-tree state is: `scripts/runtime/_ensure_envsubst.sh` (NEW, +x), `scripts/runtime/go-unit.sh` (modified), `scripts/runtime/go-integration.sh` (modified), `scripts/runtime/go-e2e.sh` (modified), `scripts/runtime/go-stress.sh` (modified), `internal/deploy/envsubst_wrapper_contract_test.go` (NEW), plus this report.md addendum.
+
+**Claim Source: executed** for the contract-test PASS evidence above. **Claim Source: interpreted** for the Round 2P impact table — derived from reading scopes.md lines 301, 303, 307, 308, 319, 320, 321, 322, 323, 324 and cross-referencing against the spec-045 BUG-045-002 status.
+
+
