@@ -16,6 +16,14 @@ const (
 	CapabilityStatusUnfetched    = "unfetched"
 )
 
+var requiredCapabilityEventTypes = []string{
+	"packet_created",
+	"packet_updated",
+	"packet_trust_changed",
+	"packet_archived",
+	"packet_action_boundary_attempted",
+}
+
 // QFBridgeCapability mirrors the response of GET /api/private/smackerel/v1/capabilities.
 // Schema source of truth: ~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md
 // (F2 §"GET /api/private/smackerel/v1/capabilities"). All 21 fields are required by
@@ -82,9 +90,11 @@ func (c *Client) FetchCapability(ctx context.Context) (QFBridgeCapability, error
 // Required invariants for Scope 2:
 //   - audit_envelope_version MUST equal "v1" (Smackerel build only consumes v1 envelopes)
 //   - supported_packet_versions MUST contain "v1"
+//   - supported_event_types MUST contain the canonical packet_* event vocabulary;
+//     stale aliases such as "created", "updated", and "badge_changed" are not normalized
 //   - supported_decision_types MUST contain "recommendation", "policy_denial", "analysis_note"
 //     ("no_action" is capability-gated by no_action_emit_enabled and is NOT required)
-//   - max_page_size MUST be >= 1 (negative or zero is a contract bug on QF side)
+//   - min_page_size and max_page_size MUST form a valid [min, max] range
 //
 // Emits smackerel_qf_capability_mismatch_total{required,actual} on failure.
 func (cap QFBridgeCapability) CompatibilityCheck() error {
@@ -96,6 +106,13 @@ func (cap QFBridgeCapability) CompatibilityCheck() error {
 		metrics.QFCapabilityMismatch.WithLabelValues("v1", strings.Join(cap.SupportedPacketVersions, ",")).Inc()
 		return CapabilityMismatchError{Field: "supported_packet_versions", Required: "v1", Actual: strings.Join(cap.SupportedPacketVersions, ",")}
 	}
+	for _, required := range requiredCapabilityEventTypes {
+		if !containsString(cap.SupportedEventTypes, required) {
+			actual := strings.Join(cap.SupportedEventTypes, ",")
+			metrics.QFCapabilityMismatch.WithLabelValues(required, actual).Inc()
+			return CapabilityMismatchError{Field: "supported_event_types", Required: required, Actual: actual}
+		}
+	}
 	for _, required := range []string{"recommendation", "policy_denial", "analysis_note"} {
 		if !containsString(cap.SupportedDecisionTypes, required) {
 			metrics.QFCapabilityMismatch.WithLabelValues(required, strings.Join(cap.SupportedDecisionTypes, ",")).Inc()
@@ -105,6 +122,15 @@ func (cap QFBridgeCapability) CompatibilityCheck() error {
 	if cap.MaxPageSize < 1 {
 		metrics.QFCapabilityMismatch.WithLabelValues(">=1", fmt.Sprintf("%d", cap.MaxPageSize)).Inc()
 		return CapabilityMismatchError{Field: "max_page_size", Required: ">=1", Actual: fmt.Sprintf("%d", cap.MaxPageSize)}
+	}
+	if cap.MinPageSize < 1 {
+		metrics.QFCapabilityMismatch.WithLabelValues(">=1", fmt.Sprintf("%d", cap.MinPageSize)).Inc()
+		return CapabilityMismatchError{Field: "min_page_size", Required: ">=1", Actual: fmt.Sprintf("%d", cap.MinPageSize)}
+	}
+	if cap.MinPageSize > cap.MaxPageSize {
+		actual := fmt.Sprintf("min=%d,max=%d", cap.MinPageSize, cap.MaxPageSize)
+		metrics.QFCapabilityMismatch.WithLabelValues("min_page_size<=max_page_size", actual).Inc()
+		return CapabilityMismatchError{Field: "page_size_range", Required: "min_page_size<=max_page_size", Actual: actual}
 	}
 	return nil
 }

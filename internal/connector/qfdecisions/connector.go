@@ -200,12 +200,7 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 		return fmt.Errorf("qf capability incompatible: %w", err)
 	}
 
-	// Clamp configured page size to capability max BEFORE publishing the client
-	// so subsequent Sync calls always issue requests within QF-allowed bounds.
-	clamped := client.ClampPageSize(client.pageSize, capability.MaxPageSize)
-	if clamped != client.pageSize {
-		client.pageSize = clamped
-	}
+	client.SetCapability(&capability, CapabilityStatusCompatible)
 
 	c.mu.Lock()
 	c.client = client
@@ -231,6 +226,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	response, err := client.FetchDecisionEvents(ctx, cursor)
 	if err != nil {
 		health := connector.HealthError
+		var pageSizeErr PageSizeOutOfRangeError
+		if errors.As(err, &pageSizeErr) {
+			metrics.QFPacketValidationFailures.WithLabelValues("page_size_out_of_range").Inc()
+			health = connector.HealthDegraded
+		}
+		var capabilityErr CapabilityUnavailableError
+		if errors.As(err, &capabilityErr) {
+			health = connector.HealthDegraded
+		}
 		var schemaErr SchemaCompatibilityError
 		if errors.As(err, &schemaErr) {
 			health = connector.HealthDegraded

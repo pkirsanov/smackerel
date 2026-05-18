@@ -280,6 +280,18 @@ var QFCursorFastForwardEventsSkipped = prometheus.NewCounter(
 	},
 )
 
+// QFPacketValidationFailures counts QF companion packet and polling contract
+// failures by bounded reason. The Scope 2 page-size path emits
+// reason="page_size_out_of_range" when QF rejects the connector's explicit,
+// capability-clamped decision-events limit.
+var QFPacketValidationFailures = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_packet_validation_failures_total",
+		Help: "QF Companion packet validation and polling contract failures by reason",
+	},
+	[]string{"reason"},
+)
+
 // QFFreshnessP95Seconds reports the rolling-window p95 freshness latency of the
 // QF Companion connector per pipeline stage. Bounded labels: `stage` is one of
 // "ingest" (QF event server_time → smackerel artifact persisted), "render"
@@ -324,6 +336,7 @@ func init() {
 		QFUnknownDecisionType,
 		QFCursorLagSeconds,
 		QFCursorFastForwardEventsSkipped,
+		QFPacketValidationFailures,
 		QFFreshnessP95Seconds,
 		// Spec 039 Scope 6 recommendation metrics — defined in
 		// recommendations.go; bounded labels enforced (no watch_id,

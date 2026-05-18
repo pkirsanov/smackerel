@@ -402,7 +402,7 @@ func validConnectorConfig(baseURL string, packetVersion int) connector.Connector
 func defaultValidCapability() QFBridgeCapability {
 	return QFBridgeCapability{
 		SupportedPacketVersions:        []string{"v1"},
-		SupportedEventTypes:            []string{"packet_created"},
+		SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
 		SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
 		MaxPageSize:                    100,
 		MinPageSize:                    1,
@@ -580,6 +580,51 @@ func TestSync_ClampsPageSizeToCapabilityMax(t *testing.T) {
 	}
 	if observedLimit != "50" {
 		t.Fatalf("outbound limit = %q, want 50 (clamped from configured 100 to capability.MaxPageSize=50)", observedLimit)
+	}
+}
+
+func TestSync_PageSizeOutOfRangeMarksDegradedAndAlertsWithoutRetry(t *testing.T) {
+	metrics.QFPacketValidationFailures.Reset()
+
+	var eventRequests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case CapabilitiesPath:
+			_ = json.NewEncoder(w).Encode(defaultValidCapability())
+		case DecisionEventsPath:
+			eventRequests++
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(BridgeErrorResponse{
+				Code:    "PAGE_SIZE_OUT_OF_RANGE",
+				Message: "requested page_size is outside the current capability range",
+			})
+		default:
+			t.Fatalf("unexpected request path %q", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(DefaultConnectorID)
+	if err := c.Connect(context.Background(), validConnectorConfig(srv.URL, 1)); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	_, _, err := c.Sync(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected page-size out-of-range sync error, got nil")
+	}
+	var oor PageSizeOutOfRangeError
+	if !errors.As(err, &oor) {
+		t.Fatalf("expected PageSizeOutOfRangeError, got %T: %v", err, err)
+	}
+	if eventRequests != 1 {
+		t.Fatalf("expected exactly one decision-events request with no retry, got %d", eventRequests)
+	}
+	if got := c.Health(context.Background()); got != connector.HealthDegraded {
+		t.Fatalf("health = %s, want %s", got, connector.HealthDegraded)
+	}
+	if got := testutil.ToFloat64(metrics.QFPacketValidationFailures.WithLabelValues("page_size_out_of_range")); got != 1 {
+		t.Fatalf("smackerel_qf_packet_validation_failures_total{reason=page_size_out_of_range} = %v, want 1", got)
 	}
 }
 
