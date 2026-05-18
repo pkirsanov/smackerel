@@ -642,7 +642,7 @@ func TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata(t *testing.T
 			// v1, the three required decision_types, max_page_size>=1).
 			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
 				SupportedPacketVersions:        []string{"v1"},
-				SupportedEventTypes:            []string{"packet_created"},
+				SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
 				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
 				MaxPageSize:                    100,
 				MinPageSize:                    1,
@@ -908,7 +908,7 @@ func TestQFDecisionsIncompatibleCapabilityBlocksPolling(t *testing.T) {
 		case r.URL.Path == qfdecisions.CapabilitiesPath:
 			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
 				SupportedPacketVersions:        []string{"v2"}, // INCOMPATIBLE — missing "v1"
-				SupportedEventTypes:            []string{"packet_created"},
+				SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
 				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
 				MaxPageSize:                    100,
 				MinPageSize:                    1,

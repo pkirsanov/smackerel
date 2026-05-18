@@ -17,7 +17,7 @@ import (
 func validCapability() QFBridgeCapability {
 	return QFBridgeCapability{
 		SupportedPacketVersions:            []string{"v1"},
-		SupportedEventTypes:                []string{"created", "updated", "badge_changed", "approval_state_changed", "archived", "superseded"},
+		SupportedEventTypes:                []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
 		SupportedDecisionTypes:             []string{"recommendation", "no_action", "policy_denial", "analysis_note"},
 		MaxPageSize:                        200,
 		MinPageSize:                        1,
@@ -111,6 +111,67 @@ func TestQFBridgeCapability_CompatibilityCheck_RejectsMissingDecisionType(t *tes
 	}
 	if mismatch.Required != "recommendation" {
 		t.Fatalf("Required = %q, want recommendation", mismatch.Required)
+	}
+}
+
+func TestCapabilityRejectsUnsupportedEventAliasesWithoutCompatibilityMap(t *testing.T) {
+	cap := validCapability()
+	cap.SupportedEventTypes = []string{"created", "updated", "badge_changed", "archived", "superseded"}
+	err := cap.CompatibilityCheck()
+	if err == nil {
+		t.Fatal("expected stale event alias mismatch, got nil")
+	}
+	var mismatch CapabilityMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("expected CapabilityMismatchError, got %T: %v", err, err)
+	}
+	if mismatch.Field != "supported_event_types" {
+		t.Fatalf("Field = %q, want supported_event_types", mismatch.Field)
+	}
+	if mismatch.Required != "packet_created" {
+		t.Fatalf("Required = %q, want packet_created", mismatch.Required)
+	}
+	if !strings.Contains(mismatch.Actual, "created") || strings.Contains(mismatch.Actual, "packet_created") {
+		t.Fatalf("Actual = %q, want stale aliases only", mismatch.Actual)
+	}
+}
+
+func TestQFBridgeCapability_CompatibilityCheck_RejectsInvalidMinPageSize(t *testing.T) {
+	cap := validCapability()
+	cap.MinPageSize = 0
+	err := cap.CompatibilityCheck()
+	if err == nil {
+		t.Fatal("expected mismatch error, got nil")
+	}
+	var mismatch CapabilityMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("expected CapabilityMismatchError, got %T: %v", err, err)
+	}
+	if mismatch.Field != "min_page_size" {
+		t.Fatalf("Field = %q, want min_page_size", mismatch.Field)
+	}
+	if mismatch.Required != ">=1" || mismatch.Actual != "0" {
+		t.Fatalf("Required/Actual = %q/%q, want >=1/0", mismatch.Required, mismatch.Actual)
+	}
+}
+
+func TestQFBridgeCapability_CompatibilityCheck_RejectsInvertedPageSizeRange(t *testing.T) {
+	cap := validCapability()
+	cap.MinPageSize = 50
+	cap.MaxPageSize = 25
+	err := cap.CompatibilityCheck()
+	if err == nil {
+		t.Fatal("expected mismatch error, got nil")
+	}
+	var mismatch CapabilityMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("expected CapabilityMismatchError, got %T: %v", err, err)
+	}
+	if mismatch.Field != "page_size_range" {
+		t.Fatalf("Field = %q, want page_size_range", mismatch.Field)
+	}
+	if mismatch.Required != "min_page_size<=max_page_size" || mismatch.Actual != "min=50,max=25" {
+		t.Fatalf("Required/Actual = %q/%q, want min_page_size<=max_page_size/min=50,max=25", mismatch.Required, mismatch.Actual)
 	}
 }
 

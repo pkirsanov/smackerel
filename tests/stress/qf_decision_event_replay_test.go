@@ -271,7 +271,7 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 func stressFreshnessCapability() qfdecisions.QFBridgeCapability {
 	return qfdecisions.QFBridgeCapability{
 		SupportedPacketVersions:            []string{"v1"},
-		SupportedEventTypes:                []string{"created", "updated", "badge_changed", "approval_state_changed", "archived", "superseded"},
+		SupportedEventTypes:                []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
 		SupportedDecisionTypes:             []string{"recommendation", "no_action", "policy_denial", "analysis_note"},
 		MaxPageSize:                        200,
 		MinPageSize:                        1,
