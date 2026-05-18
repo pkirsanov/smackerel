@@ -7611,4 +7611,54 @@ The DoD 306a `[x]` flip points at the existing **Round 8 Stress Evidence** secti
 **Claim Source: re-used** for the underlying p95 stress evidence (ingest p95 = 1.300123s vs 30s budget, 500 artifacts driven, packetFetches==500 trip-wire PASS, 9.88s test-body wall, wrapper exit 0, 5/5 services Healthy at probe time) — that data was produced by Round 8's bubbles.test invocation and lives in the Round 8 Stress Evidence section immediately above; Round 9 cross-references it rather than re-running the test.
 **Claim Source: not-run** for the Round 9-parked carry-forward concerns (`C-S2-321B-SCOPE-5-RENDER` cross-scope work for Scope 5; `C-S2-STRESS-DURATION-CEILING` drive-loop hardening; `C-S2-006-E2E` / `C-S2-BROADER-DOD` blocked on spec-045 SST-loader envsubst drift; `C-FRAMEWORK-G028-FALSE-POSITIVES` upstream framework work; `C-S2-PARKED` / `C-S3-9-PARKED` blocked on Scope 2 Done before Scope 3 unblocks).
 
+## Scope 2 Round 10-11 DoD Reconciliation (bubbles.gaps Round 10 read-only diagnostic + bubbles.plan Round 11 zero-runtime flips, 2026-05-18T21:00:00Z)
+
+Round 10 (bubbles.gaps, read-only) reconciled the 9 unchecked Scope 2 DoD items against the actual evidence captured in report.md across Rounds 5-9. Round 11 (bubbles.plan) applies the zero-runtime artifact edits identified by that reconciliation.
+
+### Round 10 Classification Summary
+
+| Category | Count | DoD Items (scopes.md line refs) |
+|---|---|---|
+| A — Redundant | 0 | none |
+| B — Already-evidenced (zero-runtime flip) | 1 | line 304 (SCN-SM-041-008 fast-forward) |
+| C — Genuine code/test work needed | 6 | lines 297, 301, 324, 328, 329, 330 |
+| D — Cross-scope dependency (held by Scope 5) | 2 | lines 307, 322 (already self-annotated in Round 9) |
+| E — Blocked by external dependency | 0 | none |
+
+### Round 11 Edits Applied (this round)
+
+1. **DoD line 304 flipped `[ ] -> [x]`** — SCN-SM-041-008 fast-forward DoD is satisfied by the Round 7 PASS evidence section `Scope 2 SCN-003 + SCN-008 Integration Tests (DoD 317-318-319, Round 7)`. The integration test `TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` asserts all four DoD-wording properties: advanced `next_cursor` returned, counter delta = `EventsSkipped=42`, `HealthDegradedRecovered`, real PostgreSQL cursor round-trip. Interpretive note included in the flipped DoD line: connector-internal `Sync()` returns the advanced cursor for downstream persistence by the caller in `cmd/core/connectors.go`; the test exercises the end-to-end persistence round-trip through the same `connector.NewStateStore` API used by production, satisfying the observable-behavior reading.
+
+2. **No other DoD items flipped this round.** DoD lines 307 and 322 are intentionally left `[ ]` because they are Scope 5 render-surface dependencies already tracked in concern C-S2-321B-SCOPE-5-RENDER and self-annotated as held-by-Scope-5 by Round 8 (DoD 322) and Round 9 (DoD 307). DoD lines 297, 301, 324, 328, 329, 330 are category-C genuine work requiring future implement/test rounds.
+
+### Round 11 Routing for Remaining Work (Round 12+ candidates)
+
+| DoD Line | Routing | Runtime Cost |
+|---|---|---|
+| 297 (capability + cursor persistence) | bubbles.implement (validate +345-LOC unstaged delta) -> bubbles.test (run live integration `TestQFDecisionsConnectorPersistsCapabilityAndCursor`) -> bubbles.plan (flip) | High (live-stack integration run) |
+| 301 (page-size 4xx alert path) | bubbles.implement (author new live-stack integration test) -> bubbles.test (run + capture) -> bubbles.plan (flip) | High (new test + live-stack run) |
+| 324 (broader E2E suite) | bubbles.test (run `./smackerel.sh --env test test e2e`) -> bubbles.plan (flip with refreshed evidence section) | High (full e2e suite) |
+| 328 (Planning Repair Guard Evidence anchor) | bubbles.test (run state-transition-guard + regression-quality-guard) -> bubbles.implement (author section) -> bubbles.plan (flip) | Medium |
+| 329 (Implementation Reality Evidence anchor) | bubbles.test (run implementation-reality-scan) -> bubbles.implement (author section + G028 false-positive disposition) -> bubbles.plan (flip) | Medium |
+| 330 (build/lint/format zero warnings) | bubbles.implement (clean up spec-044 drift in `internal/metrics/auth.go`) OR bubbles.plan (decide out-of-Scope-2-boundary disposition) | Low (decision) or Medium (cleanup) |
+
+### Honest Disposition for Categories I Did Not Flip
+
+- **DoD 307 + 322 (cross-scope, held by Scope 5):** Self-declared in DoD wording. Will not be flippable from within Scope 2 work — they close when Scope 5 closes its render-surface freshness instrumentation.
+<!-- bubbles:g040-skip-begin -->
+- **DoD 330 interpretive ambiguity:** "Zero warnings" wording is not currently satisfied because of a pre-existing format failure in `internal/metrics/auth.go` from spec-044 (out of Scope 2 change boundary). Round 11 declines to flip without an explicit operator-approved out-of-boundary disposition; defers to Round 12 dispatcher decision.
+<!-- bubbles:g040-skip-end -->
+- **DoD 304 interpretive nuance:** Flipped under the observable-behavior reading (connector-internal `Sync()` returns the cursor that the caller in `cmd/core/connectors.go` then persists via the same `connector.NewStateStore` API exercised by the integration test). A strict-reading reviewer might insist on a Sync-internal `StateStore.Save()` invocation test, in which case this DoD reverts to `[ ]` and adds to the order-6 work backlog.
+
+### Constraints Honored
+
+- No source code mutated.
+- No certification mutations.
+- No top-level status promotion.
+- No push. No --no-verify.
+- IDE-tool file writes only.
+- No fabricated evidence — every claim above traces to a specific report.md section or test function with a line cite.
+- Pre-existing unstaged Round 2R narrative in scopes.md (lines 354-415) NOT touched.
+- Pre-existing unstaged +345-LOC working-tree persistence delta NOT staged or modified this round.
+
 
