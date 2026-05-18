@@ -98,12 +98,15 @@ services:
     environment:
       # Override host paths with container-internal mount paths.
       # The env_file provides the host path; these overrides point to the
-      # volume-mounted location inside the container.
+      # volume-mounted location inside the container. Container-internal mount
+      # paths are bare literal architectural constants (matching the existing
+      # AGENT_SCENARIO_DIR / PROMPT_CONTRACTS_DIR pattern below) — not subject
+      # to Gate G028 because they are NOT runtime configuration. BUG-029-005.
       PORT: ${CORE_CONTAINER_PORT}
-      BOOKMARKS_IMPORT_DIR: ${BOOKMARKS_IMPORT_DIR:+/data/bookmarks-import}
-      MAPS_IMPORT_DIR: ${MAPS_IMPORT_DIR:+/data/maps-import}
-      BROWSER_HISTORY_PATH: ${BROWSER_HISTORY_PATH:+/data/browser-history/History}
-      TWITTER_ARCHIVE_DIR: ${TWITTER_ARCHIVE_DIR:+/data/twitter-archive}
+      BOOKMARKS_IMPORT_DIR: /data/bookmarks-import
+      MAPS_IMPORT_DIR: /data/maps-import
+      BROWSER_HISTORY_PATH: /data/browser-history/History
+      TWITTER_ARCHIVE_DIR: /data/twitter-archive
       # Prompt contract YAMLs are mounted read-only at the container path below;
       # generated env values point at host paths, so override them for the
       # container view.
@@ -116,21 +119,15 @@ services:
       nats:
         condition: service_healthy
     volumes:
-      # HL-RESCAN-012 — the 4 connector-fixture mount paths below remain
-      # `${X:-./data/...}` form because the env file emits them empty by
-      # default (empty value = "no import" signal consumed by the
-      # connectors via the `${X:+/container/path}` env override block
-      # above). Converting them to fail-loud `${X:?...}` requires
-      # decoupling the mount path from the import-enabled signal (e.g.
-      # always populate the path in the env file and add a separate
-      # `<connector>_import_enabled` boolean) — tracked under a separate
-      # follow-up bug-packet. The build-metadata / env-file / image
-      # default-fallbacks above were the high-value targets for this
-      # sweep and are now fail-loud.
-      - ${BOOKMARKS_IMPORT_DIR:-./data/bookmarks-import}:/data/bookmarks-import:ro
-      - ${MAPS_IMPORT_DIR:-./data/maps-import}:/data/maps-import:ro
-      - ${BROWSER_HISTORY_PATH:-./data/browser-history/History}:/data/browser-history/History:ro
-      - ${TWITTER_ARCHIVE_DIR:-./data/twitter-archive}:/data/twitter-archive:ro
+      # BUG-029-005: Fail-loud SST contract for the 4 connector-fixture mount
+      # paths. The shell-env > yaml-value > repo-default precedence (see
+      # scripts/commands/config.sh) guarantees the env file always emits
+      # a non-empty value, so these fail-loud forms can never be tripped
+      # by an SST-emitted env file (Gate G028 / HL-RESCAN-012).
+      - ${BOOKMARKS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/bookmarks-import:ro
+      - ${MAPS_IMPORT_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/maps-import:ro
+      - ${BROWSER_HISTORY_PATH:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/browser-history/History:ro
+      - ${TWITTER_ARCHIVE_DIR:?Gate G028 / HL-RESCAN-012 — must be SST-emitted; run ./smackerel.sh config generate or ./smackerel.sh up}:/data/twitter-archive:ro
       # Spec 037 Scope 10: scenario YAMLs read-only — paired with the
       # AGENT_SCENARIO_DIR override in `environment:` above. Operators
       # drop new YAMLs in the host dir and SIGHUP triggers Bridge.Reload.
