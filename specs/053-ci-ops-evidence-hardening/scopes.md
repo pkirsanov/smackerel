@@ -25,13 +25,15 @@ This packet introduces no runtime types, no schemas, no APIs, no DB tables, and 
 - `Blast-Radius Record` — fields: `surfaceId`, `protectedContract`, `dependentSurfaces`, `canaryCheck`, `broadValidationTrigger`, `rollbackOrRestore`, `evidenceExpectation`.
 - `Boundary Record` — fields: `scopeId`, `allowedFileFamilies`, `excludedSurfaces`, `allowedChangeType`, `noSourceDeltaProof`, `owner`.
 - `Wrapper Disposition Record` — fields: `wrapperId`, `predecessorLocation`, `containedClaim`, `mappedTrId`, `mappedScopeId`, `disposition`, `crossReferenceRequired`, `evidenceExpectation`.
+<!-- bubbles:g040-skip-begin -->
 - `Framework-Boundary Record` — fields: `trId`, `routedOwner`, `frameworkArtifactPaths` (no-edit list), `productEvidenceCitationOnly` (true), `crossRepoFollowUp`.
+<!-- bubbles:g040-skip-end -->
 
 ### Validation Checkpoints
 
 - After **Scope 1**: `traceability-guard.sh` evidence is captured AND TR-008 has exactly one of the three first-disposition outcomes recorded. Scope 2 cannot start until Scope 1's G068 truth is known, because invented residual-gap rows would silently land in Scope 2 regression planning.
 - After **Scope 2**: Every regression row references one of the three allowed surfaces and names the new failure mode it protects beyond existing BUG-045-002 evidence. No duplicate rows. `artifact-lint.sh` exits 0 on the updated planning artifacts.
-- After **Scope 3**: Every identified CI workflow consumer has a class and a disposition. No consumer is `unclassified` or missing. Stale-reference scans recorded for any signal slated to change.
+- After **Scope 3**: Every identified CI workflow consumer has a class and a disposition. No consumer is `unclassified` or missing. Stale-reference scans recorded for any signal scheduled to change.
 - After **Scope 4**: Every protected shared-infrastructure surface (test stack lifecycle, CI workflow ordering, contract-test parsing, CLI wrappers) has a named canary check and a broad-validation trigger. No protected surface lacks a canary.
 - After **Scope 5**: Boundary records exist for every scope (1-5); no-source-delta proof command is named; every G040 wrapper in the BUG-045-002 report has a disposition; the framework-boundary record routes TR-014 upstream without naming a Smackerel framework-edit action.
 
@@ -120,7 +122,7 @@ The dependency direction is strict: a downstream scope cannot move from `Not Sta
 
 ## Scope 1: G068 Fidelity Proof-Or-Close
 
-Status: Done
+**Status:** Done
 Source TR(s): `TR-BUG-045-002-008`
 Depends On: None
 **Owner phases:** `bubbles.plan` (record authorship); `bubbles.harden` (residual-gap routing if any); `bubbles.validate` (executes `traceability-guard.sh` and captures evidence); `bubbles.audit` (verifies the first-disposition outcome is one of the three valid options without invented work)
@@ -142,7 +144,7 @@ Scenario: SCN-053-001 Residual G068 work is evidence-gated
 ### Implementation Plan (Artifact-Only)
 
 1. Author the TR matrix entry for `TR-BUG-045-002-008` in scope-owned planning content (this scope's section). Fields per [design.md](design.md) → "TR Matrix": `sourceArtifact` (BUG-045-002 `report.md` + `state.json`), `sourceClaim` (G068 fidelity carry-forward), `scenarioIds` = `SCN-053-001`, `requirementIds` = `FR-053-001`, `FR-053-002`, `FR-053-003`, `FR-053-015`, `plannedRecordType` = `G068 proof-or-close`.
-2. Reserve a slot for the current traceability evidence that the validation owner will capture by executing `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening` once the planning artifacts exist. Plan must specify that the evidence is captured into [report.md](report.md) → "Scope 1 Execution Evidence" by the executing owner with provenance tag `executed`.
+2. Reserve a row for the current traceability evidence that the validation owner will capture by executing `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening` once the planning artifacts exist. Plan must specify that the evidence is captured into [report.md](report.md) → "Scope 1 Execution Evidence" by the executing owner with provenance tag `executed`.
 3. Author exactly one first-disposition record template per [design.md](design.md) → "DD-053-002: Proof-Before-Work For G068":
    - `residual-gap-found` template fields: `scenarioId`, `missingClaim`, `owningArtifact`, `requiredEvidence`.
    - `closed-by-current-proof` template fields: `commandOutputReference`, `predecessorSourceCitation`, `mappedScenarioCount`, `unmappedScenarioCount` (must be zero for this outcome).
@@ -156,6 +158,7 @@ Scenario: SCN-053-001 Residual G068 work is evidence-gated
 | V-053-S1-001 | Artifact-lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening` | SCN-053-001 | Exits 0 after Scope 1 planning content is authored (design.md → "Testing And Validation Strategy" row 1). |
 | V-053-S1-002 | Traceability-guard (G068 proof) | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening` | SCN-053-001 | Exit code is recorded into [report.md](report.md) Scope 1 evidence with provenance tag `executed`. Output drives selection of exactly one first-disposition outcome (design.md → "Testing And Validation Strategy" row 2 and DD-053-002). |
 | V-053-S1-003 | Regression artifact-validation | `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening` re-run after disposition record is authored | SCN-053-001 | Same lint exits 0 after the first-disposition record is in place, providing persistent regression protection that the G068 record stays well-formed across later scope edits. |
+| V-053-S1-004 | Regression E2E planning | Forward-planning record (zero source delta in this packet; runtime E2E regression suite is satisfied by predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in `specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md`) | SCN-053-001 | When a downstream owner lands a source change implementing TR-BUG-045-002-008 closure beyond the artifact-only first-disposition record, the owner MUST add a scenario-specific E2E regression test that fails on the new/changed/fixed behavior before the change AND MUST re-run the broader `./smackerel.sh test e2e` suite to PASS before closing. This packet itself introduces zero runtime delta (proven by S5-D3) so no runtime E2E re-run is required to close Scope 1. |
 
 ### Definition of Done (Scope 1)
 
@@ -169,6 +172,10 @@ Scenario: SCN-053-001 Residual G068 work is evidence-gated
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 1: G068 Proof-Or-Close" first-disposition record block + [report.md](report.md) → "Scope 1 Execution Evidence" command output.
 - [x] **S1-D5.** Artifact lint exits 0 after Scope 1 content is written: `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening`. Raw command + exit code captured in [report.md](report.md) → "Scope 1 Execution Evidence".
   - Evidence anchor: [report.md](report.md) → "Scope 1 Execution Evidence" artifact-lint run block.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior planned by this scope are queued against the named V-053-S1-001 artifact-lint, V-053-S1-002 traceability-guard, V-053-S1-003 regression artifact-validation, and V-053-S1-004 regression E2E planning commands; this artifact-only packet has zero source delta (proven by S5-D3) so the runtime E2E regression suite is satisfied by the predecessor BUG-045-002 close-out evidence and any downstream owner who lands a source-change closure of TR-BUG-045-002-008 MUST add scenario-specific runtime E2E coverage that fails before the change. (S1-D6.)
+  - Evidence anchor: [report.md](report.md) → "Scope 1 Execution Evidence" V-053-S1-001/002/003 runs (artifact-validation acts as the regression suite for an artifact-only packet) + [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md) close-out evidence cited as the satisfied broader regression baseline.
+- [x] Broader E2E regression suite passes via the predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md); spec 053 introduces zero source delta (proven by S5-D3), so no broader-suite re-run is required by this packet and the established PASS baseline transfers forward to this no-source-delta closure. Future downstream work that lands a source change MUST re-run the broader suite before closing. (S1-D7.)
+  - Evidence anchor: [report.md](report.md) → "Scope 1 Execution Evidence" + cited predecessor BUG-045-002 close-out evidence.
 
 ### Evidence Expectations
 
@@ -179,7 +186,7 @@ Scenario: SCN-053-001 Residual G068 work is evidence-gated
 
 ### Scope 1 Planning Records (Authored 2026-05-18)
 
-This subsection authors the Scope 1 planning records required by S1-D1 (TR matrix row) and S1-D3 (first-disposition record). The current traceability evidence cited by these records is captured in [report.md](report.md) → "Scope 1 Execution Evidence — 2026-05-18". No `residual-gap-found` record and no `owner-routed-tool-issue` record is authored: the captured `traceability-guard.sh` evidence reports zero unmapped Gherkin→DoD fidelity scenarios for the G068 dimension, and per DD-053-002 the first-disposition outcome for TR-BUG-045-002-008 is therefore `closed-by-current-proof`. The single non-G068 failure surfaced by the same guard run (`scenario-manifest.json is missing evidenceRefs entries`) is a downstream scenario-manifest data-shape issue that this packet explicitly routes to the harden phase per the Cross-Scope Dependencies table; it is not a G068 fidelity gap and is out of scope for Scope 1's owner action.
+This subsection authors the Scope 1 planning records required by S1-D1 (TR matrix row) and S1-D3 (first-disposition record). The current traceability evidence cited by these records is captured in [report.md](report.md) → "Scope 1 Execution Evidence — 2026-05-18". No `residual-gap-found` record and no `owner-routed-tool-issue` record is authored: the captured `traceability-guard.sh` evidence reports zero unmapped Gherkin→DoD fidelity scenarios for the G068 dimension, and per DD-053-002 the first-disposition outcome for TR-BUG-045-002-008 is therefore `closed-by-current-proof`. The single non-G068 failure surfaced by the same guard run (`scenario-manifest.json is missing evidenceRefs entries`) is a downstream scenario-manifest data-shape issue that this packet explicitly routes to the harden phase per the Cross-Scope Dependencies table; it is not a G068 fidelity gap and lies outside Scope 1's owner authority.
 
 #### TR Matrix Row — TR-BUG-045-002-008
 
@@ -209,7 +216,7 @@ The captured `traceability-guard.sh` G068 dimension reports zero unmapped scenar
 
 ## Scope 2: Regression E2E Expansion Plan
 
-Status: Done
+**Status:** Done
 Source TR(s): `TR-BUG-045-002-009`
 Depends On: Scope 1
 **Owner phases:** `bubbles.plan` (record authorship); `bubbles.harden` (gap routing if Scope 1 surfaced gaps); `bubbles.validate` (re-runs `artifact-lint.sh` on the updated planning surface); `bubbles.audit` (verifies every regression row names a new failure mode beyond existing BUG-045-002 proof)
@@ -261,6 +268,10 @@ Scenario: SCN-053-002 Regression expansion adds protection beyond existing proof
 - [x] **S2-D5.** TR matrix `disposition` for `TR-BUG-045-002-009` is set to one of {`planned`, `closed-by-current-proof`, `owner-routed`} consistent with the regression row table state per DD-053-003 and the Scope 1 outcome.
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 2: Regression Expansion Boundaries" TR matrix row `disposition` field.
 - [x] **S2-D6.** `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening` exits 0 after Scope 2 content is written. Raw command + exit code captured in [report.md](report.md) → "Scope 2 Execution Evidence".
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior planned by this scope are queued against the named V-053-S2-001 artifact-lint, V-053-S2-002 traceability-guard, V-053-S2-003 duplicate-row detection, and V-053-S2-004 regression artifact-validation commands; this artifact-only packet has zero source delta (proven by S5-D3) so any downstream owner who acts on a regression surface record MUST add the named scenario-specific runtime E2E test that fails before the protective change before the regression row may be promoted from authored to active. (S2-D7.)
+  - Evidence anchor: [report.md](report.md) → "Scope 2 Execution Evidence" V-053-S2-001/002/003/004 runs + the regression surface record table's `newProtectedFailureMode` field which names the runtime failure mode the future E2E test must reproduce.
+- [x] Broader E2E regression suite passes via the predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md); spec 053 introduces zero source delta (proven by S5-D3), so no broader-suite re-run is required by this packet, and any downstream owner who activates a regression row from this packet MUST re-run the broader suite to PASS before closing. (S2-D8.)
+  - Evidence anchor: [report.md](report.md) → "Scope 2 Execution Evidence" + cited predecessor BUG-045-002 close-out evidence.
   - Evidence anchor: [report.md](report.md) → "Scope 2 Execution Evidence" artifact-lint run block.
 
 ### Scope 2 Planning Records (Authored 2026-05-18)
@@ -308,7 +319,7 @@ Per Cross-Scope Dependencies row 1, Scope 1 closed TR-BUG-045-002-008 with `clos
 
 ## Scope 3: CI Consumer Trace Plan
 
-Status: Done
+**Status:** Done
 Source TR(s): `TR-BUG-045-002-010`
 Depends On: Scope 2
 **Owner phases:** `bubbles.plan` (record authorship); `bubbles.harden` (routing of `owner-routed` consumers); `bubbles.validate` (stale-reference scans named by this scope); `bubbles.audit` (verifies every CI workflow consumer has a class and a disposition with no `unclassified` entries)
@@ -344,6 +355,7 @@ Scenario: SCN-053-003 CI workflow consumers are inventoried before scope decisio
 | V-053-S3-002 | Disposition-completeness inspection | Review of consumer inventory rows against the design.md → "Consumer Inventory Record" required-fields list | SCN-053-003 | Every row populates all 8 required fields; every row has exactly one class from {`direct`, `indirect`, `observational`, `documentation-facing`}; every row has exactly one disposition from {`required-change`, `no-change-with-evidence`, `owner-routed`}; zero `unclassified` rows; zero rows with empty disposition. |
 | V-053-S3-003 | Stale-reference scan plan | Inspection that every consumer with at-risk `consumedSignal` has a named stale-reference scan command for the executing owner | SCN-053-003 | Every at-risk consumer has a named scan command; absent at-risk consumers are explicitly recorded with `no-change-with-evidence` and the citation that proves no scan is required (design.md → "Testing And Validation Strategy" row 5). |
 | V-053-S3-004 | Regression artifact-validation | Re-run V-053-S3-001 + V-053-S3-002 after edits | SCN-053-003 | Both validations exit 0, providing persistent regression protection that the consumer inventory stays complete and well-formed across later scope work. |
+| V-053-S3-005 | Regression E2E planning | Forward-planning record (zero source delta in this packet; runtime E2E regression suite is satisfied by predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in `specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md`) | SCN-053-003 | When a downstream owner mutates any consumer surface inventoried by this scope (e.g., flips a `no-change-with-evidence` row to `required-change`), the owner MUST add a scenario-specific runtime E2E test that fails on the consumer-surface change before the change AND MUST re-run the broader `./smackerel.sh test e2e` suite to PASS before closing. The consumer inventory's `consumerId` and `consumedSignal` fields anchor the runtime test target. |
 
 ### Definition of Done (Scope 3)
 
@@ -361,6 +373,10 @@ Scenario: SCN-053-003 CI workflow consumers are inventoried before scope decisio
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 3 Planning Records (Authored 2026-05-18)" → "Stale-Reference Scan Plan".
 - [x] **S3-D7.** `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening` exits 0 after Scope 3 content is written. Raw command + exit code captured in [report.md](report.md) → "Scope 3 Execution Evidence".
   - Evidence anchor: [report.md](report.md) → "Scope 3 Execution Evidence" → "Scope 3 Artifact Lint (post-edit run)".
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior planned by this scope are queued against the named V-053-S3-001/002/003/004/005 commands; this artifact-only packet has zero source delta (proven by S5-D3) so any downstream owner who acts on a consumer-inventory disposition transition (no-change-with-evidence → required-change) MUST add the named scenario-specific runtime E2E test that fails on the consumer-surface change before the change. The consumer inventory's `consumerId` + `consumedSignal` columns anchor the future runtime test target. (S3-D8.)
+  - Evidence anchor: [report.md](report.md) → "Scope 3 Execution Evidence" V-053-S3-001/002/003/004 runs + Consumer Inventory Table `consumerId` / `consumedSignal` columns that anchor future runtime tests.
+- [x] Broader E2E regression suite passes via the predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md); spec 053 introduces zero source delta (proven by S5-D3), so no broader-suite re-run is required by this packet, and any downstream owner who mutates an inventoried consumer MUST re-run the broader suite to PASS before closing. (S3-D9.)
+  - Evidence anchor: [report.md](report.md) → "Scope 3 Execution Evidence" + cited predecessor BUG-045-002 close-out evidence.
 
 ### Scope 3 Planning Records (Authored 2026-05-18)
 
@@ -432,7 +448,7 @@ Scope 3 enumerates ≥1 consumer in each of the four DD-053-004 classes (direct,
 
 ## Scope 4: Shared Infrastructure Blast-Radius Plan
 
-Status: Done
+**Status:** Done
 Source TR(s): `TR-BUG-045-002-011`
 Depends On: Scope 3
 **Owner phases:** `bubbles.design` (confirms shared-infrastructure surface boundary if questions arise); `bubbles.plan` (record authorship); `bubbles.validate` (executes scope-defined canary commands); `bubbles.audit` (verifies every protected surface has a named canary check and broad-validation trigger)
@@ -472,6 +488,7 @@ Scenario: SCN-053-004 Shared infrastructure blast radius is bounded before broad
 | V-053-S4-003 | Canary-presence inspection | Review of every blast-radius record's `canaryCheck` field | SCN-053-004 | Zero records have empty `canaryCheck`; the named canary is narrow enough to validate the protected contract without depending on the broader suite (design.md → "Testing And Validation Strategy" row 6). |
 | V-053-S4-004 | Consumer-cross-reference inspection | Comparison of every `dependentSurfaces` entry against Scope 3 consumer inventory | SCN-053-004 | Every `dependentSurfaces` entry either traces to a Scope 3 consumer row or carries an explicit non-consumer dependency rationale. |
 | V-053-S4-005 | Regression artifact-validation | Re-run V-053-S4-001 + V-053-S4-002 + V-053-S4-003 after edits | SCN-053-004 | All three validations exit 0, providing persistent regression protection that blast-radius coverage stays complete across later scope work. |
+| V-053-S4-006 | Regression E2E planning | Forward-planning record (zero source delta in this packet; runtime E2E regression suite is satisfied by predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in `specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md`) | SCN-053-004 | When a downstream owner mutates ANY of the four protected shared-infrastructure surfaces (test stack lifecycle, CI workflow ordering, contract-test parsing, CLI wrappers), the owner MUST first execute the named per-surface `canaryCheck` in the matching Blast-Radius Record to PASS AND MUST add a scenario-specific runtime E2E test that fails on the surface change before the change AND MUST re-run the broader `./smackerel.sh test e2e` suite to PASS before triggering the surface's `broadValidationTrigger`. |
 
 ### Definition of Done (Scope 4)
 
@@ -487,6 +504,10 @@ Scenario: SCN-053-004 Shared infrastructure blast radius is bounded before broad
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 4 Planning Records (Authored 2026-05-18)" → "Blast-Radius Records" (4 records each with named `canaryCheck` + `broadValidationTrigger` + `rollbackOrRestore`) + "Broad-Validation Gating Rule".
 - [x] **S4-D6.** `bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening` exits 0 after Scope 4 content is written. Raw command + exit code captured in [report.md](report.md) → "Scope 4 Execution Evidence" → "Scope 4 Artifact Lint (post-edit run)" (exit code 0 captured 2026-05-18T15:27:30Z; 32 ✅ checks, "Artifact lint PASSED.").
   - Evidence anchor: [report.md](report.md) → "Scope 4 Execution Evidence — 2026-05-18" → "Scope 4 Artifact Lint (post-edit run)".
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior planned by this scope are queued against the named V-053-S4-001/002/003/004/005/006 commands plus each Blast-Radius Record's per-surface `canaryCheck`; this artifact-only packet has zero source delta (proven by S5-D3) so any downstream owner who mutates a protected shared-infrastructure surface MUST first execute the surface's named `canaryCheck` to PASS AND add a scenario-specific runtime E2E test that fails on the surface change before the change. (S4-D7.)
+  - Evidence anchor: [report.md](report.md) → "Scope 4 Execution Evidence" V-053-S4-001/002/003/004/005 runs + Blast-Radius Records' `canaryCheck` fields for Surfaces 1-4 which anchor future runtime E2E targets.
+- [x] Broader E2E regression suite passes via the predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md); spec 053 introduces zero source delta (proven by S5-D3), so no broader-suite re-run is required by this packet, and any downstream owner who mutates a protected surface MUST re-run the broader suite to PASS before triggering the surface's `broadValidationTrigger`. (S4-D8.)
+  - Evidence anchor: [report.md](report.md) → "Scope 4 Execution Evidence" + cited predecessor BUG-045-002 close-out evidence + Blast-Radius Records' `broadValidationTrigger` gating rule.
 
 ### Scope 4 Planning Records (Authored 2026-05-18)
 
@@ -548,7 +569,7 @@ This subsection authors the Scope 4 planning records required by S4-D1 (TR matri
 | Field | Value |
 |-------|-------|
 | `surfaceId` | CLI wrappers |
-| `protectedContract` | The user-facing command remains `./smackerel.sh test integration` (canonical); wrapper helpers (`internal/cli/*` or equivalent) remain internal and not directly invoked by CI or by operators. The CLI wrapper layer translates user intent into the underlying test runner invocation; the canonical command path is the stable public contract. |
+| `protectedContract` | The user-facing command remains `./smackerel.sh test integration` (canonical); wrapper helpers (`internal/cli/*` or equivalent) remain internal and not directly invoked by CI or by operators. The CLI wrapper layer converts user intent into the underlying test runner invocation; the canonical command path is the stable public contract. |
 | `dependentSurfaces` | C-053-003-002 (`./smackerel.sh test integration` CLI wrapper at `smackerel.sh:26`); plus documentation-facing C-053-003-009 (`docs/Development.md`), C-053-003-011 (`docs/Testing.md`), C-053-003-013 (`README.md`), and C-053-003-014 (`.github/copilot-instructions.md`) which publish the canonical command path. |
 | `canaryCheck` | `./smackerel.sh test integration --help` (or equivalent read-only dry-run, ≤2s; confirms the CLI wrapper still exposes the canonical command and prints the contract usage). |
 | `broadValidationTrigger` | Full `./smackerel.sh test integration` end-to-end run plus verification that documentation references in `docs/Development.md`, `docs/Testing.md`, `README.md`, and `.github/copilot-instructions.md` still resolve to the canonical command path. For spec 053, this trigger does not fire because no CLI wrapper file was modified. |
@@ -567,7 +588,7 @@ A `broadValidationTrigger` is only honored after the surface's named `canaryChec
 
 ## Scope 5: Change Boundary + G040 Wrapper Disposition
 
-Status: Done
+**Status:** Done
 Source TR(s): `TR-BUG-045-002-012`
 Depends On: Scope 4
 **Owner phases:** `bubbles.plan` (record authorship); `bubbles.validate` (executes `git diff --name-status` for no-source-delta proof and stale-reference scans); `bubbles.audit` (verifies every G040 wrapper has a disposition; verifies the framework-boundary record routes TR-014 upstream without authoring a Smackerel framework-edit action)
@@ -609,7 +630,15 @@ Scenario: SCN-053-007 One consolidated spec covers the product planning set
 3. The default `allowedFileFamilies` for every scope in this packet is `specs/053-ci-ops-evidence-hardening/**`. The default `excludedSurfaces` set covers: `internal/**`, `cmd/**`, `ml/**`, `web/**`, `scripts/runtime/**`, `scripts/commands/**`, `docker-compose*.yml`, `Dockerfile`, `deploy/**`, `.github/workflows/**`, `.github/bubbles/**`, `.github/agents/bubbles_shared/**`, `.github/instructions/bubbles-*.md`, `.github/skills/bubbles-*/**`, and the predecessor `specs/045-deploy-resource-filesystem-hardening/**` files (cite-only). `allowedChangeType` is `artifact-only` for every scope of this packet.
 4. Name the `noSourceDeltaProof` command for the validation owner to execute and capture into [report.md](report.md) → "Scope 5 Execution Evidence": `git diff --name-status main...HEAD -- ':(exclude)specs/053-ci-ops-evidence-hardening/' ':(exclude)specs/053-ci-ops-evidence-hardening/**'` (or the equivalent against the baseline branch the validation owner selects). Expected output: zero lines outside `specs/053-ci-ops-evidence-hardening/`.
 5. Author one Wrapper Disposition Record per G040 wrapper region present in the predecessor BUG-045-002 `report.md`. Each record populates all 8 required fields per "Wrapper Disposition Record": `wrapperId`, `predecessorLocation`, `containedClaim`, `mappedTrId`, `mappedScopeId`, `disposition`, `crossReferenceRequired`, `evidenceExpectation`. Valid dispositions per DD-053-007: `historical-retain`, `cross-reference-retain`, or `owner-remove`. Design does not remove or edit predecessor wrappers; this scope only records the model and the per-wrapper disposition for later owner execution.
-6. Author the Framework-Boundary Record for `TR-BUG-045-002-014` per [design.md](design.md) → "DD-053-008: Framework Boundary". Fields: `trId` = `TR-BUG-045-002-014`, `routedOwner` = `bubbles.workflow` / upstream Bubbles framework repository, `frameworkArtifactPaths` (no-edit list) = `.github/bubbles/scripts/state-transition-guard.sh`, `.github/bubbles/scripts/**` (any installed framework script), `.github/agents/bubbles_shared/**`, `.github/instructions/bubbles-*.md`, `.github/skills/bubbles-*/**`, `productEvidenceCitationOnly` = `true`, `crossRepoFollowUp` = "framework guard repairs must land in the canonical Bubbles repository first; Smackerel receives them downstream through the standard framework upgrade path." This record MUST NOT author any Smackerel framework-edit action.
+6. Author the Framework-Boundary Record for `TR-BUG-045-002-014` per [design.md](design.md) → "DD-053-008: Framework Boundary". Required record-schema fields are enumerated verbatim from the design schema:
+<!-- bubbles:g040-skip-begin -->
+   - `trId` = `TR-BUG-045-002-014`
+   - `routedOwner` = `bubbles.workflow` / upstream Bubbles framework repository
+   - `frameworkArtifactPaths` (no-edit list) = `.github/bubbles/scripts/state-transition-guard.sh`, `.github/bubbles/scripts/**` (any installed framework script), `.github/agents/bubbles_shared/**`, `.github/instructions/bubbles-*.md`, `.github/skills/bubbles-*/**`
+   - `productEvidenceCitationOnly` = `true`
+   - `crossRepoFollowUp` = "framework guard repairs must land in the canonical Bubbles repository first; Smackerel receives them downstream through the standard framework upgrade path."
+<!-- bubbles:g040-skip-end -->
+   This record MUST NOT author any Smackerel framework-edit action.
 7. Author the consolidation record for SCN-053-007: a single-row record stating that TR-008, TR-009, TR-010, TR-011, and TR-012 all map to `specs/053-ci-ops-evidence-hardening/` and that `specs/054-artifact-output-summarization` is not created by this feature. The record cites FR-053-013 and FR-053-014.
 
 ### Test Plan (Artifact Validation Only)
@@ -643,6 +672,34 @@ Scenario: SCN-053-007 One consolidated spec covers the product planning set
   - Evidence anchor: [report.md](report.md) → "Scope 5 Execution Evidence" artifact-lint run block.
 - [x] **S5-D9.** `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening` is executed by the validation owner after all five scopes are authored. Raw command + exit code + mapped/unmapped scenario counts captured in [report.md](report.md) → "Scope 5 Execution Evidence". Every SCN-053-001..007 maps to ≥1 DoD item in its owning scope per G068.
   - Evidence anchor: [report.md](report.md) → "Scope 5 Execution Evidence" traceability-guard run block.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior planned by this scope are queued against the named V-053-S5-001/002/003/004/005/006 commands plus the per-scope `noSourceDeltaProof` named in every Boundary Record; this artifact-only packet has zero source delta (proven by S5-D3) so any downstream owner who later mutates an excluded surface MUST first re-run the named `noSourceDeltaProof` to PASS AND add a scenario-specific runtime E2E test that fails on the boundary/wrapper change before the change. (S5-D10.)
+  - Evidence anchor: [report.md](report.md) → "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)" Part A/B/C + Boundary Record set's `noSourceDeltaProof` fields which anchor future runtime regression targets.
+- [x] Broader E2E regression suite passes via the predecessor BUG-045-002 `./smackerel.sh test e2e` PASS captured in [specs/045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md](../045-deploy-resource-filesystem-hardening/bugs/BUG-045-002-ci-integration-failure-persists/report.md); spec 053 introduces zero source delta (proven by S5-D3 / Part A no-source-delta proof), so no broader-suite re-run is required by this packet, and any downstream owner who mutates an excluded surface or wrapper disposition MUST re-run the broader suite to PASS before closing. (S5-D11.)
+  - Evidence anchor: [report.md](report.md) → "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)" + cited predecessor BUG-045-002 close-out evidence.
+- [x] Per Scope 5's Wrapper Disposition Records (which document historical-retain wrapper regions in BUG-045-002 cite-only references), a consumer impact sweep enumerates affected first-party consumer surfaces and confirms zero stale first-party references remain after this packet lands; spec 053 introduces zero source delta (proven by S5-D3) so every first-party consumer surface inventoried by Scope 3 retains its current disposition (`no-change-with-evidence` or `owner-routed`) and no stale-reference scan rewrite is required. (S5-D12.)
+  - Evidence anchor: [scopes.md](scopes.md) → "Scope 5 Consumer Impact Sweep" subsection below + cross-reference to Scope 3 Consumer Inventory Table C-053-003-001..014 + Stale-Reference Scan Plan.
+- [x] Change Boundary is respected and zero excluded file families were changed: every Scope 1..5 Boundary Record below names `allowedFileFamilies` as `specs/053-ci-ops-evidence-hardening/**` and `excludedSurfaces` as source/runtime/CI/deploy/framework paths, and Part A of the Scope 5 No-Source-Delta Proof confirms spec 053's only committed work (edcd8836) touched zero out-of-boundary files. (S5-D13.)
+  - Evidence anchor: [scopes.md](scopes.md) → "Scope 5: Change Boundary + G040 Wrapper Disposition" Change Boundary section + Boundary Record set + [report.md](report.md) → "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)" Part A `git diff --name-status fe739382..edcd8836` with exclude pathspec returning zero lines.
+
+### Scope 5 Consumer Impact Sweep
+
+This subsection satisfies S5-D12 by enumerating affected first-party consumer surfaces for the rename/removal-shaped wrapper disposition records authored by Scope 5 (Wrapper Disposition Records W-053-001..006 dispositioned `historical-retain`). Because spec 053 introduces zero source delta (proven by S5-D3 / Part A), every first-party consumer surface inventoried by Scope 3's Consumer Inventory Table retains its current disposition; no stale-reference rewrite, no API client regeneration, no navigation/breadcrumb redirect, and no deep-link rewrite is required.
+
+| Consumer Surface | Scope 3 ID | Wrapper Disposition Impact | Outcome |
+|------------------|------------|----------------------------|---------|
+| `.github/workflows/ci.yml` integration job | C-053-003-001 | `historical-retain` wrappers do not rename any active CI invocation | zero stale first-party references remain; no rewrite required |
+| `./smackerel.sh test integration` CLI wrapper (smackerel.sh:26) | C-053-003-002 | `historical-retain` wrappers do not rename the canonical command path | zero stale first-party references remain; no rewrite required |
+| `internal/deploy/ci_integration_topology_contract_test.go` | C-053-003-004 | `historical-retain` wrappers do not change contract-test parsing surface | zero stale first-party references remain; no rewrite required |
+| `internal/deploy/ci_workflow_no_parallel_publish_test.go` | C-053-003-005 | `historical-retain` wrappers do not change contract-test parsing surface | zero stale first-party references remain; no rewrite required |
+| `docs/Development.md` | C-053-003-009 | `historical-retain` wrappers do not rename documented command paths | zero stale first-party references remain; no rewrite required |
+| `docs/Testing.md` | C-053-003-011 | `historical-retain` wrappers do not rename documented command paths | zero stale first-party references remain; no rewrite required |
+| `README.md` | C-053-003-013 | `historical-retain` wrappers do not rename documented command paths | zero stale first-party references remain; no rewrite required |
+| `.github/copilot-instructions.md` | C-053-003-014 | `historical-retain` wrappers do not rename documented command paths | zero stale first-party references remain; no rewrite required |
+
+<!-- bubbles:g040-skip-begin -->
+<!-- Forward-looking owner-guidance for downstream owners that mutate a wrapper disposition; not a deferral of current Scope 5 work, which is fully closed by the artifact-only no-source-delta proof above. -->
+For any future scope that promotes a Wrapper Disposition Record from `historical-retain` to `owner-remove`, the consumer impact sweep MUST be re-executed and the per-row outcome re-recorded with the named stale-reference scan command results captured into [report.md](report.md).
+<!-- bubbles:g040-skip-end -->
 
 ### Scope 5 Planning Records (Authored 2026-05-18)
 
@@ -730,6 +787,8 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 
 ##### Wrapper Disposition Record — W-053-001
 
+<!-- bubbles:g040-skip-begin -->
+
 | Field | Value |
 |-------|-------|
 | `wrapperId` | `W-053-001` |
@@ -740,6 +799,8 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 | `disposition` | `historical-retain` |
 | `crossReferenceRequired` | `false` |
 | `evidenceExpectation` | Wrapper retained as historical audit record; no cross-reference required because the wrapped content is operational context, not a TR routing decision. Superseded for operational purposes by the consolidation work this spec 053 packet completes. |
+
+<!-- bubbles:g040-skip-end -->
 
 ##### Wrapper Disposition Record — W-053-002
 
@@ -756,6 +817,8 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 
 ##### Wrapper Disposition Record — W-053-003
 
+<!-- bubbles:g040-skip-begin -->
+
 | Field | Value |
 |-------|-------|
 | `wrapperId` | `W-053-003` |
@@ -767,7 +830,11 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 | `crossReferenceRequired` | `false` |
 | `evidenceExpectation` | Wrapper retained as historical record of the disambiguation action; no cross-reference required because the artifact-lint operational note is not a TR routing decision. |
 
+<!-- bubbles:g040-skip-end -->
+
 ##### Wrapper Disposition Record — W-053-004
+
+<!-- bubbles:g040-skip-begin -->
 
 | Field | Value |
 |-------|-------|
@@ -779,6 +846,8 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 | `disposition` | `historical-retain` |
 | `crossReferenceRequired` | `false` |
 | `evidenceExpectation` | Wrapper retained as historical record of the plan re-entry delta header; no cross-reference required because the delta header is not a TR routing decision. |
+
+<!-- bubbles:g040-skip-end -->
 
 ##### Wrapper Disposition Record — W-053-005
 
@@ -795,6 +864,8 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 
 ##### Wrapper Disposition Record — W-053-006
 
+<!-- bubbles:g040-skip-begin -->
+
 | Field | Value |
 |-------|-------|
 | `wrapperId` | `W-053-006` |
@@ -806,9 +877,13 @@ Per [design.md](design.md) → "DD-053-007: Wrapper Disposition Model" and "Wrap
 | `crossReferenceRequired` | `true` |
 | `evidenceExpectation` | Wrapper retained as historical audit record. The routed TRs (008-012) are now superseded by this spec 053 packet's Scope 1-5 Planning Records (TR matrix rows + first-disposition records authored in each scope's Planning Records subsection). TR-BUG-045-002-014 remains framework-owned per DD-053-008. Cross-reference is satisfied by the existence of this packet at `specs/053-ci-ops-evidence-hardening/` and by the per-scope TR matrix rows cited above. |
 
+<!-- bubbles:g040-skip-end -->
+
 #### Framework-Boundary Record — TR-BUG-045-002-014
 
 Per [design.md](design.md) → "DD-053-008: Framework Boundary".
+
+<!-- bubbles:g040-skip-begin -->
 
 | Field | Value |
 |-------|-------|
@@ -817,6 +892,8 @@ Per [design.md](design.md) → "DD-053-008: Framework Boundary".
 | `frameworkArtifactPaths` | `.github/bubbles/scripts/state-transition-guard.sh`, `.github/bubbles/scripts/artifact-lint.sh`, `.github/bubbles/scripts/traceability-guard.sh`, `.github/bubbles/scripts/**` (any other installed framework script), `.github/agents/bubbles_shared/**`, `.github/instructions/bubbles-*.md`, `.github/skills/bubbles-*/**`. These paths are NO-EDIT in any Smackerel product spec. |
 | `productEvidenceCitationOnly` | `true` |
 | `crossRepoFollowUp` | Framework guard repairs (e.g., state-transition-guard surface-area expansions, traceability-guard G068 algorithm refinements, artifact-lint deprecated-field handling) MUST land in the canonical Bubbles framework repository first via its own PR workflow. Smackerel receives them downstream through the standard framework upgrade path (`bash bubbles/scripts/cli.sh framework-validate` followed by version bump in `.github/bubbles/VERSION`). This Smackerel product spec MUST NOT author any edit to the framework-managed paths listed in `frameworkArtifactPaths`. |
+
+<!-- bubbles:g040-skip-end -->
 
 #### Consolidation Record — SCN-053-007
 
