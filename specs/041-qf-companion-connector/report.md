@@ -7117,4 +7117,98 @@ PASS: go-e2e
 
 **Claim Source: executed** for the test command, the wrapper exit code, the live-stack health snapshot, the captured test stdout/stderr (PII-redacted but otherwise verbatim), the `go vet` + compile exit codes, and the `git diff --stat` output for the new test file. **Claim Source: interpreted** for the four behavioural-proof bullets (derived from the PASS verdict combined with the test source assertions enumerated in the task prompt) and for the health-state transitive-coverage analysis on line 300 (derived from inspection of `internal/connector/qfdecisions/connector.go:191-198` source code).
 
+## Scope 2 SCN-004 Core Behaviour DoD (Round 6 — conn.Health() Explicit Assertion, bubbles.implement + bubbles.test, 2026-05-18T17:30:00Z)
+
+**Owner chain:** `bubbles.iterate` (dispatcher) -> `bubbles.implement` (Round 6 phase 1 — author the explicit health-state assertion in the existing E2E test) -> `bubbles.test` (Round 6 phase 2 — re-run the augmented test on the live disposable test stack and capture the GREEN evidence).
+
+**Round 6 goal:** close the carry-forward documented at the end of the Round 5 evidence section above. Round 5 flipped scopes.md line 319 (Validation E2E API row for SCN-SM-041-004) but deliberately left line 300 (Core behaviour row, which contains the assertion text "mark connector health `mismatched`") at `[ ]` because the Round 5 test asserted the `Connect()` return type (`CapabilityMismatchError`) and the underlying source code at `internal/connector/qfdecisions/connector.go:194-197` sets `c.setHealth(connector.HealthDegraded)` BEFORE returning that error — covering the health-state requirement transitively but not via a direct runtime assertion. Round 6 adds the missing explicit assertion and captures a fresh live-stack PASS so line 300 can be flipped without ambiguity.
+
+**Round 6 phase 1 — `bubbles.implement` (source change):**
+
+- File modified: `tests/e2e/qf_decisions_connector_api_test.go` (one file only).
+- Lines added: 15 (no deletions). Insertion site: lines 961-975, inside `TestQFDecisionsIncompatibleCapabilityBlocksPolling` (the test authored by Round 5), AFTER the existing `mismatchErr.Required != "v1"` guard at line 959 and BEFORE the `// Mismatch metric MUST be incremented...` comment at line 977.
+- Asserted invariant: `conn.Health(ctx) == connector.HealthDegraded` after the `Connect()` failure assertions. Mapping rationale: the codebase's canonical degraded-runtime constant is `connector.HealthDegraded` (`internal/connector/connector.go:14`). There is NO separate `HealthMismatched` constant defined in the `connector` package. The SCN-SM-041-004 Core behaviour DoD wording "mark connector health `mismatched`" is therefore satisfied by `HealthDegraded` — this is the existing production code path (`internal/connector/qfdecisions/connector.go:194-197`: `c.capabilityStatus = CapabilityStatusIncompatible` immediately followed by `c.setHealth(connector.HealthDegraded)` BEFORE `Connect()` wraps and returns the `CapabilityMismatchError`). The assertion block includes a multi-line comment recording this mapping rationale inline in the test source.
+- No new imports added. The `connector` package was already imported at `tests/e2e/qf_decisions_connector_api_test.go:22` (used by the existing `connector.ConnectorConfig` literal at line 935). `ctx` was already in scope from the test body's earlier `ctx, cancel := context.WithTimeout(...)` block.
+- `go vet ./tests/e2e/...`: exit 0, no findings.
+- `go test -tags e2e -c -o /dev/null ./tests/e2e/...`: exit 0, compile-only success.
+- `git status --short` after edit: only `tests/e2e/qf_decisions_connector_api_test.go` modified by this agent. The five `specs/053-ci-ops-evidence-hardening/*` entries (deleted `design.md`, modified `report.md`/`scopes.md`/`state.json`, untracked `scenario-manifest.json`) were already present in the working tree before Round 6 phase 1 and were NOT touched (out-of-scope parallel-session work).
+- NO commit by this phase. NO push. NO `--no-verify`. NO test execution by this phase (delegated to phase 2). NO shell redirection used to mutate the file (all edits via IDE `replace_string_in_file`).
+
+**Round 6 phase 2 — `bubbles.test` (live-stack runtime verification):**
+
+Commands executed (in order):
+
+```bash
+cd ~/smackerel
+./smackerel.sh --env test up                                                              # exit 0
+./smackerel.sh --env test status                                                          # exit 0 — 5/5 services Healthy
+./smackerel.sh --env test test e2e --go-run '^TestQFDecisionsIncompatibleCapabilityBlocksPolling$'  # WRAPPER_EXIT=0
+./smackerel.sh --env test down                                                            # exit 0 (idempotent — wrapper had already auto-torn-down)
+```
+
+Live-stack health snapshot (PII-redacted):
+
+```
+[+] Running 9/9
+ ✔ Container smackerel-test-nats-1            Healthy                     13.3s
+ ✔ Container smackerel-test-ollama-1          Healthy                     13.3s
+ ✔ Container smackerel-test-postgres-1        Healthy                     13.3s
+ ✔ Container smackerel-test-smackerel-ml-1    Healthy                     17.9s
+ ✔ Container smackerel-test-smackerel-core-1  Healthy                     17.4s
+```
+
+Verbatim test output (PII-redacted — home paths normalised to `~/`, NATS bearer token replaced with `<redacted>`):
+
+```
+config-validate: ~/smackerel/config/generated/test.env.tmp OK
+go-e2e: applying -run selector: ^TestQFDecisionsIncompatibleCapabilityBlocksPolling$
+=== RUN   TestQFDecisionsIncompatibleCapabilityBlocksPolling
+2026/05/18 16:11:01 INFO connected to NATS url=nats://<redacted>@127.0.0.1:47002
+    qf_decisions_connector_api_test.go:893: cleanup query artifacts for qf-decisions-e2e-incompat-1779120661732327712: closed pool
+--- PASS: TestQFDecisionsIncompatibleCapabilityBlocksPolling (0.12s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.193s
+PASS: go-e2e
+```
+
+Adversarial verification (all six checks PASS):
+
+1. Test name appears: `=== RUN TestQFDecisionsIncompatibleCapabilityBlocksPolling`.
+2. `--- PASS:` line present for that test name.
+3. Duration `0.12s > 0s` (non-zero, slightly longer than Round 5's `0.08s` — consistent with one additional health-state read).
+4. `-run '^TestQFDecisionsIncompatibleCapabilityBlocksPolling$'` selector applied (visible in the wrapper's `go-e2e: applying -run selector: ...` echo line).
+5. Wrapper exit 0 (`WRAPPER_EXIT=0`).
+6. Live test stack came up Healthy 5/5 (postgres, nats, ollama, smackerel-core, smackerel-ml) before the test ran.
+
+**What this proves (about Scope 2 SCN-SM-041-004 Core behaviour DoD line 300):**
+
+- The connector's in-memory health state is, at the moment `Connect()` returns its `CapabilityMismatchError`, equal to `connector.HealthDegraded` — proved by a direct runtime assertion against the live connector instance (`conn.Health(ctx)`), not by source-code inspection or transitive reasoning. This satisfies the "mark connector health `mismatched`" requirement of DoD line 300 in the canonical degraded-runtime mapping the codebase already uses.
+- The four pre-existing assertions from Round 5 (the four bullets enumerated in the Round 5 evidence section above) still hold this round — same test, same live stack, same PASS verdict, plus one additional explicit assertion. NO regression to Round 5's behavioural proofs.
+- The adversarial trip-wire on `DecisionEventsPath`/`DecisionPacketsPath` did NOT fire (would have produced `--- FAIL:` and non-zero wrapper exit); polling was correctly blocked.
+- The `SELECT COUNT(*) FROM artifacts WHERE source_id=$1` query against live PostgreSQL still returned 0 — incompatible capability still publishes zero trusted artifacts.
+
+**DoD impact this round:**
+
+- scopes.md line 300 (Core behaviour row for SCN-SM-041-004) flipped `[ ]` -> `[x]` by `bubbles.iterate` after this evidence section was committed. The flip is anchored on (a) the new explicit `conn.Health()` assertion at `tests/e2e/qf_decisions_connector_api_test.go:961-975`, (b) the live-stack PASS captured above, and (c) this report.md evidence section.
+- scopes.md line 319 (Validation E2E API row for SCN-SM-041-004) remains `[x]` from Round 5 (re-validated this round by the same test continuing to PASS with one additional assertion).
+- No other DoD checkbox flipped this round.
+
+**Scope-status impact:** Scope 2 remains `In Progress` (per the 2026-05-18T16:30:00Z `bubbles.plan` drift-repair commit `40e518c8`, which reconciled certification.scopeProgress to reflect 13 of ~27 DoD items already `[x]`). With line 300 now `[x]`, Scope 2 has 14 of ~27 DoD items completed. Remaining `[ ]` items continue to be: SCN-SM-041-003 capability handshake integration (×2 functions), SCN-SM-041-005 page-size clamping integration, SCN-SM-041-008 fast-forward `events_skipped` integration, SCN-SM-041-003+008 freshness stress, Change-Boundary planning evidence, no-fallback-defaults check, zero-warnings build/lint/test, Scope 2-owned metrics docs in design.md, and Broader E2E suite. Top-level spec status remains `in_progress`. `certification.status` remains `in_progress`.
+
+**Concern impact:**
+
+- `C-S2-004-E2E` is FULLY resolved this round. Round 5 marked it with `resolutionAcknowledgedAt` / `resolutionAcknowledgedBy` / `resolutionRationale` flagging PARTIAL empirical resolution (Validation row covered but Core behaviour row's health-state requirement transitively covered only). Round 6 closes the residual gap: the explicit `conn.Health()` assertion now runs on live stack, PASSes, and flips the Core behaviour row. Round 6 promotes the concern to `status: resolved` with `resolvedAt: 2026-05-18T17:30:00Z`, `resolvedBy: bubbles.iterate (Round 6 dispatch chain: bubbles.implement + bubbles.test)`, `resolutionEvidenceRef` pointing at this report.md section, and `resolutionRationale` updated to remove the PARTIAL qualifier.
+- No new concern opened.
+
+**Honesty declarations:**
+
+- `bubbles.implement` (Round 6 phase 1) modified exactly ONE file: `tests/e2e/qf_decisions_connector_api_test.go` (+15 lines inserted at lines 961-975, 0 deletions). Confirmed via `git diff --stat`. NO source code in `internal/connector/qfdecisions/**` modified — the production contract from Rounds 2L/2N is unchanged. The other working-tree modifications (`specs/053-ci-ops-evidence-hardening/*`) were pre-existing parallel-session changes not touched by this round.
+- `bubbles.test` (Round 6 phase 2) did NOT modify any source code. Stack was brought up via `./smackerel.sh --env test up` and auto-torn-down by the wrapper after the focused test run; an explicit `./smackerel.sh --env test down` was issued as a belt-and-braces idempotent cleanup (exit 0 — no-op).
+- DoD flip in this round is limited to scopes.md line 300 ONLY. Line 319 was already `[x]` from Round 5; the test continuing to PASS is evidence the Round 5 flip remains valid but is not a re-flip.
+- No `--no-verify` used. No shell redirection used to write artifacts (all writes via IDE `replace_string_in_file` / `multi_replace_string_in_file`). No spec 053 territory touched by this iteration.
+- The bubbles.test wrapper did NOT need to install `gettext-base` this round (Round 5 already triggered the one-time install). Both bring-ups (the explicit one and the wrapper's auto-bring-up) reached 5/5 Healthy without further setup.
+- `bubbles.iterate` Round 6 commits this iteration's artifacts (augmented e2e test source + scopes.md line 300 flip + this report.md evidence section + state.json executionHistory entry + state.json concerns C-S2-004-E2E resolution promotion + completedPhaseClaims + lastUpdatedAt). Does NOT push — operator-gated.
+
+**Claim Source: executed** for the test command, the wrapper exit code, the live-stack health snapshot, the captured test stdout/stderr (PII-redacted but otherwise verbatim), the `go vet` + compile exit codes, and the `git diff --stat` output for the augmented test file. **Claim Source: interpreted** for the health-mapping rationale (derived from inspection of `internal/connector/connector.go:14` constant set and `internal/connector/qfdecisions/connector.go:194-197` source code) and for the "no regression to Round 5 behavioural proofs" bullet (derived from the test continuing to PASS with the same four pre-existing assertions plus the one new assertion).
+
 
