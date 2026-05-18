@@ -100,6 +100,12 @@
         "agent": "bubbles.test",
         "timestamp": "2026-05-18T14:04:12Z",
         "summary": "SCN-SM-041-006 runtime proof completion. After the 2026-05-18T13:50:28Z FAIL attempt routed C-S2-006-E2E-STUB-ARM to bubbles.implement, the operator authored the missing capability handshake stub arm directly at tests/e2e/qf_decisions_connector_api_test.go:637-654 (case r.URL.Path == qfdecisions.CapabilitiesPath returning canonical qfdecisions.QFBridgeCapability value with the Round 2N field set). bubbles.test re-ran the identical narrow-scope command `./smackerel.sh test e2e --go-run '^TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata$'`: disposable test stack came up Healthy (5/5 services), envsubst helper auto-installed cleanly (second consecutive empirical confirmation that scripts/runtime/_ensure_envsubst.sh works end-to-end), Go test wrapper invoked test with correct -run selector, test PASSED in 0.09s (--- PASS: TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata (0.09s); ok github.com/smackerel/smackerel/tests/e2e 0.132s; PASS: go-e2e), wrapper exit 0. NATS publish observed at artifact_id=01KRXPDJB9RSD8XXQY8ZVW63MF (content_type=qf/decision-packet, tier=standard) proving the unknown-decision-type production code path was exercised end-to-end and the artifact survived ingestion. Stack teardown clean. DoD flipped: scopes.md:320 SCN-SM-041-006 [ ] -> [x]. Concerns updated: C-S2-006-E2E-STUB-ARM marked resolved in place with resolvedAt/resolvedBy/resolutionEvidenceRef/resolutionRationale; older C-S2-006-E2E (envsubst root-cause) decorated with resolutionAcknowledgedAt acknowledging empirical resolution via the envsubst wrapper. NO other DoD flipped (Scope 2 still has SCN-SM-041-003/004/008, freshness stress, broader E2E suite, change-boundary, no-fallback-defaults, zero-warnings, Scope 2 metrics docs all [ ] — most blocked on cross-repo QF 063 producer-readiness which did not move). NO scope status promoted (Scope 2 still Not Started overall). NO spec status promoted (still in_progress). NO source code modified by bubbles.test (operator supplied the test-source fix). NO foreign-spec territory touched. NO bypass flag. NO commit or push performed (this completedPhaseClaims entry is added BEFORE the local commit). Evidence anchor: report.md '### Scope 2 E2E Runtime Evidence (DoD 320 -- bubbles.test, 2026-05-18T14:04:12Z)'. NEXT REQUIRED OWNERS: spec-045 BUG-045-002 owner to close upstream (independent); bubbles.implement + bubbles.test for SCN-003/004/007/008 live-stack proofs; cross-repo QF 063 producer wiring before full Scope 2 certifies Done."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-18T16:30:00Z",
+        "summary": "DRIFT REPAIR planning round to reconcile state.json with the reality already documented in scopes.md. NO scope content was edited; NO DoD checkbox was flipped; NO source code was modified. Reconciled certification.scopeProgress to match scopes.md as the source of truth: (1) Scope 2 name corrected from 'Cursor Sync Normalization And Storage' to canonical scopes.md heading 'Capability Handshake, Cursor Sync Normalization, And Storage'; (2) Scope 2 status promoted from 'Not Started' to 'In Progress' to reflect 13 of ~27 DoD items already [x] from Rounds 2L/2N/5 (SCN-006 unit + e2e PASS DoD 320; SCN-007 lag breach PASS; SCN-006/008 content-type mappings PASS; SCN-003/004/005/008 unit PASS; SCN-004 e2e PASS DoD 319 Round 5; artifact lint PASS; raw evidence recorded); (3) Scope 2 notes rewritten to enumerate concrete remaining [ ] items (SCN-003 integration tests missing per Round 2P, SCN-008 fast-forward integration, freshness SLA stress, broader e2e, change-boundary guard, no-fallback check, build-quality, metrics documentation) and confirm RESTART decision (parking branch is historical reference only; main is ahead); (4) Scopes 3-9 notes refreshed to acknowledge QF 063 dependency cleared 2026-05-12 (done_with_concerns) and to enumerate the current transitive dependency chain through Scope 2 In Progress — statuses remain 'Not Started' because every Scope 3-9 is still legitimately blocked behind Scope 2 (or behind another non-Done scope); (5) lastUpdatedAt bumped to 2026-05-18T16:30:00Z. NO certification.completedScopes change (Scope 1 only). NO certification.certifiedCompletedPhases change ([] preserved). NO certification.status change (in_progress preserved). NO concerns array modification. NO scopes.md, report.md, uservalidation.md, design.md, or spec.md modification. NO source code or test file change. NO foreign-spec territory touched. NO commit, push, or shell write. All edits applied via IDE replace_string_in_file / multi_replace_string_in_file tools. HONEST DISCREPANCY: orchestrator's baseline assumed 13 completedPhaseClaims entries (this entry would have been entry 14); actual baseline at session start was 15 entries because the harden(8a67238e), runtime-proof(9af2a9d4), dispatch-re-verify(fe739382), and SCN-004 E2E(f7701da3) entries had landed since the snapshot — this drift-repair entry is therefore entry 16, not 14. NEXT REQUIRED OWNER: bubbles.implement to author the missing SCN-003 live-stack integration tests, SCN-008 fast-forward integration test, and freshness SLA stress test once spec-045 BUG-045-002 envsubst drift is resolved; cross-repo QF 063 producer wiring before Scope 2 can certify Done."
       }
     ],
     "pendingTransitionRequests": []
@@ -123,13 +129,13 @@
       },
       {
         "scope": 2,
-        "name": "Cursor Sync Normalization And Storage",
-        "status": "Not Started",
+        "name": "Capability Handshake, Cursor Sync Normalization, And Storage",
+        "status": "In Progress",
         "dependsOn": [1],
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked on QF 063 Scope 2 read/outbox readiness."
+        "notes": "Unparked 2026-05-13 (QF 063 done_with_concerns on 2026-05-12). In-progress with multiple DoD items [x] from Rounds 2L/2N/5 (SCN-003/004/005/006/007 unit PASS; SCN-006/008 normalizer content-type mappings PASS; SCN-006 e2e PASS at DoD 320; SCN-004 e2e PASS at DoD 319 Round 5; artifact lint PASS; raw evidence recorded). Remaining [ ] items: SCN-003 integration tests (files do not exist per Round 2P), SCN-008 fast-forward integration, freshness SLA stress, broader e2e, change-boundary guard, no-fallback check, build-quality, metrics documentation. RESTART decision: parking branch is historical reference only; main is ahead."
       },
       {
         "scope": 3,
@@ -139,7 +145,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked until Scope 2 source-qualified QF artifacts exist."
+        "notes": "Awaiting Scope 2 source-qualified QF artifacts (Scope 2 In Progress). QF 063 dependency cleared 2026-05-12 (done_with_concerns)."
       },
       {
         "scope": 4,
@@ -149,7 +155,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked until Scope 3 read-only packet surfacing exists."
+        "notes": "Awaiting Scope 3 read-only packet surfacing (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
       },
       {
         "scope": 5,
@@ -159,7 +165,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked behind completed Scopes 2-4."
+        "notes": "Awaiting Scopes 2-4 completion (Scope 2 In Progress; Scopes 3-4 Not Started). QF 063 dependency cleared 2026-05-12."
       },
       {
         "scope": 6,
@@ -169,7 +175,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked behind Scope 3 trust-rendering surface readiness."
+        "notes": "Awaiting Scope 3 trust-rendering surface (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
       },
       {
         "scope": 7,
@@ -179,7 +185,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked behind Scope 3 trust-rendering surface readiness and consent-token issuance."
+        "notes": "Awaiting Scope 3 trust-rendering surface + consent-token issuance (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
       },
       {
         "scope": 8,
@@ -189,7 +195,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked behind Scope 3 action-eligible packet rendering readiness; QF rejects callbacks during pre-MVP."
+        "notes": "Awaiting Scope 3 action-eligible packet rendering (transitively blocked by Scope 2 In Progress); QF rejects callbacks during pre-MVP. QF 063 dependency cleared 2026-05-12."
       },
       {
         "scope": 9,
@@ -199,7 +205,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Parked behind Scope 1 capability-handshake readiness; QF rejects proposal writes during pre-MVP."
+        "notes": "Awaiting Scope 1 capability-handshake (Scope 1 Done) and Scope 2 capability-policy persistence (Scope 2 In Progress); QF rejects proposal writes during pre-MVP. QF 063 dependency cleared 2026-05-12."
       }
     ],
     "lockdownState": {
@@ -537,7 +543,7 @@
     }
 
   ],
-  "lastUpdatedAt": "2026-05-18T15:08:00Z",
+  "lastUpdatedAt": "2026-05-18T16:30:00Z",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
