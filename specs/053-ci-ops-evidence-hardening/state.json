@@ -1,0 +1,125 @@
+{
+  "version": 3,
+  "featureDir": "specs/053-ci-ops-evidence-hardening",
+  "featureName": "CI Ops Evidence Hardening",
+  "status": "in_progress",
+  "workflowMode": "spec-scope-hardening",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-05-18T00:00:00Z",
+    "lastUpdatedAt": "2026-05-18T18:00:00Z",
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": [
+        "analyze"
+      ],
+      "runStartedAt": "2026-05-18T00:00:00Z",
+      "runEndedAt": "2026-05-18T00:00:00Z",
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "summary": "Created consolidated analyst specification for BUG-045-002 product-side carry-forward concerns. Covered TR-BUG-045-002-008 through TR-BUG-045-002-012; excluded TR-BUG-045-002-014 as framework-owned. Created minimal report.md and uservalidation.md because the feature folder was absent. No runtime/source/design/scope files changed."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": [
+        "design"
+      ],
+      "runStartedAt": "2026-05-18T00:00:00Z",
+      "runEndedAt": "2026-05-18T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Created design.md for the consolidated CI ops evidence-hardening planning packet. Defined current truth from BUG-045-002 report/state context, design decisions for TR-BUG-045-002-008 through TR-BUG-045-002-012, data and artifact record models, five-scope architecture, verification strategy, explicit product/source boundaries, and the framework boundary excluding TR-BUG-045-002-014. No runtime/source/CI/deploy/framework files changed, no scopes created, and no completion status promoted."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "runStartedAt": "2026-05-18T18:00:00Z",
+      "runEndedAt": "2026-05-18T18:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Created scopes.md for the consolidated CI ops evidence-hardening planning packet. Authored five sequential scopes per design.md Scope Architecture: Scope 1 G068 Proof-Or-Close (TR-BUG-045-002-008) with first-disposition record templates (residual-gap-found, closed-by-current-proof, owner-routed-tool-issue) per DD-053-002; Scope 2 Regression Expansion Boundaries (TR-BUG-045-002-009) gating regression rows against duplicates of existing BUG-045-002 proof per DD-053-003; Scope 3 Consumer Trace Inventory (TR-BUG-045-002-010) requiring all four DD-053-004 classes and three dispositions; Scope 4 Shared Infrastructure Blast Radius (TR-BUG-045-002-011) requiring named canary checks for all four protected surfaces per DD-053-005; Scope 5 Boundary And Wrapper Disposition (TR-BUG-045-002-012 plus TR-BUG-045-002-014 framework-boundary) covering DD-053-006 boundary records, DD-053-007 wrapper dispositions, and DD-053-008 framework boundary routing TR-014 upstream without authoring any Smackerel framework-edit action. All 33 DoD items are unchecked [ ] for later owner execution; every SCN-053-001 through SCN-053-007 maps to a scope-internal scenario validator DoD item per G068; zero deferral language. Test plans are artifact-validation only (artifact-lint, traceability-guard, git diff --name-status, stale-reference scans, canary-check planning) consistent with design Testing And Validation Strategy. Updated artifacts.scopes to scopes.md. No runtime/source/CI/deploy/framework files changed, no scope statuses promoted beyond Not Started, no DoD items ticked, no top-level or certification status promotion."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-05-18T18:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": null,
+    "lockdownApprovals": null,
+    "invalidationLedger": null,
+    "transitionRequests": null,
+    "reworkQueue": null
+  },
+  "statusDiscipline": {
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
+    "scopePickupRule": "Design and plan artifacts are owner-managed; no scope pickup is available until bubbles.design and bubbles.plan create their artifacts.",
+    "scopeDoneGates": [],
+    "specDoneRequires": "All scopes done after bubbles.plan creates scope artifacts and bubbles.validate certifies promotion."
+  },
+  "notes": "Planning artifact authored. Five scopes (Scope 1 G068 Proof-Or-Close through Scope 5 Boundary And Wrapper Disposition) with 33 unchecked DoD items ready for later owner execution. Next owner route per spec-scope-hardening mode: bubbles.harden (planning-hardening pass for ambiguity or routing) or bubbles.validate (executes artifact-lint, traceability-guard, no-source-delta proof, stale-reference scans, and canary checks named by the scopes). Status remains in_progress; certification.status remains in_progress; no DoD ticks; no status promotions."
+}
