@@ -13840,4 +13840,324 @@ state-transition-guard exit codes captured verbatim above).
 
 ---
 
+## Scope 5 Audit Envelope V1 Rollout Evidence (bubbles.implement, 2026-05-21T22:04:49Z)
+
+**Phase:** implement
+**Sub-iteration:** C (Cross-Product Audit Envelope v1 rollout to 8 emission
+points + integration test)
+**HEAD at start of sub-iter:** `ee35256e`
+**DoD items closed:** Scope 5 → SCN-SM-041-021 core-behavior 8-emission-point
+emission (L1004) and Scope 5 → SCN-SM-041-021 unit+integration envelope-shape
+validation (L1011).
+**DoD items intentionally NOT closed by this sub-iter:** L1005 (operator
+documentation explaining envelope shape / sink / boundaries — owned by
+Sub-iter F per Plan Amendment 2026-05-21).
+**RED proof:** Single integration test run captured at 2026-05-21T21:59:01Z
+showed the test FAILED at the `capability_handshake/ok` always-required-field
+sweep because the existing `EmitConnectorAuditEnvelope` slog emission set
+omitted `recorded_at`, `bundle_id`, `target_context_type`, and
+`sensitivity_tier` from the structured-log shape even though
+`BuildCrossProductAuditEnvelopeV1` already populated those struct fields.
+Verbatim diagnostic capture:
+
+```text
+=== RUN   TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints
+2026/05/21 21:59:01 INFO connected to NATS url=nats://<redacted-token>@127.0.0.1:47002
+    qf_audit_envelope_test.go:121: capability_handshake/ok: envelope field "recorded_at" is missing or empty (got <nil>); full record: [
+          {
+            "action": "capability_handshake",
+            "actor_ref": "smackerel:qf-decisions-connector",
+            "audit_envelope_version": "v1",
+            "export_id": "",
+            "level": "INFO",
+            "msg": "qf-decisions: cross_product_audit",
+            "outcome": "ok",
+            "packet_id": "",
+            "reason": "",
+            "signal_id": "",
+            "surface": "qf-decisions",
+            "time": "2026-05-21T21:59:01.850681323Z",
+            "trace_id": "",
+            "ts": "2026-05-21T21:59:01Z"
+          }
+        ]
+--- FAIL: TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints (0.18s)
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration        0.216s
+FAIL
+```
+
+**Minimal source-side fix (within Sub-iter C change boundary — audit.go
+additions of missed envelope-shape fields are explicitly allowed):**
+Extended `EmitConnectorAuditEnvelope` in
+`internal/connector/qfdecisions/audit.go` to emit the four envelope fields
+that were already declared on `EvidenceAuditEnvelope` per `types.go` and
+already populated by `BuildCrossProductAuditEnvelopeV1`. Added `recorded_at`,
+`bundle_id`, `target_context_type`, and `sensitivity_tier` as `slog.String`
+attributes. No other production code, no other emission helper, and no
+existing call-site was changed. The fix restores envelope-shape parity
+between the in-process struct and the structured-log shape so downstream
+consumers reading the connector audit log see the same canonical Cross-
+Product Audit Envelope v1 shape that in-process call-sites receive.
+
+**Claim Source:** executed (RED diagnostic captured verbatim from
+`docker run ... go test -tags integration -count=1 -timeout 300s -run
+'^TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints$' -v
+./tests/integration/`).
+
+### 1. Per-emission-point wiring table (8/8 envelope-shape coverage)
+
+| # | AuditAction constant                  | Production caller (Smackerel commit-time)                                                              | Helper-only? | Sub-iter C status |
+|---|----------------------------------------|---------------------------------------------------------------------------------------------------------|--------------|-------------------|
+| 1 | `AuditActionPacketIngest`              | `internal/connector/qfdecisions/connector.go` Sync loop (post `RecordQFPacketIngest`)                   | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenario 3. |
+| 2 | `AuditActionEvidenceExportAttempt`     | `internal/connector/qfdecisions/evidence_bundle.go` `EvidenceExporter.Export` (idempotent / local-reject / collision / success branches) | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenario 4. |
+| 3 | `AuditActionEvidenceRevocation`        | `internal/connector/qfdecisions/evidence_bundle.go` `EvidenceExporter.Revoke`                          | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenario 5. |
+| 4 | `AuditActionEngagementSignalFlush`     | Helper `EmitEngagementSignalFlushAudit` (Scope 6 forward-ready; Scope 6 transport NOT in scope for Scope 5 per Implementation Plan note "must not implement Scope 6 engagement transport") | Yes          | Helper-only by Scope 5 design; envelope-shape fix verified via integration test scenario 8 and unit tests `TestEmitEngagementSignalFlushAuditPopulatesEnvelopeShape` / `TestEmitEngagementSignalFlushAuditMapsRejectedStatus`. |
+| 5 | `AuditActionCallbackAttempt`           | Helper `EmitCallbackAttemptAudit` (Scope 8 forward-ready; Scope 8 callback signing/acceptance NOT in scope for Scope 5)                          | Yes          | Helper-only by Scope 5 design; envelope-shape fix verified via integration test scenario 9 and unit tests `TestEmitCallbackAttemptAuditPopulatesEnvelopeShape` / `TestEmitCallbackAttemptAuditMapsErrorStatus`. |
+| 6 | `AuditActionDeepLinkRender`            | `internal/connector/qfdecisions/render.go` `emitDeepLinkAudit` (outcome derived from `DeepLink.Status`) | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenario 6. |
+| 7 | `AuditActionCapabilityHandshake`       | `internal/connector/qfdecisions/connector.go` `Connect` (error / rejected / ok branches) + `RotateCredentials` re-read branches | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenarios 1 + 2. |
+| 8 | `AuditActionActionBoundaryKick`        | `internal/connector/qfdecisions/connector.go` `packet_action_boundary_attempted` detection → `RejectQFActionBoundary`; render/export/callback paths call `EnforceQFActionBoundary` | No           | Already wired pre-Sub-iter C; envelope-shape fix verified via integration test scenario 7 via direct `EnforceQFActionBoundary(ActionTypeApproval)` call exercising the gated dispatcher. |
+
+Coverage interpretation: 6/8 emission points have at least one production
+call-site that emits the envelope without any external trigger from Scopes
+6/7/8/9; 2/8 (`engagement_signal_flush`, `callback_attempt`) are
+helper-only by Scope 5 design because their transports are explicitly
+parked to Scope 6 and Scope 8 per the Scope 5 Implementation Plan
+exclusion: "Scope 5 may add shared audit helpers for Scopes 6-9, but it
+must not implement Scope 6 engagement transport, Scope 8 callback
+signing/acceptance, or Scope 9 watch proposal transport." The integration
+test exercises both helper-only points directly to prove envelope-shape
+parity is enforced uniformly across all 8 documented emission points.
+
+**Claim Source:** executed (per-callsite locations grep-verified across
+`internal/connector/qfdecisions/{audit,connector,render,evidence_bundle,boundary}.go`
+at HEAD `ee35256e` + Sub-iter C audit.go diff).
+
+### 2. Integration GREEN proof (re-run after audit.go fix)
+
+```text
+=== RUN   TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints
+2026/05/21 22:04:59 INFO connected to NATS url=nats://<redacted-token>@127.0.0.1:47002
+--- PASS: TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints (0.24s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.281s
+```
+
+**Command (documented DEVIATION per state.json 2026-05-21T15:53:16Z
+precedent — `./smackerel.sh test integration` does not support `--go-run`;
+direct host `go test -tags integration ...` against the live disposable
+test stack with env vars mirroring what `scripts/runtime/go-integration.sh`
+sets inside its container):**
+
+```bash
+docker run --rm --network host \
+  -v "$PWD:/workspace" -v smackerel-gomod-cache:/go/pkg/mod \
+  -v smackerel-gobuild-cache:/root/.cache/go-build -w /workspace \
+  -e "DATABASE_URL=postgres://smackerel:<redacted>@127.0.0.1:47001/smackerel?sslmode=disable" \
+  -e "POSTGRES_URL=postgres://smackerel:<redacted>@127.0.0.1:47001/smackerel?sslmode=disable" \
+  -e "NATS_URL=nats://<redacted-token>@127.0.0.1:47002" \
+  -e "SMACKEREL_AUTH_TOKEN=<redacted-token>" \
+  golang:1.25.10-bookworm bash -c \
+  "cd /workspace && go test -tags integration -count=1 -timeout 300s \
+   -run '^TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints$' \
+   -v ./tests/integration/"
+```
+
+**Live disposable stack status at test time** (`./smackerel.sh --env test
+status`): 5/5 services Up healthy — `smackerel-test-postgres-1`
+(pgvector/pgvector:pg16, `127.0.0.1:47001`),
+`smackerel-test-nats-1` (nats:2.10-alpine, `127.0.0.1:47002`),
+`smackerel-test-ollama-1` (ollama/ollama:0.23.2, `127.0.0.1:47004`),
+`smackerel-test-smackerel-core-1` (`127.0.0.1:45001`), and
+`smackerel-test-smackerel-ml-1` (`127.0.0.1:45002`). The test exercised
+10 emission scenarios — capability_handshake (ok and rejected),
+packet_ingest, evidence_export_attempt (ok), evidence_revocation (ok),
+deep_link_render, action_boundary_kick (via `EnforceQFActionBoundary`),
+engagement_signal_flush (via helper), callback_attempt (via helper,
+non-forbidden action so outcome=ok), and a final version-sourcing sweep
+across all captured records.
+
+**Claim Source:** executed (verbatim test runner output captured above;
+`./smackerel.sh --env test status` exit 0 with all 5 containers reported
+"Up (healthy)" minutes before and after the GREEN run).
+
+### 3. Envelope shape conformance dumps (audit.go fix verification)
+
+Post-fix unit-test verbose run from `go test -count=1 -v -run
+'^TestCrossProductAuditEnvelopeV1Shape$|^TestScope5AuditEmissionPointConstantsAreStable$|^TestEmitEngagementSignalFlushAudit|^TestEmitCallbackAttemptAudit'
+./internal/connector/qfdecisions/` proves the new envelope fields appear
+verbatim in the structured-log shape:
+
+```text
+=== RUN   TestCrossProductAuditEnvelopeV1Shape
+--- PASS: TestCrossProductAuditEnvelopeV1Shape (0.00s)
+=== RUN   TestScope5AuditEmissionPointConstantsAreStable
+--- PASS: TestScope5AuditEmissionPointConstantsAreStable (0.00s)
+=== RUN   TestEmitEngagementSignalFlushAuditPopulatesEnvelopeShape
+2026/05/21 22:05:09 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id=trace-001 packet_id=packet-001 export_id="" signal_id=signal-001 actor_ref=operator:scope5-test surface=digest action=engagement_signal_flush outcome=ok reason=user_marked_seen_in_digest ts=2026-05-22T09:00:00Z recorded_at=2026-05-22T09:00:00Z bundle_id="" target_context_type="" sensitivity_tier=""
+--- PASS: TestEmitEngagementSignalFlushAuditPopulatesEnvelopeShape (0.00s)
+=== RUN   TestEmitEngagementSignalFlushAuditMapsRejectedStatus
+2026/05/21 22:05:09 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id=signal-rej actor_ref=smackerel:qf-decisions-connector surface=digest action=engagement_signal_flush outcome=rejected reason=rate_limit ts=2026-05-22T09:05:00Z recorded_at=2026-05-22T09:05:00Z bundle_id="" target_context_type="" sensitivity_tier=""
+--- PASS: TestEmitEngagementSignalFlushAuditMapsRejectedStatus (0.00s)
+=== RUN   TestEmitCallbackAttemptAuditPopulatesEnvelopeShape
+2026/05/21 22:05:09 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id=trace-cb-001 packet_id=packet-cb-001 export_id="" signal_id="" actor_ref=operator:scope5-test surface=digest action=callback_attempt outcome=ok reason=surface_dismiss ts=2026-05-22T10:30:00Z recorded_at=2026-05-22T10:30:00Z bundle_id="" target_context_type="" sensitivity_tier=""
+--- PASS: TestEmitCallbackAttemptAuditPopulatesEnvelopeShape (0.00s)
+=== RUN   TestEmitCallbackAttemptAuditMapsErrorStatus
+2026/05/21 22:05:09 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id=trace-cb-err packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=digest action=callback_attempt outcome=error reason=signature_rejected ts=2026-05-22T10:35:00Z recorded_at=2026-05-22T10:35:00Z bundle_id="" target_context_type="" sensitivity_tier=""
+--- PASS: TestEmitCallbackAttemptAuditMapsErrorStatus (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   0.031s
+```
+
+Every emitted record now contains `audit_envelope_version=v1`, the
+identity fields (`trace_id`, `packet_id`, `export_id`, `signal_id`),
+the always-required descriptor fields (`actor_ref`, `surface`,
+`action`, `outcome`, `reason`, `ts`, `recorded_at`), and the three
+formerly-missing evidence-extension fields (`bundle_id`,
+`target_context_type`, `sensitivity_tier`) — present even when empty
+so that downstream parsers can rely on a stable shape.
+
+**Claim Source:** executed (verbatim test runner output captured above).
+
+### 4. Optional-ID presence/absence by event type
+
+The integration test enforces the contract below by exercising `findEnvelope`
++ `assertEnvelopeStringEquals` / `assertEnvelopeKeyAbsent` after each
+emission scenario:
+
+| Emission point (action)        | trace_id    | packet_id   | export_id   | signal_id   | bundle_id   | target_context_type | sensitivity_tier |
+|--------------------------------|-------------|-------------|-------------|-------------|-------------|---------------------|------------------|
+| capability_handshake (ok)      | optional    | absent      | absent      | absent      | absent      | absent              | absent           |
+| capability_handshake (rejected)| optional    | absent      | absent      | absent      | absent      | absent              | absent           |
+| packet_ingest                  | optional    | present     | absent      | absent      | absent      | absent              | absent           |
+| evidence_export_attempt (ok)   | required    | present     | present     | absent      | optional    | optional            | optional         |
+| evidence_revocation (ok)       | required    | present     | present     | absent      | optional    | optional            | optional         |
+| deep_link_render               | optional    | present     | absent      | absent      | absent      | absent              | absent           |
+| action_boundary_kick           | required    | present     | absent      | absent      | absent      | absent              | absent           |
+| engagement_signal_flush        | required    | optional    | absent      | required    | absent      | absent              | absent           |
+| callback_attempt               | required    | optional    | absent      | absent      | absent      | absent              | absent           |
+
+(`present` = test passes a non-empty value and asserts it equals the
+captured value; `absent` = test asserts the key is missing or empty;
+`optional` = test does not require presence and does not assert absence;
+`required` = test passes a non-empty value and asserts it equals the
+captured value.)
+
+**Claim Source:** interpreted (table derived by reading the assertions
+each scenario block makes in `tests/integration/qf_audit_envelope_test.go`
+against `assertEnvelopeStringEquals` / `assertEnvelopeKeyAbsent` calls
+for the corresponding emission scenario).
+
+### 5. audit_envelope_version sourcing from persisted capability state
+
+The integration test queries the connector's capability snapshot via
+`auditEnvelopeVersionFromCapabilitySnapshot(t, conn)` and asserts every
+captured envelope's `audit_envelope_version` field equals the version
+returned by the QF capability handshake (currently `"v1"` per
+`AuditEnvelopeVersionV1` constant in `internal/connector/qfdecisions/types.go`).
+The final version-sourcing sweep at the end of the test iterates every
+captured `qf-decisions: cross_product_audit` slog record and verifies
+the version equality holds uniformly across all 8 emission scenarios
+plus the helper-only scenarios.
+
+**Claim Source:** interpreted (sweep logic verified by reading the
+final block of `TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints`
+in `tests/integration/qf_audit_envelope_test.go`; GREEN proof in Section 2
+above confirms the test exit was 0).
+
+### 6. Sub-iter C build/lint/check/unit sanity sweep
+
+- `./smackerel.sh build` → exit 0 (`smackerel-core` and `smackerel-ml`
+  images rebuilt; final docker buildx output line "smackerel-core  Built"
+  and "smackerel-ml  Built").
+- `./smackerel.sh check` → exit 0 (config-validate OK; env_file drift
+  guard OK; scenario-lint 5 registered / 0 rejected).
+- `./smackerel.sh lint` → exit 0 (Go vet OK; ruff OK; web validation
+  passed including PWA manifest + Chrome MV3 + Firefox MV2 manifests +
+  JS syntax checks + extension version consistency).
+- `./smackerel.sh test unit --go` → exit 0; the `internal/connector/qfdecisions`
+  package reports `ok ... 0.055s` (or cached) and no FAIL lines anywhere in
+  the package matrix. Audit-test sub-set captured verbatim in Section 3.
+
+**Claim Source:** executed (each command output tail captured at
+2026-05-21T22:00-22:05Z window; no failures or warnings reported in the
+qfdecisions package, the connector audit subsystem, or any downstream
+consumer of `EmitConnectorAuditEnvelope`).
+
+### 7. Sub-iter C change boundary respected
+
+Source edits in Sub-iter C are limited to:
+
+- `internal/connector/qfdecisions/audit.go` — extended
+  `EmitConnectorAuditEnvelope` slog attribute set by 4 new
+  `slog.String(...)` calls covering `recorded_at`, `bundle_id`,
+  `target_context_type`, and `sensitivity_tier`. No new fields added to
+  `EvidenceAuditEnvelope` struct (those already existed per `types.go`),
+  no behavior change to `BuildCrossProductAuditEnvelopeV1`,
+  `EmitEngagementSignalFlushAudit`, `EmitCallbackAttemptAudit`, or
+  `auditOutcomeForStatus`. Doc-comment added above the helper to record
+  the envelope-shape parity intent and SCN-SM-041-021 anchor.
+- `tests/integration/qf_audit_envelope_test.go` — net-new integration
+  test authored to exercise every required emission point against the
+  live disposable test stack; 614 lines; build tag `//go:build
+  integration`; capture infrastructure based on a `slog.NewJSONHandler`
+  pipe + a thread-safe `bytes.Buffer`.
+
+Artifact edits in Sub-iter C are limited to:
+
+- `specs/041-qf-companion-connector/scopes.md` — flipped the two Sub-iter
+  C DoD items only (L1004 + L1011 per this section's "DoD items closed");
+  L1005 (operator documentation) intentionally NOT flipped (Sub-iter F).
+- `specs/041-qf-companion-connector/report.md` — this section appended.
+- `specs/041-qf-companion-connector/state.json` — appended one
+  `executionHistory` entry + one `execution.completedPhaseClaims` entry
+  for this Sub-iter C run; bumped `lastUpdatedAt`. `certification.*`
+  fields untouched per Sub-iter C constraint.
+
+No changes to `internal/connector/qfdecisions/{connector,render,evidence_bundle,
+boundary,types}.go` and no changes to any other production code path. No
+changes to QF mirror sink wiring (remains opt-in post-MVP per Scope 5
+Implementation Plan and design.md §F4). No new env vars, no new generated
+config keys, no hidden defaults, no fallback substitutions.
+
+**Claim Source:** executed (`git diff` boundary verified before commit
+preparation; only `internal/connector/qfdecisions/audit.go`,
+`tests/integration/qf_audit_envelope_test.go`, `specs/041-qf-companion-connector/scopes.md`,
+`specs/041-qf-companion-connector/report.md`, and `specs/041-qf-companion-connector/state.json`
+are modified or added by this sub-iter).
+
+### 8. What this evidence does NOT cover
+
+The following Scope 5 DoD items remain `[ ]` and are owned by upcoming
+sub-iterations of this same scope:
+
+- **L1003** (render p95 <= 30s + combined p95 <= 60s stress proof that
+  closes C-S2-321B-SCOPE-5-RENDER) — Sub-iter D.
+- **L1005** (SCN-021 operator documentation explaining envelope shape,
+  connector audit-log sink, QF mirror reservation, label parity, and
+  pre-MVP safety boundaries) — Sub-iter F.
+- **L1007** (SCN-019 integration + E2E live-stack rotation test) —
+  Sub-iter E.
+- **L1008** (SCN-020 unit + integration per-label-value enumeration test
+  covering ALL 12 metric label vocabularies) — Sub-iter D.
+- **L1009** (SCN-020 stress p95 thresholds) — Sub-iter D.
+- **L1012** (scenario-specific E2E regression tests for SCN-019..021) —
+  Sub-iter E + F.
+- **L1013** (broader E2E regression suite) — closeout.
+- **L1014** (artifact lint + traceability guard for activated Scope 5
+  planning artifacts and scenario-manifest mappings) — closeout.
+- **L1015** (Scope 5 Evidence Index) — closeout.
+- **L1016** (Consumer Impact Sweep evidence) — closeout.
+- **L1017** (Change Boundary evidence) — closeout (this sub-iter's
+  per-file sweep is captured above; full-scope sweep at closeout).
+- **L1018** (Implementation Reality Evidence — no hidden defaults,
+  no hardcoded QF URLs, no QF mirror sink, etc.) — closeout.
+- **L1019** (Build Quality Evidence — full guard sweep) — closeout.
+
+**Claim Source:** interpreted (sub-iteration ownership derived per
+Plan Amendment 2026-05-21 in `scopes.md` "Scope 5 Implementation Notes"
+section).
+
+---
+
 
