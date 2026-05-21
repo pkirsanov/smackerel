@@ -836,6 +836,101 @@ Scenario: SCN-SM-041-021 Cross-Product Audit Envelope v1 Covers Every Bridge Emi
 - `docs/Operations.md`, `docs/Testing.md`, and `docs/Development.md` Scope 5 sections only
 - `specs/041-qf-companion-connector/*` planning/evidence artifacts
 
+### Implementation Notes (Plan Amendment 2026-05-21)
+
+This subsection ratifies pre-landed Scope 5-territory modules and the
+retroactive flip policy decided by `bubbles.plan` while resolving open concerns
+`C-PLAN-SCOPE5-CHECK-8A-WORDING-ALIGNMENT`,
+`C-PLAN-SCOPE5-RETROACTIVE-FLIP-CANDIDATES`, and
+`C-AUDIT-S5-SCAFFOLDING-PLAN-RATIFY`. Scope 5 status remains **Not Started**;
+this is plan-amendment only, not an activation of executable work.
+
+**Pre-Landed Scaffolding Ratification (per `C-AUDIT-S5-SCAFFOLDING-PLAN-RATIFY`)**
+
+Three Scope 5-territory modules landed in closeout commit `39ca4fcb` alongside
+Scope 2/3/4 closeout work. They are ratified here as Scope 5 starting code
+points (NOT to be re-authored or rejected on Scope 5 activation):
+
+- `internal/connector/qfdecisions/audit.go` and `audit_test.go` — SHARED
+  INFRASTRUCTURE with 8+ production callers across Scopes 2-4 (Scope 2
+  `connector.go` capability-mismatch envelopes; Scope 3 `render.go` deep-link
+  envelope per SCN-012; Scope 4 `evidence_bundle.go` evidence-export,
+  idempotent-replay, local-reject, success, and revocation envelopes per
+  SCN-017). Scope 5 active work EXTENDS this module with the remaining unique
+  audit-emission points required by SCN-021 (sync lifecycle, engagement,
+  callback, action-boundary kick) plus the operator-runbook narrative.
+
+- `internal/connector/qfdecisions/boundary.go` and `boundary_test.go` —
+  UNWIRED Scope 5-territory scaffolding (`RejectQFActionBoundary`,
+  `IsForbiddenQFActionType`, `ActionBoundaryAttempt`,
+  `ActionBoundaryDiagnostic`). ZERO production callers at HEAD. Scope 5 active
+  work WIRES `RejectQFActionBoundary` into any QF action-eligible
+  sync/render/export/callback/watch-adjacent path so SCN-020 action-boundary
+  attempts are emitted with the documented metric label set.
+
+- `internal/connector/qfdecisions/credentials.go` and `credentials_test.go` —
+  UNWIRED Scope 5-territory scaffolding (`PlanCredentialRotation`,
+  `RotatingCredential`, `CredentialRotationPlan`, `CredentialRotationState`).
+  ZERO production callers at HEAD. Scope 5 active work WIRES
+  `PlanCredentialRotation` into the connector restart and credential-reload
+  paths so SCN-019 selects the newest valid credential, re-reads QF
+  capabilities at rotation start, preserves `sync_state.sync_cursor` and
+  Scope 4 evidence-export idempotency state, and writes the rotation-lifecycle
+  audit envelopes.
+
+**Retroactive DoD Flip Policy (per `C-PLAN-SCOPE5-RETROACTIVE-FLIP-CANDIDATES`)**
+
+Two RETROACTIVE-FLIP-OK candidates were surfaced by `bubbles.gaps` Scope 5
+retroactive audit (`C-GAPS-SCOPE5-RETROACTIVE-AUDIT`, 2026-05-21T16:53:07Z).
+`bubbles.plan` resolves the policy as follows:
+
+- **V1 (SCN-019 unit-test coverage): FLIPPED.**
+  `internal/connector/qfdecisions/credentials_test.go::TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState`
+  (line 9) exercises valid overlap, newest-valid `not_before` selection, cursor
+  preservation, evidence-export idempotency preservation (with explicit
+  alias-mutation guard), capability-re-read requirement, and `AuditOutcomeOK`
+  rotation envelope. `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries`
+  (line 46) exercises overlap >24h rejection, future-only credential rejection,
+  one-active-credential rejection, diagnostics enumeration, cursor preservation
+  under rejection, and `AuditOutcomeRejected` audit envelopes. All nine V1
+  sub-claims are covered by passing unit tests. Function-name divergence from
+  the test-plan-expected `TestCredentialRotation*` names is accepted because
+  the substance is what V1 requires; the existing Test Plan rows remain
+  as-written so Scope 5 active work may add additional rotation tests under
+  the planned names without redundant rework.
+
+- **C4 (12-metric symmetric set "is emitted"): NOT FLIPPED.** The DoD wording
+  requires emission with documented label parity, not just registration. The
+  registration half is complete at HEAD: all 12 `smackerel_qf_*` metrics are
+  declared in `internal/metrics/metrics.go` (lines 238, 251, 263, 276, 288,
+  297, 309, 324, 337, 347, 357, 368, 378, 388) and registered exactly once via
+  `prometheus.MustRegister` at line 395 (call list includes
+  `QFFreshnessP95Seconds` at line 424). However, three metrics
+  (`QFActionBoundaryAttemptsTotal`, `QFEngagementSignalAttemptsTotal`,
+  `QFCallbackAttemptsTotal`) have no production emission paths at HEAD because
+  boundary/engagement/callback are unwired pending Scope 5/6/8 active work.
+  Flipping C4 would overclaim. Scope 5 active work must add the missing
+  emission wiring AND author the parity test (V3 `metrics_test.go`) before C4
+  is flipped.
+
+**Check 8A Wording Alignment (per `C-PLAN-SCOPE5-CHECK-8A-WORDING-ALIGNMENT`)**
+
+The scenario-specific E2E regression DoD line below was rewritten to restore
+`state-transition-guard.sh` Check 8A anchor parity with Scopes 1-4 (regex
+`^- \[(x| )\] Scenario-specific E2E regression tests? for (EVERY|every)
+new/changed/fixed behavior`). Wording-only swap; no semantic change; DoD
+remains `[ ]` pending live-stack execution by Scope 5 active work.
+
+**Scope 5 Status (unchanged)**
+
+This plan-amendment ratifies scaffolding and one V1 unit-coverage flip.
+Scope 5 status remains **Not Started** and
+`certification.scopeProgress[4].status` remains `"Not Started"`. Active
+Scope 5 implementation work has NOT begun. The Scope 5 Implementation Plan,
+Implementation Files, Test Plan, Consumer Impact Sweep, Change Boundary, and
+remaining DoD listings are unchanged in substance — Scope 5 active work
+executes them as written, starting from the ratified scaffolds.
+
 ### Test Plan
 
 | Test Type | Category | Scenario(s) | File/Location | Expected Test Title | Command | Live System |
@@ -909,12 +1004,12 @@ Core behavior:
 
 Validation:
 
-- [ ] SCN-SM-041-019: Unit tests cover valid overlap, overlap >24h rejection, newest-valid `not_before` selection, future-only credential rejection, cursor preservation, evidence export idempotency preservation, capability re-read, diagnostics, and rotation audit envelopes. Evidence: `report.md` -> Scope 5 Unit Evidence.
+- [x] SCN-SM-041-019: Unit tests cover valid overlap, overlap >24h rejection, newest-valid `not_before` selection, future-only credential rejection, cursor preservation, evidence export idempotency preservation, capability re-read, diagnostics, and rotation audit envelopes. Evidence: `internal/connector/qfdecisions/credentials_test.go::TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` (line 9) and `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` (line 46); function-name divergence from the planned `TestCredentialRotation*` names is acknowledged per Plan Amendment 2026-05-21 (see Scope 5 Implementation Notes). Live-stack rotation evidence still required for V2 below; `report.md` -> Scope 5 Plan Amendment Evidence captures the retroactive-flip rationale.
 - [ ] SCN-SM-041-019: Integration and E2E tests rotate credentials through overlapping `not_before` windows and verify cursor, evidence export idempotency state, capability re-read, diagnostics, and audit envelope preservation against the live disposable stack. Evidence: `report.md` -> Scope 5 Integration Evidence, Scope 5 E2E Evidence.
 - [ ] SCN-SM-041-020: Unit and integration tests cover all 12 `smackerel_qf_*` metrics with exact label names and allowed label values, including Scope 2/3/4 previously introduced metrics and Scope 5 action-boundary completion. Evidence: `report.md` -> Scope 5 Metric Evidence.
 - [ ] SCN-SM-041-020: Stress test proves render p95 <= 30s and combined ingest+render p95 <= 60s while preserving the existing Scope 2 ingest proof. Evidence: `report.md` -> Scope 5 Stress Evidence.
 - [ ] SCN-SM-041-021: Unit and integration tests confirm Cross-Product Audit Envelope v1 shape across all eight required emission points, including optional ID presence/absence by event type and `audit_envelope_version` sourcing from persisted capability state. Evidence: `report.md` -> Scope 5 Audit Envelope Evidence.
-- [ ] SCN-SM-041-019 through SCN-SM-041-021: Scenario-specific E2E regression tests for every new/changed/fixed Scope 5 behavior pass. Evidence: `report.md` -> Scope 5 E2E Evidence.
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior in SCN-SM-041-019 through SCN-SM-041-021 pass. Evidence: `report.md` -> Scope 5 E2E Evidence.
 - [ ] Broader E2E regression suite passes after Scope 5 implementation. Evidence: `report.md` -> Scope 5 Broader E2E Evidence.
 - [ ] Artifact lint and traceability guard pass for the activated Scope 5 planning artifacts and scenario-manifest mappings. Evidence: `report.md` -> Scope 5 Artifact Lint Evidence, Scope 5 Traceability Guard Evidence.
 
