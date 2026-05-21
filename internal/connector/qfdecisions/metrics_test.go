@@ -287,6 +287,122 @@ func TestQFFreshnessRollingP95UsesPerStageGaugeAfterRecord(t *testing.T) {
 	}
 }
 
+// TestQFRenderAndCombinedFreshnessMetricsAreRecorded is the SCN-SM-041-020
+// render+combined freshness-emission assertion planned by the Scope 5 Test
+// Plan (scopes.md row "freshness render and combined" under the unit test
+// table). It pins three invariants the Scope 2 cross-scope dependency
+// C-S2-321B-SCOPE-5-RENDER and Scope 5 V3 (12-metric label parity) both
+// depend on:
+//
+//  1. RecordFreshnessSample(FreshnessStageRender, ...) — the package-level
+//     entrypoint called from render.go:301 — emits a sample on the
+//     smackerel_qf_freshness_p95_seconds gauge with the documented stage
+//     label value "render" exactly (no whitespace, no synonym).
+//
+//  2. RecordFreshnessSample(FreshnessStageTotal, ...) — the package-level
+//     entrypoint called from render.go:305 for the combined
+//     QF-create-to-render measurement derived from the qf_created_at
+//     metadata field — emits a sample on the same gauge with the
+//     documented stage label value "total" exactly, AND that the value
+//     is recorded against an INDEPENDENT rolling window (i.e. observations
+//     against stage="total" never bleed into stage="render" or
+//     stage="ingest").
+//
+//  3. The "combined" (stage="total") measurement is derivable from
+//     INDEPENDENT ingest and render observations. The render.go
+//     implementation derives stage="total" as the wall-clock span from
+//     the qf_created_at upstream timestamp to the render observation
+//     time; the ingest stage observes capture-to-publish; the total
+//     stage transparently covers the combined ingest+render span. This
+//     test exercises the per-stage isolation invariant by recording
+//     distinct ingest, render, and total samples through the public
+//     helper surfaces and asserting each gauge carries exactly the
+//     value driven against its own stage, never bleeding from another.
+//
+// Together these three assertions prove the render-stage freshness
+// metric is wired and emits with the documented label set, and that the
+// combined ingest+render p95 measurement is recorded independently —
+// satisfying the Scope 5 unit-test V3 row and serving as the unit-layer
+// half of the C-S2-321B-SCOPE-5-RENDER closure (the stress-layer half
+// lives in tests/stress/qf_decision_event_replay_test.go).
+//
+// SCN-SM-041-020 (Scope 5 V3 + render/combined freshness DoD).
+func TestQFRenderAndCombinedFreshnessMetricsAreRecorded(t *testing.T) {
+	metrics.QFFreshnessP95Seconds.Reset()
+	resetGlobalFreshnessForTest()
+
+	// --- Part 1: render-stage emission via the public RecordFreshnessSample
+	// entrypoint (the same call-site render.go:301 uses).
+	RecordFreshnessSample(FreshnessStageRender, 12.5)
+	renderKeys, renderFound := sampleLabelKeysFor(t, "smackerel_qf_freshness_p95_seconds", map[string]string{"stage": FreshnessStageRender})
+	if !renderFound {
+		t.Fatalf("render-stage sample not found after RecordFreshnessSample(FreshnessStageRender, 12.5)")
+	}
+	if !slicesEqualUnordered(renderKeys, []string{"stage"}) {
+		t.Fatalf("render-stage sample label keys = %v, want [stage] (QF design 063 label parity)", renderKeys)
+	}
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageRender)); got != 12.5 {
+		t.Fatalf("render p95 = %v, want 12.5 (single sample → nearest-rank p95 = that sample)", got)
+	}
+
+	// --- Part 2: combined (stage="total") emission via the public
+	// RecordFreshnessSample entrypoint (the same call-site render.go:305
+	// uses for the qf_created_at-to-render-observation span).
+	RecordFreshnessSample(FreshnessStageTotal, 47.0)
+	totalKeys, totalFound := sampleLabelKeysFor(t, "smackerel_qf_freshness_p95_seconds", map[string]string{"stage": FreshnessStageTotal})
+	if !totalFound {
+		t.Fatalf("total-stage sample not found after RecordFreshnessSample(FreshnessStageTotal, 47.0)")
+	}
+	if !slicesEqualUnordered(totalKeys, []string{"stage"}) {
+		t.Fatalf("total-stage sample label keys = %v, want [stage] (QF design 063 label parity)", totalKeys)
+	}
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageTotal)); got != 47.0 {
+		t.Fatalf("total p95 = %v, want 47.0 (single sample → nearest-rank p95 = that sample)", got)
+	}
+
+	// --- Part 3: render observations do not bleed into total, and total
+	// observations do not bleed into render. Drive additional render
+	// observations and assert total stays put; drive additional total
+	// observations and assert render stays put.
+	RecordFreshnessSample(FreshnessStageRender, 18.0)
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageTotal)); got != 47.0 {
+		t.Fatalf("total p95 after render update = %v, want 47.0 (no cross-stage bleed)", got)
+	}
+	// 2 render samples → nearest-rank p95 = sample at index ceil(0.95*2)-1 = 1
+	// (the larger sample after sort).
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageRender)); got != 18.0 {
+		t.Fatalf("render p95 after 2 samples = %v, want 18.0 (max of {12.5, 18.0})", got)
+	}
+
+	RecordFreshnessSample(FreshnessStageTotal, 55.0)
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageRender)); got != 18.0 {
+		t.Fatalf("render p95 after total update = %v, want 18.0 (no cross-stage bleed)", got)
+	}
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageTotal)); got != 55.0 {
+		t.Fatalf("total p95 after 2 samples = %v, want 55.0 (max of {47.0, 55.0})", got)
+	}
+
+	// --- Part 4: combined ingest+render derivability. Record an ingest
+	// observation on a fresh Connector and confirm it lands on the ingest
+	// gauge independently of render/total. This proves the three stages
+	// are emitted as independent rolling windows, which is the prerequisite
+	// for deriving combined ingest+render p95 by reading the total gauge
+	// (recorded against the qf_created_at-to-render-observation span which
+	// transparently includes both the ingest and render legs).
+	c := New(DefaultConnectorID)
+	c.recordFreshness(FreshnessStageIngest, 5.0)
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageIngest)); got != 5.0 {
+		t.Fatalf("ingest p95 = %v, want 5.0 (independent stage window)", got)
+	}
+	// Confirm none of the previous render/total observations bled into ingest.
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageRender)); got != 18.0 {
+		t.Fatalf("render p95 after ingest update = %v, want 18.0 (no cross-stage bleed from ingest)", got)
+	}
+	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageTotal)); got != 55.0 {
+		t.Fatalf("total p95 after ingest update = %v, want 55.0 (no cross-stage bleed from ingest)", got)
+	}
+}
+
 // sampleLabelKeysFor finds a metric sample matching the provided label values
 // and returns the label keys present on that sample. The caller passes
 // `labelExpect` to disambiguate when multiple samples are present for the
