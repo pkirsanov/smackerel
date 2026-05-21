@@ -2228,3 +2228,154 @@ The `./smackerel.sh config generate --env <env>` pipeline now runs `cmd/config-v
 This means an envelope-violating override (whether authored by an operator, an upstream merge, or a runtime experiment) cannot land in `config/generated/<env>.env`. The stack will fail to start with a clear validator error instead of crashing ollama at first inference on the deploy target. The pre-emit gate is honored by every codepath that lands on `smackerel_generate_config` — including `./smackerel.sh check` (Compose render preflight), `./smackerel.sh up` (which runs `config generate` first), and `./smackerel.sh test integration` (which runs `config generate --env test` first).
 
 The integration harness can substitute a precompiled validator binary by setting `SMACKEREL_CONFIG_VALIDATE_BIN` before invoking `smackerel_generate_config`; the default path falls back to `go run ./cmd/config-validate`. The gate also skips when `SHELL_PRODUCTION_CLASS_TARGETS` is empty (i.e., not a production-class generation run).
+
+## QF Companion Connector Operations (Spec 041 Scope 5)
+
+The QF companion connector (`internal/connector/qfdecisions`) is a read-only
+bridge into the QF (quantitativeFinance) companion surface. Scope 5 hardens
+credential rotation, completes the symmetric metric set, locks in the pre-MVP
+safety boundary, and rolls out Cross-Product Audit Envelope v1 across every
+Smackerel-side QF emission point.
+
+### Credential Rotation Overlap
+
+QF companion credentials rotate via `(*Connector).RotateCredentials`, which
+delegates to the pure planner
+`internal/connector/qfdecisions/credentials.go::PlanCredentialRotation`. The
+operator-facing contract:
+
+- Exactly two active credentials may be supplied; rotation rejects any other
+  count with diagnostic `expected_exactly_two_active_credentials`.
+- The overlap between the two credentials' `not_before` / `not_after`
+  intervals MUST NOT exceed **24 hours**. An overlap beyond 24 hours is
+  rejected with diagnostic `credential_overlap_exceeds_24h`.
+- The newest valid credential is selected by `not_before` (most recent wins).
+- Future-only credentials (whose `not_before` is in the future at rotation
+  time) are rejected with diagnostic `credential_not_active`.
+- Inverted credential windows (`not_after <= not_before`) are rejected with
+  diagnostic `credential_window_inverted`.
+
+### Capability Re-Read On Rotation Start
+
+On every successful rotation, `RotateCredentials` invokes the QF bridge
+capability fetch with the newly selected credential **before** any sync,
+render, or evidence export call uses it. The `capability_re_read_required`
+diagnostic is always present on a successful plan. A failed capability
+fetch aborts the rotation and emits an `outcome=error` audit envelope; the
+previous credential remains in use until the next successful rotation.
+
+### State Preservation Through Rotation
+
+A successful rotation preserves the following state verbatim:
+
+- `sync_state.sync_cursor` — the QF cursor checkpoint persisted by Scope 2.
+- Persisted QF capability response (`capability_response_json`,
+  `capability_fetched_at`, `capability_status`) and the
+  `EvidenceExportIDs` idempotency record persisted by Scope 4.
+
+Rotation MUST NOT create a new connector identity, clear cursor state,
+duplicate evidence exports, or reset revoked / failed export records. The
+`sync_cursor_preserved` and `evidence_export_state_preserved` diagnostics
+are always present on a successful plan.
+
+### Symmetric `smackerel_qf_*` Metric Reference
+
+Twelve QF-specific metrics are declared and registered exactly once at
+process init in `internal/metrics/metrics.go` (declarations at lines
+238-388, registrations at lines 395-449). Label parity with QF design 063
+is enforced by `internal/metrics/metrics_test.go` and
+`internal/connector/qfdecisions/metrics_test.go`.
+
+| Metric | Labels | Emission point |
+|--------|--------|----------------|
+| `smackerel_qf_packet_ingest_total` | `event_type`, `decision_type`, `approval_state`, `source_surface` | Scope 2 sync per ingested packet |
+| `smackerel_qf_packet_validation_failures_total` | `reason` | Scope 2 sync validation failure |
+| `smackerel_qf_evidence_export_attempts_total` | `status`, `target_context_type`, `sensitivity_tier` | Scope 4 evidence export attempt |
+| `smackerel_qf_cursor_lag_seconds` | (gauge, no labels) | Scope 2 sync per cursor checkpoint |
+| `smackerel_qf_action_boundary_attempts_total` | `attempted_action_type` | Scope 5 boundary kick on any rejected QF action attempt (sync diagnostic / render / export) |
+| `smackerel_qf_capability_mismatch_total` | `required`, `actual` | Scope 2 capability handshake on mismatch |
+| `smackerel_qf_unknown_decision_type_total` | `value` | Scope 2 unknown `decision_type` packet |
+| `smackerel_qf_engagement_signal_attempts_total` | `event`, `surface`, `status` | Scope 6 engagement flush (pre-MVP placeholder: registered with zero emissions until Scope 6 transport lands) |
+| `smackerel_qf_evidence_revoked_total` | `reason` | Scope 4 evidence revocation |
+| `smackerel_qf_callback_attempts_total` | `action`, `status` | Scope 8 callback attempt (pre-MVP placeholder: registered with zero emissions until Scope 8 callback transport lands) |
+| `smackerel_qf_deep_link_render_total` | `surface`, `status` | Scope 3 deep-link render |
+| `smackerel_qf_trust_object_render_failures_total` | `reason` | Scope 3 trust-object render failure |
+
+Scope 5 also extends the freshness gauge `smackerel_qf_freshness_p95_seconds`
+(label: `stage`) with the `render` and `total` stages on top of the existing
+`ingest` stage, closing the C-S2-321B-SCOPE-5-RENDER dependency.
+
+### Cross-Product Audit Envelope V1
+
+Every Smackerel-side QF bridge emission point logs a
+`qf-decisions: cross_product_audit` record via the structured-logging sink in
+`internal/connector/qfdecisions/audit.go::EmitConnectorAuditEnvelope`. The
+envelope fields (per QF design 063 mirror):
+
+| Field | Always present? | Source |
+|-------|-----------------|--------|
+| `audit_envelope_version` | yes | Persisted capability response (`v1` today) |
+| `trace_id` | yes | Caller-supplied |
+| `actor_ref` | yes | Defaults to `smackerel_connector` when caller-empty |
+| `surface` | yes | Defaults to `qf-decisions` when caller-empty |
+| `action` | yes | One of the action constants below |
+| `outcome` | yes | `ok`, `rejected`, `error`, `degraded`, or domain-specific |
+| `reason` | yes | Free-form caller-supplied |
+| `ts` | yes | RFC3339 UTC observed timestamp |
+| `recorded_at` | yes | RFC3339 UTC matching `ts` |
+| `packet_id` | per-event | Set on packet-bound events |
+| `export_id` | per-event | Set on evidence-export-bound events |
+| `signal_id` | per-event | Set on engagement-signal events |
+| `bundle_id` | per-event | Set on evidence-bundle events |
+| `target_context_type` | per-event | Set on evidence-export events |
+| `sensitivity_tier` | per-event | Set on evidence-export events |
+
+Action constants (`internal/connector/qfdecisions/types.go`):
+
+| Constant | Wire value | Emission point |
+|----------|-----------|----------------|
+| `AuditActionPacketIngest` | `packet_ingest` | Scope 2 sync per ingested packet |
+| `AuditActionEvidenceExportAttempt` | `evidence_export_attempt` | Scope 4 evidence export attempt |
+| `AuditActionEvidenceRevocation` | `evidence_revocation` | Scope 4 evidence revocation |
+| `AuditActionEngagementSignalFlush` | `engagement_signal_flush` | Scope 6 engagement flush (helper present; transport in Scope 6) |
+| `AuditActionCallbackAttempt` | `callback_attempt` | Scope 8 callback attempt (helper present; transport in Scope 8) |
+| `AuditActionDeepLinkRender` | `deep_link_render` | Scope 3 deep-link render |
+| `AuditActionCapabilityHandshake` | `capability_handshake` | Scope 2 capability handshake |
+| `AuditActionActionBoundaryKick` | `action_boundary_kick` | Scope 5 boundary kick on any rejected QF action attempt |
+| `AuditActionCredentialRotation` | `credential_rotation` | Scope 5 rotation start / complete / reject |
+
+The connector audit-log sink (Smackerel-local slog stream) is the canonical
+destination for these envelopes today. The QF mirror sink (forwarding
+envelopes back to QF's audit ingestion surface) is explicitly reserved
+post-MVP and opt-in; no MVP runtime configuration enables it.
+
+### Pre-MVP Safety Boundary
+
+The QF companion connector is **read-only**. The shared safety-boundary
+helper `EnforceQFActionBoundary`
+(`internal/connector/qfdecisions/boundary.go`) is called from every sync,
+render, and evidence-export code path. The following action types are
+unconditionally rejected pre-MVP and bump
+`smackerel_qf_action_boundary_attempts_total{attempted_action_type}`:
+
+| `attempted_action_type` | Wire value |
+|-------------------------|-----------|
+| Approval | `approval` |
+| Execution | `execution` |
+| Mandate change | `mandate_change` |
+| EmergencyStop | `emergency_stop` |
+| Watch creation | `watch_creation` |
+| Watch evaluation | `watch_evaluation` |
+| Callback acceptance | `callback_acceptance` |
+| QF trust reconstruction | `qf_trust_reconstruction` |
+
+No MVP code path enables any of these actions; no MVP audit-sink wiring
+forwards Smackerel envelopes to QF.
+
+### QF Mirror Sink (Reserved Post-MVP)
+
+The QF mirror audit sink is documented as a deliberate post-MVP surface. It
+remains opt-in only: no default configuration toggles it on, no SST key
+enables it, and no production code path writes to it today. Operators
+considering the post-MVP mirror should treat it as a new scope activation
+requiring an explicit planning round and explicit operator consent.
