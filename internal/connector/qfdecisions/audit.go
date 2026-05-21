@@ -55,6 +55,12 @@ func BuildCrossProductAuditEnvelopeV1(input AuditEnvelopeInput) EvidenceAuditEnv
 	}
 }
 
+// EmitConnectorAuditEnvelope logs the complete Cross-Product Audit
+// Envelope v1 record to the connector audit sink (slog). Every field of
+// the EvidenceAuditEnvelope struct that appears in the canonical JSON
+// shape (per spec 041 design.md §F4 / scopes.md L837) is emitted so
+// downstream consumers reading the structured log see the same shape
+// the in-process call-sites receive. SCN-SM-041-021.
 func EmitConnectorAuditEnvelope(envelope EvidenceAuditEnvelope) {
 	slog.Info("qf-decisions: cross_product_audit",
 		slog.String("audit_envelope_version", envelope.AuditEnvelopeVersion),
@@ -68,6 +74,10 @@ func EmitConnectorAuditEnvelope(envelope EvidenceAuditEnvelope) {
 		slog.String("outcome", envelope.Outcome),
 		slog.String("reason", envelope.Reason),
 		slog.String("ts", envelope.TS),
+		slog.String("recorded_at", envelope.RecordedAt),
+		slog.String("bundle_id", envelope.BundleID),
+		slog.String("target_context_type", envelope.TargetContextType),
+		slog.String("sensitivity_tier", envelope.SensitivityTier),
 	)
 }
 
