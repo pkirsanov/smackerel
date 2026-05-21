@@ -14390,4 +14390,203 @@ sequence to capture Section 1 GREEN evidence).
 
 ---
 
+## Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z)
+
+**Scope:** Scope 5 — Hardening, Capability Re-Read, And Final Compliance
+**Sub-iteration:** E — Live rotation E2E + V3 metric integration closeout + scenario-specific E2E regression
+**HEAD at start:** `bdf4ff43`
+**Owner agent:** `bubbles.implement`
+**Disposable test stack:** `127.0.0.1:{45001 core, 45002 ml, 47001 postgres, 47002 nats, 47004 ollama}`
+
+### Section 1: New E2E test file landed at tests/e2e/qf_scope5_safety_observability_test.go
+
+The single test file authors the three scenario-specific E2E regression
+tests required by Scope 5 Validation row V6 (Check 8A) and the live-stack
+proofs required by V2 (SCN-019) and V3 (SCN-020). All three test
+functions carry `//go:build e2e` and live in package `e2e`.
+
+| Test function (line) | Scenario | Surface exercised |
+|---|---|---|
+| `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` (line 352) | SCN-SM-041-019 | Connect → Sync → seed sync_state cursor → seed 2 evidence_export rows via real `BuildPacketContextEvidenceBundle` + `exporter.Export()` against live postgres → RotateCredentials → re-assert plan + PreservedState + 3 diagnostics + Bearer rotation + persisted `stateStore.Get` cursor + `exportStore.Get` records (status=accepted) |
+| `TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface` (line 664) | SCN-SM-041-020 | Baseline snapshot 7 metrics → Sync page 1 (3 events: recommendation/unknown/fast-forward) → Sync page 2 (boundary diagnostic event EventTypePacketActionBoundaryAttempted) → happy RenderPacketCard → forbidden RenderPacketCard (Metadata.requested_action_type=ActionTypeMandateChange) → happy exporter.Export + exporter.Revoke → forbidden exporter.Export with bundle authored directly with `TargetContext.type=ActionTypeExecution` to fire both EnforceQFActionBoundary AND ValidateEvidenceBundleForExport |
+| `TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface` (line 1118) | SCN-SM-041-021 | Captures slog stream and drives 7 emission points sequentially with `capture.reset()` between each: capability_handshake/OK + Rejected, packet_ingest/OK, evidence_export_attempt/OK, evidence_revocation/OK, deep_link_render/SignedUsed, action_boundary_kick/Rejected; every captured envelope passes `AssertAlwaysRequiredEnvelopeFields` with `persistedCapVersion` sourced from `CapabilitySnapshot` |
+
+File-local helpers (all prefixed `qfScope5E2E`):
+
+- `UniqueSuffix()`, `ConnectorConfig()`, `ValidCapability()` (21-field `QFBridgeCapability`, `AuditEnvelopeVersion="v1"`), `ExportCapability()` (`SupportedTargetContextTypes=[packet_context]` with `EligibleSmackerelSourceClasses`)
+- `DBPool(t)` (skips on missing `DATABASE_URL`), `CleanupSourceState(t, pool, sourceID, suffix)`
+- `AuditCapture` struct with thread-safe `slog` JSON sink + `AssertAlwaysRequiredEnvelopeFields()` + `AuditVersionFromConnector(t, conn)` sourced from `CapabilitySnapshot`
+- `SumCounterCollector(c)` via `dto.Metric`
+
+**Claim Source:** executed (file authored this sub-iteration; compiled via `./smackerel.sh build` exit 0, `./smackerel.sh lint` exit 0, `./smackerel.sh test unit` cmd/core PASS, then proven against the live disposable stack — see Sections 2 and 3).
+
+### Section 2: Focused E2E run — all 3 tests PASS
+
+Initial focused run executed via the sanctioned E2E runner against the
+live disposable stack (after `./smackerel.sh --env test up`):
+
+```
+=== RUN   TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface
+--- PASS: TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface (0.12s)
+=== RUN   TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface
+    qf_scope5_safety_observability_test.go:1049: QFActionBoundaryAttemptsTotal delta = 3 (>= 3)
+    qf_scope5_safety_observability_test.go:1072: QFPacketIngestTotal delta=2 render delta=2 export delta=2 revoked delta=1 unknownDT delta=1 cursorFFwd delta=3
+    qf_scope5_safety_observability_test.go:1086: QFEngagementSignalAttemptsTotal registered (label combinations = 0; Scope 6 pre-MVP)
+    qf_scope5_safety_observability_test.go:1087: QFCallbackAttemptsTotal registered (label combinations = 0; Scope 8 pre-MVP)
+--- PASS: TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface (0.10s)
+=== RUN   TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface
+--- PASS: TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface (0.09s)
+PASS
+ok      github.com/smackerel/smackerel/tests/e2e        0.357s
+PASS: go-e2e
+```
+
+Notable assertions proven by the boundary/metric test:
+
+| Metric | Observed delta | Required |
+|---|---|---|
+| `smackerel_qf_action_boundary_attempts_total` | 3 | ≥ 3 (sync boundary kick + render forbidden + export forbidden) |
+| `smackerel_qf_packet_ingest_total` | 2 | ≥ 1 |
+| `smackerel_qf_freshness_p95_seconds{stage=render}` samples | 2 | ≥ 1 |
+| `smackerel_qf_evidence_export_attempts_total` | 2 | ≥ 1 |
+| `smackerel_qf_evidence_revoked_total` | 1 | ≥ 1 |
+| `smackerel_qf_unknown_decision_type_total` | 1 | ≥ 1 |
+| `smackerel_qf_cursor_fast_forward_events_skipped_total` | 3 | ≥ 1 |
+| `smackerel_qf_engagement_signal_attempts_total` | registered (0 emissions) | registered (Scope 6 pre-MVP placeholder) |
+| `smackerel_qf_callback_attempts_total` | registered (0 emissions) | registered (Scope 8 pre-MVP placeholder) |
+
+The audit-envelope test captures 1 `cross_product_audit` record per
+emission with thread-safe slog interception, and asserts the always-required
+field set (`audit_envelope_version`, `trace_id`, `packet_id`,
+`actor_ref`, `surface`, `action`, `outcome`, `ts`, `recorded_at`) for
+each of the 6+ exercised emission points (capability_handshake ok+rejected,
+packet_ingest, evidence_export_attempt, evidence_revocation,
+deep_link_render, action_boundary_kick).
+
+**Claim Source:** executed (verbatim PASS lines captured from the
+sanctioned E2E runner output during this sub-iteration's focused run; log
+file at `~/tmp/qf-sub-iter-e/cmd3.log`).
+
+### Section 3: Broader E2E suite re-run — all 3 Scope 5 tests PASS in broader-run; suite GREEN end-to-end
+
+After the focused run validated GREEN, the broader E2E suite was run
+via `./smackerel.sh --env test test e2e` (full output captured at
+`~/tmp/qf-sub-iter-e/broader-e2e.log`, 1542 lines).
+
+Final summary at log tail:
+
+```
+ok      github.com/smackerel/smackerel/tests/e2e/drive  23.328s
+PASS: go-e2e
+```
+
+Counts across the broader run:
+
+| Counter | Value |
+|---|---|
+| Go `--- PASS:` lines | 136 |
+| Go `--- FAIL:` lines | **0** |
+| Go `--- SKIP:` lines | 3 |
+| Shell `PASS:` markers | 74 |
+| Shell `PASS: SCN-*` markers | 43 |
+| Shell `PASS: BUG-*` markers | 3 |
+| Test packages reporting `ok` | 4 (`tests/e2e`, `tests/e2e/agent`, `tests/e2e/auth`, `tests/e2e/drive`) |
+| Final go-e2e wrapper exit | `PASS: go-e2e` |
+
+All 3 new Scope 5 E2E test functions PASS in the broader run with
+identical assertion text and metric deltas to the focused run (durations
+under broader run: 0.07s / 0.07s / 0.08s):
+
+```
+=== RUN   TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface
+--- PASS: TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface (0.07s)
+=== RUN   TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface
+    qf_scope5_safety_observability_test.go:1049: QFActionBoundaryAttemptsTotal delta = 3 (>= 3)
+    qf_scope5_safety_observability_test.go:1072: QFPacketIngestTotal delta=2 render delta=2 export delta=2 revoked delta=1 unknownDT delta=1 cursorFFwd delta=3
+    qf_scope5_safety_observability_test.go:1086: QFEngagementSignalAttemptsTotal registered (label combinations = 0; Scope 6 pre-MVP)
+    qf_scope5_safety_observability_test.go:1087: QFCallbackAttemptsTotal registered (label combinations = 0; Scope 8 pre-MVP)
+--- PASS: TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface (0.07s)
+=== RUN   TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface
+    qf_scope5_safety_observability_test.go:1367: captured 1 cross_product_audit records across 6 emission points (capability_handshake ok+rejected, packet_ingest, evidence_export_attempt, evidence_revocation, deep_link_render, action_boundary_kick)
+--- PASS: TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface (0.08s)
+```
+
+**Honest disclosure — single `FAIL:` token in the log is an expected
+intermediate harness line inside a deliberate chaos test:** the only line
+matching `^FAIL:` in the entire 1542-line log is line 247:
+
+```
+Stopping postgres to force a readiness failure...
+ Container smackerel-test-postgres-1  Stopping
+ Container smackerel-test-postgres-1  Stopped
+Waiting for services to be healthy (max 8s)...
+FAIL: Services did not become healthy within 8s
+Last API health readiness error: service 'postgres' status is 'down', expected 'up'; payload={"status":"degraded",...,"postgres":{"status":"down"},...}
+Last postgres readiness error: service "postgres" is not running
+PASS: SCN-002-BUG-002-001 (stopped postgres rejected, exit=1)
+```
+
+This is the `SCN-002-BUG-002-001` chaos test deliberately stopping
+postgres to assert that the readiness endpoint reports `degraded` (with
+`postgres.status="down"`) — the harness's outer wait-for-healthy loop
+prints the intermediate `FAIL:` line because postgres is intentionally
+stopped, then the test itself records `PASS: SCN-002-BUG-002-001
+(stopped postgres rejected, exit=1)` on the next line. This is a
+pre-existing chaos test (BUG-002 regression scaffolding), is unrelated
+to Scope 5, and does not block the V6 Broader E2E DoD per the
+sub-iteration E dispatch's pre-existing-failure clause.
+
+**Claim Source:** executed (broader suite invoked end-to-end via
+sanctioned runner; verbatim final summary and per-test PASS lines
+captured from `~/tmp/qf-sub-iter-e/broader-e2e.log`).
+
+### Section 4: DoD evidence anchor table (Scope 5 sub-iter E flips)
+
+| scopes.md row | scopes.md line | Evidence anchor |
+|---|---|---|
+| V2: SCN-SM-041-019 Integration and E2E tests rotate credentials through overlapping `not_before` windows | line 1008 | This section §1+§2+§3 — `tests/e2e/qf_scope5_safety_observability_test.go::TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` PASS (focused 0.12s + broader 0.07s) |
+| V3: SCN-SM-041-020 Unit and integration tests cover all 12 `smackerel_qf_*` metrics with exact label names and allowed label values | line 1009 | Sub-iter B integration test `tests/integration/qf_scope5_observability_test.go::TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths` (covers all 12 wired vectors listed in comments 37-50, with the 2 pre-MVP placeholders QFEngagementSignalAttemptsTotal/QFCallbackAttemptsTotal declared at comments 54-55) PLUS the unit-test metric-parity file `internal/metrics/metrics_test.go` (covering label declaration parity for the same 12 vectors) PLUS this section's E2E metric-delta proof (Section 2 table) |
+| V6 (Check 8A): Scenario-specific E2E regression tests for every new/changed/fixed behavior in SCN-SM-041-019 through SCN-SM-041-021 pass | line 1012 | This section §1+§2+§3 — 3 new E2E test functions covering SCN-019/020/021, all PASS in focused and broader runs |
+| Broader E2E regression suite passes after Scope 5 implementation | line 1013 | This section §3 — broader suite GREEN: 136 Go PASS, 0 Go FAIL, 3 Go SKIP, 74 shell PASS, 1 shell `FAIL:` token is intermediate harness output inside passing chaos test SCN-002-BUG-002-001 (honestly disclosed) |
+
+**Claim Source:** interpreted (evidence anchors map sub-iter E execution
+artifacts to the four Scope 5 Validation rows; the underlying evidence
+in Sections 1-3 above carries the `executed` source tag for each
+runtime invocation).
+
+### Section 5: Reproducibility footprint
+
+To reproduce the focused run GREEN locally:
+
+```
+./smackerel.sh --env test down --volumes
+./smackerel.sh --env test up
+./smackerel.sh --env test test e2e --go-run '^(TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface|TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface|TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface)$'
+```
+
+To reproduce the broader suite GREEN locally (also exercises the
+SCN-002-BUG-002-001 chaos test):
+
+```
+./smackerel.sh --env test test e2e
+```
+
+**Claim Source:** executed (both invocation forms were exercised this
+sub-iteration; focused via `--go-run` filter, broader via no filter).
+
+### Section 6: What this sub-iteration does NOT claim
+
+- Does NOT modify any production code under `internal/connector/qfdecisions/`, `internal/metrics/`, or `internal/connector/` — Scope 5 wiring landed in sub-iters A-D and remains untouched
+- Does NOT flip the SCN-SM-041-020 Core Behavior C4 row that requires 12-metric emission with `QFActionBoundaryAttemptsTotal`/`QFEngagementSignalAttemptsTotal`/`QFCallbackAttemptsTotal` real emission paths — emission for 9 of 12 is proven by Section 2 deltas + Sub-iter B integration; the 2 placeholders (engagement/callback) remain pre-MVP per Scope 5 scope (Scope 6 transport + Scope 8 callback acceptance both parked); the action-boundary emission is proven by `delta = 3` in Section 2
+- Does NOT promote any scope status (Scope 5 remains `Not Started` at the scope-status block per scopes.md until all Scope 5 DoD checkboxes are [x] and bubbles.validate certifies)
+- Does NOT touch `certification.completedScopes`, `certification.certifiedCompletedPhases`, `certification.scopeProgress`, or top-level `status` (those promotions belong to bubbles.validate and remain at Scopes 1-4 Done / `test` certified)
+- Does NOT modify `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`, or any planning-content sections of `scopes.md` (only the 4 listed DoD checkboxes are flipped, with no description-text changes)
+- Does NOT push to origin; the single coherent commit `spec-041 Scope 5 sub-iter E: live E2E + broader regression + V2/V3/V6 closeout` lands locally only
+
+**Claim Source:** interpreted (file diff inspection against the focused
+edits this sub-iteration; foreign artifacts and certification fields
+verified untouched via post-edit `git diff` review).
+
+---
+
 
