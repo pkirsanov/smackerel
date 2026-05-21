@@ -335,6 +335,36 @@ Required adversarial cases:
 - A local Smackerel synthesis must not rewrite the QF thesis or approval state.
 - A context export without explicit consent or source provenance must fail.
 
+#### Scope 5 Test Surface (Spec 041)
+
+Scope 5 hardens credential rotation, safety boundaries, the symmetric
+`smackerel_qf_*` metric set, and Cross-Product Audit Envelope v1. It adds
+the following live-stack test surface on top of Scopes 1-4:
+
+| Test type | Test file | Functions / coverage |
+|-----------|-----------|----------------------|
+| unit | `internal/connector/qfdecisions/credentials_test.go` | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState`, `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` (24h overlap rule, newest-by-`not_before` selection, cursor / evidence-export / capability state preservation, diagnostics for all reject paths) |
+| unit | `internal/connector/qfdecisions/boundary_test.go` | `EnforceQFActionBoundary` rejects all 8 pre-MVP forbidden action types (`approval`, `execution`, `mandate_change`, `emergency_stop`, `watch_creation`, `watch_evaluation`, `callback_acceptance`, `qf_trust_reconstruction`) and emits a boundary-kick audit envelope per attempt |
+| unit | `internal/connector/qfdecisions/audit_test.go` | `BuildCrossProductAuditEnvelopeV1` field shape, default-fill for `actor_ref` / `surface`, RFC3339 timestamp normalization, per-event field projection |
+| unit | `internal/connector/qfdecisions/metrics_test.go` + `internal/metrics/metrics_test.go` | All 12 `smackerel_qf_*` metrics declared and registered exactly once with the label sets contracted by QF design 063 |
+| integration | `tests/integration/qf_credential_rotation_test.go` | `TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit` — full rotation against the live disposable stack with an httptest QF stub; asserts cursor + evidence-export preservation, capability re-read with the new bearer token, and the `capability_handshake ok → credential_rotation ok → capability_handshake ok` audit envelope sequence |
+| integration | `tests/integration/qf_scope5_observability_test.go` | Live-stack proof that the 12-metric set emits with QF design 063 label parity across sync / render / export / boundary kick paths |
+| integration | `tests/integration/qf_audit_envelope_test.go` | Live-stack proof that the 8 Smackerel-side emission points (`packet_ingest`, `evidence_export_attempt`, `evidence_revocation`, `deep_link_render`, `capability_handshake`, `action_boundary_kick`, plus the two pre-MVP helpers `engagement_signal_flush` / `callback_attempt`) build envelopes with the always-required field set |
+| e2e | `tests/e2e/qf_scope5_safety_observability_test.go` | `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` (line 352, SCN-SM-041-019), `TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface` (line 664, SCN-SM-041-020), `TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface` (line 1118, SCN-SM-041-021) — each runs against the live disposable test stack (core 45001, ml 45002, postgres 47001, nats 47002, ollama 47004) plus an httptest QF stub |
+| stress | `tests/stress/qf_freshness_test.go::TestQFDecisionsFreshnessSLAP95RenderAndCombined` | Render-stage and combined (ingest → render) freshness gauges meet the p95 SLA with the operator-documented headroom |
+
+Run locally against the disposable test stack with the standard repo CLI:
+
+```bash
+./smackerel.sh --env test test integration
+./smackerel.sh --env test test e2e --go-run 'QFScope5|QFCredentialRotation|QFSafetyBoundary|QFAuditEnvelopeV1'
+./smackerel.sh --env test test stress
+```
+
+Each command stands the test stack up on the disposable ports listed above, runs
+the matching suite, then tears the stack down with `--volumes`. No dev state is
+touched.
+
 ### Ollama-Backed Agent E2E Test Lane (Spec 043)
 
 Spec 043 closes MIT-037-OLLAMA-001 by adding an opt-in test lane that drives the production NATS + Python sidecar + LiteLLM + Ollama path against a real local model. The lane is gated by an environment variable so the default `./smackerel.sh test e2e` run stays Ollama-free.
