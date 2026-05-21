@@ -12458,4 +12458,228 @@ executed; this is a structural read-only audit per the
 
 ---
 
+## Scope 5 Plan Amendment Evidence (bubbles.plan, 2026-05-21T18:05:00Z)
+
+This section is the evidence anchor for the `bubbles.plan` resolution of
+three routed planning concerns surfaced by the preceding `bubbles.audit`
+(2026-05-21T17:00:00Z) and `bubbles.gaps` (2026-05-21T16:53:07Z) audits:
+
+- `C-PLAN-SCOPE5-CHECK-8A-WORDING-ALIGNMENT` (low)
+- `C-PLAN-SCOPE5-RETROACTIVE-FLIP-CANDIDATES` (medium)
+- `C-AUDIT-S5-SCAFFOLDING-PLAN-RATIFY` (low)
+
+Scope 5 status remains **Not Started**. This is plan-amendment only, not
+activation of executable Scope 5 work. No source-code modifications, no
+scope-status promotions, no `certifiedCompletedPhases` /
+`completedScopes` / `scopeProgress` / `executionHistory` /
+`completedPhaseClaims` / top-level `status` modifications were made.
+
+### Section 1: Check 8A Wording Alignment (Concern Resolution)
+
+The `state-transition-guard.sh` Check 8A regex anchor (line 1757) requires
+`^- \[(x| )\] Scenario-specific E2E regression tests? for (EVERY|every)
+new/changed/fixed behavior` to match anchored at start of line. Scope 5's
+prior DoD line broke that anchor by inserting `Scope 5 ` between `fixed`
+and `behavior`.
+
+**Before (broke Check 8A):**
+
+```
+- [ ] SCN-SM-041-019 through SCN-SM-041-021: Scenario-specific E2E regression tests for every new/changed/fixed Scope 5 behavior pass. Evidence: `report.md` -> Scope 5 E2E Evidence.
+```
+
+**After (restores Check 8A parity with Scopes 1-4):**
+
+```
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior in SCN-SM-041-019 through SCN-SM-041-021 pass. Evidence: `report.md` -> Scope 5 E2E Evidence.
+```
+
+**Guard rerun (post-fix):**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector 2>&1 | grep "Check 8A" -A 18
+--- Check 8A: Scenario-Specific Regression E2E Coverage ---
+✅ PASS: Scope DoD includes scenario-specific regression E2E requirement: Scope 1: Connector Configuration And QF Client Contract
+✅ PASS: Scope DoD includes broader E2E regression suite requirement: Scope 1: Connector Configuration And QF Client Contract
+✅ PASS: Scope Test Plan includes explicit regression E2E row(s): Scope 1: Connector Configuration And QF Client Contract
+✅ PASS: Scope DoD includes scenario-specific regression E2E requirement: Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope DoD includes broader E2E regression suite requirement: Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope Test Plan includes explicit regression E2E row(s): Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope DoD includes scenario-specific regression E2E requirement: Scope 3: Web Telegram Digest And Search Surfacing
+✅ PASS: Scope DoD includes broader E2E regression suite requirement: Scope 3: Web Telegram Digest And Search Surfacing
+✅ PASS: Scope Test Plan includes explicit regression E2E row(s): Scope 3: Web Telegram Digest And Search Surfacing
+✅ PASS: Scope DoD includes scenario-specific regression E2E requirement: Scope 4: Personal Evidence Bundle Export
+✅ PASS: Scope DoD includes broader E2E regression suite requirement: Scope 4: Personal Evidence Bundle Export
+✅ PASS: Scope Test Plan includes explicit regression E2E row(s): Scope 4: Personal Evidence Bundle Export
+✅ PASS: Scope DoD includes scenario-specific regression E2E requirement: Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+✅ PASS: Scope DoD includes broader E2E regression suite requirement: Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+✅ PASS: Scope Test Plan includes explicit regression E2E row(s): Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+```
+
+Verdict: **`WORDING-FIXED-CHECK-8A-RESTORED`**. Pure wording swap; no
+semantic change; DoD remains `[ ]` pending live-stack execution by
+Scope 5 active work.
+
+### Section 2: Retroactive DoD Flip Policy (Concern Resolution)
+
+`bubbles.gaps` Scope 5 retroactive audit identified two
+`RETROACTIVE-FLIP-OK` candidates. `bubbles.plan` adopts a
+**FLIP-V1-DEFER-C4** split policy.
+
+#### V1 (SCN-019 unit-test coverage): FLIPPED
+
+Per-claim verification table mapping V1 DoD sub-claims to existing test
+coverage at HEAD:
+
+| V1 sub-claim | Test function | Test line | Verified |
+|---|---|---|---|
+| Valid overlap (`<= 24h`) | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` | `credentials_test.go:9-44` | YES (3h overlap accepted; `OverlapSeconds = 3 * 3600`) |
+| Overlap `> 24h` rejection | `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` ("overlap longer than 24 hours") | `credentials_test.go:60-66` | YES (`wantReason: "credential_overlap_exceeds_24h"`) |
+| Newest-valid `not_before` selection | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` | `credentials_test.go:25-28` | YES (`SelectedCredentialRef == "qf-new"`, `PreviousCredentialRef == "qf-old"`) |
+| Future-only credential rejection | `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` ("future credential is not active") | `credentials_test.go:67-73` | YES (`wantReason: "credential_not_active"`) |
+| Cursor preservation | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` + rejected-rotation cursor check | `credentials_test.go:34-35,89-91` | YES (`PreservedState.SyncCursor == state.SyncCursor`) |
+| Evidence-export idempotency preservation (with alias-mutation guard) | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` | `credentials_test.go:35-40` | YES (`PreservedState.EvidenceExportIDs[0]` mutated; original `state.EvidenceExportIDs[0]` unchanged) |
+| Capability re-read at rotation start | `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` | `credentials_test.go:31-33` | YES (`plan.CapabilityReReadRequired` asserted true) |
+| Diagnostics enumeration | `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` | `credentials_test.go:79-83` | YES (`plan.Diagnostics` joined and substring-matched against expected reason) |
+| Rotation audit envelopes (OK + Rejected outcomes) | both tests | `credentials_test.go:41-43,84-87` | YES (`AuditOutcomeOK` + `AuditEnvelopeVersionV1` for accepted; `AuditOutcomeRejected` + `Reason` for each rejection case) |
+
+All nine V1 sub-claims covered. Function-name divergence from the
+test-plan-expected `TestCredentialRotation*` names is acknowledged in
+the Scope 5 Implementation Notes subsection of `scopes.md`; the Test
+Plan rows for those expected names are left as-written so Scope 5
+active work may add additional rotation tests without redundant
+re-authoring of equivalent coverage.
+
+V1 DoD line was flipped from `[ ]` to `[x]` with a credentials_test.go
+evidence anchor. Live-stack rotation evidence (V2 integration + E2E)
+remains `[ ]` because the credentials.go helper has zero production
+callers at HEAD (see Section 3) and live-stack execution requires
+connector-restart-path wiring as part of Scope 5 active work.
+
+#### C4 (12-metric symmetric set "is emitted"): NOT FLIPPED
+
+C4 DoD wording: *"The complete symmetric metric set is emitted with
+documented QF design 063 label parity for all 12 metrics listed in the
+Scope 5 implementation plan."*
+
+**Registration half (complete at HEAD):** all 12 `smackerel_qf_*`
+metrics declared in `internal/metrics/metrics.go`:
+
+| # | Metric | Declaration line |
+|---|---|---|
+| 1 | `smackerel_qf_packet_ingest_total` | 238 |
+| 2 | `smackerel_qf_capability_mismatch_total` | 251 |
+| 3 | `smackerel_qf_unknown_decision_type_total` | 263 |
+| 4 | `smackerel_qf_cursor_lag_seconds` | 276 |
+| 5 | `smackerel_qf_cursor_fast_forward_events_skipped_total` | 288 |
+| 6 | `smackerel_qf_action_boundary_attempts_total` | 297 |
+| 7 | `smackerel_qf_packet_validation_failures_total` | 309 |
+| 8 | `smackerel_qf_freshness_p95_seconds` (`QFFreshnessP95Seconds`) | 324 |
+| 9 | `smackerel_qf_trust_object_render_failures_total` | 337 |
+| 10 | `smackerel_qf_deep_link_render_total` | 347 |
+| 11 | `smackerel_qf_evidence_export_attempts_total` | 357 |
+| 12 | `smackerel_qf_evidence_revoked_total` | 368 |
+| (+) | `smackerel_qf_engagement_signal_attempts_total` | 378 |
+| (+) | `smackerel_qf_callback_attempts_total` | 388 |
+
+Registered exactly once via `prometheus.MustRegister` at line 395
+(call list includes `QFFreshnessP95Seconds` at line 424,
+`QFEngagementSignalAttemptsTotal`, `QFCallbackAttemptsTotal`,
+`QFActionBoundaryAttemptsTotal`).
+
+**Emission half (incomplete at HEAD):** three metrics
+(`QFActionBoundaryAttemptsTotal`, `QFEngagementSignalAttemptsTotal`,
+`QFCallbackAttemptsTotal`) have no production emission paths because
+boundary/engagement/callback are unwired pending Scope 5/6/8 active
+work (`grep -rn 'RecordQFActionBoundaryAttempt\|RecordQFEngagementSignalAttempt\|RecordQFCallbackAttempt'` returns hits only inside `internal/connector/qfdecisions/metrics.go` itself).
+
+Flipping C4 when 3 of 12 metrics cannot emit would overclaim against
+the DoD wording. The registration half is documented in the
+`scopes.md` Implementation Notes subsection as a Scope 5
+starting-evidence anchor that V3 `metrics_test.go` and Scope 5
+production-wiring work will extend before C4 is flipped.
+
+Verdict: **`POLICY-DECIDED-FLIP-V1-DEFER-C4`**.
+
+### Section 3: Pre-Landed Scaffolding Ratification (Concern Resolution)
+
+The closeout commit `39ca4fcb` (2026-05-21T07:47Z) landed three
+Scope 5-territory connector modules alongside Scope 2/3/4 closeout
+work. `bubbles.audit` previously verdicted
+`OVERREACH-ACCEPTABLE-SCAFFOLDING`; `bubbles.plan` now ratifies these
+modules as Scope 5 starting code points per the audit followUpAction
+directive.
+
+| Module | Role at HEAD | Production callers | Scope 5 active-work boundary |
+|---|---|---|---|
+| `internal/connector/qfdecisions/audit.go` | SHARED INFRASTRUCTURE for capability-mismatch envelopes, deep-link envelopes, evidence-export/replay/reject/success/revocation envelopes | 8+ callers across Scopes 2-4 (`connector.go:201,220`; `render.go:251`; `evidence_bundle.go:89,101,110,119,150,299`; `boundary.go:32,42`) | EXTEND with remaining SCN-021 emission points (sync lifecycle, engagement, callback, action-boundary kick) + operator runbook narrative |
+| `internal/connector/qfdecisions/boundary.go` | UNWIRED Scope 5 scaffolding — `RejectQFActionBoundary`, `IsForbiddenQFActionType`, `ActionBoundaryAttempt`, `ActionBoundaryDiagnostic` | ZERO production callers (only `boundary_test.go`) | WIRE `RejectQFActionBoundary` into action-eligible sync/render/export/callback/watch-adjacent paths; emit `smackerel_qf_action_boundary_attempts_total` with documented labels per SCN-020 |
+| `internal/connector/qfdecisions/credentials.go` | UNWIRED Scope 5 scaffolding — `PlanCredentialRotation`, `RotatingCredential`, `CredentialRotationPlan`, `CredentialRotationState` | ZERO production callers (only `credentials_test.go`) | WIRE `PlanCredentialRotation` into connector restart and credential-reload paths per SCN-019 |
+
+Verdict: **`RATIFIED-AS-SCOPE-5-STARTING-POINTS`**. Modules are kept
+verbatim and recorded as Scope 5 starting code points in the
+`scopes.md` Implementation Notes subsection. Their unit tests are
+valid scaffolded coverage and MUST be extended (not replaced) with
+live-stack integration/E2E/stress evidence when Scope 5 active work
+runs.
+
+### Section 4: Guard Reruns (Post-Amendment)
+
+**`bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector`** (2026-05-21T18:02:21Z):
+
+- Check 8A Scope 5 — **PASS** (three sub-assertions: scenario-specific
+  regression E2E DoD requirement, broader E2E regression suite
+  requirement, Test Plan explicit regression E2E row)
+- Overall verdict: `🔴 TRANSITION BLOCKED: 17 failure(s), 3 warning(s)`
+- Remaining failures are all pre-existing full-feature-promotion gates
+  that this plan-amendment does not address and is not expected to
+  resolve: Check 4 unchecked DoD on Scope 5 (Scope 5 Not Started — 52
+  unchecked items expected); Check 5 five Not Started scopes (5-9 are
+  unstarted); Check 6 nine missing specialist phases (full-feature
+  pipeline not yet run); Check 8B preexisting Scope 2 consumer-trace
+  enumeration flag; Check 16 G028 false-positives at `render.go:240`
+  and `render.go:244` (already filed as
+  `C-AUDIT-G028-RENDER-FALSE-POSITIVE`); Check 18 G040 deferral
+  language scan hit on Scopes 6-9 future-work table row and 72
+  preexisting report.md hits.
+- DoD totals shifted from 79 checked / 54 unchecked before amendment to
+  **80 checked / 53 unchecked** after amendment, confirming the V1
+  flip landed exactly once.
+
+**`bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector`** (2026-05-21T18:03:00Z):
+
+```text
+Artifact lint PASSED.
+EXIT=0
+```
+
+### Section 5: state.json Concern Transitions
+
+| Concern ID | Before | After | resolutionVerdict |
+|---|---|---|---|
+| `C-PLAN-SCOPE5-CHECK-8A-WORDING-ALIGNMENT` | `status: open` | `status: resolved, resolvedAt: 2026-05-21T18:05:00Z, resolvedBy: bubbles.plan` | `WORDING-FIXED-CHECK-8A-RESTORED` |
+| `C-PLAN-SCOPE5-RETROACTIVE-FLIP-CANDIDATES` | `status: open` | `status: resolved, resolvedAt: 2026-05-21T18:05:00Z, resolvedBy: bubbles.plan` | `POLICY-DECIDED-FLIP-V1-DEFER-C4` |
+| `C-AUDIT-S5-SCAFFOLDING-PLAN-RATIFY` | no status field | `status: resolved, resolvedAt: 2026-05-21T18:05:00Z, resolvedBy: bubbles.plan` | `RATIFIED-AS-SCOPE-5-STARTING-POINTS` |
+| `state.lastUpdatedAt` | `2026-05-21T17:45:00Z` | `2026-05-21T18:05:00Z` | — |
+
+No other state.json fields were modified. Specifically: top-level
+`status` remains `in_progress`; `certification.status` remains
+`in_progress`; `certification.completedScopes` is unchanged (still 4
+entries Scopes 1-4); `certification.certifiedCompletedPhases` remains
+`["test"]`; `certification.scopeProgress[4]` (Scope 5) remains
+`status: "Not Started"`; `executionHistory` is unchanged;
+`completedPhaseClaims`, `transitionRequests`, `reworkQueue`, and
+`policySnapshot` are unchanged.
+
+### Section 6: Artifact Diff Summary
+
+| Artifact | Lines added | Lines removed | Net effect |
+|---|---|---|---|
+| `specs/041-qf-companion-connector/scopes.md` | 1 DoD flip ([ ] → [x] on V1 with evidence anchor); 1 wording swap on Check 8A regression line; 1 new `### Implementation Notes (Plan Amendment 2026-05-21)` subsection inside Scope 5 (between Implementation Files and Test Plan) | none of substance — wording swap is content-equivalent | Scope 5 plan content reflects ratified scaffolding and split flip policy |
+| `specs/041-qf-companion-connector/state.json` | 3 concern resolutions (status, resolvedAt, resolvedBy, resolutionVerdict, resolutionEvidenceRef, resolutionRationale); `lastUpdatedAt` refresh | none | All three concerns transition to resolved; concern history preserved |
+| `specs/041-qf-companion-connector/report.md` | this entire `## Scope 5 Plan Amendment Evidence` section | none | Evidence anchor for the resolution rationale |
+| Any source code | 0 | 0 | No source modifications |
+
+---
+
 
