@@ -11,7 +11,7 @@ TEST_ENV="test"
 
 cleanup() {
     echo "Cleaning up test stack..."
-    timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 

@@ -64,12 +64,20 @@ func (p *RawArtifactPublisher) PublishRawArtifact(ctx context.Context, artifact 
 	}
 
 	// Store initial artifact
+	var metadataJSON []byte
+	var err error
+	if artifact.Metadata != nil {
+		metadataJSON, err = json.Marshal(artifact.Metadata)
+		if err != nil {
+			return "", fmt.Errorf("marshal connector metadata: %w", err)
+		}
+	}
 	ct, err := p.DB.Exec(ctx, `
-		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, processing_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO artifacts (id, artifact_type, title, content_raw, content_hash, source_id, source_url, processing_tier, capture_method, processing_status, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (content_hash) WHERE content_hash IS NOT NULL DO NOTHING
 	`, artifactID, artifact.ContentType, artifact.Title, contentRaw, contentHash,
-		artifact.SourceID, artifact.URL, tier, "passive", string(StatusPending))
+		artifact.SourceID, artifact.URL, tier, "passive", string(StatusPending), metadataJSON)
 	if err != nil {
 		return "", fmt.Errorf("insert connector artifact: %w", err)
 	}

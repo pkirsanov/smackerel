@@ -218,6 +218,7 @@ func TestCloseDisconnectsConnector(t *testing.T) {
 //
 // SCN-SM-041-005.
 func TestSyncReturnsOpaqueQFCursorWithoutRewritingLocalPacketIdentity(t *testing.T) {
+	metrics.QFPacketIngestTotal.Reset()
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -329,6 +330,10 @@ func TestSyncReturnsOpaqueQFCursorWithoutRewritingLocalPacketIdentity(t *testing
 	}
 	if len(artifacts1) != 2 {
 		t.Fatalf("first Sync produced %d artifacts, want 2", len(artifacts1))
+	}
+	ingestMetric := testutil.ToFloat64(metrics.QFPacketIngestTotal.WithLabelValues("packet_created", DecisionTypeRecommendation, "display_only", metricUnknown))
+	if ingestMetric != 2 {
+		t.Fatalf("packet ingest metric after first Sync = %v, want 2", ingestMetric)
 	}
 	for _, want := range []string{"packet-A", "packet-B"} {
 		found := false

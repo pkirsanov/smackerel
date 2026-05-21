@@ -117,8 +117,19 @@ const allTemplates = `
     <h3><a href="/artifact/{{.ID}}">{{.Title}}</a></h3>
     <div class="meta"><span class="type-badge">{{.Type}}</span></div>
     {{if .Summary}}<div class="summary">{{truncate .Summary 200}}</div>{{end}}
+    {{if .QFCard}}{{template "qf-card" .QFCard}}{{end}}
 </div>
 {{end}}
+{{end}}
+
+{{define "qf-card"}}
+<div class="qf-card" data-card-kind="{{.CardKind}}">
+    <div class="meta"><strong>{{.DisplayLabel}}</strong> · {{.ApprovalState}} · read-only</div>
+    <div class="meta">Packet {{.PacketID}} · Trace {{.TraceID}}</div>
+    {{if .UnknownDecisionType}}<div class="meta">Generic QF packet</div>{{end}}
+    {{if .TrustObjects}}<ul class="idea-list">{{range .TrustObjects}}<li><strong>{{.Label}}</strong> ({{.Severity}}): {{.Summary}}</li>{{end}}</ul>{{end}}
+    {{if .DeepLink.URL}}<div class="meta"><a href="{{safeURL .DeepLink.URL}}" target="_blank">Open in QF</a> · {{.DeepLink.Status}}</div>{{end}}
+</div>
 {{end}}
 
 {{define "detail.html"}}
@@ -126,10 +137,73 @@ const allTemplates = `
 <a href="/" class="back-link">< Back to search</a>
 <h1>{{.Title}}</h1>
 <div class="meta"><span class="type-badge">{{.Type}}</span> {{.Connections}} connections</div>
+{{if .QFCard}}<div class="detail-section">{{template "qf-card" .QFCard}}</div>{{end}}
 <div class="detail-section"><h2>Summary</h2><p>{{.Summary}}</p></div>
 {{if .KeyIdeas}}<div class="detail-section"><h2>Key Ideas</h2><ul class="idea-list">{{range .KeyIdeas}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 {{if .Topics}}<div class="detail-section"><h2>Topics</h2>{{range .Topics}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
 {{if .SourceURL}}<div class="detail-section"><a href="{{safeURL .SourceURL}}" target="_blank">View Source</a></div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "evidence-builder.html"}}
+{{template "head" .}}
+<a href="/" class="back-link">< Back to search</a>
+<h1>Personal Evidence Bundle</h1>
+<div class="card" id="qf-evidence-builder" data-qf-artifact-id="{{.QFArtifactID}}" data-packet-id="{{.PacketID}}">
+    <form id="qf-evidence-export-form">
+        <label>QF artifact ID <input name="packet_artifact_id" value="{{.QFArtifactID}}" required></label>
+        <label>Source artifact IDs <input name="source_artifact_ids" required></label>
+        <label>Extracted claims <textarea name="extracted_claims" required></textarea></label>
+        <label>Consent scope <input name="consent_scope" required></label>
+        <label>Sensitivity tier <input name="sensitivity_tier" required></label>
+        <label>Source provenance class <input name="source_provenance_class" required></label>
+        <label>Confidence <input name="confidence" type="number" min="0.01" max="1" step="0.01" required></label>
+        <button type="submit">Export Evidence Bundle</button>
+    </form>
+    <div id="qf-evidence-export-status" aria-live="polite"></div>
+    <button id="qf-evidence-revoke" type="button" disabled>Revoke Evidence Sharing</button>
+</div>
+<script>
+(function () {
+    const form = document.getElementById("qf-evidence-export-form");
+    const status = document.getElementById("qf-evidence-export-status");
+    const revoke = document.getElementById("qf-evidence-revoke");
+    let exportID = "";
+    function splitList(value) { return value.split(",").map(function (x) { return x.trim(); }).filter(Boolean); }
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const data = new FormData(form);
+        const sourceIDs = splitList(data.get("source_artifact_ids") || "");
+        const payload = {
+            packet_artifact_id: String(data.get("packet_artifact_id") || ""),
+            source_artifact_ids: sourceIDs,
+            source_refs: [],
+            source_provenance_classes: sourceIDs.map(function (id) { return { source_artifact_id: id, source_provenance_class: String(data.get("source_provenance_class") || "") }; }),
+            extracted_claims: splitList(data.get("extracted_claims") || ""),
+            confidence: Number(data.get("confidence")),
+            consent_scope: String(data.get("consent_scope") || ""),
+            sensitivity_tier: String(data.get("sensitivity_tier") || ""),
+            provenance: { surface: "web_evidence_builder" },
+            redaction_summary: { raw_personal_content: "omitted" },
+            related_symbols: [],
+            related_entities: []
+        };
+        status.textContent = "Exporting";
+        const response = await fetch("/api/qf/evidence-bundles/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const body = await response.json();
+        if (!response.ok) { status.textContent = body.error ? body.error.message : "Export failed"; return; }
+        exportID = body.record.export_id;
+        revoke.disabled = false;
+        status.textContent = "Export " + body.record.status + " · " + exportID;
+    });
+    revoke.addEventListener("click", async function () {
+        if (!exportID) { return; }
+        const response = await fetch("/api/qf/evidence-bundles/" + encodeURIComponent(exportID), { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "consent_revoked" }) });
+        const body = await response.json();
+        status.textContent = response.ok ? "Revocation " + body.record.status : (body.error ? body.error.message : "Revocation failed");
+    });
+}());
+</script>
 {{template "foot"}}
 {{end}}
 

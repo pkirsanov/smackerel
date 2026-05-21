@@ -14,7 +14,7 @@ CORE_IMAGE=""
 
 cleanup() {
     echo "Cleaning up test stack..."
-    timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+    timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -45,7 +45,7 @@ docker compose -p "$COMPOSE_PROJECT" -f "$REPO_DIR/docker-compose.yml" --env-fil
 # Run smackerel-core with incomplete config — expect failure
 echo "Starting smackerel-core with incomplete config..."
 set +e
-OUTPUT=$(timeout 60 docker run --rm --env-file "$TEMP_ENV" "$CORE_IMAGE" 2>&1)
+OUTPUT=$(timeout --kill-after=15s 60 docker run --rm --env-file "$TEMP_ENV" "$CORE_IMAGE" 2>&1)
 EXIT_CODE=$?
 set -e
 

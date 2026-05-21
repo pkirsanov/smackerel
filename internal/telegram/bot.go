@@ -658,6 +658,10 @@ func (b *Bot) handleFind(ctx context.Context, msg *tgbotapi.Message, query strin
 		}
 		entry := fmt.Sprintf("> %s (%s)\n- %s", title, artType, summary)
 
+		if qfCard := formatQFPacketCardFromAny(result["qf_card"]); qfCard != "" {
+			entry += "\n" + qfCard
+		}
+
 		// Spec 040 Scope 4 — sensitivity-aware retrieval. If the
 		// result is a photo flagged as requires_reveal, do NOT include
 		// any preview URL (`auto-send` is forbidden). The user must
@@ -726,6 +730,13 @@ func (b *Bot) handleDigest(ctx context.Context, msg *tgbotapi.Message) {
 	if text == "" {
 		b.reply(msg.Chat.ID, "> Digest is empty")
 		return
+	}
+	if rawCards, ok := result["qf_cards"].([]interface{}); ok {
+		for _, rawCard := range rawCards {
+			if qfCard := formatQFPacketCardFromAny(rawCard); qfCard != "" {
+				text += "\n\n" + qfCard
+			}
+		}
 	}
 	b.reply(msg.Chat.ID, text)
 }
