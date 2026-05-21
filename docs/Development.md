@@ -622,4 +622,98 @@ All NATS subjects and streams are defined in `config/nats_contract.json`. Both G
 | `AGENT` | `agent.>` | Spec 037 agent loop — `agent.invoke.request`, `agent.invoke.response`, `agent.tool_call.executed`, `agent.complete` |
 | `WEATHER` | `weather.>` | Weather connector reactive subjects |
 | `DEADLETTER` | `deadletter.>` | Dead-letter queue for messages that exhaust retry budgets |
+
+## QF Companion Connector Internals (Spec 041 Scope 5)
+
+The QF companion connector lives at `internal/connector/qfdecisions/` and is
+the only Smackerel package that talks to the QF (quantitativeFinance)
+companion surface. Scope 5 adds four hardening modules on top of the Scope
+1-4 sync / render / export base.
+
+### Module Map
+
+| File | Responsibility |
+|------|----------------|
+| `connector.go`, `render.go`, `evidence_bundle.go` | Scopes 1-4 sync / render / evidence export call sites that invoke the Scope 5 hardening helpers below |
+| `credentials.go` | Pure planner `PlanCredentialRotation(creds, state, now)` and the connector-level entry point `(*Connector).RotateCredentials` that wires it into capability re-read + atomic state swap |
+| `boundary.go` | Pure helper `EnforceQFActionBoundary(attempt ActionBoundaryAttempt) (ActionBoundaryDiagnostic, bool, error)` — returns `(diagnostic, fired, err)`; callers short-circuit on `fired == true` |
+| `audit.go` | `BuildCrossProductAuditEnvelopeV1(input AuditEnvelopeInput) EvidenceAuditEnvelope` plus the slog sink `EmitConnectorAuditEnvelope` that writes the canonical `qf-decisions: cross_product_audit` JSON record |
+| `metrics.go` | Lightweight metric-emission helpers that wrap the 12 `smackerel_qf_*` Prometheus collectors declared in `internal/metrics/metrics.go` |
+| `types.go` | Action-constant and forbidden-action-type tables consumed by every helper above |
+
+### Calling Pattern: Action Boundary
+
+Every sync, render, and evidence-export code path that could ever attempt a
+QF-side mutating action MUST funnel the attempt through
+`EnforceQFActionBoundary` before any other work. The contract is:
+
+```go
+diag, fired, err := qfdecisions.EnforceQFActionBoundary(qfdecisions.ActionBoundaryAttempt{
+    AttemptedActionType: attemptedAction, // typed enum, never free-form string
+    TraceID:             traceID,
+    PacketID:            packetID,
+    // ... per-call envelope context ...
+})
+if err != nil {
+    return err
+}
+if fired {
+    // Boundary rejected the attempt. The helper has already emitted
+    // smackerel_qf_action_boundary_attempts_total{attempted_action_type=...}
+    // and an audit envelope with action=action_boundary_kick, outcome=rejected.
+    // Callers MUST short-circuit; no further QF-side work is permitted.
+    return nil
+}
+// Boundary allowed the attempt (or it was a benign / empty attempt).
+// Proceed with the read-only flow.
+```
+
+The helper itself never enables an action; the `fired == true` branch is the
+only legal outcome for any of the 8 pre-MVP forbidden action types listed in
+[`docs/Operations.md`](Operations.md#pre-mvp-safety-boundary).
+
+### Calling Pattern: Audit Envelope
+
+Every Smackerel-side QF emission point builds a Cross-Product Audit Envelope
+v1 via the shared helper before emitting the metric counter:
+
+```go
+envelope := qfdecisions.BuildCrossProductAuditEnvelopeV1(qfdecisions.AuditEnvelopeInput{
+    Action:            qfdecisions.AuditActionPacketIngest, // typed constant
+    Outcome:           "ok",
+    Reason:            "scope2_ingest_packet",
+    TraceID:           traceID,
+    PacketID:          packetID,
+    AuditEnvelopeVersion: capability.AuditEnvelopeVersion, // sourced from persisted capability
+    ObservedAt:        observedAt,
+})
+qfdecisions.EmitConnectorAuditEnvelope(ctx, envelope)
+metrics.QFPacketIngestTotal.WithLabelValues(eventType, decisionType, approvalState, sourceSurface).Inc()
+```
+
+The builder fills the always-required field set (`actor_ref`,
+`surface`, `recorded_at`) when the caller supplies empty values, normalizes
+`ts` and `recorded_at` to RFC3339 UTC, and copies through the per-event
+optional fields (`export_id`, `signal_id`, `bundle_id`,
+`target_context_type`, `sensitivity_tier`) only when the caller sets them.
+
+### Calling Pattern: Credential Rotation
+
+`(*Connector).RotateCredentials(ctx, newCreds)` is the single supported
+entry point for credential rotation. It:
+
+1. Calls `PlanCredentialRotation(newCreds, currentState, now)` — pure, no I/O.
+2. On `plan.SelectedCredentialRef != nil`, builds a new `Client` against the
+   selected credential and calls `FetchCapability` + `CompatibilityCheck`
+   BEFORE swapping any in-memory state. The capability re-read emits a
+   `capability_handshake` envelope with the appropriate outcome.
+3. On successful capability re-read, atomically swaps `c.client`,
+   `c.cfg.CredentialRef`, `c.capability`, `c.capabilityStatus`,
+   `c.capabilityFetchedAt`, and `c.health` to the new credential's values.
+4. Emits a `credential_rotation` audit envelope with outcome `ok` /
+   `rejected` / `error` and the plan diagnostics attached.
+
+Failure at any step preserves the previous credential, cursor, and
+evidence-export idempotency state verbatim.
+
 | `DEADLETTER` | `deadletter.>` | Failed message storage for debugging |

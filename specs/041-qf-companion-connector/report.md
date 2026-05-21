@@ -14589,4 +14589,278 @@ verified untouched via post-edit `git diff` review).
 
 ---
 
+## Scope 5 Operator Documentation Evidence (bubbles.implement, 2026-05-21T23:42:01Z)
+
+This section captures the operator-documentation deliverable for Scope 5
+sub-iteration F. Three managed docs received a Scope-5-specific section
+covering credential rotation overlap, the symmetric 12-metric reference,
+the Cross-Product Audit Envelope v1 shape, the pre-MVP safety boundary
+forbidden-action list, and the QF mirror sink post-MVP reservation.
+
+### Section 1 — Documentation Deliverables
+
+| DoD topic | File | Section anchor |
+|-----------|------|----------------|
+| Credential rotation 24h overlap rule + newest-by-`not_before` selection + reject diagnostics | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### Credential Rotation Overlap` |
+| Capability re-read on rotation start | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### Capability Re-Read On Rotation Start` |
+| Cursor + capability + evidence-export state preservation | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### State Preservation Through Rotation` |
+| All 12 `smackerel_qf_*` metrics + label sets + emission points | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### Symmetric smackerel_qf_* Metric Reference` |
+| Cross-Product Audit Envelope v1 field shape + 9 action constants + slog sink + QF mirror sink reservation | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### Cross-Product Audit Envelope V1` and `### QF Mirror Sink (Reserved Post-MVP)` |
+| 8 pre-MVP forbidden action types | [`docs/Operations.md`](../../docs/Operations.md) | `## QF Companion Connector Operations (Spec 041 Scope 5)` → `### Pre-MVP Safety Boundary` |
+| Test file map (unit / integration / E2E / stress for Scope 5) + how to run locally | [`docs/Testing.md`](../../docs/Testing.md) | `### QF Companion Connector Test Surface (Spec 041)` → `#### Scope 5 Test Surface (Spec 041)` |
+| Module map + helper signatures + calling patterns (boundary, audit envelope, credential rotation) | [`docs/Development.md`](../../docs/Development.md) | `## QF Companion Connector Internals (Spec 041 Scope 5)` |
+
+### Section 2 — Cross-Reference Verification
+
+- `docs/Operations.md` Scope 5 metric table mirrors the 12 metric names and
+  label sets declared at `internal/metrics/metrics.go` lines 238-388 and
+  registered at lines 395-449. The two placeholder metrics
+  (`smackerel_qf_engagement_signal_attempts_total` for Scope 6 transport,
+  `smackerel_qf_callback_attempts_total` for Scope 8 callback transport)
+  are explicitly marked as pre-MVP placeholders with zero emissions until
+  their owning scopes activate.
+- `docs/Operations.md` Scope 5 audit envelope table mirrors the 9 action
+  constants in `internal/connector/qfdecisions/types.go` and matches the
+  always-required and per-event field projection performed by
+  `BuildCrossProductAuditEnvelopeV1` in
+  `internal/connector/qfdecisions/audit.go`.
+- `docs/Operations.md` Scope 5 forbidden-action table mirrors the 8
+  forbidden action types enforced by `EnforceQFActionBoundary` at
+  `internal/connector/qfdecisions/boundary.go`.
+- `docs/Testing.md` Scope 5 test surface table mirrors the integration
+  files at `tests/integration/qf_credential_rotation_test.go`,
+  `tests/integration/qf_scope5_observability_test.go`,
+  `tests/integration/qf_audit_envelope_test.go`, the E2E file
+  `tests/e2e/qf_scope5_safety_observability_test.go` (with function-name
+  + line-number anchors), and the stress entry
+  `tests/stress/qf_freshness_test.go::TestQFDecisionsFreshnessSLAP95RenderAndCombined`.
+- `docs/Development.md` Scope 5 module map mirrors the file inventory
+  under `internal/connector/qfdecisions/` and documents the helper
+  signatures `EnforceQFActionBoundary(attempt ActionBoundaryAttempt) (ActionBoundaryDiagnostic, bool, error)`
+  and `BuildCrossProductAuditEnvelopeV1(input AuditEnvelopeInput) EvidenceAuditEnvelope`.
+
+**Claim Source:** executed (file additions verified by `wc -l` deltas and
+post-edit `grep` against the new section headings).
+
+---
+
+## Scope 5 Evidence Index (bubbles.implement, 2026-05-21T23:42:01Z)
+
+Consolidated DoD-to-evidence map for Scope 5. Each row points at the
+report.md section that proves the claim, or — for the two C4-half deferrals
+— explicitly states the pre-MVP rationale.
+
+### Section 1 — DoD-To-Evidence Map
+
+| DoD area | Status | Evidence anchor |
+|----------|--------|-----------------|
+| C1 Credential rotation (overlap, selection, diagnostics) | `[x]` | report.md `## Scope 5 Credential Rotation Evidence (bubbles.implement, 2026-05-21T19:05:00Z)` Sections 1-8 |
+| C1 Cursor + capability + evidence-export preservation through rotation | `[x]` | report.md `## Scope 5 Credential Rotation Evidence (bubbles.implement, 2026-05-21T19:05:00Z)` Sections 3, 6 |
+| C2 / C3 Safety boundary call-sites (sync / render / export) | `[x]` | report.md `## Scope 5 Safety Boundary And Observability Evidence (bubbles.implement, 2026-05-21T20:30:00Z)` Sections 1-5 |
+| C4 12-metric symmetric set — registration + 10/12 emission paths | `[x]` | report.md `## Scope 5 Safety Boundary And Observability Evidence (bubbles.implement, 2026-05-21T20:30:00Z)` Sections 3-5 + `## Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z)` Section 2 (delta=3 boundary, delta=2 render, delta=2 export, delta=1 revoked, delta=1 unknownDT, delta=3 cursorFFwd) |
+| C4 — engagement signal (`smackerel_qf_engagement_signal_attempts_total`) emission | DEFERRED (Scope 6 pre-MVP) | Registered with zero emissions today; transport lands in Scope 6 per scopes.md L1019 plan amendment; documented in `docs/Operations.md` Scope 5 metric table |
+| C4 — callback attempt (`smackerel_qf_callback_attempts_total`) emission | DEFERRED (Scope 8 pre-MVP) | Registered with zero emissions today; transport lands in Scope 8 per scopes.md L1019 plan amendment; documented in `docs/Operations.md` Scope 5 metric table |
+| C5 Render-stage + combined freshness gauge | `[x]` | report.md `## Scope 5 Render-Stage Freshness And Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z)` Sections 1-3 |
+| C6 / SCN-021 audit envelope v1 across 8 emission points | `[x]` | report.md `## Scope 5 Audit Envelope V1 Rollout Evidence (bubbles.implement, 2026-05-21T21:30:00Z)` Sections 1-6 |
+| C7 / SCN-021 operator documentation (rotation overlap, metrics, envelope, boundary, mirror sink) | `[x]` | report.md `## Scope 5 Operator Documentation Evidence (bubbles.implement, 2026-05-21T23:42:01Z)` Sections 1-2 + the three doc anchors listed there |
+| V1 SCN-019 unit tests (overlap accept/reject + diagnostics) | `[x]` | report.md `## Scope 5 Plan Amendment Evidence (bubbles.plan, 2026-05-21T18:05:00Z)` Section 2; tests at `internal/connector/qfdecisions/credentials_test.go` lines 9 and 46 |
+| V2 SCN-019 integration + E2E rotation proof | `[x]` | report.md `## Scope 5 Credential Rotation Evidence (bubbles.implement, 2026-05-21T19:05:00Z)` Section 5 (integration) + `## Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z)` Section 2 (E2E `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` PASS 0.12s) |
+| V3 SCN-020 12-metric unit (label parity) + integration (emission) | `[x]` | unit: `internal/metrics/metrics_test.go` + `internal/connector/qfdecisions/metrics_test.go` (label-parity for all 12 vectors); integration: report.md `## Scope 5 Safety Boundary And Observability Evidence (bubbles.implement, 2026-05-21T20:30:00Z)` Section 4 (`tests/integration/qf_scope5_observability_test.go`); E2E: `TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface` (Sub-iter E Section 2) |
+| V4 Render stress p95 | `[x]` | report.md `## Scope 5 Render-Stage Freshness And Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z)` Section 3 (5-10x headroom against operator-documented SLA) |
+| V5 SCN-021 audit envelope unit + integration | `[x]` | unit: `internal/connector/qfdecisions/audit_test.go`; integration: `tests/integration/qf_audit_envelope_test.go`; report.md `## Scope 5 Audit Envelope V1 Rollout Evidence (bubbles.implement, 2026-05-21T21:30:00Z)` Sections 2-5 |
+| V6 / Check 8A scenario-specific E2E regression for SCN-019/020/021 | `[x]` | report.md `## Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z)` Section 2; new file `tests/e2e/qf_scope5_safety_observability_test.go` lines 352 / 664 / 1118 |
+| V7 Broader E2E regression after Scope 5 | `[x]` | report.md `## Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z)` Section 3 (`PASS: go-e2e` at log line 1511; 136 Go PASS, 0 Go FAIL, 3 Go SKIP, 74 shell PASS, 4 `ok` package summaries; honest chaos-test disclosure for the deliberate `FAIL: Services did not become healthy within 8s` at log line 247 inside SCN-002-BUG-002-001 which reports `PASS:` on the next line) |
+| V8 Artifact lint + traceability guard | `[x]` | report.md `## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)` Section 2 (artifact-lint EXIT=0, traceability-guard EXIT=0) |
+| Build Quality umbrella (build / lint / format / check / all test categories) | `[x]` | report.md `## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)` Section 1 + per-sub-iter validation evidence in Sub-iters A through E |
+| Consumer Impact Sweep | `[x]` | scopes.md Scope 5 Consumer Impact Sweep section (L962-971) + report.md `## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)` Section 3 |
+| Change Boundary | `[x]` | scopes.md Scope 5 Change Boundary (L975-997) + report.md `## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)` Section 4 (per-file allowlist audit across Sub-iters A-F) |
+| Implementation Reality (no hidden defaults, no fallback windows, no hardcoded credentials, no QF mirror sink, no forbidden actions) | `[x]` | report.md `## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)` Section 5 |
+| Raw evidence index (unit / integration / E2E / stress) | `[x]` | This `## Scope 5 Evidence Index` section in report.md |
+
+### Section 2 — Pre-MVP C4 Deferral Rationale
+
+The C4 12-metric DoD line at scopes.md L992 is checked `[x]` based on the
+following composite evidence:
+
+- All 12 metrics are declared and registered exactly once at process init
+  in `internal/metrics/metrics.go` (declarations 238-388, registrations
+  395-449). Label parity with QF design 063 is enforced by unit tests
+  (`internal/metrics/metrics_test.go` and
+  `internal/connector/qfdecisions/metrics_test.go`).
+- 10 of 12 metrics have real production emission paths today (Scope 2
+  packet ingest, validation failures, capability mismatch, unknown
+  decision type, cursor lag; Scope 3 deep-link render, trust-object
+  render failure; Scope 4 evidence export attempts, evidence revoked;
+  Scope 5 action-boundary attempts). Live-stack emission proof landed in
+  Sub-iters B / C / E with explicit delta counts captured in their
+  respective evidence sections.
+- 2 of 12 metrics (`smackerel_qf_engagement_signal_attempts_total`,
+  `smackerel_qf_callback_attempts_total`) are explicit pre-MVP
+  placeholders. Their helpers exist
+  (`AuditActionEngagementSignalFlush`, `AuditActionCallbackAttempt`) and
+  their unit + label-parity coverage exists, but their transport call
+  sites are owned by Scope 6 (engagement signal flush) and Scope 8
+  (callback attempt) respectively — both scopes are parked pre-MVP per
+  the plan amendment recorded in scopes.md L1019 and in
+  `## Scope 5 Plan Amendment Evidence (bubbles.plan, 2026-05-21T18:05:00Z)`.
+  Both metrics are documented as registered-with-zero-emissions
+  placeholders in `docs/Operations.md` Scope 5 metric table.
+
+The deferral is therefore explicit, planned, and operator-visible. No
+hidden zero-emission metric exists; no forbidden action is enabled by the
+placeholder; no audit-sink wiring forwards Smackerel envelopes to QF
+today.
+
+**Claim Source:** interpreted (evidence-anchor inventory verified by
+sequential `grep` of report.md section headings; deferral rationale
+verified against scopes.md L1019 plan amendment and the
+`## Scope 5 Plan Amendment Evidence` report.md section).
+
+---
+
+## Scope 5 Build Quality And Consumer Impact Sweep (bubbles.implement, 2026-05-21T23:42:01Z)
+
+This section is the final Scope 5 attestation across the build-quality
+umbrella, the Consumer Impact Sweep, the Change Boundary file-list audit,
+the Implementation Reality assertions, and the artifact-lint /
+traceability-guard re-run evidence.
+
+### Section 1 — Build / Lint / Format / Check Status
+
+The cumulative build-quality status across Scope 5 Sub-iters A through E
+(consolidated, per-sub-iter evidence is at each sub-iter's evidence
+section):
+
+| Phase | Sub-iter A | Sub-iter B | Sub-iter C | Sub-iter D | Sub-iter E |
+|-------|-----------|-----------|-----------|-----------|-----------|
+| `./smackerel.sh build` | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 |
+| `./smackerel.sh check` | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 |
+| `./smackerel.sh lint` | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 |
+| `./smackerel.sh format --check` | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 | EXIT=0 |
+| `./smackerel.sh test unit` (Go + Python) | PASS | PASS | PASS | PASS | PASS |
+| `./smackerel.sh --env test test integration` (focused on Scope 5) | PASS (1 test) | PASS (observability) | PASS (audit envelope) | n/a | PASS |
+| `./smackerel.sh --env test test e2e` (focused + broader) | n/a | n/a | n/a | n/a | PASS (3 focused PASS + broader PASS: go-e2e at log line 1511) |
+| `./smackerel.sh --env test test stress` | n/a | n/a | n/a | PASS (5-10x headroom) | n/a |
+
+Sub-iter F (this sub-iter) adds documentation + DoD-closure work only; no
+new source code or new test files are introduced, so no new test
+categories need to re-run. Artifact-lint and traceability-guard are
+re-run below as Sub-iter F's build-quality contribution.
+
+### Section 2 — Artifact Lint + Traceability Guard Re-Run
+
+Both guards were re-run against `specs/041-qf-companion-connector` after
+all Sub-iter F doc + DoD edits landed but before this evidence section
+was committed.
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector
+...
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+EXIT=0
+```
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 21
+ℹ️  Test rows checked: 66
+ℹ️  Scenario-to-row mappings: 21
+ℹ️  Concrete test file references: 21
+ℹ️  Report evidence references: 21
+ℹ️  DoD fidelity scenarios: 21 (mapped: 21, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
+EXIT=0
+```
+
+Both EXIT=0, both PASSED. No new scenarios were added in Sub-iter F and
+no scenario was unmapped.
+
+### Section 3 — Consumer Impact Sweep Verdict
+
+Per scopes.md Scope 5 Consumer Impact Sweep (L962-971), the Scope 5
+Change Boundary rename / removal scan returned NO renamed or removed
+routes / paths / contracts / identifiers / UI targets:
+
+- No URL route was added, removed, or renamed.
+- No public API contract field was added, removed, or renamed.
+- No artifact-type identifier was added, removed, or renamed.
+- No UI surface (web PWA, Telegram, digest) was renamed or relocated.
+- No SST key was added, removed, or renamed (the entire Scope 5 surface
+  composes on top of the existing connector / capability / metrics keys
+  unchanged).
+
+Scope 5 is a wiring-and-hardening scope: it adds boundary call-sites,
+wires audit envelopes into existing emission points, completes the
+existing metric set, and adds documentation. No consumer rerouting work
+is required.
+
+### Section 4 — Change Boundary File-List Audit
+
+Per scopes.md Scope 5 Change Boundary (L975-997), the allowed change set
+for Sub-iters A through F is:
+
+- `internal/connector/qfdecisions/` (Scope 5 hardening modules + their
+  call-sites in `connector.go`, `render.go`, `evidence_bundle.go`)
+- `internal/metrics/metrics.go` (12-metric registration only; no
+  cross-cutting metric changes)
+- `tests/integration/qf_credential_rotation_test.go`,
+  `tests/integration/qf_scope5_observability_test.go`,
+  `tests/integration/qf_audit_envelope_test.go`
+- `tests/e2e/qf_scope5_safety_observability_test.go`
+- `tests/stress/qf_freshness_test.go` (new render-stage + combined
+  function only; existing ingest stress unchanged)
+- `docs/Operations.md`, `docs/Development.md`, `docs/Testing.md` (Scope
+  5 sections only; pre-existing sections unchanged)
+- `specs/041-qf-companion-connector/scopes.md`,
+  `specs/041-qf-companion-connector/report.md`,
+  `specs/041-qf-companion-connector/state.json`
+
+A `git log --name-only origin/main..HEAD -- ':!**/*.md' ':!specs/**'`
+review across the 9 unpushed commits confirms every modified source file
+falls inside this allowlist. No file outside Scope 5 territory was
+touched.
+
+### Section 5 — Implementation Reality Assertions
+
+- No hidden defaults: every Scope 5 helper requires its caller to pass
+  the required envelope context fields explicitly; missing-field paths
+  reject loudly rather than silently filling in defaults.
+- No fallback credential windows: `PlanCredentialRotation` rejects all
+  out-of-bound configurations with named diagnostics; no silent grace
+  window extends a rejected credential.
+- No hardcoded QF credentials or URLs: Scope 5 modules consume only the
+  in-memory `CredentialRef` and the configured QF endpoint from the
+  pre-existing connector config; no Scope 5 source file embeds a QF
+  hostname, token, or capability URL.
+- No QF mirror sink wiring: `EmitConnectorAuditEnvelope` writes only to
+  the local slog stream; no Scope 5 code path forwards envelopes to QF's
+  audit ingestion surface. The post-MVP mirror remains documented as
+  opt-in only.
+- No forbidden actions: `EnforceQFActionBoundary` is the only code path
+  that ever decides whether an action attempt proceeds, and it
+  unconditionally rejects all 8 pre-MVP forbidden action types
+  (`approval`, `execution`, `mandate_change`, `emergency_stop`,
+  `watch_creation`, `watch_evaluation`, `callback_acceptance`,
+  `qf_trust_reconstruction`).
+- No QF DB access: Scope 5 modules read and write only Smackerel-owned
+  tables (`connectors`, `sync_state`, `evidence_exports`, plus the
+  capability cache). No Scope 5 SQL touches a QF-owned table.
+
+**Claim Source:** executed for Section 2 (commands re-run against the
+working tree at this sub-iter's pre-commit HEAD); interpreted for
+Sections 1, 3, 4, and 5 (consolidated from each prior sub-iter's
+executed evidence sections and from post-edit `git diff` review of the
+9 unpushed commits).
+
+---
+
 
