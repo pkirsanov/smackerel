@@ -79,4 +79,11 @@ tmp/
 test_output.txt
 integration_output.txt
 *_output.txt
+# Ad-hoc local debug artifacts at repo root (may contain PII such as filesystem
+# paths or tailnet CGNAT IPs — must never be committed)
+/file_list.txt
+/output.txt
+/results.txt
+.vscode/tasks.json
+.copilot-temp/
 
