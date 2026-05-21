@@ -12682,4 +12682,301 @@ entries Scopes 1-4); `certification.certifiedCompletedPhases` remains
 
 ---
 
+## Scope 5 Credential Rotation Evidence (bubbles.implement, 2026-05-21T19:05:00Z)
+
+Sub-iteration A of the Scope 5 plan-ratified work plan: wire the
+already-implemented `qfdecisions.PlanCredentialRotation` rotation planner
+into the connector lifecycle as a real production-callable code path,
+and prove the wired path against the live disposable test stack.
+
+Sub-iteration boundary (deliberately preserved; routed forward as
+unresolved follow-up via `nextRequiredOwner`):
+
+- Sub-iteration B (boundary helper wiring) — NOT IN SCOPE this pass.
+- Sub-iteration C (engagement-signal flush + callback audit emission
+  points) — NOT IN SCOPE this pass.
+- Sub-iteration D (Scope 5 metric-parity unit + integration tests) —
+  NOT IN SCOPE this pass.
+- Sub-iteration E (Scope 5 stress proof for combined render+ingest
+  freshness) — NOT IN SCOPE this pass.
+- Sub-iteration F (operator documentation update) — NOT IN SCOPE this
+  pass.
+
+### Section 1: Production Caller Anchor
+
+The `RotateCredentials` method on `*qfdecisions.Connector` is the single
+production-callable entry point that wraps
+`qfdecisions.PlanCredentialRotation` and connects its plan output back
+into the live connector lifecycle (client swap, capability re-read,
+audit envelope emission, health pin).
+
+| Anchor | File | Line range | Role |
+|---|---|---|---|
+| `PlanCredentialRotation` | `internal/connector/qfdecisions/credentials.go` | 38-126 | Pure planner; returns `CredentialRotationPlan` with selected/previous credential ref, preserved state, diagnostics, audit envelope. Unchanged this pass. |
+| `(*Connector).RotateCredentials` | `internal/connector/qfdecisions/connector.go` | 552-611 | Production wiring; calls `PlanCredentialRotation`, builds a `Client` against the selected credential, calls `FetchCapability` + `CompatibilityCheck` BEFORE swapping in-memory state, emits the three `capability_handshake` audit-envelope branches (ok / rejected / error), then atomically swaps `c.client`, `c.cfg.CredentialRef`, `c.capability`, `c.capabilityStatus`, `c.capabilityFetchedAt`, and `c.health`. Wired in pre-existing local commit `c22151a5`; re-validated this pass. |
+
+Production-caller invariants demonstrated by inspection (verified
+against the source above):
+
+1. The rotation planner result is fed verbatim into the capability
+   re-read step: `rotatedClient := NewClient(..., plan.SelectedCredentialRef, ...)`
+   uses the planner-chosen newest-valid credential as the only credential
+   carried into the capability call.
+2. The capability re-read happens BEFORE any field on `c` is mutated;
+   the atomic mutation of `c.client / c.cfg.CredentialRef / c.capability /
+   c.capabilityStatus / c.capabilityFetchedAt / c.health` only runs after
+   both `FetchCapability` and `CompatibilityCheck` succeed.
+3. On any capability re-read failure (transport or compatibility), the
+   pre-rotation `c.client` and `c.cfg.CredentialRef` remain in place,
+   the rejection or error envelope is emitted, and an error is returned;
+   the persisted sync_state row is therefore not touched and the next
+   sync continues against the pre-rotation credential.
+
+Diagnostic emission verified per inspection of
+`internal/connector/qfdecisions/credentials.go` lines 104-110: the
+success-path planner attaches the three required diagnostic tokens
+`capability_re_read_required`, `sync_cursor_preserved`, and
+`evidence_export_state_preserved`. All three tokens are asserted by
+the integration test (Section 3 below).
+
+### Section 2: Unit Test Re-Validation (Live Capture)
+
+Focused unit-test run capturing the three Scope 5 rotation tests against
+the current working tree (Sub-iteration A baseline):
+
+```text
+$ go test -count=1 -v -run '^(TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState|TestPlanCredentialRotationRejectsInvalidCredentialBoundaries|TestRotateCredentialsRebuildsClientAndRefetchesCapabilityWithNewCredential)$' ./internal/connector/qfdecisions/...
+=== RUN   TestRotateCredentialsRebuildsClientAndRefetchesCapabilityWithNewCredential
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=capability_handshake outcome=ok reason="" ts=2026-05-21T18:57:46Z
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=ok reason="" ts=2026-05-22T12:00:00Z
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=capability_handshake outcome=ok reason="" ts=2026-05-22T12:00:00Z
+--- PASS: TestRotateCredentialsRebuildsClientAndRefetchesCapabilityWithNewCredential (0.03s)
+=== RUN   TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=ok reason="" ts=2026-05-20T12:00:00Z
+--- PASS: TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState (0.00s)
+=== RUN   TestPlanCredentialRotationRejectsInvalidCredentialBoundaries
+=== RUN   TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/one_active_credential
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=rejected reason=expected_exactly_two_active_credentials ts=2026-05-20T12:00:00Z
+=== RUN   TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/overlap_longer_than_24_hours
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=rejected reason=credential_overlap_exceeds_24h ts=2026-05-20T12:00:00Z
+=== RUN   TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/future_credential_is_not_active
+2026/05/21 18:57:46 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=rejected reason=credential_not_active ts=2026-05-20T12:00:00Z
+--- PASS: TestPlanCredentialRotationRejectsInvalidCredentialBoundaries (0.00s)
+    --- PASS: TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/one_active_credential (0.00s)
+    --- PASS: TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/overlap_longer_than_24_hours (0.00s)
+    --- PASS: TestPlanCredentialRotationRejectsInvalidCredentialBoundaries/future_credential_is_not_active (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/qfdecisions   0.050s
+Exit Code: 0
+```
+
+This re-confirms the three rejection branches (one-active, overlap
+exceeds 24h, future-only) and the success branch emit the
+`credential_rotation` envelope under the expected `outcome`/`reason`
+token, AND that the new `(*Connector).RotateCredentials` wrapper
+emits the full `capability_handshake (ok) → credential_rotation (ok)
+→ capability_handshake (ok)` envelope sequence end-to-end.
+
+**Claim Source:** executed.
+
+### Section 3: Integration Test Evidence (SCN-SM-041-019 Wired Path Against Live Stack)
+
+NEW: `tests/integration/qf_credential_rotation_test.go` (248 lines) —
+introduced this pass as the SCN-SM-041-019 live-stack proof for
+Sub-iteration A. The test runs the full sequence
+Connect → Sync → state-store Save → RotateCredentials → Sync against the
+disposable test postgres + nats stack plus an httptest QF stub, then
+asserts all eight invariants required by Scope 5 DoD lines 998-999.
+
+Stack lifecycle (disposable; no impact on persistent dev state):
+
+```text
+$ ./smackerel.sh --env test up
+Preparing disposable test stack...
+[+] Running 6/6
+ ✔ Network smackerel-test_default             Created
+ ✔ Container smackerel-test-postgres-1        Healthy
+ ✔ Container smackerel-test-nats-1            Healthy
+ ✔ Container smackerel-test-ollama-1          Healthy
+ ✔ Container smackerel-test-smackerel-ml-1    Healthy
+ ✔ Container smackerel-test-smackerel-core-1  Healthy
+Exit Code: 0
+```
+
+Focused integration test (DEVIATION NOTED — identical to the
+2026-05-21T15:53:16Z bubbles.test pass per executionHistory[-1]:
+`./smackerel.sh test integration` lacks a `--go-run` flag, so the
+focused selection is replicated via direct `go test` from the host with
+the EXACT loopback DATABASE_URL/POSTGRES_URL/NATS_URL overrides that
+`smackerel.sh` lines 736-740 inject inside the sanctioned runner
+container):
+
+```text
+$ set -a; source config/generated/test.env; set +a; \
+  DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:47001/smackerel?sslmode=disable" \
+  POSTGRES_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:47001/smackerel?sslmode=disable" \
+  NATS_URL="nats://${SMACKEREL_AUTH_TOKEN}@127.0.0.1:47002" \
+  go test -tags integration -count=1 -v -timeout 5m \
+    -run '^TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit$' \
+    ./tests/integration/...
+=== RUN   TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit
+2026/05/21 19:02:01 INFO connected to NATS url=nats://<REDACTED-AUTH-TOKEN>@127.0.0.1:47002
+2026/05/21 19:02:01 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=capability_handshake outcome=ok reason="" ts=2026-05-21T19:02:01Z
+2026/05/21 19:02:01 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=credential_rotation outcome=ok reason="" ts=2026-05-21T12:00:00Z
+2026/05/21 19:02:01 INFO qf-decisions: cross_product_audit audit_envelope_version=v1 trace_id="" packet_id="" export_id="" signal_id="" actor_ref=smackerel:qf-decisions-connector surface=qf-decisions action=capability_handshake outcome=ok reason="" ts=2026-05-21T12:00:00Z
+--- PASS: TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit (0.10s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration        0.151s
+Exit Code: 0
+```
+
+Stack teardown (disposable storage removed; idempotent network/volume
+cleanup — proves no persistent state was touched):
+
+```text
+$ ./smackerel.sh --env test down --volumes
+[+] Running 9/9
+ ✔ Container smackerel-test-ollama-1          Removed
+ ✔ Container smackerel-test-smackerel-core-1  Removed
+ ✔ Container smackerel-test-smackerel-ml-1    Removed
+ ✔ Container smackerel-test-postgres-1        Removed
+ ✔ Container smackerel-test-nats-1            Removed
+ ✔ Volume smackerel-test-postgres-data        Removed
+ ✔ Volume smackerel-test-ollama-data          Removed
+ ✔ Volume smackerel-test-nats-data            Removed
+ ✔ Network smackerel-test_default             Removed
+Exit Code: 0
+```
+
+Test-asserted invariants (each maps to a hard assertion in
+`qf_credential_rotation_test.go`):
+
+| # | Invariant | Assertion location |
+|---|---|---|
+| 1 | Planner selects `qf-rotated-token` as newest valid by `not_before`. | line ~164 (`plan.SelectedCredentialRef != "qf-rotated-token"`) |
+| 2 | Planner reports `qf-service-token` as previous. | line ~167 (`plan.PreviousCredentialRef != "qf-service-token"`) |
+| 3 | Diagnostics carry `capability_re_read_required`. | line ~175-188 (`wantDiagnostics` loop) |
+| 4 | Diagnostics carry `sync_cursor_preserved`. | same loop |
+| 5 | Diagnostics carry `evidence_export_state_preserved`. | same loop |
+| 6 | `plan.PreservedState.SyncCursor == preRotationCursor` ("qf-rotation-cursor-page-end"). | line ~191 |
+| 7 | `plan.PreservedState.EvidenceExportIDs` round-trips verbatim. | lines ~194-200 |
+| 8 | Rotation plan envelope `Action == credential_rotation` AND `Outcome == ok` AND `AuditEnvelopeVersion == v1`. | lines ~203-211 |
+
+Adversarial trip-wires asserted (would each independently fail this
+test if a future regression broke them):
+
+- Trip-wire 1 — credential SWAP audit: capability handshake MUST be
+  called exactly TWICE (once at Connect, once at Rotation), and the
+  SECOND call MUST carry `Bearer qf-rotated-token` (the rotated bearer
+  token). Asserted at test lines ~215-230. If a future regression keeps
+  using the previous credential after rotation, the recorded second
+  header value would still be `Bearer qf-service-token` and the test
+  fails.
+- Trip-wire 2 — cursor PRESERVATION through rotation: post-rotation
+  `runSync` returns the same cursor as pre-rotation, AND the persisted
+  `sync_state.sync_cursor` row reads back unchanged. Asserted at test
+  lines ~234-245. If a future regression clears the cursor on
+  rotation, the persisted value reads empty and the test fails.
+- Trip-wire 3 — diagnostic TOKEN preservation: missing any one of the
+  three operator diagnostic tokens causes a hard failure rather than
+  silent degradation of operator visibility. Asserted at test lines
+  ~175-188.
+
+**Claim Source:** executed.
+
+### Section 4: Build / Lint / Check (Sub-Iteration A Working Tree)
+
+```text
+$ ./smackerel.sh build
+[+] Building 2/2
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+Exit Code: 0
+
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 5, rejected: 0
+scenario-lint: OK
+Exit Code: 0
+
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: web/extension/manifest.json
+  OK: web/extension/manifest.firefox.json
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+Exit Code: 0
+```
+
+**Claim Source:** executed.
+
+### Section 5: Pre-Existing Local-Only Commits Acknowledgment (Scope Boundary Deviation)
+
+For audit transparency: this Sub-iteration A pass found three
+local-only unpushed commits already present on the working branch at
+session start, exceeding the explicit Sub-iteration A boundary:
+
+| Commit | Subject | Sub-iteration | Status |
+|---|---|---|---|
+| `c22151a5` | RotateCredentials + boundary_attempted in Sync | A (wiring) + partial B (boundary_attempted) | Re-validated this pass; A surface kept; B-portion flagged for review |
+| `a3a0d59d` | Engagement-signal flush + callback audit helpers | C (audit emission points) | NOT IN SCOPE this pass; flagged for review by next agent |
+| `9e905280` | `metrics_test.go` additions | D (metric parity tests) | NOT IN SCOPE this pass; flagged for review by next agent |
+
+This Sub-iteration A pass adds ONE additional commit on top of these
+three. Operator awareness recommended for the routed B/C/D follow-up
+work to determine whether to keep, split, or rewrite these
+pre-existing commits before pushing.
+
+**Claim Source:** interpreted (pre-existing baseline review, not
+re-executed in this session).
+
+### Section 6: DoD Flips This Pass
+
+| Spec line (scopes.md) | Before | After | Evidence anchor |
+|---|---|---|---|
+| ~line 998 — "SCN-SM-041-019: Credential rotation accepts exactly two active credentials... selects newest valid... rejects overlap beyond 24 hours... emits operator diagnostics plus rotation audit envelopes" | `[ ]` | `[x]` | This section (Sections 1, 2, 3 — wiring + unit + integration evidence) |
+| ~line 999 — "SCN-SM-041-019: Rotation preserves `sync_state.sync_cursor`, persisted QF capability state, and Scope 4 evidence/export idempotency records... re-reads capabilities at rotation start before any sync/render/export call uses the new credential" | `[ ]` | `[x]` | This section (Sections 1, 3 — production caller + integration cursor/idempotency/capability assertions) |
+
+No other DoD checkbox modified this pass. No top-level scope status
+change this pass (Scope 5 remains `Not Started` in
+`certification.scopeProgress`; certification fields are
+foreign-owned). No `certification.*` field write this pass.
+
+### Section 7: Artifact Diff Summary
+
+| Artifact | Lines added | Lines removed | Net effect |
+|---|---|---|---|
+| `tests/integration/qf_credential_rotation_test.go` | 248 new lines (whole new file) | 0 | New SCN-SM-041-019 integration proof against live disposable stack |
+| `specs/041-qf-companion-connector/scopes.md` | 2 DoD checkbox flips (`[ ]` → `[x]`) on Scope 5 Core Behavior SCN-019 items | 0 | Records that Sub-iteration A core-behavior surface is wired and integration-proven |
+| `specs/041-qf-companion-connector/report.md` | this entire `## Scope 5 Credential Rotation Evidence` section | 0 | Evidence anchor for the two flipped DoD items + sub-iteration boundary acknowledgment |
+| `specs/041-qf-companion-connector/state.json` | 1 new `executionHistory` entry + 1 new `execution.completedPhaseClaims` entry + `lastUpdatedAt` refresh | 0 | Phase recording per scope-workflow.md; certification fields untouched |
+| Source code (`internal/connector/qfdecisions/*.go`) | 0 | 0 | RotateCredentials wiring was pre-committed in `c22151a5` (Section 5); not modified this pass |
+
+### Section 8: RESULT-ENVELOPE Coverage
+
+This evidence section satisfies the dispatch's
+`completed_owned`/`route_required` evidence requirement for:
+
+- Production-caller anchor for `PlanCredentialRotation` — Section 1.
+- Integration test PASS evidence (SCN-SM-041-019) — Section 3.
+- Audit envelope emission proof (3-of-3 expected envelopes captured
+  from `INFO qf-decisions: cross_product_audit ...` log lines during
+  the integration run) — Section 3.
+
+---
+
 
