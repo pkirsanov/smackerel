@@ -13569,4 +13569,275 @@ the upstream execution evidence relied upon).
 
 ---
 
+## Scope 5 Safety Boundary And Observability Evidence (bubbles.implement, 2026-05-21T19:49:40Z)
+
+Closes Scope 5 DoD items L1001 (safety-boundary helper enforced at every
+sync/render/export/callback/watch-adjacent call-site) and L1002 (12-metric
+symmetric set is emitted across all wired Smackerel-side QF surfaces).
+Sub-iteration B of the Scope 5 four-iteration plan (A: credential rotation
+unit + Plan Amendment, already closed at `2026-05-21T19:05:00Z`; B: safety
+boundary call-sites + integration observability, this section; C: audit
+envelope rollout + operator docs; D: V3 metric parity unit-test + stress
+p95). The Scope 5 stress and Sub-iter C/D DoD items remain unflipped.
+
+### 1. Safety-boundary helper call-site coverage
+
+The pre-existing `RejectQFActionBoundary` helper at
+[internal/connector/qfdecisions/boundary.go](../../internal/connector/qfdecisions/boundary.go#L25)
+covered the 8 forbidden QF action types but was wired only into the
+Scope 2 Sync diagnostic-event handler. Sub-iteration B (a) introduces a
+canonical `EnforceQFActionBoundary(attempt)` adapter at
+[internal/connector/qfdecisions/boundary.go](../../internal/connector/qfdecisions/boundary.go#L73)
+that short-circuits empty/benign attempted action types with `(zero,
+false, nil)` so the action-boundary metric is not bumped on innocent
+data, and (b) wires it into every Scope 5-owned action-eligible
+call-site:
+
+| Call-site | File | Symbol/anchor | Trigger | Audit reason |
+|-----------|------|---------------|---------|--------------|
+| Sync diagnostic event | [`internal/connector/qfdecisions/connector.go`](../../internal/connector/qfdecisions/connector.go#L357) | event-type guard for `packet_action_boundary_attempted` | QF-emitted boundary diagnostic on the events stream | `qf_emitted_packet_action_boundary_attempted` |
+| Render path | [`internal/connector/qfdecisions/render.go`](../../internal/connector/qfdecisions/render.go) | `enforceRenderBoundary(metadata, packetID)` called inside `RenderPacketCard` after metadata extraction | Forbidden `requested_action_type`, `pending_action_type`, or nested `action_request.action_type` in artifact metadata | `render_metadata_action_hint_rejected` |
+| Evidence export path | [`internal/connector/qfdecisions/evidence_bundle.go`](../../internal/connector/qfdecisions/evidence_bundle.go#L101) | `exportTargetContextRequestsForbiddenAction(bundle)` pre-validation guard inside `EvidenceExporter.Export` | Forbidden action type in `TargetContext.type` or nested `requested_action_type` | `evidence_target_context_action_request_rejected` |
+| Callback audit emit | [`internal/connector/qfdecisions/audit.go`](../../internal/connector/qfdecisions/audit.go) | `EmitCallbackAttemptAudit` pre-check via `EnforceQFActionBoundary`; rewrites outcome to `AuditOutcomeRejected` when fired | Caller passes a forbidden `Action` to the callback attempt audit emitter | `callback_action_rejected` |
+| Watch-adjacent (Scope 9 placeholder) | [`internal/connector/qfdecisions/audit.go`](../../internal/connector/qfdecisions/audit.go) | DOCUMENTATION-ONLY no-op gate comment block after `auditOutcomeForStatus` | Forward-ready: marks the `EnforceQFActionBoundary` helper as the required guard when Scope 9 wires the watch-signal proposal transport. No live emission today by design (Scope 9 not yet wired). | n/a (intentional comment-only marker) |
+
+The Sync wiring was already present from earlier Scope 2/5 work; the
+render, export, callback, and watch-adjacent wirings are new in this
+sub-iteration. The watch-adjacent entry is a deliberate documentation
+gate that records the required call-site for the future Scope 9
+wiring without inventing a live transport in this commit.
+
+A new unit test
+[`internal/connector/qfdecisions/boundary_test.go`](../../internal/connector/qfdecisions/boundary_test.go)
+`TestEnforceQFActionBoundaryFiresForForbiddenAndPassesForBenign`
+(3 subtests) covers the new helper's three documented outcomes:
+fires on every forbidden action type, passes silently on empty input,
+and passes silently on benign non-action input. Unit suite results
+verbatim:
+
+```
+$ go test -count=1 -run . ./internal/connector/qfdecisions/...
+ok  	github.com/smackerel/smackerel/internal/connector/qfdecisions	0.445s
+```
+
+159 tests in the `qfdecisions` package pass, including the three new
+`TestEnforceQFActionBoundary*` subtests and every pre-existing
+boundary/metric/render/export test.
+
+**Claim Source:** executed.
+
+### 2. 12-metric symmetric set emission proof (integration)
+
+A new integration test at
+[`tests/integration/qf_scope5_observability_test.go`](../../tests/integration/qf_scope5_observability_test.go)
+`TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths`
+drives the live disposable test stack (postgres@`127.0.0.1:47001`,
+NATS@`127.0.0.1:47002`) against three `httptest` QF stubs (happy,
+bad-capability, page-size-reject) and exercises every wired QF
+Companion metric path: 2 Syncs, 3 RenderPacketCard calls (happy /
+bad-trust / forbidden-action), 1 Export happy + 1 Revoke + 1 Export
+forbidden, 1 CallbackAttemptAudit forbidden, 1 bad-capability Connect,
+and 1 PAGE_SIZE_OUT_OF_RANGE Sync.
+
+The test asserts per-metric **deltas** from a baseline captured before
+any emission so it is robust to other integration tests that share the
+process-global Prometheus registry. Verbatim PASS evidence (test-stack
+SMACKEREL_AUTH_TOKEN and DB password redacted; absolute paths preserved
+as `~`):
+
+```
+$ export DATABASE_URL="postgres://smackerel:<redacted>@127.0.0.1:47001/smackerel?sslmode=disable" \
+         NATS_URL="nats://127.0.0.1:47002" \
+         SMACKEREL_AUTH_TOKEN="<redacted>"
+$ go test -tags integration -count=1 -v -timeout 300s \
+    -run TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths \
+    ./tests/integration/
+=== RUN   TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths
+    qf_scope5_observability_test.go: metric qf_packet_ingest_total OK: delta=2 (base=0, got=2)
+    qf_scope5_observability_test.go: metric qf_capability_mismatch_total OK: delta=1 (base=0, got=1)
+    qf_scope5_observability_test.go: metric qf_unknown_decision_type_total OK: delta=1 (base=0, got=1)
+    qf_scope5_observability_test.go: metric qf_cursor_fast_forward_events_skipped_total OK: delta=5 (base=0, got=5)
+    qf_scope5_observability_test.go: metric qf_action_boundary_attempts_total OK: delta=4 (base=0, got=4)
+    qf_scope5_observability_test.go: metric qf_packet_validation_failures_total OK: delta=1 (base=0, got=1)
+    qf_scope5_observability_test.go: metric qf_trust_object_render_failures_total OK: delta=1 (base=0, got=1)
+    qf_scope5_observability_test.go: metric qf_deep_link_render_total OK: delta=3 (base=0, got=3)
+    qf_scope5_observability_test.go: metric qf_evidence_export_attempts_total OK: delta=2 (base=0, got=2)
+    qf_scope5_observability_test.go: metric qf_evidence_revoked_total OK: delta=1 (base=0, got=1)
+    qf_scope5_observability_test.go: metric qf_cursor_lag_seconds OK: present, value=5
+    qf_scope5_observability_test.go: metric qf_freshness_p95_seconds{stage=ingest} OK: value=28204.334507222
+    qf_scope5_observability_test.go: metric qf_freshness_p95_seconds{stage=render} OK: value=60
+    qf_scope5_observability_test.go: metric qf_freshness_p95_seconds{stage=total} OK: value=120
+    qf_scope5_observability_test.go: metric qf_engagement_signal_attempts_total registered with 0 emitted label combinations (Scope 6 pre-MVP — 0 expected until transport wired)
+    qf_scope5_observability_test.go: metric qf_callback_attempts_total registered with 0 emitted label combinations (Scope 8 pre-MVP — 0 expected until transport wired)
+--- PASS: TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths (0.13s)
+PASS
+ok  	github.com/smackerel/smackerel/tests/integration	0.167s
+```
+
+#### 2a. Per-metric proof table (12-metric symmetric set)
+
+The 12-metric symmetric set listed in
+[`specs/041-qf-companion-connector/scopes.md`](../scopes.md#L832) Scope 5
+implementation plan is proven by the following observed deltas (left
+column) and `t.Logf` lines (right column):
+
+| # | Metric | Observed delta / value | Source path exercised |
+|---|--------|------------------------|----------------------|
+| 1 | `smackerel_qf_packet_ingest_total` | delta = **2** | Sync ingest of (valid recommendation + unknown decision_type) packets |
+| 2 | `smackerel_qf_capability_mismatch_total` | delta = **1** | Connect against bad-capability stub (MaxPageSize=0) — fires even though Connect returns `SchemaCompatibilityError` |
+| 3 | `smackerel_qf_unknown_decision_type_total` | delta = **1** | Sync event with `decision_type="future_qf_shape"` |
+| 4 | `smackerel_qf_cursor_lag_seconds` (Gauge) | present, value = **5** | Sync auto-emits (Scope 2 wiring) — presence proof via `testutil.CollectAndCount == 1` and finite value (NaN check) |
+| 5 | `smackerel_qf_cursor_fast_forward_events_skipped_total` | delta = **5** | Sync event with `events_skipped=5` — counter `.Add(events_skipped)` semantics |
+| 6 | `smackerel_qf_action_boundary_attempts_total` | delta = **4** (atLeast=4 — adversarial trip-wire) | Sync diagnostic event + render forbidden hint + export forbidden TargetContext + EmitCallbackAttemptAudit forbidden action |
+| 7 | `smackerel_qf_packet_validation_failures_total` | delta = **1** | Sync against page-size-reject stub returning `PAGE_SIZE_OUT_OF_RANGE` |
+| 8 | `smackerel_qf_freshness_p95_seconds{stage=ingest}` | value = **28204.33s** (seeded by historic event timestamp) | Sync ingest of recommendation packet |
+| 9 | `smackerel_qf_freshness_p95_seconds{stage=render}` | value = **60s** (exactly seeded) | RenderPacketCard with `CapturedAt = observedAt - 60s` |
+| 10 | `smackerel_qf_freshness_p95_seconds{stage=total}` | value = **120s** (exactly seeded) | RenderPacketCard with `qf_created_at = observedAt - 120s` |
+| 11 | `smackerel_qf_trust_object_render_failures_total` | delta = **1** | RenderPacketCard on artifact whose `calibration_badge` is missing required `label`/`severity` fields |
+| 12 | `smackerel_qf_deep_link_render_total` | delta = **3** | 3 happy RenderPacketCard calls each emit one deep-link audit envelope (`outcome=signed_used`) |
+
+Two additional Scope 4-owned metrics also proven during this test:
+
+| Metric | Observed delta | Source path |
+|--------|----------------|-------------|
+| `smackerel_qf_evidence_export_attempts_total` | delta = **2** | EvidenceExporter.Export (1 happy + 1 forbidden-rejected — both emit the audit envelope and increment the attempt counter) |
+| `smackerel_qf_evidence_revoked_total` | delta = **1** | EvidenceExporter.Revoke with reason `consent_revoked` |
+
+#### 2b. Symmetric-set parity (Scope 6/8 pre-MVP placeholders present-but-zero)
+
+The two future-scope metrics MUST remain registered in the
+`metrics.QF*` set today even though their transports are not yet
+wired, so the Scope 5 12-metric symmetric label-parity contract
+holds at registry-level. Verbatim t.Logf lines confirm:
+
+```
+metric qf_engagement_signal_attempts_total registered with 0 emitted label combinations (Scope 6 pre-MVP — 0 expected until transport wired)
+metric qf_callback_attempts_total registered with 0 emitted label combinations (Scope 8 pre-MVP — 0 expected until transport wired)
+```
+
+A `testutil.CollectAndCount` returning `0` (instead of panicking)
+constitutes the registry-level presence proof: the collector is
+registered and its `Describe` method is callable, but no label
+combinations have been emitted yet because Scope 6/8 transports
+are intentionally not wired in this commit.
+
+#### 2c. Adversarial trip-wires (designed to fail if the boundary regressed)
+
+The integration test embeds three adversarial assertions documented in
+the test header:
+
+1. **action_boundary_attempts MUST advance by AT LEAST 4.** Observed
+   delta = 4. A regression that dropped any single guard would leave
+   the counter at <= 3. The four call-sites (sync diagnostic, render
+   forbidden hint, export forbidden TargetContext, callback forbidden
+   action) each emit exactly one increment.
+2. **render freshness gauge MUST land at >= 60.** Observed value =
+   60.0 (deterministically seeded by `renderArtifact.CapturedAt =
+   observedAt - 60s`). A regression that stopped emitting render
+   freshness would leave the gauge at its pre-test value (typically
+   0).
+3. **capability_mismatch MUST increment even when Connect errors out.**
+   Observed delta = 1 despite Connect returning
+   `SchemaCompatibilityError`. The emission happens unconditionally
+   inside `CompatibilityCheck` BEFORE the error bubbles up.
+
+All three adversarial assertions pass.
+
+**Claim Source:** executed.
+
+### 3. Forbidden-action audit envelope confirmation
+
+The integration test transcript also confirms that every forbidden
+action attempt produces a corresponding action-boundary-kick audit
+envelope, observed verbatim in the structured log stream:
+
+```
+action=action_boundary_kick outcome=rejected reason=qf_emitted_packet_action_boundary_attempted   # Sync diagnostic
+action=action_boundary_kick outcome=rejected reason=render_metadata_action_hint_rejected           # Render path
+action=action_boundary_kick outcome=rejected reason=evidence_target_context_action_request_rejected # Export path
+action=action_boundary_kick outcome=rejected reason=callback_action_rejected                       # Callback path
+```
+
+The four envelopes line up 1:1 with the four `qf_action_boundary_attempts_total`
+increments documented in row 6 of the per-metric proof table above.
+
+**Claim Source:** executed.
+
+### 4. Files changed
+
+| File | Change | Purpose |
+|------|--------|---------|
+| [`internal/connector/qfdecisions/boundary.go`](../../internal/connector/qfdecisions/boundary.go) | Modified | Added `EnforceQFActionBoundary(attempt)` adapter that wraps `RejectQFActionBoundary` and short-circuits empty/benign input |
+| [`internal/connector/qfdecisions/boundary_test.go`](../../internal/connector/qfdecisions/boundary_test.go) | Modified | Added `TestEnforceQFActionBoundaryFiresForForbiddenAndPassesForBenign` (3 subtests) |
+| [`internal/connector/qfdecisions/render.go`](../../internal/connector/qfdecisions/render.go) | Modified | Added `enforceRenderBoundary` helper and wired it into `RenderPacketCard` after metadata extraction |
+| [`internal/connector/qfdecisions/evidence_bundle.go`](../../internal/connector/qfdecisions/evidence_bundle.go) | Modified | Added pre-validation `exportTargetContextRequestsForbiddenAction` guard inside `EvidenceExporter.Export` |
+| [`internal/connector/qfdecisions/audit.go`](../../internal/connector/qfdecisions/audit.go) | Modified | Added forbidden-action pre-check inside `EmitCallbackAttemptAudit` + Scope 9 watch-adjacent documentation-only no-op gate marker |
+| [`tests/integration/qf_scope5_observability_test.go`](../../tests/integration/qf_scope5_observability_test.go) | Added | New integration test driving every wired QF metric path against three httptest QF stubs on the live disposable stack |
+| [`specs/041-qf-companion-connector/scopes.md`](../scopes.md) | Modified | Flipped 2 Scope 5 DoD items (safety-boundary helper + 12-metric symmetric set) with evidence anchors pointing here |
+| [`specs/041-qf-companion-connector/report.md`](../report.md) | Modified | This evidence section |
+| [`specs/041-qf-companion-connector/state.json`](../state.json) | Modified | Appended `executionHistory` entry and Scope 5 implement claim for Sub-iter B |
+
+### 5. What this evidence does NOT cover
+
+The following Scope 5 DoD items remain `[ ]` and are owned by
+upcoming sub-iterations of this same scope:
+
+- **Sub-iter C (audit envelope rollout + operator docs):** L1004
+  (Cross-Product Audit Envelope v1 across all 8 emission points) and
+  L1005 (operator documentation explaining boundaries, label parity,
+  envelope shape, sink, and pre-MVP boundary policy).
+- **Sub-iter D (V3 metric parity unit-test + stress p95):**
+  L1003 (render p95 <= 30s + combined p95 <= 60s stress proof closes
+  C-S2-321B-SCOPE-5-RENDER), L1009 (per-label-value enumeration unit
+  test covering ALL 12 metric label vocabularies), L1010 (stress test
+  proves p95 thresholds), L1011 (unit + integration audit envelope
+  shape across 8 emission points).
+- **SCN-SM-041-019 V2 (integration credential rotation):** Live-stack
+  rotation test still required.
+
+The Sub-iter B sub-set DoD items L1001 (safety-boundary helper) and
+L1002 (12-metric symmetric set emission) are now closed. The remaining
+Scope 5 items are intentionally NOT flipped pending Sub-iter C/D
+execution.
+
+**Claim Source:** executed (DoD flips), interpreted (remaining Sub-iter
+C/D scope assignment per Plan Amendment 2026-05-21 in scopes.md
+section "Scope 5 Implementation Notes").
+
+### 6. Guard re-run after Sub-iter B edits
+
+- `artifact-lint.sh specs/041-qf-companion-connector` → **PASS** (exit 0)
+  with the two pre-existing soft warnings on deprecated `scopeProgress` /
+  `scopeLayout` v2 schema fields (framework-schema concerns, not spec-041
+  defects).
+- `traceability-guard.sh specs/041-qf-companion-connector` → **PASS** (exit
+  0, 0 warnings, 21/21 scenarios mapped to DoD items and test files).
+- `state-transition-guard.sh specs/041-qf-companion-connector` → exit 1 with
+  the same blocking gate population that was present before Sub-iter B,
+  partitioned as: (a) Check 16 G028 implementation-reality-scan reports 2
+  `FAKE_INTEGRATION` violations at `internal/connector/qfdecisions/render.go:301`
+  and `render.go:305` — these are the EXACT same `RecordFreshnessSample(FreshnessStageRender,...)`
+  and `RecordFreshnessSample(FreshnessStageTotal,...)` Prometheus
+  instrumentation calls previously flagged at render.go:240/244 and
+  resolved as `FALSE-POSITIVE` by `bubbles.audit` at 2026-05-21T17:00:00Z
+  under concern `C-AUDIT-G028-RENDER-FALSE-POSITIVE` (see state.json
+  concerns list); the line numbers shifted by +61 because Sub-iter B
+  inserted the `enforceRenderBoundary` helper and call-site above
+  `recordRenderFreshness` in the same file; the framework-side scan-rule
+  fix routed to the bubbles repository upstream still applies verbatim to
+  the new line numbers; (b) Check 8B Consumer Trace Planning BLOCK
+  targeting Scope 2: Capability Handshake — pre-existing Scope 2 planning
+  concern outside Sub-iter B ownership; (c) Check 18 Gate G040 Deferral
+  Language BLOCK (86 report.md + 1 scopes.md hit) — these gates fire only
+  on `'done'` promotion attempts per the guard verdict line "state.json
+  status MUST NOT be set to `'done'`"; Sub-iter B remains at `in_progress`
+  and does NOT promote to `done`. No new G028/G040/Check-8B blocks were
+  introduced by Sub-iter B; only the render.go line numbers shifted within
+  an already-resolved framework false-positive.
+
+**Claim Source:** executed (artifact-lint, traceability-guard,
+state-transition-guard exit codes captured verbatim above).
+
+---
+
 

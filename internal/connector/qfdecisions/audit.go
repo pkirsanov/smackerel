@@ -135,10 +135,37 @@ type CallbackAttemptAuditInput struct {
 // and is preserved verbatim in the envelope `reason` slot so audit
 // consumers can correlate against the callback transport log without
 // new envelope fields. SCN-SM-041-021.
+//
+// SCN-SM-041-020 callback-adjacent safety-boundary defense-in-depth:
+// the helper pre-checks `input.Action` via EnforceQFActionBoundary
+// BEFORE building or emitting the callback audit envelope. If the
+// callback payload's action is a forbidden QF action type (approval,
+// execution, mandate_change, emergency_stop, watch_*,
+// callback_acceptance, qf_trust_reconstruction) the boundary helper
+// fires first and the callback envelope's outcome is forced to
+// AuditOutcomeRejected so the same emission point cannot accidentally
+// report `ok` for a payload that violated the pre-MVP no-action
+// contract. Scope 8 has NOT wired the signed-callback transport yet
+// (audit.go owns shape only; HMAC signing, dispatch, and acceptance
+// remain Scope 8 territory) so no production caller invokes this
+// helper at HEAD; the guard is forward-ready and will become operative
+// when Scope 8 wires the signed-callback transport.
 func EmitCallbackAttemptAudit(input CallbackAttemptAuditInput) EvidenceAuditEnvelope {
 	reason := strings.TrimSpace(input.Reason)
 	if reason == "" {
 		reason = strings.TrimSpace(input.Action)
+	}
+	outcome := auditOutcomeForStatus(input.Status)
+	if _, fired, _ := EnforceQFActionBoundary(ActionBoundaryAttempt{
+		AttemptedActionType: strings.TrimSpace(input.Action),
+		TraceID:             input.TraceID,
+		PacketID:            input.PacketID,
+		ActorRef:            input.ActorRef,
+		Surface:             input.Surface,
+		Reason:              "callback_action_rejected",
+		ObservedAt:          input.ObservedAt,
+	}); fired {
+		outcome = AuditOutcomeRejected
 	}
 	envelope := BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
 		TraceID:    input.TraceID,
@@ -146,7 +173,7 @@ func EmitCallbackAttemptAudit(input CallbackAttemptAuditInput) EvidenceAuditEnve
 		ActorRef:   input.ActorRef,
 		Surface:    input.Surface,
 		Action:     AuditActionCallbackAttempt,
-		Outcome:    auditOutcomeForStatus(input.Status),
+		Outcome:    outcome,
 		Reason:     reason,
 		ObservedAt: input.ObservedAt,
 	})
@@ -168,3 +195,29 @@ func auditOutcomeForStatus(status string) string {
 		return strings.TrimSpace(strings.ToLower(status))
 	}
 }
+
+// SCN-SM-041-020 watch-adjacent safety-boundary gate (DOCUMENTATION-ONLY).
+//
+// Scope 9 (Watch-Signal Proposal Exporter) has NOT been activated and no
+// production transport, signing pipeline, or watch-proposal request handler
+// exists at HEAD. Per scopes.md Change Boundary, Scope 5 MUST NOT implement
+// Scope 9 watch-signal proposal request/signing/rejection transport. This
+// comment is the documented no-op gate required by the dispatch:
+//
+//	"If a path doesn't currently expose such actions (because the relevant
+//	transport is Scope 6/8/9 territory), document the no-op gate with a code
+//	comment citing 'Scope 5 boundary helper; will become operative when
+//	Scope X wires the transport'."
+//
+// When Scope 9 wires the watch-signal proposal transport, the first
+// statement of EVERY proposal-emitter call-site MUST invoke
+// EnforceQFActionBoundary(ActionBoundaryAttempt{
+//
+//	AttemptedActionType: proposalRequest.ActionType,
+//	...}) so a proposal that names `watch_creation` or `watch_evaluation`
+//
+// (both forbidden via IsForbiddenQFActionType) is rejected BEFORE any HTTP
+// transport, signing, or QF-bridge round trip happens. Smackerel MUST NOT
+// author, evaluate, or accept QF watch-signal proposals; it can only
+// observe QF-emitted diagnostics through the Scope 2 sync path. The Scope 5
+// boundary helper is forward-ready for that wiring.

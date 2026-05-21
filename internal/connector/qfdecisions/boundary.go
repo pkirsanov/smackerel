@@ -59,3 +59,26 @@ func IsForbiddenQFActionType(actionType string) bool {
 		return false
 	}
 }
+
+// EnforceQFActionBoundary is the shared no-action defense-in-depth guard used
+// by sync, render, evidence export, callback-adjacent, and watch-adjacent
+// call-sites. It pre-checks the supplied attempted action type against
+// IsForbiddenQFActionType and, when the type is forbidden, dispatches to
+// RejectQFActionBoundary so the action-boundary-kick audit envelope is
+// emitted and smackerel_qf_action_boundary_attempts_total{attempted_action_type}
+// is incremented BEFORE any side effect (artifact emission, card render, HTTP
+// export, callback acceptance, or watch proposal) reaches the surface.
+//
+// Returns (diagnostic, fired=true, err) when the action type is forbidden so
+// callers can short-circuit. Returns (zero, false, nil) when the action type
+// is empty or not forbidden so non-action paths remain unaffected. This is the
+// only function call-site wirings should use; calling RejectQFActionBoundary
+// directly is reserved for the Sync-loop's QF-bridge-emitted
+// packet_action_boundary_attempted event (SCN-SM-041-020).
+func EnforceQFActionBoundary(attempt ActionBoundaryAttempt) (ActionBoundaryDiagnostic, bool, error) {
+	if !IsForbiddenQFActionType(attempt.AttemptedActionType) {
+		return ActionBoundaryDiagnostic{}, false, nil
+	}
+	diagnostic, err := RejectQFActionBoundary(attempt)
+	return diagnostic, true, err
+}

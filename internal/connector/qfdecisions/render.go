@@ -96,6 +96,27 @@ func RenderPacketCard(ctx context.Context, artifact connector.RawArtifact, optio
 	unknownDecisionType := boolFromMetadata(metadata, "unknown_decision_type")
 	packetID := stringFromMetadata(metadata, "packet_id")
 
+	// SCN-SM-041-020 render-path safety-boundary defense-in-depth:
+	// QF packet cards are read-only by contract (ReadOnly=true,
+	// ActionEligible=false set unconditionally below). If upstream metadata
+	// ever carries a structured action-request hint (`action_request` map
+	// with `action_type`, or a top-level `requested_action_type` /
+	// `pending_action_type` field) for a forbidden QF action type
+	// (approval, execution, mandate_change, emergency_stop, watch_*,
+	// callback_acceptance, qf_trust_reconstruction), the render path MUST
+	// emit the action-boundary-kick audit envelope and increment
+	// smackerel_qf_action_boundary_attempts_total BEFORE the card is built
+	// so the violation is observable. The card is still rendered as
+	// read-only so the user never sees an action surface. Pre-MVP QF does
+	// NOT send these metadata keys (capability snapshot constrains
+	// SupportedDecisionTypes to recommendation|no_action|policy_denial|
+	// analysis_note and design 063 §F2 prohibits action-eligible
+	// rendering), so this gate is silent in the happy path. The gate
+	// becomes operative if (a) a future QF regression injects an
+	// action-request hint or (b) a future Scope 8 transport hand-off
+	// attempts to mark a packet action-eligible at render time.
+	enforceRenderBoundary(metadata, packetID)
+
 	card := PacketCard{
 		CardKind:            CardKindQFPacket,
 		DisplayLabel:        defaultQFPacketDisplayLabel,
@@ -129,6 +150,46 @@ func RenderPacketCard(ctx context.Context, artifact connector.RawArtifact, optio
 
 	card.DeepLink = renderDeepLink(ctx, metadata, surface, options, packetID)
 	return card, nil
+}
+
+// enforceRenderBoundary applies SCN-SM-041-020 defense-in-depth to the render
+// surface. It scans `metadata` for forbidden-action hints in three locations:
+//   - top-level `requested_action_type` (string)
+//   - top-level `pending_action_type` (string)
+//   - nested `action_request` map's `action_type` key (string)
+//
+// For each hit, the helper calls EnforceQFActionBoundary so a forbidden type
+// (approval, execution, mandate_change, emergency_stop, watch_*,
+// callback_acceptance, qf_trust_reconstruction) fires the action-boundary
+// audit envelope and increments
+// smackerel_qf_action_boundary_attempts_total{attempted_action_type=<value>}
+// BEFORE the card is built. The render surface never becomes action-eligible
+// regardless of metadata content (RenderPacketCard sets ActionEligible=false
+// unconditionally on every code path).
+func enforceRenderBoundary(metadata map[string]any, packetID string) {
+	traceID := stringFromMetadata(metadata, "trace_id")
+	reason := "render_metadata_action_hint_rejected"
+	candidates := []string{
+		stringFromMetadata(metadata, "requested_action_type"),
+		stringFromMetadata(metadata, "pending_action_type"),
+	}
+	if actionRequest, ok := mapFromMetadata(metadata, "action_request"); ok {
+		candidates = append(candidates, stringFromMap(actionRequest, "action_type"))
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		_, _, _ = EnforceQFActionBoundary(ActionBoundaryAttempt{
+			AttemptedActionType: candidate,
+			TraceID:             traceID,
+			PacketID:            packetID,
+			ActorRef:            AuditActorSmackerelConnector,
+			Surface:             SurfaceWeb,
+			Reason:              reason,
+			ObservedAt:          time.Now().UTC(),
+		})
+	}
 }
 
 func renderTrustObjects(metadata map[string]any) ([]TrustObjectRender, bool) {

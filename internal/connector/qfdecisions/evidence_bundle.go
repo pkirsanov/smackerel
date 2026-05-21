@@ -79,6 +79,36 @@ func NewEvidenceExporter(client *Client, store *EvidenceExportStore, limiter *Ev
 
 func (e *EvidenceExporter) Export(ctx context.Context, bundle PersonalEvidenceBundle, capability QFBridgeCapability) (EvidenceExportRecord, EvidenceExportResponse, error) {
 	observedAt := e.now().UTC()
+	// SCN-SM-041-020 export-path safety-boundary defense-in-depth:
+	// PersonalEvidenceBundle exports are a consent-scoped read-out of
+	// already-captured smackerel artifacts (no financial-action surface).
+	// If a bundle ever carries a forbidden QF action type in its
+	// `target_context` map (either as TargetContextTypeKey or as a nested
+	// `requested_action_type` field), the export path MUST emit the
+	// action-boundary-kick audit envelope and increment
+	// smackerel_qf_action_boundary_attempts_total BEFORE the bundle is
+	// validated, persisted, or transmitted to QF. Pre-MVP QF capability
+	// snapshots constrain SupportedTargetContextTypes to non-action types
+	// (guided_analysis, rhai_run, saved_result, analysis_context,
+	// packet_context), so this gate is silent in the happy path. It
+	// becomes operative if (a) a future caller constructs a bundle whose
+	// TargetContext claims an action surface or (b) future expansion of
+	// the evidence export API introduces a transport that could enable a
+	// financial action. The ValidateEvidenceBundleForExport call below
+	// remains responsible for capability-supported target-context
+	// rejection; this guard is a higher-precedence pre-MVP veto so the
+	// boundary metric and audit envelope land even if validation passes.
+	if exportTargetContextRequestsForbiddenAction(bundle) {
+		_, _, _ = EnforceQFActionBoundary(ActionBoundaryAttempt{
+			AttemptedActionType: stringFromExportTargetContext(bundle.TargetContext),
+			TraceID:             stringFromTargetContextKey(bundle.TargetContext, TargetContextTraceIDKey),
+			PacketID:            stringFromTargetContextKey(bundle.TargetContext, TargetContextPacketIDKey),
+			ActorRef:            AuditActorSmackerelConnector,
+			Surface:             "evidence_export",
+			Reason:              "evidence_target_context_action_request_rejected",
+			ObservedAt:          observedAt,
+		})
+	}
 	if err := ValidateEvidenceBundleForExport(bundle, capability, e.limiter, e.credentialRef); err != nil {
 		reason := evidenceErrorReason(err)
 		audit := BuildEvidenceAuditEnvelope(AuditActionEvidenceExportAttempt, AuditOutcomeRejected, reason, bundle, observedAt)
@@ -560,4 +590,42 @@ func decodeEvidenceBridgeError(body []byte) BridgeErrorResponse {
 		bridgeErr.Code = bridgeErr.Reason
 	}
 	return bridgeErr
+}
+
+// exportTargetContextRequestsForbiddenAction returns true when a
+// PersonalEvidenceBundle's TargetContext requests a forbidden QF action type
+// via either TargetContextTypeKey or a nested `requested_action_type` /
+// `pending_action_type` field. Used by Export to fire the SCN-SM-041-020
+// safety-boundary guard before validation/persistence/transmission.
+func exportTargetContextRequestsForbiddenAction(bundle PersonalEvidenceBundle) bool {
+	if bundle.TargetContext == nil {
+		return false
+	}
+	if IsForbiddenQFActionType(stringFromExportTargetContext(bundle.TargetContext)) {
+		return true
+	}
+	if IsForbiddenQFActionType(stringFromTargetContextKey(bundle.TargetContext, "requested_action_type")) {
+		return true
+	}
+	if IsForbiddenQFActionType(stringFromTargetContextKey(bundle.TargetContext, "pending_action_type")) {
+		return true
+	}
+	return false
+}
+
+// stringFromExportTargetContext returns the bundle's TargetContextTypeKey
+// value as a string (empty if missing/non-string). Kept package-local so the
+// boundary guard doesn't have to depend on render.go helpers.
+func stringFromExportTargetContext(targetContext map[string]any) string {
+	return stringFromTargetContextKey(targetContext, TargetContextTypeKey)
+}
+
+func stringFromTargetContextKey(targetContext map[string]any, key string) string {
+	if targetContext == nil {
+		return ""
+	}
+	if raw, ok := targetContext[key].(string); ok {
+		return raw
+	}
+	return ""
 }
