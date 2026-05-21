@@ -163,6 +163,14 @@ func NewRouter(deps *Dependencies) http.Handler {
 					}
 				})
 			}
+
+			if deps.QFEvidenceHandlers != nil {
+				r.Route("/qf/evidence-bundles", func(r chi.Router) {
+					r.Post("/", deps.QFEvidenceHandlers.CreateExport)
+					r.Get("/{exportID}", deps.QFEvidenceHandlers.GetExport)
+					r.Delete("/{exportID}", deps.QFEvidenceHandlers.RevokeExport)
+				})
+			}
 		})
 	})
 
@@ -198,6 +206,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Get("/", deps.WebHandler.SearchPage)
 			r.Post("/search", deps.WebHandler.SearchResults)
 			r.Get("/artifact/{id}", deps.WebHandler.ArtifactDetail)
+			r.Get("/evidence-bundles/new", deps.WebHandler.EvidenceBundleBuilderPage)
 			r.Get("/digest", deps.WebHandler.DigestPage)
 			r.Get("/topics", deps.WebHandler.TopicsPage)
 			r.Get("/settings", deps.WebHandler.SettingsPage)

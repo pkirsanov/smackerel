@@ -247,6 +247,7 @@ func (p *Postgres) GetArtifact(ctx context.Context, id string) (*ArtifactDetail,
 type ArtifactWithDomain struct {
 	ArtifactDetail
 	DomainData             json.RawMessage
+	Metadata               json.RawMessage
 	DomainExtractionStatus string
 }
 
@@ -258,12 +259,12 @@ func (p *Postgres) GetArtifactWithDomain(ctx context.Context, id string) (*Artif
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(sentiment, ''), COALESCE(source_quality, ''), COALESCE(processing_tier, ''),
 		       processing_status, created_at, updated_at, COALESCE(domain_data::text, ''),
-		       COALESCE(domain_extraction_status, '')
+		       COALESCE(metadata::text, ''), COALESCE(domain_extraction_status, '')
 		FROM artifacts WHERE id = $1
 	`, id).Scan(&a.ID, &a.Title, &a.ArtifactType, &a.Summary, &a.SourceURL,
 		&a.Sentiment, &a.SourceQuality, &a.ProcessingTier,
 		&a.ProcessingStatus, &a.CreatedAt, &a.UpdatedAt, &domainData,
-		&a.DomainExtractionStatus)
+		&a.Metadata, &a.DomainExtractionStatus)
 	if err != nil {
 		return nil, fmt.Errorf("get artifact with domain: %w", err)
 	}

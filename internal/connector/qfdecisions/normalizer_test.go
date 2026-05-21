@@ -348,6 +348,40 @@ func TestNormalizerMarksUnknownDecisionTypeWithMetadata(t *testing.T) {
 	}
 }
 
+func TestNormalizerPreservesSignedLinkAndPreferredSurfaceMetadata(t *testing.T) {
+	n := NewNormalizer(DefaultConnectorID, 1)
+	env := validQFEnvelope()
+	env.PacketURLSigned = "https://qf.example.test/packets/packet-001?sig=qf-owned"
+	env.SignatureExpiresAt = "2026-05-06T00:10:00Z"
+	env.PreferredSurface = "smackerel_telegram"
+
+	artifact, diag := n.Normalize(validQFEvent(), env, time.Date(2026, 5, 6, 0, 1, 0, 0, time.UTC))
+	if diag != nil {
+		t.Fatalf("expected nil diagnostic, got %#v", diag)
+	}
+	if artifact == nil {
+		t.Fatal("expected normalized artifact")
+	}
+	requireString(t, artifact.Metadata, "packet_url_signed", env.PacketURLSigned)
+	requireString(t, artifact.Metadata, "signature_expires_at", env.SignatureExpiresAt)
+	requireString(t, artifact.Metadata, "preferred_surface", env.PreferredSurface)
+
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(artifact.RawContent), &raw); err != nil {
+		t.Fatalf("RawContent is not valid JSON: %v", err)
+	}
+	for key, want := range map[string]string{
+		"packet_url_signed":    env.PacketURLSigned,
+		"signature_expires_at": env.SignatureExpiresAt,
+		"preferred_surface":    env.PreferredSurface,
+	} {
+		got, ok := raw[key].(string)
+		if !ok || got != want {
+			t.Fatalf("RawContent[%q] = %v, want %q", key, raw[key], want)
+		}
+	}
+}
+
 // metadataKeys returns a sorted slice of map keys for diagnostic output.
 func metadataKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))

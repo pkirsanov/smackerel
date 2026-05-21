@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"runtime/debug"
@@ -34,6 +35,10 @@ const (
 	panicWindowDuration             = 10 * time.Minute // rolling window for panic counting
 	defaultMaxConsecutiveSyncErrors = 50               // max consecutive Sync() errors before disabling
 )
+
+type capabilitySnapshotter interface {
+	CapabilitySnapshot() (responseJSON string, fetchedAt time.Time, status string, err error)
+}
 
 // NewSupervisor creates a new connector supervisor.
 // The optional publisher bridges connector-produced RawArtifacts into the
@@ -237,6 +242,16 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		slog.Error("connector not found in registry", "connector", id)
 		return
 	}
+	if err := s.connectBeforeSync(connCtx, id, conn); err != nil {
+		metrics.ConnectorSync.WithLabelValues(id, "error").Inc()
+		slog.Error("connector connect failed before sync", "connector", id, "error", err)
+		if s.stateStore != nil {
+			if recordErr := s.stateStore.RecordError(connCtx, id, err.Error()); recordErr != nil {
+				slog.Warn("failed to record connector connect error in state store", "connector", id, "error", recordErr)
+			}
+		}
+		return
+	}
 
 	var backoff *Backoff
 	if s.backoffFactory != nil {
@@ -392,6 +407,30 @@ func (s *Supervisor) runWithRecovery(parentCtx context.Context, connCtx context.
 		case <-time.After(interval):
 		}
 	}
+}
+
+func (s *Supervisor) connectBeforeSync(ctx context.Context, id string, conn Connector) error {
+	s.mu.RLock()
+	cfg, hasConfig := s.connectorConfigs[id]
+	s.mu.RUnlock()
+	if !hasConfig || conn.Health(ctx) == HealthHealthy {
+		return nil
+	}
+	if err := conn.Connect(ctx, cfg); err != nil {
+		return fmt.Errorf("connect connector before sync: %w", err)
+	}
+	snapshotter, ok := conn.(capabilitySnapshotter)
+	if !ok || s.stateStore == nil {
+		return nil
+	}
+	responseJSON, fetchedAt, status, err := snapshotter.CapabilitySnapshot()
+	if err != nil {
+		return fmt.Errorf("snapshot connector capability: %w", err)
+	}
+	if err := s.stateStore.SaveCapability(ctx, id, responseJSON, fetchedAt, status); err != nil {
+		return fmt.Errorf("save connector capability: %w", err)
+	}
+	return nil
 }
 
 // defaultSyncInterval is used when no per-connector schedule is configured.

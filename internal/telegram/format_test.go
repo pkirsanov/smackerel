@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 )
 
 // Verify marker constants are distinct two-char strings: symbol + space.
@@ -62,6 +64,47 @@ func TestSCN002042_UnsupportedAttachmentMarker(t *testing.T) {
 	response := MarkerUncertain + "Not sure what to do with this. Can you add context?"
 	if response[:2] != "? " {
 		t.Errorf("unsupported attachment should start with '? ', got %q", response[:2])
+	}
+}
+
+func TestFormatQFPacketCardReadOnlyAndPublicTrustOnly(t *testing.T) {
+	text := formatQFPacketCard(qfdecisions.PacketCard{
+		CardKind:            qfdecisions.CardKindGenericPacket,
+		DisplayLabel:        "QF packet",
+		UnknownDecisionType: true,
+		PacketID:            "packet-telegram-1",
+		TraceID:             "trace-telegram-1",
+		Title:               "QF-authored Telegram thesis",
+		ApprovalState:       "display_only",
+		ReadOnly:            true,
+		TrustObjects: []qfdecisions.TrustObjectRender{{
+			Label:    "calibration",
+			Severity: "medium",
+			Summary:  "calibration public summary",
+		}},
+		DeepLink: qfdecisions.DeepLinkRender{
+			URL:    "https://qf.example.test/signed/packet-telegram-1",
+			Status: qfdecisions.DeepLinkStatusSignedUsed,
+		},
+	})
+
+	for _, want := range []string{
+		"# QF packet",
+		"> QF-authored Telegram thesis",
+		"- Packet: packet-telegram-1",
+		"- Trace: trace-telegram-1",
+		"? Generic read-only QF packet",
+		"~ calibration/medium: calibration public summary",
+		"https://qf.example.test/signed/packet-telegram-1",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Telegram QF card missing %q in %s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"confidence", "score", "value"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("Telegram QF card leaked non-public trust field %q in %s", forbidden, text)
+		}
 	}
 }
 

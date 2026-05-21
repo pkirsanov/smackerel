@@ -146,6 +146,25 @@ func startQFSchemaMismatchStub(t *testing.T) func() {
 		t.Fatalf("start live QF schema-mismatch stub on configured port %s: %v", port, err)
 	}
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == qfdecisions.CapabilitiesPath {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
+				SupportedPacketVersions:        []string{"v1"},
+				SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
+				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
+				MaxPageSize:                    100,
+				MinPageSize:                    1,
+				SupportedTargetContextTypes:    []string{"trip"},
+				EvidenceMaxBundleSizeBytes:     1048576,
+				EvidenceMaxClaimsPerBundle:     50,
+				EvidenceRateLimitPerMinute:     60,
+				FreshnessSLAP95Seconds:         60,
+				AuditEnvelopeVersion:           "v1",
+				WatchSignalDirection:           "qf_to_smackerel",
+				EligibleSmackerelSourceClasses: []string{"watch"},
+			})
+			return
+		}
 		if r.URL.Path != qfDecisionEventsPath {
 			http.NotFound(w, r)
 			return
@@ -337,6 +356,22 @@ func TestQFDecisionsConnectorIngestsPacketAndRetrievesItThroughSmackerelAPIs(t *
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == qfdecisions.CapabilitiesPath:
+			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
+				SupportedPacketVersions:        []string{"v1"},
+				SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
+				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
+				MaxPageSize:                    100,
+				MinPageSize:                    1,
+				SupportedTargetContextTypes:    []string{"trip"},
+				EvidenceMaxBundleSizeBytes:     1048576,
+				EvidenceMaxClaimsPerBundle:     50,
+				EvidenceRateLimitPerMinute:     60,
+				FreshnessSLAP95Seconds:         60,
+				AuditEnvelopeVersion:           "v1",
+				WatchSignalDirection:           "qf_to_smackerel",
+				EligibleSmackerelSourceClasses: []string{"watch"},
+			})
 		case r.URL.Path == qfdecisions.DecisionEventsPath:
 			if r.URL.Query().Get("cursor") == "qf-page-2" {
 				_ = json.NewEncoder(w).Encode(qfdecisions.DecisionEventsResponse{

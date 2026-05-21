@@ -231,6 +231,16 @@ var DriveRuleConflictsTotal = prometheus.NewCounterVec(
 
 // --- QF Companion Connector (spec 041) ---
 
+// QFPacketIngestTotal counts successfully ingested QF decision packets with
+// the exact label parity required by QF design 063.
+var QFPacketIngestTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_packet_ingest_total",
+		Help: "QF Companion decision packet ingest attempts by event type, decision type, approval state, and source surface",
+	},
+	[]string{"event_type", "decision_type", "approval_state", "source_surface"},
+)
+
 // QFCapabilityMismatch counts capability-handshake mismatches by required vs actual value.
 // Bounded labels: `required` is the value the connector requires (a small fixed set:
 // "v1", "recommendation", "policy_denial", "analysis_note", ">=1"); `actual` is the
@@ -280,6 +290,16 @@ var QFCursorFastForwardEventsSkipped = prometheus.NewCounter(
 	},
 )
 
+// QFActionBoundaryAttemptsTotal counts rejected attempts to use the passive
+// companion bridge as a financial-action surface.
+var QFActionBoundaryAttemptsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_action_boundary_attempts_total",
+		Help: "QF Companion rejected action-boundary attempts by attempted action type",
+	},
+	[]string{"attempted_action_type"},
+)
+
 // QFPacketValidationFailures counts QF companion packet and polling contract
 // failures by bounded reason. The Scope 2 page-size path emits
 // reason="page_size_out_of_range" when QF rejects the connector's explicit,
@@ -309,6 +329,68 @@ var QFFreshnessP95Seconds = prometheus.NewGaugeVec(
 	[]string{"stage"},
 )
 
+// QFTrustObjectRenderFailures counts QF trust objects that cannot be rendered
+// because the public rendering contract is incomplete. Bounded reason labels
+// currently use missing_required_field for absent label/severity values.
+var QFTrustObjectRenderFailures = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_trust_object_render_failures_total",
+		Help: "QF Companion trust object render failures by bounded reason",
+	},
+	[]string{"reason"},
+)
+
+// QFDeepLinkRenderTotal counts QF deep-link render decisions by surface and
+// bounded status: signed_used, signed_expired_fallback_unsigned, unsigned_only.
+var QFDeepLinkRenderTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_deep_link_render_total",
+		Help: "QF Companion deep-link render decisions by surface and status",
+	},
+	[]string{"surface", "status"},
+)
+
+// QFEvidenceExportAttempts counts personal evidence bundle export attempts by
+// terminal status and bounded context labels.
+var QFEvidenceExportAttempts = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_evidence_export_attempts_total",
+		Help: "QF Companion personal evidence bundle export attempts by status, target context, and sensitivity tier",
+	},
+	[]string{"status", "target_context_type", "sensitivity_tier"},
+)
+
+// QFEvidenceRevokedTotal counts completed evidence-export revocations by
+// bounded reason. The pre-MVP Scope 4 path emits consent_revoked for user
+// consent removal.
+var QFEvidenceRevokedTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_evidence_revoked_total",
+		Help: "QF Companion personal evidence bundle revocations by reason",
+	},
+	[]string{"reason"},
+)
+
+// QFEngagementSignalAttemptsTotal counts pre-MVP engagement-signal flush
+// attempts without implementing downstream Scope 6 transport.
+var QFEngagementSignalAttemptsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_engagement_signal_attempts_total",
+		Help: "QF Companion engagement signal flush attempts by event, surface, and status",
+	},
+	[]string{"event", "surface", "status"},
+)
+
+// QFCallbackAttemptsTotal counts callback attempts without accepting QF-side
+// financial action callbacks in the pre-MVP bridge.
+var QFCallbackAttemptsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_callback_attempts_total",
+		Help: "QF Companion callback attempts by action and status",
+	},
+	[]string{"action", "status"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -332,12 +414,20 @@ func init() {
 		DriveConfirmationsTotal,
 		DrivePolicyDecisionsTotal,
 		DriveRuleConflictsTotal,
+		QFPacketIngestTotal,
 		QFCapabilityMismatch,
 		QFUnknownDecisionType,
 		QFCursorLagSeconds,
 		QFCursorFastForwardEventsSkipped,
+		QFActionBoundaryAttemptsTotal,
 		QFPacketValidationFailures,
 		QFFreshnessP95Seconds,
+		QFTrustObjectRenderFailures,
+		QFDeepLinkRenderTotal,
+		QFEvidenceExportAttempts,
+		QFEvidenceRevokedTotal,
+		QFEngagementSignalAttemptsTotal,
+		QFCallbackAttemptsTotal,
 		// Spec 039 Scope 6 recommendation metrics — defined in
 		// recommendations.go; bounded labels enforced (no watch_id,
 		// no recommendation_id, no request_id).

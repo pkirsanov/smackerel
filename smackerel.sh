@@ -612,6 +612,7 @@ case "$COMMAND" in
   test)
     SUBCOMMAND="${1:-}"
     shift || true
+    export COMPOSE_PROGRESS=plain
     case "$SUBCOMMAND" in
       unit)
         # Spec 045 / BUG-045-001 — accept optional --go-run / --verbose
@@ -700,14 +701,34 @@ case "$COMMAND" in
         # KEEP_STACK_UP=1 is explicit because the trap below owns final
         # teardown regardless of test outcome.
         integration_cleanup() {
-          timeout 60 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes >/dev/null 2>&1 || true
+          local cleanup_status=0
+
+          echo "Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)..."
+          timeout --kill-after=20s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || cleanup_status=$?
+          if [[ "$cleanup_status" -ne 0 ]]; then
+            echo "ERROR: integration test stack teardown failed during exit cleanup (exit ${cleanup_status})." >&2
+            return "$cleanup_status"
+          fi
+          return 0
         }
-        trap integration_cleanup EXIT
+        integration_cleanup_trap() {
+          local status=$?
+          local cleanup_status=0
+
+          trap - EXIT
+          integration_cleanup || cleanup_status=$?
+          if [[ "$status" -eq 0 && "$cleanup_status" -ne 0 ]]; then
+            exit "$cleanup_status"
+          fi
+          exit "$status"
+        }
+        trap integration_cleanup_trap EXIT
 
         # Run shell-based health probe (brings stack up + asserts health)
-        timeout 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+        timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
 
         # Run Go integration tests against the live test stack
+        set +e
         docker run --rm \
           --network host \
           -v "$SCRIPT_DIR:/workspace" \
@@ -719,6 +740,14 @@ case "$COMMAND" in
           -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh
+        go_integration_status=$?
+        set -e
+        if [[ "$go_integration_status" -eq 0 ]]; then
+          echo "PASS: go-integration"
+        else
+          echo "FAIL: go-integration (exit=${go_integration_status})"
+        fi
+        exit "$go_integration_status"
         ;;
       e2e)
         GO_E2E_RUN_SELECTOR=""
@@ -788,6 +817,8 @@ case "$COMMAND" in
         # keep the wrapper bounded while allowing slow successful teardown.
         E2E_STACK_DOWN_TIMEOUT_S=180
         E2E_STACK_DOWN_SLOW_WARN_S=60
+        E2E_LIFECYCLE_SHELL_TIMEOUT_S=600
+        E2E_SHARED_SHELL_TIMEOUT_S=300
 
         e2e_process_group_has_members() {
           local process_group_id="$1"
@@ -797,16 +828,28 @@ case "$COMMAND" in
           [[ -n "${group_members//[[:space:]]/}" ]]
         }
 
+        e2e_wait_child() {
+          local child_pid="$1"
+          local child_state=""
+          local status=0
+
+          while true; do
+            child_state="$(ps -p "$child_pid" -o stat= 2>/dev/null || true)"
+            if [[ -z "$child_state" || "$child_state" == Z* ]]; then
+              wait "$child_pid"
+              status=$?
+              return "$status"
+            fi
+            sleep 0.2
+          done
+        }
+
         e2e_terminate_child_process_group() {
           local process_group_id="$1"
           local child_pid="${2:-}"
           local attempt
 
-          if [[ -n "$process_group_id" ]]; then
-            if ! e2e_process_group_has_members "$process_group_id"; then
-              return 0
-            fi
-
+          if [[ -n "$process_group_id" ]] && e2e_process_group_has_members "$process_group_id"; then
             kill -TERM "-$process_group_id" 2>/dev/null || true
             for attempt in {1..20}; do
               if ! e2e_process_group_has_members "$process_group_id"; then
@@ -912,6 +955,19 @@ case "$COMMAND" in
           fi
         }
 
+        e2e_shell_timeout_for() {
+          local shell_test_target="$1"
+
+          case "$shell_test_target" in
+            test_timeout_process_cleanup.sh|test_compose_start.sh|test_persistence.sh|test_postgres_readiness_gate.sh|test_config_fail.sh)
+              printf '%s\n' "$E2E_LIFECYCLE_SHELL_TIMEOUT_S"
+              ;;
+            *)
+              printf '%s\n' "$E2E_SHARED_SHELL_TIMEOUT_S"
+              ;;
+          esac
+        }
+
         e2e_print_test_stack_state() {
           local compose_project
 
@@ -938,6 +994,7 @@ case "$COMMAND" in
           local status=$?
           local cleanup_status=0
 
+          trap - EXIT INT TERM HUP
           e2e_cleanup || cleanup_status=$?
           if [[ "$status" -eq 0 && "$cleanup_status" -ne 0 ]]; then
             exit "$cleanup_status"
@@ -945,22 +1002,35 @@ case "$COMMAND" in
           exit "$status"
         }
 
+        e2e_signal_trap() {
+          local exit_status="$1"
+
+          trap - EXIT INT TERM HUP
+          e2e_cleanup || true
+          exit "$exit_status"
+        }
+
         trap e2e_cleanup_trap EXIT
-        trap 'e2e_cleanup || true; exit 143' INT TERM
+        trap 'e2e_signal_trap 130' INT
+        trap 'e2e_signal_trap 143' TERM
+        trap 'e2e_signal_trap 129' HUP
 
         e2e_run_child() {
           e2e_child_run_id="smackerel-e2e-child-$$-$BASHPID-$(date +%s%N)"
           if command -v setsid >/dev/null 2>&1; then
             setsid --wait env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
+            e2e_child_pgid="$!"
           else
             env SMACKEREL_E2E_CHILD_RUN_ID="$e2e_child_run_id" "$@" &
+            e2e_child_pgid=""
           fi
           e2e_child_pid=$!
-          e2e_child_pgid="$e2e_child_pid"
           set +e
-          wait "$e2e_child_pid"
+          e2e_wait_child "$e2e_child_pid"
           local status=$?
-          e2e_terminate_child_process_group "$e2e_child_pgid" "$e2e_child_pid"
+          if [[ "$status" -ne 0 ]]; then
+            e2e_terminate_child_process_group "$e2e_child_pgid" "$e2e_child_pid"
+          fi
           e2e_terminate_marked_children "$e2e_child_run_id"
           e2e_child_pid=""
           e2e_child_pgid=""
@@ -975,7 +1045,7 @@ case "$COMMAND" in
           started_at="$(date +%s)"
           echo "Running project-scoped test stack teardown (${phase}, timeout ${E2E_STACK_DOWN_TIMEOUT_S}s)..."
           set +e
-          e2e_run_child timeout "$E2E_STACK_DOWN_TIMEOUT_S" "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
+          e2e_run_child timeout --kill-after=30s "$E2E_STACK_DOWN_TIMEOUT_S" "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
           status=$?
           set -e
           finished_at="$(date +%s)"
@@ -1051,9 +1121,10 @@ case "$COMMAND" in
         }
 
         if [[ -n "$SHELL_E2E_RUN_TARGET" ]]; then
+          shell_e2e_timeout_s="$(e2e_shell_timeout_for "$SHELL_E2E_RUN_TARGET")"
           e2e_validate_shell_test_target "$SHELL_E2E_RUN_TARGET"
           echo "Running targeted shell E2E: $SHELL_E2E_RUN_TARGET"
-          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" timeout 300 env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
+          e2e_run_shell_test "$SHELL_E2E_RUN_TARGET" timeout --kill-after=15s "$shell_e2e_timeout_s" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$SHELL_E2E_RUN_TARGET"
           e2e_print_shell_summary
           if [[ "$e2e_overall_status" -ne 0 ]]; then
             exit "$e2e_overall_status"
@@ -1073,7 +1144,7 @@ case "$COMMAND" in
           )
           for e2e_script in "${e2e_lifecycle_scripts[@]}"; do
             echo "Running isolated lifecycle shell E2E: $e2e_script"
-            e2e_run_shell_test "$e2e_script" timeout 300 bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
+            e2e_run_shell_test "$e2e_script" timeout --kill-after=15s "$E2E_LIFECYCLE_SHELL_TIMEOUT_S" bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
           done
 
           # Shared shell E2E scripts use one parent-owned disposable test
@@ -1124,7 +1195,7 @@ case "$COMMAND" in
           echo "Booting shared shell E2E test stack for ${#e2e_shared_scripts[@]} scripts..."
           e2e_down_test_stack "before shared shell E2E block"
           set +e
-          e2e_run_child timeout 360 "$SCRIPT_DIR/smackerel.sh" --env test up
+          e2e_run_child timeout --kill-after=30s 360 "$SCRIPT_DIR/smackerel.sh" --env test up
           e2e_shared_stack_status=$?
           set -e
 
@@ -1133,7 +1204,7 @@ case "$COMMAND" in
           else
             for e2e_script in "${e2e_shared_scripts[@]}"; do
               echo "Running shared-stack shell E2E: $e2e_script"
-              e2e_run_shell_test "$e2e_script" timeout 300 env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
+              e2e_run_shell_test "$e2e_script" timeout --kill-after=15s "$E2E_SHARED_SHELL_TIMEOUT_S" env E2E_STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/e2e/$e2e_script"
             done
           fi
 
@@ -1165,7 +1236,7 @@ case "$COMMAND" in
         # Bring up a fresh stack for the Go E2E block; the e2e trap owns
         # final teardown regardless of Go test outcome.
         set +e
-        e2e_run_child timeout 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
+        e2e_run_child timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
         e2e_go_stack_status=$?
         set -e
         if [[ "$e2e_go_stack_status" -ne 0 ]]; then
