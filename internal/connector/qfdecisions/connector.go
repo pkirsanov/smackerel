@@ -344,6 +344,40 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 
+		// Safety boundary (SCN-SM-041-020): the QF bridge MAY emit a
+		// `packet_action_boundary_attempted` diagnostic event when an
+		// upstream caller tried to invoke a forbidden financial action.
+		// Smackerel MUST NOT normalize the event into a trusted artifact
+		// and MUST emit the action-boundary-kick audit envelope plus
+		// increment smackerel_qf_action_boundary_attempts_total so the
+		// pre-MVP no-financial-action contract is observable in the
+		// connector audit log. The event is skipped without bumping the
+		// degraded counter — it is QF's notification that *another*
+		// caller hit the boundary, not a Smackerel-local degradation.
+		if strings.TrimSpace(event.EventType) == EventTypePacketActionBoundaryAttempted {
+			boundaryActionType := strings.TrimSpace(event.DecisionType)
+			if boundaryActionType == "" {
+				boundaryActionType = ActionTypeApproval
+			}
+			_, _ = RejectQFActionBoundary(ActionBoundaryAttempt{
+				AttemptedActionType: boundaryActionType,
+				TraceID:             event.TraceID,
+				PacketID:            event.PacketID,
+				ActorRef:            AuditActorSmackerelConnector,
+				Surface:             event.SourceSurface,
+				Reason:              "qf_emitted_packet_action_boundary_attempted",
+				ObservedAt:          now,
+			})
+			slog.Warn("qf-decisions: action_boundary_attempted",
+				slog.String("event", "action_boundary_attempted"),
+				slog.String("event_id", event.EventID),
+				slog.String("packet_id", event.PacketID),
+				slog.String("trace_id", event.TraceID),
+				slog.String("attempted_action_type", boundaryActionType),
+			)
+			continue
+		}
+
 		// Per-event cursor is diagnostic-only — never used for advancement.
 		// The response-level next_cursor is the canonical advancement value.
 		if event.Cursor != "" {
@@ -492,6 +526,87 @@ func (c *Connector) Close() error {
 	c.capabilityStatus = CapabilityStatusUnfetched
 	c.capabilityFetchedAt = time.Time{}
 	return nil
+}
+
+// RotateCredentials performs the SCN-SM-041-019 credential rotation
+// lifecycle on a connected `qf-decisions` Connector. The caller supplies
+// the two currently active QF credentials with overlapping `not_before` /
+// `not_after` windows AND a snapshot of the durable state that MUST
+// survive the rotation (sync cursor, persisted capability response,
+// evidence-export idempotency export_ids). RotateCredentials calls
+// PlanCredentialRotation to select the newest-valid credential, enforces
+// the documented 24-hour overlap ceiling, builds a fresh QF client bound
+// to the selected credential, re-reads QF capabilities BEFORE any
+// sync/render/export call uses the new credential, and emits the
+// rotation-lifecycle Cross-Product Audit Envelope v1 records via the
+// shared audit sink. The connector's in-memory cursor is not modified
+// because cursor advancement is owned by `connector.StateStore`; the
+// returned plan carries the preserved cursor + capability + evidence
+// export-id snapshot so the caller can re-persist it without ambiguity.
+//
+// On any rejection or capability re-read failure, RotateCredentials
+// leaves the existing `c.client`, `c.cfg`, and `c.capability*` fields
+// untouched and returns the plan so the caller can log the diagnostics
+// and audit envelope. On success, RotateCredentials swaps the in-memory
+// client + capability state to the new credential's responses. SCN-SM-041-019.
+func (c *Connector) RotateCredentials(ctx context.Context, credentials []RotatingCredential, state CredentialRotationState, now time.Time) (CredentialRotationPlan, error) {
+	c.mu.RLock()
+	currentClient := c.client
+	currentCfg := c.cfg
+	c.mu.RUnlock()
+	if currentClient == nil {
+		return CredentialRotationPlan{}, fmt.Errorf("qf-decisions connector must be connected before RotateCredentials")
+	}
+
+	plan, planErr := PlanCredentialRotation(credentials, state, now)
+	if planErr != nil {
+		return plan, planErr
+	}
+
+	rotatedClient := NewClient(currentCfg.BaseURL, plan.SelectedCredentialRef, currentCfg.PacketVersion, currentCfg.PageSize)
+	observedAt := now.UTC()
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	capability, err := rotatedClient.FetchCapability(ctx)
+	if err != nil {
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			Surface:    DefaultConnectorID,
+			Action:     AuditActionCapabilityHandshake,
+			Outcome:    AuditOutcomeError,
+			Reason:     err.Error(),
+			ObservedAt: observedAt,
+		}))
+		return plan, fmt.Errorf("qf credential rotation capability re-read: %w", err)
+	}
+	if err := capability.CompatibilityCheck(); err != nil {
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			Surface:    DefaultConnectorID,
+			Action:     AuditActionCapabilityHandshake,
+			Outcome:    AuditOutcomeRejected,
+			Reason:     err.Error(),
+			ObservedAt: observedAt,
+		}))
+		return plan, fmt.Errorf("qf credential rotation capability incompatible: %w", err)
+	}
+
+	rotatedClient.SetCapability(&capability, CapabilityStatusCompatible)
+	EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+		Surface:    DefaultConnectorID,
+		Action:     AuditActionCapabilityHandshake,
+		Outcome:    AuditOutcomeOK,
+		ObservedAt: observedAt,
+	}))
+
+	c.mu.Lock()
+	c.client = rotatedClient
+	c.cfg.CredentialRef = plan.SelectedCredentialRef
+	c.capability = capability
+	c.capabilityStatus = CapabilityStatusCompatible
+	c.capabilityFetchedAt = observedAt
+	c.health = connector.HealthHealthy
+	c.mu.Unlock()
+	return plan, nil
 }
 
 func (c *Connector) setHealth(health connector.HealthStatus) {

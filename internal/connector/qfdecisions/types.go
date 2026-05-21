@@ -71,6 +71,14 @@ const (
 	ActionTypeWatchEvaluation       = "watch_evaluation"
 	ActionTypeCallbackAcceptance    = "callback_acceptance"
 	ActionTypeQFTrustReconstruction = "qf_trust_reconstruction"
+
+	// EventTypePacketActionBoundaryAttempted is the QF-bridge diagnostic
+	// event the connector receives when an upstream caller tried to invoke
+	// a forbidden financial action against QF. The connector MUST emit
+	// the action-boundary-kick audit envelope plus increment
+	// smackerel_qf_action_boundary_attempts_total without normalizing
+	// the event into a trusted artifact. SCN-SM-041-020.
+	EventTypePacketActionBoundaryAttempted = "packet_action_boundary_attempted"
 )
 
 type ContentTypeMapping struct {

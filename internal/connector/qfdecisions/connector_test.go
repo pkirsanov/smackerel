@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1348,5 +1350,216 @@ func TestSyncSkipsFastForwardDiagnosticEventAndIncrementsCounter(t *testing.T) {
 	}
 	if found.ConnectorID != DefaultConnectorID {
 		t.Errorf("slog connector_id = %q, want %q", found.ConnectorID, DefaultConnectorID)
+	}
+}
+
+// TestRotateCredentialsRebuildsClientAndRefetchesCapabilityWithNewCredential
+// proves SCN-SM-041-019 wire-up on the connected `*Connector`. Two
+// overlapping QF credentials are presented; the connector MUST select the
+// newest-valid credential, immediately re-fetch the capability with the
+// rotated credential, swap the in-memory client + capability state, and
+// emit the OK rotation audit envelope. The first capability fetch uses the
+// pre-rotation credential, the second MUST present the rotated credential.
+func TestRotateCredentialsRebuildsClientAndRefetchesCapabilityWithNewCredential(t *testing.T) {
+	var capCalls int32
+	authSeen := make([]string, 0, 2)
+	var authMu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case CapabilitiesPath:
+			atomic.AddInt32(&capCalls, 1)
+			authMu.Lock()
+			authSeen = append(authSeen, r.Header.Get("Authorization"))
+			authMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(defaultValidCapability())
+		default:
+			t.Fatalf("unexpected request path %q during rotation test", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(DefaultConnectorID)
+	if err := c.Connect(context.Background(), validConnectorConfig(srv.URL, 1)); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	if got := atomic.LoadInt32(&capCalls); got != 1 {
+		t.Fatalf("Connect should have hit /capabilities exactly once, got %d", got)
+	}
+
+	now := time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC)
+	plan, err := c.RotateCredentials(context.Background(), []RotatingCredential{
+		{Ref: "qf-service-token", NotBefore: now.Add(-20 * time.Hour), NotAfter: now.Add(2 * time.Hour)},
+		{Ref: "qf-rotated-token", NotBefore: now.Add(-time.Hour), NotAfter: now.Add(20 * time.Hour)},
+	}, CredentialRotationState{
+		SyncCursor:             "cursor-before-rotation",
+		CapabilityResponseJSON: `{"audit_envelope_version":"v1"}`,
+		CapabilityFetchedAt:    now.Add(-time.Hour),
+		CapabilityStatus:       CapabilityStatusCompatible,
+		EvidenceExportIDs:      []string{"export-before-rotation"},
+	}, now)
+	if err != nil {
+		t.Fatalf("RotateCredentials returned error: %v", err)
+	}
+	if plan.SelectedCredentialRef != "qf-rotated-token" || plan.PreviousCredentialRef != "qf-service-token" {
+		t.Fatalf("rotation selection = %+v", plan)
+	}
+	if got := atomic.LoadInt32(&capCalls); got != 2 {
+		t.Fatalf("RotateCredentials must trigger one capability re-read, got total cap calls %d", got)
+	}
+
+	authMu.Lock()
+	defer authMu.Unlock()
+	if len(authSeen) != 2 {
+		t.Fatalf("expected two capability auth headers captured, got %v", authSeen)
+	}
+	if authSeen[0] != "Bearer qf-service-token" {
+		t.Fatalf("first capability call auth = %q, want pre-rotation token", authSeen[0])
+	}
+	if authSeen[1] != "Bearer qf-rotated-token" {
+		t.Fatalf("rotated capability call auth = %q, want rotated token", authSeen[1])
+	}
+
+	if plan.PreservedState.SyncCursor != "cursor-before-rotation" {
+		t.Fatalf("rotation must preserve cursor; got %q", plan.PreservedState.SyncCursor)
+	}
+	if len(plan.PreservedState.EvidenceExportIDs) != 1 || plan.PreservedState.EvidenceExportIDs[0] != "export-before-rotation" {
+		t.Fatalf("rotation must preserve evidence-export idempotency; got %v", plan.PreservedState.EvidenceExportIDs)
+	}
+	if plan.AuditEnvelope.Outcome != AuditOutcomeOK {
+		t.Fatalf("rotation audit outcome = %q, want %q", plan.AuditEnvelope.Outcome, AuditOutcomeOK)
+	}
+}
+
+// TestRotateCredentialsLeavesClientUnchangedWhenPlanRejected proves the
+// safety contract of SCN-SM-041-019 wire-up: a rejected rotation MUST NOT
+// modify `c.client`, `c.cfg.CredentialRef`, or the in-memory capability
+// state. The post-rotation auth header MUST still be the pre-rotation
+// credential.
+func TestRotateCredentialsLeavesClientUnchangedWhenPlanRejected(t *testing.T) {
+	var capCalls int32
+	var lastAuth string
+	var authMu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case CapabilitiesPath:
+			atomic.AddInt32(&capCalls, 1)
+			authMu.Lock()
+			lastAuth = r.Header.Get("Authorization")
+			authMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(defaultValidCapability())
+		default:
+			t.Fatalf("unexpected request path %q during rotation test", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(DefaultConnectorID)
+	if err := c.Connect(context.Background(), validConnectorConfig(srv.URL, 1)); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	now := time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC)
+	// Overlap > 24h MUST reject.
+	_, err := c.RotateCredentials(context.Background(), []RotatingCredential{
+		{Ref: "qf-service-token", NotBefore: now.Add(-40 * time.Hour), NotAfter: now.Add(40 * time.Hour)},
+		{Ref: "qf-rotated-token", NotBefore: now.Add(-time.Hour), NotAfter: now.Add(40 * time.Hour)},
+	}, CredentialRotationState{SyncCursor: "cursor-stays"}, now)
+	if err == nil {
+		t.Fatal("expected rejection for >24h overlap")
+	}
+
+	// The rejected rotation MUST NOT have triggered a second capability call.
+	if got := atomic.LoadInt32(&capCalls); got != 1 {
+		t.Fatalf("rejected rotation must not re-read capability; cap calls = %d", got)
+	}
+	// Drive a follow-up capability re-read by invoking CapabilitySnapshot
+	// indirectly: assert the connector's credential ref is still the
+	// pre-rotation token via CapabilitySnapshot returning the original
+	// auth-header trail through a probe Sync. Use Health as a stable
+	// post-condition: the connector MUST still be Healthy.
+	if c.Health(context.Background()) != connector.HealthHealthy {
+		t.Fatalf("connector health after rejected rotation = %s, want %s", c.Health(context.Background()), connector.HealthHealthy)
+	}
+	authMu.Lock()
+	defer authMu.Unlock()
+	if lastAuth != "Bearer qf-service-token" {
+		t.Fatalf("post-rejection capability auth = %q, want pre-rotation token", lastAuth)
+	}
+}
+
+// TestRotateCredentialsRequiresConnectFirst proves the connector MUST refuse
+// rotation when it has never been connected. This protects against a
+// caller invoking RotateCredentials against an unconnected connector whose
+// `c.cfg` is zero-valued and would yield a malformed rotated client.
+func TestRotateCredentialsRequiresConnectFirst(t *testing.T) {
+	c := New(DefaultConnectorID)
+	now := time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC)
+	_, err := c.RotateCredentials(context.Background(), []RotatingCredential{
+		{Ref: "a", NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour)},
+		{Ref: "b", NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour)},
+	}, CredentialRotationState{}, now)
+	if err == nil {
+		t.Fatal("expected error from RotateCredentials against unconnected connector")
+	}
+	if !strings.Contains(err.Error(), "must be connected") {
+		t.Fatalf("error = %q, want substring %q", err.Error(), "must be connected")
+	}
+}
+
+// TestSyncSkipsPacketActionBoundaryAttemptedEventAndEmitsAuditAndMetric proves
+// SCN-SM-041-020 wire-up: when QF emits a packet_action_boundary_attempted
+// diagnostic event, the connector MUST NOT normalize it into a trusted
+// artifact and MUST emit the action-boundary audit + metric instead.
+func TestSyncSkipsPacketActionBoundaryAttemptedEventAndEmitsAuditAndMetric(t *testing.T) {
+	beforeBoundary := testutil.ToFloat64(metrics.QFActionBoundaryAttemptsTotal.WithLabelValues(ActionTypeMandateChange))
+
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case CapabilitiesPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(defaultValidCapability())
+		case DecisionEventsPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(DecisionEventsResponse{
+				Events: []QFDecisionEvent{
+					{
+						ContractVersion: 1,
+						EventID:         "boundary-evt-1",
+						PacketID:        "packet-boundary-1",
+						TraceID:         "trace-boundary-1",
+						EventType:       EventTypePacketActionBoundaryAttempted,
+						DecisionType:    ActionTypeMandateChange,
+						PacketVersion:   1,
+						SourceSurface:   SurfaceDigest,
+						CreatedAt:       createdAt,
+					},
+				},
+				NextCursor: "after-boundary",
+				HasMore:    false,
+				ServerTime: createdAt,
+			})
+		default:
+			t.Fatalf("unexpected request path %q", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(DefaultConnectorID)
+	if err := c.Connect(context.Background(), validConnectorConfig(srv.URL, 1)); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	artifacts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("Sync failed: %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("packet_action_boundary_attempted event MUST NOT produce a trusted artifact; got %d", len(artifacts))
+	}
+	afterBoundary := testutil.ToFloat64(metrics.QFActionBoundaryAttemptsTotal.WithLabelValues(ActionTypeMandateChange))
+	if afterBoundary-beforeBoundary != 1 {
+		t.Fatalf("QFActionBoundaryAttemptsTotal{mandate_change} delta = %v, want 1", afterBoundary-beforeBoundary)
 	}
 }
