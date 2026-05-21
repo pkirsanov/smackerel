@@ -13,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 )
@@ -40,6 +41,7 @@ type DigestContext struct {
 	Hospitality        *HospitalityDigestContext     `json:"hospitality,omitempty"`
 	KnowledgeHealth    *KnowledgeHealthDigestContext `json:"knowledge_health,omitempty"`
 	Expenses           *ExpenseDigestContext         `json:"expenses,omitempty"`
+	QFPackets          []qfdecisions.PacketCard      `json:"qf_packets,omitempty"`
 	// Weather is populated by AssembleWeatherContext when a home location is
 	// configured and fresh weather/current or weather/forecast artifacts exist.
 	// Restored per BUG-016-W1 — see specs/016-weather-connector/bugs/BUG-016-W1-digest-no-weather/.
@@ -147,11 +149,19 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 		}
 	}
 
+	qfPackets, qfErr := g.getQFPackets(ctx, today)
+	if qfErr != nil {
+		slog.Warn("failed to assemble QF packet digest context", "error", qfErr)
+	} else if len(qfPackets) > 0 {
+		digestCtx.QFPackets = qfPackets
+	}
+
 	// Check for quiet day
 	hasHospitality := digestCtx.Hospitality != nil
 	hasKnowledgeHealth := digestCtx.KnowledgeHealth != nil
 	hasExpenses := digestCtx.Expenses != nil
-	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth && !hasExpenses {
+	hasQFPackets := len(digestCtx.QFPackets) > 0
+	if len(actionItems) == 0 && len(overnight) == 0 && len(hotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth && !hasExpenses && !hasQFPackets {
 		metrics.DigestGeneration.WithLabelValues("quiet").Inc()
 		return digestCtx, g.storeQuietDigest(ctx, today)
 	}
@@ -171,6 +181,13 @@ func (g *Generator) Generate(ctx context.Context) (*DigestContext, error) {
 
 	metrics.DigestGeneration.WithLabelValues("published").Inc()
 	return digestCtx, nil
+}
+
+// GetLatestQFCards returns QF packet cards from the digest date. API and
+// Telegram surfaces use this to render the same public, read-only packet card
+// contract that the digest generator sends to ML.
+func (g *Generator) GetLatestQFCards(ctx context.Context, date string) ([]qfdecisions.PacketCard, error) {
+	return g.getQFPackets(ctx, date)
 }
 
 // HandleDigestResult processes the generated digest from the ML sidecar.
@@ -358,6 +375,9 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 	if digestCtx.KnowledgeHealth != nil {
 		lines = append(lines, formatKnowledgeHealthFallback(digestCtx.KnowledgeHealth))
 	}
+	if len(digestCtx.QFPackets) > 0 {
+		lines = append(lines, formatQFPacketsFallback(digestCtx.QFPackets))
+	}
 
 	text := strings.Join(lines, "\n")
 	wordCount := len(strings.Fields(text))
@@ -369,6 +389,61 @@ func (g *Generator) storeFallbackDigest(ctx context.Context, date string, digest
 		ON CONFLICT (digest_date) DO UPDATE SET digest_text = $3, word_count = $4, model_used = 'fallback'
 	`, id, date, text, wordCount)
 	return err
+}
+
+func (g *Generator) getQFPackets(ctx context.Context, digestDate string) ([]qfdecisions.PacketCard, error) {
+	if g.Pool == nil || strings.TrimSpace(digestDate) == "" {
+		return nil, nil
+	}
+
+	rows, err := g.Pool.Query(ctx, `
+		SELECT source_id, source_url, artifact_type, title, content, COALESCE(metadata::text, '{}')
+		FROM artifacts
+		WHERE artifact_type LIKE 'qf/%'
+		  AND created_at::date = $1::date
+		ORDER BY created_at DESC
+		LIMIT 10
+	`, digestDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cards := make([]qfdecisions.PacketCard, 0)
+	for rows.Next() {
+		var artifact connector.RawArtifact
+		var metadataJSON []byte
+		if err := rows.Scan(&artifact.SourceID, &artifact.URL, &artifact.ContentType, &artifact.Title, &artifact.RawContent, &metadataJSON); err != nil {
+			slog.Warn("QF digest artifact scan failed", "error", err)
+			continue
+		}
+
+		metadata := map[string]any{}
+		if len(metadataJSON) > 0 {
+			if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+				slog.Warn("QF digest metadata decode failed", "source_id", artifact.SourceID, "error", err)
+				continue
+			}
+		}
+		artifact.Metadata = metadata
+
+		card, renderErr := qfdecisions.RenderPacketCard(ctx, artifact, qfdecisions.RenderOptions{
+			Surface:                       qfdecisions.SurfaceDigest,
+			DeepLinkSigningSupported:      strings.TrimSpace(fmt.Sprint(metadata["packet_url_signed"])) != "",
+			PreferredSurfaceHintSupported: true,
+		})
+		if renderErr != nil {
+			slog.Warn("QF digest card render failed", "source_id", artifact.SourceID, "error", renderErr)
+			continue
+		}
+		if card.Placement.IncludeInDigest {
+			cards = append(cards, card)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return cards, err
+	}
+	return cards, nil
 }
 
 // isGuestHostActive checks whether the GuestHost connector is registered.
@@ -500,6 +575,28 @@ func formatKnowledgeHealthFallback(kh *KnowledgeHealthDigestContext) string {
 	}
 	if kh.SynthesisBacklog > 10 {
 		parts = append(parts, fmt.Sprintf("Synthesis backlog: %d items pending", kh.SynthesisBacklog))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func formatQFPacketsFallback(cards []qfdecisions.PacketCard) string {
+	var parts []string
+	parts = append(parts, "--- QF Packets ---")
+	for _, card := range cards {
+		label := strings.TrimSpace(card.DisplayLabel)
+		if label == "" {
+			label = "QF packet"
+		}
+		parts = append(parts, fmt.Sprintf("  • %s: %s", label, card.Title))
+		if card.ApprovalState != "" || card.TraceID != "" {
+			parts = append(parts, fmt.Sprintf("    State: %s · Trace: %s", card.ApprovalState, card.TraceID))
+		}
+		for _, trust := range card.TrustObjects {
+			parts = append(parts, fmt.Sprintf("    %s [%s]: %s", trust.Label, trust.Severity, trust.Summary))
+		}
+		if card.DeepLink.URL != "" {
+			parts = append(parts, "    Link: "+card.DeepLink.URL)
+		}
 	}
 	return strings.Join(parts, "\n")
 }

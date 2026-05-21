@@ -38,6 +38,7 @@ type WebUI interface {
 	SearchPage(w http.ResponseWriter, r *http.Request)
 	SearchResults(w http.ResponseWriter, r *http.Request)
 	ArtifactDetail(w http.ResponseWriter, r *http.Request)
+	EvidenceBundleBuilderPage(w http.ResponseWriter, r *http.Request)
 	DigestPage(w http.ResponseWriter, r *http.Request)
 	TopicsPage(w http.ResponseWriter, r *http.Request)
 	SettingsPage(w http.ResponseWriter, r *http.Request)
@@ -199,6 +200,9 @@ type Dependencies struct {
 
 	// Recommendation watch handlers (optional — nil when recommendations not enabled)
 	RecommendationWatchHandlers *RecommendationWatchHandlers
+
+	// QF evidence export handlers (optional — nil when QF connector is not enabled)
+	QFEvidenceHandlers *QFEvidenceHandlers
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string

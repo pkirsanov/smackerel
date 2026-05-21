@@ -1,21 +1,28 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 )
 
 // DigestResponse is the JSON response for GET /api/digest.
 type DigestResponse struct {
-	Date        string `json:"date"`
-	Text        string `json:"text"`
-	WordCount   int    `json:"word_count"`
-	IsQuiet     bool   `json:"is_quiet"`
-	GeneratedAt string `json:"generated_at"`
+	Date        string                   `json:"date"`
+	Text        string                   `json:"text"`
+	WordCount   int                      `json:"word_count"`
+	IsQuiet     bool                     `json:"is_quiet"`
+	GeneratedAt string                   `json:"generated_at"`
+	QFCards     []qfdecisions.PacketCard `json:"qf_cards,omitempty"`
+}
+
+type qfDigestCardProvider interface {
+	GetLatestQFCards(ctx context.Context, date string) ([]qfdecisions.PacketCard, error)
 }
 
 // DigestHandler handles GET /api/digest.
@@ -45,11 +52,22 @@ func (d *Dependencies) DigestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	qfCards := []qfdecisions.PacketCard{}
+	if provider, ok := d.DigestGen.(qfDigestCardProvider); ok {
+		cards, cardErr := provider.GetLatestQFCards(r.Context(), result.DigestDate.Format("2006-01-02"))
+		if cardErr != nil {
+			slog.Warn("digest QF packet lookup failed", "error", cardErr, "date", date)
+		} else {
+			qfCards = cards
+		}
+	}
+
 	writeJSON(w, http.StatusOK, DigestResponse{
 		Date:        result.DigestDate.Format("2006-01-02"),
 		Text:        result.DigestText,
 		WordCount:   result.WordCount,
 		IsQuiet:     result.IsQuiet,
 		GeneratedAt: result.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		QFCards:     qfCards,
 	})
 }

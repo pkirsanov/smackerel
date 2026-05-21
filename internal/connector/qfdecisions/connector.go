@@ -35,6 +35,11 @@ const freshnessWindowSize = 256
 
 var _ connector.Connector = (*Connector)(nil)
 
+var globalFreshness = map[string]*freshnessWindow{
+	FreshnessStageRender: newFreshnessWindow(freshnessWindowSize),
+	FreshnessStageTotal:  newFreshnessWindow(freshnessWindowSize),
+}
+
 type QFConfig struct {
 	BaseURL       string
 	CredentialRef string
@@ -147,16 +152,31 @@ func New(id string) *Connector {
 // smackerel hosts and is clamped to zero so the window never produces a
 // misleading negative p95.
 func (c *Connector) recordFreshness(stage string, latencySeconds float64) {
+	recordFreshnessSample(c.freshness, stage, latencySeconds)
+}
+
+func RecordFreshnessSample(stage string, latencySeconds float64) {
+	recordFreshnessSample(globalFreshness, stage, latencySeconds)
+}
+
+func recordFreshnessSample(windows map[string]*freshnessWindow, stage string, latencySeconds float64) {
 	if latencySeconds < 0 {
 		latencySeconds = 0
 	}
-	w, ok := c.freshness[stage]
+	w, ok := windows[stage]
 	if !ok {
 		return
 	}
 	w.Add(latencySeconds)
 	if p95, has := w.P95(); has {
 		metrics.QFFreshnessP95Seconds.WithLabelValues(stage).Set(p95)
+	}
+}
+
+func resetGlobalFreshnessForTest() {
+	globalFreshness = map[string]*freshnessWindow{
+		FreshnessStageRender: newFreshnessWindow(freshnessWindowSize),
+		FreshnessStageTotal:  newFreshnessWindow(freshnessWindowSize),
 	}
 }
 
@@ -178,6 +198,13 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 	// contract the connector needs for safe polling. A single round-trip suffices.
 	capability, err := client.FetchCapability(ctx)
 	if err != nil {
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			Surface:    DefaultConnectorID,
+			Action:     AuditActionCapabilityHandshake,
+			Outcome:    AuditOutcomeError,
+			Reason:     err.Error(),
+			ObservedAt: time.Now().UTC(),
+		}))
 		health := connector.HealthError
 		var schemaErr SchemaCompatibilityError
 		if errors.As(err, &schemaErr) {
@@ -190,6 +217,13 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 		return fmt.Errorf("qf capability handshake: %w", err)
 	}
 	if err := capability.CompatibilityCheck(); err != nil {
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			Surface:    DefaultConnectorID,
+			Action:     AuditActionCapabilityHandshake,
+			Outcome:    AuditOutcomeRejected,
+			Reason:     err.Error(),
+			ObservedAt: time.Now().UTC(),
+		}))
 		c.mu.Lock()
 		c.capability = capability
 		c.capabilityStatus = CapabilityStatusIncompatible
@@ -201,6 +235,12 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 	}
 
 	client.SetCapability(&capability, CapabilityStatusCompatible)
+	EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+		Surface:    DefaultConnectorID,
+		Action:     AuditActionCapabilityHandshake,
+		Outcome:    AuditOutcomeOK,
+		ObservedAt: time.Now().UTC(),
+	}))
 
 	c.mu.Lock()
 	c.client = client
@@ -366,6 +406,15 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			continue
 		}
 		artifacts = append(artifacts, *artifact)
+		RecordQFPacketIngest(event)
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			TraceID:    event.TraceID,
+			PacketID:   packetID,
+			Surface:    event.SourceSurface,
+			Action:     AuditActionPacketIngest,
+			Outcome:    AuditOutcomeOK,
+			ObservedAt: now,
+		}))
 
 		// Freshness SLA instrumentation (SCN-SM-041-003): observe ingest-stage
 		// latency (QF emit → smackerel artifact materialized) for every

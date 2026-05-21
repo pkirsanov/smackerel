@@ -15,6 +15,7 @@
   const listEl = document.getElementById("drive-search-list");
   const emptyEl = document.getElementById("drive-search-empty");
   const tplEl = document.getElementById("drive-result-template");
+  const qfTplEl = document.getElementById("qf-result-template");
 
   function show(el) { el.hidden = false; }
   function hide(el) { el.hidden = true; }
@@ -131,17 +132,57 @@
     return node;
   }
 
+  function renderQFResult(result) {
+    const card = result.qf_card;
+    const node = qfTplEl.content.firstElementChild.cloneNode(true);
+    node.dataset.cardKind = card.card_kind || "qf_packet";
+    node.querySelector(".qf-result-title").textContent = card.title || card.thesis || "QF packet";
+    node.querySelector(".qf-result-summary").textContent = card.why_now || result.summary || "";
+    node.querySelector(".qf-approval-state").dataset.state = card.approval_state || "display_only";
+    node.querySelector(".qf-approval-state").textContent = card.approval_state || "display_only";
+    node.querySelector(".qf-packet-id").textContent = card.packet_id || "";
+    node.querySelector(".qf-trace-id").textContent = card.trace_id || "";
+
+    const trustList = node.querySelector(".qf-trust-list");
+    (card.trust_objects || []).forEach(function (trust) {
+      const li = document.createElement("li");
+      li.textContent = (trust.label || "trust") + " (" + (trust.severity || "unknown") + "): " + (trust.summary || "");
+      trustList.appendChild(li);
+    });
+
+    const openInQF = node.querySelector(".qf-open-in-qf");
+    if (card.deep_link && card.deep_link.url) {
+      openInQF.setAttribute("href", card.deep_link.url);
+    } else {
+      openInQF.removeAttribute("href");
+      openInQF.setAttribute("aria-disabled", "true");
+      openInQF.classList.add("disabled");
+    }
+
+    const detail = node.querySelector(".qf-open-detail");
+    if (result.artifact_id) {
+      detail.setAttribute("href", "/pwa/drive-artifact-detail.html?type=qf&id=" + encodeURIComponent(result.artifact_id));
+    } else {
+      detail.removeAttribute("href");
+    }
+    return node;
+  }
+
   function renderResults(results) {
     clearList();
-    const driveResults = (results || []).filter(function (r) {
-      return r.artifact_type === "drive_file";
+    const surfaceResults = (results || []).filter(function (r) {
+      return r.artifact_type === "drive_file" || r.qf_card;
     });
-    if (driveResults.length === 0) {
+    if (surfaceResults.length === 0) {
       show(emptyEl);
       return;
     }
     hide(emptyEl);
-    driveResults.forEach(function (result) {
+    surfaceResults.forEach(function (result) {
+      if (result.qf_card) {
+        listEl.appendChild(renderQFResult(result));
+        return;
+      }
       listEl.appendChild(renderResult(result));
     });
   }

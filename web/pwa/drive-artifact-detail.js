@@ -42,6 +42,17 @@
 
   const versionsListEl = document.getElementById("drive-versions-list");
   const versionsEmptyEl = document.getElementById("drive-versions-empty");
+  const qfPanelEl = document.getElementById("qf-packet-panel");
+  const qfLabelEl = document.getElementById("qf-packet-label");
+  const qfTitleEl = document.getElementById("qf-packet-title");
+  const qfPacketIDEl = document.getElementById("qf-packet-id");
+  const qfTraceIDEl = document.getElementById("qf-trace-id");
+  const qfApprovalStateEl = document.getElementById("qf-approval-state");
+  const qfDeepLinkEl = document.getElementById("qf-deep-link");
+  const qfTrustListEl = document.getElementById("qf-trust-list");
+  const qfEvidenceBuilderLinkEl = document.getElementById("qf-evidence-builder-link");
+  const qfEvidenceRevokeEl = document.getElementById("qf-evidence-revoke");
+  const qfEvidenceStatusEl = document.getElementById("qf-evidence-status");
 
   const tabIDs = ["preview", "text", "metadata", "versions"];
 
@@ -155,6 +166,7 @@
   }
 
   function render(detail) {
+    hide(qfPanelEl);
     titleEl.textContent = detail.title || "Drive file";
     subtitleEl.textContent = (detail.drive && detail.drive.mime_type) || "Drive artifact";
 
@@ -226,6 +238,99 @@
     sectionEl.setAttribute("aria-busy", "false");
   }
 
+  function hideDrivePanelsForQF() {
+    [
+      document.querySelector(".drive-artifact-badges"),
+      document.querySelector(".drive-folder-breadcrumb"),
+      document.querySelector(".drive-artifact-actions"),
+      document.querySelector(".tab-strip"),
+      document.getElementById("panel-preview"),
+      document.getElementById("panel-text"),
+      document.getElementById("panel-metadata"),
+      document.getElementById("panel-versions")
+    ].forEach(function (el) {
+      if (el) { hide(el); }
+    });
+  }
+
+  function renderQFDetail(detail) {
+    const card = detail.qf_card;
+    if (!card) {
+      showError("QF packet card is unavailable for this artifact.");
+      return;
+    }
+    titleEl.textContent = card.title || card.thesis || detail.title || "QF packet";
+    subtitleEl.textContent = "Read-only QF Companion packet";
+    hide(bannerEl);
+    hideDrivePanelsForQF();
+    qfLabelEl.textContent = card.display_label || "QF packet";
+    qfTitleEl.textContent = card.title || card.thesis || "";
+    qfPacketIDEl.textContent = card.packet_id || "—";
+    qfTraceIDEl.textContent = card.trace_id || "—";
+    qfApprovalStateEl.textContent = card.approval_state || "—";
+    while (qfTrustListEl.firstChild) {
+      qfTrustListEl.removeChild(qfTrustListEl.firstChild);
+    }
+    (card.trust_objects || []).forEach(function (trust) {
+      const li = document.createElement("li");
+      li.textContent = (trust.label || "trust") + " (" + (trust.severity || "unknown") + "): " + (trust.summary || "");
+      qfTrustListEl.appendChild(li);
+    });
+    if (card.deep_link && card.deep_link.url) {
+      qfDeepLinkEl.setAttribute("href", card.deep_link.url);
+      qfDeepLinkEl.textContent = card.deep_link.status || card.deep_link.url;
+    } else {
+      qfDeepLinkEl.removeAttribute("href");
+      qfDeepLinkEl.textContent = "—";
+    }
+    if (qfEvidenceBuilderLinkEl) {
+      const builderParams = new URLSearchParams();
+      builderParams.set("qf_artifact_id", detail.artifact_id || id || "");
+      builderParams.set("packet_id", card.packet_id || "");
+      qfEvidenceBuilderLinkEl.setAttribute("href", "/evidence-bundles/new?" + builderParams.toString());
+    }
+    if (qfEvidenceStatusEl) {
+      qfEvidenceStatusEl.textContent = "Evidence export status appears after a bundle is accepted.";
+    }
+    if (qfEvidenceRevokeEl) {
+      qfEvidenceRevokeEl.disabled = true;
+      qfEvidenceRevokeEl.addEventListener("click", async function () {
+        const exportID = qfEvidenceRevokeEl.getAttribute("data-export-id");
+        if (!exportID) { return; }
+        const response = await fetch("/api/qf/evidence-bundles/" + encodeURIComponent(exportID), {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "consent_revoked" })
+        });
+        const body = await response.json();
+        qfEvidenceStatusEl.textContent = response.ok ? "Evidence sharing revoked: " + body.record.status : (body.error ? body.error.message : "Evidence revocation failed");
+      }, { once: true });
+    }
+    show(qfPanelEl);
+    statusEl.textContent = "";
+    statusEl.classList.remove("status-loading");
+    show(bodyEl);
+    sectionEl.setAttribute("aria-busy", "false");
+  }
+
+  async function loadQFDetail(id) {
+    try {
+      const resp = await fetch("/api/artifact/" + encodeURIComponent(id));
+      if (resp.status === 404) {
+        showError("QF packet not found: " + id);
+        return;
+      }
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status);
+      }
+      const body = await resp.json();
+      renderQFDetail(body);
+    } catch (err) {
+      console.error("qf detail load failed", err);
+      showError("Failed to load QF packet: " + err.message);
+    }
+  }
+
   async function loadDetail(id) {
     try {
       const resp = await fetch("/v1/drive/artifacts/" + encodeURIComponent(id));
@@ -251,6 +356,10 @@
   const id = params.get("id");
   if (!id) {
     showError("Missing artifact id; expected ?id=<artifact_id> in the URL.");
+    return;
+  }
+  if (params.get("type") === "qf") {
+    loadQFDetail(id);
     return;
   }
   loadDetail(id);

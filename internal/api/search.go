@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
+	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/metrics"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
@@ -103,6 +105,11 @@ type SearchResult struct {
 	// non-nil only for drive_file artifact_type results so non-drive
 	// callers continue to receive their existing payload unchanged.
 	Drive *DriveSearchMetadata `json:"drive,omitempty"`
+
+	// QFCard is the read-only public rendering contract for QF companion
+	// packets. It is present only for qf/* artifacts and never exposes raw
+	// numeric trust internals or action affordances.
+	QFCard *qfdecisions.PacketCard `json:"qf_card,omitempty"`
 }
 
 // SearchEngine handles semantic search operations.
@@ -535,7 +542,7 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		       COALESCE(a.topics::text, '[]'), a.created_at,
 		       1 - (a.embedding <=> $1::vector) AS similarity,
 		       aas.current_rating, aas.times_used, COALESCE(aas.tags, '{}'),
-		       a.domain_data
+		       a.domain_data, COALESCE(a.metadata::text, '')
 		FROM artifacts a
 		LEFT JOIN artifact_annotation_summary aas ON aas.artifact_id = a.id
 		WHERE a.embedding IS NOT NULL`
@@ -636,9 +643,10 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		var annTags []string
 
 		var domainData []byte
+		var metadataJSON []byte
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
 			&r.SourceURL, &topicsStr, &createdAt, &similarity,
-			&annRating, &annTimesUsed, &annTags, &domainData); err != nil {
+			&annRating, &annTimesUsed, &annTags, &domainData, &metadataJSON); err != nil {
 			continue
 		}
 
@@ -653,6 +661,7 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		if len(domainData) > 0 {
 			r.DomainData = json.RawMessage(domainData)
 		}
+		r.QFCard = renderQFCard(r.ContextlessArtifact(), metadataJSON, qfdecisions.SurfaceSearch)
 
 		// Apply annotation boost (small enough not to overwhelm semantics)
 		rawSimilarity := similarity
@@ -897,7 +906,7 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       COALESCE(topics::text, '[]'), created_at,
+		       COALESCE(topics::text, '[]'), created_at, COALESCE(metadata::text, ''),
 		       similarity(title, $1) AS sim
 		FROM artifacts
 		WHERE title % $1
@@ -925,9 +934,10 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 		var topicsStr string
 		var sim float64
 		var createdAt time.Time
+		var metadataJSON []byte
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &topicsStr, &createdAt, &sim); err != nil {
+			&r.SourceURL, &topicsStr, &createdAt, &metadataJSON, &sim); err != nil {
 			continue
 		}
 
@@ -940,6 +950,7 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 			slog.Debug("failed to unmarshal artifact topics", "artifact_id", r.ArtifactID, "error", err)
 		}
 		r.Topics = topics
+		r.QFCard = renderQFCard(r.ContextlessArtifact(), metadataJSON, qfdecisions.SurfaceSearch)
 
 		results = append(results, r)
 	}
@@ -956,7 +967,7 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
 	query := `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       COALESCE(topics::text, '[]'), created_at
+		       COALESCE(topics::text, '[]'), created_at, COALESCE(metadata::text, '')
 		FROM artifacts
 		WHERE 1=1`
 
@@ -1007,9 +1018,10 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 		var r SearchResult
 		var topicsStr string
 		var createdAt time.Time
+		var metadataJSON []byte
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &topicsStr, &createdAt); err != nil {
+			&r.SourceURL, &topicsStr, &createdAt, &metadataJSON); err != nil {
 			continue
 		}
 
@@ -1022,6 +1034,7 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 			slog.Debug("failed to unmarshal artifact topics", "artifact_id", r.ArtifactID, "error", err)
 		}
 		r.Topics = topics
+		r.QFCard = renderQFCard(r.ContextlessArtifact(), metadataJSON, qfdecisions.SurfaceSearch)
 
 		results = append(results, r)
 	}
@@ -1031,4 +1044,33 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 	}
 
 	return results, len(results), nil
+}
+
+func (r SearchResult) ContextlessArtifact() connector.RawArtifact {
+	return connector.RawArtifact{
+		ContentType: r.ArtifactType,
+		Title:       r.Title,
+		URL:         r.SourceURL,
+	}
+}
+
+func renderQFCard(artifact connector.RawArtifact, metadataJSON []byte, surface string) *qfdecisions.PacketCard {
+	if !strings.HasPrefix(artifact.ContentType, "qf/") || len(metadataJSON) == 0 {
+		return nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(metadataJSON, &metadata); err != nil || len(metadata) == 0 {
+		return nil
+	}
+	artifact.Metadata = metadata
+	signedLink, _ := metadata["packet_url_signed"].(string)
+	card, err := qfdecisions.RenderPacketCard(context.Background(), artifact, qfdecisions.RenderOptions{
+		Surface:                       surface,
+		DeepLinkSigningSupported:      strings.TrimSpace(signedLink) != "",
+		PreferredSurfaceHintSupported: true,
+	})
+	if err != nil {
+		return nil
+	}
+	return &card
 }

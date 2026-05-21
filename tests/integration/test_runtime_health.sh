@@ -31,14 +31,14 @@ cleanup() {
   if [[ "$HEALTH_OK" == "1" && "$KEEP_STACK_UP" == "1" ]]; then
     return
   fi
-  timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+  timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 # Ensure a clean baseline before bringing the stack up. Any leftover
 # containers from a previous run would otherwise confuse the health
 # probe.
-timeout 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" build
 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" up
 

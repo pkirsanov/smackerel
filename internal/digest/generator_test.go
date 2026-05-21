@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 )
 
 func TestDigestContext_QuietDay(t *testing.T) {
@@ -343,5 +345,65 @@ func TestDigestContext_NotQuietWithKnowledgeHealth(t *testing.T) {
 	isQuiet := len(ctx.ActionItems) == 0 && len(ctx.OvernightArtifacts) == 0 && len(ctx.HotTopics) == 0 && !hasHospitality && !hasKnowledgeHealth
 	if isQuiet {
 		t.Error("should NOT be quiet when knowledge health has findings")
+	}
+}
+
+func TestDigestContext_QFPacketCardsSerializeAndPreventQuietDay(t *testing.T) {
+	ctx := &DigestContext{
+		DigestDate: "2026-05-06",
+		QFPackets: []qfdecisions.PacketCard{{
+			CardKind:      qfdecisions.CardKindGenericPacket,
+			DisplayLabel:  "QF packet",
+			PacketID:      "packet-1",
+			TraceID:       "trace-1",
+			Title:         "QF-authored thesis",
+			ApprovalState: "display_only",
+			ReadOnly:      true,
+			TrustObjects: []qfdecisions.TrustObjectRender{{
+				Label:    "calibration",
+				Severity: "medium",
+				Summary:  "calibration public summary",
+			}},
+		}},
+	}
+
+	data, err := json.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("marshal digest context: %v", err)
+	}
+	body := string(data)
+	for _, want := range []string{`"qf_packets"`, `"packet-1"`, `"trace-1"`, `"calibration public summary"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("digest context missing %q in %s", want, body)
+		}
+	}
+	if len(ctx.ActionItems) == 0 && len(ctx.OvernightArtifacts) == 0 && len(ctx.HotTopics) == 0 && ctx.Hospitality == nil && ctx.KnowledgeHealth == nil && ctx.Expenses == nil && len(ctx.QFPackets) == 0 {
+		t.Fatal("QF packet cards must prevent quiet-day classification")
+	}
+}
+
+func TestFormatQFPacketsFallbackPreservesPublicTrustOnly(t *testing.T) {
+	text := formatQFPacketsFallback([]qfdecisions.PacketCard{{
+		DisplayLabel:  "QF packet",
+		Title:         "QF-authored thesis",
+		ApprovalState: "display_only",
+		TraceID:       "trace-1",
+		TrustObjects: []qfdecisions.TrustObjectRender{{
+			Label:    "provenance",
+			Severity: "low",
+			Summary:  "provenance public summary",
+		}},
+		DeepLink: qfdecisions.DeepLinkRender{URL: "https://qf.example.test/packets/packet-1"},
+	}})
+
+	for _, want := range []string{"QF Packets", "QF-authored thesis", "trace-1", "provenance public summary", "https://qf.example.test/packets/packet-1"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("QF fallback digest missing %q in %s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"confidence", "score", "value"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("QF fallback digest leaked non-public trust field %q in %s", forbidden, text)
+		}
 	}
 }

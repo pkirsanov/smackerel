@@ -17,7 +17,9 @@ import (
 
 	"github.com/smackerel/smackerel/internal/api"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/connector/bookmarks"
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
@@ -166,6 +168,7 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 		Summary   string
 		SourceURL string
 		CreatedAt time.Time
+		QFCard    *qfdecisions.PacketCard
 	}
 
 	var viewResults []Result
@@ -181,6 +184,7 @@ func (h *Handler) SearchResults(w http.ResponseWriter, r *http.Request) {
 			Summary:   sr.Summary,
 			SourceURL: sr.SourceURL,
 			CreatedAt: createdAt,
+			QFCard:    sr.QFCard,
 		})
 	}
 
@@ -222,15 +226,15 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var title, artType, summary, sourceURL string
-	var keyIdeas, entities, topics []byte
+	var keyIdeas, entities, topics, metadataJSON []byte
 	var createdAt time.Time
 
 	err := h.Pool.QueryRow(r.Context(), `
 		SELECT title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(key_ideas::text, '[]')::bytea, COALESCE(entities::text, '{}')::bytea,
-		       COALESCE(topics::text, '[]')::bytea, created_at
+		       COALESCE(topics::text, '[]')::bytea, COALESCE(metadata::text, '{}')::bytea, created_at
 		FROM artifacts WHERE id = $1
-	`, id).Scan(&title, &artType, &summary, &sourceURL, &keyIdeas, &entities, &topics, &createdAt)
+	`, id).Scan(&title, &artType, &summary, &sourceURL, &keyIdeas, &entities, &topics, &metadataJSON, &createdAt)
 	if err != nil {
 		http.Error(w, "Artifact not found", http.StatusNotFound)
 		return
@@ -248,6 +252,30 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("failed to unmarshal artifact topics", "artifact_id", id, "error", err)
 	}
 
+	var qfCard *qfdecisions.PacketCard
+	if strings.HasPrefix(artType, "qf/") {
+		metadata := map[string]any{}
+		if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+			slog.Debug("failed to unmarshal QF artifact metadata", "artifact_id", id, "error", err)
+		} else {
+			card, err := qfdecisions.RenderPacketCard(r.Context(), connector.RawArtifact{
+				SourceRef:   id,
+				ContentType: artType,
+				Title:       title,
+				RawContent:  summary,
+				URL:         sourceURL,
+				Metadata:    metadata,
+			}, qfdecisions.RenderOptions{
+				Surface:                       qfdecisions.SurfaceWeb,
+				DeepLinkSigningSupported:      strings.TrimSpace(webStringFromAny(metadata["packet_url_signed"])) != "",
+				PreferredSurfaceHintSupported: true,
+			})
+			if err == nil {
+				qfCard = &card
+			}
+		}
+	}
+
 	h.Templates.ExecuteTemplate(w, "detail.html", map[string]interface{}{
 		"Title":       title,
 		"Type":        artType,
@@ -258,7 +286,28 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 		"Connections": connections,
 		"CreatedAt":   createdAt,
 		"ID":          id,
+		"QFCard":      qfCard,
 	})
+}
+
+// EvidenceBundleBuilderPage handles GET /evidence-bundles/new.
+func (h *Handler) EvidenceBundleBuilderPage(w http.ResponseWriter, r *http.Request) {
+	if err := h.Templates.ExecuteTemplate(w, "evidence-builder.html", map[string]interface{}{
+		"Title":        "Personal Evidence Bundle",
+		"QFArtifactID": r.URL.Query().Get("qf_artifact_id"),
+		"PacketID":     r.URL.Query().Get("packet_id"),
+	}); err != nil {
+		slog.Error("template render failed", "template", "evidence-builder.html", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+	}
+}
+
+func webStringFromAny(value any) string {
+	stringValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return stringValue
 }
 
 // DigestPage handles GET /digest.

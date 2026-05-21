@@ -23,6 +23,9 @@ func (m *mockWebUI) SearchResults(w http.ResponseWriter, r *http.Request) {
 func (m *mockWebUI) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+func (m *mockWebUI) EvidenceBundleBuilderPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) DigestPage(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
 func (m *mockWebUI) TopicsPage(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
 func (m *mockWebUI) SettingsPage(w http.ResponseWriter, r *http.Request) {

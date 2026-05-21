@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/pipeline"
 )
@@ -223,19 +225,20 @@ type RecentResponse struct {
 
 // ArtifactDetailResponse is the JSON response for GET /api/artifact/{id}.
 type ArtifactDetailResponse struct {
-	ArtifactID             string          `json:"artifact_id"`
-	Title                  string          `json:"title"`
-	ArtifactType           string          `json:"artifact_type"`
-	Summary                string          `json:"summary"`
-	SourceURL              string          `json:"source_url"`
-	Sentiment              string          `json:"sentiment"`
-	SourceQuality          string          `json:"source_quality"`
-	ProcessingTier         string          `json:"processing_tier"`
-	ProcessingStatus       string          `json:"processing_status"`
-	DomainExtractionStatus string          `json:"domain_extraction_status"`
-	DomainData             json.RawMessage `json:"domain_data,omitempty"`
-	CreatedAt              string          `json:"created_at"`
-	UpdatedAt              string          `json:"updated_at"`
+	ArtifactID             string                  `json:"artifact_id"`
+	Title                  string                  `json:"title"`
+	ArtifactType           string                  `json:"artifact_type"`
+	Summary                string                  `json:"summary"`
+	SourceURL              string                  `json:"source_url"`
+	Sentiment              string                  `json:"sentiment"`
+	SourceQuality          string                  `json:"source_quality"`
+	ProcessingTier         string                  `json:"processing_tier"`
+	ProcessingStatus       string                  `json:"processing_status"`
+	DomainExtractionStatus string                  `json:"domain_extraction_status"`
+	DomainData             json.RawMessage         `json:"domain_data,omitempty"`
+	QFCard                 *qfdecisions.PacketCard `json:"qf_card,omitempty"`
+	CreatedAt              string                  `json:"created_at"`
+	UpdatedAt              string                  `json:"updated_at"`
 }
 
 // RecentHandler handles GET /api/recent.
@@ -320,8 +323,13 @@ func (d *Dependencies) ArtifactDetailHandler(w http.ResponseWriter, r *http.Requ
 		ProcessingStatus:       a.ProcessingStatus,
 		DomainExtractionStatus: a.DomainExtractionStatus,
 		DomainData:             a.DomainData,
-		CreatedAt:              a.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:              a.UpdatedAt.Format(time.RFC3339),
+		QFCard: renderQFCard(connector.RawArtifact{
+			ContentType: a.ArtifactType,
+			Title:       a.Title,
+			URL:         a.SourceURL,
+		}, a.Metadata, qfdecisions.SurfaceArtifactDetail),
+		CreatedAt: a.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: a.UpdatedAt.Format(time.RFC3339),
 	})
 }
 

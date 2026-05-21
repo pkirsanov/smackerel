@@ -15,13 +15,22 @@ import (
 
 // supervisorMockConnector implements the Connector interface for supervisor testing.
 type supervisorMockConnector struct {
-	id        string
-	syncFunc  func(ctx context.Context, cursor string) ([]RawArtifact, string, error)
-	syncCount atomic.Int32
+	id           string
+	healthMu     sync.RWMutex
+	healthStatus HealthStatus
+	connectFunc  func(ctx context.Context, config ConnectorConfig) error
+	syncFunc     func(ctx context.Context, cursor string) ([]RawArtifact, string, error)
+	connectCount atomic.Int32
+	syncCount    atomic.Int32
 }
 
 func (m *supervisorMockConnector) ID() string { return m.id }
-func (m *supervisorMockConnector) Connect(_ context.Context, _ ConnectorConfig) error {
+func (m *supervisorMockConnector) Connect(ctx context.Context, config ConnectorConfig) error {
+	m.connectCount.Add(1)
+	if m.connectFunc != nil {
+		return m.connectFunc(ctx, config)
+	}
+	m.setHealth(HealthHealthy)
 	return nil
 }
 func (m *supervisorMockConnector) Sync(ctx context.Context, cursor string) ([]RawArtifact, string, error) {
@@ -32,9 +41,20 @@ func (m *supervisorMockConnector) Sync(ctx context.Context, cursor string) ([]Ra
 	return nil, cursor, nil
 }
 func (m *supervisorMockConnector) Health(_ context.Context) HealthStatus {
-	return HealthHealthy
+	m.healthMu.RLock()
+	defer m.healthMu.RUnlock()
+	if m.healthStatus == "" {
+		return HealthHealthy
+	}
+	return m.healthStatus
 }
 func (m *supervisorMockConnector) Close() error { return nil }
+
+func (m *supervisorMockConnector) setHealth(status HealthStatus) {
+	m.healthMu.Lock()
+	m.healthStatus = status
+	m.healthMu.Unlock()
+}
 
 // supervisorMockPublisher implements the ArtifactPublisher interface for supervisor testing.
 type supervisorMockPublisher struct {
@@ -288,6 +308,44 @@ func TestTriggerSync_StartsNonRunningConnector(t *testing.T) {
 	case <-synced:
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("TriggerSync did not start a non-running connector")
+	}
+
+	cancel()
+	sup.StopAll()
+}
+
+func TestTriggerSync_ReconnectsConfiguredUnhealthyConnector(t *testing.T) {
+	reg := NewRegistry()
+	synced := make(chan struct{}, 1)
+	cfg := ConnectorConfig{SyncSchedule: "30m"}
+	conn := &supervisorMockConnector{id: "c1", healthStatus: HealthError}
+	conn.connectFunc = func(_ context.Context, got ConnectorConfig) error {
+		if got.SyncSchedule != cfg.SyncSchedule {
+			t.Fatalf("Connect config SyncSchedule = %q, want %q", got.SyncSchedule, cfg.SyncSchedule)
+		}
+		conn.setHealth(HealthHealthy)
+		return nil
+	}
+	conn.syncFunc = func(ctx context.Context, cursor string) ([]RawArtifact, string, error) {
+		synced <- struct{}{}
+		<-ctx.Done()
+		return nil, cursor, ctx.Err()
+	}
+	reg.Register(conn)
+
+	sup := NewSupervisor(reg, nil)
+	sup.SetConfig("c1", cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup.TriggerSync(ctx, "c1")
+	select {
+	case <-synced:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("TriggerSync did not sync after reconnecting unhealthy connector")
+	}
+	if got := conn.connectCount.Load(); got != 1 {
+		t.Fatalf("Connect calls = %d, want 1", got)
 	}
 
 	cancel()

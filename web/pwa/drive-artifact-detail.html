@@ -46,6 +46,23 @@
         hidden
       ></p>
 
+      <section id="qf-packet-panel" class="drive-tab-panel" hidden>
+        <h2 id="qf-packet-label">QF packet</h2>
+        <p id="qf-packet-title"></p>
+        <dl class="drive-metadata-fields">
+          <div><dt>Packet</dt><dd id="qf-packet-id">—</dd></div>
+          <div><dt>Trace</dt><dd id="qf-trace-id">—</dd></div>
+          <div><dt>Approval</dt><dd id="qf-approval-state">—</dd></div>
+          <div><dt>Deep link</dt><dd><a id="qf-deep-link" href="#" rel="noopener">—</a></dd></div>
+        </dl>
+        <ul id="qf-trust-list" class="idea-list"></ul>
+        <div id="qf-evidence-panel" class="drive-artifact-actions">
+          <a id="qf-evidence-builder-link" class="primary" href="/evidence-bundles/new">Build Evidence Bundle</a>
+          <button id="qf-evidence-revoke" type="button" disabled>Revoke Evidence Sharing</button>
+          <p id="qf-evidence-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
       <div class="drive-artifact-badges">
         <span class="provider-chip" id="drive-provider-chip" data-provider="">—</span>
         <span class="sharing-badge" id="drive-sharing-badge" data-state="">—</span>

@@ -28,7 +28,7 @@ e2e_cleanup() {
   if [ "$E2E_STACK_MANAGED" = "1" ]; then
     return 0
   fi
-  "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
+  timeout --kill-after=15s 60 "$REPO_DIR/smackerel.sh" --env "$TEST_ENV" down --volumes >/dev/null 2>&1 || true
   # Force-remove explicitly-named test volumes (docker compose down -v does not remove them)
   local env_file
   env_file="$(smackerel_env_file "$TEST_ENV")"

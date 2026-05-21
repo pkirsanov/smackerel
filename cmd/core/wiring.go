@@ -14,7 +14,9 @@ import (
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/connector"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
+	qfdecisions "github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/drive"
 	"github.com/smackerel/smackerel/internal/drive/confirm"
 	"github.com/smackerel/smackerel/internal/drive/google"
@@ -134,6 +136,18 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
+	}
+
+	if cfg.QFDecisionsEnabled {
+		qfEvidenceStore := qfdecisions.NewEvidenceExportStore(svc.pg.Pool)
+		qfEvidenceExporter := qfdecisions.NewEvidenceExporter(
+			qfdecisions.NewClient(cfg.QFDecisionsBaseURL, cfg.QFDecisionsCredentialRef, cfg.QFDecisionsPacketVersion, cfg.QFDecisionsPageSize),
+			qfEvidenceStore,
+			qfdecisions.NewEvidenceRateLimiter(time.Now),
+			cfg.QFDecisionsCredentialRef,
+			time.Now,
+		)
+		deps.QFEvidenceHandlers = api.NewQFEvidenceHandlers(svc.pg, connector.NewStateStore(svc.pg.Pool), qfEvidenceStore, qfEvidenceExporter)
 	}
 
 	if provider, ok := drive.DefaultRegistry.Get("google"); ok {

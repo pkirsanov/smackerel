@@ -3,7 +3,11 @@
   "specId": "041",
   "featureDir": "specs/041-qf-companion-connector",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-05-13T00:00:00Z",
+  "generatedAt": "2026-05-19T12:03:48Z",
+  "coverageNotes": [
+    "Scope 3 PWA/UI live proof is repo-standard Go live-stack E2E in tests/e2e/qf_decisions_surface_test.go, especially TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail and assertPWAQFBundleServed.",
+    "web/pwa/tests/qf_decisions_surface.spec.ts is a traceability/static-contract anchor only; it is not an executable Playwright/PWA DoD runner unless a future toolchain-adoption scope adds a sanctioned runner through ./smackerel.sh."
+  ],
   "scenarios": [
     {
       "scenarioId": "SCN-SM-041-001",
@@ -237,6 +241,412 @@
         "SCN-SM-041-008 unit test response-level next_cursor persistence and per-event cursor diagnostic-only",
         "SCN-SM-041-008 integration test fast-forward recovery against live stack",
         "SCN-SM-041-008 stress test freshness SLA p95 ingest render combined budget"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-009",
+      "name": "Unknown Decision Type Renders As Generic QF Packet Card",
+      "scope": "03-web-telegram-digest-and-search-surfacing",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api", "static-contract"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/render_test.go",
+          "function": "TestRenderUnknownDecisionTypeUsesGenericCardWithoutDerivedSemantics"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_surface_test.go",
+          "function": "TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-unit-evidence",
+        "report.md#scope-3-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-009 unknown decision-type generic-card fallback preserves QF-authored content and does not infer local advice semantics",
+        "SCN-SM-041-009 unit and E2E tests prove generic read-only rendering across Web, digest, Telegram, and search"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-010",
+      "name": "Trust Objects Render Only The Public QF Contract",
+      "scope": "03-web-telegram-digest-and-search-surfacing",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api", "static-contract"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/render_test.go",
+          "function": "TestTrustObjectRendererKeepsOnlyPublicFieldsForAllBadgeTypes"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_surface_test.go",
+          "function": "TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-trust-object-rendering-evidence",
+        "report.md#scope-3-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-010 trust object renderers expose only label severity summary optional detail and optional links",
+        "SCN-SM-041-010 numeric internals and unenumerated QF fields are silently dropped"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-011",
+      "name": "Missing Required Trust Fields Falls Back Loudly",
+      "scope": "03-web-telegram-digest-and-search-surfacing",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/render_test.go",
+          "function": "TestTrustObjectMissingRequiredFieldFallsBackAndEmitsMetric"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_surface_test.go",
+          "function": "TestQFDecisionTrustObjectsRenderPublicFieldsAndFallbackOnMissingRequired"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-trust-object-failure-evidence",
+        "report.md#scope-3-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-011 missing trust label or severity emits smackerel_qf_trust_object_render_failures_total",
+        "SCN-SM-041-011 missing required trust fields fall back to generic read-only QF packet card"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-012",
+      "name": "Signed Deep Links Are Preferred Or Refetched",
+      "scope": "03-web-telegram-digest-and-search-surfacing",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api", "static-contract"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/render_test.go",
+          "function": "TestSignedDeepLinkSelectionUsesSignedRefetchesExpiredAndFallsBackOnlyWhenUnsupported"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_surface_test.go",
+          "function": "TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-signed-deep-link-evidence",
+        "report.md#scope-3-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-012 signed deep-link rendering covers signed_used signed_expired_fallback_unsigned and unsigned_only branches",
+        "SCN-SM-041-012 QFDecisionPacketEnvelope and artifact metadata preserve packet_url_signed signature_expires_at and never locally re-sign"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-013",
+      "name": "Preferred Surface Routes Placement Only",
+      "scope": "03-web-telegram-digest-and-search-surfacing",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api", "static-contract"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/render_test.go",
+          "function": "TestPreferredSurfaceRoutingBranchesDoNotMutateTrustOrActionState"
+        },
+        {
+          "file": "tests/e2e/qf_decisions_surface_test.go",
+          "function": "TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-preferred-surface-routing-evidence",
+        "report.md#scope-3-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-013 preferred_surface routing affects placement only for digest telegram qf_dashboard any and missing branches",
+        "SCN-SM-041-013 routing never changes trust metadata decision content action eligibility deep-link choice or read-only boundary"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-014",
+      "name": "Idempotent Export Replay And Collision Handling",
+      "scope": "04-personal-evidence-bundle-export",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/client_test.go",
+          "function": "TestEvidenceExportTreatsIdempotentReplayAsNoopSuccess"
+        },
+        {
+          "file": "internal/connector/qfdecisions/client_test.go",
+          "function": "TestEvidenceExportCollisionAbortsWithoutRetry"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "tests/e2e/qf_personal_evidence_bundle_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceBundleIdempotentReplayAndCollisionThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4-unit-evidence",
+        "report.md#scope-4-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-014 HTTP 200 replay with same export_id and payload is no-op success",
+        "SCN-SM-041-014 HTTP 409 EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD aborts with EXPORT_ID_COLLISION and is never retried"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-015",
+      "name": "Packet Context Evidence Bundle Export",
+      "scope": "04-personal-evidence-bundle-export",
+      "status": "active",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/evidence_bundle_test.go",
+          "plannedTitle": "TestEvidenceBundleBuildsPacketContextTargetWithRequiredFields"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_evidence_bundle_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceBundleExportsPacketContextThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4-packet-context-export-evidence",
+        "report.md#scope-4-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-015 evidence bundles attached to QF packets use target_context packet_context",
+        "SCN-SM-041-015 exported bundle includes source artifact IDs claims confidence sensitivity consent provenance redaction summary source provenance classes and timestamp"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-016",
+      "name": "Capability-Bound Evidence Preflight Limits",
+      "scope": "04-personal-evidence-bundle-export",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/evidence_bundle_test.go",
+          "plannedTitle": "TestEvidenceBundlePreflightRejectsBundleSizeClaimCountAndRateLimit"
+        },
+        {
+          "plannedPath": "tests/integration/qf_personal_evidence_export_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceExportPersistsPacketContextAndCapabilityPreflightState"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_evidence_bundle_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceBundlePreflightRejectsLimitsAndIneligibleSourceClassBeforeRemoteCall"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4-preflight-limit-evidence",
+        "report.md#scope-4-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-016 persisted capability limits reject oversized too many claims rate-limited and ineligible source-class bundles locally",
+        "SCN-SM-041-016 local rejects emit smackerel_qf_evidence_export_attempts_total with status local_reject and reason"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-017",
+      "name": "Consent Revocation Deletes Remote Bundle And Marks Local State Revoked",
+      "scope": "04-personal-evidence-bundle-export",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "tests/integration/qf_personal_evidence_export_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceExportIdempotencyCollisionAndRevocationState"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_evidence_bundle_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceBundleConsentRevocationDeletesRemoteAndMarksLocalRevoked"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4-revocation-evidence",
+        "report.md#scope-4-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-017 consent revocation calls QF DELETE with reason consent_revoked",
+        "SCN-SM-041-017 local export state becomes revoked and evidence-revocation audit envelope is emitted"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-018",
+      "name": "Source Provenance Classes Are Validated Without Pre-MVP Badge Attachment",
+      "scope": "04-personal-evidence-bundle-export",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/evidence_bundle_test.go",
+          "plannedTitle": "TestEvidenceBundleSourceProvenanceClassesAndNoPreMVPBadgeAttachment"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_evidence_bundle_test.go",
+          "plannedTitle": "TestQFPersonalEvidenceBundlePreflightRejectsLimitsAndIneligibleSourceClassBeforeRemoteCall"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-4-source-provenance-evidence",
+        "report.md#scope-4-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-018 source_provenance_classes populated and validated against eligible_smackerel_source_classes",
+        "SCN-SM-041-018 pre-MVP DataProvenanceBadge-shaped source badge attachment is not enabled"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-019",
+      "name": "Credential Rotation Preserves Connector And Evidence State",
+      "scope": "05-credential-rotation-safety-boundaries-observability-documentation-and-tests",
+      "status": "active",
+      "behaviorClass": "integration",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/credentials_test.go",
+          "plannedTitle": "TestCredentialRotationSelectsNewestValidNotBeforeWithinTwentyFourHourOverlap"
+        },
+        {
+          "plannedPath": "tests/integration/qf_credential_rotation_test.go",
+          "plannedTitle": "TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_scope5_safety_observability_test.go",
+          "plannedTitle": "TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-5-credential-rotation-evidence",
+        "report.md#scope-5-e2e-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-019 credential rotation accepts two active QF credentials for no more than 24 hours",
+        "SCN-SM-041-019 rotation preserves sync cursor capability state and evidence export idempotency state"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-020",
+      "name": "Safety Boundaries And Symmetric Metrics Stay Complete Across Sync Render And Export",
+      "scope": "05-credential-rotation-safety-boundaries-observability-documentation-and-tests",
+      "status": "active",
+      "behaviorClass": "observability",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api", "stress"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/metrics_test.go",
+          "plannedTitle": "TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity"
+        },
+        {
+          "plannedPath": "tests/integration/qf_scope5_observability_test.go",
+          "plannedTitle": "TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths"
+        },
+        {
+          "plannedPath": "tests/stress/qf_decision_event_replay_test.go",
+          "plannedTitle": "TestQFDecisionsFreshnessSLAP95RenderAndCombined"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-5-metric-parity-evidence",
+        "report.md#scope-5-freshness-render-combined-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-020 complete symmetric smackerel_qf metric set emitted with QF design 063 label parity",
+        "SCN-SM-041-020 render p95 and combined ingest render p95 stress assertions close C-S2-321B-SCOPE-5-RENDER"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-021",
+      "name": "Cross-Product Audit Envelope v1 Covers Every Bridge Emission Point And Operator Runbook",
+      "scope": "05-credential-rotation-safety-boundaries-observability-documentation-and-tests",
+      "status": "active",
+      "behaviorClass": "audit",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/audit_test.go",
+          "plannedTitle": "TestCrossProductAuditEnvelopeV1ShapeMatchesQFDesign063"
+        },
+        {
+          "plannedPath": "tests/integration/qf_audit_envelope_test.go",
+          "plannedTitle": "TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_scope5_safety_observability_test.go",
+          "plannedTitle": "TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-5-audit-envelope-evidence",
+        "report.md#scope-5-documentation-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-021 audit envelope v1 emitted for all eight bridge emission points",
+        "SCN-SM-041-021 operator documentation lists rotation metric audit and safety boundary diagnostics"
       ]
     }
   ]

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#e94560">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
-  <title>Drive search — Smackerel</title>
+  <title>Drive and QF search — Smackerel</title>
   <link rel="manifest" href="/pwa/manifest.json">
   <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/pwa/style.css">
@@ -14,8 +14,8 @@
   <a href="/pwa/" class="logo-link" aria-label="Back to Smackerel home">
     <img src="/pwa/icon.svg" alt="Smackerel" class="logo">
   </a>
-  <h1>Drive search</h1>
-  <p class="subtitle">Find drive files by extracted content, folder, or metadata</p>
+  <h1>Drive and QF search</h1>
+  <p class="subtitle">Find drive files and read-only QF packets by extracted content, folder, or metadata</p>
 
   <!--
     Spec 038 Scope 4 Screen 5 — drive-aware unified search results.
@@ -47,7 +47,7 @@
     aria-busy="false"
   >
     <h2 id="drive-search-results-heading">Results</h2>
-    <p id="drive-search-empty" class="status status-info" hidden>No drive files matched that search.</p>
+    <p id="drive-search-empty" class="status status-info" hidden>No drive files or QF packets matched that search.</p>
     <ul id="drive-search-list" class="drive-results"></ul>
   </section>
 
@@ -77,6 +77,27 @@
       <div class="drive-result-actions">
         <a class="drive-open-in-drive" href="#" rel="noopener">Open in Drive ↗</a>
         <a class="drive-open-detail" href="#">View details</a>
+      </div>
+    </li>
+  </template>
+
+  <template id="qf-result-template">
+    <li class="drive-result qf-result" data-card-kind="">
+      <h3 class="qf-result-title"></h3>
+      <p class="drive-result-snippet qf-result-summary"></p>
+      <div class="drive-result-badges">
+        <span class="provider-chip">QF Companion</span>
+        <span class="sharing-badge qf-approval-state" data-state=""></span>
+        <span class="sensitivity-badge qf-read-only" data-level="none">Read-only</span>
+      </div>
+      <dl class="drive-metadata-fields">
+        <div><dt>Packet</dt><dd class="qf-packet-id"></dd></div>
+        <div><dt>Trace</dt><dd class="qf-trace-id"></dd></div>
+      </dl>
+      <ul class="qf-trust-list"></ul>
+      <div class="drive-result-actions">
+        <a class="qf-open-in-qf" href="#" rel="noopener">Open in QF</a>
+        <a class="qf-open-detail" href="#">View details</a>
       </div>
     </li>
   </template>

@@ -32,6 +32,18 @@ func TestMetricsRegistered(t *testing.T) {
 	RecommendationSuppression.WithLabelValues("_test_reg")
 	RecommendationRankingConfidence.WithLabelValues("_test_reg")
 	RecommendationLocationPrecision.WithLabelValues("_test_reg", "_test_reg")
+	QFPacketIngestTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg", "_test_reg")
+	QFPacketValidationFailures.WithLabelValues("_test_reg")
+	QFEvidenceExportAttempts.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	QFCursorLagSeconds.Set(0)
+	QFActionBoundaryAttemptsTotal.WithLabelValues("_test_reg")
+	QFCapabilityMismatch.WithLabelValues("_test_reg", "_test_reg")
+	QFUnknownDecisionType.WithLabelValues("_test_reg")
+	QFEngagementSignalAttemptsTotal.WithLabelValues("_test_reg", "_test_reg", "_test_reg")
+	QFEvidenceRevokedTotal.WithLabelValues("_test_reg")
+	QFCallbackAttemptsTotal.WithLabelValues("_test_reg", "_test_reg")
+	QFDeepLinkRenderTotal.WithLabelValues("_test_reg", "_test_reg")
+	QFTrustObjectRenderFailures.WithLabelValues("_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -59,6 +71,18 @@ func TestMetricsRegistered(t *testing.T) {
 		"smackerel_recommendation_suppression_total":        false,
 		"smackerel_recommendation_ranking_confidence_total": false,
 		"smackerel_recommendation_location_precision_total": false,
+		"smackerel_qf_packet_ingest_total":                  false,
+		"smackerel_qf_packet_validation_failures_total":     false,
+		"smackerel_qf_evidence_export_attempts_total":       false,
+		"smackerel_qf_cursor_lag_seconds":                   false,
+		"smackerel_qf_action_boundary_attempts_total":       false,
+		"smackerel_qf_capability_mismatch_total":            false,
+		"smackerel_qf_unknown_decision_type_total":          false,
+		"smackerel_qf_engagement_signal_attempts_total":     false,
+		"smackerel_qf_evidence_revoked_total":               false,
+		"smackerel_qf_callback_attempts_total":              false,
+		"smackerel_qf_deep_link_render_total":               false,
+		"smackerel_qf_trust_object_render_failures_total":   false,
 	}
 
 	for _, fam := range families {
@@ -70,6 +94,77 @@ func TestMetricsRegistered(t *testing.T) {
 	for name, found := range expected {
 		if !found {
 			t.Errorf("metric %q not registered", name)
+		}
+	}
+}
+
+func TestQFCompanionMetricLabelParity(t *testing.T) {
+	QFPacketIngestTotal.WithLabelValues("packet_created", "recommendation", "display_only", "dashboard").Inc()
+	QFPacketValidationFailures.WithLabelValues("missing_packet_id").Inc()
+	QFEvidenceExportAttempts.WithLabelValues("accepted", "packet_context", "personal").Inc()
+	QFCursorLagSeconds.Set(5)
+	QFActionBoundaryAttemptsTotal.WithLabelValues("approval").Inc()
+	QFCapabilityMismatch.WithLabelValues("v1", "v0").Inc()
+	QFUnknownDecisionType.WithLabelValues("future_decision").Inc()
+	QFEngagementSignalAttemptsTotal.WithLabelValues("flush", "digest", "queued").Inc()
+	QFEvidenceRevokedTotal.WithLabelValues("consent_revoked").Inc()
+	QFCallbackAttemptsTotal.WithLabelValues("ack", "blocked").Inc()
+	QFDeepLinkRenderTotal.WithLabelValues("web", "signed_used").Inc()
+	QFTrustObjectRenderFailures.WithLabelValues("missing_required_field").Inc()
+
+	expected := map[string][]string{
+		"smackerel_qf_packet_ingest_total":                {"approval_state", "decision_type", "event_type", "source_surface"},
+		"smackerel_qf_packet_validation_failures_total":   {"reason"},
+		"smackerel_qf_evidence_export_attempts_total":     {"sensitivity_tier", "status", "target_context_type"},
+		"smackerel_qf_cursor_lag_seconds":                 {},
+		"smackerel_qf_action_boundary_attempts_total":     {"attempted_action_type"},
+		"smackerel_qf_capability_mismatch_total":          {"actual", "required"},
+		"smackerel_qf_unknown_decision_type_total":        {"value"},
+		"smackerel_qf_engagement_signal_attempts_total":   {"event", "status", "surface"},
+		"smackerel_qf_evidence_revoked_total":             {"reason"},
+		"smackerel_qf_callback_attempts_total":            {"action", "status"},
+		"smackerel_qf_deep_link_render_total":             {"status", "surface"},
+		"smackerel_qf_trust_object_render_failures_total": {"reason"},
+	}
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("failed to gather metrics: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, family := range families {
+		wantLabels, ok := expected[family.GetName()]
+		if !ok {
+			continue
+		}
+		seen[family.GetName()] = true
+		if len(wantLabels) == 0 {
+			if len(family.GetMetric()) == 0 {
+				t.Fatalf("metric %s has no samples", family.GetName())
+			}
+			if len(family.GetMetric()[0].GetLabel()) != 0 {
+				t.Fatalf("metric %s labels = %v, want none", family.GetName(), family.GetMetric()[0].GetLabel())
+			}
+			continue
+		}
+		labels := map[string]bool{}
+		for _, sample := range family.GetMetric() {
+			for _, label := range sample.GetLabel() {
+				labels[label.GetName()] = true
+			}
+		}
+		for _, wantLabel := range wantLabels {
+			if !labels[wantLabel] {
+				t.Fatalf("metric %s missing label %q; saw %v", family.GetName(), wantLabel, labels)
+			}
+		}
+		if len(labels) != len(wantLabels) {
+			t.Fatalf("metric %s label count = %d labels=%v, want %d %v", family.GetName(), len(labels), labels, len(wantLabels), wantLabels)
+		}
+	}
+	for metricName := range expected {
+		if !seen[metricName] {
+			t.Fatalf("metric %s was not gathered", metricName)
 		}
 	}
 }

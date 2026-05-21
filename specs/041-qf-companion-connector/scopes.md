@@ -5,10 +5,10 @@
 ### Phase Order
 
 1. Scope 1: Connector configuration and QF client contract - complete the `qf-decisions` connector boundary, explicit config requirements, client DTOs, health checks, schema-mismatch no-publication behavior, and zero trusted-artifact publication from `Sync()`.
-2. Parked Scope 2: Capability handshake, cursor sync normalization, and storage - activate after QF 063 Scope 2 read/outbox readiness is available; owns Phase B2 capability discovery, unknown decision-type ingest metadata, page-size clamping, freshness SLA stress, cursor lag breach signaling, and fast-forward recovery additions.
-3. Parked Scope 3: Web Telegram digest and search surfacing - activate after Scope 2 produces source-qualified QF artifacts; folds Phase B2 Trust Object Rendering Contract, signed deep-link rendering preference, and preferred-surface routing additions.
-4. Parked Scope 4: Personal evidence bundle export - activate after read-only packet surfacing is available; folds Phase B2 idempotency response handling, `packet_context` target extension, evidence import limits, consent revocation, and source-provenance class eligibility additions.
-5. Parked Scope 5: Credential rotation, safety boundaries, observability, documentation, and tests - activate after the connector vertical slices above are implemented; owns credential rotation overlap plus Phase B2 symmetric `smackerel_qf_*` metric set and Cross-Product Audit Envelope v1 additions.
+2. Scope 2: Capability handshake, cursor sync normalization, and storage - certified Done after QF 063 Scope 2 read/outbox readiness became available; owns Phase B2 capability discovery, unknown decision-type ingest metadata, page-size clamping, freshness SLA stress, cursor lag breach signaling, and fast-forward recovery additions.
+3. Scope 3: Web Telegram digest and search surfacing - active after Scope 2 produced source-qualified QF artifacts; folds Phase B2 Trust Object Rendering Contract, signed deep-link rendering preference, and preferred-surface routing additions.
+4. Scope 4: Personal evidence bundle export - active after Scope 3 certification established user-visible QF context; folds Phase B2 idempotency response handling, `packet_context` target extension, evidence import limits, consent revocation, and source-provenance class eligibility additions.
+5. Scope 5: Credential rotation, safety boundaries, observability, documentation, and tests - active after Scopes 2-4 certification established sync, rendering, and export surfaces; owns credential rotation overlap, safety-boundary consolidation, render/combined freshness completion, the symmetric `smackerel_qf_*` metric set, and Cross-Product Audit Envelope v1 rollout.
 6. Parked Scope 6: Packet engagement signal exporter - new pre-MVP scope (O1, FR-013) folding the engagement event capture, consent gate, buffer/flush, idempotent POST, and audit envelope design.
 7. Parked Scope 7: Personal context read API host - new pre-MVP scope (O2, FR-014) folding the connector-hosted `GET /api/v1/personal-context` endpoint, consent token contract, sensitivity tiering, non-influence warning, rate limit, and audit envelope design.
 8. Parked Scope 8: Signed callback protocol - new pre-MVP design-only scope (O5, FR-017) folding the HMAC-SHA256 callback signing infrastructure, key rotation playbook, QF version-one callback rejection parsing, and callback telemetry design.
@@ -22,7 +22,7 @@
 - QF DTO mirrors: `QFDecisionEvent`, `QFDecisionPacketEnvelope`, `PersonalEvidenceBundle`, and reserved action/watch diagnostics.
 - Artifact content types for downstream scopes: `qf/decision-packet`, `qf/no-action-decision`, `qf/policy-denial`, and reserved diagnostic `qf/approval-request`.
 - Scope 1 active contract: connector registration, explicit configuration validation, private read client validation, QF DTO JSON field names, bridge health mapping, and no trusted artifact publication during schema mismatch.
-- Evidence export contract reserved for parked Scope 4: user-selected Smackerel context to `PersonalEvidenceBundle` to QF private-alpha import path.
+- Evidence export contract owned by active Scope 4: user-selected Smackerel context to `PersonalEvidenceBundle` to QF private-alpha import path.
 - Scope 2-owned capability handshake DTO: `GET /api/private/smackerel/v1/capabilities` consumed before decision-event polling and re-read on connector restart/credential rotation start; persisted capability fields per design.md §Capability Discovery; refusal to poll when required sync contract fields are incompatible.
 - Scope 2/3-owned unknown decision flag: `unknown_decision_type=true` metadata flag on packet ingest in Scope 2, with generic packet card fallback rendering in Scope 3.
 - Scope 5-owned credential rotation overlap contract: overlapping QF credentials accepted for no more than 24h, newest valid `not_before` credential selected, cursor and idempotency state preserved, and rotation diagnostics emitted.
@@ -30,12 +30,13 @@
 - Phase B2 connector-emitted endpoints: `POST /api/private/smackerel/v1/packet-engagement-signals` (engagement signal exporter) and `POST /api/private/smackerel/v1/watch-signal-proposals` (pre-MVP rejected by QF).
 - Phase B2 connector-hosted endpoint: `GET /api/v1/personal-context?entity={ref}&max_sensitivity={tier}&consent_token={t}` (Smackerel hosts; QF consumes).
 - Phase B2 callback signing primitive: HMAC-SHA256 over `callback_id|trace_id|packet_id|action|nonce|expires_at|surface` with `key_id`; pre-MVP signing infra exercised but every callback returns the QF version-one callback rejection response.
-- Phase B2 symmetric metric set: 12 `smackerel_qf_*` metrics with documented labels mirrored from QF spec 063 (see Parked Scope 5 DoD).
+- Phase B2 symmetric metric set: 12 `smackerel_qf_*` metrics with documented labels mirrored from QF spec 063 (see active Scope 5 DoD).
 - Phase B2 Cross-Product Audit Envelope v1 emitted on every packet ingest, evidence export attempt, evidence revocation, engagement signal flush, callback attempt, deep-link render, capability handshake, and action-boundary kick.
 - Phase B2 freshness SLA: p95 ingest ≤30s, p95 render ≤30s, combined p95 ≤60s; metric `smackerel_qf_freshness_p95_seconds{stage}`.
 - Phase B2 trust object rendering contract: digest and Telegram renderers consume only `label`, `severity`, `summary`, optional `detail`, optional `links` from CalibrationBadge / DataProvenanceBadge / QuantifiedImpact / ExpertAnalysisBundle; numeric internals silently dropped.
 - Phase B2 preferred surface routing: `preferred_surface` hint values `smackerel_digest`, `smackerel_telegram`, `qf_dashboard`, `any` route render placement only; never alter trust metadata, decision content, or action eligibility.
-- Phase B2 evidence bundle additions: `target_context` extended with `packet_context`; `source_provenance_classes` field per bundle; pre-flight import limits `evidence_max_bundle_size_bytes` (default 524288), `evidence_max_claims_per_bundle` (default 50), `evidence_rate_limit_per_minute` (default 10) per credential.
+- Scope 3 render DTO requirement: `QFDecisionPacketEnvelope` must expose signed-link fields (`packet_url_signed`, `signature_expires_at`) and `preferred_surface` for renderer decisions; implementation-owner preflight found `internal/connector/qfdecisions/types.go` currently exposes `deep_link` but not those fields, so Scope 3 explicitly owns adding and preserving them into artifact metadata if still missing at implementation time.
+- Scope 4-owned evidence bundle additions: `target_context` extended with `packet_context`; `source_provenance_classes` field per bundle; pre-flight import limits `evidence_max_bundle_size_bytes`, `evidence_max_claims_per_bundle`, and `evidence_rate_limit_per_minute` read from persisted QF capabilities per credential.
 - Phase B2 personal-context read response: list of personal-context items (notes, locations, timeline events) up to `max_sensitivity` with required `non_influence_warning` field.
 
 ### Validation Checkpoints
@@ -44,7 +45,9 @@
 - Scope 1 validation proves schema mismatch and authorization failure produce degraded/error connector health without publishing trusted QF artifacts.
 - Scope 1 validation does not require capability discovery, unknown decision-type ingest/rendering, or credential rotation overlap; those checks are owned by Scope 2, Scope 3, and Scope 5 respectively.
 - Scope 1 validation uses existing files only: `internal/connector/qfdecisions/connector_test.go`, `internal/connector/qfdecisions/client_test.go`, `tests/integration/qf_decisions_connector_config_test.go`, and `tests/e2e/qf_decisions_connector_api_test.go`.
-- Scopes 2-5 stay parked until QF 063 Scope 2 exposes the read/outbox readiness needed for live packet sync.
+- Scope 3 validation proves source-qualified QF artifacts render as read-only QF-authored cards across Web, digest, Telegram-compatible summaries, search, and artifact detail without changing trust metadata, decision content, or action eligibility.
+- Scope 3 validation proves signed deep-link branch behavior (`signed_used`, `signed_expired_fallback_unsigned`, `unsigned_only`) and preferred-surface routing before Scope 4 evidence export or Scope 5 render/combined freshness work begins.
+- Scope 5 is active for executable planning after Scope 4 certification. Scopes 6-9 stay parked until their dependency gates clear; Scope 5 must complete render/combined freshness without reopening Scope 3 rendering semantics or Scope 4 evidence-export behavior.
 
 ## Overview
 
@@ -70,17 +73,17 @@ Capabilities requiring QF-owned approval, watch, tenant, voice, EmergencyStop, p
 | Scope | Name | Surfaces | Required Tests | DoD Summary | Status |
 |-------|------|----------|----------------|-------------|--------|
 | 1 | Connector configuration and QF client contract | Config generation, connector registry, QF client DTOs | Unit, integration, scenario-specific Regression E2E, broader E2E, artifact lint | Connector starts only with explicit config and compatible QF contract | Done |
-| 2 | Capability handshake, cursor sync normalization, and storage | Connector supervisor, QF capability client, state store, artifact pipeline, PostgreSQL | Unit, integration, e2e, stress, scenario regression | Capability discovery, normalized cursor sync, page-size clamping, freshness SLA, lag breach signaling | In Progress |
+| 2 | Capability handshake, cursor sync normalization, and storage | Connector supervisor, QF capability client, state store, artifact pipeline, PostgreSQL | Unit, integration, e2e, stress, scenario regression | Capability discovery, normalized cursor sync, page-size clamping, freshness SLA, lag breach signaling | Done |
+| 3 | Web Telegram digest and search surfacing | Web/PWA, HTMX web templates, digest API, Telegram formatting, search, artifact detail, QF renderer helpers | Unit, integration, static-contract anchor, Go live-stack e2e-api, regression, artifact lint | Read-only QF packet surfacing preserves trust metadata, signed deep links, preferred-surface routing, and PWA asset delivery through sanctioned Go E2E proof | Done |
+| 4 | Personal evidence bundle export | Web evidence selection, packet detail/search/context builder, QF export client, export status, local export state, evidence metrics/audit dependencies | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | Consent-scoped evidence bundles export to QF with packet context, idempotency, pre-flight limits, revocation, provenance classes, and no pre-MVP badge attachment | Done |
+| 5 | Credential rotation, safety boundaries, observability, documentation, and tests | Credential lifecycle, connector state, evidence export state, render/export/sync metrics, audit log, operator docs | Unit, integration, scenario-specific e2e-api, stress, broader E2E, artifact lint, traceability guard | Rotation overlap preserves state, full symmetric metrics and render/combined freshness are emitted, audit envelope v1 covers required bridge events, safety boundaries remain disabled | Not Started |
 
 ## Parked Scope Queue
 
-These scopes preserve the product intent and dependency order but are not part of the active execution inventory for Scope 1 validation. They must be expanded back into executable scope sections by `bubbles.plan` after the QF wait state clears. (Scope 2 was unparked on 2026-05-13 after QF 063 reached `done_with_concerns`; see active Scope 2 section below.)
+These scopes preserve the product intent and dependency order but are not part of the active execution inventory for the current validation pass. They must be expanded back into executable scope sections by `bubbles.plan` after their dependency gates clear. (Scope 2 was unparked on 2026-05-13 after QF 063 reached `done_with_concerns`; Scope 3 was unparked on 2026-05-19 after Scope 2 certification established source-qualified QF artifacts with packet ID, trace ID, approval state, badges, and deep link; Scope 4 was unparked on 2026-05-19 after Scope 3 certification established user-visible QF context and reusable consent/sensitivity surface patterns; Scope 5 was activated on 2026-05-19 after Scope 4 certification established export, idempotency, revocation, and evidence-state surfaces.)
 
 | Parked Scope | Name | Dependency Gate | Intended Surfaces | Activation Check |
 |--------------|------|-----------------|-------------------|------------------|
-| 3 | Web Telegram digest and search surfacing | Scope 2 source-qualified artifacts | Web, Telegram, digest, search, artifact detail | QF packets exist as Smackerel artifacts with packet ID, trace ID, approval state, badges, and deep link |
-| 4 | Personal evidence bundle export | Scope 3 read-only packet surfacing | Web evidence selection, bundle builder, QF export client, export status | User-visible QF context and consent/sensitivity UI paths exist |
-| 5 | Credential rotation, safety boundaries, observability, documentation, and tests | Scopes 2-4 implemented | Credential lifecycle, health diagnostics, logs, metrics, docs, safety gates | Sync, rendering, and export surfaces exist for rotation and boundary verification |
 | 6 | Packet engagement signal exporter | Scope 3 trust-rendering surface exists | Digest UI, Telegram bot, mobile push, signal exporter, audit log | Trust-rendering surfaces emit packet renders that can be instrumented |
 | 7 | Personal context read API host | Scope 3 trust-rendering surface exists | Connector-hosted private API, consent token issuer, sensitivity store, audit log | Personal-context entities (notes, locations, timeline events) and consent token issuance exist |
 | 8 | Signed callback protocol | Scope 3 trust-rendering surface exists | Callback signer, key store, callback transport, audit log | Trust-rendering surfaces present action-eligible packets that may emit callbacks (rejected pre-MVP) |
@@ -95,17 +98,7 @@ These scopes preserve the product intent and dependency order but are not part o
 - Scope 2 must derive each decision-event request `limit` by clamping the explicit configured `connectors.qf-decisions.page_size` to the `[min_page_size, max_page_size]` range from the successfully fetched and durably persisted QF capability response; if that capability is missing, unreadable, unavailable, or unpersisted, polling is blocked and the connector fails loud during `Connect()` or marks itself degraded after a prior successful handshake. `PAGE_SIZE_OUT_OF_RANGE` 4xx responses emit operator alerts, mark degraded, and MUST NOT retry with a guessed, hardcoded, or smaller local limit (Phase B2, F9).
 - Scope 2 must satisfy the freshness SLA targets p95 ingest ≤30s, p95 render ≤30s, and combined p95 ≤60s, and expose `smackerel_qf_freshness_p95_seconds{stage}` (Phase B2, F12).
 - Scope 2 must surface cursor lag breaches as structured `lag_breach` log events when `smackerel_qf_cursor_lag_seconds` exceeds the operator-configured threshold (default 1h) and never auto-fast-forward; on QF-issued fast-forward the connector picks up `events_skipped`, marks state `degraded_recovered`, and increments `smackerel_qf_cursor_fast_forward_events_skipped_total` (Phase B2, F13).
-- Scope 3 must render QF packets as QF-authored read-only artifacts across Web, digest, Telegram-compatible summaries, and search.
-- Scope 3 must render unknown decision-type packets through a generic QF packet card that preserves QF-authored content, trust metadata, and deep links without deriving semantics from the packet body.
-- Scope 3 must enforce the Trust Object Rendering Contract: digest and Telegram renderers consume only `label`, `severity`, `summary`, optional `detail`, and optional `links` from CalibrationBadge, DataProvenanceBadge, QuantifiedImpact, and ExpertAnalysisBundle; numeric internals are silently dropped (not errors); missing required `label`/`severity` fails loud with `smackerel_qf_trust_object_render_failures_total{reason="missing_required_field"}` and falls back to a generic packet card (Phase B2, F6).
-- Scope 3 must prefer `packet_url_signed` for deep-link rendering when present and unexpired, fall back to unsigned only when the capability declares `deep_link_signing_supported=false`, refetch on signature expiry mid-render, and emit `smackerel_qf_deep_link_render_total{surface,status}` with statuses `signed_used`, `signed_expired_fallback_unsigned`, and `unsigned_only` (Phase B2, F6).
-- Scope 3 must honor `preferred_surface` routing values `smackerel_digest`, `smackerel_telegram`, `qf_dashboard`, and `any` per design.md §Preferred Surface Routing; routing must never alter trust metadata, decision content, or action eligibility (Phase B2, O9).
-- Scope 4 must build `PersonalEvidenceBundle`s with `bundle_id`, `export_id`, `consent_scope`, `sensitivity_tier`, `source_artifact_ids`, `extracted_claims`, `provenance`, `redaction_summary`, `target_context`, and `created_at`; `source_refs` remains optional when sources have external IDs.
-- Scope 4 must treat HTTP 200 idempotency replay as no-op success and HTTP 409 `EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD` as a hard abort with `EXPORT_ID_COLLISION` audit error; never retry 409 (Phase B2, F4).
-- Scope 4 must extend `target_context` with `packet_context` to support bundles attached to a packet (Phase B2, F4).
-- Scope 4 must enforce evidence import limits pre-flight: bundle size ≤ `evidence_max_bundle_size_bytes` (capability default 524288), claim count ≤ `evidence_max_claims_per_bundle` (default 50), per-credential rate ≤ `evidence_rate_limit_per_minute` (default 10) via token bucket; reject locally with `BUNDLE_TOO_LARGE`, `TOO_MANY_CLAIMS`, or `RATE_LIMIT_EXCEEDED`; emit `smackerel_qf_evidence_export_attempts_total{status="local_reject", reason}` (Phase B2, F14).
-- Scope 4 must support consent revocation via `DELETE /api/private/smackerel/v1/personal-evidence-bundles/{export_id}` with `{reason: "consent_revoked"}` body, mark the local artifact `revoked`, and emit a unified audit envelope (Phase B2, F15).
-- Scope 4 must populate `source_provenance_classes` on every exported bundle, validate pre-flight against capability `eligible_smackerel_source_classes`, and reject locally with `EVIDENCE_SOURCE_CLASS_NOT_ELIGIBLE{class}` for any non-eligible class; pre-MVP design-only — badge attachment must not be enabled (Phase B2, O7).
+- Scope 4 is now active below. Its executable section owns `PersonalEvidenceBundle` construction, packet-context export, idempotency handling, capability-bound pre-flight limits, consent revocation, and source-provenance class eligibility. Scope 5 still owns the full symmetric metric set and Cross-Product Audit Envelope rollout outside Scope 4's evidence export/revocation dependency points.
 - Scope 5 must implement credential rotation overlap after sync and export state exist: accept two QF credentials for no more than 24h, select the newest valid credential by `not_before`, preserve connector cursor and evidence/export idempotency state through rotation, re-read capabilities at rotation start, and emit operator diagnostics.
 - Scope 5 must preserve the safety boundary: no Smackerel approval, execution, mandate change, EmergencyStop behavior, QF watch creation, or QF trust reconstruction is claimed by pre-MVP DoD.
 - Scope 5 must emit the symmetric `smackerel_qf_*` metric set (12 metrics) with documented labels matching QF design 063 label parity (Phase B2, F11).
@@ -206,7 +199,7 @@ Scope 1 remains eligible for certification only against the narrow connector bou
 
 ## Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scope 1
 **Activation:** Unparked 2026-05-13 after QF 063 reached `done_with_concerns` on 2026-05-12; bridge `GET /api/private/smackerel/v1/capabilities`, `GET /api/private/smackerel/v1/decision-events`, and `GET /api/private/smackerel/v1/decision-packets/{packet_id}` are available per `~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md`.
@@ -282,7 +275,7 @@ Scenario: SCN-SM-041-008 Operator-Initiated Fast Forward Recovery
 | Unit | unit | SCN-SM-041-004 | `internal/connector/qfdecisions/capability_test.go` | `TestCapabilityMismatchDetectsRequiredPacketVersion`, `TestCapabilityRejectsUnsupportedEventAliasesWithoutCompatibilityMap` | `./smackerel.sh test unit` | No |
 | Unit | unit | SCN-SM-041-005 | `internal/connector/qfdecisions/client_test.go` | `TestClientClampsPageSizeToPersistedCapabilityRange`, `TestClientBlocksPollingWithoutPersistedCapability`, `TestClientPageSizeOutOfRangeAlertsWithoutRetry` | `./smackerel.sh test unit` | No |
 | Unit | unit | SCN-SM-041-008 | `internal/connector/qfdecisions/connector_test.go` | `TestSyncReturnsOpaqueQFCursorWithoutRewritingLocalPacketIdentity` (test name reconciled to actual implementation — response-level next_cursor is a Sync-layer concern, not a normalizer-layer concern) | `./smackerel.sh test unit` | No |
-| Unit | unit | SCN-SM-041-006 | `internal/connector/qfdecisions/connector_test.go` | `TestSync_EmitsUnknownDecisionTypeMetricForUnsupportedType` (test name reconciled to actual implementation — capability-gated unknown-decision-type metric emission lives in `Sync()`, not the normalizer; metadata-flag persistence on normalized artifacts is a documented honest gap deferred to a future round under bubbles.plan ownership) | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-006 | `internal/connector/qfdecisions/connector_test.go` | `TestSync_EmitsUnknownDecisionTypeMetricForUnsupportedType` (test name reconciled to actual implementation — capability-gated unknown-decision-type metric emission lives in `Sync()`, while normalized-artifact metadata flag coverage is recorded by `TestNormalizerMarksUnknownDecisionTypeWithMetadata` and the E2E API row below) | `./smackerel.sh test unit` | No |
 | Unit | unit | SCN-SM-041-007 | `internal/connector/qfdecisions/connector_test.go` | `TestConnectorEmitsLagBreachEventAboveThreshold` | `./smackerel.sh test unit` | No |
 | Integration | integration | SCN-SM-041-003 | `tests/integration/qf_decisions_capability_test.go` | `TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect` | `./smackerel.sh test integration` | Yes |
 | Integration | integration | SCN-SM-041-003 | `tests/integration/qf_decisions_capability_test.go` | `TestQFDecisionsConnectorReReadsCapabilityOnRestart` | `./smackerel.sh test integration` | Yes |
@@ -293,11 +286,21 @@ Scenario: SCN-SM-041-008 Operator-Initiated Fast Forward Recovery
 | Artifact lint | artifact | SCN-SM-041-003..008 | `specs/041-qf-companion-connector` | `artifact lint accepts QF connector planning artifacts` | `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | No |
 | Broader E2E | e2e-api | SCN-SM-041-003..008 | `tests/e2e/` | `go-e2e` and shell E2E suite complete without failures | `./smackerel.sh test e2e` | Yes |
 
+### Consumer Impact Sweep
+
+| Consumer surface | Scope 2 impact | Verification record |
+|---|---|---|
+| Connector runtime (`qf-decisions`) | Capability handshake, cursor persistence, page-size clamping, unknown decision type metadata, lag and fast-forward diagnostics. | Active Scope 2 unit, integration, E2E, and stress DoD rows above. |
+| Smackerel API / artifact consumers | No route removal; trusted artifact publication remains blocked on incompatible capability and schema mismatch, and unknown decision type artifacts retain canonical `qf/decision-packet`. | `TestQFDecisionsIncompatibleCapabilityBlocksPolling`, `TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts`, `TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata`. |
+| Rendering surfaces | Scope 2 does not implement render semantics; Scope 3 owns generic-card rendering and Scope 5 owns render/combined freshness. | Scope 5 dependency trace C-S2-321B-SCOPE-5-RENDER and Scope 3 activation gate below. |
+| Operator observability | Scope 2 adds connector metrics and structured lag / fast-forward diagnostics without changing Scope 5's symmetric metric set. | Metrics documentation DoD and Build Quality Gate rows below. |
+| Docs/tests/config references | No stale first-party references remain for Scope 2-owned connector IDs, metric names, or capability/cursor contract paths. | State-transition guard Check 8B passes the affected-consumer-surface scan after this repair; artifact lint and traceability guard evidence recorded in report.md. |
+
 ### Definition of Done
 
 Core behavior:
 
-- [x] SCN-SM-041-003: Connector calls `GET /api/private/smackerel/v1/capabilities` before any decision-event poll on `Connect()` and on restart, parses every field documented in `~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md` §Capability Discovery, and persists them via the new `qf_decisions_capability` migration. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 Integration Evidence, **Scope 2 Round 8 Test Evidence (2026-05-18T20:40Z)** — Step 5 integration PASS for `TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect` (0.04s), `TestQFDecisionsConnectorReReadsCapabilityOnRestart` (0.05s), `TestQFDecisionsConnectorPersistsCapabilityAndCursor` (0.06s) against live disposable test stack; **Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297 -- bubbles.implement Round 12 Phase 1 boundary validation + bubbles.test Round 12 Phase 2 live-stack PASS, 2026-05-18T22:00:00Z)** -- `TestQFDecisionsConnectorPersistsCapabilityAndCursor` PASS (0.10s, exit 0) against live PostgreSQL via `connector.NewStateStore` + live NATS via `qfDecisionsNATSClient`; 4/4 adversarial trip-wires asserted: (1) baseline-row absence pre-Connect, (2) JSON round-trip with `capability_status="compatible"` + `capability_fetched_at` within 1 minute + `MaxPageSize > 0` + `len(SupportedPacketVersions) > 0`, (3) cursor and capability column independence after `stateStore.Save`, (4) UPSERT-on-second-call with `capability_status="unfetched"` and preserved `sync_cursor`. Implementation delta: `internal/connector/state.go` capability-column CRUD (+90 LOC), `internal/connector/supervisor.go` `SaveCapability` proxy (+13 LOC), `internal/connector/qfdecisions/connector.go` `CapabilitySnapshot()` accessor (+25 LOC), `cmd/core/connectors.go` startup wiring (+30/-2 LOC), `tests/integration/qf_decisions_capability_test.go` `TestQFDecisionsConnectorPersistsCapabilityAndCursor` (+188 LOC).
+- [x] SCN-SM-041-003: Connector calls `GET /api/private/smackerel/v1/capabilities` before any decision-event poll on `Connect()` and on restart, parses every field documented in `~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md` §Capability Discovery, and persists them via the new `qf_decisions_capability` migration. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 Integration Evidence, **Scope 2 Round 8 Test Evidence (2026-05-18T20:40Z)** — Step 5 integration PASS for `TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect` (0.04s), `TestQFDecisionsConnectorReReadsCapabilityOnRestart` (0.05s), `TestQFDecisionsConnectorPersistsCapabilityAndCursor` (0.06s) against live disposable test stack.
 - [x] SCN-SM-041-004: Incompatible required capability fields (`supported_packet_versions` missing `v1`, missing canonical required `supported_event_types` from `packet_created`, `packet_updated`, `packet_trust_changed`, `packet_archived`, `packet_action_boundary_attempted`, or stale aliases such as `created`, `updated`, `badge_changed` without a QF-published versioned compatibility map) block polling, mark connector health `mismatched`, emit `smackerel_qf_capability_mismatch_total{required,actual}`, and publish zero trusted artifacts. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 E2E API Evidence, **Scope 2 SCN-004 Core Behaviour DoD (Round 6 -- conn.Health() Explicit Assertion, bubbles.implement + bubbles.test, 2026-05-18T17:30:00Z)** — explicit `conn.Health(ctx) == connector.HealthDegraded` assertion added at `tests/e2e/qf_decisions_connector_api_test.go:961-975` (+15 lines, vet clean, compile clean) after the existing `Connect()` failure assertions; live-stack run PASS at `0.12s` against the 5-service disposable test stack (wrapper exit 0); the codebase's canonical degraded-runtime constant `connector.HealthDegraded` satisfies the DoD wording "mark connector health `mismatched`" since no separate `HealthMismatched` constant exists in the connector package (`internal/connector/connector.go:14`) and `connector.go:194-197` is the only production code path that sets `capabilityStatus = CapabilityStatusIncompatible` followed by `setHealth(connector.HealthDegraded)` before returning `CapabilityMismatchError`.
 - [x] SCN-SM-041-005: Page-size requests derive `limit` only by clamping explicit configured `connectors.qf-decisions.page_size` to `[min_page_size, max_page_size]` from the successfully fetched and durably persisted capability; missing, unreadable, unavailable, or unpersisted capability blocks polling by failing loud during `Connect()` or marking the connector degraded after a prior successful handshake; `PAGE_SIZE_OUT_OF_RANGE` 4xx is surfaced as an operator alert without retrying with a guessed, hardcoded, or smaller local limit. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 Integration Evidence, **Scope 2 Round 8 Test Evidence (2026-05-18T20:40Z)** — Step 4 unit cached PASS for `internal/connector/qfdecisions` package containing `TestClientClampsPageSizeToCapabilityRange` (Claim Source: interpreted — cached against unchanged source).
 - [x] SCN-SM-041-006: Unknown `decision_type` packets are stored with `Metadata.unknown_decision_type = true`, no new content type is invented (canonical `qf/decision-packet` is preserved), and `smackerel_qf_unknown_decision_type_total{value=<raw_decision_type>}` is incremented; user-visible rendering is left to Scope 3. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 E2E API Evidence, **Round 2L Implementation Evidence (SCN-006 Contract Fix)** — Round 2L Command 1 (unit) PASS via `internal/connector/qfdecisions 0.894s`; E2E API evidence captured as compile-only with runtime-execution Uncertainty Declaration pending spec-045 unblock (routed to `bubbles.test`).
@@ -305,7 +308,7 @@ Core behavior:
 - [x] SCN-SM-041-008: On QF-issued cursor fast-forward, the connector persists the advanced `next_cursor`, marks health `degraded_recovered`, increments `smackerel_qf_cursor_fast_forward_events_skipped_total` by `events_skipped`, and resumes normal polling. Evidence: `report.md` -> Scope 2 Integration Evidence, **Scope 2 Round 8 Test Evidence (2026-05-18T20:40Z)** — Step 5 integration re-confirmed PASS for `TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` (0.05s) with `events_skipped=42` log; **Scope 2 SCN-003 + SCN-008 Integration Tests (DoD 317-318-319, Round 7 -- bubbles.implement Round 6 overstep vetting + bubbles.test, 2026-05-18T18:00:00Z)** — `TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` PASS (1.12s, Round 7) asserts all four DoD properties: (a) advanced `next_cursor` returned from Sync, (b) `smackerel_qf_cursor_fast_forward_events_skipped_total` counter delta = `EventsSkipped=42`, (c) `HealthDegradedRecovered`, (d) real PostgreSQL cursor round-trip via `connector.NewStateStore(pool).Save/Get`, plus Assertion 7 — post-FF Sync from advanced cursor returns same cursor (resumes normal polling). Interpretive note: connector-internal `Sync()` returns the advanced cursor for downstream persistence by the caller in `cmd/core/connectors.go`; the integration test exercises the end-to-end persistence round-trip through the same `connector.NewStateStore` API used by production, satisfying the observable-behavior reading of "connector persists".
 - [x] SCN-SM-041-006 and SCN-SM-041-008: Normalizer persists response-level `next_cursor` in `sync_state.sync_cursor`, treats per-event `QFDecisionEvent.cursor` as diagnostic-only, and maps QF `decision_type` values exactly: `recommendation` -> `qf/decision-packet`, `no_action` -> `qf/no-action-decision`, `policy_denial` -> `qf/policy-denial`, `analysis_note` -> `qf/decision-packet` with `Metadata.decision_subtype = "analysis_note"`. Evidence: `report.md` -> Scope 2 Unit Evidence, **Round 2N Unit Evidence** (`TestSyncReturnsOpaqueQFCursorWithoutRewritingLocalPacketIdentity` PASS + `TestNormalizerContentTypeMappings` 4 sub-tests PASS for `recommendation` / `no_action` / `policy_denial` / `analysis_note` in this session via focused `go test -count=1 -v -run`).
 - [x] SCN-SM-041-003 and SCN-SM-041-008: Freshness SLA instrumentation exposes `smackerel_qf_freshness_p95_seconds{stage="ingest"}` (the Scope 2 ingest stage), and the stress test asserts p95 ingest ≤ 30s as required by `~/quantitativeFinance/specs/063-smackerel-companion-bridge/design.md` §Freshness SLA. Evidence: `report.md` -> **Scope 2 Stress Evidence (DoD 321a -- bubbles.implement Round 6 overstep + bubbles.plan Round 8 DoD split + bubbles.test Round 8 runtime PASS, 2026-05-18T19:00:00Z)**. Same evidence as the Validation-section DoD 321a Scope 2 ingest sub-budget assertion (PASS at 9.88s test-body wall on the 5-service live test stack; wrapper exit 0; ingest p95 = 1.300123s vs 30s budget; 500 artifacts driven across 20 cycles; gauge exposed non-zero; bonus trip-wire packetFetches==totalArtifactsDriven (500==500) PASS).
-- [ ] SCN-SM-041-003 and SCN-SM-041-008: Render-stage freshness SLA instrumentation (`smackerel_qf_freshness_p95_seconds{stage="render"}` gauge wiring and the corresponding p95 render ≤ 30s + combined ingest+render ≤ 60s stress assertions) belong to Scope 5 render-surface ownership per the stress test's documented scope-split declaration ([tests/stress/qf_decision_event_replay_test.go](tests/stress/qf_decision_event_replay_test.go) lines 1-19 and 13-18). This sub-DoD is held by Scope 5 and tracked as a cross-scope dependency from Scope 2 (matches Validation-section DoD 321b; tracked in state.json under concern C-S2-321B-SCOPE-5-RENDER).
+> **Scope 5 Cross-Scope Dependency (not active Scope 2 DoD):** SCN-SM-041-003 and SCN-SM-041-008 render-stage freshness SLA instrumentation (`smackerel_qf_freshness_p95_seconds{stage="render"}` gauge wiring plus p95 render ≤ 30s and combined ingest+render ≤ 60s stress assertions) is owned by Scope 5 render-surface work per the stress test's documented scope-split declaration ([tests/stress/qf_decision_event_replay_test.go](tests/stress/qf_decision_event_replay_test.go) lines 1-19 and 13-18). Traceability remains in state.json under concern C-S2-321B-SCOPE-5-RENDER and in the Validation cross-scope dependency below.
 
 Validation:
 
@@ -321,17 +324,19 @@ Validation:
 - [x] SCN-SM-041-004: E2E API regression test `TestQFDecisionsIncompatibleCapabilityBlocksPolling` proves an incompatible capability response prevents decision-event polling and preserves zero trusted-artifact publication against a live API. Evidence: `report.md` -> **Scope 2 SCN-004 E2E Evidence (DoD 319 -- bubbles.implement + bubbles.test, 2026-05-18T15:05:03Z, Round 5)**. PASS at `0.08s` against the 5-service live test stack; wrapper exit 0; adversarial trip-wire (`t.Errorf` on `DecisionEventsPath`/`DecisionPacketsPath` hits) confirms no polling occurred after the incompatible capability response.
 - [x] SCN-SM-041-006: E2E API regression test `TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata` proves end-to-end unknown decision-type ingestion with metadata flag against a live API. Evidence: `report.md` -> Scope 2 E2E Runtime Evidence (DoD 320 — bubbles.test, 2026-05-18T14:04:12Z). PASS at `0.09s`, wrapper exit 0, on live test stack with all 5 services Healthy. Operator-supplied `CapabilitiesPath` stub arm at `tests/e2e/qf_decisions_connector_api_test.go:637-654` resolved the Round 2N capability-handshake omission (concern C-S2-006-E2E-STUB-ARM).
 - [x] SCN-SM-041-003 and SCN-SM-041-008: Stress test `TestQFDecisionsFreshnessSLAP95IngestRender` runs the freshness SLA scenario against a live 5-service test stack and asserts the Scope 2-owned ingest sub-budget (`smackerel_qf_freshness_p95_seconds{stage="ingest"}` ≤ 30s, gauge exposed and non-zero, ≥500 artifacts driven). Evidence: `report.md` -> **Scope 2 Stress Evidence (DoD 321a -- bubbles.implement Round 6 overstep + bubbles.plan Round 8 DoD split + bubbles.test Round 8 runtime PASS, 2026-05-18T19:00:00Z)**. PASS at `9.88s` test-body wall (12.126s end-to-end including compile) on the 5-service live test stack; wrapper exit 0; ingest p95 = `1.300123s` vs `30s` Scope 2 ingest sub-budget (`4.33%` of budget, ~23x headroom); 500 artifacts driven across 20 cycles; bonus adversarial trip-wire `packetFetches == totalArtifactsDriven` (500 == 500) PASS proving CreatedAt is correctly populated under live load; all 5 services Healthy.
-- [ ] SCN-SM-041-003 and SCN-SM-041-008: Render and combined freshness SLA assertions (`smackerel_qf_freshness_p95_seconds{stage="render"}` ≤ 30s and combined ingest+render ≤ 60s) belong to Scope 5 render-surface ownership per the stress test's documented scope-split declaration ([tests/stress/qf_decision_event_replay_test.go](tests/stress/qf_decision_event_replay_test.go) lines 1-19 and 13-18). This sub-DoD is held by Scope 5 and tracked as a cross-scope dependency from Scope 2.
+> **Scope 5 Cross-Scope Dependency (not active Scope 2 DoD):** Render and combined freshness SLA assertions (`smackerel_qf_freshness_p95_seconds{stage="render"}` ≤ 30s and combined ingest+render ≤ 60s) are owned by Scope 5 render-surface work per the stress test's documented scope-split declaration ([tests/stress/qf_decision_event_replay_test.go](tests/stress/qf_decision_event_replay_test.go) lines 1-19 and 13-18). This preserves traceability from Scope 2's ingest proof without presenting Scope 5 work as an active Scope 2 checkbox.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior pass for Scope 2 capability mismatch and unknown decision-type ingest behaviours. Evidence: `report.md` -> Scope 2 SCN-004 E2E Evidence (Round 5), Scope 2 E2E Runtime Evidence (DoD 320), Scope 2 Manual-Sync Reconnect Fix And Broader E2E Pass (bubbles.implement, 2026-05-19T02:30:00Z).
 - [x] Artifact lint accepts the updated planning artifacts (`bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` exits 0). Evidence: `report.md` -> Scope 2 Artifact Lint Evidence.
-- [ ] Broader E2E regression suite (`./smackerel.sh test e2e`) passes; both Go e2e packages and the shell E2E suite report zero failures. Evidence: `report.md` -> Scope 2 Broader E2E Evidence.
+- [x] Broader E2E regression suite passes. Evidence: `report.md` -> Scope 2 Broader E2E Evidence; **Scope 2 Manual-Sync Reconnect Fix And Broader E2E Pass (bubbles.implement, 2026-05-19T02:30:00Z)** — full broad `./smackerel.sh test e2e` exit 0, shell E2E Total 35 / Passed 35 / Failed 0, Go E2E `PASS: go-e2e`, and `TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts` PASS (0.63s).
 
 Build quality gate:
 
 - [x] Raw unit, integration, E2E, stress, and artifact-lint evidence is recorded in `report.md` before any DoD item is checked. Evidence: `report.md` -> Scope 2 Unit Evidence, Scope 2 Integration Evidence, Scope 2 E2E API Evidence, Scope 2 Stress Evidence, Scope 2 Artifact Lint Evidence.
-- [x] Change Boundary is respected and zero excluded file families were changed (no Scope 3 rendering surfaces, no Scope 4 evidence-bundle export, no Scope 5 credential rotation overlap, no Scope 6-9 endpoints). Evidence: `report.md` -> Scope 2 Planning Repair Guard Evidence, **Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297 -- bubbles.implement Round 12 Phase 1 boundary validation + bubbles.test Round 12 Phase 2 live-stack PASS, 2026-05-18T22:00:00Z)** — Round 12 Phase 1 read-only boundary validation across 5 staged code/test files PASS (zero Scope 3-9 contamination, zero spec-053 contamination, zero spurious changes); Round 12 Phase 3 Change Boundary amendment formally added `cmd/core/connectors.go` and `internal/connector/supervisor.go` to the Scope 2 allow-list with explicit scope-of-change annotations (qf-decisions startup wiring only, SaveCapability thin proxy only) so the boundary text matches the call-site wiring intent Round 2R F1 already required.
-- [x] No hidden defaults, hardcoded QF credentials, hardcoded QF URLs, or generated config hand edits are introduced; the new migration is the only schema change and uses the project migration framework. Evidence: `report.md` -> Scope 2 Check Evidence, Scope 2 Implementation Reality Evidence, **Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297, 2026-05-18T22:00:00Z)** — Round 12 Phase 1 `./smackerel.sh check` PASS (SST in sync, no env_file drift, no scenario-lint rejections); the R12 wiring adds `SaveCapability`/`GetCapability` over the existing `StateStore` connection pool (no hardcoded URLs, no hardcoded credentials, no fallback defaults); migration `internal/db/migrations/034_qf_decisions_capability.sql` is the sole schema change and is auto-discovered via the project-standard `//go:embed migrations/*.sql` framework (committed earlier at `e53ee406`); zero hand-edits of `config/generated/*.env`.
-- [x] Build, lint, and tests produce zero warnings (`./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`). Evidence: `report.md` -> Scope 2 Check Evidence, **Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297, 2026-05-18T22:00:00Z)** — Round 12 Phase 1 boundary validation table records all checks PASS exit 0 across the 5 R12 staged code/test files plus the design.md doc-only diff: `go vet ./internal/connector/... ./cmd/core/... ./tests/integration/...` exit 0, `./smackerel.sh check` exit 0, `./smackerel.sh lint` exit 0 (Go + Python + Web lint), `go test -count=1 -run=^$ ./internal/connector/qfdecisions/... ./tests/integration/...` exit 0 (21 packages compile), `./smackerel.sh build` exit 0 (smackerel-core 44.8s + smackerel-ml). Zero warnings reported by any check.
-- [x] New Scope 2-owned metrics (`smackerel_qf_capability_mismatch_total{required,actual}`, `smackerel_qf_unknown_decision_type_total{value}`, `smackerel_qf_cursor_lag_seconds`, `smackerel_qf_cursor_fast_forward_events_skipped_total`, `smackerel_qf_freshness_p95_seconds{stage}`) are documented in `design.md` and exposed via the Prometheus registry without altering the Scope 5-owned full 12-metric symmetric set commitments. Evidence: `report.md` -> Scope 2 Documentation Boundary Evidence, **Scope 2 Round 7-Followup Integration Re-confirmation (DoD 331 / metrics doc, bubbles.implement, 2026-05-18T17:13:04Z)** — `design.md:1219+` `## Scope 2-owned metrics (consolidated reference)` subsection inserted this round with a per-metric table (type, labels, emission site, purpose) plus an explicit independence statement from the Scope 5-owned full 12-metric symmetric set; the 5 metric names are unchanged from the production emission sites at `internal/connector/qfdecisions/connector.go` (capability mismatch lines, unknown-decision-type emission, lag gauge, fast-forward counter, freshness p95 gauge) so no rename / re-label was performed.
+- [x] Consumer impact sweep completed and zero stale first-party references remain for Scope 2 connector IDs, metric names, capability paths, cursor contract paths, rendering boundaries, and QF artifact consumers. Evidence: `report.md` -> Scope 2 Planning Artifact Repair (bubbles.plan, 2026-05-19T03:15:00Z); `scopes.md` -> Scope 2 Consumer Impact Sweep.
+- [x] Change Boundary is respected and zero excluded file families were changed (no Scope 3 rendering surfaces, no Scope 4 evidence-bundle export, no Scope 5 credential rotation overlap, no Scope 6-9 endpoints). Evidence: `report.md` -> Scope 2 Build Quality Gate DoD Reconciliation (DoDs 331/332/333, 2026-05-18T23:00:00Z), Scope 2 Capability + Cursor Persistence Integration Evidence (DoD 297, 2026-05-18T22:00:00Z), Scope 2 Round 15 Current-Session Verification.
+- [x] No hidden defaults, hardcoded QF credentials, hardcoded QF URLs, or generated config hand edits are introduced; the new migration is the only schema change and uses the project migration framework. Evidence: `report.md` -> Scope 2 Check Evidence, Scope 2 Implementation Reality Evidence, **Scope 2 Round 14 Fresh Evidence (2026-05-19T00:00:00Z — against HEAD 0a08c3ec)** — R14 commit explicitly removed `defaultUnfetchedPageSize=200`; grep confirms zero production hits for hardcoded URLs/creds (only `_test.go` files use the reserved `qf.example.test` TLD per RFC 2606); sole migration is `034_qf_decisions_capability.sql`; `./smackerel.sh check` exit 0 with "Config is in sync with SST" + "env_file drift guard: OK".
+- [x] Build, lint, and tests produce zero warnings (`./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`). Evidence: `report.md` -> Scope 2 Build Quality Gate DoD Reconciliation (DoDs 331/332/333, 2026-05-18T23:00:00Z), Scope 2 Round 15 Current-Session Verification, Scope 2 Manual-Sync Reconnect Fix And Broader E2E Pass (bubbles.implement, 2026-05-19T02:30:00Z).
+- [x] New Scope 2-owned metrics (`smackerel_qf_capability_mismatch_total{required,actual}`, `smackerel_qf_unknown_decision_type_total{value}`, `smackerel_qf_cursor_lag_seconds`, `smackerel_qf_cursor_fast_forward_events_skipped_total`, `smackerel_qf_freshness_p95_seconds{stage}`) are documented in `design.md` and exposed via the Prometheus registry while preserving the Scope 5-owned full 12-metric symmetric set commitments. Evidence: `report.md` -> Scope 2 Documentation Boundary Evidence and metrics documentation evidence captured on 2026-05-18T17:13:04Z — `design.md:1219+` `## Scope 2-owned metrics (consolidated reference)` subsection inserted with a per-metric table (type, labels, emission site, purpose) plus an explicit independence statement from the Scope 5-owned full 12-metric symmetric set; the 5 metric names match the production emission sites at `internal/connector/qfdecisions/connector.go` (capability mismatch lines, unknown-decision-type emission, lag gauge, fast-forward counter, freshness p95 gauge).
 
 ### Round 2P DoD Name Reconciliation (2026-05-13)
 
@@ -343,17 +348,19 @@ Round 2N flagged five Scope 2 DoD items whose checklist text references test fun
 |---|---------------------|---------------------|----------------------|----------------|--------------------------|
 | 1a | SCN-SM-041-003 capability handshake on first connect | `tests/integration/qf_decisions_capability_test.go::TestQFDecisionsConnectorPerformsCapabilityHandshakeOnConnect` | File and function do NOT exist (CMD 1, CMD 2a). Unit-layer connect-time capability path covered by `internal/connector/qfdecisions/connector_test.go::TestConnect_CapabilityCompatibleSucceeds` and 9 functions in `internal/connector/qfdecisions/capability_test.go` (httptest mocks, NOT a live PostgreSQL+NATS stack). Existing live integration tests in `tests/integration/qf_decisions_*.go` (4 functions) have ZERO references to `CapabilitiesPath` / `capability` / `handshake` (CMD 12). | **B (semantic gap)** | Author live-stack integration test asserting the capability call lands BEFORE any decision-event poll against the PostgreSQL+NATS test stack. |
 | 1b | SCN-SM-041-003 capability re-read on connector restart | `tests/integration/qf_decisions_capability_test.go::TestQFDecisionsConnectorReReadsCapabilityOnRestart` | File and function do NOT exist (CMD 1, CMD 2a). NO test of any layer (unit OR integration OR e2e) covers the connector restart re-read capability path. | **B (semantic gap)** | Author live-stack integration test that restarts the connector and asserts the capability endpoint is re-fetched. |
-| 2 | SCN-SM-041-008 fast-forward `events_skipped` recovery | `tests/integration/qf_decisions_sync_test.go::TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` | Function does NOT exist anywhere (CMD 2a). Production code at `internal/connector/qfdecisions/connector.go:245-296,387-388` implements the positive fast-forward recovery path (`fastForwardObserved`, `metrics.QFCursorFastForwardEventsSkipped.Add`, `setHealth(HealthDegradedRecovered)`) per CMD 9, but ZERO tests (unit OR integration OR e2e) exercise that positive path per CMD 10. The lag-breach unit test `TestConnectorEmitsLagBreachEventAboveThreshold` only asserts the NEGATIVE no-auto-fast-forward invariant. | **B (semantic gap)** | Author at minimum a unit test of the positive fast-forward recovery path; ideally also the live-stack integration test the DoD demands. This is the most under-covered gap of the five — production code exists but is functionally untested at every layer. **Round 2Q IMPLEMENTED (unit layer only):** `internal/connector/qfdecisions/connector_test.go::TestSyncSkipsFastForwardDiagnosticEventAndIncrementsCounter` (added at line 1079, ran fresh under `./smackerel.sh test unit --go` — package `internal/connector/qfdecisions` reported `ok` in 0.458s and re-cached on a follow-up run; raw output captured in `report.md` -> Round 2Q Evidence). Test asserts: (a) FF diagnostic event with `EventsSkipped=42` is NOT normalized into a `RawArtifact` and its `packet_id` is NEVER fetched (adversarial trip-wire `ffPacketFetches==0`), (b) `smackerel_qf_cursor_fast_forward_events_skipped_total` counter delta is exactly `42`, (c) `Health()` transitions to `HealthDegradedRecovered`, (d) slog emits a `fast_forward_recovered` WARN record carrying `events_skipped=42`, `event_id="event-ff-marker-1"`, `connector_id=DefaultConnectorID`. **Live-stack integration test the DoD names (`TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` against the PostgreSQL+NATS test stack) is still genuinely absent — blocked by spec-045 SST-loader runtime drift (`envsubst: command not found` per `internal/config::TestSSTLoader_RejectsDevPostgresPassword_HomeLab` failure observed in the same run).** Original DoD line 304 stays `[ ]` until `bubbles.test` re-evaluates whether the unit-layer cover is acceptable substitution OR the live integration test must be authored after spec-045 unblocks. |
+| 2 | SCN-SM-041-008 fast-forward `events_skipped` recovery | `tests/integration/qf_decisions_sync_test.go::TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped` | Historical Round 2P classification recorded that the named function did not exist at that time. Later Scope 2 rounds added and verified the positive fast-forward recovery path; the active Scope 2 Integration row now points to the live-stack PASS evidence for `TestQFDecisionsConnectorPicksUpFastForwardEventsSkipped`. | **B (semantic gap, historical)** | Superseded by Round 7 / Round 8 integration evidence; active Scope 2 DoD above is the executable source of truth. |
 | 3 | SCN-SM-041-004 incompatible-capability E2E | `tests/e2e/qf_decisions_connector_api_test.go::TestQFDecisionsIncompatibleCapabilityBlocksPolling` | Function does NOT exist (CMD 2a). Unit-layer coverage exists across `connector_test.go::TestConnect_CapabilityIncompatibleReturnsError`, `client_test.go::TestClientRejectsIncompatibleQFPacketVersion`, `client_test.go::TestClient_FetchDecisionEvents_IncompatibleStatusBypassesClamp` — all httptest-mocked, NOT live API. The existing E2E `TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts` is a different scenario (packet schema mismatch via `startQFSchemaMismatchStub`, not capability handshake mismatch); existing e2e files have ZERO references to capability/Incompatible/CapabilitiesPath (CMD 13). | **B (semantic gap)** | Author live-API E2E test that drives an incompatible capability response (e.g., wrong `audit_envelope_version` OR missing `v1` in `supported_packet_versions`) through the live supervisor and asserts ZERO trusted artifacts published. |
 | 4 + 5 | SCN-SM-041-003 + SCN-SM-041-008 freshness SLA P95 stress | `tests/stress/qf_decision_event_replay_test.go::TestQFDecisionsFreshnessSLAP95IngestRender` | File and function do NOT exist (CMD 1, CMD 2a). Unit tests (`TestSyncRecordsIngestFreshness_FreshPacket`, `TestSyncRecordsIngestFreshness_DelayedPacket`, `TestRecordFreshness_PerStageIsolation`) cover the rolling-window gauge mechanics with httptest mocks, but ZERO stress test asserts `p95 ingest ≤ 30s, render ≤ 30s, combined ≤ 60s` under sustained load. Existing `tests/stress/qf_decisions_sync_stress_test.go::TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity` covers replay identity, not freshness SLA budget; that file has ZERO references to `P95` / `freshness` / `30s` / `60s` (CMD 11). | **B (semantic gap)** | Author live-stack stress test that drives a sustained packet workload through ingest+render and asserts the P95 budgets via the `smackerel_qf_freshness_p95_seconds{stage}` gauge. |
 
 **Honesty notes:**
 
-- Each classification was verified by direct file inspection plus grep searches captured in `report.md` -> Round 2P Evidence (CMDs 1-13). No test was assumed implemented from the function name alone.
-- No DoD lines were re-worded, no DoD checkboxes were flipped, and no source code was changed in this round. The original live-stack assertion intent is preserved verbatim; Round 2Q (`bubbles.implement`) inherits the gap list unchanged.
-- The duplicate `## Parked Scope 2:` legacy section (line 357) was NOT touched — that cleanup is owned by a separate planning round.
-- Round 2P explicitly REJECTS classification A for all 5 items. Although unit-layer coverage exists for items 1a, 3, and 4+5, the DoD lines explicitly require live-stack integration / live-API E2E / live-stack stress execution. Classifying these as A would silently downgrade the assertion bar from live-stack to unit-layer; that downgrade is a planning decision the user must make explicitly, not a name-reconciliation outcome.
-- Item 1b and Item 2 have NO equivalent unit-layer coverage either — the production behavior they target is genuinely untested.
+| Note | Record |
+|---|---|
+| Evidence basis | Each classification was verified by direct file inspection plus grep searches captured in `report.md` -> Round 2P Evidence (CMDs 1-13). No test was assumed implemented from the function name alone. |
+| DoD preservation | No DoD lines were re-worded, no DoD checkboxes were flipped, and no source code was changed in this round. The original live-stack assertion intent is preserved verbatim; Round 2Q (`bubbles.implement`) inherits the gap list unchanged. |
+| Historical appendix ownership | The former parked Scope 2 legacy section is now preserved as the `Historical Appendix: Former Parked Scope 2 Trace`; its items are represented in active Scope 2 above or in Scope 5 cross-scope dependency trace. |
+| Classification boundary | Round 2P explicitly rejected classification A for all 5 items. Although unit-layer coverage exists for items 1a, 3, and 4+5, the DoD lines explicitly require live-stack integration / live-API E2E / live-stack stress execution. Classifying these as A would silently downgrade the assertion bar from live-stack to unit-layer; that downgrade is a planning decision the user must make explicitly, not a name-reconciliation outcome. |
+| Remaining live-stack gaps at that time | Item 1b and Item 2 had no equivalent unit-layer coverage at the time of Round 2P; later Scope 2 evidence sections record the integration and E2E closures. |
 
 ### Round 2R Planning Decisions (2026-05-18) — Resolves 4 Findings From Implement Round
 
@@ -370,27 +377,30 @@ This section records bubbles.plan scope-level decisions for the 4 findings (F1-F
 - Decision: **Extend Scope 2 inline.** Do NOT split into a new Scope 2.5. The work is bounded (capability-column CRUD on existing `StateStore`, `Sync()` wiring through `StateStore.Save()`, one persistence-smoke integration test) and matches the scope name verbatim.
 - Change Boundary amendment: add `internal/connector/state.go` (capability-column CRUD methods only — no other connector logic) to the allowed file families. Migration 034 is already in scope via the existing `internal/db/migrations/*qf*` family and the `//go:embed migrations/*.sql` auto-discovery.
 - No new DoD items needed. The existing DoD items for SCN-SM-041-003 (capability persistence) and SCN-SM-041-008 (next_cursor persistence) already cover the requirement; this round only removes the boundary blocker and clarifies the migration-wiring expectation.
-- Routing owner: `bubbles.implement` to author the StateStore capability-column CRUD methods + connector wiring; `bubbles.test` to author/run the live-integration persistence-smoke test against the disposable test stack.
+Routing owner: implementation specialist for the StateStore capability-column CRUD methods + connector wiring; test specialist for the live-integration persistence-smoke test against the disposable test stack.
 
 **Finding F2 — WSL2 stress harness incompatibility (infrastructure, medium)**
 
 - Decision: **Accept WSL2 limitation; allow native-Linux execution evidence for the freshness SLA stress DoD item.** Do NOT introduce a separate Scope 2.6 for WSL2 compatibility. The freshness instrumentation (`smackerel_qf_freshness_p95_seconds{stage}` gauge from Round 2L) is independent of the stress runner; the production code path is unchanged. The WSL2-loopback incompatibility on `--network host` is a developer-environment limitation, not a code defect.
 - Acceptable evidence sources for the freshness SLA p95 stress DoD item: (a) native-Linux CI runner, (b) native-Linux operator host, (c) the home-lab target. Evidence must include raw `./smackerel.sh test stress` output and the gauge readings.
-- Optional follow-up (NOT a Scope 2 DoD addition): `bubbles.implement` or `bubbles.devops` MAY author a runtime `t.Skip()` guard in `tests/stress/qf_decision_event_replay_test.go` that detects WSL2 (via `/proc/sys/fs/binfmt_misc/WSLInterop` or `/proc/version` containing `microsoft`) with a `t.Skip()` message pointing to the operator runbook. This is a developer-experience improvement, not a closure requirement for the DoD item itself.
-- Routing owner: `bubbles.test` to run the stress workload on a native-Linux execution surface and record evidence. Optional `bubbles.implement` for the WSL2-skip guard.
+Developer-experience note: a runtime `t.Skip()` guard in `tests/stress/qf_decision_event_replay_test.go` could detect WSL2 (via `/proc/sys/fs/binfmt_misc/WSLInterop` or `/proc/version` containing `microsoft`) and point to the operator runbook. This note is not a Scope 2 DoD item.
+Routing owner: test specialist for the stress workload on a native-Linux execution surface and evidence capture. Implementation specialist may own the WSL2-skip guard if that developer-experience note is picked up.
 
 **Finding F3 — Broader E2E suite not executed (execution, medium)**
 
 - Decision: **Execution-only.** No scope-content change required. The full broader E2E suite (`./smackerel.sh test e2e` without `--go-run` narrowing) has not been captured as evidence against Scope 2's broader-DoD line since the Round 6/7 PASS snapshots (which were `--go-run`-narrowed).
-- Routing owner: `bubbles.test` to run `./smackerel.sh --env test test e2e` against the disposable test stack and record verbatim terminal output in `report.md` under a new "Scope 2 Broader E2E Suite Evidence" section. Then flip the broader-E2E DoD item to `[x]` with the evidence anchor.
+Routing owner: test specialist for `./smackerel.sh --env test test e2e` against the disposable test stack and verbatim terminal output in `report.md` under a new "Scope 2 Broader E2E Suite Evidence" section. The broader-E2E DoD is now checked above with the 2026-05-19T02:30 evidence anchor.
 
 **Finding F4 — Missing report.md anchor sections (medium)**
 
 - Decision: **Execution-only, mixed routing.** The three missing anchor sections (Planning Repair Guard Evidence, Implementation Reality Evidence, Check Evidence) require fresh command runs in the current session.
-- Planning Repair Guard Evidence: `bubbles.test` runs `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector` and `bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/qf_decisions_connector_api_test.go`; `bubbles.implement` (or `bubbles.test` if no narrative is needed) authors the section with raw output.
-- Implementation Reality Evidence: `bubbles.test` runs `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose`; the run will surface the 4 known false-positive FAKE_INTEGRATION hits already tracked under `C-FRAMEWORK-G028-FALSE-POSITIVES` (out of scope for this feature). `bubbles.implement` authors the section noting the false positives and pointing at the framework concern.
-- Check Evidence: `bubbles.test` runs `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` and captures raw output; `bubbles.implement` authors the section.
-- Routing owner: `bubbles.test` for the three guard/scan/check runs; `bubbles.implement` for authoring the three anchor sections with the raw evidence.
+Planning Repair Guard Evidence: test specialist runs `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector` and `bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/qf_decisions_connector_api_test.go`; implementation specialist authors the section with raw output when narrative is needed.
+
+Implementation Reality Evidence: test specialist runs `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose`; current validation records that implementation reality scan passes with zero violations.
+
+Check Evidence: test specialist runs `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check` and captures raw output; implementation specialist authors the section when narrative is needed.
+
+Routing owner: test specialist for guard/scan/check runs; implementation specialist for evidence section authoring with raw output.
 
 **Mutations applied this round:**
 
@@ -406,8 +416,6 @@ Allowed file families:
 
 - `internal/connector/qfdecisions/*` (capability client, normalizer, connector sync logic, client page-size clamping, types, tests)
 - `internal/connector/state.go` (capability-column CRUD methods on `StateStore` for the `capability_response` / `capability_fetched_at` / `capability_status` columns added by migration 034 — no other connector logic; Round 2R amendment)
-- `internal/connector/supervisor.go` (`SaveCapability` thin proxy only — no other lifecycle/run-loop changes; Round 12 amendment for Round 2R F1 call-site wiring)
-- `cmd/core/connectors.go` (qf-decisions startup wiring only — `Supervisor.SaveCapability` call-through during connector registration; no other entry-point logic touched; Round 12 amendment for Round 2R F1 call-site wiring)
 - `internal/db/migrations/*qf*` (new capability migration only; migration 034 is auto-discovered by `//go:embed migrations/*.sql` in `internal/db/migrate.go`, no registration required in `cmd/dbmigrate/main.go`)
 - `tests/integration/qf_decisions_*` (capability handshake, sync, fast-forward integration tests)
 - `tests/e2e/qf_decisions_*` (mismatch, unknown decision-type, ingest e2e tests)
@@ -416,10 +424,10 @@ Allowed file families:
 
 Excluded surfaces:
 
-- Web, digest, Telegram, search, mobile push rendering of QF packets (owned by Parked Scope 3)
-- `PersonalEvidenceBundle` export, `target_context = packet_context`, evidence import limits, consent revocation (owned by Parked Scope 4)
-- Credential rotation overlap / overlapping `not_before` window / capability re-read at rotation start (owned by Parked Scope 5; capability re-read on connector restart and credential reload IS in Scope 2, but rotation overlap behavior is not)
-- Cross-Product Audit Envelope v1 emission across all eight emission points and the full 12-metric symmetric set (owned by Parked Scope 5; Scope 2 only adds the five new metrics enumerated above)
+- Web, digest, Telegram, search, mobile push rendering of QF packets remains excluded from Scope 2 and is owned by active Scope 3.
+- `PersonalEvidenceBundle` export, `target_context = packet_context`, evidence import limits, consent revocation (owned by Scope 4)
+- Credential rotation overlap / overlapping `not_before` window / capability re-read at rotation start (owned by active Scope 5; capability re-read on connector restart and credential reload IS in Scope 2, but rotation overlap behavior is not)
+- Cross-Product Audit Envelope v1 emission across all eight emission points and the full 12-metric symmetric set (owned by active Scope 5; Scope 2 only adds the five new metrics enumerated above)
 - Packet engagement signal exporter and `POST /packet-engagement-signals` (owned by Parked Scope 6)
 - Personal context read API host `GET /api/v1/personal-context` (owned by Parked Scope 7)
 - Signed callback infrastructure and `POST /callback` (owned by Parked Scope 8)
@@ -427,103 +435,496 @@ Excluded surfaces:
 - Generated config hand edits or new connector configuration keys (Scope 1 boundary; Scope 2 reuses the explicit configuration already proven by Scope 1)
 - `state.json` modifications (workflow agent owns state transitions)
 
-## Parked Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+## Historical Appendix: Former Parked Scope 2 Trace
 
-**Status:** Superseded by active Scope 2 section above (unparked 2026-05-13 after QF 063 reached `done_with_concerns`). This section is preserved for traceability of the original Phase B2 design intent only; its proposed DoD items have been folded into the active Scope 2 Definition of Done. **Do not execute against these checkboxes** — they are advisory historical context.
+**Historical Note:** This former parked-scope trace was superseded by the active Scope 2 section above after QF 063 reached `done_with_concerns` on 2026-05-12 and Scope 2 was unparked on 2026-05-13. It is preserved only to show the original Phase B2 design intent; the active Scope 2 Definition of Done above is the executable record.
 
 **Depends On (historical):** Scope 1
 **Activation Gate (historical):** QF 063 Scope 2 read/outbox readiness — cleared 2026-05-12.
 
 ### Phase B2 Design Additions (2026-05-07) — Historical Proposed DoD (Superseded)
 
-The following items were the original Phase B2 design intent for Scope 2 captured during planning. Each item is now represented as a Core Behavior or Validation DoD item in the active Scope 2 section above; these checkboxes remain unchecked and MUST NOT be ticked here.
+The following items were the original Phase B2 design intent for Scope 2 captured during planning. Each item is now represented as a Core Behavior or Validation DoD item in the active Scope 2 section above, or as a Scope 5 cross-scope dependency trace where render-surface ownership applies.
 
-Core behavior (Phase B2 additions, superseded — see active Scope 2 Core Behavior):
+Core behavior trace (Phase B2 additions, superseded by active Scope 2 Core Behavior):
 
-- [ ] Capability handshake: connector calls `GET /api/private/smackerel/v1/capabilities` before decision-event polling and on connector restart/credential-rotation start, parses and persists all fields enumerated in design.md §Capability Discovery, blocks polling when required sync contract fields are incompatible, and emits `smackerel_qf_capability_mismatch_total{required,actual}` (Phase B2, F2).
-- [ ] Unknown decision-type ingest: when QF emits an unknown `decision_type` with `unknown_decision_type=true`, the connector stores the packet with `Metadata.unknown_decision_type = true`, does not invent a new content type, emits `smackerel_qf_unknown_decision_type_total{value}`, and leaves generic-card rendering to Scope 3 (Phase B2, F8).
-- [ ] Page-size clamping: connector derives `limit` only by clamping explicit configured `connectors.qf-decisions.page_size` to the `[min_page_size, max_page_size]` range from the successfully fetched and durably persisted capability response; missing, unreadable, unavailable, or unpersisted capability blocks polling by failing loud during `Connect()` or marking the connector degraded after a prior successful handshake; `PAGE_SIZE_OUT_OF_RANGE` 4xx responses emit operator alerts, mark degraded, and never retry with a guessed, hardcoded, or smaller local limit (Phase B2, F9).
-- [ ] Freshness SLA stress test: `tests/stress/qf_decision_event_replay_test.go` (or equivalent) verifies p95 ingest ≤30s, p95 render ≤30s, and combined p95 ≤60s; metric `smackerel_qf_freshness_p95_seconds{stage}` is exposed (Phase B2, F12).
-- [ ] Cursor lag breach signaling: when `smackerel_qf_cursor_lag_seconds` exceeds the operator-configured threshold (default 1h), the connector logs a structured `lag_breach` event for the operator dashboard and never auto-fast-forwards itself (Phase B2, F13).
-- [ ] QF-issued fast-forward recovery: on a server-side cursor advancement, the connector picks up the `events_skipped` count, marks state `degraded_recovered`, and increments `smackerel_qf_cursor_fast_forward_events_skipped_total`; integration test exercises the fast-forward recovery path (Phase B2, F13).
+| Historical item | Original intent |
+|---|---|
+| Capability handshake | Connector calls `GET /api/private/smackerel/v1/capabilities` before decision-event polling and on connector restart/credential-rotation start, parses and persists all fields enumerated in design.md §Capability Discovery, blocks polling when required sync contract fields are incompatible, and emits `smackerel_qf_capability_mismatch_total{required,actual}` (Phase B2, F2). |
+| Unknown decision-type ingest | When QF emits an unknown `decision_type` with `unknown_decision_type=true`, the connector stores the packet with `Metadata.unknown_decision_type = true`, does not invent a new content type, emits `smackerel_qf_unknown_decision_type_total{value}`, and leaves generic-card rendering to Scope 3 (Phase B2, F8). |
+| Page-size clamping | Connector derives `limit` only by clamping explicit configured `connectors.qf-decisions.page_size` to the `[min_page_size, max_page_size]` range from the successfully fetched and durably persisted capability response; missing, unreadable, unavailable, or unpersisted capability blocks polling by failing loud during `Connect()` or marking the connector degraded after a prior successful handshake; `PAGE_SIZE_OUT_OF_RANGE` 4xx responses emit operator alerts, mark degraded, and never retry with a guessed, hardcoded, or smaller local limit (Phase B2, F9). |
+| Freshness SLA stress test | `tests/stress/qf_decision_event_replay_test.go` verifies Scope 2 ingest p95 ≤30s; render p95 ≤30s and combined p95 ≤60s are tracked as Scope 5 render-surface work by C-S2-321B-SCOPE-5-RENDER (Phase B2, F12). |
+| Cursor lag breach signaling | When `smackerel_qf_cursor_lag_seconds` exceeds the operator-configured threshold (default 1h), the connector logs a structured `lag_breach` event for the operator dashboard and never auto-fast-forwards itself (Phase B2, F13). |
+| QF-issued fast-forward recovery | On a server-side cursor advancement, the connector picks up the `events_skipped` count, marks state `degraded_recovered`, and increments `smackerel_qf_cursor_fast_forward_events_skipped_total`; integration test exercises the fast-forward recovery path (Phase B2, F13). |
 
-Validation (Phase B2 additions, superseded — see active Scope 2 Validation):
+Validation trace (Phase B2 additions, superseded by active Scope 2 Validation):
 
-- [ ] Unit tests cover capability response parsing, required-field compatibility checks, persisted capability diagnostics, and capability mismatch metric labels.
-- [ ] Integration tests cover capability handshake before polling, handshake on restart, and capability re-read at credential rotation start without activating Scope 5 rotation overlap behavior.
-- [ ] E2E regression test covers incompatible capability response preventing decision-event polling and preserving zero trusted artifact publication.
-- [ ] Unit and integration tests cover unknown decision-type ingest metadata, no invented content type, and metric emission.
-- [ ] Unit tests cover explicit configured page-size clamping against persisted capability range, missing/unreadable/unavailable/unpersisted capability poll blocking, and `PAGE_SIZE_OUT_OF_RANGE` alert/degraded/no-retry behavior.
-- [ ] Stress test exercises the freshness SLA budget and surfaces `smackerel_qf_freshness_p95_seconds{stage}`.
-- [ ] Integration test exercises cursor lag breach signaling and the QF-issued fast-forward recovery path.
+| Historical validation item | Original intent |
+|---|---|
+| Capability parsing unit coverage | Unit tests cover capability response parsing, required-field compatibility checks, persisted capability diagnostics, and capability mismatch metric labels. |
+| Capability handshake integration coverage | Integration tests cover capability handshake before polling, handshake on restart, and capability re-read at credential rotation start without activating Scope 5 rotation overlap behavior. |
+| Incompatible capability E2E coverage | E2E regression test covers incompatible capability response preventing decision-event polling and preserving zero trusted artifact publication. |
+| Unknown decision-type coverage | Unit and integration tests cover unknown decision-type ingest metadata, no invented content type, and metric emission. |
+| Page-size clamping coverage | Unit tests cover explicit configured page-size clamping against persisted capability range, missing/unreadable/unavailable/unpersisted capability poll blocking, and `PAGE_SIZE_OUT_OF_RANGE` alert/degraded/no-retry behavior. |
+| Ingest freshness stress coverage | Stress test exercises the Scope 2 ingest freshness SLA budget and surfaces `smackerel_qf_freshness_p95_seconds{stage="ingest"}`; Scope 5 owns render and combined freshness assertions. |
+| Cursor lag and fast-forward coverage | Integration test exercises cursor lag breach signaling and the QF-issued fast-forward recovery path. |
 
-## Parked Scope 3: Web Telegram Digest And Search Surfacing
+## Scope 3: Web Telegram Digest And Search Surfacing
 
-**Status:** Not Started
+**Status:** Done
+**Priority:** P0
 **Depends On:** Scope 2
-**Activation Gate:** QF packets exist as Smackerel artifacts with packet ID, trace ID, approval state, badges, and deep link
+**Activation:** Activated for executable delivery on 2026-05-19 after Scope 2 was certified Done and established source-qualified QF artifacts with packet ID, trace ID, approval state, trust badges, and deep link. Implementation passes added the PWA static-contract assertion file and focused live E2E coverage for SCN-SM-041-011, SCN-SM-041-012, and SCN-SM-041-013. The later broader `./smackerel.sh test e2e` recheck passes. After DevOps runner review on 2026-05-19T11:18:38Z, Scope 3 PWA/UI proof is reconciled to the existing Go live-stack E2E surface (`tests/e2e/qf_decisions_surface_test.go`, including `assertPWAQFBundleServed`). `web/pwa/tests/qf_decisions_surface.spec.ts` is a traceability/static-contract anchor only, not an executable DoD runner. `bubbles.validate` certified Scope 3 Done on 2026-05-19T11:50:00Z under the reconciled PWA coverage model; certification.completedScopes now includes Scope 1, Scope 2, and Scope 3 while the overall feature remains `in_progress` for downstream Scopes 4-9.
 
-### Phase B2 Design Additions (2026-05-07) — Proposed DoD
+### Gherkin Scenarios
 
-Core behavior (Phase B2 additions):
+Scenario: SCN-SM-041-009 Unknown Decision Type Renders As Generic QF Packet Card
+	Given Scope 2 has ingested a QF packet artifact with `Metadata.unknown_decision_type = true`, a QF-authored title, QF-authored content, trust metadata, trace ID, approval state, and QF deep link
+	When the packet appears in Web search results, Web artifact detail, daily digest, or Telegram-compatible summary
+	Then Smackerel renders a generic read-only QF packet card that preserves the QF-authored title/content, trust metadata, and QF deep link without deriving buy/sell/hold semantics or a local content type from the packet body.
 
-- [ ] Unknown decision-type generic-card fallback: render packets carrying `Metadata.unknown_decision_type = true` through a generic QF packet card that preserves QF-authored title/content, trust metadata, and QF deep link without deriving semantics from packet body (Phase B2, F8).
-- [ ] Trust Object Rendering Contract: digest and Telegram renderers consume ONLY `label`, `severity`, `summary`, optional `detail`, and optional `links` from CalibrationBadge, DataProvenanceBadge, QuantifiedImpact, and ExpertAnalysisBundle; numeric internals are silently dropped (NOT errors); unit tests cover each badge type (Phase B2, F6).
-- [ ] Trust Object missing-required failure: fail loud only when a required field (`label` / `severity`) is missing; emit `smackerel_qf_trust_object_render_failures_total{reason="missing_required_field"}` and fall back to the generic packet card (Phase B2, F6).
-- [ ] Signed deep-link rendering preference: prefer `packet_url_signed` when present and unexpired; fall back to unsigned only when the capability declares `deep_link_signing_supported=false`; on signature expiry mid-render, refetch the packet for a fresh signed URL; emit `smackerel_qf_deep_link_render_total{surface,status}` with statuses `signed_used`, `signed_expired_fallback_unsigned`, and `unsigned_only`; e2e tests cover each branch (Phase B2, F6).
-- [ ] `preferred_surface` routing: digest renderer routes per design.md §Preferred Surface Routing — `smackerel_digest` to digest-only, `smackerel_telegram` to the Telegram bot, `qf_dashboard` to a "View in QF dashboard" tile, `any` to user preference; routing NEVER alters trust metadata, decision content, or action eligibility based on the hint; unit tests cover each routing branch (Phase B2, O9, FR-020).
+Scenario: SCN-SM-041-010 Trust Objects Render Only The Public QF Contract
+	Given a QF packet contains `CalibrationBadge`, `DataProvenanceBadge`, `QuantifiedImpact`, and `ExpertAnalysisBundle` objects with public fields (`label`, `severity`, `summary`, optional `detail`, optional `links`) plus numeric internals
+	When the digest, Telegram, search, and artifact-detail renderers format the packet
+	Then Smackerel renders only the public fields, preserves downgraded severities visibly, uses severity for accessible icon/label hints, renders optional links as QF drilldown affordances, and silently drops numeric internals without logging them as errors.
 
-Validation (Phase B2 additions):
+Scenario: SCN-SM-041-011 Missing Required Trust Fields Falls Back Loudly
+	Given a QF packet is otherwise renderable but any required trust object is missing `label` or `severity`
+	When any Scope 3 renderer attempts to display the packet
+	Then Smackerel emits `smackerel_qf_trust_object_render_failures_total{reason="missing_required_field"}`, avoids rendering the incomplete trust object, and falls back to a generic read-only QF packet card while preserving packet ID, trace ID, approval state, QF-authored content, and the QF deep link.
 
-- [ ] UI/unit and E2E tests cover the unknown decision-type generic-card fallback and prove no buy/sell/hold semantics are inferred locally.
-- [ ] Unit tests cover Trust Object Rendering Contract per badge type (CalibrationBadge, DataProvenanceBadge, QuantifiedImpact, ExpertAnalysisBundle).
-- [ ] Unit tests cover the missing-required-field fallback and metric emission.
-- [ ] E2E tests cover `signed_used`, `signed_expired_fallback_unsigned`, and `unsigned_only` deep-link render branches.
-- [ ] Unit tests cover each `preferred_surface` routing branch.
+Scenario: SCN-SM-041-012 Signed Deep Links Are Preferred Or Refetched
+	Given a QF packet includes unsigned `deep_link`, optional `packet_url_signed`, `signature_expires_at`, and the persisted QF capability field `deep_link_signing_supported`
+	When Web, digest, Telegram, search, or artifact detail renders the QF deep link
+	Then Smackerel uses unexpired `packet_url_signed`, refetches the packet if the signed URL expires mid-render, falls back to unsigned only when `deep_link_signing_supported=false`, never re-signs locally, and emits `smackerel_qf_deep_link_render_total{surface,status}` with `signed_used`, `signed_expired_fallback_unsigned`, or `unsigned_only`.
 
-## Parked Scope 4: Personal Evidence Bundle Export
+Scenario: SCN-SM-041-013 Preferred Surface Routes Placement Only
+	Given a QF packet carries `preferred_surface` as `smackerel_digest`, `smackerel_telegram`, `qf_dashboard`, `any`, or omits the hint
+	When digest assembly, Telegram delivery selection, Web search, and Web artifact detail choose where to surface the packet
+	Then Smackerel applies the design.md preferred-surface routing matrix as render-priority only and never changes trust metadata, QF-authored decision content, approval/action eligibility, deep-link choice, or read-only boundary based on the hint.
 
-**Status:** Not Started
+### Implementation Plan
+
+- Add a QF packet rendering boundary shared by Web/search/artifact detail, digest, and Telegram-compatible summary paths; keep the renderer read-only and source-qualified to QF.
+- Add or extend a `qfdecisions` render DTO/helper package (expected location: `internal/connector/qfdecisions` or a new package under `internal/render/qfdecisions`) that accepts normalized Scope 2 artifact metadata and returns a surface-neutral render model containing QF title, QF-authored content, packet ID, trace ID, approval state, trust-object rows, deep-link selection, and read-only action-boundary copy.
+- Account for the implementation-owner preflight finding: `internal/connector/qfdecisions/types.go` currently appears to expose `DeepLink` only. Scope 3 must add missing envelope/metadata fields for `packet_url_signed`, `signature_expires_at`, and `preferred_surface` if still absent, and must preserve them through normalization into renderer-accessible metadata. This is a DTO/metadata extension only; it must not reopen Scope 2 cursor/capability behavior.
+- Implement the unknown-decision generic-card variant for packets where Scope 2 set `Metadata.unknown_decision_type = true`; do not infer semantics from packet title, raw body, symbol, or thesis text.
+- Implement the Trust Object Rendering Contract for `CalibrationBadge`, `DataProvenanceBadge`, `QuantifiedImpact`, and `ExpertAnalysisBundle`: render only `label`, `severity`, `summary`, optional `detail`, optional `links`; silently drop numeric internals and unenumerated fields; fail loud only on missing `label` or `severity`.
+- Emit `smackerel_qf_trust_object_render_failures_total{reason="missing_required_field"}` on missing required trust fields and route the affected packet through the generic read-only fallback card.
+- Implement signed deep-link selection as a pure render decision using persisted QF capabilities and packet metadata: prefer unexpired `packet_url_signed`; on mid-render expiry, refetch the packet through the existing QF client for a fresh signed URL; use unsigned `deep_link` only when `deep_link_signing_supported=false`; never sign locally.
+- Emit `smackerel_qf_deep_link_render_total{surface,status}` with labels `surface in {web,digest,telegram,search,artifact_detail}` and `status in {signed_used,signed_expired_fallback_unsigned,unsigned_only}` for each link render decision.
+- Implement `preferred_surface` routing as placement priority only: `smackerel_digest` includes the packet in digest when eligible, `smackerel_telegram` queues it for Telegram-compatible delivery window, `qf_dashboard` suppresses automatic digest/Telegram surfacing and leaves search/detail plus QF dashboard tile, `any` or missing follows existing defaults. This routing must not alter content, trust metadata, approval/action state, or link choice.
+- Wire Web/HTMX and PWA surfaces through existing search and artifact-detail entry points (`internal/web/templates.go`, `internal/web/handler.go`, `web/pwa/drive-search.js`, `web/pwa/drive-artifact-detail.js`) only where the existing surface consumes artifact metadata.
+- Wire digest through `internal/api/digest.go` and Telegram-compatible formatting through `internal/telegram/*` delivery/formatting packages discovered during implementation; keep Telegram actions read-only and leave signed callback infrastructure to Scope 8.
+- Add operator-visible diagnostics for unsigned-only link rendering when QF capability says signed links are unsupported, but do not treat that branch as an error. Do not add or complete Scope 5 render/combined freshness instrumentation in this scope.
+
+### Implementation Files
+
+- `internal/connector/qfdecisions/types.go` (DTO field additions only if `packet_url_signed`, `signature_expires_at`, or `preferred_surface` are missing)
+- `internal/connector/qfdecisions/normalizer.go` and `internal/connector/qfdecisions/normalizer_test.go` (metadata preservation for signed-link and preferred-surface fields only)
+- `internal/connector/qfdecisions/render.go` (new, expected shared render model/helper)
+- `internal/connector/qfdecisions/render_test.go` (new)
+- `internal/api/digest.go` and matching tests (digest QF card insertion/routing only)
+- `internal/telegram/*` and matching tests (Telegram-compatible QF summary formatting only)
+- `internal/web/templates.go`, `internal/web/handler.go`, and `internal/web/handler_test.go` (HTMX search/detail QF card rendering only)
+- `web/pwa/drive-search.js`, `web/pwa/drive-artifact-detail.js`, and `web/pwa/tests/qf_decisions_surface.spec.ts` (PWA search/detail rendering assets plus static-contract anchor; live PWA proof is the Go E2E helper `assertPWAQFBundleServed`, not a Playwright runner)
+- `tests/integration/qf_decisions_rendering_test.go` (new)
+- `tests/e2e/qf_decisions_surface_test.go` (new or appended to existing `tests/e2e/qf_decisions_connector_api_test.go` if the suite convention prefers one QF file)
+
+### Test Plan
+
+| Test Type | Category | Scenario(s) | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|-------------|---------------|---------------------|---------|-------------|
+| Unit | unit | SCN-SM-041-009 | `internal/connector/qfdecisions/render_test.go` | `TestRenderUnknownDecisionTypeUsesGenericCardWithoutDerivedSemantics` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-010 | `internal/connector/qfdecisions/render_test.go` | `TestTrustObjectRendererKeepsOnlyPublicFieldsForAllBadgeTypes` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-011 | `internal/connector/qfdecisions/render_test.go` | `TestTrustObjectMissingRequiredFieldFallsBackAndEmitsMetric` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-012 | `internal/connector/qfdecisions/render_test.go` | `TestSignedDeepLinkSelectionUsesSignedRefetchesExpiredAndFallsBackOnlyWhenUnsupported` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-013 | `internal/connector/qfdecisions/render_test.go` | `TestPreferredSurfaceRoutingBranchesDoNotMutateTrustOrActionState` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-012, SCN-SM-041-013 | `internal/connector/qfdecisions/normalizer_test.go` | `TestNormalizerPreservesSignedLinkAndPreferredSurfaceMetadata` | `./smackerel.sh test unit` | No |
+| Integration | integration | SCN-SM-041-009, SCN-SM-041-010, SCN-SM-041-011 | `tests/integration/qf_decisions_rendering_test.go` | `TestQFDecisionPacketRenderingPreservesTrustContractAcrossDigestSearchAndDetail` | `./smackerel.sh test integration` | Yes |
+| Integration | integration | SCN-SM-041-012 | `tests/integration/qf_decisions_rendering_test.go` | `TestQFDecisionPacketRenderingRefetchesExpiredSignedDeepLink` | `./smackerel.sh test integration` | Yes |
+| Integration | integration | SCN-SM-041-013 | `tests/integration/qf_decisions_rendering_test.go` | `TestQFPreferredSurfaceRoutingAffectsPlacementOnly` | `./smackerel.sh test integration` | Yes |
+| Static Contract Anchor | traceability/static-contract | SCN-SM-041-009, SCN-SM-041-010, SCN-SM-041-011, SCN-SM-041-012, SCN-SM-041-013 | `web/pwa/tests/qf_decisions_surface.spec.ts` | `QF PWA search/detail static assertions remain mapped to Scope 3 scenarios without silent-pass bailout patterns` | `bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/qf_decisions_surface.spec.ts` | No |
+| Regression E2E | e2e-api | SCN-SM-041-009, SCN-SM-041-010, partial SCN-SM-041-012, partial SCN-SM-041-013, accepted PWA asset-served proof | `tests/e2e/qf_decisions_surface_test.go` | `TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail` plus `assertPWAQFBundleServed` | `./smackerel.sh test e2e --go-run '^TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail$'` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-011 | `tests/e2e/qf_decisions_surface_test.go` | `TestQFDecisionTrustObjectMissingRequiredFieldFallsBackInLiveSurface` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-012, SCN-SM-041-013 | `tests/e2e/qf_decisions_surface_test.go` | `TestQFDecisionDeepLinkAndPreferredSurfaceBranchMatrix` | `./smackerel.sh test e2e` | Yes |
+| PWA/UI Live Proof | e2e-api | SCN-SM-041-009, SCN-SM-041-010, SCN-SM-041-012, SCN-SM-041-013 | `tests/e2e/qf_decisions_surface_test.go` | `TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail` asserts the PWA bundle is served via `assertPWAQFBundleServed` while validating search/detail QF card behavior through the live stack | `./smackerel.sh test e2e --go-run '^TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail$'` | Yes |
+| Broader E2E | e2e-api | SCN-SM-041-009..013 | `tests/e2e/` | `go-e2e and shell E2E suites complete without failures; no Playwright/PWA runner is required in this repo state` | `./smackerel.sh test e2e` | Yes |
+| Artifact lint | artifact | SCN-SM-041-009..013 | `specs/041-qf-companion-connector` | `artifact lint accepts QF Scope 3 planning artifacts` | `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | No |
+
+### PWA Static-Contract Anchor And Accepted Live Proof
+
+- `web/pwa/tests/qf_decisions_surface.spec.ts` now exists and passed `bash .github/bubbles/scripts/regression-quality-guard.sh web/pwa/tests/qf_decisions_surface.spec.ts` with zero violations and zero warnings. This proves the PWA assertion file is present and free of silent-pass bailout patterns. It is classified as a traceability/static-contract anchor and is not an executable DoD runner.
+- Accepted Scope 3 PWA/UI proof is the repo-standard Go live-stack E2E coverage in `tests/e2e/qf_decisions_surface_test.go`, especially `TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail` and its `assertPWAQFBundleServed` helper. That proof must continue to show the PWA bundle is served and that search/detail QF card rendering preserves user-visible packet ID, trace ID, trust metadata, signed/allowed unsigned deep link behavior, and read-only status through the live stack.
+- The DevOps decision is final for this scope: do not add a one-off Playwright runner here. If browser automation becomes product direction later, it requires a separate operational/toolchain adoption scope with package metadata, lockfile, config, docs, and disposable-stack isolation through `./smackerel.sh`.
+
+### Consumer Impact Sweep
+
+| Consumer surface | Scope 3 impact | Verification record |
+|---|---|---|
+| QF packet artifact metadata | Adds renderer-consumed `packet_url_signed`, `signature_expires_at`, and `preferred_surface` preservation if missing; does not change Scope 2 cursor/capability semantics. | `TestNormalizerPreservesSignedLinkAndPreferredSurfaceMetadata`, `TestQFDecisionPacketRenderingRefetchesExpiredSignedDeepLink`. |
+| Web HTMX search and artifact detail | Renders source-qualified read-only QF card and trust rows without local recommendation semantics. | `TestQFDecisionPacketRenderingPreservesTrustContractAcrossDigestSearchAndDetail`, PWA/Web E2E rows. |
+| PWA search/detail | Shows the same source-qualified QF card, visible trace/trust metadata, and signed or allowed unsigned deep link; PWA asset delivery is proved through the live stack. | `tests/e2e/qf_decisions_surface_test.go` -> `TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail` with `assertPWAQFBundleServed`; `web/pwa/tests/qf_decisions_surface.spec.ts` remains a static-contract anchor only. |
+| Digest API | Applies preferred-surface routing and includes digest-eligible QF packets without altering content/trust/action boundary. | `TestQFPreferredSurfaceRoutingAffectsPlacementOnly`, digest branch of `TestQFDecisionUnknownTypeAppearsAsGenericReadOnlyCardInSearchDigestTelegram`. |
+| Telegram-compatible delivery | Formats compact QF summaries with read-only trust rows and deep link; no signed callback acceptance or action controls. | Telegram branch in integration and E2E rows; Scope 8 remains owner for callback signing. |
+| Search index/results | QF packets remain searchable by Scope 2 metadata; rendering only changes card presentation and does not mutate stored artifacts. | `TestQFDecisionUnknownTypeAppearsAsGenericReadOnlyCardInSearchDigestTelegram`. |
+| Metrics and operator diagnostics | Adds render metrics for trust failures and deep-link selection; does not claim Scope 5 full symmetric metric set or render/combined freshness DoD. | Unit metric tests plus artifact lint/state-transition guard evidence. |
+| Downstream scopes | Scope 4 may depend on read-only QF context visibility; Scope 5 still owns credential rotation, safety-boundary consolidation, render/combined freshness, and full audit envelope rollout. | Parked Scope Queue dependency gate remains unchanged for Scopes 4-9. |
+
+### Change Boundary
+
+Allowed file families:
+
+- `internal/connector/qfdecisions/types.go` (signed-link and preferred-surface DTO fields only)
+- `internal/connector/qfdecisions/normalizer.go` and `internal/connector/qfdecisions/normalizer_test.go` (metadata preservation for signed-link and preferred-surface fields only)
+- `internal/connector/qfdecisions/render.go` and `internal/connector/qfdecisions/render_test.go` (new shared read-only QF render model/helper)
+- `internal/api/digest.go` and corresponding tests (QF packet inclusion/routing only)
+- `internal/telegram/*` and corresponding tests (QF read-only summary formatting only)
+- `internal/web/templates.go`, `internal/web/handler.go`, and corresponding tests (search/detail QF card rendering only)
+- `web/pwa/drive-search.js`, `web/pwa/drive-artifact-detail.js`, `web/pwa/tests/qf_decisions_surface.spec.ts` (PWA search/detail QF card rendering assets and static-contract anchor only; no Playwright runner work in this scope)
+- `tests/integration/qf_decisions_rendering_test.go`
+- `tests/e2e/qf_decisions_surface_test.go` or existing QF E2E file append if project convention requires it
+- `specs/041-qf-companion-connector/*` (planning/evidence artifacts only)
+
+Excluded surfaces:
+
+- Scope 2 capability handshake, cursor sync, page-size clamping, unknown-decision ingest metric, lag/fast-forward, and ingest freshness behavior.
+- Scope 4 `PersonalEvidenceBundle` export, export consent flows, `packet_context`, evidence limits, consent revocation, and source-provenance class eligibility.
+- Scope 5 credential rotation overlap, full 12-metric symmetric set, Cross-Product Audit Envelope rollout, action-boundary consolidation, and render/combined freshness certification.
+- Scope 6 packet engagement signal exporter and any influence of engagement on ranking or digest priority.
+- Scope 7 personal-context read API host.
+- Scope 8 signed callback acceptance/signing infrastructure beyond rendering ordinary QF deep links; no Telegram callback action controls in Scope 3.
+- Scope 9 watch-signal proposal endpoint.
+- Generated config hand edits, new connector credentials, or new runtime defaults/fallbacks.
+
+### Definition of Done
+
+Core behavior:
+
+- [x] SCN-SM-041-009: Unknown decision-type packets render through a generic read-only QF card in Web/search/artifact detail, digest, and Telegram-compatible summaries, preserving QF-authored title/content, trust metadata, trace ID, approval state, and QF deep link without deriving buy/sell/hold semantics or inventing a local content type. Evidence: `report.md` -> Scope 3 Unknown Decision Generic Card Evidence.
+- [x] SCN-SM-041-010: Trust Object Rendering Contract is implemented for `CalibrationBadge`, `DataProvenanceBadge`, `QuantifiedImpact`, and `ExpertAnalysisBundle`; renderers consume only `label`, `severity`, `summary`, optional `detail`, optional `links`, preserve downgraded severities, render optional links as QF drilldowns, and silently drop numeric internals/unknown fields without error. Evidence: `report.md` -> Scope 3 Trust Object Rendering Evidence.
+- [x] SCN-SM-041-011: Missing required trust fields (`label` or `severity`) fail loud with `smackerel_qf_trust_object_render_failures_total{reason="missing_required_field"}` and fall back to the generic read-only QF card without losing packet ID, trace ID, approval state, QF-authored content, or QF deep link. Evidence: `report.md` -> Scope 3 Trust Object Failure Evidence.
+- [x] SCN-SM-041-012: Signed deep-link rendering prefers unexpired `packet_url_signed`, refetches on mid-render signature expiry, falls back to unsigned only when `deep_link_signing_supported=false`, never re-signs locally, and emits `smackerel_qf_deep_link_render_total{surface,status}` for `signed_used`, `signed_expired_fallback_unsigned`, and `unsigned_only`. Evidence: `report.md` -> Scope 3 Signed Deep Link Evidence.
+- [x] SCN-SM-041-013: `preferred_surface` values `smackerel_digest`, `smackerel_telegram`, `qf_dashboard`, `any`, and missing route packet placement only; routing never changes trust metadata, QF-authored decision content, approval/action eligibility, deep-link choice, or read-only boundary. Evidence: `report.md` -> Scope 3 Preferred Surface Routing Evidence.
+- [x] SCN-SM-041-012 and SCN-SM-041-013: `QFDecisionPacketEnvelope` and normalized artifact metadata preserve `packet_url_signed`, `signature_expires_at`, and `preferred_surface` if those fields are missing today from `internal/connector/qfdecisions/types.go`; this addition does not reopen Scope 2 cursor/capability behavior. Evidence: `report.md` -> Scope 3 DTO Metadata Preservation Evidence.
+
+Validation:
+
+- [x] SCN-SM-041-009: Unit and E2E tests prove unknown decision-type fallback renders a generic QF packet card and does not infer local recommendation semantics. Evidence: `report.md` -> Scope 3 Unit Evidence, Scope 3 E2E Evidence.
+- [x] SCN-SM-041-010: Unit tests cover Trust Object Rendering Contract for all four trust objects and verify numeric internals are absent from render output. Evidence: `report.md` -> Scope 3 Unit Evidence.
+- [x] SCN-SM-041-011: Unit coverage exists for missing-required-field fallback and metric emission, and live E2E proves the missing-required-field surface fallback preserves packet ID, trace ID, approval state, QF-authored content, and deep link while emitting the missing-field metric. Evidence: `report.md` -> Scope 3 Trust Object Failure Evidence, Scope 3 Missing Trust Live E2E Evidence.
+- [x] SCN-SM-041-012: Unit coverage exists for `signed_used`, expired refetch, refetch failure with unsigned fallback, and `unsigned_only`; focused live E2E proves `signed_used`, `signed_expired_fallback_unsigned`, and `unsigned_only` through search/detail rendering. Evidence: `report.md` -> Scope 3 Signed Deep Link Evidence, Scope 3 Branch Matrix Live E2E Evidence.
+- [x] SCN-SM-041-013: Unit coverage exists for each preferred-surface routing branch; focused live E2E proves `smackerel_digest`, `smackerel_telegram`, `qf_dashboard`, `any`, and missing-hint placement branches without mutating trust metadata, content, action eligibility, deep-link choice, or read-only boundary. Evidence: `report.md` -> Scope 3 Preferred Surface Routing Evidence, Scope 3 Branch Matrix Live E2E Evidence.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior pass for SCN-SM-041-009 through SCN-SM-041-013. Focused Go E2E evidence covers the original search/detail QF card path, accepted PWA asset-served proof via `assertPWAQFBundleServed`, SCN-SM-041-011 missing-trust fallback, and SCN-SM-041-012/013 branch matrices. Evidence: `report.md` -> Scope 3 E2E Evidence, Scope 3 Missing Trust Live E2E Evidence, Scope 3 Branch Matrix Live E2E Evidence, Scope 3 UI-Unit Coverage Status, Scope 3 PWA/UI Coverage Strategy Reconciliation - 2026-05-19T11:34:18Z.
+- [x] Broader E2E regression suite passes for Scope 3, including accepted PWA/UI proof through Go live-stack E2E. Focused Go E2E evidence passes, current broad `./smackerel.sh test e2e` recheck passes, and the PWA `.spec.ts` file exists with regression-quality guard evidence as a static-contract anchor. No Playwright/PWA runner evidence is required or claimed for this scope. Evidence: `report.md` -> Scope 3 Broader E2E Evidence, Scope 3 Broad E2E Recheck Evidence - 2026-05-19T10:58Z, Scope 3 UI-Unit Coverage Status, Scope 3 PWA Runner DevOps Decision - 2026-05-19T11:18:38Z, Scope 3 PWA/UI Coverage Strategy Reconciliation - 2026-05-19T11:34:18Z.
+- [x] Artifact lint accepts the activated Scope 3 planning artifacts. Evidence: `report.md` -> Scope 3 Artifact Lint Evidence.
+
+Build quality gate:
+
+- [x] Raw evidence coverage is complete for the reconciled Scope 3 Test Plan/DoD: executable proof uses repo-standard Go live-stack E2E and broad `./smackerel.sh test e2e`; `web/pwa/tests/qf_decisions_surface.spec.ts` is a static-contract anchor with regression-quality-guard evidence, not a Playwright/PWA runner gate. Evidence: `report.md` -> Scope 3 Evidence Index, Scope 3 Broad E2E Recheck Evidence - 2026-05-19T10:58Z, Scope 3 UI-Unit Coverage Status, Scope 3 PWA Runner DevOps Decision - 2026-05-19T11:18:38Z, Scope 3 PWA/UI Coverage Strategy Reconciliation - 2026-05-19T11:34:18Z.
+- [x] Consumer Impact Sweep is completed and zero stale first-party references remain for QF packet render models, signed-link fields, preferred-surface values, metric names, and route/card entry points. Evidence: `report.md` -> Scope 3 Consumer Impact Evidence.
+- [x] Change Boundary is respected and zero excluded file families were changed; Scope 5 render/combined freshness remains unclaimed. Evidence: `report.md` -> Scope 3 Change Boundary Evidence.
+- [x] No hidden defaults, fallback runtime config, local financial advice, local QF trust reconstruction, generated config hand edits, or action controls are introduced. Evidence: `report.md` -> Scope 3 Implementation Reality Evidence.
+- [x] Build, lint, format, unit, integration, and E2E commands complete with zero warnings through repo-standard `./smackerel.sh` commands. Evidence: `report.md` -> Scope 3 Build Quality Evidence.
+
+## Scope 4: Personal Evidence Bundle Export
+
+**Status:** Done
+**Priority:** P0
 **Depends On:** Scope 3
-**Activation Gate:** User-visible QF context and consent/sensitivity UI paths exist
+**Activation:** Activated for executable delivery on 2026-05-19 after Scope 3 was certified Done and established user-visible QF packet context across Web/search/detail, digest, Telegram-compatible summaries, and PWA asset-served proof. The activation gate is satisfied: Scope 3 provides user-visible QF context; existing Smackerel consent-confirmation and sensitivity patterns are available from recommendation-watch, drive, and photos surfaces. Scope 4 owns the QF-specific evidence builder, export-consent confirmation, sensitivity ceiling selection, export/revocation state, and QF write-client behavior.
 
-### Phase B2 Design Additions (2026-05-07) — Proposed DoD
+**Execution Progress (2026-05-19T17:25:00Z):** `bubbles.implement` extended the partial slice with API and Web/PWA evidence-builder/status/revocation affordances, persisted revocation audit envelopes, missing/unreadable persisted-capability rejection, local-reject metric coverage for `BUNDLE_TOO_LARGE`, `TOO_MANY_CLAIMS`, `RATE_LIMIT_EXCEEDED`, and `EVIDENCE_SOURCE_CLASS_NOT_ELIGIBLE`, and focused unit/integration/E2E proof. Evidence: `report.md` -> Scope 4 implementation evidence at 2026-05-19T17:25:00Z.
 
-Core behavior (Phase B2 additions):
+**Validation Certification (2026-05-19T20:15:00Z):** `bubbles.validate` certifies Scope 4 as `Done` after current artifact-lint, traceability-guard, state-transition-guard, and implementation-reality evidence. The earlier integration and broad E2E harness verdict blockers are resolved by the Scope 4 DevOps Harness Stabilization evidence: full integration emits `PASS: go-integration` with exit status 0, and broad E2E emits shell 35/35 PASS, `PASS: go-e2e`, and exit status 0. The state-transition guard still blocks full-feature promotion for Scopes 5-9, missing full-feature phase certification, the Scope 2 consumer-trace historical gate, and report G040 history, but no Scope 4-local blocker remains. Evidence: `report.md` -> Scope 4 Validation Certification (bubbles.validate, 2026-05-19T20:15:00Z).
 
-- [ ] Idempotency response handling: HTTP 200 with the same `export_id` and payload is treated as a no-op success; HTTP 409 `EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD` aborts the export with an `EXPORT_ID_COLLISION` audit error and is never retried (Phase B2, F4).
-- [ ] `target_context` enum extended with `packet_context`; e2e test exports a bundle attached to a packet (Phase B2, F4).
-- [ ] Evidence import limits enforced pre-flight: bundle size ≤ `evidence_max_bundle_size_bytes` (capability default 524288), claim count ≤ `evidence_max_claims_per_bundle` (default 50), per-credential rate ≤ `evidence_rate_limit_per_minute` (default 10) via token bucket; reject locally with `BUNDLE_TOO_LARGE`, `TOO_MANY_CLAIMS`, or `RATE_LIMIT_EXCEEDED`; emit `smackerel_qf_evidence_export_attempts_total{status="local_reject", reason}` (Phase B2, F14).
-- [ ] Consent revocation: when the user revokes export consent (Smackerel UI/API), the connector calls `DELETE /api/private/smackerel/v1/personal-evidence-bundles/{export_id}` with `{reason: "consent_revoked"}`, marks the local artifact `revoked`, and emits a unified audit envelope; e2e test covers the revocation path (Phase B2, F15).
-- [ ] `source_provenance_classes` field populated on every exported bundle; pre-flight validation against capability `eligible_smackerel_source_classes`; reject locally with `EVIDENCE_SOURCE_CLASS_NOT_ELIGIBLE{class}` if any class is not eligible; pre-MVP design-only — badge attachment must NOT be enabled (Phase B2, O7).
+### Gherkin Scenarios
 
-Validation (Phase B2 additions):
+Scenario: SCN-SM-041-014 Idempotent Export Replay And Collision Handling
+	Given a user has already exported a `PersonalEvidenceBundle` with `export_id` and an identical payload hash
+	When QF responds HTTP 200 with the same `export_id` and payload identity on replay
+	Then Smackerel treats the replay as a no-op success, preserves the original local export record, and does not duplicate audit or retry state.
+	And when QF responds HTTP 409 `EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD`
+	Then Smackerel aborts the export, records an `EXPORT_ID_COLLISION` audit error, marks the local export failed, and never retries that `export_id`.
 
-- [ ] Unit tests cover idempotent 200 replay and 409 collision paths.
-- [ ] E2E test exports a bundle with `target_context = packet_context`.
-- [ ] Unit and integration tests cover bundle-size, claim-count, and rate-limit pre-flight rejection.
-- [ ] E2E test covers consent revocation via DELETE and audit envelope emission.
-- [ ] Unit tests cover `source_provenance_classes` population and eligibility rejection; pre-MVP enforcement that badge attachment is NOT enabled.
+Scenario: SCN-SM-041-015 Packet Context Evidence Bundle Export
+	Given a user is viewing a read-only QF packet surfaced by Scope 3 and explicitly chooses Smackerel artifacts, claims, consent scope, and sensitivity ceiling
+	When the user exports the bundle to QF
+	Then Smackerel builds a `PersonalEvidenceBundle` with `target_context = packet_context`, links it to the QF `packet_id` and `trace_id`, includes source artifact IDs, extracted claims, confidence, sensitivity tier, consent scope, redaction summary, provenance, `source_provenance_classes`, and generated timestamp, and posts it to the QF private-alpha import path.
 
-## Parked Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+Scenario: SCN-SM-041-016 Capability-Bound Evidence Preflight Limits
+	Given the persisted QF capability response defines `evidence_max_bundle_size_bytes`, `evidence_max_claims_per_bundle`, `evidence_rate_limit_per_minute`, and `eligible_smackerel_source_classes`
+	When a user attempts to export a bundle that is too large, has too many claims, exceeds the per-credential token bucket, or includes an ineligible source class
+	Then Smackerel rejects locally before any remote POST, returns `BUNDLE_TOO_LARGE`, `TOO_MANY_CLAIMS`, `RATE_LIMIT_EXCEEDED`, or `EVIDENCE_SOURCE_CLASS_NOT_ELIGIBLE{class}`, and emits `smackerel_qf_evidence_export_attempts_total{status="local_reject", reason}`.
+
+Scenario: SCN-SM-041-017 Consent Revocation Deletes Remote Bundle And Marks Local State Revoked
+	Given a previously exported evidence bundle has active consent
+	When the user revokes export consent from the Smackerel evidence export surface
+	Then the connector calls `DELETE /api/private/smackerel/v1/personal-evidence-bundles/{export_id}` with `{reason:"consent_revoked"}`, marks the local evidence artifact/export record `revoked`, emits `smackerel_qf_evidence_revoked_total{reason="consent_revoked"}`, and writes a unified evidence-revocation audit envelope.
+
+Scenario: SCN-SM-041-018 Source Provenance Classes Are Validated Without Pre-MVP Badge Attachment
+	Given selected source artifacts come from Smackerel connector classes
+	When Smackerel builds the evidence bundle
+	Then every bundle includes `source_provenance_classes`, rejects any class not listed in QF capability `eligible_smackerel_source_classes`, and does not attach any `DataProvenanceBadge`-shaped source badge metadata in pre-MVP.
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected User-Visible Result | Test Type | Evidence |
+|----------|---------------|-------|------------------------------|-----------|----------|
+| Packet detail export | Scope 3 packet visible in search/detail; consent settings available | Open packet detail, select context, choose consent scope and sensitivity ceiling, export | Export status shows QF-bound packet context, consent scope, sensitivity tier, source count, and success state without financial-action controls | e2e-api with served Web/PWA proof | `report.md#scope-4-e2e-evidence` |
+| Local preflight rejection | Capability limits persisted; selected context exceeds size/claim/rate/source-class limit | Attempt export from builder | UI/API returns exact local rejection reason and no remote POST is observed | integration + e2e-api | `report.md#scope-4-preflight-limit-evidence` |
+| Consent revocation | A bundle is exported and consent remains active | Revoke export consent | Status changes to revoked, remote DELETE call is recorded, and audit envelope contains reason `consent_revoked` | e2e-api | `report.md#scope-4-revocation-evidence` |
+
+### Implementation Plan
+
+- Add the QF-specific evidence bundle builder flow from Scope 3 packet detail/search/context surfaces. The builder must require explicit user selection of source artifacts/claims, consent scope, and sensitivity ceiling before export.
+- Extend QF evidence DTOs so `target_context` accepts `packet_context` and carries QF `packet_id` / `trace_id` when the bundle is attached to a packet. Preserve existing `source_refs` optional semantics and keep `source_artifact_ids` required.
+- Build bundles with the canonical field set: `bundle_id`, `export_id`, `consent_scope`, `sensitivity_tier`, `source_artifact_ids`, `extracted_claims`, `confidence`, `provenance`, `redaction_summary`, `target_context`, `source_provenance_classes`, and `created_at`.
+- Implement an export-state store keyed by `export_id` and payload hash so idempotent HTTP 200 replay is a no-op success and HTTP 409 `EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD` records `EXPORT_ID_COLLISION`, marks the local export failed, and blocks retry for that `export_id`.
+- Extend the QF client with `POST /api/private/smackerel/v1/personal-evidence-bundles` and `DELETE /api/private/smackerel/v1/personal-evidence-bundles/{export_id}`. Do not add any direct QF database access or broker path.
+- Enforce persisted capability limits before remote calls: serialized bundle size, extracted-claim count, per-credential token bucket, and eligible source classes. Missing or unreadable persisted capabilities fail loud and block export; they must not fall back to hardcoded local values.
+- Populate `source_provenance_classes` from selected artifacts' connector/source metadata and reject ineligible classes locally. Do not attach `DataProvenanceBadge`-shaped source badge metadata in pre-MVP; that remains design-only and downstream-gated.
+- Add consent revocation handling from the evidence export surface. Revocation must call QF DELETE with reason `consent_revoked`, update local state to `revoked`, and preserve a user-visible revoked status.
+- Emit Scope 4-owned evidence metrics only: `smackerel_qf_evidence_export_attempts_total{status,target_context_type,sensitivity_tier,reason?}` and `smackerel_qf_evidence_revoked_total{reason}`. The full 12-metric symmetric set remains Scope 5-owned.
+- Emit unified audit-envelope records only for evidence export attempts, local rejects, collision aborts, successful exports, and revocations. Scope 5 still owns full Cross-Product Audit Envelope rollout across every bridge emission point.
+- Preserve the QF authority boundary: exported context is analysis evidence only, never financial advice, never approval state, never a QF trust badge, and never an execution/mandate/watch action.
+
+### Implementation Files
+
+- `internal/connector/qfdecisions/types.go` (evidence DTO `target_context=packet_context`, source provenance classes, idempotency/collision response DTOs)
+- `internal/connector/qfdecisions/client.go` and `internal/connector/qfdecisions/client_test.go` (POST/DELETE evidence bundle client, 200 replay, 409 collision, no retry)
+- `internal/connector/qfdecisions/evidence_bundle.go` and `internal/connector/qfdecisions/evidence_bundle_test.go` (bundle construction, preflight limits, source-class eligibility, no badge attachment)
+- `internal/connector/qfdecisions/evidence_export_store.go` and matching tests (local export state, payload hash, revoked/failed/succeeded states)
+- `internal/db/migrations/<next-id>_qf_personal_evidence_exports.sql` (local export-state persistence only)
+- `internal/api/qf_evidence.go`, `internal/web/handler.go`, `internal/web/templates.go`, and matching tests (evidence builder/status/revocation surfaces using existing auth and consent patterns)
+- `web/pwa/drive-search.js`, `web/pwa/drive-artifact-detail.js`, and a Scope 4 static-contract anchor if the PWA bundle receives export/status controls
+- `tests/integration/qf_personal_evidence_export_test.go`
+- `tests/e2e/qf_personal_evidence_bundle_test.go`
+
+### Test Plan
+
+| Test Type | Category | Scenario(s) | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|-------------|---------------|---------------------|---------|-------------|
+| Unit | unit | SCN-SM-041-014 | `internal/connector/qfdecisions/client_test.go` | `TestEvidenceExportTreatsIdempotentReplayAsNoopSuccess`, `TestEvidenceExportCollisionAbortsWithoutRetry` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-015 | `internal/connector/qfdecisions/evidence_bundle_test.go` | `TestEvidenceBundleBuildsPacketContextTargetWithRequiredFields` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-016 | `internal/connector/qfdecisions/evidence_bundle_test.go` | `TestEvidenceBundlePreflightRejectsBundleSizeClaimCountAndRateLimit` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-018 | `internal/connector/qfdecisions/evidence_bundle_test.go` | `TestEvidenceBundleSourceProvenanceClassesAndNoPreMVPBadgeAttachment` | `./smackerel.sh test unit` | No |
+| Integration | integration | SCN-SM-041-015, SCN-SM-041-016 | `tests/integration/qf_personal_evidence_export_test.go` | `TestQFPersonalEvidenceExportPersistsPacketContextAndCapabilityPreflightState` | `./smackerel.sh test integration` | Yes |
+| Integration | integration | SCN-SM-041-014, SCN-SM-041-017 | `tests/integration/qf_personal_evidence_export_test.go` | `TestQFPersonalEvidenceExportIdempotencyCollisionAndRevocationState` | `./smackerel.sh test integration` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-014 | `tests/e2e/qf_personal_evidence_bundle_test.go` | `TestQFPersonalEvidenceBundleIdempotentReplayAndCollisionThroughLiveSurface` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-015 | `tests/e2e/qf_personal_evidence_bundle_test.go` | `TestQFPersonalEvidenceBundleExportsPacketContextThroughLiveSurface` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-016, SCN-SM-041-018 | `tests/e2e/qf_personal_evidence_bundle_test.go` | `TestQFPersonalEvidenceBundlePreflightRejectsLimitsAndIneligibleSourceClassBeforeRemoteCall` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-017 | `tests/e2e/qf_personal_evidence_bundle_test.go` | `TestQFPersonalEvidenceBundleConsentRevocationDeletesRemoteAndMarksLocalRevoked` | `./smackerel.sh test e2e` | Yes |
+| Broader E2E | e2e-api | SCN-SM-041-014..018 | `tests/e2e/` | `go-e2e and shell E2E suites complete without failures` | `./smackerel.sh test e2e` | Yes |
+| Artifact lint | artifact | SCN-SM-041-014..018 | `specs/041-qf-companion-connector` | `artifact lint accepts QF Scope 4 planning artifacts` | `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | No |
+| Traceability guard | artifact | SCN-SM-041-014..018 | `specs/041-qf-companion-connector` | `traceability guard maps Scope 4 scenarios to planned tests with zero warnings` | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector` | No |
+
+### Consumer Impact Sweep
+
+| Consumer surface | Scope 4 impact | Verification record |
+|---|---|---|
+| Scope 3 QF packet detail/search context | Adds evidence-builder entry/status affordance from read-only packet context without adding approval, execution, mandate, callback, or watch controls. | `TestQFPersonalEvidenceBundleExportsPacketContextThroughLiveSurface`; Change Boundary excludes action surfaces. |
+| QF private-alpha import API | Adds POST evidence import and DELETE revocation calls; handles 200 idempotent replay and 409 collision without retry. | `TestEvidenceExportTreatsIdempotentReplayAsNoopSuccess`, `TestEvidenceExportCollisionAbortsWithoutRetry`, E2E idempotency/collision row. |
+| Local artifact/export state | Adds export-state persistence for success, failed collision, local reject, and revoked status; existing QF packet artifacts remain read-only. | Integration export-state rows and migration evidence. |
+| Consent and sensitivity surfaces | Reuses existing Smackerel consent-confirmation and sensitivity ceiling patterns; adds QF-specific export consent and revocation paths. | UI scenario matrix rows and E2E export/revocation tests. |
+| Capability consumers | Reads persisted Scope 2 capability limits for evidence size, claim count, rate, and eligible source classes; missing capability blocks export. | Unit and integration preflight rows. |
+| Metrics/audit consumers | Emits Scope 4-owned export attempt and revocation metrics plus evidence-only unified audit envelopes; does not claim Scope 5 full metric/audit rollout. | Unit/integration metric assertions and Scope 5 exclusion in Change Boundary. |
+| Downstream scopes | Scope 5 can depend on completed export surfaces for credential rotation, full audit envelope, and full symmetric metric set; Scopes 6-9 remain untouched. | Parked Scope Queue remains separate for Scopes 5-9. |
+
+### Change Boundary
+
+Allowed file families:
+
+- `internal/connector/qfdecisions/types.go`, `client.go`, `client_test.go`, `evidence_bundle.go`, `evidence_bundle_test.go`, `evidence_export_store.go`, and matching tests for Scope 4 evidence export only.
+- `internal/db/migrations/*qf_personal_evidence*` for local export-state persistence only.
+- `internal/api/qf_evidence.go`, `internal/web/handler.go`, `internal/web/templates.go`, and matching tests for evidence builder/status/revocation surfaces only.
+- `web/pwa/drive-search.js`, `web/pwa/drive-artifact-detail.js`, and a Scope 4 PWA static-contract anchor only if export/status controls are served through the existing PWA bundle.
+- `internal/metrics/*` only for `smackerel_qf_evidence_export_attempts_total` and `smackerel_qf_evidence_revoked_total` labels needed by Scope 4.
+- `tests/integration/qf_personal_evidence_export_test.go` and `tests/e2e/qf_personal_evidence_bundle_test.go`.
+- `specs/041-qf-companion-connector/*` planning/evidence artifacts.
+
+Excluded surfaces:
+
+- Scope 1 connector configuration and DTO startup gates except additive evidence DTO fields required by Scope 4.
+- Scope 2 capability handshake/cursor sync/page-size/unknown-decision/lag/fast-forward/freshness behavior.
+- Scope 3 QF card rendering semantics except adding a builder/status affordance from existing read-only packet context.
+- Scope 5 credential rotation overlap, full 12-metric symmetric set, full Cross-Product Audit Envelope rollout, action-boundary consolidation, and render/combined freshness certification.
+- Scope 6 packet engagement signal exporter.
+- Scope 7 personal-context read API host and consent-token issuer.
+- Scope 8 signed callback protocol.
+- Scope 9 watch-signal proposal endpoint.
+- Generated config hand edits, new runtime defaults/fallbacks, hardcoded QF credentials/URLs, direct QF database access, broker federation, QF approval/execution/mandate/EmergencyStop/watch behavior, or any pre-MVP provenance badge attachment.
+
+### Definition of Done
+
+Core behavior:
+
+- [x] SCN-SM-041-014: HTTP 200 replay with the same `export_id` and payload is treated as no-op success; HTTP 409 `EXPORT_ID_REUSE_WITH_DIFFERENT_PAYLOAD` aborts with `EXPORT_ID_COLLISION`, marks local export failed, emits evidence audit, and is never retried. Evidence: `report.md` -> Scope 4 Idempotency Evidence.
+- [x] SCN-SM-041-015: Evidence bundles attached to QF packets use `target_context = packet_context`, preserve packet ID and trace ID, and include the canonical `PersonalEvidenceBundle` field set with user-selected source artifacts, claims, sensitivity, consent, provenance, redaction summary, source provenance classes, and timestamp. Evidence: `report.md` -> Scope 4 Packet Context Export Evidence.
+- [x] SCN-SM-041-016: Persisted capability limits are enforced before remote POST for bundle size, claim count, per-credential token bucket, and eligible source class; missing/unreadable capability blocks export without fallback; local rejects emit `smackerel_qf_evidence_export_attempts_total{status="local_reject", reason}`. Evidence: `report.md` -> Scope 4 Preflight Limit Evidence.
+- [x] SCN-SM-041-017: Consent revocation calls QF DELETE with `{reason:"consent_revoked"}`, marks local artifact/export state `revoked`, emits `smackerel_qf_evidence_revoked_total{reason="consent_revoked"}`, and writes evidence-revocation audit envelope. Evidence: `report.md` -> Scope 4 Revocation Evidence.
+- [x] SCN-SM-041-018: `source_provenance_classes` is populated and validated for every exported bundle, ineligible classes reject locally with `EVIDENCE_SOURCE_CLASS_NOT_ELIGIBLE{class}`, and no `DataProvenanceBadge`-shaped source badge attachment is enabled pre-MVP. Evidence: `report.md` -> Scope 4 Source Provenance Evidence.
+
+Validation:
+
+- [x] SCN-SM-041-014: Unit tests cover idempotent 200 replay, 409 collision, and no-retry behavior. Evidence: `report.md` -> Scope 4 Unit Evidence.
+- [x] SCN-SM-041-015: Unit, integration, and E2E tests export a bundle with `target_context = packet_context` from a live QF packet surface. Evidence: `report.md` -> Scope 4 Packet Context Export Evidence.
+- [x] SCN-SM-041-016: Unit and integration tests cover bundle-size, claim-count, rate-limit, missing-capability, and local-reject metric paths. Evidence: `report.md` -> Scope 4 Preflight Limit Evidence.
+- [x] SCN-SM-041-017: E2E test covers consent revocation via QF DELETE, local revoked state, metric, and audit envelope emission. Evidence: `report.md` -> Scope 4 Revocation Evidence.
+- [x] SCN-SM-041-018: Unit and E2E tests cover `source_provenance_classes` population, eligibility rejection before remote call, and no pre-MVP badge attachment. Evidence: `report.md` -> Scope 4 Source Provenance Evidence.
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior in SCN-SM-041-014 through SCN-SM-041-018 pass. Evidence: `report.md` -> Scope 4 E2E Evidence.
+- [x] Broader E2E regression suite passes after Scope 4 implementation. Evidence: `report.md` -> Scope 4 Broader E2E Evidence.
+
+Build quality gate:
+
+- [x] Raw unit, integration, E2E, broader E2E, artifact-lint, and traceability-guard evidence is recorded in `report.md` before any Scope 4 DoD item is checked. Evidence: `report.md` -> Scope 4 Evidence Index.
+- [x] Consumer Impact Sweep is completed and zero stale first-party references remain for evidence builder routes, export status fields, idempotency/collision codes, revocation states, target_context values, metric labels, and audit actions. Evidence: `report.md` -> Scope 4 Consumer Impact Evidence.
+- [x] Change Boundary is respected and zero excluded file families are changed; Scopes 5-9 remain untouched except explicit dependency notes. Evidence: `report.md` -> Scope 4 Change Boundary Evidence.
+- [x] No hidden defaults, fallback limits, hardcoded QF credentials/URLs, local financial advice, QF trust reconstruction, generated config hand edits, direct QF DB access, broker federation, action controls, or pre-MVP provenance badge attachment are introduced. Evidence: `report.md` -> Scope 4 Implementation Reality Evidence.
+- [x] Build, lint, format, unit, integration, E2E, artifact-lint, traceability-guard, and state-transition guard checks complete with zero Scope 4-local warnings or blockers; any remaining state-transition guard failures are explicitly classified as downstream/full-feature blockers only. Evidence: `report.md` -> Scope 4 Build Quality Evidence.
+
+## Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
 
 **Status:** Not Started
+**Priority:** P0
 **Depends On:** Scopes 2, 3, 4
-**Activation Gate:** Sync, rendering, and export surfaces exist for boundary verification
+**Activation:** Activated for executable planning on 2026-05-19. Scopes 2, 3, and 4 are certified Done, so the activation gate is satisfied: cursor/capability sync exists, read-only render surfaces exist, and evidence export/idempotency/revocation state exists for rotation, boundary, audit, and metric verification.
 
-### Phase B2 Design Additions (2026-05-07) — Proposed DoD
+### Gherkin Scenarios
 
-Core behavior (Phase B2 additions):
+Scenario: SCN-SM-041-019 Credential Rotation Preserves Connector And Evidence State
+	Given the `qf-decisions` connector has a persisted `sync_state.sync_cursor`, persisted QF capabilities, and existing evidence export idempotency records
+	And an operator starts credential rotation with two active QF credentials whose `not_before` windows overlap for no more than 24 hours
+	When the connector chooses credentials for sync, render, and evidence-export operations during the overlap
+	Then Smackerel selects the newest credential whose `not_before` is valid, re-reads QF capabilities at rotation start, preserves the cursor and evidence/export idempotency state, emits operator diagnostics, and writes Cross-Product Audit Envelope v1 records for the rotation lifecycle.
 
-- [ ] Credential rotation overlap: connector accepts two active QF credentials for no more than 24h during rotation, chooses the newest valid credential by `not_before`, preserves `sync_state.sync_cursor` and evidence/export idempotency state, re-reads capabilities at rotation start, and emits operator diagnostics and audit envelope records (Phase B2, F16).
-- [ ] Symmetric metric set emitted with documented labels: `smackerel_qf_packet_ingest_total{event_type,decision_type,approval_state,source_surface}`, `smackerel_qf_packet_validation_failures_total{reason}`, `smackerel_qf_evidence_export_attempts_total{status,target_context_type,sensitivity_tier}`, `smackerel_qf_cursor_lag_seconds`, `smackerel_qf_action_boundary_attempts_total{attempted_action_type}`, `smackerel_qf_capability_mismatch_total{required,actual}`, `smackerel_qf_unknown_decision_type_total{value}`, `smackerel_qf_engagement_signal_attempts_total{event,surface,status}`, `smackerel_qf_evidence_revoked_total{reason}`, `smackerel_qf_callback_attempts_total{action,status}`, `smackerel_qf_deep_link_render_total{surface,status}`, and `smackerel_qf_trust_object_render_failures_total{reason}`; cross-reference QF design 063 for label parity (Phase B2, F11).
-- [ ] Cross-Product Audit Envelope v1 emitted for every packet ingest, evidence export attempt, evidence revocation, engagement signal flush, callback attempt, deep-link render, capability handshake, and action-boundary kick; envelope shape mirrored from QF design 063; integration test confirms envelope shape; sink is the connector audit log with opt-in QF mirror reserved post-MVP (Phase B2, O4).
+Scenario: SCN-SM-041-020 Safety Boundaries And Symmetric Metrics Stay Complete Across Sync Render And Export
+	Given Scope 2 sync metrics, Scope 3 render metrics, and Scope 4 evidence metrics are present across QF packet ingest, rendering, and evidence export paths
+	When a QF packet is ingested, rendered, exported, revoked, or presented with an unavailable approval, execution, mandate, EmergencyStop, watch, callback, or trust-reconstruction action
+	Then Smackerel emits the complete documented `smackerel_qf_*` metric set with QF design 063 label parity, records render and combined freshness p95 metrics, emits action-boundary attempts, and never enables the prohibited financial-action or trust-authoring behavior.
 
-Validation (Phase B2 additions):
+Scenario: SCN-SM-041-021 Cross-Product Audit Envelope v1 Covers Every Bridge Emission Point And Operator Runbook
+	Given the QF companion connector emits bridge events from sync, export, revocation, engagement, callback, deep-link rendering, capability handshake, and action-boundary paths
+	When those events are recorded in the connector audit log
+	Then every record uses Cross-Product Audit Envelope v1 with the QF 063 mirrored shape, required optional IDs, action/outcome/reason fields, timestamp, and audit envelope version, while operator documentation lists the rotation, metric, audit, and safety-boundary diagnostics without promising a pre-MVP QF mirror sink.
 
-- [ ] Unit and integration tests rotate credentials through overlapping `not_before` windows and verify cursor, evidence export idempotency state, capability re-read, diagnostics, and audit envelope preservation.
-- [ ] Unit and integration tests cover emission of all 12 `smackerel_qf_*` metrics with correct label sets.
-- [ ] Integration test confirms Cross-Product Audit Envelope v1 shape across the eight required emission points.
+### Implementation Plan
+
+- Add a credential-rotation helper under the QF connector boundary that accepts the active credential set, validates no overlap exceeds 24 hours, chooses the newest valid credential by `not_before`, and rejects stale or future-only credentials with operator-visible diagnostics.
+- Reuse the Scope 2 capability client and state store so rotation start re-reads capabilities for the selected credential before polling, rendering, or evidence export. Rotation must never poll from an in-memory-only capability response.
+- Preserve the existing `sync_state.sync_cursor`, persisted capability record, and Scope 4 evidence export/idempotency state through rotation. Rotation must not create a new connector identity, clear cursor state, duplicate evidence exports, or reset revoked/failed export records.
+- Emit rotation diagnostics and Cross-Product Audit Envelope v1 records for rotation start, credential selected, credential rejected, overlap rejected, capability re-read success/failure, and rotation completion.
+- Consolidate safety-boundary enforcement in a shared QF boundary helper used by sync/render/export/callback/watch-adjacent paths. The helper must block or diagnose approval, execution, mandate change, EmergencyStop, watch creation/evaluation, callback acceptance, and QF trust reconstruction before any user-visible or outbound side effect.
+- Implement or complete the full symmetric metric set with documented labels and QF design 063 label parity: `smackerel_qf_packet_ingest_total{event_type,decision_type,approval_state,source_surface}`, `smackerel_qf_packet_validation_failures_total{reason}`, `smackerel_qf_evidence_export_attempts_total{status,target_context_type,sensitivity_tier}`, `smackerel_qf_cursor_lag_seconds`, `smackerel_qf_action_boundary_attempts_total{attempted_action_type}`, `smackerel_qf_capability_mismatch_total{required,actual}`, `smackerel_qf_unknown_decision_type_total{value}`, `smackerel_qf_engagement_signal_attempts_total{event,surface,status}`, `smackerel_qf_evidence_revoked_total{reason}`, `smackerel_qf_callback_attempts_total{action,status}`, `smackerel_qf_deep_link_render_total{surface,status}`, and `smackerel_qf_trust_object_render_failures_total{reason}`.
+- Carry forward the Scope 2 cross-scope dependency C-S2-321B-SCOPE-5-RENDER: complete `smackerel_qf_freshness_p95_seconds{stage="render"}` and derived combined ingest+render p95 assertion so stress evidence proves render p95 <= 30s and combined p95 <= 60s without reopening Scope 3 rendering semantics.
+- Introduce an audit-envelope builder and connector audit-log sink for Cross-Product Audit Envelope v1. Required envelope shape mirrors QF design 063: `trace_id`, optional `packet_id`, optional `export_id`, optional `signal_id`, `actor_ref`, `surface`, `action`, `outcome`, `reason`, `ts`, and `audit_envelope_version` from persisted capability response.
+- Emit the audit envelope for every packet ingest, evidence export attempt, evidence revocation, engagement signal flush, callback attempt, deep-link render, capability handshake, and action-boundary kick. Scope 5 may add shared audit helpers for Scopes 6-9, but it must not implement Scope 6 engagement transport, Scope 8 callback signing/acceptance, or Scope 9 watch proposal transport.
+- Update operator documentation for credential rotation overlap, the 24-hour limit, capability re-read behavior, cursor/export state preservation, metric names/labels, audit envelope shape, connector audit-log sink, and pre-MVP safety boundaries. The QF mirror sink remains explicitly reserved post-MVP and opt-in.
+
+### Implementation Files
+
+- `internal/connector/qfdecisions/credentials.go` and `credentials_test.go` (credential overlap validation, newest-valid selection, diagnostics)
+- `internal/connector/qfdecisions/audit.go` and `audit_test.go` (Cross-Product Audit Envelope v1 builder and connector audit-log sink)
+- `internal/connector/qfdecisions/boundary.go` and `boundary_test.go` (shared no-action financial boundary helper)
+- `internal/connector/qfdecisions/metrics.go` and `metrics_test.go` (complete symmetric metric registration/label parity and freshness render/combined helpers)
+- `internal/connector/qfdecisions/connector.go`, `client.go`, `render.go`, and `evidence_export_store.go` (call-site wiring only for rotation, metrics, audit envelope, safety boundary, and freshness completion)
+- `tests/integration/qf_credential_rotation_test.go`
+- `tests/integration/qf_scope5_observability_test.go`
+- `tests/integration/qf_audit_envelope_test.go`
+- `tests/e2e/qf_scope5_safety_observability_test.go`
+- `tests/stress/qf_decision_event_replay_test.go` (Scope 5 render and combined freshness assertions only)
+- `docs/Operations.md`, `docs/Testing.md`, and `docs/Development.md` Scope 5 sections only
+- `specs/041-qf-companion-connector/*` planning/evidence artifacts
+
+### Test Plan
+
+| Test Type | Category | Scenario(s) | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|-------------|---------------|---------------------|---------|-------------|
+| Unit | unit | SCN-SM-041-019 | `internal/connector/qfdecisions/credentials_test.go` | `TestCredentialRotationSelectsNewestValidNotBeforeWithinTwentyFourHourOverlap`, `TestCredentialRotationRejectsOverlapBeyondTwentyFourHours` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-019 | `internal/connector/qfdecisions/credentials_test.go` | `TestCredentialRotationPreservesCursorEvidenceExportStateAndReReadsCapabilities` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-020 | `internal/connector/qfdecisions/boundary_test.go` | `TestQFActionBoundaryRejectsApprovalExecutionMandateEmergencyStopWatchCallbackAndTrustAuthoring` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-020 | `internal/connector/qfdecisions/metrics_test.go` | `TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`, `TestQFRenderAndCombinedFreshnessMetricsAreRecorded` | `./smackerel.sh test unit` | No |
+| Unit | unit | SCN-SM-041-021 | `internal/connector/qfdecisions/audit_test.go` | `TestCrossProductAuditEnvelopeV1ShapeMatchesQFDesign063`, `TestCrossProductAuditEnvelopeOptionalIDsByEmissionPoint` | `./smackerel.sh test unit` | No |
+| Integration | integration | SCN-SM-041-019 | `tests/integration/qf_credential_rotation_test.go` | `TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit` | `./smackerel.sh test integration` | Yes |
+| Integration | integration | SCN-SM-041-020 | `tests/integration/qf_scope5_observability_test.go` | `TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths` | `./smackerel.sh test integration` | Yes |
+| Integration | integration | SCN-SM-041-021 | `tests/integration/qf_audit_envelope_test.go` | `TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints` | `./smackerel.sh test integration` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-019 | `tests/e2e/qf_scope5_safety_observability_test.go` | `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-020 | `tests/e2e/qf_scope5_safety_observability_test.go` | `TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E | e2e-api | SCN-SM-041-021 | `tests/e2e/qf_scope5_safety_observability_test.go` | `TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface` | `./smackerel.sh test e2e` | Yes |
+| Stress | stress | SCN-SM-041-020 | `tests/stress/qf_decision_event_replay_test.go` | `TestQFDecisionsFreshnessSLAP95RenderAndCombined` (asserts p95 render <= 30s and combined <= 60s while preserving Scope 2 ingest proof) | `./smackerel.sh test stress` | Yes |
+| Broader E2E | e2e-api | SCN-SM-041-019..021 | `tests/e2e/` | `go-e2e and shell E2E suites complete without failures` | `./smackerel.sh test e2e` | Yes |
+| Artifact lint | artifact | SCN-SM-041-019..021 | `specs/041-qf-companion-connector` | `artifact lint accepts activated QF Scope 5 planning artifacts` | `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | No |
+| Traceability guard | artifact | SCN-SM-041-019..021 | `specs/041-qf-companion-connector` | `traceability guard maps Scope 5 scenarios to planned tests with zero warnings` | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector` | No |
+
+### Consumer Impact Sweep
+
+| Consumer surface | Scope 5 impact | Verification record |
+|---|---|---|
+| Scope 2 sync and capability state | Rotation reuses the existing state store and capability client; cursor and persisted capability must survive credential overlap and capability re-read. | `TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit`; unit credential-rotation state test. |
+| Scope 3 render surfaces | Adds render freshness completion, deep-link/audit metric coverage, and action-boundary diagnostics without changing Scope 3 content rendering, trust-object rendering, signed-link selection, or preferred-surface routing semantics. | `TestQFRenderAndCombinedFreshnessMetricsAreRecorded`; stress render/combined p95 row; Change Boundary excludes render semantic changes. |
+| Scope 4 evidence export state | Rotation preserves export idempotency, failed/collision, success, and revoked state; evidence metrics are completed but export behavior is not changed. | `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface`; Scope 4 E2E regression remains in broader E2E. |
+| Operator status, logs, and runbooks | Adds rotation diagnostics, action-boundary diagnostics, full metric-label reference, audit envelope shape, and connector audit-log sink documentation. | Docs Build Quality Gate; artifact lint and traceability guard rows. |
+| Metrics dashboards and QF label parity | Completes the symmetric 12-metric set plus Scope 5 freshness render/combined completion; label names and enum values must match QF design 063. | `TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`, integration metrics row. |
+| Connector audit consumers | Adds Cross-Product Audit Envelope v1 builder and connector audit-log sink for the required eight emission points; QF mirror sink stays reserved post-MVP. | `TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints`. |
+| Scopes 6-9 future work | Scope 5 may provide shared metrics/audit helpers for engagement, callback, and watch events, but must not implement Scope 6 engagement signal transport, Scope 8 callback signing/acceptance, or Scope 9 watch proposal transport. | Change Boundary and explicit dependency notes in active Scope 5; Scopes 6-9 remain parked. |
+
+### Change Boundary
+
+Allowed file families:
+
+- `internal/connector/qfdecisions/credentials.go` and `credentials_test.go` for credential overlap validation, newest-valid selection, capability re-read trigger, and rotation diagnostics only.
+- `internal/connector/qfdecisions/audit.go` and `audit_test.go` for Cross-Product Audit Envelope v1 builder and connector audit-log sink only.
+- `internal/connector/qfdecisions/boundary.go` and `boundary_test.go` for shared pre-MVP action-boundary rejection and diagnostics only.
+- `internal/connector/qfdecisions/metrics.go` and `metrics_test.go` for the full symmetric `smackerel_qf_*` metric registration/label parity and Scope 5 render/combined freshness helpers only.
+- `internal/connector/qfdecisions/connector.go`, `client.go`, `render.go`, `evidence_bundle.go`, and `evidence_export_store.go` call-site wiring only where needed for rotation, metrics, audit envelopes, boundary diagnostics, and freshness completion.
+- `tests/integration/qf_credential_rotation_test.go`, `tests/integration/qf_scope5_observability_test.go`, and `tests/integration/qf_audit_envelope_test.go`.
+- `tests/e2e/qf_scope5_safety_observability_test.go`.
+- `tests/stress/qf_decision_event_replay_test.go` for render p95 and combined p95 assertions only.
+- `docs/Operations.md`, `docs/Testing.md`, and `docs/Development.md` Scope 5 sections only.
+- `specs/041-qf-companion-connector/*` planning/evidence/state artifacts.
+
+Excluded surfaces:
+
+- Scope 1 connector configuration startup gates, new generated config keys, or credential secret storage changes.
+- Scope 2 cursor sync semantics, page-size clamping, unknown decision-type ingest behavior, fast-forward recovery, or ingest freshness proof except for reading the existing state/metric values.
+- Scope 3 QF card rendering semantics, trust-object public-field filtering, signed-link branch behavior, preferred-surface routing, PWA asset proof, or any visual redesign.
+- Scope 4 evidence bundle construction, QF POST/DELETE semantics, revocation behavior, local preflight limit logic, source-provenance eligibility, or export UI controls.
+- Scope 6 packet engagement signal exporter transport, consent-gated event capture, buffer/flush behavior, or retry policy.
+- Scope 7 personal-context read API host and consent-token issuer.
+- Scope 8 callback HMAC signing, callback acceptance/rejection parsing, or callback transport.
+- Scope 9 watch-signal proposal request/signing/rejection transport.
+- Direct QF database access, broker federation, QF approval/execution/mandate/EmergencyStop/watch behavior, local financial advice, QF trust reconstruction, generated config hand edits, hidden defaults/fallbacks, or hardcoded QF credentials/URLs.
+
+### Definition of Done
+
+Core behavior:
+
+- [ ] SCN-SM-041-019: Credential rotation accepts exactly two active credentials for no more than 24 hours of overlap, selects the newest valid credential by `not_before`, rejects overlap beyond 24 hours, and emits operator diagnostics plus rotation audit envelopes. Evidence: `report.md` -> Scope 5 Credential Rotation Evidence.
+- [ ] SCN-SM-041-019: Rotation preserves `sync_state.sync_cursor`, persisted QF capability state, and Scope 4 evidence/export idempotency records across credential changes, and re-reads capabilities at rotation start before any sync/render/export call uses the new credential. Evidence: `report.md` -> Scope 5 Credential Rotation State Evidence.
+- [ ] SCN-SM-041-020: Safety-boundary helper blocks or diagnoses approval, execution, mandate change, EmergencyStop, watch creation/evaluation, callback acceptance, and QF trust reconstruction; no prohibited pre-MVP action is enabled in any sync, render, export, callback, or watch-adjacent path. Evidence: `report.md` -> Scope 5 Safety Boundary Evidence.
+- [ ] SCN-SM-041-020: The complete symmetric metric set is emitted with documented QF design 063 label parity for all 12 metrics listed in the Scope 5 implementation plan. Evidence: `report.md` -> Scope 5 Metric Parity Evidence.
+- [ ] SCN-SM-041-020: Scope 2 cross-scope dependency C-S2-321B-SCOPE-5-RENDER is closed by render p95 <= 30s and combined ingest+render p95 <= 60s stress evidence using `smackerel_qf_freshness_p95_seconds{stage="render"}` and derived combined measurement without changing Scope 3 rendering semantics. Evidence: `report.md` -> Scope 5 Freshness Render Combined Evidence.
+- [ ] SCN-SM-041-021: Cross-Product Audit Envelope v1 is emitted to the connector audit log for packet ingest, evidence export attempt, evidence revocation, engagement signal flush, callback attempt, deep-link render, capability handshake, and action-boundary kick, using the QF 063 mirrored shape and persisted `audit_envelope_version`; QF mirror sink remains opt-in post-MVP. Evidence: `report.md` -> Scope 5 Audit Envelope Evidence.
+- [ ] SCN-SM-041-021: Operator documentation explains rotation overlap, newest-valid credential selection, capability re-read, state preservation, metric labels, audit envelope shape, connector audit-log sink, QF mirror reservation, and pre-MVP safety boundaries. Evidence: `report.md` -> Scope 5 Documentation Evidence.
+
+Validation:
+
+- [ ] SCN-SM-041-019: Unit tests cover valid overlap, overlap >24h rejection, newest-valid `not_before` selection, future-only credential rejection, cursor preservation, evidence export idempotency preservation, capability re-read, diagnostics, and rotation audit envelopes. Evidence: `report.md` -> Scope 5 Unit Evidence.
+- [ ] SCN-SM-041-019: Integration and E2E tests rotate credentials through overlapping `not_before` windows and verify cursor, evidence export idempotency state, capability re-read, diagnostics, and audit envelope preservation against the live disposable stack. Evidence: `report.md` -> Scope 5 Integration Evidence, Scope 5 E2E Evidence.
+- [ ] SCN-SM-041-020: Unit and integration tests cover all 12 `smackerel_qf_*` metrics with exact label names and allowed label values, including Scope 2/3/4 previously introduced metrics and Scope 5 action-boundary completion. Evidence: `report.md` -> Scope 5 Metric Evidence.
+- [ ] SCN-SM-041-020: Stress test proves render p95 <= 30s and combined ingest+render p95 <= 60s while preserving the existing Scope 2 ingest proof. Evidence: `report.md` -> Scope 5 Stress Evidence.
+- [ ] SCN-SM-041-021: Unit and integration tests confirm Cross-Product Audit Envelope v1 shape across all eight required emission points, including optional ID presence/absence by event type and `audit_envelope_version` sourcing from persisted capability state. Evidence: `report.md` -> Scope 5 Audit Envelope Evidence.
+- [ ] SCN-SM-041-019 through SCN-SM-041-021: Scenario-specific E2E regression tests for every new/changed/fixed Scope 5 behavior pass. Evidence: `report.md` -> Scope 5 E2E Evidence.
+- [ ] Broader E2E regression suite passes after Scope 5 implementation. Evidence: `report.md` -> Scope 5 Broader E2E Evidence.
+- [ ] Artifact lint and traceability guard pass for the activated Scope 5 planning artifacts and scenario-manifest mappings. Evidence: `report.md` -> Scope 5 Artifact Lint Evidence, Scope 5 Traceability Guard Evidence.
+
+Build quality gate:
+
+- [ ] Raw unit, integration, E2E, stress, broader E2E, artifact-lint, and traceability-guard evidence is recorded in `report.md` before any Scope 5 DoD item is checked. Evidence: `report.md` -> Scope 5 Evidence Index.
+- [ ] Consumer Impact Sweep is completed and zero stale first-party references remain for credential rotation fields, metric names/labels, audit actions, safety-boundary action types, freshness stage names, and operator documentation anchors. Evidence: `report.md` -> Scope 5 Consumer Impact Evidence.
+- [ ] Change Boundary is respected and zero excluded file families are changed; Scopes 6-9 remain parked except for shared helper dependency notes. Evidence: `report.md` -> Scope 5 Change Boundary Evidence.
+- [ ] No hidden defaults, fallback credential windows, hardcoded QF credentials/URLs, generated config hand edits, direct QF DB access, broker federation, local financial advice, QF trust reconstruction, approval/execution/mandate/EmergencyStop/watch/callback behavior, or QF mirror audit sink is introduced. Evidence: `report.md` -> Scope 5 Implementation Reality Evidence.
+- [ ] Build, lint, format, unit, integration, E2E, stress, artifact-lint, traceability-guard, and state-transition guard checks complete with zero Scope 5-local warnings or blockers; downstream full-feature blockers for Scopes 6-9 remain classified separately. Evidence: `report.md` -> Scope 5 Build Quality Evidence.
 
 ## Parked Scope 6: Packet Engagement Signal Exporter
 

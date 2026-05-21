@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/smackerel/smackerel/internal/connector/qfdecisions"
 )
 
 // Text markers used by the Telegram bot. No emoji allowed.
@@ -51,6 +53,60 @@ func formatDomainCard(domainData json.RawMessage) string {
 	default:
 		return ""
 	}
+}
+
+func formatQFPacketCard(card qfdecisions.PacketCard) string {
+	var lines []string
+	label := strings.TrimSpace(card.DisplayLabel)
+	if label == "" {
+		label = "QF packet"
+	}
+	title := strings.TrimSpace(card.Title)
+	if title == "" {
+		title = strings.TrimSpace(card.Thesis)
+	}
+	lines = append(lines, MarkerHeading+label)
+	if title != "" {
+		lines = append(lines, MarkerInfo+title)
+	}
+	if card.PacketID != "" {
+		lines = append(lines, MarkerListItem+"Packet: "+card.PacketID)
+	}
+	if card.TraceID != "" {
+		lines = append(lines, MarkerListItem+"Trace: "+card.TraceID)
+	}
+	if card.ApprovalState != "" {
+		lines = append(lines, MarkerListItem+"Approval: "+card.ApprovalState)
+	}
+	if card.UnknownDecisionType || card.CardKind == qfdecisions.CardKindGenericPacket {
+		lines = append(lines, MarkerUncertain+"Generic read-only QF packet")
+	}
+	for _, trust := range card.TrustObjects {
+		summary := strings.TrimSpace(trust.Summary)
+		if summary == "" {
+			continue
+		}
+		lines = append(lines, MarkerContinued+trust.Label+"/"+trust.Severity+": "+summary)
+	}
+	if card.DeepLink.URL != "" {
+		lines = append(lines, MarkerInfo+"QF link ("+card.DeepLink.Status+"): "+card.DeepLink.URL)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatQFPacketCardFromAny(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return ""
+	}
+	var card qfdecisions.PacketCard
+	if err := json.Unmarshal(data, &card); err != nil {
+		return ""
+	}
+	return formatQFPacketCard(card)
 }
 
 // recipeData represents the JSON structure for recipe domain data.
