@@ -3,7 +3,7 @@
   "featureDir": "specs/041-qf-companion-connector",
   "featureName": "QF Companion Connector",
   "status": "in_progress",
-  "currentPhase": "plan",
+  "currentPhase": "validate",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -106,6 +106,12 @@
         "agent": "bubbles.plan",
         "timestamp": "2026-05-18T16:30:00Z",
         "summary": "DRIFT REPAIR planning round to reconcile state.json with the reality already documented in scopes.md. NO scope content was edited; NO DoD checkbox was flipped; NO source code was modified. Reconciled certification.scopeProgress to match scopes.md as the source of truth: (1) Scope 2 name corrected from 'Cursor Sync Normalization And Storage' to canonical scopes.md heading 'Capability Handshake, Cursor Sync Normalization, And Storage'; (2) Scope 2 status promoted from 'Not Started' to 'In Progress' to reflect 13 of ~27 DoD items already [x] from Rounds 2L/2N/5 (SCN-006 unit + e2e PASS DoD 320; SCN-007 lag breach PASS; SCN-006/008 content-type mappings PASS; SCN-003/004/005/008 unit PASS; SCN-004 e2e PASS DoD 319 Round 5; artifact lint PASS; raw evidence recorded); (3) Scope 2 notes rewritten to enumerate concrete remaining [ ] items (SCN-003 integration tests missing per Round 2P, SCN-008 fast-forward integration, freshness SLA stress, broader e2e, change-boundary guard, no-fallback check, build-quality, metrics documentation) and confirm RESTART decision (parking branch is historical reference only; main is ahead); (4) Scopes 3-9 notes refreshed to acknowledge QF 063 dependency cleared 2026-05-12 (done_with_concerns) and to enumerate the current transitive dependency chain through Scope 2 In Progress — statuses remain 'Not Started' because every Scope 3-9 is still legitimately blocked behind Scope 2 (or behind another non-Done scope); (5) lastUpdatedAt bumped to 2026-05-18T16:30:00Z. NO certification.completedScopes change (Scope 1 only). NO certification.certifiedCompletedPhases change ([] preserved). NO certification.status change (in_progress preserved). NO concerns array modification. NO scopes.md, report.md, uservalidation.md, design.md, or spec.md modification. NO source code or test file change. NO foreign-spec territory touched. NO commit, push, or shell write. All edits applied via IDE replace_string_in_file / multi_replace_string_in_file tools. HONEST DISCREPANCY: orchestrator's baseline assumed 13 completedPhaseClaims entries (this entry would have been entry 14); actual baseline at session start was 15 entries because the harden(8a67238e), runtime-proof(9af2a9d4), dispatch-re-verify(fe739382), and SCN-004 E2E(f7701da3) entries had landed since the snapshot — this drift-repair entry is therefore entry 16, not 14. NEXT REQUIRED OWNER: bubbles.implement to author the missing SCN-003 live-stack integration tests, SCN-008 fast-forward integration test, and freshness SLA stress test once spec-045 BUG-045-002 envsubst drift is resolved; cross-repo QF 063 producer wiring before Scope 2 can certify Done."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-21T08:15:38Z",
+        "summary": "Validate-only drift-repair pass at HEAD 39ca4fcb after operator manually reset state.json.executionHistory to R5 baseline on 2026-05-21T07:30Z (approx). Reconciled state.json against scopes.md (Scopes 1-4 marked Done) and report.md (Scope 2/3/4 Validation Certification sections dated 2026-05-19T03:16:47Z, 2026-05-19T11:50:00Z, 2026-05-19T20:15:00Z). DECISIONS: (A) STRATEGY-COMPRESS chosen over STRATEGY-RESTORE — added one executionHistory entry citing all 8 missing commit SHAs (c60b9fd7, 0adb6342, fb5a3f38, fa53db9e, 251a8dcf, ae1fed59, ab8fc871, 39ca4fcb) rather than fabricating per-round entries the agent never authored; per-round git snapshots remain recoverable via git show <SHA>:specs/041-qf-companion-connector/state.json. (B) Scope 3 and Scope 4 PROMOTE — both backed by passing artifact-lint, traceability-guard, and implementation-reality gates documented in report.md, G070 outcome contract verification all-PASS at certification time, and verified evidence anchors in report.md (Scope 3: 22+ anchors at confirmed line numbers including Unknown Decision Generic Card, Trust Object Rendering/Failure, Signed Deep Link, Preferred Surface, DTO Metadata, Missing Trust Live E2E, Branch Matrix Live E2E, E2E Evidence, Broader E2E Evidence, Artifact Lint, Consumer Impact, Change Boundary, Implementation Reality, Build Quality, and Validation Certification 2026-05-19T11:50Z; Scope 4: 17+ anchors including Validation Certification 2026-05-19T20:15Z, Partial Implementation, Follow-up Implementation, Direct/API/Capability/Surface E2E, Governance, State Transition Guard, DevOps Harness Stabilization, Scenario And DoD Evidence Matrix). EDITS APPLIED THIS PASS: lastUpdatedAt 2026-05-18T16:30:00Z → 2026-05-21T08:15:38Z; currentPhase plan → validate; executionHistorySchemaNote added; certification.completedScopes ['Scope 1'] → ['Scope 1', 'Scope 2', 'Scope 3', 'Scope 4']; scopeProgress[1] Scope 2 In Progress → Done (certifiedAt 2026-05-19T03:16:47Z); scopeProgress[2] Scope 3 Not Started → Done (certifiedAt 2026-05-19T11:50:00Z); scopeProgress[3] Scope 4 Not Started → Done (certifiedAt 2026-05-19T20:15:00Z); scopeProgress[4-8] Scope 5-9 notes refreshed to acknowledge Scopes 2-4 now Done. New concern C-CLOSEOUT-S5-TERRITORY-BOUNDARY-OVERREACH (severity medium, owner bubbles.audit + bubbles.gaps) recording that closeout commit 39ca4fcb landed Scope 5-territory modules (audit.go + audit_test.go, boundary.go + boundary_test.go, credentials.go + credentials_test.go) alongside Scope 2/3/4 closeout work — Scope 5 remains correctly Not Started in scopes.md and state.json, but the Scope 4 Change Boundary explicitly excluded those modules; this is a Change Boundary concern for downstream audit, NOT a DoD-fraud finding. status remains in_progress; certification.status remains in_progress; certification.certifiedCompletedPhases remains [] (reserved for Scope 5+ closure). DID NOT touch source/tests, spec.md, design.md, scopes.md, uservalidation.md, scenario-manifest.json, or report.md. DID NOT modify any [x] DoD checkbox. DID NOT commit, push, or run the test stack. NEXT REQUIRED OWNERS: bubbles.test (disposable-stack runtime re-verification of all 4 certified-Done scopes at HEAD 39ca4fcb), bubbles.regression (adversarial scenario coverage), bubbles.gaps (Scope 5+ unstarted DoD audit), bubbles.audit (Change Boundary / Scope 5 territory overreach review of closeout diff)."
       }
     ],
     "pendingTransitionRequests": []
@@ -113,7 +119,10 @@
   "certification": {
     "status": "in_progress",
     "completedScopes": [
-      "Scope 1: Connector Configuration And QF Client Contract"
+      "Scope 1: Connector Configuration And QF Client Contract",
+      "Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage",
+      "Scope 3: Web Telegram Digest And Search Surfacing",
+      "Scope 4: Personal Evidence Bundle Export"
     ],
     "certifiedCompletedPhases": [],
     "scopeProgress": [
@@ -130,32 +139,32 @@
       {
         "scope": 2,
         "name": "Capability Handshake, Cursor Sync Normalization, And Storage",
-        "status": "In Progress",
+        "status": "Done",
         "dependsOn": [1],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null,
-        "notes": "Unparked 2026-05-13 (QF 063 done_with_concerns on 2026-05-12). In-progress with multiple DoD items [x] from Rounds 2L/2N/5 (SCN-003/004/005/006/007 unit PASS; SCN-006/008 normalizer content-type mappings PASS; SCN-006 e2e PASS at DoD 320; SCN-004 e2e PASS at DoD 319 Round 5; artifact lint PASS; raw evidence recorded). Remaining [ ] items: SCN-003 integration tests (files do not exist per Round 2P), SCN-008 fast-forward integration, freshness SLA stress, broader e2e, change-boundary guard, no-fallback check, build-quality, metrics documentation. RESTART decision: parking branch is historical reference only; main is ahead."
+        "certifiedAt": "2026-05-19T03:16:47Z",
+        "notes": "Certified Done by bubbles.validate on 2026-05-19T03:16:47Z after Rounds 2L/2N/5-13 landed Scope 2 implementation (capability handshake gate, cursor sync normalization, page-size clamping, freshness SLA p95 emission, lag breach signaling, fast-forward events_skipped) across commits c60b9fd7..ab8fc871. Evidence anchors: report.md `Scope 2 Validation After Broad E2E Fix (bubbles.validate, 2026-05-19T02:40:00Z)`, `Scope 2 Certification Validation After Artifact Repair (bubbles.validate, 2026-05-19T03:16:47Z)`, `Scope 2 Certification Disposition`. The 39ca4fcb closeout commit on 2026-05-21T07:47Z landed the Scope 2 work as a single coherent operator-authored commit covering 60 files; the certification reports in report.md were authored in the working tree on 2026-05-19 and were carried into git history at closeout time. Re-confirmed by bubbles.validate drift-repair pass on 2026-05-21T08:15:38Z (STRATEGY-COMPRESS state.json reconciliation; see executionHistorySchemaNote)."
       },
       {
         "scope": 3,
         "name": "Web Telegram Digest And Search Surfacing",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": [2],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null,
-        "notes": "Awaiting Scope 2 source-qualified QF artifacts (Scope 2 In Progress). QF 063 dependency cleared 2026-05-12 (done_with_concerns)."
+        "certifiedAt": "2026-05-19T11:50:00Z",
+        "notes": "Certified Done by bubbles.validate on 2026-05-19T11:50:00Z under the reconciled PWA coverage model. Evidence anchors: report.md `Scope 3 Validation Certification (bubbles.validate, 2026-05-19T11:50:00Z)`, `Scope 3 Implementation Evidence - 2026-05-19`, `Scope 3 PWA/UI Coverage Strategy Reconciliation - 2026-05-19T11:34:18Z`, `Scope 3 PWA Runner DevOps Decision - 2026-05-19T11:18:38Z`. Gate results at certification time: artifact-lint exit 0 PASS, traceability-guard exit 0 PASS (5 scenarios SCN-009..013, 16 Test Plan rows), PWA static-contract guard exit 0 PASS, focused Go live-stack E2E TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail (with assertPWAQFBundleServed) exit 0 PASS. G070 outcome contract verification all-PASS. State-transition guard blocked full-feature promotion only on Scope 4-9 downstream gates, not on Scope 3-local content. Re-confirmed by bubbles.validate drift-repair pass on 2026-05-21T08:15:38Z."
       },
       {
         "scope": 4,
         "name": "Personal Evidence Bundle Export",
-        "status": "Not Started",
+        "status": "Done",
         "dependsOn": [3],
         "scopeDir": null,
         "evidenceFile": "report.md",
-        "certifiedAt": null,
-        "notes": "Awaiting Scope 3 read-only packet surfacing (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
+        "certifiedAt": "2026-05-19T20:15:00Z",
+        "notes": "Certified Done by bubbles.validate on 2026-05-19T20:15:00Z. Evidence anchors: report.md `Scope 4 Validation Certification (bubbles.validate, 2026-05-19T20:15:00Z)`, `Scope 4 Partial Implementation Evidence - 2026-05-19T14:15:00Z`, `Scope 4 Follow-up Implementation Evidence - 2026-05-19T17:25:00Z`, `Scope 4 DevOps Harness Stabilization - 2026-05-19`, `Scope 4 Scenario And DoD Evidence Matrix`. Gate results at certification time: artifact-lint exit 0 PASS, traceability-guard exit 0 PASS (5 scenarios SCN-014..018, 13 Test Plan rows), implementation-reality-scan exit 0 PASS (34 files, 0 violations, 0 warnings), focused/follow-up/direct/API/capability/surface E2E PASS, full integration PASS go-integration exit 0, broad E2E shell 35/35 PASS + PASS go-e2e exit 0. G070 outcome contract verification all-PASS. State-transition guard blocked full-feature promotion only on Scopes 5-9 downstream gates, not on Scope 4-local content. Re-confirmed by bubbles.validate drift-repair pass on 2026-05-21T08:15:38Z."
       },
       {
         "scope": 5,
@@ -165,7 +174,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Awaiting Scopes 2-4 completion (Scope 2 In Progress; Scopes 3-4 Not Started). QF 063 dependency cleared 2026-05-12."
+        "notes": "Dependency state refreshed by 2026-05-21T08:15:38Z drift-repair pass: Scopes 2-4 now Done; Scope 5 transitive dependency cleared but Scope 5 not yet activated by bubbles.plan. The 39ca4fcb closeout commit landed Scope 5-territory infrastructure modules (internal/connector/qfdecisions/audit.go, boundary.go, credentials.go and their _test.go) alongside the Scope 2/3/4 closeout work; no Scope 5 DoD checkbox was flipped and Scope 5 remains correctly Not Started. See concern C-CLOSEOUT-S5-TERRITORY-BOUNDARY-OVERREACH for downstream bubbles.audit + bubbles.gaps routing."
       },
       {
         "scope": 6,
@@ -175,7 +184,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Awaiting Scope 3 trust-rendering surface (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
+        "notes": "Dependency state refreshed by 2026-05-21T08:15:38Z drift-repair pass: Scope 3 trust-rendering surface now Done at 2026-05-19T11:50:00Z; Scope 6 dependency cleared but Scope 6 not yet activated by bubbles.plan."
       },
       {
         "scope": 7,
@@ -185,7 +194,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Awaiting Scope 3 trust-rendering surface + consent-token issuance (transitively blocked by Scope 2 In Progress). QF 063 dependency cleared 2026-05-12."
+        "notes": "Dependency state refreshed by 2026-05-21T08:15:38Z drift-repair pass: Scope 3 trust-rendering surface now Done at 2026-05-19T11:50:00Z and Scope 4 consent-scoped export now Done at 2026-05-19T20:15:00Z; Scope 7 dependencies cleared but Scope 7 not yet activated by bubbles.plan."
       },
       {
         "scope": 8,
@@ -195,7 +204,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Awaiting Scope 3 action-eligible packet rendering (transitively blocked by Scope 2 In Progress); QF rejects callbacks during pre-MVP. QF 063 dependency cleared 2026-05-12."
+        "notes": "Dependency state refreshed by 2026-05-21T08:15:38Z drift-repair pass: Scope 3 action-eligible packet rendering now Done at 2026-05-19T11:50:00Z; Scope 8 dependency cleared but Scope 8 not yet activated by bubbles.plan. QF still rejects callbacks during pre-MVP."
       },
       {
         "scope": 9,
@@ -205,7 +214,7 @@
         "scopeDir": null,
         "evidenceFile": "report.md",
         "certifiedAt": null,
-        "notes": "Awaiting Scope 1 capability-handshake (Scope 1 Done) and Scope 2 capability-policy persistence (Scope 2 In Progress); QF rejects proposal writes during pre-MVP. QF 063 dependency cleared 2026-05-12."
+        "notes": "Dependency state refreshed by 2026-05-21T08:15:38Z drift-repair pass: Scope 1 capability handshake Done and Scope 2 capability-policy persistence Done at 2026-05-19T03:16:47Z; Scope 9 dependencies cleared but Scope 9 not yet activated by bubbles.plan. QF still rejects proposal writes during pre-MVP."
       }
     ],
     "lockdownState": {
@@ -452,6 +461,23 @@
       "scopesCompleted": [],
       "summary": "Round 5 dispatch chain advancing Scope 2 SCN-SM-041-004 (incompatible capability blocks polling). Phase 1: bubbles.implement authored TestQFDecisionsIncompatibleCapabilityBlocksPolling at tests/e2e/qf_decisions_connector_api_test.go:864 (+135 lines appended; only one file modified per `git diff --name-only`). Function uses httptest.NewServer with switch on r.URL.Path: case qfdecisions.CapabilitiesPath returns intentionally-incompatible QFBridgeCapability (SupportedPacketVersions=[v2] missing required v1, other fields canonical); case strings.HasPrefix(qfdecisions.DecisionEventsPath)/DecisionPacketsPath fires `t.Errorf(\"polling MUST NOT occur after incompatible capability; saw request to %s\", r.URL.Path)` plus http.StatusInternalServerError as adversarial trip-wire. Test asserts Connect() returns errors.As(&CapabilityMismatchError{}) with Field=supported_packet_versions, Required=v1; metrics.QFCapabilityMismatch.WithLabelValues(\"v1\",\"v2\") increments to 1; SELECT COUNT(*) FROM artifacts WHERE source_id=$1 returns 0 against live PostgreSQL. Verified clean: go vet exit 0, go test -c exit 0, no import changes needed (all imports already present). Phase 2: bubbles.test re-invoked the canonical CLI: `./smackerel.sh --env test up` (5/5 services Healthy at 2026-05-18T15:03:29Z), then `./smackerel.sh --env test test e2e --go-run '^TestQFDecisionsIncompatibleCapabilityBlocksPolling$'` (wrapper exit 0, `--- PASS: TestQFDecisionsIncompatibleCapabilityBlocksPolling (0.08s)`, package wall 0.139s for tests/e2e, sibling packages `[no tests to run]` confirming focused selector). Live-stack evidence: NATS connect line `INFO connected to NATS url=nats://...@127.0.0.1:47002`, postgres pool cleanup line `cleanup query artifacts for qf-decisions-e2e-incompat-1779116703569840466: closed pool`. Adversarial verification all 6 checks PASS (test name appears, --- PASS line, duration 0.08s > 0, selector applied correctly, wrapper exit 0, live-system evidence). Wrapper auto-installed gettext-base 0.21-12 on first envsubst use (third consecutive empirical confirmation that scripts/runtime/_ensure_envsubst.sh works). Stack auto-teardown clean (9/9 containers + 3 volumes + network removed via wrapper exit cleanup; EXIT_CODE=0). DoD flipped THIS ROUND: scopes.md line 319 (Validation E2E API row for SCN-SM-041-004) [ ] -> [x] with evidence anchor to report.md '## Scope 2 SCN-004 E2E Evidence (DoD 319 -- bubbles.implement + bubbles.test, 2026-05-18T15:05:03Z, Round 5)'. DoD DELIBERATELY NOT FLIPPED: scopes.md line 300 (Core behaviour row for SCN-SM-041-004) remains [ ]. Honest gap rationale: the DoD wording includes 'mark connector health `mismatched`' but the test does NOT call conn.Health() directly; it asserts the CapabilityMismatchError return which only happens after c.setHealth(connector.HealthDegraded) executes per internal/connector/qfdecisions/connector.go:191-198 source code -- transitive coverage, not explicit assertion. To avoid silently substituting transitive coverage for the explicit assertion text, line 300 stays [ ] with the gap documented in report.md. Future round may add `if got := conn.Health(); got != connector.HealthDegraded { t.Fatalf(...) }` after the existing Connect() error assertion and flip line 300 unambiguously. CONCERN UPDATES: C-S2-004-E2E (medium, followUpOwner: bubbles.implement) decorated with resolutionAcknowledgedAt/resolutionAcknowledgedBy/resolutionRationale acknowledging empirical partial resolution -- the test exists, compiles, runs against live stack, PASSes; the residual carry-forward is the explicit conn.Health() assertion needed to flip line 300. No source code modified outside the new test (production source under internal/connector/qfdecisions/** untouched -- the existing capability.go + connector.go contract was sufficient). NO foreign-spec territory touched (specs/053-* working-tree changes are pre-existing parallel-session work this iteration deliberately did not stage). NO bypass flag used. NO shell redirection used (all artifact writes via IDE replace_string_in_file / multi_replace_string_in_file). NO --no-verify. Commit performed for spec-041 files + new test ONLY; NO push (operator-gated). Scope 2 remains Not Started overall (SCN-SM-041-003, line 300 carry-forward, SCN-SM-041-008, freshness stress, broader E2E suite, change-boundary, no-fallback-defaults, zero-warnings, Scope 2 metrics docs all remain [ ]). Top-level spec status remains in_progress. certification.status remains in_progress. certification.completedScopes remains [Scope 1]. certification.certifiedCompletedPhases remains []. NEXT REQUIRED OWNERS: bubbles.implement (small) to add conn.Health() assertion enabling line 300 flip; bubbles.implement + bubbles.test for SCN-SM-041-003 capability handshake integration tests (C-S2-003-INT); bubbles.implement + bubbles.test for SCN-SM-041-008 fast-forward integration (C-S2-008-INT); cross-repo QF 063 producer wiring before full Scope 2 certifies Done.",
       "evidenceRef": "specs/041-qf-companion-connector/report.md#scope-2-scn-004-e2e-evidence-dod-319--bubblesimplement--bubblestest-2026-05-18t150503z-round-5"
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "workflowMode": "validate-only",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-21T08:00:00Z",
+      "runFinishedAt": "2026-05-21T08:15:38Z",
+      "timestamp": "2026-05-21T08:00:00Z",
+      "completedAt": "2026-05-21T08:15:38Z",
+      "outcome": "DRIFT_RECONCILED",
+      "scopesCompleted": [],
+      "summary": "STRATEGY-COMPRESS state.json drift-repair at HEAD 39ca4fcb. CONTEXT: operator manually reset state.json on 2026-05-21T07:30Z (approx) before committing the 39ca4fcb closeout. Reset dropped 8 rounds of executionHistory authored between R5 (2026-05-18T14:30Z) and the closeout. This entry compresses the missing-rounds work envelope into one honest summary; per-round state.json snapshots remain recoverable via `git show <SHA>:specs/041-qf-companion-connector/state.json`. MISSING ROUNDS cited by commit SHA on origin/main: (R6+R7) c60b9fd7 'spec-041 Scope 2 R6/R7: SCN-SM-041-004 conn.Health() explicit assertion + DoD 300 advancement' 2026-05-18T16:19Z bubbles.test; (R8) 0adb6342 'spec-041 Scope 2 R8: SCN-SM-041-003 capability handshake x2 + SCN-SM-041-008 fast-forward integration tests adopted; DoD 317-319 advanced' 2026-05-18T17:19Z bubbles.test; (R9) fb5a3f38 'spec-041 Scope 2 R9: DoD 321 split into 321a+321b' 2026-05-18T18:08Z bubbles.test; (R10) fa53db9e 'spec-041 Scope 2 R10: DoD 306 split; Core ingest/render scope-ownership boundary surfaced; DoD 306a flipped via Round 8 evidence reuse' 2026-05-18T20:24Z bubbles.plan; (R11) 251a8dcf 'spec-041 Scope 2 R11: flip DoD 304 (SCN-008 fast-forward) via Round 7 evidence reuse + add Round 10-11 reconciliation evidence section' 2026-05-18T20:38Z bubbles.iterate; (R12) ae1fed59 'spec-041 Scope 2 R12: capability + cursor persistence wiring (DoD 297)' 2026-05-18T21:06Z bubbles.implement; (R13) ab8fc871 'spec-041 Scope 2 R13: zero-runtime DoD flips 331/332/333 via R12 evidence reuse' 2026-05-18T21:11Z bubbles.iterate. CERTIFICATION SUB-PHASES authored in working tree on 2026-05-19, landed in git at 2026-05-21 closeout: Scope 2 Validation After Broad E2E Fix (bubbles.validate, 2026-05-19T02:40:00Z); Scope 2 Certification Validation After Artifact Repair (bubbles.validate, 2026-05-19T03:16:47Z) promotes Scope 2 → Done; Scope 3 Validation Certification (bubbles.validate, 2026-05-19T11:50:00Z) promotes Scope 3 → Done after focused Go live-stack E2E TestQFDecisionSurfaceCardsRenderThroughLiveSearchAndArtifactDetail PASS plus PWA static-contract guard PASS; Scope 4 Validation Certification (bubbles.validate, 2026-05-19T20:15:00Z) promotes Scope 4 → Done after focused/follow-up/direct/API/capability/surface E2E PASS, full integration PASS go-integration exit 0, broad E2E shell 35/35 PASS + PASS go-e2e exit 0, implementation-reality-scan exit 0 (34 files, 0 violations). CLOSEOUT COMMIT: 39ca4fcb 'spec-041 Scope 2 closeout: evidence-export + audit + boundary + credentials + render + telegram + PWA surface' 2026-05-21T07:47Z operator-authored single-coherent commit landing 60 files of cross-cutting Scope 2-4 implementation (capability handshake, cursor sync, render, evidence bundle export, e2e/integration tests, PWA surfacing) and Scope 5-territory infrastructure modules (audit.go + audit_test.go, boundary.go + boundary_test.go, credentials.go + credentials_test.go); the Scope 5-territory inclusion is recorded as new concern C-CLOSEOUT-S5-TERRITORY-BOUNDARY-OVERREACH for downstream audit. OPERATOR RESET: 2026-05-21T07:30Z (approx) the operator manually reset state.json.executionHistory to R5 baseline before the closeout commit was authored, dropping all R6-R13 entries. THIS RECONCILIATION (2026-05-21T08:15:38Z): bubbles.validate validate-only drift-repair pass. Top-level status remains in_progress; certification.status remains in_progress; certification.completedScopes promoted from [Scope 1] to [Scope 1, Scope 2, Scope 3, Scope 4]; certification.scopeProgress[1..3] (Scope 2/3/4) flipped to Done with certifiedAt values matching the report.md certification sections; Scopes 5-9 notes refreshed; new concern recorded; lastUpdatedAt refreshed; executionHistorySchemaNote added. DID NOT touch source/tests, spec.md, design.md, scopes.md, uservalidation.md, scenario-manifest.json, or report.md. DID NOT modify any [x] DoD checkbox. DID NOT run the test stack. DID NOT commit or push. NEXT REQUIRED OWNERS: bubbles.test, bubbles.regression, bubbles.gaps, bubbles.audit.",
+      "evidenceRef": "git log: c60b9fd7..ab8fc871 (R6-R13) + 39ca4fcb (closeout) on origin/main; specs/041-qf-companion-connector/report.md anchors `Scope 2 Validation After Broad E2E Fix`, `Scope 2 Certification Validation After Artifact Repair`, `Scope 3 Validation Certification`, `Scope 4 Validation Certification`"
     }
   ],
   "activeBugs": [],
@@ -540,10 +566,19 @@
       "resolvedBy": "operator (acting as bubbles.implement) + bubbles.test runtime verification",
       "resolutionEvidenceRef": "specs/041-qf-companion-connector/report.md#scope-2-e2e-runtime-evidence-dod-320--bubblestest-2026-05-18t140412z",
       "resolutionRationale": "Operator added the missing `case r.URL.Path == qfdecisions.CapabilitiesPath:` arm at `tests/e2e/qf_decisions_connector_api_test.go:637-654` returning a canonical `qfdecisions.QFBridgeCapability` value (SupportedPacketVersions=[v1], SupportedEventTypes=[packet_created], SupportedDecisionTypes=[recommendation, policy_denial, analysis_note], MaxPageSize=100, MinPageSize=1, SupportedTargetContextTypes=[trip], EvidenceMaxBundleSizeBytes=1048576, EvidenceMaxClaimsPerBundle=50, EvidenceRateLimitPerMinute=60, FreshnessSLAP95Seconds=60, AuditEnvelopeVersion=v1, WatchSignalDirection=qf_to_smackerel, EligibleSmackerelSourceClasses=[watch]). The 2026-05-18T14:04:12Z bubbles.test re-run with the identical -run selector produced `--- PASS: TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata (0.09s)` with wrapper exit 0 against a live disposable test stack (5/5 services Healthy). DoD scopes.md:320 flipped to `[x]` with evidence anchor to the success-evidence section. The actual canonical capability type in code is `QFBridgeCapability` (not `QFCapabilityResponse` as this concern's followUpAction text referenced); the operator used the correct existing type. Concern marked resolved in place — no `resolvedConcerns[]` array exists in this state.json schema."
+    },
+    {
+      "id": "C-CLOSEOUT-S5-TERRITORY-BOUNDARY-OVERREACH",
+      "severity": "medium",
+      "sourceDodItem": "Closeout commit 39ca4fcb 'spec-041 Scope 2 closeout' landed Scope 5-territory implementation modules (internal/connector/qfdecisions/audit.go + audit_test.go, boundary.go + boundary_test.go, credentials.go + credentials_test.go) alongside the Scope 2-4 closeout work. The Scope 2, Scope 3, and Scope 4 Change Boundary sections in scopes.md explicitly exclude Scope 5 territory: 'Scope 5 credential rotation overlap, full 12-metric symmetric set, full Cross-Product Audit Envelope rollout, action-boundary consolidation, and render/combined freshness certification'.",
+      "followUpOwner": "bubbles.audit",
+      "followUpAction": "Compare the closeout commit 39ca4fcb diff against the Scope 5 Change Boundary file families declared in scopes.md (Scope 5 covers Credential Rotation Overlap, Safety Boundaries, Observability + 12-metric symmetric set, Cross-Product Audit Envelope v1 documentation). If the closeout authored Scope 5 module source without flipping any Scope 5 DoD checkbox, route to bubbles.plan for Scope 5 scope-status review (Scope 5 currently correctly marked Not Started in scopes.md and state.json). Also confirm whether the modules are infrastructure scaffolding (DI-wired but not exercised by Scope 5 DoD scenarios) or whether they semantically satisfy any Scope 5 DoD that should be flipped retroactively with proper evidence. Cross-reference with bubbles.gaps Scope 5 audit pass before any DoD action.",
+      "rationale": "Added by the 2026-05-21T08:15:38Z bubbles.validate drift-repair pass. The closeout commit message explicitly enumerates 'audit.go + audit_test.go — audit envelope emission; boundary.go + boundary_test.go — action-boundary attempt log; credentials.go + credentials_test.go — rotating credential mgmt' as new connector modules. The semantic mapping of these modules to the QF spec 063 cross-product contract is: audit_envelope_version + audit envelope emission (Scope 5 Cross-Product Audit Envelope v1), action-boundary attempt log (Scope 5 Safety Boundaries), rotating credential management (Scope 5 Credential Rotation Overlap). None of the Scope 5 DoD checkboxes in scopes.md were flipped by the closeout; Scope 5 status remains Not Started in both scopes.md and certification.scopeProgress[4]. This is therefore a Change Boundary concern for downstream audit, NOT a DoD-fraud finding — the modules exist as code (DI-wired infrastructure) but Scope 5 is not claimed Done. The concern is routed primarily to bubbles.audit for the diff review and secondarily to bubbles.gaps for the Scope 5 DoD audit pass. No automated remediation is appropriate at this validate-only stage."
     }
 
   ],
-  "lastUpdatedAt": "2026-05-18T16:30:00Z",
+  "lastUpdatedAt": "2026-05-21T08:15:38Z",
+  "executionHistorySchemaNote": "On 2026-05-21T07:30Z (approx) the operator manually reset state.json.executionHistory back to the R5 baseline (last preserved entry 2026-05-18T14:30Z) before committing the 39ca4fcb closeout. The reset dropped per-round executionHistory entries for rounds R6-R13 that had landed on origin/main between 2026-05-18T16:19Z and 2026-05-18T21:11Z. The bubbles.validate drift-repair reconciliation on 2026-05-21T08:15:38Z chose STRATEGY-COMPRESS over STRATEGY-RESTORE: rather than fabricating per-round entries the agent never authored, a single compressed entry was appended to executionHistory citing all 8 missing commit SHAs (c60b9fd7, 0adb6342, fb5a3f38, fa53db9e, 251a8dcf, ae1fed59, ab8fc871, 39ca4fcb) plus the closeout. Full per-round state.json snapshots remain recoverable via `git show <SHA>:specs/041-qf-companion-connector/state.json` against any of those 8 SHAs.",
   "scopeLayout": "single-file",
   "createdAt": "2026-05-02T00:00:00Z",
   "artifacts": {
@@ -562,5 +597,5 @@
     "<home>/quantitativeFinance/docs/releases/pre-mvp/features.md",
     "<home>/quantitativeFinance/docs/releases/pre-mvp/actions.md"
   ],
-  "notes": "Scope 1 is partially certified and remains the only active executable planning section after the 2026-05-07 repair. Scope 2+ is parked on QF 063 Scope 2 read/outbox readiness. Overall feature remains in_progress; no final feature completion is claimed."
+  "notes": "Scopes 1-4 are certified Done (Scope 1 at 2026-05-07T20:12:45Z; Scope 2 at 2026-05-19T03:16:47Z; Scope 3 at 2026-05-19T11:50:00Z; Scope 4 at 2026-05-19T20:15:00Z). Scopes 5-9 remain Not Started; certification.status remains in_progress because full-feature completion requires Scopes 5-9 plus cross-product QF 063 producer integration. The 2026-05-21T08:15:38Z bubbles.validate drift-repair pass reconciled state.json with the reality already documented in scopes.md and report.md after the operator manually reset executionHistory to R5 baseline on 2026-05-21T07:30Z; STRATEGY-COMPRESS used to summarize the 8 missing commits. New concern C-CLOSEOUT-S5-TERRITORY-BOUNDARY-OVERREACH routed to bubbles.audit + bubbles.gaps re: closeout commit 39ca4fcb landing Scope 5-territory modules alongside Scope 2/3/4 closeout work; no Scope 5 DoD was flipped and Scope 5 status remains Not Started in both scopes.md and state.json. No final feature completion is claimed."
 }
