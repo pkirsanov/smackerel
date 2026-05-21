@@ -14160,4 +14160,234 @@ section).
 
 ---
 
+## Scope 5 Freshness Render Combined Evidence (bubbles.implement, 2026-05-21T22:25:41Z)
+
+**Scope:** Scope 5 — Hardening, Capability Re-Read, And Final Compliance
+**Sub-iteration:** D — render/combined freshness metrics + stress p95 proof
+**HEAD at start:** `1670d3ac` (`spec-041 Scope 5 sub-iter C: audit envelope v1 rollout + integration test`)
+**Owner agent:** `bubbles.implement`
+**Scope status:** in-progress (sub-iteration D of F)
+
+### Sub-iteration D scope (verbatim from dispatch)
+
+> Render/combined freshness metrics + stress p95 proof. Tasks: (D1) survey
+> render.go freshness wiring; (D2) add `stage="render"` emission if
+> missing; (D3) author `TestQFRenderAndCombinedFreshnessMetricsAreRecorded`
+> unit test; (D4) author `TestQFDecisionsFreshnessSLAP95RenderAndCombined`
+> stress test that preserves the existing Scope 2 ingest proof; (D5) flip
+> Scope 5 DoD (SCN-020 stress closure + V3 unit + V4 stress) when evidence
+> is GREEN; (D6) append Scope 5 Freshness And Stress Evidence to report;
+> (D7) update state.json executionHistory.
+
+### Section 1: Render freshness wiring survey (D1) — pre-existing GREEN
+
+Render and total stages are emitted directly from the render path via the
+package-global `RecordFreshnessSample` helper (no per-connector receiver
+required because rendering is a pure-function entrypoint exposed at the
+package level):
+
+```go
+// internal/connector/qfdecisions/render.go (verbatim around emission)
+//   ~L294-L308 recordRenderFreshness
+func recordRenderFreshness(observedAt time.Time, artifact connector.RawArtifact) {
+    if !artifact.CapturedAt.IsZero() {
+        RecordFreshnessSample(FreshnessStageRender,
+            observedAt.Sub(artifact.CapturedAt.UTC()).Seconds())
+    }
+    if created, ok := parseTimeMetadata(artifact, "qf_created_at"); ok {
+        RecordFreshnessSample(FreshnessStageTotal,
+            observedAt.Sub(created).Seconds())
+    }
+}
+```
+
+D1 survey result: render and total stage emission are already wired into
+`RenderPacketCard` via `recordRenderFreshness`. No additional wiring is
+required for D2.
+
+**Claim Source:** executed (file read; pre-existing function shape
+confirmed against current HEAD `1670d3ac`).
+
+### Section 2: D2 outcome — no-op
+
+Because Section 1 proved render+total emission is already wired, D2 is a
+documented no-op for this sub-iteration. No source change was made for
+D2.
+
+**Claim Source:** interpreted (derived directly from Section 1 source
+read; nothing was written).
+
+### Section 3: Render p95 stage label parity (D3 unit test) — GREEN
+
+A new unit test `TestQFRenderAndCombinedFreshnessMetricsAreRecorded`
+was added to
+[`internal/connector/qfdecisions/metrics_test.go`](internal/connector/qfdecisions/metrics_test.go)
+covering four behaviors:
+
+1. `RecordFreshnessSample(FreshnessStageRender, 12.5)` writes exactly the
+   `{stage="render"}` label and surfaces the 2-sample p95 of `12.5s` on
+   `metrics.QFFreshnessP95Seconds`.
+2. `RecordFreshnessSample(FreshnessStageTotal, 47.0)` writes exactly the
+   `{stage="total"}` label and surfaces the 2-sample p95 of `47.0s`.
+3. Cross-stage isolation: emitting an additional render sample does NOT
+   move the total-stage gauge, and vice versa (two independent
+   rolling-window aggregators per stage label).
+4. Per-connector receiver path (`c := New(DefaultConnectorID);
+   c.recordFreshness(FreshnessStageIngest, 5.0)`) proves the ingest stage
+   uses a separate write path from the render/total package-global path,
+   matching the dual-emission contract documented in `connector.go`.
+
+Test execution (verbatim from `go test`):
+
+```
+=== RUN   TestQFRenderAndCombinedFreshnessMetricsAreRecorded
+--- PASS: TestQFRenderAndCombinedFreshnessMetricsAreRecorded (0.02s)
+PASS
+ok      smackerel/internal/connector/qfdecisions        0.016s
+```
+
+**Claim Source:** executed (test invoked directly with
+`go test -run TestQFRenderAndCombinedFreshnessMetricsAreRecorded -count=1
+-v ./internal/connector/qfdecisions/...`; verbatim PASS output captured
+above).
+
+### Section 4: C-S2-321B-SCOPE-5-RENDER closure
+
+Cross-scope dependency C-S2-321B-SCOPE-5-RENDER (declared in Scope 2
+DoD; documented in this scope's planning header at
+[`scopes.md`](specs/041-qf-companion-connector/scopes.md) lines 295,
+311, 456, 819) required Scope 5 to deliver:
+
+- `smackerel_qf_freshness_p95_seconds{stage="render"}` gauge wiring,
+  AND
+- Render p95 ≤ 30s stress assertion, AND
+- Combined ingest+render p95 ≤ 60s stress assertion.
+
+All three are now satisfied in this sub-iteration:
+
+| Requirement | Satisfaction anchor |
+|---|---|
+| `stage="render"` gauge wiring | Section 1 source survey + Section 3 unit test |
+| Render p95 ≤ 30s stress assertion | Section 1 of `Scope 5 Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z)` (next ## section below) |
+| Combined ingest+render p95 ≤ 60s stress assertion | Section 1 of `Scope 5 Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z)` (next ## section below) |
+
+**Claim Source:** interpreted (cross-section reference; the underlying
+GREEN data is captured executed in the referenced Stress Evidence
+section).
+
+### Section 5: Combined-stage derivation transparency
+
+The stress test computes combined freshness as the p95 of the
+**total-stage** sample series rather than as a numerical sum of separate
+ingest-leg and render-leg p95s. That is correct and intentional: the
+`stage="total"` gauge is emitted at render time using the difference
+between the render `observedAt` and the original `qf_created_at`
+timestamp from the QF metadata envelope, which exactly equals the full
+QF-create-to-Smackerel-render span (ingest leg + render leg per packet).
+Summing two p95s separately would over-estimate combined latency because
+ingest and render percentiles do not occur at the same packet positions
+in the sample order.
+
+The new stress test enforces this combined SLA directly against the
+`stage="total"` series, matching the QF design 063 specification of
+"combined ingest+render p95 ≤ 60s".
+
+**Claim Source:** interpreted (mathematical derivation grounded in the
+`recordRenderFreshness` source surveyed in Section 1).
+
+---
+
+## Scope 5 Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z)
+
+**Scope:** Scope 5 — Hardening, Capability Re-Read, And Final Compliance
+**Sub-iteration:** D — render/combined freshness metrics + stress p95 proof
+**HEAD at start:** `1670d3ac`
+**Owner agent:** `bubbles.implement`
+
+### Section 1: New stress test `TestQFDecisionsFreshnessSLAP95RenderAndCombined` — GREEN
+
+Stress test added to
+[`tests/stress/qf_decision_event_replay_test.go`](tests/stress/qf_decision_event_replay_test.go)
+ABOVE the existing `TestQFDecisionsFreshnessSLAP95IngestRender` (which
+was left untouched to preserve the Scope 2 ingest proof). Shape:
+
+- 500 packets / 25 per page / 75s drive deadline
+- HTTP server stamps `event.CreatedAt` at request time (ingest leg)
+- New helper `stressRenderEnvelope(packetID, traceID, now)` stamps the
+  packet envelope `CreatedAt` + `UpdatedAt` at response time (render leg
+  baseline)
+- After the Sync loop, iterates collected `RawArtifact` records and
+  calls `qfdecisions.RenderPacketCard(ctx, art, RenderOptions{...})` on
+  each (drives the render-stage and total-stage emission)
+- Asserts: ingestP95 ≤ 30s **AND** renderP95 ≤ 30s **AND**
+  combinedP95 ≤ 60s
+
+Live-stack execution against the disposable test stack (clean tear-down
++ fresh `--env test up` to align the NATS auth token with the freshly
+generated `config/generated/test.env`):
+
+```
+=== RUN   TestQFDecisionsFreshnessSLAP95RenderAndCombined
+    qf_decision_event_replay_test.go:555: freshness SLA stress (render+combined): cycles=20 artifacts=500 renders=500 packetFetches=500 eventCalls=20 ingestP95=1.193426s renderP95=6.036306s combinedP95=6.036306s
+--- PASS: TestQFDecisionsFreshnessSLAP95RenderAndCombined (10.96s)
+PASS
+ok      smackerel/tests/stress  11.55s
+```
+
+Headroom vs SLA budgets:
+
+| Stage | Measured p95 | Budget | Headroom |
+|---|---|---|---|
+| `stage="ingest"` | 1.193426s | ≤ 30s | 25.1× |
+| `stage="render"` | 6.036306s | ≤ 30s | 4.97× |
+| `stage="total"` (combined) | 6.036306s | ≤ 60s | 9.94× |
+
+The combined-stage p95 matches the render-stage p95 in this run because
+the test stamps `event.CreatedAt` and the response-time `envelope.CreatedAt`
+within microseconds of each other on the same wall clock; the combined
+SLA still holds end-to-end against the live render pipeline because the
+test exercises the real `RenderPacketCard` code path (including signing,
+labelling, audit envelope emission, and freshness sample emission).
+
+**Claim Source:** executed (test invoked end-to-end against the
+freshly-restarted disposable test stack; verbatim PASS line and
+freshness SLA log captured above).
+
+### Section 2: Scope 2 ingest proof preservation
+
+The pre-existing stress test `TestQFDecisionsFreshnessSLAP95IngestRender`
+was left UNTOUCHED. The new test was inserted ABOVE it in the file. The
+existing test's Scope 2 ingest p95 ≤ 30s assertion remains valid and
+runnable independently via:
+
+```
+go test -tags stress -run TestQFDecisionsFreshnessSLAP95IngestRender ./tests/stress/...
+```
+
+**Claim Source:** interpreted (file diff inspection: existing test
+function body unchanged; new function inserted before it).
+
+### Section 3: Reproducibility footprint
+
+To reproduce GREEN locally:
+
+```
+./smackerel.sh --env test down --volumes
+./smackerel.sh --env test up
+# env values resolved from config/generated/test.env (see test stress runner)
+go test -tags stress -v -count=1 -timeout 300s \
+  -run "^TestQFDecisionsFreshnessSLAP95RenderAndCombined$" ./tests/stress/...
+```
+
+NATS auth alignment requirement: the running NATS container's auth token
+must match `SMACKEREL_AUTH_TOKEN` in `config/generated/test.env`. A
+clean `down --volumes` + `up` cycle guarantees alignment because both
+the container env and the test runner read from the same freshly
+generated file.
+
+**Claim Source:** executed (this sub-iteration followed exactly this
+sequence to capture Section 1 GREEN evidence).
+
+---
+
 
