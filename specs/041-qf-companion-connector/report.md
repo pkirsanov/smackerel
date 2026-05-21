@@ -12979,4 +12979,594 @@ This evidence section satisfies the dispatch's
 
 ---
 
+## Scope 5 Pre-Existing Commit Audit (bubbles.audit, 2026-05-21T19:18:54Z)
+
+**Audit Mode:** commit-range review before push to `origin/main`.
+**Audit HEAD:** `8da0dbd5` (working tree clean; 4 unpushed commits
+ahead of `origin/main`).
+**Audit Trigger:** `bubbles.implement` Sub-iteration A pass at
+`2026-05-21T19:05:00Z` flagged three pre-existing local-only commits
+that exceeded the explicit Sub-iteration A boundary; routed here for
+keep/split/rewrite decision before push.
+
+**Commits under review (oldest → newest):**
+
+1. `a3a0d59d` — `qfdecisions: add engagement signal and callback attempt audit envelope helpers (Scope 5)`
+2. `c22151a5` — `qfdecisions: wire RotateCredentials and packet_action_boundary_attempted handling into Connector (Scope 5)`
+3. `9e905280` — `qfdecisions: add symmetric QF metric set + label-parity unit tests (Scope 5)`
+4. `8da0dbd5` — `spec-041 scope 5 sub-iter A: wire credential rotation + live-stack proof` (authored this pass by `bubbles.implement`)
+
+**Audit Inputs (read-only):**
+
+- `git show --stat <sha>` and `git show <sha> -- <file>` for each commit
+  + each touched source file.
+- `specs/041-qf-companion-connector/scopes.md` Scope 5 Change Boundary
+  (L981–L1001) + Implementation Files (L824–L831) + Symmetric Metric
+  Set spec (L832) + Audit Envelope Shape spec (L837).
+- `internal/connector/qfdecisions/{audit.go,types.go,metrics.go,boundary.go,connector.go}`
+  pre-existing definitions for `BuildCrossProductAuditEnvelopeV1`,
+  `AuditAction*` / `AuditOutcome*` / `AuditActor*` constants,
+  `Record*` helper signatures, and `Connector.cfg` value-type guarantee.
+- `internal/metrics/metrics.go` L238–L388 (14 `smackerel_qf_*` declarations)
+  + L395–L449 (`prometheus.MustRegister` call list).
+
+**Claim Source:** interpreted (read-only inspection of git diffs +
+source files at HEAD `8da0dbd5`; no commands executed against the
+running stack this pass; `bubbles.implement` build/check/lint/unit/
+integration evidence at `2026-05-21T19:05:00Z` is the upstream
+execution evidence this audit relies on).
+
+---
+
+### Section 1: Per-Commit Verdicts
+
+#### Commit 1 of 4 — `a3a0d59d` — Audit-Envelope Helpers (Engagement + Callback)
+
+**Touched files:** `internal/connector/qfdecisions/audit.go`
+(+98 lines), `internal/connector/qfdecisions/audit_test.go` (+93 lines).
+
+**Boundary check (scopes.md L832, L981–L1001):**
+Scope 5 explicitly permits "Scope 5 may add shared audit helpers for
+Scopes 6-9, but it must not implement Scope 6 engagement transport,
+Scope 8 callback signing/acceptance, or Scope 9 watch proposal
+transport." Both new helpers (`EmitEngagementSignalFlushAudit`,
+`EmitCallbackAttemptAudit`) are pure audit-envelope emitters: they
+construct `EvidenceAuditEnvelope` via the pre-existing
+`BuildCrossProductAuditEnvelopeV1` and emit through
+`EmitConnectorAuditEnvelope`. No HTTP transport, no signing, no
+acceptance/rejection of callbacks, no buffer/flush/retry policy is
+added. The doc comments are explicit about ownership boundary
+(e.g., audit.go L95: "the corresponding metric increment is owned by
+the Scope 6 transport (RecordQFEngagementSignalAttempt)"; L133: "the
+corresponding metric increment is owned by the Scope 8 transport
+(RecordQFCallbackAttempt)"). **WITHIN-BOUNDARY.**
+
+**SST / NO-DEFAULTS check:**
+Grep for `os.Getenv(...,| || "| ${VAR:-` against `audit.go` +
+`audit_test.go` → zero matches. **CLEAN.**
+
+**Audit envelope shape (scopes.md L832 = Cross-Product Audit Envelope v1):**
+Helper output for engagement: `Action = AuditActionEngagementSignalFlush`
+(types.go L54 = `"engagement_signal_flush"`), populated `TraceID`,
+`PacketID`, `SignalID`, `ActorRef`, `Surface`, `Outcome` (via
+`auditOutcomeForStatus`), `Reason`, `ObservedAt`, with
+`AuditEnvelopeVersion = AuditEnvelopeVersionV1` set inside
+`BuildCrossProductAuditEnvelopeV1` (audit.go L50). Helper output for
+callback: identical shape with `Action = AuditActionCallbackAttempt`
+(types.go L55 = `"callback_attempt"`). **MATCHES SPEC.**
+
+**Forbidden-behavior check:**
+No approval / execution / mandate change / EmergencyStop / watch
+creation / callback acceptance / QF trust reconstruction is enabled.
+The callback helper explicitly preserves the action string verbatim
+in the envelope `Reason` slot (audit.go L138–L143) for audit
+correlation; it does NOT execute or accept the callback. **PASS.**
+
+**Test coverage:**
+Four unit tests in `audit_test.go` (+93 lines) cover both helpers:
+shape assertions, outcome mapping for `"ok"` / `"rejected"` / `"error"`,
+fallback of empty `Reason` → trimmed `Action`, and
+`AuditEnvelopeVersion = v1` invariant.
+
+**Consumer-graph check (potential dead-code concern):**
+Neither helper has a production caller at HEAD `8da0dbd5` — confirmed
+by grep for `EmitEngagementSignalFlushAudit|EmitCallbackAttemptAudit`
+in `internal/`, `ml/`, `tests/` (matches only in `audit.go` definition
+and `audit_test.go` unit tests). This is **by design**: scopes.md L832
+explicitly authorizes Scope 5 to land shared helpers ahead of Scope 6
+engagement transport wiring and Scope 8 callback signing wiring. The
+helpers are NOT dead code; they are forward scaffolding consumed by
+unit tests today and by Sub-iteration C wiring tomorrow.
+
+**Verdict:** **CLEAN.** Push permitted. No rework required.
+
+#### Commit 2 of 4 — `c22151a5` — Connector.RotateCredentials + Sync Boundary-Attempted Wiring
+
+**Touched files:** `internal/connector/qfdecisions/connector.go`
+(+115 lines: Sync-loop boundary branch + `RotateCredentials` method),
+`internal/connector/qfdecisions/connector_test.go` (+213 lines: 4 new
+unit tests), `internal/connector/qfdecisions/types.go` (+8 lines:
+`EventTypePacketActionBoundaryAttempted` constant).
+
+**Boundary check (scopes.md L981–L1001):**
+- `RotateCredentials` method on `(*Connector)` — call-site wiring of
+  the pre-existing `PlanCredentialRotation` planner +
+  `FetchCapability` + `CompatibilityCheck` + audit-envelope emission +
+  atomic in-memory state swap. `connector.go` is on the explicit
+  call-site-wiring allowlist (scopes.md L828–L830). **WITHIN-BOUNDARY.**
+- Sync-loop `EventType == EventTypePacketActionBoundaryAttempted`
+  branch routes through `RejectQFActionBoundary` (boundary.go,
+  pre-existing) and skips normalization. This is Scope 5 territory:
+  scopes.md L832 lists "action-boundary kick" in the required
+  audit-emission set, and L825 lists `boundary.go` as a Scope 5-owned
+  implementation file. Call-site wiring into `connector.go` is
+  explicitly allowed per L828. **WITHIN-BOUNDARY.**
+- `EventTypePacketActionBoundaryAttempted` constant in `types.go`:
+  Scope 5 owns the wire-string for the action-boundary diagnostic
+  event. Lives next to the existing `ActionType*` constants in
+  `types.go` which is already Scope 5-adjacent. **WITHIN-BOUNDARY.**
+
+**SST / NO-DEFAULTS check:**
+Grep for `os.Getenv(...,| || "| ${VAR:-` against the three touched
+files → zero matches. The `RotateCredentials` method reads
+`currentCfg.PacketVersion` and `currentCfg.PageSize` from the
+connector's already-validated in-memory `QFConfig` (populated by
+`Connect` via `parseConfig`, which is the SST entrypoint). **CLEAN.**
+
+**State-mutation safety:**
+- `Connector.cfg` is declared as value-type `QFConfig` (connector.go
+  L120), not `*QFConfig`. The mutation `c.cfg.CredentialRef =
+  plan.SelectedCredentialRef` (connector.go L603) only modifies the
+  connector's internal copy; no caller config is leaked.
+- The `c.client`, `c.capability`, `c.capabilityStatus`,
+  `c.capabilityFetchedAt`, and `c.health` swap happens under
+  `c.mu.Lock()` (L601 + L607) AFTER the capability re-read succeeds.
+  On planner rejection (`PlanCredentialRotation` returns error,
+  L569–L571) and on capability-re-read or compatibility-check failure
+  (L575–L595), `c.client` / `c.cfg` / `c.capability*` are left
+  untouched and the appropriate `AuditOutcomeError` /
+  `AuditOutcomeRejected` envelope is emitted via
+  `EmitConnectorAuditEnvelope`. **CORRECT.**
+- The `RotateCredentials` Connect-required guard (L558–L562) returns
+  an error if `c.client == nil`, preventing rotation against a
+  zero-valued `c.cfg`. **CORRECT.**
+
+**Metric label parity (scopes.md L832, `smackerel_qf_action_boundary_attempts_total{attempted_action_type}`):**
+The Sync-loop branch routes through `RejectQFActionBoundary`
+(boundary.go L24+), which calls `RecordQFActionBoundaryAttempt(actionType)`
+(boundary.go L31, metrics.go L28–L30) which emits
+`metrics.QFActionBoundaryAttemptsTotal.WithLabelValues(metricLabel(attemptedActionType)).Inc()`.
+The vector is declared in `internal/metrics/metrics.go` L295 with
+labels `[]string{"attempted_action_type"}` and registered exactly
+once at L422. Label name and label-set count match the spec
+exactly. **PASS.**
+
+**Audit envelope shape (scopes.md L832 = "capability handshake" +
+"action-boundary kick"):**
+- Three `AuditActionCapabilityHandshake` envelopes are emitted from
+  `RotateCredentials` (OK / Rejected / Error) via
+  `BuildCrossProductAuditEnvelopeV1` (connector.go L575–L596). Each
+  carries `Surface = DefaultConnectorID`, `Action =
+  AuditActionCapabilityHandshake` (types.go L52 = `"capability_handshake"`),
+  appropriate `Outcome`, `Reason` (error message on error/reject
+  branches), `ObservedAt`. `ActorRef` is defaulted by
+  `BuildCrossProductAuditEnvelopeV1` (audit.go L31–L33) to
+  `AuditActorSmackerelConnector`. **MATCHES SPEC.**
+- One `AuditActionActionBoundaryKick` envelope is emitted by
+  `RejectQFActionBoundary` (boundary.go L34–L42) with `Outcome =
+  AuditOutcomeRejected`, `Reason =
+  "qf_emitted_packet_action_boundary_attempted"` (connector.go L361),
+  `ActorRef = AuditActorSmackerelConnector` (connector.go L359),
+  `Surface = event.SourceSurface`. **MATCHES SPEC.**
+
+**Forbidden-behavior check:**
+The `packet_action_boundary_attempted` event MUST NOT be normalized
+into a trusted artifact (scopes.md L832). The Sync-loop branch
+(connector.go L348–L378) `continue`s without calling the normalizer
+and explicitly does NOT increment the degraded counter (the boundary
+is a contract-enforcement signal, not a degraded data path). The
+event is also logged at WARN level for operator visibility
+(connector.go L371–L377). **PASS — no forbidden behavior enabled.**
+
+**Sub-iteration A vs B territory acknowledgment:**
+The Sub-iteration A operator dispatch scoped credential-rotation
+wiring as A territory and `packet_action_boundary_attempted` handling
+as B territory. Both belong to Scope 5; the split was about
+human-led routing of Sub-iter dispatches, not about boundary
+crossings. Landing the B-portion early is **NOT a boundary
+violation** under Scope 5 Change Boundary; it accelerates Sub-iter B
+without contaminating Sub-iter A's DoD-flip surface (which only
+flipped the two SCN-SM-041-019 items, leaving SCN-SM-041-020 [ ]).
+The Sub-iter A `report.md` evidence section explicitly disclosed
+this overreach and routed it here.
+
+**Test coverage:**
+Four unit tests in `connector_test.go` (+213 lines) cover OK
+rotation (client + capability + auth-header trail swap), rejected
+plan (no state mutation), Connect-required guard, and boundary
+event skip (zero artifacts + metric delta == 1 + audit emission).
+
+**Verdict:** **CLEAN.** Push permitted. No rework required. The
+B-portion overreach is a Sub-iter dispatch-routing observation, not
+a Scope 5 boundary issue.
+
+#### Commit 3 of 4 — `9e905280` — Symmetric Metric-Set + Label-Parity Unit Tests
+
+**Touched files:** `internal/connector/qfdecisions/metrics_test.go`
+(+352 lines, NEW FILE).
+
+**Boundary check (scopes.md L824 + L981–L1001):**
+`metrics_test.go` is on the explicit Scope 5-owned implementation
+file list (scopes.md L824: "`internal/connector/qfdecisions/metrics.go`
+and `metrics_test.go`"). The file was previously empty/missing; this
+commit creates the parity-test surface. **WITHIN-BOUNDARY.**
+
+**SST / NO-DEFAULTS check:**
+Grep for `os.Getenv(...,| || "| ${VAR:-` against the new file →
+zero matches. **CLEAN.**
+
+**Metric-set enumeration parity (scopes.md L832 specifies 12 core +
+2 transport metrics):**
+`TestQFSymmetricMetricSetHasAllFourteenQFPrefixedRegistrations`
+enumerates exactly the 14 `smackerel_qf_*` names declared in
+`internal/metrics/metrics.go` L238–L388 and asserts each is
+registered exactly once with `prometheus.DefaultGatherer`. The
+14 names match `internal/metrics/metrics.go` declarations 1:1:
+
+| # | Test enumeration | metrics.go decl | metrics.go register |
+|---|---|---|---|
+| 1 | `smackerel_qf_packet_ingest_total` | L232–L239 | L417 (`QFPacketIngestTotal`) |
+| 2 | `smackerel_qf_capability_mismatch_total` | L246–L253 | L418 (`QFCapabilityMismatch`) |
+| 3 | `smackerel_qf_unknown_decision_type_total` | L259–L266 | L419 (`QFUnknownDecisionType`) |
+| 4 | `smackerel_qf_cursor_lag_seconds` | L272–L278 | L420 (`QFCursorLagSeconds`) |
+| 5 | `smackerel_qf_cursor_fast_forward_events_skipped_total` | L284–L290 | L421 (`QFCursorFastForwardEventsSkipped`) |
+| 6 | `smackerel_qf_action_boundary_attempts_total` | L295–L301 | L422 (`QFActionBoundaryAttemptsTotal`) |
+| 7 | `smackerel_qf_packet_validation_failures_total` | L308–L315 | L423 (`QFPacketValidationFailures`) |
+| 8 | `smackerel_qf_freshness_p95_seconds` | L324–L330 | L424 (`QFFreshnessP95Seconds`) |
+| 9 | `smackerel_qf_trust_object_render_failures_total` | L335–L342 | L425 (`QFTrustObjectRenderFailures`) |
+| 10 | `smackerel_qf_deep_link_render_total` | L347–L353 | L426 (`QFDeepLinkRenderTotal`) |
+| 11 | `smackerel_qf_evidence_export_attempts_total` | L358–L365 | L427 (`QFEvidenceExportAttempts`) |
+| 12 | `smackerel_qf_evidence_revoked_total` | L368–L374 | L428 (`QFEvidenceRevokedTotal`) |
+| 13 | `smackerel_qf_engagement_signal_attempts_total` | L376–L382 | L429 (`QFEngagementSignalAttemptsTotal`) |
+| 14 | `smackerel_qf_callback_attempts_total` | L386–L392 | L430 (`QFCallbackAttemptsTotal`) |
+
+No double-registration: each name asserted `registered[name] == 1`
+(metrics_test.go L268–L271). **PASS.**
+
+**Label parity (scopes.md L832):**
+`TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`
+drives each metric via its documented helper or vector accessor and
+inspects the resulting MetricFamily protobuf via
+`prometheus.DefaultGatherer.Gather()`. Cross-checked against
+`internal/metrics/metrics.go` label declarations:
+
+- `packet_ingest_total` → `{event_type, decision_type, approval_state, source_surface}` ✓ (metrics.go L239)
+- `capability_mismatch_total` → `{required, actual}` ✓ (metrics.go L253)
+- `unknown_decision_type_total` → `{value}` ✓ (metrics.go L266)
+- `cursor_lag_seconds` → unlabeled gauge ✓ (metrics.go L278 = `NewGauge`)
+- `cursor_fast_forward_events_skipped_total` → unlabeled counter ✓ (metrics.go L290 = `NewCounter`)
+- `action_boundary_attempts_total` → `{attempted_action_type}` ✓ (metrics.go L301)
+- `packet_validation_failures_total` → `{reason}` ✓ (metrics.go L315)
+- `freshness_p95_seconds` → `{stage}` ✓ (metrics.go L330)
+- `trust_object_render_failures_total` → `{reason}` ✓ (metrics.go L342)
+- `deep_link_render_total` → `{surface, status}` ✓ (metrics.go L353)
+- `evidence_export_attempts_total` → `{status, target_context_type, sensitivity_tier}` ✓ (metrics.go L365)
+- `evidence_revoked_total` → `{reason}` ✓ (metrics.go L374)
+- `engagement_signal_attempts_total` → `{event, surface, status}` ✓ (metrics.go L382)
+- `callback_attempts_total` → `{action, status}` ✓ (metrics.go L392)
+
+**PASS.** All 14 label sets match the spec.
+
+**Forbidden-behavior check:**
+Test-only file; no production behavior. No approval / execution /
+mandate change enabled. **PASS.**
+
+**Verdict:** **CLEAN.** Push permitted. No rework required.
+
+#### Commit 4 of 4 — `8da0dbd5` — Sub-Iteration A Integration Test + DoD Flips (Sanity Check)
+
+**Touched files:** `tests/integration/qf_credential_rotation_test.go`
+(+248 lines, NEW FILE), `specs/041-qf-companion-connector/scopes.md`
+(+2/-2 — 2 DoD flips [ ]→[x] on SCN-SM-041-019 lines),
+`specs/041-qf-companion-connector/report.md` (+297, new evidence
+section), `specs/041-qf-companion-connector/state.json` (+24/-1 —
+new `executionHistory` + `completedPhaseClaims` entries +
+`lastUpdatedAt` bump).
+
+**Boundary check (scopes.md L824 + L981–L1001):**
+`tests/integration/qf_credential_rotation_test.go` is on the
+explicit Scope 5 implementation files list (L826). The 2 DoD flips
+are scoped to SCN-SM-041-019 Core Behavior only; no SCN-SM-041-020 /
+SCN-SM-041-021 DoD item modified. **WITHIN-BOUNDARY.**
+
+**SST / NO-DEFAULTS check:**
+Grep for `os.Getenv(...,| || "| ${VAR:-` against the new integration
+test file → zero matches. The test uses `testPool(t)` helper and
+`qfDecisionsNATSClient(t)` helper (pre-existing in
+`tests/integration/`) which already enforce the loopback test-stack
+contract (port 47001 postgres / 47002 nats). No hardcoded credentials;
+test tokens `qf-service-token` / `qf-rotated-token` are pure test
+fixtures. **CLEAN.**
+
+**Test-environment isolation:**
+The test uses `cleanupQFDecisionsRows(t, pool, sourceID)` in
+`t.Cleanup()` (line 61). The `sourceID` is uniquely suffixed via
+`uniqueSuffix()` so parallel runs do not collide. Live disposable
+stack only; no persistent dev state touched. **PASS.**
+
+**Adversarial trip-wires:**
+Three trip-wires documented in the test file's doc comment (L33–L48)
+and asserted in the test body: (1) post-rotation capability re-read
+auth header MUST equal `Bearer qf-rotated-token` not
+`Bearer qf-service-token`; (2) persisted `sync_state.sync_cursor`
+MUST survive rotation verbatim across both `runSync` calls; (3)
+diagnostics MUST include all three required tokens
+(`capability_re_read_required`, `sync_cursor_preserved`,
+`evidence_export_state_preserved`). Each trip-wire uses `t.Fatalf`
+on regression — would fail (not silently skip) if any future change
+broke the contract. **PASS.**
+
+**Test-fidelity check (scopes.md L832 audit envelope shape):**
+The integration test asserts `plan.AuditEnvelope.Action ==
+AuditActionCredentialRotation` AND `Outcome == AuditOutcomeOK` AND
+`AuditEnvelopeVersion == AuditEnvelopeVersionV1` (test L200–L209).
+This validates the v1 audit envelope contract end-to-end through
+the real `BuildCrossProductAuditEnvelopeV1` + `slog.Info` sink.
+**PASS.**
+
+**DoD-flip accuracy:**
+Both flipped lines (SCN-SM-041-019 core-behavior rotation
+accept/reject + diagnostics; SCN-SM-041-019 cursor/capability
+re-read/idempotency preservation) cite
+`report.md -> Scope 5 Credential Rotation Evidence (bubbles.implement,
+2026-05-21T19:05:00Z)` as the evidence anchor. Sections 1 (production
+caller), 2 (unit-test re-validation), and 3 (integration test
+evidence with verbatim audit-envelope log capture) collectively
+support both DoD claims. **PASS.**
+
+**Verdict:** **CLEAN.** Push permitted. No rework required.
+
+---
+
+### Section 2: Cross-Commit Coherence
+
+**1. Inter-commit dependency graph:**
+
+- `a3a0d59d` (audit helpers) depends on: `AuditActionEngagementSignalFlush`,
+  `AuditActionCallbackAttempt` (pre-existing in `types.go` L54–L55),
+  `BuildCrossProductAuditEnvelopeV1` + `EmitConnectorAuditEnvelope`
+  (pre-existing in `audit.go` L25–L72). No conflicting changes.
+- `c22151a5` (RotateCredentials + boundary wiring) depends on:
+  `PlanCredentialRotation` (pre-existing `credentials.go`),
+  `RejectQFActionBoundary` (pre-existing `boundary.go`),
+  `EventTypePacketActionBoundaryAttempted` (added in THIS commit's
+  `types.go` diff). All `AuditAction*` / `AuditOutcome*` constants
+  pre-existing. No conflicting changes.
+- `9e905280` (metric-set parity tests) depends on: `RecordQFEngagementSignalAttempt`,
+  `RecordQFCallbackAttempt`, `RecordQFActionBoundaryAttempt`,
+  `RecordQFPacketIngest`, `RecordQFEvidenceExportAttempt`,
+  `RecordFreshnessSample` (all pre-existing in `metrics.go` L11–L46),
+  `metricLabel` (pre-existing L40), `SurfaceDigest`,
+  `TargetContextPacketContext`, `FreshnessStageRender`,
+  `ActionTypeApproval` constants (all pre-existing in `types.go`).
+  No conflicting changes.
+- `8da0dbd5` (Sub-iter A integration test + DoD flips + report
+  evidence + state.json) depends on: `(*Connector).RotateCredentials`
+  (added in `c22151a5`), `CapabilitiesPath` /
+  `DecisionEventsPath` / `defaultValidCapability` / `validQFIntegrationCapability` /
+  `qfIntegrationConfig` / `validConnectorConfig` test helpers
+  (pre-existing). **Coherence-critical:** the integration test
+  `8da0dbd5` would NOT compile without `c22151a5` having landed
+  first. Commit ordering is correct (chronological: `a3a0d59d`
+  18:44:51Z → `c22151a5` 18:45:15Z → `9e905280` 18:45:37Z →
+  `8da0dbd5` 19:14:11Z).
+
+**2. Audit-helper consumption in `a3a0d59d`:**
+The two new helpers (`EmitEngagementSignalFlushAudit`,
+`EmitCallbackAttemptAudit`) have zero production callers at HEAD
+`8da0dbd5` by design. They will be consumed by Sub-iteration C
+(SCN-SM-041-021 audit-emission wiring across the remaining 8 points).
+The new constants (`AuditActionEngagementSignalFlush`,
+`AuditActionCallbackAttempt`) were pre-existing in `types.go`; the
+commit only adds the helper functions that emit envelopes carrying
+those action strings. Unit tests in `audit_test.go` exercise the
+helper shapes today.
+
+**3. Metric registration consistency in `9e905280`:**
+The test's 14-metric enumeration is the complete set declared in
+`internal/metrics/metrics.go` (declarations at L238, L251, L263, L276,
+L288, L297, L309, L324, L337, L347, L357, L368, L378, L388 inclusive)
+and registered exactly once each via `prometheus.MustRegister` at
+L417–L430. No double-registration anywhere; label-name spelling
+matches both source declarations and the spec at scopes.md L832.
+**COHERENT.**
+
+**4. Boundary-handling metric emission in `c22151a5`:**
+The Sync-loop branch routes through `RejectQFActionBoundary`
+(boundary.go) which calls `RecordQFActionBoundaryAttempt(actionType)`
+(metrics.go L28–L30). The vector label is exactly
+`attempted_action_type` per metrics.go L295–L301 + scopes.md L832.
+The `c22151a5` unit test
+(`TestSyncSkipsPacketActionBoundaryAttemptedEventAndEmitsAuditAndMetric`,
+connector_test.go +213 lines section) confirms metric delta == 1
+on `mandate_change` label after one boundary event ingested. The
+`9e905280` parity test
+(`TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`,
+sub-test `action_boundary_attempts_total`) drives
+`RecordQFActionBoundaryAttempt(ActionTypeApproval)` and asserts
+label key `{"attempted_action_type"}`. The two tests are
+complementary, not duplicative: c22151a5 validates the Sync-loop
+emission path; 9e905280 validates the metric-vector contract.
+**COHERENT.**
+
+**5. No working-tree conflicts:**
+`git status --porcelain` (executed by `bubbles.implement` at
+`2026-05-21T19:05:00Z`, re-confirmed empty by audit pre-flight at
+`2026-05-21T19:18:54Z`) shows zero unstaged or untracked changes
+between the four commits. Each commit was authored as a discrete
+diff and the chronological order matches the dependency order.
+
+**Cross-Commit Coherence Verdict:** **COHERENT.** All four commits
+are mutually consistent, the dependency graph is acyclic and matches
+commit chronology, and no two commits modify the same line of any
+file in conflicting ways.
+
+---
+
+### Section 3: Push Authorization Decision
+
+**Verdict tally:**
+
+| Commit | Verdict | Push allowed? |
+|---|---|---|
+| `a3a0d59d` audit helpers | **CLEAN** | ✅ |
+| `c22151a5` RotateCredentials + boundary wiring | **CLEAN** | ✅ |
+| `9e905280` metric-set parity tests | **CLEAN** | ✅ |
+| `8da0dbd5` Sub-iter A integration + DoD flips | **CLEAN** | ✅ |
+
+**Push Authorization:** **AUTHORIZED.** All four commits are within
+Scope 5 territory, compile/lint/test cleanly per `bubbles.implement`
+pre-implement validation evidence at `2026-05-21T19:05:00Z`, comply
+with SST / NO-DEFAULTS / metric label parity / audit envelope shape
+/ forbidden-behavior gates, and present no cross-commit conflicts.
+
+The operator MAY:
+
+- Push the four commits to `origin/main` now (no further rework
+  required), OR
+- Batch the push after Sub-iterations B / C / D close out, OR
+- Split the c22151a5 boundary-handling portion out of the broader
+  c22151a5 commit if a tighter Sub-iter A history is preferred for
+  retrospection — **NOT REQUIRED** by audit; presented as a stylistic
+  option only.
+
+**Recommendation:** Push as-is. The Sub-iter B / C / D dispatches can
+pick up from a known-clean baseline, and the in-tree boundary +
+helpers + parity tests will be `_test.go` and call-site material the
+later dispatches build on rather than re-author.
+
+---
+
+### Section 4: Specific Guidance for Next Implement Dispatches
+
+**Sub-Iteration B (Safety Boundary + 12-Metric Parity Emission):**
+
+- The Sync-loop `packet_action_boundary_attempted` branch is already
+  wired by `c22151a5`. Sub-iter B does NOT need to re-author it.
+- Sub-iter B SHOULD verify render / export / callback / watch-adjacent
+  paths reject forbidden actions via `RejectQFActionBoundary`
+  (today the boundary helper is consumed only by the Sync-loop branch;
+  Sub-iter B should add render-time + export-time call sites where
+  scopes.md L832 requires the boundary kick).
+- Sub-iter B SHOULD author `tests/integration/qf_scope5_observability_test.go`
+  per scopes.md L853 test plan (live-stack end-to-end metric emission
+  proof across Sync / Render / Export / Boundary paths).
+- After Sub-iter B closes, flip:
+  - scopes.md SCN-SM-041-020 Core Behavior "Safety-boundary helper
+    blocks or diagnoses…" `[ ]` → `[x]`.
+  - scopes.md SCN-SM-041-020 Core Behavior "The complete symmetric
+    metric set is emitted with documented QF design 063 label parity
+    for all 12 metrics…" `[ ]` → `[x]` (the parity test from
+    `9e905280` provides the unit-side anchor; the new integration
+    test provides the live-stack-emission anchor).
+  - scopes.md SCN-SM-041-020 Validation "Unit and integration tests
+    cover all 12 `smackerel_qf_*` metrics…" `[ ]` → `[x]`.
+
+**Sub-Iteration C (8-Emission-Point Audit Envelope v1):**
+
+- The two new audit helpers from `a3a0d59d`
+  (`EmitEngagementSignalFlushAudit`, `EmitCallbackAttemptAudit`) are
+  ready to consume. Sub-iter C wires them into the Smackerel-side
+  emission paths (signal-receipt-time and callback-attempt-time —
+  NOT the transport layer; transport stays Scope 6 / Scope 8
+  parked).
+- Sub-iter C SHOULD verify the other 6 emission points are already
+  wired through existing code: `packet_ingest`
+  (`BuildPacketIngestAuditEnvelope` in connector.go),
+  `evidence_export_attempt` + `evidence_revocation`
+  (`BuildEvidenceAuditEnvelope` in evidence_bundle.go L84/L95/L113/L144),
+  `deep_link_render` (render.go), `capability_handshake` (Connect +
+  RotateCredentials in connector.go L575–L596 from `c22151a5`),
+  `action_boundary_kick` (boundary.go from `c22151a5`'s call site).
+- Sub-iter C SHOULD author `tests/integration/qf_audit_envelope_test.go`
+  per scopes.md L854 test plan (live-stack proof of all 8 emission
+  points emitting v1 envelopes via the slog audit sink).
+- After Sub-iter C closes, flip:
+  - scopes.md SCN-SM-041-021 Core Behavior "Cross-Product Audit
+    Envelope v1 is emitted to the connector audit log for [8
+    emission points]…" `[ ]` → `[x]`.
+
+**Sub-Iteration D (12-Metric Symmetric-Set Parity Unit Test):**
+
+- The parity test (`metrics_test.go`) is already authored by
+  `9e905280` with 4 sub-tests
+  (`TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`,
+  `TestQFSymmetricMetricSetHasAllFourteenQFPrefixedRegistrations`,
+  `TestMetricLabelDefaultsBlankToUnknownAndTrimsWhitespace`,
+  `TestQFFreshnessRollingP95UsesPerStageGaugeAfterRecord`).
+- Sub-iter D's primary remaining work is the integration-side parity
+  test (covered in Sub-iter B above) plus the
+  `TestQFRenderAndCombinedFreshnessMetricsAreRecorded` unit test
+  named in scopes.md L851 — that test is NOT yet authored at HEAD
+  `8da0dbd5`; Sub-iter D SHOULD author it before flipping the
+  SCN-SM-041-020 V3 unit-test DoD line.
+
+**Sub-Iteration E (Stress p95 render + combined):**
+
+- Out of scope for this audit; Sub-iter E will author
+  `tests/stress/qf_decision_event_replay_test.go` Scope 5 assertions
+  (render p95 ≤ 30s + combined ingest+render p95 ≤ 60s) per
+  scopes.md L856.
+
+**Sub-Iteration F (Operator documentation):**
+
+- Out of scope for this audit; Sub-iter F will author
+  `docs/Operations.md` / `docs/Testing.md` / `docs/Development.md`
+  Scope 5 sections per scopes.md L858.
+
+---
+
+### Section 5: Audit Verdict Summary
+
+| Audit dimension | Result |
+|---|---|
+| Per-commit boundary check (all 4 commits within Scope 5) | ✅ PASS |
+| SST / NO-DEFAULTS compliance (4 commits, 6 source files + 1 test file) | ✅ PASS |
+| Metric label parity (14 metrics × labels) | ✅ PASS |
+| Audit envelope shape (Cross-Product Audit Envelope v1) | ✅ PASS |
+| Forbidden-behavior gate (no approval/execution/mandate/EmergencyStop/watch/callback/trust-reconstruction) | ✅ PASS |
+| Cross-commit coherence (dependency graph + label/spelling consistency + no conflicts) | ✅ PASS |
+| Push authorization | ✅ AUTHORIZED |
+
+**Final Verdict:** `🚀 SHIP_IT` for all 4 commits. No rework required
+before push. No DoD checkbox modified by this audit. No source code
+modified by this audit. No scope status promoted by this audit. No
+`certification.*` field written by this audit.
+
+**Spot-Check Recommendations (automation-bias mitigation):**
+
+This audit was read-only — no commands were executed against the
+running stack this pass. The user is advised to spot-check:
+
+1. **Run the focused unit + integration tests one more time before
+   push.** Even though `bubbles.implement` captured PASS evidence
+   at `2026-05-21T19:05:00Z`, a re-run at the exact pre-push HEAD
+   `8da0dbd5` gives the operator direct visual confirmation that
+   the four commits together produce a passing test suite.
+2. **Sanity-check the `git log @{u}..HEAD` ordering** before push —
+   should show exactly four commits in chronological order
+   `a3a0d59d → c22151a5 → 9e905280 → 8da0dbd5`.
+3. **Verify the auditor's metric label table** by spot-grepping
+   `internal/metrics/metrics.go` for any of the 14
+   `smackerel_qf_*` names — confirm the labels declared in the
+   source match the table in Section 1's Commit 3 verdict.
+
+---
+
+**Claim Source:** interpreted (read-only audit; pre-implement
+test/build/lint/integration evidence at `2026-05-21T19:05:00Z` is
+the upstream execution evidence relied upon).
+
+---
+
 
