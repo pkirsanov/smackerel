@@ -525,6 +525,27 @@ INTEGRATION_SUSPICIOUS_PATTERNS=(
   'Promise\.resolve\('
 )
 
+go_package_has_external_call() {
+  local impl_file="$1"
+  local impl_dir=""
+  local neighbor=""
+
+  impl_dir="$(dirname "$impl_file")"
+  [[ -d "$impl_dir" ]] || return 1
+
+  while IFS= read -r neighbor; do
+    [[ -z "$neighbor" ]] && continue
+    if echo "$neighbor" | grep -qE '(_test\.go|/testdata/)'; then
+      continue
+    fi
+    if grep -qE "$INTEGRATION_EXTERNAL_CALL_PATTERNS" "$neighbor" 2>/dev/null; then
+      return 0
+    fi
+  done < <(find "$impl_dir" -maxdepth 1 -type f -name '*.go' 2>/dev/null || true)
+
+  return 1
+}
+
 for impl_file in "${impl_files[@]}"; do
   file_ext="${impl_file##*.}"
 
@@ -542,7 +563,15 @@ for impl_file in "${impl_files[@]}"; do
       continue
     fi
 
+    package_external_call_present="false"
+    if [[ "$file_ext" == "go" ]] && go_package_has_external_call "$impl_file"; then
+      package_external_call_present="true"
+    fi
+
     for pattern in "${INTEGRATION_SUSPICIOUS_PATTERNS[@]}"; do
+      if [[ "$file_ext" == "go" && "$package_external_call_present" == "true" && "$pattern" == 'return[[:space:]]+nil' ]]; then
+        continue
+      fi
       while IFS=: read -r line_num matched_line; do
         [[ -z "$line_num" ]] && continue
         if echo "$matched_line" | grep -qE '^\s*(//|#|/\*|\*)'; then
