@@ -76,7 +76,7 @@ Capabilities requiring QF-owned approval, watch, tenant, voice, EmergencyStop, p
 | 2 | Capability handshake, cursor sync normalization, and storage | Connector supervisor, QF capability client, state store, artifact pipeline, PostgreSQL | Unit, integration, e2e, stress, scenario regression | Capability discovery, normalized cursor sync, page-size clamping, freshness SLA, lag breach signaling | Done |
 | 3 | Web Telegram digest and search surfacing | Web/PWA, HTMX web templates, digest API, Telegram formatting, search, artifact detail, QF renderer helpers | Unit, integration, static-contract anchor, Go live-stack e2e-api, regression, artifact lint | Read-only QF packet surfacing preserves trust metadata, signed deep links, preferred-surface routing, and PWA asset delivery through sanctioned Go E2E proof | Done |
 | 4 | Personal evidence bundle export | Web evidence selection, packet detail/search/context builder, QF export client, export status, local export state, evidence metrics/audit dependencies | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | Consent-scoped evidence bundles export to QF with packet context, idempotency, pre-flight limits, revocation, provenance classes, and no pre-MVP badge attachment | Done |
-| 5 | Credential rotation, safety boundaries, observability, documentation, and tests | Credential lifecycle, connector state, evidence export state, render/export/sync metrics, audit log, operator docs | Unit, integration, scenario-specific e2e-api, stress, broader E2E, artifact lint, traceability guard | Rotation overlap preserves state, full symmetric metrics and render/combined freshness are emitted, audit envelope v1 covers required bridge events, safety boundaries remain disabled | Not Started |
+| 5 | Credential rotation, safety boundaries, observability, documentation, and tests | Credential lifecycle, connector state, evidence export state, render/export/sync metrics, audit log, operator docs | Unit, integration, scenario-specific e2e-api, stress, broader E2E, artifact lint, traceability guard | Rotation overlap preserves state, full symmetric metrics and render/combined freshness are emitted, audit envelope v1 covers required bridge events, safety boundaries remain disabled | Done |
 
 ## Parked Scope Queue
 
@@ -785,7 +785,7 @@ Build quality gate:
 
 ## Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** Scopes 2, 3, 4
 **Activation:** Activated for executable planning on 2026-05-19. Scopes 2, 3, and 4 are certified Done, so the activation gate is satisfied: cursor/capability sync exists, read-only render surfaces exist, and evidence export/idempotency/revocation state exists for rotation, boundary, audit, and metric verification.
