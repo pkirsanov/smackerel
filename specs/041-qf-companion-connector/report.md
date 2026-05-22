@@ -15145,4 +15145,270 @@ interpreted from `git log` + existing concerns ledger), 5, 6, 7, 8
 
 ---
 
+## C-S2-STRESS-STUB-ARM Resolution (bubbles.implement, 2026-05-22T01:05:00Z)
+
+**Phase:** implement
+**Concern:** `C-S2-STRESS-STUB-ARM` (`state.json` concerns array L838-L848,
+raised by `bubbles.test` 2026-05-22T00:30:42Z)
+**Scope boundary:** This is a narrow Scope 2 test-harness defect repair
+routed forward from `bubbles.test`'s fresh Scope 5 live-stack
+verification at HEAD `10ee5d05`. NOT a Scope 5 implementation task.
+Scope 5's own 15-row Test Plan was already GREEN at HEAD `10ee5d05`;
+this fix unblocks `bubbles.validate` certification of Scope 5 by
+returning the stress runner exit code to `0`.
+**Working tree at start:** HEAD `24dc84b4` (4 commits ahead of
+`origin/main` per session context; same root-cause family as the
+previously-resolved `C-S2-006-E2E-STUB-ARM` resolution dated
+2026-05-18T14:04:12Z).
+
+### Section 1 — Root Cause Recap
+
+The stress test's `httptest.NewServer` stub
+(`tests/stress/qf_decisions_sync_stress_test.go` line 93+) was authored
+during Scope 2 work in commit `e53ee406` BEFORE the Round 2N change
+that added Connect-time capability handshake to
+`internal/connector/qfdecisions/connector.go`. The stub omitted a
+`case qfdecisions.CapabilitiesPath:` arm, so the capability probe
+returned 404 and `Connect()` short-circuited with the recorded error
+before the stress test body could execute. The identical defect was
+already fixed for the E2E sibling at
+`tests/e2e/qf_decisions_connector_api_test.go:670-693` (case
+`qfdecisions.CapabilitiesPath`); only the stress variant remained
+broken. Pre-existence relative to Scope 5: `git log --oneline
+10ee5d05~10..10ee5d05 -- tests/stress/qf_decisions_sync_stress_test.go`
+returns ZERO commits, confirming Scope 5's 10 sub-iteration commits
+A-F never touched the failing test file.
+
+### Section 2 — BEFORE (bubbles.test 2026-05-22T00:30:42Z fresh verification)
+
+Quoted verbatim from `report.md` `## Scope 5 Fresh Live-Stack
+Verification (bubbles.test, 2026-05-22T00:30:42Z)` Section 4:
+
+```
+07-stress.log:2648  === RUN   TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity
+07-stress.log:2651  qf_decisions_sync_stress_test.go:134: Connect: qf capability handshake: QF bridge request failed with status 404: 404 Not Found
+07-stress.log:2654  --- FAIL: TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity (0.04s)
+07-stress.log:2660  FAIL    github.com/smackerel/smackerel/tests/stress     364.436s
+```
+
+**BEFORE EXIT CODE:** `EXIT_CODE=1` (stress runner) — recorded by
+`bubbles.test` at 2026-05-22T00:30:42Z; root-cause attribution in
+Section 4 of that section.
+
+### Section 3 — Stub-Arm Addition Diff (verbatim, PII-redacted)
+
+```diff
+diff --git a/tests/stress/qf_decisions_sync_stress_test.go b/tests/stress/qf_decisions_sync_stress_test.go
+index 6d511d78..bbd38586 100644
+--- a/tests/stress/qf_decisions_sync_stress_test.go
++++ b/tests/stress/qf_decisions_sync_stress_test.go
+@@ -93,6 +93,30 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
+        server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                w.Header().Set("Content-Type", "application/json")
+                switch {
++               case r.URL.Path == qfdecisions.CapabilitiesPath:
++                       // Round 2N capability handshake — Connect() probes this path
++                       // before Sync() is permitted. Canonical shape mirrors the
++                       // resolved C-S2-006-E2E-STUB-ARM fix at
++                       // tests/e2e/qf_decisions_connector_api_test.go (case
++                       // qfdecisions.CapabilitiesPath) so CompatibilityCheck()
++                       // passes: audit_envelope_version=v1, packet_version v1, the
++                       // three required decision_types, and a valid [min,max]
++                       // page-size range that admits the stress page_size of 2.
++                       _ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
++                               SupportedPacketVersions:        []string{"v1"},
++                               SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
++                               SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
++                               MaxPageSize:                    100,
++                               MinPageSize:                    1,
++                               SupportedTargetContextTypes:    []string{"trip"},
++                               EvidenceMaxBundleSizeBytes:     1048576,
++                               EvidenceMaxClaimsPerBundle:     50,
++                               EvidenceRateLimitPerMinute:     60,
++                               FreshnessSLAP95Seconds:         60,
++                               AuditEnvelopeVersion:           "v1",
++                               WatchSignalDirection:           "qf_to_smackerel",
++                               EligibleSmackerelSourceClasses: []string{"watch"},
++                       })
+                case r.URL.Path == qfdecisions.DecisionEventsPath:
+                        eventCalls.Add(1)
+                        cursor := r.URL.Query().Get("cursor")
+```
+
+**Diff size:** 24 insertions (per `git diff --stat`). Canonical shape
+mirrors the resolved E2E fix verbatim (same 13-field
+`QFBridgeCapability` literal as `tests/e2e/qf_decisions_connector_api_test.go`
+case `qfdecisions.CapabilitiesPath`). The field set satisfies
+`CompatibilityCheck()` requirements: `audit_envelope_version=v1`,
+`supported_packet_versions` contains `v1`, `supported_event_types`
+contains the five required `packet_*` event types,
+`supported_decision_types` contains the three required types
+(`recommendation`/`policy_denial`/`analysis_note`), and
+`min_page_size=1 <= page_size=2 <= max_page_size=100`.
+
+### Section 4 — AFTER (fresh stress run at HEAD 24dc84b4 + this fix)
+
+Stack lifecycle (commands executed verbatim, PII-redacted):
+
+```
+$ ./smackerel.sh --env test up
+config-validate: ~/smackerel/config/generated/test.env.tmp OK
+Preparing disposable test stack...
+[+] Running 9/9
+ ✔ Network smackerel-test_default             Created                      0.9s
+ ✔ Volume "smackerel-test-ollama-data"        Created                      0.0s
+ ✔ Volume "smackerel-test-postgres-data"      Created                      0.0s
+ ✔ Volume "smackerel-test-nats-data"          Created                      0.0s
+ ✔ Container smackerel-test-nats-1            Healthy                     13.3s
+ ✔ Container smackerel-test-ollama-1          Healthy                     13.3s
+ ✔ Container smackerel-test-postgres-1        Healthy                     13.3s
+ ✔ Container smackerel-test-smackerel-ml-1    Healthy                     18.5s
+ ✔ Container smackerel-test-smackerel-core-1  Healthy                     22.5s
+$ echo $?
+0
+```
+
+Targeted stress test result (verbatim, captured at line 2733 of the
+executed stress run output):
+
+```
+=== RUN   TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity
+    qf_decisions_sync_stress_test.go:69: cleanup query artifacts for qf-decisions-stress-1779411549462577341: closed pool
+--- PASS: TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity (0.64s)
+```
+
+Suite-level results (verbatim package summary lines):
+
+```
+ok      github.com/smackerel/smackerel/tests/stress             368.217s
+ok      github.com/smackerel/smackerel/tests/stress/agent       2.238s
+ok      github.com/smackerel/smackerel/tests/stress/drive       332.177s
+ok      github.com/smackerel/smackerel/tests/stress/readiness   0.101s
+```
+
+Suite tally (counts derived from `grep -cE '^--- (PASS|FAIL|SKIP):'`
+against the executed stress run output):
+
+| Outcome | Count | Target (per dispatch) |
+|---------|-------|-----------------------|
+| `--- PASS:` | 19 | 19 |
+| `--- FAIL:` | 0 | 0 |
+| `--- SKIP:` | 1 | 1 |
+
+The single SKIP is the pre-existing `TestKnowledge_LintAt1000ArtifactScale`
+skip, unrelated to Scope 2 or Scope 5.
+
+Stack teardown is performed automatically by the stress runner via
+its trap (verified by tail of executed output):
+
+```
+ Container smackerel-test-smackerel-ml-1  Stopped
+ Container smackerel-test-smackerel-ml-1  Removing
+ Container smackerel-test-smackerel-ml-1  Removed
+ Container smackerel-test-nats-1  Stopping
+ Container smackerel-test-nats-1  Stopped
+ Container smackerel-test-nats-1  Removing
+ Container smackerel-test-nats-1  Removed
+ Network smackerel-test_default  Removing
+ Volume smackerel-test-ollama-data  Removing
+ Volume smackerel-test-nats-data  Removing
+ Volume smackerel-test-ollama-data  Removed
+ Volume smackerel-test-nats-data  Removed
+ Volume smackerel-test-postgres-data  Removing
+ Volume smackerel-test-postgres-data  Removed
+ Network smackerel-test_default  Removed
+```
+
+Post-teardown status confirmation:
+
+```
+$ ./smackerel.sh --env test status
+config-validate: ~/smackerel/config/generated/test.env.tmp OK
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+curl: (7) Failed to connect to 127.0.0.1 port 45001 after 4 ms: Couldn't connect to server
+```
+
+**AFTER EXIT CODE:** `EXIT_CODE=0` (stress runner). Target met:
+19 PASS / 0 FAIL / 1 SKIP / EXIT=0.
+
+### Section 5 — Before/After Summary
+
+| Metric | BEFORE (HEAD 10ee5d05) | AFTER (HEAD 24dc84b4 + this fix) |
+|--------|------------------------|----------------------------------|
+| Stress runner EXIT | `1` | `0` |
+| `TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity` | `FAIL` (capability handshake 404) | `PASS` (0.64s) |
+| `TestQFDecisionsFreshnessSLAP95IngestRender` | `PASS` (Scope 5) | `PASS` (10.73s) |
+| `TestQFDecisionsFreshnessSLAP95RenderAndCombined` | `PASS` (Scope 5) | `PASS` (10.56s) |
+| Overall `--- PASS:` count | 18 | 19 |
+| Overall `--- FAIL:` count | 1 | 0 |
+| Overall `--- SKIP:` count | 1 | 1 |
+
+### Section 6 — Change Boundary Compliance
+
+Files modified by this dispatch (operator allowlist verbatim):
+
+1. `tests/stress/qf_decisions_sync_stress_test.go` — 24 insertions
+   (case-arm addition only); no deletions, no other changes
+2. `specs/041-qf-companion-connector/report.md` — this section
+   appended only; no existing section modified
+3. `specs/041-qf-companion-connector/state.json` — concern
+   `C-S2-STRESS-STUB-ARM` flipped `open` → `resolved` with
+   `resolvedAt` / `resolvedBy` / `resolutionNote`; matching
+   `executionHistory` entry appended; `lastUpdatedAt` refreshed; no
+   other field modified
+
+Files NOT modified (excluded by operator change boundary, verified
+via `git diff --stat`):
+
+- All `internal/` and `cmd/` production source
+- All `tests/` files other than the single stress test
+- `scopes.md` (no DoD checkbox flipped, no planning content edited;
+  per dispatch this is a bugfix-style fix, not a Scope 5 closeout)
+- `scenario-manifest.json`, `spec.md`, `design.md`,
+  `uservalidation.md`
+- All `certification.*` fields in `state.json`
+- All other specs' folders
+
+### Section 7 — Policy Compliance
+
+- No `--no-verify` flag will be used at commit time
+- No shell-redirection / `cat >` writes to repo files (all artifact
+  writes via IDE `replace_string_in_file` / `multi_replace_string_in_file`
+  tools; the transient `stress_output.log` created by an execution
+  subagent during evidence capture was removed via `rm` before this
+  section was authored)
+- All terminal output snippets are PII-redacted (absolute
+  `/home/<USER>/...` paths rewritten to `~/...`)
+- Test isolation maintained: only `./smackerel.sh --env test ...`
+  used; no touch to persistent dev stack
+- Single coherent commit will be produced at the end of this
+  dispatch
+- No push to `origin/main` (per dispatch DELIVERABLE — operator
+  will push when appropriate)
+
+### Section 8 — What This Resolution Does NOT Claim
+
+- Does NOT promote Scope 5 status to Done (that belongs to
+  `bubbles.validate` against the now-clean stress runner)
+- Does NOT touch any `certification.*` field
+- Does NOT flip any `scopes.md` DoD checkbox (Scope 5 DoD items are
+  already all `[x]` per Sub-iters A-F; this fix is a Scope 2
+  test-harness defect repair routed forward)
+- Does NOT modify production source under `internal/`
+- Does NOT modify any other test file
+- Does NOT modify any other spec folder
+- Does NOT close the cross-product QF 063 producer-readiness
+  dependency for Scopes 6-9
+
+**Claim Source:** executed for the BEFORE block (quoted verbatim from
+prior `bubbles.test` 2026-05-22T00:30:42Z section that itself
+recorded executed evidence), executed for the diff (verbatim
+`git diff` output, PII-redacted), executed for the AFTER block
+(verbatim from this dispatch's executed stress run captured at
+2026-05-22T00:53Z to 2026-05-22T01:04Z), interpreted for the
+root-cause attribution in Section 1 (sourced from `git log` +
+existing concerns ledger).
+
+---
+
 
