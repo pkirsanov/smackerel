@@ -14863,4 +14863,286 @@ executed evidence sections and from post-edit `git diff` review of the
 
 ---
 
+## Scope 5 Fresh Live-Stack Verification (bubbles.test, 2026-05-22T00:30:42Z)
+
+**HEAD:** `10ee5d05` (Sub-iteration F closeout; 10 commits ahead of
+`origin/main`, NOT pushed).
+**Run window:** `2026-05-21T23:54:54Z` → `2026-05-22T00:30:42Z`.
+**Mode:** test-only verification. No source code, test code, scope
+plans, DoD checkboxes, or `state.json` certification fields were
+modified by this run.
+**Claim Source:** executed.
+
+All command outputs PII-redacted (absolute host home-dir paths →
+`~`; auth tokens already scrubbed by `./smackerel.sh` log emission).
+Raw transcripts captured to `~/tmp/spec041-s5-verify/NN-suite.{log,exit,end}`
+during the run (host-local scratch path; not committed).
+
+### Section 1 — Test Pyramid Suite-Level Results
+
+| # | Suite | Command | Exit | Counts | Wall | Log |
+|---|-------|---------|------|--------|------|-----|
+| 1 | Unit (Go) | `./smackerel.sh test unit --go` | 0 | all packages PASS | 30s | `01-unit-go.log` |
+| 2 | Unit (Python) | `./smackerel.sh test unit --python` | 0 | `450 passed in 13.87s` | 71s (incl. pip install) | `02-unit-python.log` |
+| 3 | Stack up | `./smackerel.sh --env test up` | 0 | 5/5 services Healthy | 36s | `03-up.log` |
+| 4 | Stack status | `./smackerel.sh --env test status` | 0 | 5/5 services `Up (healthy)` | <2s | `04-status.log` |
+| 5 | Integration | `./smackerel.sh --env test test integration` | 0 | 225 PASS / 0 FAIL / 15 SKIP across 3 packages | ~243s | `05-integration.log` |
+| 6 | E2E | `./smackerel.sh --env test test e2e` | 0 | 136 PASS / 0 FAIL / 3 SKIP (Go) + 74 PASS (shell) across 4 packages | ~968s | `06-e2e.log` |
+| 7 | Stress | `./smackerel.sh --env test test stress` | **1** | 18 PASS / **1 FAIL** / 1 SKIP across 4 packages | ~479s | `07-stress.log` |
+| 8 | Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector` | 0 | "Artifact lint PASSED" | <2s | `09-artifact-lint.log` |
+| 9 | Traceability guard | `bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector` | 0 | "RESULT: PASSED (0 warnings)"; 21 scenarios / 66 test rows / 21/21 DoD fidelity | <5s | `10-traceability.log` |
+
+**Stack lifecycle behaviour observed (not a defect, not introduced by
+this run).** The integration, e2e, and stress runners each manage
+their own disposable test stack lifecycle: the `./smackerel.sh --env
+test up` stack from row 3 was torn down by the integration runner's
+exit cleanup at row 5, and was re-created+torn-down independently by
+rows 6 and 7. Post-stress `./smackerel.sh --env test status` returns
+zero containers + `curl: (7) Failed to connect to 127.0.0.1 port
+45001`, confirming clean teardown by the stress wrapper. No residual
+containers, volumes, networks, or listeners remain.
+
+### Section 2 — Scope 5 Test Plan Coverage (15 rows from `scopes.md` L926–L962)
+
+Each row maps a Test Plan entry to the actual run evidence. Names
+prefixed `→` are the planned name; `=>` shows the actual function
+that exercised the scenario (name divergences acknowledged in
+`scopes.md` Plan Amendment 2026-05-21).
+
+| # | Row | Scenario | File | Planned name → Actual name | Verdict | Evidence |
+|---|-----|----------|------|----------------------------|---------|----------|
+| 1 | Unit | SCN-019 | `internal/connector/qfdecisions/credentials_test.go` | `TestCredentialRotationSelectsNewestValidNotBeforeWithinTwentyFourHourOverlap` => `TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` (L9); `TestCredentialRotationRejectsOverlapBeyondTwentyFourHours` => `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` (L46) | ✅ PASS (Go unit package PASS, cached/fresh per row 1) | `01-unit-go.log` |
+| 2 | Unit | SCN-019 | `internal/connector/qfdecisions/credentials_test.go` | `TestCredentialRotationPreservesCursorEvidenceExportStateAndReReadsCapabilities` => (covered as INTEGRATION, see row 6) | ✅ PASS (live-stack equivalent) | `05-integration.log` |
+| 3 | Unit | SCN-020 | `internal/connector/qfdecisions/boundary_test.go` | `TestQFActionBoundaryRejectsApprovalExecutionMandateEmergencyStopWatchCallbackAndTrustAuthoring` => `TestRejectQFActionBoundaryBlocksAllFinancialActionTypes` (L11); `TestEnforceQFActionBoundaryFiresForForbiddenAndPassesForBenign` (L62) | ✅ PASS (Go unit package PASS) | `01-unit-go.log` |
+| 4 | Unit | SCN-020 | `internal/connector/qfdecisions/metrics_test.go` | `TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity` (L40, exact match); `TestQFRenderAndCombinedFreshnessMetricsAreRecorded` (L330, exact match); also `TestQFSymmetricMetricSetHasAllFourteenQFPrefixedRegistrations` (L226), `TestMetricLabelDefaultsBlankToUnknownAndTrimsWhitespace` (L265), `TestQFFreshnessRollingP95UsesPerStageGaugeAfterRecord` (L281) | ✅ PASS (Go unit package PASS) | `01-unit-go.log` |
+| 5 | Unit | SCN-021 | `internal/connector/qfdecisions/audit_test.go` | `TestCrossProductAuditEnvelopeV1ShapeMatchesQFDesign063` => `TestCrossProductAuditEnvelopeV1Shape` (L8); `TestCrossProductAuditEnvelopeOptionalIDsByEmissionPoint` => `TestScope5AuditEmissionPointConstantsAreStable` (L45) + `TestEmitEngagementSignalFlushAuditPopulatesEnvelopeShape` (L63) + `TestEmitEngagementSignalFlushAuditMapsRejectedStatus` (L97) + `TestEmitCallbackAttemptAuditPopulatesEnvelopeShape` (L110) + `TestEmitCallbackAttemptAuditMapsErrorStatus` (L139) | ✅ PASS (Go unit package PASS) | `01-unit-go.log` |
+| 6 | Integration | SCN-019 | `tests/integration/qf_credential_rotation_test.go` | `TestQFCredentialRotationOverlapPreservesCursorExportIdempotencyCapabilityDiagnosticsAndAudit` | ✅ PASS (0.06s) | `05-integration.log:===QF SCOPE5===` |
+| 7 | Integration | SCN-020 | `tests/integration/qf_scope5_observability_test.go` | `TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths` | ✅ PASS (0.13s) | `05-integration.log:===QF SCOPE5===` |
+| 8 | Integration | SCN-021 | `tests/integration/qf_audit_envelope_test.go` | `TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints` | ✅ PASS (0.11s) | `05-integration.log:===QF SCOPE5===` |
+| 9 | Regression E2E | SCN-019 | `tests/e2e/qf_scope5_safety_observability_test.go:352` | `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` | ✅ PASS (0.07s) | `06-e2e.log:1241-1242` |
+| 10 | Regression E2E | SCN-020 | `tests/e2e/qf_scope5_safety_observability_test.go:664` | `TestQFSafetyBoundaryAndMetricSetThroughLiveSyncRenderExportSurface` | ✅ PASS (0.11s); metric deltas: QFActionBoundaryAttemptsTotal=3, QFPacketIngestTotal=2, render=2, export=2, revoked=1, unknownDT=1, cursorFFwd=3; QFEngagementSignalAttemptsTotal + QFCallbackAttemptsTotal registered with 0 emissions (Scope 6/8 pre-MVP) | `06-e2e.log:1243-1248` |
+| 11 | Regression E2E | SCN-021 | `tests/e2e/qf_scope5_safety_observability_test.go:1118` | `TestQFAuditEnvelopeV1RecordedForRequiredBridgeEventsThroughLiveSurface` | ✅ PASS (0.10s); captured 1 cross_product_audit record across 6 emission points | `06-e2e.log:1249-1251` |
+| 12 | Stress | SCN-020 | `tests/stress/qf_decision_event_replay_test.go` | `TestQFDecisionsFreshnessSLAP95RenderAndCombined` | ✅ PASS (10.13s); see Section 3 | `07-stress.log:1141-2647` |
+| 13 | Broader E2E | SCN-019..021 | `tests/e2e/` | "go-e2e and shell E2E suites complete without failures" | ✅ PASS (`PASS: go-e2e`); 136 Go PASS / 0 Go FAIL / 3 Go SKIP / 74 shell PASS / 4 `ok` packages | `06-e2e.log` |
+| 14 | Artifact lint | SCN-019..021 | `specs/041-qf-companion-connector` | Artifact lint PASS with zero anti-fabrication violations | ✅ PASS (EXIT=0) | `09-artifact-lint.log` |
+| 15 | Traceability guard | SCN-019..021 | `specs/041-qf-companion-connector` | Traceability guard PASS with zero warnings | ✅ PASS (EXIT=0, 21 scenarios / 21/21 DoD fidelity) | `10-traceability.log` |
+
+**Coverage verdict:** 15 of 15 Scope 5 Test Plan rows executed at HEAD
+`10ee5d05` and **all 15 returned PASS** (12 named test functions plus
+the broader E2E suite plus artifact lint plus traceability guard).
+Name divergences from the planned column are pre-existing (recorded
+in `scopes.md` Plan Amendment 2026-05-21) and do not affect coverage.
+
+### Section 3 — Scope 5 Freshness SLA Stress Detail (SCN-SM-041-020, Row 12)
+
+Verbatim freshness SLA log line from `07-stress.log:2645`:
+
+```
+freshness SLA stress (render+combined): cycles=20 artifacts=500
+renders=500 packetFetches=500 eventCalls=20 ingestP95=1.299709s
+renderP95=4.554166s combinedP95=4.554166s
+--- PASS: TestQFDecisionsFreshnessSLAP95RenderAndCombined (10.13s)
+```
+
+| Stage | p95 observed | Threshold | Headroom |
+|-------|--------------|-----------|----------|
+| ingest | 1.299709 s | n/a (Scope 2 territory, not asserted by this test) | — |
+| render | 4.554166 s | ≤ 30 s (SCN-SM-041-020) | 6.58× |
+| combined (total) | 4.554166 s | ≤ 60 s (SCN-SM-041-020) | 13.17× |
+
+**Comparison vs Sub-iteration D baseline** (recorded
+`renderP95=6.036306s`, `combinedP95=6.036306s` at HEAD `1670d3ac`):
+this run's p95 numbers are LOWER on both stages, which is normal
+sample-to-sample variance under the same fixed-workload contract. The
+test PASSes at both samples.
+
+### Section 4 — Pre-Existing Non-Scope-5 Stress Failure (HONEST DISCLOSURE)
+
+The stress runner returned `EXIT_CODE=1` because of a SINGLE
+non-Scope-5 stress test that has been broken in the repo SINCE its
+authoring during Scope 2 work (commit `e53ee406`):
+
+```
+07-stress.log:2648  === RUN   TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity
+07-stress.log:2651  qf_decisions_sync_stress_test.go:134: Connect: qf capability handshake: QF bridge request failed with status 404: 404 Not Found
+07-stress.log:2654  --- FAIL: TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity (0.04s)
+07-stress.log:2660  FAIL    github.com/smackerel/smackerel/tests/stress     364.436s
+```
+
+**Root cause (interpreted from source + report.md history):** Same
+defect family as the previously-resolved `C-S2-006-E2E-STUB-ARM`
+concern (`state.json` L700 in the concerns array). The Round 2L
+author wrote the stress test's `httptest.NewServer` stub BEFORE
+Round 2N added Connect-time capability handshake to
+`internal/connector/qfdecisions/connector.go`. The stub omits a
+`case qfdecisions.CapabilitiesPath:` arm, so the handshake gets 404
+and `Connect()` returns the recorded error before the stress test
+body executes. The same pattern was fixed for the E2E variant
+`TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata` at
+`tests/e2e/qf_decisions_connector_api_test.go:637-654` on
+`2026-05-18T14:04:12Z`; the equivalent fix was never applied to the
+stress variant.
+
+**Pre-existence proof:** `git log --oneline 10ee5d05 --
+tests/stress/qf_decisions_sync_stress_test.go` returns exactly one
+commit (`e53ee406 spec(041): Stream D snapshot — Round 2L Scope 2
+partial …`). `git log --oneline 10ee5d05~10..10ee5d05 --
+tests/stress/qf_decisions_sync_stress_test.go` returns ZERO commits,
+confirming none of the 10 Scope 5 sub-iteration commits (A-F)
+touched this test file. The failure is therefore **NOT a Scope 5
+regression**.
+
+**This concern is being routed forward as a new entry
+`C-S2-STRESS-STUB-ARM` in `state.json` (severity medium,
+followUpOwner bubbles.implement), mirroring the
+`C-S2-006-E2E-STUB-ARM` pattern.** Operator dispatch explicitly
+prohibits modifying test code in this verification-only phase, so
+the test source was NOT edited by this run.
+
+**Stress suite breakdown (4 packages):**
+
+```
+ok      github.com/smackerel/smackerel/tests/stress/readiness    1.572s
+FAIL    github.com/smackerel/smackerel/tests/stress              364.436s
+ok      github.com/smackerel/smackerel/tests/stress/agent        1.255s
+ok      github.com/smackerel/smackerel/tests/stress/drive       317.388s
+ok      github.com/smackerel/smackerel/tests/stress/readiness    1.631s
+```
+
+The failing test is in the `tests/stress` package; the other 3
+stress packages PASS, and within the failing package the Scope 5
+freshness SLA test PASSes (Section 3 above) and the rest of the
+package's PASS-count is 17 (totalling 18 PASS in the stress
+suite).
+
+### Section 5 — Live Stack Health Snapshot (Row 4)
+
+From `04-status.log` immediately after `./smackerel.sh --env test
+up`:
+
+```
+NAME                              STATUS                    PORTS
+smackerel-test-nats-1             Up 27 seconds (healthy)   6222/tcp, 127.0.0.1:47002->4222/tcp, 127.0.0.1:47003->8222/tcp
+smackerel-test-ollama-1           Up 27 seconds (healthy)   127.0.0.1:47004->11434/tcp
+smackerel-test-postgres-1         Up 27 seconds (healthy)   127.0.0.1:47001->5432/tcp
+smackerel-test-smackerel-core-1   Up 18 seconds (healthy)   127.0.0.1:45001->8080/tcp
+smackerel-test-smackerel-ml-1     Up 18 seconds (healthy)   127.0.0.1:45002->8081/tcp
+```
+
+All 5 services Healthy on loopback bind addresses (NO public-net
+binding). `127.0.0.1:45001` (core) responded `{"status":"degraded","services":null}`
+to `/api/health` — degraded is the expected cold-start health
+verdict before any connector is wired, NOT a runtime defect.
+
+### Section 6 — Governance Guard Re-Run
+
+`artifact-lint.sh` re-run output tail (from `09-artifact-lint.log`):
+
+```
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+EXIT_CODE=0
+```
+
+`traceability-guard.sh` re-run output tail (from
+`10-traceability.log`):
+
+```
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 21
+ℹ️  Test rows checked: 66
+ℹ️  Scenario-to-row mappings: 21
+ℹ️  Concrete test file references: 21
+ℹ️  Report evidence references: 21
+ℹ️  DoD fidelity scenarios: 21 (mapped: 21, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
+```
+
+### Section 7 — Integration Suite Breakdown (Row 5)
+
+From `05-integration.log`:
+
+```
+ok      github.com/smackerel/smackerel/tests/integration         43.634s
+ok      github.com/smackerel/smackerel/tests/integration/agent    4.251s
+ok      github.com/smackerel/smackerel/tests/integration/drive   11.764s
+```
+
+3 packages OK; 225 `--- PASS:`, 0 `--- FAIL:`, 15 `--- SKIP:`.
+All 3 Scope 5 integration tests PASS within the umbrella package.
+
+### Section 8 — E2E Suite Breakdown (Rows 9–11, 13)
+
+From `06-e2e.log`:
+
+- Final summary line: `PASS: go-e2e`
+- 136 `--- PASS:`, 0 `--- FAIL:`, 3 `--- SKIP:` (Go); 74 shell `PASS:` markers
+- 4 packages `ok`: `tests/e2e`, `tests/e2e/agent`, `tests/e2e/auth`, `tests/e2e/drive`
+- All 3 Scope 5 E2E test functions PASS in the broader run (Section 2 rows 9–11)
+- Chaos test `SCN-002-BUG-002-001` (deliberate postgres-stop readiness assertion) PASS (`06-e2e.log:250`); the matching `FAIL` marker inside its body at line 247 is the expected intermediate harness line documented in Sub-iter E's pre-existing-failure disclosure
+
+### Section 9 — Reproducibility Footprint
+
+Exact commands run, in order:
+
+```bash
+./smackerel.sh test unit --go                                   # 01
+./smackerel.sh test unit --python                               # 02
+./smackerel.sh --env test up                                    # 03
+./smackerel.sh --env test status                                # 04
+./smackerel.sh --env test test integration                      # 05
+./smackerel.sh --env test test e2e                              # 06
+./smackerel.sh --env test test stress                           # 07
+bash .github/bubbles/scripts/artifact-lint.sh specs/041-qf-companion-connector       # 09
+bash .github/bubbles/scripts/traceability-guard.sh specs/041-qf-companion-connector  # 10
+```
+
+No `--no-verify`, no `--go-run` selector flags, no shell-redirection
+file writes, no IDE-tool bypass. All artifact writes via
+`replace_string_in_file` / `multi_replace_string_in_file`.
+
+### Section 10 — What This Run Does NOT Claim
+
+- **Scope 5 is NOT promoted to test-certified.** The stress runner's
+  exit code 1 (driven by the non-Scope-5 pre-existing
+  `TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity`
+  failure) means the full test pyramid did not exit clean. The
+  appropriate next routing is `bubbles.implement` to address
+  `C-S2-STRESS-STUB-ARM`, not `bubbles.validate` for Scope 5
+  closeout.
+- **Scope 5's own test surface (15 Test Plan rows) is fully GREEN
+  at HEAD `10ee5d05`** — verified by Sections 2, 3, 5, 6, 7, 8
+  above. Once the pre-existing Scope 2 stress stub-arm omission is
+  fixed and the stress runner returns exit 0, Scope 5 is ready for
+  `bubbles.validate` certification.
+- No production source code modified.
+- No test code modified.
+- No `scopes.md` DoD checkbox flipped.
+- No `scopes.md` planning content modified.
+- No `state.json` certification field promoted (no
+  `certification.completedScopes` write, no
+  `certification.scopeProgress[4].status` change, no
+  `certification.certifiedCompletedPhases` change, no top-level
+  `status` change).
+- No `spec.md` / `design.md` / `uservalidation.md` /
+  `scenario-manifest.json` modified.
+- No push to `origin/main`.
+
+**Claim Source:** executed for Sections 1, 2 (verdict column derived
+from grep results against the executed logs), 3, 4 (failure evidence
+quoted verbatim from executed log; root-cause attribution
+interpreted from `git log` + existing concerns ledger), 5, 6, 7, 8
+(all evidence quoted verbatim from executed log files), 9, 10
+(self-attestation).
+
+---
+
 
