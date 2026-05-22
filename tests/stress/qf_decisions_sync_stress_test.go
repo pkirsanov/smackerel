@@ -93,6 +93,30 @@ func TestQFDecisionsSyncStress_RepeatedCursorPagesDoNotDuplicatePacketIdentity(t
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case r.URL.Path == qfdecisions.CapabilitiesPath:
+			// Round 2N capability handshake — Connect() probes this path
+			// before Sync() is permitted. Canonical shape mirrors the
+			// resolved C-S2-006-E2E-STUB-ARM fix at
+			// tests/e2e/qf_decisions_connector_api_test.go (case
+			// qfdecisions.CapabilitiesPath) so CompatibilityCheck()
+			// passes: audit_envelope_version=v1, packet_version v1, the
+			// three required decision_types, and a valid [min,max]
+			// page-size range that admits the stress page_size of 2.
+			_ = json.NewEncoder(w).Encode(qfdecisions.QFBridgeCapability{
+				SupportedPacketVersions:        []string{"v1"},
+				SupportedEventTypes:            []string{"packet_created", "packet_updated", "packet_trust_changed", "packet_archived", "packet_action_boundary_attempted"},
+				SupportedDecisionTypes:         []string{"recommendation", "policy_denial", "analysis_note"},
+				MaxPageSize:                    100,
+				MinPageSize:                    1,
+				SupportedTargetContextTypes:    []string{"trip"},
+				EvidenceMaxBundleSizeBytes:     1048576,
+				EvidenceMaxClaimsPerBundle:     50,
+				EvidenceRateLimitPerMinute:     60,
+				FreshnessSLAP95Seconds:         60,
+				AuditEnvelopeVersion:           "v1",
+				WatchSignalDirection:           "qf_to_smackerel",
+				EligibleSmackerelSourceClasses: []string{"watch"},
+			})
 		case r.URL.Path == qfdecisions.DecisionEventsPath:
 			eventCalls.Add(1)
 			cursor := r.URL.Query().Get("cursor")
