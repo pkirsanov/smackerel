@@ -126,6 +126,64 @@ type Connector struct {
 	// own internal mutex so it is safe to read/write outside of c.mu.
 	// SCN-SM-041-003, SCN-SM-041-008.
 	freshness map[string]*freshnessWindow
+	// engagement is the Scope 6 packet engagement signal exporter
+	// constructed on Connect when the QF capability response reports
+	// `engagement_signal_supported=true`; nil before Connect and
+	// after Close, or when the capability flag is false. SCN-SM-041-022.
+	engagement *Exporter
+	// callbackKeystore is the Scope 8 HMAC bridge signing keystore
+	// loaded from the SST-managed env var
+	// QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON at Connect time. nil
+	// when the env var is empty/unset (callback signing intentionally
+	// not configured in this environment) or before Connect / after
+	// Close. The keystore is immutable after construction. SCN-SM-041-028.
+	callbackKeystore *CallbackKeystore
+	// callbackSigner is the Scope 8 callback signer wrapping the
+	// keystore above. nil when no keystore is configured or before
+	// Connect / after Close. The signer's Sign method emits the
+	// signature-failure metric + Cross-Product Audit Envelope v1
+	// record on any local rejection; the network is never reached
+	// when Sign returns an error. SCN-SM-041-028 / SCN-SM-041-030.
+	callbackSigner *CallbackSigner
+	// watchProposalClient is the Scope 9 connector-internal
+	// diagnostic watch-proposal client. nil when no callback
+	// keystore is configured or before Connect / after Close. The
+	// client is NEVER wired into web/digest/Telegram surfaces
+	// pre-MVP; it is only callable from the connector internal
+	// diagnostic path and the Scope 9 integration test. The client
+	// REUSES the Scope 8 keystore via interface reference for
+	// signing (verbatim Scope 8 reuse). SCN-SM-041-031 /
+	// SCN-SM-041-032 / SCN-SM-041-033.
+	watchProposalClient *WatchProposalClient
+}
+
+// Package-level consent reader used by the engagement exporter when
+// the connector constructs one on Connect. The reader returns the
+// user's `engagement_telemetry` privacy preference at event-capture
+// time. When no reader is installed, the engagement exporter falls
+// back to `off` (fail-closed) so no signals can leak without explicit
+// privacy-store wiring. SCN-SM-041-022.
+var (
+	engagementConsentReaderMu sync.RWMutex
+	engagementConsentReader   ConsentReader
+)
+
+// SetEngagementConsentReader installs the privacy-preference reader
+// the connector will pass to NewExporterFromClient on Connect. Passing
+// nil resets the reader to the fail-closed default. Concurrency-safe.
+func SetEngagementConsentReader(reader ConsentReader) {
+	engagementConsentReaderMu.Lock()
+	engagementConsentReader = reader
+	engagementConsentReaderMu.Unlock()
+}
+
+func activeEngagementConsentReader() ConsentReader {
+	engagementConsentReaderMu.RLock()
+	defer engagementConsentReaderMu.RUnlock()
+	if engagementConsentReader == nil {
+		return ConsentReaderFunc(func(context.Context) string { return EngagementConsentOff })
+	}
+	return engagementConsentReader
 }
 
 func New(id string) *Connector {
@@ -182,6 +240,65 @@ func resetGlobalFreshnessForTest() {
 
 func (c *Connector) ID() string {
 	return c.id
+}
+
+// EngagementExporter returns the Scope 6 packet engagement signal
+// exporter constructed on Connect. Returns nil before Connect and
+// after Close, or a permanently-disabled exporter when the QF
+// capability flag `engagement_signal_supported` is false. Safe for
+// concurrent use. SCN-SM-041-022.
+func (c *Connector) EngagementExporter() *Exporter {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.engagement
+}
+
+// CallbackSigner returns the Scope 8 HMAC bridge callback signer
+// constructed on Connect when the SST env var
+// QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON is set. Returns nil before
+// Connect, after Close, or when the env var is empty/unset (callback
+// signing intentionally not configured in this environment). Safe for
+// concurrent use. The caller MUST handle a nil return by aborting the
+// callback emission attempt (do NOT POST an unsigned envelope).
+// SCN-SM-041-028.
+func (c *Connector) CallbackSigner() *CallbackSigner {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.callbackSigner
+}
+
+// CallbackKeystore returns the underlying Scope 8 keystore for
+// diagnostic display (KeyIDs, Len). Returns nil when no keystore was
+// configured. SCN-SM-041-028.
+func (c *Connector) CallbackKeystore() *CallbackKeystore {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.callbackKeystore
+}
+
+// Client returns the underlying QF Companion Bridge HTTP client.
+// Returns nil before Connect and after Close. Exposed for Scope 8
+// signed-callback transport call sites that need to invoke the
+// shared auth/TLS/timeout pipeline (e.g.,
+// internal/telegram/render/qf_packet_message.go EmitSignedCallback).
+// Safe for concurrent use.
+func (c *Connector) Client() *Client {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.client
+}
+
+// WatchProposalClient returns the Scope 9 connector-internal
+// diagnostic watch-proposal client. Returns nil before Connect, after
+// Close, or when no callback keystore was configured at startup. The
+// client is NEVER wired into web/digest/Telegram surfaces pre-MVP;
+// callers MUST be inside the connector internal diagnostic path or
+// the Scope 9 integration test. Safe for concurrent use.
+// SCN-SM-041-031.
+func (c *Connector) WatchProposalClient() *WatchProposalClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.watchProposalClient
 }
 
 func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) error {
@@ -242,6 +359,82 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 		ObservedAt: time.Now().UTC(),
 	}))
 
+	// Scope 6: construct the packet engagement signal exporter from the
+	// persisted capability flag. NewExporterFromClient constructs a
+	// permanently-disabled exporter when EngagementSignalSupported is
+	// false, so the capability gate is enforced at construction time
+	// per SCN-SM-041-022. The exporter is installed as the global
+	// engagement exporter so the three render surfaces (web, digest,
+	// telegram) can call CaptureEngagementOpened without depending on
+	// connector-specific wiring.
+	exporter := NewExporterFromClient(client, activeEngagementConsentReader(), capability.EngagementSignalSupported)
+	if exporter.Enabled() {
+		exporter.Start(context.Background())
+	}
+	SetGlobalEngagementExporter(exporter)
+
+	// Scope 8: load the HMAC bridge callback signing keystore from
+	// the SST-managed env var QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON.
+	// An empty / unset env var means "callback signing not configured
+	// in this environment" and is permitted — the QF connector
+	// continues to run for ingest/render/evidence flows. A non-empty
+	// but malformed env var is a fatal startup error; a non-empty
+	// well-formed env var whose every key has not_before in the
+	// future is also a fatal startup error (caught by the explicit
+	// SelectActiveKey probe below). SCN-SM-041-028 / SCN-SM-041-030.
+	keystore, keystoreErr := LoadCallbackKeystoreFromEnv()
+	if keystoreErr != nil {
+		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+			Surface:    DefaultConnectorID,
+			Action:     AuditActionCapabilityHandshake,
+			Outcome:    AuditOutcomeRejected,
+			Reason:     "callback_keystore_invalid: " + keystoreErr.Error(),
+			ObservedAt: time.Now().UTC(),
+		}))
+		c.setHealth(connector.HealthError)
+		return fmt.Errorf("qf-decisions: load callback signing keystore: %w", keystoreErr)
+	}
+	var signer *CallbackSigner
+	if keystore != nil {
+		if _, probeErr := keystore.SelectActiveKey(time.Now().UTC()); probeErr != nil {
+			EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+				Surface:    DefaultConnectorID,
+				Action:     AuditActionCapabilityHandshake,
+				Outcome:    AuditOutcomeRejected,
+				Reason:     "callback_keystore_no_active_key: " + probeErr.Error(),
+				ObservedAt: time.Now().UTC(),
+			}))
+			c.setHealth(connector.HealthError)
+			return fmt.Errorf("qf-decisions: callback signing keystore has no active key at startup: %w", probeErr)
+		}
+		signer = NewCallbackSigner(keystore, func() time.Time { return time.Now().UTC() })
+		slog.Info("qf-decisions: callback signing keystore loaded",
+			slog.Int("keys", keystore.Len()),
+			slog.Any("key_ids", keystore.KeyIDs()),
+			slog.Bool("qf_capability_callback_signing_supported", capability.CallbackSigningSupported),
+		)
+	}
+
+	// Scope 9: construct the connector-internal diagnostic
+	// watch-proposal client. The client REUSES the Scope 8 keystore
+	// verbatim via the WatchProposalKeystore interface
+	// (*CallbackKeystore satisfies it). The Scope 1 QF transport
+	// client is reused verbatim. The client is NEVER wired into
+	// web/digest/Telegram surfaces pre-MVP; it is only callable
+	// from the connector internal diagnostic path and the Scope 9
+	// integration test. SCN-SM-041-031 / SCN-SM-041-032 /
+	// SCN-SM-041-033.
+	var watchProposalClient *WatchProposalClient
+	if keystore != nil {
+		watchProposalSigner := NewWatchProposalSigner(keystore, func() time.Time { return time.Now().UTC() })
+		watchProposalClient = NewWatchProposalClient(client, watchProposalSigner, 0, func() time.Time { return time.Now().UTC() }, NewWatchProposalTraceID)
+		slog.Info("qf-decisions: watch-proposal diagnostic client constructed",
+			slog.Bool("qf_capability_watch_proposal_supported", false),
+			slog.String("path", WatchProposalPath),
+			slog.String("source", WatchProposalSourceSmackerelPropose),
+		)
+	}
+
 	c.mu.Lock()
 	c.client = client
 	c.cfg = parsed
@@ -249,6 +442,10 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 	c.capabilityStatus = CapabilityStatusCompatible
 	c.capabilityFetchedAt = time.Now().UTC()
 	c.health = connector.HealthHealthy
+	c.engagement = exporter
+	c.callbackKeystore = keystore
+	c.callbackSigner = signer
+	c.watchProposalClient = watchProposalClient
 	c.mu.Unlock()
 	return nil
 }
@@ -519,12 +716,31 @@ func (c *Connector) CapabilitySnapshot() (responseJSON string, fetchedAt time.Ti
 
 func (c *Connector) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	engagement := c.engagement
 	c.client = nil
 	c.health = connector.HealthDisconnected
 	c.capability = QFBridgeCapability{}
 	c.capabilityStatus = CapabilityStatusUnfetched
 	c.capabilityFetchedAt = time.Time{}
+	c.engagement = nil
+	c.callbackKeystore = nil
+	c.callbackSigner = nil
+	c.watchProposalClient = nil
+	c.mu.Unlock()
+	// Scope 6: drain + stop the engagement exporter outside the
+	// connector mutex so a slow flush attempt cannot block other
+	// connector operations. Clearing the global exporter happens AFTER
+	// Stop so render call sites mid-Capture see the same exporter the
+	// connector held and the buffer is drained one last time before
+	// the exporter is removed from the global pointer.
+	if engagement != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), engagementTransportTimeout)
+		engagement.Stop(ctx)
+		cancel()
+	}
+	if GlobalEngagementExporter() == engagement {
+		SetGlobalEngagementExporter(nil)
+	}
 	return nil
 }
 

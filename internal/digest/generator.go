@@ -438,6 +438,13 @@ func (g *Generator) getQFPackets(ctx context.Context, digestDate string) ([]qfde
 		}
 		if card.Placement.IncludeInDigest {
 			cards = append(cards, card)
+			// Scope 6: capture an `opened` engagement signal on the
+			// DIGEST surface immediately after the packet card is
+			// admitted to the digest. The capture is one-way
+			// Smackerel→QF observability — it MUST NOT influence
+			// digest priority, ranking, or trust metadata.
+			// SCN-SM-041-022.
+			qfdecisions.CaptureEngagementOpened(ctx, qfdecisions.SurfaceDigest, card.PacketID, card.TraceID, "")
 		}
 	}
 	if err := rows.Err(); err != nil {

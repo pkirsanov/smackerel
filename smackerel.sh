@@ -25,7 +25,7 @@ Commands:
   test unit [--go|--python] [--go-run <regex>] [--verbose]   Run unit tests; --go-run / --verbose require --go and apply focused subtest selection
   test integration            Run live-stack integration validation
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
-  test stress                 Run live-stack stress smoke test
+  test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
@@ -691,10 +691,13 @@ case "$COMMAND" in
         env_file="$(smackerel_require_env_file test)"
         pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
         nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
+        pg_container_port="$(smackerel_env_value "$env_file" "POSTGRES_CONTAINER_PORT")"
+        nats_container_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_PORT")"
         auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
         pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
+        compose_network="$(smackerel_compose_project test)_default"
 
         # Spec 037 Scope 10 — orchestrator owns the test-stack
         # lifecycle so the Go integration runner sees a live stack.
@@ -730,14 +733,14 @@ case "$COMMAND" in
         # Run Go integration tests against the live test stack
         set +e
         docker run --rm \
-          --network host \
+          --network "$compose_network" \
           -v "$SCRIPT_DIR:/workspace" \
           -v smackerel-gomod-cache:/go/pkg/mod \
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
-          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-          -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-          -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
+          -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+          -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+          -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh
         go_integration_status=$?
@@ -1223,11 +1226,15 @@ case "$COMMAND" in
         core_host_port="$(smackerel_env_value "$env_file" "CORE_HOST_PORT")"
         pg_host_port="$(smackerel_env_value "$env_file" "POSTGRES_HOST_PORT")"
         nats_host_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_HOST_PORT")"
+        core_container_port="$(smackerel_env_value "$env_file" "CORE_CONTAINER_PORT")"
+        pg_container_port="$(smackerel_env_value "$env_file" "POSTGRES_CONTAINER_PORT")"
+        nats_container_port="$(smackerel_env_value "$env_file" "NATS_CLIENT_PORT")"
         auth_token="$(smackerel_env_value "$env_file" "SMACKEREL_AUTH_TOKEN")"
         pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
         qf_decisions_base_url="$(smackerel_env_value "$env_file" "QF_DECISIONS_BASE_URL")"
+        compose_network="$(smackerel_compose_project test)_default"
         go_e2e_args=()
         if [[ -n "$GO_E2E_RUN_SELECTOR" ]]; then
           go_e2e_args+=(--run "$GO_E2E_RUN_SELECTOR")
@@ -1247,15 +1254,16 @@ case "$COMMAND" in
         else
           set +e
           e2e_run_child docker run --rm \
-            --network host \
+            --network "$compose_network" \
+            --network-alias qf-e2e-runner \
             -v "$SCRIPT_DIR:/workspace" \
             -v smackerel-gomod-cache:/go/pkg/mod \
             -v smackerel-gobuild-cache:/root/.cache/go-build \
             -w /workspace \
-            -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
-            -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-            -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-            -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
+            -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
+            -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+            -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+            -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
             -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
             -e "QF_DECISIONS_BASE_URL=${qf_decisions_base_url}" \
             golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-e2e.sh "${go_e2e_args[@]}"
@@ -1308,15 +1316,15 @@ case "$COMMAND" in
 
             set +e
             e2e_run_child docker run --rm \
-              --network host \
+              --network "$compose_network" \
               -v "$SCRIPT_DIR:/workspace" \
               -v smackerel-gomod-cache:/go/pkg/mod \
               -v smackerel-gobuild-cache:/root/.cache/go-build \
               -w /workspace \
-              -e "CORE_EXTERNAL_URL=http://127.0.0.1:${core_host_port}" \
-              -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-              -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable" \
-              -e "NATS_URL=nats://${auth_token}@127.0.0.1:${nats_host_port}" \
+              -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
+              -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
+              -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
               -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
               -e "OLLAMA_URL=$ollama_pull_url" \
               -e "OLLAMA_TEST_MODEL=$ollama_test_model" \
@@ -1349,19 +1357,55 @@ case "$COMMAND" in
         fi
         ;;
       stress)
+        STRESS_GO_RUN_SELECTOR=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --go-run)
+              if [[ $# -lt 2 || -z "${2:-}" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              STRESS_GO_RUN_SELECTOR="$2"
+              shift 2
+              ;;
+            --go-run=*)
+              STRESS_GO_RUN_SELECTOR="${1#*=}"
+              if [[ -z "$STRESS_GO_RUN_SELECTOR" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              shift
+              ;;
+            *)
+              echo "Unknown test stress option: $1" >&2
+              usage
+              exit 1
+              ;;
+          esac
+        done
+
         require_docker
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
 
         core_external_url="$(smackerel_require_env_value "$env_file" CORE_EXTERNAL_URL)"
+        core_container_port="$(smackerel_require_env_value "$env_file" CORE_CONTAINER_PORT)"
         auth_token="$(smackerel_require_env_value "$env_file" SMACKEREL_AUTH_TOKEN)"
         pg_host_port="$(smackerel_require_env_value "$env_file" POSTGRES_HOST_PORT)"
         nats_host_port="$(smackerel_require_env_value "$env_file" NATS_CLIENT_HOST_PORT)"
+        pg_container_port="$(smackerel_require_env_value "$env_file" POSTGRES_CONTAINER_PORT)"
+        nats_container_port="$(smackerel_require_env_value "$env_file" NATS_CLIENT_PORT)"
         pg_user="$(smackerel_require_env_value "$env_file" POSTGRES_USER)"
         pg_pass="$(smackerel_require_env_value "$env_file" POSTGRES_PASSWORD)"
         pg_db="$(smackerel_require_env_value "$env_file" POSTGRES_DB)"
-        database_url="postgres://${pg_user}:${pg_pass}@127.0.0.1:${pg_host_port}/${pg_db}?sslmode=disable"
-        nats_url="nats://${auth_token}@127.0.0.1:${nats_host_port}"
+        go_stress_args=()
+        if [[ -n "$STRESS_GO_RUN_SELECTOR" ]]; then
+          go_stress_args+=(--run "$STRESS_GO_RUN_SELECTOR")
+        fi
+        database_url="postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable"
+        nats_url="nats://${auth_token}@nats:${nats_container_port}"
+        go_stress_core_url="http://smackerel-core:${core_container_port}"
+        compose_network="$(smackerel_compose_project test)_default"
 
         stress_cleanup() {
           timeout 60 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || true
@@ -1373,16 +1417,16 @@ case "$COMMAND" in
         timeout 300 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
         timeout 600 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"
         timeout 900 docker run --rm \
-          --network host \
+          --network "$compose_network" \
           -v "$SCRIPT_DIR:/workspace" \
           -v smackerel-gomod-cache:/go/pkg/mod \
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
-          -e "CORE_EXTERNAL_URL=${core_external_url}" \
+          -e "CORE_EXTERNAL_URL=${go_stress_core_url}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           -e "DATABASE_URL=${database_url}" \
           -e "NATS_URL=${nats_url}" \
-          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-stress.sh
+          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-stress.sh "${go_stress_args[@]}"
         ;;
       *)
         usage

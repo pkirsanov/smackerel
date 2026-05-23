@@ -856,6 +856,12 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("BACKUP_RETENTION_DAILY", "7")
 	t.Setenv("BACKUP_RETENTION_WEEKLY", "4")
 	t.Setenv("BACKUP_WATCHER_POLL_SECONDS", "60")
+	t.Setenv("NOTIFICATION_INTELLIGENCE_ENABLED", "true")
+	t.Setenv("NOTIFICATION_PERSISTENCE_THRESHOLD", "2")
+	t.Setenv("NOTIFICATION_ESCALATION_SEVERITY", "high")
+	t.Setenv("NOTIFICATION_LOW_CONFIDENCE_THRESHOLD", "0.55")
+	t.Setenv("NOTIFICATION_MAX_RETRIES", "2")
+	t.Setenv("NOTIFICATION_OUTPUT_CHANNELS", `["dashboard"]`)
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {

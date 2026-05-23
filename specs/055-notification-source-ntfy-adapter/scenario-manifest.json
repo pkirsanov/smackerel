@@ -1,0 +1,266 @@
+{
+  "version": 1,
+  "featureDir": "specs/055-notification-source-ntfy-adapter",
+  "featureName": "Notification Source ntfy Adapter",
+  "createdAt": "2026-05-23T03:24:08Z",
+  "status": "planned",
+  "implementationStatus": "not_started",
+  "sourceContractDependency": "specs/054-notification-intelligence-handler",
+  "notes": "Scenario manifest created by bubbles.plan. Linked tests are planned contracts; no implementation or execution is claimed.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-055-001",
+      "scopeId": "SCOPE-1",
+      "title": "Enabled ntfy source requires explicit configuration",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-001", "FR-055-002", "FR-055-003", "FR-055-004", "FR-055-005", "FR-055-020"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "static", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/config_test.go", "title": "TestNtfyConfigValidationRequiresExplicitEnabledInstanceFieldsAndSecretReferences", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/config_integration_test.go", "title": "TestNtfyInvalidEnabledInstanceRegistersDisconnectedHealthAndAcceptsNoEvents", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfySourceStatusAPIRedactsInvalidConfigAndAuthFailures", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceListShowsDisconnectedRedactedHealthWithoutSecrets", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyConfigValidationBurstDoesNotFabricateConnectedHealth", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "regression", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "RegressionNtfyInvalidConfigCannotFallBackToConnectedHealth", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-002",
+      "scopeId": "SCOPE-2",
+      "title": "ntfy message enters the spec 054 raw and normalized pipeline",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-001", "FR-055-002", "FR-055-006", "FR-055-008", "FR-055-010", "FR-055-021"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/mapper_test.go", "title": "TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/adapter_integration_test.go", "title": "TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceDetailDisplaysAcceptedEventAndLifecycleHealth", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyBurstMessagesPreserveRawPayloadAndDoNotLoseFieldProvenance", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-003",
+      "scopeId": "SCOPE-2",
+      "title": "ntfy fields are preserved without becoming core policy branches",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-008", "FR-055-009", "FR-055-010", "FR-055-017", "FR-055-022"],
+      "requiredTestTypes": ["unit", "e2e-api", "stress", "static"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/mapper_test.go", "title": "TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyBurstMessagesPreserveRawPayloadAndDoNotLoseFieldProvenance", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "static", "path": "internal/notification/no_ntfy_core_dependency_test.go", "title": "TestCoreNotificationPackageHasNoNtfyPolicyBranchesAfterMapperAdded", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-004",
+      "scopeId": "SCOPE-2",
+      "title": "ntfy priority and tags provide hints but not final authority",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-008", "FR-055-009", "FR-055-010"],
+      "requiredTestTypes": ["unit", "e2e-api", "static"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/mapper_test.go", "title": "TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "static", "path": "internal/notification/no_ntfy_core_dependency_test.go", "title": "TestCoreNotificationPackageHasNoNtfyPolicyBranchesAfterMapperAdded", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-005",
+      "scopeId": "SCOPE-2",
+      "title": "ntfy keepalive and open events update source health without creating notifications",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-007", "FR-055-011", "FR-055-020"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/mapper_test.go", "title": "TestNtfyMapperPreservesRawFieldsAndSeparatesLifecycleEvents", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/adapter_integration_test.go", "title": "TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyMessagePipelineAPIRoundTripShowsRawNormalizedAndSourceFields", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceDetailDisplaysAcceptedEventAndLifecycleHealth", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-006",
+      "scopeId": "SCOPE-3",
+      "title": "transient ntfy connection loss becomes degraded health and then recovers",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-011", "FR-055-012", "FR-055-013"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/health_test.go", "title": "TestNtfyHealthTransitionsUseRealChecksAndRetryBudget", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/reconnect_integration_test.go", "title": "TestNtfyReconnectLagAndGapPersistInTopicState", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyReconnectAPIReportsDegradedRecoveredAndDisconnectedStates", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyTroubleshootingPanelShowsRetryLagAndRedactedErrors", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyReconnectChurnRemainsBoundedAndDoesNotFabricateConnectedHealth", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "regression", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "RegressionNtfyRecoveredHealthRequiresRealCheckOrAcceptedEvent", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-007",
+      "scopeId": "SCOPE-3",
+      "title": "exhausted reconnect budget becomes disconnected health",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-011", "FR-055-012", "FR-055-013"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/health_test.go", "title": "TestNtfyHealthTransitionsUseRealChecksAndRetryBudget", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/reconnect_integration_test.go", "title": "TestNtfyReconnectLagAndGapPersistInTopicState", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyReconnectAPIReportsDegradedRecoveredAndDisconnectedStates", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyTroubleshootingPanelShowsRetryLagAndRedactedErrors", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyReconnectChurnRemainsBoundedAndDoesNotFabricateConnectedHealth", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-008",
+      "scopeId": "SCOPE-4",
+      "title": "malformed ntfy JSON is dead-lettered without successful ingest",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-014", "FR-055-020"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/dead_letter_test.go", "title": "TestNtfyDeadLetterRedactsCausesAndComputesReplayEligibility", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/replay_integration_test.go", "title": "TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyDeadLetterAndReplayAPIRoundTripUsesSourceSinkOnly", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyDeadLetterQueueAndReplayConfirmationProtectSourceSinkBoundary", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyMalformedAndSinkFailureBurstCreatesBoundedDeadLetters", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-009",
+      "scopeId": "SCOPE-4",
+      "title": "core sink failure is retried and then dead-lettered",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-014", "FR-055-019", "FR-055-021"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "static", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/dead_letter_test.go", "title": "TestNtfyDeadLetterRedactsCausesAndComputesReplayEligibility", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/replay_integration_test.go", "title": "TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyDeadLetterAndReplayAPIRoundTripUsesSourceSinkOnly", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyDeadLetterQueueAndReplayConfirmationProtectSourceSinkBoundary", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyMalformedAndSinkFailureBurstCreatesBoundedDeadLetters", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "static", "path": "internal/notification/source/ntfy/no_output_coupling_test.go", "title": "TestNtfyReplayServiceHasNoOutputChannelImports", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "regression", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "RegressionNtfyReplayCannotBypassSourceSinkOrDispatchOutput", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-010",
+      "scopeId": "SCOPE-5",
+      "title": "multiple topics preserve exact topic provenance",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-003", "FR-055-016", "FR-055-021"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/provenance_test.go", "title": "TestNtfyProvenanceAndLoopMetadataArePreservedInEnvelope", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/provenance_integration_test.go", "title": "TestNtfyMultiTopicAndMultiInstanceEventsDoNotCollapseIdentity", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyProvenanceLoopAndNoOutputBoundaryAPI", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceUIKeepsTopicInstanceAndOutputBoundaryVisible", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyDuplicateEventIDsAcrossTopicsAndInstancesRemainDistinctUnderBurst", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "regression", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "RegressionNtfyTopicInstanceProvenanceSurvivesCoreCorrelationWithoutDirectForwarding", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-011",
+      "scopeId": "SCOPE-5",
+      "title": "multiple ntfy source instances remain distinct",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-015", "FR-055-016", "FR-055-021"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/provenance_test.go", "title": "TestNtfyProvenanceAndLoopMetadataArePreservedInEnvelope", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/provenance_integration_test.go", "title": "TestNtfyMultiTopicAndMultiInstanceEventsDoNotCollapseIdentity", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyProvenanceLoopAndNoOutputBoundaryAPI", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceUIKeepsTopicInstanceAndOutputBoundaryVisible", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyDuplicateEventIDsAcrossTopicsAndInstancesRemainDistinctUnderBurst", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-012",
+      "scopeId": "SCOPE-5",
+      "title": "ntfy adapter cannot become ntfy-to-Telegram forwarding",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-010", "FR-055-019", "FR-055-022"],
+      "requiredTestTypes": ["unit", "e2e-api", "e2e-ui", "static", "regression"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/no_output_coupling_test.go", "title": "TestNtfyAdapterHasNoOutputImportsAndCoreHasNoNtfyBranches", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyProvenanceLoopAndNoOutputBoundaryAPI", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceUIKeepsTopicInstanceAndOutputBoundaryVisible", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "regression", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "RegressionNtfyTopicInstanceProvenanceSurvivesCoreCorrelationWithoutDirectForwarding", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-013",
+      "scopeId": "SCOPE-5",
+      "title": "ntfy-originated loop metadata is preserved for the core loop guard",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-018", "FR-055-021"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/provenance_test.go", "title": "TestNtfyProvenanceAndLoopMetadataArePreservedInEnvelope", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/provenance_integration_test.go", "title": "TestNtfyMultiTopicAndMultiInstanceEventsDoNotCollapseIdentity", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfyProvenanceLoopAndNoOutputBoundaryAPI", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-014",
+      "scopeId": "SCOPE-1",
+      "title": "ntfy auth failure never exposes credential values",
+      "source": "spec.md#user-scenarios-gherkin",
+      "requirements": ["FR-055-005", "FR-055-011", "AC-055-005"],
+      "requiredTestTypes": ["unit", "e2e-api", "e2e-ui", "static"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/redaction_test.go", "title": "TestNtfyAuthFailureReportsOnlyRedactedCredentialCategories", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfySourceStatusAPIRedactsInvalidConfigAndAuthFailures", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfySourceListShowsDisconnectedRedactedHealthWithoutSecrets", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "static", "path": "internal/notification/source/ntfy/redaction_test.go", "title": "StaticNoNtfyCredentialValuesInLogsStatusDeadLettersOrAPIs", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-REL-001",
+      "scopeId": "SCOPE-6",
+      "title": "Spec 055 remains source-neutral after all implementation scopes",
+      "source": "scopes.md#scope-6-release-hardening-and-documentation",
+      "requirements": ["FR-055-001", "FR-055-010", "FR-055-019", "FR-055-021", "FR-055-022"],
+      "requiredTestTypes": ["unit", "integration", "e2e-api", "e2e-ui", "stress", "lint", "format", "artifact", "traceability", "static"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "unit", "path": "internal/notification/source/ntfy/...", "title": "TestNtfyAdapterUnitSuiteCoversAllScenarioMappings", "command": "./smackerel.sh test unit", "liveSystem": false, "status": "planned"},
+        {"testType": "integration", "path": "internal/notification/source/ntfy/...", "title": "TestNtfyAdapterIntegrationSuiteCoversAllSourceContracts", "command": "./smackerel.sh test integration", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-api", "path": "tests/e2e/notification_ntfy_source_api_test.go", "title": "TestNtfySourceAPIFullScenarioRegressionSuite", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyOperatorWorkflowSourceListDetailDLQReplayTroubleshooting", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "stress", "path": "tests/stress/notification_ntfy_source_stress_test.go", "title": "TestNtfyAdapterStressSuiteBurstReconnectDLQReplayAndMultiInstance", "command": "./smackerel.sh test stress", "liveSystem": true, "status": "planned"},
+        {"testType": "artifact", "path": "specs/055-notification-source-ntfy-adapter", "title": "ArtifactLintSpec055", "command": "bash .github/bubbles/scripts/artifact-lint.sh specs/055-notification-source-ntfy-adapter", "liveSystem": false, "status": "planned"},
+        {"testType": "traceability", "path": "specs/055-notification-source-ntfy-adapter", "title": "TraceabilityGuardSpec055", "command": "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/055-notification-source-ntfy-adapter", "liveSystem": false, "status": "planned"}
+      ]
+    },
+    {
+      "scenarioId": "SCN-055-REL-002",
+      "scopeId": "SCOPE-6",
+      "title": "Operator documentation matches implemented source behavior",
+      "source": "scopes.md#scope-6-release-hardening-and-documentation",
+      "requirements": ["AC-055-001", "AC-055-012"],
+      "requiredTestTypes": ["e2e-ui", "artifact", "traceability", "static"],
+      "evidenceRefs": [],
+      "linkedTests": [
+        {"testType": "e2e-ui", "path": "tests/e2e/notification_ntfy_source_ui_test.go", "title": "TestNtfyOperatorWorkflowSourceListDetailDLQReplayTroubleshooting", "command": "./smackerel.sh test e2e", "liveSystem": true, "status": "planned"},
+        {"testType": "static", "path": "tests/e2e/notification_ntfy_source_api_test.go tests/e2e/notification_ntfy_source_ui_test.go", "title": "RegressionQualityGuardForNtfyE2E", "command": "timeout 600 bash .github/bubbles/scripts/regression-quality-guard.sh tests/e2e/notification_ntfy_source_api_test.go tests/e2e/notification_ntfy_source_ui_test.go", "liveSystem": false, "status": "planned"},
+        {"testType": "artifact", "path": "specs/055-notification-source-ntfy-adapter", "title": "ArtifactLintSpec055", "command": "bash .github/bubbles/scripts/artifact-lint.sh specs/055-notification-source-ntfy-adapter", "liveSystem": false, "status": "planned"},
+        {"testType": "traceability", "path": "specs/055-notification-source-ntfy-adapter", "title": "TraceabilityGuardSpec055", "command": "timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/055-notification-source-ntfy-adapter", "liveSystem": false, "status": "planned"}
+      ]
+    }
+  ]
+}

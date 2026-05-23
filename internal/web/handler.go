@@ -23,6 +23,7 @@ import (
 	"github.com/smackerel/smackerel/internal/graph"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/notification"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
@@ -47,6 +48,7 @@ type Handler struct {
 	RecommendationStore     *recstore.Store
 	RecommendationRegistry  RecommendationRuntimeRegistry
 	RecommendationConfig    config.RecommendationsConfig
+	NotificationStore       *notification.Store
 }
 
 // RecommendationProviderLister lists configured recommendation providers for operator status.
@@ -272,6 +274,13 @@ func (h *Handler) ArtifactDetail(w http.ResponseWriter, r *http.Request) {
 			})
 			if err == nil {
 				qfCard = &card
+				// Scope 6: capture an `opened` engagement signal on
+				// the WEB surface immediately after the packet card
+				// renders. The capture is one-way Smackerel→QF
+				// observability — it MUST NOT influence subsequent
+				// local rendering, ranking, or trust metadata.
+				// SCN-SM-041-022.
+				qfdecisions.CaptureEngagementOpened(r.Context(), qfdecisions.SurfaceWeb, card.PacketID, card.TraceID, "")
 			}
 		}
 	}
@@ -515,6 +524,157 @@ func (h *Handler) StatusPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Templates.ExecuteTemplate(w, "status.html", data)
+}
+
+func (h *Handler) NotificationDashboard(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	summary, err := store.StatusSummary(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "Notification Status", "notification status is unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-status.html", map[string]interface{}{"Title": "Notifications", "Summary": summary})
+}
+
+func (h *Handler) NotificationSourcesPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	sources, err := store.ListSourceStatuses(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "Notification Sources", "notification sources are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-sources.html", map[string]interface{}{"Title": "Notification Sources", "Sources": sources})
+}
+
+func (h *Handler) NotificationEventsPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	events, err := store.ListNotifications(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Events", "notification events are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-events.html", map[string]interface{}{"Title": "Notification Events", "Events": events})
+}
+
+func (h *Handler) NotificationIncidentsPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	incidents, err := store.ListIncidents(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Incidents", "notification incidents are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-incidents.html", map[string]interface{}{"Title": "Notification Incidents", "Incidents": incidents})
+}
+
+func (h *Handler) NotificationIncidentDetailPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	incident, err := store.GetIncident(r.Context(), chi.URLParam(r, "incident_id"))
+	if err != nil {
+		h.renderNotificationError(w, "Notification Incident", "notification incident is unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-incident-detail.html", map[string]interface{}{"Title": "Notification Incident", "Incident": incident})
+}
+
+func (h *Handler) NotificationApprovalsPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	approvals, err := store.ListApprovalRequests(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Approvals", "notification approvals are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-approvals.html", map[string]interface{}{"Title": "Notification Approvals", "Approvals": approvals})
+}
+
+func (h *Handler) NotificationApprovalDetailPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	detail, err := store.GetApprovalDetail(r.Context(), chi.URLParam(r, "approval_id"))
+	if err != nil {
+		h.renderNotificationError(w, "Notification Approval", "notification approval is unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-approval-detail.html", map[string]interface{}{"Title": "Notification Approval", "Approval": detail.Request, "Decisions": detail.Decisions})
+}
+
+func (h *Handler) NotificationSuppressionsPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	suppressions, err := store.ListSuppressions(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Suppressions", "notification suppressions are unavailable")
+		return
+	}
+	quietWindows, err := store.ListQuietWindows(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Suppressions", "notification quiet windows are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-suppressions.html", map[string]interface{}{"Title": "Notification Suppressions", "Suppressions": suppressions, "QuietWindows": quietWindows})
+}
+
+func (h *Handler) NotificationSummaryPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	summary, err := store.StatusSummary(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "Notification Summary", "notification summary is unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-summary.html", map[string]interface{}{"Title": "Notification Summary", "Summary": summary})
+}
+
+func (h *Handler) NotificationOutputsPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	outputs, err := store.ListDeliveries(r.Context(), 100)
+	if err != nil {
+		h.renderNotificationError(w, "Notification Outputs", "notification outputs are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-outputs.html", map[string]interface{}{"Title": "Notification Outputs", "Outputs": outputs})
+}
+
+func (h *Handler) requireNotificationStore(w http.ResponseWriter) (*notification.Store, bool) {
+	if h.NotificationStore != nil {
+		return h.NotificationStore, true
+	}
+	if h.Pool == nil {
+		h.renderNotificationError(w, "Notifications", "notification store is unavailable")
+		return nil, false
+	}
+	return notification.NewStore(h.Pool), true
+}
+
+func (h *Handler) renderNotificationError(w http.ResponseWriter, title string, message string) {
+	w.WriteHeader(http.StatusInternalServerError)
+	h.Templates.ExecuteTemplate(w, "notification-error.html", map[string]interface{}{"Title": title, "Error": message})
 }
 
 func (h *Handler) recommendationProviderStatuses(ctx context.Context) []recommendationProviderStatus {

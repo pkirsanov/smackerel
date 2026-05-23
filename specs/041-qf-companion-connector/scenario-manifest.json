@@ -648,6 +648,625 @@
         "SCN-SM-041-021 audit envelope v1 emitted for all eight bridge emission points",
         "SCN-SM-041-021 operator documentation lists rotation metric audit and safety boundary diagnostics"
       ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-022",
+      "name": "Consent-Gated Engagement Capture Across Web Digest And Telegram Surfaces",
+      "scope": "06-packet-engagement-signal-exporter",
+      "status": "active",
+      "behaviorClass": "telemetry",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterCapturesAllSixEventTypesAcrossWebDigestAndTelegramSurfaces"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterHonorsConsentGateAndCapabilityGate"
+        },
+        {
+          "plannedPath": "tests/integration/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalRoundTripCapturesAllSurfacesFlushesAndPostsIdempotentUUIDv7"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalConsentGatedCaptureAcrossLiveWebDigestTelegramSurfaces"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-6-engagement-capture-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-022 engagement capture fires on opened dwell dismissed snoozed deep_linked and shared across web digest and telegram",
+        "SCN-SM-041-022 consent gate emits only when engagement_telemetry is anonymous or pseudonymous and off bypasses the buffer at capture time",
+        "SCN-SM-041-022 capability gate disables the exporter when engagement_signal_supported is false"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-023",
+      "name": "Buffered Flush With Idempotent UUIDv7 Posts To Packet Engagement Signals Endpoint",
+      "scope": "06-packet-engagement-signal-exporter",
+      "status": "active",
+      "behaviorClass": "telemetry",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterFlushesOnTenSecondTimerAndOnHundredEventThreshold"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementSignalIDIsUUIDv7AndIdempotentAcrossRepeatedFlushAttempt"
+        },
+        {
+          "plannedPath": "tests/integration/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalRoundTripCapturesAllSurfacesFlushesAndPostsIdempotentUUIDv7"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalBufferedFlushPostsIdempotentUUIDv7ThroughLiveQFStub"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-6-flush-and-idempotency-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-023 each captured signal carries a UUIDv7 signal_id used verbatim as the QF idempotency key",
+        "SCN-SM-041-023 flush triggers on a 10 second timer or a 100 event threshold and POSTs the batch to /api/private/smackerel/v1/packet-engagement-signals"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-024",
+      "name": "Failure Handling Drops 4xx Without Retry Retries 5xx With Bounded Backoff And Drops Overflow",
+      "scope": "06-packet-engagement-signal-exporter",
+      "status": "active",
+      "behaviorClass": "telemetry",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterDropsFourXXWithoutRetryAndRecordsRejectedMetricAndAuditEnvelope"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterRetriesFiveXXWithBoundedBackoffUpToThreeAttemptsThenDrops"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/engagement_test.go",
+          "plannedTitle": "TestEngagementExporterDropsOldestOnOverflowAndRecordsOverflowDropMetricAndAuditEnvelope"
+        },
+        {
+          "plannedPath": "tests/integration/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalFailureMatrixDrops4xxRetries5xxAndEmitsAuditEnvelopeAndMetrics"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_engagement_signal_test.go",
+          "plannedTitle": "TestQFEngagementSignalFailureMatrixThroughLiveQFStubDropsFourXXRetriesFiveXXAndOverflows"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-6-failure-matrix-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-024 HTTP 4xx responses log drop without retry emit rejected metrics with the QF reason code and write an outcome rejected audit envelope",
+        "SCN-SM-041-024 HTTP 5xx and transport timeouts retry with exponential backoff up to 3 attempts then drop and emit degraded metrics and audit envelopes",
+        "SCN-SM-041-024 buffer overflow drops the oldest signal emits overflow_drop metric and writes a degraded audit envelope"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-025",
+      "name": "Consent-Token-Gated Read Of Personal Context Returns Sensitivity-Filtered Items With Mandatory Non-Influence Warning",
+      "scope": "07-personal-context-read-api-host",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_HappyPath_NonInfluenceWarningExactString"
+        },
+        {
+          "path": "internal/connector/qfdecisions/personal_context_consent_test.go",
+          "title": "TestPersonalContextConsentMaxTTLIs15Minutes"
+        },
+        {
+          "path": "internal/connector/qfdecisions/personal_context_consent_test.go",
+          "title": "TestPersonalContextConsentMaxReadsIs5"
+        },
+        {
+          "path": "tests/e2e/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_LiveHTTP_NonInfluenceWarningAndHappyPath"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerReturnsSensitivityFilteredItemsWithMandatoryNonInfluenceWarning"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/personal_context_consent_test.go",
+          "plannedTitle": "TestPersonalContextConsentTokenIssuedAtMostFifteenMinutesAndScopeBound"
+        },
+        {
+          "plannedPath": "tests/integration/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadRoundTripFiltersBySensitivityAndIncludesNonInfluenceWarning"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadConsentTokenGatedFetchThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-7-read-path-evidence",
+        "report.md#scope-7-audit-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-025 GET /api/private/qf/v1/personal-context returns HTTP 200 with sensitivity filtered items each carrying artifact_id kind sensitivity_tier summary source_ref and captured_at",
+        "SCN-SM-041-025 response body MUST include mandatory non_influence_warning with the declared exact text",
+        "SCN-SM-041-025 audit envelope v1 record written with action personal_context_read and outcome ok"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-026",
+      "name": "Sensitivity Tier Ceiling Redacts Items Above The Ceiling And Returns 403 When The Token Is Expired Scoped Mismatched Or Capability Off",
+      "scope": "07-personal-context-read-api-host",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_ConsentScopeViolationReturns403"
+        },
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_ConsentExpiredReturns403"
+        },
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_CapabilityDisabledReturns503"
+        },
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_DegradedWhenUserCeilingRedacts"
+        },
+        {
+          "path": "tests/integration/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_CeilingFiltersAndCountsRedactions"
+        },
+        {
+          "path": "tests/integration/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_CapabilityDisabledReturns503Live"
+        },
+        {
+          "path": "tests/e2e/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_LiveHTTP_FailureMatrix"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerRejectsExpiredScopeMismatchedAndCeilingRaisedTokens"
+        },
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerReturnsCapabilityDisabledWhenCapabilityFlagIsFalse"
+        },
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerRedactsItemsAboveUserPrivacyCeilingAndReturnsRedactionCount"
+        },
+        {
+          "plannedPath": "tests/integration/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadConsentTokenFailureMatrixReturnsDocumented4xxAnd503"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadSensitivityCeilingAndConsentScopeFailureMatrixThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-7-failure-matrix-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-026 consent token validation rejects expired scope mismatched and ceiling raised tokens with documented 403 error codes",
+        "SCN-SM-041-026 capability disabled requests return 503 PERSONAL_CONTEXT_DISABLED_BY_CAPABILITY regardless of token validity",
+        "SCN-SM-041-026 user privacy ceiling redacts items above the user ceiling and the response redaction_count integer reflects the redacted count"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-027",
+      "name": "Rate Limit Of Five Reads Per Consent Token Enforced And Metrics Emitted Per Outcome Plus Sensitivity Tier",
+      "scope": "07-personal-context-read-api-host",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "path": "internal/api/personal_context_test.go",
+          "title": "TestPersonalContextRead_RateLimitReturns429WithRetryAfter"
+        },
+        {
+          "path": "tests/integration/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_AtomicReadCapEnforced_WhenSixthAttemptIsMade"
+        },
+        {
+          "path": "tests/e2e/qf_personal_context_read_test.go",
+          "title": "TestQFPersonalContextRead_LiveHTTP_RateLimitAndAudit"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerEnforcesFiveReadsPerTokenAndEmitsRateLimitedMetricWithRetryAfter"
+        },
+        {
+          "plannedPath": "internal/api/personal_context_test.go",
+          "plannedTitle": "TestPersonalContextHandlerEmitsAuditEnvelopeForOkRejectedDegradedAndRateLimitedOutcomes"
+        },
+        {
+          "plannedPath": "tests/integration/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadFiveReadRateLimitEnforcedAndAuditEnvelopeEmittedPerAttempt"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_personal_context_read_test.go",
+          "plannedTitle": "TestQFPersonalContextReadRateLimitAndAuditEnvelopeThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-7-rate-limit-evidence",
+        "report.md#scope-7-metric-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-027 five reads per token rate limit enforced atomically with HTTP 429 PERSONAL_CONTEXT_RATE_LIMIT_EXCEEDED and Retry-After header",
+        "SCN-SM-041-027 metric smackerel_qf_personal_context_reads_total outcome and sensitivity_tier labels emitted on every read attempt with documented label parity"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-028",
+      "name": "HMAC-SHA256 Signing Over The Canonical Payload With Key Id Envelope Inclusion And Rotation Playbook",
+      "scope": "08-signed-callback-protocol",
+      "status": "active",
+      "behaviorClass": "security",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackCanonicalPayloadCompositionIsPipeDelimitedWithoutWhitespaceOrTrailingPipe"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackHMACSHA256SignatureIsLowerCaseHexAndMatchesKnownVector"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "function": "TestCallbackKeystoreSelectsNewestNotBeforeValidKeyAndIncludesKeyIdInEnvelope"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "function": "TestCallbackKeystoreFailsLoudOnEmptyKeySetAndOnAllKeysWithFutureNotBefore"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "function": "TestLoadCallbackKeystoreFromEnvReturnsNilWhenUnsetAndKeystoreWhenSet"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "function": "TestCallbackKeystoreKeyIDsReturnsDescendingByNotBefore"
+        },
+        {
+          "file": "tests/integration/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSignedEnvelopePostedAndPreMVPRejectionParsedFromLiveQFStub"
+        },
+        {
+          "file": "tests/e2e/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSigningWiringThroughLiveSurfaceComposesCanonicalPayloadAndKeyIdEnvelope"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackCanonicalPayloadCompositionIsPipeDelimitedWithoutWhitespaceOrTrailingPipe"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackHMACSHA256SignatureIsLowerCaseHexAndMatchesKnownVector"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "plannedTitle": "TestCallbackKeystoreSelectsNewestNotBeforeValidKeyAndIncludesKeyIdInEnvelope"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_keystore_test.go",
+          "plannedTitle": "TestCallbackKeystoreFailsLoudOnEmptyKeySetAndOnAllKeysWithFutureNotBefore"
+        },
+        {
+          "plannedPath": "tests/integration/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackSignedEnvelopePostedAndPreMVPRejectionParsedFromLiveQFStub"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackSigningCanonicalPayloadAndKeyIdEnvelopeThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-8-signing-evidence",
+        "report.md#scope-8-documentation-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-028 canonical payload composition is exactly callback_id trace_id packet_id action nonce expires_at surface pipe delimited",
+        "SCN-SM-041-028 keystore selects the newest not_before valid key and the signed envelope carries key_id from the selected key",
+        "SCN-SM-041-028 operator documentation publishes the per release key rotation playbook"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-029",
+      "name": "Pre-MVP Callback Signing Path Exercised End-To-End While QF Returns Callback Deferred To V1 Rejection",
+      "scope": "08-signed-callback-protocol",
+      "status": "active",
+      "behaviorClass": "security",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackPreMVPParsesCallbackDeferredToV1RejectionWithoutRetryOrLocalActionAcceptance"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackEmitsAttemptsMetricAndAuditEnvelopeForRejectedV1DeferredStatus"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackHTTP2xxBranchDoesNotAcceptAnyLocalAction"
+        },
+        {
+          "file": "internal/telegram/render/qf_packet_message_test.go",
+          "function": "TestEmitSignedCallbackPreMVPRejectionWiringMatchesPostCallback"
+        },
+        {
+          "file": "tests/integration/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSignedEnvelopePostedAndPreMVPRejectionParsedFromLiveQFStub"
+        },
+        {
+          "file": "tests/e2e/qf_callback_signing_test.go",
+          "function": "TestQFCallbackPreMVPDeferralRejectionThroughLiveSurfaceNoLocalActionAcceptance"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackPreMVPParsesCallbackDeferredToV1RejectionWithoutRetryOrLocalActionAcceptance"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackEmitsAttemptsMetricAndAuditEnvelopeForRejectedV1DeferredStatus"
+        },
+        {
+          "plannedPath": "tests/integration/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackSignedEnvelopePostedAndPreMVPRejectionParsedFromLiveQFStub"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackPreMVPDeferralRejectionParsedThroughLiveSurfaceWithNoLocalActionAcceptance"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-8-pre-mvp-rejection-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-029 pre MVP signing path executes end to end with signature and key_id in the request body and QF CALLBACK_DEFERRED_TO_V1 rejection is parsed without retry",
+        "SCN-SM-041-029 connector never persists the callback as accepted never mutates QF state never renders a local action submitted affordance",
+        "SCN-SM-041-029 smackerel_qf_callback_attempts_total emitted with status rejected_v1_deferred and audit envelope action callback outcome rejected reason CALLBACK_DEFERRED_TO_V1"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-030",
+      "name": "Signature Failure Recorded As Diagnostic Without Sending Or Retrying And Clock Skew Outside Tolerance Rejected Locally",
+      "scope": "08-signed-callback-protocol",
+      "status": "active",
+      "behaviorClass": "security",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackSignatureFailureNoActiveKeyAbortsLocallyAndEmitsFailureMetricAndAuditEnvelope"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackSignatureFailureMalformedCanonicalPayloadAbortsLocallyAndRecordsReason"
+        },
+        {
+          "file": "internal/connector/qfdecisions/callback_test.go",
+          "function": "TestCallbackSignatureFailureExpiresAtOutsideToleranceAbortsLocallyAndRecordsReason"
+        },
+        {
+          "file": "tests/integration/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSignatureFailureMatrixAbortsLocallyAndRecordsDiagnosticsAcrossAllThreeReasons"
+        },
+        {
+          "file": "tests/e2e/qf_callback_signing_test.go",
+          "function": "TestQFCallbackStartupFailsLoudWhenKeystoreHasNoActiveKey"
+        },
+        {
+          "file": "tests/e2e/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSignatureFailureMatrixThroughLiveSurfaceNoNetworkSendAndDiagnosticsRecorded"
+        }
+      ],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackSignatureFailureNoActiveKeyAbortsLocallyAndEmitsFailureMetricAndAuditEnvelope"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackSignatureFailureMalformedCanonicalPayloadAbortsLocallyAndRecordsReason"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/callback_test.go",
+          "plannedTitle": "TestCallbackSignatureFailureExpiresAtOutsideToleranceAbortsLocallyAndRecordsReason"
+        },
+        {
+          "plannedPath": "tests/integration/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackSignatureFailureMatrixAbortsLocallyAndRecordsDiagnosticsAcrossAllThreeReasons"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_callback_signing_test.go",
+          "plannedTitle": "TestQFCallbackSignatureFailureMatrixThroughLiveSurfaceNoNetworkSendAndDiagnosticsRecorded"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-8-signature-failure-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-030 signature failures NO_ACTIVE_KEY MALFORMED_CANONICAL_PAYLOAD EXPIRES_AT_OUTSIDE_TOLERANCE abort signing locally and never send the callback over the network",
+        "SCN-SM-041-030 smackerel_qf_callback_signature_failures_total emitted with documented reason vocabulary and audit envelope written with action callback outcome rejected"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-031",
+      "name": "Diagnostic POST Constructs Canonical Watch Proposal Body With Required Fields And Trace Continuity",
+      "scope": "09-watch-signal-proposal-endpoint",
+      "status": "active",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalBodyContainsExactlyTraceIdSourceEntityRefReasonAndExpiresAt"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalSourceFieldIsLiteralSmackerelProposeAndTraceIdIsUUIDv7"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalIsNotCallableFromUserVisibleSurfacesAndOnlyFromConnectorDiagnosticPath"
+        },
+        {
+          "plannedPath": "tests/integration/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalSignedEnvelopePostedAndScope8SignerReusedAgainstLiveQFStub"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalCanonicalBodyAndTraceContinuityThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-9-body-construction-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-031 proposal body contains exactly trace_id source smackerel_propose entity_ref reason expires_at with no extra fields and no missing fields and trace_id is UUIDv7 client side per proposal",
+        "SCN-SM-041-031 diagnostic invocation is never fired from a user visible Smackerel surface and is only callable from the connector internal diagnostic path and the Scope 9 integration test"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-032",
+      "name": "Watch Proposal Endpoint Reuses Scope 8 Signer And Keystore Without Modification",
+      "scope": "09-watch-signal-proposal-endpoint",
+      "status": "active",
+      "behaviorClass": "security",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalReusesScope8SignerAndKeystoreVerbatimWithoutReimplementation"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalCanonicalPayloadIsPipeDelimitedTraceIdSourceEntityRefReasonExpiresAt"
+        },
+        {
+          "plannedPath": "tests/integration/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalSignedEnvelopePostedAndScope8SignerReusedAgainstLiveQFStub"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalScope8SignerReuseThroughLiveSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-9-signer-reuse-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-032 Scope 9 reuses the Scope 8 signer and keystore verbatim via interface reference",
+        "SCN-SM-041-032 canonical payload is trace_id source entity_ref reason expires_at pipe delimited and signed envelope carries signature and key_id from the Scope 8 signer"
+      ]
+    },
+    {
+      "scenarioId": "SCN-SM-041-033",
+      "name": "Pre-MVP QF Rejects Every Proposal With Watch Proposals Deferred To V1 And No Watch State Or User Surface Is Mutated",
+      "scope": "09-watch-signal-proposal-endpoint",
+      "status": "active",
+      "behaviorClass": "compliance",
+      "changeType": "new",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [],
+      "plannedTests": [
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalPreMVPParsesWatchProposalsDeferredToV1WithoutRetryOrLocalWatchStateMutation"
+        },
+        {
+          "plannedPath": "internal/connector/qfdecisions/watch_proposal_test.go",
+          "plannedTitle": "TestWatchProposalEmitsAttemptsMetricAndAuditEnvelopeForRejectedV1DeferredStatus"
+        },
+        {
+          "plannedPath": "tests/integration/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalPreMVPRejectionParsedAndNoLocalWatchStateMutatedAcrossLiveStack"
+        },
+        {
+          "plannedPath": "tests/e2e/qf_watch_proposal_test.go",
+          "plannedTitle": "TestQFWatchProposalPreMVPDeferralRejectionThroughLiveSurfaceWithNoLocalMutationOrUserSurface"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-9-pre-mvp-rejection-evidence"
+      ],
+      "linkedDoD": [
+        "SCN-SM-041-033 pre MVP WATCH_PROPOSALS_DEFERRED_TO_V1 rejection is parsed without retry and connector never persists the proposal as accepted never mutates QF watch state never renders a proposal submitted user affordance",
+        "SCN-SM-041-033 smackerel_qf_watch_proposal_attempts_total emitted with status rejected_v1_deferred and audit envelope action watch_proposal outcome rejected reason WATCH_PROPOSALS_DEFERRED_TO_V1"
+      ]
     }
   ]
 }

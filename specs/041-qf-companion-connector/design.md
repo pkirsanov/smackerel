@@ -880,8 +880,21 @@ Smackerel implements the HMAC-SHA256 signing infrastructure pre-MVP so the signi
 | `action` | Pre-MVP enum: `noop`, `open` only. v1.0+ extends to `delivery_ack`, `no_action_capture`. v3.0 extends to `emergency_stop`. |
 | `nonce` | Per-callback random nonce; included in the signed payload to prevent replay. |
 | `expires_at` | RFC3339 expiry; pre-MVP TTL is 5 minutes from issuance. |
-| `signature` | HMAC-SHA256 over canonical payload `callback_id|trace_id|packet_id|action|nonce|expires_at|surface` (UTF-8, pipe-separated, base64url-encoded). |
+| `signature` | HMAC-SHA256 over canonical payload `callback_id|trace_id|packet_id|action|nonce|expires_at|surface` (UTF-8, pipe-separated). Signature output is **lower-case hex** (`hex.EncodeToString(HMAC-SHA256(...))`). |
 | `surface` | Enum: `telegram` or `web`. |
+
+> **Encoding reconciliation 2026-05-23:** Lower-case hex is the canonical wire
+> format for the `signature` field. Earlier drafts of this section described
+> the output as base64url-encoded; the Scope 8 implementation (see
+> `internal/connector/qfdecisions/callback.go`'s `hex.EncodeToString(mac.Sum(nil))`)
+> and the adversarial unit test
+> `TestCallbackHMACSHA256SignatureIsLowerCaseHexAndMatchesKnownVector` codify
+> lower-case hex as the chosen encoding. The two encodings are
+> cryptographically equivalent; hex was selected for HMAC bridge signature
+> idiom alignment, adversarial unit-test assertability against a known HMAC
+> vector, and parity with `scopes.md` Scope 8 Implementation Plan + DoD
+> wording. Receivers MUST validate the signature as lower-case hex; any other
+> encoding is `CALLBACK_SIGNATURE_INVALID`.
 
 ### Key Management
 

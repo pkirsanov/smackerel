@@ -546,6 +546,189 @@ The `qf-decisions` connector is governed as a companion read surface for Quantit
 
 Smackerel operators must not use this connector to approve trades, alter QF mandates, submit execution requests, or rewrite QF-provided decision content.
 
+### Notification Intelligence Operations (Spec 054)
+
+The Notification Intelligence Handler is the source-neutral layer for
+operational and personal notification events. Source adapters submit raw events
+to the handler; the handler stores raw input, normalizes the event, classifies
+severity/domain/intent, correlates incidents, chooses one handling decision,
+records suppressions or approvals, and queues redacted output attempts. ntfy is
+not implemented in this layer; spec 055 owns the concrete ntfy adapter and must
+translate ntfy transport data into the source adapter contract.
+
+#### Configuration And Startup
+
+Notification intelligence configuration lives in `config/smackerel.yaml`:
+
+| YAML path | Generated env var | Operator note |
+|-----------|-------------------|---------------|
+| `notification_intelligence.enabled` | `NOTIFICATION_INTELLIGENCE_ENABLED` | Enables the handler and operator API wiring. |
+| `notification_intelligence.persistence_threshold` | `NOTIFICATION_PERSISTENCE_THRESHOLD` | Controls persistence-based escalation. |
+| `notification_intelligence.escalation_severity` | `NOTIFICATION_ESCALATION_SEVERITY` | Controls severity-based escalation. Valid values are `medium`, `high`, and `critical`. |
+| `notification_intelligence.low_confidence_threshold` | `NOTIFICATION_LOW_CONFIDENCE_THRESHOLD` | Low-confidence classifications choose diagnostics instead of fabricated certainty. |
+| `notification_intelligence.max_retries` | `NOTIFICATION_MAX_RETRIES` | Bounded retry budget for notification handling/output. |
+| `notification_outputs.channels` | `NOTIFICATION_OUTPUT_CHANNELS` | Output channels; the committed runtime uses `dashboard`. |
+
+After editing the YAML, regenerate and restart through the repo CLI:
+
+```bash
+./smackerel.sh config generate
+./smackerel.sh down
+./smackerel.sh up
+```
+
+Missing or malformed notification config fails at config generation or at Go
+startup. Do not edit `config/generated/*.env` by hand and do not add Compose or
+shell fallback syntax for these values.
+
+#### Source Health
+
+Inspect all notification source instances and their latest redacted health:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/sources
+```
+
+Expected source states:
+
+| State | Meaning | Operator action |
+|-------|---------|-----------------|
+| `connected` | Adapter has reported a successful event or check. | No action unless incidents are missing. |
+| `degraded` | Transient failures are occurring; retry count and redacted error category should be present. | Inspect source credentials/connectivity outside Smackerel, then regenerate config if references changed. |
+| `disconnected` | Auth, configuration, connectivity, or missing-health state prevents normal intake. | Check secret reference names, source instance identity, and source-specific adapter logs. |
+
+Health responses include source type, source instance ID, source form, config
+hash, secret reference names, redacted metadata, last event/check timestamps,
+retry count, and redacted error text. Secret values are never returned.
+
+#### Event History And Incidents
+
+Use the event history endpoint for raw-to-normalized audit chains:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/events
+```
+
+Inspect one event detail:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/events/<event_id>
+```
+
+The detail response links the normalized notification, raw event,
+classification, processing decision, and incident when present. Use it to verify
+that raw input was stored before normalized output, that source event identity
+is `source` or `handler_derived`, and that redaction state is present.
+
+Inspect incidents:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/incidents
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/incidents/<incident_id>
+```
+
+Incident states are `observing`, `active`, `diagnosing`, `mitigating`,
+`approval_requested`, `escalated`, `suppressed`, or `resolved`. Routine and
+low-severity events should usually remain record-only; persistent or severe
+events should correlate into one incident instead of producing repeated noise.
+
+#### Suppressions And Quiet Windows
+
+Inspect active or historical suppressions:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/suppressions
+```
+
+Suppression kinds are `dedupe`, `maintenance`, `cooldown`, `user_preference`,
+`reaction_loop`, `policy`, and `quiet_window`. Suppressions preserve raw event
+history; they only explain why user-facing output or action was withheld.
+
+Inspect quiet-window status:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/quiet-windows
+```
+
+When no quiet-window records are active, the response is `{"quiet_windows": []}`.
+Do not encode quiet-window policy in source adapters; policy belongs in the
+core notification configuration and decision layer.
+
+#### Approvals And Safe Reactions
+
+High-blast-radius decisions are represented as `approval_request` decisions.
+The core policy refuses destructive automatic actions, runs diagnostics only
+when they are read-only, and permits autonomous actions only when the action is
+low-risk and allowlisted by policy.
+
+Inspect an approval:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/approvals/<approval_id>
+```
+
+Record an approval decision acknowledgement:
+
+```bash
+curl --max-time 5 -X POST -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/approvals/<approval_id>/decisions
+```
+
+If an event appears to require a destructive reaction, the correct outcome is a
+refusal or a user-facing approval path, never automatic execution.
+
+#### Output Delivery
+
+Output channels are separate from source adapters. Dashboard delivery attempts
+are visible through:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/outputs
+```
+
+Delivery statuses are `queued`, `sent`, `failed`, `withheld`, and
+`retry_exhausted`. Each attempt includes the decision ID, incident ID when
+present, output channel, destination reference, payload hash, redaction state,
+status, redacted error details, attempted timestamp, and completion timestamp.
+
+Use `/api/notifications/summary` for a compact incident/output overview:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/summary
+```
+
+#### Redaction Checks
+
+The handler redacts bearer tokens, query-string tokens/API keys/secrets,
+password fragments, and `secret-*` / `secret_*` fragments before writing
+operator-visible bodies, source metadata, health errors, and output messages.
+If a sensitive string appears in a notification response, treat it as a P0 data
+exposure: stop sending new source events, preserve the event ID for audit, and
+fix the redaction path before reconnecting the source adapter.
+
+#### Troubleshooting
+
+| Symptom | Likely cause | Resolution |
+|---------|--------------|------------|
+| `missing or invalid required notification configuration` | One of the `NOTIFICATION_*` env vars was not generated or has an invalid value. | Edit `config/smackerel.yaml`, run `./smackerel.sh config generate`, then restart with `./smackerel.sh down` and `./smackerel.sh up`. |
+| `/api/notifications/sources` shows `disconnected` with `no_health_report` | Source instance exists but no adapter has reported health yet. | Confirm the source adapter is configured and running; for ntfy, wait for spec 055 adapter wiring rather than adding ntfy logic to the core handler. |
+| Source health is `degraded` | Transient source failures or rate limits. | Check the source system and credential references; health errors are redacted by category. |
+| Events are stored but no output is queued | Event was routine, low severity, suppressed, below thresholds, or confidence selected diagnostics. | Inspect `/api/notifications/events/<event_id>` for classification, decision reason codes, suppressions, and incident state. |
+| Repeated alerts appear as one incident | Correlation is working as designed. | Inspect the incident `persistence_count` and source instance IDs to confirm related events are grouped. |
+| Approval expected but event was only recorded | Risk level or severity/persistence thresholds did not select `approval_request`. | Inspect decision `threshold_inputs`, `risk_assessment`, and classification confidence in the event detail. |
+| Output remains queued | Output channel is not completing delivery or the dispatcher has not sent it yet. | Check `/api/notifications/outputs` for status and redacted errors; verify `notification_outputs.channels` includes the intended channel. |
+| ntfy event is expected but no ntfy source exists | ntfy adapter behavior is not part of spec 054. | Implement or enable the spec 055 ntfy adapter; do not add ntfy-specific branches to `internal/notification`. |
+
 ### Reset a Connector's Sync Cursor
 
 If a connector is stuck or you want to re-sync from scratch, clear its cursor in the database. This requires the stack to be running:
@@ -2297,7 +2480,8 @@ is enforced by `internal/metrics/metrics_test.go` and
 | `smackerel_qf_unknown_decision_type_total` | `value` | Scope 2 unknown `decision_type` packet |
 | `smackerel_qf_engagement_signal_attempts_total` | `event`, `surface`, `status` | Scope 6 engagement flush (pre-MVP placeholder: registered with zero emissions until Scope 6 transport lands) |
 | `smackerel_qf_evidence_revoked_total` | `reason` | Scope 4 evidence revocation |
-| `smackerel_qf_callback_attempts_total` | `action`, `status` | Scope 8 callback attempt (pre-MVP placeholder: registered with zero emissions until Scope 8 callback transport lands) |
+| `smackerel_qf_callback_attempts_total` | `action`, `status` | Scope 8 callback attempt — emitted once per `PostCallback` invocation (action vocabulary `{noop, open, unknown}`, status vocabulary `{ok, rejected_v1_deferred, rejected_local, error}`) |
+| `smackerel_qf_watch_proposal_attempts_total` | `status` | Scope 9 watch-proposal POST attempt — emitted once per `WatchProposalClient.Propose` invocation (status vocabulary `{rejected_v1_deferred, rejected_local, degraded}`; pre-MVP `accepted` is NEVER emitted because QF rejects every proposal with `WATCH_PROPOSALS_DEFERRED_TO_V1`) |
 | `smackerel_qf_deep_link_render_total` | `surface`, `status` | Scope 3 deep-link render |
 | `smackerel_qf_trust_object_render_failures_total` | `reason` | Scope 3 trust-object render failure |
 
@@ -2338,7 +2522,8 @@ Action constants (`internal/connector/qfdecisions/types.go`):
 | `AuditActionEvidenceExportAttempt` | `evidence_export_attempt` | Scope 4 evidence export attempt |
 | `AuditActionEvidenceRevocation` | `evidence_revocation` | Scope 4 evidence revocation |
 | `AuditActionEngagementSignalFlush` | `engagement_signal_flush` | Scope 6 engagement flush (helper present; transport in Scope 6) |
-| `AuditActionCallbackAttempt` | `callback_attempt` | Scope 8 callback attempt (helper present; transport in Scope 8) |
+| `AuditActionCallbackAttempt` | `callback_attempt` | Scope 8 callback attempt — emitted on every `PostCallback` invocation (success, parsed QF rejection, local signature failure, and transport error all log one envelope) |
+| `AuditActionWatchProposalAttempt` | `watch_proposal` | Scope 9 watch-proposal attempt — emitted on every `WatchProposalClient.Propose` invocation (parsed QF `WATCH_PROPOSALS_DEFERRED_TO_V1` rejection, local signature failure, and transport error all log one envelope; pre-MVP `outcome` is always `rejected`/`degraded`, never `ok`) |
 | `AuditActionDeepLinkRender` | `deep_link_render` | Scope 3 deep-link render |
 | `AuditActionCapabilityHandshake` | `capability_handshake` | Scope 2 capability handshake |
 | `AuditActionActionBoundaryKick` | `action_boundary_kick` | Scope 5 boundary kick on any rejected QF action attempt |
@@ -2379,3 +2564,646 @@ remains opt-in only: no default configuration toggles it on, no SST key
 enables it, and no production code path writes to it today. Operators
 considering the post-MVP mirror should treat it as a new scope activation
 requiring an explicit planning round and explicit operator consent.
+
+## QF Companion Connector Operations (Spec 041 Scope 6)
+
+Scope 6 ships the packet engagement signal exporter — a write-only,
+buffered, observability-oriented pipeline that captures user engagement
+events ( `opened`, `dwell`, `dismissed`, `snoozed`, `deep_linked`,
+`shared`) across the web detail surface, the daily digest surface, and
+the Telegram surface, batches them, and flushes them to QF's
+`POST /api/private/smackerel/v1/packet-engagement-signals` endpoint via
+the Scope 1 QF client transport.
+
+### Capability Gate (Construction Time)
+
+The exporter checks `engagement_signal_supported` on the persisted QF
+capability response ONCE, at exporter construction time inside
+`(*Connector).Connect`. When the field is `false` the returned exporter
+is in a permanently-disabled state: every `Capture` call is a no-op,
+no flush worker is started, no metric is emitted, and no audit
+envelope is written. Capability is NEVER re-read per `Capture` call;
+the only way to flip an exporter from disabled to enabled is to tear
+down the connector via `Close` and reconnect after the QF capability
+handshake re-runs.
+
+### Consent Gate (Event-Capture Time)
+
+Consent is checked at event-capture time, NOT at flush time. The user's
+`engagement_telemetry` privacy preference must be one of:
+
+- `off` / `engagement_telemetry_off` — buffer is bypassed entirely at
+  capture time regardless of which surface fires the event;
+- `anonymous` / `engagement_telemetry_anonymous` — signals are enqueued
+  with `consent_scope=anonymous` and `actor_ref=""` (no PII);
+- `pseudonymous` / `engagement_telemetry_pseudonymous` — signals are
+  enqueued with `consent_scope=pseudonymous` and `actor_ref` set to the
+  caller-supplied opaque pseudonym.
+
+The default consent reader installed at the package level is
+fail-closed (`engagement_telemetry_off`). Operators wire a real
+consent reader by calling
+`qfdecisions.SetEngagementConsentReader(reader qfdecisions.ConsentReader)`
+during core process bootstrap.
+
+### Flush Policy (Fixed)
+
+| Knob | Value | Rationale |
+|---|---|---|
+| Flush interval | 10s | Bounded freshness without sub-second flush storms |
+| Flush threshold | 100 events | Batch size that matches the QF endpoint's documented intake budget |
+| Buffer capacity | 1024 events | Bounded memory; overflow drops the OLDEST entry to keep recent signals fresh |
+| Max retry attempts | 3 | Bounded retry budget; per design.md §Failure Handling |
+| Initial backoff | 100ms | First retry delay |
+| Max backoff | 2s | Cap on exponential growth |
+| Engagement transport timeout | 5s | Per-attempt timeout against the QF endpoint |
+
+The buffer is NOT persisted across process restarts. Engagement signals
+in flight at shutdown are flushed best-effort by `Close`; un-flushable
+signals are dropped.
+
+### Metric Reference (Scope 6 emissions)
+
+The Scope 6 exporter EMITS samples on the pre-registered Scope 5 vector
+`smackerel_qf_engagement_signal_attempts_total{event,surface,status}`.
+No new vector is registered. The `reason` label is NOT carried on the
+metric (cardinality bound); the QF response reason code is carried only
+on the audit envelope.
+
+| Label | Vocabulary |
+|---|---|
+| `event` | `opened`, `dwell`, `dismissed`, `snoozed`, `deep_linked`, `shared`, `overflow_drop` |
+| `surface` | `web`, `digest`, `telegram` |
+| `status` | `accepted`, `rejected`, `degraded`, `dropped` |
+
+Per-status emission rules:
+
+- `accepted` — QF responded with HTTP 201 OR HTTP 200 idempotent-repeat;
+- `rejected` — QF responded with HTTP 4xx (drop without retry);
+- `degraded` — QF responded with HTTP 5xx OR the transport timed out
+  after the bounded retry budget exhausted;
+- `dropped` — exporter buffer overflowed and the OLDEST entry was
+  evicted at enqueue time.
+
+### Audit Envelope Reference (Scope 6 emissions)
+
+Every flush attempt OR overflow-drop emits one Cross-Product Audit
+Envelope v1 record via the Scope 5 builder
+(`BuildCrossProductAuditEnvelopeV1`) with:
+
+| Field | Value |
+|---|---|
+| `action` | `engagement_signal_flush` (`AuditActionEngagementSignalFlush`) |
+| `outcome` | `ok` (accepted), `rejected` (4xx), `degraded` (5xx or overflow) |
+| `reason` | QF response `reason` code for 4xx/5xx; `ENGAGEMENT_BUFFER_OVERFLOW` for overflow; empty for `ok` |
+| `surface` | The surface that fired the source events (envelope-level for batch flushes) |
+| `actor_ref` | The opaque pseudonym from the consent reader (only set when consent scope is `pseudonymous`) |
+| `signal_ids` | The list of signal IDs in the flushed batch |
+
+Idempotent-repeat responses (HTTP 200) increment the `accepted` metric
+but MUST NOT emit a duplicate audit envelope beyond the first `ok`
+envelope for the same `signal_id` set.
+
+### Write-Only Boundary (Product Principle 10)
+
+The exporter is write-only. Engagement signals are NEVER read back
+into local rendering, ranking, digest priority, recommendation
+surfaces, or trust metadata. The Smackerel → QF observability channel
+is one-way; QF owns interpretation of engagement signals for
+calibration, and Smackerel never reflects engagement back onto its own
+surfaces. This invariant is enforced at the Change Boundary level
+(every excluded file family in `scopes.md` Scope 6 Change Boundary
+section names the read-back surfaces explicitly) and at the code level
+(`internal/connector/qfdecisions/engagement.go` exposes only
+write-path APIs; no `ReadEngagementSignal*` accessor exists).
+
+### Failure Matrix Quick Reference
+
+| QF response | Retry? | Metric `status` | Audit `outcome` | Audit `reason` |
+|---|---|---|---|---|
+| HTTP 201 | No | `accepted` | `ok` | `""` |
+| HTTP 200 idempotent-repeat | No | `accepted` | `ok` (no duplicate envelope) | `""` |
+| HTTP 4xx (409 `ENGAGEMENT_SIGNAL_ID_REUSE_WITH_DIFFERENT_PAYLOAD`, `ENGAGEMENT_PACKET_NOT_FOUND`, `ENGAGEMENT_TRACE_ID_MISMATCH`, `ENGAGEMENT_CONSENT_REQUIRED`, `ENGAGEMENT_DWELL_FIELD_MISMATCH`) | No | `rejected` | `rejected` | QF response `reason` |
+| HTTP 5xx | Yes — exponential backoff up to 3 attempts | `degraded` | `degraded` | QF response `reason` if present, else `"transport_failed"` |
+| Transport timeout / connection refused | Yes — exponential backoff up to 3 attempts | `degraded` | `degraded` | `"transport_failed"` |
+| Buffer overflow (at enqueue time) | N/A | `dropped` | `degraded` | `ENGAGEMENT_BUFFER_OVERFLOW` |
+
+### Operator Hooks
+
+| Hook | API | Purpose |
+|---|---|---|
+| Install runtime consent reader | `qfdecisions.SetEngagementConsentReader(reader)` | Wire the user's `engagement_telemetry` privacy preference to the global exporter at bootstrap. Fail-closed (`off`) by default. |
+| Capture an engagement event | `qfdecisions.CaptureEngagementOpened(ctx, surface, packetID, traceID, actorRef)` | Surface render hooks call this nil-safely; no-ops when no exporter is connected. Follow-up scopes may add additional capture helpers for `dwell`, `dismissed`, `snoozed`, `deep_linked`, `shared` events. |
+| Access the connected exporter | `(*Connector).EngagementExporter() *Exporter` | Test/operator-facing accessor for the exporter created at `Connect` time; nil after `Close`. |
+
+### Privacy Preferences Store (Out Of Scope For Spec 041 Scope 6)
+
+Scope 6 wires the consent gate but does NOT introduce a persistent
+privacy preferences store. The live core process defaults to
+fail-closed (`engagement_telemetry_off`) at process startup. A
+follow-up scope owned by a future privacy-settings store activation
+will wire user preferences to `SetEngagementConsentReader` at
+bootstrap. Until that follow-up scope lands, engagement telemetry is
+emitted ONLY by tests that explicitly install a consent reader; the
+live system is silent.
+
+## QF Personal Context Read API (Spec 041 Scope 7)
+
+Scope 7 ships the personal-context read API host — a read-only,
+consent-token-gated endpoint that lets QF (the only authorized
+consumer) pull recent personal-context items for a single
+`entity_ref`, strictly bounded by sensitivity ceilings, with a
+short-lived consent token that may be redeemed at most five times.
+
+### Route
+
+`GET /api/private/qf/v1/personal-context`
+
+Mounted inside the bearer-auth-gated route group; the route MUST NOT
+be reachable without a valid `Authorization: Bearer <token>` header.
+
+Query parameters (all required unless noted):
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `entity_ref` | yes | Opaque entity reference (e.g., `user:<id>`). MUST match the token's bound `entity_ref` exactly. |
+| `max_sensitivity` | yes | Requested ceiling. MUST be one of `low`, `medium`, `high` (lower-case). |
+| `consent_token` | yes | Token id issued by `PersonalContextConsentTokenStore.Issue`. Each call to the route consumes one read against the token, regardless of outcome (rate-limited, capability-disabled, and rejected attempts all count). |
+| `requester_id` | no | Defaults to the bearer-auth `auth.UserIDFromContext` value when absent. |
+
+### Response shape (200)
+
+```json
+{
+  "items": [
+    {
+      "artifact_id": "...",
+      "kind": "note",
+      "sensitivity_tier": "low",
+      "summary": "...",
+      "source_ref": "https://...",
+      "captured_at": "2026-05-22T20:19:28Z"
+    }
+  ],
+  "redaction_count": 2,
+  "effective_tier": "low",
+  "consent_ceiling": "high",
+  "user_ceiling": "low",
+  "non_influence_warning": "Personal context returned for QF calibration only. Smackerel does not, and MUST NOT, influence QF mandate, watch list, trade approval, or execution decisions.",
+  "token_reads_used": 1,
+  "token_reads_remaining": 4
+}
+```
+
+The `non_influence_warning` string is byte-exact and is asserted by
+the unit, integration, and e2e tests. Any drift is treated as a
+governance break under Principle 10 (QF Companion Boundary) and is
+caught by the regression suite.
+
+### Failure matrix
+
+| HTTP status | Error code | Trigger |
+|-------------|------------|---------|
+| 400 | `missing_consent_token` | `consent_token` query parameter absent or empty |
+| 400 | `invalid_max_sensitivity` | `max_sensitivity` not in `{low, medium, high}` |
+| 400 | `invalid_entity_ref` | `entity_ref` empty |
+| 403 | `PERSONAL_CONTEXT_CONSENT_SCOPE_VIOLATION` | `entity_ref` or requested tier exceeds what the token was issued for |
+| 403 | `PERSONAL_CONTEXT_CONSENT_EXPIRED` | Token past `expires_at` |
+| 403 | `PERSONAL_CONTEXT_TOKEN_REVOKED` | Token revoked |
+| 403 | `PERSONAL_CONTEXT_TOKEN_NOT_FOUND` | Token id unknown |
+| 429 | `PERSONAL_CONTEXT_RATE_LIMIT_EXCEEDED` | 6th read against a token issued with the documented 5-read cap (response includes `Retry-After: 900`) |
+| 503 | `PERSONAL_CONTEXT_DISABLED_BY_CAPABILITY` | Persisted capability declares `personal_context_pull_supported: false` |
+
+The capability gate fires BEFORE the consent counter is incremented;
+the 503 path leaves `reads_used` unchanged. The rate-limit gate
+fires AFTER the atomic counter increment, so the disallowed read is
+counted and persisted (this is what the SCN-SM-041-027 contract
+requires: every attempt MUST be counted).
+
+### Persistent state
+
+Migration `037_qf_personal_context_consent_tokens.sql` creates the
+`qf_personal_context_consent_tokens` table:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `token_id` | TEXT PRIMARY KEY | Prefixed with `pct_` followed by 64 hex chars |
+| `entity_ref` | TEXT NOT NULL | The opaque entity reference the token is bound to |
+| `max_sensitivity_tier` | TEXT NOT NULL | CHECK constraint: must be `low`, `medium`, or `high` |
+| `requester_id` | TEXT NOT NULL | The issuer/requester id recorded with the token |
+| `issued_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
+| `expires_at` | TIMESTAMPTZ NOT NULL | CHECK constraint: must be > `issued_at` |
+| `reads_used` | INTEGER NOT NULL DEFAULT 0 | CHECK constraint: must be >= 0 |
+| `revoked_at` | TIMESTAMPTZ | Set by `Revoke`; `COALESCE`-protected so revocation is idempotent |
+
+An index on `(expires_at, revoked_at)` supports a future sweep job;
+no sweep is wired in Scope 7.
+
+### Token issuance contract
+
+`PersonalContextConsentTokenStore.Issue` refuses any TTL greater than
+`PersonalContextConsentMaxTTL` (15 minutes) and refuses any tier
+outside `{low, medium, high}`. The maximum reads-per-token is
+`PersonalContextConsentMaxReads` (5). Both ceilings are adversarially
+asserted by unit tests in
+`internal/connector/qfdecisions/personal_context_consent_test.go` so
+that a future edit that relaxes them without spec approval fails
+first.
+
+### Atomic read counter
+
+`AtomicConsumeRead` performs a single UPDATE that increments
+`reads_used` and returns the new row, then validates in this order:
+
+1. revoked → `PERSONAL_CONTEXT_TOKEN_REVOKED` (403)
+2. expired → `PERSONAL_CONTEXT_CONSENT_EXPIRED` (403)
+3. scope mismatch (wrong `entity_ref`) → `PERSONAL_CONTEXT_CONSENT_SCOPE_VIOLATION` (403)
+4. ceiling raised above token bound → `PERSONAL_CONTEXT_CONSENT_SCOPE_VIOLATION` (403)
+5. rate-limit (`reads_used > 5` after increment) → `PERSONAL_CONTEXT_RATE_LIMIT_EXCEEDED` (429)
+
+Because the increment is the first step, EVERY attempt — including
+rejected ones — is counted; the integration test
+`TestQFPersonalContextRead_AtomicReadCapEnforced_WhenSixthAttemptIsMade`
+asserts the persisted counter is exactly 6 after 5 happy reads + 1
+rate-limited read.
+
+### Sensitivity filter
+
+Items are pulled by
+`PersonalContextSensitivityQuerier.QueryByEntityRef`, which reads
+from the `artifacts` table where `metadata->>'entity_ref'` matches
+and `metadata->>'sensitivity_tier'` is non-null. The handler then
+applies the most-restrictive of (consent ceiling, user ceiling):
+
+- Items with tier strictly above the consent ceiling are NOT
+  counted as redactions — they were never in scope.
+- Items with tier strictly above the user ceiling but at or below
+  the consent ceiling ARE counted in `redaction_count`.
+- Items at or below the user ceiling are returned in `items`.
+
+The conservative wired-default user ceiling is `low`
+(`personalContextLowCeilingProvider` in `cmd/core/wiring.go`); a
+follow-up scope owned by a future privacy-settings store activation
+will replace it with a per-user lookup. Misconfigured ceilings
+collapse to `low` (the most-restrictive sentinel) via
+`PersonalContextTierMinimum`, which is adversarially tested so a
+future regression cannot silently widen access.
+
+### Metric
+
+`smackerel_qf_personal_context_reads_total{outcome, sensitivity_tier}` —
+one counter, two labels. Outcome vocabulary:
+
+| Outcome | When it fires |
+|---------|---------------|
+| `ok` | Read succeeded, no redactions |
+| `degraded` | Read succeeded with `redaction_count > 0` |
+| `rejected` | 4xx outcome (missing token, invalid tier, scope violation, expired, revoked, not found) |
+| `rate_limited` | 429 outcome (rate-limit exceeded) |
+| `capability_disabled` | 503 outcome (capability declares `personal_context_pull_supported: false`) |
+| `unknown` | Fallback for guarded vocabulary drift (never reached in normal operation) |
+
+### Audit envelope
+
+Every attempt — successful, redacted, rejected, rate-limited, or
+capability-disabled — emits a Cross-Product Audit Envelope v1 via
+`EmitConnectorAuditEnvelope` with `action =
+"personal_context_read"`. The envelope is emitted unconditionally
+inside `defer`, so even error paths produce one audit record per
+read attempt. Audit outcome vocabulary:
+
+| Outcome constant | String |
+|------------------|--------|
+| `AuditOutcomeOK` | `ok` |
+| `AuditOutcomeDegraded` | `degraded` |
+| `AuditOutcomeRejected` | `rejected` |
+| `AuditOutcomeRateLimited` | `rate_limited` |
+| `AuditOutcomeCapabilityDisabled` | `capability_disabled` |
+
+### Operator guidance
+
+- Personal context reads are bounded by the token's `max_sensitivity_tier`
+  AND the persisted user privacy ceiling. To raise the user
+  ceiling above the conservative `low` default, a future spec
+  must add a per-user privacy preferences store (out of scope
+  for spec 041 Scope 7).
+- Tokens are sweepable via `Revoke(tokenID)`; revocation is
+  idempotent. No background sweep is wired in Scope 7; tokens
+  past `expires_at` are simply rejected at read time and remain
+  in the table until manual cleanup or a future sweep job.
+- Capability flips are read live on every attempt (no in-process
+  cache). To disable the read path, flip
+  `personal_context_pull_supported` to `false` in the persisted
+  capability response and the next call returns 503 without
+  consuming a token read.
+
+### Non-negotiable boundaries (Principle 10)
+
+- Smackerel MUST NOT use this route to initiate trade approval,
+  mandate change, execution, or financial advice. The
+  `non_influence_warning` string is byte-exact and is the binding
+  reminder on every response.
+- The route MUST NOT bypass the bearer-auth gate; the e2e test
+  `TestQFPersonalContextRead_LiveHTTP_RequiresBearerAuth` asserts
+  this by calling without the header and requiring 401.
+- The route MUST NOT widen sensitivity beyond the token's
+  `max_sensitivity_tier`; the ordering check is adversarially
+  tested with `PersonalContextTierLessOrEqual` so the reversal
+  cannot silently grant high-tier access.
+
+## QF Companion Signed Callback Protocol (Spec 041 Scope 8)
+
+Scope 8 ships the signed-callback protocol the connector uses to POST
+diagnostic, no-action callbacks back to QF (`POST /api/private/smackerel/v1/callback`).
+Every callback envelope is signed with HMAC-SHA256 (lower-case hex) using a
+key drawn from an SST-managed JSON keystore. Pre-MVP, every QF response
+returns `{"code":"CALLBACK_DEFERRED_TO_V1"}`; Smackerel parses that
+rejection deterministically and treats it as `Status = rejected_v1_deferred`
+with **zero** local action acceptance — Principle 10 forbids Smackerel from
+ever executing a QF action.
+
+### Canonical payload
+
+The signed input is a pipe-delimited string composed in exactly this order:
+
+```text
+callback_id|trace_id|packet_id|action|nonce|expires_at|surface
+```
+
+Rules (`internal/connector/qfdecisions/callback.go::CallbackCanonicalPayload`):
+
+- No whitespace in any component (no space, tab, CR, LF).
+- No trailing pipe.
+- No pipe character inside any component.
+- `expires_at` is RFC3339 UTC.
+- `action` MUST be one of `{noop, open}` pre-MVP. Any other value (in
+  particular `approval`, `execution`, `mandate_change`, etc.) is rejected
+  locally with reason `MALFORMED_CANONICAL_PAYLOAD` AND triggers the
+  pre-existing `EnforceQFActionBoundary` kick (Scope 5 defense-in-depth).
+- `surface` MUST be one of `{telegram, web}`.
+
+Any violation aborts before the HMAC step and emits a signature-failure
+metric (see below). The signer never reaches the network on a malformed
+envelope.
+
+### Keystore (SST env var)
+
+```bash
+QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON='[
+  {"key_id":"k-2026-05-01","secret":"…32+ bytes…","not_before":"2026-05-01T00:00:00Z"},
+  {"key_id":"k-2026-05-15","secret":"…32+ bytes…","not_before":"2026-05-15T00:00:00Z"}
+]'
+```
+
+Schema (`internal/connector/qfdecisions/callback_keystore.go`):
+
+- The env var holds a JSON array of `{key_id, secret, not_before}` entries.
+- `key_id`, `secret`, and `not_before` are all required per entry.
+- `key_id` values MUST be unique across the array.
+- `not_before` is RFC3339 UTC.
+- `SelectActiveKey(now)` chooses the newest key whose `not_before` is not
+  after `now` (ties broken by `key_id` ordering). If every key has a
+  future `not_before`, the keystore returns `ErrNoActiveCallbackKey` —
+  the connector treats this as a **fatal startup error** at
+  `Connector.Connect` time and emits a `callback_keystore_no_active_key`
+  audit envelope.
+
+Empty / unset env var: the connector still starts; the signer is simply
+not wired and the callback path is unavailable in that environment. This
+is the documented pre-MVP default.
+
+Malformed env var (invalid JSON, missing fields, duplicate `key_id`, etc.):
+fatal startup error with audit reason `callback_keystore_invalid:<err>`.
+
+### Key rotation playbook
+
+1. Generate the new key + `not_before` at least 24h in the future.
+2. Add the new entry to the `QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON`
+   array (keep the old entry in place during the overlap window).
+3. Apply the deploy adapter so the new env var reaches the running
+   container; restart the core process. The log line
+   `qf-decisions: callback signing keystore loaded keys=N key_ids=[…]`
+   confirms the new key is visible.
+4. At `now ≥ new_key.not_before`, `SelectActiveKey` switches
+   automatically. The old key remains in the keystore and stays
+   available for in-flight envelopes that QF may still validate
+   against the older `key_id`.
+5. Withdraw the old key by removing it from the array and applying
+   another deploy. The 24h overlap window is the recommended minimum;
+   tightening it requires explicit operator review.
+
+### Signature failure vocabulary
+
+| Reason | Trigger | Behaviour |
+|--------|---------|-----------|
+| `NO_ACTIVE_KEY` | Keystore is empty OR every key has `not_before > now` at signing time | Abort locally, increment `smackerel_qf_callback_signature_failures_total{reason="NO_ACTIVE_KEY"}`, emit `callback_attempt` audit envelope with `outcome=rejected reason=NO_ACTIVE_KEY`, **no network send** |
+| `MALFORMED_CANONICAL_PAYLOAD` | Any canonical-payload rule violation (pipe-in-field, whitespace, unknown action, unknown surface, non-RFC3339 `expires_at`, empty required field) | Same as above with `reason="MALFORMED_CANONICAL_PAYLOAD"` |
+| `EXPIRES_AT_OUTSIDE_TOLERANCE` | `expires_at` is more than 60 seconds in the past relative to the signer's wall clock | Same as above with `reason="EXPIRES_AT_OUTSIDE_TOLERANCE"` (clock-skew check is enforced **locally** before signing — Smackerel does not retry the QF round-trip to re-test) |
+
+The Status label emitted on every signature-failure attempt is
+`rejected_local`. On every `rejected_local` attempt, the connector
+increments BOTH `smackerel_qf_callback_signature_failures_total{reason}`
+AND `smackerel_qf_callback_attempts_total{action,status=rejected_local}`.
+
+### Status label vocabulary
+
+| Status | Meaning |
+|--------|---------|
+| `ok` | QF returned 2xx. **Crucial**: a 2xx response is _not_ a local action acceptance — Smackerel still does nothing with the user-affecting side of the callback (PP10). |
+| `rejected_v1_deferred` | QF returned a structured rejection with `code=CALLBACK_DEFERRED_TO_V1`. This is the **expected** pre-MVP status; the connector returns a Go-nil error and surfaces the parsed `RejectionCode` to the caller for observability. |
+| `rejected_local` | The signer aborted before any network send. See the failure vocabulary above. |
+| `error` | Transport error (network failure, non-2xx unparseable response, etc.). The caller receives a non-nil Go error; **no retry** is attempted — callback is a diagnostic, not a delivery contract. |
+
+### Capability gate
+
+`QFBridgeCapability.callback_signing_supported` is reserved on the wire and
+read by the connector during the capability handshake. Pre-MVP it is
+documentary only: the connector logs its value
+(`qf_capability_callback_signing_supported=…`) at startup but does NOT
+condition the signer wiring on it, so an operator-configured keystore
+remains the source of truth for the Smackerel side. The flag flips to a
+runtime gate when QF lands the v1 callback contract.
+
+### PP10 no-action-accepted guarantee
+
+The callback path:
+
+- Signs and POSTs a diagnostic envelope only.
+- NEVER mutates Smackerel state in response to QF's reply (success,
+  rejection, or error).
+- NEVER retries — neither on QF rejection (e.g., `CALLBACK_DEFERRED_TO_V1`)
+  nor on transport failure.
+- ALWAYS emits a `callback_attempt` cross-product audit envelope that
+  carries `trace_id`, `packet_id`, the canonical `action`, the `surface`,
+  the final `status`, and the `reason` (free-form on local failures,
+  `CALLBACK_DEFERRED_TO_V1` on the parsed pre-MVP rejection).
+
+These guarantees are unit-tested
+(`internal/connector/qfdecisions/callback_test.go`,
+`internal/telegram/render/qf_packet_message_test.go`),
+integration-tested against the live disposable test stack
+(`tests/integration/qf_callback_signing_test.go`), and e2e-tested
+through the connector lifecycle against the live core API
+(`tests/e2e/qf_callback_signing_test.go`).
+
+## QF Companion Watch Signal Proposal Endpoint (Spec 041 Scope 9, Pre-MVP Design Only)
+
+Scope 9 ships the diagnostic watch-signal proposal client the connector
+uses to POST signed pre-MVP watch-signal proposals to the QF Bridge
+(`POST /api/private/smackerel/v1/watch-signal-proposals`). Pre-MVP, QF
+rejects every proposal with `WATCH_PROPOSALS_DEFERRED_TO_V1` over HTTP
+503; the connector parses the rejection without retry. The path is
+connector-internal: it has no user-visible affordance on web, digest,
+or Telegram, and Smackerel never mutates local watch state in response
+to a proposal POST.
+
+### Canonical payload
+
+The signed input is a pipe-delimited string composed in exactly this
+order:
+
+```text
+trace_id|source|entity_ref|reason|expires_at
+```
+
+Rules (`internal/connector/qfdecisions/watch_proposal.go`):
+
+- No whitespace in any component.
+- No trailing pipe.
+- No pipe character inside any component.
+- `expires_at` is RFC3339 UTC.
+- `source` MUST be the literal `smackerel_propose` pre-MVP. Any other
+  value is rejected locally with reason `MALFORMED_CANONICAL_PAYLOAD`.
+- `trace_id` is a UUIDv7 generated client-side per proposal.
+
+### Body shape
+
+The signed envelope POSTed to QF is exactly:
+
+```json
+{
+  "trace_id": "01970000-0000-7000-8000-000000000031",
+  "source": "smackerel_propose",
+  "entity_ref": "qf:security:NVDA",
+  "reason": "attention_signal_over_threshold",
+  "expires_at": "2026-05-23T12:05:00Z",
+  "signature": "<64-char lower-case hex HMAC-SHA256>",
+  "key_id": "<active Scope 8 key_id>"
+}
+```
+
+No extra fields. No missing fields.
+
+### Scope 8 signer reuse contract
+
+Scope 9 holds an interface reference to the Scope 8 signer
+(`internal/connector/qfdecisions/callback.go`) and the Scope 8 in-process
+keystore (`internal/connector/qfdecisions/callback_keystore.go`). Scope
+9 does NOT reimplement HMAC-SHA256, key selection, or `key_id` envelope
+inclusion. The signature-failure reason vocabulary is aliased to the
+Scope 8 vocabulary so any future Scope 8 extension propagates without
+a divergent code path:
+
+```go
+WatchProposalSignatureFailureNoActiveKey               = CallbackSignatureFailureNoActiveKey
+WatchProposalSignatureFailureMalformedCanonicalPayload = CallbackSignatureFailureMalformedCanonicalPayload
+WatchProposalSignatureFailureExpiresAtOutsideTolerance = CallbackSignatureFailureExpiresAtOutsideTolerance
+```
+
+### Capability gate
+
+`QFBridgeCapability.watch_proposal_supported` is reserved on the wire
+and read by the connector during the capability handshake. The pre-MVP
+contract is `false`. The connector logs its value
+(`qf_capability_watch_proposal_supported=…`) at watch-proposal client
+construction time but does NOT treat a `true` value as a runtime
+override toggle: the connector continues to expect the
+`WATCH_PROPOSALS_DEFERRED_TO_V1` rejection envelope regardless. The
+flag flips to a runtime gate when QF lands the v1 watch-proposal
+acceptance contract.
+
+### Pre-MVP rejection parsing
+
+Pre-MVP QF responds HTTP 503 with body:
+
+```json
+{"code":"WATCH_PROPOSALS_DEFERRED_TO_V1","message":"pre-MVP: bridge does not accept watch proposals"}
+```
+
+The connector:
+
+- Parses the response without retrying.
+- Returns `Status = rejected_v1_deferred` with the parsed
+  `RejectionCode = "WATCH_PROPOSALS_DEFERRED_TO_V1"`.
+- Increments
+  `smackerel_qf_watch_proposal_attempts_total{status="rejected_v1_deferred"}`.
+- Emits a Cross-Product Audit Envelope v1 record with
+  `action=watch_proposal`, `outcome=rejected`,
+  `reason=WATCH_PROPOSALS_DEFERRED_TO_V1`,
+  `target_context_type=<entity_ref>`.
+
+### Status label vocabulary
+
+| Status | Meaning |
+|--------|---------|
+| `rejected_v1_deferred` | QF returned the structured pre-MVP rejection `WATCH_PROPOSALS_DEFERRED_TO_V1`. This is the expected pre-MVP status. |
+| `rejected_local` | The signer aborted before any network send (e.g., `NO_ACTIVE_KEY`, `MALFORMED_CANONICAL_PAYLOAD`, `EXPIRES_AT_OUTSIDE_TOLERANCE`). |
+| `degraded` | Transport failure (timeout, network error, malformed QF body) prevented the connector from observing a definitive QF response. |
+
+Pre-MVP `accepted` is NEVER emitted because QF rejects every proposal.
+
+### No-watch-state-mutation guarantee
+
+The watch-proposal client:
+
+- NEVER persists the proposal as accepted in any Smackerel database
+  table.
+- NEVER mutates QF watch state (no Smackerel-side watch creation, watch
+  evaluation, trade approval, mandate change, EmergencyStop, or
+  execution).
+- NEVER publishes on any NATS subject in response to a proposal POST.
+- NEVER retries `WATCH_PROPOSALS_DEFERRED_TO_V1` rejections.
+
+This invariant is enforced at the Change Boundary level
+(every excluded file family in `scopes.md` Scope 9 Change Boundary
+section names the watch/proposal/qf-state surfaces explicitly) and at
+the live-stack level: the integration test
+`TestQFWatchProposalPreMVPRejectionParsedAndNoLocalWatchStateMutatedAcrossLiveStack`
+snapshots `pg_stat_user_tables.n_tup_ins + n_tup_upd + n_tup_del` for
+every `watch_*` / `proposal_*` / `qf_*` relation BEFORE the Propose
+call and asserts zero delta AFTER.
+
+### No-user-visible-affordance guarantee
+
+The watch-proposal client is connector-internal. It is callable only
+from the connector internal diagnostic path (constructed at
+`(*Connector).Connect` time, shut down at `(*Connector).Close` time)
+and from the Scope 9 integration test. It is NEVER wired into any
+user-visible Smackerel surface (web, daily digest, Telegram). The
+unit test
+`TestWatchProposalIsNotCallableFromUserVisibleSurfacesAndOnlyFromConnectorDiagnosticPath`
+asserts this structurally via an import-graph check. The e2e
+adversarial probe
+`TestQFWatchProposalPreMVPDeferralRejectionThroughLiveSurfaceWithNoLocalMutationOrUserSurface`
+hits `http://smackerel-core:8080/api/private/smackerel/v1/watch-signal-proposals`
+and asserts HTTP 4xx (Smackerel core does NOT host the QF endpoint;
+the path is only used as a target for outbound POSTs).
+
+### PP10 cross-product boundary
+
+The watch-proposal path is a Smackerel → QF diagnostic POST. It NEVER
+initiates trade approval, mandate change, execution, or financial
+advice. Smackerel observes attention signals; QF (post-MVP) decides
+whether to act on them. Pre-MVP, the rejection envelope makes the
+boundary explicit on every attempt.
+
+### Test references
+
+These guarantees are unit-tested
+(`internal/connector/qfdecisions/watch_proposal_test.go`),
+integration-tested against the live disposable test stack
+(`tests/integration/qf_watch_proposal_test.go`), and e2e-tested
+through the connector lifecycle against the live core API
+(`tests/e2e/qf_watch_proposal_test.go`).
+
+

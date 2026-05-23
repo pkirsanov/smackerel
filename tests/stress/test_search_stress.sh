@@ -65,8 +65,9 @@ fi
 echo ""
 echo "Seeding $ARTIFACT_COUNT synthetic artifacts..."
 
-# Seed in batches to avoid exceeding OS argument length limit
-BATCH_SIZE=100
+# Seed in bounded batches to avoid exceeding OS argument length limits while
+# minimizing repeated docker compose exec sessions against the disposable DB.
+BATCH_SIZE=250
 batch_start=1
 while [[ $batch_start -le $ARTIFACT_COUNT ]]; do
   batch_end=$((batch_start + BATCH_SIZE - 1))

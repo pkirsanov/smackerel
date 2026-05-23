@@ -758,6 +758,14 @@ RECOMMENDATIONS_WATCHES_ALERT_WINDOW_SECONDS="$(required_value recommendations.w
 RECOMMENDATIONS_WATCHES_COOLDOWN_SECONDS_BY_KIND="$(required_json_value recommendations.watches.cooldown_seconds_by_kind)"
 RECOMMENDATIONS_WATCHES_QUIET_HOURS_POLICY="$(required_json_value recommendations.watches.quiet_hours_policy)"
 RECOMMENDATIONS_WATCHES_POLL_CRON="$(required_value recommendations.watches.poll_cron)"
+
+# Notification intelligence configuration (spec 054 SST-owned; no generator defaults)
+NOTIFICATION_INTELLIGENCE_ENABLED="$(required_value notification_intelligence.enabled)"
+NOTIFICATION_PERSISTENCE_THRESHOLD="$(required_value notification_intelligence.persistence_threshold)"
+NOTIFICATION_ESCALATION_SEVERITY="$(required_value notification_intelligence.escalation_severity)"
+NOTIFICATION_LOW_CONFIDENCE_THRESHOLD="$(required_value notification_intelligence.low_confidence_threshold)"
+NOTIFICATION_MAX_RETRIES="$(required_value notification_intelligence.max_retries)"
+NOTIFICATION_OUTPUT_CHANNELS="$(required_json_value notification_outputs.channels)"
 RECOMMENDATIONS_RETENTION_RAW_PROVIDER_PAYLOAD_SECONDS="$(required_value recommendations.retention.raw_provider_payload_seconds)"
 RECOMMENDATIONS_RETENTION_TRACE_RETENTION_SECONDS="$(required_value recommendations.retention.trace_retention_seconds)"
 RECOMMENDATIONS_RANKING_MAX_CANDIDATES_PER_PROVIDER="$(required_value recommendations.ranking.max_candidates_per_provider)"
@@ -1114,7 +1122,7 @@ OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
 # $OUTPUT_FILE (if any) is left untouched, so an operator with a
 # previously-valid env file can keep running while they fix the
 # regression. NO-DEFAULTS / fail-loud per Gate G028.
-OUTPUT_FILE_TMP="${OUTPUT_FILE}.tmp"
+OUTPUT_FILE_TMP="${OUTPUT_FILE}.tmp.$$"
 
 cat > "$OUTPUT_FILE_TMP" <<EOF
 # Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
@@ -1290,6 +1298,12 @@ RECOMMENDATIONS_POLICY_SAFETY_SOURCES=${RECOMMENDATIONS_POLICY_SAFETY_SOURCES}
 RECOMMENDATIONS_DELIVERY_TELEGRAM_ENABLED=${RECOMMENDATIONS_DELIVERY_TELEGRAM_ENABLED}
 RECOMMENDATIONS_DELIVERY_DIGEST_ENABLED=${RECOMMENDATIONS_DELIVERY_DIGEST_ENABLED}
 RECOMMENDATIONS_DELIVERY_TRIP_DOSSIER_ENABLED=${RECOMMENDATIONS_DELIVERY_TRIP_DOSSIER_ENABLED}
+NOTIFICATION_INTELLIGENCE_ENABLED=${NOTIFICATION_INTELLIGENCE_ENABLED}
+NOTIFICATION_PERSISTENCE_THRESHOLD=${NOTIFICATION_PERSISTENCE_THRESHOLD}
+NOTIFICATION_ESCALATION_SEVERITY=${NOTIFICATION_ESCALATION_SEVERITY}
+NOTIFICATION_LOW_CONFIDENCE_THRESHOLD=${NOTIFICATION_LOW_CONFIDENCE_THRESHOLD}
+NOTIFICATION_MAX_RETRIES=${NOTIFICATION_MAX_RETRIES}
+NOTIFICATION_OUTPUT_CHANNELS=${NOTIFICATION_OUTPUT_CHANNELS}
 CORE_EXTERNAL_URL=${CORE_EXTERNAL_URL}
 ML_EXTERNAL_URL=${ML_EXTERNAL_URL}
 BOOKMARKS_ENABLED=${BOOKMARKS_ENABLED}
