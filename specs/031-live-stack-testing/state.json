@@ -2,7 +2,9 @@
   "version": 3,
   "featureDir": "specs/031-live-stack-testing",
   "featureName": "Live Stack Testing",
-  "status": "done",
+  "status": "in_progress",
+  "previousStatus": "done",
+  "reconciliationNote": "Reset from 'done' to 'in_progress' on 2026-05-23 by reconcile-to-doc (sweep-2026-05-23-r30 round 3). state-transition-guard found 38 BLOCK findings; the prior 'done' promotion did not satisfy the current strict gates (G016, G022, G053, G060, plus SLA stress and change-boundary checks). Drift routed to bugs/BUG-031-006-strict-guard-gate-drift/ for finding-owned planning + delivery closure. Implementation on disk is real; gaps are governance/evidence and planning-coverage shaped.",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": null,
@@ -21,7 +23,8 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done",
+    "status": "in_progress",
+    "previousStatus": "done",
     "completedScopes": [
       "1",
       "2",
@@ -168,12 +171,27 @@
       "runStartedAt": "2026-05-13T00:00:00Z",
       "runEndedAt": "2026-05-13T00:00:00Z",
       "summary": "Stochastic-quality-sweep R18/20 (seed 20260513) — devops-to-doc child workflow probe of live-stack testing infrastructure. Verified test-environment isolation (SST drives compose_project=smackerel-test, ports 47001-47004, named volumes smackerel-test-*), test fixture freshness (down --volumes pre+post), KEEP_STACK_UP=1 ownership contract (spec 037 Scope 10), test data identifiability (testID(t)=test-{TestName}-{UnixNano}), Build-Once Deploy-Many separation (build.yml stops at registry push), and CI integration job's deliberate raw-go-test divergence (documented in ci.yml lines 136-139). Identified 4 specialist-class findings (DEVOPS-031-001 missing E2E in CI, DEVOPS-031-002 integration job main-only, DEVOPS-031-003 no parallel-test infra for integration lane, DEVOPS-031-004 no leak-detector after down --volumes); all logged as concerns[] in report.md R18 section. Outcome: done_with_concerns. No source/test/config/framework changes; report.md and state.json executionHistory only."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "validate",
+        "reconcile"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-23T00:00:00Z",
+      "runEndedAt": "2026-05-23T00:00:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Stochastic-quality-sweep sweep-2026-05-23-r30 round 3 of 30 — reconcile-to-doc child workflow (parent-expanded; runSubagent unavailable in nested runtime). Ran authoritative state-transition-guard pass against the spec-claimed status of 'done'. Guard exited 1 with 38 BLOCK failures and 2 warnings across: Gate G060 (no scenario-first TDD red→green markers), Gate G022 (4 required specialist phases missing — regression/simplify/stabilize/security — and 5 phase-claim provenance violations — chaos/docs/test/audit/validate appear in completedPhaseClaims without matching bubbles.<phase> executionHistory entries), Gate G016 (18 regression E2E planning items missing across all 6 scopes — DoD item, broader regression suite DoD item, and Test Plan row), Check 8D (3 change-boundary items missing — section, DoD item, allowed/excluded surfaces; triggered by 'cleanup' keyword usage in test helper context), Gate G053 (report.md missing '### Code Diff Evidence' subsection), Check 5A (Scope 6 has explicit 60s ML readiness timeout = SLA-sensitive but no stress test), Check 17 (no structured 'spec(031)' / 'bubbles(031/...)' commit on file). Reset top-level status and certification.status from 'done' to 'in_progress' (previous values preserved in 'previousStatus' fields for audit). artifact-lint.sh continues to pass (loose check accepts completedPhaseClaims at face value); only the strict state-transition-guard rejects the prior promotion. Implementation on disk is verified real — 52 integration test functions, 24 E2E test functions, internal/api/ml_readiness.go (52 LOC). Drift is governance/evidence shaped, not implementation shaped, but still requires planning-owned scope edits and a fresh evidence pass. Created BUG-031-006-strict-guard-gate-drift with full 6-artifact planning packet to route remediation through bubbles.design → bubbles.plan → bubbles.implement → bubbles.test → bubbles.regression → bubbles.simplify → bubbles.stabilize → bubbles.security → bubbles.validate → bubbles.audit → bubbles.chaos → bubbles.docs → bubbles.workflow.finalize. No source/test/config/framework changes; edits limited to specs/031-live-stack-testing/{state.json,report.md} and the new bugs/BUG-031-006-* packet."
     }
   ],
-  "activeBugs": [],
+  "activeBugs": [
+    "BUG-031-006-strict-guard-gate-drift"
+  ],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T00:00:00Z",
+  "lastUpdatedAt": "2026-05-23T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

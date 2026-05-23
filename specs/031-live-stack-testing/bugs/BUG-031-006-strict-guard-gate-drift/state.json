@@ -1,0 +1,165 @@
+{
+  "bugId": "BUG-031-006-strict-guard-gate-drift",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "title": "Strict-Guard Gate Drift on Spec 031",
+  "status": "open",
+  "workflowMode": "bugfix-fastlane",
+  "createdAt": "2026-05-23T00:00:00Z",
+  "createdBy": "bubbles.workflow",
+  "createdViaWorkflow": "reconcile-to-doc",
+  "createdViaParent": {
+    "parentWorkflowMode": "stochastic-quality-sweep",
+    "sweepId": "sweep-2026-05-23-r30",
+    "parentRound": 3,
+    "trigger": "validate",
+    "mappedChildWorkflowMode": "reconcile-to-doc",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "summary": "state-transition-guard.sh raised 38 BLOCK findings + 2 warnings against specs/031-live-stack-testing/ after the spec was promoted to done under an earlier gate set. Implementation on disk is real; drift is governance/evidence/provenance shaped. Bug routes remediation through the standard finding-owned planning + delivery chain.",
+  "findingCount": {
+    "block": 38,
+    "warn": 2,
+    "totalDrift": 40
+  },
+  "findingCategories": [
+    {
+      "id": "FC-G060-TDD",
+      "gate": "G060",
+      "check": "3E",
+      "count": 1,
+      "description": "Scenario-first TDD red->green markers missing in scope/report artifacts",
+      "closingScope": "BUG-031-006:Scope-3"
+    },
+    {
+      "id": "FC-G022-PHASES",
+      "gate": "G022",
+      "check": "6",
+      "count": 4,
+      "description": "Required specialist phases missing: regression, simplify, stabilize, security",
+      "closingScope": "BUG-031-006:Scope-5"
+    },
+    {
+      "id": "FC-G022-IMPERSONATION",
+      "gate": "G022-ext",
+      "check": "6B",
+      "count": 5,
+      "description": "Phase claim impersonation: chaos, docs, test, audit, validate listed in completedPhaseClaims but absent from executionHistory",
+      "closingScope": "BUG-031-006:Scope-5"
+    },
+    {
+      "id": "FC-G016-REGRESSION",
+      "gate": "G016",
+      "check": "8A",
+      "count": 18,
+      "description": "Regression E2E planning items missing: 3 per scope (scenario DoD, suite DoD, Test Plan row) x 6 scopes",
+      "closingScope": "BUG-031-006:Scope-1"
+    },
+    {
+      "id": "FC-CHECK-8D-BOUNDARY",
+      "gate": "Check-8D",
+      "check": "8D",
+      "count": 3,
+      "description": "Change Boundary section, DoD item, and allowed/excluded surface enumeration missing in scopes.md (false-positive trigger on cleanup helper naming)",
+      "closingScope": "BUG-031-006:Scope-2"
+    },
+    {
+      "id": "FC-G053-CODE-DIFF",
+      "gate": "G053",
+      "check": "13B",
+      "count": 1,
+      "description": "report.md missing ### Code Diff Evidence section",
+      "closingScope": "BUG-031-006:Scope-4"
+    },
+    {
+      "id": "FC-CHECK-5A-SLA",
+      "gate": "G026-or-Check-5A",
+      "check": "5A",
+      "count": 1,
+      "description": "Scope 6 declares 60s configurable ML readiness timeout (SLA-sensitive) but has no stress test",
+      "closingScope": "BUG-031-006:Scope-3"
+    },
+    {
+      "id": "FC-CHECK-17-COMMIT",
+      "gate": "Check-17",
+      "check": "17",
+      "count": 1,
+      "description": "full-delivery mode requires structured commit prefix spec(031) or bubbles(031/...); none in history",
+      "closingScope": "BUG-031-006:Scope-5"
+    },
+    {
+      "id": "FC-WARN-ADVISORY",
+      "gate": "advisory",
+      "check": "7+8",
+      "count": 2,
+      "description": "Warnings only: no completedAt timestamps; no concrete test file paths in some scope Test Plans",
+      "closingScope": "BUG-031-006:advisory"
+    }
+  ],
+  "scopes": [
+    {
+      "scopeId": "BUG-031-006:Scope-1",
+      "title": "Planning Edits - Regression E2E Coverage Across 6 Scopes",
+      "status": "Not Started",
+      "owner": "bubbles.design+bubbles.plan",
+      "closesFindings": 18
+    },
+    {
+      "scopeId": "BUG-031-006:Scope-2",
+      "title": "Planning Edits - Change Boundary Section",
+      "status": "Not Started",
+      "owner": "bubbles.design+bubbles.plan",
+      "closesFindings": 3
+    },
+    {
+      "scopeId": "BUG-031-006:Scope-3",
+      "title": "Implementation - Scope 6 SLA Stress Test (+ scenario-first TDD)",
+      "status": "Not Started",
+      "owner": "bubbles.implement+bubbles.test",
+      "closesFindings": 2
+    },
+    {
+      "scopeId": "BUG-031-006:Scope-4",
+      "title": "Implementation - Code Diff Evidence Section",
+      "status": "Not Started",
+      "owner": "bubbles.implement+bubbles.docs",
+      "closesFindings": 1
+    },
+    {
+      "scopeId": "BUG-031-006:Scope-5",
+      "title": "Specialist Phase Re-Runs - G022 Provenance Closure (+ structured commit)",
+      "status": "Not Started",
+      "owner": "bubbles.regression+bubbles.simplify+bubbles.stabilize+bubbles.security+bubbles.test+bubbles.audit+bubbles.chaos+bubbles.docs+bubbles.validate",
+      "closesFindings": 10
+    }
+  ],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "reconcile",
+        "select",
+        "bootstrap"
+      ],
+      "statusBefore": "n/a",
+      "statusAfter": "open",
+      "runStartedAt": "2026-05-23T00:00:00Z",
+      "runEndedAt": "2026-05-23T00:00:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Bug created by reconcile-to-doc (sweep-2026-05-23-r30 round 3) after state-transition-guard.sh rejected the prior spec-031 done promotion with 38 BLOCK findings + 2 warnings. Full 6-artifact planning packet authored: spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json. Parent spec state.json reset done->in_progress; BUG-031-006 registered in parent activeBugs. Routed to bubbles.design as next required owner."
+    }
+  ],
+  "completedPhaseClaims": [],
+  "completedPhaseClaimDetails": [],
+  "certification": {
+    "status": "open",
+    "completedScopes": [],
+    "totalScopes": 5,
+    "blockedReason": null,
+    "certifiedBy": null,
+    "certifiedAt": null
+  },
+  "nextRequiredOwner": "bubbles.design",
+  "failures": [],
+  "lastUpdatedAt": "2026-05-23T00:00:00Z",
+  "scopeLayout": "single-file"
+}
