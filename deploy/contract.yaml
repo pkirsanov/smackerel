@@ -20,6 +20,11 @@ images:
   registry: ghcr.io/pkirsanov/smackerel-ml
 
 # Third-party images pinned for reproducibility. NOT built by this project.
+# Each entry MAY carry an optional `profile:` field indicating that the image
+# is only required when the operator activates that Docker Compose profile.
+# Entries without `profile:` are part of the default profile set.
+# Drift between this list and `deploy/compose.deploy.yml::services.*.image`
+# is locked by `internal/deploy/external_images_contract_test.go` (BUG-049-001).
 externalImages:
 - name: postgres
   image: pgvector/pgvector:pg16
@@ -27,6 +32,11 @@ externalImages:
   image: nats:2.10-alpine
 - name: ollama
   image: ollama/ollama:0.23.2
+# Spec 049 — only required when operator enables `--profile monitoring`.
+# SST pin: config/smackerel.yaml::monitoring.prometheus.image
+- name: prometheus
+  image: prom/prometheus:v2.55.1
+  profile: monitoring
 
 # Config bundle environments. CI emits one bundle per env, identified by <env>-<sourceSha>.
 # Per BUG-047-001 / DEVOPS-HL-002, the published build-manifest-<sourceSha>.yaml
