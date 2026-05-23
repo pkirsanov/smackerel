@@ -27,6 +27,7 @@ import (
 //  7. smackerel_qf_packet_validation_failures_total {reason}
 //  8. smackerel_qf_freshness_p95_seconds            {stage}
 //  9. smackerel_qf_trust_object_render_failures_total {reason}
+//
 // 10. smackerel_qf_deep_link_render_total           {surface, status}
 // 11. smackerel_qf_evidence_export_attempts_total   {status, target_context_type, sensitivity_tier}
 // 12. smackerel_qf_evidence_revoked_total           {reason}

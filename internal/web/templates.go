@@ -76,6 +76,7 @@ const allTemplates = `
         <a href="/digest">Digest</a>
         <a href="/topics">Topics</a>
         <a href="/knowledge">Knowledge</a>
+        <a href="/notifications">Notifications</a>
         <a href="/settings">Settings</a>
         <a href="/status">Status</a>
         <button class="theme-toggle" id="themeBtn" aria-label="Toggle dark mode">Light / Dark</button>
@@ -88,6 +89,115 @@ const allTemplates = `
 {{end}}
 
 {{define "foot"}}</body></html>{{end}}
+
+{{define "notification-nav"}}
+<p class="meta"><a href="/notifications">Status</a> · <a href="/notifications/sources">Sources</a> · <a href="/notifications/events">Events</a> · <a href="/notifications/incidents">Incidents</a> · <a href="/notifications/approvals">Approvals</a> · <a href="/notifications/suppressions">Suppressions</a> · <a href="/notifications/summary">Summary</a> · <a href="/notifications/outputs">Outputs</a></p>
+{{end}}
+
+{{define "notifications-status.html"}}
+{{template "head" .}}
+<h1>Notifications</h1>
+{{template "notification-nav" .}}
+<div class="status-card">
+    <div class="card stat"><div class="value">{{.Summary.SourceCount}}</div><div class="label">Sources</div></div>
+    <div class="card stat"><div class="value">{{.Summary.OpenIncidentCount}}</div><div class="label">Open Incidents</div></div>
+    <div class="card stat"><div class="value">{{.Summary.PendingApprovals}}</div><div class="label">Pending Approvals</div></div>
+    <div class="card stat"><div class="value">{{.Summary.QueuedDeliveries}}</div><div class="label">Queued Outputs</div></div>
+</div>
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-sources.html"}}
+{{template "head" .}}
+<h1>Notification Sources</h1>
+{{template "notification-nav" .}}
+{{range .Sources}}
+<div class="card"><h3>{{.Config.SourceInstanceID}}</h3><p class="meta">{{.Config.SourceType}} · {{.Config.SourceForm}} · {{.Health.State}} · retry {{.Health.RetryCount}}</p>{{if .Health.LastErrorRedacted}}<p class="summary">{{.Health.LastErrorRedacted}}</p>{{end}}</div>
+{{else}}<div class="empty">No notification sources registered</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-events.html"}}
+{{template "head" .}}
+<h1>Notification Events</h1>
+{{template "notification-nav" .}}
+{{range .Events}}
+<div class="card"><h3>{{.Title}}</h3><p class="meta">{{.SourceType}}/{{.SourceInstanceID}} · {{.Severity}} · {{.Domain}} · {{.Intent}}</p><p class="summary">{{truncate .Body 180}}</p></div>
+{{else}}<div class="empty">No notification events recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-incidents.html"}}
+{{template "head" .}}
+<h1>Notification Incidents</h1>
+{{template "notification-nav" .}}
+{{range .Incidents}}
+<div class="card"><h3><a href="/notifications/incidents/{{.ID}}">{{.Title}}</a></h3><p class="meta">{{.State}} · {{.Severity}} · {{.Domain}} · {{.Intent}} · persistence {{.PersistenceCount}}</p><p class="summary">{{.StateReason}}</p></div>
+{{else}}<div class="empty">No notification incidents recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-incident-detail.html"}}
+{{template "head" .}}
+<a href="/notifications/incidents" class="back-link">< Back to incidents</a>
+<h1>{{.Incident.Title}}</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>Incident Timeline</h3><p class="meta">{{.Incident.ID}} · {{.Incident.State}} · {{.Incident.Severity}} · {{.Incident.RiskLevel}}</p><p class="summary">{{.Incident.StateReason}}</p><p class="meta">Subject {{.Incident.Subject}} · Service {{.Incident.Service}} · Sources {{range .Incident.SourceInstanceIDs}}{{.}} {{end}}</p></div>
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-approvals.html"}}
+{{template "head" .}}
+<h1>Notification Approvals</h1>
+{{template "notification-nav" .}}
+{{range .Approvals}}
+<div class="card"><h3><a href="/notifications/approvals/{{.ID}}">{{.ActionKey}}</a></h3><p class="meta">{{.Status}} · incident {{.IncidentID}} · expires {{timeAgo .ExpiresAt}}</p><p class="summary">{{.RiskExplanation}}</p></div>
+{{else}}<div class="empty">No notification approvals recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-approval-detail.html"}}
+{{template "head" .}}
+<a href="/notifications/approvals" class="back-link">< Back to approvals</a>
+<h1>Approval {{.Approval.ID}}</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>{{.Approval.ActionKey}}</h3><p class="meta">{{.Approval.Status}} · {{.Approval.TargetRef}}</p><p class="summary">{{.Approval.RiskExplanation}}</p><p class="summary">{{.Approval.ExpectedEffect}}</p></div>
+{{range .Decisions}}<div class="card"><h3>{{.Decision}}</h3><p class="meta">{{.ActorKind}} · {{.Channel}} · {{timeAgo .CreatedAt}}</p><p class="summary">{{.Reason}}</p></div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-suppressions.html"}}
+{{template "head" .}}
+<h1>Notification Suppressions</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>Quiet Windows</h3>{{range .QuietWindows}}<p class="meta">{{.Reason}} · {{.StartsAt}} {{if .ExpiresAt}}to {{.ExpiresAt}}{{end}}</p>{{else}}<p class="meta">No quiet windows recorded</p>{{end}}</div>
+{{range .Suppressions}}<div class="card"><h3>{{.Kind}}</h3><p class="meta">incident {{.IncidentID}} · source {{.SourceInstanceID}}</p><p class="summary">{{.Reason}}</p></div>{{else}}<div class="empty">No suppressions recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-summary.html"}}
+{{template "head" .}}
+<h1>Notification Summary</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>Handled Noise And Open Work</h3><p class="summary">{{.Summary.OpenIncidentCount}} open incidents, {{.Summary.PendingApprovals}} pending approvals, {{.Summary.QueuedDeliveries}} queued outputs, and {{.Summary.SourceCount}} source instances.</p></div>
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-outputs.html"}}
+{{template "head" .}}
+<h1>Notification Outputs</h1>
+{{template "notification-nav" .}}
+{{range .Outputs}}<div class="card"><h3>{{.Channel}}</h3><p class="meta">{{.Status}} · decision {{.DecisionID}} · incident {{.IncidentID}}</p>{{if .ErrorRedacted}}<p class="summary">{{.ErrorRedacted}}</p>{{end}}</div>{{else}}<div class="empty">No notification outputs recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notification-error.html"}}
+{{template "head" .}}
+<h1>{{.Title}}</h1>
+{{template "notification-nav" .}}
+<div class="error">{{.Error}}</div>
+{{template "foot"}}
+{{end}}
 
 {{define "search.html"}}
 {{template "head" .}}

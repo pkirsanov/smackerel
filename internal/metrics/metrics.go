@@ -391,6 +391,51 @@ var QFCallbackAttemptsTotal = prometheus.NewCounterVec(
 	[]string{"action", "status"},
 )
 
+// QFCallbackSignatureFailuresTotal counts local signing-stage rejections of
+// callback envelopes BEFORE any HTTP transport. The `reason` label
+// vocabulary is bounded to spec 041 Scope 8 / SCN-SM-041-030:
+// {NO_ACTIVE_KEY, MALFORMED_CANONICAL_PAYLOAD, EXPIRES_AT_OUTSIDE_TOLERANCE}.
+// Every increment is paired with a Cross-Product Audit Envelope v1 record
+// (action=callback_attempt, outcome=rejected, reason=<vocabulary>). The
+// network is never reached when this metric fires — see
+// internal/connector/qfdecisions/callback.go CallbackSigner.Sign.
+var QFCallbackSignatureFailuresTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_callback_signature_failures_total",
+		Help: "QF Companion callback signature failures by documented reason vocabulary",
+	},
+	[]string{"reason"},
+)
+
+// QFWatchProposalAttemptsTotal counts diagnostic watch-proposal POST
+// attempts made by the Scope 9 connector-internal client. The `status`
+// label vocabulary is bounded to spec 041 Scope 9 / SCN-SM-041-033:
+// {rejected_v1_deferred, rejected_local, degraded}. Pre-MVP `accepted`
+// is never emitted; every Scope 9 attempt is expected to be rejected
+// by QF with `WATCH_PROPOSALS_DEFERRED_TO_V1`. Every increment is
+// paired with a Cross-Product Audit Envelope v1 record
+// (action=watch_proposal, outcome=rejected|error, reason=<vocabulary>).
+var QFWatchProposalAttemptsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_watch_proposal_attempts_total",
+		Help: "QF Companion watch-proposal POST attempts by Scope 9 status vocabulary",
+	},
+	[]string{"status"},
+)
+
+// QFPersonalContextReadsTotal counts personal-context read attempts by
+// outcome and sensitivity tier (spec 041 Scope 7, SCN-SM-041-027). The
+// outcome vocabulary is bounded to
+// {ok, rejected, degraded, rate_limited, capability_disabled}; the
+// sensitivity_tier vocabulary is bounded to {low, medium, high}.
+var QFPersonalContextReadsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_qf_personal_context_reads_total",
+		Help: "QF Companion personal-context read attempts by outcome and requested sensitivity tier",
+	},
+	[]string{"outcome", "sensitivity_tier"},
+)
+
 func init() {
 	prometheus.MustRegister(
 		ArtifactsIngested,
@@ -428,6 +473,9 @@ func init() {
 		QFEvidenceRevokedTotal,
 		QFEngagementSignalAttemptsTotal,
 		QFCallbackAttemptsTotal,
+		QFCallbackSignatureFailuresTotal,
+		QFWatchProposalAttemptsTotal,
+		QFPersonalContextReadsTotal,
 		// Spec 039 Scope 6 recommendation metrics — defined in
 		// recommendations.go; bounded labels enforced (no watch_id,
 		// no recommendation_id, no request_id).

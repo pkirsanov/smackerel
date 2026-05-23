@@ -21,6 +21,7 @@ import (
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/mealplan"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	"github.com/smackerel/smackerel/internal/notification"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
@@ -52,6 +53,7 @@ type coreServices struct {
 	contextHandler         *api.ContextHandler
 	recommendationStore    *recstore.Store
 	recommendationRegistry *recprovider.Registry
+	notificationStore      *notification.Store
 	driveSaveService       *save.Service
 	driveRetrieveService   *retrieve.Service // spec 038 Scope 7 — drive retrieval
 	mealPlanSaveBack       *mealplan.DriveSaveBack
@@ -106,6 +108,7 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 
 	// Create connector registry (used by digest generator for hospitality detection)
 	svc.registry = connector.NewRegistry()
+	svc.notificationStore = notification.NewStore(svc.pg.Pool)
 
 	// Start result subscriber for ML processing results
 	svc.resultSub = pipeline.NewResultSubscriber(svc.pg.Pool, svc.nc, svc.registry)
@@ -212,6 +215,7 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 	svc.webHandler.RecommendationStore = svc.recommendationStore
 	svc.webHandler.RecommendationRegistry = svc.recommendationRegistry
 	svc.webHandler.RecommendationConfig = cfg.Recommendations
+	svc.webHandler.NotificationStore = svc.notificationStore
 
 	// Create context enrichment handler for GuestHost connector
 	svc.contextHandler = api.NewContextHandler(svc.guestRepo, svc.propertyRepo, svc.pg.Pool)

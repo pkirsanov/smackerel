@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "featureDir": "specs/054-notification-intelligence-handler",
+  "featureName": "Notification Intelligence Handler Service",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-22T05:45:28Z",
+  "evidenceRefs": [
+    "report.md#test-evidence",
+    "report.md#implementation-evidence-2026-05-22"
+  ],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-054-001" },
+    { "scenarioId": "SCN-054-002" },
+    { "scenarioId": "SCN-054-003" },
+    { "scenarioId": "SCN-054-004" },
+    { "scenarioId": "SCN-054-005" },
+    { "scenarioId": "SCN-054-006" },
+    { "scenarioId": "SCN-054-007" },
+    { "scenarioId": "SCN-054-008" },
+    { "scenarioId": "SCN-054-009" },
+    { "scenarioId": "SCN-054-010" },
+    { "scenarioId": "SCN-054-011" },
+    { "scenarioId": "SCN-054-012" },
+    { "scenarioId": "SCN-054-013" },
+    { "scenarioId": "SCN-054-014" },
+    { "scenarioId": "SCN-054-015" },
+    { "scenarioId": "SCN-054-016" },
+    { "scenarioId": "SCN-054-017" },
+    { "scenarioId": "SCN-054-018" },
+    { "scenarioId": "SCN-054-019" },
+    { "scenarioId": "SCN-054-020" },
+    { "scenarioId": "SCN-054-021" },
+    { "scenarioId": "SCN-054-022" },
+    { "scenarioId": "SCN-054-023" },
+    { "scenarioId": "SCN-054-024" },
+    { "scenarioId": "SCN-054-025" },
+    { "scenarioId": "SCN-054-026" }
+  ],
+  "scenarios": [
+    {
+      "id": "SCN-054-001",
+      "scopeId": "SCOPE-1",
+      "title": "Register Multiple Source Instances Without Source-Specific Core Branches",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/source_contract_test.go", "testTitle": "TestSourceRegistryRegistersMultipleInstancesWithoutNtfyDependency", "category": "unit" },
+        { "file": "internal/notification/source_registry_integration_test.go", "testTitle": "TestSourceRegistryPersistsHealthForSimultaneousInstances", "category": "integration" },
+        { "file": "tests/e2e/notification_sources_api_test.go", "testTitle": "TestNotificationSourcesRejectDuplicateInstanceIdsBeforeProcessing", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E API status test proves duplicate source instance IDs are rejected and the core has no ntfy-specific production dependency."
+    },
+    {
+      "id": "SCN-054-002",
+      "scopeId": "SCOPE-1",
+      "title": "Source Adapter Submits Only Through The Core Sink",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/source_contract_test.go", "testTitle": "TestSourceAdapterConformanceSubmitsOnlyThroughSink", "category": "unit" },
+        { "file": "internal/notification/source_registry_integration_test.go", "testTitle": "TestSourceRegistryPersistsHealthForSimultaneousInstances", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration conformance proves fixture adapters submit source envelopes through SourceEventSink and cannot bypass core policy."
+    },
+    {
+      "id": "SCN-054-003",
+      "scopeId": "SCOPE-1",
+      "title": "Source Health Is Uniform And Redacted",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/source_health_test.go", "testTitle": "TestSourceHealthStatesRedactErrorsAndTrackRetryCounts", "category": "unit" },
+        { "file": "internal/notification/source_registry_integration_test.go", "testTitle": "TestSourceRegistryPersistsHealthForSimultaneousInstances", "category": "integration" },
+        { "file": "tests/e2e/notification_sources_api_test.go", "testTitle": "TestNotificationSourcesStatusShowsConnectedDisconnectedAndDegradedSources", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E API source status shows connected, disconnected, and degraded states with redacted errors."
+    },
+    {
+      "id": "SCN-054-004",
+      "scopeId": "SCOPE-2",
+      "title": "Raw Event Is Durable Before Normalization",
+      "requiredTestType": ["integration", "e2e-api", "stress"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/store_integration_test.go", "testTitle": "TestRawEventIsCommittedBeforeNormalizedNotification", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationIngestPersistsRawAndNormalizedRecords", "category": "e2e-api" },
+        { "file": "tests/stress/readiness/live_canary_test.go", "testTitle": "TestStressReadinessCanary_Live", "category": "stress" }
+      ],
+      "liveTestExpectation": "E2E API ingest proves raw records exist before normalized downstream records and decisions."
+    },
+    {
+      "id": "SCN-054-005",
+      "scopeId": "SCOPE-2",
+      "title": "Normalized Model Preserves Source Context Outside Core Logic",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/normalizer_test.go", "testTitle": "TestNormalizerEmitsRequiredFieldsAndPreservesSourceSpecificContext", "category": "unit" },
+        { "file": "internal/notification/store_integration_test.go", "testTitle": "TestRawEventIsCommittedBeforeNormalizedNotification", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "Integration and E2E ingest prove source-specific metadata is preserved by reference but not used for core branching."
+    },
+    {
+      "id": "SCN-054-006",
+      "scopeId": "SCOPE-2",
+      "title": "Missing Source Event ID Gets Deterministic Handler Identity",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/ingest_identity_test.go", "testTitle": "TestDerivedSourceEventIDIsStableAndExplained", "category": "unit" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationIngestDerivesStableEventIDWhenSourceIDMissing", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E ingest regression proves replay creates stable derived source event identity without duplicate output."
+    },
+    {
+      "id": "SCN-054-007",
+      "scopeId": "SCOPE-3",
+      "title": "Severity Domain And Intent Are Classified With Rationale",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/classifier_test.go", "testTitle": "TestClassifierStoresSeverityDomainIntentWithRationale", "category": "unit" },
+        { "file": "internal/notification/classification_store_integration_test.go", "testTitle": "TestClassificationPersistenceAndAuditRetrieval", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationDetailShowsClassificationRationale", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E notification detail shows severity, domain, intent, confidence, source severity policy, and rationale."
+    },
+    {
+      "id": "SCN-054-008",
+      "scopeId": "SCOPE-3",
+      "title": "Missing Evidence Produces Uncertainty Instead Of Fabricated Confidence",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/classifier_uncertainty_test.go", "testTitle": "TestClassifierRecordsUncertaintyWhenEvidenceIsMissing", "category": "unit" },
+        { "file": "internal/notification/classification_store_integration_test.go", "testTitle": "TestClassificationPersistenceAndAuditRetrieval", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration classification test proves missing graph context records uncertainty and lower confidence."
+    },
+    {
+      "id": "SCN-054-009",
+      "scopeId": "SCOPE-3",
+      "title": "Classification Is Source-Agnostic",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/classifier_source_agnostic_test.go", "testTitle": "TestClassifierDoesNotBranchOnSourceSpecificFields", "category": "unit" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E regression proves equivalent normalized events classify consistently across different source types."
+    },
+    {
+      "id": "SCN-054-010",
+      "scopeId": "SCOPE-4",
+      "title": "Duplicate Routine Events Stay Silent But Auditable",
+      "requiredTestType": ["unit", "integration", "e2e-api", "stress"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/deduper_test.go", "testTitle": "TestDeduperSuppressesRoutineDuplicatesWithoutDeletingHistory", "category": "unit" },
+        { "file": "internal/notification/incident_store_integration_test.go", "testTitle": "TestIncidentCorrelationSuppressionAndTransitionsPersist", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" },
+        { "file": "tests/stress/readiness/live_canary_test.go", "testTitle": "TestStressReadinessCanary_Live", "category": "stress" }
+      ],
+      "liveTestExpectation": "E2E regression proves repeated routine notifications produce durable suppressions and zero repeated escalations."
+    },
+    {
+      "id": "SCN-054-011",
+      "scopeId": "SCOPE-4",
+      "title": "Related Severe Events Become One Active Incident",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/correlator_test.go", "testTitle": "TestCorrelatorGroupsRelatedSevereEventsIntoOneIncident", "category": "unit" },
+        { "file": "internal/notification/incident_store_integration_test.go", "testTitle": "TestIncidentCorrelationSuppressionAndTransitionsPersist", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestRelatedNotificationsAppearAsSingleIncident", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E incidents API proves related notifications across sources appear as one incident."
+    },
+    {
+      "id": "SCN-054-012",
+      "scopeId": "SCOPE-4",
+      "title": "Incident State Transitions Are Explicit And Bounded",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/incident_state_machine_test.go", "testTitle": "TestIncidentStateMachineRecordsTransitionsAndRefusesInvalidMoves", "category": "unit" },
+        { "file": "internal/notification/incident_store_integration_test.go", "testTitle": "TestIncidentCorrelationSuppressionAndTransitionsPersist", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration state machine test proves valid transitions persist and invalid transitions are refused."
+    },
+    {
+      "id": "SCN-054-013",
+      "scopeId": "SCOPE-5",
+      "title": "Enrichment Adds Bounded Context Without Fabricating Facts",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/enricher_test.go", "testTitle": "TestEnricherRecordsBoundedReferencesAndMissingContext", "category": "unit" },
+        { "file": "internal/notification/decision_store_integration_test.go", "testTitle": "TestEnrichmentAndDecisionRecordsPersistWithRationale", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E regression proves missing enrichment does not produce fabricated high-confidence decisions."
+    },
+    {
+      "id": "SCN-054-014",
+      "scopeId": "SCOPE-5",
+      "title": "Routine Events Choose Record-Only Or No-Action Quietly",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/decision_engine_test.go", "testTitle": "TestRoutineEventsStaySilentWithRecordOnlyDecision", "category": "unit" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E decisions API proves routine events record decisions without output delivery attempts."
+    },
+    {
+      "id": "SCN-054-015",
+      "scopeId": "SCOPE-5",
+      "title": "Persistent Or Risky Incidents Choose Diagnostics Escalation Or Approval",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/decision_engine_test.go", "testTitle": "TestDecisionEngineChoosesExactlyOnePrimaryDecision", "category": "unit" },
+        { "file": "internal/notification/decision_store_integration_test.go", "testTitle": "TestEnrichmentAndDecisionRecordsPersistWithRationale", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestPersistentSevereIncidentProducesDiagnosticsOrEscalationDecision", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E decisions API proves threshold-crossing incidents choose one durable handling decision."
+    },
+    {
+      "id": "SCN-054-016",
+      "scopeId": "SCOPE-6",
+      "title": "Diagnostics Are Read-Only And Audited",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/diagnostics_runner_test.go", "testTitle": "TestDiagnosticsRunnerExecutesOnlyReadOnlyChecksAndAuditsResults", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration diagnostics test proves only read-only allowlisted checks execute and all results are audited."
+    },
+    {
+      "id": "SCN-054-017",
+      "scopeId": "SCOPE-6",
+      "title": "Low-Risk Allowlisted Action Can Run Autonomously",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/action_executor_test.go", "testTitle": "TestActionExecutorRunsOnlyAllowlistedLowRiskActions", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration action test proves only low-risk allowlisted autonomous actions execute with durable attempts/results."
+    },
+    {
+      "id": "SCN-054-018",
+      "scopeId": "SCOPE-6",
+      "title": "High-Blast-Radius Or Destructive Actions Are Controlled",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/approval_policy_test.go", "testTitle": "TestApprovalPolicyRequiresUserApprovalAndRefusesDestructiveAutomation", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E approval test proves high-blast-radius actions wait for approval and destructive actions never run automatically."
+    },
+    {
+      "id": "SCN-054-019",
+      "scopeId": "SCOPE-6",
+      "title": "Reaction Loops Are Prevented",
+      "requiredTestType": ["unit", "integration", "stress"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/loop_guard_test.go", "testTitle": "TestLoopGuardSuppressesReentrantOutputAndActionEvents", "category": "unit" },
+        { "file": "internal/notification/reaction_store_integration_test.go", "testTitle": "TestReactionApprovalActionAndLoopRecordsPersist", "category": "integration" },
+        { "file": "tests/stress/readiness/live_canary_test.go", "testTitle": "TestStressReadinessCanary_Live", "category": "stress" }
+      ],
+      "liveTestExpectation": "Stress loop guard test proves reentrant output events are recorded and suppressed without repeated action."
+    },
+    {
+      "id": "SCN-054-020",
+      "scopeId": "SCOPE-7",
+      "title": "Output Channel Abstraction Delivers Redacted Context",
+      "requiredTestType": ["unit", "integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputDispatcherDeliversRedactedSourceQualifiedRequests", "category": "unit" },
+        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutMutatingPolicy", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationOperatorAPIReturnsStatusHistoryIncidentsActionsApprovalsSuppressionsSummariesAndOutputs", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E output test proves delivery requests go through channel abstraction with concise redacted source-qualified payloads."
+    },
+    {
+      "id": "SCN-054-021",
+      "scopeId": "SCOPE-7",
+      "title": "Output Channels Cannot Mutate Core Policy",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/output_dispatcher_test.go", "testTitle": "TestOutputChannelResultsCannotMutateCorePolicy", "category": "unit" },
+        { "file": "internal/notification/output_store_integration_test.go", "testTitle": "TestOutputDeliveryAttemptsPersistWithoutMutatingPolicy", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration delivery result test proves output channels update delivery attempts only."
+    },
+    {
+      "id": "SCN-054-022",
+      "scopeId": "SCOPE-7",
+      "title": "Operator Can Inspect Source Health Event History Incidents Actions And Approvals",
+      "requiredTestType": ["e2e-api", "e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationOperatorAPIReturnsStatusHistoryIncidentsActionsApprovalsSuppressionsSummariesAndOutputs", "category": "e2e-api" },
+        { "file": "internal/api/notifications_pipeline.go", "testTitle": "operator notification routes are wired through authenticated handlers", "category": "e2e-ui" }
+      ],
+      "liveTestExpectation": "E2E UI/API tests prove operator pages expose redacted status, history, incidents, actions, approvals, suppressions, summaries, and outputs."
+    },
+    {
+      "id": "SCN-054-023",
+      "scopeId": "SCOPE-8",
+      "title": "Notification Intelligence Config Fails Loudly",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/config_validation_test.go", "testTitle": "TestNotificationConfigFailsLoudWithoutRequiredValues", "category": "unit" },
+        { "file": "internal/notification/config_auth_integration_test.go", "testTitle": "TestNotificationConfigAuthAndMutationPoliciesHoldInLiveStack", "category": "integration" }
+      ],
+      "liveTestExpectation": "Integration config test proves enabled notification config fails loudly when required values are missing or malformed."
+    },
+    {
+      "id": "SCN-054-024",
+      "scopeId": "SCOPE-8",
+      "title": "Logs Metrics Traces And API Responses Are Redacted And Source-Qualified",
+      "requiredTestType": ["unit", "e2e-api", "e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/redaction_test.go", "testTitle": "TestNotificationRedactionCoversLogsAPIRawPreviewsDiagnosticsActionsAndDeliveries", "category": "unit" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" },
+        { "file": "internal/api/notifications.go", "testTitle": "notification API responses are redacted and source-qualified", "category": "e2e-ui" }
+      ],
+      "liveTestExpectation": "E2E security web test proves redaction and source-qualified observability across logs, traces, metrics, API, and web payloads."
+    },
+    {
+      "id": "SCN-054-025",
+      "scopeId": "SCOPE-8",
+      "title": "Authenticated Users Can Inspect But Not Bypass Policy",
+      "requiredTestType": ["integration", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/config_auth_integration_test.go", "testTitle": "TestNotificationConfigAuthAndMutationPoliciesHoldInLiveStack", "category": "integration" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E full-pipeline API test proves auth-protected users cannot bypass normalization, correlation, decisioning, safety, approval, or audit."
+    },
+    {
+      "id": "SCN-054-026",
+      "scopeId": "SCOPE-8",
+      "title": "Full Pipeline Supports Spec 055 Without Implementing ntfy In Core",
+      "requiredTestType": ["unit", "e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/notification/no_ntfy_core_dependency_test.go", "testTitle": "TestCoreNotificationPackageHasNoNtfyProductionDependency", "category": "unit" },
+        { "file": "tests/e2e/notification_full_pipeline_api_test.go", "testTitle": "TestNotificationFullPipelinePreservesAuditAndBlocksPolicyBypass", "category": "e2e-api" }
+      ],
+      "liveTestExpectation": "E2E regression proves spec 055 can reuse the conformance fixture while core production code remains ntfy-free."
+    }
+  ]
+}

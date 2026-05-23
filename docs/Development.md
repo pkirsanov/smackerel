@@ -8,7 +8,7 @@ Committed:
 
 - `README.md`
 - `docs/smackerel.md`
-- `specs/` (001-036, all with spec, design, scopes, reports)
+- `specs/` (feature packets through 054 in this checkout, all with spec, design, scopes, reports)
 - `.github/`
 - `.specify/memory/`
 - Go core runtime sources under `cmd/` and `internal/` (154 source files, 152 test files)
@@ -31,6 +31,7 @@ Implemented runtime capabilities:
 - 15 passive connectors (IMAP email, CalDAV calendar, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, GuestHost STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
 - Cloud Drives integration (spec 038): Google Drive provider with OAuth `BeginConnect`/`FinalizeConnect`, scan + monitor loop on the `DRIVE` NATS stream, classification + sensitivity policy, Save Rules engine with audit/dry-run, Save Service with confirmations (`/v1/drive/confirmations/{id}`), Drive search/artifact-detail surface (`/v1/drive/artifacts/{id}`), agent retrieval tools, and 17 `drive_*` schema tables
 - Cloud Photo Libraries integration (spec 040): provider-neutral `photolib.PhotoLibrary` contract with Immich and PhotoPrism adapters, capability taxonomy SST, lifecycle/duplicates/removal analyzers, scope-hash `PhotoActionToken` mint/confirm flow, sensitivity reveal tokens (`/v1/photos/{id}/reveal`), unified `/v1/photos/upload` capture pipeline shared by Telegram/PWA/web, cross-feature routing (8 RouteTargets), and 7 `photo_*` schema tables
+- Notification Intelligence Handler (spec 054): source-neutral `internal/notification` service with source adapter contracts, source health, raw event persistence, normalized notifications, classification rationale, incident correlation, decisions, suppressions, redacted delivery attempts, authenticated `/api/notifications/*` operator endpoints, and a spec 055 boundary that keeps ntfy transport out of the core handler
 - 17 connector source families across `internal/connector/` and `internal/drive/`
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
@@ -41,7 +42,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations (3 SQL files — migrations 002–017 consolidated into 001)
+- Database migrations through `036_notification_intelligence.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -153,6 +154,36 @@ Rules:
 - Docker Compose and deploy specs use fail-loud required interpolation such as `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`. If loopback is desired, it must be an explicit SST/generated env value, not a Compose fallback.
 - Generated files are derived artifacts, never hand-edited sources of truth.
 - Missing required config must fail loudly.
+
+### Notification Intelligence SST (Spec 054)
+
+The source-neutral notification intelligence handler is configured only through
+`config/smackerel.yaml`. `scripts/commands/config.sh` reads the keys with
+`required_value` / `required_json_value` and emits the corresponding
+`NOTIFICATION_*` env vars into `config/generated/dev.env` and
+`config/generated/test.env`. Runtime loading then fails loud in
+`internal/config/notification.go` if any emitted key is missing, malformed, or
+empty.
+
+| YAML path | Generated env var | Current committed value | Runtime purpose |
+|-----------|-------------------|-------------------------|-----------------|
+| `notification_intelligence.enabled` | `NOTIFICATION_INTELLIGENCE_ENABLED` | `true` | Enables the handler and its authenticated operator endpoints. |
+| `notification_intelligence.persistence_threshold` | `NOTIFICATION_PERSISTENCE_THRESHOLD` | `2` | Number of correlated events that can trigger escalation by persistence. |
+| `notification_intelligence.escalation_severity` | `NOTIFICATION_ESCALATION_SEVERITY` | `high` | Minimum severity that can trigger user-facing escalation. Valid values are `medium`, `high`, and `critical`. |
+| `notification_intelligence.low_confidence_threshold` | `NOTIFICATION_LOW_CONFIDENCE_THRESHOLD` | `0.55` | Classifier confidence floor below which the decision engine chooses diagnostics instead of pretending certainty. |
+| `notification_intelligence.max_retries` | `NOTIFICATION_MAX_RETRIES` | `2` | Bounded retry budget for notification reaction/output handling. |
+| `notification_outputs.channels` | `NOTIFICATION_OUTPUT_CHANNELS` | `["dashboard"]` | Output-channel list consumed by the decision policy and dispatcher. Channels stay separate from source adapters. |
+
+Implementation references:
+
+- `scripts/commands/config.sh` owns SST extraction and env-file emission for the six notification env vars.
+- `internal/config/notification.go` parses and validates the env vars into `config.NotificationConfig`.
+- `cmd/core/wiring.go` converts `config.NotificationConfig` into `notification.DecisionPolicy` and wires `api.NewNotificationHandlers`.
+- `internal/notification/config_validation.go` contains package-level validation used by notification tests.
+
+Do not add ntfy-specific settings under these core blocks. Spec 055 owns ntfy
+adapter configuration, subscription transport, topic mapping, and ntfy payload
+translation into the spec 054 source adapter contract.
 
 ### Environment Model
 
@@ -345,7 +376,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | Package | Purpose |
 |---------|---------|
 | `internal/annotation/` | User annotation model, freeform parser (ratings, tags, interactions, notes), PostgreSQL store, materialized summary view |
-| `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint), Bearer auth, security headers, rate limiting |
+| `internal/api/` | Chi router, REST API handlers (capture, search, digest, export, knowledge, annotations, lists, expense API (7 endpoints: query, export CSV, correction, classification, suggestions), meal plan API (12 endpoints), recipe domain scaling endpoint, notification intelligence operator API), Bearer auth, security headers, rate limiting |
 | `internal/auth/` | Two coexisting subsystems: (1) OAuth2 provider abstraction, token exchange/refresh, Google OAuth scopes, encrypted token storage (`oauth.go`, `handler.go`, `store.go`); (2) spec 044 per-user PASETO v4.public bearer auth (`issue.go`, `verify.go`, `hash.go`, `session.go`, `startup.go`, `bearer_store.go`) plus `revocation/` cache + NATS broadcaster. Per-user surface is gated by `auth.enabled` per environment; dev/test default to off (legacy shared `SMACKEREL_AUTH_TOKEN` ergonomic preserved) and home-lab defaults to on. |
 | `internal/config/` | SST-compliant configuration loader — reads all env vars, validates required fields, parses numeric config, cross-validates constraints |
 | `internal/connector/` | Connector interface, registry, supervisor (5-min sync cycles), health status model. Sub-packages per connector: `alerts/`, `bookmarks/`, `browser/`, `caldav/`, `discord/`, `guesthost/`, `hospitable/`, `imap/`, `keep/`, `maps/`, `markets/`, `qfdecisions/` (Scope 1 QF bridge validation only; no artifact publication yet), `rss/`, `twitter/`, `weather/`, `youtube/`, plus the `photos/` provider-neutral library and adapters under `photos/adapters/{immich,photoprism}/` |
@@ -360,6 +391,7 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/list/` | Actionable list model — lists and list items, domain-aware aggregation from extracted data, completion tracking, PostgreSQL store |
 | `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge, **eight bounded recommendation metrics — see `docs/Operations.md` Recommendations table**) and W3C traceparent propagation via NATS headers |
 | `internal/nats/` | NATS JetStream client — stream/consumer creation, publish/subscribe helpers, subject constants matching `config/nats_contract.json` |
+| `internal/notification/` | Spec 054 source-neutral notification intelligence handler — source adapter contract and registry, redacted source health, raw event and normalized notification stores, classifier, dedupe/correlation, incident model, decision engine, diagnostics/action/approval policy helpers, output dispatcher, and redaction guard. Core code must not import or branch on ntfy-specific behavior; spec 055 owns ntfy adapter transport. |
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
 | `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
@@ -381,6 +413,13 @@ Migrations 002–017 were consolidated into `001_initial_schema.sql` during a sc
 | 001 | `001_initial_schema.sql` | Consolidated schema (original migrations 001–017): `artifacts`, `people`, `topics`, `edges`, `sync_state`, `action_items`, `digests`, `synthesis_insights`, `alerts`, `meeting_briefs`, `weekly_synthesis`, `trips`, `trails`, `privacy_consent`, `keep_exports`, `ocr_cache`, `oauth_tokens`, `location_clusters`, `subscriptions`, `learning_progress`, `quick_references`, `search_log`, `guests`, `properties`, `knowledge_concepts`, `knowledge_entities`, `knowledge_lint_reports`, `annotations`, `telegram_message_artifacts`, `lists`, `list_items`. Extensions: `vector`, `pg_trgm`. Includes all indexes, unique constraints, materialized views, and column additions from the original 17 migrations |
 | 018 | `018_meal_plans.sql` | Meal planning (spec 036): `meal_plans` + `meal_plan_slots` tables with date range, lifecycle status, slot constraints |
 | 019 | `019_expense_tracking.sql` | Expense tracking (spec 034): `vendor_aliases`, `expense_suggestions`, `expense_suggestion_suppressions` tables, GIN index on artifacts expense metadata |
+| 020 | `020_agent_traces.sql` | Agent trace persistence for prompt/tool execution audit |
+| 021 | `021_drive_schema.sql` | Cloud-drive connection, scan, retrieval, and policy schema |
+| 022 | `022_recommendations.sql` | Recommendation requests, preferences, provider payloads, suppressions, delivery attempts, and audit records |
+| 023-035 | `023_*.sql` through `035_*.sql` | Incremental drive, photo, auth, QF companion, and evidence-export schema additions |
+| 036 | `036_notification_intelligence.sql` | Spec 054 notification intelligence schema: `notification_source_instances`, `notification_source_health_events`, `notification_raw_events`, `normalized_notifications`, `notification_classifications`, `notification_incidents`, `notification_incident_events`, `notification_processing_decisions`, `notification_suppressions`, and `notification_delivery_attempts` |
+
+Migration `036_notification_intelligence.sql` is additive and follows the existing application-written ID/timestamp pattern: it uses `CHECK` constraints for enum-like values, JSONB for redaction/rationale envelopes, and no database-side runtime fallback values. Raw source input is stored in `notification_raw_events` before a normalized notification can be processed downstream.
 
 ## Prompt Contracts
 

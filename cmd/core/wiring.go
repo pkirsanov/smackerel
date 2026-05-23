@@ -29,6 +29,7 @@ import (
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/list"
 	"github.com/smackerel/smackerel/internal/mealplan"
+	"github.com/smackerel/smackerel/internal/notification"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/web"
@@ -107,6 +108,18 @@ func resolveBroadcasterInstanceID() (string, error) {
 // validation paths (e.g. nil pool, malformed PASETO key material) that
 // MUST surface to the caller rather than be silently swallowed.
 func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
+	notificationSeverity := notification.ParseSeverity(cfg.Notification.EscalationSeverity)
+	notificationEngine, err := notification.NewDecisionEngine(notification.DecisionPolicy{
+		PersistenceThreshold:   cfg.Notification.PersistenceThreshold,
+		EscalationSeverity:     notificationSeverity,
+		LowConfidenceThreshold: cfg.Notification.LowConfidenceThreshold,
+		OutputChannels:         cfg.Notification.OutputChannels,
+		MaxRetries:             cfg.Notification.MaxRetries,
+	})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("notification decision policy: %w", err)
+	}
+	notificationService := notification.NewService(svc.notificationStore, notificationEngine)
 	deps := &api.Dependencies{
 		DB:                              svc.pg,
 		NATS:                            svc.nc,
@@ -136,6 +149,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
+		NotificationHandlers:            api.NewNotificationHandlers(svc.notificationStore, notificationService),
 	}
 
 	if cfg.QFDecisionsEnabled {
@@ -148,6 +162,24 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 			time.Now,
 		)
 		deps.QFEvidenceHandlers = api.NewQFEvidenceHandlers(svc.pg, connector.NewStateStore(svc.pg.Pool), qfEvidenceStore, qfEvidenceExporter)
+
+		// Spec 041 Scope 7 — personal-context read API host.
+		//
+		// The per-user privacy ceiling reader is intentionally a
+		// conservative-minimum provider here: until a per-user
+		// privacy-settings table is introduced by a follow-up spec,
+		// every user is treated as having the most-restrictive
+		// ("low") ceiling. This is the documented safe minimum
+		// (qfdecisions.PersonalContextTierMinimum collapses unknown
+		// inputs to "low"), so the read API can never accidentally
+		// over-share before the per-user surface lands.
+		deps.PersonalContextHandlers = api.NewPersonalContextHandlers(
+			connector.NewStateStore(svc.pg.Pool),
+			qfdecisions.NewPersonalContextConsentTokenStore(svc.pg.Pool, time.Now),
+			knowledge.NewPersonalContextSensitivityQuerier(svc.pg.Pool),
+			personalContextLowCeilingProvider{},
+			time.Now,
+		)
 	}
 
 	if provider, ok := drive.DefaultRegistry.Get("google"); ok {
@@ -559,4 +591,16 @@ func wireMealPlanning(
 		"default_servings", cfg.MealPlanDefaultServings,
 		"calendar_sync", cfg.MealPlanCalendarSync,
 	)
+}
+
+// personalContextLowCeilingProvider is the Scope 7 per-user privacy
+// ceiling reader used until a per-user privacy-settings table is
+// introduced. Returning "low" is the documented safe minimum
+// (qfdecisions.PersonalContextTierMinimum collapses unknown inputs to
+// "low"), so the route can never accidentally over-share before the
+// per-user surface lands.
+type personalContextLowCeilingProvider struct{}
+
+func (personalContextLowCeilingProvider) UserPrivacyCeiling(_ context.Context, _ string) (string, error) {
+	return qfdecisions.PersonalContextTierLow, nil
 }

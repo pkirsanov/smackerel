@@ -6,6 +6,12 @@ const (
 	DecisionEventsPath          = "/api/private/smackerel/v1/decision-events"
 	DecisionPacketsPath         = "/api/private/smackerel/v1/decision-packets"
 	PersonalEvidenceBundlesPath = "/api/private/smackerel/v1/personal-evidence-bundles"
+	// PacketEngagementSignalsPath is the QF endpoint that accepts
+	// Smackerel-emitted packet engagement signals (Scope 6, SCN-SM-041-023).
+	// The connector POSTs `[]PacketEngagementSignal` batches here through
+	// the Scope 1 QF client transport (auth/TLS/timeouts), with the
+	// per-signal `signal_id` used verbatim as the QF idempotency key.
+	PacketEngagementSignalsPath = "/api/private/smackerel/v1/packet-engagement-signals"
 	TargetContextPacketContext  = "packet_context"
 	TargetContextRefKey         = "target_context_ref"
 	TargetContextTypeKey        = "target_context_type"
@@ -53,15 +59,29 @@ const (
 	AuditActionEvidenceRevocation    = "evidence_revocation"
 	AuditActionEngagementSignalFlush = "engagement_signal_flush"
 	AuditActionCallbackAttempt       = "callback_attempt"
-	AuditActionDeepLinkRender        = "deep_link_render"
-	AuditActionCapabilityHandshake   = "capability_handshake"
-	AuditActionActionBoundaryKick    = "action_boundary_kick"
-	AuditActionCredentialRotation    = "credential_rotation"
+	// AuditActionWatchProposalAttempt is the audit `action` value
+	// recorded by the Scope 9 diagnostic watch-proposal client on
+	// every signed-proposal attempt (success, local signature
+	// rejection, transport degraded, pre-MVP `WATCH_PROPOSALS_DEFERRED_TO_V1`
+	// QF rejection). SCN-SM-041-031 / SCN-SM-041-033.
+	AuditActionWatchProposalAttempt = "watch_proposal"
+	AuditActionDeepLinkRender       = "deep_link_render"
+	AuditActionCapabilityHandshake  = "capability_handshake"
+	AuditActionActionBoundaryKick   = "action_boundary_kick"
+	AuditActionCredentialRotation   = "credential_rotation"
+	// AuditActionPersonalContextRead is the audit action recorded by
+	// the Scope 7 personal-context read API host on every read
+	// attempt (success, redaction, rejection, rate-limit, capability
+	// disabled). SCN-SM-041-025/026/027.
+	AuditActionPersonalContextRead = "personal_context_read"
 
-	AuditOutcomeOK               = "ok"
-	AuditOutcomeRejected         = "rejected"
-	AuditOutcomeError            = "error"
-	AuditOutcomeIdempotentReplay = "idempotent_replay"
+	AuditOutcomeOK                 = "ok"
+	AuditOutcomeRejected           = "rejected"
+	AuditOutcomeError              = "error"
+	AuditOutcomeIdempotentReplay   = "idempotent_replay"
+	AuditOutcomeDegraded           = "degraded"
+	AuditOutcomeRateLimited        = "rate_limited"
+	AuditOutcomeCapabilityDisabled = "capability_disabled"
 
 	ActionTypeApproval              = "approval"
 	ActionTypeExecution             = "execution"

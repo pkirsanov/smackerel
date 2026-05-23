@@ -1,0 +1,62 @@
+package notification
+
+import (
+	"context"
+	"fmt"
+	"strings"
+)
+
+type HealthStore interface {
+	RecordSourceHealth(ctx context.Context, report SourceHealthReport) error
+}
+
+type HealthService struct {
+	store HealthStore
+}
+
+func NewHealthService(store HealthStore) *HealthService {
+	return &HealthService{store: store}
+}
+
+func (s *HealthService) Report(ctx context.Context, report SourceHealthReport) error {
+	if s == nil || s.store == nil {
+		return fmt.Errorf("notification source health: store is required")
+	}
+	redacted, err := RedactHealthReport(report)
+	if err != nil {
+		return err
+	}
+	return s.store.RecordSourceHealth(ctx, redacted)
+}
+
+func RedactHealthReport(report SourceHealthReport) (SourceHealthReport, error) {
+	if err := report.Validate(); err != nil {
+		return SourceHealthReport{}, err
+	}
+	report.SourceType = strings.TrimSpace(report.SourceType)
+	report.SourceInstanceID = strings.TrimSpace(report.SourceInstanceID)
+	report.LastErrorKind = strings.TrimSpace(report.LastErrorKind)
+	if report.State == SourceHealthConnected {
+		report.LastErrorKind = ""
+		report.LastErrorRedacted = ""
+		return report, nil
+	}
+	if report.LastErrorKind == "" {
+		report.LastErrorKind = "source_error"
+	}
+	report.LastErrorRedacted = redactedHealthMessage(report.LastErrorKind)
+	return report, nil
+}
+
+func redactedHealthMessage(kind string) string {
+	switch strings.TrimSpace(kind) {
+	case "auth_failed", "invalid_credentials", "credential_ref_missing":
+		return "source authentication failed"
+	case "connectivity_failed", "timeout", "dns_failed":
+		return "source connectivity check failed"
+	case "transient_failure", "rate_limited", "upstream_5xx":
+		return "transient source check failed"
+	default:
+		return "source health check failed"
+	}
+}

@@ -162,21 +162,20 @@ func TestDriveConnectorsEndpoint_LiveStackReturnsNeutralProviderList(t *testing.
 	}
 }
 
-// liveStackHTTPBase resolves the http://127.0.0.1:<port> base URL of the
-// live test stack's smackerel-core container. The integration runner uses
-// `--network host` and exposes the core API on the host port declared by
-// CORE_HOST_PORT in config/generated/test.env. Reading the env file
-// directly (rather than depending on a CORE_EXTERNAL_URL env var being
-// forwarded into the container) keeps this resolution self-contained
-// inside the drive integration test package, matching the pattern used
-// by drive_foundation_canary_test.go for envFilePath/loadEnvFileKeys.
+// liveStackHTTPBase resolves the base URL of the live test stack's
+// smackerel-core container. The Go integration runner joins the Compose
+// network, so the internal CORE_API_URL service-DNS URL is the first choice.
+// CORE_EXTERNAL_URL is only a fallback for host-run diagnostics.
 func liveStackHTTPBase(t *testing.T) string {
 	t.Helper()
 	envPath := envFilePath(t)
 	keys := loadEnvFileKeys(t, envPath)
-	port := keys["CORE_HOST_PORT"]
-	if port == "" {
-		t.Skipf("integration: CORE_HOST_PORT not present in %s — cannot reach live test stack", envPath)
+	if internalURL := strings.TrimSpace(keys["CORE_API_URL"]); internalURL != "" {
+		return internalURL
 	}
-	return "http://127.0.0.1:" + port
+	if externalURL := strings.TrimSpace(keys["CORE_EXTERNAL_URL"]); externalURL != "" {
+		return externalURL
+	}
+	t.Skipf("integration: CORE_API_URL/CORE_EXTERNAL_URL not present in %s — cannot reach live test stack", envPath)
+	return ""
 }

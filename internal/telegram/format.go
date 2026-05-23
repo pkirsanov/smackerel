@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -106,7 +107,21 @@ func formatQFPacketCardFromAny(raw any) string {
 	if err := json.Unmarshal(data, &card); err != nil {
 		return ""
 	}
-	return formatQFPacketCard(card)
+	formatted := formatQFPacketCard(card)
+	if formatted != "" {
+		// Scope 6: capture an `opened` engagement signal on the
+		// TELEGRAM surface immediately after the packet card is
+		// successfully formatted for outbound delivery. The capture
+		// is one-way Smackerel→QF observability — it MUST NOT
+		// influence subsequent Telegram delivery, ranking, or trust
+		// metadata. Background context is acceptable here because
+		// the helper is called from message-format paths that may
+		// not have a request-scoped ctx in scope; correlation is
+		// driven by packet_id and trace_id, not by context propagation.
+		// SCN-SM-041-022.
+		qfdecisions.CaptureEngagementOpened(context.Background(), qfdecisions.SurfaceTelegram, card.PacketID, card.TraceID, "")
+	}
+	return formatted
 }
 
 // recipeData represents the JSON structure for recipe domain data.

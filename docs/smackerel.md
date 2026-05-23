@@ -170,6 +170,7 @@ graph TB
         DISCORD_CONN[Discord - discordgo]
         HOSPITABLE[Hospitable]
         GUESTHOST[GuestHost]
+        NOTIF_SRC[Notification Source Adapters]
     end
 
     subgraph "Passive Ingestion Layer (🔜 Planned)"
@@ -198,6 +199,7 @@ graph TB
         LIFECYCLE[Topic Lifecycle + Momentum]
         DIGEST_GEN[Digest Assembly]
         SYNTH[Synthesis Orchestration]
+        NOTIF[Notification Intelligence Handler]
         NATS_PUB[NATS Publisher]
     end
 
@@ -219,6 +221,7 @@ graph TB
         DIGEST[Daily Smackerel]
         WEEKLY[Weekly Synthesis]
         ALERTS[Contextual Alerts]
+        INCIDENTS[Notification Incidents + Approvals]
         SEARCH[Semantic Search]
         WEB_UI[Web UI]
     end
@@ -246,6 +249,7 @@ graph TB
     DISCORD_CONN --> CONNECTORS
     HOSPITABLE --> CONNECTORS
     GUESTHOST --> CONNECTORS
+    NOTIF_SRC --> NOTIF
 
     SHARE --> API
     BEXT --> API
@@ -255,6 +259,7 @@ graph TB
     FWD --> CONNECTORS
     VOICE --> API
     WEB_CAP --> API
+    API --> NOTIF
 
     SCHEDULER --> CONNECTORS
     CONNECTORS --> EXTRACT
@@ -272,18 +277,21 @@ graph TB
     KGRAPH --> PG
     LIFECYCLE --> PG
     SYNTH --> PG
+    NOTIF --> PG
 
     KGRAPH --> DIGEST_GEN
     DIGEST_GEN --> DIGEST
     DIGEST_GEN --> WEEKLY
     SYNTH --> WEEKLY
     LIFECYCLE --> ALERTS
+    NOTIF --> INCIDENTS
     API --> SEARCH
 
     DIGEST --> TG
     DIGEST --> SLACK
     WEEKLY --> TG
     ALERTS --> TG
+    INCIDENTS --> WEB_UI
     SEARCH --> WEB
     SEARCH --> WEB_UI
 ```
@@ -497,6 +505,37 @@ time, not extended.
 - **Local-first compatibility.** The pattern is provider-agnostic; the same
   scenarios run against Ollama for fully local operation or against a hosted
   LLM via litellm.
+
+### 3.7 Notification Intelligence Handler
+
+Spec 054 adds a source-neutral notification intelligence handler inside the Go
+core. It is not a channel adapter and it is not an ntfy implementation. Its job
+is to accept source events from pluggable adapters, preserve raw input, normalize
+events into one model, classify severity/domain/intent, correlate related events
+into incidents, choose one handling decision, and record suppressions,
+approvals, and output attempts with redaction.
+
+| Layer | Current implementation |
+|-------|------------------------|
+| Source contract | `internal/notification.SourceAdapter` and `SourceEventSink`; supported forms are `stream`, `webhook`, `polling`, `queue`, `file_drop`, `api_pull`, and `manual`. |
+| Persistence | `036_notification_intelligence.sql` creates source instance, source health, raw event, normalized notification, classification, incident, decision, suppression, and delivery-attempt tables. |
+| Operator API | Authenticated `/api/notifications/*` routes expose source health, manual ingest, event history, incidents, suppressions, quiet-window status, approvals, summaries, and outputs. |
+| Config | `notification_intelligence` and `notification_outputs` in `config/smackerel.yaml`, rendered to `NOTIFICATION_*` env vars by `./smackerel.sh config generate`. |
+| Output boundary | Output channels receive redacted delivery requests. They cannot classify, correlate, mutate incident policy, or bypass the decision engine. |
+
+Notification intelligence follows the product principle "invisible by default":
+routine and low-severity events are recorded silently; persistent, severe,
+uncertain, or risky incidents are surfaced only when thresholds and policy allow
+it. Diagnostics are read-only, autonomous handling is limited to low-risk
+allowlisted actions, high-blast-radius actions require approval, and destructive
+automatic actions are refused.
+
+Spec 055 owns ntfy-specific behavior. That includes ntfy subscription mechanics,
+topic authentication, ntfy message parsing, priority/header mapping, delivery
+metadata extraction, retry transport, health probes, and conformance tests that
+prove ntfy events enter the spec 054 raw-and-normalized pipeline before any
+classification or action decision. Core notification code must not import an
+ntfy package or branch on ntfy-only fields.
 
 ---
 
@@ -858,7 +897,7 @@ Each passive source has:
 | Google Voice | Low | Voicemail transcripts already forwarded to Gmail; SMS via Gmail forward | | | ✅ |
 | Podcasts | Low | Emerging API support | | | ✅ |
 | Notes Apps | Low | Complex sync | | | ✅ |
-| SMS/Notifications | Low | Noisy, needs heavy filtering | | | ✅ |
+| SMS/Notifications | Low | Noisy, needs heavy filtering; spec 054 provides the source-neutral handler, while concrete adapters remain source-owned | | | ✅ |
 
 ---
 
@@ -1024,6 +1063,10 @@ graph TD
         SYNC[(sync_state)]
         INSIGHTS[(synthesis_insights)]
         ALERTS[(alerts)]
+        NRAW[(notification_raw_events)]
+        NNORM[(normalized_notifications)]
+        NINC[(notification_incidents)]
+        NDEC[(notification_processing_decisions)]
         TRIPS[(trips)]
         TRAILS[(trails)]
     end
@@ -1039,7 +1082,17 @@ graph TD
     EDGES -->|src, dst| ART
     INSIGHTS -->|source_artifact_ids| ART
     ALERTS -->|artifact_id| ART
+    NRAW --> NNORM
+    NNORM --> NINC
+    NINC --> NDEC
 ```
+
+  Spec 054 notification intelligence records are durable operational memory, not
+  a parallel knowledge store. Raw notification input is preserved in
+  `notification_raw_events`, normalized events in `normalized_notifications`,
+  correlated incident state in `notification_incidents`, and decision rationale in
+  `notification_processing_decisions`. Source-specific fields stay attached for
+  audit and enrichment, while core policy consumes normalized fields.
 
 ### 8.2 Knowledge Graph Model
 

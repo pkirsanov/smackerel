@@ -56,6 +56,16 @@ type WebUI interface {
 	RecommendationWatchSilenceAction(w http.ResponseWriter, r *http.Request)
 	RecommendationWatchDeleteAction(w http.ResponseWriter, r *http.Request)
 	TripDossierPage(w http.ResponseWriter, r *http.Request)
+	NotificationDashboard(w http.ResponseWriter, r *http.Request)
+	NotificationSourcesPage(w http.ResponseWriter, r *http.Request)
+	NotificationEventsPage(w http.ResponseWriter, r *http.Request)
+	NotificationIncidentsPage(w http.ResponseWriter, r *http.Request)
+	NotificationIncidentDetailPage(w http.ResponseWriter, r *http.Request)
+	NotificationApprovalsPage(w http.ResponseWriter, r *http.Request)
+	NotificationApprovalDetailPage(w http.ResponseWriter, r *http.Request)
+	NotificationSuppressionsPage(w http.ResponseWriter, r *http.Request)
+	NotificationSummaryPage(w http.ResponseWriter, r *http.Request)
+	NotificationOutputsPage(w http.ResponseWriter, r *http.Request)
 	SyncConnectorHandler(w http.ResponseWriter, r *http.Request)
 	BookmarkUploadHandler(w http.ResponseWriter, r *http.Request)
 	KnowledgeDashboard(w http.ResponseWriter, r *http.Request)
@@ -203,6 +213,13 @@ type Dependencies struct {
 
 	// QF evidence export handlers (optional — nil when QF connector is not enabled)
 	QFEvidenceHandlers *QFEvidenceHandlers
+
+	// QF personal-context read API handlers (optional — nil when QF
+	// connector is not enabled). Spec 041 Scope 7.
+	PersonalContextHandlers *PersonalContextHandlers
+
+	// Notification source status handlers (optional — nil until spec 054 is wired)
+	NotificationHandlers *NotificationHandlers
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string

@@ -248,6 +248,7 @@ type Config struct {
 	Drive           DriveConfig
 	Photos          PhotosConfig
 	Recommendations RecommendationsConfig
+	Notification    NotificationConfig
 
 	// Spec 044 — Per-user bearer auth foundation. SST-compliant; populated
 	// from AUTH_* env vars produced by `./smackerel.sh config generate`.
@@ -841,6 +842,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Recommendations = recommendationsCfg
+
+	notificationCfg, err := loadNotificationConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Notification = notificationCfg
 
 	// Parse numeric config after string validation passes
 	dbMaxConnsStr := os.Getenv("DB_MAX_CONNS")
