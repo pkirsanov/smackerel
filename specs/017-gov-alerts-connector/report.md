@@ -1151,3 +1151,81 @@ Best-practice analysis of the Government Alerts connector (1770 LOC, 4749 test L
 - `./smackerel.sh test unit` — all 35 Go packages pass, all Python tests pass
 - `./smackerel.sh check` — clean
 - No existing tests broken or weakened
+
+---
+
+## Simplification Report — 2026-05-23 (Stochastic Child, sweep-2026-05-23-r30 Round 2)
+
+**Trigger:** `simplify-to-doc` (stochastic-quality-sweep child workflow)
+**Mode:** `simplify-to-doc`
+**Target:** `specs/017-gov-alerts-connector`
+**Agent:** `bubbles.workflow` (parent-expanded — child workflow runtime lacks `runSubagent`)
+**Execution Model:** `parent-expanded-child-mode`
+
+### Summary
+
+Post-done simplification sweep of the Government Alerts connector. Identified one cross-cutting duplication finding (SIMP-017-001) in `Sync()`: the dedup-acquire pattern (`Lock` → check `known[ID]` → record `known[ID]=now` → `Unlock` → conditionally process) was inlined verbatim at all 7 source loops (USGS earthquakes, NWS weather, NOAA tsunamis, USGS volcanoes, InciWeb wildfires, AirNow AQI, GDACS). Each call site repeated ~12 lines of identical lock/check/record/unlock code with only the alert ID and downstream normalization differing. This duplication invited drift (e.g., a future contributor could forget the unlock, double-record, or split the critical section incorrectly) and made the mutex contract noisy at every read site.
+
+Extracted a single `claimAlert(id string, now time.Time) bool` helper that atomically performs the lock-check-record-unlock sequence. Each call site now reduces to a single guard line: `if c.claimAlert(XX.ID, now) { … process … }`. Behavior is preserved: the helper uses `defer c.mu.Unlock()` so the lock is released before the caller's conditional block runs, matching the original critical-section boundary in the pre-refactor code. Total LOC: 1815 → 1788 (−27 lines), 7 inline acquire sites collapsed to 7 single-line calls plus 1 helper definition.
+
+### Findings
+
+| ID | Category | Severity | Description | Status |
+|----|----------|----------|-------------|--------|
+| SIMP-017-001 | Duplication / Mutex Hygiene | Medium | `Sync()` inlined the same 12-line dedup-acquire pattern (`Lock` → check `known[id]` → record `known[id]=now` → `Unlock` → `if !seen { normalize, append, notify }`) at all 7 source loops (USGS earthquakes/volcanoes, NWS weather, NOAA tsunami, InciWeb wildfire, AirNow AQI, GDACS). Each duplicated block widened the surface area for mutex-handling bugs (forgotten unlock, double-record, mis-scoped critical section) and obscured the dedup contract behind 84 lines of bookkeeping. | Fixed |
+
+### Remediation
+
+**SIMP-017-001 Fix — Extract `claimAlert` Helper:**
+
+- Added `func (c *Connector) claimAlert(id string, now time.Time) bool` immediately after `Close()` in `internal/connector/alerts/alerts.go`. The helper acquires `c.mu`, defers `Unlock`, checks `c.known[id]`, records `c.known[id] = now` when the ID is new, and returns `true` on first-claim or `false` on duplicate. The `defer c.mu.Unlock()` placement intentionally releases the mutex at helper return — i.e. immediately before the caller's `if` body runs — which is byte-for-byte the same critical-section boundary as the pre-refactor inline pattern (which always called `c.mu.Unlock()` before the `if !seen { ... }` block).
+- Replaced all 7 inline dedup-acquire blocks in `Sync()` with a single-line guard of the form `if c.claimAlert(<source>.ID, now) { ... normalize, append, notify ... }`. The previous shape — five separate statements per call site (Lock, lookup-into-seen, conditional record, Unlock, conditional process) — collapses to one statement plus the existing conditional body.
+- Critical-section boundary preserved: `defer c.mu.Unlock()` fires at helper return — before the caller's `if` block runs — which matches the original `c.mu.Unlock()` placement immediately before the `if !seen` check.
+- Remaining 6 `c.mu.Lock()` sites in `alerts.go` are all distinct from the dedup pattern: `Connect()`, `Sync()` initial config-read, `Sync()` defer-end health update, `Sync()` eviction loop, `claimAlert()` itself, and `Close()`. Each retains its existing semantics and was not touched.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `internal/connector/alerts/alerts.go` | Added `claimAlert(id string, now time.Time) bool` method; replaced 7 inline dedup-acquire blocks in `Sync()` with single-line `claimAlert` calls. Line count 1815 → 1788. |
+
+### Validation
+
+Behavior-preserving refactor. No spec content changed. Validated against existing test suite (no new tests added — refactor does not change observable behavior; existing concurrency and dedup tests already cover the contract):
+
+```
+$ go build ./internal/connector/alerts/
+BUILD_EXIT=0
+
+$ go vet ./internal/connector/alerts/...
+VET_EXIT=0
+
+$ go test -count=1 -race -timeout 120s ./internal/connector/alerts/...
+ok      github.com/smackerel/smackerel/internal/connector/alerts        4.953s
+TEST_EXIT=0
+
+$ go test -count=1 -race -timeout 120s -v -run 'TestSync_Deduplication|TestSync_ConcurrentWithLiveKnownMapWrites|TestKnownMapEviction|TestConcurrentSyncHealth|TestConcurrentCloseHealth' ./internal/connector/alerts/...
+=== RUN   TestConcurrentSyncHealth
+--- PASS: TestConcurrentSyncHealth (0.00s)
+=== RUN   TestConcurrentCloseHealth
+--- PASS: TestConcurrentCloseHealth (0.00s)
+=== RUN   TestKnownMapEviction
+--- PASS: TestKnownMapEviction (0.00s)
+=== RUN   TestSync_Deduplication
+--- PASS: TestSync_Deduplication (0.06s)
+=== RUN   TestSync_ConcurrentWithLiveKnownMapWrites
+--- PASS: TestSync_ConcurrentWithLiveKnownMapWrites (0.03s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/alerts        1.237s
+TEST_EXIT=0
+
+$ go build ./...
+FULL_BUILD_EXIT=0
+```
+
+- Race detector clean across all dedup/concurrency-sensitive tests (`TestSync_Deduplication`, `TestSync_ConcurrentWithLiveKnownMapWrites`, `TestKnownMapEviction`, `TestConcurrentSyncHealth`, `TestConcurrentCloseHealth`).
+- Full alerts package suite green under `-race` (4.953s, 358 test invocations including subtests).
+- Whole-repo `go build ./...` clean — no downstream consumer (`cmd/core/connectors.go`, `cmd/core/main_test.go`) broken by the refactor.
+- `go vet` clean.
+- No DoD items reopened, no scope statuses changed, no spec content altered. Certification remains valid (status `done`, lastCertifiedAt 2026-04-17).
+

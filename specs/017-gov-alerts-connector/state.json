@@ -149,6 +149,17 @@
       "runStartedAt": "2026-05-09T04:00:00Z",
       "runFinishedAt": "2026-05-09T04:30:00Z",
       "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 18 trace failures (18->0). Added Test Plan tables to Scopes 01-06 referencing internal/connector/alerts/alerts_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-GA-PROX-001, SCN-GA-LIFE-001, SCN-GA-USGS-001/002, SCN-GA-NWS-001, SCN-GA-CONN-001, SCN-GA-TSUN-001, SCN-GA-AQI-001, SCN-GA-GDACS-001, SCN-GA-NOTIF-001/002. No DoD content rewriting; no source/test/config/framework changes. artifact-lint clean; traceability-guard PASSED 0 failures."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T00:00:00Z",
+      "runFinishedAt": "2026-05-23T00:00:00Z",
+      "summary": "Simplify-to-doc (stochastic sweep-2026-05-23-r30 Round 2, parent-expanded child workflow): SIMP-017-001 fixed. Extracted claimAlert(id, now) bool helper to consolidate 7 inline dedup-acquire patterns (Lock/check known[id]/record/Unlock) in Sync() across all 7 source loops (USGS earthquake/volcano, NWS, NOAA tsunami, InciWeb wildfire, AirNow AQI, GDACS). Behavior-preserving (defer Unlock matches original critical-section boundary). LOC 1815->1788. Race detector clean: TestSync_Deduplication, TestSync_ConcurrentWithLiveKnownMapWrites, TestKnownMapEviction, TestConcurrentSyncHealth, TestConcurrentCloseHealth all pass. Full alerts suite green under -race (4.953s). go build ./... clean. No spec content changed; certification preserved."
     }
   ]
 }

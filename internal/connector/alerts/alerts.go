@@ -220,13 +220,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				continue
 			}
 			if match := findNearestLocation(eq.Latitude, eq.Longitude, allLocations); match != nil {
-				c.mu.Lock()
-				_, seen := c.known[eq.ID]
-				if !seen {
-					c.known[eq.ID] = now
-				}
-				c.mu.Unlock()
-				if !seen {
+				if c.claimAlert(eq.ID, now) {
 					art := normalizeEarthquake(eq, match)
 					allArtifacts = append(allArtifacts, art)
 					c.maybeNotify(ctx, art)
@@ -256,13 +250,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				// NWS alerts are already point-filtered server-side; use the querying
 				// location directly instead of a tautological findNearestLocation call (H-017-002).
 				match := &ProximityMatch{LocationName: loc.Name, DistanceKm: 0}
-				c.mu.Lock()
-				_, seen := c.known[alert.ID]
-				if !seen {
-					c.known[alert.ID] = now
-				}
-				c.mu.Unlock()
-				if !seen {
+				if c.claimAlert(alert.ID, now) {
 					art := normalizeNWSAlert(alert, match)
 					allArtifacts = append(allArtifacts, art)
 					c.maybeNotify(ctx, art)
@@ -297,13 +285,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if match == nil {
 				continue
 			}
-			c.mu.Lock()
-			_, seen := c.known[t.ID]
-			if !seen {
-				c.known[t.ID] = now
-			}
-			c.mu.Unlock()
-			if !seen {
+			if c.claimAlert(t.ID, now) {
 				art := normalizeTsunamiAlert(t, match)
 				allArtifacts = append(allArtifacts, art)
 				c.maybeNotify(ctx, art)
@@ -327,13 +309,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
 			}
-			c.mu.Lock()
-			_, seen := c.known[v.ID]
-			if !seen {
-				c.known[v.ID] = now
-			}
-			c.mu.Unlock()
-			if !seen {
+			if c.claimAlert(v.ID, now) {
 				art := normalizeVolcanoAlert(v)
 				allArtifacts = append(allArtifacts, art)
 				// Volcano alerts lack coordinates; suppress proactive notifications
@@ -358,13 +334,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				syncErr = ctx.Err()
 				return allArtifacts, now.Format(time.RFC3339), syncErr
 			}
-			c.mu.Lock()
-			_, seen := c.known[w.ID]
-			if !seen {
-				c.known[w.ID] = now
-			}
-			c.mu.Unlock()
-			if !seen {
+			if c.claimAlert(w.ID, now) {
 				art := normalizeWildfireAlert(w)
 				allArtifacts = append(allArtifacts, art)
 				// Wildfire alerts lack coordinates; suppress proactive notifications
@@ -391,13 +361,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 					syncErr = ctx.Err()
 					return allArtifacts, now.Format(time.RFC3339), syncErr
 				}
-				c.mu.Lock()
-				_, seen := c.known[obs.ID]
-				if !seen {
-					c.known[obs.ID] = now
-				}
-				c.mu.Unlock()
-				if !seen {
+				if c.claimAlert(obs.ID, now) {
 					art := normalizeAirNowAlert(obs, &ProximityMatch{LocationName: loc.Name, DistanceKm: 0})
 					allArtifacts = append(allArtifacts, art)
 					c.maybeNotify(ctx, art)
@@ -431,13 +395,7 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 			if match == nil {
 				continue
 			}
-			c.mu.Lock()
-			_, seen := c.known[d.ID]
-			if !seen {
-				c.known[d.ID] = now
-			}
-			c.mu.Unlock()
-			if !seen {
+			if c.claimAlert(d.ID, now) {
 				art := normalizeGDACSAlert(d, match)
 				allArtifacts = append(allArtifacts, art)
 				c.maybeNotify(ctx, art)
@@ -460,6 +418,21 @@ func (c *Connector) Close() error {
 	c.closed = true
 	c.mu.Unlock()
 	return nil
+}
+
+// claimAlert atomically records an alert ID in the dedup map.
+// Returns true if the ID was newly recorded (not previously seen) and
+// the caller should therefore process the alert; false if it was already
+// known and should be skipped. Consolidates the lock-check-record-unlock
+// pattern previously inlined at every source loop in Sync (SIMP-017-001).
+func (c *Connector) claimAlert(id string, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, seen := c.known[id]; seen {
+		return false
+	}
+	c.known[id] = now
+	return true
 }
 
 // Earthquake represents a USGS earthquake event.
