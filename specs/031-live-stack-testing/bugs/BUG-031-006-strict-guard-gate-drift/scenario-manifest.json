@@ -1,0 +1,129 @@
+{
+  "bugId": "BUG-031-006-strict-guard-gate-drift",
+  "version": "1.0",
+  "createdAt": "2026-05-23T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-031-006-001",
+      "title": "state-transition-guard accepts the closure",
+      "scopeIds": [
+        "BUG-031-006:Scope-1",
+        "BUG-031-006:Scope-2",
+        "BUG-031-006:Scope-3",
+        "BUG-031-006:Scope-4",
+        "BUG-031-006:Scope-5"
+      ],
+      "gherkin": "Given specs/031-live-stack-testing has all 38 BLOCK findings closed with real evidence\nAnd no G041 manipulation pattern is present in the closure diff\nWhen bash .github/bubbles/scripts/state-transition-guard.sh specs/031-live-stack-testing runs\nThen the script exits 0 with zero BLOCK findings\nAnd artifact-lint.sh continues to exit 0\nAnd regression-baseline-guard.sh exits 0",
+      "testCoverage": [
+        "gate:state-transition-guard.sh",
+        "gate:artifact-lint.sh",
+        "gate:regression-baseline-guard.sh"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-002",
+      "title": "G022 phase provenance is real",
+      "scopeIds": [
+        "BUG-031-006:Scope-5"
+      ],
+      "gherkin": "Given each of regression, simplify, stabilize, security, chaos, docs, test, audit, validate has run\nWhen state.json executionHistory is inspected\nThen each phase has a structured bubbles.<phase> entry with timestamp and summary\nAnd completedPhaseClaimDetails enumerates per-phase agent provenance\nAnd no narrative-only Phase Agent line is the sole evidence",
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-6",
+        "gate:state-transition-guard.sh:Check-6B"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-003",
+      "title": "G016 regression E2E planning is complete per scope",
+      "scopeIds": [
+        "BUG-031-006:Scope-1"
+      ],
+      "gherkin": "Given all 6 scopes describe at least one user-visible behavior\nWhen scopes.md is inspected\nThen each scope has a scenario-specific regression E2E DoD item\nAnd each scope has a broader regression suite DoD item\nAnd each scope has an explicit regression Test Plan row referencing the test file",
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-8A"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-004",
+      "title": "Check 8D Change Boundary containment",
+      "scopeIds": [
+        "BUG-031-006:Scope-2"
+      ],
+      "gherkin": "Given scopes.md is inspected after closure\nWhen the Change Boundary section is checked\nThen a Change Boundary section enumerates allowed/excluded surfaces and a change-boundary DoD item is present\nAnd Check 8D no longer fires",
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-8D"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-005",
+      "title": "Scope 6 SLA stress coverage exists and consumes SST env",
+      "scopeIds": [
+        "BUG-031-006:Scope-3"
+      ],
+      "gherkin": "Given the disposable test stack is healthy\nWhen the new Scope 6 SLA stress test runs against the 60-second ML readiness timeout\nThen the test asserts the timeout fires at the configured boundary\nAnd the test consumes SMACKEREL_ML_READINESS_TIMEOUT from SST env\nAnd the test never touches the persistent dev stack",
+      "testCoverage": [
+        "tests/stress/ml_readiness_timeout_stress_test.go:TestMLReadinessTimeoutBoundary"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-006",
+      "title": "Adversarial regression catches silent timeout bypass",
+      "scopeIds": [
+        "BUG-031-006:Scope-3"
+      ],
+      "gherkin": "Given the new SLA stress test exists\nWhen a hypothetical change silently bypasses the 60-second timeout in internal/api/ml_readiness.go\nThen the adversarial test case fails before merge",
+      "testCoverage": [
+        "tests/stress/ml_readiness_timeout_stress_test.go:TestMLReadinessTimeoutSilentBypass"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-007",
+      "title": "Adversarial regression catches always-200 readiness",
+      "scopeIds": [
+        "BUG-031-006:Scope-3"
+      ],
+      "gherkin": "Given the new SLA stress test exists\nWhen a hypothetical change makes /ml/readyz return 200 unconditionally\nThen the always-200 adversarial case fails before merge",
+      "testCoverage": [
+        "tests/stress/ml_readiness_timeout_stress_test.go:TestMLReadinessAlways200Regression"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-008",
+      "title": "Report.md has Code Diff Evidence section",
+      "scopeIds": [
+        "BUG-031-006:Scope-4"
+      ],
+      "gherkin": "Given specs/031-live-stack-testing/report.md has been updated\nWhen state-transition-guard.sh runs\nThen Check 13B passes (G053 satisfied)",
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-13B"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-009",
+      "title": "Structured commit lands closure",
+      "scopeIds": [
+        "BUG-031-006:Scope-5"
+      ],
+      "gherkin": "Given the closure is staged\nWhen git commit runs without --no-verify\nThen the commit message matches ^(spec\\(031\\)|bubbles\\(031/.*\\)):\nAnd all pre-commit hooks (gitleaks, etc.) pass on the first attempt",
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-17",
+        "gate:pre-commit-hook:gitleaks"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-031-006-010",
+      "title": "Change Boundary respected (spec 055 untouched)",
+      "scopeIds": [
+        "BUG-031-006:Scope-1",
+        "BUG-031-006:Scope-2",
+        "BUG-031-006:Scope-3",
+        "BUG-031-006:Scope-4",
+        "BUG-031-006:Scope-5"
+      ],
+      "gherkin": "Given closure work is in progress\nWhen each closure commit is staged\nThen git diff --cached --name-status shows only allowed Change Boundary surfaces\nAnd no spec 055 ntfy adapter files (internal/notification/source/**, internal/api/notifications_ntfy.go, tests/e2e/notification_ntfy_source_*, etc.) appear in the staged set",
+      "testCoverage": [
+        "manual:git-diff-cached-verification"
+      ]
+    }
+  ]
+}
