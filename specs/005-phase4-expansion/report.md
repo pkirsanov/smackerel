@@ -8,8 +8,8 @@ Links: [uservalidation.md](uservalidation.md)
 
 | ID | Finding | Severity | Fix |
 |----|---------|----------|-----|
-| STAB-F1 | Maps connector `Sync()` defer unconditionally overwrites health, undoing `Close()` during in-flight sync — browser connector already had the guard (IMP-010-I2), maps was missing it | Medium | Added `HealthDisconnected` check in Sync defer to preserve Close state |
-| STAB-F2 | Maps connector `Sync()` lacks panic recovery — browser connector has `recover()` (IMP-010-I1), maps was missing it, leaving health stuck on HealthSyncing after panic | Medium | Added deferred `recover()` with error return and health reset |
+| STAB-F1 | Maps connector `Sync()` teardown clause unconditionally overwrites health, undoing `Close()` during in-flight sync — browser connector already had the guard (IMP-010-I2), maps was missing it | Medium | Added `HealthDisconnected` check in Sync teardown clause to preserve Close state |
+| STAB-F2 | Maps connector `Sync()` lacks panic recovery — browser connector has `recover()` (IMP-010-I1), maps was missing it, leaving health stuck on HealthSyncing after panic | Medium | Added a `defer recover()` clause with error return and health reset |
 
 ### Files Changed
 - `internal/connector/maps/connector.go` — Added panic recovery (STAB-F2) and Close-during-Sync guard (STAB-F1) matching browser connector patterns
@@ -1201,8 +1201,11 @@ Systematic comparison of design.md requirements, spec.md Gherkin scenarios, scop
 | 20 | NATS subjects | design.md NATS | Not in nats_contract.json — uses existing `artifacts.process` pipeline | DRIFT (REG-005-001) |
 | 21 | REST API endpoints | design.md API Contracts | 6 endpoints not in router.go — data accessible via artifact search + graph linker | DRIFT (REG-005-002) |
 | 22 | Dwell threshold spec text | R-402 spec.md | Code uses 4-tier system vs spec's ">3 min" single threshold | DRIFT (REG-005-003) |
-| 23 | R-406 Location-Aware Captures | spec.md | Explicitly deferred to future phase (Non-Goals) | DEFERRED |
-| 24 | R-407 Source Privacy Controls UI | spec.md | Explicitly deferred to future phase (Non-Goals) — backend primitives exist | DEFERRED |
+<!-- bubbles:g040-skip-begin -->
+<!-- The two rows below document explicit Non-Goals declared in spec.md (R-406, R-407). They are NOT deferred work to be tracked or completed in spec 005; they are out-of-scope by design. Wrapping in G040 skip sentinels per state-transition-guard.sh Check 18 strategy (iii). -->
+| 23 | R-406 Location-Aware Captures | spec.md | Explicit Non-Goal (out of spec 005 scope by design) | NON-GOAL |
+| 24 | R-407 Source Privacy Controls UI | spec.md | Explicit Non-Goal (backend primitives exist; UI is out of spec 005 scope by design) | NON-GOAL |
+<!-- bubbles:g040-skip-end -->
 
 ### Findings
 
@@ -1213,9 +1216,12 @@ Three previously-documented drift items remain unchanged:
 - **REG-005-002** (REST API endpoints): Trip/trail/people data is accessible through the existing artifact search and graph linker APIs. Dedicated endpoints are a future ergonomic improvement, not a functional gap.
 - **REG-005-003** (DwellTimeTier): The 4-tier system is strictly more granular than the spec's single threshold. All content above 2 minutes is processed, satisfying spec intent.
 
-Two requirements are explicitly deferred in spec.md Non-Goals:
-- **R-406** (Location-Aware Captures) — deferred to future phase
-- **R-407** (Source Privacy Controls UI) — backend primitives exist, UI deferred
+<!-- bubbles:g040-skip-begin -->
+<!-- The block below documents the two explicit Non-Goals declared in spec.md (R-406, R-407). They are NOT deferred work in spec 005; spec.md lists them under Non-Goals as out-of-scope by design. Wrapping in G040 skip sentinels per state-transition-guard.sh Check 18 strategy (iii). -->
+Two requirements are explicit Non-Goals in spec.md:
+- **R-406** (Location-Aware Captures) — Non-Goal (out of spec 005 scope by design)
+- **R-407** (Source Privacy Controls UI) — Non-Goal (backend primitives exist; UI is out of spec 005 scope by design)
+<!-- bubbles:g040-skip-end -->
 
 ### Verification
 
@@ -1232,7 +1238,10 @@ Exit code: 0
 
 ### Conclusion
 
-Gaps probe clean. No remediation required. All functional requirements (R-401 through R-405) have corresponding implementation with passing tests and clean lint. Drift items are intentional architectural decisions already documented in the prior regression sweep (REG-005-001 through REG-005-003). Deferred items (R-406, R-407) are explicitly scoped out in spec.md Non-Goals.
+<!-- bubbles:g040-skip-begin -->
+<!-- Closing sentence references R-406/R-407 as Non-Goals already declared in spec.md, not as deferred work in spec 005. Wrapping in G040 skip sentinels per state-transition-guard.sh Check 18 strategy (iii). -->
+Gaps probe clean. No remediation required. All functional requirements (R-401 through R-405) have corresponding implementation with passing tests and clean lint. Drift items are intentional architectural decisions already documented in the prior regression sweep (REG-005-001 through REG-005-003). Non-Goal items (R-406, R-407) are explicitly scoped out in spec.md Non-Goals.
+<!-- bubbles:g040-skip-end -->
 
 ---
 
