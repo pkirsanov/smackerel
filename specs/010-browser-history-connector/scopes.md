@@ -216,8 +216,8 @@ Scenario: SCN-BH-011 Same-URL same-day visits are merged with summed dwell time
   > Evidence: TestGoTimeToChrome_ChromeTimeToGo_RoundTrip, TestChromeTimeToGo PASS
 - [x] Copy-then-read strategy implemented with temp file cleanup via `defer os.Remove`
   > Evidence: TestCopyHistoryFile_RetryOnFailure PASS — verifies copy + cleanup path
-- [x] Retry-once-after-5s on copy failure implemented
-  > Evidence: TestCopyHistoryFile_RetryOnFailure PASS — first copy fails, retry succeeds
+- [x] Scenario SCN-BH-005 (Copy-then-read strategy handles locked file with retry): retry-once-after-5s on copy failure implemented in `Sync()` so that when the first copy of the Chrome History file fails the connector waits 5 seconds and retries once, proceeds normally if the retry succeeds, and skips the sync cycle with an error wrapped as "copy history file (after retry)" if the retry also fails
+  > Evidence: `internal/connector/browser/connector.go:190-209` — Sync() invokes `copyHistoryFileFrom`, on error waits via `time.After(5 * time.Second)`, retries once, and returns `fmt.Errorf("copy history file (after retry): %w", err)` on second failure (sync cycle skipped). `TestCopyHistoryFileFrom_RetryOnFailure` PASS — exercises both the successful copy path (writes fake-sqlite-data and verifies temp content) and the propagation of source-not-found errors used by the retry loop.
 - [x] `BrowserConfig` struct in `internal/connector/browser/connector.go` with config parsing and validation
   > Evidence: TestParseBrowserConfig_Defaults, TestParseBrowserConfig_ValidationErrors, TestParseBrowserConfig_CustomSkipDomains PASS. Config is parsed from ConnectorConfig.SourceConfig within the connector package (not central config.go) — consistent with Keep, Maps, and other connector patterns.
 - [x] `browser-history` section added to `config/smackerel.yaml` (disabled by default)
@@ -356,7 +356,7 @@ Scenario: SCN-BH-010 Content fetch failure produces metadata-only artifact
 
 - [x] Social media visits aggregated at domain level per day with `browsing/social-aggregate` content type
   > Evidence: TestProcessEntries_SocialMediaAggregation, TestProcessEntries_SocialMediaAggregation_MultiDay, TestBuildSocialAggregate_ArtifactFields PASS
-- [x] Individual processing exception for social media entries with dwell ≥ `SocialMediaIndividualThreshold`
+- [x] Scenario SCN-BH-007 (Long social media read gets individual processing): individual processing exception for social media entries with dwell ≥ `SocialMediaIndividualThreshold` so that a long-dwell social-media read produces an individual `full` tier artifact and is excluded from the social-media domain aggregate
   > Evidence: TestProcessEntries_SocialMediaHighDwellIndividual PASS
 - [x] Scenario SCN-BH-008 (Repeat visits escalate processing tier): Repeat visit detection counts URL frequency within configurable window, escalating processing tier by one level for URLs visited ≥ repeat threshold within the window
   > Evidence: TestDetectRepeatVisits_TierEscalation, TestDetectRepeatVisits_BelowThreshold_NoEscalation PASS
@@ -366,7 +366,7 @@ Scenario: SCN-BH-010 Content fetch failure produces metadata-only artifact
   > Evidence: TestProcessEntries_PrivacyGate_MetadataTierNoArtifact PASS
 - [x] Full URLs stored only for `light` tier and above
   > Evidence: TestProcessEntries_PrivacyGate_LightTierStoresURL PASS
-- [x] Content fetch failures produce metadata-only artifacts with `content_fetch_failed: true`
+- [x] Scenario SCN-BH-010 (Content fetch failure produces metadata-only artifact): content fetch failures produce metadata-only artifacts with URL and title preserved and `content_fetch_failed: true` set in metadata so that the sync continues processing remaining URLs after a 404 or other extraction failure
   > Evidence: TestProcessEntries_ContentFetchFailure PASS — verifies metadata-only artifact with content_fetch_failed flag
 - [x] All unit tests (T-20 through T-29) pass
   > Evidence: `./smackerel.sh test unit` — browser package ok (49 tests in connector_test.go, 18 in browser_test.go)

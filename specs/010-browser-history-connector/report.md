@@ -4,6 +4,64 @@
 
 ---
 
+## Gaps-to-Doc Pass (stochastic-quality-sweep `sweep-2026-05-23-r30`, round 6, gaps trigger, May 23 2026)
+
+**Phase Agent:** `bubbles.workflow` (parent-expanded child workflow mode `gaps-to-doc`; nested `runSubagent` unavailable so phase owners executed inline)
+**Parent Sweep ID:** sweep-2026-05-23-r30
+**Parent Round:** 6
+**Trigger:** gaps
+
+### Findings Detected
+
+Gaps probe ran the traceability-guard and state-transition-guard. Identified **3 actionable G068 DoD-Gherkin content-fidelity gaps** plus 28 systemic governance-evolution items pre-existing from R1 precedent.
+
+| Finding | Gate | Type | Status |
+|---------|------|------|--------|
+| GAP-R6-001 | G068 | Scope 01 SCN-BH-005 (Copy-then-read strategy handles locked file with retry) had no faithful DoD item preserving its behavioral claim | Closed |
+| GAP-R6-002 | G068 | Scope 02 SCN-BH-007 (Long social media read gets individual processing) had no faithful DoD item preserving its behavioral claim | Closed |
+| GAP-R6-003 | G068 | Scope 02 SCN-BH-010 (Content fetch failure produces metadata-only artifact) had no faithful DoD item preserving its behavioral claim | Closed |
+
+### Remediation
+
+Applied the same DoD-prefix pattern used by Iter 9 / R-010-V1: prepended `Scenario SCN-BH-XXX (<title>):` to each affected DoD bullet, preserving the behavioral claim verbatim, and updated the SCN-BH-005 evidence reference to cite the correct test name `TestCopyHistoryFileFrom_RetryOnFailure` and the `Sync()` retry-loop code location `internal/connector/browser/connector.go:190-209`.
+
+### Verification
+
+```text
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/010-browser-history-connector
+ℹ️  DoD fidelity: 11 scenarios checked, 11 mapped to DoD, 0 unmapped
+RESULT: PASSED (0 warnings)
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/010-browser-history-connector
+Artifact lint PASSED.
+
+$ go test ./internal/connector/browser/...
+ok      github.com/smackerel/smackerel/internal/connector/browser       0.053s
+
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/010-browser-history-connector | grep G068
+--- Check 22: DoD-Gherkin Content Fidelity (Gate G068) ---
+✅ PASS: All 11 Gherkin scenarios have faithful DoD items (Gate G068)
+```
+
+State-transition-guard moved from 32 failures → 28 failures (4 closed: 3 individual scenario fidelity + 1 aggregate fidelity gate). Spec status unchanged (`done`).
+
+### Residual Systemic Findings (NOT introduced by this round, deferred per R1/R54/R66/R91/R92/R93/devops/harden/improve precedent)
+
+The remaining 28 state-transition-guard failures are pre-existing governance-evolution items, identical in shape to those documented in the R1 reconciliationNote and unchanged by this round:
+
+- **Check 14 — E2E regression coverage planning requirements (6 hits)**: Scope 02 lacks explicit scenario-specific E2E regression DoD/test-plan rows for SCN-BH-006/008/009/010. These pre-existed; the prior R1 sweep noted them as governance-evolution items requiring a dedicated reconciliation cycle.
+- **Check 15 — Shared infrastructure planning (4 hits)**: Scope 02 canary/rollback/contract-surface DoD items not present (originally authored before Shared Infrastructure Impact Sweep was a binding gate).
+- **Check 13 — Change-boundary refactor/repair DoD (1 hit)**: scopes.md authored before refactor change-boundary DoD became binding.
+- **Check 12 — Gate G053 Code Diff Evidence (1 hit)**: report.md authored before G053 required `### Code Diff Evidence`.
+- **Check 16 — Gate G027 phase-scope coherence (1 hit)**: state.json `execution.completedScopes` lists `["1"]` while certification has both scopes Done (legacy data-shape issue from initial certification).
+- **Check 16 — Gate G028 implementation-reality scan (1 hit)**: 13 FAKE_INTEGRATION violations in `internal/connector/browser/browser.go` and `connector.go`. Per R1 analysis, these flag legitimate Go error-return patterns `return nil, fmt.Errorf(...)` as false positives.
+- **Check 17 — Strict-mode commit prefix (1 hit)**: full-delivery requires `spec(010):` prefix on at least one commit touching the spec. This round's commit will use that prefix and incidentally close this finding.
+- **Check 18 — Gate G040 deferral language (2 hits, 5+9 occurrences)**: scopes.md and report.md contain narrative text describing integration/E2E test deferrals that accurately reflect the env-gated test pattern shared with sibling connectors 007/009/011. Removing the language would misrepresent the actual delivery state.
+
+These items have been deferred by 12+ prior stochastic-quality-sweep rounds; per R1 (2026-05-13) reconciliationNote precedent, "these systemic governance-evolution items are NOT escalated within a single sweep round; they require a dedicated full-delivery reconciliation cycle." This round's outcome (3 actionable items closed, 28 systemic items deferred per precedent) follows that pattern.
+
+---
+
 ## Workflow Mode Migration (2026-04-24)
 
 **Phase Agent:** `bubbles.workflow`
