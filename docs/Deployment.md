@@ -883,6 +883,7 @@ docker compose --env-file app.env -f compose.deploy.yml \
 | Dashboard inventory | `docs/Operations.md::Monitoring Stack` | Names the 10 dashboards the runtime metrics support |
 | Alert runbook | `docs/Operations.md::Alert Runbook` | One row per alert: name, severity, firing action |
 | SST keys | `config/smackerel.yaml::monitoring.prometheus.* + environments.<env>.prometheus_*` | Single source of truth for image, port, retention, intervals |
+| External image pin | `deploy/contract.yaml::externalImages[name=prometheus]` | Canonical pin list for adapter overlays. `prom/prometheus:v2.55.1` is profile-gated; only required when `--profile monitoring` is enabled. Drift between this list and `deploy/compose.deploy.yml` is locked by `internal/deploy/external_images_contract_test.go` (BUG-049-001). |
 
 ### What The Deploy Adapter Owns
 
