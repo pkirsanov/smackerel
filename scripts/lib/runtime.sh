@@ -23,7 +23,7 @@ smackerel_require_env_file() {
   local env_file
 
   env_file="$(smackerel_env_file "$target_env")"
-  if [[ ! -f "$env_file" ]]; then
+  if [[ ! -f "$env_file" || ! -r "$env_file" ]]; then
     smackerel_generate_config "$target_env" >/dev/null
   fi
   printf '%s\n' "$env_file"

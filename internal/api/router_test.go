@@ -71,6 +71,36 @@ func (m *mockWebUI) RecommendationWatchDeleteAction(w http.ResponseWriter, r *ht
 func (m *mockWebUI) TripDossierPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+func (m *mockWebUI) NotificationDashboard(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationSourcesPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationEventsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationIncidentsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationIncidentDetailPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationApprovalsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationApprovalDetailPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationSuppressionsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationSummaryPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationOutputsPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) SyncConnectorHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }

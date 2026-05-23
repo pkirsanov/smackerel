@@ -1,0 +1,123 @@
+{
+  "version": 3,
+  "featureDir": "specs/055-notification-source-ntfy-adapter",
+  "featureName": "Notification Source ntfy Adapter",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": null,
+    "runStartedAt": "2026-05-23T03:24:08Z",
+    "completedPhaseClaims": [
+      "analyze",
+      "design",
+      "plan"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "full-delivery",
+      "source": "repo-default"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": [
+        "analyze"
+      ],
+      "statusBefore": "missing",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-23T02:49:05Z",
+      "completedAt": "2026-05-23T02:49:05Z",
+      "summary": "Created analyst-owned spec.md for the ntfy notification source adapter and recorded dependency on spec 054 source-neutral notification handler contract."
+    },
+    {
+      "agent": "bubbles.ux",
+      "phasesExecuted": [
+        "analyze"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-23T02:56:17Z",
+      "completedAt": "2026-05-23T02:56:17Z",
+      "summary": "Added inline UX Wireframes and User Flows for ntfy source health, subscription status, topic list, lag, reconnect state, dead-letter review, replay confirmation, redacted errors, troubleshooting, and source/output-channel boundary clarity."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": [
+        "bootstrap"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-23T02:59:14Z",
+      "completedAt": "2026-05-23T02:59:14Z",
+      "summary": "Created design.md for the ntfy notification source adapter, defining adapter architecture, SourceEventEnvelope mapping, SST and secret handling, topic health, reconnect, lag, dead-letter, replay, operator APIs, UI data flow, security, observability, tests, and rollout while leaving plan and implementation incomplete."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-23T03:24:08Z",
+      "completedAt": "2026-05-23T03:24:08Z",
+      "summary": "Created planning-owned scopes.md, report.md, uservalidation.md, and scenario-manifest.json for six sequential spec 055 scopes. Implementation remains not started, all scope DoD items are unchecked, and certification has no completed scopes or certified phases."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-05-23T03:24:08Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "notes": "Analyst, UX, design, and planning artifacts exist. Planning resolved the top-level/certification status mismatch by aligning certification.status with the in_progress feature state while leaving completedScopes and certifiedCompletedPhases empty. Implementation and validation evidence remain unclaimed."
+}

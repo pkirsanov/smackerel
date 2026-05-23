@@ -206,28 +206,78 @@ func auditOutcomeForStatus(status string) string {
 	}
 }
 
-// SCN-SM-041-020 watch-adjacent safety-boundary gate (DOCUMENTATION-ONLY).
+// SCN-SM-041-020 watch-adjacent safety-boundary gate.
 //
-// Scope 9 (Watch-Signal Proposal Exporter) has NOT been activated and no
-// production transport, signing pipeline, or watch-proposal request handler
-// exists at HEAD. Per scopes.md Change Boundary, Scope 5 MUST NOT implement
-// Scope 9 watch-signal proposal request/signing/rejection transport. This
-// comment is the documented no-op gate required by the dispatch:
+// Scope 9 (Watch-Signal Proposal Exporter) wires its safety-boundary gate
+// inside internal/connector/qfdecisions/watch_proposal.go
+// WatchProposalClient.Propose: BEFORE any signing or HTTP transport, the
+// client invokes EnforceQFActionBoundary with attempted action type
+// "watch_proposal" so the Scope 5 safety boundary helper has the
+// opportunity to reject the attempt if a future code change ever adds
+// `watch_proposal` to IsForbiddenQFActionType. In MVP "watch_proposal" is
+// NOT forbidden (the diagnostic path is the intended pre-MVP behavior), so
+// the boundary helper is a no-op gate today; the explicit invocation
+// locks in the pattern. Smackerel MUST NOT author, evaluate, or accept QF
+// watch-signal proposals as actionable state mutations; the pre-MVP
+// rejection envelope `WATCH_PROPOSALS_DEFERRED_TO_V1` is the only
+// expected QF response and is parsed without retry, without local
+// watch-state mutation, and without any user-visible affordance.
+
+// WatchProposalAttemptAuditInput carries the fields a Scope 9
+// watch-proposal attempt MUST populate when emitting Cross-Product
+// Audit Envelope v1 records. The connector audit shape is owned here
+// so Scope 9's diagnostic client only has to provide the per-attempt
+// values. SCN-SM-041-031 / SCN-SM-041-033.
+type WatchProposalAttemptAuditInput struct {
+	TraceID    string
+	EntityRef  string
+	ActorRef   string
+	Surface    string
+	Status     string
+	Reason     string
+	ObservedAt time.Time
+}
+
+// EmitWatchProposalAttemptAudit records a Cross-Product Audit
+// Envelope v1 entry for the QF watch_proposal emission point. The
+// outcome derives from the supplied `Status` (`ok`, `rejected`,
+// `error`); the corresponding metric increment is owned by the
+// Scope 9 transport (RecordQFWatchProposalAttempt). The supplied
+// `EntityRef` describes the entity the proposal references and is
+// preserved verbatim in the envelope `target_context_type` slot so
+// audit consumers can correlate against the watch-proposal transport
+// log without new envelope fields. SCN-SM-041-031 / SCN-SM-041-033.
 //
-//	"If a path doesn't currently expose such actions (because the relevant
-//	transport is Scope 6/8/9 territory), document the no-op gate with a code
-//	comment citing 'Scope 5 boundary helper; will become operative when
-//	Scope X wires the transport'."
-//
-// When Scope 9 wires the watch-signal proposal transport, the first
-// statement of EVERY proposal-emitter call-site MUST invoke
-// EnforceQFActionBoundary(ActionBoundaryAttempt{
-//
-//	AttemptedActionType: proposalRequest.ActionType,
-//	...}) so a proposal that names `watch_creation` or `watch_evaluation`
-//
-// (both forbidden via IsForbiddenQFActionType) is rejected BEFORE any HTTP
-// transport, signing, or QF-bridge round trip happens. Smackerel MUST NOT
-// author, evaluate, or accept QF watch-signal proposals; it can only
-// observe QF-emitted diagnostics through the Scope 2 sync path. The Scope 5
-// boundary helper is forward-ready for that wiring.
+// SCN-SM-041-020 watch-adjacent safety-boundary defense-in-depth:
+// the helper pre-checks the watch-proposal action type via
+// EnforceQFActionBoundary BEFORE building or emitting the
+// envelope. In MVP `watch_proposal` is NOT in the forbidden action
+// vocabulary so the boundary helper is a no-op; any future change
+// adding `watch_proposal` to IsForbiddenQFActionType will force the
+// envelope outcome to AuditOutcomeRejected.
+func EmitWatchProposalAttemptAudit(input WatchProposalAttemptAuditInput) EvidenceAuditEnvelope {
+	reason := strings.TrimSpace(input.Reason)
+	outcome := auditOutcomeForStatus(input.Status)
+	if _, fired, _ := EnforceQFActionBoundary(ActionBoundaryAttempt{
+		AttemptedActionType: AuditActionWatchProposalAttempt,
+		TraceID:             input.TraceID,
+		ActorRef:            input.ActorRef,
+		Surface:             input.Surface,
+		Reason:              "watch_proposal_action_rejected",
+		ObservedAt:          input.ObservedAt,
+	}); fired {
+		outcome = AuditOutcomeRejected
+	}
+	envelope := BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
+		TraceID:       input.TraceID,
+		ActorRef:      input.ActorRef,
+		Surface:       input.Surface,
+		Action:        AuditActionWatchProposalAttempt,
+		Outcome:       outcome,
+		Reason:        reason,
+		TargetContext: input.EntityRef,
+		ObservedAt:    input.ObservedAt,
+	})
+	EmitConnectorAuditEnvelope(envelope)
+	return envelope
+}

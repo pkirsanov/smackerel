@@ -171,6 +171,33 @@ func NewRouter(deps *Dependencies) http.Handler {
 					r.Delete("/{exportID}", deps.QFEvidenceHandlers.RevokeExport)
 				})
 			}
+
+			// Spec 041 Scope 7 — QF Companion personal-context read API
+			// host. The route is mounted INSIDE the bearer-auth gated
+			// group; consent-token validation, capability gating, and
+			// per-token rate limiting happen inside the handler.
+			if deps.PersonalContextHandlers != nil {
+				r.Get("/private/qf/v1/personal-context", deps.PersonalContextHandlers.Read)
+			}
+
+			if deps.NotificationHandlers != nil {
+				r.Route("/notifications", func(r chi.Router) {
+					r.Get("/status", deps.NotificationHandlers.Status)
+					r.Get("/sources", deps.NotificationHandlers.ListSources)
+					r.Get("/events", deps.NotificationHandlers.ListEvents)
+					r.Get("/events/{event_id}", deps.NotificationHandlers.GetEvent)
+					r.Post("/manual-ingest", deps.NotificationHandlers.ManualIngest)
+					r.Get("/incidents", deps.NotificationHandlers.ListIncidents)
+					r.Get("/incidents/{incident_id}", deps.NotificationHandlers.GetIncident)
+					r.Post("/incidents/{incident_id}/snooze", deps.NotificationHandlers.SnoozeIncident)
+					r.Get("/suppressions", deps.NotificationHandlers.ListSuppressions)
+					r.Get("/quiet-windows", deps.NotificationHandlers.ListQuietWindows)
+					r.Get("/summary", deps.NotificationHandlers.Summary)
+					r.Get("/outputs", deps.NotificationHandlers.ListOutputs)
+					r.Get("/approvals/{approval_id}", deps.NotificationHandlers.GetApproval)
+					r.Post("/approvals/{approval_id}/decisions", deps.NotificationHandlers.RecordApprovalDecision)
+				})
+			}
 		})
 	})
 
@@ -227,6 +254,16 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Post("/recommendations/{id}/feedback", deps.WebHandler.RecommendationFeedback)
 			r.Get("/recommendations/{id}", deps.WebHandler.RecommendationDetail)
 			r.Get("/recommendations/trip-dossier/{trip_id}", deps.WebHandler.TripDossierPage)
+			r.Get("/notifications", deps.WebHandler.NotificationDashboard)
+			r.Get("/notifications/sources", deps.WebHandler.NotificationSourcesPage)
+			r.Get("/notifications/events", deps.WebHandler.NotificationEventsPage)
+			r.Get("/notifications/incidents", deps.WebHandler.NotificationIncidentsPage)
+			r.Get("/notifications/incidents/{incident_id}", deps.WebHandler.NotificationIncidentDetailPage)
+			r.Get("/notifications/approvals", deps.WebHandler.NotificationApprovalsPage)
+			r.Get("/notifications/approvals/{approval_id}", deps.WebHandler.NotificationApprovalDetailPage)
+			r.Get("/notifications/suppressions", deps.WebHandler.NotificationSuppressionsPage)
+			r.Get("/notifications/summary", deps.WebHandler.NotificationSummaryPage)
+			r.Get("/notifications/outputs", deps.WebHandler.NotificationOutputsPage)
 
 			// Knowledge layer web routes
 			r.Get("/knowledge", deps.WebHandler.KnowledgeDashboard)
