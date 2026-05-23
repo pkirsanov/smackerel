@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "specId": "049-monitoring-stack",
+  "bugId": "BUG-049-001",
+  "featureDir": "specs/049-monitoring-stack/bugs/BUG-049-001-prometheus-external-image-contract-drift",
+  "featureName": "BUG-049-001 Prometheus external image contract drift",
+  "parentSpec": "specs/049-monitoring-stack/",
+  "title": "Prometheus external image missing from deploy/contract.yaml::externalImages",
+  "status": "resolved",
+  "workflowMode": "devops-to-doc",
+  "severity": "medium",
+  "class": "devops",
+  "discoveredBy": "sweep-2026-05-23-r30 round 7 (devops-to-doc)",
+  "discoveredAtHead": "700171b2b637057ec41f88330bc38c070fd9c14b",
+  "createdAt": "2026-05-23T20:16:42Z",
+  "completedAt": "2026-05-23T20:45:00Z",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 7,
+    "executionModel": "parent-expanded-child-mode",
+    "mappedMode": "devops-to-doc",
+    "trigger": "devops",
+    "findingLens": "Build-Once Deploy-Many / adapter contract drift",
+    "findingSurface": "deploy/contract.yaml::externalImages",
+    "findingHead": "700171b2b637057ec41f88330bc38c070fd9c14b"
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "done",
+    "currentScope": "BUG-049-001-S1",
+    "runStartedAt": "2026-05-23T20:16:42Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "resolved",
+    "completedScopes": [
+      "BUG-049-001-S1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.workflow",
+    "certifiedAt": "2026-05-23T20:45:00Z",
+    "auditorAgent": "bubbles.workflow",
+    "auditedAt": "2026-05-23T20:45:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Single-finding devops trigger closure. Contract update plus 5-test contract regression (1 live + 4 adversarial sub-tests covering missing-prometheus, missing-nats, stale-entry, literal-image-mismatch). Full internal/deploy gate (19.079s) green with zero regressions. Doc cross-reference in docs/Deployment.md Monitoring Profile section names the new test as the enforcer.",
+    "scopeProgress": [
+      {
+        "scope": "BUG-049-001-S1",
+        "name": "Contract update + regression test + doc cross-reference",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-23T20:40:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-contract",
+      "source": "devops-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "contract-test-required",
+      "source": "devops-to-doc-mode-default"
+    }
+  },
+  "transitionRequests": [],
+  "scopes": [
+    {
+      "id": "BUG-049-001-S1",
+      "title": "Contract update + regression test + doc cross-reference",
+      "status": "Done",
+      "dod": {
+        "total": 10,
+        "checked": 10
+      }
+    }
+  ],
+  "scenarios": [
+    "SCN-049-B001",
+    "SCN-049-B002"
+  ],
+  "reworkQueue": []
+}
