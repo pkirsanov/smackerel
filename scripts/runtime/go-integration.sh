@@ -14,4 +14,4 @@ source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
 ensure_envsubst "go-integration"
 
 cd /workspace
-go test -p 1 -tags integration -v -count=1 -timeout 300s ./tests/integration/... ./internal/notification
+go test -p 1 -tags integration -v -count=1 -timeout 300s ./tests/integration/... ./internal/notification/...
