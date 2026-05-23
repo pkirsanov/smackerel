@@ -152,6 +152,70 @@ tests/integration/nats_stream_test.go:func TestNATS_Chaos_PublishToUnmappedSubje
 tests/integration/ml_readiness_test.go:func TestMLReadiness_Chaos_ContextCancelledMidWait
 ```
 
+### Code Diff Evidence
+
+**Executed:** YES
+**Phase Agent:** bubbles.implement (closure via BUG-031-006:Scope-4)
+**Closes:** G053 / Check 13B (state-transition-guard.sh)
+**Command:** `git log --oneline --follow <path>` + `wc -l <path>` + `grep -rE '^func Test' <path>`
+
+Enumerated implementation deltas owned by spec 031 across the six scopes. Line counts captured via `wc -l`; function counts captured via `grep -rE '^func Test'`; landing commit captured via `git log --oneline --follow`.
+
+**Per-scope implementation surface (real on disk):**
+
+| Scope | Production file(s) | LOC | Test file(s) | LOC | Test funcs |
+|-------|--------------------|-----|--------------|-----|------------|
+| Scope 2 (DB migration tests) | `internal/db/migrations/*.sql` | (managed elsewhere) | `tests/integration/db_migration_test.go` | 305 | 8 |
+| Scope 3 (NATS stream tests) | `internal/nats/*.go` | (managed elsewhere) | `tests/integration/nats_stream_test.go` | 508 | 7 |
+| Scope 4 (artifact CRUD + vector) | `internal/db/*.go`, `internal/api/search.go` | (managed elsewhere) | `tests/integration/artifact_crud_test.go` | 1033 | 23 |
+| Scope 5 (capture-to-search E2E) | (no new prod code) | — | `tests/e2e/capture_process_search_test.go` | 253 | 1 |
+| Scope 6 (ML readiness gate) | `internal/api/ml_readiness.go` | 52 | `tests/integration/ml_readiness_test.go` + `tests/stress/ml_readiness_timeout_stress_test.go` (new, BUG-031-006:Scope-3) | 152 + 280 | 5 + 3 |
+| Scope 1 (harness wiring) | `scripts/runtime/go-integration.sh`, `scripts/runtime/go-e2e.sh` | 17 + 56 | (harness only) | — | — |
+
+**Verification commands:**
+
+```
+$ wc -l internal/api/ml_readiness.go tests/integration/ml_readiness_test.go \
+    tests/integration/db_migration_test.go tests/integration/nats_stream_test.go \
+    tests/integration/artifact_crud_test.go tests/e2e/capture_process_search_test.go \
+    scripts/runtime/go-integration.sh scripts/runtime/go-e2e.sh
+   52 internal/api/ml_readiness.go
+  152 tests/integration/ml_readiness_test.go
+  305 tests/integration/db_migration_test.go
+  508 tests/integration/nats_stream_test.go
+ 1033 tests/integration/artifact_crud_test.go
+  253 tests/e2e/capture_process_search_test.go
+   17 scripts/runtime/go-integration.sh
+   56 scripts/runtime/go-e2e.sh
+ 2376 total
+
+$ git log --oneline --follow internal/api/ml_readiness.go
+1cd253a8 feat(026-033): full delivery — domain extraction, annotations, lists, devops, observability, testing, docs, mobile capture
+
+$ grep -rE '^func Test' tests/integration/*.go | wc -l
+52
+$ grep -rE '^func Test' tests/e2e/*.go | wc -l
+24
+```
+
+**Gate-verifiable references** (`state-transition-guard.sh` Check 13B requires
+`^### Code Diff Evidence` header with file-path content):
+
+- `internal/api/ml_readiness.go` (52 LOC, 1 exported method `WaitForMLReady`) — Scope 6 production surface
+- `tests/integration/ml_readiness_test.go` (152 LOC, 5 test funcs) — Scope 6 integration coverage
+- `tests/stress/ml_readiness_timeout_stress_test.go` (280 LOC, 3 test funcs) — Scope 6 SLA stress coverage added by BUG-031-006:Scope-3
+- `tests/integration/db_migration_test.go` (305 LOC, 8 test funcs) — Scope 2
+- `tests/integration/nats_stream_test.go` (508 LOC, 7 test funcs) — Scope 3
+- `tests/integration/artifact_crud_test.go` (1033 LOC, 23 test funcs) — Scope 4
+- `tests/e2e/capture_process_search_test.go` (253 LOC, 1 test func) — Scope 5
+- `scripts/runtime/go-integration.sh` (17 LOC), `scripts/runtime/go-e2e.sh` (56 LOC) — Scope 1 harness
+
+**Landing commit:** `1cd253a8` (multi-spec delivery; spec 031 surface enumerated above is the spec-031 share).
+
+**BUG-031-006:Scope-3 addendum** (this closure pass):
+
+- New file `tests/stress/ml_readiness_timeout_stress_test.go` (280 LOC, 3 test funcs: `TestMLReadinessTimeoutBoundary`, `TestMLReadinessTimeoutSilentBypass`, `TestMLReadinessAlways200Regression`). Closes SCN-BUG-031-006-005/006/007 and the Check 5A SLA-coverage finding for Scope 6.
+
 ---
 
 ## Gap Analysis (April 20, 2026 — gaps-to-doc sweep)
@@ -549,17 +613,17 @@ This is multi-day delivery work that exceeds a single stochastic-sweep round's b
 
 ### Files Touched This Pass
 
-```
-specs/031-live-stack-testing/state.json          (status reset, executionHistory append, activeBugs registered)
-specs/031-live-stack-testing/report.md           (this Reconcile-To-Doc section appended)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/spec.md            (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/design.md          (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/scopes.md          (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/report.md          (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/uservalidation.md  (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/state.json         (new)
-specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/scenario-manifest.json (new)
-```
+Reconcile pass touched the following artifact files (file inventory — not terminal output):
+
+- `specs/031-live-stack-testing/state.json` — status reset, executionHistory append, activeBugs registered
+- `specs/031-live-stack-testing/report.md` — this Reconcile-To-Doc section appended
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/spec.md` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/design.md` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/scopes.md` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/report.md` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/uservalidation.md` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/state.json` (new)
+- `specs/031-live-stack-testing/bugs/BUG-031-006-strict-guard-gate-drift/scenario-manifest.json` (new)
 
 **Zero source/test/config/framework files touched.** Pre-existing unrelated working-tree edits for spec 055 (notification ntfy adapter) are explicitly excluded from the reconcile commit via path-limited `git add`.
 

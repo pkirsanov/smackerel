@@ -55,6 +55,45 @@ if [[ -n "$go_run_selector" ]]; then
 	echo "go-stress: applying -run selector: $go_run_selector"
 	go_test_args+=(-run "$go_run_selector")
 fi
-go_test_args+=(./tests/stress/...)
 
-go test "${go_test_args[@]}"
+stress_packages=()
+while IFS= read -r package_path; do
+	stress_packages+=("$package_path")
+done < <(go list -tags stress ./tests/stress/...)
+
+go_stress_package_has_selected_tests() {
+	local package_path="$1"
+	local found_match=false
+	if [[ -z "$go_run_selector" ]]; then
+		return 0
+	fi
+	while IFS= read -r test_name; do
+		case "$test_name" in
+			Test*)
+				found_match=true
+				;;
+		esac
+	done < <(go test -tags stress -list "$go_run_selector" "$package_path")
+	if [[ "$found_match" == true ]]; then
+		return 0
+	fi
+	echo "go-stress: skipping workload package $package_path (no tests match selector)"
+	return 1
+}
+
+ran_package_count=0
+for package_path in "${stress_packages[@]}"; do
+	if ! go_stress_package_has_selected_tests "$package_path"; then
+		continue
+	fi
+	echo "go-stress: running workload package $package_path"
+	go test "${go_test_args[@]}" "$package_path"
+	ran_package_count=$((ran_package_count + 1))
+done
+
+if [[ "$ran_package_count" -eq 0 ]]; then
+	echo "ERROR: go-stress selector matched zero stress packages: $go_run_selector" >&2
+	exit 1
+fi
+
+echo "go-stress: workload packages passed"

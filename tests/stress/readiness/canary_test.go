@@ -139,16 +139,31 @@ func TestGoStressHarness_WorkloadFailurePropagatesAfterCanary(test *testing.T) {
 	fakeGoPath := filepath.Join(fakeBinDir, "go")
 	fakeGo := `#!/usr/bin/env bash
 set -euo pipefail
-printf 'fake-go args: %s\n' "$*"
 case "$*" in
+	"list -tags stress ./tests/stress/..."*)
+		echo "github.com/smackerel/smackerel/tests/stress"
+		echo "github.com/smackerel/smackerel/tests/stress/agent"
+		exit 0
+		;;
+	esac
+	printf 'fake-go args: %s\n' "$*"
+	case "$*" in
 	*"^TestStressReadinessCanary_Live$"*)
     echo "fake-go canary pass"
     exit 0
     ;;
-  *)
+	*"-list TestForcedWorkloadFailure github.com/smackerel/smackerel/tests/stress"*)
+		echo "TestForcedWorkloadFailure"
+		exit 0
+		;;
+	*"github.com/smackerel/smackerel/tests/stress"*)
     echo "fake-go workload failure"
     exit 42
     ;;
+	*)
+		echo "unexpected fake-go args: $*"
+		exit 43
+		;;
 esac
 `
 	if err := os.WriteFile(fakeGoPath, []byte(fakeGo), 0o755); err != nil {
@@ -178,10 +193,14 @@ esac
 	if !strings.Contains(output, "fake-go workload failure") {
 		test.Fatalf("expected workload failure to remain visible, output:\n%s", output)
 	}
+	if !strings.Contains(output, "go-stress: running workload package github.com/smackerel/smackerel/tests/stress") {
+		test.Fatalf("expected workload package progress before long-running tests, output:\n%s", output)
+	}
 	canaryIndex := strings.Index(output, "go-stress: readiness canary passed")
+	packageIndex := strings.Index(output, "go-stress: running workload package github.com/smackerel/smackerel/tests/stress")
 	workloadIndex := strings.Index(output, "fake-go workload failure")
-	if canaryIndex < 0 || workloadIndex < 0 || workloadIndex < canaryIndex {
-		test.Fatalf("expected workload failure after canary pass, output:\n%s", output)
+	if canaryIndex < 0 || packageIndex < 0 || workloadIndex < 0 || packageIndex < canaryIndex || workloadIndex < packageIndex {
+		test.Fatalf("expected package progress and workload failure after canary pass, output:\n%s", output)
 	}
 }
 
