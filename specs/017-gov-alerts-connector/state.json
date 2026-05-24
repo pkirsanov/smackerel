@@ -160,6 +160,17 @@
       "runStartedAt": "2026-05-23T00:00:00Z",
       "runFinishedAt": "2026-05-23T00:00:00Z",
       "summary": "Simplify-to-doc (stochastic sweep-2026-05-23-r30 Round 2, parent-expanded child workflow): SIMP-017-001 fixed. Extracted claimAlert(id, now) bool helper to consolidate 7 inline dedup-acquire patterns (Lock/check known[id]/record/Unlock) in Sync() across all 7 source loops (USGS earthquake/volcano, NWS, NOAA tsunami, InciWeb wildfire, AirNow AQI, GDACS). Behavior-preserving (defer Unlock matches original critical-section boundary). LOC 1815->1788. Race detector clean: TestSync_Deduplication, TestSync_ConcurrentWithLiveKnownMapWrites, TestKnownMapEviction, TestConcurrentSyncHealth, TestConcurrentCloseHealth all pass. Full alerts suite green under -race (4.953s). go build ./... clean. No spec content changed; certification preserved."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runFinishedAt": "2026-05-24T00:13:00Z",
+      "summary": "Regression-to-doc (stochastic sweep-2026-05-23-r30 Round 12, parent-expanded child workflow): REG-017-001 found and fixed via BUG-017-002. Framework upgrade on 2026-05-12 (commit 3037eb8c) tightened traceability-guard.sh G068 matcher (word-length floor 4->3, trimmed stop list). Under v3.8.0, Scope 03 SCN-GA-NWS-002 lost faithful DoD mapping (existing bullets scored 2/3 required overlap and lacked trace ID). Artifact-only fix: inserted 1 scenario-prefix DoD bullet for SCN-GA-NWS-002 into scopes.md Scope 03 between existing 'Event types classified' and '17 unit tests pass' bullets. All other bullets byte-identical. Underlying behavior (mapNWSSeverity + classifyNWSEventType) was already delivered since 2026-04-11 and continuously tested. Post-fix: traceability-guard PASS (13/13 mapped, 0 unmapped), artifact-lint PASS (parent + bug), go test PASS (175 tests, 7.358s), race subset clean (1.334s). Spec status preserved (done); certification preserved."
     }
   ]
 }

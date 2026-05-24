@@ -220,6 +220,8 @@ Scenario: SCN-GA-NWS-002 NWS severity and event classification
   > Evidence: `mapNWSSeverity()` maps Extreme→extreme, Severe→severe, Moderate→moderate, Minor→minor, Unknown→minor; TestMapNWSSeverity covers all cases
 - [x] Event types classified (tornado, hurricane, flood, winter storm, heat, etc.)
   > Evidence: `classifyNWSEventType()` classifies 20+ event patterns into 8 categories (tornado, hurricane, flood, winter_storm, thunderstorm, heat, cold, fire); TestClassifyNWSEventType verifies
+- [x] Scenario "SCN-GA-NWS-002 NWS severity and event classification": NWS severity (Extreme/Severe/Moderate/Minor) and event_type (tornado, winter_storm, heat, etc.) are classified together for each NWS alert per the SCN-GA-NWS-002 example table
+  > Evidence: `alerts.go::mapNWSSeverity()` + `alerts.go::classifyNWSEventType()` jointly satisfy SCN-GA-NWS-002; TestMapNWSSeverity (Extreme→extreme, Severe→severe, Moderate→moderate, Minor→minor, Unknown→minor) and TestClassifyNWSEventType (tornado, winter_storm, heat, hurricane, flood, thunderstorm, cold, fire) PASS in `internal/connector/alerts/alerts_test.go`
 - [x] 17 unit tests pass (exceeds requirement of 10+3)
   > Evidence: 17 NWS-specific test functions all pass via `./smackerel.sh test unit`; includes httptest-based integration-style tests (TestSync_WeatherAlertsOnly, TestSync_WeatherAlertDeduplication, TestSync_NWSHTTPError_SetsDegraded)
 
