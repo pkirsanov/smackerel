@@ -1,0 +1,123 @@
+{
+  "bugId": "BUG-002-005-reconcile-artifact-drift",
+  "version": 1,
+  "generatedAt": "2026-05-24T00:00:00Z",
+  "parentSpec": "specs/002-phase1-foundation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-002-005-SCN-001",
+      "scope": "scope-1",
+      "title": "Planning specialist dispatch records restored to executionHistory (Check 6A)",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/002-phase1-foundation/state.json",
+          "function": "python3 -c 'import json; d=json.load(open(\"specs/002-phase1-foundation/state.json\")); agents=[e[\"agent\"] for e in d[\"executionHistory\"]]; assert all(a in agents for a in [\"bubbles.analyst\",\"bubbles.design\",\"bubbles.plan\",\"bubbles.finalize\"])'",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/002-phase1-foundation/state.json",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -cE '^🔴 BLOCK.*Check 6A|Planning specialist'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/002-phase1-foundation/state.json::executionHistory[20-24]"
+      ],
+      "linkedDoD": "Scope 1 DoD: state.json executionHistory backfilled with 5 strict-provenance entries — Scenario 'SCN-001 Planning specialist dispatch records restored to executionHistory (Check 6A)'."
+    },
+    {
+      "scenarioId": "BUG-002-005-SCN-002",
+      "scope": "scope-1",
+      "title": "Regression E2E DoD bullets + Test Plan rows added to scopes 9-25 (Check 8A)",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/002-phase1-foundation/scopes.md",
+          "function": "grep -c 'Scenario-specific E2E regression tests for EVERY' specs/002-phase1-foundation/scopes.md  # → >= 17 (one per scope 9-25)",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/002-phase1-foundation/scopes.md",
+          "function": "grep -c '| Regression E2E |' specs/002-phase1-foundation/scopes.md  # → >= 17 (one Test Plan row per scope 9-25)",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/002-phase1-foundation/scopes.md",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -cE '^🔴 BLOCK.*Check 8A|regression E2E'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/002-phase1-foundation/scopes.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: Regression E2E Test Plan rows + DoD bullets added to scopes 9-25 — Scenario 'SCN-002 Regression E2E DoD bullets + Test Plan rows added to scopes 9-25 (Check 8A)'."
+    },
+    {
+      "scenarioId": "BUG-002-005-SCN-003",
+      "scope": "scope-1",
+      "title": "Change Boundary section added to scopes.md (Check 8D)",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/002-phase1-foundation/scopes.md",
+          "function": "grep -c '^## Change Boundary' specs/002-phase1-foundation/scopes.md  # → 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/002-phase1-foundation/scopes.md",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -cE '^🔴 BLOCK.*Check 8D|Change Boundary'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/002-phase1-foundation/scopes.md (EOF Change Boundary section)"
+      ],
+      "linkedDoD": "Scope 1 DoD: Change Boundary section added to scopes.md with Allowed/Excluded enumeration — Scenario 'SCN-003 Change Boundary section added to scopes.md (Check 8D)'."
+    },
+    {
+      "scenarioId": "BUG-002-005-SCN-004",
+      "scope": "scope-1",
+      "title": "BUG-002-005 packet artifacts pass own gates",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/state.json",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift 2>&1 | grep -cE '^🔴 BLOCK'  # → 0",
+          "type": "guard-execution"
+        },
+        {
+          "file": "specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/scopes.md",
+          "function": "bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift 2>&1 | tail -1  # → Artifact lint PASSED.",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/"
+      ],
+      "linkedDoD": "Scope 1 DoD: BUG-002-005 packet authored with 8 artifacts; all 4 guards exit 0 on bug packet — Scenario 'SCN-004 BUG-002-005 packet artifacts pass own gates'."
+    },
+    {
+      "scenarioId": "BUG-002-005-SCN-005",
+      "scope": "scope-1",
+      "title": "Single atomic commit with structured prefix satisfies Check 17 and respects Change Boundary",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/report.md",
+          "function": "git log --oneline -1 --format=%s | grep -cE '^spec\\(002\\)|^bubbles\\(002/bug-002-005\\):'  # → 1 (evidence captured in BUG report.md Git-Backed Proof block)",
+          "type": "git-history"
+        },
+        {
+          "file": "specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/report.md",
+          "function": "git diff --name-only HEAD~1 | grep -vE '^specs/002-phase1-foundation/' | wc -l  # → 0 (Change Boundary respected; evidence in BUG report.md commit-discipline subsection)",
+          "type": "commit-discipline"
+        }
+      ],
+      "evidenceRefs": [
+        "git log --oneline -1"
+      ],
+      "linkedDoD": "Scope 1 DoD: Single atomic commit with subject prefix `spec(002):` or `bubbles(002/bug-002-005):` lands all changes; commit --name-status confirms zero stray files — Scenario 'SCN-005 Single atomic commit with structured prefix satisfies Check 17 and respects Change Boundary'."
+    }
+  ]
+}

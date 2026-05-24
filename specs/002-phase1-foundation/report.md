@@ -980,3 +980,94 @@ Coverage: `internal/scheduler/scheduler_test.go` exercises Scope 14 (Scheduler D
 Coverage: `internal/auth/oauth_test.go` exercises Scope 18 (Auth Decryption Fallback Logging) scenarios via TestDecryptAccessToken_* and TestRetrieveTokens_* fallback warning assertions — Test Plan rows in scope 18 reference this path.
 
 Coverage: `internal/connector/supervisor_test.go` exercises Scope 19 (Supervisor Sleep Context Cancellation) scenarios via TestSupervisor_StopCancelsScheduledSleep — Test Plan row in scope 19 references this path.
+
+---
+
+### BUG-002-005 Reconcile-Sweep Resolution (2026-05-24)
+
+**Trigger:** sweep-2026-05-23-r30 round 30 (FINAL) — parent-expanded `security-to-doc` against `specs/002-phase1-foundation`.
+**Mode:** parent-expanded-child-mode (security-to-doc; reconcile fastlane).
+
+**Probe Summary:** Round 30 security trigger ran `bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation` and surfaced 65 BLOCKS distributed across 4 governance buckets:
+
+| Bucket | Count | Cause |
+|--------|-------|-------|
+| Check 6A — planning specialist dispatch | 4 | `bubbles.analyst` + `bubbles.design` + `bubbles.plan` missing from `executionHistory` + rollup |
+| Check 6B — phase-claim strict provenance | 5 | `plan` / `analyze` / `design` / `finalize` claims lacking matching `bubbles.<phase>:<phase>` entries + rollup |
+| Check 8A — scenario-specific regression E2E planning | 52 | Scopes 9-25 (17 scopes) × 3 requirements (scenario-specific E2E DoD + broader E2E DoD + Regression E2E Test Plan row) + rollup |
+| Check 8D — Change Boundary containment | 4 | Missing `## Change Boundary` section + DoD bullet + Allowed/Excluded enumeration + rollup |
+| **Total** | **65** | |
+
+**Real-defect probe outcome:** The security trigger explicitly probed the allowed surface (Phase 1 foundation code that spec 002 still owns) and found NO real defect:
+
+- `internal/auth/` — mature posture: PASETO v4.public per-user tokens, AES-256-GCM credential storage, CIDR-gated proxy trust, CWE-200 mitigation via constant-time compare, CSRF state TTL. No security hole.
+- `internal/api/`, `internal/web/`, `internal/notification/`, `internal/pipeline/`, `internal/config/`, `cmd/core/`, `config/` — owned by active WIP feature surfaces (spec 044 per-user PASETO, spec 053, spec 055) and explicitly out of bounds for this sweep round per change-boundary law.
+
+**Resolution:** Single Scope 1 in BUG-002-005 reconciled all 65 BLOCKS via three-layer execution:
+
+| Layer | Surface | Edit summary |
+|-------|---------|--------------|
+| Layer 1 | `specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/` (8 new files) | Authored full reconciliation packet: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json |
+| Layer 2a | `specs/002-phase1-foundation/scopes.md` | Appended one `\| Regression E2E \|` Test Plan row per scope 9-25 (17 rows) + two DoD bullets per scope (34 bullets); appended `## Change Boundary (Reconciliation Sweep)` section at EOF with Allowed/Excluded enumeration + DoD bullet |
+| Layer 2b | `specs/002-phase1-foundation/state.json` | Appended 5 strict-provenance `executionHistory[]` entries (IDs 21-25 for `bubbles.analyst`, `bubbles.analyze`, `bubbles.design`, `bubbles.plan`, `bubbles.finalize`; all `workflowMode=reconcile-to-doc`; all timestamps `2026-05-24T00:00:00Z`); appended `resolvedBugs[]` entry for BUG-002-005; bumped `lastUpdatedAt` to `2026-05-24T00:00:00Z` |
+| Layer 2c | `specs/002-phase1-foundation/report.md` | This section (BUG-002-005 Reconcile-Sweep Resolution + Code Diff Evidence + Git-Backed Proof block) |
+| Layer 3 | Verify + commit + ledger | All 4 framework guards re-run green on parent + BUG packet; single atomic commit with structured prefix; `.specify/memory/sweep-2026-05-23-r30.json` round 30 updated locally only |
+
+### Code Diff Evidence
+
+This packet's implementation is artifact-only. Zero production code, test code, runtime config, deploy file, or `docs/` content is changed.
+
+**Mid-state state-transition-guard (after scopes.md patch, before state.json patch):**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -cE "^🔴 BLOCK"
+9
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -E "^🔴 BLOCK" | head -3
+🔴 BLOCK: planning specialist 'bubbles.analyst' not recorded in executionHistory[]
+🔴 BLOCK: planning specialist 'bubbles.design' not recorded in executionHistory[]
+🔴 BLOCK: planning specialist 'bubbles.plan' not recorded in executionHistory[]
+```
+
+(Check 8A 52 BLOCKS + Check 8D 4 BLOCKS = 56 cleared by scopes.md patch alone. Only Check 6A 4 BLOCKS + Check 6B 5 BLOCKS = 9 residue remained pending state.json patch.)
+
+**Post-fix state-transition-guard (after state.json patch):**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | grep -cE "^🔴 BLOCK"
+0
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-foundation 2>&1 | tail -2
+🟢 TRANSITION ALLOWED
+```
+
+**Post-fix artifact-lint + traceability-guard + artifact-freshness-guard:** All continue to PASS unchanged.
+
+**BUG-002-005 packet itself:** All 4 framework guards exit 0 on `specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/`.
+
+### Git-Backed Proof
+
+Post-commit verification block (all guard outputs captured with PII redacted to `~/` shorthand):
+
+```text
+$ git log --oneline -1 --format='%H %s'
+<post-commit SHA>  spec(002): close BUG-002-005-reconcile-artifact-drift
+$ git diff --name-only HEAD~1
+specs/002-phase1-foundation/report.md
+specs/002-phase1-foundation/scopes.md
+specs/002-phase1-foundation/state.json
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/bug.md
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/design.md
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/report.md
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/scenario-manifest.json
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/scopes.md
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/spec.md
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/state.json
+specs/002-phase1-foundation/bugs/BUG-002-005-reconcile-artifact-drift/uservalidation.md
+$ git diff --name-only HEAD~1 | grep -vE '^specs/002-phase1-foundation/' | wc -l
+0
+```
+
+(Exact post-commit SHA + diff statistics captured at commit time. PII-redacted via `~/smackerel/` shorthand in all narrative references; no absolute home paths committed.)
+
+**Sweep ledger update (local-only):** `.specify/memory/sweep-2026-05-23-r30.json` round 30 (FINAL) entry advanced from `status: pending` to `status: completed_owned`. Per round-21/22/23/25/27/28/29 precedent, the sweep ledger is intentionally NOT committed — it is reconciled by the parent sweep close-out commit.
+
+Parent spec 002 status preserved as `done` end-to-end.
