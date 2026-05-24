@@ -326,3 +326,52 @@ go vet ./internal/connector/maps/... — Exit Code: 0
 - **Findings closed this round:** DEVOPS-D01 (mechanical doc drift recorded inline; no scope/DoD/certification changes).
 - **Concerns logged for follow-up:** DEVOPS-D02 (Maps-specific operator runbook → `bubbles.docs`).
 - **Spec 011 certification status:** unchanged (`done`).
+
+## Stochastic Quality Sweep — Gaps Probe (2026-05-24, round 17, sweep-2026-05-23-r30)
+
+**Workflow:** `mode: gaps-to-doc` (parent-expanded child workflow mode — runtime lacks nested `runSubagent`).
+**Owner:** `bubbles.gaps` (probe) + `bubbles.workflow` (orchestration).
+
+### Probe Coverage
+
+| Gap Dimension | Result |
+|---|---|
+| Race tests (`go test -race -count=1 ./internal/connector/maps/`) | PASS — `ok` 1.394s, 184 test functions |
+| `go vet ./internal/connector/maps/...` | PASS — exit 0 |
+| TODO/FIXME/HACK/STUB markers in non-test files | 0 |
+| `context.TODO` / `panic` / `os.Exit` in hot paths | 0 |
+| `os.Getenv` / `||` / `??` default fallbacks (SST) | 0 |
+| Connector registration (`cmd/core/connectors.go`) | wired (lines 39, 154–155) |
+| PostSync orchestration in `Sync` (`connector.go`) | wired (line 374) |
+| Observability (`metrics.ConnectorSync`) | inherited via `supervisor.go` (error + success label paths) |
+| Bug closure | BUG-001-maps-enabled-flag-ignored = `done`; BUG-011-001-dod-scenario-fidelity-gap = `done` |
+| Migration drift (`location_clusters`) | consolidated into `001_initial_schema.sql:321-339` (DEVOPS-D01 round 7 closure holding) |
+| DoD-trace fidelity (`traceability-guard.sh` Gate G068) | **6 findings → all closed in-round** |
+
+### Findings & Closure
+
+| Finding ID | Scenario | Closure |
+|---|---|---|
+| GAPS-T01 | SCN-MT-004 (Normalizer produces RawArtifact with full metadata) | DoD-trace-prefix rewrite in `scopes.md` Scope 01 |
+| GAPS-T02 | SCN-MT-005 (Cursor-based incremental sync skips processed files) | DoD-trace-prefix rewrite in `scopes.md` Scope 01 |
+| GAPS-T03 | SCN-MT-008 (GeoJSON route stored correctly in metadata) | DoD-trace-prefix rewrite in `scopes.md` Scope 02 |
+| GAPS-T04 | SCN-MT-010 (Dedup hash distinguishes nearby but different activities) | DoD-trace-prefix rewrite in `scopes.md` Scope 02 |
+| GAPS-T05 | SCN-MT-012 (Processed files are archived) | DoD-trace-prefix rewrite in `scopes.md` Scope 02 |
+| GAPS-T06 | SCN-MT-013 (Location clusters populated during sync) | DoD-trace-prefix rewrite in `scopes.md` Scope 02 |
+
+Closure pattern: added `Scenario SCN-MT-NNN (<title>): <expanded behavioral claim>` prefix to the already-evidenced DoD bullet (iter-10 trace-cleanup precedent). No code changes, no certification changes — pure planning-artifact fidelity fix.
+
+### Post-Fix Verification
+
+```text
+bash .github/bubbles/scripts/traceability-guard.sh specs/011-maps-connector
+ℹ️  DoD fidelity: 21 scenarios checked, 21 mapped to DoD, 0 unmapped
+RESULT: PASSED (0 warnings)
+```
+
+### Round Outcome
+
+- **Gap surface coverage:** complete across race, vet, dead-code markers, hot-path safety, SST/no-defaults, wiring, observability, bug closure, migration drift, and DoD-trace fidelity.
+- **Findings closed this round:** 6/6 (GAPS-T01..06).
+- **Bugs spawned:** 0 (planning-artifact fidelity fix only).
+- **Spec 011 certification status:** unchanged (`done`).

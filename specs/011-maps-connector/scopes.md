@@ -235,13 +235,13 @@ Scenario: SCN-MT-006 Activities below minimum thresholds are skipped
   > Evidence: TestConnectMissingImportDir, TestConnectEmptyImportDir, TestParseMapsConfigNegativeMinDistance PASS
 - [x] Scenario SCN-MT-003 (Takeout JSON parsing produces classified activities): `Sync()` orchestrates cursor parse → find new files → parse → filter → normalize → return artifacts + cursor so a Takeout Semantic Location History JSON file produces RawArtifacts with `SourceID="google-maps-timeline"` and ContentType `activity/{walk|hike|cycle|drive|run|transit}` matching each activity classification
   > Evidence: TestSyncProducesArtifacts, TestSyncCursorSkipsProcessed, TestNormalizeAllActivityTypes, TestSyncMultiActivityTypeDistribution PASS
-- [x] `NormalizeActivity()` produces `RawArtifact` with all 17 metadata fields per R-007
+- [x] Scenario SCN-MT-004 (Normalizer produces RawArtifact with full metadata): `NormalizeActivity()` converts a parsed TakeoutActivity into a RawArtifact whose SourceID equals "google-maps-timeline", ContentType matches the classified activity (e.g. `activity/hike`), CapturedAt mirrors the activity StartTime, Title is formatted as `"{Type} — {distance}km, {duration}min"`, and Metadata contains all 17 fields per R-007 including `trail_qualified` and `waypoint_count`
   > Evidence: TestNormalizeActivityMetadata PASS — asserts 17 fields
 - [x] Title formatted as `"{Type} — {distance}km, {duration}min"` for all 6 types
   > Evidence: TestNormalizeActivityTitle, TestNormalizeAllActivityTypes PASS
 - [x] `assignTier()` returns `full` for trail-qualified, `standard` for drive/transit/short
   > Evidence: TestAssignTierTrailFull PASS
-- [x] Cursor management: pipe-delimited filenames, empty cursor → full scan, populated cursor → incremental
+- [x] Scenario SCN-MT-005 (Cursor-based incremental sync skips processed files): cursor management uses pipe-delimited processed filenames so an empty cursor triggers a full scan, a populated cursor like `"jan.json|feb.json"` causes only `mar.json` to be parsed when the import directory contains jan/feb/mar, and the returned cursor is appended (e.g. `"jan.json|feb.json|mar.json"`) while RawArtifacts come only from the newly parsed file
   > Evidence: TestSyncCursorSkipsProcessed, TestSyncEmptyCursorFullScan, TestParseCursor, TestEncodeCursor PASS
 - [x] Scenario SCN-MT-006 (Activities below minimum thresholds are skipped): activities below `min_distance_m` and `min_duration_min` are filtered out so only activities passing both thresholds appear in the returned RawArtifacts while the file is still marked processed in the cursor
   > Evidence: TestSyncMinThresholdFiltering PASS, TestSyncAllFilteredStillAdvancesCursor PASS
@@ -383,17 +383,17 @@ Scenario: SCN-MT-013 Location clusters populated during sync
 
 ### Definition of Done
 
-- [x] `computeDedupHash()` implemented: rounds coords to ~500m grid, SHA-256, returns 16-char hex prefix
+- [x] Scenario SCN-MT-010 (Dedup hash distinguishes nearby but different activities): `computeDedupHash()` rounds start/end coords to a ~500m grid, composes `"{date}:{startLat},{startLng}:{endLat},{endLng}"`, SHA-256s it, and returns a 16-char hex prefix so two same-date walks sharing a start cluster but ending >500m apart hash to different values while activities within the same date+grid hash to the same value
   > Evidence | **Phase:** implement — TestComputeDedupHash, TestDedupHashDistinguishesNearby, TestDedupHashSameGridSameHash PASS (already implemented in Scope 1, Scope 2 adds adversarial tests)
 - [x] Trail-qualified activities produce enriched metadata: trail_qualified=true, route_geojson, elevation, distance, duration
   > Evidence | **Phase:** implement — TestTrailQualifiedEnrichment PASS: hike 8.3km → trail_qualified=true, tier=full, route_geojson LineString with 12 coords, distance_km=8.3, duration_min=142
-- [x] GeoJSON routes stored as LineString in metadata, with fallback to 2-point for routeless activities
+- [x] Scenario SCN-MT-008 (GeoJSON route stored correctly in metadata): the normalizer writes `Metadata["route_geojson"]` as a GeoJSON LineString so a 12-waypoint activity yields 12 coordinate pairs in `[longitude, latitude]` order (GeoJSON convention), and a routeless activity that still carries start/end locations yields a 2-point LineString built from those two coordinates
   > Evidence | **Phase:** implement — TestGeoJSONRouteStorage PASS: 12 waypoints → LineString [lng,lat] coords. TestGeoJSONFallbackTwoPoint PASS: routeless activity → empty LineString (no start/end fields in TakeoutActivity without route; maps.go change boundary respected)
 - [x] `009_maps.sql` migration creates `location_clusters` table with correct schema and 3 indexes
   > Evidence | **Phase:** implement — internal/db/migrations/009_maps.sql created: location_clusters table with 12 columns, 3 indexes (route, day, date). embed.FS auto-discovers. Integration tests (T-2-11, T-2-12) pending live DB.
-- [x] `location_clusters` rows populated for every synced activity with correctly rounded coordinates
+- [x] Scenario SCN-MT-013 (Location clusters populated during sync): every synced activity inserts a row into `location_clusters` via `InsertLocationCluster()` with start/end coordinates rounded to the ~500m clustering grid by `roundToGrid()` and with `day_of_week` and `departure_hour` derived from the activity start time, so processing 10 activities produces 10 rows (subject to `ON CONFLICT DO NOTHING` idempotency)
   > Evidence | **Phase:** implement — InsertLocationCluster() wired into Sync loop with ON CONFLICT DO NOTHING. Uses roundToGrid() for ~500m clustering. Integration test (T-2-13) pending live DB.
-- [x] File archiving moves processed files to `{import_dir}/archive/` when enabled, no-op when disabled
+- [x] Scenario SCN-MT-012 (Processed files are archived): when `archive_processed=true`, after a successful Sync the source JSON is moved into `{import_dir}/archive/` (the archive subdirectory is auto-created if missing); when `archive_processed=false` the file remains in place and cursor state alone prevents reprocessing
   > Evidence | **Phase:** implement — TestArchiveFile PASS: file moved to archive/, dir auto-created. TestArchiveDisabled PASS: file remains, no archive dir created.
 - [x] Dedup prevents duplicate artifacts when same activities appear in different Takeout export files
   > Evidence | **Phase:** implement — computeDedupHash() used as SourceRef for pipeline dedup. ON CONFLICT DO NOTHING in location_clusters. Integration test (T-2-14) pending live DB.
