@@ -674,3 +674,30 @@ Coverage: `internal/connector/bookmarks/topics_test.go` exercises SCN-BK-008 (Fo
 Coverage: `tests/e2e/test_bookmark_import.sh` exercises SCN-BK-006 (cross-browser dedup) and SCN-BK-010 (full pipeline) — Test Plan rows T-2-18 and T-2-19 corrected to point at this existing shell-based e2e instead of a never-created Go file.
 
 Coverage: `tests/integration/bookmarks_dedup_test.go` and `tests/integration/bookmarks_topics_test.go` exercise SCN-BK-006/008/009 via TestFilterNew_*, TestIsKnown_ReturnsTrueForExistingURL, TestTopicMapper_ExactMatch/CreatesNewTopic/HierarchicalPath. Test Plan rows T-2-13 through T-2-17 corrected to point at these existing per-feature integration files instead of a never-created `tests/integration/bookmarks_test.go`.
+
+### Chaos R30 — NormalizeURL hardening (2026-05-23)
+
+**Trigger:** stochastic-quality-sweep `sweep-2026-05-23-r30`, round 14 (parent-expanded child workflow mode `chaos-hardening`).
+**Bug:** [BUG-009-002-normalize-url-chaos-r30](bugs/BUG-009-002-normalize-url-chaos-r30/spec.md) — status `done`.
+
+Adversarial chaos probe of `internal/connector/bookmarks/dedup.go::NormalizeURL` against control-byte / default-port / trailing-dot input shapes surfaced three previously-uncaught defects on this already-`done` spec:
+
+| Finding | Severity | Defect | Status |
+|---|---|---|---|
+| F-CHAOS-R30-001 | HIGH | ASCII control characters (`0x00`-`0x1F`, `0x7F`) survived into `SourceRef`, enabling PG `INSERT` failure on NUL (silent capture loss), log injection via `\n`/`\r` in structured-log fields, and dedup miss when an attacker introduces control-char variants of the same URL. | Fixed |
+| F-CHAOS-R30-002 | MEDIUM | Default protocol ports (`:80` for http, `:443` for https, `:21` for ftp) were preserved, causing canonically-equivalent URLs to dedup as two distinct artifacts. | Fixed |
+| F-CHAOS-R30-003 | MEDIUM | Trailing DNS-root dot on the hostname (`example.com.`) was preserved, causing the same dedup-miss class as R30-002. | Fixed |
+
+**Fix scope (boundary):** `internal/connector/bookmarks/dedup.go` (new `stripURLControlChars` helper + ordered host-canonicalisation block: trailing-dot strip → `www.` strip → default-port elision with IPv6 bracket re-add) and `internal/connector/bookmarks/dedup_test.go` (6 new adversarial regression tests / 27 sub-cases). No DB schema, no connector contract, no config change.
+
+**Adversarial fidelity proof:** Reverting the `stripURLControlChars` call in `NormalizeURL` causes `TestChaosR30_NormalizeURLStripsControlChars`, `TestChaosR30_ToRawArtifactsRejectsNULInSourceRef`, and `TestChaosR30_ControlCharVariantsDedup` to FAIL with concrete control-byte offset diagnostics; restoring the call returns the suite to green. Full transcript in [BUG-009-002 report](bugs/BUG-009-002-normalize-url-chaos-r30/report.md).
+
+**Verification:**
+
+```
+$ go test ./internal/connector/bookmarks/... -count=1
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.109s
+
+$ go vet ./internal/connector/bookmarks/...
+(no output — clean)
+```

@@ -24,11 +24,19 @@ var trackingParams = map[string]bool{
 }
 
 // NormalizeURL lowercases scheme+host, strips trailing slash, and removes tracking params.
-// Path casing is preserved. Invalid URLs are returned as-is.
+// Path casing is preserved. Invalid URLs are returned as-is (after control-char stripping).
 func NormalizeURL(rawURL string) string {
 	if rawURL == "" {
 		return rawURL
 	}
+
+	// F-CHAOS-R30-001: Strip ASCII control characters (0x00-0x1F, 0x7F) before parsing.
+	// Embedded NUL/CR/LF/TAB in URLs would otherwise survive url.Parse and produce:
+	//   - log injection via slog when the URL is included in structured log fields
+	//   - PostgreSQL INSERT failure on NUL bytes (text columns reject 0x00),
+	//     blocking the artifact row and short-circuiting all dedup checks for the file
+	//   - dedup miss when an attacker introduces \n/\r/\t variants of the same URL
+	rawURL = stripURLControlChars(rawURL)
 
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -42,9 +50,33 @@ func NormalizeURL(rawURL string) string {
 	// F-CHAOS-R24-002: Strip userinfo to prevent credential leaks into SourceRef.
 	u.User = nil
 
+	// F-CHAOS-R30-002/003: Canonicalise host — strip trailing DNS-root dot,
+	// strip www. prefix, and elide default ports (:80 for http, :443 for https,
+	// :21 for ftp) so equivalent URLs hash to one SourceRef instead of several.
+	hostname := strings.TrimRight(u.Hostname(), ".")
 	// IMP-009-R-002: Strip www. prefix for consistent dedup across www/non-www variants.
-	if strings.HasPrefix(u.Host, "www.") {
-		u.Host = u.Host[4:]
+	if strings.HasPrefix(hostname, "www.") {
+		hostname = hostname[4:]
+	}
+	port := u.Port()
+	if port != "" {
+		defaultPorts := map[string]string{
+			"http":  "80",
+			"https": "443",
+			"ftp":   "21",
+		}
+		if def, ok := defaultPorts[u.Scheme]; ok && def == port {
+			port = ""
+		}
+	}
+	// Re-add brackets for IPv6 literals when reassembling.
+	if strings.Contains(hostname, ":") {
+		hostname = "[" + hostname + "]"
+	}
+	if port != "" {
+		u.Host = hostname + ":" + port
+	} else {
+		u.Host = hostname
 	}
 
 	// Strip trailing slash from path (unless path is just "/")
@@ -157,4 +189,31 @@ func (d *URLDeduplicator) IsKnown(ctx context.Context, normalizedURL string) (bo
 		return false, fmt.Errorf("dedup check: %w", err)
 	}
 	return exists, nil
+}
+
+// stripURLControlChars removes ASCII control characters (0x00-0x1F and 0x7F)
+// from a URL string. Used by NormalizeURL (F-CHAOS-R30-001) to prevent
+// embedded NUL/CR/LF/TAB bytes from surviving into SourceRef.
+func stripURLControlChars(s string) string {
+	hasControl := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == 0x7F {
+			hasControl = true
+			break
+		}
+	}
+	if !hasControl {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == 0x7F {
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
