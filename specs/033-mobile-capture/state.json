@@ -161,12 +161,37 @@
       "runStartedAt": "2026-05-09T05:00:00Z",
       "runEndedAt": "2026-05-09T05:10:00Z",
       "summary": "Authored 3 Gherkin scenarios across scopes 1, 3, 6 (SCN-MC-008 PWA manifest share target + installable shell, SCN-MC-009 Chrome extension popup title/URL with persisted auth token, SCN-MC-010 Firefox extension WebExtension polyfill + Chrome parity) to close trace-guard residuals. Reused existing scenario-manifest.json IDs. Added Use Cases (Gherkin) and Test Plan subsections referencing web/pwa/manifest.json, web/pwa/sw.js, web/extension/manifest.json, web/extension/popup/popup.js, web/extension/manifest.firefox.json, web/extension/lib/browser-polyfill.js. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "devops",
+        "bug-route",
+        "plan",
+        "implement",
+        "test",
+        "docs"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:50:00Z",
+      "summary": "SQS round 9 devops trigger (parent-expanded-child-mode, mappedMode=devops-to-doc): probed CI/CD/build/deploy/observability surfaces for spec 033. Found 1 finding (DEVOPS-033-003 — extension manifest parity not lint-protected); two historical GAP-F bugs (F01 Firefox missing alarms+host patterns, F03 mismatched CSP object-src) were closed by hand with no machine-checked contract preventing the next drift. Routed to BUG-033-001-extension-manifest-parity-not-lint-protected/ and closed end-to-end. Added internal/web/extension_parity_contract_test.go (511 LOC, package web) with 1 live-file test + 1 baseline-sanity test + 7 adversarial sub-tests (one per parity surface: missing-alarms, missing-host-pattern, mismatched-CSP-object-src, mismatched-name, mismatched-version, mismatched-description, extra-perm-in-chrome). Focused run 0.029s, full internal/web/... gate 0.083s, zero regressions. artifact-lint PASS; traceability-guard PASS; state-transition-guard verdict TRANSITION PERMITTED. Spec 033 status unchanged: done. PWA cache-busting and extension version parity confirmed non-findings (already correct). Spec 055 WIP boundary preserved via path-limited git add."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-033-001",
+      "path": "specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected",
+      "status": "resolved",
+      "resolvedAt": "2026-05-24T00:50:00Z",
+      "openedBy": "sweep-2026-05-23-r30 round 9 devops trigger",
+      "summary": "Extension manifest parity not lint-protected: added Go contract test (1 live + 1 baseline + 7 adversarial sub-tests) covering MV3/MV2 name/version/description/permissions/host-patterns/CSP-object-src parity invariants; closes GAP-F01 and GAP-F03 regression-protection gaps."
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-09T04:40:00Z",
+  "lastUpdatedAt": "2026-05-24T00:50:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

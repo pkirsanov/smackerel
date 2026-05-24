@@ -1,0 +1,93 @@
+{
+  "spec": "033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected",
+  "version": "1.0.0",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-033-B001",
+      "name": "Live extension manifests pass the parity contract",
+      "scope": "BUG-033-001-S1",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_LiveFiles",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_CanonicalBaselinePasses",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_LiveFiles",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_CanonicalBaselinePasses"
+      ],
+      "regressionProtected": true
+    },
+    {
+      "scenarioId": "SCN-033-B002",
+      "name": "Adversarial parity drift is rejected by the contract test",
+      "scope": "BUG-033-001-S1",
+      "evidenceRefs": [
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMissingAlarmsInFirefox",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMissingHostPatternInFirefox",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMismatchedCSPObjectSrc",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMismatchedName",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMismatchedVersion",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialExtraPermissionInChrome",
+          "status": "implemented"
+        },
+        {
+          "type": "test",
+          "file": "internal/web/extension_parity_contract_test.go",
+          "function": "TestExtensionManifestParity_AdversarialMismatchedDescription",
+          "status": "implemented"
+        }
+      ],
+      "status": "implemented",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMissingAlarmsInFirefox",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMissingHostPatternInFirefox",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMismatchedCSPObjectSrc",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMismatchedName",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMismatchedVersion",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialExtraPermissionInChrome",
+        "internal/web/extension_parity_contract_test.go::TestExtensionManifestParity_AdversarialMismatchedDescription"
+      ],
+      "regressionProtected": true
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "version": 3,
+  "specId": "033-mobile-capture",
+  "bugId": "BUG-033-001",
+  "featureDir": "specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected",
+  "featureName": "BUG-033-001 Extension manifest parity not lint-protected",
+  "parentSpec": "specs/033-mobile-capture/",
+  "title": "Browser extension Chrome MV3 + Firefox MV2 manifest parity has no machine enforcement (GAP-F01 + GAP-F03 regression class)",
+  "status": "resolved",
+  "workflowMode": "devops-to-doc",
+  "severity": "medium",
+  "class": "devops",
+  "discoveredBy": "sweep-2026-05-23-r30 round 9 (devops-to-doc)",
+  "discoveredAtHead": "a910f952fe55a506b85be6aea558ee0a70deb712",
+  "createdAt": "2026-05-23T22:30:00Z",
+  "completedAt": "2026-05-23T23:15:00Z",
+  "parentWorkflow": {
+    "mode": "stochastic-quality-sweep",
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 9,
+    "executionModel": "parent-expanded-child-mode",
+    "mappedMode": "devops-to-doc",
+    "trigger": "devops",
+    "findingLens": "web-asset cross-browser parity / contributor-experience drift",
+    "findingSurface": "web/extension/manifest.json + web/extension/manifest.firefox.json",
+    "findingHead": "a910f952fe55a506b85be6aea558ee0a70deb712"
+  },
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "done",
+    "currentScope": "BUG-033-001-S1",
+    "runStartedAt": "2026-05-23T22:30:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "resolved",
+    "completedScopes": [
+      "BUG-033-001-S1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.workflow",
+    "certifiedAt": "2026-05-23T23:15:00Z",
+    "auditorAgent": "bubbles.workflow",
+    "auditedAt": "2026-05-23T23:15:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Single-finding devops trigger closure. New contract test internal/web/extension_parity_contract_test.go (package web, 511 lines) with 9 sub-tests: 1 live-file (TestExtensionManifestParity_LiveFiles), 1 baseline sanity (TestExtensionManifestParity_CanonicalBaselinePasses), and 7 adversarial sub-tests covering each parity surface (alarms missing in Firefox / GAP-F01, host pattern missing in Firefox / GAP-F01 root cause, CSP object-src drift / GAP-F03, name drift, version drift, extra permission in Chrome, description drift). Each adversarial error message cites GAP-F01 / GAP-F03 by ID. Focused test green in 0.029s, full internal/web/... gate green in 0.083s with zero regressions. No manifest content changes (live manifests were already in lockstep — gap is enforcement, not content). Pattern matches BUG-049-001 (sibling devops-to-doc closure from sweep round 7).",
+    "scopeProgress": [
+      {
+        "scope": "BUG-033-001-S1",
+        "name": "Manifest parity contract test + adversarial regression suite",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-23T23:10:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-contract",
+      "source": "devops-to-doc-mode-default"
+    },
+    "validation": {
+      "mode": "contract-test-required",
+      "source": "devops-to-doc-mode-default"
+    }
+  },
+  "transitionRequests": [],
+  "scopes": [
+    {
+      "id": "BUG-033-001-S1",
+      "title": "Manifest parity contract test + adversarial regression suite",
+      "status": "Done",
+      "dod": {
+        "total": 11,
+        "checked": 11
+      }
+    }
+  ],
+  "scenarios": [
+    "SCN-033-B001",
+    "SCN-033-B002"
+  ],
+  "reworkQueue": []
+}
