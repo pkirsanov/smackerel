@@ -6,6 +6,7 @@
   "scenarios": [
     {
       "scenarioId": "SCN-TW-ARC-001",
+      "requiredTestType": ["unit"],
       "scope": "01-archive-parser",
       "title": "Parse tweets.js with JS wrapper",
       "gherkin": {
@@ -20,6 +21,7 @@
     },
     {
       "scenarioId": "SCN-TW-ARC-002",
+      "requiredTestType": ["unit"],
       "scope": "01-archive-parser",
       "title": "Parse like.js and bookmark.js",
       "gherkin": {
@@ -34,6 +36,7 @@
     },
     {
       "scenarioId": "SCN-TW-THR-001",
+      "requiredTestType": ["unit"],
       "scope": "02-thread-reconstruction",
       "title": "Reconstruct self-reply thread",
       "gherkin": {
@@ -48,6 +51,7 @@
     },
     {
       "scenarioId": "SCN-TW-THR-002",
+      "requiredTestType": ["unit"],
       "scope": "02-thread-reconstruction",
       "title": "Ignore replies to other users",
       "gherkin": {
@@ -62,6 +66,7 @@
     },
     {
       "scenarioId": "SCN-TW-NRM-001",
+      "requiredTestType": ["unit"],
       "scope": "03-normalizer-and-tier-assignment",
       "title": "Normalize tweet with full metadata",
       "gherkin": {
@@ -76,6 +81,7 @@
     },
     {
       "scenarioId": "SCN-TW-NRM-002",
+      "requiredTestType": ["unit"],
       "scope": "03-normalizer-and-tier-assignment",
       "title": "Tier assignment ladder",
       "gherkin": {
@@ -90,6 +96,7 @@
     },
     {
       "scenarioId": "SCN-TW-CONN-001",
+      "requiredTestType": ["unit"],
       "scope": "04-twitter-connector-and-config",
       "title": "Full archive import",
       "gherkin": {
@@ -104,6 +111,7 @@
     },
     {
       "scenarioId": "SCN-TW-CONN-002",
+      "requiredTestType": ["unit"],
       "scope": "04-twitter-connector-and-config",
       "title": "Dedup on re-import",
       "gherkin": {
@@ -118,6 +126,7 @@
     },
     {
       "scenarioId": "SCN-TW-LNK-001",
+      "requiredTestType": ["unit"],
       "scope": "05-tweet-link-extraction",
       "title": "Extract URLs into child artifacts",
       "gherkin": {
@@ -132,6 +141,7 @@
     },
     {
       "scenarioId": "SCN-TW-LNK-002",
+      "requiredTestType": ["unit"],
       "scope": "05-tweet-link-extraction",
       "title": "Cross-tweet URL dedup",
       "gherkin": {
@@ -146,6 +156,7 @@
     },
     {
       "scenarioId": "SCN-TW-API-001",
+      "requiredTestType": ["unit"],
       "scope": "06-api-client-opt-in",
       "title": "Bearer token authenticates the Twitter API client opt-in",
       "gherkin": {
@@ -160,6 +171,7 @@
     },
     {
       "scenarioId": "SCN-TW-API-002",
+      "requiredTestType": ["unit"],
       "scope": "06-api-client-opt-in",
       "title": "Hybrid mode merges archive and API tweets without duplicates",
       "gherkin": {
