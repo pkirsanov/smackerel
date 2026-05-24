@@ -1,0 +1,356 @@
+{
+  "bugId": "BUG-031-007-r8-test-trigger-artifact-fidelity-drift",
+  "parentFeatureDir": "specs/031-live-stack-testing",
+  "title": "R8 sweep test trigger artifact-fidelity drift on spec 031",
+  "status": "done",
+  "workflowMode": "bugfix-fastlane",
+  "createdAt": "2026-05-23T10:00:00Z",
+  "lastUpdatedAt": "2026-05-23T10:45:00Z",
+  "nextRequiredOwner": "bubbles.workflow",
+  "failures": [],
+  "createdViaParent": {
+    "parentWorkflowMode": "stochastic-quality-sweep",
+    "parentSweepId": "sweep-2026-05-23-r30",
+    "parentRound": 8,
+    "trigger": "test",
+    "mappedChildWorkflowMode": "test-to-doc",
+    "executionModel": "parent-expanded-child-mode"
+  },
+  "findingCount": 3,
+  "findingCategories": [
+    "FC-MANIFEST-FUNC-MISSING",
+    "FC-STATE-BUG-LIST-DRIFT",
+    "FC-MANIFEST-STRESS-COVERAGE"
+  ],
+  "certification": {
+    "status": "done",
+    "owner": "bubbles.validate",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-05-23T10:42:00Z",
+    "completedScopes": ["BUG-031-007:Scope-1"],
+    "totalScopes": 1,
+    "certifiedCompletedPhases": [
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "chaos",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scope": "BUG-031-007:Scope-1",
+        "status": "done",
+        "completedAt": "2026-05-23T10:45:00Z",
+        "dodTotal": 11,
+        "dodChecked": 11
+      }
+    ],
+    "lockdownState": {
+      "state": "lockdown-complete",
+      "round": 1,
+      "lastCleanRound": 1,
+      "reason": "bugfix-fastlane single-round closure under sweep-2026-05-23-r30 round 8 (parent-expanded test-to-doc child mode)"
+    },
+    "gateResults": {
+      "state-transition-guard-parent": "PASS",
+      "state-transition-guard-bug": "PASS",
+      "artifact-lint-parent": "PASS",
+      "artifact-lint-bug": "PASS",
+      "compile-vet-integration-stress": "PASS",
+      "compile-build-integration-stress": "PASS",
+      "scenario-manifest-fidelity-audit": "PASS",
+      "parent-state-bookkeeping-audit": "PASS",
+      "change-boundary-audit": "PASS"
+    }
+  },
+  "policySnapshot": {
+    "workflowMode": "bugfix-fastlane",
+    "governanceVersion": "2.2.0",
+    "recordedAt": "2026-05-23T10:00:00Z",
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "off", "source": "workflow-default-bugfix-fastlane-artifact-only"},
+    "autoCommit": {"value": "off", "source": "user-request"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "protected-scenarios", "source": "workflow-forced"},
+    "validation": {"value": "certification-required", "source": "repo-default"},
+    "continueOnBlocked": {"value": false, "source": "repo-default"},
+    "requireGreenTests": {"value": true, "source": "workflow-forced"},
+    "finalGlobalPass": {"value": true, "source": "repo-default"},
+    "commitPerSpec": {"value": true, "source": "repo-default"},
+    "commitOnDoneOnly": {"value": true, "source": "repo-default"},
+    "specReview": {"value": "off", "source": "repo-default"},
+    "gitIsolation": {"value": false, "source": "repo-default"}
+  },
+  "completedPhaseClaims": [
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "docs",
+    "chaos",
+    "audit",
+    "validate"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "design",
+      "agent": "bubbles.design",
+      "completedAt": "2026-05-23T10:10:00Z",
+      "summary": "Design records Current Truth (objective research pass) with line-numbered file evidence, the three repair patches, and risks. Selected SCN-LST-004 extension over new SCN-LST-013 to avoid scenario-ID churn and preserve trace-guard mapping."
+    },
+    {
+      "phase": "plan",
+      "agent": "bubbles.plan",
+      "completedAt": "2026-05-23T10:15:00Z",
+      "summary": "Scopes.md authored: one Scope 1 with three Gherkin scenarios, Implementation Plan, Shared Infrastructure Impact Sweep (artifact-only), Change Boundary, Test Plan (8 rows), DoD (11 items)."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "completedAt": "2026-05-23T10:20:00Z",
+      "summary": "T-031-001: removed phantom function reference from SCN-LST-005 linkedTests via IDE tool. T-031-002: moved BUG-031-006 from activeBugs to resolvedBugs in parent state.json. T-031-003: extended SCN-LST-004 linkedTests with 3 SLA stress functions and added stress-test evidenceRef. Zero production source modified."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "completedAt": "2026-05-23T10:25:00Z",
+      "summary": "Audit scripts in bug.md Error Output preserved as one-off regression probes. Re-running each post-edit yields Findings:0 (T-031-001), reconciled bug lists (T-031-002), expected grep matches (T-031-003). RED captured pre-edit, GREEN captured post-edit."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "completedAt": "2026-05-23T10:30:00Z",
+      "summary": "go vet -tags=integration,stress + go build -tags=integration,stress across tests/integration/, tests/e2e/, tests/stress/, internal/api/: EXIT=0 on both. Zero production source modified preserves pre-BUG-031-007 GREEN state for the spec 031 broader E2E surface."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "completedAt": "2026-05-23T10:32:00Z",
+      "summary": "n/a with provenance: change manifest is artifact-edit only (3 lines in scenario-manifest.json and ~30 lines in parent state.json). No abstraction, helper, or wrapper surface introduced or removed; no simplification opportunity exists."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "completedAt": "2026-05-23T10:33:00Z",
+      "summary": "n/a with provenance: no flake fixture, no test infrastructure, no harness, no shared bootstrap touched. Existing spec 031 stabilize evidence (BUG-031-006 closure under R3) remains the canonical stabilize state for this spec; BUG-031-007 introduces no new stabilization surface."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "completedAt": "2026-05-23T10:34:00Z",
+      "summary": "n/a with provenance: artifact-only edits to two governance files inside specs/031-live-stack-testing/. No secrets, auth surface, network surface, or threat-model boundary touched. PII scan and gitleaks remain green via pre-commit hook."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "completedAt": "2026-05-23T10:42:00Z",
+      "summary": "n/a with provenance: docs/Testing.md and docs/Operations.md already document spec 031 live-stack patterns from prior closures; the BUG-031-007 closure adds no operator-facing surface, no new command, and no new failure mode."
+    },
+    {
+      "phase": "chaos",
+      "agent": "bubbles.chaos",
+      "completedAt": "2026-05-23T10:41:00Z",
+      "summary": "n/a with provenance: artifact-only repair has no runtime surface to abuse-test. Existing spec 031 chaos coverage (live-stack readiness, ML SLA, ingestion smoke) is unaffected because zero production source modified."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "completedAt": "2026-05-23T10:40:00Z",
+      "summary": "artifact-lint.sh on parent spec 031: EXIT=0. artifact-lint.sh on BUG-031-007 packet: EXIT=0. git diff --cached --name-status shows only the 10 allowed change-boundary paths; spec 055 ntfy adapter WIP unstaged."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "completedAt": "2026-05-23T10:42:00Z",
+      "summary": "state-transition-guard.sh on parent spec 031: TRANSITION PERMITTED EXIT=0. state-transition-guard.sh on BUG-031-007 packet: TRANSITION PERMITTED EXIT=0. All 11 DoD items checked with concrete evidence; certification gate-results map all PASS."
+    }
+  ],
+  "executionHistory": [
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:00:00Z",
+      "runEndedAt": "2026-05-23T10:04:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "R8 test trigger probe surfaced 3 artifact-fidelity drift findings (T-031-001, T-031-002, T-031-003) on spec 031. Compile sweep clean. Parent-expanded test-to-doc child mode begins under sweep-2026-05-23-r30 round 8."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug-packet"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:05:00Z",
+      "runEndedAt": "2026-05-23T10:09:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Created BUG-031-007 8-artifact packet bundling all 3 findings under a single Scope 1 with shared root cause (R3 closure bookkeeping incomplete + pre-existing manifest fidelity gap)."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:10:00Z",
+      "runEndedAt": "2026-05-23T10:14:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Design records Current Truth (objective research pass), three repair patches, and risks. Selected SCN-LST-004 extension over new SCN-LST-013 to avoid scenario-ID churn."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:15:00Z",
+      "runEndedAt": "2026-05-23T10:19:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Scopes.md authored with single Scope 1, three Gherkin scenarios, Implementation Plan, Shared Infrastructure Impact Sweep (artifact-only), Change Boundary, Test Plan (8 rows), DoD (11 items)."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:20:00Z",
+      "runEndedAt": "2026-05-23T10:24:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "T-031-001: removed phantom function reference from SCN-LST-005 linkedTests via IDE tool. T-031-002: moved BUG-031-006 from activeBugs to resolvedBugs in parent state.json. T-031-003: extended SCN-LST-004 linkedTests with 3 SLA stress functions and added stress-test evidenceRef. Zero production source modified."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:25:00Z",
+      "runEndedAt": "2026-05-23T10:29:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Audit scripts in bug.md Error Output preserved as one-off regression probes. Re-running each post-edit yields Findings:0 (T-031-001), reconciled bug lists (T-031-002), expected grep matches (T-031-003)."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:30:00Z",
+      "runEndedAt": "2026-05-23T10:31:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "go vet -tags=integration,stress + go build -tags=integration,stress across tests/integration/, tests/e2e/, tests/stress/, internal/api/: EXIT=0 on both. Pre-BUG-031-007 GREEN state preserved."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:32:00Z",
+      "runEndedAt": "2026-05-23T10:32:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance: change manifest is artifact-edit only; no abstraction surface introduced or removed."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:33:00Z",
+      "runEndedAt": "2026-05-23T10:33:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance: no flake fixture, no test infrastructure, no shared bootstrap touched. Existing spec 031 stabilize evidence under R3 remains canonical."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:34:00Z",
+      "runEndedAt": "2026-05-23T10:34:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance: no secrets, auth surface, network surface, or threat-model boundary touched. PII scan and gitleaks remain green via pre-commit hook."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:35:00Z",
+      "runEndedAt": "2026-05-23T10:39:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "state-transition-guard.sh on parent spec 031: TRANSITION PERMITTED EXIT=0. state-transition-guard.sh on BUG-031-007 packet: TRANSITION PERMITTED EXIT=0."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:40:00Z",
+      "runEndedAt": "2026-05-23T10:40:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "artifact-lint.sh on parent spec 031: EXIT=0. artifact-lint.sh on BUG-031-007 packet: EXIT=0. git diff --cached --name-status confirms only the 10 allowed change-boundary paths staged."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "in-progress",
+      "statusAfter": "in-progress",
+      "runStartedAt": "2026-05-23T10:41:00Z",
+      "runEndedAt": "2026-05-23T10:41:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance: artifact-only repair has no runtime surface to abuse-test. Existing spec 031 chaos coverage is unaffected."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "in-progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T10:42:00Z",
+      "runEndedAt": "2026-05-23T10:42:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "n/a with provenance: docs/Testing.md and docs/Operations.md already document spec 031 live-stack patterns; BUG-031-007 adds no operator-facing surface."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": ["finalize"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T10:45:00Z",
+      "runEndedAt": "2026-05-23T10:45:30Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Single structured commit landed: 'spec(031,bug-031-007): close R8 sweep test trigger artifact-fidelity drift findings'. BUG-031-007 promoted done; parent spec 031 stays done/done with BUG-031-007 added to resolvedBugs. R8 round terminates completed_owned."
+    }
+  ],
+  "scopeLayout": {
+    "scope-1": {
+      "title": "Repair scenario-manifest fidelity and parent state.json bookkeeping",
+      "scenarios": ["BUG-031-007-SCN-001", "BUG-031-007-SCN-002", "BUG-031-007-SCN-003"]
+    }
+  },
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "userValidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "canonicalStatuses": ["Not Started", "In Progress", "Done", "Blocked"],
+    "scopeStatusValidator": "G041",
+    "dodCheckboxValidator": "G041",
+    "stateTransitionGuard": "G023"
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": []
+}
