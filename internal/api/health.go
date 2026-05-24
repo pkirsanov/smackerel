@@ -578,34 +578,42 @@ func (d *Dependencies) mlClient() *http.Client {
 	return d.MLClient
 }
 
-// checkMLSidecar probes the ML sidecar health endpoint.
-func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) ServiceStatus {
-	if baseURL == "" {
-		return ServiceStatus{Status: "not_configured"}
-	}
-
+// probeHTTPGet issues a bounded GET against url and reports whether the
+// response status was 200 OK. The caller controls URL composition, success
+// translation, and any optional response fields; this helper owns the
+// shared timeout / request-build / transport / body-drain plumbing so the
+// two service-health probes below do not duplicate it (BUG-023-002).
+func probeHTTPGet(ctx context.Context, url string, client *http.Client) bool {
 	probeCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, baseURL+"/health", nil)
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, url, nil)
 	if err != nil {
-		return ServiceStatus{Status: "down"}
+		return false
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return ServiceStatus{Status: "down"}
+		return false
 	}
 	defer func() {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
 
-	if resp.StatusCode == http.StatusOK {
-		loaded := true
-		return ServiceStatus{Status: "up", ModelLoaded: &loaded}
+	return resp.StatusCode == http.StatusOK
+}
+
+// checkMLSidecar probes the ML sidecar health endpoint.
+func checkMLSidecar(ctx context.Context, baseURL string, client *http.Client) ServiceStatus {
+	if baseURL == "" {
+		return ServiceStatus{Status: "not_configured"}
 	}
-	return ServiceStatus{Status: "down"}
+	if !probeHTTPGet(ctx, baseURL+"/health", client) {
+		return ServiceStatus{Status: "down"}
+	}
+	loaded := true
+	return ServiceStatus{Status: "up", ModelLoaded: &loaded}
 }
 
 // checkOllama probes the Ollama health endpoint.
@@ -613,26 +621,8 @@ func checkOllama(ctx context.Context, ollamaURL string, client *http.Client) Ser
 	if ollamaURL == "" {
 		return ServiceStatus{Status: "not_configured"}
 	}
-
-	probeCtx, cancel := context.WithTimeout(ctx, healthAuxiliaryProbeTimeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, ollamaURL+"/api/tags", nil)
-	if err != nil {
+	if !probeHTTPGet(ctx, ollamaURL+"/api/tags", client) {
 		return ServiceStatus{Status: "down"}
 	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return ServiceStatus{Status: "down"}
-	}
-	defer func() {
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-	}()
-
-	if resp.StatusCode == http.StatusOK {
-		return ServiceStatus{Status: "up"}
-	}
-	return ServiceStatus{Status: "down"}
+	return ServiceStatus{Status: "up"}
 }
