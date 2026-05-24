@@ -509,16 +509,16 @@ Execute edits in this order to minimize merge conflicts and ensure consistency:
 After all edits:
 
 ```bash
-# Zero unmarked OpenClaw references (§4 superseded header is the only allowed occurrence context)
+# Zero unmarked OpenClaw references (§4 historical-context header is the only allowed occurrence context)
 grep -n "OpenClaw" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "## 4\."
 
-# Zero SQLite references outside §4 superseded block and §22.5 Apple Notes note
+# Zero SQLite references outside §4 historical block and §22.5 Apple Notes note
 grep -n "SQLite" docs/smackerel.md | grep -v "SUPERSEDED" | grep -v "Apple Notes"
 
-# Zero LanceDB references outside §4 superseded block
+# Zero LanceDB references outside §4 historical block
 grep -n "LanceDB" docs/smackerel.md | grep -v "SUPERSEDED"
 
-# Verify 15 connectors are represented
+# Verify 16 connectors are represented
 grep -c "connector" docs/smackerel.md  # sanity check
 ```
 

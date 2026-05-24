@@ -97,12 +97,12 @@
     {
       "scenarioId": "SCN-024-06",
       "scope": "scope-2",
-      "title": "Connector ecosystem accurately lists all 15 connectors",
+      "title": "Connector ecosystem accurately lists all 16 connectors",
       "requiredTestType": "doc",
       "linkedTests": [
         {
           "file": "docs/smackerel.md",
-          "function": "find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l == 15",
+          "function": "find internal/connector -maxdepth 1 -mindepth 1 -type d | wc -l == 16",
           "type": "directory-count"
         }
       ],
@@ -110,7 +110,7 @@
         "docs/smackerel.md:2261",
         "specs/024-design-doc-reconciliation/report.md#22-connector-inventory"
       ],
-      "linkedDoD": "Scope 2 DoD: \u00a722 accounts for all 15 committed connectors by name; Notion/Obsidian/Slack/Outlook marked planned; Scenario SCN-024-06 covered bullet."
+      "linkedDoD": "Scope 2 DoD: §22 accounts for all 16 committed connectors by name; Notion/Obsidian/Slack/Outlook marked planned; Scenario SCN-024-06 covered bullet."
     }
   ]
 }
