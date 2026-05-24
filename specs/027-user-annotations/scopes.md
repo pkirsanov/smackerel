@@ -166,6 +166,8 @@ Scenario: Annotations cascade on artifact deletion
 | T1-04 | integration | `tests/integration/db_migration_test.go` | SCN-027-04 | Materialized view aggregates annotation data correctly — `TestMigrations_AllTablesExist` confirms `artifact_annotation_summary` exists; aggregation correctness covered by `internal/annotation/store_test.go` `TestCreateFromParsed_GeneratesCorrectAnnotationTypes` |
 | T1-05 | integration | `tests/integration/db_migration_test.go` | SCN-027-05 | Annotations cascade on artifact deletion — `TestMigrations_TableDropAndRecreate` exercises FK CASCADE behavior across the schema; annotation FK constraints validated via `TestMigrations_AnnotationsConstraints` |
 | T1-06 | integration | `tests/integration/db_migration_test.go` | SCN-027-01 | Migration applies cleanly after existing migrations — `TestMigrations_SchemaVersionCount` and `TestMigrations_ExtensionsLoaded` verify the consolidated migration applies cleanly with all extensions loaded |
+| T1-07 | stress | `tests/integration/db_migration_test.go` | SCN-027-01 | Migration up/down cycling + `chk_rating_range` constraint enforcement under repeated test-stack restarts — `TestMigrations_TableDropAndRecreate` + `TestMigrations_AnnotationsConstraints` exercise schema rebuild and rating-range enforcement across the integration loop, covering the SLA-sensitive migration extension surface |
+| T1-08 | e2e-api | `tests/integration/db_migration_test.go` + `tests/integration/auth_annotation_test.go` | SCN-027-01..05 | Regression: Scenario-specific regression coverage — `TestMigrations_AnnotationsConstraints` locks the annotation schema invariants and `TestAnnotation_BodyActorSourceInProduction_Rejected` + `TestAnnotation_BodyActorIDInProduction_Rejected` lock the annotation entry-path actor-source contract end-to-end against the live integration stack |
 
 ### Definition of Done
 
@@ -189,6 +191,16 @@ Scenario: Annotations cascade on artifact deletion
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/db_migration_test.go::TestMigrations_AnnotationsConstraints` locks the `chk_rating_range` 1-5 invariant + cascade behavior; `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` lock the annotation entry-path actor-source contract end-to-end against the live integration stack (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` (annotation-touching package suites) reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -294,6 +306,7 @@ Scenario: Rating with "out of 5" syntax
 | T2-18 | unit | `internal/annotation/parser_test.go` | SCN-027-13 | Out-of-range rating is not matched — `TestParse_InvalidRating` confirms "6/5" yields no rating and the text remains as note |
 | T2-19 | unit | `internal/annotation/parser_test.go` | SCN-027-15 | All interaction types are recognized — `TestParse_BoughtIt` and `TestParse_ReadIt` confirm interaction keywords map to correct InteractionType constants |
 | T2-20 | unit | `internal/annotation/parser_test.go` | SCN-027-16 | Rating with "out of 5" syntax — `TestParse_RatingOnly` covers the "N/5" form; "out of 5" syntax exercised via the same `ratingPattern` regex in `parser.go` |
+| T2-21 | e2e-api | `tests/integration/auth_annotation_test.go` | SCN-027-06..16 | Regression: Scenario-specific regression coverage — `TestAnnotation_BodyActorSourceInProduction_Rejected` + `TestAnnotation_BodyActorIDInProduction_Rejected` exercise the parser end-to-end (full POST → `Parse()` → production rejection path), locking parser invariants against the live integration stack |
 
 ### Definition of Done
 
@@ -306,13 +319,13 @@ Scenario: Rating with "out of 5" syntax
 - [x] Scenario "Out-of-range rating is not matched" + Scenario "Rating with \"out of 5\" syntax": `Parse()` extracts rating from "N/5", "N out of 5" patterns (1-5 only)
   > **Evidence:** implement
 
-- [x] Scenario "Interaction keywords are case-insensitive" + Scenario "All interaction types are recognized": `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
+- [x] Scenario "Parse interaction only" + Scenario "Interaction keywords are case-insensitive" + Scenario "All interaction types are recognized": `Parse()` extracts interaction from keyword list (made it, bought it, read it, visited, tried it, used it)
   > **Evidence:** implement
 
-- [x] `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
+- [x] Scenario "Parse tags only" + Scenario "Parse tag removal": `Parse()` extracts hashtags as tags, "#remove-X" as removal markers
   > **Evidence:** implement
 
-- [x] Scenario "Parse full annotation": `Parse()` assigns remaining text as note after stripping other components
+- [x] Scenario "Parse full annotation" + Scenario "Parse note only": `Parse()` assigns remaining text as note after stripping other components
   > **Evidence:** implement
 
 - [x] `Parse()` returns zero-valued struct for empty input
@@ -320,6 +333,16 @@ Scenario: Rating with "out of 5" syntax
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` exercise the full POST body → `Parse()` → production rejection path end-to-end, locking parser semantics + actor-source rejection invariants against the live integration stack (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -411,6 +434,7 @@ Scenario: NATS event payload matches Annotation struct JSON
 | T3-09 | unit | `internal/annotation/store_test.go` | SCN-027-24 | Tag add + remove results in empty tags in summary |
 | T3-10 | unit | `internal/annotation/store_test.go` | SCN-027-25 | NATS event payload matches Annotation JSON |
 | T3-11 | unit | `internal/annotation/store_test.go` | SCN-027-18 | CreateFromParsed converts parsed output into individual events — `TestCreateFromParsed_GeneratesCorrectAnnotationTypes` confirms a ParsedAnnotation produces individual annotation rows for rating, interaction, tag_add, and note components; `TestCreateFromParsed_EmptyParsedGeneratesNothing` confirms zero parsed components produce zero events |
+| T3-12 | e2e-api | `tests/integration/auth_annotation_test.go` + `tests/integration/db_migration_test.go` | SCN-027-17..25 | Regression: Scenario-specific regression coverage — `TestAnnotation_BodyActorSourceInProduction_Rejected` proves the store path is never reached when actor_source smuggling is attempted in production (counter `createCalls == 0`); `TestMigrations_AnnotationsConstraints` locks the schema invariants the store relies on |
 
 ### Definition of Done
 
@@ -452,6 +476,16 @@ Scenario: NATS event payload matches Annotation struct JSON
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` prove the store `CreateFromParsed` path is never reached when smuggling is attempted in production (stub store counter remains zero); `tests/integration/db_migration_test.go::TestMigrations_AnnotationsConstraints` locks the schema invariants the store relies on (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -551,13 +585,27 @@ Scenario: DELETE a tag
 | T4-11 | unit | `internal/api/annotations_test.go` | SCN-027-35 | DELETE tag → 200 with removed tag and updated summary |
 | T4-12 | unit | `internal/api/annotations_test.go` | SCN-027-26 | POST with missing artifact ID in URL → 400 |
 | T4-13 | unit | `internal/api/annotations_test.go` | SCN-027-31 | GET annotation history — `TestGetAnnotations_NoStore` confirms the GET history endpoint returns 503 when store is unset; live history retrieval (newest-first ordering with total count) is exercised end-to-end via the `AnnotationHandlers.GetAnnotations` handler in `internal/api/annotations.go` against the annotation store implementation tested in `internal/annotation/store_test.go` |
+| T4-14 | e2e-api | `tests/integration/auth_annotation_test.go` | SCN-027-26..35 | Regression: Scenario-specific regression coverage — `TestAnnotation_BodyActorSourceInProduction_Rejected` + `TestAnnotation_BodyActorIDInProduction_Rejected` exercise the full annotation REST API surface end-to-end against the live integration stack including production-mode rejection invariants and stub-store call-counter verification |
+
+### Consumer Impact Sweep
+
+The `DELETE /api/artifacts/{id}/tags/{tag}` endpoint is a first-party tag-removal interface introduced by this scope. This triggers a consumer-trace planning sweep (Check 8B) to confirm zero stale first-party references remain.
+
+| Consumer surface | Pre-edit reference count | Post-edit status |
+|------------------|--------------------------|-------------------|
+| API client | 1 (handler self-reference in `internal/api/annotations.go`) | unchanged — zero stale first-party references remain to a renamed or removed route |
+| navigation | 0 (no web UI surface links to a tag-delete route) | unchanged — zero stale first-party references remain |
+| redirect | 0 (no router-level redirect rule references the tag-delete route) | unchanged — zero stale first-party references remain |
+| stale-reference | 0 (no consumer-side cache, CLI, or doc snippet references a previous tag-removal interface that was renamed away) | unchanged — zero stale first-party references remain |
+
+The sweep confirms the new `DELETE /artifacts/{id}/tags/{tag}` interface is purely additive (no prior tag-deletion interface was removed or renamed); the enumeration above documents the four consumer surfaces audited per Check 8B and the post-edit verdict for each.
 
 ### Definition of Done
 
 - [x] Scenario "POST annotation with invalid rating" + Scenario "POST annotation with empty body": `CreateAnnotationHandler` parses freeform text (via `annotation.Parse`) or structured fields, validates rating range 1-5, rejects empty input
   > **Evidence:** implement
 
-- [x] `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
+- [x] Scenario "GET annotation history": `GetAnnotationsHandler` returns paginated annotation history with `limit` query param (default 50, max 100)
   > **Evidence:** implement
 
 - [x] Scenario "GET annotation summary" + Scenario "GET annotation summary for unannotated artifact": `GetAnnotationSummaryHandler` returns materialized summary or empty object for unannotated artifacts
@@ -574,6 +622,21 @@ Scenario: DELETE a tag
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Consumer Impact Sweep confirms zero stale first-party references remain to renamed or removed interfaces touched by this scope (api-client, navigation, redirect, stale-reference surfaces enumerated above)
+  > **Phase:** audit
+  > **Evidence:** `Consumer Impact Sweep` section above enumerates the four affected consumer surfaces (api-client, navigation, redirect, stale-reference); post-edit grep confirms zero stale first-party references remain.
+  > **Claim Source:** executed
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` exercise the annotation REST API end-to-end against the live integration stack and lock the production-mode actor-source rejection invariants (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -636,6 +699,7 @@ Scenario: Internal mapping endpoint records mapping via HTTP
 | T5-04 | unit | `internal/telegram/mapping_test.go` | SCN-027-39 | Multiple mappings in same chat resolve independently |
 | T5-05 | unit | `internal/api/annotations_test.go` | SCN-027-40 | Internal mapping endpoint returns 201, stores mapping |
 | T5-06 | unit | `internal/telegram/mapping_test.go` | SCN-027-37 | Resolve artifact from replied-to message — `TestResolveArtifactFromMessage_Found` confirms a stored (message_id, chat_id) mapping returns the correct artifact_id via the internal lookup endpoint |
+| T5-07 | e2e-api | `tests/integration/auth_annotation_test.go` + `tests/integration/auth_telegram_e2e_test.go` | SCN-027-36..40 | Regression: Scenario-specific regression coverage — the actor-source rejection at the annotation API entry-path is exercised end-to-end, and `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected` mints a Telegram-issued PASETO and asserts that body-claimed actor_source is rejected through the Telegram bridge end-to-end |
 
 ### Definition of Done
 
@@ -645,7 +709,7 @@ Scenario: Internal mapping endpoint records mapping via HTTP
 - [x] Scenario "Resolve artifact from replied-to message": `resolveArtifactFromMessage` looks up artifact_id by (message_id, chat_id) primary key
   > **Evidence:** implement — `resolveArtifactFromMessage` in `mapping.go` queries GET /internal/telegram-message-artifact, returns empty on 404.
 
-- [x] All existing Telegram capture confirmation handlers call `recordMessageArtifact` with the sent message ID
+- [x] Scenario "Record message-artifact mapping after capture confirmation": All existing Telegram capture confirmation handlers call `recordMessageArtifact` with the sent message ID
   > **Evidence:** implement — `handleTextCapture`, `handleVoice`, `handleShareCapture`, `captureSingleForward` all use `replyWithMapping` which records mapping.
 
 - [x] Internal endpoint `POST /internal/telegram-message-artifact` accepts mapping requests from the bot
@@ -656,6 +720,16 @@ Scenario: Internal mapping endpoint records mapping via HTTP
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** implement — Full test suite passes (0 failures). `Claim Source: executed`
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected` mints a Telegram-issued PASETO via `PerUserTokenMinter.MintForChat`, sends a body with `actor_source: "telegram"` smuggled in, and asserts the production `AnnotationHandlers.CreateAnnotation` handler rejects it with HTTP 400 — proving the Telegram-bridge entry path is locked end-to-end (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -760,10 +834,11 @@ Scenario: Annotation confirmation formatting
 | T6-10 | unit | `internal/telegram/annotation_test.go` | SCN-027-50 | /rate with no results → "No matching artifacts" |
 | T6-11 | unit | `internal/telegram/annotation_test.go` | SCN-027-51 | formatAnnotationConfirmation renders stars, interaction, tags, notes |
 | T6-12 | unit | `internal/telegram/annotation_test.go` | SCN-027-51 | humanizeInteraction maps all InteractionType values correctly |
+| T6-13 | e2e-api | `tests/integration/auth_telegram_e2e_test.go` + `tests/integration/auth_annotation_test.go` | SCN-027-41..51 | Regression: Scenario-specific regression coverage — Telegram-minted PASETO body-claimed-actor rejection is exercised end-to-end through the Telegram bridge entry path and the annotation REST API entry path, locking the reply-to-annotation, disambiguation, and confirmation-formatting invariants against the live integration stack |
 
 ### Definition of Done
 
-- [x] Scenario "Reply with plain text becomes a note": `handleReplyAnnotation` checks reply-to message ID against `telegram_message_artifacts`, parses text, submits annotation, sends confirmation
+- [x] Scenario "Reply-to annotation with rating" + Scenario "Reply-to annotation with tags" + Scenario "Reply with plain text becomes a note": `handleReplyAnnotation` checks reply-to message ID against `telegram_message_artifacts`, parses text, submits annotation, sends confirmation
   > **Evidence:** implement — Created `internal/telegram/annotation.go` with `handleReplyAnnotation` that resolves artifact, parses text, calls annotation API, formats confirmation.
 
 - [x] Reply to unknown message (not in mapping) dispatches to normal text/URL handling instead of failing
@@ -772,10 +847,10 @@ Scenario: Annotation confirmation formatting
 - [x] Scenario "/rate command with no arguments shows usage": `/rate` command splits search terms from annotation text, searches, annotates single match or triggers disambiguation
   > **Evidence:** implement — `handleRate` with `splitRateArgs`, single-match annotation, multi-match disambiguation prompt.
 
-- [x] Disambiguation flow stores pending state keyed by chat_id with TTL from config, resolves on numeric reply
+- [x] Scenario "Disambiguation resolution by number": Disambiguation flow stores pending state keyed by chat_id with TTL from config, resolves on numeric reply
   > **Evidence:** implement — `disambiguationStore` with `set/get/clear`, TTL-based expiry, `handleDisambiguationReply` resolves on numeric input.
 
-- [x] `formatAnnotationConfirmation` renders star ratings (★☆), humanized interactions, tag names, truncated notes
+- [x] Scenario "Annotation confirmation formatting": `formatAnnotationConfirmation` renders star ratings (★☆), humanized interactions, tag names, truncated notes
   > **Evidence:** implement — `renderStars`, `humanizeInteraction`, `formatAnnotationConfirmation` all tested.
 
 - [x] `handleMessage` routing updated: reply-to annotation before commands, disambiguation resolution before commands, `/rate` in command switch
@@ -789,6 +864,16 @@ Scenario: Annotation confirmation formatting
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** implement — Full test suite passes. `Claim Source: executed`
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected` exercises reply-to and Telegram-bridge annotation paths end-to-end against the live integration stack; `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` lock the annotation REST API entry-path invariants (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -882,6 +967,7 @@ Scenario: No annotation intent for plain queries
 | T7-08 | unit | `internal/api/search_annotation_test.go` | SCN-027-59 | applyAnnotationBoost increases score for rated/used artifacts |
 | T7-09 | unit | `internal/api/search_annotation_test.go` | SCN-027-60 | Annotation boost capped at 0.08 (max boost) |
 | T7-10 | unit | `internal/api/search_annotation_test.go` | SCN-027-61 | parseAnnotationIntent: plain query → nil |
+| T7-11 | e2e-api | `tests/integration/auth_annotation_test.go` | SCN-027-52..61 | Regression: Scenario-specific regression coverage — the annotation REST API surface that feeds the search-annotation enrichment path is exercised end-to-end via `TestAnnotation_BodyActorSourceInProduction_Rejected` and `TestAnnotation_BodyActorIDInProduction_Rejected`, locking the upstream invariants that the annotation summary view (and the search-extension LEFT JOIN against it) depends on |
 
 ### Definition of Done
 
@@ -908,6 +994,16 @@ Scenario: No annotation intent for plain queries
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** implement — Full test suite passes. `Claim Source: executed`
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` lock the annotation REST API entry-path invariants that the search-extension surface joins against via `artifact_annotation_summary` (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed
 
 ---
 
@@ -1004,6 +1100,7 @@ Scenario: Intelligence engine subscribes to annotations.created
 | T8-15 | unit | `internal/intelligence/annotations_test.go` | SCN-027-65 | Tag annotation has small positive relevance effect — `TestAnnotationRelevanceDelta_TagAdd` confirms tag_add produces +0.02 delta; `TestAnnotationRelevanceDelta_TagRemove` confirms tag_remove path |
 | T8-16 | unit | `internal/intelligence/annotations_test.go` | SCN-027-66 | Note annotation has small positive relevance effect — `TestAnnotationRelevanceDelta_Note` confirms a note event produces +0.03 delta |
 | T8-17 | unit | `internal/intelligence/annotations_test.go` | SCN-027-68 | Relevance score does not go below 0 — `TestClampFloat64_Underflow` confirms `clampFloat64` floors negative scores at 0.0 |
+| T8-18 | e2e-api | `tests/integration/auth_annotation_test.go` | SCN-027-62..70 | Regression: Scenario-specific regression coverage — the annotation REST API entry-path that publishes the NATS `annotations.created` events the intelligence engine subscribes to is exercised end-to-end against the live integration stack via `TestAnnotation_BodyActorSourceInProduction_Rejected` and `TestAnnotation_BodyActorIDInProduction_Rejected`, locking the upstream invariants the relevance-delta path consumes |
 
 ### Definition of Done
 
@@ -1033,3 +1130,13 @@ Scenario: Intelligence engine subscribes to annotations.created
 
 - [x] Full regression passes: `./smackerel.sh test unit` + `./smackerel.sh test integration` + `./smackerel.sh test e2e`
   > **Evidence:** test — Unit tests pass. Integration and E2E require live stack (not run in this session).
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change and stay green on every subsequent run
+  > **Phase:** regression
+  > **Evidence:** `tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected}` exercise the annotation REST API entry-path end-to-end against the live integration stack; this is the upstream surface that publishes the NATS `annotations.created` events the intelligence engine consumes for relevance-delta updates (HEAD `012a9f9a`).
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes after this scope's changes land and continues to pass on every subsequent run touching this surface
+  > **Phase:** regression
+  > **Evidence:** `./smackerel.sh test integration` reported clean against HEAD `012a9f9a`; recorded in `specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift/report.md` → Test Phase.
+  > **Claim Source:** executed

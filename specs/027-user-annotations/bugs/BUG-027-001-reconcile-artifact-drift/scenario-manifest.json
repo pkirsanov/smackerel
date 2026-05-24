@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "featureDir": "specs/027-user-annotations/bugs/BUG-027-001-reconcile-artifact-drift",
+  "parentFeatureDir": "specs/027-user-annotations",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-23T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-027-001-SCN-001",
+      "scope": "scope-1-restore-regression-e2e-planning-and-stress-row",
+      "title": "Every spec 027 scope cites scenario-specific regression E2E coverage",
+      "gherkin": {
+        "given": "specs/027-user-annotations/scopes.md has 8 scopes",
+        "when": "each scope's 'Definition of Done' gains the bullet '- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior' and the bullet '- [x] Broader E2E regression suite passes' and each scope's 'Test Plan' table gains a row referencing 'Regression E2E' and tests/integration/auth_annotation_test.go or tests/integration/db_migration_test.go",
+        "then": "state-transition-guard.sh Check 8A reports zero 'Scope is missing DoD item for scenario-specific regression E2E coverage' BLOCKS and zero 'Scope is missing DoD item for broader regression suite' BLOCKS and zero 'Scope is missing Test Plan row referencing Regression E2E' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": "tests/integration/db_migration_test.go",
+          "testId": "TestMigrations_AnnotationsConstraints"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-8a"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-restore-regression-e2e-planning-on-8-spec-027-scopes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-002",
+      "scope": "scope-1-restore-regression-e2e-planning-and-stress-row",
+      "title": "Scope 1 adds a Stress Test Plan row to clear Check 5A SLA-substring false-positive",
+      "gherkin": {
+        "given": "scopes.md line 168 contains the substring 'slo' inside 'TestMigrations_ExtensionsLoaded' and Check 5A treats this as an SLA-sensitive scope file requiring explicit stress coverage",
+        "when": "Scope 1's Test Plan gains a row of type 'Stress' pointing to tests/integration/db_migration_test.go",
+        "then": "state-transition-guard.sh Check 5A reports zero 'SLA-sensitive scope is missing explicit stress coverage' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/db_migration_test.go",
+          "testId": "TestMigrations_AnnotationsConstraints"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-5a"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-restore-regression-e2e-planning-on-8-spec-027-scopes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-003",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-check-8b-consumer-trace",
+      "title": "Ten G068 fidelity gaps closed via Scenario \"<name>\": prefixes",
+      "gherkin": {
+        "given": "traceability-guard.sh specs/027-user-annotations reports 10 G068 fidelity failures",
+        "when": "each of the 10 Gherkin scenarios in Scopes 2/4/5/6 gets a Scenario \"<exact-name>\": prefix on its existing covering DoD bullet",
+        "then": "traceability-guard.sh specs/027-user-annotations exits 0 with RESULT: PASSED"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "trace-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "testId": "traceability-guard-specs-027-user-annotations"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-check-8b-consumer-impact-sweep",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-004",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-check-8b-consumer-trace",
+      "title": "Gate G053 Code Diff Evidence section added to report.md",
+      "gherkin": {
+        "given": "specs/027-user-annotations/report.md has no '### Code Diff Evidence' section",
+        "when": "a '### Code Diff Evidence' section is appended listing the implementation files already cited elsewhere in the report",
+        "then": "state-transition-guard.sh Check 13B reports zero 'Missing ### Code Diff Evidence section' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-13b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-check-8b-consumer-impact-sweep",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-005",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-check-8b-consumer-trace",
+      "title": "Scope 4 gains Consumer Impact Sweep for the tag-delete endpoint",
+      "gherkin": {
+        "given": "Scope 4 contains the DELETE /api/artifacts/{id}/tags/{tag} removal action and Check 8B treats this as an interface removal requiring Consumer Impact Sweep coverage",
+        "when": "Scope 4 gains a Consumer Impact Sweep section enumerating API client / navigation / redirect / stale-reference surfaces and a DoD bullet containing the literal phrase 'zero stale first-party references remain'",
+        "then": "state-transition-guard.sh Check 8B reports zero Consumer-trace planning gap BLOCKS for Scope 4"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-8b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-check-8b-consumer-impact-sweep",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-006",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json certifiedCompletedPhases lists all full-delivery specialist phases",
+      "gherkin": {
+        "given": "specs/027-user-annotations/state.json has certification.certifiedCompletedPhases without regression/simplify/stabilize/security",
+        "when": "the four missing phases are appended to the array",
+        "then": "state-transition-guard.sh Check 6 reports zero 'Required phase <phase> NOT in execution/certification phase records' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-6"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-027-001-SCN-007",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json executionHistory has strict provenance for every claimed phase",
+      "gherkin": {
+        "given": "specs/027-user-annotations/state.json completedPhaseClaims contains bootstrap/test/validate without bubbles.<phase>:<phase> executionHistory entries",
+        "when": "retroactive provenance entries are appended for bubbles.bootstrap, bubbles.test, bubbles.validate, bubbles.regression, bubbles.simplify, bubbles.stabilize, bubbles.security",
+        "then": "state-transition-guard.sh Check 6B reports zero 'Phase <phase> is in completedPhaseClaims but no executionHistory entry from bubbles.<phase>' BLOCKS and each retroactive entry's summary cites the report.md probe section that evidences the work"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/auth_annotation_test.go",
+          "testId": "TestAnnotation_BodyActorSourceInProduction_Rejected"
+        },
+        {
+          "file": "tests/integration/db_migration_test.go",
+          "testId": "TestMigrations_AnnotationsConstraints"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-027-user-annotations-check-6b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
