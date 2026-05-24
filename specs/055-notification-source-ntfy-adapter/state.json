@@ -2,24 +2,119 @@
   "version": 3,
   "featureDir": "specs/055-notification-source-ntfy-adapter",
   "featureName": "Notification Source ntfy Adapter",
-  "status": "in_progress",
+  "status": "done_with_concerns",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
-    "currentScope": null,
-    "runStartedAt": "2026-05-23T03:24:08Z",
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "final-certification",
+    "runStartedAt": "2026-05-24T20:11:12Z",
     "completedPhaseClaims": [
-      "analyze",
-      "design",
-      "plan"
+      "plan",
+      "implement",
+      "test",
+      "docs",
+      "stabilize",
+      "regression",
+      "simplify",
+      "security",
+      "chaos",
+      "audit",
+      "validate"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "done_with_concerns",
+    "completedScopes": [
+      "scope-1-config-and-source-identity",
+      "scope-2-event-mapping-and-core-ingest",
+      "scope-3-reconnect-lag-and-health",
+      "scope-4-dead-letter-and-replay",
+      "scope-5-provenance-loop-and-boundary-guards",
+      "scope-6-release-hardening-and-documentation",
+      "scope-7-production-webhook-receiver-and-route",
+      "scope-8-runtime-adapter-startup-from-ntfy-sources-json",
+      "scope-9-focused-webhook-regression-and-quality-gates"
+    ],
+    "certifiedCompletedPhases": [
+      "plan",
+      "implement",
+      "test",
+      "docs",
+      "stabilize",
+      "regression",
+      "simplify",
+      "security",
+      "chaos",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scopeId": "SCOPE-1",
+        "title": "Config And Source Identity",
+        "status": "done",
+        "scenarioIds": ["SCN-055-001", "SCN-055-014"],
+        "evidenceRefs": ["report.md#implementation-evidence-2026-05-24-scopes-1-6-current-pass", "report.md#implementation-evidence-2026-05-24-remaining-ntfy-health-gap-closure", "report.md#test-owner-evidence-closure-2026-05-24-scope-1-6-exact-dod", "report.md#final-audit-evidence-2026-05-24-spec-055-ntfy-adapter"]
+      },
+      {
+        "scopeId": "SCOPE-2",
+        "title": "Event Mapping And Core Ingest",
+        "status": "done",
+        "scenarioIds": ["SCN-055-002", "SCN-055-003", "SCN-055-004", "SCN-055-005"],
+        "evidenceRefs": ["report.md#implementation-evidence-2026-05-24-scopes-1-6-current-pass", "report.md#test-phase-evidence-2026-05-24", "report.md#regression-phase-evidence-2026-05-24"]
+      },
+      {
+        "scopeId": "SCOPE-3",
+        "title": "Reconnect, Lag, And Health",
+        "status": "done",
+        "scenarioIds": ["SCN-055-006", "SCN-055-007"],
+        "evidenceRefs": ["report.md#implementation-evidence-2026-05-24-scopes-1-6-current-pass", "report.md#test-phase-evidence-2026-05-24", "report.md#regression-phase-evidence-2026-05-24"]
+      },
+      {
+        "scopeId": "SCOPE-4",
+        "title": "Dead-Letter And Replay",
+        "status": "done",
+        "scenarioIds": ["SCN-055-008", "SCN-055-009"],
+        "evidenceRefs": ["report.md#implementation-evidence-2026-05-24-scopes-1-6-current-pass", "report.md#implementation-evidence-2026-05-24-remaining-ntfy-health-gap-closure", "report.md#security-remediation-evidence-2026-05-24-sec-055-001", "report.md#security-closure-verification-2026-05-24-sec-055-001-and-sec-055-002", "report.md#final-audit-evidence-2026-05-24-spec-055-ntfy-adapter"]
+      },
+      {
+        "scopeId": "SCOPE-5",
+        "title": "Provenance, Loop, And Boundary Guards",
+        "status": "done",
+        "scenarioIds": ["SCN-055-010", "SCN-055-011", "SCN-055-012", "SCN-055-013"],
+        "evidenceRefs": ["report.md#implementation-evidence-2026-05-24-scopes-1-6-current-pass", "report.md#test-phase-evidence-2026-05-24", "report.md#regression-phase-evidence-2026-05-24"]
+      },
+      {
+        "scopeId": "SCOPE-6",
+        "title": "Release Hardening And Documentation",
+        "status": "done",
+        "scenarioIds": ["SCN-055-REL-001", "SCN-055-REL-002"],
+        "evidenceRefs": ["report.md#current-lint-evidence", "report.md#current-format-evidence", "report.md#current-artifact-lint-evidence", "report.md#current-traceability-guard-evidence", "report.md#docs-publication-evidence-2026-05-24", "report.md#stabilization-evidence-2026-05-24-shared-search-stress-prelude", "report.md#regression-closure-evidence-2026-05-24-reg-055-001", "report.md#test-owner-evidence-closure-2026-05-24-scope-1-6-exact-dod", "report.md#security-closure-verification-2026-05-24-sec-055-001-and-sec-055-002", "report.md#chaos-closure-verification-2026-05-24-bug-chaos-20260524-001", "report.md#final-audit-evidence-2026-05-24-spec-055-ntfy-adapter"]
+      },
+      {
+        "scopeId": "SCOPE-7",
+        "title": "Production Webhook Receiver And Route",
+        "status": "done",
+        "scenarioIds": ["SCN-055-015"],
+        "evidenceRefs": ["report.md#focused-unit-evidence", "report.md#focused-e2e-api-evidence", "report.md#implementation-evidence-reconciliation-2026-05-24-current-ntfy-slice"]
+      },
+      {
+        "scopeId": "SCOPE-8",
+        "title": "Runtime Adapter Startup From NTFY_SOURCES_JSON",
+        "status": "done",
+        "scenarioIds": ["SCN-055-016"],
+        "evidenceRefs": ["report.md#config-generation-evidence", "report.md#focused-unit-evidence", "report.md#focused-integration-evidence", "report.md#implementation-evidence-reconciliation-2026-05-24-current-ntfy-slice"]
+      },
+      {
+        "scopeId": "SCOPE-9",
+        "title": "Focused Webhook Regression And Quality Gates",
+        "status": "done",
+        "scenarioIds": ["SCN-055-017"],
+        "evidenceRefs": ["report.md#focused-stress-evidence", "report.md#lint-evidence", "report.md#format-evidence", "report.md#code-diff-evidence", "report.md#implementation-evidence-reconciliation-2026-05-24-current-ntfy-slice"]
+      }
+    ],
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
@@ -101,12 +196,189 @@
       "startedAt": "2026-05-23T03:24:08Z",
       "completedAt": "2026-05-23T03:24:08Z",
       "summary": "Created planning-owned scopes.md, report.md, uservalidation.md, and scenario-manifest.json for six sequential spec 055 scopes. Implementation remains not started, all scope DoD items are unchecked, and certification has no completed scopes or certified phases."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T12:00:00Z",
+      "completedAt": "2026-05-24T12:00:01Z",
+      "summary": "Implemented focused spec 055 production webhook receiver/route and runtime startup wiring from NTFY_SOURCES_JSON. Evidence recorded in report.md#implementation-gap-evidence-2026-05-24-production-webhook-and-runtime-startup. Certification fields remain unmodified for validate ownership."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan-repair"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T12:20:00Z",
+      "completedAt": "2026-05-24T12:25:00Z",
+      "summary": "Repaired planning-owned artifact structure after focused ntfy webhook/runtime implementation: added Scope 7-9 scope progress mappings, scenario manifest requiredTestType fields, and evidence references without promoting final validation certification."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": [
+        "test"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T13:00:00Z",
+      "completedAt": "2026-05-24T13:24:37Z",
+      "summary": "Recorded test-phase evidence for focused ntfy unit, integration, e2e, stress, format, lint, skip-marker, live-test authenticity, and regression-quality checks. Certification remains in_progress because DoD completion was not promoted."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T15:00:00Z",
+      "completedAt": "2026-05-24T15:16:12Z",
+      "summary": "Recorded docs-phase evidence for managed documentation updates covering ntfy API, operations, testing, development, architecture, and product design surfaces."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T15:25:00Z",
+      "completedAt": "2026-05-24T15:48:33Z",
+      "summary": "Recorded stabilize-phase evidence for the shared search stress prelude recovery rerun; no source or test harness code changes were certified by this state repair."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T15:50:00Z",
+      "completedAt": "2026-05-24T16:05:31Z",
+      "summary": "Recorded regression-phase evidence and REG-055-001 closure rerun for source-neutral boundary, integration, e2e, stress, lint, format, skip-marker, and deployment-surface regression checks. REG-055-002 certification artifact work remains open for planning/test/validation routing."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "plan-repair"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T16:21:40Z",
+      "completedAt": "2026-05-24T16:22:30Z",
+      "summary": "Repaired planning-owned certification artifacts for REG-055-002: aligned scopeProgress for Scopes 1-6, mapped existing phase provenance for test/docs/stabilize/regression, removed stale Test Plan gap prose from file-path-sensitive rows, and preserved unchecked DoD items for owner validation."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T17:00:00Z",
+      "completedAt": "2026-05-24T17:45:54Z",
+      "summary": "Ran post-implementation simplification for spec 055 ntfy adapter: clarified JSON config assembly, centralized ntfy redaction-state construction, simplified loop metadata extraction, removed redundant retry-budget fallback behavior after validation, required replay actor identity, and recorded focused unit/integration/e2e/stress/lint/format evidence in report.md#simplification-evidence-2026-05-24-ntfy-adapter-post-implementation-pass. Certification fields remain unchanged."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T17:53:44Z",
+      "completedAt": "2026-05-24T17:53:44Z",
+      "summary": "Ran security and secret/log-surface verification for the ntfy adapter. Focused unit, integration, and e2e selectors passed for current redaction/no-output-coupling coverage, but security found high-severity replayable dead-letter RawPayload exposure through operator API JSON and routed remediation to implementation/test/docs. Certification fields remain unchanged."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T18:40:07Z",
+      "completedAt": "2026-05-24T18:40:07Z",
+      "summary": "Reran security closure verification after SEC-055-001 and SEC-055-002 remediation. Focused unit, e2e, integration, artifact lint, and traceability guard commands passed. SEC-055-001 and SEC-055-002 are closed for the reviewed operator API/docs surfaces; certification fields remain unchanged."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T18:53:23Z",
+      "completedAt": "2026-05-24T18:53:23Z",
+      "summary": "Ran ntfy resilience chaos verification with seed 20260524 plus focused no-output-coupling and live stress guards. Created BUG-CHAOS-20260524-001 after replay bursts showed replay attempt rows are idempotent but repeated SourceEventSink side effects still create multiple raw events. Certification fields remain unchanged and implementation routing is required."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T19:28:34Z",
+      "completedAt": "2026-05-24T19:28:34Z",
+      "summary": "Implemented BUG-CHAOS-20260524-001 replay idempotency repair: dead-letter replay now locks before SourceEventSink side effects, repeated successful replays return the existing accepted attempt, failed attempts remain retryable, and focused unit/integration/e2e/stress/lint/format evidence is recorded in the bug report. Certification fields remain unchanged."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T19:39:54Z",
+      "completedAt": "2026-05-24T19:39:54Z",
+      "summary": "Reran BUG-CHAOS-20260524-001 closure verification. The temporary seed 20260524 chaos replay probe, focused ntfy stress selectors, live replay E2E selector, bug artifact lint, spec artifact lint, and traceability guard passed. Active bug ledger moved BUG-CHAOS-20260524-001 to chaos_verified resolved state; certification fields remain unchanged."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": [
+        "audit"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T19:48:04Z",
+      "completedAt": "2026-05-24T20:04:07Z",
+      "summary": "Ran final audit for spec 055. Artifact lint, traceability guard, implementation reality scan, regression-quality guards, focused ntfy unit/integration/e2e/stress selectors, bug artifact lint, and security/docs spot checks found no new critical implementation, security, docs, or focused-test gap. State-transition promotion remains blocked by seven unchecked DoD items, six in-progress scopes, evidence-signal warnings, and validation-owned certification fields; certification remains unpromoted."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "done_with_concerns",
+      "startedAt": "2026-05-24T20:11:12Z",
+      "completedAt": "2026-05-24T20:24:00Z",
+      "summary": "Validated the seven remaining Scope 1, Scope 4, and Scope 6 DoD items against later implementation, test, security, chaos, and audit evidence; manually classified evidence-signal warnings as stale planning/interpreted sections not used for promotion; certified Scopes 1-9 and promoted spec 055 to done_with_concerns because historical report evidence fences need cleanup but do not contradict the latest executed evidence."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
-  "failures": [],
-  "lastUpdatedAt": "2026-05-23T03:24:08Z",
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-CHAOS-20260524-001",
+      "status": "validated_done_with_concerns",
+      "resolvedAt": "2026-05-24T23:17:08Z",
+      "summary": "Repeated ntfy dead-letter replay returns the existing accepted attempt and does not repeat source-sink side effects after a successful replay. Seed 20260524 closure rerun showed replay_attempt_rows=1, replay_raw=1, replay_normalized=1. G048 redaction_state decode rework is repaired and validate-certified with concerns in the standalone bug packet."
+    }
+  ],
+  "failures": [
+    {
+      "source": "bubbles.chaos seed 20260524",
+      "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-24T23:17:08Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
@@ -119,5 +391,5 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "Analyst, UX, design, and planning artifacts exist. Planning resolved the top-level/certification status mismatch by aligning certification.status with the in_progress feature state while leaving completedScopes and certifiedCompletedPhases empty. Implementation and validation evidence remain unclaimed."
+  "notes": "Analyst, UX, design, planning, implementation, test, docs, stabilize, regression, simplify, security, chaos, final audit, and validation certification evidence exists in report.md. Implementation evidence for the production ntfy webhook receiver/route, NTFY_SOURCES_JSON runtime startup path, invalid-config disconnected health rows, and dead-letter pressure degraded health is recorded and mapped to Scopes 1-9. Security initially found replayable ntfy dead-letter RawPayload exposure through operator API JSON and routed remediation to implementation/test/docs; the security closure rerun recorded in report.md closes SEC-055-001 and SEC-055-002 for the reviewed operator API/docs/log-surface surfaces. Chaos seed 20260524 created BUG-CHAOS-20260524-001 for replay-burst side-effect idempotency; implementation and chaos closure evidence for the repair is recorded in the bug report and parent report. Final audit reran artifact lint, traceability, implementation reality, focused ntfy unit/integration/e2e/stress, regression-quality, and bug artifact gates; no new critical implementation, security, docs, or focused-test gap was found. Validation classified the stale evidence-signal warnings as non-blocking planning/interpreted sections and promoted certification.status to done_with_concerns. Standalone validation later certified BUG-CHAOS-20260524-001 as validated_done_with_concerns after the G048 redaction_state decode rework passed focused unit, integration, E2E, stress, lint, format, implementation reality, artifact, traceability, and state-transition gates; literal child done remains blocked by legacy report evidence-fence cleanup."
 }

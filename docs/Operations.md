@@ -552,9 +552,13 @@ The Notification Intelligence Handler is the source-neutral layer for
 operational and personal notification events. Source adapters submit raw events
 to the handler; the handler stores raw input, normalizes the event, classifies
 severity/domain/intent, correlates incidents, chooses one handling decision,
-records suppressions or approvals, and queues redacted output attempts. ntfy is
-not implemented in this layer; spec 055 owns the concrete ntfy adapter and must
-translate ntfy transport data into the source adapter contract.
+records suppressions or approvals, and queues redacted output attempts.
+
+The spec 055 ntfy adapter is the concrete source implementation for ntfy
+topics. It owns ntfy stream/webhook transport, payload parsing, topic health,
+reconnect state, dead-letter records, and replay controls. It still submits
+accepted messages only through `SourceEventSink`; classification, incidents,
+approvals, safe reactions, and output dispatch remain spec 054 core behavior.
 
 #### Configuration And Startup
 
@@ -568,6 +572,7 @@ Notification intelligence configuration lives in `config/smackerel.yaml`:
 | `notification_intelligence.low_confidence_threshold` | `NOTIFICATION_LOW_CONFIDENCE_THRESHOLD` | Low-confidence classifications choose diagnostics instead of fabricated certainty. |
 | `notification_intelligence.max_retries` | `NOTIFICATION_MAX_RETRIES` | Bounded retry budget for notification handling/output. |
 | `notification_outputs.channels` | `NOTIFICATION_OUTPUT_CHANNELS` | Output channels; the committed runtime uses `dashboard`. |
+| `notification_sources.ntfy.instances` | `NTFY_SOURCES_JSON` | JSON array of explicit ntfy source instances consumed at Go startup. |
 
 After editing the YAML, regenerate and restart through the repo CLI:
 
@@ -580,6 +585,36 @@ After editing the YAML, regenerate and restart through the repo CLI:
 Missing or malformed notification config fails at config generation or at Go
 startup. Do not edit `config/generated/*.env` by hand and do not add Compose or
 shell fallback syntax for these values.
+
+#### ntfy Source Configuration
+
+Every ntfy source instance is declared under
+`notification_sources.ntfy.instances` in `config/smackerel.yaml` and rendered
+as `NTFY_SOURCES_JSON` by `./smackerel.sh config generate`. The Go runtime reads
+that JSON at startup, registers enabled source instances in
+`notification_source_instances`, starts configured adapters, and fails loudly if
+the JSON is missing, malformed, or contains an enabled instance with invalid
+required fields.
+
+Required instance fields in the current adapter are:
+
+| Field | Purpose |
+|-------|---------|
+| `source_instance_id` | Stable source identity used by health, raw events, normalized notifications, dead letters, replay attempts, and UI routes. |
+| `enabled` | Enables or skips the instance at startup. |
+| `source_form` / `transport_mode` | Must both be `stream` or both be `webhook`; the instance does not silently switch modes. |
+| `endpoint_url` | Source endpoint used by the transport. For webhook mode in the committed local config, this is the internal core route. |
+| `endpoint_ref_name` | Operator-safe endpoint identity shown in status/detail responses. |
+| `topics` | Explicit topic allowlist; payloads from unconfigured topics are rejected and can be dead-lettered. |
+| `auth_mode` | One of `none`, `bearer_token`, or `basic`. `none` must be explicit to allow zero `secret_ref_names`. |
+| `secret_ref_names` | Secret reference names only for credential-backed modes; values never appear in status, logs, dead letters, or UI. |
+| `default_domain`, `topic_subjects`, `tag_services`, `tag_intents` | Optional mapping hints. Core classification remains authoritative. |
+| `retry_budget`, `initial_delay_seconds`, `max_delay_seconds`, `keepalive_timeout_seconds` | Bounded reconnect policy. All values must be positive and initial delay must not exceed max delay. |
+| `lag_degraded_after_seconds`, `lag_disconnected_after_seconds` | Lag thresholds; degraded must be lower than disconnected. |
+| `dead_letter_retry_budget`, `max_payload_bytes`, `pressure_threshold_count` | Dead-letter retry, payload ceiling, and pressure thresholds. |
+| `display_name`, `endpoint_label`, `config_hash` | Redacted display and drift/audit metadata. |
+
+The built-in HTTP stream transport accepts `auth_mode=none` directly. Credential-backed stream modes require a secret-resolved transport client; otherwise startup or connection fails instead of pretending an unauthenticated connection is valid. Webhook mode uses the authenticated Smackerel API route and the source's explicit metadata.
 
 #### Source Health
 
@@ -601,6 +636,77 @@ Expected source states:
 Health responses include source type, source instance ID, source form, config
 hash, secret reference names, redacted metadata, last event/check timestamps,
 retry count, and redacted error text. Secret values are never returned.
+
+#### ntfy Source Detail, Webhook, Reconnect, And Replay
+
+Use the adapter-owned detail endpoint for topic state, lag, last accepted event
+proof, and source/output boundary text:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/sources/<source_instance_id>/ntfy
+```
+
+For the committed local webhook source, a valid ntfy message-like event is sent
+to the webhook route and accepted with `202 Accepted` only after the runtime
+webhook receiver is registered:
+
+```bash
+curl --max-time 5 -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  --data '{"id":"evt-local-check","event":"message","topic":"home-lab-alerts","title":"Check","message":"source sink path"}' \
+  http://127.0.0.1:40001/api/notifications/sources/ntfy-local-webhook/ntfy/webhook
+```
+
+The webhook route enforces the configured `max_payload_bytes` ceiling and
+configured topics. Malformed JSON returns `invalid_ntfy_webhook_payload` and is
+recorded as a dead-letter when the receiver is running. Topic mismatches return
+`ntfy_webhook_rejected`.
+
+Reconnect is an operator control that records reconnecting topic state and
+degraded source health without creating a notification:
+
+```bash
+curl --max-time 5 -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  --data '{}' \
+  http://127.0.0.1:40001/api/notifications/sources/<source_instance_id>/ntfy/reconnect
+```
+
+Dead-letter inspection supports bounded pagination:
+
+```bash
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  'http://127.0.0.1:40001/api/notifications/sources/<source_instance_id>/ntfy/dead-letters?limit=50'
+
+curl --max-time 5 -H "Authorization: Bearer <token>" \
+  http://127.0.0.1:40001/api/notifications/sources/<source_instance_id>/ntfy/dead-letters/<dead_letter_id>
+```
+
+Replay requires the explicit confirmation value `replay_through_source_sink`:
+
+```bash
+curl --max-time 5 -X POST -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  --data '{"confirmation":"replay_through_source_sink"}' \
+  http://127.0.0.1:40001/api/notifications/sources/<source_instance_id>/ntfy/dead-letters/<dead_letter_id>/replay
+```
+
+The first accepted replay reconstructs an eligible source envelope and submits
+it through `SourceEventSink`. If the same dead letter is replayed again after a
+successful replay, the API returns the existing accepted attempt with
+`already_replayed=true` and the same raw event ID; it does not create another
+raw event, normalized notification, incident, decision, approval, delivery
+attempt, or direct output.
+
+Operator web pages mirror the same information:
+
+| Page | Purpose |
+|------|---------|
+| `/notifications/sources` | Source list with ntfy rows, redacted auth mode, topic count, config hash, endpoint reference, and dead-letter link. |
+| `/notifications/sources/{source_instance_id}` | ntfy health/detail page with topic lag, retry count, possible-gap flag, reconnect action, last accepted event proof, and boundary text. |
+| `/notifications/sources/{source_instance_id}/dead-letters` | Dead-letter list with cause, replay status, payload hash, safe preview, and source-sink confirmation note. |
+| `/notifications/sources/{source_instance_id}/dead-letters/{dead_letter_id}` | Dead-letter detail and replay confirmation guidance. |
 
 #### Event History And Incidents
 
@@ -721,13 +827,21 @@ fix the redaction path before reconnecting the source adapter.
 | Symptom | Likely cause | Resolution |
 |---------|--------------|------------|
 | `missing or invalid required notification configuration` | One of the `NOTIFICATION_*` env vars was not generated or has an invalid value. | Edit `config/smackerel.yaml`, run `./smackerel.sh config generate`, then restart with `./smackerel.sh down` and `./smackerel.sh up`. |
-| `/api/notifications/sources` shows `disconnected` with `no_health_report` | Source instance exists but no adapter has reported health yet. | Confirm the source adapter is configured and running; for ntfy, wait for spec 055 adapter wiring rather than adding ntfy logic to the core handler. |
+| `ntfy notification sources: ... NTFY_SOURCES_JSON is required` | `notification_sources.ntfy.instances` was not rendered into the generated env file. | Restore the SST key in `config/smackerel.yaml`, run `./smackerel.sh config generate`, and restart. |
+| Startup fails with `ntfy source config: ... is required` | An enabled ntfy instance is missing explicit identity, form/mode, endpoint identity, topic set, config hash, redacted metadata, or credential references for a credential-backed mode. | Fix the explicit source instance config in `config/smackerel.yaml`; use `auth_mode: "none"` only when no credential is intentionally required. |
+| `/api/notifications/sources` shows `disconnected` with `no_health_report` | Source instance exists but no adapter has reported health yet. | Confirm `NTFY_SOURCES_JSON` contains an enabled instance, restart the core so `StartConfiguredAdapters` runs, and inspect the ntfy detail endpoint. |
 | Source health is `degraded` | Transient source failures or rate limits. | Check the source system and credential references; health errors are redacted by category. |
+| ntfy source detail shows `stalled`, `possible_gap=true`, or high lag | No event/open/keepalive/check has refreshed the topic before the configured lag threshold. | Inspect source connectivity, then use the reconnect route to record bounded reconnect state. Connected health returns only after a real source check or accepted event. |
+| ntfy webhook returns `ntfy_webhook_receiver_unavailable` | The runtime receiver registry is not running or the source instance is not registered. | Restart the core after generating config; confirm the source is enabled and configured with `transport_mode: "webhook"`. |
+| ntfy webhook returns `invalid_ntfy_webhook_payload` | Empty, malformed, oversize, or unparsable ntfy JSON payload. | Inspect the matching dead-letter record. Payload previews and causes are redacted; use payload hash and source instance/topic provenance for audit. |
+| ntfy webhook returns `ntfy_webhook_rejected` | Payload was valid JSON but rejected by adapter mapping, commonly due to an unconfigured topic or unsupported event shape. | Confirm the topic is present in `notification_sources.ntfy.instances[].topics`; unsupported lifecycle-only events should update health, not create notifications. |
+| Dead-letter replay returns `invalid_ntfy_replay_confirmation` | Request did not include the exact confirmation value. | Re-submit with `{"confirmation":"replay_through_source_sink"}`. |
+| Dead-letter replay returns `ntfy_replay_failed` | Record is not replay eligible, cannot be parsed/mapped, or the source sink rejected it. | Inspect `ReplayEligible`, `ReplayStatus`, `ErrorKind`, and `ErrorRedacted` on the attempt; replay never bypasses the source sink. |
+| Repeating a dead-letter replay returns `already_replayed=true` | The dead letter was already replayed successfully. | Treat the response as an idempotent repeat; use the returned attempt and raw event ID for audit instead of replaying through another path. |
 | Events are stored but no output is queued | Event was routine, low severity, suppressed, below thresholds, or confidence selected diagnostics. | Inspect `/api/notifications/events/<event_id>` for classification, decision reason codes, suppressions, and incident state. |
 | Repeated alerts appear as one incident | Correlation is working as designed. | Inspect the incident `persistence_count` and source instance IDs to confirm related events are grouped. |
 | Approval expected but event was only recorded | Risk level or severity/persistence thresholds did not select `approval_request`. | Inspect decision `threshold_inputs`, `risk_assessment`, and classification confidence in the event detail. |
 | Output remains queued | Output channel is not completing delivery or the dispatcher has not sent it yet. | Check `/api/notifications/outputs` for status and redacted errors; verify `notification_outputs.channels` includes the intended channel. |
-| ntfy event is expected but no ntfy source exists | ntfy adapter behavior is not part of spec 054. | Implement or enable the spec 055 ntfy adapter; do not add ntfy-specific branches to `internal/notification`. |
 
 ### Reset a Connector's Sync Cursor
 

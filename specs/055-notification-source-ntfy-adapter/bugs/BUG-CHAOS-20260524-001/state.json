@@ -1,0 +1,320 @@
+{
+  "version": 3,
+  "featureDir": "specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001",
+  "parentFeatureDir": "specs/055-notification-source-ntfy-adapter",
+  "featureName": "ntfy Dead-Letter Replay Burst Re-submits Through Source Sink",
+  "bugId": "BUG-CHAOS-20260524-001",
+  "status": "done_with_concerns",
+  "workflowMode": "chaos-hardening",
+  "execution": {
+    "activeAgent": "bubbles.validate",
+    "currentPhase": "validate",
+    "currentScope": "final-certification",
+    "runStartedAt": "2026-05-24T23:17:08Z",
+    "completedPhaseClaims": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "audit",
+      "validate"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done_with_concerns",
+    "completedScopes": [
+      "scope-1-idempotent-replay-burst"
+    ],
+    "certifiedCompletedPhases": [
+      "chaos",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "audit",
+      "validate"
+    ],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1-idempotent-replay-burst",
+        "scope": 1,
+        "title": "Make ntfy Dead-Letter Replay Side-Effect Idempotent",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "scenarioIds": [
+          "SCN-BUG-CHAOS-20260524-001-001",
+          "SCN-BUG-CHAOS-20260524-001-002"
+        ],
+        "evidenceRefs": [
+          "report.md#deterministic-red-evidence",
+          "report.md#replay-burst-integration-regression",
+          "report.md#replay-api-e2e-regression",
+          "report.md#seeded-replay-side-effect-closure-rerun",
+          "report.md#focused-resilience-stress-rerun",
+          "report.md#audit-rework-red-evidence",
+          "report.md#audit-rework-unit-regression",
+          "report.md#audit-rework-g048-scan",
+          "report.md#audit-rework-implementation-reality-scan-rerun"
+        ],
+        "certifiedAt": "2026-05-24T23:17:08Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": [
+      "Replay correctness is regression_verified and stabilize-clean for the focused integration/E2E ntfy replay/source-sink risk surface.",
+      "The prior transient test-stack start failure did not reproduce after DevOps port-release remediation; two consecutive current-session focused ntfy stress runs passed through pre-clean, stack startup, readiness, ntfy workload, and exit teardown.",
+      "Regression and stabilization runtime coverage are focused and do not claim a fresh full-repo regression baseline.",
+      "Security phase verified the replay idempotency fix and bug-packet docs do not reintroduce raw payload exposure, credential leakage, output-channel coupling, or unsafe repeated replay behavior.",
+      "Audit independently reran focused integration, E2E, unit boundary, and stress selectors; all passed in the current session.",
+      "G048 repair added direct implementation file references to scopes.md so implementation-reality scan no longer needs design.md fallback for this bug packet.",
+      "Validate certification reran focused unit, integration, E2E, stress, format, lint, implementation reality, artifact lint, traceability, and state-transition gates on 2026-05-24; the standalone bug packet is certified as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+    ]
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "chaos-hardening",
+      "source": "bubbles.chaos"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "missing",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T18:53:23Z",
+      "completedAt": "2026-05-24T18:53:23Z",
+      "summary": "Created chaos bug artifact after seed 20260524 showed repeated replay of one replay-eligible ntfy dead-letter coalesces replay attempt rows but still submits multiple source-sink raw events. Routed to implementation for idempotent replay fix."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": [
+        "implement"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T19:28:34Z",
+      "completedAt": "2026-05-24T19:28:34Z",
+      "summary": "Implemented row-locked ntfy dead-letter replay idempotency, added deterministic integration and E2E replay regressions, and recorded focused unit, integration, E2E, stress, lint, and format evidence. Certification remains validation-owned."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": [
+        "chaos"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T19:39:54Z",
+      "completedAt": "2026-05-24T19:39:54Z",
+      "summary": "Reran seed 20260524 replay-resilience chaos after the fix. The temporary integration chaos probe, focused ntfy stress selectors, live replay E2E selector, bug artifact lint, parent artifact lint, and parent traceability guard all passed. No chaos finding remains for BUG-CHAOS-20260524-001; certification fields remain validation-owned."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": [
+        "planning-repair"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T20:37:26Z",
+      "completedAt": "2026-05-24T20:37:26Z",
+      "summary": "Repaired standalone bug-packet planning structure by adding explicit Gherkin scenario mapping, scenario manifest coverage, regression E2E planning rows, change-boundary DoD, policy snapshot fields, lockdown state, and completed scope tracking. Did not claim validation/audit/full specialist certification."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": [
+        "test"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T20:59:07Z",
+      "completedAt": "2026-05-24T20:59:07Z",
+      "summary": "Reran and certified current-session test evidence for the ntfy replay idempotency bug packet. Focused integration replay burst, live replay API E2E, no-output-coupling unit guard, focused ntfy stress selectors, skip/mock scans, regression-quality guard, artifact lint, and bug traceability guard passed. State remains in_progress because chaos-hardening specialist phases beyond test remain unrecorded."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T21:10:04Z",
+      "completedAt": "2026-05-24T21:10:04Z",
+      "summary": "Certified focused regression risk for the ntfy replay idempotency fix. The no-output-coupling unit guard, focused replay/source-sink integration selector, focused replay/webhook E2E selector, focused ntfy stress selector, and regression-quality guards passed. No regression was found for repeated replay, output-loop prevention, raw/normalized side-effect duplication, or source-sink behavior. Full-repo regression baseline was not claimed."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T21:13:40Z",
+      "completedAt": "2026-05-24T21:25:49Z",
+      "summary": "Simplified the ntfy replay idempotency fix without changing behavior: removed an unused replay-attempt wrapper, normalized the internal idempotency helper name, extracted focused replay count helpers in integration and E2E tests, and hoisted the no-output-coupling token list. Focused unit, integration, E2E, format, lint, bug artifact lint, and bug traceability checks passed. Certification remains validation-owned."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T21:38:43Z",
+      "completedAt": "2026-05-24T21:38:43Z",
+      "summary": "Stabilization verified the ntfy replay idempotency fix remains clean under focused integration and E2E selectors, including the replay burst and replay API idempotency tests. Focused stress could not be certified because disposable test-stack startup/preflight repeatedly hit host-port release conflicts on 127.0.0.1:47002 and 127.0.0.1:45002 with no visible process or Docker owner after project-scoped cleanup. No replay code defect was found; route required to bubbles.devops for test-stack lifecycle and host-port preflight remediation."
+    },
+    {
+      "agent": "bubbles.devops",
+      "phasesExecuted": [
+        "devops"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T21:42:40Z",
+      "completedAt": "2026-05-24T21:51:27Z",
+      "summary": "Remediated the disposable test-stack port-release blocker in smackerel.sh. Added a shared test-stack suite lock for integration, E2E, and stress lanes; preserved the legacy E2E lock for compatibility; extended host-port release preflight to 180s; and made stress pre-clean/exit cleanup use explicit 180s fail-fast teardown. Verified two consecutive ./smackerel.sh test stress --go-run 'TestNtfy' runs passed through pre-clean, stack startup, health/search stress, Go readiness canary, all ntfy stress tests, and exit teardown with test volumes/network removed. ./smackerel.sh format --check, ./smackerel.sh lint, bug artifact lint, bug traceability guard, parent artifact lint, and parent traceability guard all passed. Certification-owned blocker fields were not edited by devops."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T22:04:18Z",
+      "completedAt": "2026-05-24T22:04:18Z",
+      "summary": "Reran stabilization after DevOps fixed disposable test-stack port-release stability. Focused replay integration and replay API E2E selectors passed. Two consecutive focused ./smackerel.sh test stress --go-run 'TestNtfy' runs passed through pre-clean, stack startup, health/search stress, Go readiness canary, all focused ntfy stress tests, and exit teardown with disposable volumes/network removed. The prior stabilize host-port blocker is closed; final packet promotion remains blocked on security, validate, audit, and docs provenance from owning phases."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T22:14:52Z",
+      "completedAt": "2026-05-24T22:14:52Z",
+      "summary": "Certified the ntfy replay idempotency bug packet for the focused security phase. Static scan, redacted dead-letter DTO/unit guard, no-output-coupling unit guard, replay idempotency integration guard, and replay API redaction/idempotency E2E guard passed. No raw payload exposure, credential leakage, output-channel coupling, or unsafe repeated replay behavior was found. Certification remains in_progress for validate, audit, and docs provenance."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T22:19:15Z",
+      "completedAt": "2026-05-24T22:22:54Z",
+      "summary": "Reviewed BUG-CHAOS-20260524-001 against the effective managed-doc registry and actual ntfy replay implementation. Updated managed docs to distinguish first accepted replay through SourceEventSink from idempotent repeat replay returning the existing attempt with already_replayed=true and no duplicate raw/normalized side effects. Deployment docs required no change because the bug did not alter deploy inputs or recovery mechanics. Bug artifact lint and traceability guard passed after the docs update."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": [
+        "audit"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T22:36:31Z",
+      "completedAt": "2026-05-24T22:36:31Z",
+      "summary": "Final audit reran state-transition guard, bug and parent artifact lint, bug and parent traceability guard, focused replay integration, replay API E2E, no-output-coupling unit guard, focused ntfy stress selector, skip/mock scans, regression-quality guards, and implementation reality scan. Runtime replay idempotency evidence passed, but audit found G048 silent decode failures in internal/notification/source/ntfy/store.go where redaction_state json.Unmarshal errors are ignored. Routed to bubbles.implement before validate promotion."
+    },
+    {
+      "agent": "GitHub Copilot",
+      "phasesExecuted": [
+        "implementation-repair",
+        "focused-test",
+        "artifact-repair"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "startedAt": "2026-05-24T22:57:38Z",
+      "completedAt": "2026-05-24T23:03:31Z",
+      "summary": "Repaired RW-BUG-CHAOS-20260524-001-AUDIT-001 by propagating malformed persisted ntfy redaction_state decode errors from scanSubscriptionStates and scanDeadLetters, adding deterministic scanner regression coverage, preserving redacted operator API and replay idempotency selectors, and updating bug artifacts. Final promotion remains validation-owned."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "in_progress",
+      "statusAfter": "done_with_concerns",
+      "startedAt": "2026-05-24T23:17:08Z",
+      "completedAt": "2026-05-24T23:17:08Z",
+      "summary": "Validated BUG-CHAOS-20260524-001 after G048 audit rework. Focused unit, integration, E2E, stress, format, lint, implementation reality scan, artifact lint, traceability guard, and pre-promotion state-transition guard passed or were blocked only by missing validate phase. Certified the standalone bug packet as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-CHAOS-20260524-001",
+      "status": "validated_done_with_concerns",
+      "resolvedAt": "2026-05-24T23:17:08Z",
+      "summary": "Repeated ntfy dead-letter replay returns the existing accepted attempt and does not repeat source-sink side effects after a successful replay. Seed 20260524 closure rerun showed replay_attempt_rows=1, replay_raw=1, replay_normalized=1; G048 redaction_state decode repair is covered by deterministic scanner regressions; validate reran focused unit, integration, E2E, stress, lint, format, artifact, traceability, and implementation-reality gates."
+    }
+  ],
+  "failures": [
+    {
+      "source": "bubbles.chaos seed 20260524",
+      "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
+    }
+  ],
+  "lastUpdatedAt": "2026-05-24T23:17:08Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "routing": {
+    "nextOwner": null,
+    "targetSpec": "specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001",
+    "targetScope": "scope-1-idempotent-replay-burst",
+    "constraint": "Validation-owned certification completed with concerns; no routed owner remains for the replay/G048 behavior fix. Literal done remains blocked by legacy report evidence-fence cleanup."
+  },
+  "notes": "Chaos-owned closure verification, bubbles.test phase certification, focused bubbles.regression provenance, bubbles.simplify cleanup provenance, bubbles.devops test-stack lifecycle remediation, bubbles.stabilize closure rerun, bubbles.security provenance, bubbles.docs managed-doc publication, bubbles.audit diagnostic provenance, G048 implementation repair, and validation certification are recorded for BUG-CHAOS-20260524-001. The prior disposable test-stack host-port release blocker is closed by current-session stabilization, audit, and validate stress evidence. Security found no raw payload exposure, credential leakage, output-channel coupling, or unsafe replay behavior. Docs updated the managed replay contract for first accepted replay versus idempotent repeat replay. G048 silent redaction_state decode rework is repaired with contextual decode propagation and deterministic scanner regressions. The standalone bug packet is done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+}

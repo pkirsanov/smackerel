@@ -54,6 +54,10 @@ func redactedHealthMessage(kind string) string {
 		return "source authentication failed"
 	case "connectivity_failed", "timeout", "dns_failed":
 		return "source connectivity check failed"
+	case "dead_letter_pressure":
+		return "source dead-letter pressure threshold exceeded"
+	case "invalid_config", "missing_source_instance_id", "missing_source_form", "missing_transport_mode", "missing_endpoint", "missing_topics", "invalid_auth_mode", "missing_config_hash", "missing_redacted_metadata":
+		return "source configuration missing required field"
 	case "transient_failure", "rate_limited", "upstream_5xx":
 		return "transient source check failed"
 	default:

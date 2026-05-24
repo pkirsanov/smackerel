@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/notification"
+	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
 )
 
 type NotificationSourceStatusProvider interface {
@@ -13,19 +14,29 @@ type NotificationSourceStatusProvider interface {
 }
 
 type NotificationHandlers struct {
-	sources NotificationSourceStatusProvider
-	store   *notification.Store
-	service *notification.Service
+	sources      NotificationSourceStatusProvider
+	store        *notification.Store
+	service      *notification.Service
+	ntfyWebhooks *ntfysource.WebhookReceiverRegistry
+	ntfyStore    *ntfysource.Store
 }
 
 func NewNotificationHandlers(store *notification.Store, service *notification.Service) *NotificationHandlers {
+	return NewNotificationHandlersWithNtfyWebhookReceiver(store, service, nil)
+}
+
+func NewNotificationHandlersWithNtfyWebhookReceiver(store *notification.Store, service *notification.Service, receiver *ntfysource.WebhookReceiverRegistry) *NotificationHandlers {
+	return NewNotificationHandlersWithNtfyWebhookReceiverAndStore(store, service, receiver, nil)
+}
+
+func NewNotificationHandlersWithNtfyWebhookReceiverAndStore(store *notification.Store, service *notification.Service, receiver *ntfysource.WebhookReceiverRegistry, ntfyStore *ntfysource.Store) *NotificationHandlers {
 	if store == nil {
 		panic("api: notification store is required")
 	}
 	if service == nil {
 		panic("api: notification service is required")
 	}
-	return &NotificationHandlers{sources: store, store: store, service: service}
+	return &NotificationHandlers{sources: store, store: store, service: service, ntfyWebhooks: receiver, ntfyStore: ntfyStore}
 }
 
 type notificationSourcesResponse struct {

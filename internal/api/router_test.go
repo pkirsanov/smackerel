@@ -77,6 +77,15 @@ func (m *mockWebUI) NotificationDashboard(w http.ResponseWriter, r *http.Request
 func (m *mockWebUI) NotificationSourcesPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+func (m *mockWebUI) NotificationNtfySourcePage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationNtfyDeadLettersPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+func (m *mockWebUI) NotificationNtfyDeadLetterDetailPage(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
 func (m *mockWebUI) NotificationEventsPage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }

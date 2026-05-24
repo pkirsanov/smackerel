@@ -24,6 +24,7 @@ This guide defines Smackerel's CLI-owned test surface and the isolation rules fo
 - **Actionable list tests**: list CRUD, item completion (done/skipped/substituted), domain-aware aggregation (recipe ingredients, reading lists, product comparisons)
 - **Observability tests**: Prometheus metric registration, counter increments, histogram recording, W3C traceparent header injection/extraction
 - **Pipeline tests**: dedup, processing, embedding format, tier assignment, synthesis subscriber
+- **ntfy source adapter tests**: explicit `NTFY_SOURCES_JSON` validation, webhook receiver registration, valid ntfy message ingest through `SourceEventSink`, malformed payload dead-lettering, reconnect state, topic lag, replay-through-source-sink idempotency, multi-topic/multi-instance provenance, and no output-channel coupling
 
 ## Current Validation Surface
 
@@ -53,6 +54,50 @@ The current CLI-owned runtime surface exposes these categories today:
 | End-to-end API | `e2e-api` | `./smackerel.sh test e2e` |
 | End-to-end UI | `e2e-ui` | `./smackerel.sh test e2e` (web UI paths included) |
 | Stress | `stress` | `./smackerel.sh test stress` |
+
+### ntfy Source Adapter Test Surface (Spec 055)
+
+Spec 055 test coverage is focused on the adapter boundary: ntfy transport and
+payload translation live in `internal/notification/source/ntfy`, while the core
+notification package remains source-neutral. Tests must prove that accepted
+ntfy events enter through `SourceEventSink`, malformed or rejected events are
+dead-lettered with redaction, the first accepted replay goes back through the
+source sink, repeated replay is side-effect idempotent, and the adapter never
+performs output dispatch.
+
+| Test type | Command | Primary coverage |
+|-----------|---------|------------------|
+| Unit | `./smackerel.sh test unit --go --go-run 'TestNtfy\|TestValidate_DBMaxConns_Missing' --verbose` | Config validation, explicit `auth_mode=none`, secret-reference validation for credential-backed modes, mapper field preservation, lifecycle handling, health transitions, dead-letter eligibility, replay boundaries, webhook route unit coverage, and no-output-coupling guards. |
+| Integration | `./smackerel.sh test integration --go-run 'TestNtfy'` | Runtime startup from `NTFY_SOURCES_JSON`, webhook receiver registration, raw/normalized persistence through the source sink, invalid enabled source health, reconnect/lag state, replay attempts, replay burst idempotency, and multi-topic/multi-instance provenance. |
+| E2E API/UI | `./smackerel.sh test e2e --go-run 'TestNtfy'` | Authenticated webhook ingest, malformed payload rejection, source detail, reconnect, dead-letter list/detail/replay, idempotent replay API responses, operator web source pages, replay confirmation copy, redaction, and source/output boundary markers. |
+| Stress | `./smackerel.sh test stress --go-run 'TestNtfy'` | Concurrent webhook burst acceptance, duplicate source-event provenance, malformed-payload burst dead-lettering, reconnect control under load, and redaction of secret-like malformed content. |
+| Format | `./smackerel.sh format --check` | Go/Python formatting stays clean after ntfy changes. |
+| Lint | `./smackerel.sh lint` | Go vet, Python ruff, and web asset validation stay clean after ntfy changes. |
+| Artifact lint | `bash .github/bubbles/scripts/artifact-lint.sh specs/055-notification-source-ntfy-adapter` | Spec packet structure remains valid. |
+| Traceability guard | `timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/055-notification-source-ntfy-adapter` | Scenario manifest, tests, report evidence references, and DoD mappings remain coherent. |
+
+Current concrete ntfy test files:
+
+| File | Coverage |
+|------|----------|
+| `internal/api/notifications_ntfy_test.go` | Production webhook route dispatches to the registered receiver and rejects malformed, wrong-topic, not-running, and non-webhook-source cases. |
+| `internal/notification/source/ntfy/config_test.go` | Enabled instances require explicit identity, form/mode, endpoint identity, topic set, config hash, redacted metadata, and credential refs except explicit `auth_mode=none`. |
+| `internal/notification/source/ntfy/mapper_test.go` | ntfy fields, unknown safe fields, lifecycle events, priority/tag hints, and raw JSON mapping. |
+| `internal/notification/source/ntfy/health_test.go` | Connected/degraded/disconnected transitions, retry count, lag thresholds, and redacted error categories. |
+| `internal/notification/source/ntfy/dead_letter_test.go` | Redacted dead-letter causes, payload hashes/previews, replay eligibility, and bounded sink retry. |
+| `internal/notification/source/ntfy/provenance_test.go` | Topic/source-instance provenance and loop metadata preservation. |
+| `internal/notification/source/ntfy/no_output_coupling_test.go` | Static guard that ntfy production files do not import output-channel packages or dispatch paths. |
+| `internal/notification/no_ntfy_core_dependency_test.go` | Static guard that core notification production code has no ntfy-specific dependency. |
+| `internal/notification/source/ntfy/*_integration_test.go` | Live PostgreSQL-backed adapter integration for raw/normalized records, invalid source health, reconnect state, replay, replay burst idempotency, and provenance. |
+| `tests/integration/notification_ntfy_runtime_test.go` | Runtime startup from JSON and webhook receiver registration. |
+| `tests/e2e/notification_ntfy_source_api_test.go` | Live API workflow for webhook ingest, reconnect, dead-letter list/detail, replay, idempotent repeat replay responses, invalid limit, and redaction. |
+| `tests/e2e/notification_ntfy_source_ui_test.go` | Operator web pages for source list, ntfy detail, dead letters, replay confirmation, and boundary text. |
+| `tests/stress/notification_ntfy_source_stress_test.go` | Burst webhook and malformed/dead-letter/reconnect stress coverage. |
+
+Evidence for spec 055 closeout should be recorded in
+`specs/055-notification-source-ntfy-adapter/report.md` with `**Claim Source:**
+tags. For docs-only alignment, rerun artifact lint and traceability guard after
+the documentation edits so the spec packet still passes its governance checks.
 
 ### Go Package Coverage
 

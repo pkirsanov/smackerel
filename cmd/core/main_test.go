@@ -435,5 +435,5 @@ func TestShutdownAll_ParallelSubscriberStop(t *testing.T) {
 func TestShutdownAll_NilSubscribersHandled(t *testing.T) {
 	// shutdownAll with all nil components should complete without panic.
 	// This exercises the nil-guard pattern in the parallel subscriber stop.
-	shutdownAll(5, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	shutdownAll(5, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
