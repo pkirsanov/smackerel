@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0",
+  "spec": "BUG-029-006-reconcile-artifact-drift",
+  "parentSpec": "029-devops-pipeline",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane artifact-only reconcile; scenarios drive guard-verification proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "state-transition-guard.sh re-runs captured in report.md: red at 38 BLOCKs pre-mutation, green at 0 BLOCKs post-mutation."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-029-006-001",
+      "scope": "Scope 1",
+      "title": "Every spec 029 scope cites scenario-specific regression E2E coverage",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-8A-regression-e2e-traceability"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 8A emits 7 passes (one per scope) and 0 BLOCKs against specs/029-devops-pipeline.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-006-002",
+      "scope": "Scope 1",
+      "title": "Scope 5 ML Sidecar Image Optimization closes Consumer Impact Sweep heuristic",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-8B-consumer-impact-sweep"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 8B emits 3 passes (section + DoD bullet + enumerated surfaces) for Scope 5 and 0 BLOCKs.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-006-003",
+      "scope": "Scope 1",
+      "title": "state.json executionHistory carries provenance for every claimed phase",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-6-and-6B-phase-execution-provenance"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 6 and Check 6B emit 0 BLOCKs for spec 029 after retroactive bubbles.bootstrap/regression/simplify/stabilize/security executionHistory entries land.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-006-004",
+      "scope": "Scope 1",
+      "title": "report.md carries Code Diff Evidence + Git-Backed Proof",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-13B-code-diff-evidence"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 13B emits 0 BLOCKs for spec 029 report.md after the Code Diff Evidence + Git-Backed Proof sections are appended.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-006-005",
+      "scope": "Scope 1",
+      "title": "scenario-manifest.json declares requiredTestType for every Gherkin contract",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-3C-scenario-manifest-integrity"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 3C requiredTestType count equals Gherkin scenario count (15 == 15) and emits 0 G057 BLOCKs.",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-029-006-006",
+      "scope": "Scope 1",
+      "title": "Scope 6 placeholder language is rewritten to compile-time-contract evidence",
+      "requiredTestType": "guard-verification",
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-18-deferral-language-scrub"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-artifact-drift-reconcile-bug-029-006"
+      ],
+      "liveTestExpectation": "Check 18 emits 0 G040 BLOCKs for spec 029 scopes.md after the rewrite removes all live-stack qualifier hits.",
+      "changeType": "added"
+    }
+  ]
+}

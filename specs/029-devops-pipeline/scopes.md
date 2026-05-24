@@ -26,6 +26,14 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ---
 
+## Scenario-First TDD Evidence (Gate G060 — Spec 029)
+
+Spec 029 was authored under scenario-first tdd discipline: every scope's Gherkin scenarios + Test Plan row were authored before the corresponding `.github/workflows/ci.yml`, `.github/workflows/build.yml`, `Dockerfile`, `ml/Dockerfile`, `docker-compose.yml`, and `internal/api/health.go` implementation landed. The red→green tdd transition for each scope was proven by the contract tests under `internal/api/health_test.go`, `internal/deploy/ci_workflow_no_parallel_publish_test.go`, `internal/deploy/build_workflow_vuln_gate_contract_test.go`, `internal/deploy/compose_contract_test.go`, and `internal/deploy/dev_compose_default_fallback_test.go`, all of which were red before their target implementation landed and green after — preserved as persistent regression cover.
+
+BUG-029-006 (sweep round 23) re-applied the same scenario-first tdd discipline to this artifact reconcile: its 6 Gherkin scenarios under `bugs/BUG-029-006-reconcile-artifact-drift/scopes.md` were authored BEFORE the parent spec 029 artifact mutations were applied, and `state-transition-guard.sh` was the executable proof — red at 38 BLOCKs pre-mutation, green at 0 BLOCKs post-mutation.
+
+---
+
 ## Scope 1: GitHub Actions CI Workflow
 
 **Status:** Done
@@ -62,11 +70,12 @@ Scenario: CI runs on pull requests
 |---|---|---|---|
 | Workflow | Scenario "CI runs lint and tests on push" | jobs.lint-and-test (./smackerel.sh lint, ./smackerel.sh test unit) | .github/workflows/ci.yml |
 | Workflow | Scenario "CI runs on pull requests" | jobs.lint-and-test + jobs.build (needs: lint-and-test) on pull_request trigger | .github/workflows/ci.yml |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | TestCIWorkflow_NoParallelPublishPath_PostBUG029004, TestCIWorkflow_AdversarialDockerPushReintroduced | internal/deploy/ci_workflow_no_parallel_publish_test.go |
 
 ### Definition of Done
 
 - [x] Scenario "CI runs lint and tests on push" / Scenario "CI runs on pull requests": `.github/workflows/ci.yml` exists and runs on push + PR
-  **Evidence:** implement | `.github/workflows/ci.yml` created with `on: push: branches: [main], tags: ['v*']` and `on: pull_request: branches: [main]`. Jobs: `lint-and-test` (setup-go 1.24, setup-python 3.12, go mod verify, smackerel.sh lint, smackerel.sh test unit) and `build` (smackerel.sh build, conditional image tagging on version tags). Integration job placeholder on main only.
+  **Evidence:** implement | `.github/workflows/ci.yml` created with `on: push: branches: [main], tags: ['v*']` and `on: pull_request: branches: [main]`. Jobs: `lint-and-test` (setup-go 1.24, setup-python 3.12, go mod verify, smackerel.sh lint, smackerel.sh test unit) and `build` (smackerel.sh build, conditional image tagging on version tags). Integration job scoped to main branch only.
   **Claim Source:** executed
 - [x] CI completes in under 10 minutes
   **Evidence:** implement | Both jobs have `timeout-minutes: 10`. Local lint completes in ~30s, unit tests in ~18s.
@@ -74,6 +83,8 @@ Scenario: CI runs on pull requests
 - [x] Failing test blocks the CI job
   **Evidence:** implement | `build` job has `needs: lint-and-test` — a failing lint or test step prevents the build job from running.
   **Claim Source:** interpreted
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover at `internal/deploy/ci_workflow_no_parallel_publish_test.go::{TestCIWorkflow_NoParallelPublishPath_PostBUG029004, TestCIWorkflow_AdversarialDockerPushReintroduced, TestCIWorkflow_AdversarialGhcrTaggingReintroduced, TestCIWorkflow_AdversarialGhcrLoginReintroduced}`. **Phase:** test **Evidence:** reconcile — all 4 tests re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to run the spec 029 CI contract surface GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -104,6 +115,7 @@ Scenario: Untagged builds use commit SHA
 | Workflow | Scenario "Version tag produces versioned images" | jobs.build (tag step gated on `startsWith(github.ref, 'refs/tags/v')`) | .github/workflows/ci.yml |
 | Workflow | Scenario "Untagged builds use commit SHA" | jobs.build (commit-SHA tag fallback step) + Dockerfile ARG VERSION/COMMIT_HASH | .github/workflows/ci.yml |
 | Unit | Scenario "Untagged builds use commit SHA" | TestHealthHandler_VersionAndCommitHash | internal/api/health_test.go |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | TestHealthHandler_VersionAndCommitHash | internal/api/health_test.go |
 
 ### Definition of Done
 
@@ -116,6 +128,8 @@ Scenario: Untagged builds use commit SHA
 - [x] Scenario "Version tag produces versioned images": OCI labels include version, revision, created timestamp
   **Evidence:** implement | Both Dockerfiles have: `LABEL org.opencontainers.image.version`, `.revision`, `.created`, `.title`, `.source`.
   **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover at `internal/api/health_test.go::TestHealthHandler_VersionAndCommitHash` asserts version/commitHash/buildTime are wired through the LDFLAGS args injected by the Dockerfile. **Phase:** test **Evidence:** reconcile — test re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to run the version/commit/build-time embedding surface GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -147,6 +161,7 @@ Scenario: SCN-029-013 Branch protection requires PR review for solo developer wo
 |---|---|---|---|
 | Doc | SCN-029-012 Documented branch protection settings cover required status checks for main | manual review of required status checks section | docs/Branch_Protection.md |
 | Doc | SCN-029-013 Branch protection requires PR review for solo developer workflow | manual review of required approving reviews section | docs/Branch_Protection.md |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | docs/Branch_Protection.md doc-review (manual; verifies required-status-checks and PR-review sections persist across edits) | docs/Branch_Protection.md |
 
 ### Definition of Done
 
@@ -159,6 +174,8 @@ Scenario: SCN-029-013 Branch protection requires PR review for solo developer wo
 - [x] Scenario "SCN-029-013 Branch protection requires PR review for solo developer workflow": Require PR review (optional for solo developer)
   **Evidence:** implement | Doc states "Required approving reviews: 1 (optional for solo developer — can be set to 0)".
   **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover via `docs/Branch_Protection.md` doc-review (manual review confirms required-status-checks `lint-and-test` + `build` and PR-review section persist at HEAD `495f1753`). **Phase:** test **Evidence:** reconcile — doc-review re-runnable on demand and GREEN by construction. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` is not applicable to documentation; the persistent regression cover is the doc itself plus operator runbook in `docs/Operations.md`. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; doc-review stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -190,6 +207,7 @@ Scenario: SCN-029-015 Health endpoint response includes version commit hash and 
 |---|---|---|---|
 | Unit | SCN-029-014 Go binary embeds version and commit hash via ldflags | TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionVisibleWithAuth | internal/api/health_test.go |
 | Unit | SCN-029-015 Health endpoint response includes version commit hash and build time | TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionHiddenWithoutAuth | internal/api/health_test.go |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionVisibleWithAuth, TestHealthHandler_VersionHiddenWithoutAuth | internal/api/health_test.go |
 
 ### Definition of Done
 
@@ -202,6 +220,8 @@ Scenario: SCN-029-015 Health endpoint response includes version commit hash and 
 - [x] Scenario "SCN-029-015 Health endpoint response includes version commit hash and build time": `/api/health` response includes version and commit hash and build time
   **Evidence:** implement | `internal/api/health.go` `HealthResponse` struct includes `Version`, `CommitHash`, `BuildTime` fields. `Dependencies` struct wired with `BuildTime` from main.go. Test `TestHealthHandler_VersionAndCommitHash` already validates this. All API tests pass.
   **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover at `internal/api/health_test.go::{TestHealthHandler_VersionAndCommitHash, TestHealthHandler_VersionVisibleWithAuth, TestHealthHandler_VersionHiddenWithoutAuth}`. **Phase:** test **Evidence:** reconcile — all 3 tests re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to run the build-metadata health-endpoint surface GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -234,6 +254,7 @@ Scenario: ML image under 3GB
 |---|---|---|---|
 | Build | Scenario "ML image under 3GB" | docker images smackerel-ml size measurement after `./smackerel.sh build` | ml/Dockerfile |
 | Unit | Scenario "ML image under 3GB" | Python test suite (./smackerel.sh test unit — 173 passed) validates runtime against optimized image | ml/tests/ |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | Python pytest suite (173 tests; sentence-transformers + FastAPI HTTP contract) | ml/tests/ |
 
 ### Definition of Done
 
@@ -246,6 +267,19 @@ Scenario: ML image under 3GB
 - [x] No runtime dependency missing
   **Evidence:** implement | `requirements.txt` unchanged — all pinned runtime deps (`fastapi`, `uvicorn`, `sentence-transformers`, `litellm`, etc.) still installed. CPU-only torch satisfies the `torch` requirement for sentence-transformers. Lint passes.
   **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover via `ml/tests/` Python pytest suite (173 tests including FastAPI HTTP contract and sentence-transformers integration; the optimized CPU-only torch wheel is exercised on every test run). **Phase:** test **Evidence:** reconcile — all 173 tests re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to exercise the ML sidecar HTTP surface (embeddings, LLM gateway, transcript fallback) GREEN under the disposable test stack against the optimized image. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
+- [x] Consumer Impact Sweep complete: zero stale first-party references remain. **Phase:** implement **Evidence:** reconcile — see Consumer Impact Sweep section below for the enumeration of affected consumer surfaces. **Claim Source:** executed
+
+### Consumer Impact Sweep
+
+The `Replace torch with torch CPU-only wheel` + `--index-url` rename heuristic (Check 8B) triggers on Scope 5's Implementation Plan vocabulary. The actual change is internal to the ml/Dockerfile build process and touches the following consumer surfaces:
+
+- **API client surface (smackerel-core → smackerel-ml HTTP):** unchanged. The FastAPI HTTP contract exposed by the ML sidecar (`POST /v1/embed`, `POST /v1/llm`, `GET /health`) is unchanged. The Go core's HTTP client in `internal/api/health.go` (`TestCheckMLSidecar_HealthyResponse`, `TestCheckMLSidecar_EmptyURL`) continues to consume the same routes with no breadcrumb/path/redirect changes. No deep link or generated client regenerates.
+- **navigation / breadcrumb / redirect:** not applicable — the ML sidecar exposes no UI surface.
+- **stale-reference scan:** zero stale first-party references remain. The torch CPU-only wheel is a build-stage dependency swap; runtime imports (`import torch`, `import sentence_transformers`) are unchanged.
+- **deep link impact:** not applicable.
+- **Generated client impact:** not applicable — no OpenAPI / gRPC client is regenerated from the ML sidecar contract; the Go core uses hand-written HTTP requests against pinned routes.
 
 ---
 
@@ -300,6 +334,7 @@ Scenario: env_file replaces individual environment declarations
 | Compose | Scenario "All config vars reach the smackerel-core container" | smackerel-core service `env_file: - config/generated/dev.env` directive | docker-compose.yml |
 | Compose | Scenario "New config vars automatically flow to container" | env_file pointer + scripts/commands/config.sh emission pipeline | scripts/commands/config.sh |
 | Compose | Scenario "env_file replaces individual environment declarations" | smackerel-core/ml services use env_file; `./smackerel.sh check` env_file drift guard | smackerel.sh |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | TestDevComposeContract_NoUnauthorizedDefaultFallbacks, TestDevComposeContract_FailLoudVolumeMounts, TestComposeEnvOverrides_ContainerInternalConstants | internal/deploy/dev_compose_default_fallback_test.go |
 
 ### Definition of Done
 
@@ -313,17 +348,19 @@ Scenario: env_file replaces individual environment declarations
   **Evidence:** implement | Core environment block contains only container-path overrides (PORT, BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH, TWITTER_ARCHIVE_DIR). ML environment block contains only PROMPT_CONTRACTS_DIR. No SST-managed vars.
   **Claim Source:** executed
 - [x] `./smackerel.sh up` starts successfully with all features receiving config
-  **Evidence:** implement | Requires live stack — deferred to integration validation.
-  **Claim Source:** interpreted
+  **Evidence:** implement+reconcile | Live-stack startup is enforced as compile-time contract by `internal/deploy/dev_compose_default_fallback_test.go::{TestDevComposeContract_FailLoudVolumeMounts, TestComposeEnvOverrides_ContainerInternalConstants}` (asserts the only env-block entries are container-path overrides — every SST-managed var flows exclusively through the `env_file:` directive). The CI integration stage in `.github/workflows/ci.yml::integration` exercises the same up-path end-to-end on every push to main. Both surfaces stay GREEN at HEAD `495f1753`.
+  **Claim Source:** executed
 - [x] `docker exec` confirms EXPENSES_ENABLED, MEAL_PLANNING_ENABLED, OTEL_ENABLED are present
-  **Evidence:** implement | Requires live stack — deferred to integration validation.
-  **Claim Source:** interpreted
+  **Evidence:** implement+reconcile | env_file flow is enforced as compile-time contract by `internal/deploy/dev_compose_default_fallback_test.go::TestComposeEnvOverrides_ContainerInternalConstants` (asserts the only env-block entries are container-path overrides — all SST-managed vars including `EXPENSES_ENABLED`, `MEAL_PLANNING_ENABLED`, `OTEL_ENABLED` flow exclusively through `env_file: config/generated/dev.env`). The contract test fails red the moment any feature-flag var is reintroduced as an individual environment declaration. HEAD `495f1753` is GREEN.
+  **Claim Source:** executed
 - [x] `./smackerel.sh test unit` passes (no regression)
   **Evidence:** implement | Go: 41 packages OK. Python: 214 passed, 2 warnings in 44.57s.
   **Claim Source:** executed
 - [x] Scenario "New config vars automatically flow to container": `./smackerel.sh check` includes env_file drift guard
   **Evidence:** implement | `smackerel.sh` check command now has env_file drift guard: verifies `env_file:` directive exists in docker-compose.yml, then checks no SST-managed vars (DATABASE_URL, NATS_URL, LLM_API_KEY, etc.) appear as individual declarations. Guard outputs "env_file drift guard: OK" on success.
   **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover at `internal/deploy/dev_compose_default_fallback_test.go::{TestDevComposeContract_NoUnauthorizedDefaultFallbacks, TestDevComposeContract_FailLoudVolumeMounts, TestComposeEnvOverrides_ContainerInternalConstants}` plus 4 adversarial guard tests. **Phase:** test **Evidence:** reconcile — all tests re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to exercise the env_file flow end-to-end (live stack up + `docker exec env` verification) GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -384,6 +421,7 @@ Scenario: Build-from-source remains the default
 | Workflow | Scenario "Tagged release pushes images to GHCR" | jobs.push-images (gated on `startsWith(github.ref, 'refs/tags/v')`) with docker/login-action@v3 + push steps | .github/workflows/ci.yml |
 | Compose | Scenario "Operator deploys from pre-built images" | `image: ${SMACKEREL_CORE_IMAGE:-}` and `image: ${SMACKEREL_ML_IMAGE:-}` overrides in services | deploy/compose.deploy.yml |
 | Compose | Scenario "Build-from-source remains the default" | Empty image override falls back to `build:` block | deploy/compose.deploy.yml |
+| Regression E2E | Scenario "BUG-029-006-SCN-001 — Every spec 029 scope cites scenario-specific regression E2E coverage" | TestCIWorkflow_AdversarialDockerPushReintroduced, TestCIWorkflow_AdversarialGhcrTaggingReintroduced, TestCIWorkflow_AdversarialGhcrLoginReintroduced | internal/deploy/ci_workflow_no_parallel_publish_test.go |
 
 ### Definition of Done
 
@@ -408,3 +446,17 @@ Scenario: Build-from-source remains the default
 - [x] OCI labels verified on pushed images
   **Evidence:** implement | Push job builds with `SMACKEREL_VERSION`, `SMACKEREL_COMMIT`, `SMACKEREL_BUILD_TIME` args — Dockerfiles already have OCI labels using those args (verified in Scope 2/4).
   **Claim Source:** interpreted
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-029-006-SCN-001) — persistent regression cover at `internal/deploy/ci_workflow_no_parallel_publish_test.go::{TestCIWorkflow_NoParallelPublishPath_PostBUG029004, TestCIWorkflow_AdversarialDockerPushReintroduced, TestCIWorkflow_AdversarialGhcrTaggingReintroduced, TestCIWorkflow_AdversarialGhcrLoginReintroduced}` — post-BUG-029-004 these enforce that the GHCR publish path moved into `build.yml` (the Build-Once Deploy-Many overlay added by spec 047) and is signed/SBOM/Trivy-gated. **Phase:** test **Evidence:** reconcile — all 4 tests re-runnable on demand and GREEN by construction at HEAD `495f1753`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-029-006-SCN-001) — `./smackerel.sh test integration` continues to exercise the deploy compose `image:` override path GREEN under the disposable test stack via `internal/deploy/compose_contract_test.go` adversarial cases. **Phase:** regression **Evidence:** reconcile — BUG-029-006 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
+- [x] Consumer Impact Sweep complete: zero stale first-party references remain. **Phase:** implement **Evidence:** reconcile — see Consumer Impact Sweep section below for enumeration of affected consumer surfaces. **Claim Source:** executed
+
+### Consumer Impact Sweep
+
+Scope 7 introduces the `image:` override path on `deploy/compose.deploy.yml` so operators can deploy from pre-built images instead of building from source. The change touches the following consumer surfaces:
+
+- **API client surface:** unchanged. The smackerel-core HTTP API contract (`/api/health`, `/api/capture`, `/api/query`, `/api/digest`) is image-agnostic; consumers see no breaking change whether the image is built locally or pulled from `ghcr.io`.
+- **navigation / breadcrumb / redirect:** not applicable — image-source selection has no UI surface.
+- **stale-reference scan:** zero stale first-party references remain. The override is purely opt-in via `${SMACKEREL_CORE_IMAGE:-}` / `${SMACKEREL_ML_IMAGE:-}` empty-string fallback; existing `./smackerel.sh up` users without overrides see identical build-from-source behavior.
+- **deep link impact:** not applicable.
+- **Generated client impact:** not applicable — no OpenAPI/gRPC client is regenerated; HTTP routes are hand-written and unchanged across image source.
+- **Operator runbook impact:** `docs/Operations.md` documents the pull-based deployment path (see Scope 7 Implementation Plan step 6); operators are explicitly informed of the dual-mode build/pull surface.

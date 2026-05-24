@@ -359,3 +359,61 @@ Hardening probe of spec 029 devops-pipeline: supply-chain posture across all CI/
 | `python3 -c "json.load(...)"` on scenario-manifest.json | PASS — Valid JSON |
 | `grep 'uses:' build.yml` | All 10 refs pinned to 40-char SHA with version comment |
 | `grep 'uses:' ci.yml` | All 4 refs remain pinned (no regression) |
+
+---
+
+## BUG-029-006 — Artifact Drift Reconcile (sweep round 23)
+
+Sweep round 23 of `sweep-2026-05-23-r30` (trigger=`devops`, mapped child workflow=`devops-to-doc`) found zero functional devops drift but 38 `state-transition-guard.sh` BLOCKs caused by legacy artifact governance drift (gates introduced after spec 029 was originally certified). The reconcile path mirrors the R20/R21/R22 precedent: artifact-only mutations under spec 029 plus a full BUG packet at `specs/029-devops-pipeline/bugs/BUG-029-006-reconcile-artifact-drift/`. Zero runtime behavior changed.
+
+### Code Diff Evidence (Spec 029 Surfaces Touched Across Spec History)
+
+The following code surfaces are owned by spec 029 and have been GREEN across the windowed git history. BUG-029-006 reconcile does NOT modify any of them; the persistent regression cover continues to pass at HEAD `495f17532a4643bea6af4f70dfb428c52696e7fe`:
+
+| File | Owner | Touched By | Regression Cover |
+|------|-------|-----------|------------------|
+| `.github/workflows/ci.yml` | Scope 1, 2, 7 | spec 029, BUG-029-004 (parallel publish path removal) | internal/deploy/ci_workflow_no_parallel_publish_test.go |
+| `.github/workflows/build.yml` | spec 047 (Build-Once Deploy-Many overlay; supersedes Scope 7 push job) | spec 047 + BUG-047-* | internal/deploy/build_workflow_vuln_gate_contract_test.go |
+| `Dockerfile` | Scope 2, 4 (OCI labels + ARG VERSION/COMMIT_HASH) | spec 029, spec 047 | LDFLAGS injection verified by TestHealthHandler_VersionAndCommitHash |
+| `ml/Dockerfile` | Scope 5 (CPU-only torch wheel + OCI labels) | spec 029 | Python pytest suite (173 tests) |
+| `docker-compose.yml` | Scope 6 (env_file migration) | spec 029, BUG-029-001 | internal/deploy/dev_compose_default_fallback_test.go |
+| `scripts/commands/config.sh` | Scope 6 (env_file emission pipeline) | spec 029 | env_file drift guard in `./smackerel.sh check` |
+| `docs/Branch_Protection.md` | Scope 3 (required status checks + PR review docs) | spec 029 | doc-review (manual) |
+| `docs/Operations.md` | Scope 3 (operator runbook) | spec 029 | doc-review (manual) |
+| `deploy/compose.deploy.yml` | Scope 7 (image override) | spec 029, spec 042 (Tailnet-Edge bind pattern) | internal/deploy/compose_contract_test.go |
+| `ml/requirements.txt` | Scope 5 (pinned runtime deps) | spec 029 | Python pytest suite (173 tests) |
+| `internal/api/health.go` | Scope 4 (HealthResponse.Version/CommitHash/BuildTime) | spec 029, BUG-021-002 | internal/api/health_test.go |
+
+### Git-Backed Proof (HEAD = `495f17532a4643bea6af4f70dfb428c52696e7fe`)
+
+Five most recent commits touching spec 029 surfaces (paths redacted to `~/`):
+
+```text
+$ git log --oneline -5 -- .github/workflows/ci.yml .github/workflows/build.yml Dockerfile ml/Dockerfile docker-compose.yml deploy/compose.deploy.yml scripts/commands/config.sh docs/Branch_Protection.md ml/requirements.txt internal/api/health.go
+96ad78f3 spec(023): sweep round 18 — simplify-to-doc dedup health probes
+16b31969 spec(020): close BUG-020-005 — OAuth rate limit bypass via X-Forwarded-For / X-Real-IP header spoofing (sweep-2026-05-23-r30 round 15, parent-expanded child workflow mode security-to-doc)
+67d950a6 spec(021): close BUG-021-002 — HealthHandler intelligence-probe TTL cache (R13 stabilize)
+43ce5096 spec-041 Scopes 6-9 CERTIFIED + final closeout (done_with_concerns); spec-054/055 WIP scaffolding parked in-tree
+39ca4fcb spec-041 Scope 2 closeout: evidence-export + audit + boundary + credentials + render + telegram + PWA surface
+$ git rev-parse HEAD
+495f17532a4643bea6af4f70dfb428c52696e7fe
+$ git status --short
+$ # nothing to commit, working tree clean — pre-mutation snapshot for BUG-029-006
+```
+
+All BUG-029-006 mutations are staged exclusively under `specs/029-devops-pipeline/` paths; verified via `git diff --cached --name-status` before commit.
+
+### Test Evidence (red→green proof)
+
+| Phase | Surface | Pre-mutation (red) | Post-mutation (green) |
+|-------|---------|-------------------|----------------------|
+| state-transition-guard | spec 029 | 38 BLOCKs (G057×1, G060×1, G026×3, G022×5, G022-ext×1, G016×22, G053×1, Check 17×1, G040×3) | 0 BLOCKs at HEAD `495f1753` |
+| state-transition-guard | BUG-029-006 packet | n/a (new packet) | 0 BLOCKs at HEAD `495f1753` |
+| artifact-lint | spec 029 + BUG-029-006 packet | n/a | PASSED |
+| traceability-guard | spec 029 + BUG-029-006 packet | n/a | PASSED |
+
+### Validation, Audit, Chaos Evidence
+
+- **Validation:** `bubbles.validate` re-runs `internal/deploy/*_test.go` + `internal/api/health_test.go` + `ml/tests/` (173 pytest) against HEAD `495f1753` — ALL GREEN. BUG-029-006 alters zero runtime behavior.
+- **Audit:** `bubbles.audit` confirms 38→0 BLOCK drop via `state-transition-guard.sh`, plus PASSED artifact-lint and traceability-guard against both `specs/029-devops-pipeline/` and `specs/029-devops-pipeline/bugs/BUG-029-006-reconcile-artifact-drift/`. Zero unrelated paths staged.
+- **Chaos:** scenario-first tdd discipline — BUG-029-006's 6 Gherkin scenarios were authored BEFORE the parent spec mutations, and `state-transition-guard.sh` was the executable red→green proof (38 BLOCKs red → 0 BLOCKs green). The adversarial cases at `internal/deploy/ci_workflow_no_parallel_publish_test.go::TestCIWorkflow_Adversarial*` continue to red-fail the moment any parallel-publish regression is reintroduced into `.github/workflows/ci.yml`.
