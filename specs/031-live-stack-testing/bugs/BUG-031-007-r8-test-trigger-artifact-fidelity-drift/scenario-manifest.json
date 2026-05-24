@@ -1,0 +1,67 @@
+{
+  "version": 2,
+  "specId": "BUG-031-007",
+  "featureDir": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift",
+  "generatedBy": "bubbles.workflow (parent-expanded child mode for sweep-2026-05-23-r30 round 8)",
+  "generatedAt": "2026-05-23T10:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-031-007-SCN-001",
+      "name": "SCN-LST-005 references only real functions",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/scopes.md#gherkin-scenarios",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/bug.md", "function": "manifest_fidelity_audit_script"}
+      ],
+      "evidenceRefs": [
+        {"type": "artifact", "location": "specs/031-live-stack-testing/scenario-manifest.json::SCN-LST-005::linkedTests"},
+        {"type": "artifact", "location": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/report.md#implementation-evidence"}
+      ],
+      "linkedDoD": [
+        "T-031-001 closed: SCN-LST-005 linkedTests no longer contains the scripts/runtime/go-integration.sh::test_integration entry"
+      ]
+    },
+    {
+      "scenarioId": "BUG-031-007-SCN-002",
+      "name": "Parent state.json activeBugs reflects truth",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/scopes.md#gherkin-scenarios",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/bug.md", "function": "parent_state_bookkeeping_audit_script"}
+      ],
+      "evidenceRefs": [
+        {"type": "artifact", "location": "specs/031-live-stack-testing/state.json::activeBugs"},
+        {"type": "artifact", "location": "specs/031-live-stack-testing/state.json::resolvedBugs"},
+        {"type": "artifact", "location": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/report.md#implementation-evidence"}
+      ],
+      "linkedDoD": [
+        "T-031-002 closed: parent state.json activeBugs no longer contains BUG-031-006-strict-guard-gate-drift; resolvedBugs contains it"
+      ]
+    },
+    {
+      "scenarioId": "BUG-031-007-SCN-003",
+      "name": "SLA stress tests are anchored to SCN-LST-004",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/scopes.md#gherkin-scenarios",
+      "requiredTestType": ["stress"],
+      "linkedTests": [
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessTimeoutBoundary"},
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessTimeoutSilentBypass"},
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessAlways200Regression"}
+      ],
+      "evidenceRefs": [
+        {"type": "stress-test", "location": "tests/stress/ml_readiness_timeout_stress_test.go"},
+        {"type": "artifact", "location": "specs/031-live-stack-testing/scenario-manifest.json::SCN-LST-004::linkedTests"},
+        {"type": "artifact", "location": "specs/031-live-stack-testing/bugs/BUG-031-007-r8-test-trigger-artifact-fidelity-drift/report.md#implementation-evidence"}
+      ],
+      "linkedDoD": [
+        "T-031-003 closed: SCN-LST-004 linkedTests contains three new entries pointing at tests/stress/ml_readiness_timeout_stress_test.go and evidenceRefs contains a stress-test entry for the same file"
+      ]
+    }
+  ]
+}

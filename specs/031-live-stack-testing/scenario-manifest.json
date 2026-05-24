@@ -70,15 +70,19 @@
       "scope": "scope-06",
       "status": "active",
       "source": "specs/031-live-stack-testing/scopes.md#L231",
-      "requiredTestType": ["integration"],
+      "requiredTestType": ["integration", "stress"],
       "linkedTests": [
         {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_WaitForHealthy"},
         {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_TimeoutFallback"},
-        {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_Chaos_ContextCancelledMidWait"}
+        {"file": "tests/integration/ml_readiness_test.go", "function": "TestMLReadiness_Chaos_ContextCancelledMidWait"},
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessTimeoutBoundary"},
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessTimeoutSilentBypass"},
+        {"file": "tests/stress/ml_readiness_timeout_stress_test.go", "function": "TestMLReadinessAlways200Regression"}
       ],
       "evidenceRefs": [
         {"type": "integration-test", "location": "tests/integration/ml_readiness_test.go::TestMLReadiness_WaitForHealthy"},
-        {"type": "integration-test", "location": "tests/integration/ml_readiness_test.go::TestMLReadiness_TimeoutFallback"}
+        {"type": "integration-test", "location": "tests/integration/ml_readiness_test.go::TestMLReadiness_TimeoutFallback"},
+        {"type": "stress-test", "location": "tests/stress/ml_readiness_timeout_stress_test.go"}
       ],
       "linkedDoD": [
         "ML sidecar readiness gate prevents cold-start search failures"
@@ -93,8 +97,7 @@
       "requiredTestType": ["integration"],
       "linkedTests": [
         {"file": "tests/integration/helpers_test.go", "function": "testPool"},
-        {"file": "tests/integration/helpers_test.go", "function": "testJetStream"},
-        {"file": "scripts/runtime/go-integration.sh", "function": "test_integration"}
+        {"file": "tests/integration/helpers_test.go", "function": "testJetStream"}
       ],
       "evidenceRefs": [
         {"type": "integration-test", "location": "tests/integration/helpers_test.go::testPool"},
