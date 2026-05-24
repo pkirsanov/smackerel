@@ -30,6 +30,7 @@ import (
 	"github.com/smackerel/smackerel/internal/list"
 	"github.com/smackerel/smackerel/internal/mealplan"
 	"github.com/smackerel/smackerel/internal/notification"
+	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/web"
@@ -107,7 +108,7 @@ func resolveBroadcasterInstanceID() (string, error) {
 // subsystem (BearerStore + RevocationCache + Broadcaster) has fail-fast
 // validation paths (e.g. nil pool, malformed PASETO key material) that
 // MUST surface to the caller rather than be silently swallowed.
-func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
+func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*api.Dependencies, list.ArtifactResolver, *list.Store, error) {
 	notificationSeverity := notification.ParseSeverity(cfg.Notification.EscalationSeverity)
 	notificationEngine, err := notification.NewDecisionEngine(notification.DecisionPolicy{
 		PersistenceThreshold:   cfg.Notification.PersistenceThreshold,
@@ -120,6 +121,14 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		return nil, nil, nil, fmt.Errorf("notification decision policy: %w", err)
 	}
 	notificationService := notification.NewService(svc.notificationStore, notificationEngine)
+	if err := ntfysource.BootstrapConfiguredSources(ctx, cfg.NtfySourcesJSON, svc.notificationStore, time.Now().UTC()); err != nil {
+		return nil, nil, nil, fmt.Errorf("ntfy notification sources: %w", err)
+	}
+	ntfyRuntime, err := ntfysource.StartConfiguredAdapters(ctx, cfg.NtfySourcesJSON, notificationService, ntfysource.WithRuntimeStore(svc.ntfyStore))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("start ntfy notification sources: %w", err)
+	}
+	svc.ntfyRuntime = ntfyRuntime
 	deps := &api.Dependencies{
 		DB:                              svc.pg,
 		NATS:                            svc.nc,
@@ -151,7 +160,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
-		NotificationHandlers:            api.NewNotificationHandlers(svc.notificationStore, notificationService),
+		NotificationHandlers:            api.NewNotificationHandlersWithNtfyWebhookReceiverAndStore(svc.notificationStore, notificationService, ntfyRuntime.WebhookReceiver(), svc.ntfyStore),
 	}
 
 	if cfg.QFDecisionsEnabled {

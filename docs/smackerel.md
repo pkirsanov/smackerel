@@ -530,12 +530,19 @@ it. Diagnostics are read-only, autonomous handling is limited to low-risk
 allowlisted actions, high-blast-radius actions require approval, and destructive
 automatic actions are refused.
 
-Spec 055 owns ntfy-specific behavior. That includes ntfy subscription mechanics,
-topic authentication, ntfy message parsing, priority/header mapping, delivery
-metadata extraction, retry transport, health probes, and conformance tests that
-prove ntfy events enter the spec 054 raw-and-normalized pipeline before any
-classification or action decision. Core notification code must not import an
-ntfy package or branch on ntfy-only fields.
+Spec 055 implements ntfy as a concrete source adapter under
+`internal/notification/source/ntfy`. It owns explicit `NTFY_SOURCES_JSON`
+startup, stream/webhook transport, topic allowlists, ntfy JSON parsing,
+priority/tag mapping hints, source-specific metadata preservation, topic
+health, reconnect state, dead-letter records, and replay-through-source-sink
+controls. The adapter registers enabled source instances, exposes authenticated
+operator routes under `/api/notifications/sources/{source_instance_id}/ntfy`,
+and feeds accepted or replayed message events through `SourceEventSink`.
+
+Core notification code must not import an ntfy package or branch on ntfy-only
+fields. ntfy details can guide normalization through mapping hints, but final
+severity/domain/intent, incidents, approvals, safe reactions, suppressions, and
+output delivery remain source-neutral core behavior.
 
 ---
 

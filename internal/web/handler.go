@@ -24,6 +24,7 @@ import (
 	"github.com/smackerel/smackerel/internal/knowledge"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
 	"github.com/smackerel/smackerel/internal/notification"
+	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
 	recprovider "github.com/smackerel/smackerel/internal/recommendation/provider"
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 )
@@ -49,6 +50,7 @@ type Handler struct {
 	RecommendationRegistry  RecommendationRuntimeRegistry
 	RecommendationConfig    config.RecommendationsConfig
 	NotificationStore       *notification.Store
+	NtfyStore               *ntfysource.Store
 }
 
 // RecommendationProviderLister lists configured recommendation providers for operator status.
@@ -550,6 +552,112 @@ func (h *Handler) NotificationSourcesPage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	h.Templates.ExecuteTemplate(w, "notifications-sources.html", map[string]interface{}{"Title": "Notification Sources", "Sources": sources})
+}
+
+func (h *Handler) NotificationNtfySourcePage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	instanceID := chi.URLParam(r, "source_instance_id")
+	statuses, err := store.ListSourceStatuses(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "ntfy Source", "notification sources are unavailable")
+		return
+	}
+	var source *notification.SourceStatus
+	for _, status := range statuses {
+		if status.Config.SourceInstanceID == instanceID && status.Config.SourceType == ntfysource.SourceType {
+			copy := status
+			source = &copy
+			break
+		}
+	}
+	if source == nil {
+		h.renderNotificationError(w, "ntfy Source", "ntfy source is unavailable")
+		return
+	}
+	topics := []ntfysource.SubscriptionState{}
+	deadLetters := []ntfysource.DeadLetterRecord{}
+	if h.NtfyStore != nil {
+		if loadedTopics, err := h.NtfyStore.ListSubscriptionStates(r.Context(), instanceID); err == nil {
+			topics = loadedTopics
+		}
+		if page, err := h.NtfyStore.ListDeadLetters(r.Context(), instanceID, 5, ""); err == nil {
+			deadLetters = page.Records
+		}
+	}
+	events, _ := store.ListNotifications(r.Context(), 25)
+	var lastEvent *notification.NormalizedNotification
+	for _, event := range events {
+		if event.SourceInstanceID == instanceID {
+			copy := event
+			lastEvent = &copy
+			break
+		}
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-ntfy-source.html", map[string]interface{}{"Title": "ntfy Source", "Source": source, "Topics": topics, "DeadLetters": deadLetters, "LastEvent": lastEvent})
+}
+
+func (h *Handler) NotificationNtfyDeadLettersPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	instanceID := chi.URLParam(r, "source_instance_id")
+	statuses, err := store.ListSourceStatuses(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "ntfy Dead Letters", "notification sources are unavailable")
+		return
+	}
+	found := false
+	for _, status := range statuses {
+		if status.Config.SourceInstanceID == instanceID && status.Config.SourceType == ntfysource.SourceType {
+			found = true
+			break
+		}
+	}
+	if !found || h.NtfyStore == nil {
+		h.renderNotificationError(w, "ntfy Dead Letters", "ntfy dead-letter records are unavailable")
+		return
+	}
+	page, err := h.NtfyStore.ListDeadLetters(r.Context(), instanceID, 50, "")
+	if err != nil {
+		h.renderNotificationError(w, "ntfy Dead Letters", "ntfy dead-letter records are unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-ntfy-dead-letters.html", map[string]interface{}{"Title": "ntfy Dead Letters", "SourceInstanceID": instanceID, "DeadLetters": page.Records, "NextCursor": page.NextCursor})
+}
+
+func (h *Handler) NotificationNtfyDeadLetterDetailPage(w http.ResponseWriter, r *http.Request) {
+	store, ok := h.requireNotificationStore(w)
+	if !ok {
+		return
+	}
+	instanceID := chi.URLParam(r, "source_instance_id")
+	deadLetterID := chi.URLParam(r, "dead_letter_id")
+	statuses, err := store.ListSourceStatuses(r.Context())
+	if err != nil {
+		h.renderNotificationError(w, "ntfy Dead Letter", "notification sources are unavailable")
+		return
+	}
+	found := false
+	for _, status := range statuses {
+		if status.Config.SourceInstanceID == instanceID && status.Config.SourceType == ntfysource.SourceType {
+			found = true
+			break
+		}
+	}
+	if !found || h.NtfyStore == nil {
+		h.renderNotificationError(w, "ntfy Dead Letter", "ntfy dead-letter record is unavailable")
+		return
+	}
+	record, err := h.NtfyStore.GetDeadLetter(r.Context(), instanceID, deadLetterID)
+	if err != nil {
+		h.renderNotificationError(w, "ntfy Dead Letter", "ntfy dead-letter record is unavailable")
+		return
+	}
+	h.Templates.ExecuteTemplate(w, "notifications-ntfy-dead-letter-detail.html", map[string]interface{}{"Title": "ntfy Dead Letter", "SourceInstanceID": instanceID, "Record": record})
 }
 
 func (h *Handler) NotificationEventsPage(w http.ResponseWriter, r *http.Request) {

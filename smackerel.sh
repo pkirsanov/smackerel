@@ -23,7 +23,7 @@ Commands:
   format [--check]            Format Go and Python files, or check formatting
   package extension           Package browser extension for Chrome and Firefox distribution
   test unit [--go|--python] [--go-run <regex>] [--verbose]   Run unit tests; --go-run / --verbose require --go and apply focused subtest selection
-  test integration            Run live-stack integration validation
+  test integration [--go-run <regex>] Run live-stack integration validation; optionally run only matching Go integration tests
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
   up                          Start the stack for the current environment
@@ -129,7 +129,7 @@ smackerel_assert_host_ports_free() {
   local enable_ollama
   local port_key
   local port_value
-  local wait_timeout_s=60
+  local wait_timeout_s=180
   local wait_interval_s=2
   local port_specs=()
 
@@ -405,6 +405,14 @@ smackerel_stack_lock_file() {
   printf '/tmp/smackerel-%s-%s-stack.lock\n' "$user_id" "$target_env"
 }
 
+smackerel_test_suite_lock_file() {
+  local target_env="$1"
+  local user_id
+
+  user_id="$(id -u)"
+  printf '/tmp/smackerel-%s-%s-test-suite.lock\n' "$user_id" "$target_env"
+}
+
 smackerel_e2e_suite_lock_file() {
   local target_env="$1"
   local user_id
@@ -413,26 +421,48 @@ smackerel_e2e_suite_lock_file() {
   printf '/tmp/smackerel-%s-%s-e2e-suite.lock\n' "$user_id" "$target_env"
 }
 
+smackerel_acquire_test_suite_lock() {
+  local target_env="$1"
+  local suite_label="$2"
+  local lock_file
+  local legacy_lock_file
+
+  if [[ "${SMACKEREL_TEST_SUITE_LOCK_HELD:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "ERROR: flock is required for serialized Smackerel test-stack suite operations" >&2
+    exit 1
+  fi
+
+  lock_file="$(smackerel_test_suite_lock_file "$target_env")"
+  exec {SMACKEREL_TEST_SUITE_LOCK_FD}>"$lock_file"
+  if ! flock -n "$SMACKEREL_TEST_SUITE_LOCK_FD"; then
+    echo "ERROR: another Smackerel ${target_env} test-stack suite is already running; wait for it to finish or stop the stale runner before starting the ${suite_label} suite" >&2
+    exit 73
+  fi
+
+  # Preserve compatibility with any already-running older E2E wrapper that
+  # still holds the legacy E2E-only suite lock.
+  legacy_lock_file="$(smackerel_e2e_suite_lock_file "$target_env")"
+  exec {SMACKEREL_LEGACY_E2E_SUITE_LOCK_FD}>"$legacy_lock_file"
+  if ! flock -n "$SMACKEREL_LEGACY_E2E_SUITE_LOCK_FD"; then
+    echo "ERROR: another Smackerel ${target_env} E2E suite is already running; wait for it to finish before starting the ${suite_label} suite" >&2
+    exit 73
+  fi
+
+  export SMACKEREL_TEST_SUITE_LOCK_HELD=1
+}
+
 smackerel_acquire_e2e_suite_lock() {
   local target_env="$1"
-  local lock_file
 
   if [[ "${SMACKEREL_E2E_SUITE_LOCK_HELD:-0}" == "1" ]]; then
     return 0
   fi
 
-  if ! command -v flock >/dev/null 2>&1; then
-    echo "ERROR: flock is required for serialized Smackerel E2E suite operations" >&2
-    exit 1
-  fi
-
-  lock_file="$(smackerel_e2e_suite_lock_file "$target_env")"
-  exec {SMACKEREL_E2E_SUITE_LOCK_FD}>"$lock_file"
-  if ! flock -n "$SMACKEREL_E2E_SUITE_LOCK_FD"; then
-    echo "ERROR: another Smackerel ${target_env} E2E suite is already running; wait for it to finish or stop the stale runner before starting a new suite" >&2
-    exit 73
-  fi
-
+  smackerel_acquire_test_suite_lock "$target_env" "E2E"
   export SMACKEREL_E2E_SUITE_LOCK_HELD=1
 }
 
@@ -686,6 +716,36 @@ case "$COMMAND" in
         fi
         ;;
       integration)
+        GO_INTEGRATION_RUN_SELECTOR=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --go-run)
+              if [[ $# -lt 2 ]] || [[ -z "$2" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              GO_INTEGRATION_RUN_SELECTOR="$2"
+              shift 2
+              ;;
+            --go-run=*)
+              GO_INTEGRATION_RUN_SELECTOR="${1#*=}"
+              if [[ -z "$GO_INTEGRATION_RUN_SELECTOR" ]]; then
+                echo "ERROR: --go-run requires a non-empty regex" >&2
+                exit 1
+              fi
+              shift
+              ;;
+            *)
+              echo "Unknown test integration option: $1" >&2
+              exit 1
+              ;;
+          esac
+        done
+        go_integration_args=()
+        if [[ -n "$GO_INTEGRATION_RUN_SELECTOR" ]]; then
+          go_integration_args+=(--run "$GO_INTEGRATION_RUN_SELECTOR")
+        fi
+        smackerel_acquire_test_suite_lock test "integration"
         require_docker
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
@@ -742,7 +802,7 @@ case "$COMMAND" in
           -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
           -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
-          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh
+          golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_args[@]}"
         go_integration_status=$?
         set -e
         if [[ "$go_integration_status" -eq 0 ]]; then
@@ -1385,6 +1445,7 @@ case "$COMMAND" in
         done
 
         require_docker
+        smackerel_acquire_test_suite_lock test "stress"
         smackerel_generate_config test >/dev/null
         env_file="$(smackerel_require_env_file test)"
 
@@ -1407,12 +1468,26 @@ case "$COMMAND" in
         go_stress_core_url="http://smackerel-core:${core_container_port}"
         compose_network="$(smackerel_compose_project test)_default"
 
-        stress_cleanup() {
-          timeout 60 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes || true
-        }
-        trap stress_cleanup EXIT
+        stress_down_test_stack() {
+          local phase="$1"
 
-        stress_cleanup
+          echo "Running project-scoped stress test stack teardown (${phase}, timeout 180s)..."
+          timeout --kill-after=30s 180 "$SCRIPT_DIR/smackerel.sh" --env test down --volumes
+        }
+        stress_cleanup_trap() {
+          local status=$?
+          local cleanup_status=0
+
+          trap - EXIT
+          stress_down_test_stack "exit cleanup" || cleanup_status=$?
+          if [[ "$status" -eq 0 && "$cleanup_status" -ne 0 ]]; then
+            exit "$cleanup_status"
+          fi
+          exit "$status"
+        }
+        trap stress_cleanup_trap EXIT
+
+        stress_down_test_stack "pre-clean"
         timeout 360 "$SCRIPT_DIR/smackerel.sh" --env test up
         timeout 300 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_health_stress.sh"
         timeout 600 env STACK_MANAGED=1 bash "$SCRIPT_DIR/tests/stress/test_search_stress.sh"

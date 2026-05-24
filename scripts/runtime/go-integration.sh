@@ -14,4 +14,42 @@ source "$(dirname "${BASH_SOURCE[0]}")/_ensure_envsubst.sh"
 ensure_envsubst "go-integration"
 
 cd /workspace
-go test -p 1 -tags integration -v -count=1 -timeout 300s ./tests/integration/... ./internal/notification/...
+go_run_selector=""
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--run)
+			if [[ $# -lt 2 ]]; then
+				echo "ERROR: --run requires a non-empty regex" >&2
+				exit 1
+			fi
+			if [[ -z "$2" ]]; then
+				echo "ERROR: --run requires a non-empty regex" >&2
+				exit 1
+			fi
+			go_run_selector="$2"
+			shift 2
+			;;
+		--run=*)
+			go_run_selector="${1#*=}"
+			if [[ -z "$go_run_selector" ]]; then
+				echo "ERROR: --run requires a non-empty regex" >&2
+				exit 1
+			fi
+			shift
+			;;
+		*)
+			echo "Unknown go-integration option: $1" >&2
+			exit 1
+			;;
+	esac
+done
+
+go_test_args=(-p 1 -tags integration -v -count=1 -timeout 300s)
+if [[ -n "$go_run_selector" ]]; then
+	echo "go-integration: applying -run selector: $go_run_selector"
+	go_test_args+=(-run "$go_run_selector")
+fi
+go_test_args+=(./tests/integration/... ./internal/notification/...)
+
+go test "${go_test_args[@]}"
