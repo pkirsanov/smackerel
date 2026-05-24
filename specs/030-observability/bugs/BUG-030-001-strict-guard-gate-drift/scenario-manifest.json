@@ -1,0 +1,91 @@
+{
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-030-001-001",
+      "title": "state-transition-guard accepts the closure",
+      "specFile": "spec.md",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        ".github/bubbles/scripts/state-transition-guard.sh",
+        ".github/bubbles/scripts/artifact-lint.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-validate",
+        "report.md#phase-audit"
+      ],
+      "testCoverage": "integration: state-transition-guard.sh exits 0; artifact-lint.sh exits 0; both verified against working tree post-closure"
+    },
+    {
+      "scenarioId": "SCN-BUG-030-001-002",
+      "title": "Regression E2E + SLA stress + TDD evidence planning is complete per scope",
+      "specFile": "spec.md",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "specs/030-observability/scopes.md",
+        "specs/030-observability/report.md",
+        "internal/metrics/metrics_test.go",
+        "internal/metrics/trace_test.go",
+        "ml/tests/test_metrics.py",
+        "tests/e2e/test_capture_to_search.sh",
+        "tests/e2e/test_capture_pipeline.sh",
+        "tests/e2e/test_search.sh",
+        "tests/e2e/test_telegram.sh",
+        "tests/e2e/test_youtube_sync.sh",
+        "tests/e2e/test_llm_failure_e2e.sh",
+        "tests/stress/test_search_stress.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test",
+        "report.md#phase-regression",
+        "report.md#phase-tdd-evidence"
+      ],
+      "testCoverage": "unit: scopes.md regex-line check per scope confirms Regression E2E row + 2 DoD items; Scope 2 has Stress row; report.md has TDD Evidence subsection matching Gate G060 regex; all 8 E2E/stress test files exist on disk (verified ls -la 2026-05-24); 19 Go metrics + 8 Go trace + 22 Python ml tests PASS"
+    },
+    {
+      "scenarioId": "SCN-BUG-030-001-003",
+      "title": "Phase provenance backfill restores execution truth",
+      "specFile": "spec.md",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "specs/030-observability/state.json",
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-validate"
+      ],
+      "testCoverage": "unit: state.json.execution.executionHistory[] has authentic entries for select, bootstrap, test, regression, simplify, stabilize, security, validate, audit, chaos with completedAt + provenance summary describing on-disk verification; Check 6 + 6B both PASS post-closure"
+    },
+    {
+      "scenarioId": "SCN-BUG-030-001-004",
+      "title": "Deferral language is removed and replaced with truthful OTEL contract framing",
+      "specFile": "spec.md",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "specs/030-observability/scopes.md",
+        "specs/030-observability/report.md",
+        "internal/metrics/trace.go",
+        "internal/nats/client.go",
+        "config/smackerel.yaml"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-simplify",
+        "report.md#phase-stabilize"
+      ],
+      "testCoverage": "unit: scopes.md L209 + report.md L241 no longer match Gate G040 regex; Scope 5 DoD claim sentence preserved verbatim per G041; rewrites grounded in trace.go:12,24 + nats/client.go:177 + smackerel.yaml otel_enabled SST entry"
+    },
+    {
+      "scenarioId": "SCN-BUG-030-001-005",
+      "title": "Structured commit lands closure",
+      "specFile": "spec.md",
+      "requiredTestType": "integration",
+      "linkedTests": [
+        ".github/bubbles/scripts/state-transition-guard.sh",
+        ".git/hooks/pre-commit"
+      ],
+      "evidenceRefs": [
+        "report.md#phase-docs"
+      ],
+      "testCoverage": "integration: closure commit matches ^(spec\\(030\\)|bubbles\\(030/) regex; pre-commit gitleaks PASS; no --no-verify; git diff --cached --name-status confirms 0 spec 055 paths swept in"
+    }
+  ]
+}
