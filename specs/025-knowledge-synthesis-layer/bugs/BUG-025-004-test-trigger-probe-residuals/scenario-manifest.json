@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-004-test-trigger-probe-residuals",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-24T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-025-004-SCN-001",
+      "scope": "scope-1-rename-failuremarksflailed-typo",
+      "title": "Synthesis failure path test function uses correct English spelling",
+      "gherkin": {
+        "given": "internal/pipeline/synthesis_subscriber_test.go contains a function with the misspelled token \"Flailed\"",
+        "when": "the function is renamed from TestSynthesisExtractResponse_FailureMarksFlailed to TestSynthesisExtractResponse_FailureMarksFailed",
+        "then": "grep -rn \"Flailed\" --include=\"*.go\" . returns zero matches and go test -run TestSynthesisExtractResponse_FailureMarksFailed ./internal/pipeline/... passes and the function body and assertions are unchanged"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "test-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/pipeline/synthesis_subscriber_test.go",
+          "testId": "TestSynthesisExtractResponse_FailureMarksFailed"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-1-rename-failuremarksflailed-typo", "report.md#test-phase--independent-re-verification--2026-05-24"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-004-SCN-002",
+      "scope": "scope-2-refresh-scenario-manifest-linkedtests",
+      "title": "Every scenario-manifest linkedTests entry resolves to a real test function",
+      "gherkin": {
+        "given": "specs/025-knowledge-synthesis-layer/scenario-manifest.json has 13 stale linkedTests entries across 11 scenarios",
+        "when": "each stale entry is updated to the current function name documented in bug.md and SCN-025-21 file path is updated to internal/telegram/knowledge_test.go",
+        "then": "the Python linkedTests cross-check returns zero MISSING lines and the file count of linkedTests entries is preserved and scenario-manifest.json parses as valid JSON"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "manifest",
+      "changeType": "bugfix",
+      "requiredTestType": "manifest-validation",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "specs/025-knowledge-synthesis-layer/scenario-manifest.json",
+          "testId": "linkedTests-existence-cross-check"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-2-refresh-scenario-manifest-linkedtests", "report.md#test-phase--independent-re-verification--2026-05-24"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-004-SCN-003",
+      "scope": "scope-3-restore-g068-dod-gherkin-fidelity",
+      "title": "Scope 2 DoD preserves the Incremental concept page update behavioral claim",
+      "gherkin": {
+        "given": "specs/025-knowledge-synthesis-layer/scopes.md Scope 2 Definition of Done has no item containing 'incremental' or 'preserves existing knowledge'",
+        "when": "a new evidence-cited DoD item 'Incremental concept page update preserves existing knowledge (claims appended not replaced, prior source_artifact_ids retained)' is added",
+        "then": "bash .github/bubbles/scripts/traceability-guard.sh specs/025-knowledge-synthesis-layer no longer fails on SCN-025-05"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "trace-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "specs/025-knowledge-synthesis-layer/scopes.md",
+          "testId": "scope-2-dod-incremental-concept-page-fidelity"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-3-restore-g068-dod-gherkin-fidelity", "report.md#test-phase--independent-re-verification--2026-05-24"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-004-SCN-004",
+      "scope": "scope-3-restore-g068-dod-gherkin-fidelity",
+      "title": "Scope 5 DoD preserves the Lint detects contradictions behavioral claim",
+      "gherkin": {
+        "given": "specs/025-knowledge-synthesis-layer/scopes.md Scope 5 Definition of Done has no item that contains 'lint detects contradictions'",
+        "when": "a new evidence-cited DoD item 'Lint detects contradictions and emits a high-severity finding referencing both claims and source artifacts' is added",
+        "then": "bash .github/bubbles/scripts/traceability-guard.sh specs/025-knowledge-synthesis-layer no longer fails on SCN-025-14"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "trace-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "specs/025-knowledge-synthesis-layer/scopes.md",
+          "testId": "scope-5-dod-lint-detects-contradictions-fidelity"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-3-restore-g068-dod-gherkin-fidelity", "report.md#test-phase--independent-re-verification--2026-05-24"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-025-004-SCN-005",
+      "scope": "scope-3-restore-g068-dod-gherkin-fidelity",
+      "title": "Traceability guard returns PASSED for spec 025",
+      "gherkin": {
+        "given": "specs/025-knowledge-synthesis-layer/scopes.md Scope 2 and Scope 5 Definitions of Done lack faithful items preserving the SCN-025-05 and SCN-025-14 Gherkin claims",
+        "when": "an evidence-cited DoD item is added to Scope 2 preserving 'Incremental concept page update preserves existing knowledge' and another is added to Scope 5 preserving 'Lint detects contradictions'",
+        "then": "bash .github/bubbles/scripts/traceability-guard.sh specs/025-knowledge-synthesis-layer exits 0 and prints RESULT: PASSED and the G068 summary reports zero unmapped scenarios"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "trace-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "testId": "traceability-guard-specs-025-knowledge-synthesis-layer"
+        }
+      ],
+      "evidenceRefs": ["report.md#scope-3-restore-g068-dod-gherkin-fidelity", "report.md#test-phase--independent-re-verification--2026-05-24"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

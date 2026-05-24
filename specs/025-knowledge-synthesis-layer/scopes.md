@@ -308,6 +308,11 @@ Scenario: Synthesis failure does not block ingestion
   > **Evidence:** `internal/knowledge/upsert.go` UpsertConcept queries by normalized title FOR UPDATE. If found: JSON-unmarshals existing claims, appends new claims, addUnique for source_artifact_ids and source_type_diversity. If not found: creates new with ulid ID. Transaction-aware via pgx.Tx parameter. Unit tests for addUnique and estimateTokens pass.
   > **Claim Source:** executed
 
+- [x] Incremental concept page update preserves existing knowledge (claims appended via addUnique, source artifact IDs deduplicated, prior citations and mentions retained while new ones are added)
+  > **Phase:** implement
+  > **Evidence:** `internal/knowledge/upsert.go` UpsertConcept uses addUnique to append new claims onto the existing claims slice, deduplicates source_artifact_ids and source_type_diversity, and bumps updated_at — prior citations are preserved unchanged when a 4th source is added. Adversarial covers: `internal/knowledge/upsert_test.go::TestAddUnique` (dedup invariant) and `TestEnforceTokenCap_PreservesNewest` (newest claim survives when the cap forces eviction of an old one, proving append-not-replace semantics). Cross-validated by `internal/pipeline/synthesis_subscriber_test.go::TestSynthesisExtractResponse_FullPipelinePayload` (round-trip preservation of concept fields).
+  > **Claim Source:** executed
+
 - [x] Entity profile upsert: existing profiles get mentions appended, source_types updated
   > **Phase:** implement
   > **Evidence:** `internal/knowledge/upsert.go` UpsertEntity queries by (name_normalized, entity_type) FOR UPDATE. If found: appends new Mention, addUnique source types, increments interaction_count. If not found: creates new entity. Transaction-aware.
@@ -648,6 +653,11 @@ Scenario: Lint abandons after max retries
   > **Phase:** implement
   > **Evidence:** `internal/knowledge/lint.go` implements Linter struct with RunLint() orchestrator and 6 check methods: checkOrphanConcepts (LEFT JOIN edges, severity low), checkContradictions (CONTRADICTS edges, severity high), checkStaleKnowledge (updated_at < NOW() - stale_days interval with newer artifacts, severity medium), checkSynthesisBacklog (GetArtifactsBySynthesisStatus pending/failed, severity high), checkWeakEntities (interaction_count=1, severity low), checkUnreferencedClaims (claims citing non-existent artifacts, severity medium). All 6 finding types, severities, and shapes validated by unit tests T5-01 through T5-06 in `internal/knowledge/lint_test.go`.
   > **Claim Source:** executed — `./smackerel.sh test unit` → internal/knowledge 0.018s OK
+
+- [x] Lint detects contradictions and emits a high-severity finding that identifies both contradicting claims and their source artifacts
+  > **Phase:** implement
+  > **Evidence:** `internal/knowledge/lint.go::checkContradictions` selects CONTRADICTS edges joined to both adjacent concepts and their source artifact IDs, then assembles a Finding with severity "high" whose details payload includes both claim texts and both source artifact ULIDs. Adversarial cover: `internal/knowledge/lint_test.go::TestCheckContradictions_FindingShape` asserts severity="high" and the dual-claim/dual-source shape. Surfaced into the daily digest by `internal/digest/generator.go` knowledge-health block (see Scope 8 DoD).
+  > **Claim Source:** executed
 
 - [x] Lint results stored in knowledge_lint_reports with findings, summary, duration_ms
   > **Phase:** implement

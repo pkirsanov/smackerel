@@ -264,9 +264,19 @@
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-025-004",
+      "folder": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-004-test-trigger-probe-residuals",
+      "title": "Test trigger probe quality residuals (DoD-Gherkin fidelity, scenario-manifest drift, test function typo)",
+      "discoveredBy": "sweep-2026-05-23-r30 round 19 (test-to-doc trigger probe on spec 025)",
+      "resolvedAt": "2026-05-24T00:00:00Z",
+      "scopes": 3,
+      "summary": "3 artifact-quality findings: (1) G068 DoD fidelity gaps for SCN-025-05 and SCN-025-14 fixed by adding evidence-cited DoD items to spec 025 Scope 2 and Scope 5; (2) 13 stale linkedTests entries refreshed in scenario-manifest.json across 11 scenarios (cross-check now reports TOTAL_MISSING=0); (3) test function typo TestSynthesisExtractResponse_FailureMarksFlailed renamed to TestSynthesisExtractResponse_FailureMarksFailed in internal/pipeline/synthesis_subscriber_test.go (no runtime behavior changed)."
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-04-21T00:30:00Z",
+  "lastUpdatedAt": "2026-05-24T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

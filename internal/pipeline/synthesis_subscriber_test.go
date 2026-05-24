@@ -100,7 +100,7 @@ func TestSynthesisExtractResponse_SuccessMarksCompleted(t *testing.T) {
 }
 
 // T2-03: handleSynthesized failure → artifact synthesis_status=failed
-func TestSynthesisExtractResponse_FailureMarksFlailed(t *testing.T) {
+func TestSynthesisExtractResponse_FailureMarksFailed(t *testing.T) {
 	resp := SynthesisExtractResponse{
 		ArtifactID: "01JART001",
 		Success:    false,
