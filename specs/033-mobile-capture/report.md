@@ -493,3 +493,24 @@ $ timeout 120 bash .github/bubbles/scripts/traceability-guard.sh specs/033-mobil
 RESULT: FAILED (3 failures, 0 warnings)  # all 3 are scopes lacking Gherkin
 ```
 
+---
+
+## Devops Probe (devops-to-doc, SQS round 9, 2026-05-23)
+
+**Sweep:** `sweep-2026-05-23-r30` round 9 — `parent-expanded-child-mode` execution model — `trigger=devops` → `mappedMode=devops-to-doc`.
+
+**Finding:** DEVOPS-033-003 — Extension manifest parity not lint-protected.
+
+Two historical GAP-F bugs landed against this spec because Chrome MV3 manifest and Firefox MV2 manifest drifted apart with no machine-checked contract: GAP-F01 (Firefox manifest missing `alarms` permission and the `https://*/api/*` + `http://*/api/*` host patterns the Chrome side had) and GAP-F03 (CSP `object-src` was `'self'` in one and `'none'` in the other before manual tightening). Both fixes were applied by hand. No lint, contract test, or guard existed to prevent the next drift — the only forcing function was that a developer remembered to mirror every Chrome edit into the Firefox manifest. The capture surface for ~50% of users (Firefox) was one forgotten array entry away from being silently broken in production.
+
+**Closure:** Routed to `specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/` and closed end-to-end as a single-scope bug packet following the BUG-049-001 (round-7) Go-contract-test pattern.
+
+- Added `internal/web/extension_parity_contract_test.go` (`package web`, 511 LOC) which parses both live manifests (`web/extension/manifest.json` MV3 and `web/extension/manifest.firefox.json` MV2) and asserts six parity invariants: manifest_version preconditions, `name`, `version`, `description`, API permissions (normalised against URL-pattern grammar to separate host patterns from API perms), host patterns (Chrome `host_permissions` ⇔ Firefox merged `permissions`), and CSP `object-src` (extracted from Chrome dict and Firefox flat-string forms via a `extractObjectSrc` helper that handles both manifest shapes).
+- Added 1 baseline-sanity sub-test (canonical in-memory pair PASSES the contract — prevents adversarial vacuity) plus 7 adversarial sub-tests, each driving one parity surface independently: missing-`alarms`-in-Firefox (GAP-F01 root-cause regression), missing-host-pattern-`http://*/api/*`-in-Firefox (GAP-F01 root-cause regression), mismatched-CSP-`object-src` (GAP-F03 regression), mismatched name, mismatched version, mismatched description, and extra permission in Chrome (`downloads`) without Firefox mirror. Each adversarial assertion names the specific drifted surface in its error message.
+- Full focused run (`go test -v -run TestExtensionManifestParity ./internal/web/...`) green in 0.029s. Full package gate (`go test ./internal/web/...`) green in 0.083s with zero regressions across sibling web-handler and icons tests.
+- artifact-lint PASS; traceability-guard PASS; state-transition-guard verdict **TRANSITION PERMITTED**. BUG-033-001 closed `open → resolved` with 11/11 DoD items checked.
+
+**No regression to spec 033 itself.** The closure is purely additive — a new test file plus a documentation cross-reference. Spec 033 remains `done` with all 7 scopes Done and certification intact. No source-of-truth manifest content changed; no PWA, extension runtime, or capture-flow code touched. Pre-existing spec 055 (notification source / ntfy adapter) WIP in the working tree was excluded from the commit via path-limited `git add`.
+
+**Cross-reference:** `specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/report.md` carries the full execution trace, Code Diff Evidence with `wc -l` plus filtered `git status --short` output, verbose test output for all 9 sub-tests, and DoD Closure Accounting table.
+
