@@ -964,3 +964,39 @@ The stability surface for intelligence delivery remains in the same well-enginee
 - 1 judgment-requiring observability concern surfaced and routed to `concerns[]` (synthesis Prometheus metric); not mechanically fixed because schema/cardinality/threshold choices require specialist planning.
 - No new bugs filed; no scope advancement; no DoD changes (DoD already complete from prior rounds and the spec is `done`).
 - Spec status remains `done`; no de-promotion.
+
+---
+
+## Round 13 Stabilize Sweep (2026-05-23, stabilize-to-doc, stochastic R13 of 20)
+
+Parent run `sweep-2026-05-23-r30`, trigger `stabilize`, mapped child mode `stabilize-to-doc`, executed parent-expanded by `bubbles.workflow` because the nested workflow runtime lacked `runSubagent`. Per the parent contract: re-audit `internal/intelligence` + `internal/scheduler` + `internal/digest` plus the API-handler call sites that depend on them (a dimension not previously swept by R6 or R16).
+
+### Probe surface
+
+| Area | Method | Result |
+|------|--------|--------|
+| Re-confirmation of R6/R16 invariants | `grep` + structural review of `internal/intelligence/{synthesis,alerts}.go`, `internal/scheduler/{jobs,lifecycle}.go`, `internal/digest/*.go` | All 9 invariants from R16 still hold. No regression. |
+| API handler → IntelligenceEngine call-site fan-in | `grep -rn "IntelligenceEngine\." internal/api/` plus structural review of `HealthHandler` | **STAB-021-R13-001 found:** `HealthHandler` invoked `GetLastSynthesisTime` + `HasStalePendingAlerts` on EVERY `/api/health` request without TTL caching. Sibling subsection (`knowledge`) already had a TTL cache (added by C-023-C001) — this was a missed transfer. |
+| Same-pattern audit on `KnowledgeHandlers` and other engine-backed handlers | `grep` for `GetLastSynthesisTime`, `HasStalePendingAlerts`, `KnowledgeHealthStats`, and similar repository-call methods in `internal/api/*.go` | Only `HealthHandler` exhibited the un-cached pattern. No other API handler calls these methods. |
+
+### Findings
+
+- **Mechanical findings:** 1 — STAB-021-R13-001
+- **Code defects:** 0 net new (the underlying methods themselves are correct; the defect is a missing cache wrapper at the call site)
+- **New regression coverage required:** 6 unit tests (SCN-021-FIX-002A through 002F)
+
+### STAB-021-R13-001 → BUG-021-002
+
+**Issue:** `HealthHandler` invoked `IntelligenceEngine.GetLastSynthesisTime` + `IntelligenceEngine.HasStalePendingAlerts` on every `/api/health` request, costing 2 DB round-trips per hit. Under the typical 30-second polling cadence, this is 8 640 redundant DB round-trips per day per polling caller. The sibling knowledge subsection had a TTL cache (`getCachedKnowledgeHealth`, added by C-023-C001) but the intelligence subsection did not — a missed transfer when C-023-C001 landed.
+
+**Fix shape:** Apply the C-023-C001 RWMutex + snapshot-TTL pattern to the two intelligence probes. Reuse the existing `ML_HEALTH_CACHE_TTL_S` SST knob (no new config). Preserve all response-shape behaviour (nil engine omits section, nil pool reports down + omits alert_delivery, etc.).
+
+**Closure:** [BUG-021-002](bugs/BUG-021-002-health-intelligence-uncached-db-load/) closed `done` this round. 1 scope, 6 SCN-021-FIX-002* scenarios, 6 unit tests, all PASS under `-race`. Spec 021 status remains `done` (this bug did not regress the parent spec).
+
+### Round 13 verdict
+
+- Real test execution: api + intelligence + scheduler suites all green under `-race`.
+- Stability invariants: all 9 audited invariants from R16 still hold; R13 widened the audit lens to API call-site density and found the one cache-transfer gap.
+- 1 mechanical finding → 1 bug → 1 closure (BUG-021-002), one-to-one accounting per the parent contract.
+- Spec status remains `done`; no de-promotion.
+- No new judgment-requiring concerns surfaced this round.

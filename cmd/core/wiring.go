@@ -143,6 +143,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		KnowledgeStore:                  svc.knowledgeStore,
 		KnowledgeConceptSearchThreshold: cfg.KnowledgeConceptSearchThreshold,
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
+		IntelligenceHealthCacheTTL:      time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
 		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool).WithEnvironment(cfg.Environment),

@@ -196,6 +196,17 @@ type Dependencies struct {
 	knowledgeHealthCache *KnowledgeHealthSection
 	knowledgeHealthAt    time.Time
 
+	// Intelligence engine health cache (BUG-021-002 — stabilize R13).
+	// Without caching, every /api/health request triggered two synchronous
+	// DB round-trips (GetLastSynthesisTime + HasStalePendingAlerts) against
+	// the IntelligenceEngine pool, for data that updates at most once per
+	// 24h (synthesis) or every 15 min (alert sweep). Reuses the same SST
+	// TTL contract as KnowledgeHealthCacheTTL (ML_HEALTH_CACHE_TTL_S).
+	IntelligenceHealthCacheTTL time.Duration
+	intelligenceHealthMu       sync.RWMutex
+	intelligenceHealthCache    *intelligenceHealthSnapshot
+	intelligenceHealthAt       time.Time
+
 	// Actionable list handlers (optional — nil when lists not configured)
 	ListHandlers *ListHandlers
 
@@ -336,34 +347,18 @@ func (d *Dependencies) HealthHandler(w http.ResponseWriter, r *http.Request) {
 		ollamaStatus = checkOllama(ctx, d.OllamaURL, client)
 	}()
 
-	// Intelligence engine status — runs while external probes are in flight
+	// Intelligence engine status — runs while external probes are in flight.
+	// Both DB queries (GetLastSynthesisTime + HasStalePendingAlerts) are
+	// TTL-cached via getCachedIntelligenceHealth to avoid hammering Postgres
+	// on every /api/health request (BUG-021-002 — stabilize R13). The
+	// pre-existing response shape is preserved exactly: nil engine ⇒ no
+	// "intelligence" key; nil pool ⇒ "intelligence"="down" with no
+	// "alert_delivery" key; alert-probe error ⇒ "alert_delivery" omitted.
 	if d.IntelligenceEngine != nil {
-		if d.IntelligenceEngine.Pool == nil {
-			services["intelligence"] = ServiceStatus{Status: "down"}
-		} else {
-			lastSynthesis, err := d.IntelligenceEngine.GetLastSynthesisTime(ctx)
-			if err != nil {
-				slog.Warn("intelligence freshness check failed", "error", err)
-				services["intelligence"] = ServiceStatus{Status: "up"}
-			} else if lastSynthesis.IsZero() || lastSynthesis.Year() < 2000 {
-				// No synthesis has ever run (fresh install) — not stale, just not started
-				services["intelligence"] = ServiceStatus{Status: "up"}
-			} else if time.Since(lastSynthesis) > 48*time.Hour {
-				services["intelligence"] = ServiceStatus{Status: "stale"}
-			} else {
-				services["intelligence"] = ServiceStatus{Status: "up"}
-			}
-
-			// Alert delivery pipeline freshness: pending alerts older than 30 minutes
-			// indicate the delivery sweep is not running (2 missed sweep cycles).
-			staleAlerts, err := d.IntelligenceEngine.HasStalePendingAlerts(ctx, 30*time.Minute)
-			if err != nil {
-				slog.Warn("alert delivery freshness check failed", "error", err)
-			} else if staleAlerts {
-				services["alert_delivery"] = ServiceStatus{Status: "stale"}
-			} else {
-				services["alert_delivery"] = ServiceStatus{Status: "up"}
-			}
+		snap := d.getCachedIntelligenceHealth(ctx)
+		services["intelligence"] = ServiceStatus{Status: snap.intelligenceStatus}
+		if snap.alertDeliveryStatus != "" {
+			services["alert_delivery"] = ServiceStatus{Status: snap.alertDeliveryStatus}
 		}
 	}
 
@@ -477,6 +472,79 @@ func (d *Dependencies) getCachedKnowledgeHealth(ctx context.Context) *KnowledgeH
 	d.knowledgeHealthMu.Unlock()
 
 	return section
+}
+
+// intelligenceHealthSnapshot caches the result of HealthHandler's two
+// intelligence-engine DB probes (GetLastSynthesisTime, HasStalePendingAlerts).
+// intelligenceStatus is always populated when the snapshot is valid
+// ("up" | "down" | "stale"). alertDeliveryStatus is empty when the alert
+// probe errored, preserving the pre-cache behaviour of omitting the
+// "alert_delivery" service key from the response in that case.
+type intelligenceHealthSnapshot struct {
+	intelligenceStatus  string
+	alertDeliveryStatus string
+}
+
+// getCachedIntelligenceHealth returns a cached intelligence/alert-delivery
+// snapshot, refreshing when the TTL is exceeded. Mirrors getCachedKnowledgeHealth's
+// RWMutex+TTL pattern (BUG-021-002 — stabilize R13). Without caching, every
+// /api/health request triggered two synchronous DB round-trips against the
+// IntelligenceEngine pool for data that updates at most once per 24h
+// (synthesis) or every 15 min (alert sweep), allowing health probes to
+// amplify backpressure under DB contention.
+//
+// The slow path computes the snapshot with no lock held — the underlying DB
+// calls are the slow part, and holding the cache mutex across them would
+// re-introduce the C-023-C001 serialisation bug.
+func (d *Dependencies) getCachedIntelligenceHealth(ctx context.Context) *intelligenceHealthSnapshot {
+	// Fast path: serve from cache under read lock when TTL allows.
+	d.intelligenceHealthMu.RLock()
+	if d.IntelligenceHealthCacheTTL > 0 && d.intelligenceHealthCache != nil &&
+		time.Since(d.intelligenceHealthAt) < d.IntelligenceHealthCacheTTL {
+		cached := d.intelligenceHealthCache
+		d.intelligenceHealthMu.RUnlock()
+		return cached
+	}
+	d.intelligenceHealthMu.RUnlock()
+
+	// Slow path: compute fresh snapshot with no locks held.
+	snapshot := &intelligenceHealthSnapshot{}
+	if d.IntelligenceEngine.Pool == nil {
+		snapshot.intelligenceStatus = "down"
+	} else {
+		lastSynthesis, err := d.IntelligenceEngine.GetLastSynthesisTime(ctx)
+		if err != nil {
+			slog.Warn("intelligence freshness check failed", "error", err)
+			snapshot.intelligenceStatus = "up"
+		} else if lastSynthesis.IsZero() || lastSynthesis.Year() < 2000 {
+			// No synthesis has ever run (fresh install) — not stale, just not started.
+			snapshot.intelligenceStatus = "up"
+		} else if time.Since(lastSynthesis) > 48*time.Hour {
+			snapshot.intelligenceStatus = "stale"
+		} else {
+			snapshot.intelligenceStatus = "up"
+		}
+
+		// Alert delivery pipeline freshness: pending alerts older than 30 minutes
+		// indicate the delivery sweep is not running (2 missed sweep cycles).
+		staleAlerts, err := d.IntelligenceEngine.HasStalePendingAlerts(ctx, 30*time.Minute)
+		if err != nil {
+			slog.Warn("alert delivery freshness check failed", "error", err)
+			// leave alertDeliveryStatus empty — call site omits the service key.
+		} else if staleAlerts {
+			snapshot.alertDeliveryStatus = "stale"
+		} else {
+			snapshot.alertDeliveryStatus = "up"
+		}
+	}
+
+	// Update cache under write lock.
+	d.intelligenceHealthMu.Lock()
+	d.intelligenceHealthCache = snapshot
+	d.intelligenceHealthAt = time.Now()
+	d.intelligenceHealthMu.Unlock()
+
+	return snapshot
 }
 
 // isAuthenticated checks whether the request carries a valid Bearer token.
