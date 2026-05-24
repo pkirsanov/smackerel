@@ -2,11 +2,11 @@
   "version": 3,
   "featureDir": "specs/054-notification-intelligence-handler",
   "featureName": "Notification Intelligence Handler Service",
-  "status": "blocked",
+  "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
-    "activeAgent": "bubbles.validate",
-    "currentPhase": "blocked",
+    "activeAgent": null,
+    "currentPhase": "finalize",
     "currentScope": null,
     "runStartedAt": "2026-05-22T05:45:28Z",
     "completedPhaseClaims": [
@@ -25,9 +25,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "blocked",
-    "lastSpecialistVerdict": "VALIDATE-054-BLOCKED-COMMIT-GATE-2026-05-23",
-    "certifiedAt": "2026-05-23T02:25:00Z",
+    "status": "done",
+    "lastSpecialistVerdict": "VALIDATE-054-PASSED-STRUCTURED-COMMIT-GATE-2026-05-24",
+    "certifiedAt": "2026-05-24T23:39:28Z",
     "certifiedBy": "bubbles.validate",
     "completedScopes": [
       "SCOPE-1",
@@ -410,16 +410,9 @@
   ],
   "activeBugs": [],
   "resolvedBugs": [],
-  "failures": [
-    {
-      "gate": "state-transition-guard Check 17: Strict Mode Commit Enforcement",
-      "status": "blocked",
-      "reason": "full-delivery requires at least one structured commit touching specs/054-notification-intelligence-handler, but the user explicitly instructed not to commit in this validation pass.",
-      "evidenceRef": "report.md#validation-evidence"
-    }
-  ],
-  "lastUpdatedAt": "2026-05-23T02:25:00Z",
-  "completedAt": null,
+  "failures": [],
+  "lastUpdatedAt": "2026-05-24T23:39:28Z",
+  "completedAt": "2026-05-24T23:39:28Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
@@ -432,5 +425,5 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "DoD and scope evidence are certified, but state promotion is blocked by the full-delivery structured-commit gate because this validation pass was explicitly instructed not to commit."
+  "notes": "DoD and scope evidence are certified. The prior structured-commit blocker is resolved by the spec(054) closeout commit touching this spec artifact set."
 }
