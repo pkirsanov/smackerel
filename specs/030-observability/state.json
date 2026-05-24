@@ -326,7 +326,8 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "activeBugs": [
+  "activeBugs": [],
+  "resolvedBugs": [
     {
       "bugId": "BUG-030-001",
       "slug": "strict-guard-gate-drift",
@@ -344,13 +345,17 @@
         "block": 34,
         "warn": 2
       },
+      "findingsClosedThisRound": 34,
       "openedAt": "2026-05-23T22:00:00Z",
-      "resolvedAt": "2026-05-24T03:05:00Z"
+      "resolvedAt": "2026-05-24T03:05:00Z",
+      "closureCommits": [
+        "8a437d9a"
+      ],
+      "postClosureGuardVerdict": "TRANSITION PERMITTED (0 BLOCK, 1 pre-existing advisory warn)"
     }
   ],
-  "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T03:05:00Z",
+  "lastUpdatedAt": "2026-05-24T03:25:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
