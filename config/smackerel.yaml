@@ -619,6 +619,32 @@ notification_intelligence:
 notification_outputs:
   channels: [ "dashboard" ]
 
+notification_sources:
+  ntfy:
+    instances:
+    - source_instance_id: "ntfy-local-webhook"
+      enabled: true
+      source_form: "webhook"
+      transport_mode: "webhook"
+      endpoint_url: "http://smackerel-core:8080/api/notifications/sources/ntfy-local-webhook/ntfy/webhook"
+      endpoint_ref_name: "NTFY_LOCAL_WEBHOOK_ENDPOINT_URL"
+      topics: [ "home-lab-alerts" ]
+      auth_mode: "none"
+      secret_ref_names: []
+      default_domain: "ops"
+      retry_budget: 3
+      initial_delay_seconds: 1
+      max_delay_seconds: 5
+      keepalive_timeout_seconds: 30
+      lag_degraded_after_seconds: 60
+      lag_disconnected_after_seconds: 300
+      dead_letter_retry_budget: 2
+      max_payload_bytes: 4096
+      pressure_threshold_count: 2
+      display_name: "ntfy local webhook"
+      endpoint_label: "SST-managed ntfy webhook endpoint"
+      config_hash: "sha256:ntfy-local-webhook-v1"
+
 drive:
   enabled: false
   classification:

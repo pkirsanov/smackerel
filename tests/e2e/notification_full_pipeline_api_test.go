@@ -125,13 +125,18 @@ type notificationIngestResponse struct {
 
 type notificationEventDetailResponse struct {
 	Notification struct {
-		ID   string `json:"ID"`
-		Body string `json:"Body"`
+		ID               string            `json:"ID"`
+		SourceInstanceID string            `json:"SourceInstanceID"`
+		SourceEventID    string            `json:"SourceEventID"`
+		Body             string            `json:"Body"`
+		DeliveryMetadata map[string]string `json:"DeliveryMetadata"`
 	} `json:"Notification"`
 	RawEvent struct {
-		ID                  string `json:"ID"`
-		SourceEventID       string `json:"SourceEventID"`
-		SourceEventIDOrigin string `json:"SourceEventIDOrigin"`
+		ID                  string            `json:"ID"`
+		SourceEventID       string            `json:"SourceEventID"`
+		SourceEventIDOrigin string            `json:"SourceEventIDOrigin"`
+		SourceSpecific      map[string]string `json:"SourceSpecific"`
+		DeliveryMetadata    map[string]string `json:"DeliveryMetadata"`
 	} `json:"RawEvent"`
 	Classification *struct {
 		Severity    string         `json:"Severity"`

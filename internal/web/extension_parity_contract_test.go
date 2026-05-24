@@ -11,26 +11,26 @@
 //
 //  1. name           — user-visible product name must be identical
 //  2. version        — package version must match (already checked by
-//                      scripts/runtime/web-validate.sh; re-checked here
-//                      so the Go test suite is self-contained)
+//     scripts/runtime/web-validate.sh; re-checked here
+//     so the Go test suite is self-contained)
 //  3. description    — user-visible description must be identical
 //  4. permissions    — every non-host API permission (storage,
-//                      contextMenus, notifications, activeTab, alarms,
-//                      …) must appear in BOTH manifests. Chrome MV3
-//                      lists API permissions under `permissions` and
-//                      host patterns under `host_permissions`; Firefox
-//                      MV2 merges both lists into `permissions`. The
-//                      contract normalises by extracting host patterns
-//                      from the Firefox `permissions` array and then
-//                      comparing the remaining API-permission sets.
+//     contextMenus, notifications, activeTab, alarms,
+//     …) must appear in BOTH manifests. Chrome MV3
+//     lists API permissions under `permissions` and
+//     host patterns under `host_permissions`; Firefox
+//     MV2 merges both lists into `permissions`. The
+//     contract normalises by extracting host patterns
+//     from the Firefox `permissions` array and then
+//     comparing the remaining API-permission sets.
 //  5. host patterns  — every URL pattern (https://*/api/*, http://*/api/*)
-//                      must appear in BOTH manifests (Chrome
-//                      `host_permissions`, Firefox `permissions`).
+//     must appear in BOTH manifests (Chrome
+//     `host_permissions`, Firefox `permissions`).
 //  6. CSP object-src — both manifests must set object-src 'none' for
-//                      defense-in-depth parity with the PWA. Chrome
-//                      stores CSP as a dict (`content_security_policy.
-//                      extension_pages`); Firefox stores it as a flat
-//                      string (`content_security_policy`).
+//     defense-in-depth parity with the PWA. Chrome
+//     stores CSP as a dict (`content_security_policy.
+//     extension_pages`); Firefox stores it as a flat
+//     string (`content_security_policy`).
 //
 // Why this exists:
 // Spec 033's gaps probe (gaps-to-doc, 2026-04-22) found two manifest
@@ -75,13 +75,13 @@ import (
 // assertions. Unmodelled fields (icons, action, background, etc.) are
 // ignored so adding unrelated MV3 keys stays a non-event.
 type chromeManifest struct {
-	ManifestVersion int                  `json:"manifest_version"`
-	Name            string               `json:"name"`
-	Version         string               `json:"version"`
-	Description     string               `json:"description"`
-	Permissions     []string             `json:"permissions"`
-	HostPermissions []string             `json:"host_permissions"`
-	CSP             chromeCSPContainer   `json:"content_security_policy"`
+	ManifestVersion int                `json:"manifest_version"`
+	Name            string             `json:"name"`
+	Version         string             `json:"version"`
+	Description     string             `json:"description"`
+	Permissions     []string           `json:"permissions"`
+	HostPermissions []string           `json:"host_permissions"`
+	CSP             chromeCSPContainer `json:"content_security_policy"`
 }
 
 // chromeCSPContainer is the MV3 CSP dict shape. MV3 requires CSP under

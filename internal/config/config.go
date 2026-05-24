@@ -259,6 +259,7 @@ type Config struct {
 	Photos          PhotosConfig
 	Recommendations RecommendationsConfig
 	Notification    NotificationConfig
+	NtfySourcesJSON string
 
 	// Spec 044 — Per-user bearer auth foundation. SST-compliant; populated
 	// from AUTH_* env vars produced by `./smackerel.sh config generate`.
@@ -638,6 +639,7 @@ func Load() (*Config, error) {
 		BackupRetentionDailyRaw:  os.Getenv("BACKUP_RETENTION_DAILY"),
 		BackupRetentionWeeklyRaw: os.Getenv("BACKUP_RETENTION_WEEKLY"),
 		BackupWatcherPollSecsRaw: os.Getenv("BACKUP_WATCHER_POLL_SECONDS"),
+		NtfySourcesJSON:          os.Getenv("NTFY_SOURCES_JSON"),
 	}
 
 	// Spec 046 — NATS production hardening. Raw env values are parsed
@@ -1513,6 +1515,7 @@ func (c *Config) requiredVars() []struct {
 		{"BACKUP_RETENTION_DAILY", c.BackupRetentionDailyRaw},
 		{"BACKUP_RETENTION_WEEKLY", c.BackupRetentionWeeklyRaw},
 		{"BACKUP_WATCHER_POLL_SECONDS", c.BackupWatcherPollSecsRaw},
+		{"NTFY_SOURCES_JSON", c.NtfySourcesJSON},
 	}
 	// MIT-040-S-004 — SMACKEREL_AUTH_TOKEN is NOT in requiredVars(): it is
 	// required only when SMACKEREL_ENV=production, and the dedicated

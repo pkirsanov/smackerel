@@ -146,8 +146,10 @@ func (c SourceInstanceConfig) Validate() error {
 	if strings.TrimSpace(c.ConfigHash) == "" {
 		return fmt.Errorf("notification source config: config hash is required")
 	}
-	if len(c.SecretRefNames) == 0 {
-		return fmt.Errorf("notification source config: at least one secret reference name is required")
+	authMode := strings.TrimSpace(c.RedactedMetadata["auth_mode"])
+	configStatus := strings.TrimSpace(c.RedactedMetadata["config_status"])
+	if len(c.SecretRefNames) == 0 && authMode != "none" && configStatus != "invalid" {
+		return fmt.Errorf("notification source config: at least one secret reference name is required unless auth_mode=none is explicit")
 	}
 	for _, name := range c.SecretRefNames {
 		if strings.TrimSpace(name) == "" {

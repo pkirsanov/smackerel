@@ -10,6 +10,7 @@ import (
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
+	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
 	"github.com/smackerel/smackerel/internal/pipeline"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
@@ -25,6 +26,7 @@ func shutdownAll(
 	sched *scheduler.Scheduler,
 	srv *http.Server,
 	tgBot *telegram.Bot,
+	ntfyRuntime *ntfysource.Runtime,
 	resultSub *pipeline.ResultSubscriber,
 	synthesisSub *pipeline.SynthesisResultSubscriber,
 	domainSub *pipeline.DomainResultSubscriber,
@@ -68,14 +70,25 @@ func shutdownAll(
 		}
 	})
 
-	// Step 3: Stop Telegram bot (cancel long-poll) — 2s budget
+	// Step 3: Stop ntfy source adapters after HTTP drains inbound webhooks.
+	runWithTimeout("ntfy source adapters", 2*time.Second, deadline, func() {
+		if ntfyRuntime != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := ntfyRuntime.Stop(stopCtx); err != nil {
+				slog.Warn("shutdown: ntfy source adapter stop error", "error", err)
+			}
+		}
+	})
+
+	// Step 4: Stop Telegram bot (cancel long-poll) — 2s budget
 	runWithTimeout("Telegram bot", 2*time.Second, deadline, func() {
 		if tgBot != nil {
 			tgBot.Stop()
 		}
 	})
 
-	// Step 4: Stop result subscribers (NATS consumer drain) — 6s budget
+	// Step 5: Stop result subscribers (NATS consumer drain) — 6s budget
 	// Budget covers NATS Fetch() MaxWait (5s) + processing margin (1s).
 	// Subscribers are stopped in PARALLEL because they are independent (each has
 	// its own done channel, goroutines, and WaitGroup). Sequential stop would
@@ -101,21 +114,21 @@ func shutdownAll(
 		subWg.Wait()
 	})
 
-	// Step 5: Stop connector supervisor (all connectors) — 2s budget
+	// Step 6: Stop connector supervisor (all connectors) — 2s budget
 	runWithTimeout("connectors", 2*time.Second, deadline, func() {
 		if supervisor != nil {
 			supervisor.StopAll()
 		}
 	})
 
-	// Step 6: Drain NATS connection (after all NATS consumers are stopped) — 2s budget
+	// Step 7: Drain NATS connection (after all NATS consumers are stopped) — 2s budget
 	runWithTimeout("NATS", 2*time.Second, deadline, func() {
 		if nc != nil {
 			nc.Close()
 		}
 	})
 
-	// Step 7: Close DB pool (last — all DB consumers are already stopped) — 1s budget
+	// Step 8: Close DB pool (last — all DB consumers are already stopped) — 1s budget
 	runWithTimeout("database pool", 1*time.Second, deadline, func() {
 		if pg != nil {
 			pg.Close()

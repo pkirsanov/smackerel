@@ -862,6 +862,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("NOTIFICATION_LOW_CONFIDENCE_THRESHOLD", "0.55")
 	t.Setenv("NOTIFICATION_MAX_RETRIES", "2")
 	t.Setenv("NOTIFICATION_OUTPUT_CHANNELS", `["dashboard"]`)
+	t.Setenv("NTFY_SOURCES_JSON", `[]`)
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {

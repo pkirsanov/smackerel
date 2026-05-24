@@ -12,6 +12,73 @@ topology, ML sidecar boundaries), see [`docs/smackerel.md`](smackerel.md)
 sections 3 (System Architecture), 8 (Storage), 17 (Trust), 18 (Privacy),
 and 23 (Implementation reality).
 
+## Current System Shape
+
+Smackerel runs as a Go core service plus a Python ML sidecar on Docker
+Compose. PostgreSQL stores canonical runtime state, NATS JetStream carries
+asynchronous work, and Ollama or another configured LLM provider powers ML
+tasks through the sidecar. The Go core owns HTTP routing, connector polling,
+notification intelligence, storage writes, web UI routes, and operator APIs.
+
+Notification intelligence is split into two layers:
+
+- `internal/notification` is the source-neutral spec 054 core. It owns source
+  contracts, source health, raw event persistence, normalized notifications,
+  classification, correlation, incidents, decisions, suppressions, approvals,
+  redaction, and output attempts.
+- `internal/notification/source/ntfy` is the concrete spec 055 ntfy source
+  adapter. It owns ntfy config validation, stream/webhook transport, payload
+  parsing, topic state, reconnect/lag status, dead-letter records, replay, and
+  adapter boundary tests.
+
+## Major Components
+
+| Component | Runtime surface | Responsibility |
+|-----------|-----------------|----------------|
+| Go core | `cmd/core`, `internal/api`, `internal/web` | HTTP API, HTMX web UI, startup wiring, auth, notification routes, connector orchestration. |
+| Notification core | `internal/notification` | Source-neutral raw-before-normalized notification pipeline and output decisioning. |
+| ntfy source adapter | `internal/notification/source/ntfy` | Concrete ntfy source intake and adapter-owned operations; no output dispatch. |
+| Operational storage | `internal/db/migrations/036_notification_intelligence.sql`, `038_notification_ntfy_source_adapter.sql` | Notification core tables plus ntfy topic/dead-letter/replay tables. |
+| Config pipeline | `config/smackerel.yaml`, `scripts/commands/config.sh`, `internal/config/config.go` | SST config generation and fail-loud runtime loading, including `NTFY_SOURCES_JSON`. |
+
+## Data And Control Flows
+
+For ntfy intake, startup reads `NTFY_SOURCES_JSON`, registers enabled source
+instances, starts adapters, and wires the webhook receiver into
+`NotificationHandlers`. Webhook mode accepts authenticated requests at
+`/api/notifications/sources/{source_instance_id}/ntfy/webhook`; stream mode
+opens topic streams through the adapter transport. Message-like ntfy events are
+parsed, redacted where they become operator-visible, mapped to
+`SourceEventEnvelope`, and submitted through `SourceEventSink`.
+
+The source sink stores raw JSON before creating a normalized notification. The
+spec 054 core then classifies, correlates, decides, suppresses, approves, or
+queues output according to source-neutral policy. ntfy lifecycle events update
+topic/source health only. Malformed, unsupported, unconfigured-topic, sink
+unavailable, and sink-rejected records go to adapter-owned dead letters.
+The first accepted replay reconstructs an eligible source envelope and submits
+it through the same source sink. Later replay requests for an already-replayed
+dead letter return the existing accepted attempt and do not repeat the sink side
+effect.
+
+## Integration Boundaries
+
+| Boundary | Rule |
+|----------|------|
+| ntfy adapter to notification core | The adapter imports source-neutral notification interfaces and submits `SourceEventEnvelope`; the core must not import the ntfy adapter or branch on ntfy-only fields. |
+| ntfy adapter to output delivery | The adapter never dispatches output. Output attempts are created only by the notification core decision/output layer. |
+| ntfy config to secrets | Config stores secret reference names only. Credential values stay in the secret-management path and must not appear in status, logs, payload previews, dead letters, or API responses. |
+| ntfy webhook to source identity | The route requires a registered ntfy source instance and rejects non-ntfy or non-webhook source forms. |
+| replay to core pipeline | The first accepted replay requires `replay_through_source_sink` confirmation and calls `SourceEventSink`; repeated replay is idempotent and returns the existing accepted attempt without another sink submission. Replay does not bypass raw persistence or output policy. |
+
+## Authoritative References
+
+- [`specs/054-notification-intelligence-handler/`](../specs/054-notification-intelligence-handler/) — source-neutral notification core contract.
+- [`specs/055-notification-source-ntfy-adapter/`](../specs/055-notification-source-ntfy-adapter/) — concrete ntfy adapter execution packet.
+- [`docs/API.md`](API.md#ntfy-source-adapter) — authenticated ntfy source endpoints.
+- [`docs/Operations.md`](Operations.md#notification-intelligence-operations-spec-054) — operator runbook for source health, reconnect, dead letters, and replay.
+- [`docs/Development.md`](Development.md#ntfy-source-adapter-sst-spec-055) — SST shape and implementation references.
+
 ---
 
 ## Secret Boundary (spec 052)

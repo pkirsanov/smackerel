@@ -31,7 +31,8 @@ Implemented runtime capabilities:
 - 15 passive connectors (IMAP email, CalDAV calendar, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, GuestHost STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
 - Cloud Drives integration (spec 038): Google Drive provider with OAuth `BeginConnect`/`FinalizeConnect`, scan + monitor loop on the `DRIVE` NATS stream, classification + sensitivity policy, Save Rules engine with audit/dry-run, Save Service with confirmations (`/v1/drive/confirmations/{id}`), Drive search/artifact-detail surface (`/v1/drive/artifacts/{id}`), agent retrieval tools, and 17 `drive_*` schema tables
 - Cloud Photo Libraries integration (spec 040): provider-neutral `photolib.PhotoLibrary` contract with Immich and PhotoPrism adapters, capability taxonomy SST, lifecycle/duplicates/removal analyzers, scope-hash `PhotoActionToken` mint/confirm flow, sensitivity reveal tokens (`/v1/photos/{id}/reveal`), unified `/v1/photos/upload` capture pipeline shared by Telegram/PWA/web, cross-feature routing (8 RouteTargets), and 7 `photo_*` schema tables
-- Notification Intelligence Handler (spec 054): source-neutral `internal/notification` service with source adapter contracts, source health, raw event persistence, normalized notifications, classification rationale, incident correlation, decisions, suppressions, redacted delivery attempts, authenticated `/api/notifications/*` operator endpoints, and a spec 055 boundary that keeps ntfy transport out of the core handler
+- Notification Intelligence Handler (spec 054): source-neutral `internal/notification` service with source adapter contracts, source health, raw event persistence, normalized notifications, classification rationale, incident correlation, decisions, suppressions, redacted delivery attempts, and authenticated `/api/notifications/*` operator endpoints
+- ntfy source adapter (spec 055): `internal/notification/source/ntfy` implements the concrete ntfy source adapter, runtime startup from `NTFY_SOURCES_JSON`, webhook ingest, stream transport hooks, topic health, reconnect state, dead-letter records, replay-through-source-sink controls, and HTMX operator pages while keeping ntfy transport out of the core handler
 - 17 connector source families across `internal/connector/` and `internal/drive/`
 - Intelligence engine (synthesis at 2AM, momentum hourly, resurfacing at 8AM, overdue alerts)
 - Knowledge synthesis layer (concept pages, entity profiles, cross-source connections, lint auditing, prompt contract validation)
@@ -42,7 +43,7 @@ Implemented runtime capabilities:
 - PWA share target for mobile capture and browser extension (Chrome MV3 / Firefox) for desktop capture
 - OAuth2 flow with CSRF protection, token storage, auto-refresh
 - Data export endpoint with cursor pagination (JSONL streaming)
-- Database migrations through `036_notification_intelligence.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
+- Database migrations through `038_notification_ntfy_source_adapter.sql`; migrations 002-017 remain consolidated into `001_initial_schema.sql`
 - NATS JetStream with token authentication (11 streams: ARTIFACTS, SEARCH, DIGEST, KEEP, INTELLIGENCE, ALERTS, SYNTHESIS, DOMAIN, ANNOTATIONS, LISTS, DEADLETTER)
 - Security: CSP, rate limiting, dedup unique index, config validation, body size limits
 - CI/CD pipeline (GitHub Actions workflows, Docker image versioning, branch protection)
@@ -184,6 +185,43 @@ Implementation references:
 Do not add ntfy-specific settings under these core blocks. Spec 055 owns ntfy
 adapter configuration, subscription transport, topic mapping, and ntfy payload
 translation into the spec 054 source adapter contract.
+
+### ntfy Source Adapter SST (Spec 055)
+
+The concrete ntfy adapter is configured through
+`notification_sources.ntfy.instances` in `config/smackerel.yaml`. The config
+generator reads that array with `required_json_value` and emits it as
+`NTFY_SOURCES_JSON` into each generated env file. `internal/config/config.go`
+marks `NTFY_SOURCES_JSON` as required, and `cmd/core/wiring.go` calls
+`ntfy.BootstrapConfiguredSources` and `ntfy.StartConfiguredAdapters` during
+startup. A missing JSON array, malformed JSON, or invalid enabled source
+instance stops startup loudly.
+
+Each ntfy source instance currently supports these SST fields:
+
+| YAML field | Runtime meaning |
+|------------|-----------------|
+| `source_instance_id` | Stable source identity used by health, events, dead letters, replay attempts, and UI/API routes. |
+| `enabled` | Starts or skips the instance. |
+| `source_form` and `transport_mode` | Must match exactly and be either `stream` or `webhook`. |
+| `endpoint_url` | Transport endpoint. Webhook mode uses the Smackerel API route for the source. |
+| `endpoint_ref_name` | Redacted endpoint identity surfaced in status and detail responses. |
+| `topics` | Explicit topic allowlist; unconfigured topics are rejected. |
+| `auth_mode` | `none`, `bearer_token`, or `basic`; `none` must be explicit to allow zero secret references. |
+| `secret_ref_names` | Secret reference names only for credential-backed modes. Secret values stay outside status, logs, UI, and dead letters. |
+| `default_domain`, `topic_subjects`, `tag_services`, `tag_intents` | Mapping hints that the core classifier may use; they are not policy decisions. |
+| `retry_budget`, `initial_delay_seconds`, `max_delay_seconds`, `keepalive_timeout_seconds` | Positive reconnect policy values. |
+| `lag_degraded_after_seconds`, `lag_disconnected_after_seconds` | Positive lag thresholds; degraded must be lower than disconnected. |
+| `dead_letter_retry_budget`, `max_payload_bytes`, `pressure_threshold_count` | Positive dead-letter/replay controls and payload ceiling. |
+| `display_name`, `endpoint_label`, `config_hash` | Redacted operator display and drift/audit metadata. |
+
+Implementation references:
+
+- `scripts/commands/config.sh` emits `NTFY_SOURCES_JSON` from `notification_sources.ntfy.instances`.
+- `internal/notification/source/ntfy/config_json.go` parses the JSON and bootstraps enabled source instances.
+- `internal/notification/source/ntfy/types.go` validates identity, source form, auth mode, secret references, config hash, redacted metadata, and positive policy values.
+- `cmd/core/wiring.go` starts the ntfy runtime and wires the webhook receiver plus ntfy operational store into notification handlers.
+- `internal/api/notifications_ntfy.go` owns ntfy detail, webhook, reconnect, dead-letter, and replay API handlers.
 
 ### Environment Model
 
@@ -391,7 +429,8 @@ Any runtime change that affects command surfaces, topology, storage, or test beh
 | `internal/list/` | Actionable list model — lists and list items, domain-aware aggregation from extracted data, completion tracking, PostgreSQL store |
 | `internal/metrics/` | Prometheus metrics (ingestion, capture, search latency, domain extraction, connector sync, NATS dead-letter counters, DB connection gauge, **eight bounded recommendation metrics — see `docs/Operations.md` Recommendations table**) and W3C traceparent propagation via NATS headers |
 | `internal/nats/` | NATS JetStream client — stream/consumer creation, publish/subscribe helpers, subject constants matching `config/nats_contract.json` |
-| `internal/notification/` | Spec 054 source-neutral notification intelligence handler — source adapter contract and registry, redacted source health, raw event and normalized notification stores, classifier, dedupe/correlation, incident model, decision engine, diagnostics/action/approval policy helpers, output dispatcher, and redaction guard. Core code must not import or branch on ntfy-specific behavior; spec 055 owns ntfy adapter transport. |
+| `internal/notification/` | Spec 054 source-neutral notification intelligence handler — source adapter contract and registry, redacted source health, raw event and normalized notification stores, classifier, dedupe/correlation, incident model, decision engine, diagnostics/action/approval policy helpers, output dispatcher, and redaction guard. Core code must not import or branch on ntfy-specific behavior. |
+| `internal/notification/source/ntfy/` | Spec 055 concrete ntfy source adapter — explicit config validation, stream/webhook transport, ntfy JSON parsing, `SourceEventEnvelope` mapping, topic health/lag/reconnect state, adapter-owned dead letters, replay through `SourceEventSink`, and boundary guards preventing output-channel coupling. |
 | `internal/pipeline/` | Artifact processing pipeline — NATS subscribers for process/embed/rerank/digest/synthesis/domain-extract, result handlers, retry logic |
 | `internal/scheduler/` | Cron-based task scheduler — digest generation (configurable cron), intelligence synthesis (2AM), momentum (hourly), resurfacing (8AM), knowledge lint (configurable), alert checks |
 | `internal/stringutil/` | String utility functions — UTF-8 safe truncation, control character sanitization, text normalization |
@@ -418,8 +457,11 @@ Migrations 002–017 were consolidated into `001_initial_schema.sql` during a sc
 | 022 | `022_recommendations.sql` | Recommendation requests, preferences, provider payloads, suppressions, delivery attempts, and audit records |
 | 023-035 | `023_*.sql` through `035_*.sql` | Incremental drive, photo, auth, QF companion, and evidence-export schema additions |
 | 036 | `036_notification_intelligence.sql` | Spec 054 notification intelligence schema: `notification_source_instances`, `notification_source_health_events`, `notification_raw_events`, `normalized_notifications`, `notification_classifications`, `notification_incidents`, `notification_incident_events`, `notification_processing_decisions`, `notification_suppressions`, and `notification_delivery_attempts` |
+| 038 | `038_notification_ntfy_source_adapter.sql` | Spec 055 ntfy source adapter schema: relaxes source-instance secret references only when `auth_mode=none` is explicit, then adds `notification_ntfy_subscription_states`, `notification_ntfy_dead_letters`, and `notification_ntfy_replay_attempts` |
 
 Migration `036_notification_intelligence.sql` is additive and follows the existing application-written ID/timestamp pattern: it uses `CHECK` constraints for enum-like values, JSONB for redaction/rationale envelopes, and no database-side runtime fallback values. Raw source input is stored in `notification_raw_events` before a normalized notification can be processed downstream.
+
+Migration `038_notification_ntfy_source_adapter.sql` is adapter-owned. It stores one subscription-state row per `(source_instance_id, topic)`, redacted dead-letter records for failed ntfy intake, and replay attempts keyed by idempotency hash. The replay table records whether the source sink accepted, rejected, or failed a replay; it does not represent output delivery. Runtime replay locks the dead-letter row and short-circuits already-replayed records before another `SourceEventSink` call, so the idempotency contract bounds both audit rows and source-sink side effects.
 
 ## Prompt Contracts
 

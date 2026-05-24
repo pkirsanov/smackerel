@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "featureDir": "specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001",
+  "generatedAt": "2026-05-24T20:37:26Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-CHAOS-20260524-001-001",
+      "scope": "scope-1-idempotent-replay-burst",
+      "title": "Repeated ntfy dead-letter replay does not duplicate source events",
+      "gherkin": {
+        "given": "an ntfy dead-letter is replay eligible and has not yet been replayed",
+        "when": "an operator or retry path submits replay for the same dead-letter three times",
+        "then": "at most one replay reaches SourceEventSink, at most one raw notification event is created, later attempts return already-replayed or existing-attempt state, and no direct output-channel delivery is created"
+      },
+      "behaviorClass": "e2e-api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/notification/source/ntfy/replay_integration_test.go",
+          "testId": "TestNtfyDeadLetterReplayBurstIsIdempotent"
+        },
+        {
+          "file": "tests/e2e/notification_ntfy_source_api_test.go",
+          "testId": "TestNtfyDeadLetterReplayAPIIsIdempotent"
+        },
+        {
+          "file": "internal/notification/source/ntfy/no_output_coupling_test.go",
+          "testId": "TestNtfyAdapterHasNoOutputChannelImports"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#deterministic-red-evidence",
+        "report.md#replay-burst-integration-regression",
+        "report.md#replay-api-e2e-regression",
+        "report.md#seeded-replay-side-effect-closure-rerun",
+        "report.md#live-replay-api-idempotency-rerun"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-CHAOS-20260524-001-002",
+      "scope": "scope-1-idempotent-replay-burst",
+      "title": "Malformed ntfy redaction state is not silently discarded",
+      "gherkin": {
+        "given": "persisted ntfy subscription-state or dead-letter row data contains malformed redaction_state bytes",
+        "when": "the ntfy store scan helper reconstructs the row",
+        "then": "the helper returns a contextual decode error and does not fabricate an empty redaction map"
+      },
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/notification/source/ntfy/store_scan_test.go",
+          "testId": "TestNtfyScanSubscriptionStatesRejectsMalformedRedactionState"
+        },
+        {
+          "file": "internal/notification/source/ntfy/store_scan_test.go",
+          "testId": "TestNtfyScanDeadLettersRejectsMalformedRedactionState"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#audit-rework-red-evidence",
+        "report.md#audit-rework-unit-regression",
+        "report.md#audit-rework-g048-scan"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

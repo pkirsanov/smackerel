@@ -112,8 +112,40 @@ const allTemplates = `
 <h1>Notification Sources</h1>
 {{template "notification-nav" .}}
 {{range .Sources}}
-<div class="card"><h3>{{.Config.SourceInstanceID}}</h3><p class="meta">{{.Config.SourceType}} · {{.Config.SourceForm}} · {{.Health.State}} · retry {{.Health.RetryCount}}</p>{{if .Health.LastErrorRedacted}}<p class="summary">{{.Health.LastErrorRedacted}}</p>{{end}}</div>
+<div class="card"><h3>{{if eq .Config.SourceType "ntfy"}}<a href="/notifications/sources/{{.Config.SourceInstanceID}}">{{.Config.SourceInstanceID}}</a>{{else}}{{.Config.SourceInstanceID}}{{end}}</h3><p class="meta">{{.Config.SourceType}} · {{.Config.SourceForm}} · {{.Health.State}} · retry {{.Health.RetryCount}}</p><p class="meta">config {{.Config.ConfigHash}} · auth {{index .Config.RedactedMetadata "auth_mode"}} · topics {{index .Config.RedactedMetadata "topic_count"}} · endpoint ref {{index .Config.RedactedMetadata "endpoint_ref_name"}}</p>{{if .Health.LastErrorRedacted}}<p class="summary">{{.Health.LastErrorRedacted}}</p>{{end}}{{if eq .Config.SourceType "ntfy"}}<p class="meta"><a href="/notifications/sources/{{.Config.SourceInstanceID}}/dead-letters">Dead letters</a> · source/output boundary: source ingest only</p>{{end}}</div>
 {{else}}<div class="empty">No notification sources registered</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-ntfy-source.html"}}
+{{template "head" .}}
+<a href="/notifications/sources" class="back-link">< Back to sources</a>
+<h1>ntfy Source {{.Source.Config.SourceInstanceID}}</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>Source Health</h3><p class="meta">{{.Source.Config.SourceType}} · {{.Source.Config.SourceForm}} · {{.Source.Health.State}} · retry {{.Source.Health.RetryCount}}</p><p class="summary">{{.Source.Health.LastErrorRedacted}}</p><p class="meta">config {{.Source.Config.ConfigHash}} · auth {{index .Source.Config.RedactedMetadata "auth_mode"}} · endpoint ref {{index .Source.Config.RedactedMetadata "endpoint_ref_name"}}</p></div>
+<div class="card"><h3>Topic Health And Troubleshooting</h3><p class="meta"><a href="/api/notifications/sources/{{.Source.Config.SourceInstanceID}}/ntfy">Refresh Health</a> · <form style="display:inline" method="post" action="/api/notifications/sources/{{.Source.Config.SourceInstanceID}}/ntfy/reconnect"><button type="submit">Reconnect Source</button></form></p>{{range .Topics}}<p class="meta">{{.Topic}} · {{.SubscriptionState}} · lag {{.LagSeconds}}s · possible gap {{.PossibleGap}} · retry {{.RetryCount}}/{{.RetryBudget}}</p>{{if .LastErrorRedacted}}<p class="summary">{{.LastErrorRedacted}}</p>{{end}}{{else}}<p class="meta">No ntfy topic state recorded yet. A real source check, accepted event, reconnect action, or dead-letter pressure records topic state.</p>{{end}}</div>
+<div class="card"><h3>Last Accepted Event</h3>{{if .LastEvent}}<p class="meta">source event {{.LastEvent.SourceEventID}} · raw {{.LastEvent.RawEventID}} · topic {{index .LastEvent.DeliveryMetadata "topic"}}</p><p class="summary">{{.LastEvent.Title}}</p>{{else}}<p class="meta">No accepted ntfy event recorded yet.</p>{{end}}</div>
+<div class="card"><h3>Dead-Letter Queue</h3><p class="meta"><a href="/notifications/sources/{{.Source.Config.SourceInstanceID}}/dead-letters">Open ntfy dead letters</a></p>{{range .DeadLetters}}<p class="meta">{{.CauseKind}} · {{.ReplayStatus}} · {{.PayloadHash}}</p><p class="summary">{{.CauseRedacted}}</p>{{else}}<p class="meta">No ntfy dead letters recorded.</p>{{end}}</div>
+<div class="card"><h3>Source/Output Boundary</h3><p class="summary">ntfy source events enter through SourceEventSink. Replay submits through the same source sink. Output dispatch is handled only by the notification core.</p></div>
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-ntfy-dead-letters.html"}}
+{{template "head" .}}
+<a href="/notifications/sources/{{.SourceInstanceID}}" class="back-link">< Back to ntfy source</a>
+<h1>ntfy Dead Letters</h1>
+{{template "notification-nav" .}}
+{{range .DeadLetters}}<div class="card"><h3><a href="/notifications/sources/{{$.SourceInstanceID}}/dead-letters/{{.ID}}">{{.CauseKind}}</a></h3><p class="meta">{{.ID}} · topic {{.Topic}} · replay {{.ReplayStatus}} · eligible {{.ReplayEligible}}</p><p class="summary">{{.CauseRedacted}}</p><p class="meta">payload {{.PayloadHash}} · preview {{.SafePayloadPreview}}</p><p class="meta">Replay confirmation must use replay_through_source_sink; no output dispatch is performed here.</p></div>{{else}}<div class="empty">No ntfy dead letters recorded</div>{{end}}
+{{template "foot"}}
+{{end}}
+
+{{define "notifications-ntfy-dead-letter-detail.html"}}
+{{template "head" .}}
+<a href="/notifications/sources/{{.SourceInstanceID}}/dead-letters" class="back-link">< Back to ntfy dead letters</a>
+<h1>ntfy Dead Letter</h1>
+{{template "notification-nav" .}}
+<div class="card"><h3>{{.Record.CauseKind}}</h3><p class="meta">{{.Record.ID}} · topic {{.Record.Topic}} · replay {{.Record.ReplayStatus}} · eligible {{.Record.ReplayEligible}}</p><p class="summary">{{.Record.CauseRedacted}}</p><p class="meta">payload {{.Record.PayloadHash}} · preview {{.Record.SafePayloadPreview}}</p></div>
+<div class="card"><h3>Replay Confirmation</h3><p class="summary">Replay confirmation value: replay_through_source_sink</p><p class="meta">Replay submits through SourceEventSink and does not perform output dispatch.</p><p class="meta">API route: /api/notifications/sources/{{.SourceInstanceID}}/ntfy/dead-letters/{{.Record.ID}}/replay</p></div>
 {{template "foot"}}
 {{end}}
 
