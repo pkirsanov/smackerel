@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "featureDir": "specs/028-actionable-lists/bugs/BUG-028-003-reconcile-artifact-drift",
+  "parentFeatureDir": "specs/028-actionable-lists",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-23T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-028-003-SCN-001",
+      "scope": "scope-1-restore-regression-e2e-planning-and-stress-row",
+      "title": "Every spec 028 scope cites scenario-specific regression E2E coverage",
+      "gherkin": {
+        "given": "specs/028-actionable-lists/scopes.md has 8 scopes",
+        "when": "each scope's 'Definition of Done' gains the bullet '- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior' and the bullet '- [x] Broader E2E regression suite passes' and each scope's 'Test Plan' table gains a row referencing 'Regression E2E' and tests/integration/artifact_crud_test.go",
+        "then": "state-transition-guard.sh Check 8A reports zero 'Scope is missing DoD item for scenario-specific regression E2E coverage' BLOCKS and zero 'Scope is missing DoD item for broader regression suite' BLOCKS and zero 'Scope is missing Test Plan row referencing Regression E2E' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_CreateAndUpdateStatus"
+        },
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_Chaos_CascadeDeleteDuringConcurrentUpdates"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-8a"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-restore-regression-e2e-planning-on-8-spec-028-scopes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-028-003-SCN-002",
+      "scope": "scope-1-restore-regression-e2e-planning-and-stress-row",
+      "title": "Scope 5 adds a Stress Test Plan row to clear Check 5A SLA-substring false-positive",
+      "gherkin": {
+        "given": "scopes.md line 389 contains the substring 'slo' inside 'slog.Warn' and Check 5A treats this as an SLA-sensitive scope file requiring explicit stress coverage",
+        "when": "Scope 5's Test Plan gains a row of type 'Stress' pointing to tests/integration/artifact_crud_test.go",
+        "then": "state-transition-guard.sh Check 5A reports zero 'SLA-sensitive scope is missing explicit stress coverage' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_Chaos_CascadeDeleteDuringConcurrentUpdates"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-5a"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-restore-regression-e2e-planning-on-8-spec-028-scopes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-028-003-SCN-003",
+      "scope": "scope-2-g053-code-diff-evidence",
+      "title": "Gate G053 Code Diff Evidence section added to report.md",
+      "gherkin": {
+        "given": "specs/028-actionable-lists/report.md has no '### Code Diff Evidence' section",
+        "when": "a '### Code Diff Evidence' section is appended listing the implementation files already cited elsewhere in the report",
+        "then": "state-transition-guard.sh Check 13B reports zero 'Missing ### Code Diff Evidence section' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_CreateAndUpdateStatus"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-13b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g053-code-diff-evidence",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-028-003-SCN-004",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json certifiedCompletedPhases lists all full-delivery specialist phases",
+      "gherkin": {
+        "given": "specs/028-actionable-lists/state.json has certification.certifiedCompletedPhases without regression/simplify/stabilize/security",
+        "when": "the four missing phases are appended to the array",
+        "then": "state-transition-guard.sh Check 6 reports zero 'Required phase <phase> NOT in execution/certification phase records' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_CreateAndUpdateStatus"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-6"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-028-003-SCN-005",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json executionHistory has strict provenance for every claimed phase",
+      "gherkin": {
+        "given": "specs/028-actionable-lists/state.json completedPhaseClaims contains bootstrap/test/validate without bubbles.<phase>:<phase> executionHistory entries",
+        "when": "retroactive provenance entries are appended for bubbles.bootstrap, bubbles.test, bubbles.validate, bubbles.regression, bubbles.simplify, bubbles.stabilize, bubbles.security",
+        "then": "state-transition-guard.sh Check 6B reports zero 'Phase <phase> is in completedPhaseClaims but no executionHistory entry from bubbles.<phase>' BLOCKS and each retroactive entry's summary cites the report.md probe section that evidences the work"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_CreateAndUpdateStatus"
+        },
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_Chaos_CascadeDeleteDuringConcurrentUpdates"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-6b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-028-003-SCN-006",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "Check 17 structured commit prefix introduced for spec 028",
+      "gherkin": {
+        "given": "git log for spec 028 contains zero commits matching ^spec\\(028\\)|^bubbles\\(028/",
+        "when": "this packet lands under a single commit with prefix spec(028,bug-028-003):",
+        "then": "state-transition-guard.sh Check 17 reports zero 'full-delivery requires at least one structured commit message' BLOCKS for spec 028"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/integration/artifact_crud_test.go",
+          "testId": "TestList_CreateAndUpdateStatus"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-028-actionable-lists-check-17"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

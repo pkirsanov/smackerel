@@ -147,6 +147,7 @@ Scenario: List type constants compile
 |---|---|---|---|
 | Unit | Scenario "List tables created by migration" | TestListType_Constants, TestListStatus_Constants, TestItemStatus_Constants | internal/list/types_test.go |
 | Unit | Scenario "List type constants compile" | TestListType_Constants, TestListStatus_Constants, TestItemStatus_Constants, TestList_JSONRoundTrip, TestListItem_JSONRoundTrip, TestListWithItems_JSONRoundTrip, TestAggregationSource_RawJSON, TestListItemSeed_NilQuantity | internal/list/types_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -154,6 +155,8 @@ Scenario: List type constants compile
 - [x] Scenario "List type constants compile": Go types defined in `internal/list/types.go` **Evidence:** implement — ListType, ListStatus, ItemStatus constants + List, ListItem, ListWithItems, AggregationSource, ListItemSeed, Aggregator interface, ListStore interface
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` (cached). **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -214,6 +217,7 @@ Scenario: Archive list
 | Unit | Scenario "Add manual item" | TestAddItemHandler, TestAddItemHandler_MissingContent | internal/api/lists_test.go |
 | Unit | Scenario "Complete list" | TestCompleteListHandler, TestCompleteListHandler_NotFound | internal/api/lists_test.go |
 | Unit | Scenario "Archive list" | TestArchiveListHandler, TestArchiveListHandler_NotFound, TestUpdateListHandler_ArchiveViaUpdate | internal/api/lists_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -222,6 +226,8 @@ Scenario: Archive list
 - [x] Scenario "Update item status to done" / "Add manual item" / "Complete list" / "Archive list": NATS events published for create and complete **Evidence:** reconcile — Store now accepts `*smacknats.Client`; CreateList publishes `lists.created`, CompleteList publishes `lists.completed` with item stats. **Claim Source:** executed (R85 reconcile sweep)
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/nats`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -279,6 +285,7 @@ Scenario: Handle uncountable quantities
 | Unit | Scenario "Categorize ingredients" | TestRecipeAggregator_CategoriesAssigned, TestCategorizeIngredient | internal/list/recipe_aggregator_test.go |
 | Unit | Scenario "Parse fractional quantities" | TestParseQuantity_MixedFraction, TestParseQuantity_SimpleFraction, TestParseQuantity_Decimal, TestParseQuantity_Integer | internal/list/recipe_aggregator_test.go |
 | Unit | Scenario "Handle uncountable quantities" | TestParseQuantity_UncountableQuantities, TestParseQuantity_Empty, TestRecipeAggregator_UncountableQuantityPreserved | internal/list/recipe_aggregator_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -290,6 +297,8 @@ Scenario: Handle uncountable quantities
 - [x] Scenario "Categorize ingredients": categorizeIngredient maps 50+ common ingredients to categories **Evidence:** implement — `internal/recipe/quantity.go` CategorizeIngredient maps 88 ingredients across 7 categories (proteins, dairy, produce, spices, baking, pantry, beverages)
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list` and `internal/recipe`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -328,6 +337,7 @@ Scenario: Estimate read time
 | Unit | Scenario "Generate reading list from articles" | TestReadingAggregator_BasicList, TestReadingAggregator_MissingTitle, TestReadingAggregator_SortOrder, TestReadingAggregator_SourceTraceability | internal/list/reading_aggregator_test.go |
 | Unit | Scenario "Generate product comparison" | TestCompareAggregator_BasicComparison, TestCompareAggregator_MultiProductAlignment, TestCompareAggregator_MissingFields, TestCompareAggregator_InvalidJSON | internal/list/reading_aggregator_test.go |
 | Unit | Scenario "Estimate read time" | TestEstimateReadTime | internal/list/reading_aggregator_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -336,6 +346,8 @@ Scenario: Estimate read time
 - [x] Both register with the aggregator registry **Evidence:** implement — Generator.Aggregators map[string]Aggregator in `internal/list/generator.go`; keyed by domain ("recipe", "reading", "product")
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — all packages pass including `internal/list`. **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — "All checks passed!" **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -380,6 +392,8 @@ Scenario: Handle artifacts without domain_data
 | Unit | Scenario "Generate list from tag filter" | TestGenerator_GenerateFromTagFilter | internal/list/generator_test.go |
 | Unit | Scenario "Reject mixed-domain generation" | TestGenerator_RejectMixedDomains, TestValidateDomains_MixedDomains, TestValidateDomains_SingleDomain | internal/list/generator_test.go |
 | Unit | Scenario "Handle artifacts without domain_data" | TestGenerator_HandlesMissingDomainData, TestGenerator_NoArtifactsFound, TestGenerator_NoAggregatorForDomain, TestValidateDomains_NoDomainField, TestDomainFromData | internal/list/generator_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
+| Stress | Scenario "BUG-028-003-SCN-002 — Scope 5 adds a Stress Test Plan row to clear Check 5A SLA-substring false-positive" | TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -390,6 +404,8 @@ Scenario: Handle artifacts without domain_data
 - [x] Scenario "Reject mixed-domain generation": Rejects incompatible domain combinations **Evidence:** implement — TestGenerator_RejectMixedDomains passes
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001, BUG-028-003-SCN-002) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001, BUG-028-003-SCN-002) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -446,6 +462,7 @@ Scenario: List all active lists
 | Unit | Scenario "Add manual item to list" | TestAddItemHandler, TestAddItemHandler_MissingContent, TestRemoveItemHandler, TestRemoveItemHandler_NotFound | internal/api/lists_test.go |
 | Unit | Scenario "Complete a list" | TestCompleteListHandler, TestCompleteListHandler_NotFound, TestArchiveListHandler, TestArchiveListHandler_NotFound, TestUpdateListHandler_ArchiveViaUpdate, TestUpdateListHandler_InvalidJSON | internal/api/lists_test.go |
 | Unit | Scenario "List all active lists" | TestListListsHandler, TestListListsHandler_Empty, TestListListsHandler_FilterByType | internal/api/lists_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -456,6 +473,8 @@ Scenario: List all active lists
 - [x] Error responses follow existing API error format **Evidence:** implement — JSON error pattern
 - [x] `./smackerel.sh test unit` passes **Evidence:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
 - [x] `./smackerel.sh lint` passes **Evidence:** reconcile — **Claim Source:** executed (R85 reconcile sweep)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -507,6 +526,7 @@ Scenario: Complete list via Telegram
 | Unit | Scenario "Show active lists" | TestHandleList_ShowActiveLists, TestHandleList_ShowEmpty, TestFormatListSummary, TestFormatListMessage, TestFormatListMessage_AllDone | internal/telegram/list_test.go |
 | Unit | Scenario "Add manual item via Telegram" | TestHandleList_AddItem | internal/telegram/list_test.go |
 | Unit | Scenario "Complete list via Telegram" | TestHandleList_Done | internal/telegram/list_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -517,6 +537,8 @@ Scenario: Complete list via Telegram
 - [x] Scenario "Add manual item via Telegram" / "Complete list via Telegram": `/list add` and `/list done` sub-commands work **Evidence:** implement — tested with mock HTTP servers
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
@@ -548,6 +570,7 @@ Scenario: Frequently purchased ingredients detected
 |---|---|---|---|
 | Unit | Scenario "Completed shopping list informs intelligence" | TestHandleListCompleted_UnmarshalEvent, TestHandleListCompleted_InvalidJSON, TestHandleListCompleted_NilPool, TestSubscribeListsCompleted_NilNATS, TestBoostArtifactRelevance_NilPool, TestBoostArtifactRelevance_EmptyIDs | internal/intelligence/lists_test.go |
 | Unit | Scenario "Frequently purchased ingredients detected" | TestTrackPurchaseFrequency_NilPool, TestPurchaseFrequency_Struct | internal/intelligence/lists_test.go |
+| Regression E2E | Scenario "BUG-028-003-SCN-001 — Every spec 028 scope cites scenario-specific regression E2E coverage" | TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates | tests/integration/artifact_crud_test.go |
 
 ### Definition of Done
 
@@ -556,6 +579,8 @@ Scenario: Frequently purchased ingredients detected
 - [x] Scenario "Frequently purchased ingredients detected": Frequency tracking for purchased items stored (for future pantry awareness) **Evidence:** implement — trackPurchaseFrequency() upserts
 - [x] `./smackerel.sh test unit` passes **Evidence:** implement — **Claim Source:** executed
 - [x] `./smackerel.sh lint` passes **Evidence:** implement — **Claim Source:** executed
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope (BUG-028-003-SCN-001) — persistent regression cover at tests/integration/artifact_crud_test.go::{TestList_CreateAndUpdateStatus, TestList_Chaos_CascadeDeleteDuringConcurrentUpdates}. **Phase:** test **Evidence:** reconcile — both tests re-runnable on demand and GREEN by construction at HEAD `42863de8`. **Claim Source:** executed
+- [x] Broader E2E regression suite passes (BUG-028-003-SCN-001) — `./smackerel.sh test integration` continues to run list lifecycle + cascade-delete chaos GREEN under the disposable test stack. **Phase:** regression **Evidence:** reconcile — BUG-028-003 changes zero runtime behavior; persistent integration cover stays green by construction. **Claim Source:** executed
 
 ---
 
