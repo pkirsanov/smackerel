@@ -1667,6 +1667,230 @@ func TestHealthHandler_IntelligenceDownDegrades(t *testing.T) {
 	}
 }
 
+// === BUG-021-002 — HealthHandler intelligence-probe TTL cache (STAB-021-R13-001) ===
+// These tests verify the cache infrastructure added by getCachedIntelligenceHealth.
+// They exploit same-package field access on Dependencies to pre-seed
+// d.intelligenceHealthCache and assert the cache decision logic without
+// depending on a real *intelligence.Engine with a live pgxpool.
+
+// SCN-021-FIX-002A — TTL cache hit reuses snapshot without DB round-trip.
+// Pre-seed a fresh "up" snapshot; set Pool=nil (which would normally yield
+// "down"); assert the response uses the cached "up" value, proving the
+// fast-path returned without falling through to the slow path.
+func TestHealthHandler_IntelligenceCacheHit(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 1 * time.Minute,
+	}
+	deps.intelligenceHealthCache = &intelligenceHealthSnapshot{
+		intelligenceStatus:  "up",
+		alertDeliveryStatus: "up",
+	}
+	deps.intelligenceHealthAt = time.Now()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp.Services["intelligence"].Status; got != "up" {
+		t.Errorf("expected cached intelligence=up, got %q (slow path leaked through?)", got)
+	}
+	if got := resp.Services["alert_delivery"].Status; got != "up" {
+		t.Errorf("expected cached alert_delivery=up, got %q", got)
+	}
+}
+
+// SCN-021-FIX-002B — TTL cache expiry triggers refresh.
+// Pre-seed a snapshot dated 2 minutes ago with TTL=1m; set Pool=nil so the
+// refresh re-computes "down"; assert the cached "up" is discarded.
+func TestHealthHandler_IntelligenceCacheExpired(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 1 * time.Minute,
+	}
+	deps.intelligenceHealthCache = &intelligenceHealthSnapshot{
+		intelligenceStatus:  "up",
+		alertDeliveryStatus: "up",
+	}
+	deps.intelligenceHealthAt = time.Now().Add(-2 * time.Minute)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp.Services["intelligence"].Status; got != "down" {
+		t.Errorf("expected refresh ⇒ intelligence=down, got %q (stale cache returned?)", got)
+	}
+}
+
+// SCN-021-FIX-002C — Cache disabled (TTL=0) preserves always-fresh path.
+// Even with a pre-seeded snapshot, TTL=0 must bypass the cache and always
+// invoke the slow path; nil Pool then yields "down".
+func TestHealthHandler_IntelligenceCacheDisabled(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 0,
+	}
+	deps.intelligenceHealthCache = &intelligenceHealthSnapshot{
+		intelligenceStatus:  "up",
+		alertDeliveryStatus: "up",
+	}
+	deps.intelligenceHealthAt = time.Now()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp.Services["intelligence"].Status; got != "down" {
+		t.Errorf("expected TTL=0 ⇒ always-fresh ⇒ intelligence=down, got %q", got)
+	}
+}
+
+// SCN-021-FIX-002D — Nil pool preserved (no alert_delivery key).
+// Nil pool with no cache must produce intelligence="down" AND must omit
+// the alert_delivery key, exactly matching the pre-cache behaviour.
+func TestHealthHandler_IntelligenceNilPool_OmitsAlertDelivery(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 0,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp.Services["intelligence"].Status; got != "down" {
+		t.Errorf("expected intelligence=down for nil pool, got %q", got)
+	}
+	if _, ok := resp.Services["alert_delivery"]; ok {
+		t.Errorf("expected NO alert_delivery key when pool is nil, but got: %+v", resp.Services["alert_delivery"])
+	}
+}
+
+// SCN-021-FIX-002F — Snapshot stores stale-state for both subsections.
+// Verifies the snapshot type can carry "stale" values for both sub-services
+// and that they surface correctly through the response. (002E — nil-engine
+// preservation — is already covered by TestHealthHandler_IntelligenceNilEngine
+// above; this round's only structural change is the cache layer, which is
+// guarded by the call-site `if d.IntelligenceEngine != nil` check that remains
+// unchanged. Asserting it again here would be redundant.)
+func TestHealthHandler_IntelligenceCacheStaleSubsections(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 1 * time.Minute,
+	}
+	deps.intelligenceHealthCache = &intelligenceHealthSnapshot{
+		intelligenceStatus:  "stale",
+		alertDeliveryStatus: "stale",
+	}
+	deps.intelligenceHealthAt = time.Now()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	deps.HealthHandler(rec, req)
+
+	var resp HealthResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := resp.Services["intelligence"].Status; got != "stale" {
+		t.Errorf("expected cached intelligence=stale, got %q", got)
+	}
+	if got := resp.Services["alert_delivery"].Status; got != "stale" {
+		t.Errorf("expected cached alert_delivery=stale, got %q", got)
+	}
+}
+
+// SCN-021-FIX-002 — Concurrent readers do not serialise on the cache mutex.
+// Verifies that the RWMutex precedent from C-023-C001 (knowledge cache) is
+// applied correctly to the intelligence cache: 50 concurrent goroutines must
+// all complete in well under N * TTL even when the cache is pre-seeded with
+// a fresh snapshot (fast-path under RLock). A regression that swapped RLock
+// for Lock would serialise readers and inflate elapsed time linearly.
+func TestHealthHandler_IntelligenceCacheConcurrentReaders(t *testing.T) {
+	engine := &intelligence.Engine{Pool: nil}
+	deps := &Dependencies{
+		DB:                         &mockDB{healthy: true},
+		NATS:                       &mockNATS{healthy: true},
+		StartTime:                  time.Now(),
+		IntelligenceEngine:         engine,
+		IntelligenceHealthCacheTTL: 1 * time.Minute,
+	}
+	deps.intelligenceHealthCache = &intelligenceHealthSnapshot{
+		intelligenceStatus:  "up",
+		alertDeliveryStatus: "up",
+	}
+	deps.intelligenceHealthAt = time.Now()
+
+	const goroutines = 50
+	errs := make(chan error, goroutines)
+	start := time.Now()
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			rec := httptest.NewRecorder()
+			deps.HealthHandler(rec, req)
+			var resp HealthResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				errs <- err
+				return
+			}
+			if resp.Services["intelligence"].Status != "up" {
+				errs <- fmt.Errorf("intelligence status: got %q, want up", resp.Services["intelligence"].Status)
+				return
+			}
+			errs <- nil
+		}()
+	}
+	for i := 0; i < goroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent handler error: %v", err)
+		}
+	}
+	elapsed := time.Since(start)
+	// 50 cache-hit reads should complete in well under 2s even on slow CI.
+	// A serialised write-lock regression would scale linearly with goroutines.
+	if elapsed > 2*time.Second {
+		t.Errorf("50 concurrent cache-hit reads took %v (expected < 2s) — possible RWMutex regression", elapsed)
+	}
+}
+
 // === CHAOS-023-C001: Concurrent health checks with slow knowledge store ===
 // Verifies that concurrent authenticated health checks don't serialise on the
 // knowledge health mutex when the cache TTL expires and the DB query is slow.
