@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "spec": "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Guard-verification scenarios are the contractual proof of the artifact reconcile; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "Red state: state-transition-guard.sh reports 50 BLOCKs at HEAD 381cc0e9 (specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md § Diagnostic Evidence). Green state: state-transition-guard.sh + artifact-lint.sh + traceability-guard.sh all return Exit 0 post-reconcile (report.md § Verification Evidence)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-018-001-001",
+      "scope": 1,
+      "title": "State-transition-guard passes on parent spec 018",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:check-state-transition-guard-parent-spec-018"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md#guard-pass--state-transition-guard-parent-spec-018"
+      ],
+      "liveTestExpectation": "Exit 0 with 🟢 TRANSITION PERMITTED on parent spec 018 (or ≤2 documented framework-heuristic false-positive residuals)",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-018-001-002",
+      "scope": 1,
+      "title": "Artifact-lint passes on parent spec 018",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/artifact-lint.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/artifact-lint.sh",
+          "function": "manual:check-artifact-lint-parent-spec-018"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md#guard-pass--artifact-lint-parent-spec-018"
+      ],
+      "liveTestExpectation": "Exit 0 on parent spec 018",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-018-001-003",
+      "scope": 1,
+      "title": "Traceability-guard passes on parent spec 018",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/traceability-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "function": "manual:check-traceability-guard-parent-spec-018"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md#guard-pass--traceability-guard-parent-spec-018"
+      ],
+      "liveTestExpectation": "Exit 0 on parent spec 018 with 11/11 G068 fidelity (scenarios SCN-FM-FH-001, SCN-FM-RL-001, SCN-FM-CG-001, SCN-FM-FRED-001, SCN-FM-CONN-001, SCN-FM-NORM-001, SCN-FM-NORM-002, SCN-FM-ALERT-001, SCN-FM-SUMM-001, SCN-FM-SYM-001, SCN-FM-SYM-002)",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-018-001-004",
+      "scope": 1,
+      "title": "Production-code regression baseline stays clean",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/connector/markets/markets_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/markets/markets_test.go",
+          "function": "manual:check-go-test-markets-151-pass-97.2-coverage"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md#regression-baseline-markets-suite"
+      ],
+      "liveTestExpectation": "ok smackerel/internal/connector/markets, 151 PASS, 0 FAIL, 97.2% statement coverage (exact match to R09 and R12 baselines)",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-018-001-005",
+      "scope": 1,
+      "title": "Zero production-code changes",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "internal/connector/markets/markets_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/markets/markets_test.go",
+          "function": "manual:check-git-diff-zero-production-code"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift/report.md#git-backed-proof"
+      ],
+      "liveTestExpectation": "git diff --name-only HEAD~1..HEAD -- internal/connector/markets/ returns empty; git diff --name-only HEAD~1..HEAD returns only paths under specs/018-financial-markets-connector/ (or .specify/memory/sweep-2026-05-23-r30.json)",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}
