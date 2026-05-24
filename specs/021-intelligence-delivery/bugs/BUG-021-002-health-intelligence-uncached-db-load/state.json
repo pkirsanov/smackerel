@@ -1,0 +1,40 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-002-health-intelligence-uncached-db-load",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-002-health-intelligence-uncached-db-load",
+  "featureName": "BUG-021-002: HealthHandler intelligence-probe TTL cache (STAB-021-R13-001)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-23T00:00:00Z",
+    "completedPhaseClaims": ["plan", "implement", "test", "validate", "audit", "docs"],
+    "executionHistory": [
+      {"phase": "plan", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:00:00Z", "completedAt": "2026-05-23T00:05:00Z", "outcome": "completed_owned"},
+      {"phase": "implement", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:05:00Z", "completedAt": "2026-05-23T00:15:00Z", "outcome": "completed_owned"},
+      {"phase": "test", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:15:00Z", "completedAt": "2026-05-23T00:18:00Z", "outcome": "completed_owned"},
+      {"phase": "validate", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:18:00Z", "completedAt": "2026-05-23T00:22:00Z", "outcome": "completed_owned"},
+      {"phase": "audit", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:22:00Z", "completedAt": "2026-05-23T00:25:00Z", "outcome": "completed_owned"},
+      {"phase": "docs", "agent": "bubbles.workflow", "startedAt": "2026-05-23T00:25:00Z", "completedAt": "2026-05-23T00:27:00Z", "outcome": "completed_owned"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-23T00:27:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "validate", "audit", "docs"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
