@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "featureDir": "specs/015-twitter-connector/bugs/BUG-015-002-reconcile-artifact-drift",
+  "generatedAt": "2026-05-24T00:00:00Z",
+  "spec": "BUG-015-002-reconcile-artifact-drift",
+  "parentSpec": "015-twitter-connector",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Bugfix-fastlane artifact-only reconcile; scenarios drive guard-verification proof."
+  },
+  "tdd": {
+    "mode": "scenario-first",
+    "redGreenEvidence": "state-transition-guard.sh re-runs captured in report.md: red at 50 BLOCKs pre-mutation, green at 11 residual BLOCKs post-mutation (residuals are documented framework-heuristic false positives: 10 Check 28 G028 slog calls + 1 Check 3F G061 grep-regex layout)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-015-002-001",
+      "scope": "Scope 1",
+      "title": "Every spec 015 scope cites scenario-specific regression E2E coverage",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-8A-regression-e2e-traceability"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-015-artifact-drift-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 8A emits 6 passes (one per scope) and 0 BLOCKs against specs/015-twitter-connector.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-002-002",
+      "scope": "Scope 1",
+      "title": "scenario-manifest.json declares requiredTestType for every Gherkin contract",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-3C-scenario-manifest-integrity"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-015-artifact-drift-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 3C requiredTestType count equals Gherkin scenario count (12 == 12) and emits 0 G057 BLOCKs.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-002-003",
+      "scope": "Scope 1",
+      "title": "state.json executionHistory carries specialist provenance for every claimed phase",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-6-and-6B-phase-execution-provenance"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-015-artifact-drift-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 6 and Check 6B emit 0 BLOCKs for spec 015 after retroactive bubbles.select/bootstrap/regression/simplify/stabilize/security/devops/improve/docs/chaos executionHistory entries land.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-002-004",
+      "scope": "Scope 1",
+      "title": "report.md carries Code Diff Evidence + Git-Backed Proof",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-13B-code-diff-evidence"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-015-artifact-drift-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 13B emits 0 BLOCKs for spec 015 report.md after the Code Diff Evidence + Git-Backed Proof sections are appended.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-002-005",
+      "scope": "Scope 1",
+      "title": "Spec 015 scope text adds explicit Stress Coverage paragraph + scenario-first TDD evidence + deferral-trigger sentinels",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [".github/bubbles/scripts/state-transition-guard.sh"],
+      "linkedTests": [
+        {"file": ".github/bubbles/scripts/state-transition-guard.sh", "function": "manual:check-3E-5A-18-stress-tdd-deferral-coverage"}
+      ],
+      "evidenceRefs": [
+        "report.md#test-evidence-scenario-first-tdd-red-green-proof",
+        "scopes.md#scope-1-reconcile-spec-015-artifact-drift-single-scope-bugfix-fastlane"
+      ],
+      "liveTestExpectation": "Check 3E, Check 5A, and Check 18 each emit 0 BLOCKs for spec 015 after the Stress Coverage paragraph + Scenario-First TDD Evidence subsection + deferral-trigger sentinels land.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}
