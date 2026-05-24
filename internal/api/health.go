@@ -234,6 +234,17 @@ type Dependencies struct {
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
+
+	// Runtime trusted reverse-proxy CIDR allowlist (BUG-020-005,
+	// F-SEC-R30-001). Consumed by trustedProxyRealIPMiddleware in
+	// internal/api/realip.go to decide whether the connecting TCP peer
+	// is allowed to set forwarded-IP headers that the API will trust.
+	// Empty slice = secure-by-default: forwarded headers are ignored
+	// regardless of which peer sends them; per-IP rate limits key on
+	// the raw TCP peer; slog `remote_addr` reflects the raw TCP peer.
+	// Source: runtime.trusted_proxies in smackerel.yaml via
+	// RUNTIME_TRUSTED_PROXIES (comma-separated CIDRs).
+	TrustedProxies []string
 }
 
 // DBHealthChecker is the interface for database health checks.
