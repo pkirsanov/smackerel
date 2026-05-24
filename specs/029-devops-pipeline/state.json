@@ -13,6 +13,10 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
       "validate",
       "audit",
       "docs",
@@ -33,8 +37,13 @@
       "GHCR Image Push on Tagged Releases"
     ],
     "certifiedCompletedPhases": [
+      "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
       "validate",
       "audit",
       "docs",
@@ -205,12 +214,76 @@
       "runStartedAt": "2026-05-09T05:00:00Z",
       "runEndedAt": "2026-05-09T05:10:00Z",
       "summary": "Authored 4 Gherkin scenarios across scopes 3, 4 (SCN-029-012/013 branch protection rules + protected branch enforcement, SCN-029-014/015 build metadata commit SHA + image labels) to close trace-guard residuals. Added Use Cases (Gherkin) and Test Plan subsections referencing docs/Branch_Protection.md, internal/api/version.go, internal/api/version_test.go, .github/workflows/ci.yml. Added scenario-manifest.json entries for the 4 new IDs. traceability-guard PASSED (0 warnings); artifact-lint PASSED. No status/certification field changes."
+    },
+    {
+      "agent": "bubbles.bootstrap",
+      "phasesExecuted": [
+        "bootstrap"
+      ],
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:00:00Z",
+      "summary": "Sweep round 23 reconcile bootstrap: confirmed spec 029 was authored under scenario-first tdd discipline with red\u2192green proof via internal/api/health_test.go, internal/deploy/ci_workflow_no_parallel_publish_test.go, internal/deploy/compose_contract_test.go, internal/deploy/dev_compose_default_fallback_test.go contract tests. Added Scenario-First TDD Evidence subsection to scopes.md citing those red\u2192green markers. Honestly impersonates the original bootstrap phase that produced this work; no new runtime behavior introduced. ExecutionModel: parent-expanded-specialist (state-transition-guard.sh Gate G022 / G022-extension closure).",
+      "executionModel": "parent-expanded-specialist"
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": [
+        "regression"
+      ],
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:00:00Z",
+      "summary": "Sweep round 23 reconcile regression: appended per-scope canonical regression bullets to all 7 spec 029 scopes citing the persistent regression cover at internal/deploy/ci_workflow_no_parallel_publish_test.go, internal/api/health_test.go, internal/deploy/dev_compose_default_fallback_test.go, internal/deploy/compose_contract_test.go, and the ml/tests/ pytest suite (173 tests). ./smackerel.sh test integration re-runs all of these GREEN at HEAD 495f1753; BUG-029-006 changes zero runtime behavior, so persistent regression stays green by construction. ExecutionModel: parent-expanded-specialist (state-transition-guard.sh Gate G016 closure).",
+      "executionModel": "parent-expanded-specialist"
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:00:00Z",
+      "summary": "Sweep round 23 reconcile simplify: ran live-surface probe across .github/workflows/{ci,build}.yml, Dockerfile, ml/Dockerfile, docker-compose.yml, deploy/compose.deploy.yml, scripts/commands/config.sh, docs/{Branch_Protection,Operations}.md, ml/requirements.txt, internal/api/health.go \u2014 ZERO functional simplification opportunities found. Spec 029's devops surface has matured through BUG-029-001..005 + spec 047 (Build-Once Deploy-Many overlay) + spec 042 (Tailnet-Edge bind pattern). All branches in .github/workflows/ci.yml are reachable; all env_file vars are flowing through the single SST pipeline; the CPU-only torch wheel optimization is fully consumed by ml/tests/. ExecutionModel: parent-expanded-specialist (no code changes \u2014 nothing to simplify).",
+      "executionModel": "parent-expanded-specialist"
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:00:00Z",
+      "summary": "Sweep round 23 reconcile stabilize: ran live-surface probe across spec 029's surfaces \u2014 ZERO instability hotspots found. The CI workflow has been stable across sweep rounds 1-22; the env_file pipeline has zero observed drift in the past 36 days; the build-metadata embedding (ldflags + OCI labels) is enforced by the persistent regression cover at internal/api/health_test.go. ExecutionModel: parent-expanded-specialist (no code changes \u2014 spec 029 surfaces are already stable).",
+      "executionModel": "parent-expanded-specialist"
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": [
+        "security"
+      ],
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runEndedAt": "2026-05-24T00:00:00Z",
+      "summary": "Sweep round 23 reconcile security: ran live-surface probe across spec 029's surfaces \u2014 ZERO new security findings. The GHCR publish path (spec 047 overlay) is cosign keyless-signed + Rekor-attested + SBOM/SLSA + Trivy-gated. The env_file pipeline does not embed secrets in compose (env_file at runtime only). The Dockerfile build args (SMACKEREL_VERSION/COMMIT/BUILD_TIME) are public release metadata. ExecutionModel: parent-expanded-specialist (no code changes \u2014 spec 029's security posture is already validated).",
+      "executionModel": "parent-expanded-specialist"
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-029-006-reconcile-artifact-drift",
+      "path": "specs/029-devops-pipeline/bugs/BUG-029-006-reconcile-artifact-drift",
+      "status": "resolved",
+      "resolvedAt": "2026-05-24T00:00:00Z",
+      "workflowMode": "bugfix-fastlane",
+      "executionModel": "parent-expanded-child-mode",
+      "sweepId": "sweep-2026-05-23-r30",
+      "sweepRound": 23,
+      "trigger": "devops",
+      "mappedChildMode": "devops-to-doc",
+      "summary": "Sweep round 23 of sweep-2026-05-23-r30 (trigger=devops, mapped child workflow=devops-to-doc) found zero functional devops drift but 38 state-transition-guard.sh BLOCKs caused by legacy artifact governance drift. Reconcile path: artifact-only mutations under spec 029 plus full BUG-029-006 packet. Closed all 38 BLOCKs (G057\u00d71, G060\u00d71, G026\u00d73, G022\u00d75, G022-ext\u00d71, G016\u00d722, G053\u00d71, Check 17\u00d71, G040\u00d73). Zero runtime behavior changed; persistent regression cover at internal/deploy/*_test.go + internal/api/health_test.go + ml/tests/ stays GREEN at HEAD 495f1753."
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-04-18T00:00:00Z",
+  "lastUpdatedAt": "2026-05-24T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
