@@ -1229,3 +1229,85 @@ FULL_BUILD_EXIT=0
 - `go vet` clean.
 - No DoD items reopened, no scope statuses changed, no spec content altered. Certification remains valid (status `done`, lastCertifiedAt 2026-04-17).
 
+---
+
+## BUG-017-002 — Trace-Guard G068 Regression on SCN-GA-NWS-002 (sweep-2026-05-23-r30 Round 12, regression-to-doc)
+
+**Date:** 2026-05-24
+**Boundary:** artifact-only — zero production code, test code, scenario-manifest, or config changed.
+**Files touched (under `specs/017-gov-alerts-connector/`):** `scopes.md` (+5 lines: 1 scenario-prefix DoD bullet for SCN-GA-NWS-002 + evidence line), `report.md` (this cross-reference section), `state.json` (BUG-017-002 closure history entry), `bugs/BUG-017-002-trace-guard-g068-regression/{spec,design,scopes,report,uservalidation,state}.{md,json}` (6 new artifacts).
+
+### Trigger
+
+The Bubbles framework upgrade on 2026-05-12 (commit `3037eb8c chore: upgrade Bubbles framework + prune stale workflow-runs`) tightened `traceability-guard.sh` Gate G068 (Gherkin → DoD Content Fidelity) — lowered significant-word length floor 4 → 3 and trimmed the stop-word list. Under the v3.8.0 matcher, the existing Scope 03 DoD bullets for SCN-GA-NWS-002 (`Severity mapped from NWS categories to CAP standard`, `Event types classified (tornado, hurricane, …)`) no longer scored ≥3 significant-word overlap and contained no trace ID, so the scenario was flagged unmapped. BUG-017-001 (closed 2026-04-29) had passed under the older matcher.
+
+### Fix
+
+Inserted a single new scenario-prefix DoD bullet for SCN-GA-NWS-002 into Scope 03 between the existing `Event types classified ...` bullet and the `17 unit tests pass ...` bullet:
+
+```
+# Scope 03 DoD context (existing bullets preserved byte-identical; one new bullet inserted)
+- [x] Severity mapped from NWS categories to CAP standard
+- [x] Event types classified (tornado, hurricane, flood, etc.)
+- [x] Scenario "SCN-GA-NWS-002 NWS severity and event classification": NWS severity (Extreme/Severe/Moderate/Minor) and event_type (tornado, winter_storm, heat, etc.) are classified together for each NWS alert per the SCN-GA-NWS-002 example table
+  > Evidence: alerts.go::mapNWSSeverity() + alerts.go::classifyNWSEventType() jointly satisfy SCN-GA-NWS-002; TestMapNWSSeverity (Extreme→extreme, Severe→severe, Moderate→moderate, Minor→minor, Unknown→minor) and TestClassifyNWSEventType (tornado, winter_storm, heat, hurricane, flood, thunderstorm, cold, fire) PASS in internal/connector/alerts/alerts_test.go
+- [x] 17 unit tests pass (NWS source coverage)
+```
+
+All other Scope 03 DoD bullets preserved byte-identical. No Gherkin edits. No production code edits. No test code edits.
+
+### Pre-Fix Guard Baseline (HEAD `90554aca`)
+
+```
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/017-gov-alerts-connector 2>&1 | tail -8
+❌ Scope 03: NWS Weather Alerts Source Gherkin scenario has no faithful DoD item preserving its behavioral claim: SCN-GA-NWS-002 NWS severity and event classification
+ℹ️  DoD fidelity: 13 scenarios checked, 12 mapped to DoD, 1 unmapped
+❌ DoD content fidelity gap: 1 Gherkin scenario(s) have no matching DoD item — DoD may have been rewritten to match delivery instead of the spec (Gate G068)
+
+--- Traceability Summary ---
+ℹ️  DoD fidelity scenarios: 13 (mapped: 12, unmapped: 1)
+
+RESULT: FAILED (2 failures, 0 warnings)
+```
+
+### Post-Fix Guard
+
+```
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/017-gov-alerts-connector 2>&1 | tail -8
+
+--- Traceability Summary ---
+ℹ️  Scenarios checked: 13
+ℹ️  Test rows checked: 13
+ℹ️  Scenario-to-row mappings: 13
+ℹ️  Concrete test file references: 13
+ℹ️  Report evidence references: 13
+ℹ️  DoD fidelity scenarios: 13 (mapped: 13, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
+```
+
+### Anchor Tests for SCN-GA-NWS-002
+
+```
+$ go test ./internal/connector/alerts/ -count=1 -v -run '^TestMapNWSSeverity$|^TestClassifyNWSEventType$' 2>&1 | tail -3
+    --- PASS: TestClassifyNWSEventType/#00 (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/connector/alerts        0.091s
+```
+
+### Regression Baseline (full alerts suite + race subset)
+
+```
+$ go test ./internal/connector/alerts/ -count=1 2>&1 | tail -1
+ok      github.com/smackerel/smackerel/internal/connector/alerts        7.358s
+
+$ go test ./internal/connector/alerts/ -race -count=1 -timeout 180s -run 'TestSync_Deduplication|TestSync_ConcurrentWithLiveKnownMapWrites|TestKnownMapEviction|TestConcurrentSyncHealth|TestConcurrentCloseHealth' 2>&1 | tail -1
+ok      github.com/smackerel/smackerel/internal/connector/alerts        1.334s
+```
+
+175 tests PASS; race-detector clean. R02 simplify (extracted `claimAlert` helper) and this Round 12 documentation fix both preserve the chaos-hardened concurrency contract.
+
+### Disposition
+
+Closed `done` on 2026-05-24. Spec 017 parent status remains `done`. Underlying NWS severity + event-type classification behavior was already delivered (commit `3793f32f feat(017): implement NWS weather alerts source + complete scopes 3-4`, 2026-04-11) and continuously verified by `TestMapNWSSeverity` + `TestClassifyNWSEventType`; the only gap was documentation linkage under the tightened v3.8.0 G068 matcher.
+
