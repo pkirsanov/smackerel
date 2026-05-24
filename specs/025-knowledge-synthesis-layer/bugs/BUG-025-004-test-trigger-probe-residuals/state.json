@@ -1,0 +1,189 @@
+{
+  "version": 3,
+  "featureDir": "specs/025-knowledge-synthesis-layer/bugs/BUG-025-004-test-trigger-probe-residuals",
+  "parentFeatureDir": "specs/025-knowledge-synthesis-layer",
+  "featureName": "BUG-025-004: Test trigger probe quality residuals (DoD-Gherkin fidelity, scenario-manifest drift, test function typo)",
+  "bugId": "BUG-025-004",
+  "status": "done",
+  "workflowMode": "test-to-doc",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": null,
+    "runStartedAt": "2026-05-24T00:00:00Z",
+    "runCompletedAt": "2026-05-24T00:00:00Z",
+    "completedPhaseClaims": ["bug", "implement", "test", "validate", "audit", "docs"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "interpreted",
+        "summary": "Created the BUG-025-004 6-artifact packet for three artifact-quality residuals surfaced by sweep-2026-05-23-r30 round 19 (mode: test-to-doc) trigger probe on spec 025. Findings: G068 DoD-Gherkin fidelity gaps for SCN-025-05 and SCN-025-14; 13 stale scenario-manifest.json linkedTests entries (12 unique renames + 1 file-move) across 11 scenarios; test function name typo TestSynthesisExtractResponse_FailureMarksFlailed in internal/pipeline/synthesis_subscriber_test.go line 103. Confirmed none of the residuals are covered by closed BUG-025-001/002/003. No runtime path is changed; parent 025 stays done."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Applied all three scopes. Scope 1: renamed TestSynthesisExtractResponse_FailureMarksFlailed -> TestSynthesisExtractResponse_FailureMarksFailed at internal/pipeline/synthesis_subscriber_test.go line 103 (header only; body untouched). Scope 2: refreshed 13 linkedTests strings and SCN-025-21 file path in specs/025-knowledge-synthesis-layer/scenario-manifest.json via 13 multi_replace patches. Scope 3: added 2 evidence-cited DoD items to specs/025-knowledge-synthesis-layer/scopes.md (Scope 2 -> SCN-025-05 fidelity, Scope 5 -> SCN-025-14 fidelity). No source-code behavior changed."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Targeted Go test via repo CLI ./smackerel.sh test unit --go --go-run TestSynthesisExtractResponse_FailureMarksFailed exits 0 (internal/pipeline 0.029s). Python unit suite via ./smackerel.sh test unit --python exits 0 (450 passed in 15.65s). grep -rn 'Flailed' --include='*.go' . returns zero matches repo-wide. Python linkedTests cross-check reports TOTAL_MISSING=0."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Traceability guard for specs/025-knowledge-synthesis-layer exits 0 with RESULT: PASSED (0 warnings) and DoD fidelity 23/23 mapped, 0 unmapped. All 3 bug scopes promoted Not Started -> Done with checked DoD evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Artifact lint for specs/025-knowledge-synthesis-layer exits 0 (Artifact lint PASSED). Artifact lint for the bug folder exits 0 after Completion Statement + Test Evidence sections added and repo-CLI wrapper commands recorded."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "claimSource": "executed",
+        "summary": "Completion Statement added to report.md. Parent spec 025 state.json updated with BUG-025-004 in resolvedBugs. Single path-limited commit stages only this bug folder, the targeted test rename, the scenario manifest refresh, the spec 025 scopes.md DoD additions, and the parent state.json update. 055 WIP files explicitly excluded."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-05-24T00:00:00Z",
+    "completedScopes": [
+      "Scope 1: Rename FailureMarksFlailed typo",
+      "Scope 2: Refresh scenario-manifest linkedTests",
+      "Scope 3: Restore G068 acceptance-criteria-to-Gherkin fidelity"
+    ],
+    "certifiedCompletedPhases": ["bug", "implement", "test", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Rename FailureMarksFlailed typo",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T00:00:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Refresh scenario-manifest linkedTests",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T00:00:00Z"
+      },
+      {
+        "scope": 3,
+        "name": "Restore G068 acceptance-criteria-to-Gherkin fidelity",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T00:00:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "evidence-after", "source": "scopes.md"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "route_required",
+      "summary": "Classified three independent residuals surfaced by sweep round 19 of sweep-2026-05-23-r30 (mode: test-to-doc) test-trigger probe on spec 025. Findings ownership confirmed against BUG-025-001/002/003 — no overlap. Packet artifacts authored: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Applied all 3 scopes. Test rename + 13 linkedTests refreshed + 2 DoD fidelity items added. Per-scope evidence captured in scopes.md and report.md."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Targeted Go test (./smackerel.sh test unit --go --go-run TestSynthesisExtractResponse_FailureMarksFailed) exits 0. Python unit suite (./smackerel.sh test unit --python) exits 0 with 450 passed in 15.65s. grep Flailed empty. Python linkedTests cross-check TOTAL_MISSING=0."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "traceability-guard specs/025-knowledge-synthesis-layer exits 0 RESULT: PASSED (0 warnings); DoD fidelity 23/23 mapped 0 unmapped."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "artifact-lint specs/025-knowledge-synthesis-layer exits 0 (PASSED). artifact-lint bug folder exits 0 after Completion Statement + Test Evidence sections added and raw go/python3 commands replaced with ./smackerel.sh wrapper invocations."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:00:00Z",
+      "outcome": "completed_owned",
+      "summary": "Completion Statement section added to report.md; parent 025 state.json resolvedBugs updated with BUG-025-004 summary; state.json status -> done, certification.status -> done."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "sweep-2026-05-23-r30 round 19 test-trigger probe",
+      "summary": "Traceability guard exited non-zero with 2 G068 DoD fidelity failures (SCN-025-05, SCN-025-14) plus rollup; 13 stale scenario-manifest linkedTests entries detected via Python cross-check; 1 misspelled test function (Flailed) in internal/pipeline/synthesis_subscriber_test.go:103.",
+      "resolution": "All three findings fully remediated this round. Trace guard now exits 0, manifest cross-check is clean, test rename verified by targeted ./smackerel.sh test unit run."
+    }
+  ]
+}

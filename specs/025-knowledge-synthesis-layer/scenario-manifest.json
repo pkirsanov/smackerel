@@ -31,7 +31,7 @@
           "scenario": "Prompt contract is loaded from YAML and validated",
           "requiredTestType": "unit",
           "file": "internal/knowledge/contract_test.go",
-          "linkedTests": ["TestLoadContract_ValidIngestSynthesis", "TestLoadContract_InvalidYAML", "TestLoadContract_MissingFields"],
+          "linkedTests": ["TestLoadContract_ValidIngestSynthesis", "TestLoadContract_InvalidYAML", "TestLoadContract_MissingRequiredFields"],
           "evidenceRefs": ["scopes.md#scope-1-dod-contract"],
           "liveSystem": false
         }
@@ -46,7 +46,7 @@
           "scenario": "Artifact ingestion triggers knowledge synthesis",
           "requiredTestType": "unit",
           "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "linkedTests": ["TestHandleSynthesized_Success"],
+          "linkedTests": ["TestSynthesisExtractResponse_SuccessMarksCompleted"],
           "evidenceRefs": ["scopes.md#scope-2-dod-pipeline"],
           "liveSystem": false
         },
@@ -55,7 +55,7 @@
           "scenario": "Incremental concept page update preserves existing knowledge",
           "requiredTestType": "unit",
           "file": "internal/knowledge/upsert_test.go",
-          "linkedTests": ["TestMergeClaimsDedup"],
+          "linkedTests": ["TestAddUnique", "TestEnforceTokenCap_PreservesNewest"],
           "evidenceRefs": ["scopes.md#scope-2-dod-upsert"],
           "liveSystem": false
         },
@@ -64,7 +64,7 @@
           "scenario": "Synthesis failure does not block ingestion",
           "requiredTestType": "unit",
           "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "linkedTests": ["TestHandleSynthesized_Failure"],
+          "linkedTests": ["TestSynthesisExtractResponse_FailureMarksFailed"],
           "evidenceRefs": ["scopes.md#scope-2-dod-failopen"],
           "liveSystem": false
         }
@@ -97,7 +97,7 @@
           "scenario": "Knowledge API lists concept pages",
           "requiredTestType": "unit",
           "file": "internal/api/knowledge_test.go",
-          "linkedTests": ["TestKnowledgeConceptsHandler"],
+          "linkedTests": ["TestKnowledgeConceptsHandler_List"],
           "evidenceRefs": ["scopes.md#scope-3-dod-endpoints"],
           "liveSystem": false
         }
@@ -112,7 +112,7 @@
           "scenario": "Cross-source connection detected at ingest time",
           "requiredTestType": "unit",
           "file": "internal/pipeline/synthesis_subscriber_test.go",
-          "linkedTests": ["TestCheckCrossSource_MultipleSourceTypes"],
+          "linkedTests": ["TestCrossSourceRequest_MultiSourceConceptTriggersPublish"],
           "evidenceRefs": ["scopes.md#scope-4-dod-crosssource"],
           "liveSystem": false
         },
@@ -121,7 +121,7 @@
           "scenario": "Surface-level overlap is discarded",
           "requiredTestType": "unit",
           "file": "ml/tests/test_synthesis.py",
-          "linkedTests": ["test_crosssource_surface_level_discarded"],
+          "linkedTests": ["test_handle_crosssource_surface_level"],
           "evidenceRefs": ["scopes.md#scope-4-dod-discard"],
           "liveSystem": false
         }
@@ -136,7 +136,7 @@
           "scenario": "Lint detects orphan concepts",
           "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestCheckOrphanConcepts_FindingShape", "TestNewLinter"],
+          "linkedTests": ["TestCheckOrphanConcepts_FindingShape", "TestNewLinter_Constructor"],
           "evidenceRefs": ["scopes.md#scope-5-dod-lint"],
           "liveSystem": true,
           "note": "checkOrphanConcepts uses direct SQL via pgxpool — functional test requires live PostgreSQL"
@@ -156,7 +156,7 @@
           "scenario": "Lint retries failed synthesis",
           "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestRetrySynthesisBacklog_UnderMaxRetries", "TestRetrySynthesisDecisionLogic"],
+          "linkedTests": ["TestRetrySynthesisBacklog_UnderMaxRetries", "TestClassifySynthesisRetry"],
           "evidenceRefs": ["scopes.md#scope-5-dod-retry"],
           "liveSystem": true,
           "note": "retrySynthesisBacklog uses KnowledgeStore + NATS — unit tests cover decision logic, functional test requires live stack"
@@ -166,7 +166,7 @@
           "scenario": "Lint abandons after max retries",
           "requiredTestType": "integration",
           "file": "internal/knowledge/lint_test.go",
-          "linkedTests": ["TestRetrySynthesisBacklog_MaxRetriesAbandoned", "TestRetrySynthesisDecisionLogic"],
+          "linkedTests": ["TestRetrySynthesisBacklog_MaxRetriesAbandoned", "TestClassifySynthesisRetry_BoundaryValues"],
           "evidenceRefs": ["scopes.md#scope-5-dod-abandon"],
           "liveSystem": true,
           "note": "retrySynthesisBacklog abandon path uses KnowledgeStore — unit tests cover decision logic, functional test requires live stack"
@@ -215,7 +215,7 @@
           "scenario": "/concept lists top concepts",
           "requiredTestType": "unit",
           "file": "internal/telegram/knowledge_test.go",
-          "linkedTests": ["TestHandleConcept_NoArgs"],
+          "linkedTests": ["TestHandleConcept_NoArgs_ListsTopConcepts"],
           "evidenceRefs": ["scopes.md#scope-7-dod-concept"],
           "liveSystem": false
         },
@@ -224,7 +224,7 @@
           "scenario": "/concept <name> shows concept detail",
           "requiredTestType": "unit",
           "file": "internal/telegram/knowledge_test.go",
-          "linkedTests": ["TestHandleConcept_WithName"],
+          "linkedTests": ["TestHandleConcept_WithName_ShowsDetail"],
           "evidenceRefs": ["scopes.md#scope-7-dod-concept-detail"],
           "liveSystem": false
         },
@@ -232,8 +232,8 @@
           "scenarioId": "SCN-025-21",
           "scenario": "/find enhanced with knowledge provenance",
           "requiredTestType": "unit",
-          "file": "internal/telegram/bot_test.go",
-          "linkedTests": ["TestHandleFind_KnowledgeMatch"],
+          "file": "internal/telegram/knowledge_test.go",
+          "linkedTests": ["TestHandleFind_WithKnowledgeMatch"],
           "evidenceRefs": ["scopes.md#scope-7-dod-find"],
           "liveSystem": false
         }
