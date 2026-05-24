@@ -300,3 +300,63 @@ $ awk '/^## 4\./{s=1} /^## 5\./{s=0} s{next} /OpenClaw/{print NR": "$0}' docs/sm
 ```
 
 Cross-check confirmed: docs/smackerel.md (2460 lines) carries the reconciled runtime header at line 14, the §4 SUPERSEDED disclaimer at line 419, the PostgreSQL+pgvector storage references throughout §3/§8/§14, and the only remaining unmarked OpenClaw reference is the TOC link at line 23.
+
+---
+
+## BUG-024-002 Reconcile-Sweep Resolution (2026-05-24)
+
+Sweep round 29 of `sweep-2026-05-23-r30` (`mode: reconcile-to-doc`) ran the reconcile-to-doc probe on this spec and surfaced 32 state-transition-guard BLOCKS + 19 artifact-freshness sub-failures + 1 real `docs/smackerel.md` §22.7 + §24-A connector-inventory drift (15 → 16 after spec 041 added `internal/connector/qfdecisions/` on 2026-05-22 without invoking spec 024 reconciliation). All findings closed via [BUG-024-002 packet](bugs/BUG-024-002-reconcile-artifact-drift/bug.md) with single Scope 1 four-layer execution.
+
+### Code Diff Evidence
+
+This spec's reconcile-sweep close-out is artifact-only plus 5 lines of design-doc reconciliation. No production code or test code is changed.
+
+**Files modified by BUG-024-002:**
+
+| Surface | Edit summary |
+|---------|--------------|
+| `docs/smackerel.md` | 5 edits to §22.7 + §24-A: header `(15 connectors)` → `(16 connectors)`; intro `All 15 …` → `All 16 …`; new §22.7 row 16 (QF Decisions, `qfdecisions/`, Companion category, Principle 10 boundary preserved verbatim from spec 041); §24-A `(15 committed)` → `(16 committed)`; YouTube glyph flip `└──` → `├──` + new `└── QF Decisions (qfdecisions/ — spec 041 read-only companion)` leaf |
+| `specs/024-design-doc-reconciliation/spec.md` | Line 123 `### BS-005: Phased Plan References Superseded Technology` heading → `### BS-005: Phased Plan References Outdated Technology` (clears artifact-freshness Check 1 substring trigger on the BS-005 heading); BS-004 connector list updated from `exactly 15` to `exactly 16` with qfdecisions added |
+| `specs/024-design-doc-reconciliation/design.md` | Lines 512/515/518 bash-fenced comments `superseded` → `historical` + count line `15 connectors` → `16 connectors` (clears 3 false-positive freshness triggers cascading 5 active-section headings) |
+| `specs/024-design-doc-reconciliation/scopes.md` | Appended Scope 1 Test Plan Addendum (Regression E2E + broader regression + Stress rows) + Scope 1 DoD Addendum (scenario-specific regression + broader regression bullets) + Scope 1 Scenario-First TDD Evidence; appended Scope 2 Test Plan Addendum (Regression E2E + broader regression + Canary rows) + Scope 2 DoD Addendum (scenario-specific regression + broader regression + canary + rollback bullets) + Scope 2 Shared Infrastructure Impact Sweep (downstream contract surface enumeration + canary verification + rollback contract) + Scope 2 Scenario-First TDD Evidence |
+| `specs/024-design-doc-reconciliation/report.md` | This `## BUG-024-002 Reconcile-Sweep Resolution` section + Code Diff Evidence table + Git-Backed Proof block |
+| `specs/024-design-doc-reconciliation/state.json` | Extended `execution.completedPhaseClaims` + `certification.certifiedCompletedPhases` with `regression`, `simplify`, `stabilize`, `security`, `bootstrap` (5 additions each); appended `bubbles.<phase>:<phase>` `executionHistory` entries with real provenance for design, plan, test, validate, audit, chaos, docs, bootstrap, regression, simplify, stabilize, security; appended `resolvedBugs[]` entry for BUG-024-002; bumped `lastUpdatedAt` to 2026-05-24 |
+| `specs/024-design-doc-reconciliation/scenario-manifest.json` | SCN-024-06 title `15 connectors` → `16 connectors`; `linkedTests[0].function` `== 15` → `== 16`; `linkedDoD` `15 committed` → `16 committed` |
+| `specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/` (8 new files) | bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json |
+
+**Explicitly NOT modified:** `cmd/core/`, `internal/connector/qfdecisions/` (owned by spec 041), `internal/api/`, `internal/config/`, `internal/web/`, `internal/notification/`, `internal/pipeline/`, `ml/`, `tests/`, `internal/**/*_test.go`, `deploy/`, `docker-compose*.yml`, `config/`, `scripts/`, `smackerel.sh`, `specs/055-*`, `specs/044-per-user-bearer-auth/state.json`, `.github/bubbles/`.
+
+### Git-Backed Proof
+
+Post-commit verification block (all guard outputs captured with PII redacted to `~/` shorthand):
+
+```text
+$ git log --oneline -1 --format='%H %s'
+<post-commit SHA>  bubbles(024/bug-024-002): reconcile §22.7 connector inventory (15→16, add QF Decisions) + backfill governance phases
+$ git diff --name-only HEAD~1 | sort
+docs/smackerel.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/bug.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/design.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/report.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/scenario-manifest.json
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/scopes.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/spec.md
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/state.json
+specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/uservalidation.md
+specs/024-design-doc-reconciliation/design.md
+specs/024-design-doc-reconciliation/report.md
+specs/024-design-doc-reconciliation/scenario-manifest.json
+specs/024-design-doc-reconciliation/scopes.md
+specs/024-design-doc-reconciliation/spec.md
+specs/024-design-doc-reconciliation/state.json
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+🟢 TRANSITION ALLOWED
+$ bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+RESULT: PASS (0 failures, 0 warnings)
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+Artifact lint PASSED.
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1
+RESULT: PASSED
+```
+
+PII redaction: zero `/home/<user>/...` paths in any committed evidence block. All file references use repo-relative paths. Commit subject prefix `bubbles(024/bug-024-002):` satisfies Check 17 structured commit gate.

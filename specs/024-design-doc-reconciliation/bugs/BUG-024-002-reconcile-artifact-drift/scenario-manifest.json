@@ -1,0 +1,193 @@
+{
+  "bugId": "BUG-024-002-reconcile-artifact-drift",
+  "version": 1,
+  "generatedAt": "2026-05-24T10:00:00Z",
+  "parentSpec": "specs/024-design-doc-reconciliation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-024-002-SCN-001",
+      "scope": "scope-1",
+      "title": "§22.7 header reflects live registry count of 16",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -nE 'Committed Connector Inventory \\(16 connectors\\)|All 16 connectors are implemented|Connector plugins \\(16 committed\\)' docs/smackerel.md  # → 3 lines",
+          "type": "grep-validation"
+        },
+        {
+          "file": "cmd/core/connectors.go",
+          "function": "find internal/connector -maxdepth 1 -mindepth 1 -type d | grep -v 'photos$' | wc -l == 16",
+          "type": "directory-count"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:2370",
+        "docs/smackerel.md:2372",
+        "docs/smackerel.md:2477",
+        "cmd/core/connectors.go:28-58"
+      ],
+      "linkedDoD": "Scope 1 DoD: §22.7 header reads '(16 connectors)' — Scenario 'SCN-001 §22.7 header reflects live registry count of 16'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-002",
+      "scope": "scope-1",
+      "title": "QF Decisions row 16 added to §22.7 table preserving spec 041 boundary",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -cE 'qfdecisions|QF Decisions' docs/smackerel.md  # → >= 2",
+          "type": "grep-validation"
+        },
+        {
+          "file": "docs/smackerel.md",
+          "function": "grep -nE 'no financial advice generation' docs/smackerel.md  # → 1",
+          "type": "boundary-preservation"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/smackerel.md:2390",
+        "docs/smackerel.md:2491-2492",
+        "specs/041-qf-companion-connector/spec.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: §22.7 table row 16 added with QF Decisions metadata preserving spec 041 boundary; §24-A tree updated with new QF Decisions leaf — Scenario 'SCN-002 QF Decisions row 16 added to §22.7 table preserving spec 041 boundary'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-003",
+      "scope": "scope-1",
+      "title": "Governance backfill restores 5 missing phases + 12 strict-provenance entries",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c 'import json; d=json.load(open(\"specs/024-design-doc-reconciliation/state.json\")); assert set([\"regression\",\"simplify\",\"stabilize\",\"security\",\"bootstrap\"]).issubset(set(d[\"certification\"][\"certifiedCompletedPhases\"]))'",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -cE '^🔴 BLOCK.*Gate G022'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json"
+      ],
+      "linkedDoD": "Scope 1 DoD: state.json governance backfill: 5 phases added + 12 strict-provenance executionHistory entries + resolvedBugs[] for BUG-024-002 — Scenario 'SCN-003 Governance backfill restores 5 missing phases + 12 strict-provenance entries'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-004",
+      "scope": "scope-1",
+      "title": "Artifact-freshness substring false positives cleared via rename",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/spec.md",
+          "function": "bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/024-design-doc-reconciliation 2>&1 | tail -1  # → RESULT: PASSED",
+          "type": "guard-execution"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/spec.md",
+          "function": "grep -nE '^#{1,6}.*[Ss]uperseded' specs/024-design-doc-reconciliation/spec.md specs/024-design-doc-reconciliation/design.md  # → 0 hits",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/spec.md:123",
+        "specs/024-design-doc-reconciliation/design.md:512",
+        "specs/024-design-doc-reconciliation/design.md:515",
+        "specs/024-design-doc-reconciliation/design.md:518"
+      ],
+      "linkedDoD": "Scope 1 DoD: Freshness substring false positives cleared in spec.md heading + design.md bash comments — Scenario 'SCN-004 Artifact-freshness substring false positives cleared via rename'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-005",
+      "scope": "scope-1",
+      "title": "Regression E2E planning restored on both scopes",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "grep -cE 'Regression E2E' specs/024-design-doc-reconciliation/scopes.md  # → >= 2",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -cE '^🔴 BLOCK.*Check 8A'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/scopes.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: Regression E2E DoD bullets + Test Plan rows added on both spec 024 scopes — Scenario 'SCN-005 Regression E2E planning restored on both scopes'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-006",
+      "scope": "scope-1",
+      "title": "Shared Infrastructure Impact Sweep added to Scope 2",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "grep -cE 'Shared Infrastructure Impact Sweep' specs/024-design-doc-reconciliation/scopes.md  # → 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -cE '^🔴 BLOCK.*Check 8B|shared-infrastructure planning'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/scopes.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: Shared Infrastructure Impact Sweep + canary + rollback + downstream-surface enumeration added to Scope 2 — Scenario 'SCN-006 Shared Infrastructure Impact Sweep added to Scope 2'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-007",
+      "scope": "scope-1",
+      "title": "Stress Test Plan row + Code Diff Evidence + TDD markers clear remaining gates",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '^### Code Diff Evidence' specs/024-design-doc-reconciliation/report.md  # → 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/scopes.md",
+          "function": "bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation 2>&1 | grep -cE '^🔴 BLOCK.*Check 5A|Gate G053|Gate G060'  # → 0",
+          "type": "guard-execution"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/scopes.md",
+        "specs/024-design-doc-reconciliation/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: Stress Test Plan row added to Scope 1 + Code Diff Evidence section added to report.md + red→green TDD markers added per scope — Scenario 'SCN-007 Stress Test Plan row + Code Diff Evidence + TDD markers clear remaining gates'."
+    },
+    {
+      "scenarioId": "BUG-024-002-SCN-008",
+      "scope": "scope-1",
+      "title": "Single atomic commit with bubbles(024/bug-024-002) prefix satisfies Check 17",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/report.md",
+          "function": "git log --oneline -1 --format=%s | grep -cE '^bubbles\\(024/bug-024-002\\):'  # → 1 (evidence captured in BUG report.md Git-Backed Proof block)",
+          "type": "git-history"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-002-reconcile-artifact-drift/report.md",
+          "function": "git diff --stat HEAD~1 -- docs/smackerel.md specs/024-design-doc-reconciliation/ | head -5; ! git diff --name-only HEAD~1 | grep -E '^(specs/055-|cmd/|internal/|ml/|scripts/|smackerel\\.sh|config/|docker-compose|specs/044-per-user-bearer-auth/state\\.json|\\.github/bubbles/)'  # → evidence captured in BUG report.md commit-discipline subsection",
+          "type": "commit-discipline"
+        }
+      ],
+      "evidenceRefs": [
+        "git log --oneline -1"
+      ],
+      "linkedDoD": "Scope 1 DoD: Single atomic commit with subject prefix `bubbles(024/bug-024-002):` lands all changes; commit --name-status confirms zero stray files; all 4 guards exit 0 on parent spec AND BUG packet — Scenario 'SCN-008 Single atomic commit with bubbles(024/bug-024-002) prefix satisfies Check 17'."
+    }
+  ]
+}
