@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "specId": "014-discord-connector",
+  "bugId": "BUG-014-002-rate-limit-header-no-upper-bound",
+  "featureDir": "specs/014-discord-connector/bugs/BUG-014-002-rate-limit-header-no-upper-bound",
+  "featureName": "BUG-014-002: rate-limit header parsing has no upper bound (chaos R30)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-23T00:00:00Z",
+    "completedPhaseClaims": [
+      "chaos",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "timestamp": "2026-05-23T00:05:00Z",
+        "completedAt": "2026-05-23T00:07:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Parent-expanded chaos-hardening child workflow probe ran parseRetryAfter and updateRateLimits with adversarial float headers (NaN, +Inf, -Inf, Infinity, 86400 seconds, 99999999 seconds, 99999999999999.0 unix-seconds, max-float64). Four findings surfaced — F-CHAOS-R30-001 (MEDIUM: parseRetryAfter accepts NaN/Inf, falls through to float→time.Duration producing -2562047h47m16s), F-CHAOS-R30-002 (HIGH: parseRetryAfter has no upper bound — Retry-After: 86400 blocks sync goroutine 24h, 99999999 blocks 3+ years), F-CHAOS-R30-003 (MEDIUM: updateRateLimits accepts NaN/Inf X-RateLimit-Reset, poisons limiter state via int64(NaN)→MinInt64→year-1677 resetAt), F-CHAOS-R30-004 (HIGH: updateRateLimits has no upper bound on X-RateLimit-Reset — 99999999999999.0 makes ShouldWait return ~292,277 years; 9223372036854775000 overflows int64 silently disabling rate limiting). None had pre-existing coverage by C1-C4 or CHAOS-014-001..007 chaos batches."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-23T00:08:00Z",
+        "completedAt": "2026-05-23T00:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Finding-owned planning: created BUG-014-002 folder with spec.md (HIGH+MEDIUM classification + 4-finding reproduction with concrete adversarial output), design.md (root cause for both non-finite-float and unbounded-finite-float axes + 4-part fix approach with ordering rationale — cap MUST be between finiteness guard and int64 conversion), scopes.md (single Scope 1 with 5 SCN-DC-FIX-002-NNN Gherkin scenarios + 6-row Test Plan + 7 DoD bullets each carrying scenario IDs and adversarial-fidelity evidence)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-23T00:15:00Z",
+        "completedAt": "2026-05-23T00:18:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Modified internal/connector/discord/discord.go: added two named constants (maxRetryAfter = 5*time.Minute, maxRateLimitResetFromNow = 5*time.Minute) directly below maxErrorBodyExcerpt; hardened parseRetryAfter to reject NaN/Inf via math.IsNaN/math.IsInf and cap at maxRetryAfter BEFORE the float→time.Duration multiplication (avoids float-to-int overflow); hardened updateRateLimits to reject NaN/Inf X-RateLimit-Reset and cap resetFloat at (now + maxRateLimitResetFromNow) BEFORE the int64(resetFloat) conversion (avoids int64 overflow AND bounds awaitRateLimit wait). Function signatures unchanged. Boundary: discord.go is the only production file modified."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-23T00:20:00Z",
+        "completedAt": "2026-05-23T00:24:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added 6 adversarial regression tests to internal/connector/discord/discord_test.go: TestChaosR30_ParseRetryAfter_RejectsNonFiniteValues (6 sub-cases), TestChaosR30_ParseRetryAfter_CapsLargeValues (5 sub-cases), TestChaosR30_ParseRetryAfter_PreservesSmallValues (4 sub-cases), TestChaosR30_UpdateRateLimits_RejectsNonFiniteReset (4 sub-cases — hardened mid-round to assert limiter.buckets[route] non-presence, the only adversarial-fidelity-true check because ShouldWait==0 alone is coincidentally satisfied by int64(NaN)→MinInt64→year-1677→time.Until-negative→ShouldWait coerce-to-0), TestChaosR30_UpdateRateLimits_CapsAbsurdReset (4 sub-cases), TestChaosR30_UpdateRateLimits_PreservesLegitimateReset (1 case). `go test -race -count=1 -run 'TestChaosR30' ./internal/connector/discord/` → 6/6 tests PASS (24 sub-case PASS rows) ok 1.074s. Full package suite `go test -race -count=1 ./internal/connector/discord/` → ok 10.221s. Adversarial fidelity proof: temporarily reverted both production guards → 4 of 6 R30 tests FAIL with concrete diagnostics (parseRetryAfter(\"NaN\") = -2562047h47m16s; parseRetryAfter(\"86400\") = 24h0m0s; ShouldWait after absurd reset \"99999999999999.0\" = 2562047h47m16s ~292,277 years; limiter bucket for \"/test/route\" was created from NaN reset); restored guards → all 6 PASS again. Lesson learned and documented inline: tests MUST use make(http.Header) + h.Set(...) — map literals bypass http.Header key canonicalisation and silently make tests pass for the wrong reason. Transcript recorded in report.md."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-23T00:25:00Z",
+        "completedAt": "2026-05-23T00:27:00Z",
+        "outcome": "completed_owned",
+        "evidence": "All four F-CHAOS-R30-NNN findings have a fix and a regression test that demonstrably catches the bug if reverted (proven by revert+restore cycle captured in report.md). Rate-limit contract holds for both adversarial axes (non-finite floats AND absurd finite floats). No pre-existing discord-package test regressed: TestDoDiscordRequest_RateLimitHeaders, TestChaos_C1..C4, TestCHAOS_014_001..007, the gateway-poller tests, and the connector contract tests all PASS under race detector."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-23T00:28:00Z",
+        "completedAt": "2026-05-23T00:29:00Z",
+        "outcome": "completed_owned",
+        "evidence": "`go vet ./internal/connector/discord/...` exit=0 (clean). `gofmt -l internal/connector/discord/discord.go internal/connector/discord/discord_test.go` empty (clean). Boundary verified: only internal/connector/discord/discord.go and internal/connector/discord/discord_test.go modified for this round; all 6 BUG-014-002 artifacts created under specs/014-discord-connector/bugs/BUG-014-002-rate-limit-header-no-upper-bound/; parent state.json updated. No spec 055 / cmd/core / internal/api / internal/web / internal/notification / internal/pipeline / config / scripts / smackerel.sh / other-spec-state.json edits staged. No lint-suppression comments introduced. No tests skipped or weakened. Gate G041 honoured — no DoD items reformatted to bypass checkbox accounting; all 7 are - [x] with embedded evidence."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-23T00:30:00Z",
+        "completedAt": "2026-05-23T00:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Appended Chaos R30 execution-history entry to specs/014-discord-connector/state.json with BUG-014-002 reference added to resolvedBugs[]; the bug artifact set (spec.md, design.md, scopes.md, report.md, state.json, uservalidation.md) is fully cross-linked. Sweep ledger .specify/memory/sweep-2026-05-23-r30.json round 24 entry updated to completed_owned with findings=4, bugsSpawned=1, bugId=BUG-014-002-rate-limit-header-no-upper-bound, bugFinalStatus=resolved."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-23T00:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["chaos", "plan", "implement", "test", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1",
+        "title": "Harden rate-limit header parsing against NaN/Inf and absurd values",
+        "status": "Done",
+        "completedAt": "2026-05-23T00:30:00Z",
+        "evidenceRef": "report.md#test-evidence-pass-guards-restored"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "reason": "chaos-hardening child workflow mode under sweep-2026-05-23-r30 round 24 — lockdown not engaged for finding-owned bug closure"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "parentSweepContext": {
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 24,
+    "trigger": "chaos",
+    "executionModel": "parent-expanded-child-mode",
+    "childWorkflowMode": "chaos-hardening"
+  }
+}

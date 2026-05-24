@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -3668,5 +3669,209 @@ func TestStabilize_CollectThreadMessagesCapsTotal(t *testing.T) {
 	}
 	if len(result) < msgsPerThread {
 		t.Errorf("expected at least %d messages (one thread's worth), got %d", msgsPerThread, len(result))
+	}
+}
+
+// =====================================================================
+// BUG-014-002 / chaos R30 — Discord rate-limit header sanity caps.
+//
+// SCN-DC-FIX-002-001: parseRetryAfter rejects NaN/Inf Retry-After headers.
+// SCN-DC-FIX-002-002: parseRetryAfter caps absurdly large Retry-After values.
+// SCN-DC-FIX-002-003: updateRateLimits rejects NaN/Inf X-RateLimit-Reset.
+// SCN-DC-FIX-002-004: updateRateLimits caps absurd X-RateLimit-Reset values.
+// SCN-DC-FIX-002-005: parseRetryAfter and updateRateLimits leave legitimate
+//                     small values unchanged (no behavioural regression).
+// =====================================================================
+
+// TestChaosR30_ParseRetryAfter_RejectsNonFiniteValues — SCN-DC-FIX-002-001.
+// Adversarial: NaN comparisons return false for every operator, so a naive
+// `seconds <= 0` guard silently lets NaN through to `time.Duration(NaN * 1e9)`
+// which produces implementation-defined behaviour. +Inf and -Inf have the same
+// hazard. The fix must explicitly reject all three via math.IsNaN/IsInf.
+func TestChaosR30_ParseRetryAfter_RejectsNonFiniteValues(t *testing.T) {
+	tests := []struct {
+		name string
+		val  string
+	}{
+		{"NaN", "NaN"},
+		{"+Inf", "+Inf"},
+		{"-Inf", "-Inf"},
+		{"Infinity", "Infinity"},
+		{"inf_lowercase", "inf"},
+		{"nan_lowercase", "nan"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := make(http.Header)
+			h.Set("Retry-After", tt.val)
+			got := parseRetryAfter(h)
+			if got != 0 {
+				t.Errorf("CHAOS R30-001: parseRetryAfter(%q) = %v, want 0 — non-finite Retry-After must be rejected", tt.val, got)
+			}
+		})
+	}
+}
+
+// TestChaosR30_ParseRetryAfter_CapsLargeValues — SCN-DC-FIX-002-002.
+// Adversarial: a malicious/buggy upstream sends Retry-After: 86400 (1 day) or
+// larger. Without a cap the sync goroutine inside doDiscordRequest blocks for
+// the full nominal duration. The fix must cap at maxRetryAfter.
+func TestChaosR30_ParseRetryAfter_CapsLargeValues(t *testing.T) {
+	tests := []struct {
+		name string
+		val  string
+	}{
+		{"1 day (86400s)", "86400"},
+		{"3 years (99999999s)", "99999999"},
+		{"max int32 seconds", "2147483647"},
+		{"max float64", "1.7976931348623157e+308"},
+		{"just over cap", strconv.FormatFloat(maxRetryAfter.Seconds()+1, 'f', -1, 64)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := make(http.Header)
+			h.Set("Retry-After", tt.val)
+			got := parseRetryAfter(h)
+			if got != maxRetryAfter {
+				t.Errorf("CHAOS R30-002: parseRetryAfter(%q) = %v, want capped at %v — large Retry-After must be bounded", tt.val, got, maxRetryAfter)
+			}
+		})
+	}
+}
+
+// TestChaosR30_ParseRetryAfter_PreservesSmallValues — SCN-DC-FIX-002-005.
+// Non-regression: values below the cap must round-trip unchanged so that
+// Discord's legitimate Retry-After signalling continues to work.
+func TestChaosR30_ParseRetryAfter_PreservesSmallValues(t *testing.T) {
+	tests := []struct {
+		name string
+		val  string
+		want time.Duration
+	}{
+		{"1.5 seconds", "1.5", 1500 * time.Millisecond},
+		{"30 seconds", "30", 30 * time.Second},
+		{"4 minutes (below cap)", "240", 4 * time.Minute},
+		{"cap exactly", strconv.FormatFloat(maxRetryAfter.Seconds(), 'f', -1, 64), maxRetryAfter},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := make(http.Header)
+			h.Set("Retry-After", tt.val)
+			got := parseRetryAfter(h)
+			if got != tt.want {
+				t.Errorf("CHAOS R30-005: parseRetryAfter(%q) = %v, want %v — legitimate small value must round-trip", tt.val, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestChaosR30_UpdateRateLimits_RejectsNonFiniteReset — SCN-DC-FIX-002-003.
+// Adversarial: X-RateLimit-Reset: NaN or +Inf. Without explicit rejection,
+// int64(NaN) and int64(+Inf) produce implementation-defined values that
+// propagate into the limiter state and corrupt subsequent ShouldWait() math.
+func TestChaosR30_UpdateRateLimits_RejectsNonFiniteReset(t *testing.T) {
+	tests := []struct {
+		name      string
+		remaining string
+		reset     string
+	}{
+		{"NaN", "0", "NaN"},
+		{"+Inf", "0", "+Inf"},
+		{"-Inf", "0", "-Inf"},
+		{"Infinity", "0", "Infinity"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New("discord-r30-nonfinite-" + tt.name)
+			h := make(http.Header)
+			h.Set("X-RateLimit-Remaining", tt.remaining)
+			h.Set("X-RateLimit-Reset", tt.reset)
+			route := "/test/route"
+			c.updateRateLimits(route, h)
+			// Limiter MUST NOT have a bucket for this route — otherwise the
+			// NaN/Inf has poisoned limiter state with a garbage resetAt
+			// (e.g. on amd64, int64(NaN) = MinInt64 → time.Unix → year ~1677,
+			// which ShouldWait happens to coerce to 0 but the bucket is still
+			// corrupt). Asserting bucket non-presence is the only adversarial-
+			// fidelity-true check: ShouldWait==0 alone is satisfied by both
+			// "guard rejected" and "guard missing → coincidentally negative".
+			c.limiter.mu.RLock()
+			_, bucketPresent := c.limiter.buckets[route]
+			c.limiter.mu.RUnlock()
+			if bucketPresent {
+				t.Errorf("CHAOS R30-003: limiter bucket for %q was created from %s reset — non-finite reset must be rejected (limiter state must be untouched)", route, tt.name)
+			}
+			wait := c.limiter.ShouldWait(route)
+			if wait != 0 {
+				t.Errorf("CHAOS R30-003: ShouldWait after updateRateLimits with %s reset = %v, want 0 — non-finite reset must be rejected (limiter unchanged)", tt.name, wait)
+			}
+		})
+	}
+}
+
+// TestChaosR30_UpdateRateLimits_CapsAbsurdReset — SCN-DC-FIX-002-004.
+// Adversarial: X-RateLimit-Remaining: 0 + X-RateLimit-Reset: 99999999999999.0
+// (year 5138 in unix seconds). Without a cap, awaitRateLimit blocks for ~95k
+// years until context cancellation. The fix must cap at
+// (now + maxRateLimitResetFromNow) BEFORE the float→int64 conversion (also
+// preventing int64 overflow on values larger than int64 can represent).
+func TestChaosR30_UpdateRateLimits_CapsAbsurdReset(t *testing.T) {
+	tests := []struct {
+		name      string
+		remaining string
+		reset     string
+	}{
+		{"year 5138", "0", "99999999999999.0"},
+		{"max int64-ish", "0", "9223372036854775000"},
+		{"max float64", "0", "1.7976931348623157e+308"},
+		{"10 years out", "0", strconv.FormatInt(time.Now().Add(10*365*24*time.Hour).Unix(), 10)},
+	}
+	slack := time.Second
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New("discord-r30-absurd-reset-" + tt.name)
+			h := make(http.Header)
+			h.Set("X-RateLimit-Remaining", tt.remaining)
+			h.Set("X-RateLimit-Reset", tt.reset)
+			route := "/test/route"
+			c.updateRateLimits(route, h)
+			wait := c.limiter.ShouldWait(route)
+			if wait > maxRateLimitResetFromNow+slack {
+				t.Errorf("CHAOS R30-004: ShouldWait after absurd reset %q = %v, want <= %v (cap %v + %v slack) — absurd reset must be capped to prevent indefinite blocking",
+					tt.reset, wait, maxRateLimitResetFromNow+slack, maxRateLimitResetFromNow, slack)
+			}
+			if wait <= 0 {
+				// We sent remaining=0 with a future reset, so a positive wait
+				// is the expected result — a zero wait would mean the limiter
+				// either rejected the entry (it shouldn't — the value is just
+				// large, not malformed) or the cap math collapsed the reset
+				// to the past.
+				t.Errorf("CHAOS R30-004: ShouldWait after absurd reset %q = %v, want > 0 — value was finite and remaining=0, so the limiter should record a positive (capped) wait",
+					tt.reset, wait)
+			}
+		})
+	}
+}
+
+// TestChaosR30_UpdateRateLimits_PreservesLegitimateReset — SCN-DC-FIX-002-005.
+// Non-regression: a sane Discord reset (e.g. 5 seconds from now) must
+// round-trip without being clamped by the cap. This proves the cap only
+// triggers on absurd values and does not corrupt normal rate-limit handling.
+func TestChaosR30_UpdateRateLimits_PreservesLegitimateReset(t *testing.T) {
+	c := New("discord-r30-legitimate-reset")
+	resetUnix := float64(time.Now().Add(5 * time.Second).Unix())
+	h := make(http.Header)
+	h.Set("X-RateLimit-Remaining", "0")
+	h.Set("X-RateLimit-Reset", strconv.FormatFloat(resetUnix, 'f', 6, 64))
+	route := "/test/route"
+	c.updateRateLimits(route, h)
+	wait := c.limiter.ShouldWait(route)
+	// Legitimate 5-second future reset → wait must be in (0, 6 seconds].
+	// Some clock-skew slack is allowed.
+	if wait <= 0 {
+		t.Errorf("CHAOS R30-005: ShouldWait after legitimate 5s-future reset = %v, want > 0 — legitimate signalling must not be discarded", wait)
+	}
+	if wait > 6*time.Second {
+		t.Errorf("CHAOS R30-005: ShouldWait after legitimate 5s-future reset = %v, want <= 6s — cap must not corrupt legitimate values", wait)
 	}
 }

@@ -168,12 +168,50 @@
       "startedAt": "2026-05-09T04:00:00Z",
       "completedAt": "2026-05-09T04:30:00Z",
       "summary": "Trace-guard cleanup batch (post MIT-FRAMEWORK-001 patch): closed 15 trace failures (15->0). Added Test Plan tables to Scopes 01-06 referencing internal/connector/discord/discord_test.go and internal/connector/discord/gateway_test.go (already mentioned in report.md). Added 'Scenario \"<scenario name>\": ' DoD-trace prefixes to existing DoD bullets covering SCN-DC-NRM-001/002, SCN-DC-REST-001/002, SCN-DC-CONN-001, SCN-DC-GW-001, SCN-DC-THR-004, SCN-DC-CMD-003. No DoD content rewriting; no source/test/config/framework changes. artifact-lint clean; traceability-guard PASSED 0 failures."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "chaos",
+        "plan",
+        "implement",
+        "test",
+        "validate",
+        "audit",
+        "docs"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-23T00:00:00Z",
+      "completedAt": "2026-05-23T00:30:00Z",
+      "summary": "Stochastic-quality-sweep round 24 (sweep-2026-05-23-r30) chaos-hardening: parent-expanded child workflow probe of internal/connector/discord/discord.go rate-limit header parsing surfaced 4 findings (F-CHAOS-R30-001..004) covering two adversarial axes — non-finite floats (NaN, \u00b1Inf, Infinity in parseRetryAfter and updateRateLimits) and unbounded absurd finite floats (Retry-After: 86400 \u2192 24h block; X-RateLimit-Reset: 99999999999999.0 \u2192 ~292,277 year ShouldWait; int64 overflow at 9223372036854775000 \u2192 silent rate-limit disabling). BUG-014-002-rate-limit-header-no-upper-bound packet (spec.md, design.md, scopes.md, report.md, state.json, uservalidation.md) authored; fix landed in discord.go (added maxRetryAfter and maxRateLimitResetFromNow constants = 5min each; hardened parseRetryAfter and updateRateLimits with math.IsNaN/math.IsInf rejection plus pre-conversion caps; ordering rationale captured in design.md). 6 adversarial regression tests (24 sub-cases) added to discord_test.go. Adversarial-fidelity proven by revert+restore cycle: 4 of 6 R30 tests FAIL with concrete diagnostics when guards reverted, all PASS when restored. Full package green with race detector: ok 10.221s. go vet + gofmt -l clean. Bug status: resolved."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-014-002-rate-limit-header-no-upper-bound",
+      "bugDir": "specs/014-discord-connector/bugs/BUG-014-002-rate-limit-header-no-upper-bound",
+      "title": "Rate-limit header parsing has no upper bound (Retry-After + X-RateLimit-Reset)",
+      "sweepContext": {
+        "sweepId": "sweep-2026-05-23-r30",
+        "round": 24,
+        "trigger": "chaos",
+        "executionModel": "parent-expanded-child-mode",
+        "childWorkflowMode": "chaos-hardening"
+      },
+      "findings": [
+        {"id": "F-CHAOS-R30-001", "severity": "MEDIUM", "summary": "parseRetryAfter accepts NaN/Inf \u2014 silently bypasses <= 0 guard, produces implementation-defined negative duration"},
+        {"id": "F-CHAOS-R30-002", "severity": "HIGH", "summary": "parseRetryAfter has no upper bound \u2014 24h to 3+ year sync-goroutine blocks on bad header"},
+        {"id": "F-CHAOS-R30-003", "severity": "MEDIUM", "summary": "updateRateLimits accepts NaN/Inf X-RateLimit-Reset \u2014 poisons limiter state via int64(NaN)\u2192MinInt64\u2192year-1677"},
+        {"id": "F-CHAOS-R30-004", "severity": "HIGH", "summary": "updateRateLimits has no upper bound on X-RateLimit-Reset \u2014 ~292,277-year ShouldWait or silent int64 overflow disabling rate limiting"}
+      ],
+      "resolvedAt": "2026-05-23T00:30:00Z",
+      "status": "resolved"
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-04-17T00:00:00Z",
+  "lastUpdatedAt": "2026-05-23T00:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
