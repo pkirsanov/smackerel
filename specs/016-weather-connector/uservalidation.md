@@ -15,6 +15,7 @@
 - [x] Connector implements standard Connector interface
 - [x] Config schema follows smackerel.yaml conventions
 - [x] BUG-016-W3 weather SourceRef collision fix verified: rapid same-location weather syncs emit unique current/forecast SourceRefs and repeated weather sync test handlers are panic-free; validation evidence is recorded in `specs/016-weather-connector/bugs/BUG-016-W3-source-ref-collision/report.md`.
+- [x] BUG-016-W4 weather cache eviction starvation fix verified: historical archive entries with 100-year TTL no longer crowd out ephemeral current/forecast entries from the bounded 1024-entry cache; the new `evictOneLocked` policy (expired-first, then latest-`expiresAt` fallback) was proven load-bearing by an adversarial revert-and-restore cycle, and validation evidence is recorded in `specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md`.
 - [ ] NWS alerts fetched and classified by CAP severity
 - [ ] High-severity alerts routed to proactive notification
 - [ ] Historical weather enrichment serves NATS request/response

@@ -316,9 +316,19 @@
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "id": "BUG-016-W4-historical-starves-cache",
+      "summary": "Historical archive entries with 100-year TTL saturated the bounded weather connector cache and starved ephemeral current/forecast entries, multiplying Open-Meteo API load under realistic Maps-driven enrichment volume.",
+      "resolution": "Replaced evictExpiredLocked with evictOneLocked in internal/connector/weather/weather.go: evict exactly one entry per call, prefer expired, fall back to the entry with the latest expiresAt (which structurally biases eviction toward 100-year historical entries). Updated all three production callers (decodeCurrent, decodeForecast, decodeHistorical). Updated existing TestCacheOverflow_AllValid and renamed TestEvictExpiredLocked to TestEvictOneLocked_PrefersExpired. Added TestEviction_HistoricalDoesNotStarveEphemeral as primary adversarial regression and TestEviction_LongestExpiryEvictedWhenFull as eviction-policy invariant. Proven by revert-and-restore adversarial fidelity cycle.",
+      "status": "resolved",
+      "resolvedAt": "2026-05-24T19:35:00Z",
+      "discoveredBy": "sweep-2026-05-23-r30 round 26 stabilize trigger probe",
+      "closedBy": "bubbles.workflow (parent-expanded stochastic-quality-sweep round 26)"
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-04-25T01:18:30Z",
+  "lastUpdatedAt": "2026-05-24T19:35:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
