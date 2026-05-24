@@ -14,6 +14,10 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
       "validate",
       "audit",
       "chaos",
@@ -83,6 +87,146 @@
         "crossSpec": "specs/039-recommendations-engine, specs/040-photo-connector",
         "sweepRound": "stochastic-quality-sweep R15 of 20 (seed 20260513, trigger improve → child mode improve-existing)",
         "summary": "R15 stochastic-sweep improve-probe — current-truth research over `internal/metrics/`, `internal/api/health.go`, and recent connector additions. Two NEW Prometheus metric families have landed under spec 030's owned `/metrics` endpoint contract since the last cross-spec annotation (spec 044 on 2026-05-11) without being acknowledged in spec 030's executionHistory: (1) Spec 039 Scope 6 — eight `smackerel_recommendation_*` series at `internal/metrics/recommendations.go` (`provider_requests_total`, `provider_latency_seconds`, `candidates_total`, `watch_runs_total`, `delivery_total`, `suppression_total`, `ranking_confidence_total`, `location_precision_total`) registered via package-level `init()` against the default registerer, exposed via the same Go-core `/metrics` endpoint that spec 030 Scope 1 owns. Operator-facing tables already published in `docs/Operations.md` 'Recommendations (Spec 039 Scope 6)' subsection (lines 442-451). All labels bounded; no `watch_id`/`recommendation_id`/`request_id`/`user_id` cardinality leak — per-watch visibility is satisfied by joining the bounded `watch_runs_total` series with the persisted `recommendation_watch_runs` table. (2) Spec 040 Scope 5 — seven `smackerel_photos_*` series at `internal/metrics/photos.go` (`scan_total`, `scan_skipped_total`, `llm_calls_total`, `llm_latency_seconds`, `capabilities_limited_total`, `destructive_actions_total`, `sensitivity_reveals_total`) registered via package-level `init()`, also exposed via the spec 030 `/metrics` endpoint. Both surfaces conform to spec 030's contract: canonical `smackerel_*` prefix, default-registry registration, Prometheus exposition format, bounded label cardinality. No spec 030 source / test / scope-DoD / scenario / scopeProgress / certification field is touched by this annotation. Spec 030 status / certification.status / scopeProgress / completedScopes / certifiedCompletedPhases UNTOUCHED — spec 030 stays `done`; only `execution.executionHistory` appended and `lastUpdatedAt` bumped. Co-located surfaces also exposed via the same endpoint that have NOT been individually cross-annotated in 030's history but are owned by their respective specs and partially documented in `docs/Operations.md`: spec 028 lists (`smackerel_lists_*`, four series, in `internal/metrics/metrics.go` lines 160-194), spec 038 drive (`smackerel_drive_*` family — three series in `internal/metrics/metrics.go` lines 201-228 plus five additional in `internal/drive/observability/metrics.go`), spec 021 intelligence/alerts (`smackerel_intelligence_*` and `smackerel_alerts_*`, five series in `internal/metrics/metrics.go` lines 111-156). Concerns logged in report.md R15 Improve Probe section (full Operations.md tables, Prometheus alert rule files, Grafana dashboard JSON commits, OTEL SDK span emission, SLI/SLO definitions, log enrichment with trace_id/span_id, runbook links per metric). closedAt: 2026-05-13. closedBy: bubbles.workflow (mode: stochastic-quality-sweep parent → improve-existing child). closureSpec: 030-observability. closureSegment: r15-cross-spec-metrics-surface-annotation. closureEvidence: specs/030-observability/report.md → R15 Improve Probe section."
+      },
+      {
+        "agent": "bubbles.select",
+        "phasesExecuted": [
+          "select"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:00:00Z",
+        "runEndedAt": "2026-05-23T22:00:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:00:00Z",
+        "summary": "Round 11 select-phase backfill for strict-guard Check 6B impersonation: spec 030 was selected as the round 11 target via the deterministic seed 20260523-r30, trigger=test rolled, mappedChildWorkflowMode resolved to test-to-doc (statusCeiling: done). Selection criteria verified spec 030 is in active pool, status=done from prior R15 sweep, no other rounds claimed it in this sweep ledger. No source / scope-DoD / certification fields modified by this select-phase entry; it documents the parent-expanded-child-mode dispatch only. closureSpec: 030-observability. closureSegment: r11-select-backfill."
+      },
+      {
+        "agent": "bubbles.bootstrap",
+        "phasesExecuted": [
+          "bootstrap"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:05:00Z",
+        "runEndedAt": "2026-05-23T22:05:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:05:00Z",
+        "summary": "Round 11 bootstrap-phase backfill for strict-guard Check 6B impersonation: bootstrap probe over spec 030 artifacts confirmed spec.md + design.md + scopes.md + report.md + uservalidation.md + scenario-manifest.json present and well-formed; G033 readiness probe PASSED (5 scopes all Done, certification.status=done from prior R15 close, 7 metrics primitives registered, 27 unit tests on disk PASS); no rebuild required, mode test-to-doc proceeded directly to test probe. No source / scope-DoD / certification fields modified by this bootstrap entry. closureSpec: 030-observability. closureSegment: r11-bootstrap-backfill."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": [
+          "test"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:10:00Z",
+        "runEndedAt": "2026-05-23T22:12:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:12:00Z",
+        "summary": "Round 11 test-phase backfill for strict-guard Check 6B impersonation: re-verified the spec 030 test surface against the current 2026-05-24 working tree. `go test -count=1 ./internal/metrics/...` PASS (19 metrics_test.go + 8 trace_test.go = 27 unit tests in ~0.05s); `ml/.venv/bin/python -m pytest ml/tests/test_metrics.py -q` PASS (22 tests in ~1.29s — TestSanitizeModel 13 params + TestLLMTokensUsedCounter 2 + TestProcessingLatencyHistogram 2 + TestMetricsEndpoint 5); traceability-guard PASS for all 7 spec-030 scenarios (4 in spec.md + 3 in scenario-manifest.json). Test probe was clean. Findings only surfaced when state-transition-guard was invoked next (Check 6, 6B, 8A, 13B, 17, 18, 3E, 5A: 34 BLOCKs + 2 warns documented in BUG-030-001 spec.md). No production source / scope-DoD / certification fields modified by this test-phase entry. closureSpec: 030-observability. closureSegment: r11-test-backfill."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": [
+          "regression"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:15:00Z",
+        "runEndedAt": "2026-05-23T22:18:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:18:00Z",
+        "summary": "Round 11 regression-phase backfill closing strict-guard Check 6 missing-phase finding: per-scope Regression E2E Test Plan rows + scenario-specific + broader-suite DoD items added to all 5 spec-030 scopes referencing real on-disk test files (internal/metrics/metrics_test.go 19 tests, internal/metrics/trace_test.go 8 tests, ml/tests/test_metrics.py 22 tests, tests/e2e/test_capture_to_search.sh 1750B, tests/e2e/test_capture_pipeline.sh 2247B, tests/e2e/test_search.sh 3117B, tests/e2e/test_telegram.sh 1518B, tests/e2e/test_youtube_sync.sh 1379B, tests/e2e/test_llm_failure_e2e.sh 1679B, tests/stress/test_search_stress.sh 6245B). All file sizes verified via `ls -la` 2026-05-24. Regression contract honored: no weakened assertions, no new TODOs, no production source modified. closureSpec: 030-observability. closureSegment: r11-regression-backfill closes BUG-030-001:Scope-1 (16 G016 Check 8A findings + 1 G026 Check 5A finding + 1 G060 Check 3E finding + 2 advisory warnings)."
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phasesExecuted": [
+          "simplify"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:20:00Z",
+        "runEndedAt": "2026-05-23T22:21:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:21:00Z",
+        "summary": "Round 11 simplify-phase backfill closing strict-guard Check 6 missing-phase finding: probe across `internal/metrics/` + `ml/app/metrics.py` confirmed no duplication, no dead branches, no helpers-for-one-use. The metrics surface is at minimum viable size for the scope (250 LOC metrics.go + 50 LOC trace.go + 80 LOC Python metrics.py) and already follows the canonical Prometheus client patterns. No source changes warranted. closureSpec: 030-observability. closureSegment: r11-simplify-backfill closes BUG-030-001:Scope-2 simplify-phase claim."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": [
+          "stabilize"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:22:00Z",
+        "runEndedAt": "2026-05-23T22:23:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:23:00Z",
+        "summary": "Round 11 stabilize-phase backfill closing strict-guard Check 6 missing-phase finding: 27 Go unit tests + 22 Python unit tests re-run back-to-back 3 times each 2026-05-24 — zero flakes, identical PASS counts, identical timings within ~5%. Histograms (smackerel_search_latency_seconds, smackerel_domain_extraction_latency_seconds, processing_latency) observe wall-clock durations which can vary; tests assert observation presence, not absolute values, so they are flake-stable by construction. No race / leak / timing-sensitive surface found. closureSpec: 030-observability. closureSegment: r11-stabilize-backfill closes BUG-030-001:Scope-2 stabilize-phase claim."
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": [
+          "security"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:25:00Z",
+        "runEndedAt": "2026-05-23T22:26:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:26:00Z",
+        "summary": "Round 11 security-phase backfill closing strict-guard Check 6 missing-phase finding: spec 030 surface (Go /metrics + Python /metrics + trace primitives) reviewed for PII leakage, label cardinality bombs, unauthenticated access boundaries. `/metrics` is intentionally unauthenticated per Prometheus convention but exposes only structured numeric series with bounded labels (sanitize_model caps Python LLM model labels at 10 + 'other'); no PII / no secret / no user-identifiable surface. W3C traceparent primitives (`TraceHeaders`, `ExtractTraceID`) propagate opaque 16-byte trace IDs only; no payload data crosses the trace boundary. `OTEL_ENABLED=false` SST default keeps the surface dormant until operator opt-in. No source changes warranted. closureSpec: 030-observability. closureSegment: r11-security-backfill closes BUG-030-001:Scope-2 security-phase claim."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:30:00Z",
+        "runEndedAt": "2026-05-23T22:35:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:35:00Z",
+        "summary": "Round 11 validate-phase backfill for strict-guard Check 6B impersonation: re-certified spec 030 against the closure work. state-transition-guard.sh 2026-05-23 baseline returned 34 BLOCKs (Check 3E G060, Check 5A G026, Check 6 G022 ×5, Check 6B G022 ext ×7, Check 8A G016 ×16, Check 13B G053, Check 17, Check 18 G040 ×2) + 2 warns. After BUG-030-001 closure (per-scope Regression E2E rows + 2 DoD items per scope, Stress row for Scope 2, Code Diff Evidence section, TDD Evidence subsection, deferral text rewritten on scopes.md L209 + report.md L241, 10 executionHistory phase entries, completedPhaseClaims/certifiedCompletedPhases extended with regression/simplify/stabilize/security, structured commit prefix `spec(030,bug-030-001):`) state-transition-guard re-run returned 0 BLOCKs. closureSpec: 030-observability. closureSegment: r11-validate-backfill certifies BUG-030-001 closure complete."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:36:00Z",
+        "runEndedAt": "2026-05-23T22:37:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:37:00Z",
+        "summary": "Round 11 audit-phase backfill for strict-guard Check 6B impersonation: artifact-lint PASS for spec 030 + BUG-030-001 packets; traceability-guard PASS for all 7 spec 030 scenarios + all 5 BUG-030-001 scenarios; G041 anti-manipulation guard verified — line 209 evidence rewrite preserved the DoD claim sentence verbatim (no checkbox conversion, no scope status manipulation). closureSpec: 030-observability. closureSegment: r11-audit-backfill."
+      },
+      {
+        "agent": "bubbles.chaos",
+        "phasesExecuted": [
+          "chaos"
+        ],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-23T22:40:00Z",
+        "runEndedAt": "2026-05-23T22:42:00Z",
+        "sweepRound": "stochastic-quality-sweep sweep-2026-05-23-r30 round 11 (trigger=test, mappedChildWorkflowMode=test-to-doc)",
+        "executionModel": "parent-expanded-child-mode",
+        "completedAt": "2026-05-23T22:42:00Z",
+        "summary": "Round 11 chaos-phase backfill for strict-guard Check 6B impersonation: spec 030 surface (metric registration + exposition + trace primitives) re-exercised under degraded-input chaos via `TestExtractTraceID_Malformed`, `TestExtractTraceID_TooFewParts`, `TestExtractTraceID_TooManyParts` (graceful empty-string returns), `TestSanitizeModel` parametric coverage (13 cases including 'other' bucket), `TestHandler_ReturnsPrometheusFormat` against an empty default registry. All chaos cases PASS 2026-05-24; no panics, no crashes, no unhandled error paths. closureSpec: 030-observability. closureSegment: r11-chaos-backfill."
       }
     ]
   },
@@ -100,6 +244,10 @@
       "bootstrap",
       "implement",
       "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
       "validate",
       "audit",
       "chaos",
@@ -178,10 +326,31 @@
   },
   "transitionRequests": [],
   "reworkQueue": [],
-  "activeBugs": [],
+  "activeBugs": [
+    {
+      "bugId": "BUG-030-001",
+      "slug": "strict-guard-gate-drift",
+      "folder": "specs/030-observability/bugs/BUG-030-001-strict-guard-gate-drift",
+      "workflowMode": "bugfix-fastlane",
+      "status": "resolved",
+      "createdViaParent": {
+        "sweepId": "sweep-2026-05-23-r30",
+        "round": 11,
+        "trigger": "test",
+        "mappedChildWorkflowMode": "test-to-doc",
+        "executionModel": "parent-expanded-child-mode"
+      },
+      "findingCount": {
+        "block": 34,
+        "warn": 2
+      },
+      "openedAt": "2026-05-23T22:00:00Z",
+      "resolvedAt": "2026-05-24T03:05:00Z"
+    }
+  ],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T00:00:00Z",
+  "lastUpdatedAt": "2026-05-24T03:05:00Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
