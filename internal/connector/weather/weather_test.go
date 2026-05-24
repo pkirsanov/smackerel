@@ -123,13 +123,13 @@ func TestSync_CancelledContext(t *testing.T) {
 	}
 }
 
-func TestEvictExpiredLocked(t *testing.T) {
+func TestEvictOneLocked_PrefersExpired(t *testing.T) {
 	c := New("weather")
 
 	c.mu.Lock()
 	c.cache["expired"] = &cacheEntry{data: &CurrentWeather{}, expiresAt: time.Now().Add(-time.Hour)}
 	c.cache["valid"] = &cacheEntry{data: &CurrentWeather{}, expiresAt: time.Now().Add(time.Hour)}
-	c.evictExpiredLocked()
+	c.evictOneLocked()
 	c.mu.Unlock()
 
 	c.mu.RLock()
@@ -138,7 +138,7 @@ func TestEvictExpiredLocked(t *testing.T) {
 		t.Error("expired entry should have been evicted")
 	}
 	if _, ok := c.cache["valid"]; !ok {
-		t.Error("valid entry should still exist")
+		t.Error("valid entry should still exist (eviction must prefer expired entries)")
 	}
 }
 
@@ -219,23 +219,30 @@ func TestSanitizeLocationName_LongASCII(t *testing.T) {
 }
 
 func TestCacheOverflow_AllValid(t *testing.T) {
+	// BUG-016-W4: when the cache is full of all-valid entries, eviction
+	// MUST fall back to removing the entry with the latest expiresAt so
+	// that ephemeral entries can still be inserted. Hard cap is preserved.
 	c := New("weather")
 
-	// Fill cache to maxCacheEntries with all-valid entries.
+	// Fill cache to maxCacheEntries with all-valid entries spanning a range
+	// of expiry times. The entry "entry-0" gets the longest expiry, so it
+	// is the expected eviction victim under the new policy.
 	c.mu.Lock()
 	for i := 0; i < maxCacheEntries; i++ {
 		key := fmt.Sprintf("entry-%d", i)
+		// entry-0 has the longest expiry, entry-1 next, etc.
+		ttl := time.Hour + time.Duration(maxCacheEntries-i)*time.Minute
 		c.cache[key] = &cacheEntry{
 			data:      &CurrentWeather{Temperature: float64(i)},
-			expiresAt: time.Now().Add(time.Hour),
+			expiresAt: time.Now().Add(ttl),
 		}
 	}
 	c.mu.Unlock()
 
-	// Attempt to add another entry — must not exceed maxCacheEntries.
+	// Attempt to add another entry — mirror production code path.
 	c.mu.Lock()
 	if len(c.cache) >= maxCacheEntries {
-		c.evictExpiredLocked()
+		c.evictOneLocked()
 	}
 	if len(c.cache) < maxCacheEntries {
 		c.cache["overflow"] = &cacheEntry{
@@ -250,9 +257,111 @@ func TestCacheOverflow_AllValid(t *testing.T) {
 	if len(c.cache) > maxCacheEntries {
 		t.Errorf("cache exceeded maxCacheEntries: got %d, want <= %d", len(c.cache), maxCacheEntries)
 	}
-	// overflow entry should NOT have been inserted because all entries were valid.
-	if _, ok := c.cache["overflow"]; ok {
-		t.Error("overflow entry should not have been inserted when cache is full of valid entries")
+	if len(c.cache) != maxCacheEntries {
+		t.Errorf("cache size after insertion: got %d, want %d", len(c.cache), maxCacheEntries)
+	}
+	// Under the new eviction policy, "overflow" MUST have been inserted
+	// after evicting the entry with the latest expiresAt.
+	if _, ok := c.cache["overflow"]; !ok {
+		t.Error("overflow entry should have been inserted after evicting the longest-expiry entry (BUG-016-W4 fix)")
+	}
+	// The longest-expiry entry "entry-0" should have been the eviction victim.
+	if _, ok := c.cache["entry-0"]; ok {
+		t.Error("entry-0 (longest expiry) should have been evicted to make room for overflow (BUG-016-W4 fix)")
+	}
+}
+
+func TestEviction_HistoricalDoesNotStarveEphemeral(t *testing.T) {
+	// BUG-016-W4 adversarial regression: a cache saturated with permanent
+	// (100-year TTL) historical entries MUST NOT prevent a freshly-fetched
+	// current entry from being cached. Without the BUG-016-W4 fix this test
+	// fails because evictExpiredLocked would find zero expired entries,
+	// the size guard would reject the insertion, and the slog warning
+	// "weather cache full, discarding new entry" would fire.
+	c := New("weather")
+
+	historicalTTL := 100 * 365 * 24 * time.Hour
+	currentTTL := 30 * time.Minute
+
+	c.mu.Lock()
+	for i := 0; i < maxCacheEntries; i++ {
+		key := fmt.Sprintf("historical-%d", i)
+		c.cache[key] = &cacheEntry{
+			data:      &CurrentWeather{Temperature: float64(i)},
+			expiresAt: time.Now().Add(historicalTTL),
+		}
+	}
+	c.mu.Unlock()
+
+	// Mirror the production decodeCurrent insertion path.
+	const currentKey = "current-50.0000-10.0000"
+	c.mu.Lock()
+	if len(c.cache) >= maxCacheEntries {
+		c.evictOneLocked()
+	}
+	if len(c.cache) < maxCacheEntries {
+		c.cache[currentKey] = &cacheEntry{
+			data:      &CurrentWeather{Temperature: 22.0, Description: "Clear sky"},
+			expiresAt: time.Now().Add(currentTTL),
+		}
+	}
+	c.mu.Unlock()
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if len(c.cache) > maxCacheEntries {
+		t.Errorf("cache exceeded maxCacheEntries: got %d, want <= %d", len(c.cache), maxCacheEntries)
+	}
+	if _, ok := c.cache[currentKey]; !ok {
+		t.Errorf("current key %q was not inserted after eviction; permanent historical entries starved the ephemeral cache slot (BUG-016-W4 regression)", currentKey)
+	}
+	// At least one historical entry MUST have been evicted to make room.
+	historicalCount := 0
+	for key := range c.cache {
+		if len(key) > 11 && key[:11] == "historical-" {
+			historicalCount++
+		}
+	}
+	if historicalCount != maxCacheEntries-1 {
+		t.Errorf("expected exactly one historical entry to be evicted; got %d historical entries (want %d)", historicalCount, maxCacheEntries-1)
+	}
+}
+
+func TestEviction_LongestExpiryEvictedWhenFull(t *testing.T) {
+	// BUG-016-W4: with no expired entries, evictOneLocked MUST remove the
+	// entry with the latest expiresAt. This biases eviction toward
+	// permanent historical entries when ephemeral entries compete for slots.
+	c := New("weather")
+
+	c.mu.Lock()
+	c.cache["ephemeral-current"] = &cacheEntry{
+		data:      &CurrentWeather{Temperature: 20.0},
+		expiresAt: time.Now().Add(30 * time.Minute),
+	}
+	c.cache["ephemeral-forecast"] = &cacheEntry{
+		data:      &CurrentWeather{Temperature: 18.0},
+		expiresAt: time.Now().Add(2 * time.Hour),
+	}
+	c.cache["permanent-historical"] = &cacheEntry{
+		data:      &CurrentWeather{Temperature: 15.0},
+		expiresAt: time.Now().Add(100 * 365 * 24 * time.Hour),
+	}
+	c.evictOneLocked()
+	c.mu.Unlock()
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if _, ok := c.cache["permanent-historical"]; ok {
+		t.Error("longest-expiry entry should have been evicted (BUG-016-W4 policy)")
+	}
+	if _, ok := c.cache["ephemeral-current"]; !ok {
+		t.Error("short-TTL current entry should NOT have been evicted")
+	}
+	if _, ok := c.cache["ephemeral-forecast"]; !ok {
+		t.Error("short-TTL forecast entry should NOT have been evicted")
+	}
+	if len(c.cache) != 2 {
+		t.Errorf("evictOneLocked should evict exactly one entry: got cache size %d, want 2", len(c.cache))
 	}
 }
 

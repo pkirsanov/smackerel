@@ -595,9 +595,12 @@ func (c *Connector) decodeCurrent(body io.ReadCloser, cacheKey string) (*Current
 	}
 
 	c.mu.Lock()
-	// Evict expired entries if cache is at capacity.
+	// Evict one entry if cache is at capacity. evictOneLocked prefers
+	// expired entries and falls back to the entry with the latest
+	// expiresAt, which biases eviction away from short-TTL current/forecast
+	// entries when long-TTL historical entries have saturated the cache.
 	if len(c.cache) >= maxCacheEntries {
-		c.evictExpiredLocked()
+		c.evictOneLocked()
 	}
 	// Only cache if there is room after eviction to enforce the size limit.
 	if len(c.cache) < maxCacheEntries {
@@ -700,7 +703,7 @@ func (c *Connector) decodeForecast(body io.ReadCloser, cacheKey string) ([]Forec
 
 	c.mu.Lock()
 	if len(c.cache) >= maxCacheEntries {
-		c.evictExpiredLocked()
+		c.evictOneLocked()
 	}
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: forecast, expiresAt: time.Now().Add(2 * time.Hour)}
@@ -806,7 +809,7 @@ func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*Curr
 	// Cache permanently — 100 years expiry as "never".
 	c.mu.Lock()
 	if len(c.cache) >= maxCacheEntries {
-		c.evictExpiredLocked()
+		c.evictOneLocked()
 	}
 	if len(c.cache) < maxCacheEntries {
 		c.cache[cacheKey] = &cacheEntry{data: cw, expiresAt: time.Now().Add(100 * 365 * 24 * time.Hour)}
@@ -818,13 +821,42 @@ func (c *Connector) decodeHistorical(body io.ReadCloser, cacheKey string) (*Curr
 	return cw, nil
 }
 
-// evictExpiredLocked removes expired cache entries. Must be called with c.mu held.
-func (c *Connector) evictExpiredLocked() {
+// evictOneLocked removes one cache entry to make room for a new insertion.
+// Must be called with c.mu held.
+//
+// Strategy (see BUG-016-W4 design.md):
+//  1. If any entry is expired, delete one expired entry and return. This
+//     preserves the historical TTL-eviction preference: still-valid
+//     ephemeral entries are not sacrificed while an expired entry exists.
+//  2. Otherwise, delete the entry with the latest expiresAt. Historical
+//     entries are cached with a 100-year TTL, so their expiresAt is
+//     structurally always the largest. Choosing the latest-expiresAt
+//     victim biases eviction toward those permanent historical entries
+//     and prevents the failure mode where accumulated historical lookups
+//     (e.g. Maps-driven enrichment of past trips) starve out the
+//     cross-sync benefit of current/forecast caching.
+//
+// The helper evicts exactly one entry; callers re-check
+// len(c.cache) < maxCacheEntries before inserting.
+func (c *Connector) evictOneLocked() {
 	now := time.Now()
 	for key, entry := range c.cache {
 		if now.After(entry.expiresAt) {
 			delete(c.cache, key)
+			return
 		}
+	}
+	// No expired entries — evict the entry with the latest expiresAt.
+	var victimKey string
+	var victimExpiry time.Time
+	for key, entry := range c.cache {
+		if victimKey == "" || entry.expiresAt.After(victimExpiry) {
+			victimKey = key
+			victimExpiry = entry.expiresAt
+		}
+	}
+	if victimKey != "" {
+		delete(c.cache, victimKey)
 	}
 }
 

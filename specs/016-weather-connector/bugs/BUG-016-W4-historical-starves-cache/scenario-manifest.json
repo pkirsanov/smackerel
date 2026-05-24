@@ -1,0 +1,135 @@
+{
+  "version": 2,
+  "specId": "016-weather-connector",
+  "bugId": "BUG-016-W4-historical-starves-cache",
+  "featureDir": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache",
+  "generatedBy": "bubbles.workflow (parent-expanded stochastic sweep round 26)",
+  "generatedAt": "2026-05-24T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG016W4-001",
+      "name": "Saturated historical cache does not block ephemeral current entry",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEviction_HistoricalDoesNotStarveEphemeral"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Test-Owned Evidence Closure"
+        },
+        {
+          "type": "adversarial-revert-failure",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Adversarial Fidelity Proof"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W4-002", "DOD-BUG016W4-003", "DOD-BUG016W4-004"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W4-002",
+      "name": "Longest-expiry entry evicted when cache full of valid entries",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEviction_LongestExpiryEvictedWhenFull"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Test-Owned Evidence Closure"
+        },
+        {
+          "type": "adversarial-revert-failure",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Adversarial Fidelity Proof"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W4-005", "DOD-BUG016W4-006"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W4-003",
+      "name": "Hard cache cap preserved under eviction",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestCacheOverflow_AllValid"
+        },
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEviction_HistoricalDoesNotStarveEphemeral"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Test-Owned Evidence Closure"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W4-007"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W4-004",
+      "name": "Expired entries still preferred for eviction",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEvictOneLocked_PrefersExpired"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Test-Owned Evidence Closure"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W4-008"]
+    },
+    {
+      "scenarioId": "SCN-BUG016W4-005",
+      "name": "Adversarial fidelity proves the fix is load-bearing",
+      "scope": "scope-01",
+      "status": "active",
+      "source": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/scopes.md",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEviction_HistoricalDoesNotStarveEphemeral"
+        },
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestEviction_LongestExpiryEvictedWhenFull"
+        },
+        {
+          "file": "internal/connector/weather/weather_test.go",
+          "function": "TestCacheOverflow_AllValid"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "adversarial-revert-failure",
+          "location": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache/report.md::Adversarial Fidelity Proof"
+        }
+      ],
+      "linkedDoD": ["DOD-BUG016W4-009"]
+    }
+  ]
+}

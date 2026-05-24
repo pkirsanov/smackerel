@@ -1,0 +1,311 @@
+{
+  "version": 3,
+  "specId": "016-weather-connector",
+  "bugId": "BUG-016-W4-historical-starves-cache",
+  "featureDir": "specs/016-weather-connector/bugs/BUG-016-W4-historical-starves-cache",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "certified",
+    "currentScope": "01-historical-cache-eviction-policy",
+    "runStartedAt": "2026-05-24T18:00:00Z",
+    "completedPhaseClaims": [
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "implement",
+      "test",
+      "validate",
+      "audit"
+    ],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-24T18:05:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Created BUG-016-W4 packet under specs/016-weather-connector/bugs after the stabilize trigger probe in sweep-2026-05-23-r30 round 26 identified a cache-saturation defect in internal/connector/weather/weather.go. Authored bug.md classifying the finding as weather-connector owned and assigning Finding IDs F1 (production stability defect) and F2 (test regression that codified the broken policy)."
+      },
+      {
+        "phase": "analysis",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-05-24T18:10:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Root cause triage recorded in design.md: historical archive entries are inserted into the shared 1024-entry cache with a 100-year TTL, and evictExpiredLocked only removed entries whose expiresAt is in the past. Once 1024+ historical lookups accumulate, every subsequent current/forecast insertion is silently dropped with 'weather cache full, discarding new entry' and the cross-Sync cache benefit is lost. Selected design: rename to evictOneLocked, evict one entry per call, prefer expired entries, fall back to the entry with the latest expiresAt."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-24T18:15:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Authored design.md with Current Truth at HEAD before BUG-016-W4, root cause, three design decisions (single-cache preserved, latest-expiresAt fallback, evict-one-per-call), selected design code, test plan, change boundary, and adversarial fidelity proof plan. spec.md and scopes.md authored alongside; scenario-manifest.json mapped SCN-BUG016W4-001..005 to linked unit tests and evidence refs."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-24T18:25:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Applied production fix to internal/connector/weather/weather.go: renamed evictExpiredLocked to evictOneLocked at line 824, added the latest-expiresAt fallback eviction branch with explicit single-entry semantics, and updated all three production callers (decodeCurrent line 603, decodeForecast line 706, decodeHistorical line 812). Code Diff Evidence recorded in report.md under '## Code Diff Evidence' / '### Code Diff Evidence'."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-24T18:35:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Test-owned evidence captured: renamed TestEvictExpiredLocked to TestEvictOneLocked_PrefersExpired (single-entry assertion); updated TestCacheOverflow_AllValid to assert the new policy (overflow inserted, longest-expiry evicted, cap preserved); added TestEviction_HistoricalDoesNotStarveEphemeral as the primary adversarial regression; added TestEviction_LongestExpiryEvictedWhenFull as the eviction-policy invariant. Targeted 'go test -race -count=1 -v' PASS evidence recorded in report.md under '## Test Evidence' / '### Test Evidence'."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-24T18:45:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Adversarial fidelity proven by revert-and-restore cycle: temporarily reverted the latest-expiresAt fallback branch in internal/connector/weather/weather.go via in-place scratch mutation; observed all three affected tests FAIL with their concrete BUG-016-W4 diagnostic strings (current key missing, historical eviction count wrong, cache size 3 instead of 2); restored the fix from /tmp/weather-fixed.go and verified bit-for-bit identical with diff; re-ran tests and observed all three PASS. Evidence recorded in report.md under '### Adversarial Fidelity Proof'. Full Go unit suite (./smackerel.sh test unit --go) finished OK with no regression in any other package."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-24T18:55:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Clean simplify verdict for the BUG-016-W4 cache eviction change. Reviewed evictOneLocked for code reuse, quality, and efficiency opportunities; the two-loop structure (first loop returns early on expired hit; second loop linearly finds the latest-expiresAt victim) cannot be collapsed without losing the early-return optimization for the common expired-eviction case. No simplification worth applying."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-24T19:05:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Stabilize verdict for the BUG-016-W4 cache eviction change is stable: the delta only changes the in-process cache eviction policy of a single connector. No config, Docker, startup, service lifecycle, schema, persistent-state, or NATS subject changes. Memory behavior strictly improves under load (ephemeral entries are no longer permanently dropped after cache saturation). Shared live-stack stress readiness remains routed to BUG-031-005-stress-stack-health-readiness."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-24T19:15:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Security verdict for the BUG-016-W4 cache eviction change is secure: no secrets, auth, IDOR, injection, unsafe logging, privacy, SSRF, or data-leak risk introduced. The change does not touch HTTP request building, response parsing, location-name sanitization, or any auth-bearing surface. No new attack surface."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-24T19:25:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Validate-owned certification closure completed after green BUG-016-W4 build (check, lint, format --check), full Go unit suite (PASS), targeted weather cache tests (PASS), and adversarial fidelity cycle. Parent spec 016 state.json updated to append BUG-016-W4 to resolvedBugs[]; uservalidation.md updated with BUG-016-W4 entry. Scope 1 marked Done. Shared live-stack stress readiness remains routed to BUG-031-005."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-24T19:35:00Z",
+        "scope": "01-historical-cache-eviction-policy",
+        "summary": "Audit-owned certification review completed for BUG-016-W4: one completed scope, all 18 DoD items checked with executed-source evidence, required bugfix-fastlane phase provenance recorded, no framework-managed files edited, no other connector source touched, and adversarial fidelity proven by revert-and-restore cycle. Bug is closed."
+      }
+    ],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-24T18:05:00Z",
+        "outcome": "completed_owned",
+        "summary": "Created BUG-016-W4 bug.md and classified the finding as weather-connector owned with Finding IDs F1 and F2."
+      },
+      {
+        "phase": "analysis",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-05-24T18:10:00Z",
+        "outcome": "completed_diagnostic",
+        "summary": "Root-cause triage authored in design.md; selected design helper signature and fallback branch confirmed."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-24T18:15:00Z",
+        "outcome": "completed_owned",
+        "summary": "design.md, spec.md, scopes.md, and scenario-manifest.json authored; SCN-BUG016W4-001..005 mapped to linked tests."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-24T18:25:00Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T18:20:00Z",
+        "runCompletedAt": "2026-05-24T18:25:00Z",
+        "summary": "Applied the BUG-016-W4 production fix to internal/connector/weather/weather.go: renamed evictExpiredLocked to evictOneLocked, added the latest-expiresAt fallback eviction branch, and updated all three production callers."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-24T18:35:00Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T18:28:00Z",
+        "runCompletedAt": "2026-05-24T18:35:00Z",
+        "summary": "Renamed TestEvictExpiredLocked to TestEvictOneLocked_PrefersExpired; updated TestCacheOverflow_AllValid for the new policy; added TestEviction_HistoricalDoesNotStarveEphemeral and TestEviction_LongestExpiryEvictedWhenFull. All five weather-cache tests PASS under go test -race -count=1 -v."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-24T18:45:00Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": ["regression"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T18:38:00Z",
+        "runCompletedAt": "2026-05-24T18:45:00Z",
+        "summary": "Proven adversarial fidelity: reverted the latest-expiresAt fallback branch in-place via scratch script, observed all three affected tests FAIL with their concrete BUG-016-W4 diagnostic strings, restored the fix from /tmp/weather-fixed.go and verified bit-for-bit identical via diff, re-ran the three tests and observed PASS. Full Go unit suite (./smackerel.sh test unit --go) finished OK with no regression in any other package."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-24T18:55:00Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": ["simplify"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T18:50:00Z",
+        "runCompletedAt": "2026-05-24T18:55:00Z",
+        "summary": "Clean simplify verdict. The two-loop structure of evictOneLocked is intentional: the first loop early-returns on the common expired-eviction case; the second loop is only walked when no expired entries exist. Collapsing into a single pass would lose the early-return optimization."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-24T19:05:00Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": ["stabilize"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T19:00:00Z",
+        "runCompletedAt": "2026-05-24T19:05:00Z",
+        "summary": "Stabilize verdict: strictly improves under load. No config, Docker, startup, lifecycle, schema, or persistent-state changes. Memory bound preserved (maxCacheEntries=1024). Shared live-stack stress readiness routed to BUG-031-005."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-24T19:15:00Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": ["security"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-24T19:10:00Z",
+        "runCompletedAt": "2026-05-24T19:15:00Z",
+        "summary": "Security verdict: secure. The change does not touch HTTP request building, response parsing, location-name sanitization, or any auth-bearing surface. No new attack surface introduced."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-24T19:25:00Z",
+        "outcome": "completed_owned",
+        "phasesExecuted": ["validate", "certification"],
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-24T19:18:00Z",
+        "runCompletedAt": "2026-05-24T19:25:00Z",
+        "summary": "Validated BUG-016-W4 closure using the green check, lint, format --check, and full Go unit suite evidence. Updated parent spec 016 state.json resolvedBugs[] and uservalidation.md. Scope 1 marked Done. certification status promoted to done."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-24T19:35:00Z",
+        "outcome": "completed_diagnostic",
+        "phasesExecuted": ["audit"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-24T19:28:00Z",
+        "runCompletedAt": "2026-05-24T19:35:00Z",
+        "summary": "Audited BUG-016-W4 final certification packet: all 18 DoD items checked with executed-source evidence, Scope 1 is Done, required bugfix-fastlane phases have provenance, no framework-managed files were edited, no other connector source touched, and shared stress readiness is still routed to BUG-031-005."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "Scope 1: Make weather cache eviction resilient to permanent historical entries"
+    ],
+    "certifiedCompletedPhases": [
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Make weather cache eviction resilient to permanent historical entries",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T19:25:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "workflow-forced"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [
+    "BUG-016-W4-historical-starves-cache"
+  ],
+  "failures": [
+    {
+      "id": "BUG-016-W4-F1",
+      "summary": "Historical entries with 100-year TTL crowd out ephemeral current/forecast entries from the bounded weather connector cache.",
+      "source": "specs/.specify/memory/sweep-2026-05-23-r30.json round 26 stabilize probe",
+      "status": "resolved"
+    },
+    {
+      "id": "BUG-016-W4-F2",
+      "summary": "TestCacheOverflow_AllValid codified the broken policy and would block the fix.",
+      "source": "specs/.specify/memory/sweep-2026-05-23-r30.json round 26 stabilize probe",
+      "status": "resolved"
+    }
+  ],
+  "completedAt": "2026-05-24T19:35:00Z",
+  "lastUpdatedAt": "2026-05-24T19:35:00Z",
+  "artifacts": {
+    "bug": "bug.md",
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  }
+}
