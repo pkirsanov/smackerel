@@ -117,10 +117,10 @@ And the competitive comparison becomes unreliable
 ### BS-004: Connector Count Inflation
 Given the design doc might reference more connectors than exist
 When a reviewer counts implemented connectors
-Then they find exactly 15: alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, rss, twitter, weather, youtube
+Then they find exactly 16: alerts, bookmarks, browser, caldav, discord, guesthost, hospitable, imap, keep, maps, markets, qfdecisions, rss, twitter, weather, youtube
 And any claimed connector not in this list is aspirational
 
-### BS-005: Phased Plan References Superseded Technology
+### BS-005: Phased Plan References Outdated Technology
 Given §19 references "OpenClaw workspace setup" and "SQLite + LanceDB setup" as Phase 1 tasks
 When a contributor reads the plan to understand project history
 Then the plan should reflect what was actually built (Go/Docker, PostgreSQL+pgvector)

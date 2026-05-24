@@ -2360,9 +2360,9 @@ All connectors are built from **proven, well-maintained open-source libraries** 
 | RSS / Podcasts | `github.com/mmcdole/gofeed` | Go | MIT | 2.5k stars | Universal RSS/Atom/JSON Feed parser. Pair with Whisper for audio. |
 | PDF text | `github.com/ledongthuc/pdf` or `pdfcpu` | Go | MIT | Active | Extract text from PDFs natively in Go |
 
-### 22.7 Committed Connector Inventory (15 connectors)
+### 22.7 Committed Connector Inventory (16 connectors)
 
-All 15 connectors are implemented under `internal/connector/` in Go:
+All 16 connectors are implemented under `internal/connector/` in Go:
 
 | # | Connector | Directory | Category | Description |
 |---|-----------|-----------|----------|-------------|
@@ -2381,6 +2381,7 @@ All 15 connectors are implemented under `internal/connector/` in Go:
 | 13 | Twitter / X | `twitter/` | Social | Tweet and thread ingestion |
 | 14 | Weather | `weather/` | Environmental | Local weather data for location context and trail enrichment |
 | 15 | YouTube | `youtube/` | Video | Watch history, liked videos, transcript fetching |
+| 16 | QF Decisions | `qfdecisions/` | Companion | QF DecisionPacket ingestion as read-only companion (spec 041 — boundary: no financial advice generation) |
 
 ### 22.8 Connector Framework Assessment
 
@@ -2467,7 +2468,7 @@ docker-compose.yml
 │   │   ├── POST /api/search       # Semantic search
 │   │   ├── GET  /api/digest       # Daily/weekly digest
 │   │   └── GET  /api/health       # Health check
-│   ├── Connector plugins (15 committed)
+│   ├── Connector plugins (16 committed)
 │   │   ├── Gov Alerts (alerts/)
 │   │   ├── Bookmarks (bookmarks/)
 │   │   ├── Browser History (browser/)
@@ -2482,7 +2483,8 @@ docker-compose.yml
 │   │   ├── RSS/Podcasts (rss/ — gofeed)
 │   │   ├── Twitter/X (twitter/)
 │   │   ├── Weather (weather/)
-│   │   └── YouTube (youtube/)
+│   │   ├── YouTube (youtube/)
+│   │   └── QF Decisions (qfdecisions/ — spec 041 read-only companion)
 │   │   Planned connectors:
 │   │   ├── Gmail SDK (google-api-go) 🔜
 │   │   ├── Google Calendar SDK (google-api-go) 🔜
