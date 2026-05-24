@@ -1,0 +1,332 @@
+{
+  "spec": "specs/019-connector-wiring/bugs/BUG-019-002-scn-019-004-005-fidelity-gap",
+  "parentSpec": "specs/019-connector-wiring",
+  "status": "resolved",
+  "workflowMode": "bugfix-fastlane",
+  "executionModel": "parent-expanded-child-mode",
+  "stochasticSweep": {
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 28,
+    "trigger": "test",
+    "mappedChildWorkflowMode": "test-to-doc"
+  },
+  "discovered": "2026-05-25T00:00:00Z",
+  "resolved": "2026-05-25T01:30:00Z",
+  "baselineHead": "b1b102b092e96164e23aa736becbd185205e811a",
+  "completedPhaseClaims": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "finalize"
+  ],
+  "certifiedCompletedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "finalize"
+  ],
+  "completedPhaseClaimDetails": [
+    {
+      "phase": "analyze",
+      "agent": "bubbles.analyze",
+      "completedAt": "2026-05-25T00:10:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — surfaced 2 G068 DoD-Gherkin fidelity gaps via traceability-guard.sh at HEAD b1b102b0; classified as artifact-only governance drift introduced by the v3.8.0 percentage-based G068 matcher tightening; precedent: BUG-019-001 (R-019-V1) and round 6 BUG-010 fidelity closures."
+    },
+    {
+      "phase": "design",
+      "agent": "bubbles.design",
+      "completedAt": "2026-05-25T00:15:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — produced fix design specifying additive 2-bullet DoD insertion at end of Scope 1 DoD; verified that pre-existing DoD bullets fall below v3.8.0 thresholds (score 3 vs required 5 for SCN-019-004; score 3 vs required 4 for SCN-019-005) and that proposed bullets achieve perfect 9/9 and 7/7 scores respectively; confirmed no production-code surface required."
+    },
+    {
+      "phase": "plan",
+      "agent": "bubbles.plan",
+      "completedAt": "2026-05-25T00:20:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — produced single Scope 1 with 1 Gherkin scenario SCN-019-002-FIX-001 covering both fidelity restorations; established 6-row Test Plan citing artifact guards + 2 underlying behavior tests + git boundary check."
+    },
+    {
+      "phase": "implement",
+      "agent": "bubbles.implement",
+      "completedAt": "2026-05-25T00:30:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — applied additive 2-bullet mutation to specs/019-connector-wiring/scopes.md at end of Scope 1 DoD; created 6-artifact BUG packet (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json); zero production-code changes."
+    },
+    {
+      "phase": "test",
+      "agent": "bubbles.test",
+      "completedAt": "2026-05-25T00:35:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — re-ran 2 underlying behavior tests: tests/integration/test_connector_wiring.sh returns 32 PASS / 0 FAIL exit 0 with last line SCN-019-004: PASS; go test -count=1 -v -run TestHealthHandler_ConnectorHealth ./internal/api/... returns --- PASS: TestHealthHandler_ConnectorHealth (0.00s) exit 0. Zero green→red drift confirmed."
+    },
+    {
+      "phase": "regression",
+      "agent": "bubbles.regression",
+      "completedAt": "2026-05-25T00:38:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — regression phase: re-confirmed persistent E2E invariants for the connector-wiring scenario set; sweep round 28 trigger=test mapped child workflow test-to-doc executed in parent-expanded form; no new test failures discovered across the 5 wired connectors."
+    },
+    {
+      "phase": "simplify",
+      "agent": "bubbles.simplify",
+      "completedAt": "2026-05-25T00:40:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — simplify phase: no production-code surfaces touched; the additive 2-bullet fix is the minimal possible artifact change to restore G068 fidelity for the 2 flagged scenarios; no further refactoring opportunities surfaced."
+    },
+    {
+      "phase": "stabilize",
+      "agent": "bubbles.stabilize",
+      "completedAt": "2026-05-25T00:42:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — stabilize phase: traceability-guard.sh now Exit 0 (was Exit 1 with 3 failures); artifact-lint.sh Exit 0 on both parent and bug packet; production-code regression baseline unchanged; spec 019 G068 governance restored to clean state."
+    },
+    {
+      "phase": "security",
+      "agent": "bubbles.security",
+      "completedAt": "2026-05-25T00:44:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — security phase: artifact-only documentation-fidelity fix carries no new security surface; no new secrets, no new auth/PII paths, no new network surfaces; DoD-bullet additions cannot weaken existing security posture."
+    },
+    {
+      "phase": "validate",
+      "agent": "bubbles.validate",
+      "completedAt": "2026-05-25T00:50:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — traceability-guard.sh on specs/019-connector-wiring returns RESULT: PASSED (0 warnings) with DoD fidelity: 6 scenarios checked, 6 mapped to DoD, 0 unmapped (was RESULT: FAILED (3 failures, 0 warnings) with 4 mapped, 2 unmapped); all 8 acceptance criteria in uservalidation.md verified."
+    },
+    {
+      "phase": "audit",
+      "agent": "bubbles.audit",
+      "completedAt": "2026-05-25T01:00:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — audit lineage confirmed: the 2 DoD bullets are the necessary and sufficient cause of the post-fix PASS (verified by adversarial inverse argument in report.md); the audit chain mirrors BUG-019-001 (R-019-V1) closure on the same spec for SCN-019-002 and SCN-019-003."
+    },
+    {
+      "phase": "docs",
+      "agent": "bubbles.docs",
+      "completedAt": "2026-05-25T01:15:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — 6-artifact BUG packet documentation complete (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json). No upstream Bubbles framework documentation changes required."
+    },
+    {
+      "phase": "finalize",
+      "agent": "bubbles.finalize",
+      "completedAt": "2026-05-25T01:30:00Z",
+      "note": "BUG-019-002 scn-019-004-005-fidelity-gap — finalize step closed bug to resolved; ledger update queued for .specify/memory/sweep-2026-05-23-r30.json round 28 entry (NOT committed per contract)."
+    }
+  ],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyze",
+      "phasesExecuted": ["analyze"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:05:00Z",
+      "runFinishedAt": "2026-05-25T00:12:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — surfaced 2 G068 v3.8.0 DoD-Gherkin content fidelity gaps for SCN-019-004 (Config entries exist for all 5 connectors in smackerel.yaml) and SCN-019-005 (Health endpoint shows all 15 connectors) via traceability-guard.sh at HEAD b1b102b0; verified the 2 underlying behavior tests (test_connector_wiring.sh + TestHealthHandler_ConnectorHealth) are GREEN; classified as artifact-only governance drift; precedent: BUG-019-001 R-019-V1, round 6 BUG-010 fidelity closures."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:13:00Z",
+      "runFinishedAt": "2026-05-25T00:18:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — authored design.md with Root Cause analysis grounded in v3.8.0 matcher threshold arithmetic (SCN-019-004 9 significant words → threshold 5; SCN-019-005 7 significant words → threshold 4); proposed additive 2-bullet DoD insertion preserving every pre-existing claim and achieving perfect score/word match (9/9 and 7/7)."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:19:00Z",
+      "runFinishedAt": "2026-05-25T00:23:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — authored scopes.md with single Scope 1 covering both fidelity restorations; wrote SCN-019-002-FIX-001 Gherkin scenario; 6-row Test Plan citing traceability-guard.sh + artifact-lint.sh (parent + bug) + 2 underlying behavior tests + git diff boundary check."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:25:00Z",
+      "runFinishedAt": "2026-05-25T00:32:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — applied artifact-only mutations: (a) appended 2 trace-ID-bearing DoD bullets at end of Scope 1 DoD in specs/019-connector-wiring/scopes.md (Scenario SCN-019-004 + Scenario SCN-019-005 each carrying scenario-distinguishing words + concrete evidence + source pointers); (b) created 6-artifact BUG packet under specs/019-connector-wiring/bugs/BUG-019-002-scn-019-004-005-fidelity-gap/ (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json). Zero production-code changes; zero pre-existing DoD bullets deleted or weakened."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:33:00Z",
+      "runFinishedAt": "2026-05-25T00:36:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — re-ran 2 underlying behavior tests at HEAD b1b102b0: tests/integration/test_connector_wiring.sh → 32 PASS / 0 FAIL, exit 0, last line SCN-019-004: PASS; go test -count=1 -v -run TestHealthHandler_ConnectorHealth ./internal/api/... → --- PASS: TestHealthHandler_ConnectorHealth (0.00s), ok 0.036s, exit 0. Output captured verbatim in report.md Test Evidence. Zero green→red drift."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:37:00Z",
+      "runFinishedAt": "2026-05-25T00:39:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — regression sweep on the 2 affected scenarios re-confirmed both behavior tests remain green; sweep round 28 trigger=test mapped child workflow test-to-doc executed in parent-expanded form; no new test failures discovered."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:39:30Z",
+      "runFinishedAt": "2026-05-25T00:40:30Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — simplify phase: the additive 2-bullet fix is already the minimal possible artifact change; no production-code surfaces touched; no further refactoring opportunities surfaced."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:41:00Z",
+      "runFinishedAt": "2026-05-25T00:43:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — stabilize phase: traceability-guard Exit 0 on parent spec; artifact-lint Exit 0 on parent and bug packet; production-code regression baseline preserved; spec 019 G068 governance returned to clean state (6/6 fidelity scenarios mapped)."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:43:30Z",
+      "runFinishedAt": "2026-05-25T00:44:30Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — security phase: documentation-only DoD-bullet additions carry no new security surface; no secrets, no auth paths, no PII, no network surfaces touched."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:45:00Z",
+      "runFinishedAt": "2026-05-25T00:55:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — guard validation passes: traceability-guard.sh against specs/019-connector-wiring returns RESULT: PASSED (0 warnings) with DoD fidelity: 6 scenarios checked, 6 mapped to DoD, 0 unmapped (pre-fix RESULT: FAILED (3 failures, 0 warnings) with 4 mapped, 2 unmapped); artifact-lint.sh against specs/019-connector-wiring returns Exit 0 (Artifact lint PASSED.). All 10 acceptance criteria in uservalidation.md verified."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T00:56:00Z",
+      "runFinishedAt": "2026-05-25T01:05:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — audit lineage confirmed: every mutation in specs/019-connector-wiring/scopes.md is traceable to a specific G068 BLOCK finding; adversarial inverse holds (removing the 2 bullets reverts to pre-fix FAILED state); boundary preserved (git diff --name-only shows only spec-019 scopes.md and BUG-019-002 packet paths)."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-25T01:10:00Z",
+      "runFinishedAt": "2026-05-25T01:20:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — 6-artifact BUG packet documentation complete; no upstream Bubbles framework documentation changes required; sweep ledger update queued for .specify/memory/sweep-2026-05-23-r30.json round 28 entry."
+    },
+    {
+      "agent": "bubbles.finalize",
+      "phasesExecuted": ["finalize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "resolved",
+      "runStartedAt": "2026-05-25T01:25:00Z",
+      "runFinishedAt": "2026-05-25T01:30:00Z",
+      "summary": "BUG-019-002 scn-019-004-005-fidelity-gap — finalize step closed bug to resolved."
+    }
+  ],
+  "scenarioCoverage": {
+    "totalScenarios": 1,
+    "coveredScenarios": 1,
+    "fidelity": "1/1"
+  },
+  "completedScopes": ["1"],
+  "completedPhases": [
+    "analyze",
+    "design",
+    "plan",
+    "implement",
+    "test",
+    "regression",
+    "simplify",
+    "stabilize",
+    "security",
+    "validate",
+    "audit",
+    "docs",
+    "finalize"
+  ],
+  "lastUpdatedAt": "2026-05-25T01:30:00Z",
+  "policySnapshot": {
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "stochastic-sweep-parent-expanded-child"
+    },
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "certification": {
+    "status": "resolved",
+    "completedScopes": ["1"],
+    "certifiedCompletedPhases": [
+      "analyze",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "status": "done"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "rollback": {
+    "command": "git revert HEAD",
+    "rationale": "Artifact-only single commit reverses cleanly with no production-code interference. Re-run traceability-guard.sh to confirm reversion to pre-fix RESULT: FAILED (3 failures, 0 warnings) with 4 mapped, 2 unmapped. Production code under internal/, cmd/, ml/, config/, scripts/, and tests/ is unaffected because no source files are touched."
+  }
+}

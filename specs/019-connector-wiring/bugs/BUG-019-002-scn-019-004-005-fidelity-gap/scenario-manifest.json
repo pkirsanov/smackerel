@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "featureDir": "specs/019-connector-wiring/bugs/BUG-019-002-scn-019-004-005-fidelity-gap",
+  "generatedAt": "2026-05-25T01:30:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-019-002-FIX-001",
+      "scope": "scope-1-restore-gherkin-scenario-fidelity",
+      "title": "Trace guard accepts SCN-019-004 and SCN-019-005 as faithfully covered",
+      "gherkin": {
+        "given": "parent spec 019 scopes.md contains Gherkin scenarios SCN-019-004 (\"Config entries exist for all 5 connectors in smackerel.yaml\") and SCN-019-005 (\"Health endpoint shows all 15 connectors\"), and traceability-guard.sh v3.8.0 percentage-based matcher requires score >= ceil(word_count/2) significant-word overlap between scenario text and a Scope 1 DoD bullet",
+        "when": "bash .github/bubbles/scripts/traceability-guard.sh specs/019-connector-wiring is executed after appending two trace-ID-bearing DoD bullets to the end of Scope 1 DoD (one per scenario) without deleting, weakening, or rewriting any pre-existing DoD bullet, and underlying behavior tests (tests/integration/test_connector_wiring.sh and go test -run TestHealthHandler_ConnectorHealth ./internal/api/...) are re-executed",
+        "then": "the guard exits with RESULT: PASSED (0 warnings), DoD fidelity reports 6 scenarios checked / 6 mapped to DoD / 0 unmapped, the integration script reports 32/32 PASS with last line \"SCN-019-004: PASS\" at exit 0, and TestHealthHandler_ConnectorHealth reports PASS at exit 0 — proving zero green->red drift on production source"
+      },
+      "behaviorClass": "artifact-governance",
+      "changeType": "bugfix",
+      "requiredTestType": "artifact-lint",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "testId": "G068DoDContentFidelity-spec019"
+        },
+        {
+          "file": "tests/integration/test_connector_wiring.sh",
+          "testId": "SCN-019-004-config-entries-and-SCN-019-005-health-endpoint"
+        },
+        {
+          "file": "internal/api/health_test.go",
+          "testId": "TestHealthHandler_ConnectorHealth"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#pre-fix-evidence",
+        "report.md#implement-evidence",
+        "report.md#test-evidence",
+        "report.md#post-fix-validation-evidence",
+        "report.md#audit-evidence",
+        "report.md#adversarial-inverse-verification"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
