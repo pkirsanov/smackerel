@@ -82,6 +82,17 @@ const (
 	// maxErrorBodyExcerpt is the max bytes of an API error response body
 	// included in error messages for diagnostics.
 	maxErrorBodyExcerpt = 256
+	// maxRetryAfter caps a Discord Retry-After header at a sane upper bound.
+	// Discord's official Retry-After values are typically well under 10 seconds.
+	// A larger value indicates a misbehaving intermediary, a corrupted proxy, or a
+	// malicious upstream (BUG-014-002 / chaos R30). Capping prevents the sync
+	// goroutine from being blocked for an unreasonable duration on a single header.
+	maxRetryAfter = 5 * time.Minute
+	// maxRateLimitResetFromNow caps the X-RateLimit-Reset header at the same sane
+	// delta from now. Same reasoning as maxRetryAfter (BUG-014-002 / chaos R30).
+	// Computing the cap before the float-to-int conversion also avoids overflow
+	// when an attacker supplies a value larger than int64 can represent.
+	maxRateLimitResetFromNow = 5 * time.Minute
 )
 
 // Compile-time interface check.
@@ -1039,6 +1050,15 @@ func snowflakeGreater(a, b string) bool {
 }
 
 // updateRateLimits parses Discord rate limit headers and updates the rate limiter.
+//
+// BUG-014-002 / chaos R30 hardening: reject NaN/Inf X-RateLimit-Reset values
+// (which would silently survive a `<= 0` comparison because NaN comparisons
+// return false) and cap the parsed reset time at maxRateLimitResetFromNow
+// before the float-to-int conversion. Without these guards a malicious or
+// buggy upstream that sets X-RateLimit-Remaining: 0 plus an absurd
+// X-RateLimit-Reset (e.g., year 5138 in unix seconds) would lock the
+// connector into an indefinite awaitRateLimit wait that only unblocks on
+// context cancellation.
 func (c *Connector) updateRateLimits(route string, header http.Header) {
 	remaining := header.Get("X-RateLimit-Remaining")
 	resetStr := header.Get("X-RateLimit-Reset")
@@ -1053,8 +1073,16 @@ func (c *Connector) updateRateLimits(route string, header http.Header) {
 	}
 
 	resetFloat, err := strconv.ParseFloat(resetStr, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(resetFloat) || math.IsInf(resetFloat, 0) {
 		return
+	}
+
+	// Cap resetFloat at (now + maxRateLimitResetFromNow) in unix seconds before
+	// the int64 conversion. This both prevents overflow on absurd values AND
+	// bounds the eventual awaitRateLimit wait at a sane upper limit.
+	capUnix := float64(time.Now().Unix()) + maxRateLimitResetFromNow.Seconds()
+	if resetFloat > capUnix {
+		resetFloat = capUnix
 	}
 
 	secs := int64(resetFloat)
@@ -1064,14 +1092,26 @@ func (c *Connector) updateRateLimits(route string, header http.Header) {
 }
 
 // parseRetryAfter extracts the Retry-After duration from a Discord API 429 response.
+//
+// BUG-014-002 / chaos R30 hardening: reject NaN/Inf values (which silently
+// bypass `<= 0` because NaN comparisons return false, and which would produce
+// implementation-defined behaviour when converted to time.Duration) and cap
+// the returned duration at maxRetryAfter. Without these guards a malicious or
+// buggy upstream sending Retry-After: 86400 (or larger) would block the sync
+// goroutine inside doDiscordRequest for the full nominal duration.
 func parseRetryAfter(header http.Header) time.Duration {
 	val := header.Get("Retry-After")
 	if val == "" {
 		return 0
 	}
 	seconds, err := strconv.ParseFloat(val, 64)
-	if err != nil || seconds <= 0 {
+	if err != nil || seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
 		return 0
+	}
+	// Cap in float-seconds before the time.Duration conversion to avoid
+	// float-to-int overflow on absurdly large values.
+	if seconds > maxRetryAfter.Seconds() {
+		return maxRetryAfter
 	}
 	return time.Duration(seconds * float64(time.Second))
 }
