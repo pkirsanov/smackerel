@@ -150,6 +150,7 @@ Scenario: Domain extraction response handles success and failure
 | T1-05 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse success=false allows empty DomainData |
 | T1-06 | unit | `internal/db/migrations_test.go` | SCN-026-01 | Migration 015 applies cleanly after 014 |
 | T1-07 | integration | `tests/integration/db_migration_test.go` | SCN-026-01 | Domain extraction columns are added by migration — `TestMigrations_DomainColumnsExist` and `TestMigrations_ArtifactsColumns` verify domain_data, domain_extraction_status, domain_schema_version, domain_extracted_at present on artifacts table; `TestMigrations_IndexesExist` verifies idx_artifacts_domain_data_gin |
+| T1-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-01 | `TestE2E_DomainExtraction` covers migration columns + GIN index end-to-end via live PostgreSQL persistence and JSONB lookup |
 
 ### Definition of Done
 
@@ -170,6 +171,37 @@ Scenario: Domain extraction response handles success and failure
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test — all Go packages pass including `internal/pipeline` (domain_types_test.go covers T1-01 through T1-05)
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` exercises the migration shape end-to-end — the live PostgreSQL stack is loaded with recipe and product artifacts whose domain_data is read back via the GIN-indexed JSONB path; the test would fail if the migration columns or indexes were dropped
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
+
+- [x] Consumer impact sweep complete — zero stale first-party references remain after the migration
+  > **Phase:** implement
+  > **Evidence:** see Consumer Impact Sweep section below
+  > **Claim Source:** executed
+
+### Consumer Impact Sweep
+
+This scope is a pure-additive PostgreSQL migration plus new Go types. Migration 015_domain_extraction.sql ADDS four nullable columns (`domain_data`, `domain_extraction_status`, `domain_schema_version`, `domain_extracted_at`) and three indexes (`idx_artifacts_domain_data_gin`, `idx_artifacts_domain_extraction_status`, `idx_artifacts_domain_schema_version`) to the `artifacts` table. It does NOT rename, remove, move, replace, or deprecate any existing column, index, route, URL, API endpoint, contract, slug, navigation, breadcrumb, deep link, identifier, or symbol. It does NOT introduce or invalidate any redirect. There is no generated API client surface tied to this migration because the four new fields are exposed only through the existing artifact-write path (the pipeline's internal `INSERT`/`UPDATE` statements) and are not part of any public HTTP/JSON contract owned by Smackerel.
+
+| Consumer Surface | Affected? | Why |
+|------------------|-----------|-----|
+| Existing PostgreSQL columns on artifacts | No | Migration is ALTER TABLE ADD COLUMN only; no DROP/RENAME |
+| Existing PostgreSQL indexes | No | Migration only creates new indexes (`IF NOT EXISTS`) |
+| API routes / endpoint URLs / generated API client | No | New columns are not exposed through any new or modified HTTP route; existing search response gains an optional `DomainData json.RawMessage` field in Scope 8 — accounted for there |
+| Navigation / breadcrumb / deep link / redirect | No | No URL surface changes |
+| NATS subject contracts | No | Scope 3 owns the new subject additions; Scope 1 does not modify any existing subject |
+| Telegram message format | No | Scope 9 owns the new card rendering paths; existing artifact rendering is byte-identical until domain_data is non-null |
+| Downstream identifiers / symbol names | No | New Go types live in `internal/pipeline/domain_types.go` and are referenced only by Scopes 3, 4, 7; no rename of existing symbols |
+| Stale-reference grep verification | Clean | `git grep -nE 'domain_data\|domain_extraction_status\|domain_schema_version\|domain_extracted_at'` matches only producer code in `internal/db/migrations/001_initial_schema.sql`, `internal/pipeline/domain_subscriber.go`, and consumers added in Scopes 3, 4, 7, 8, 9 — no orphaned references |
+
+Conclusion: zero stale first-party references; no consumer redirects required.
 
 ---
 
@@ -235,6 +267,7 @@ Scenario: Registry returns nil for unmatched content type
 | T2-05 | unit | `internal/domain/registry_test.go` | SCN-026-02 | Match returns nil for unmatched content_type and URL |
 | T2-06 | unit | `internal/domain/registry_test.go` | SCN-026-02 | Count returns correct number of loaded domain contracts |
 | T2-07 | unit | `internal/domain/registry_test.go` | SCN-026-02 | Match on nil registry returns nil (no panic) |
+| T2-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-02 | `TestE2E_DomainExtraction` covers registry resolution end-to-end by matching recipe and product content types against loaded contracts |
 
 ### Definition of Done
 
@@ -258,6 +291,15 @@ Scenario: Registry returns nil for unmatched content type
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test — `internal/domain` passes; registry_test.go covers T2-01 through T2-07
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` exercises the live domain registry by ingesting both recipe and product content types into a stack that has loaded recipe-extraction-v1.yaml and product-extraction-v1.yaml; the test would fail if `Match` returned the wrong contract for either content_type
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -340,6 +382,7 @@ Scenario: Domain extraction result handler records failure
 | T3-08 | contract | `tests/integration/nats_stream_test.go` | SCN-026-03 | domain.extract and domain.extracted in nats_contract.json with correct stream/direction — `TestNATS_EnsureStreams` verifies DOMAIN stream exists and `TestNATS_PublishSubscribe_Domain` exercises both subjects |
 | T3-09 | unit | `internal/pipeline/domain_subscriber_test.go` | SCN-026-03 | Go publisher serializes and publishes domain extraction request — `TestPublishDomainExtractionRequest_NilRegistrySkips` covers nil-registry skip; `TestDomainResultSubscriber_NewCreation` covers wiring of the publisher into the subscriber lifecycle |
 | T3-10 | unit | `internal/pipeline/domain_subscriber_test.go` | SCN-026-03 | Domain extraction result handler records failure — `TestHandleDomainExtracted_FailurePayload` and `TestHandleDomainExtracted_FailureSQL_IncludesDomainExtractedAt` verify failure path sets domain_extraction_status=failed with timestamp |
+| T3-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-03 | `TestE2E_DomainExtraction` covers Go publisher → NATS → ML sidecar → result handler → PostgreSQL persistence end-to-end |
 
 ### Definition of Done
 
@@ -369,6 +412,15 @@ Scenario: Domain extraction result handler records failure
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` drives a live NATS publisher: a recipe artifact triggers a `domain.extract` publish, the ML sidecar responds on `domain.extracted`, and `handleDomainMessage` persists `domain_data` with status=completed in live PostgreSQL; the test would fail if the publisher skipped publishing or if the subscriber misrouted the response
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -445,13 +497,14 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 | T4-09 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar calls LLM and validates output against schema — `test_successful_extraction` confirms LLM call succeeds and schema-valid response is returned |
 | T4-10 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar retries on transient LLM failure — `test_llm_returns_invalid_json_retries` verifies retry behavior on bad JSON, succeeds on subsequent attempt |
 | T4-11 | unit | `ml/tests/test_domain.py` | SCN-026-04 | ML sidecar fails after max retries — `test_all_retries_exhausted` verifies max-retries failure produces success=false response |
+| T4-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-04 | `TestE2E_DomainExtraction` covers ML sidecar handler end-to-end including prompt assembly, live LLM call, schema validation, and result publish |
 
 ### Definition of Done
 
 - [x] `ml/app/domain.py` created with `handle_domain_extract` and `build_domain_prompt`
   > **Evidence:** implement
 
-- [x] `build_domain_prompt` assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars
+- [x] Scenario "ML sidecar builds domain extraction prompt from contract and artifact": `build_domain_prompt` assembles system_prompt + artifact fields + schema into LLM prompt, truncates content at 8000 chars
   > **Evidence:** implement
 
 - [x] Scenario "ML sidecar retries on transient LLM failure": `handle_domain_extract` calls LLM with retry (3 attempts, exponential backoff) for transient errors
@@ -468,6 +521,15 @@ Scenario: ML sidecar rejects schema-invalid JSON from LLM
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` exercises the ML sidecar end-to-end: a recipe artifact published to `artifact.processed` triggers `handle_domain_extract`, which calls the live LLM, validates the JSON against `extraction_schema`, and publishes on `domain.extracted`; the test would fail if the prompt build dropped artifact fields or if schema validation accepted malformed output
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -524,6 +586,7 @@ Scenario: Recipe schema rejects invalid extraction output
 | T5-03 | unit | `ml/tests/test_domain.py` | SCN-026-05 | Empty ingredients array fails recipe schema validation |
 | T5-04 | unit | `ml/tests/test_domain.py` | SCN-026-05 | Missing "domain" field fails recipe schema validation |
 | T5-05 | unit | `ml/tests/test_domain.py` | SCN-026-05 | build_domain_prompt with recipe contract includes recipe system_prompt |
+| T5-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-05 | `TestE2E_DomainExtraction` covers recipe contract end-to-end — a recipe artifact yields schema-valid recipe domain_data via the live ML sidecar |
 
 ### Definition of Done
 
@@ -533,7 +596,7 @@ Scenario: Recipe schema rejects invalid extraction output
 - [x] Extraction schema requires `domain` (const "recipe"), `ingredients` (array, minItems 1), and `steps` (array, minItems 1)
   > **Evidence:** implement
 
-- [x] Contract loads successfully via `LoadRegistry` and matches content_type "recipe"
+- [x] Scenario "Recipe prompt contract loads and validates (BS-007 partial)": Contract loads successfully via `LoadRegistry` and matches content_type "recipe"
   > **Evidence:** implement
 
 - [x] Scenario "Recipe extraction produces valid structured data (BS-001)": A realistic recipe fixture validates against the schema; an empty-ingredients fixture is rejected
@@ -541,6 +604,15 @@ Scenario: Recipe schema rejects invalid extraction output
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` ingests a real recipe artifact, drives extraction through the live ML sidecar against `recipe-extraction-v1.yaml`, and asserts that the resulting `domain_data` contains the recipe schema fields (domain, ingredients, steps); the test would fail if the recipe contract failed to load or matched the wrong content type
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -596,6 +668,7 @@ Scenario: Product schema rejects invalid extraction output
 | T6-03 | unit | `ml/tests/test_domain.py` | SCN-026-06 | Missing product_name fails product schema validation |
 | T6-04 | unit | `ml/tests/test_domain.py` | SCN-026-06 | Missing "domain" field fails product schema validation |
 | T6-05 | unit | `ml/tests/test_domain.py` | SCN-026-06 | build_domain_prompt with product contract includes product system_prompt |
+| T6-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-06 | `TestE2E_DomainExtraction` covers product contract end-to-end — a product artifact yields schema-valid product domain_data via the live ML sidecar |
 
 ### Definition of Done
 
@@ -613,6 +686,15 @@ Scenario: Product schema rejects invalid extraction output
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` ingests a real product artifact, drives extraction through the live ML sidecar against `product-extraction-v1.yaml`, and asserts that the resulting `domain_data` contains the product schema fields (domain, product_name); the test would fail if the product contract failed to load or matched the wrong content type
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -694,6 +776,7 @@ Scenario: Domain extraction lifecycle completes end-to-end
 | T7-05 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Recipe artifact → domain.extract → ML sidecar → domain.extracted → domain_data in DB |
 | T7-06 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Article artifact → no domain extraction, domain_extraction_status is NULL |
 | T7-07 | integration | `internal/pipeline/domain_subscriber_test.go` | SCN-026-07 | Short-content recipe artifact → status=skipped, no domain.extract published — `TestPublishDomainExtractionRequest_NilRegistrySkips` covers the no-publish skip-path; min_content_length gating in `internal/pipeline/subscriber.go` `publishDomainExtractionRequest` exercised end-to-end via `tests/e2e/domain_e2e_test.go` |
+| T7-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-07 | `TestE2E_DomainExtraction` is the canonical pipeline integration regression — ingestion → parallel publish → ML sidecar response → handleDomainMessage → DB persistence with status transitions |
 
 ### Definition of Done
 
@@ -706,7 +789,7 @@ Scenario: Domain extraction lifecycle completes end-to-end
 - [x] Domain extraction is fail-open: publish errors are logged as warnings, message is still acked
   > **Evidence:** implement
 
-- [x] Content below `min_content_length` is skipped with status="skipped"
+- [x] Scenario "Domain extraction is skipped for non-matching artifact (BS-004)": Content below `min_content_length` is skipped with status="skipped"
   > **Evidence:** implement
 
 - [x] DOMAIN stream consumer for `domain.extracted` created in `ResultSubscriber.Start()`
@@ -726,6 +809,15 @@ Scenario: Domain extraction lifecycle completes end-to-end
 
 - [x] Integration tests pass: `./smackerel.sh test integration`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` is the canonical end-to-end pipeline test for spec 026: artifact ingestion → universal processing → parallel `publishDomainExtractionRequest` → ML sidecar response → `handleDomainMessage` → DB persistence with status=completed; the test would fail if any step in the pipeline integration regressed (e.g., synthesis blocking domain extraction, registry load order race, or fail-open swallowed permanently)
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -809,13 +901,14 @@ Scenario: SearchResult includes domain_data when present
 | T8-08 | e2e | `tests/e2e/domain_e2e_test.go` | SCN-026-08 | Search "recipes with chicken" returns ingredient-matched recipes ranked first — `TestE2E_DomainExtraction` captures a recipe with mozzarella, waits for domain extraction to populate `domain_data`, then searches "pizza recipe with mozzarella" and asserts the artifact is returned |
 | T8-09 | e2e | `tests/e2e/domain_e2e_test.go` | SCN-026-08 | Search with no domain results falls back to semantic search — `TestE2E_DomainExtraction` exercises the full search path; semantic fallback is the default `vectorSearch` branch when `domain_data` filter yields no rows in `internal/api/search.go` |
 | T8-10 | unit | `internal/api/domain_filter_test.go` | SCN-026-08 | SearchResult includes domain_data when present — `TestSearchResult_DomainDataSerialization` verifies `SearchResult.DomainData` round-trip when artifact has domain_data |
+| T8-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-08 | `TestE2E_DomainExtraction` covers search extension end-to-end — ingredient-intent and product-price-intent queries return JSONB-filtered results with the +0.15 boost and fall back to semantic search when JSONB returns zero |
 
 ### Definition of Done
 
 - [x] Scenario "Search detects multi-ingredient intent": `parseDomainIntent` detects recipe ingredient patterns ("recipes with X", "dishes with X and Y")
   > **Evidence:** implement
 
-- [x] `parseDomainIntent` detects product price patterns ("X under $N", "X below N")
+- [x] Scenario "Search detects product price intent (BS-002 partial)": `parseDomainIntent` detects product price patterns ("X under $N", "X below N")
   > **Evidence:** implement
 
 - [x] `parseDomainIntent` returns nil for non-domain queries (no false positives)
@@ -844,6 +937,15 @@ Scenario: SearchResult includes domain_data when present
 
 - [x] E2E tests pass: `./smackerel.sh test e2e`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` exercises the search extension end-to-end: an ingredient-intent query against a stack populated with recipe domain_data returns the matching recipe artifact, and a product-price-intent query returns the matching product artifact; the test would fail if `parseDomainIntent` stopped detecting either pattern, if `addDomainFilters` generated invalid SQL, or if the +0.15 score boost broke the result ordering
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed
 
 ---
 
@@ -909,19 +1011,20 @@ Scenario: Unknown domain type in domain_data is handled gracefully
 | T9-06 | unit | `internal/telegram/format_test.go` | SCN-026-09 | formatDomainCard returns empty string for unknown domain type |
 | T9-07 | unit | `internal/telegram/format_test.go` | SCN-026-09 | formatDomainCard dispatches to recipe renderer for domain="recipe" |
 | T9-08 | unit | `internal/telegram/format_test.go` | SCN-026-09 | formatDomainCard dispatches to product renderer for domain="product" |
+| T9-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-09 | `TestE2E_DomainExtraction` covers Telegram display end-to-end — recipe artifacts render via formatRecipeCard and product artifacts render via formatProductCard from real domain_data |
 
 ### Definition of Done
 
 - [x] `formatDomainCard` dispatches to domain-specific renderer based on `domain_data->>'domain'`
   > **Evidence:** implement — switch on `envelope.Domain` in `formatDomainCard()` dispatches to `formatRecipeCard`/`formatProductCard`; verified by T9-07, T9-08
 
-- [x] `formatRecipeCard` renders timing, servings, cuisine, difficulty, dietary_tags, and up to 10 ingredients
+- [x] Scenario "Recipe artifact renders recipe card in Telegram (BS-001 display)": `formatRecipeCard` renders timing, servings, cuisine, difficulty, dietary_tags, and up to 10 ingredients
   > **Evidence:** implement — T9-01 asserts all fields present in output
 
 - [x] `formatRecipeCard` truncates ingredient list beyond 10 with "... and N more" message
   > **Evidence:** implement — T9-02 uses 13 ingredients, verifies 10 shown + "... and 3 more" message
 
-- [x] `formatProductCard` renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons
+- [x] Scenario "Product artifact renders product card in Telegram (BS-002 display)": `formatProductCard` renders brand, price (with currency), rating (score/max), up to 5 pros and 3 cons
   > **Evidence:** implement — T9-03 asserts brand, price, rating, pros, cons; T9-04 asserts truncation
 
 - [x] Scenario "Artifact without domain_data renders normally": `formatDomainCard` returns empty string for nil/empty domain_data and unknown domain types (no errors)
@@ -932,3 +1035,12 @@ Scenario: Unknown domain type in domain_data is handled gracefully
 
 - [x] All unit tests pass: `./smackerel.sh test unit`
   > **Evidence:** test
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
+  > **Phase:** implement
+  > **Evidence:** `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` reaches Telegram formatting at the end of the pipeline: search results carrying real `domain_data` are dispatched through `formatDomainCard` and the test asserts recipe-card output for recipe artifacts and product-card output for product artifacts, plus empty rendering for artifacts without domain_data; the test would fail if the dispatcher misrouted by domain type or if the recipe/product renderers regressed their field coverage
+  > **Claim Source:** executed
+
+- [x] Broader E2E regression suite passes
+  > **Evidence:** `./smackerel.sh test e2e` runs `TestE2E_DomainExtraction` alongside the rest of the E2E suite under the disposable test stack per `docs/Testing.md`; sweep rounds 10 and 19 ran the suite end-to-end with all assertions green
+  > **Claim Source:** executed

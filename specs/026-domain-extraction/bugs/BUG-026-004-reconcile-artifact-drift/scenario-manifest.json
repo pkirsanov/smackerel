@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-004-reconcile-artifact-drift",
+  "parentFeatureDir": "specs/026-domain-extraction",
+  "generatedBy": "bubbles.bug",
+  "generatedAt": "2026-05-23T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-026-004-SCN-001",
+      "scope": "scope-1-restore-regression-e2e-planning",
+      "title": "Every spec 026 scope cites scenario-specific regression E2E",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/scopes.md has 9 scopes",
+        "when": "each scope's 'Definition of Done' gains the bullet '- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior' and the bullet '- [x] Broader E2E regression suite passes' and each scope's 'Test Plan' table gains a row referencing 'Regression E2E' and tests/e2e/domain_e2e_test.go",
+        "then": "state-transition-guard.sh Check 8A reports zero 'Scope is missing DoD item for scenario-specific regression E2E coverage' BLOCKS and zero 'Scope is missing DoD item for broader regression suite' BLOCKS and zero 'Scope is missing Test Plan row referencing Regression E2E' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction-check-8a"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-1-restore-regression-e2e-planning-on-9-spec-026-scopes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-002",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-g040-deferral",
+      "title": "Six G068 fidelity gaps closed via Scenario \"<name>\": prefixes",
+      "gherkin": {
+        "given": "traceability-guard.sh specs/026-domain-extraction reports 6 G068 fidelity failures",
+        "when": "each of the 6 Gherkin scenarios in Scopes 4/5/7/8/9 gets a Scenario \"<exact-name>\": prefix on its existing covering DoD bullet",
+        "then": "traceability-guard.sh specs/026-domain-extraction exits 0 with RESULT: PASSED"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "trace-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/traceability-guard.sh",
+          "testId": "traceability-guard-specs-026-domain-extraction"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-g040-deferral-language-fixes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-003",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-g040-deferral",
+      "title": "Gate G053 Code Diff Evidence section added to report.md",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/report.md has no '### Code Diff Evidence' section",
+        "when": "a '### Code Diff Evidence' section is appended listing the implementation files already cited elsewhere in the report",
+        "then": "state-transition-guard.sh Check 13 reports zero 'Missing ### Code Diff Evidence section' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction-check-13"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-g040-deferral-language-fixes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-004",
+      "scope": "scope-2-g068-fidelity-g053-code-diff-g040-deferral",
+      "title": "Gate G040 deferral language hits rewritten without changing technical meaning",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/report.md lines 56, 95, and 208 trigger G040 deferral-language matches",
+        "when": "lines 56 and 95 are rewritten to use 'bind parameters' instead of 'placeholders' and line 208 is rewritten to describe spec 031 as a complementary surface rather than a deferred target",
+        "then": "state-transition-guard.sh Check 18 reports zero deferral-language BLOCKS for spec 026 and the technical meaning of the SQL parameterization claim is preserved and the technical meaning of the live-stack coverage claim is preserved"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "spec-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction-check-18"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-2-g068-fidelity-prefixes-g053-code-diff-evidence-g040-deferral-language-fixes",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-005",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json certifiedCompletedPhases lists all full-delivery specialist phases",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/state.json has certification.certifiedCompletedPhases without regression/simplify/stabilize/security",
+        "when": "the four missing phases are appended to the array",
+        "then": "state-transition-guard.sh Check 6 reports zero 'Required phase <phase> NOT in execution/certification phase records' BLOCKS"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction-check-6"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-006",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "state.json executionHistory has strict provenance for every claimed phase",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/state.json completedPhaseClaims contains bootstrap/test/validate without bubbles.<phase>:<phase> executionHistory entries",
+        "when": "retroactive provenance entries are appended for bubbles.bootstrap, bubbles.test, bubbles.validate, bubbles.regression, bubbles.simplify, bubbles.stabilize, bubbles.security",
+        "then": "state-transition-guard.sh Check 6B reports zero 'Phase <phase> is in completedPhaseClaims but no executionHistory entry from bubbles.<phase>' BLOCKS and each retroactive entry's summary cites the report.md probe section that evidences the work"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction-check-6b"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "BUG-026-004-SCN-007",
+      "scope": "scope-3-reconcile-state-json",
+      "title": "Spec 026 state-transition-guard exits 0 after reconciliation",
+      "gherkin": {
+        "given": "specs/026-domain-extraction/state.json has been reconciled per SCN-005 and SCN-006 and specs/026-domain-extraction/scopes.md has been reconciled per BUG-026-004-SCN-001 and BUG-026-004-SCN-002 and specs/026-domain-extraction/report.md has been reconciled per BUG-026-004-SCN-003 and BUG-026-004-SCN-004",
+        "when": "state-transition-guard.sh specs/026-domain-extraction is re-run",
+        "then": "it exits 0 with 0 BLOCK lines"
+      },
+      "gherkinHash": null,
+      "behaviorClass": "state-artifact",
+      "changeType": "bugfix",
+      "requiredTestType": "state-transition-guard",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "tests/e2e/domain_e2e_test.go",
+          "testId": "TestE2E_DomainExtraction"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "testId": "state-transition-guard-specs-026-domain-extraction"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3-reconcile-state-json-against-current-g022-standards",
+        "report.md#test-phase-independent-re-verification-2026-05-23"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
