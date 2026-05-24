@@ -1069,3 +1069,283 @@ func TestSecurityHeaders_CSP_PinnedCDNPath(t *testing.T) {
 		t.Errorf("CSP script-src must contain pinned HTMX version path (https://unpkg.com/htmx.org@...); got: %s", csp)
 	}
 }
+
+// --- BUG-020-005 / F-SEC-R30-001 — OAuth rate-limit header-spoof bypass regression ---
+//
+// Background: prior to the fix, chi.middleware.RealIP was applied
+// unconditionally at router root. httprate.LimitByIP keys on
+// r.RemoteAddr, which middleware.RealIP rewrites from any client-supplied
+// X-Forwarded-For / X-Real-IP / True-Client-IP header. Rotating one of
+// those headers per request bypassed the per-IP rate limit completely.
+//
+// Fix: r.Use(deps.trustedProxyRealIPMiddleware()) — only honours
+// forwarded headers when the TCP peer is in Dependencies.TrustedProxies
+// CIDR allowlist. Empty allowlist (SST default) → headers ignored.
+//
+// Adversarial fidelity: temporarily replacing the gated middleware with
+// the old r.Use(middleware.RealIP) makes TestSecR30_OAuthRateLimit_*
+// (cases 1 and 3) FAIL because the spoofed XFF re-keys the bucket per
+// request and 429 never fires.
+
+func TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor(t *testing.T) {
+	// SCN-SEC-FIX-005-001 — TrustedProxies empty (the SST default).
+	// Rotating X-Forwarded-For per request MUST NOT extend the per-IP
+	// budget. The middleware ignores all forwarded headers because the
+	// connecting peer is not in an empty allowlist.
+	deps := &Dependencies{
+		DB:             &mockDB{healthy: true},
+		NATS:           &mockNATS{healthy: true},
+		StartTime:      time.Now(),
+		OAuthHandler:   &mockOAuth{},
+		TrustedProxies: nil, // empty → forwarded headers ignored
+	}
+
+	router := NewRouter(deps)
+
+	got429 := false
+	var statuses []int
+	for i := 0; i < 50; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+		req.RemoteAddr = "192.168.1.99:44444" // single TCP peer
+		// Rotate XFF per request; without the fix this would bypass
+		// the rate limit because chi.middleware.RealIP would rewrite
+		// r.RemoteAddr to a new value each iteration.
+		req.Header.Set("X-Forwarded-For", "10.0.0."+itoa(i+1))
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		statuses = append(statuses, rec.Code)
+		if rec.Code == http.StatusTooManyRequests {
+			got429 = true
+			if i >= 11 {
+				// Sanity: we should hit 429 inside the first ~11
+				// because the budget is 10/min/IP.
+				t.Errorf("rate limit triggered at i=%d, expected within first ~11", i)
+			}
+			break
+		}
+	}
+
+	if !got429 {
+		// Print first 12 statuses for diagnostic clarity if the fix
+		// regresses (every one of the 50 will be 200 in the bug state).
+		head := statuses
+		if len(head) > 12 {
+			head = head[:12]
+		}
+		t.Fatalf("BUG-020-005 regression: rotating X-Forwarded-For bypassed the OAuth rate limit; first 12 statuses = %v", head)
+	}
+}
+
+func TestSecR30_OAuthRateLimit_HonorsXForwardedForFromTrustedPeer(t *testing.T) {
+	// SCN-SEC-FIX-005-002 — peer in 127.0.0.0/8 → forwarded header
+	// honoured. Two distinct real-client XFF values get independent
+	// per-IP rate-limit buckets (proves the legitimate proxy-trust
+	// path still works after the fix).
+	deps := &Dependencies{
+		DB:             &mockDB{healthy: true},
+		NATS:           &mockNATS{healthy: true},
+		StartTime:      time.Now(),
+		OAuthHandler:   &mockOAuth{},
+		TrustedProxies: []string{"127.0.0.0/8"},
+	}
+
+	router := NewRouter(deps)
+
+	// Client A — 203.0.113.42 — should hit 429 within its 11-request burst.
+	gotA429 := false
+	for i := 0; i < 15; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+		req.RemoteAddr = "127.0.0.1:55555" // upstream proxy peer (trusted)
+		req.Header.Set("X-Forwarded-For", "203.0.113.42")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			gotA429 = true
+			break
+		}
+	}
+	if !gotA429 {
+		t.Fatalf("client A (203.0.113.42) was not rate-limited despite trusted-proxy forwarding the same XFF for 15 requests")
+	}
+
+	// Client B — 203.0.113.43 — first request must still succeed; the
+	// rate limit is per-real-client, not per-proxy-peer.
+	reqB := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+	reqB.RemoteAddr = "127.0.0.1:55555"
+	reqB.Header.Set("X-Forwarded-For", "203.0.113.43")
+	recB := httptest.NewRecorder()
+	router.ServeHTTP(recB, reqB)
+	if recB.Code == http.StatusTooManyRequests {
+		t.Fatalf("client B (203.0.113.43) was rate-limited on its first request — per-IP bucket leaked across XFF values")
+	}
+}
+
+func TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer(t *testing.T) {
+	// SCN-SEC-FIX-005-003 — trusted_proxies is non-empty but the
+	// connecting peer is NOT in any trusted CIDR. Forwarded headers
+	// MUST still be ignored.
+	deps := &Dependencies{
+		DB:             &mockDB{healthy: true},
+		NATS:           &mockNATS{healthy: true},
+		StartTime:      time.Now(),
+		OAuthHandler:   &mockOAuth{},
+		TrustedProxies: []string{"10.42.0.0/16"},
+	}
+
+	router := NewRouter(deps)
+
+	got429 := false
+	for i := 0; i < 50; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/auth/google/start", nil)
+		req.RemoteAddr = "192.168.1.99:44444" // NOT in 10.42.0.0/16
+		req.Header.Set("X-Forwarded-For", "10.0.0."+itoa(i+1))
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			got429 = true
+			break
+		}
+	}
+
+	if !got429 {
+		t.Fatalf("BUG-020-005 regression: untrusted peer was allowed to spoof X-Forwarded-For")
+	}
+}
+
+func TestSecR30_TrustedProxyMiddleware_PreservesRawRemoteAddrWhenAllowlistEmpty(t *testing.T) {
+	// SCN-SEC-FIX-005-001 — direct middleware unit. With an empty
+	// allowlist, the middleware MUST be an identity pass-through; all
+	// three forwarded headers MUST be ignored.
+	deps := &Dependencies{TrustedProxies: nil}
+	mw := deps.trustedProxyRealIPMiddleware()
+
+	var observed string
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed = r.RemoteAddr
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/anything", nil)
+	req.RemoteAddr = "192.168.1.99:44444"
+	req.Header.Set("True-Client-IP", "203.0.113.10")
+	req.Header.Set("X-Real-IP", "203.0.113.11")
+	req.Header.Set("X-Forwarded-For", "203.0.113.12, 198.51.100.7")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if observed != "192.168.1.99:44444" {
+		t.Errorf("empty-allowlist middleware MUST be a pass-through; r.RemoteAddr observed downstream = %q, want %q", observed, "192.168.1.99:44444")
+	}
+}
+
+func TestSecR30_TrustedProxyMiddleware_TrustedPeerHonorsXForwardedFor(t *testing.T) {
+	// Direct middleware unit covering the trusted-peer honor path with
+	// all three header variants. Asserts the header-precedence order
+	// matches chi.middleware.RealIP (True-Client-IP > X-Real-IP > XFF).
+	deps := &Dependencies{TrustedProxies: []string{"127.0.0.0/8"}}
+	mw := deps.trustedProxyRealIPMiddleware()
+
+	cases := []struct {
+		name   string
+		setHdr func(*http.Request)
+		wantIP string
+	}{
+		{
+			name: "True-Client-IP wins over X-Real-IP and XFF",
+			setHdr: func(r *http.Request) {
+				r.Header.Set("True-Client-IP", "203.0.113.1")
+				r.Header.Set("X-Real-IP", "203.0.113.2")
+				r.Header.Set("X-Forwarded-For", "203.0.113.3")
+			},
+			wantIP: "203.0.113.1",
+		},
+		{
+			name: "X-Real-IP wins over XFF when True-Client-IP absent",
+			setHdr: func(r *http.Request) {
+				r.Header.Set("X-Real-IP", "203.0.113.2")
+				r.Header.Set("X-Forwarded-For", "203.0.113.3, 198.51.100.7")
+			},
+			wantIP: "203.0.113.2",
+		},
+		{
+			name: "XFF leftmost wins when only XFF present",
+			setHdr: func(r *http.Request) {
+				r.Header.Set("X-Forwarded-For", "203.0.113.3, 198.51.100.7")
+			},
+			wantIP: "203.0.113.3",
+		},
+		{
+			name: "unparseable forwarded header → raw peer preserved",
+			setHdr: func(r *http.Request) {
+				r.Header.Set("X-Forwarded-For", "not-an-ip")
+			},
+			wantIP: "127.0.0.1:55555",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var observed string
+			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				observed = r.RemoteAddr
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequest(http.MethodGet, "/anything", nil)
+			req.RemoteAddr = "127.0.0.1:55555"
+			tc.setHdr(req)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if observed != tc.wantIP {
+				t.Errorf("downstream RemoteAddr = %q, want %q", observed, tc.wantIP)
+			}
+		})
+	}
+}
+
+func TestSecR30_TrustedProxyMiddleware_DropsMalformedCIDRButTrustsRest(t *testing.T) {
+	// One malformed entry MUST be logged + dropped, but a sibling
+	// well-formed CIDR MUST still grant trust. Proves a single
+	// operator typo does not silently disable the gate AND does not
+	// silently grant trust everywhere.
+	deps := &Dependencies{TrustedProxies: []string{"not-a-cidr", "127.0.0.0/8"}}
+	mw := deps.trustedProxyRealIPMiddleware()
+
+	var observed string
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed = r.RemoteAddr
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/anything", nil)
+	req.RemoteAddr = "127.0.0.1:55555"
+	req.Header.Set("X-Forwarded-For", "203.0.113.99")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if observed != "203.0.113.99" {
+		t.Errorf("with one malformed + one valid CIDR, the trusted peer 127.0.0.1 MUST still have its XFF honoured; observed RemoteAddr = %q", observed)
+	}
+}
+
+// itoa is a local small-int formatter to avoid pulling strconv into this
+// test file's import list (and to keep the SecR30 tests self-contained).
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}

@@ -41,6 +41,22 @@ runtime:
   compose_wait_timeout_s: 180
   digest_cron: "0 7 * * *"
   embedding_model: nomic-embed-text
+  # Trusted reverse-proxy CIDR allowlist (BUG-020-005, F-SEC-R30-001).
+  # When the connecting TCP peer is in one of these CIDRs, the API trusts
+  # the X-Forwarded-For / X-Real-IP / True-Client-IP headers and rewrites
+  # r.RemoteAddr accordingly (so httprate.LimitByIP and slog see the real
+  # client). When the connecting peer is NOT in any of these CIDRs, or
+  # when this list is empty (the SST default), forwarded headers are
+  # ignored and the raw TCP peer is used as the rate-limit key.
+  # Empty default = secure-by-default: any caller that can send headers
+  # cannot bypass per-IP rate limits or forge slog `remote_addr` fields.
+  # Deploy adapters that DO front the stack with a known reverse proxy
+  # (e.g., host Caddy on a tailnet bind) populate this list in their
+  # operator-private overlay (e.g., ["127.0.0.0/8"] when the proxy is
+  # co-located on the same host, or the specific peer CIDR otherwise).
+  # See specs/020-security-hardening/bugs/BUG-020-005-... for the bypass
+  # finding and the trusted-proxy gate design.
+  trusted_proxies: []
 
 cors:
   # Allowed origins for cross-origin requests (empty = same-origin only).
