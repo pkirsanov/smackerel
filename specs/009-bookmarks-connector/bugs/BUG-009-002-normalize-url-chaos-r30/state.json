@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "specId": "009-bookmarks-connector",
+  "bugId": "BUG-009-002-normalize-url-chaos-r30",
+  "featureDir": "specs/009-bookmarks-connector/bugs/BUG-009-002-normalize-url-chaos-r30",
+  "featureName": "BUG-009-002: NormalizeURL chaos R30 (control chars, default ports, trailing dot)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-23T00:00:00Z",
+    "completedPhaseClaims": [
+      "chaos",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "timestamp": "2026-05-23T00:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Parent-expanded chaos-hardening child workflow probe ran NormalizeURL with adversarial inputs (control chars 0x00-0x1F + 0x7F, explicit default ports :80/:443/:21, trailing DNS-root dot). Three findings surfaced — F-CHAOS-R30-001 (HIGH: control chars survive into SourceRef → PG insert failure on NUL, log injection on LF/CR, dedup miss on TAB), F-CHAOS-R30-002 (MEDIUM: default ports not elided → dedup miss), F-CHAOS-R30-003 (MEDIUM: trailing host dot not stripped → dedup miss). None had pre-existing coverage by R16/R24/C17 chaos batches."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-23T00:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Finding-owned planning: created BUG-009-002 folder with spec.md (classification + 3-finding reproduction), design.md (root cause + 3-part fix approach with ordering rationale), scopes.md (single Scope 1 with 3 SCN-BK-FIX-002-NNN Gherkin scenarios + 8-row Test Plan + 7 DoD bullets carrying scenario IDs)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-23T00:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Modified internal/connector/bookmarks/dedup.go: added stripURLControlChars helper (scan-first, alloc-only-if-dirty fast path); inserted stripURLControlChars call at top of NormalizeURL before url.Parse (F-CHAOS-R30-001); replaced inline www. strip with ordered host-canonicalisation block — TrimRight trailing dot → www. strip → port elision via defaultPorts map (http:80/https:443/ftp:21) → IPv6 bracket re-add (F-CHAOS-R30-002, F-CHAOS-R30-003). Signature unchanged. Boundary: dedup.go is the only production file modified."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-23T00:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added 6 adversarial regression tests to internal/connector/bookmarks/dedup_test.go: TestChaosR30_NormalizeURLStripsControlChars (7 sub-cases), TestChaosR30_NormalizeURLElidesDefaultPorts (8 sub-cases), TestChaosR30_NormalizeURLStripsTrailingDot (6 sub-cases), TestChaosR30_ToRawArtifactsRejectsNULInSourceRef, TestChaosR30_ControlCharVariantsDedup, TestChaosR30_StripURLControlCharsFastPath. `go test -count=1 -run 'ChaosR30' ./internal/connector/bookmarks/` → 6/6 tests PASS (27 sub-case PASS rows). Full package suite `go test ./internal/connector/bookmarks/... -count=1` → ok 0.109s. Adversarial fidelity proof: temporarily reverted stripURLControlChars call → 3 R30 tests FAIL with concrete control-byte offset diagnostics; restored call → all 6 PASS again. Transcript recorded in report.md."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-23T00:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "All three F-CHAOS-R30-NNN findings have a fix and a regression test that demonstrably catches the bug if reverted. Dedup contract holds for control-char variants of the same URL. PostgreSQL SourceRef TEXT-column safety verified by TestChaosR30_ToRawArtifactsRejectsNULInSourceRef. No regression in any pre-existing NormalizeURL or bookmarks-package test."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-23T00:28:00Z",
+        "outcome": "completed_owned",
+        "evidence": "`go vet ./internal/connector/bookmarks/...` — clean (no output). `gofmt -l internal/connector/bookmarks/dedup.go internal/connector/bookmarks/dedup_test.go` — clean (no output). Boundary verified: `git diff --name-only HEAD -- internal/connector/bookmarks/` returns dedup.go and dedup_test.go only. Spec 055 WIP files NOT staged."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-23T00:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Appended Chaos R30 execution-history entry to specs/009-bookmarks-connector/state.json; appended 'Chaos R30 — NormalizeURL hardening' section to specs/009-bookmarks-connector/report.md naming this bug and the three F-CHAOS-R30-NNN findings with Fixed status."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-23T00:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["chaos", "plan", "implement", "test", "validate", "audit", "docs"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "parentSweepContext": {
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 14,
+    "trigger": "chaos",
+    "executionModel": "parent-expanded-child-mode",
+    "childWorkflowMode": "chaos-hardening"
+  }
+}

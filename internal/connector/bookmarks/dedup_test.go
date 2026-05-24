@@ -435,3 +435,275 @@ func TestChaosR24_NormalizeURLStripsUserinfo(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// CHAOS R30 — Adversarial regression tests for NormalizeURL
+// Stochastic sweep round 14 (sweep-2026-05-23-r30) found three normalization
+// gaps that allowed dedup misses and DB-failure / log-injection vectors. Each
+// of these tests MUST FAIL if the corresponding fix in dedup.go is reverted.
+// ============================================================================
+
+// T-CHAOS-R30-001: NormalizeURL MUST strip ASCII control characters from URLs
+// before they become SourceRefs.
+//
+// Before the fix, embedded NUL (0x00) would survive into the source_ref TEXT
+// column and cause `INSERT INTO artifacts` to fail (PostgreSQL rejects NUL in
+// text). Embedded LF/CR/TAB would survive into structured log fields and
+// enable log injection. Attacker-introduced control-char variants of the same
+// URL would also dedup as distinct rows.
+func TestChaosR30_NormalizeURLStripsControlChars(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "embedded NUL in path",
+			in:   "http://example.com/path\x00more",
+			want: "http://example.com/pathmore",
+		},
+		{
+			name: "embedded LF in path",
+			in:   "http://example.com/path\nmore",
+			want: "http://example.com/pathmore",
+		},
+		{
+			name: "embedded CR in path",
+			in:   "http://example.com/path\rmore",
+			want: "http://example.com/pathmore",
+		},
+		{
+			name: "embedded TAB in path",
+			in:   "http://example.com/\tpath",
+			want: "http://example.com/path",
+		},
+		{
+			name: "embedded DEL (0x7F) in path",
+			in:   "http://example.com/path\x7Fmore",
+			want: "http://example.com/pathmore",
+		},
+		{
+			name: "mixed control chars across host and path",
+			in:   "http://exa\nmple.com/p\rath",
+			want: "http://example.com/path",
+		},
+		{
+			name: "leading control chars before scheme",
+			in:   "\r\nhttp://example.com/page",
+			want: "http://example.com/page",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("CHAOS R30-001: NormalizeURL(%q) = %q, want %q — control chars leaked into SourceRef", tt.in, got, tt.want)
+			}
+			// Belt-and-braces: result must not contain any control byte.
+			for i := 0; i < len(got); i++ {
+				if c := got[i]; c < 0x20 || c == 0x7F {
+					t.Errorf("CHAOS R30-001: NormalizeURL(%q) = %q contains control byte 0x%02X at offset %d", tt.in, got, c, i)
+					break
+				}
+			}
+		})
+	}
+}
+
+// T-CHAOS-R30-002: NormalizeURL MUST elide default ports (:80 for http,
+// :443 for https, :21 for ftp) so canonically-equivalent URLs share a
+// SourceRef.
+//
+// Before the fix, "https://example.com/" and "https://example.com:443/" were
+// stored as two distinct artifacts even though every browser treats them as
+// the same page. Same for "http://...:80/" and "ftp://...:21/".
+func TestChaosR30_NormalizeURLElidesDefaultPorts(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "https default port 443",
+			in:   "https://example.com:443/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "http default port 80",
+			in:   "http://example.com:80/page",
+			want: "http://example.com/page",
+		},
+		{
+			name: "ftp default port 21",
+			in:   "ftp://files.example.com:21/pub",
+			want: "ftp://files.example.com/pub",
+		},
+		{
+			name: "https non-default port preserved",
+			in:   "https://example.com:8443/api",
+			want: "https://example.com:8443/api",
+		},
+		{
+			name: "http non-default port preserved",
+			in:   "http://example.com:8080/page",
+			want: "http://example.com:8080/page",
+		},
+		{
+			name: "https default port with userinfo (both stripped)",
+			in:   "https://user:pass@example.com:443/admin",
+			want: "https://example.com/admin",
+		},
+		{
+			name: "https default port with www prefix (both stripped)",
+			in:   "https://www.example.com:443/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "https default port with tracking params",
+			in:   "https://example.com:443/p?utm_source=x&id=1",
+			want: "https://example.com/p?id=1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("CHAOS R30-002: NormalizeURL(%q) = %q, want %q — default port not elided", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// T-CHAOS-R30-003: NormalizeURL MUST strip the trailing DNS-root dot from the
+// hostname so "example.com." and "example.com" dedup as one SourceRef.
+//
+// Before the fix, "http://example.com./foo" and "http://example.com/foo"
+// produced two distinct SourceRefs even though they resolve to the same
+// origin in every browser.
+func TestChaosR30_NormalizeURLStripsTrailingDot(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "trailing dot in host",
+			in:   "http://example.com./foo",
+			want: "http://example.com/foo",
+		},
+		{
+			name: "trailing dot with uppercase",
+			in:   "https://EXAMPLE.COM./bar",
+			want: "https://example.com/bar",
+		},
+		{
+			name: "trailing dot with www prefix",
+			in:   "https://www.example.com./baz",
+			want: "https://example.com/baz",
+		},
+		{
+			name: "trailing dot with default port",
+			in:   "https://example.com.:443/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "no trailing dot (control)",
+			in:   "https://example.com/page",
+			want: "https://example.com/page",
+		},
+		{
+			name: "multiple trailing dots collapse",
+			in:   "https://example.com.../page",
+			want: "https://example.com/page",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeURL(tt.in)
+			if got != tt.want {
+				t.Errorf("CHAOS R30-003: NormalizeURL(%q) = %q, want %q — trailing dot not stripped", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// T-CHAOS-R30-004: SourceRef from ToRawArtifacts MUST never contain a NUL
+// byte. PostgreSQL TEXT columns reject NUL (0x00), which would block the
+// INSERT and prevent the artifact from ever entering the dedup table — a
+// silent capture loss.
+func TestChaosR30_ToRawArtifactsRejectsNULInSourceRef(t *testing.T) {
+	books := []Bookmark{
+		{Title: "evil", URL: "http://example.com/\x00danger"},
+		{Title: "good", URL: "http://example.com/safe"},
+	}
+	got := ToRawArtifacts(books)
+	if len(got) != 2 {
+		t.Fatalf("ToRawArtifacts: got %d artifacts, want 2", len(got))
+	}
+	for i, a := range got {
+		for j := 0; j < len(a.SourceRef); j++ {
+			if a.SourceRef[j] == 0x00 {
+				t.Errorf("CHAOS R30-004: artifact[%d].SourceRef = %q contains NUL byte at offset %d — would fail PG insert", i, a.SourceRef, j)
+			}
+		}
+	}
+}
+
+// T-CHAOS-R30-005: Two URLs that differ ONLY by an embedded control character
+// MUST normalize to the same SourceRef so dedup catches the duplicate.
+func TestChaosR30_ControlCharVariantsDedup(t *testing.T) {
+	pairs := []struct {
+		clean, dirty string
+	}{
+		{"http://example.com/page", "http://example.com/\npage"},
+		{"http://example.com/page", "http://example.com/page\r"},
+		{"http://example.com/page", "http://example.com/pa\tge"},
+		{"http://example.com/page", "http://example.com/pa\x00ge"},
+	}
+	ctx := context.Background()
+	_ = ctx // silence unused if dedup not invoked
+	for i, p := range pairs {
+		a := NormalizeURL(p.clean)
+		b := NormalizeURL(p.dirty)
+		if a != b {
+			t.Errorf("CHAOS R30-005[%d]: NormalizeURL(%q)=%q ≠ NormalizeURL(%q)=%q — control-char variant dedup miss", i, p.clean, a, p.dirty, b)
+		}
+	}
+	// Also verify FilterNew nil-pool path stays correct under chaos input.
+	d := NewURLDeduplicator(nil)
+	artifacts := []connector.RawArtifact{
+		{SourceID: "bookmarks", URL: "http://example.com/page", SourceRef: NormalizeURL("http://example.com/\npage")},
+	}
+	out, dupes, err := d.FilterNew(context.Background(), artifacts)
+	if err != nil {
+		t.Fatalf("FilterNew nil-pool error: %v", err)
+	}
+	if dupes != 0 || len(out) != 1 {
+		t.Fatalf("FilterNew nil-pool: out=%d dupes=%d, want 1/0", len(out), dupes)
+	}
+	for _, a := range out {
+		for j := 0; j < len(a.SourceRef); j++ {
+			if a.SourceRef[j] == 0x00 || a.SourceRef[j] == 0x0A {
+				t.Errorf("CHAOS R30-005: FilterNew passed through SourceRef with control byte: %q", a.SourceRef)
+				break
+			}
+		}
+	}
+}
+
+// T-CHAOS-R30-006: stripURLControlChars unit-level fast path — strings that
+// contain no control characters must be returned unchanged (no allocation).
+func TestChaosR30_StripURLControlCharsFastPath(t *testing.T) {
+	in := "https://example.com/perfectly/normal?q=1&r=2"
+	out := stripURLControlChars(in)
+	if out != in {
+		t.Errorf("stripURLControlChars(%q) = %q, want unchanged", in, out)
+	}
+	// Empty input passes through.
+	if got := stripURLControlChars(""); got != "" {
+		t.Errorf("stripURLControlChars(\"\") = %q, want \"\"", got)
+	}
+}
