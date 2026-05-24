@@ -1,0 +1,92 @@
+{
+  "bugId": "BUG-004-002-strict-guard-gate-drift",
+  "version": "1.0",
+  "createdAt": "2026-05-24T00:50:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-004-002-001",
+      "title": "state-transition-guard accepts the closure",
+      "scopeIds": [
+        "BUG-004-002:Scope-1",
+        "BUG-004-002:Scope-2"
+      ],
+      "gherkin": "Given specs/004-phase3-intelligence has all 20 BLOCK findings closed with real evidence\nAnd no G041 manipulation pattern is present in the closure diff\nWhen bash .github/bubbles/scripts/state-transition-guard.sh specs/004-phase3-intelligence runs\nThen the script exits 0 with zero BLOCK findings\nAnd artifact-lint.sh continues to exit 0",
+      "requiredTestType": "planning-validation",
+      "linkedTests": [
+        "gate:state-transition-guard.sh",
+        "gate:artifact-lint.sh"
+      ],
+      "evidenceRefs": [
+        "report.md#Validate-Evidence",
+        "report.md#Audit-Evidence",
+        "report.md#Code-Diff-Evidence"
+      ],
+      "testCoverage": [
+        "gate:state-transition-guard.sh",
+        "gate:artifact-lint.sh"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-004-002-002",
+      "title": "G016 regression E2E planning is complete per scope",
+      "scopeIds": [
+        "BUG-004-002:Scope-1"
+      ],
+      "gherkin": "Given all 6 spec-004 scopes describe at least one user-visible behavior\nWhen scopes.md is inspected\nThen each scope has a scenario-specific regression E2E DoD item with the exact gate-required phrase\nAnd each scope has a broader regression suite DoD item with the exact gate-required phrase\nAnd each scope has an explicit Regression E2E Test Plan row referencing an existing test file\nAnd every referenced test file exists on disk",
+      "requiredTestType": "planning-validation",
+      "linkedTests": [
+        "gate:state-transition-guard.sh:Check-8A"
+      ],
+      "evidenceRefs": [
+        "specs/004-phase3-intelligence/scopes.md",
+        "report.md#Test-Evidence",
+        "report.md#Code-Diff-Evidence"
+      ],
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-8A"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-004-002-003",
+      "title": "Structured commit lands closure",
+      "scopeIds": [
+        "BUG-004-002:Scope-2"
+      ],
+      "gherkin": "Given the closure diff is staged path-limited (no spec 055 WIP swept in)\nWhen git commit runs without --no-verify\nThen the commit message matches ^(spec\\(004\\)|bubbles\\(004/.*\\)):\nAnd the pre-commit hook (gitleaks) passes\nAnd Check 17 PASSes on the next state-transition-guard.sh run",
+      "requiredTestType": "provenance",
+      "linkedTests": [
+        "gate:state-transition-guard.sh:Check-17",
+        "gate:pre-commit-hook:gitleaks"
+      ],
+      "evidenceRefs": [
+        "report.md#Completion-Statement",
+        "git-log:HEAD"
+      ],
+      "testCoverage": [
+        "gate:state-transition-guard.sh:Check-17",
+        "gate:pre-commit-hook:gitleaks"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-004-002-004",
+      "title": "Change Boundary respected (spec 055 untouched)",
+      "scopeIds": [
+        "BUG-004-002:Scope-2"
+      ],
+      "gherkin": "Given closure work is in progress\nWhen the closure commit is staged path-limited\nThen git diff --cached --name-status shows only specs/004-phase3-intelligence/** + .specify/memory/sweep-2026-05-23-r30.json\nAnd no spec 055 ntfy adapter files (internal/notification/source/**, internal/api/notifications_ntfy*.go, tests/e2e/notification_ntfy_source_*, etc.) appear in the staged set\nAnd git status --short after commit still shows the same 30 spec-055 paths modified-but-unstaged",
+      "requiredTestType": "provenance",
+      "linkedTests": [
+        "manual:git-diff-cached-verification",
+        "manual:git-status-post-commit-verification"
+      ],
+      "evidenceRefs": [
+        "scopes.md#Change-Boundary",
+        "report.md#Completion-Statement"
+      ],
+      "testCoverage": [
+        "manual:git-diff-cached-verification",
+        "manual:git-status-post-commit-verification"
+      ]
+    }
+  ]
+}
