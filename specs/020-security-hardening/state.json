@@ -230,12 +230,29 @@
       "runStartedAt": "2026-05-08T00:00:00Z",
       "runEndedAt": "2026-05-08T00:00:00Z",
       "summary": "cross_spec_trace_guard_remediation_via_per_class_fixes (Iter 9): Replaced aspirational test paths in Scope 1 Test Plan with concrete artifacts (scripts/commands/config.sh, docker-compose.yml, config/generated/dev.env, config/generated/nats.conf); tagged DoD bullets for SCN-020-001/002/006/013/014; appended trace-guard remediation section to report.md mentioning cmd/core/main_test.go. trace-guard PASSED (0 warnings)."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "security",
+        "plan",
+        "implement",
+        "test",
+        "validate",
+        "audit",
+        "docs"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T01:00:00Z",
+      "runEndedAt": "2026-05-23T01:30:00Z",
+      "summary": "Stochastic-quality-sweep sweep-2026-05-23-r30 round 15, parent-expanded child workflow mode security-to-doc. Security probe surfaced F-SEC-R30-001 (HIGH, CWE-290 / CWE-345): OAuth start/callback per-IP rate limit (R-004) bypassable via X-Forwarded-For / X-Real-IP / True-Client-IP because chi.middleware.RealIP was applied unconditionally at router root and httprate.LimitByIP keyed on the rewritten r.RemoteAddr. Same root cause weakened spec 044 /v1/web/login brute-force protection and polluted slog remote_addr audit fields. Spawned specs/020-security-hardening/bugs/BUG-020-005-oauth-rate-limit-bypass-via-forwarded-headers/ with full 6-artifact set. Fixed via SST-gated trusted-proxy middleware: added runtime.trusted_proxies to config/smackerel.yaml (empty SST default → secure-by-default), JSON-array→CSV bridge in scripts/commands/config.sh, RuntimeTrustedProxies in internal/config/config.go, TrustedProxies in api.Dependencies (internal/api/health.go), wired in cmd/core/wiring.go, new internal/api/realip.go implementing CIDR-allowlist-gated middleware (empty-allowlist identity short-circuit, one-time net.ParseCIDR at construction with slog.Error+drop on malformed entries, per-request peer check, header order True-Client-IP → X-Real-IP → XFF leftmost), and one-line router.go swap r.Use(deps.trustedProxyRealIPMiddleware()). Added 6 adversarial regression tests in internal/api/router_test.go covering the three SCN-SEC-FIX-005-NNN scenarios; adversarial-fidelity proof recorded — reverting router.go line 24 to r.Use(middleware.RealIP) makes 2 router tests FAIL with concrete bypass diagnostics, restoring returns all 6 to PASS. go vet clean, gofmt clean, internal/api and internal/config packages green."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-08T00:00:00Z",
+  "lastUpdatedAt": "2026-05-23T01:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

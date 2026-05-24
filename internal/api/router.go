@@ -21,7 +21,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// BUG-020-005, F-SEC-R30-001 — replaced unconditional middleware.RealIP
+	// with a CIDR-allowlist-gated trusted-proxy middleware. With the SST
+	// default (runtime.trusted_proxies: []), forwarded headers are ignored
+	// and r.RemoteAddr keeps its raw TCP-peer value so httprate.LimitByIP
+	// and slog `remote_addr` cannot be spoofed by clients that control
+	// X-Forwarded-For / X-Real-IP / True-Client-IP. Deploy adapters that
+	// front the stack with a known reverse proxy populate trusted_proxies
+	// in their operator-private overlay.
+	r.Use(deps.trustedProxyRealIPMiddleware())
 	r.Use(structuredLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))

@@ -145,6 +145,7 @@ func buildAPIDeps(cfg *config.Config, svc *coreServices) (*api.Dependencies, lis
 		KnowledgeHealthCacheTTL:         time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		IntelligenceHealthCacheTTL:      time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 		CORSAllowedOrigins:              cfg.CORSAllowedOrigins,
+		TrustedProxies:                  cfg.RuntimeTrustedProxies,
 		AgentAdminHandler:               web.NewAgentAdminHandler(svc.pg.Pool),
 		DriveHandlers:                   api.NewDriveHandlersWithPool(drive.DefaultRegistry, svc.pg.Pool).WithEnvironment(cfg.Environment),
 		PhotosHandlers:                  api.NewPhotosHandlers(photolib.NewStore(svc.pg.Pool), cfg.Photos, cfg.Environment),

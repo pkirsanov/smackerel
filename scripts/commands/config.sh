@@ -838,6 +838,17 @@ if [[ "$CORS_ALLOWED_ORIGINS_JSON" != "[]" && -n "$CORS_ALLOWED_ORIGINS_JSON" ]]
   CORS_ALLOWED_ORIGINS="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$CORS_ALLOWED_ORIGINS_JSON" 2>/dev/null)" || CORS_ALLOWED_ORIGINS=""
 fi
 
+# Runtime trusted reverse-proxy CIDR allowlist (BUG-020-005, F-SEC-R30-001).
+# Mirrors the CORS_ALLOWED_ORIGINS pattern: YAML list → JSON → CSV env var.
+# Empty list (the SST default) → empty CSV → Go side treats every TCP peer
+# as untrusted → forwarded headers ignored → per-IP rate limits keyed on
+# the raw TCP peer. See config/smackerel.yaml runtime.trusted_proxies.
+RUNTIME_TRUSTED_PROXIES_JSON="$(yaml_get_json runtime.trusted_proxies 2>/dev/null)" || RUNTIME_TRUSTED_PROXIES_JSON="[]"
+RUNTIME_TRUSTED_PROXIES=""
+if [[ "$RUNTIME_TRUSTED_PROXIES_JSON" != "[]" && -n "$RUNTIME_TRUSTED_PROXIES_JSON" ]]; then
+  RUNTIME_TRUSTED_PROXIES="$(python3 -c "import json,sys; print(','.join(json.loads(sys.argv[1])))" "$RUNTIME_TRUSTED_PROXIES_JSON" 2>/dev/null)" || RUNTIME_TRUSTED_PROXIES=""
+fi
+
 # Connector import paths — SST repo-default fallback (BUG-029-005 / HL-RESCAN-012 / Gate G028).
 # Each of the 4 mount-path vars (BOOKMARKS_IMPORT_DIR, MAPS_IMPORT_DIR, BROWSER_HISTORY_PATH,
 # TWITTER_ARCHIVE_DIR) resolves with precedence: (1) shell env value, (2) yaml value via yaml_get,
@@ -1483,6 +1494,7 @@ MEAL_PLANNING_CALENDAR_SYNC=${MEAL_PLANNING_CALENDAR_SYNC}
 MEAL_PLANNING_AUTO_COMPLETE=${MEAL_PLANNING_AUTO_COMPLETE}
 MEAL_PLANNING_AUTO_COMPLETE_CRON=${MEAL_PLANNING_AUTO_COMPLETE_CRON}
 CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+RUNTIME_TRUSTED_PROXIES=${RUNTIME_TRUSTED_PROXIES}
 AGENT_SCENARIO_DIR=${AGENT_SCENARIO_DIR}
 AGENT_SCENARIO_GLOB=${AGENT_SCENARIO_GLOB}
 AGENT_HOT_RELOAD=${AGENT_HOT_RELOAD}

@@ -479,3 +479,89 @@ ok      github.com/smackerel/smackerel/internal/config  0.057s
 
 Coverage: `cmd/core/main_test.go` exercises Scope 3 startup auth warning scenarios SCN-020-016/017/018 — verifying that `cmd/core/main.go:71` emits a structured WARN slog when `SMACKEREL_AUTH_TOKEN` is empty and stays silent when the token is configured. Test Plan rows in scope 3 reference this path.
 
+---
+
+## Security R30 — OAuth rate-limit header-spoof bypass (2026-05-23)
+
+**Trigger:** stochastic-quality-sweep `sweep-2026-05-23-r30`, round 15
+**Workflow mode:** `security-to-doc` (parent-expanded child workflow)
+**Bug spawned:** [BUG-020-005](bugs/BUG-020-005-oauth-rate-limit-bypass-via-forwarded-headers/)
+
+### Finding
+
+| ID | Severity | CWE | Status |
+|---|---|---|---|
+| F-SEC-R30-001 | HIGH | CWE-290 (Authentication Bypass by Spoofing) + CWE-345 (Insufficient Verification of Data Authenticity) | Fixed |
+
+Per-IP rate limiting on `GET /auth/google/start` and `/auth/google/callback`
+(R-004, 10 req/min/IP) was bypassable by rotating
+`X-Forwarded-For` / `X-Real-IP` / `True-Client-IP` per request. Root cause:
+`chi.middleware.RealIP` was applied unconditionally at the router root
+(`internal/api/router.go` line 24), so `httprate.LimitByIP` keyed on the
+attacker-controlled rewritten `r.RemoteAddr`. Same root cause weakened the
+`/v1/web/login` brute-force protection added in spec 044 and polluted the
+slog `remote_addr` field used by the webAuth and bearerAuth middlewares for
+audit trails.
+
+### Fix
+
+SST-gated trusted-proxy middleware:
+
+- `config/smackerel.yaml` — added `runtime.trusted_proxies: []` (secure-by-default).
+- `scripts/commands/config.sh` — JSON-array → CSV bridge mirroring `CORS_ALLOWED_ORIGINS`; emits `RUNTIME_TRUSTED_PROXIES` in the env template.
+- `internal/config/config.go` — `Runtime.RuntimeTrustedProxies []string`, CSV-split in the env loader.
+- `internal/api/health.go` — `Dependencies.TrustedProxies []string` field.
+- `internal/api/realip.go` — new `trustedProxyRealIPMiddleware`. Empty-allowlist → identity pass-through (forwarded headers ignored, raw TCP-peer preserved). Non-empty → one-time `net.ParseCIDR` at construction with `slog.Error` + drop on malformed entries, per-request `net.SplitHostPort` + `net.ParseIP` peer check, header precedence `True-Client-IP` → `X-Real-IP` → `XFF leftmost`. Overwrites `r.RemoteAddr` with the bare client IP only when the peer is in a trusted CIDR.
+- `internal/api/router.go` line 24 — one-line swap from `r.Use(middleware.RealIP)` to `r.Use(deps.trustedProxyRealIPMiddleware())`.
+- `cmd/core/wiring.go` — wires `cfg.RuntimeTrustedProxies` into `api.Dependencies.TrustedProxies`.
+
+### Regression coverage
+
+Six adversarial tests added to `internal/api/router_test.go`:
+
+| Test | Scenario | Asserts |
+|---|---|---|
+| `TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor` | SCN-SEC-FIX-005-001 | 50 rotating-XFF requests from one TCP peer → 429 within first ~11 (empty allowlist) |
+| `TestSecR30_OAuthRateLimit_HonorsXForwardedForFromTrustedPeer` | SCN-SEC-FIX-005-002 | Trusted peer (127.0.0.0/8) — two distinct XFF values get independent buckets |
+| `TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer` | SCN-SEC-FIX-005-003 | Non-empty allowlist, peer NOT in CIDR → forwarded header ignored, 429 within first ~11 |
+| `TestSecR30_TrustedProxyMiddleware_PreservesRawRemoteAddrWhenAllowlistEmpty` | SCN-SEC-FIX-005-001 (unit) | Direct middleware unit — empty allowlist is identity pass-through |
+| `TestSecR30_TrustedProxyMiddleware_TrustedPeerHonorsXForwardedFor` | SCN-SEC-FIX-005-002 (unit) | True-Client-IP > X-Real-IP > XFF leftmost precedence + unparseable → raw fallback |
+| `TestSecR30_TrustedProxyMiddleware_DropsMalformedCIDRButTrustsRest` | All | One bad CIDR + one good CIDR; trusted peer still honoured (operator typo cannot silently disable the gate) |
+
+### Adversarial-fidelity proof
+
+Reverting `internal/api/router.go` line 24 to `r.Use(middleware.RealIP)`:
+
+```
+--- FAIL: TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor (0.00s)
+--- FAIL: TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer (0.00s)
+FAIL
+```
+
+Restoring the gated middleware:
+
+```
+--- PASS: TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor (0.00s)
+--- PASS: TestSecR30_OAuthRateLimit_HonorsXForwardedForFromTrustedPeer (0.00s)
+--- PASS: TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer (0.00s)
+--- PASS: TestSecR30_TrustedProxyMiddleware_PreservesRawRemoteAddrWhenAllowlistEmpty (0.00s)
+--- PASS: TestSecR30_TrustedProxyMiddleware_TrustedPeerHonorsXForwardedFor (0.00s)
+--- PASS: TestSecR30_TrustedProxyMiddleware_DropsMalformedCIDRButTrustsRest (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/api     0.076s
+```
+
+Full package sweep:
+
+```
+ok      github.com/smackerel/smackerel/internal/api     9.844s
+ok      github.com/smackerel/smackerel/internal/config  35.071s
+```
+
+`go vet` and `gofmt -l` clean on every touched file. SST policy (gate G028)
+preserved — no `${VAR:-default}` substitution was added; the production
+fail-loud surface is the empty-allowlist behaviour of the middleware itself.
+
+**Outcome:** F-SEC-R30-001 closed end-to-end inside round 15. Spec 020
+remains `done`. No regression in any pre-existing test.
+

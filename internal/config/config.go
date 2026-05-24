@@ -244,6 +244,16 @@ type Config struct {
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 
+	// Runtime trusted reverse-proxy CIDR allowlist (BUG-020-005,
+	// F-SEC-R30-001). When the connecting TCP peer is in one of these
+	// CIDRs, the API trusts X-Forwarded-For / X-Real-IP / True-Client-IP
+	// headers and rewrites r.RemoteAddr accordingly (so httprate.LimitByIP
+	// and slog see the real client). Empty slice = secure-by-default:
+	// any caller that can send HTTP headers cannot bypass per-IP rate
+	// limits or forge `remote_addr` log fields. Source: runtime.trusted_proxies
+	// in smackerel.yaml → RUNTIME_TRUSTED_PROXIES (comma-separated CIDRs).
+	RuntimeTrustedProxies []string
+
 	// Shared typed config blocks (SST-compliant — from smackerel.yaml via config generate)
 	Drive           DriveConfig
 	Photos          PhotosConfig
@@ -799,6 +809,19 @@ func Load() (*Config, error) {
 			o = strings.TrimSpace(o)
 			if o != "" {
 				cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
+			}
+		}
+	}
+
+	// Parse runtime trusted-proxy CIDR allowlist (comma-separated CIDRs).
+	// BUG-020-005, F-SEC-R30-001 — consumed by internal/api/realip.go to
+	// decide whether a given TCP peer is allowed to set X-Forwarded-For /
+	// X-Real-IP / True-Client-IP headers that the API will trust.
+	if trustedProxies := os.Getenv("RUNTIME_TRUSTED_PROXIES"); trustedProxies != "" {
+		for _, p := range strings.Split(trustedProxies, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				cfg.RuntimeTrustedProxies = append(cfg.RuntimeTrustedProxies, p)
 			}
 		}
 	}

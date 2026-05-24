@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "specId": "020-security-hardening",
+  "bugId": "BUG-020-005-oauth-rate-limit-bypass-via-forwarded-headers",
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-005-oauth-rate-limit-bypass-via-forwarded-headers",
+  "featureName": "BUG-020-005: OAuth rate-limit bypass via X-Forwarded-For / X-Real-IP / True-Client-IP header spoofing",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-23T01:00:00Z",
+    "completedPhaseClaims": [
+      "security",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-23T01:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Parent-expanded security-to-doc child workflow probe of spec 020 surfaced F-SEC-R30-001 (HIGH, CWE-290 / CWE-345). Confirmed bypass against current HEAD with an in-tree probe (`/tmp/sec-r15-probe/probe_test.go`): 50 requests to `/auth/google/start` from a single TCP peer with rotating `X-Forwarded-For: 10.0.0.<i>` returned 50 × 200 with zero 429s, because `chi.middleware.RealIP` was applied unconditionally at the router root (`internal/api/router.go` line 24) and `httprate.LimitByIP` keys on the rewritten `r.RemoteAddr`. Same root cause weakens spec 044 /v1/web/login brute-force protection and pollutes slog `remote_addr` audit fields in webAuth/bearerAuth middlewares."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-23T01:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Finding-owned planning: created BUG-020-005 folder with spec.md (CWE-290/CWE-345 classification + reproduction quote from probe output + 7 acceptance criteria + boundary list), design.md (Current Truth + Root Cause + Fix Approach + 9 Design Decisions DD-1..DD-9 + Touch List table + Out-of-Scope + Risk Assessment), scopes.md (single Scope 1 with 3 Gherkin scenarios SCN-SEC-FIX-005-001/002/003 + 13-step Implementation Plan + 7-row Test Plan T-SEC-FIX-005-01..07 + 8-item DoD)."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-23T01:18:00Z",
+        "outcome": "completed_owned",
+        "evidence": "SST contract: added `runtime.trusted_proxies: []` to `config/smackerel.yaml`; mirrored the `CORS_ALLOWED_ORIGINS` JSON-array→CSV bridge in `scripts/commands/config.sh` (new `RUNTIME_TRUSTED_PROXIES_JSON` block + env-template line); added `RuntimeTrustedProxies []string` to `internal/config/config.Runtime` with CSV-split in the env loader. Wiring: added `Dependencies.TrustedProxies []string` in `internal/api/health.go` and wired `cfg.RuntimeTrustedProxies` into `api.Dependencies{...}` in `cmd/core/wiring.go`. Fix: new `internal/api/realip.go` implements `(deps *Dependencies) trustedProxyRealIPMiddleware()` with empty-allowlist identity short-circuit, one-time `net.ParseCIDR` at construction, `slog.Error`+drop on malformed CIDR, per-request `net.SplitHostPort`+`net.ParseIP` peer check, header order True-Client-IP → X-Real-IP → XFF leftmost, and overwrite of `r.RemoteAddr` with the bare client IP. `internal/api/router.go` line 24 swapped from `r.Use(middleware.RealIP)` to `r.Use(deps.trustedProxyRealIPMiddleware())` with a fix-attribution comment. Boundary: one new file (`realip.go`) plus one-line edits to router/wiring/health/config + SST scripts."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-23T01:22:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Added 6 adversarial regression tests to `internal/api/router_test.go` plus a local `itoa` helper: `TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor` (50 rotating XFF, empty allowlist, asserts 429 within first ~11), `TestSecR30_OAuthRateLimit_HonorsXForwardedForFromTrustedPeer` (peer in 127.0.0.0/8, two distinct real-client XFFs get independent buckets), `TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer` (peer NOT in 10.42.0.0/16, rotating XFF, asserts 429 within first ~11), `TestSecR30_TrustedProxyMiddleware_PreservesRawRemoteAddrWhenAllowlistEmpty` (direct middleware unit), `TestSecR30_TrustedProxyMiddleware_TrustedPeerHonorsXForwardedFor` (4 sub-cases asserting True-Client-IP > X-Real-IP > XFF leftmost precedence + unparseable→raw fallback), `TestSecR30_TrustedProxyMiddleware_DropsMalformedCIDRButTrustsRest` (one bad CIDR + one good CIDR; trusted peer still honoured). `go test -v -count=1 -run TestSecR30_ ./internal/api/` → 6/6 PASS with 4 sub-case PASS rows. Full sweep `go test -count=1 ./internal/api/... ./internal/config/...` → both ok."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-23T01:25:00Z",
+        "outcome": "completed_owned",
+        "evidence": "F-SEC-R30-001 has a fix AND a regression test that demonstrably catches the bug if reverted. Adversarial fidelity proof: temporarily reverted `internal/api/router.go` line 24 to `r.Use(middleware.RealIP)` → `TestSecR30_OAuthRateLimit_NotBypassableViaXForwardedFor` and `TestSecR30_OAuthRateLimit_RejectsForwardedFromUntrustedPeer` FAIL with concrete bypass diagnostics ('BUG-020-005 regression: rotating X-Forwarded-For bypassed the OAuth rate limit' and 'untrusted peer was allowed to spoof X-Forwarded-For'). Restored the gated middleware → all 6 PASS. SST contract honoured (gate G028) — no `${VAR:-default}` substitution added, empty allowlist is the secure-by-default behaviour. No pre-existing test regressed."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-23T01:27:00Z",
+        "outcome": "completed_owned",
+        "evidence": "`go vet ./internal/api/... ./internal/config/... ./cmd/core/...` — clean (no output). `gofmt -l internal/api/realip.go internal/api/router.go internal/api/router_test.go internal/api/health.go internal/config/config.go cmd/core/wiring.go` — clean (no output) after one struct-tag whitespace fix in router_test.go. Boundary verified: only the touched files plus `config/generated/dev.env` regen. Spec 055 WIP files NOT staged."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-23T01:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Appended Security R30 execution-history entry to `specs/020-security-hardening/state.json`; appended 'Security R30 — OAuth rate-limit header-spoof bypass' section to `specs/020-security-hardening/report.md` naming this bug and F-SEC-R30-001 with Fixed status."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-23T01:30:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["security", "plan", "implement", "test", "validate", "audit", "docs"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "parentSweepContext": {
+    "sweepId": "sweep-2026-05-23-r30",
+    "round": 15,
+    "trigger": "security",
+    "executionModel": "parent-expanded-child-mode",
+    "childWorkflowMode": "security-to-doc"
+  }
+}
