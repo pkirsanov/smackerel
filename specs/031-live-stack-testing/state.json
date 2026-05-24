@@ -306,14 +306,37 @@
       "runEndedAt": "2026-05-23T09:00:00Z",
       "executionModel": "subagent-of-bubbles.workflow",
       "summary": "Closes G022 Check 6B phase-impersonation finding for `validate` on spec 031 (the final pending phase-impersonation finding) and promotes spec 031 from 'in_progress' back to 'done'. Final-certification bounded run for BUG-031-006 (sweep-2026-05-23-r30 round 3 closure). Actions: (1) Ticked all 18 newly-added regression E2E DoD items in specs/031-live-stack-testing/scopes.md (Scopes 1-6, 3 items per scope: scenario-specific E2E regression + broader E2E suite + Change Boundary respected) with inline evidence referencing existing live-stack test files on disk and the prior-certified GREEN state of spec 031's original 'done' promotion (preserved by BUG-031-006 bubbles.regression compile sweep: go vet + go build EXIT=0, zero production source modified). (2) Updated this parent state.json: bubbles.validate executionHistory entry added; certification.status promoted from in_progress to certified; top-level status promoted from in_progress to done; regression+simplify+stabilize+security+validate appended to certification.certifiedCompletedPhases (now contains all 11 phases); BUG-031-006 moved from activeBugs to resolvedBugs. (3) Updated BUG state.json: bubbles.validate executionHistory + completedPhaseClaimDetails entries appended; validate added to completedPhaseClaims; BUG status promoted from open to resolved; certification set (status=certified, completedScopes=[Scope-1..5], certifiedBy=bubbles.validate, certifiedAt=2026-05-23T09:00:00Z); nextRequiredOwner advanced from bubbles.validate to bubbles.workflow for structured-commit landing per Check 17. (4) Updated BUG scopes.md: all 5 scope statuses flipped from In Progress / Not Started to Done; Scope 5 validate DoD item ticked. Verification: state-transition-guard + artifact-lint on both spec and BUG paths pending in the validate run's terminal stage. The structured-commit DoD item in BUG Scope 5 (Check 17 prefix `spec(031): close strict-guard gate drift (BUG-031-006)`) remains unchecked because the commit has not landed — owned by bubbles.workflow.finalize."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "analyze",
+        "bug-packet",
+        "design",
+        "plan",
+        "implement",
+        "test",
+        "regression",
+        "validate",
+        "audit",
+        "docs",
+        "finalize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-23T10:00:00Z",
+      "runEndedAt": "2026-05-23T10:45:00Z",
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "sweep-2026-05-23-r30 round 8 closure for spec 031 (parent-expanded child mode `test-to-doc`). Test trigger probed the live-stack test surface after BUG-031-006 (R3) closure. Compile sweep clean (go vet + go build with integration+stress tags EXIT=0 across tests/integration, tests/e2e, tests/stress, internal/api). Three artifact-fidelity findings surfaced: T-031-001 (SCN-LST-005 referenced phantom function `test_integration` in scripts/runtime/go-integration.sh which is a top-level-only script), T-031-002 (parent state.json had BUG-031-006 in activeBugs[] while the BUG itself was done/done — R3 validate executionHistory narrative move was not paired with the actual field write), T-031-003 (scenario-manifest had no entry for the three new SLA stress test functions added by BUG-031-006 in tests/stress/ml_readiness_timeout_stress_test.go). All three drove through full finding-owned closure chain under BUG-031-007. Fixes: (1) removed the phantom function reference from SCN-LST-005 linkedTests; (2) moved BUG-031-006 from activeBugs to resolvedBugs and added BUG-031-007 to resolvedBugs; (3) extended SCN-LST-004 linkedTests with the three SLA stress functions and added a stress-test evidenceRef. Zero production source modified — change manifest is artifact-edit only. state-transition-guard.sh PASS on parent spec 031 and on BUG-031-007 packet; artifact-lint.sh PASS on both. Single structured commit landed with Check 17 prefix `spec(031,bug-031-007): close R8 sweep test trigger artifact-fidelity drift findings`. Spec 031 remains done/done at certification; R8 round terminates completed_owned."
     }
   ],
-  "activeBugs": [
-    "BUG-031-006-strict-guard-gate-drift"
+  "activeBugs": [],
+  "resolvedBugs": [
+    "BUG-031-006-strict-guard-gate-drift",
+    "BUG-031-007-r8-test-trigger-artifact-fidelity-drift"
   ],
-  "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T09:00:00Z",
+  "lastUpdatedAt": "2026-05-23T10:45:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
