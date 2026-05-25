@@ -339,8 +339,64 @@
         "deployContractAndComposeWiring": "CLEAN (deploy/contract.yaml lists smackerel-ml as bundled image; compose wires NATS dependency + healthcheck + resources limits; no host port published per Pattern P1)"
       },
       "note": "Harden surface for spec 050 (ML Sidecar Health Isolation) probed end-to-end across 10 surfaces. SST validation, bounded executor + admission control, backpressure observability (3 metrics), 14 adversarial regression tests, /health endpoint isolation, container healthcheck, operator-actionable alert, cross-spec invariants (042/045/046), deploy contract + compose wiring — ALL CLEAN. Single finding F1 was a one-paragraph stale alert recommendation in docs/Operations.md pointing at metric smackerel_ml_request_latency_seconds_bucket{endpoint=\"/health\"} that is NOT registered in ml/app/metrics.py (confirmed via repo-wide grep — single hit is the docs reference itself). Closed via R8-lightweight-parent-only-docs-edit (R4 precedent): no bug packet, no spec status change, no source code touched. Replacement text describes the three real /health SLA enforcement layers (dev-time adversarial test pinning median latency below ML_HEALTH_LATENCY_SLA_MS while executor is saturated; deploy/compose.deploy.yml smackerel-ml.healthcheck 10s/10s/3-retry probe; SmackerelMLEmbeddingStarvation alert on the rejected counter) plus directs operators wanting a per-scrape /health latency series to deploy Prometheus blackbox_exporter and alert on probe_duration_seconds against ML_HEALTH_LATENCY_SLA_MS / 1000. State-transition-guard reports 23 BLOCKs all mapping to post-certification gate tightening (G022/G028/G053/G055/G056/G086/G088/G090/G091/G092/G093) — NONE introduced by R6. Round counts as 1 finding discovered + 1 finding closed."
+    },
+    {
+      "round": 7,
+      "spec": "specs/034-expense-tracking",
+      "trigger": "simplify",
+      "mappedMode": "simplify-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T16:00:00Z",
+      "completedAt": "2026-05-25T16:30:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 1,
+      "findingsClosedThisRound": 1,
+      "findingClasses": [
+        "F1: ~150 LOC of test-only orphan code in internal/telegram/expenses.go — 8 exported Format* helpers (FormatExpenseConfirmation/FormatOCRFailure/FormatPartialExtraction/FormatAmountMissing/FormatExpenseList/FormatExpenseCSVMessage/FormatFixPrompt/FormatFieldUpdated backing T-001..T-007/T-009/T-010 wireframes), 3 intent helpers (isExpenseEntry/isSuggestionAccept/isSuggestionDismiss), expenseStateStore methods Get/Set/Clear backing the multi-turn fix-flow state machine, expenseAmountReplyPattern + expenseEntryAmountRe regexps, truncateVendor helper, and maxTelegramVendorLen constant. None have a production caller — only internal/telegram/expenses_test.go references them. Production dispatch in internal/telegram/bot.go priority-7 expense router (lines 438-443) calls only isExpenseQuery + isExpenseExport; handleExpenseQuery (1188-1245) and handleExpenseExport (1248-1289) build inline reply text via local strings.Builder; photo path uses handlePhotoUpload posting to /v1/photos/upload with no artifacts.processed NATS subscriber in internal/telegram/, contrary to design.md L690 + L712 claims and Scope 08 DoD evidence. The TTL goroutine started by newExpenseStateStore(120).StartCleanup runs against a map no production code mutates. Real spec-vs-code drift, not a simplify-delete opportunity (deleting would invalidate Scope 08 DoD evidence trail and SCN-034-048..058 test surface; Scope 15 reserves final disposition of wire-or-replace and is gated on spec 037 LLM-agent migration)."
+      ],
+      "bugsSpawned": 1,
+      "bugId": "BUG-034-002-telegram-format-helpers-not-wired",
+      "bugFinalStatus": "done",
+      "closurePattern": "R2-style artifact-only documentary bug (precedent BUG-004-003 governance baseline drift)",
+      "closurePatternRationale": "Spec-vs-code drift where the helpers are explicitly listed in Scope 08 DoD evidence as 'implemented' and Scope 15 reserves the wire-or-replace migration. Deleting the helpers now would falsify Scope 08 DoD evidence and the SCN-034-048..058 test surface. Wiring them now would re-design the photo-upload + NATS receipt-extraction subscriber path, which is feature work belonging to Scope 15 (currently Not started, depends on spec 037). Correct disposition is artifact-only documentation: file BUG-034-002 with a 6-artifact packet, insert one prose Production-wiring status note block under Scope 08 in parent scopes.md, and route final disposition to Scope 15. No production code, no tests, no scenario-manifest entries, no Test Plan rows, no DoD checkboxes modified.",
+      "guardsClean": true,
+      "guardsCleanCarryForwardNote": "Parent state-transition-guard carries pre-existing baseline deprecated-field warnings from BUG-034-001 baseline (validStatuses set includes 'specs_hardened'/'docs_updated'/'validated' which the canonical guard considers deprecated). NO new BLOCKs introduced by R7 — only the documented baseline warnings persist.",
+      "commits": ["caf5de213ae1175061a89dc51a99216e217d30b9"],
+      "newHead": "caf5de213ae1175061a89dc51a99216e217d30b9",
+      "baselineHead": "e750d7429ebaac139f853d5b22d86cf746bfe445",
+      "pushed": true,
+      "pushedTo": "origin/main",
+      "guardEvidence": {
+        "stateTransitionGuardBug": "PERMITTED (EXIT=0, 0 BLOCKs)",
+        "stateTransitionGuardParent": "PERMITTED (EXIT=0, 0 BLOCKs; pre-existing baseline deprecated-field warnings preserved unchanged from BUG-034-001 baseline)",
+        "artifactLintBug": "PASSED",
+        "artifactLintParent": "PASSED",
+        "traceabilityGuardParent": "PASSED (100/100 scenarios mapped — unchanged from baseline)"
+      },
+      "implementationSurfaces": [
+        "specs/034-expense-tracking/bugs/BUG-034-002-telegram-format-helpers-not-wired/ (new 6-artifact bug packet: spec.md, design.md, scopes.md, state.json, uservalidation.md, report.md)",
+        "specs/034-expense-tracking/scopes.md (one prose Production-wiring status note (BUG-034-002, 2026-05-25) block inserted under ## Scope 08: Telegram Expense Commands between the existing **Replacement:** block and the ### Gherkin Scenarios heading)",
+        "specs/034-expense-tracking/state.json (one bubbles.simplify executionHistory entry appended; resolvedBugs[] now lists BUG-034-002 with status validated; lastUpdatedAt bumped to 2026-05-25T00:10:00Z)"
+      ],
+      "testExecution": {
+        "unit": "N/A — artifact-only fix; no source code touched. Underlying expenses_test.go unchanged.",
+        "integration": "N/A — artifact-only fix",
+        "build": "N/A — artifact-only fix",
+        "check": "N/A — artifact-only fix"
+      },
+      "probeSurfaces": {
+        "productionDispatchGraph": "FINDING-F1 — priority-7 expense router at internal/telegram/bot.go:438-443 only invokes isExpenseQuery + isExpenseExport; never reaches isExpenseEntry / isSuggestionAccept / isSuggestionDismiss",
+        "expenseQueryHandler": "FINDING-F1 — handleExpenseQuery at internal/telegram/bot.go:1188-1245 builds reply via local strings.Builder, bypasses FormatExpenseList",
+        "expenseExportHandler": "FINDING-F1 — handleExpenseExport at internal/telegram/bot.go:1248-1289 sends CSV document directly, bypasses FormatExpenseCSVMessage",
+        "photoPath": "FINDING-F1 — handlePhotoUpload (internal/telegram/photo_upload.go) posts to /v1/photos/upload and replies with photo id; no artifacts.processed NATS subscriber in internal/telegram/ contrary to design.md L690",
+        "stateStoreUsage": "FINDING-F1 — newExpenseStateStore(120) + StartCleanup invoked at bot.go:147,163 but Get/Set/Clear never called from production; TTL goroutine runs against empty map",
+        "testCoverage": "CLEAN — all dead-in-production symbols remain covered by internal/telegram/expenses_test.go (intact, unchanged)",
+        "specContract": "FINDING-F1 — design.md L690/L712 + Scope 08 DoD claim wiring is delivered; production caller graph shows otherwise"
+      },
+      "note": "Simplify probe for spec 034 (Expense Tracking) surfaced a single high-confidence finding: ~150 LOC of Telegram format helpers / intent helpers / fix-flow state machine that the Scope 08 DoD lists as 'implemented' but that have zero production callers — only test-file references. The format functions, intent helpers, regex patterns, vendor truncation helper, and state-store Get/Set/Clear methods exist and are unit-test covered, but the production message dispatch in internal/telegram/bot.go bypasses every one of them. Spec design.md L690 (claims an artifacts.processed NATS subscriber exists in internal/telegram/) and L712 (claims all T-001..T-011 responses go through expenses.go format functions) are both false. Disposition: NOT a simplify-delete (would invalidate Scope 08 DoD evidence and SCN-034-048..058 test surface) and NOT a feature-build (Scope 15 owns the wire-or-replace migration and is gated on spec 037). Closed via R2-style artifact-only documentary bug pattern: filed 6-artifact BUG-034-002 packet, inserted one prose Production-wiring status note block under Scope 08 in parent scopes.md, appended bubbles.simplify executionHistory entry + resolvedBugs entry in parent state.json. Round counts as 1 finding discovered + 1 finding closed."
     }
   ],
-  "lastRoundCompleted": 6,
-  "lastUpdatedAt": "2026-05-25T15:30:00Z"
+  "lastRoundCompleted": 7,
+  "lastUpdatedAt": "2026-05-25T16:30:00Z"
 }
