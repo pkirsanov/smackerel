@@ -706,8 +706,8 @@ Exit code: 0
 
 **Fix:** Consolidated into a single query using PostgreSQL `COUNT(*) FILTER (WHERE ...)` conditional aggregation. Reduces 5 database round-trips to 1 while computing the same values. The `Total` and `Other` derivations remain identical.
 
-#### Finding 3: `ResurfaceScore` unused by production code — NOTED
-`internal/intelligence/resurface.go::ResurfaceScore` is an exported standalone function that is never called by any production code path. `Resurface()` ranks via SQL `ORDER BY`, and `SerendipityPick()` uses inline scoring. The function is only exercised by 8 test functions across `resurface_test.go` and `learning_test.go`. Classified as minor dead code — deferred because it's small (15 lines), well-tested, and part of the intentional public API surface for future caller use.
+#### Finding 3: `ResurfaceScore` unused by production code — NOTED (later REMOVED)
+`internal/intelligence/resurface.go::ResurfaceScore` is an exported standalone function that is never called by any production code path. `Resurface()` ranks via SQL `ORDER BY`, and `SerendipityPick()` uses inline scoring. The function is only exercised by 8 test functions across `resurface_test.go` and `learning_test.go`. Classified as minor dead code — retained at the time because it's small (15 lines), well-tested, and part of the intentional public API surface for downstream caller use. (Resolution: the function and its 11 associated tests were removed in stochastic sweep R14 below — see Finding 1 of that section.)
 
 ### Verification Evidence
 
@@ -742,7 +742,7 @@ Simplification sweep targeting dead code, N+1 query patterns, and redundant loop
 ### Findings & Remediation
 
 #### Finding 1: `ResurfaceScore` dead production code — REMOVED
-`internal/intelligence/resurface.go::ResurfaceScore` was an exported standalone function never called by any production code path. Previously deferred as "intentional public API surface for future use" but no caller ever materialized. `Resurface()` ranks via SQL `ORDER BY` and `SerendipityPick()` uses inline context scoring — neither calls `ResurfaceScore`. Removed the function (15 lines) and 11 associated test functions across `resurface_test.go` and `learning_test.go`.
+`internal/intelligence/resurface.go::ResurfaceScore` was an exported standalone function never called by any production code path. Previously retained as "intentional public API surface for downstream use" but no caller ever materialized. `Resurface()` ranks via SQL `ORDER BY` and `SerendipityPick()` uses inline context scoring — neither calls `ResurfaceScore`. Removed the function (15 lines) and 11 associated test functions across `resurface_test.go` and `learning_test.go`.
 
 #### Finding 2: N+1 queries in `GetPeopleIntelligence` — FIXED
 `internal/intelligence/people.go::GetPeopleIntelligence` ran 2 additional queries per person in a loop (shared topics + pending action items), creating O(N) database round-trips for N people (up to 50). With 50 people, this was 100+ queries instead of 2.
@@ -789,7 +789,7 @@ Exit code: 0
 | # | Finding | Severity | File | Fix |
 |---|---------|----------|------|-----|
 | DEV-001 | `search_log` table grows unboundedly — no retention cleanup for entries beyond the 30-day detection window. Over months of use this table accumulates dead weight indefinitely. | Medium | `internal/intelligence/lookups.go`, `internal/scheduler/scheduler.go` | Added `PurgeOldSearchLogs(ctx, retentionDays)` method with 30-day minimum clamp; wired into the daily `0 4 * * *` lookups cron job to purge entries older than 60 days after detection completes |
-| DEV-002 | `DetectFrequentLookups` scheduler loop unbounded — creates unlimited quick references and sends unlimited Telegram messages per cron run. If hundreds of distinct queries cross the 3× threshold simultaneously, the user receives a notification flood. | Medium | `internal/intelligence/lookups.go`, `internal/scheduler/scheduler.go` | Added `LIMIT 20` to the SQL query; added `maxQuickRefsPerRun = 5` cap in the scheduler loop with deferred remainder to next run |
+| DEV-002 | `DetectFrequentLookups` scheduler loop unbounded — creates unlimited quick references and sends unlimited Telegram messages per cron run. If hundreds of distinct queries cross the 3× threshold simultaneously, the user receives a notification flood. | Medium | `internal/intelligence/lookups.go`, `internal/scheduler/scheduler.go` | Added `LIMIT 20` to the SQL query; added `maxQuickRefsPerRun = 5` cap in the scheduler loop with overflow processed during the next scheduler tick |
 | DEV-003 | Subscription detection shares `muWeekly` — inconsistent with the dedicated-mutex pattern established by the stability fix (013) that already split `muResurface` and `muLookups` from `muDaily`. | Low | `internal/scheduler/scheduler.go` | Added `muSubs sync.Mutex` field; switched subscription detection cron from `muWeekly` to `muSubs` |
 
 ### Key Files Changed

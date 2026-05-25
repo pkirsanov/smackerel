@@ -1,0 +1,106 @@
+{
+  "version": 3,
+  "featureDir": "specs/006-phase5-advanced/bugs/BUG-006-005-governance-baseline-drift",
+  "featureName": "BUG-006-005: Governance Baseline Drift (executionHistory, claim arrays, deferral language, commit prefix)",
+  "status": "validated",
+  "workflowMode": "validate-to-doc",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "1",
+    "runStartedAt": "2026-05-24T00:00:00Z",
+    "completedPhaseClaims": [
+      "select",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.select",
+        "phasesExecuted": [
+          "select"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "startedAt": "2026-05-24T00:00:00Z",
+        "completedAt": "2026-05-24T00:05:00Z",
+        "summary": "bubbles.gaps trigger probe in sweep-2026-05-24-r10 round 2 identified 4 governance baseline finding classes against parent specs/006-phase5-advanced. Routed to validate-to-doc artifact-only bug packet because all 4 findings are artifact-integrity gaps with no runtime code surface."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "validated",
+        "startedAt": "2026-05-24T01:00:00Z",
+        "completedAt": "2026-05-24T01:10:00Z",
+        "summary": "Re-ran state-transition-guard on parent specs/006-phase5-advanced after artifact edits. F1 (Gate G040 hits in parent report.md) closed: Check 18 reports zero hits. F2 (phase impersonation) closed: Check 6B confirms all claimed phases have provenance in merged execution.executionHistory. F3 (missing required phases) closed: Check 6 confirms all 12 full-delivery required specialists present in claim arrays. F4 (commit prefix) closes on this remediation commit (Check 17)."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "startedAt": "2026-05-24T01:15:00Z",
+        "completedAt": "2026-05-24T01:20:00Z",
+        "summary": "Audit confirms only specs/006-phase5-advanced/ paths in staged diff. No production code, test code, config, CI/CD, or docs outside spec folder touched. PII redaction verified (no /home/<user>/... in evidence blocks). artifact-lint and traceability-guard both pass on parent baseline."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": [
+          "docs"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "startedAt": "2026-05-24T01:25:00Z",
+        "completedAt": "2026-05-24T01:28:00Z",
+        "summary": "Bug packet 6-artifact set created. Parent report.md updated with rewrites of 3 legacy passages. No other docs touched."
+      },
+      {
+        "agent": "bubbles.finalize",
+        "phasesExecuted": [
+          "finalize"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "startedAt": "2026-05-24T01:30:00Z",
+        "completedAt": "2026-05-24T01:32:00Z",
+        "summary": "Bug closed at validate-to-doc ceiling 'validated'. All DoD items satisfied with file:line evidence. Sweep ledger entry recorded round=2 trigger=gaps mappedMode=gaps-to-doc bugFinalStatus=resolved. Parent spec 006 returns to guard-clean state."
+      }
+    ]
+  },
+  "certification": {
+    "status": "validated",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "select",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "scopeProgress": [
+      { "scope": 1, "name": "Close All Four Governance Baseline Findings", "status": "Done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-24T01:32:00Z" }
+    ],
+    "lockdownState": { "active": false, "lockedScenarioIds": [] }
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "workflowMode": { "mode": "validate-to-doc", "source": "bubbles.gaps" },
+    "validation": { "mode": "certification-required", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
+}
