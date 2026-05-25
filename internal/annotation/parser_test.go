@@ -135,3 +135,105 @@ func TestParse_TagsCaseNormalized(t *testing.T) {
 		t.Fatalf("expected lowercase tags, got %v", p.Tags)
 	}
 }
+
+// TestParse_MultiPhrase_DeterministicOrder is a BUG-027-002 regression
+// guard for sweep-2026-05-25-r10 round 3 (stabilize-to-doc). Before the
+// fix, Parse() iterated `interactionMap` (a Go map) and broke on first
+// match — Go's randomized map iteration order meant multi-phrase inputs
+// resolved non-deterministically. The fix iterates the longest-first
+// sortedInteractionPhrasesList so a single input always yields the same
+// InteractionType across runs and processes.
+//
+// Each adversarial input below contains TWO recognized interaction
+// phrases; the longest-first rule pins the expected winner. If Parse()
+// regresses to map iteration, this test will flake within a few
+// thousand iterations (a Go map's randomization seed varies per run).
+// 5000 iterations per input gives a generous safety margin without
+// inflating the unit-test cost.
+func TestParse_MultiPhrase_DeterministicOrder(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected InteractionType
+		desc     string
+	}{
+		{
+			// "tried it" (8 chars) > "made it" (7 chars) → longest wins.
+			input:    "made it then tried it later",
+			expected: InteractionTriedIt,
+			desc:     "tried it wins over made it (longest-first)",
+		},
+		{
+			// "used it" (7 chars) == "read it" (7 chars) → alpha
+			// tiebreaker: "read it" < "used it" → InteractionReadIt.
+			input:    "used it and read it twice",
+			expected: InteractionReadIt,
+			desc:     "read it wins over used it (alpha tiebreaker on length-tie)",
+		},
+		{
+			// "bought it" (9 chars) > "tried it" (8 chars) > "visited" (7 chars).
+			input:    "bought it visited tried it",
+			expected: InteractionBoughtIt,
+			desc:     "bought it wins (longest)",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Run Parse() many times — if iteration order were still
+			// randomized by Go's map runtime, the InteractionType would
+			// drift across iterations and the assertion would fail.
+			seen := map[InteractionType]int{}
+			const iterations = 5000
+			for i := 0; i < iterations; i++ {
+				p := Parse(tc.input)
+				seen[p.InteractionType]++
+			}
+			if len(seen) != 1 {
+				t.Fatalf("expected deterministic single InteractionType across %d iterations, got %d distinct: %v",
+					iterations, len(seen), seen)
+			}
+			got := ""
+			for k := range seen {
+				got = string(k)
+			}
+			if got != string(tc.expected) {
+				t.Fatalf("input=%q: expected InteractionType=%s, got %s (after %d iterations)",
+					tc.input, tc.expected, got, iterations)
+			}
+		})
+	}
+}
+
+// TestParse_SingleInteractionStillWorks confirms the deterministic
+// iteration did not break the single-phrase happy path. The original
+// suite already covers individual phrases (TestParse_InteractionOnly,
+// TestParse_BoughtIt, TestParse_ReadIt), but this guard exercises all
+// seven canonical phrases in a single test to keep regression coverage
+// dense.
+func TestParse_SingleInteractionStillWorks(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected InteractionType
+	}{
+		{"made it", InteractionMadeIt},
+		{"madeit", InteractionMadeIt},
+		{"made_it", InteractionMadeIt},
+		{"cooked it", InteractionMadeIt},
+		{"bought it", InteractionBoughtIt},
+		{"bought_it", InteractionBoughtIt},
+		{"purchased", InteractionBoughtIt},
+		{"read it", InteractionReadIt},
+		{"read_it", InteractionReadIt},
+		{"visited", InteractionVisited},
+		{"tried it", InteractionTriedIt},
+		{"tried_it", InteractionTriedIt},
+		{"used it", InteractionUsedIt},
+		{"used_it", InteractionUsedIt},
+	}
+	for _, tc := range cases {
+		p := Parse(tc.input)
+		if p.InteractionType != tc.expected {
+			t.Errorf("input=%q: expected %s, got %s", tc.input, tc.expected, p.InteractionType)
+		}
+	}
+}
