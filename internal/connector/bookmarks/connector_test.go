@@ -1933,3 +1933,112 @@ func TestHealthDisconnectedBeforeConnect(t *testing.T) {
 		t.Errorf("Health() = %q before Connect, want disconnected", h)
 	}
 }
+
+// ============================================================================
+// STABILIZE R10 — Adversarial regression tests (sweep-2026-05-25-r10 round 10)
+// ============================================================================
+
+// T-STAB-R10-001: mapFolderTopics respects context cancellation between artifacts.
+//
+// Before the fix, Sync's inline topic-mapping loop iterated through every artifact
+// even when the supervisor's context had already been cancelled (shutdown,
+// deadline). Each iteration fired MapFolder/CreateTopicEdge/UpdateTopicMomentum,
+// every one of which failed with context.Canceled, and every failure emitted its
+// own slog.Warn. A bookmark export with 1000 entries could produce 1000+ stale
+// warnings after shutdown began and delayed supervisor teardown.
+//
+// After the fix, the loop checks ctx.Err() at the top of every iteration and
+// exits cleanly on cancellation. Adversarial fidelity: removing the ctx.Err()
+// guard at the top of mapFolderTopics will cause this test to fail because
+// processed would equal len(artifacts) (10) instead of 0.
+func TestStabR10_TopicMappingRespectsContextCancel(t *testing.T) {
+	// nil pool keeps topicMapper non-nil but makes MapFolder a no-op so the
+	// loop iteration boundary is the only observable signal.
+	c := NewConnectorWithPool("bookmarks-stab-r10", nil)
+	if c.topicMapper == nil {
+		t.Fatal("topicMapper is nil — NewConnectorWithPool contract regression")
+	}
+
+	artifacts := make([]connector.RawArtifact, 10)
+	for i := range artifacts {
+		artifacts[i] = connector.RawArtifact{
+			SourceRef: fmt.Sprintf("https://example.com/page-%d", i),
+			Metadata: map[string]interface{}{
+				"folder_path": "Tech/Go/Stabilize",
+			},
+		}
+	}
+
+	// Pre-cancelled context: loop must exit at iteration 0 without processing
+	// any artifact.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	processed := c.mapFolderTopics(ctx, artifacts)
+	if processed != 0 {
+		t.Errorf("STAB-R10-001: mapFolderTopics processed=%d on pre-cancelled ctx, want 0 "+
+			"(loop iterated past cancellation guard — ctx.Err() check missing or wrong)", processed)
+	}
+
+	// Live context: loop must iterate through every artifact (each MapFolder
+	// call is a no-op because pool is nil). Proves the cancellation guard is
+	// not a blanket short-circuit.
+	processed = c.mapFolderTopics(context.Background(), artifacts)
+	if processed != len(artifacts) {
+		t.Errorf("STAB-R10-001: mapFolderTopics processed=%d on live ctx with %d artifacts, "+
+			"want %d (cancellation guard incorrectly fired on healthy context)",
+			processed, len(artifacts), len(artifacts))
+	}
+}
+
+// T-STAB-R10-002: mapFolderTopics breaks at the very first cancellation
+// observation point, not at the next "natural" loop boundary.
+//
+// Adversarial fidelity: confirms that a context cancelled BEFORE the very
+// first iteration causes the loop to return 0, not 1. Catches a regression
+// where the ctx.Err() check is moved to the bottom of the loop body or
+// guarded by a "process at least one" pattern.
+func TestStabR10_TopicMappingCancelBeforeFirstIteration(t *testing.T) {
+	c := NewConnectorWithPool("bookmarks-stab-r10b", nil)
+
+	// Single-artifact slice — the only way processed can be 1 is if the
+	// loop body ran before the ctx check.
+	artifacts := []connector.RawArtifact{
+		{
+			SourceRef: "https://example.com/only",
+			Metadata:  map[string]interface{}{"folder_path": "OnlyFolder"},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	processed := c.mapFolderTopics(ctx, artifacts)
+	if processed != 0 {
+		t.Errorf("STAB-R10-002: mapFolderTopics processed=%d on pre-cancelled ctx with 1 artifact, "+
+			"want 0 (ctx guard must run BEFORE the iteration body, not after)", processed)
+	}
+}
+
+// T-STAB-R10-003: mapFolderTopics on a connector without a topic mapper
+// returns 0 immediately (no panic, no work).
+//
+// Adversarial fidelity: catches regressions where the early-return guard on
+// c.topicMapper == nil is removed and the loop attempts to dereference nil.
+func TestStabR10_TopicMappingNilMapper(t *testing.T) {
+	c := NewConnector("bookmarks-stab-r10c") // no pool → topicMapper is nil
+
+	artifacts := []connector.RawArtifact{
+		{
+			SourceRef: "https://example.com/a",
+			Metadata:  map[string]interface{}{"folder_path": "F1"},
+		},
+		{
+			SourceRef: "https://example.com/b",
+			Metadata:  map[string]interface{}{"folder_path": "F2"},
+		},
+	}
+
+	processed := c.mapFolderTopics(context.Background(), artifacts)
+	if processed != 0 {
+		t.Errorf("STAB-R10-003: mapFolderTopics processed=%d with nil topicMapper, want 0", processed)
+	}
+}
