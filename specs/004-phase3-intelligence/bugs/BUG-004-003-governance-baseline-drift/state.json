@@ -1,0 +1,145 @@
+{
+  "version": 3,
+  "specId": "004-phase3-intelligence",
+  "bugId": "BUG-004-003-governance-baseline-drift",
+  "featureDir": "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift",
+  "featureName": "BUG-004-003: Governance Baseline Drift (Spec Evidence Cites Pre-Refactor Monolithic File)",
+  "workflowMode": "validate-to-doc",
+  "status": "validated",
+  "lastUpdatedAt": "2026-05-25T09:30:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "scope-1",
+    "runStartedAt": "2026-05-25T07:45:00Z",
+    "completedPhaseClaims": [
+      "select",
+      "analyze",
+      "design",
+      "plan",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "executionHistory": [
+      {
+        "phase": "select",
+        "agent": "bubbles.select",
+        "timestamp": "2026-05-25T07:45:00Z",
+        "completedAt": "2026-05-25T07:50:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Scope decomposition: single scope 'Spec→Code File Citation Restoration (Artifact-Only)' identified. The bug surfaces three artifact-integrity finding classes (F1 function-citation drift, F2 Implementation Files lists understate package surface, F3 design.md architecture diagram fabricated) but they share the same root cause (post-refactor split of engine.go into domain-specific files without updating the spec artifacts), the same Change Boundary (artifact-only — no runtime/test/config/CI/deploy/docs files), and the same closure mechanism (text restoration in scopes.md + design.md). One scope is the correct decomposition because multi-scope split would create artificial seams where there is one coherent restoration unit."
+      },
+      {
+        "phase": "analyze",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-05-25T07:50:00Z",
+        "completedAt": "2026-05-25T08:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "bubbles.workflow gaps probe under sweep-2026-05-25-r10 round 2 (parent-expanded child workflow mode gaps-to-doc) compared specs/004-phase3-intelligence scope and design artifacts against actual internal/intelligence/ package layout at HEAD 554e620f. Verified file→symbol map via `grep -E '^func |^type [A-Z]' internal/intelligence/*.go` and `grep -rn '^type ActionItem ' internal/`. Findings: 22+ atomic function-citation drifts in scopes.md DoD evidence blocks (Scopes 1, 2, 3, 4, 5, 6), 4 Implementation Files lists understating the package surface (Scopes 1-4), 1 fabricated 4-subdirectory diagram in design.md describing synthesis/, digest/, alerts/, commitments/ subdirectories that do not exist on disk. Baseline state-transition-guard.sh specs/004-phase3-intelligence already clean (0 BLOCKs + 1 placeholder-paths warning), confirming the drift is at deeper spec→code traceability level than the guard inspects. Routed to validate-to-doc artifact-only closure mirroring R3/R5 precedents (BUG-020-006, BUG-014-003, BUG-006-005 under sweep-2026-05-24-r10)."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-25T08:00:00Z",
+        "completedAt": "2026-05-25T08:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "design.md documents 3 edit categories: Category A (scopes.md function-citation table mapping 22 line-precise corrections), Category B (scopes.md Implementation Files extensions for Scopes 1-4), Category C (design.md Intelligence Engine Components diagram replacement). Closure strategy recorded as artifact-only validate-to-doc mirror of prior R3/R5/R8 precedents. Out-of-scope explicitly enumerated. Verification strategy specifies baseline+post guard re-runs, artifact-lint, traceability-guard, and Change Boundary diff inspection."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-25T08:10:00Z",
+        "completedAt": "2026-05-25T08:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "scopes.md Scope 1 created with: 1 scope title, Change Boundary with allowed and excluded surfaces enumerated, 3 SCN-BUG-004-003-* Gherkin scenarios (GUARD-CLEAN, BUG-CLEAN, NO-RUNTIME) mirroring the BUG-014-003 governance-baseline-drift validate-to-doc precedent, 10 DoD bullets with verifier-grep evidence patterns including the literal Change Boundary line plus Gate G016 scenario-specific and broader regression-E2E bullets, Test Plan with 8 entries (governance-guard x2, artifact-lint x2, traceability-guard, manual-diff, gitleaks-precommit, Regression E2E row). scenario-manifest.json registers all 3 scenarios with requiredTestType / linkedTests / evidenceRefs fields per Gate G057."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-25T08:30:00Z",
+        "completedAt": "2026-05-25T09:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Post-edit state-transition-guard.sh specs/004-phase3-intelligence: TRANSITION PERMITTED with 1 warning (placeholder-paths, same as baseline). State-transition-guard.sh on bug packet directory: TRANSITION PERMITTED at validate-to-doc ceiling. Verifier-grep for `engine\\.go (RunSynthesis|GenerateWeeklySynthesis|CheckOverdueCommitments|GeneratePreMeetingBriefs|CreateAlert|DismissAlert|SnoozeAlert|GetPendingAlerts|MeetingBrief\\.|assembleWeeklySynthesisText|WeeklySynthesis\\.Patterns)` against scopes.md returns 0 matches confirming F1 closed. Diagram-real verifier-grep for fabricated subdirectory references against design.md returns 0 matches confirming F3 closed. git diff --cached --name-status confirms only scopes.md, design.md, state.json, bug packet 7-artifact set, and sweep ledger appear — no internal/, tests/, config/, deploy/, docs/, or .github/ paths."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-25T09:00:00Z",
+        "completedAt": "2026-05-25T09:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "artifact-lint.sh specs/004-phase3-intelligence PASSED. traceability-guard.sh specs/004-phase3-intelligence PASSED with no regression on the parent spec's 21 scenarios plus 3 SCN-BUG-004-003-* bug-packet scenarios. artifact-lint.sh specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift PASSED. PII redaction verified — no /home/<user>/... paths in committed text. Commit prefix bubbles(004/sweep-r10-gaps-pass): satisfies parent spec Check 17 and bug-packet provenance traceback."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-25T09:10:00Z",
+        "completedAt": "2026-05-25T09:20:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug packet 7-artifact set complete at specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/: spec.md (3 finding classes F1-F3 with severity rationale and AC1-AC7), design.md (3 edit categories A-C with line-precise hit tables and authoritative file→symbol map), scopes.md (1 scope with Change Boundary, 3 SCN-BUG-004-003-* Gherkin scenarios, 10 DoD bullets, Test Plan), report.md (validation/audit/docs evidence + change manifest + PII redaction confirmation), state.json (this file), uservalidation.md (sign-off), scenario-manifest.json (3 scenarios with Gate G057 requiredTestType/linkedTests/evidenceRefs fields). Parent specs/004-phase3-intelligence updates: scopes.md function-citation corrections + Implementation Files extensions; design.md Intelligence Engine Components diagram replacement; state.json resolvedBugs[] + lastUpdatedAt. Sweep ledger .specify/memory/sweep-2026-05-25-r10.json round-2 entry appended preserving R1 + plannedRounds[]."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-25T09:20:00Z",
+        "completedAt": "2026-05-25T09:30:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug closed at validate-to-doc ceiling validated. All 10 DoD bullets satisfied with evidence captured in scopes.md and report.md. Sweep ledger entry recorded round=2 spec=004-phase3-intelligence trigger=gaps mappedMode=gaps-to-doc executionModel=parent-expanded-child-mode bugFinalStatus=validated findings=3-finding-classes (F1+F2+F3, 27 atomic citations) findingsClosedThisRound=3 (3/3 classes). Parent spec 004 returns to guard-clean state with status=done ceiling preserved."
+      }
+    ]
+  },
+  "certification": {
+    "status": "validated",
+    "certifiedAt": "2026-05-25T09:30:00Z",
+    "certifiedBy": "bubbles.validate",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["select", "analyze", "design", "plan", "validate", "audit", "docs", "finalize"],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1",
+        "title": "Spec→Code File Citation Restoration (Artifact-Only)",
+        "status": "Done",
+        "completedAt": "2026-05-25T09:30:00Z",
+        "evidenceRef": "report.md#validate-to-doc-closure-evidence"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "reason": "validate-to-doc closure under sweep-2026-05-25-r10 round 2 — lockdown not engaged for artifact-only finding-owned bug closure"
+    },
+    "evidenceLinks": {
+      "spec": "spec.md",
+      "design": "design.md",
+      "scopes": "scopes.md",
+      "report": "report.md",
+      "userValidation": "uservalidation.md"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "off", "source": "workflow-forced", "rationale": "Artifact-only governance baseline restoration with zero runtime delta — no red-green test cadence required."},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "parentSpec": {
+    "specDir": "specs/004-phase3-intelligence",
+    "specStatus": "done",
+    "specCeilingPreserved": true
+  },
+  "parentSweepContext": {
+    "sweepId": "sweep-2026-05-25-r10",
+    "round": 2,
+    "trigger": "gaps",
+    "mappedMode": "gaps-to-doc",
+    "executionModel": "parent-expanded-child-mode",
+    "closureMode": "validate-to-doc",
+    "findingClasses": 3,
+    "atomicCitations": 27,
+    "findingsClosedThisRound": 3
+  }
+}

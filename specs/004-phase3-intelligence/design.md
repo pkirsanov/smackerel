@@ -110,31 +110,41 @@ Phase 3 transforms Smackerel from a knowledge store into a knowledge engine by a
 
 ### Intelligence Engine Components
 
+> **Layout note (BUG-004-003):** Spec 004 originally planned a 4-subdirectory layout (synthesis/, digest/, alerts/, commitments/) but the implementation split consolidated into a flat package. The diagram below reflects the as-built shape at HEAD; see BUG-004-003 (governance baseline drift) for the artifact reconciliation history.
+
 ```
 internal/intelligence/
-    synthesis/
-        engine.go           -- Daily synthesis orchestrator
-        clusterer.go         -- Artifact cluster detection (semantic + graph)
-        analyzer.go          -- LLM-powered through-line analysis
-        contradiction.go     -- Conflicting claims detector
-    
-    digest/
-        weekly.go            -- Weekly synthesis generator
-        serendipity.go       -- Archive resurface selector
-        patterns.go          -- Behavioral pattern recognizer
-    
-    alerts/
-        manager.go           -- Alert queue, batching, delivery
-        premeeting.go         -- Pre-meeting brief generator
-        commitments.go        -- Commitment tracker and overdue detector
-        bills.go             -- Bill/due-date tracker
-        types.go             -- Alert type definitions
-    
-    commitments/
-        detector.go          -- Promise/commitment detection from text
-        tracker.go           -- Lifecycle: open -> resolved/dismissed
-        resolver.go          -- Auto-resolve from follow-up detection
+    engine.go              -- Engine type, all Alert/Insight type and constant
+                              definitions (AlertType, AlertStatus, Alert,
+                              InsightType, SynthesisInsight constants),
+                              NewEngine constructor
+    synthesis.go           -- Daily and weekly synthesis (RunSynthesis,
+                              synthesisConfidence, GenerateWeeklySynthesis,
+                              detectCapturePatterns,
+                              assembleWeeklySynthesisText,
+                              GetLastSynthesisTime, WeeklySynthesis type)
+    briefs.go              -- Pre-meeting briefs + commitment lifecycle
+                              (GeneratePreMeetingBriefs, buildAttendeeBrief,
+                              assembleBriefText, CheckOverdueCommitments,
+                              collectOverdueItems, MeetingBrief,
+                              AttendeeBrief types)
+    alerts.go              -- Alert CRUD/lifecycle (CreateAlert, DismissAlert,
+                              SnoozeAlert, GetPendingAlerts,
+                              MarkAlertDelivered, HasStalePendingAlerts)
+    alert_producers.go     -- Domain-specific alert producers added by
+                              spec 021 (ProduceBillAlerts,
+                              ProduceTripPrepAlerts,
+                              ProduceReturnWindowAlerts,
+                              ProduceRelationshipCoolingAlerts) plus
+                              calendar helpers (clampDay,
+                              calendarDaysBetween)
+    resurface.go           -- Weekly serendipity resurface
+                              (Resurface, serendipityPick)
 ```
+
+> **Surface scoped to spec 004:** the files listed above. Additional `.go` files coexist in the same `internal/intelligence/` package (annotations.go, expenses.go, expertise.go, learning.go, lists.go, lookups.go, monthly.go, people.go, people_forecast.go, subscriptions.go, vendor_seeds.go) — those belong to Phase 4/5 specs (006, 025, 027, 028, 034, 035) and are NOT in scope for spec 004.
+>
+> **Action item Go type:** the `ActionItem` Go type lives in `internal/digest/generator.go` (consumed by both digest assembly and commitment surfacing). The action_items SQL table is owned by spec 004 migrations.
 
 ### Data Flow: Daily Synthesis
 

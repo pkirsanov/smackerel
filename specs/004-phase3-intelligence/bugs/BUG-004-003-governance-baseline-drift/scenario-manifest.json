@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "spec": "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift",
+  "lockingPolicy": {
+    "lockOnPhases": ["validate", "audit", "docs"],
+    "lockReason": "Guard-verification scenarios are the contractual proof of the governance baseline restoration; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "off",
+    "rationale": "Artifact-only governance baseline restoration with zero runtime delta — no failing implementation test exists to drive red→green on; the state-transition-guard re-run plus surface-grep verifiers ARE the proof artifacts. Red state captured in spec.md § Finding Ledger (3 finding classes F1/F2/F3 across 27 atomic citation drifts on parent specs/004-phase3-intelligence). Green state captured in report.md § Validation Evidence (state-transition-guard.sh on parent and bug packet both return Exit 0 TRANSITION PERMITTED with zero BLOCKs; surface-grep verifiers return zero residual drift)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-004-003-GUARD-CLEAN",
+      "scope": 1,
+      "title": "Guard re-run on parent spec exits 0 with zero BLOCKs",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:check-state-transition-guard-parent-spec-004"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/report.md#guard-re-run-on-parent-spec",
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/scopes.md#scope-1-governance-baseline-restoration-artifact-only"
+      ],
+      "liveTestExpectation": "Exit 0 with 🟡 TRANSITION PERMITTED on parent spec 004-phase3-intelligence; zero BLOCK lines in output; parent status=done ceiling preserved.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-004-003-BUG-CLEAN",
+      "scope": 1,
+      "title": "Guard run on bug packet exits 0 with zero BLOCKs",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:check-state-transition-guard-bug-packet-004-003"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/report.md#guard-re-run-on-bug-packet",
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/scopes.md#scope-1-governance-baseline-restoration-artifact-only"
+      ],
+      "liveTestExpectation": "Exit 0 with 🟡 TRANSITION PERMITTED on the BUG-004-003 bug packet folder; zero BLOCK lines in output; bug status may be set to 'validated' (validate-to-doc ceiling).",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-004-003-NO-RUNTIME",
+      "scope": 1,
+      "title": "Zero runtime files modified in staged diff",
+      "requiredTestType": ["change-boundary-verification"],
+      "testFiles": [
+        "git"
+      ],
+      "linkedTests": [
+        {
+          "file": "git",
+          "function": "manual:check-git-diff-cached-name-status-no-runtime-paths"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/report.md#path-limited-diff-boundary-verification",
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/scopes.md#change-boundary"
+      ],
+      "liveTestExpectation": "git diff --cached --name-status emits only specs/004-phase3-intelligence/{scopes.md,design.md,state.json}, the BUG-004-003 bug packet artifacts, and .specify/memory/sweep-2026-05-25-r10.json; zero matches for internal/intelligence/**, internal/digest/**, internal/scheduler/**, tests/**, config/**, .github/workflows/**, deploy/**, .github/bubbles/scripts/**, or docs/** paths.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}

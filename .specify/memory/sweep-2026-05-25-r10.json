@@ -84,6 +84,49 @@
         "build": "go build ./... exit 0"
       },
       "note": "Observability symmetry restored — AlertProducerFailures counter wired into all 4 alert producers (Bill, TripPrep, ReturnWindow, Relationship) closing the gap with AlertsProduced and AlertDelivery* metric families."
+    },
+    {
+      "round": 2,
+      "spec": "specs/004-phase3-intelligence",
+      "trigger": "gaps",
+      "mappedMode": "gaps-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T07:00:00Z",
+      "completedAt": "2026-05-25T07:15:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 3,
+      "findingsAtomic": 27,
+      "findingsClosedThisRound": 3,
+      "findingClasses": [
+        "F1: Spec→Code File Citation Drift (22 atomic citations in scopes.md naming wrong package/file after post-certification engine split at HEAD 554e620f)",
+        "F2: Implementation Files List Incompleteness (Scopes 1-4 Implementation Files lists omit 4 post-split files: synthesis.go, briefs.go, alert_producers.go, resurface.go)",
+        "F3: Design Diagram Drift (design.md Intelligence Engine Components diagram showed fictional 4-subdirectory hierarchy not reflecting actual flat package layout)"
+      ],
+      "bugsSpawned": 1,
+      "bugId": "BUG-004-003-governance-baseline-drift",
+      "bugFinalStatus": "validated",
+      "guardsClean": true,
+      "commits": ["<PENDING-COMMIT-SHA>"],
+      "pushed": false,
+      "baselineHead": "554e620f",
+      "guardEvidence": {
+        "stateTransitionGuardParent": "PERMITTED (EXIT=0, 0 BLOCKs, 1 warning — baseline scopeProgress deprecation)",
+        "stateTransitionGuardBug": "PERMITTED at validate-to-doc ceiling (EXIT=0, 0 BLOCKs, 2 warnings — baseline scopeProgress deprecation + state-canonicalization)",
+        "artifactLintParent": "PASSED",
+        "artifactLintBug": "PASSED (after uservalidation.md Checklist section added)",
+        "traceabilityGuardParent": "PASSED (0 warnings; 27 scenarios mapped; 45 test rows; 27 scenario-to-row mappings; 27 concrete test file refs; 27 report evidence refs)"
+      },
+      "closurePattern": "artifact-only validate-to-doc bug packet (precedent BUG-014-003)",
+      "implementationSurfaces": [
+        "specs/004-phase3-intelligence/scopes.md (22 function citations corrected to actual files synthesis.go/briefs.go/alert_producers.go/resurface.go/digest/generator.go; Implementation Files lists for Scopes 1-4 extended)",
+        "specs/004-phase3-intelligence/design.md (Intelligence Engine Components diagram replaced fictional 4-subdir layout with actual flat layout)",
+        "specs/004-phase3-intelligence/state.json (resolvedBugs[] extended)",
+        "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/ (all 7 artifacts: spec.md, design.md, scopes.md, scenario-manifest.json, state.json, uservalidation.md, report.md)"
+      ],
+      "note": "Governance baseline drift closed — Spec 004 scopes.md and design.md now faithfully reflect post-certification engine split at HEAD 554e620f. Artifact-only closure pattern; no runtime/test code touched."
     }
-  ]
+  ],
+  "lastRoundCompleted": 2,
+  "lastUpdatedAt": "2026-05-25T07:15:00Z"
 }

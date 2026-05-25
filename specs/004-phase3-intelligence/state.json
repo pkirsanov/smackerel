@@ -433,10 +433,12 @@
   ],
   "activeBugs": [],
   "resolvedBugs": [
-    "BUG-004-002"
+    "BUG-004-002",
+    "BUG-004-H1-silent-query-error-swallowing",
+    "BUG-004-003-governance-baseline-drift"
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T04:25:00Z",
+  "lastUpdatedAt": "2026-05-25T09:30:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
