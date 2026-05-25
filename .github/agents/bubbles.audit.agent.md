@@ -31,7 +31,7 @@ handoffs:
 - **Cross-reference DoD items with report.md** — every checked `[x]` DoD item must have corresponding evidence in report.md with real command execution.
 - **If fabrication is detected:** Immediately fail the audit, mark the spec as `in_progress` or `blocked`, and document EXACTLY what was fabricated and what needs to be re-executed.
 
-**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G040, G047, G048, G021, G035, G051, G052, G053). The audit agent is the LAST LINE OF DEFENSE — it MUST verify ALL gates including G040 (zero deferral language), G047 (IDOR/auth bypass), G048 (silent decode failures), G021 (anti-fabrication), G035 (vertical slice + gateway routing), G029 (integration completeness), G051 (test env dependencies), G052 (artifact freshness isolation), and G053 (implementation delta evidence). Revert state.json if any fail. Use `state-transition-guard.sh --revert-on-fail` to mechanically enforce.
+**⛔ COMPLETION GATES:** See [agent-common.md](bubbles_shared/agent-common.md) → ABSOLUTE COMPLETION HIERARCHY (Gates G023, G024, G025, G027, G028, G029, G040, G047, G048, G021, G035, G051, G052, G053, G093). The audit agent is the LAST LINE OF DEFENSE — it MUST verify ALL gates including G040 (zero deferral language), G047 (IDOR/auth bypass), G048 (silent decode failures), G021 (anti-fabrication), G035 (vertical slice + gateway routing), G029 (integration completeness), G051 (test env dependencies), G052 (artifact freshness isolation), G053 (implementation delta evidence), and G093 (done-ceiling delivery changed non-planning implementation/runtime/config/contract/test/docs paths). Revert state.json if any fail. Use `state-transition-guard.sh --revert-on-fail` to mechanically enforce.
 
 **Non-goals:**
 - Ad-hoc fixes outside a classified feature/bug/ops folder
@@ -56,7 +56,7 @@ Required steps:
 1. Scan all evidence blocks for `**Claim Source:** interpreted` — add each to spot-check list
 2. Scan all evidence blocks for exactly 10-line output (minimum threshold) — add each to spot-check list
 3. Scan for any resolved Uncertainty Declarations — add each to spot-check list
-4. Scan for `Done with Concerns` scopes — add each to spot-check list
+4. Scan for `Done` scopes with `observations[]` and legacy read-only `done_with_concerns` specs — add each to spot-check list
 5. Format as ordered list with one-sentence explanation + what to verify
 
 **MANDATORY: Evidence Provenance Review**
@@ -92,7 +92,7 @@ When `bubbles.audit` is invoked by `bubbles.workflow` or `bubbles.iterate`, it M
 Rules:
 - Emit exactly one `## RESULT-ENVELOPE` block per invocation.
 - Valid outcomes for `bubbles.audit` are `completed_diagnostic`, `route_required`, or `blocked`.
-- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), audit MAY surface `done_with_concerns`-shaped findings in its diagnostic envelope (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies. Audit itself does NOT certify the state — only `bubbles.validate` writes `certification.status: done_with_concerns`.
+- Per [completion-governance.md → Legacy Status: done_with_concerns](bubbles_shared/completion-governance.md#legacy-status-done_with_concerns), audit MAY surface observation-shaped findings in its diagnostic envelope (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies `done`. Audit MUST NOT recommend or certify new `done_with_concerns`; high-severity or remediation-required findings stay `blocked` / `route_required`.
 - `nextRequiredOwner` MUST be the concrete repair owner, never a generic phrase.
 - `blockedReason` MUST identify the exact audit failure class when outcome is `blocked`.
 - For compatibility during migration, if `outcome` is `route_required`, also emit a legacy `## ROUTE-REQUIRED` block carrying the same owner and reason. If no routed repair is needed, the legacy compatibility block may be:

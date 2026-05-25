@@ -19,7 +19,8 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/state-snapshot.sh \
-         --phase <name> [--scope-id <id>] [--note <string>] [--mode <start|end>]
+         --phase <name> [--scope-id <id>] [--note <string>] [--mode <start|end>] \
+         [--convergence-iteration <N> --spec-dir <path>]
 
 Required:
   --phase <name>       Phase the orchestrator is entering or closing
@@ -29,6 +30,16 @@ Optional:
   --scope-id <id>      Scope being worked, when applicable.
   --note <string>      Free-form note attached to this snapshot.
   --mode <start|end>   Records turn-start (default) or turn-end.
+  --convergence-iteration <N>
+                       Integer ≥ 0. When supplied alongside --spec-dir,
+                       additively writes/updates the (specDir, agent)
+                       entry in `convergenceLoops[]`. Enforced by Gate G082
+                       via `bubbles/scripts/convergence-cap-guard.sh`. Both
+                       --convergence-iteration and --spec-dir MUST be
+                       supplied together; supplying only one is an error.
+  --spec-dir <path>    Spec directory (repo-relative) that the
+                       convergence iteration refers to. Paired with
+                       --convergence-iteration.
   -h, --help           Print this usage and exit.
 
 Behavior:
@@ -63,6 +74,8 @@ PHASE=""
 SCOPE_ID=""
 NOTE=""
 MODE="start"
+CONV_ITER=""
+SPEC_DIR=""
 
 if [[ $# -eq 0 ]]; then
   usage >&2
@@ -95,6 +108,16 @@ while [[ $# -gt 0 ]]; do
       MODE="$2"
       shift 2
       ;;
+    --convergence-iteration)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --convergence-iteration requires a value" >&2; exit 2; }
+      CONV_ITER="$2"
+      shift 2
+      ;;
+    --spec-dir)
+      [[ $# -ge 2 ]] || { echo "state-snapshot: --spec-dir requires a value" >&2; exit 2; }
+      SPEC_DIR="$2"
+      shift 2
+      ;;
     *)
       echo "state-snapshot: unknown argument: $1" >&2
       usage >&2
@@ -102,6 +125,24 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Pair check: --convergence-iteration and --spec-dir must be supplied together.
+if [[ -n "$CONV_ITER" && -z "$SPEC_DIR" ]]; then
+  echo "state-snapshot: --convergence-iteration requires --spec-dir" >&2
+  exit 2
+fi
+if [[ -n "$SPEC_DIR" && -z "$CONV_ITER" ]]; then
+  echo "state-snapshot: --spec-dir requires --convergence-iteration" >&2
+  exit 2
+fi
+
+# Validate --convergence-iteration is a non-negative integer.
+if [[ -n "$CONV_ITER" ]]; then
+  if ! [[ "$CONV_ITER" =~ ^[0-9]+$ ]]; then
+    echo "state-snapshot: --convergence-iteration must be a non-negative integer (got: $CONV_ITER)" >&2
+    exit 2
+  fi
+fi
 
 if [[ -z "$PHASE" ]]; then
   echo "state-snapshot: --phase is required" >&2
@@ -201,8 +242,47 @@ jq \
   ' "$SESSION_FILE" > "$TMP_FILE"
 
 mv "$TMP_FILE" "$SESSION_FILE"
+
+# --- Convergence loop update (Gate G082) -----------------------------------
+#
+# When both --convergence-iteration and --spec-dir are supplied, additively
+# update the `convergenceLoops[]` array entry keyed by (specDir, agent).
+# If an entry for that key already exists, replace its `iterationCount` and
+# `lastUpdated`. Otherwise append a new entry. Other entries (for other
+# specs or other agents) are NEVER touched.
+#
+# This array is consumed by `bubbles/scripts/convergence-cap-guard.sh`
+# which enforces `maxConvergenceIterations` (default 10) per Gate G082.
+if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
+  CONV_TMP="$(mktemp)"
+  trap 'rm -f "$CONV_TMP"' EXIT INT TERM
+  jq \
+    --arg specDir "$SPEC_DIR" \
+    --arg agent "$AGENT_NAME" \
+    --argjson iterationCount "$CONV_ITER" \
+    --arg lastUpdated "$TIMESTAMP" \
+    '
+    . as $root
+    | ($root.convergenceLoops // []) as $loops
+    | ([ $loops[]
+         | select(.specDir != $specDir or .agent != $agent)
+       ] + [{
+         specDir: $specDir,
+         agent: $agent,
+         iterationCount: $iterationCount,
+         lastUpdated: $lastUpdated
+       }]) as $updated
+    | $root + { convergenceLoops: $updated }
+    ' "$SESSION_FILE" > "$CONV_TMP"
+  mv "$CONV_TMP" "$SESSION_FILE"
+fi
 trap - EXIT INT TERM
 
 # Echo a one-line summary to stdout for orchestrator log capture.
-printf 'state-snapshot: turnNumber=%s mode=%s phase=%s scopeId=%s agent=%s\n' \
-  "$NEXT_TURN" "$MODE" "$PHASE" "${SCOPE_ID:-null}" "$AGENT_NAME"
+if [[ -n "$CONV_ITER" && -n "$SPEC_DIR" ]]; then
+  printf 'state-snapshot: turnNumber=%s mode=%s phase=%s scopeId=%s agent=%s convergenceIteration=%s specDir=%s\n' \
+    "$NEXT_TURN" "$MODE" "$PHASE" "${SCOPE_ID:-null}" "$AGENT_NAME" "$CONV_ITER" "$SPEC_DIR"
+else
+  printf 'state-snapshot: turnNumber=%s mode=%s phase=%s scopeId=%s agent=%s\n' \
+    "$NEXT_TURN" "$MODE" "$PHASE" "${SCOPE_ID:-null}" "$AGENT_NAME"
+fi
