@@ -538,7 +538,7 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		       COALESCE(a.topics::text, '[]'), a.created_at,
 		       1 - (a.embedding <=> $1::vector) AS similarity,
 		       aas.current_rating, aas.times_used, COALESCE(aas.tags, '{}'),
-		       a.domain_data
+		       a.domain_data, a.metadata
 		FROM artifacts a
 		LEFT JOIN artifact_annotation_summary aas ON aas.artifact_id = a.id
 		WHERE a.embedding IS NOT NULL`
@@ -639,13 +639,15 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 		var annTags []string
 
 		var domainData []byte
+		var metadata []byte
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
 			&r.SourceURL, &topicsStr, &createdAt, &similarity,
-			&annRating, &annTimesUsed, &annTags, &domainData); err != nil {
+			&annRating, &annTimesUsed, &annTags, &domainData, &metadata); err != nil {
 			continue
 		}
 
 		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.QFCard = renderQFSearchCard(r.ArtifactType, r.Title, r.SourceURL, metadata, createdAt)
 		r.Rating = annRating
 		if annTimesUsed != nil {
 			r.TimesUsed = *annTimesUsed
@@ -840,7 +842,7 @@ func (s *SearchEngine) graphExpand(ctx context.Context, primaryResults []SearchR
 	// Find connected artifacts via edges (both directions)
 	rows, err := s.Pool.Query(ctx, `
 		SELECT DISTINCT a.id, a.title, a.artifact_type, COALESCE(a.summary, ''),
-		       COALESCE(a.source_url, ''), a.created_at, e.edge_type, e.weight
+		       COALESCE(a.source_url, ''), a.created_at, e.edge_type, e.weight, a.metadata
 		FROM edges e
 		JOIN artifacts a ON (
 			(e.dst_type = 'artifact' AND e.dst_id = a.id) OR
@@ -869,9 +871,10 @@ func (s *SearchEngine) graphExpand(ctx context.Context, primaryResults []SearchR
 		var createdAt time.Time
 		var edgeType string
 		var weight float64
+		var metadata []byte
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &createdAt, &edgeType, &weight); err != nil {
+			&r.SourceURL, &createdAt, &edgeType, &weight, &metadata); err != nil {
 			continue
 		}
 
@@ -881,6 +884,7 @@ func (s *SearchEngine) graphExpand(ctx context.Context, primaryResults []SearchR
 		seen[r.ArtifactID] = true
 
 		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.QFCard = renderQFSearchCard(r.ArtifactType, r.Title, r.SourceURL, metadata, createdAt)
 		r.Relevance = "graph"
 		r.Explanation = fmt.Sprintf("Connected via %s (weight: %.2f)", edgeType, weight)
 
@@ -901,7 +905,8 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 	rows, err := s.Pool.Query(ctx, `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
 		       COALESCE(topics::text, '[]'), created_at,
-		       similarity(title, $1) AS sim
+		       similarity(title, $1) AS sim,
+		       metadata
 		FROM artifacts
 		WHERE title % $1
 		   OR title ILIKE '%' || $2 || '%' ESCAPE '\'
@@ -928,13 +933,15 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 		var topicsStr string
 		var sim float64
 		var createdAt time.Time
+		var metadata []byte
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &topicsStr, &createdAt, &sim); err != nil {
+			&r.SourceURL, &topicsStr, &createdAt, &sim, &metadata); err != nil {
 			continue
 		}
 
 		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.QFCard = renderQFSearchCard(r.ArtifactType, r.Title, r.SourceURL, metadata, createdAt)
 		r.Relevance = "medium"
 		r.Explanation = "Text match"
 
@@ -959,7 +966,7 @@ func (s *SearchEngine) textSearch(ctx context.Context, req SearchRequest) ([]Sea
 func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) ([]SearchResult, int, error) {
 	query := `
 		SELECT id, title, artifact_type, COALESCE(summary, ''), COALESCE(source_url, ''),
-		       COALESCE(topics::text, '[]'), created_at
+		       COALESCE(topics::text, '[]'), created_at, metadata
 		FROM artifacts
 		WHERE 1=1`
 
@@ -1010,13 +1017,15 @@ func (s *SearchEngine) timeRangeSearch(ctx context.Context, req SearchRequest) (
 		var r SearchResult
 		var topicsStr string
 		var createdAt time.Time
+		var metadata []byte
 
 		if err := rows.Scan(&r.ArtifactID, &r.Title, &r.ArtifactType, &r.Summary,
-			&r.SourceURL, &topicsStr, &createdAt); err != nil {
+			&r.SourceURL, &topicsStr, &createdAt, &metadata); err != nil {
 			continue
 		}
 
 		r.CreatedAt = createdAt.Format(time.RFC3339)
+		r.QFCard = renderQFSearchCard(r.ArtifactType, r.Title, r.SourceURL, metadata, createdAt)
 		r.Relevance = "recent"
 		r.Explanation = "Time-range match"
 

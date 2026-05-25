@@ -255,6 +255,38 @@ func TestSignedDeepLinkSelectionUsesSignedRefetchesExpiredAndFallsBackOnlyWhenUn
 		}
 	})
 
+	t.Run("unsigned_only_when_packet_has_no_signed_url", func(t *testing.T) {
+		metrics.QFDeepLinkRenderTotal.Reset()
+		env := renderableEnvelope()
+		env.PacketURLSigned = ""
+		env.SignatureExpiresAt = ""
+		artifact := artifactFromEnvelope(t, env)
+		called := false
+
+		card, err := RenderPacketCard(context.Background(), artifact, RenderOptions{
+			Surface:                  SurfaceSearch,
+			DeepLinkSigningSupported: true,
+			Now:                      fixedNow,
+			FetchPacket: func(context.Context, string) (QFDecisionPacketEnvelope, error) {
+				called = true
+				return QFDecisionPacketEnvelope{}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RenderPacketCard returned error: %v", err)
+		}
+		if called {
+			t.Fatal("FetchPacket must not be called when the packet has no signed URL to refresh")
+		}
+		if card.DeepLink.URL != env.DeepLink || card.DeepLink.Status != DeepLinkStatusUnsignedOnly {
+			t.Fatalf("deep link = %#v, want unsigned_only %q", card.DeepLink, env.DeepLink)
+		}
+		got := testutil.ToFloat64(metrics.QFDeepLinkRenderTotal.WithLabelValues(SurfaceSearch, DeepLinkStatusUnsignedOnly))
+		if got != 1 {
+			t.Fatalf("unsigned_only metric = %v, want 1", got)
+		}
+	})
+
 	t.Run("unsigned_only_when_capability_disables_signing", func(t *testing.T) {
 		metrics.QFDeepLinkRenderTotal.Reset()
 		env := renderableEnvelope()
