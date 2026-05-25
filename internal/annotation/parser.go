@@ -2,6 +2,7 @@ package annotation
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -57,6 +58,28 @@ func InteractionPhrases() []string {
 	}
 }
 
+// sortedInteractionPhrases returns the full interactionMap key set in a
+// deterministic order: longest phrase first, alphabetical as tiebreaker.
+// Parse() iterates this list (NOT the raw map) so multi-phrase inputs
+// resolve to a stable InteractionType regardless of Go's randomized map
+// iteration. Longer-first ordering ensures the most-specific match wins
+// when one phrase is a strict substring of another (the current key set
+// does not contain such pairs, but the policy is defensive). The result
+// is cached at package init time.
+var sortedInteractionPhrasesList = func() []string {
+	keys := make([]string, 0, len(interactionMap))
+	for k := range interactionMap {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
+	return keys
+}()
+
 // Parse extracts structured annotation components from a freeform string.
 // Example: "4/5 made it #weeknight needs more garlic"
 // → rating:4, interaction:made_it, tags:[weeknight], note:"needs more garlic"
@@ -87,11 +110,16 @@ func Parse(input string) ParsedAnnotation {
 	}
 	remaining = tagRe.ReplaceAllString(remaining, "")
 
-	// Extract interaction type
+	// Extract interaction type. Iterate the deterministic
+	// sortedInteractionPhrasesList (longest-first, alphabetical
+	// tiebreaker) — NOT the raw interactionMap — so multi-phrase
+	// inputs like "made it then tried it" always resolve to the
+	// same InteractionType regardless of Go's randomized map
+	// iteration order. See BUG-027-002 for the regression history.
 	lower := strings.ToLower(remaining)
-	for phrase, itype := range interactionMap {
+	for _, phrase := range sortedInteractionPhrasesList {
 		if strings.Contains(lower, phrase) {
-			result.InteractionType = itype
+			result.InteractionType = interactionMap[phrase]
 			// Remove the matched phrase from remaining
 			idx := strings.Index(lower, phrase)
 			remaining = remaining[:idx] + remaining[idx+len(phrase):]

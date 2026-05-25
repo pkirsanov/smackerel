@@ -386,6 +386,18 @@
       "runEndedAt": "2026-05-23T00:00:00Z",
       "action": "security_phase_attestation_actor_source_segment_closed",
       "summary": "Security phase attestation: the MIT-027-TRACE-001 security backlog covering actor_source claim-binding on the annotation entry-path was CLOSED on 2026-05-10 by spec 044 Scope 02 (entry [7]); the Telegram-bridge end-to-end segment was CLOSED on 2026-05-11 by spec 044 Scope 03 (entry [8]); the NATS-bus-segment was CLOSED on 2026-05-11 by spec 044 spec-level finalize as transitive_via_api_entry_defense (entry [9]). Defensive rejection at AnnotationHandlers.CreateAnnotation rejects body-supplied actor_source / actor_id in production BEFORE any Store call. Tests: tests/integration/auth_annotation_test.go::{TestAnnotation_BodyActorSourceInProduction_Rejected, TestAnnotation_BodyActorIDInProduction_Rejected} + tests/integration/auth_telegram_e2e_test.go::TestTelegramBridge_BodyClaimedActorRejected. No new security findings. Closed by bug packet BUG-027-001-reconcile-artifact-drift."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "stabilize"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T05:00:00Z",
+      "runEndedAt": "2026-05-25T05:58:00Z",
+      "action": "stabilize_sweep_r3_closure_via_BUG_027_002",
+      "summary": "Stochastic-quality-sweep sweep-2026-05-25-r10 round 3 (parent-expanded stabilize-to-doc): bubbles.workflow stabilize trigger surfaced TWO latent stability defects in the spec-027 annotation pipeline. F1 — parser non-determinism for multi-phrase inputs (range interactionMap is randomized; multi-phrase inputs like 'made it then tried it later' returned different InteractionType values across runs). F2 — lost-update race on artifacts.relevance_score (updateRelevanceFromAnnotation did SELECT → compute → UPDATE without serialization; concurrent annotations against the same artifact dropped deltas). Both findings closed by bug packet BUG-027-002-annotation-stability-fixes: F1 replaced map iteration with cached sortedInteractionPhrasesList (length-desc + alphabetical-tiebreaker sort in internal/annotation/parser.go); F2 collapsed read-modify-write into a single atomic UPDATE artifacts SET relevance_score = LEAST(GREATEST(COALESCE(relevance_score, 0.5) + $1, 0), 1) WHERE id = $2 RETURNING relevance_score (internal/intelligence/annotations.go) plus exported ApplyAnnotationRelevanceForTest wrapper for race-regression integration tests. Tests: TestParse_MultiPhrase_DeterministicOrder (5000 iterations × 3 cases) + TestParse_SingleInteractionStillWorks + TestIntelligenceAnnotation_AtomicConcurrentDeltas + TestIntelligenceAnnotation_AtomicConcurrentClampsAtOne. go test -count=1 -race ./internal/annotation/... ./internal/intelligence/... PASS. ./smackerel.sh build + ./smackerel.sh check CLEAN. Spec 027 status remained 'done' throughout — only executionHistory and resolvedBugs[] appended."
     }
   ],
   "activeBugs": [],
@@ -403,10 +415,24 @@
       "parentRound": 21,
       "executionModel": "parent-expanded-child-mode",
       "summary": "Stochastic sweep round 21 (improve-existing) reconciled spec 027 artifact drift to current state-transition-guard, traceability-guard, and artifact-lint standards. Closed 53 state-transition-guard BLOCKs (Check 5A SLA stress, Check 6 G022 4 missing phases, Check 6B G022-ext 3 impersonations, Check 8A G016 24 regression-E2E planning items across 8 scopes, Check 8B 3 consumer-trace items in Scope 4, G053 Code Diff Evidence, G040 deferral language, Check 17 commit prefix) and 11 traceability-guard failures (10 G068 unmapped Gherkin scenarios + 1 rollup). All resolution was additive artifact reconciliation; zero runtime code, zero test code, and zero production-test files modified. Spec 027 status remained 'done' throughout."
+    },
+    {
+      "bugId": "BUG-027-002",
+      "slug": "annotation-stability-fixes",
+      "folder": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes",
+      "status": "resolved",
+      "openedAt": "2026-05-25T05:00:00Z",
+      "resolvedAt": "2026-05-25T05:58:00Z",
+      "resolvedBy": "bubbles.workflow",
+      "workflowMode": "bugfix-fastlane",
+      "parentSweepId": "sweep-2026-05-25-r10",
+      "parentRound": 3,
+      "executionModel": "parent-expanded-child-mode",
+      "summary": "Stochastic sweep round 3 (parent-expanded stabilize-to-doc) closed two latent stability defects in the annotation pipeline: F1 — parser non-determinism for multi-phrase inputs (fixed by cached length-desc + alphabetical-tiebreaker sortedInteractionPhrasesList in internal/annotation/parser.go); F2 — lost-update race on artifacts.relevance_score (fixed by single atomic UPDATE with in-SQL LEAST/GREATEST/COALESCE clamp in internal/intelligence/annotations.go plus exported ApplyAnnotationRelevanceForTest wrapper). Persistent regression coverage added: TestParse_MultiPhrase_DeterministicOrder + TestParse_SingleInteractionStillWorks (unit, -race) and TestIntelligenceAnnotation_AtomicConcurrentDeltas + TestIntelligenceAnnotation_AtomicConcurrentClampsAtOne (integration, -race). Spec 027 status / certification fields untouched; only executionHistory and resolvedBugs[] appended."
     }
   ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-23T00:00:00Z",
+  "lastUpdatedAt": "2026-05-25T05:58:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",

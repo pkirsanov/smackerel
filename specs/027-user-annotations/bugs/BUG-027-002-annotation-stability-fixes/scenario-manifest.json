@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "specId": "027-user-annotations",
+  "bugId": "BUG-027-002-annotation-stability-fixes",
+  "featureDir": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes",
+  "generatedBy": "bubbles.workflow",
+  "generatedAt": "2026-05-25T05:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-027-002-001",
+      "name": "Parser is deterministic for multi-phrase inputs",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/scopes.md",
+      "requiredTestType": ["unit", "regression"],
+      "linkedTests": [
+        {
+          "file": "internal/annotation/parser_test.go",
+          "function": "TestParse_MultiPhrase_DeterministicOrder"
+        },
+        {
+          "file": "internal/annotation/parser.go",
+          "function": "Parse"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Test Evidence"
+        },
+        {
+          "type": "implementation-grep",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Implementation Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-027-002-001",
+        "scope-1::DOD-BUG-027-002-002",
+        "scope-1::DOD-BUG-027-002-003"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-027-002-002",
+      "name": "Parser preserves single-phrase backward compatibility",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/scopes.md",
+      "requiredTestType": ["unit", "regression"],
+      "linkedTests": [
+        {
+          "file": "internal/annotation/parser_test.go",
+          "function": "TestParse_SingleInteractionStillWorks"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Test Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-027-002-004"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-027-002-003",
+      "name": "Concurrent annotation deltas are not lost",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/scopes.md",
+      "requiredTestType": ["integration", "regression"],
+      "linkedTests": [
+        {
+          "file": "tests/integration/intelligence_annotation_race_test.go",
+          "function": "TestIntelligenceAnnotation_AtomicConcurrentDeltas"
+        },
+        {
+          "file": "internal/intelligence/annotations.go",
+          "function": "updateRelevanceFromAnnotation"
+        },
+        {
+          "file": "internal/intelligence/annotations.go",
+          "function": "ApplyAnnotationRelevanceForTest"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-integration-pass",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Test Evidence"
+        },
+        {
+          "type": "implementation-grep",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Implementation Evidence"
+        },
+        {
+          "type": "code-diff",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Code Diff Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-027-002-005",
+        "scope-1::DOD-BUG-027-002-006",
+        "scope-1::DOD-BUG-027-002-007",
+        "scope-1::DOD-BUG-027-002-008"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-027-002-004",
+      "name": "Concurrent positive deltas clamp at 1.0 in SQL",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/scopes.md",
+      "requiredTestType": ["integration", "regression"],
+      "linkedTests": [
+        {
+          "file": "tests/integration/intelligence_annotation_race_test.go",
+          "function": "TestIntelligenceAnnotation_AtomicConcurrentClampsAtOne"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-integration-pass",
+          "location": "specs/027-user-annotations/bugs/BUG-027-002-annotation-stability-fixes/report.md::Test Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-027-002-009"
+      ]
+    }
+  ]
+}
