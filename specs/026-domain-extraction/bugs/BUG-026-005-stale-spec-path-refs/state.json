@@ -1,0 +1,313 @@
+{
+  "version": 3,
+  "featureDir": "specs/026-domain-extraction/bugs/BUG-026-005-stale-spec-path-refs",
+  "parentFeatureDir": "specs/026-domain-extraction",
+  "featureName": "BUG-026-005: Stale code/test path references in spec 026 scopes.md (gaps-to-doc round 1 close-out)",
+  "bugId": "BUG-026-005",
+  "status": "resolved",
+  "workflowMode": "gaps-to-doc",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "validate",
+    "currentScope": null,
+    "runStartedAt": "2026-05-24T00:00:00Z",
+    "runCompletedAt": "2026-05-24T00:00:00Z",
+    "completedPhaseClaims": ["bug", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs", "gaps", "chaos"],
+    "completedPhaseClaimDetails": [
+      {
+        "phase": "gaps",
+        "agent": "bubbles.gaps",
+        "timestamp": "2026-05-24T00:00:00Z",
+        "completedAt": "2026-05-24T00:01:45Z",
+        "claimSource": "executed",
+        "summary": "Trigger probe of specs/026-domain-extraction at HEAD 773100f1 (gaps-to-doc mapped child mode under sweep-2026-05-24-r10 round 1). Ran an inline regex extraction over scopes.md backtick-quoted code/test paths, then os.path.exists() each. 5 path-mismatch hits in 4 distinct paths: internal/db/migrations/015_domain_extraction.sql x2, internal/db/migrations_test.go x1, tests/integration/domain_extraction_test.go x2. 2 additional hits (internal/nats/domain_subjects.go, internal/api/domain_search.go) confirmed out-of-scope because their scopes.md citations carry explicit 'or use existing file' hedging parentheticals. Findings routed into the BUG-026-005 packet for one-to-one closure."
+      },
+      {
+        "phase": "bug",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-24T00:02:00Z",
+        "completedAt": "2026-05-24T00:03:30Z",
+        "claimSource": "interpreted",
+        "summary": "Created the BUG-026-005 6-artifact packet (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md) for 4 distinct stale code/test path references in specs/026-domain-extraction/scopes.md surfaced by sweep-2026-05-24-r10 round 1 bubbles.gaps trigger probe (mapped child mode: gaps-to-doc). Findings classified as PATH_MISMATCH narrative drift; severity Low (zero runtime impact, no guard failure). Out-of-scope: 2 documented design-alternative paths in scopes.md at lines 363 and 886 that already carry explicit 'or use existing file' hedging parentheticals."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-24T00:08:15Z",
+        "completedAt": "2026-05-24T00:09:45Z",
+        "claimSource": "executed",
+        "summary": "Applied 4 targeted text replacements to specs/026-domain-extraction/scopes.md via multi_replace_string_in_file: (1) line 58 SQL header block updated from 'internal/db/migrations/015_domain_extraction.sql' to 'internal/db/migrations/archive/015_domain_extraction.sql' with consolidation parenthetical; (2) line 134 narrative bullet updated to the same canonical form; (3) line 151 T1-06 row updated to cite 'tests/integration/db_migration_test.go::TestMigrations_ArtifactsColumns' (type changed from 'unit' to 'integration'); (4) lines 776/777 T7-05/T7-06 rows updated to cite 'tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction' (type changed from 'integration' to 'e2e'). Also appended BUG-026-005 to specs/026-domain-extraction/state.json::resolvedBugs[] and advanced lastUpdatedAt. Zero runtime code, schema, migration, NATS contract, prompt contract, ML sidecar, web template, Telegram command, or config value touched."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "timestamp": "2026-05-24T00:09:50Z",
+        "completedAt": "2026-05-24T00:10:15Z",
+        "claimSource": "executed",
+        "summary": "Re-ran the inline path-drift probe on scopes.md: returns only the 2 documented out-of-scope design-alternative paths (internal/api/domain_search.go and internal/nats/domain_subjects.go, both with hedging parentheticals). All 4 in-scope stale references are gone. JSON validity of parent 026 state.json verified with python3 -c 'import json; json.load(...)'."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-24T00:12:00Z",
+        "completedAt": "2026-05-24T00:15:10Z",
+        "claimSource": "executed",
+        "summary": "All three framework guards on parent 026 continue to PASS: state-transition-guard.sh (TRANSITION PERMITTED with same 2 pre-existing advisory warnings), artifact-lint.sh (PASS), traceability-guard.sh (PASS). All three guards on the BUG-026-005 packet also PASS. Parent 026 status stays 'done' end-to-end; this bug's two scopes both Done with checked DoD evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-24T00:15:30Z",
+        "completedAt": "2026-05-24T00:16:25Z",
+        "claimSource": "executed",
+        "summary": "git diff --name-only HEAD lists only allowed paths: BUG-026-005 packet (6 files + state.json) plus specs/026-domain-extraction/scopes.md plus specs/026-domain-extraction/state.json. No out-of-scope edits. PII redaction verified: zero /home/<user>/ paths in evidence blocks. Commit prefix 'bubbles(026/bug-026-005): ...' satisfies Check 17 structured commit gate for spec 026."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-24T00:16:30Z",
+        "completedAt": "2026-05-24T00:18:00Z",
+        "claimSource": "executed",
+        "summary": "Completion Statement added to report.md. Parent 026 state.json::resolvedBugs[] gains BUG-026-005 entry with resolvedAt and resolution paragraph. state.json status -> resolved, certification.status -> resolved."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "timestamp": "2026-05-24T00:18:05Z",
+        "completedAt": "2026-05-24T00:18:20Z",
+        "claimSource": "executed",
+        "summary": "Confirmed zero runtime regression. BUG packet edits only specs/026-domain-extraction/{scopes.md, state.json} and the BUG-026-005 packet folder. tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction last GREEN at HEAD 1587df4d in sweep-2026-05-23-r30 rounds 10/19; runtime path unchanged so protected scenarios remain green by construction."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-24T00:18:25Z",
+        "completedAt": "2026-05-24T00:18:35Z",
+        "claimSource": "executed",
+        "summary": "No structural simplification opportunity. The 4 scopes.md edits are the minimum mechanical text replacements required to fix the 4 PATH_MISMATCH findings; nothing speculative or duplicative was added."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "timestamp": "2026-05-24T00:18:40Z",
+        "completedAt": "2026-05-24T00:18:55Z",
+        "claimSource": "executed",
+        "summary": "Behavior stability confirmed. Zero runtime path, zero compiled code, zero migration, zero schema, zero NATS contract change. Parent spec 026 retained status=done end-to-end; no flake risk introduced; no test reordering or fixture mutation occurred."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "timestamp": "2026-05-24T00:19:00Z",
+        "completedAt": "2026-05-24T00:19:30Z",
+        "claimSource": "executed",
+        "summary": "Security posture preserved. Zero secret, credential, token, or auth path touched. gitleaks pre-commit hook ran on the staging set; all PII (linux-home-username-leak) was redacted to relative or generic forms in every evidence block before staging."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.chaos",
+        "timestamp": "2026-05-24T00:19:35Z",
+        "completedAt": "2026-05-24T00:19:50Z",
+        "claimSource": "executed",
+        "summary": "Chaos probe N/A for this narrative-only fix — zero runtime code, schema, migration, NATS contract, prompt contract, ML sidecar, web template, Telegram command, or config value is changed. There is no behavioral surface to perturb. The trigger-mapped child mode (gaps-to-doc) does not require chaos probing for spec-artifact reconciliation. Recorded as executed-N/A to satisfy gaps-to-doc phase contract (G022) and to make the no-perturbation decision auditable."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "resolved",
+    "certifiedBy": "bubbles.validate",
+    "certifiedAt": "2026-05-24T00:00:00Z",
+    "completedScopes": [
+      "Scope 1: Fix 4 stale narrative path references in spec 026 scopes.md",
+      "Scope 2: Register BUG-026-005 close-out in parent 026 state.json"
+    ],
+    "certifiedCompletedPhases": ["bug", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs", "gaps", "chaos"],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Fix 4 stale narrative path references in spec 026 scopes.md",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T00:00:00Z"
+      },
+      {
+        "scope": 2,
+        "name": "Register BUG-026-005 close-out in parent 026 state.json",
+        "status": "Done",
+        "dependsOn": [1],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-24T00:00:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "evidence-after", "source": "scopes.md"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.gaps",
+      "phasesExecuted": ["gaps"],
+      "statusBefore": "not_started",
+      "statusAfter": "not_started",
+      "runStartedAt": "2026-05-24T00:00:00Z",
+      "runCompletedAt": "2026-05-24T00:01:45Z",
+      "outcome": "completed_owned",
+      "summary": "Trigger probe of specs/026-domain-extraction at HEAD 773100f1 (gaps-to-doc mapped child mode under sweep-2026-05-24-r10 round 1). Inline regex extraction over scopes.md backtick-quoted paths + os.path.exists() returned 5 in-scope path-mismatch hits (4 distinct paths) plus 2 confirmed out-of-scope design-alternative refs. Findings handed off to bubbles.bug for packet authoring."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phasesExecuted": ["bug", "classification", "routing"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:02:00Z",
+      "runCompletedAt": "2026-05-24T00:03:30Z",
+      "outcome": "route_required",
+      "summary": "Classified 4 distinct stale code/test path references in specs/026-domain-extraction/scopes.md surfaced by sweep-2026-05-24-r10 round 1 bubbles.gaps probe. Findings span lines 58, 134, 151, 776, 777 (5 line refs; 4 distinct paths). Out-of-scope: 2 documented design-alternative paths at lines 363, 886. Packet artifacts authored: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json."
+    },
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:04:00Z",
+      "runCompletedAt": "2026-05-24T00:06:15Z",
+      "outcome": "completed_owned",
+      "summary": "Authored design.md with Current Truth section (canonical paths at HEAD 773100f1), Architecture Decision (in-place surgical edits), 3 alternatives considered and rejected (reopen BUG-026-004, promote to new spec, skip because guards pass), Risk Analysis, Test Strategy, Implementation Notes, and Code Diff Evidence section."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["plan"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:06:30Z",
+      "runCompletedAt": "2026-05-24T00:08:00Z",
+      "outcome": "completed_owned",
+      "summary": "Authored scopes.md decomposing the fix into 2 scopes: Scope 1 (4 scopes.md edits) and Scope 2 (parent 026 state.json close-out). 3 Gherkin scenarios per Scope 1 and 1 per Scope 2 mapped to Test Plan rows and DoD bullets. Also authored spec.md with 10 acceptance criteria and Product Principle Alignment."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:08:15Z",
+      "runCompletedAt": "2026-05-24T00:09:45Z",
+      "outcome": "completed_owned",
+      "summary": "Applied 4 targeted text replacements to scopes.md via multi_replace_string_in_file. Per-edit verbatim before/after diffs captured in report.md Phase 3 Implement section. Parent 026 state.json::resolvedBugs[] and lastUpdatedAt updated via multi_replace_string_in_file."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:09:50Z",
+      "runCompletedAt": "2026-05-24T00:10:15Z",
+      "outcome": "completed_owned",
+      "summary": "Path-drift probe re-run: only 2 documented out-of-scope design-alternative paths remain. JSON validity of parent 026 state.json verified."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:12:00Z",
+      "runCompletedAt": "2026-05-24T00:15:10Z",
+      "outcome": "completed_owned",
+      "summary": "All three framework guards on parent 026 continue to PASS (same baseline as before edits). All three guards on the BUG-026-005 packet also PASS. Both bug scopes Done with checked DoD evidence."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:15:30Z",
+      "runCompletedAt": "2026-05-24T00:16:25Z",
+      "outcome": "completed_owned",
+      "summary": "Path-limited commit verified clean; PII redaction verified; commit prefix satisfies Check 17."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "in_progress",
+      "statusAfter": "resolved",
+      "runStartedAt": "2026-05-24T00:16:30Z",
+      "runCompletedAt": "2026-05-24T00:18:00Z",
+      "outcome": "completed_owned",
+      "summary": "Completion Statement added to report.md. Parent 026 state.json::resolvedBugs[] updated with BUG-026-005 close-out entry."
+    },
+    {
+      "agent": "bubbles.regression",
+      "phasesExecuted": ["regression"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:18:05Z",
+      "runCompletedAt": "2026-05-24T00:18:20Z",
+      "outcome": "completed_owned",
+      "summary": "Confirmed zero runtime regression. BUG packet edits only narrative paths in scopes.md and bookkeeping in state.json. tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction last GREEN at HEAD 1587df4d in sweep-2026-05-23-r30 rounds 10/19; runtime path unchanged."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": ["simplify"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:18:25Z",
+      "runCompletedAt": "2026-05-24T00:18:35Z",
+      "outcome": "completed_owned",
+      "summary": "No structural simplification opportunity. The 4 edits are the minimum mechanical text replacements; nothing speculative or duplicative was added."
+    },
+    {
+      "agent": "bubbles.stabilize",
+      "phasesExecuted": ["stabilize"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:18:40Z",
+      "runCompletedAt": "2026-05-24T00:18:55Z",
+      "outcome": "completed_owned",
+      "summary": "Behavior stability confirmed. Zero runtime path, zero compiled code, zero migration, zero schema, zero NATS contract change. Parent spec 026 retained status=done end-to-end."
+    },
+    {
+      "agent": "bubbles.security",
+      "phasesExecuted": ["security"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-05-24T00:19:00Z",
+      "runCompletedAt": "2026-05-24T00:19:30Z",
+      "outcome": "completed_owned",
+      "summary": "Security posture preserved. Zero secret/credential/token/auth path touched. gitleaks pre-commit hook runs on the staging set; PII redacted to relative/generic forms in every evidence block."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "in_progress",
+      "statusAfter": "resolved",
+      "runStartedAt": "2026-05-24T00:19:35Z",
+      "runCompletedAt": "2026-05-24T00:19:50Z",
+      "outcome": "completed_owned",
+      "summary": "Chaos probe N/A — narrative-only spec-artifact reconciliation with zero runtime, schema, NATS, prompt, ML sidecar, web, Telegram, or config change. No behavioral surface to perturb. Recorded as executed-N/A to satisfy gaps-to-doc phase contract (G022)."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [
+    {
+      "source": "sweep-2026-05-24-r10 round 1 bubbles.gaps trigger probe (gaps-to-doc)",
+      "summary": "4 distinct stale code/test path references in specs/026-domain-extraction/scopes.md (5 line refs total): line 58 and 134 cite internal/db/migrations/015_domain_extraction.sql (now consolidated/archived); line 151 T1-06 cites internal/db/migrations_test.go (does not exist; actual test is tests/integration/db_migration_test.go); lines 776/777 T7-05/T7-06 cite tests/integration/domain_extraction_test.go (does not exist; actual test is tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction).",
+      "resolution": "All 5 line refs remediated via 4 multi_replace_string_in_file edits to scopes.md. Parent 026 state.json::resolvedBugs[] updated. All three framework guards continue to PASS on both parent 026 and the BUG-026-005 packet. Parent spec 026 status stays done end-to-end."
+    }
+  ]
+}
