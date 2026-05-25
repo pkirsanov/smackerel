@@ -227,8 +227,66 @@
         "governanceBaselineDrift": "CLEAN (16 STG BLOCKs all map to the 4 spec 041 carry-forward concerns documented in state.json — no new BLOCKs surfaced; Check 14 STUB substring at tests/e2e/qf_callback_signing_test.go:488 is the deliberate E2E_STUB_SHOULD_NOT_BE_CALLED_ON_SIGNATURE_FAILURE error-code literal classified false-positive in prior closeout)"
       },
       "note": "Devops surface for spec 041 (QF Companion Connector) probed end-to-end across 11 surfaces. QF integration is an outbound HTTP client — no hosted image, no extra service, no deploy-target adapter changes required. Build pipeline, deploy contract, compose wiring, SST env vars, tailnet-edge bind, rollback contract, and packet metadata preservation are all CLEAN. Single finding F1 was a one-line stale text in docs/Operations.md Scope 5 metric reference table describing the engagement-signal metric as a pre-MVP placeholder even though Scope 6 had delivered the transport — closed via R8-lightweight-parent-only-docs-edit (no bug packet, no spec status change). Spec 041 remains done_with_concerns with the existing 4 carry-forward concerns untouched. State-transition-guard reports 16 BLOCKs all mapping to documented carry-forward concerns (no new BLOCKs). Round counts as 1 finding discovered + 1 finding closed."
+    },
+    {
+      "round": 5,
+      "spec": "specs/013-guesthost-connector",
+      "trigger": "stabilize",
+      "mappedMode": "stabilize-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T08:00:00Z",
+      "completedAt": "2026-05-25T09:04:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 1,
+      "findingsClosedThisRound": 1,
+      "findingClasses": [
+        "F1: HospitalityLinker counter mutations not idempotent under NATS redelivery — IncrementStay, IncrementBookings, UpdateIssueCount called unconditionally from linkBooking/linkTask while artifacts.processed consumer is AckPolicy=AckExplicitPolicy AckWait=30s MaxDeliver>1; AckWait expiry, crash-before-ack, and Nak retry silently inflate guests.total_stays/total_spend, properties.total_bookings/total_revenue, properties.issue_count with no log signal"
+      ],
+      "bugsSpawned": 1,
+      "bugId": "BUG-013-001-hospitality-linker-counter-idempotency",
+      "bugFinalStatus": "done",
+      "guardsClean": true,
+      "guardsCleanCarryForwardNote": "Parent spec 013 state-transition-guard shows 45 PRE-EXISTING carry-forward BLOCKs (G060/G068 Gherkin fidelity, G022 reserved-phase impersonation in pre-G022 executionHistory entries, G028 stub integration tests deliberately scaffolded, G053 missing Code Diff Evidence in parent report, G040 deferral language hits, missing bubbles(013/...) commit prefix). All 45 pre-date the R5 round and pre-date the gate tightening that surfaces them. R5 introduces ZERO new BLOCKs on the bug packet itself. R5 commit message satisfies the missing bubbles(013/...) prefix going forward.",
+      "commits": ["7cd21cdd"],
+      "pushed": true,
+      "pushedTo": "origin/main",
+      "baselineHead": "0de1a3cca8ecb5c9dacc6e57da6161ac216da367",
+      "newHead": "__R5_NEWHEAD_PLACEHOLDER__",
+      "guardEvidence": {
+        "stateTransitionGuardBug": "PERMITTED (EXIT=0, 0 BLOCKs)",
+        "stateTransitionGuardParent": "45 carry-forward BLOCKs (PRE-EXISTING, documented above)",
+        "artifactLintBug": "PASSED",
+        "artifactLintParent": "PASSED",
+        "traceabilityGuardParent": "PASSED"
+      },
+      "implementationSurfaces": [
+        "internal/db/migrations/039_hospitality_counter_applications.sql (NEW: per-(artifact_id, op_kind) dedup ledger with op_kind CHECK constraint + applied_at index)",
+        "internal/graph/hospitality_linker.go (4 patches: errors + pgx/v5 imports; 3 op_kind constants; tryClaimCounterApplication helper using WITH ins AS (INSERT ... ON CONFLICT DO NOTHING RETURNING 1) SELECT EXISTS (SELECT 1 FROM ins); claim-gated IncrementStay + IncrementBookings in linkBooking and UpdateIssueCount in linkTask; 85 insertions / 8 deletions)",
+        "tests/integration/guesthost_counter_idempotency_test.go (NEW build-tagged //go:build integration: TestHospitalityLinker_BookingCounters_IdempotentOnRedelivery + TestHospitalityLinker_TaskIssueDelta_IdempotentOnRedelivery + TestHospitalityLinker_DifferentArtifactsApplyIndependently; ~290 lines)"
+      ],
+      "testExecution": {
+        "integration": "./smackerel.sh test integration --go-run TestHospitalityLinker_ -> 3 tests PASS (0.20s + 0.11s + 0.42s = 0.75s total) against live test stack; migration 039 applied automatically via //go:embed migrations/*.sql + schema_migrations advisory-lock-guarded runner; clean teardown (all volumes + network removed)",
+        "race": "go test -count=1 -race ./internal/graph/... -> PASS (1.049s)",
+        "build": "go build ./... -> exit 0; go vet ./internal/graph/... ./internal/db/... ./internal/pipeline/... -> 0 lines of output",
+        "integrationCompile": "go build -tags integration ./tests/integration/... && go vet -tags integration ./tests/integration/... -> OK"
+      },
+      "probeSurfaces": {
+        "natsConsumerConfig": "CLEAN (subscriber.go AckPolicy=AckExplicitPolicy AckWait=30s MaxDeliver>1 Nak-on-error dead-letter-on-exhaust)",
+        "baseLinkerEdgeWrites": "CLEAN (createEdgeWithMetadata ON CONFLICT DO UPDATE)",
+        "hospitalityLinkerEdgeWrites": "CLEAN (same ON CONFLICT pattern)",
+        "hospitalityLinkerBookingCounters": "FINDING-F1 (IncrementStay + IncrementBookings unconditional)",
+        "hospitalityLinkerTaskIssueDelta": "FINDING-F1 (UpdateIssueCount unconditional)",
+        "hospitalityLinkerReviewMetrics": "CLEAN (UpdateMetrics OVERWRITES — last-write-wins; no accumulation)",
+        "connectorCursorAdvancement": "CLEAN (CHAOS-013-R20-001/002 maxAllowedCursor clamp + sinceTime regression guard)",
+        "normalizerDedup": "CLEAN (content_hash + ON CONFLICT on artifacts unique key)",
+        "webServerResponseCaps": "CLEAN (MaxBytesReader + entity ID length cap from prior security audit)",
+        "goroutineUsage": "CLEAN (all work in caller goroutine; no internal goroutines)",
+        "existingStubIntegrationTests": "OUT-OF-SCOPE (5 STUB integration test files pre-existing carry-forward — not part of F1)"
+      },
+      "note": "HospitalityLinker counter mutations rendered idempotent under NATS at-least-once redelivery. Per-(artifact_id, op_kind) dedup ledger introduced via migration 039 + tryClaimCounterApplication helper using WITH ins AS (INSERT ... ON CONFLICT DO NOTHING RETURNING 1) SELECT EXISTS (SELECT 1 FROM ins). Edges remain unchanged (already idempotent via ON CONFLICT DO UPDATE). Three persistent integration regression tests committed: positive idempotency on booking (redelivery × 3 → counters land once), positive idempotency on task issue delta (redelivery × 3 → delta lands once), and adversarial inverse on independent artifacts (3 distinct artifacts × 2 deliveries each → counters accumulate to 3 NOT clamped to 1; proves dedup-ledger is correctly keyed on (artifact_id, op_kind) NOT just (op_kind)). Tests t.Fatal on missing DATABASE_URL (no silent skips, precedent BUG-027-002). Parent spec 013 carry-forward 45 STG BLOCKs are PRE-EXISTING governance drift documented under earlier round notes — NOT introduced by R5."
     }
   ],
-  "lastRoundCompleted": 4,
-  "lastUpdatedAt": "2026-05-25T08:20:00Z"
+  "lastRoundCompleted": 5,
+  "lastUpdatedAt": "2026-05-25T09:04:00Z"
 }
