@@ -249,7 +249,7 @@ replace_block "$repo_root/README.md" "GENERATED:FRAMEWORK_STATS_GATES_HEADING_ST
 
 block_temp=$(mktemp)
 cat <<EOF > "$block_temp"
-| [Workflow Modes](docs/guides/WORKFLOW_MODES.md) | All $workflow_mode_count workflow modes explained |
+<tr><td><a href="docs/guides/WORKFLOW_MODES.md">Workflow Modes</a></td><td>All $workflow_mode_count workflow modes explained</td></tr>
 EOF
 replace_block "$repo_root/README.md" "GENERATED:FRAMEWORK_STATS_DOCS_ROW_START" "GENERATED:FRAMEWORK_STATS_DOCS_ROW_END" "$block_temp"
 

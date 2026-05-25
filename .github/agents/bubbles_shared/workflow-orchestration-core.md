@@ -10,7 +10,7 @@ When execution discovers undocumented or improperly documented work, repair the 
 2. Existing folder but missing artifacts: invoke the owner chain to create the missing artifacts instead of letting downstream agents continue on partial docs.
 3. Existing artifacts but empty or skeletal content: treat that state as missing planning, not as a valid prerequisite.
 4. Placeholder, TODO, or stub behavior uncovered during execution: if the behavior is not already owned by an active feature, bug, or ops packet, promote it into one before allowing implementation or hardening to claim progress.
-5. UI-bearing work: when the promoted work has user-facing behavior, include `bubbles.ux` in the planning chain before design and plan.
+5. All implementation-capable planning work: invoke the canonical planning chain `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling.
 
 This protocol is mandatory for feature work, bug work, hardening, gaps, stabilize, improve-existing, redesign-existing, and iterate-triggered execution. Orchestrators must repair the planning deficit instead of stopping with advice to the user.
 
@@ -28,6 +28,8 @@ These requirements are enforced by planning readiness, G033 design readiness, Gh
 ## Review-To-Delivery Transition (MANDATORY)
 
 When a review agent (`bubbles.system-review`, `bubbles.code-review`, `bubbles.spec-review`) produces findings that require code changes, the transition from diagnostic findings to delivery work MUST follow this chain:
+
+**Spec-review severe-drift exception:** When `bubbles.spec-review` classifies a spec whose `state.json` status is `done` or legacy read-only `done_with_concerns` as `MAJOR_DRIFT` or `OBSOLETE`, the finding is a certified-spec freshness failure rather than an ordinary code-review defect. The orchestrator MUST invoke or parent-expand `bubbles.workflow mode=improve-existing` for that reviewed spec. This mirrors G033 design_readiness auto-escalation: invoke the owning workflow inline, resume only after the route is consumed, and stop only when that inline route itself reaches a terminal `blocked` or `route_required` result. Read-only docs-only/spec-review-only modes MUST emit the same `agent: bubbles.workflow`, `mode=improve-existing`, `spec: <reviewed-spec-dir>` packet without making code changes.
 
 1. **Every finding that requires a code change MUST be tracked as a bug.** Invoke `bubbles.bug` to create the full 6-artifact bug packet (`bug.md`, `spec.md`, `design.md`, `scopes.md`, `report.md`, `state.json`) before any implementation begins.
 2. **The `directFix` follow-up tag does NOT exempt findings from bug artifact creation.** It only indicates that the fix design is straightforward and does not require new feature-level spec work. Bug-level artifacts are still mandatory.
@@ -54,8 +56,9 @@ When a phase fails and retry limits are approaching or exhausted, orchestration 
 
 Default routing map:
 
-- Weak planning: `bubbles.design` + `bubbles.plan`
+- Weak planning: `bubbles.analyst` + `bubbles.ux` + `bubbles.design` + `bubbles.plan`
 - Weak scenarios or DoD: `bubbles.harden`
+- Severe spec-review drift on `done` / legacy read-only `done_with_concerns`: invoke or parent-expand `bubbles.workflow mode=improve-existing` for the reviewed spec
 - Implementation gaps: `bubbles.gaps` + `bubbles.implement`
 - Defect packets: `bubbles.bug` + `bubbles.implement`
 - State drift: inline reconciliation of `state.json`, stale execution claims, and stale certification claims
