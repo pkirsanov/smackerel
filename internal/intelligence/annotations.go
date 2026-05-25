@@ -43,41 +43,64 @@ func (e *Engine) SubscribeAnnotations(ctx context.Context) error {
 	return nil
 }
 
-// updateRelevanceFromAnnotation reads the current relevance score for an artifact,
-// applies the delta from the annotation, clamps to [0, 1], and writes it back.
+// updateRelevanceFromAnnotation atomically applies the per-annotation
+// relevance delta to the artifact row.
+//
+// BUG-027-002 reliability fix: the prior implementation read the
+// current `relevance_score` with `SELECT` and then wrote the new
+// value with `UPDATE` in two separate round-trips. Annotation events
+// arrive concurrently through the NATS subscriber callback (each
+// callback runs in its own goroutine), so two events for the same
+// artifact in burst would race read→write and silently lose one
+// delta (classic last-write-wins). The fix collapses the read and
+// the write into a single atomic statement: PostgreSQL serializes
+// concurrent UPDATEs against the same row via the row-level write
+// lock, and the in-statement arithmetic ensures every delta is
+// applied exactly once. The bounded-range clamp [0, 1] now lives
+// inside the SQL with GREATEST/LEAST so the invariant is enforced
+// at the storage layer.
 func (e *Engine) updateRelevanceFromAnnotation(ctx context.Context, ann *annotation.Annotation) error {
 	delta := annotationRelevanceDelta(ann)
 	if delta == 0 {
 		return nil
 	}
 
-	// Read current relevance score
-	var currentScore float64
+	// Atomically apply the delta and return the post-update score so
+	// the structured-log line records the actual persisted value
+	// after the clamp. RETURNING runs after the write commits the
+	// row-level lock, so the returned `newScore` is consistent with
+	// the persisted row even under concurrent subscribers.
+	var newScore float64
 	err := e.Pool.QueryRow(ctx, `
-		SELECT COALESCE(relevance_score, 0.5) FROM artifacts WHERE id = $1
-	`, ann.ArtifactID).Scan(&currentScore)
+		UPDATE artifacts
+		SET relevance_score = LEAST(GREATEST(COALESCE(relevance_score, 0.5) + $1, 0), 1)
+		WHERE id = $2
+		RETURNING relevance_score
+	`, delta, ann.ArtifactID).Scan(&newScore)
 	if err != nil {
-		return fmt.Errorf("read relevance score: %w", err)
-	}
-
-	// Apply delta and clamp to [0, 1]
-	newScore := clampFloat64(currentScore+delta, 0, 1)
-
-	// Write updated score
-	_, err = e.Pool.Exec(ctx, `
-		UPDATE artifacts SET relevance_score = $1 WHERE id = $2
-	`, newScore, ann.ArtifactID)
-	if err != nil {
-		return fmt.Errorf("update relevance score: %w", err)
+		return fmt.Errorf("atomically update relevance score: %w", err)
 	}
 
 	slog.Debug("relevance score updated",
 		"artifact_id", ann.ArtifactID,
 		"delta", delta,
-		"old_score", currentScore,
 		"new_score", newScore,
 	)
 	return nil
+}
+
+// ApplyAnnotationRelevanceForTest is a test-only exported wrapper
+// around the unexported updateRelevanceFromAnnotation. It exists so
+// the BUG-027-002 race regression integration tests can drive the
+// same SQL path without reaching through NATS (the production caller
+// is the SubscribeAnnotations subscriber callback).
+//
+// This wrapper is NOT for production code. The exported name is
+// suffixed with `ForTest` and this godoc explicitly forbids non-test
+// use, mirroring the Go stdlib's convention for runtime/testing
+// hooks.
+func (e *Engine) ApplyAnnotationRelevanceForTest(ctx context.Context, ann *annotation.Annotation) error {
+	return e.updateRelevanceFromAnnotation(ctx, ann)
 }
 
 // annotationRelevanceDelta calculates the relevance score adjustment for an annotation.

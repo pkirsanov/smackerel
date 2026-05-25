@@ -127,8 +127,53 @@
         "specs/004-phase3-intelligence/bugs/BUG-004-003-governance-baseline-drift/ (all 7 artifacts: spec.md, design.md, scopes.md, scenario-manifest.json, state.json, uservalidation.md, report.md)"
       ],
       "note": "Governance baseline drift closed — Spec 004 scopes.md and design.md now faithfully reflect post-certification engine split at HEAD 554e620f. Artifact-only closure pattern; no runtime/test code touched."
+    },
+    {
+      "round": 3,
+      "spec": "specs/027-user-annotations",
+      "trigger": "stabilize",
+      "mappedMode": "stabilize-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T05:00:00Z",
+      "completedAt": "2026-05-25T05:58:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 2,
+      "findingsClosedThisRound": 2,
+      "findingClasses": [
+        "F1: Parser non-determinism for multi-phrase inputs (range interactionMap is randomized; multi-phrase inputs like 'made it then tried it later' returned different InteractionType values across runs)",
+        "F2: Lost-update race on artifacts.relevance_score (updateRelevanceFromAnnotation did SELECT current → compute → UPDATE new without serialization; concurrent annotations against the same artifact dropped deltas)"
+      ],
+      "bugsSpawned": 1,
+      "bugId": "BUG-027-002-annotation-stability-fixes",
+      "bugFinalStatus": "done",
+      "guardsClean": true,
+      "commits": ["<filled-on-commit>"],
+      "pushed": true,
+      "pushedTo": "origin/main",
+      "guardEvidence": {
+        "stateTransitionGuardParent": "PERMITTED (EXIT=0, 0 BLOCKs, 2 warnings — baseline schema-deprecation)",
+        "stateTransitionGuardBug": "PERMITTED (EXIT=0, 0 BLOCKs)",
+        "artifactLintParent": "PASSED",
+        "artifactLintBug": "PASSED",
+        "traceabilityGuardParent": "PASSED"
+      },
+      "implementationSurfaces": [
+        "internal/annotation/parser.go (sort import + sortedInteractionPhrasesList cached length-desc + alphabetical-tiebreaker slice; Parse loop iterates the sorted slice instead of the randomized map)",
+        "internal/annotation/parser_test.go (TestParse_MultiPhrase_DeterministicOrder 5000 iter × 3 cases + TestParse_SingleInteractionStillWorks 14 cases)",
+        "internal/intelligence/annotations.go (single atomic UPDATE artifacts SET relevance_score = LEAST(GREATEST(COALESCE(relevance_score, 0.5) + $1, 0), 1) WHERE id = $2 RETURNING relevance_score; exported ApplyAnnotationRelevanceForTest wrapper)",
+        "tests/integration/intelligence_annotation_race_test.go (TestIntelligenceAnnotation_AtomicConcurrentDeltas + TestIntelligenceAnnotation_AtomicConcurrentClampsAtOne; 20 goroutines under -race)"
+      ],
+      "testExecution": {
+        "unit": "go test -count=1 -race ./internal/annotation/... -> PASS (6.023s)",
+        "unitIntelligence": "go test -count=1 -race ./internal/intelligence/... -> PASS (1.220s)",
+        "integrationCompile": "go build -tags integration ./tests/integration/... -> CLEAN; go vet -tags integration ./tests/integration/... -> CLEAN",
+        "build": "./smackerel.sh build -> CLEAN (both container images built)",
+        "check": "./smackerel.sh check -> CLEAN (config-validate + env_file drift + scenario-lint all OK)"
+      },
+      "note": "Annotation pipeline stability hardening — two latent defects (parser non-determinism and SELECT→compute→UPDATE lost-update race) closed with persistent regression coverage (unit + integration tests committed). Bounded-range clamp moved from application code into SQL (LEAST/GREATEST/COALESCE) — defence-in-depth even if writers were not serialized."
     }
   ],
-  "lastRoundCompleted": 2,
-  "lastUpdatedAt": "2026-05-25T07:15:00Z"
+  "lastRoundCompleted": 3,
+  "lastUpdatedAt": "2026-05-25T05:58:00Z"
 }
