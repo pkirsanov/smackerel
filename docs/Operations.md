@@ -1116,6 +1116,11 @@ All containers have health checks configured in docker-compose.yml:
 | `smackerel_nats_deadletter_total` | Counter | `stream` | Messages routed to dead letter |
 | `smackerel_db_connections_active` | Gauge | — | Active database connections |
 | `smackerel_digest_generation_total` | Counter | `status` | Digest generation (published, fallback, quiet) |
+| `smackerel_intelligence_latency_seconds` | Histogram | `endpoint` | Spec 006 Phase 5 intelligence endpoint latency (buckets 0.05..30s) |
+| `smackerel_intelligence_errors_total` | Counter | `endpoint` | Spec 006 Phase 5 intelligence endpoint errors per endpoint |
+| `smackerel_alerts_produced_total` | Counter | `type` | Alerts created by producers by type (spec 006 R-504 subscription, relationship-cooling, etc.) |
+| `smackerel_alerts_delivered_total` | Counter | `type` | Alerts delivered via Telegram by type (spec 006 R-504 subscription alerts flow through here) |
+| `smackerel_alert_delivery_failures_total` | Counter | — | Alert delivery failures (Telegram send or mark-delivered) |
 
 #### Recommendations (Spec 039 Scope 6)
 
@@ -1144,6 +1149,22 @@ The recommendation runtime exposes eight Prometheus metrics with bounded labels 
 | `smackerel_ml_processing_latency_seconds` | Histogram | `operation` | ML processing latency per operation |
 
 Model label cardinality is bounded: known models pass through, unknown models map to `other`.
+
+### Scheduled Intelligence Jobs (Spec 006 Phase 5)
+
+The Go core scheduler (`internal/scheduler/scheduler.go::scheduleEngineJobs`) registers the following cron-driven jobs that own delivery for spec 006 Phase 5 features. Schedules are hardcoded (only `digest_cron` is operator-configurable via `config/smackerel.yaml::runtime.digest_cron`). Operators verify health by joining the metric counters above (e.g. `smackerel_intelligence_errors_total{endpoint=...}` and `smackerel_alerts_produced_total{type=...}`) with the Go core JSON logs.
+
+| Job | Cron schedule | Spec 006 requirement | Runtime entrypoint | Observation surface |
+|-----|---------------|----------------------|--------------------|---------------------|
+| `synthesis` | `0 2 * * *` (daily 02:00) | R-501 (expertise mapping), R-502 (learning paths), R-503 (content creation fuel) | `Scheduler.runSynthesisJob` → `engine.RunSynthesis(ctx)` + `engine.CheckOverdueCommitments(ctx)`; 5-minute per-tick timeout | `smackerel_intelligence_latency_seconds{endpoint="synthesis"}`, `smackerel_intelligence_errors_total{endpoint="synthesis"}`, structured log `synthesis complete insights=<N>` (success) or `synthesis failed error=<...>` (error) |
+| `resurfacing` | `0 8 * * *` (daily 08:00) | R-505 (serendipity engine) | `Scheduler.runResurfacingJob` → `engine.Resurface(ctx, 5)` + `engine.MarkResurfaced(ctx, ids)`; 2-minute per-tick timeout | `smackerel_intelligence_errors_total{endpoint="resurfacing"}`, structured log `resurfaced artifacts delivered count=<N>` (success) or `resurfacing failed error=<...>` (error) |
+| `monthly report` | `0 3 1 * *` (1st of month 03:00) | R-506 (monthly self-knowledge report) | `Scheduler.runMonthlyReportJob` → `engine.GenerateMonthlyReport(ctx)`; 5-minute per-tick timeout | `smackerel_intelligence_errors_total{endpoint="monthly_report"}`, structured logs `monthly report generated month=<...> words=<N>` and `monthly report delivered via Telegram month=<...>` (success) or `monthly report generation failed error=<...>` (error) |
+| `subscription detection` | `0 3 * * 1` (Mondays 03:00) | R-504 (subscription tracking) | `Scheduler.runSubscriptionDetectionJob` → `engine.DetectSubscriptions(ctx)`; 2-minute per-tick timeout | `smackerel_alerts_produced_total{type="subscription"}`, `smackerel_alerts_delivered_total{type="subscription"}`, structured log `subscription detection complete detected=<N>` (success) or `subscription detection failed error=<...>` (error) |
+| `frequent lookup detection` | `0 4 * * *` (daily 04:00) | R-507 (repeated lookups → quick refs) | `Scheduler.runFrequentLookupsJob` → `engine.DetectFrequentLookups(ctx)` + `engine.CreateQuickReference(...)` (capped at 5 per run) + `engine.PurgeOldSearchLogs(ctx, 60)`; 2-minute per-tick timeout | `smackerel_intelligence_errors_total{endpoint="frequent_lookups"}`, structured logs `frequent lookup detection complete detected=<N>`, `quick reference auto-created concept=<...> lookups=<N>`, `search log purged rows_deleted=<N>` (success) or `frequent lookup detection failed error=<...>` (error) |
+
+**Failure recovery.** All five jobs are stateless re-entrant batch sweeps — re-run safely by waiting for the next cron tick or by restarting the Go core (`./smackerel.sh down && ./smackerel.sh up`). There is no manual trigger HTTP endpoint; missed runs catch up on the next scheduled tick (no backfill). Spec 006 design treats one missed run as an acceptable degradation per the "Knowledge Breathes" lifecycle principle.
+
+**Related shared scheduler jobs.** The scheduler also registers `pre-meeting briefs` (every 5 minutes), `weekly synthesis` (Sundays 16:00), `alert delivery sweep` (every 15 minutes), `daily alert production` (06:00), and `relationship cooling alert production` (Mondays 07:00). Those jobs are owned by the spec 004 intelligence layer and the spec 021 intelligence-delivery layer; see `internal/scheduler/scheduler.go::scheduleEngineJobs` for the live registration list.
 
 ### OpenTelemetry Tracing (Opt-in)
 

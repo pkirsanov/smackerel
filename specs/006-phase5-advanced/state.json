@@ -216,6 +216,24 @@
         "runStartedAt": "2026-05-24T00:30:00Z",
         "runEndedAt": "2026-05-24T01:30:00Z",
         "summary": "BUG-006-005-governance-baseline-drift finding-owned closure: created full bug packet (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json); rewrote 3 deferral language hits in parent report.md at lines 710/745/792 (Gate G040 cleared); merged 17 historical specialist entries from top-level executionHistory archive into execution.executionHistory[] (Check 6B provenance now satisfied for all phase claims); added regression/simplify/gaps/harden/stabilize/security to completedPhaseClaims and certifiedCompletedPhases (each phase already provenance-backed via merged history). Commit prefix bubbles(006/bug-006-005-governance-baseline-drift) closes Check 17."
+      },
+      {
+        "agent": "bubbles.devops",
+        "phasesExecuted": ["devops"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-25T05:30:00Z",
+        "runEndedAt": "2026-05-25T05:35:00Z",
+        "summary": "Sweep sweep-2026-05-24-r10 R10 (FINAL ROUND) trigger=devops mappedMode=devops-to-doc parent-expanded child-mode: probed CI/CD coverage, deploy/contract.yaml externalImages, deploy/compose.deploy.yml service entries, SST config bundle env vars (config/smackerel.yaml), and operator runbook entries (docs/Operations.md, docs/Deployment.md, docs/Development.md) for spec 006 Phase 5 runtime artifacts. Verified: (V-R10-1) CI .github/workflows/ci.yml runs ./smackerel.sh test unit --go which exercises internal/intelligence/ + internal/scheduler/ packages backing all 5 R-501..R-507 features; (V-R10-2) build workflow .github/workflows/build.yml produces smackerel-core image that includes spec 006 code via go build ./cmd/core; (V-R10-3) deploy/contract.yaml externalImages has no spec 006-specific entries (correct — all spec 006 logic ships inside smackerel-core); (V-R10-4) deploy/compose.deploy.yml smackerel-core service binds correctly with HOST_BIND_ADDRESS fail-loud SST per spec 042; (V-R10-5) config/smackerel.yaml has runtime.digest_cron as the only operator-configurable cron knob — all 5 spec 006 cron schedules (synthesis 02:00, resurfacing 08:00, monthly-report 03:00 on 1st, subscription-detection 03:00 Mondays, frequent-lookups 04:00 daily) are intentionally hardcoded in internal/scheduler/scheduler.go::scheduleEngineJobs and that is by design (no SST drift). One concrete finding F1 surfaced: docs/Operations.md operator runbook has neither the 5 Phase 5 Prometheus metrics (smackerel_intelligence_latency_seconds, smackerel_intelligence_errors_total, smackerel_alerts_produced_total, smackerel_alerts_delivered_total, smackerel_alert_delivery_failures_total) defined in internal/metrics/metrics.go lines 108-156 nor a Scheduled Intelligence Jobs section enumerating the 5 cron jobs above. Operators using docs/Operations.md as runbook have zero visibility into when spec 006 batch jobs fire or which Prometheus metrics indicate success/failure. State-transition-guard baseline pre-round: 0 BLOCKs, 1 advisory warning (TRANSITION PERMITTED). Governance drift since R2 commit e03bb0b9: NONE."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-25T05:35:00Z",
+        "runEndedAt": "2026-05-25T05:45:00Z",
+        "summary": "R10 devops finding F1 closure: docs/Operations.md `Key Metrics → Go Core` table extended with 5 new rows (smackerel_intelligence_latency_seconds, smackerel_intelligence_errors_total, smackerel_alerts_produced_total, smackerel_alerts_delivered_total, smackerel_alert_delivery_failures_total) with type/labels/purpose columns matching internal/metrics/metrics.go definitions verbatim. New section `Scheduled Intelligence Jobs (Spec 006 Phase 5)` added between ML Sidecar metrics block and OpenTelemetry Tracing section, enumerating 5 cron jobs (synthesis 0 2 * * *, resurfacing 0 8 * * *, monthly report 0 3 1 * *, subscription detection 0 3 * * 1, frequent lookup detection 0 4 * * *) with R-NNN spec linkage, runtime entrypoint (Scheduler.runXxxJob → engine.XxxYyy(ctx) + helper calls + per-tick timeout), and observation surface (which Prometheus metric + structured log message indicates success/failure). Two trailing notes added: Failure recovery (stateless re-entrant, missed runs catch up on next tick, no backfill) and Related shared scheduler jobs (pre-meeting briefs / weekly synthesis / alert delivery sweep / daily alert production / relationship cooling — owned by spec 004 + spec 021). Zero runtime/test/deploy/security/connector surface touched. Closure surface: 1 file modified (docs/Operations.md), 2 file modifications to parent (state.json + report.md), 1 file modification to sweep ledger (.specify/memory/sweep-2026-05-24-r10.json). No bug packet spawned — finding is documentary-only and closure is proportional to a single docs section addition. Commit prefix bubbles(006/sweep-r10-devops-pass) closes Check 17."
       }
     ]
   },
@@ -641,12 +659,40 @@
       ],
       "scopesCompleted": [],
       "summary": "Documentation pass: report.md prepended with Summary, Test Evidence, Completion Statement, Validation Evidence, Audit Evidence, and Chaos Evidence sections containing real captured terminal output (./smackerel.sh check, lint, build, test unit; go test -race on internal/intelligence and internal/scheduler). state.json workflowMode set to full-delivery; certifiedCompletedPhases and completedPhaseClaims extended with chaos to reflect this re-certification round."
+    },
+    {
+      "id": "20",
+      "agent": "bubbles.devops",
+      "workflowMode": "devops-to-doc",
+      "startedAt": "2026-05-25T05:30:00Z",
+      "completedAt": "2026-05-25T05:35:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "phasesExecuted": [
+        "devops"
+      ],
+      "scopesCompleted": [],
+      "summary": "Sweep sweep-2026-05-24-r10 R10 (FINAL ROUND) trigger=devops mappedMode=devops-to-doc parent-expanded child-mode. Probed CI/CD, build pipeline, deploy/contract.yaml externalImages, deploy/compose.deploy.yml, SST config bundle (config/smackerel.yaml), and operator runbook (docs/Operations.md, docs/Deployment.md, docs/Development.md). Verified 5 surfaces PASS: (1) CI ./smackerel.sh test unit --go exercises internal/intelligence + internal/scheduler; (2) build pipeline ships spec 006 inside smackerel-core; (3) deploy/contract.yaml has no spec 006-specific externalImages (correct — all logic in-process); (4) deploy/compose.deploy.yml smackerel-core uses HOST_BIND_ADDRESS fail-loud SST per spec 042; (5) only runtime.digest_cron is operator-tunable, all 5 spec 006 cron schedules are intentionally hardcoded. One concrete finding F1 surfaced: docs/Operations.md operator runbook missing both the 5 Phase 5 Prometheus metrics (defined in internal/metrics/metrics.go lines 108-156) and a Scheduled Intelligence Jobs section enumerating the 5 cron jobs registered by internal/scheduler/scheduler.go::scheduleEngineJobs. State-transition-guard baseline pre-round: 0 BLOCKs, 1 advisory warning, TRANSITION PERMITTED. Governance drift since R2 commit e03bb0b9: NONE."
+    },
+    {
+      "id": "21",
+      "agent": "bubbles.docs",
+      "workflowMode": "devops-to-doc",
+      "startedAt": "2026-05-25T05:35:00Z",
+      "completedAt": "2026-05-25T05:45:00Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "scopesCompleted": [],
+      "summary": "R10 devops finding F1 closure (sweep-2026-05-24-r10 FINAL ROUND). docs/Operations.md extended with: (a) 5 new rows in `Key Metrics → Go Core` table for smackerel_intelligence_latency_seconds, smackerel_intelligence_errors_total, smackerel_alerts_produced_total, smackerel_alerts_delivered_total, smackerel_alert_delivery_failures_total matching internal/metrics/metrics.go definitions verbatim; (b) new section `Scheduled Intelligence Jobs (Spec 006 Phase 5)` enumerating 5 cron jobs (synthesis 0 2 * * *, resurfacing 0 8 * * *, monthly report 0 3 1 * *, subscription detection 0 3 * * 1, frequent lookup detection 0 4 * * *) with R-NNN linkage, runtime entrypoint per internal/scheduler/jobs.go (Scheduler.runXxxJob → engine.XxxYyy(ctx) + helper calls + per-tick timeout), and observation surface (which Prometheus metric + structured log line indicates success/failure); (c) Failure-recovery note (stateless re-entrant batch sweeps, missed runs catch up on next tick); (d) Related-shared-scheduler-jobs note attributing pre-meeting briefs / weekly synthesis / alert delivery sweep / daily alert production / relationship cooling alert production to spec 004 + spec 021. Zero runtime/test/deploy/security/connector surface touched. Closure surface: 1 file modified (docs/Operations.md), 2 parent files modified (state.json + report.md), 1 sweep ledger entry appended (.specify/memory/sweep-2026-05-24-r10.json). No bug packet spawned — finding is documentary-only and closure is proportional to a single docs section addition (matches R8 lightweight pattern). Commit prefix bubbles(006/sweep-r10-devops-pass) closes Check 17."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T01:30:00Z",
+  "lastUpdatedAt": "2026-05-25T05:45:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -655,5 +701,5 @@
     "report": "report.md",
     "uservalidation": "uservalidation.md"
   },
-  "notes": "Phase 5: Expertise mapping, learning paths, subscription tracker, serendipity engine, monthly report, repeated lookup detection, content creation fuel, seasonal patterns. All 8 scopes delivered with passing tests. Sweep R2 (2026-05-24 sweep-2026-05-24-r10 trigger=gaps mappedMode=gaps-to-doc parent-expanded child-mode) closed BUG-006-005-governance-baseline-drift: rewrote 3 deferral language passages in report.md (G040), merged 17 historical specialist executionHistory entries into execution.executionHistory[] for Check 6B provenance, added regression/simplify/gaps/harden/stabilize/security to completedPhaseClaims and certifiedCompletedPhases, and used bubbles(006/bug-006-005-...) commit prefix (Check 17)."
+  "notes": "Phase 5: Expertise mapping, learning paths, subscription tracker, serendipity engine, monthly report, repeated lookup detection, content creation fuel, seasonal patterns. All 8 scopes delivered with passing tests. Sweep R2 (2026-05-24 sweep-2026-05-24-r10 trigger=gaps mappedMode=gaps-to-doc parent-expanded child-mode) closed BUG-006-005-governance-baseline-drift: rewrote 3 deferral language passages in report.md (G040), merged 17 historical specialist executionHistory entries into execution.executionHistory[] for Check 6B provenance, added regression/simplify/gaps/harden/stabilize/security to completedPhaseClaims and certifiedCompletedPhases, and used bubbles(006/bug-006-005-...) commit prefix (Check 17). Sweep R10 FINAL ROUND (2026-05-25 sweep-2026-05-24-r10 trigger=devops mappedMode=devops-to-doc parent-expanded child-mode) probed 5 devops surfaces and found 1 documentary gap (operator runbook missing Phase 5 metrics + scheduled jobs); closure: docs/Operations.md extended with 5 metric rows in Go Core table and new `Scheduled Intelligence Jobs (Spec 006 Phase 5)` section enumerating all 5 cron jobs with runtime entrypoints + observation surfaces (no bug packet — documentary-only, R8 lightweight pattern). Governance baseline drift since R2: NONE (state-transition-guard 0 BLOCKs, TRANSITION PERMITTED). Spec status unchanged: done."
 }
