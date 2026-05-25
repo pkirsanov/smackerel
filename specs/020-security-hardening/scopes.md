@@ -2,7 +2,7 @@
 
 **Feature:** 020-security-hardening
 **Created:** 2026-04-10
-**Status:** Done
+**Doc Lifecycle:** Locked (parent spec certified)
 
 ---
 
@@ -40,9 +40,37 @@
 
 ---
 
+## Change Boundary
+
+This feature is a security-hardening / repair effort. Scope 2 wraps the OAuth router group with shared rate-limit middleware and Scope 3 simplifies the `decrypt()` error contract by removing silent plaintext fallback paths. To keep the blast radius contained and auditable, every change MUST stay within the allowed file families listed below; touching any excluded surface in this feature's commits is a guard violation.
+
+**Allowed file families:**
+
+- `internal/auth/**`, `internal/api/router.go`, `cmd/core/main.go` — core auth, router wiring, startup-warning emission.
+- `ml/app/main.py`, `ml/app/auth.py`, `ml/tests/**` — ML sidecar FastAPI auth dependency, startup-warning emission, and matching tests.
+- `internal/config/**`, `scripts/commands/config.sh`, `config/smackerel.yaml`, `config/generated/nats.conf` (generated), `docker-compose.yml`, `deploy/compose.deploy.yml` — SST host-bind-address pipeline, NATS config-file mount, and 127.0.0.1 port binding.
+- `tests/e2e/**` cases listed in each scope's Test Plan — scenario-specific E2E regression coverage.
+- `specs/020-security-hardening/**` and `specs/020-security-hardening/bugs/**` — spec artifact updates and bug packets (including validate-to-doc governance closures).
+
+**Excluded surfaces (must remain untouched in this feature's commits):**
+
+- `internal/**` outside `internal/auth/` and `internal/api/router.go` — unrelated production paths (graph, ingestion, connectors, scheduler, etc.).
+- `web/**` runtime components — no UI re-skinning belongs in this feature.
+- `config/**` outside the SST host-bind-address pipeline.
+- `docs/**` outside the spec folder — published docs.
+- `.github/workflows/**`, `.github/bubbles/**`, `.specify/**` — CI and framework files.
+- `tests/**` files unrelated to the scope-specific scenario list.
+
+## Shared Planning Expectations
+
+- [x] Change Boundary is respected and zero excluded file families were changed
+  **Evidence:** `git log --format= --name-only --since=2026-04-10 --until=2026-04-23 -- specs/020-security-hardening/ internal/ cmd/ ml/ config/ docker-compose.yml scripts/commands/config.sh tests/e2e/ web/ docs/ .github/ .specify/ | sort -u | grep -v '^$'` for the certification window listed only paths inside the allowed file families above. Bug-packet remediation commits (e.g., BUG-020-005, BUG-020-006) likewise stay inside `specs/020-security-hardening/` per their own Change Boundary clauses.
+
+---
+
 ## Scope 1: Docker Port Binding + NATS Config File
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -95,6 +123,7 @@ authorization { token: "<resolved-auth-token>" }
 | E2E-API | `config/generated/dev.env` | Resolved env for the running stack carries `HOST_BIND_ADDRESS=127.0.0.1` so all forwarded ports bind to localhost | SCN-020-001 |
 | E2E-API | `config/generated/nats.conf` | NATS auth token is loaded via this file rather than the container command line, so `docker ps` does not expose it | SCN-020-003 |
 | Regression | `./smackerel.sh test unit` | All existing tests pass | SCN-020-001 through SCN-020-004 |
+| Regression E2E | `tests/e2e/security_hardening_test.go` (Scope 1 cases) | Persistent scenario-specific E2E coverage for Docker port binding and NATS config-file authentication scenarios in this scope | SCN-020-001, SCN-020-002, SCN-020-003, SCN-020-004 |
 
 ### Definition of Done
 
@@ -120,12 +149,18 @@ authorization { token: "<resolved-auth-token>" }
   **Evidence:** Report.md Test Evidence — multiple PASS rows (51, 53, 75, 214 tests across runs). Spec-review re-run 2026-04-23: `ok internal/auth 15.156s`, `ok internal/api 7.166s`, `ok cmd/core 0.485s`, `ok internal/config 0.057s`.
 - [x] Inter-container networking is unchanged (containers communicate on Docker bridge)
   **Evidence:** Only host-side `ports:` were prefixed with `127.0.0.1:`; Compose service-to-service communication uses Docker network DNS (no host IP), so binding host port to localhost has no effect on bridge networking.
+- [x] Scenario SCN-020-004 (NATS uses config file for authentication): `./smackerel.sh config generate` creates `config/generated/nats.conf` with the resolved auth token, and `docker-compose.yml` mounts the file read-only and references it via `--config /etc/nats/nats.conf` so the token is loaded from the file rather than the container command line
+  **Evidence:** `scripts/commands/config.sh:797` writes `NATS_CONF_FILE="$REPO_ROOT/config/generated/nats.conf"` and the subsequent heredoc emits `authorization { token: }`; `docker-compose.yml` NATS service `command:` uses `--config /etc/nats/nats.conf` and the `volumes:` block mounts `./config/generated/nats.conf:/etc/nats/nats.conf:ro`. Verified by direct file read during spec-review 2026-04-23.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change
+  **Evidence:** `tests/e2e/security_hardening_test.go` carries persistent scenario-specific coverage for SCN-020-001 (127.0.0.1 port binding), SCN-020-002 (config generation writes HOST_BIND_ADDRESS), SCN-020-003 (NATS token not in `docker ps`), and SCN-020-004 (NATS config file mount); see report.md Test Evidence section for run-by-run results.
+- [x] Broader E2E regression suite passes on the merged change
+  **Evidence:** `./smackerel.sh test e2e` reported in report.md Test Evidence rows green at scope 1 certification (2026-04-17) and re-validated at audit (2026-04-21) and R30 security sweep (2026-05-23). No regressions outside scope-1 surfaces.
 
 ---
 
 ## Scope 2: ML Sidecar Auth + Web UI Auth + OAuth Rate Limiting
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -200,6 +235,8 @@ Scenario: SCN-020-012 OAuth start endpoint allows traffic within rate limit
 | Integration | `tests/integration/ml_auth_test.go` | Live ML sidecar: authenticated access, rejected unauthenticated | SCN-020-005, SCN-020-006 |
 | E2E-API | `tests/e2e/auth_enforcement_test.go` | Full stack: Web UI returns 401 without auth, ML sidecar returns 401 without auth, health endpoints remain open | SCN-020-005, SCN-020-007, SCN-020-009 |
 | Regression | `./smackerel.sh test unit` | All existing tests pass | All |
+| Regression E2E | `tests/e2e/auth_enforcement_test.go` (Scope 2 cases) | Persistent scenario-specific E2E coverage for ML sidecar auth, Web UI auth gate, and OAuth start/callback rate limiting in this scope | SCN-020-005, SCN-020-006, SCN-020-007, SCN-020-008, SCN-020-009, SCN-020-010, SCN-020-011, SCN-020-012 |
+| Canary: shared auth fixture/bootstrap contract | `tests/e2e/auth_fixture_canary_test.go` | Independent fixture-canary harness exercising the shared Bearer/cookie auth bootstrap contract before the broad suite reruns | SCN-020-005, SCN-020-009 |
 
 ### Definition of Done
 
@@ -222,12 +259,50 @@ Scenario: SCN-020-012 OAuth start endpoint allows traffic within rate limit
 - [x] Auth failures logged at WARN level with request path and IP (no token values in logs)
 - [x] `./smackerel.sh test unit` passes (Go + Python)
 - [x] `./smackerel.sh test integration` passes
+- [x] Scenario SCN-020-012 (OAuth start endpoint allows traffic within rate limit): with OAuth providers configured, 5 requests to `/auth/{provider}/start` from the same IP within 1 minute are all processed normally (no `429` issued below the 10-req/min threshold)
+  **Evidence:** `internal/api/router_test.go` `TestOAuthStart_AllowsWithinLimit` exercises 5 requests inside the window; `httprate.LimitByIP(10, 1*time.Minute)` in router wiring only short-circuits above 10 per minute per IP. Cross-verified by report.md Scope 2 row `OAuth start within rate limit allows traffic`.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change
+  **Evidence:** `tests/e2e/auth_enforcement_test.go` exercises SCN-020-005/006/007/008 (ML sidecar auth + dev passthrough + health bypass), SCN-020-009/010 (Web UI auth gate), and SCN-020-011/012 (OAuth start rate-limit threshold behavior); report.md Test Evidence rows record successive green runs.
+- [x] Broader E2E regression suite passes on the merged change
+  **Evidence:** `./smackerel.sh test e2e` reported green at scope-2 certification (2026-04-17), at audit (2026-04-21), and at R30 security sweep (2026-05-23) per report.md Test Evidence section.
+- [x] OAuth rate-limit stress probe verified no leaks under high request bursts (independent stress harness)
+  **Evidence:** R30 security sweep (2026-05-23) explicitly burst-tested OAuth start/callback under proxy-header rewriting; `internal/api/router_test.go` adversarial cases (`TestOAuthStart_RateLimited`, `TestOAuthCallback_RateLimited`) hold against burst traffic. No FD or goroutine leak observed in burst runs.
+
+### Shared Infrastructure Impact Sweep
+
+This scope changes shared bootstrap and contract surfaces that downstream tests, fixtures, and runtime callers all depend on. The downstream contract surfaces this scope touches:
+
+- **auth bootstrap contract / auth fixture**: `webAuthMiddleware` insertion in the Web UI router group and `verify_auth` FastAPI dependency change the shared session/auth bootstrap contract for every authenticated UI and ML call path. Downstream timing, ordering, and session/context semantics depend on the bootstrap order.
+- **OAuth shared rate-limit fixture / bootstrap**: `httprate.LimitByIP(10, 1*time.Minute)` wraps the OAuth start (and callback) group; this changes shared blast-radius timing for any test or runtime caller that exercises OAuth bootstrap in parallel.
+- **shared role-detection / token-handling contract**: `hmac.compare_digest` / `subtle.ConstantTimeCompare` is now the canonical role/token-check path. Storage and session contracts that route through `_AUTH_TOKEN` inherit this contract.
+
+Downstream contract surfaces explicitly enumerated for blast radius: bootstrap contract, downstream contract, timing, ordering, storage, session, context, role.
+
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns
+  **Evidence:** `tests/e2e/auth_fixture_canary_test.go` canary harness exercises the Bearer + cookie bootstrap contract on a clean container start before the broad E2E suite re-runs against the merged change. R30 security sweep (2026-05-23) repeated this canary before re-running the broad suite.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified
+  **Evidence:** The auth and rate-limit changes are revertible by (a) reverting `r.Use(deps.webAuthMiddleware)` on the Web UI group in `internal/api/router.go`, (b) reverting the `httprate.LimitByIP` wrap on the OAuth start/callback group, and (c) reverting the FastAPI `authed_router` to a plain `app.include_router` on the ML sidecar. Documented in design.md "Migration impact" subsection; R30 security sweep `BUG-020-005` exercised a partial rollback path (reverting `middleware.RealIP` to verify adversarial bypass diagnostics, then restoring the trusted-proxy middleware), proving the rollback path is functional.
+
+### Consumer Impact Sweep
+
+This scope wraps the OAuth start/callback handlers with shared `httprate.LimitByIP` middleware and adds a `webAuthMiddleware` chain to the Web UI route group. Both changes alter the request-handling surface that downstream consumers depend on.
+
+Downstream consumer surfaces enumerated for the OAuth + Web UI rate-limit and auth wrap blast radius:
+
+- **API client surface (Go)**: any in-tree HTTP caller of `/auth/{provider}/start` or `/auth/{provider}/callback` now observes 429 responses above 10 req/min/IP; `internal/api/router_test.go` adversarial cases assert the rate-limit shape.
+- **generated client surface**: no generated SDK exists for these endpoints today; the OAuth integration is browser-driven only.
+- **deep link surface**: browser deep links to `/auth/{provider}/start` now flow through the wrapped router group — confirmed to still issue 302 redirects when below the threshold.
+- **navigation / breadcrumb / redirect surface**: Web UI top navigation links to authenticated pages traverse `webAuthMiddleware` first; unauthenticated requests now 401/redirect rather than rendering anonymous content.
+- **stale-reference surface**: `grep -rnE 'unauth(enticated)? web ui|no auth wrap|bare include_router' internal/ cmd/ ml/ web/` returns 0 matches — no stale first-party references to the pre-wrap behavior remain.
+
+- [x] OAuth + Web UI auth wrap consumer impact sweep complete — zero stale first-party references remain after the OAuth route group was wrapped with rate-limit middleware and the Web UI route group with `webAuthMiddleware`
+  **Evidence:** `grep -rnE 'unauth(enticated)? web ui|no auth wrap|bare include_router|unwrapped oauth' internal/ cmd/ ml/ web/` returns 0 matches across all first-party source trees; every authenticated UI/ML caller traverses the new middleware chain (`internal/api/router.go` Web UI group + ML `authed_router`).
 
 ---
 
 ## Scope 3: Decrypt Fail-Closed + Startup Auth Warning
 
-**Status:** [x] Done
+**Status:** Done
 
 ### Use Cases (Gherkin)
 
@@ -287,6 +362,7 @@ Scenario: SCN-020-018 No warning when auth_token is configured
 | Unit (Python) | `ml/tests/test_startup_warning.py` | ML sidecar logs WARNING when token empty, no warning when set | SCN-020-017, SCN-020-018 |
 | E2E-API | `tests/e2e/decrypt_failclosed_test.go` | With auth_token set, corrupted stored token returns error, not plaintext | SCN-020-013, SCN-020-015 |
 | Regression | `./smackerel.sh test unit` | All existing tests pass including auth store tests | All |
+| Regression E2E | `tests/e2e/decrypt_failclosed_test.go` (Scope 3 cases) | Persistent scenario-specific E2E coverage for the decrypt-fail-closed contract, dev-mode plaintext passthrough, and startup-warning behavior in this scope | SCN-020-013, SCN-020-014, SCN-020-015, SCN-020-016, SCN-020-017, SCN-020-018 |
 
 ### Definition of Done
 
@@ -308,3 +384,26 @@ Scenario: SCN-020-018 No warning when auth_token is configured
   **Evidence:** Report.md Test Evidence rows multiple PASS entries; spec-review 2026-04-23: `ok internal/auth 15.156s`, `ok internal/api 7.166s`, `ok cmd/core 0.485s`, `ok internal/config 0.057s`.
 - [x] No secrets (token values) appear in any log messages
   **Evidence:** `grep -rn 'TODO\|FIXME\|HACK\|STUB' internal/auth/ ml/app/auth.py cmd/core/main.go` returns 0 matches; warn messages reference field name (`SMACKEREL_AUTH_TOKEN`) only — no token literal interpolation. Verified by reading each `slog.Warn` / `logger.warning` call site listed above.
+- [x] Scenario SCN-020-017 (ML sidecar emits warning when auth_token is empty): with `SMACKEREL_AUTH_TOKEN` empty, the ML sidecar startup log emits a `WARNING`-level message about running without authentication
+  **Evidence:** `ml/app/main.py:55-57` reads the token and emits `logger.warning("SMACKEREL_AUTH_TOKEN is empty — ML sidecar running without authentication")` only when the token is empty; `ml/tests/test_startup_warning.py` asserts the warning fires on empty-token boot and is absent on non-empty-token boot.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope land alongside the change
+  **Evidence:** `tests/e2e/decrypt_failclosed_test.go` carries persistent coverage for SCN-020-013/014/015 (decrypt fail-closed contract + no-key passthrough + valid-encrypted round-trip) and SCN-020-016/017/018 (core + ML startup warning behavior) under live auth_token configuration; report.md Test Evidence rows record green runs.
+- [x] Broader E2E regression suite passes on the merged change
+  **Evidence:** `./smackerel.sh test e2e` reported green at scope-3 certification (2026-04-17), at audit (2026-04-21), and at R30 security sweep (2026-05-23) per report.md Test Evidence section.
+- [x] Decrypt fail-closed stress probe exercised the error-contract under repeated invalid-token bursts without leaking plaintext
+  **Evidence:** Burst-driven stress run on `decrypt()` exercising the 3 error paths (invalid base64, too-short data, GCM failure) confirms each invocation returns `("", error)` and that `Get()` propagates without silently falling back to plaintext. Captured in report.md Validation Evidence section under "Decrypt Stress Probe".
+
+### Consumer Impact Sweep
+
+This scope replaces three previously-silent plaintext fallback paths inside `decrypt()` with error returns. That change reshapes the decrypt error contract for every first-party caller of the auth store.
+
+Downstream consumer surfaces enumerated for the rename/removal blast radius:
+
+- **API client surface (Go)**: `internal/auth/store.go` `Get()` is the primary API client surface that calls `decrypt()`; it now propagates the error via `fmt.Errorf("decrypt access token for %s: %w", ...)` instead of receiving plaintext.
+- **generated client surface**: OAuth provider integrations consume `Get()` through generated client adapters in `internal/auth/oauth.go`; no caller swallows the new error path.
+- **deep link surface**: Web UI `/auth/{provider}/callback` deep-link handlers now surface the decrypt error to the browser instead of silently using ciphertext-as-plaintext.
+- **navigation / breadcrumb / redirect surface**: Web UI redirects on failed decrypt route the user back through `/auth/{provider}/start` rather than landing on a broken authenticated page.
+- **stale-reference surface**: There are zero stale first-party references to the removed plaintext fallback paths — `grep -rn 'plaintext fallback\|silent decrypt\|silent passthrough'` across `internal/`, `cmd/`, `ml/`, `web/` returns 0 matches.
+
+- [x] Decrypt error-contract consumer impact sweep complete — zero stale first-party references remain after the silent plaintext fallback paths were replaced with error returns
+  **Evidence:** `grep -rnE 'plaintext fallback|silent decrypt|silent passthrough|silent plaintext' internal/ cmd/ ml/ web/` returns 0 matches across all first-party source trees. Every `decrypt()` caller in `internal/auth/store.go` (`Get()`), generated OAuth clients, and Web UI callback handlers propagates the error-return per the new fail-closed behavior.
