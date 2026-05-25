@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "featureDir": "specs/055-notification-source-ntfy-adapter/bugs/BUG-DEVOPS-20260525-001",
+  "generatedAt": "2026-05-25T03:35:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-DEVOPS-20260525-001-001",
+      "scope": "scope-1-state-concerns-schema-compliance",
+      "title": "Parent spec 055 state.json certification.concerns is non-empty structured-object array",
+      "gherkin": {
+        "given": "specs/055-notification-source-ntfy-adapter/state.json declares status done_with_concerns",
+        "when": "the state_concerns contract test parses certification.concerns",
+        "then": "the array is non-empty, every entry is a JSON object with id, severity, summary, followUpOwner, followUpAction, severity is one of {low, medium}, and followUpAction is one of {new-spec, issue-doc, next-sprint-todo, accept}"
+      },
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/state_concerns_contract_test.go",
+          "testId": "TestSpec055StateConcernsContract"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#deterministic-red-evidence",
+        "report.md#green-evidence",
+        "report.md#focused-unit-evidence",
+        "report.md#full-unit-evidence",
+        "report.md#parent-state-json-diff-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-BUG-DEVOPS-20260525-001-002",
+      "scope": "scope-1-state-concerns-schema-compliance",
+      "title": "Child bug BUG-CHAOS-20260524-001 state.json certification.concerns entries are structured objects",
+      "gherkin": {
+        "given": "specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001/state.json declares certification.status done_with_concerns",
+        "when": "the state_concerns contract test parses certification.concerns",
+        "then": "every entry is a JSON object with the structured shape, no entry is a flat string, and every entry's followUpOwner is a concrete agent name or the literal human"
+      },
+      "behaviorClass": "unit",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/deploy/state_concerns_contract_test.go",
+          "testId": "TestSpec055StateConcernsContract"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#deterministic-red-evidence",
+        "report.md#green-evidence",
+        "report.md#focused-unit-evidence",
+        "report.md#full-unit-evidence",
+        "report.md#child-state-json-diff-evidence"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+{
+  "version": 3,
+  "featureDir": "specs/055-notification-source-ntfy-adapter/bugs/BUG-DEVOPS-20260525-001",
+  "parentFeatureDir": "specs/055-notification-source-ntfy-adapter",
+  "featureName": "Spec 055 done_with_concerns Concerns-Array Schema Drift",
+  "bugId": "BUG-DEVOPS-20260525-001",
+  "status": "done",
+  "workflowMode": "devops-to-doc",
+  "execution": {
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
+    "currentScope": "scope-1-state-concerns-schema-compliance",
+    "runStartedAt": "2026-05-25T03:21:00Z",
+    "completedPhaseClaims": [
+      "devops",
+      "bug",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": [
+      "scope-1-state-concerns-schema-compliance"
+    ],
+    "certifiedCompletedPhases": [
+      "devops",
+      "bug",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scopeId": "scope-1-state-concerns-schema-compliance",
+        "scope": 1,
+        "title": "Populate done_with_concerns Schema-Compliant Concerns Arrays",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": ".",
+        "evidenceFile": "report.md",
+        "scenarioIds": [
+          "SCN-BUG-DEVOPS-20260525-001-001",
+          "SCN-BUG-DEVOPS-20260525-001-002"
+        ],
+        "evidenceRefs": [
+          "report.md#deterministic-red-evidence",
+          "report.md#green-evidence",
+          "report.md#focused-unit-evidence",
+          "report.md#full-unit-evidence",
+          "report.md#format-evidence",
+          "report.md#lint-evidence",
+          "report.md#parent-state-json-diff-evidence",
+          "report.md#child-state-json-diff-evidence",
+          "report.md#code-diff-evidence",
+          "report.md#bug-artifact-lint-evidence",
+          "report.md#parent-artifact-lint-evidence",
+          "report.md#bug-traceability-evidence",
+          "report.md#parent-traceability-evidence",
+          "report.md#parent-state-transition-evidence",
+          "report.md#consumer-impact-sweep-evidence",
+          "report.md#shared-infrastructure-sweep-evidence",
+          "report.md#change-boundary-containment-evidence",
+          "report.md#e2e-na-justification"
+        ],
+        "certifiedAt": "2026-05-25T03:50:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    },
+    "blockers": [],
+    "concerns": []
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "specReview": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "on",
+      "source": "workflow-mode-bugfix-fastlane-equivalent"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.devops",
+      "phase": "devops",
+      "at": "2026-05-25T03:21:00Z",
+      "summary": "DevOps probe of freshly landed ntfy notification source adapter (commit 1fe8aed5) in round 6 of sweep-2026-05-24-r10. CI auto-coverage via go test ./... verified. Deploy contract (deploy/contract.yaml) requires no new externalImages because ntfy server is operator-external and smackerel-core receives webhooks via existing CORE_HOST_PORT. Compose tailnet-edge bind pattern verified. SST fail-loud wiring of NTFY_SOURCES_JSON via scripts/commands/config.sh::required_json_value verified; empty array is a graceful no-sources state. Docs (Operations.md lines 557-839, API.md) cover the adapter. State-transition-guard PERMITTED with 0 BLOCKs and 2 advisory warnings (test-plan placeholder paths + 53/129 evidence blocks lacking terminal signals — pre-existing baseline). One concrete finding surfaced: parent state.json declared status=done_with_concerns with NO certification.concerns array; child bug BUG-CHAOS-20260524-001 state.json had a string-form concerns array instead of the structured-object form required by completion-governance.md."
+    },
+    {
+      "agent": "bubbles.bug",
+      "phase": "bug",
+      "at": "2026-05-25T03:25:00Z",
+      "summary": "Bug packet BUG-DEVOPS-20260525-001 opened with severity P3 (low). Acceptance criteria and Gherkin scenarios authored covering parent + child envelopes."
+    },
+    {
+      "agent": "bubbles.design",
+      "phase": "design",
+      "at": "2026-05-25T03:28:00Z",
+      "summary": "Root-cause attribution: bubbles.validate promoted spec 055 to done_with_concerns at 2026-05-24T22:39:14Z and wrote prose summary into notes field instead of structured concerns array. Existing state-transition-guard.sh checks 1-22 do not assert done_with_concerns ⇒ concerns schema. Fix direction: populate parent certification.concerns from notes-field prose; normalize child concerns from strings to structured objects preserving each summary verbatim; add internal/deploy/state_concerns_contract_test.go to lock down the schema."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phase": "plan",
+      "at": "2026-05-25T03:32:00Z",
+      "summary": "Single scope scope-1-state-concerns-schema-compliance defined with DoD covering parent+child concerns population, contract test addition, format/lint, guard cleanliness, change-boundary containment, consumer impact sweep, and shared-infrastructure sweep."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phase": "implement",
+      "at": "2026-05-25T03:40:00Z",
+      "summary": "TDD red captured: deterministic test failure showing parent missing concerns array and child entries are flat strings. Implementation applied: parent state.json gained 2 structured concerns (legacy evidence-fence cleanup parent + child literal-done block, both severity:low owner:bubbles.docs action:next-sprint-todo). Child state.json: 7 string entries converted to 7 structured objects with original summaries preserved verbatim; entries 1-6 owner:human action:accept (informational provenance), entry 7 owner:bubbles.docs action:next-sprint-todo (legacy cleanup). New file internal/deploy/state_concerns_contract_test.go added with TestSpec055StateConcernsContract + TestSpec055StateConcernsContractAdversarial (3 adversarial sub-tests prove validator is not tautological)."
+    },
+    {
+      "agent": "bubbles.test",
+      "phase": "test",
+      "at": "2026-05-25T03:42:00Z",
+      "summary": "TDD green captured: focused contract test passes for both parent and child. Full unit regression suite (./... go) passes — internal/deploy package builds and tests in 36.608s with the new contract test included."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phase": "validate",
+      "at": "2026-05-25T03:46:00Z",
+      "summary": "Format check passed (51 files already formatted). Lint passed (all checks + web validation). Bug artifact lint clean. Parent artifact lint clean. Bug traceability guard clean. Parent traceability guard clean. Parent state-transition-guard PERMITTED with 0 BLOCKs (advisory warnings unchanged from pre-fix baseline)."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phase": "audit",
+      "at": "2026-05-25T03:48:00Z",
+      "summary": "Independent rerun of focused unit + full unit suite confirms green. Consumer impact sweep: zero downstream consumers of state.json certification.concerns exist in runtime code (cmd/, internal/ except the new test, ml/, scripts/, web/ all clean). Shared infrastructure sweep: zero changes to shared fixtures, harnesses, bootstrap, auth, session, storage, or framework files. New test uses only standard library imports."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phase": "docs",
+      "at": "2026-05-25T03:49:00Z",
+      "summary": "Bug packet (bug.md, spec.md, design.md, scopes.md, scenario-manifest.json, uservalidation.md, state.json, report.md) is self-documenting and complete. No external docs/* updates required because the change is artifact-schema-only and exposes no operator-facing surface."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-05-25T03:50:00Z",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "userValidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "bug": "bug.md"
+  },
+  "notes": "Single-scope artifact-integrity + test-only bug. Closes round-6 devops sweep finding that spec 055 parent state.json declared done_with_concerns without a structured concerns array and child bug BUG-CHAOS-20260524-001 carried string-form concerns instead of the structured-object form. Zero runtime/deploy/security surface touched. New internal/deploy/state_concerns_contract_test.go locks down the schema for both files going forward."
+}
