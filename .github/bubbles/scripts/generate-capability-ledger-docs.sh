@@ -431,9 +431,9 @@ interop_doc_temp="$(mktemp)"
 
 readme_block_temp="$(mktemp)"
 {
-  printf '| [Competitive Capabilities](docs/generated/competitive-capabilities.md) | Ledger-backed competitive posture guide — %s shipped, %s partial, %s proposed |\n' "$shipped_count" "$partial_count" "$proposed_count"
-  printf '| [Issue Status](docs/generated/issue-status.md) | Ledger-backed status for %s tracked framework gaps and proposals |\n' "$issue_backed_count"
-  echo '| [Interop Migration Matrix](docs/generated/interop-migration-matrix.md) | Ledger + registry-backed migration matrix for Claude Code, Roo Code, Cursor, and Cline |'
+  printf '<tr><td><a href="docs/generated/competitive-capabilities.md">Competitive Capabilities</a></td><td>Ledger-backed competitive posture guide — %s shipped, %s partial, %s proposed</td></tr>\n' "$shipped_count" "$partial_count" "$proposed_count"
+  printf '<tr><td><a href="docs/generated/issue-status.md">Issue Status</a></td><td>Ledger-backed status for %s tracked framework gaps and proposals</td></tr>\n' "$issue_backed_count"
+  echo '<tr><td><a href="docs/generated/interop-migration-matrix.md">Interop Migration Matrix</a></td><td>Ledger + registry-backed migration matrix for Claude Code, Roo Code, Cursor, and Cline</td></tr>'
 } > "$readme_block_temp"
 
 apply_block_to_copy() {

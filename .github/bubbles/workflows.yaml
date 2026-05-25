@@ -239,25 +239,75 @@ gates:
     name: build_once_deploy_many_integrity_gate
     description: >-
       ADVISORY-UNLESS-DEPLOYMENT-SCOPE gate. When a project ships immutable artifacts to multiple environments, deployment surfaces MUST preserve Build-Once Deploy-Many invariants: image references pin by digest, CI stops at registry/config-bundle publication, per-target adapters consume artifacts without rebuilding, signatures and bundle hashes are verified before apply, rollback is pointer-swap only, bundles are deterministic, and each target owns its own manifest pointer. Framework docs and deployment-target skills define the portable invariant; downstream product repos decide when it is blocking in project policy.
+  G082:
+    name: convergence_cap_enforcement_gate
+    description: >-
+      BLOCKING gate. Maximum 10 convergence iterations per spec per session for orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint). The cap value lives in `bubbles/workflows.yaml` under `maxConvergenceIterations` (default 10). Enforced mechanically by `bubbles/scripts/convergence-cap-guard.sh`, which reads `.specify/memory/bubbles.session.json` `convergenceLoops[]` entries keyed by (specDir, agent) and fails when any entry for the spec under inspection has `iterationCount` greater than the cap. State-transition-guard.sh invokes this guard as Check 23. Exceeding the cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G082`. Hermetic selftest: `bubbles/scripts/convergence-cap-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G083:
+    name: context_compaction_discipline_gate
+    description: >-
+      BLOCKING gate. Enforces the in-loop compaction rule from `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline": orchestrator agents (bubbles.workflow, bubbles.goal, bubbles.iterate, bubbles.sprint) MUST keep the trailing transition-packet log inside per-spec budgets. The eligible slice — all envelopes for a spec EXCEPT the latest 2 (kept raw on purpose) — MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Thresholds are framework constants (NOT workflows.yaml-configurable). Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh`, which reads `.specify/memory/bubbles.session.json` `envelopesReceived[]` (schema `{specDir, agent, receivedAt, rawSizeBytes, incomingMessage, compactedAt, rawPointer}`). The guard exits 0 (pass), 1 (violation — count or size breach with uncompacted eligible entries), or 2 (malformed/missing structured fields). State-transition-guard.sh invokes this guard as Check 24. Exceeding either threshold without compaction MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` against the over-budget envelopes (it stamps `compactedAt` additively). Hermetic selftest: `bubbles/scripts/compaction-discipline-guard-selftest.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G084:
+    name: pre_existing_deferral_block_gate
+    description: >-
+      BLOCKING gate. Forbids hiding pre-existing failures behind "out of session scope", "carried forward", or similar deferral language anywhere in a spec's `scope.md` or `report.md` artifacts. Enforced mechanically by `bubbles/scripts/pre-existing-deferral-guard.sh`, which recursively scans every `scopes/*/scope.md` and `scopes/*/report.md` under the spec directory for two classes of marker. (1) Forbidden phrases (case-insensitive substring match): "pre-existing failure", "pre-existing test failure", "carried forward", "out of session scope", "previous-session failure", "not introduced by this spec". (2) Forbidden deferral markers (colon-anchored, case-sensitive): `TODO:`, `FIXME:`, `HACK:`, `STUB:`. Three exempt H2 subsections — `## Superseded Decisions`, `## Historical Notes`, and `## Out of Scope` — are skipped so historical traceability is preserved. Content inside inline backticks (\`...\`) and inside fenced code blocks (```...```) is also stripped so enumeration prose and captured raw terminal output never self-trigger. The guard exits 0 (no active markers), 1 (at least one active marker — promotion to `done` blocked), or 2 (missing/invalid specDir argument). State-transition-guard.sh invokes this guard as Check 25. Any active hit MUST be remediated inline (fix the deferred failure, not the language); never emit a `done` RESULT-ENVELOPE while a hit remains. Hermetic selftest: `bubbles/scripts/pre-existing-deferral-guard-selftest.sh`. Persistent regression: `tests/regression/test_03_pre_existing_deferral_guard.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G085:
+    name: framework_dogfood_evidence_gate
+    description: >-
+      BLOCKING gate. The Bubbles framework MUST prove it can drive work to certification under the same chain it imposes on consumers, but the Bubbles source repository itself MUST NOT keep persistent repo-local `specs/` execution packets. In the source repo, dogfood evidence comes from `framework-validate.sh`, hermetic selftests, `bubbles/release-manifest.json`, and downstream or fixture specs. Enforced mechanically by `bubbles/scripts/framework-dogfood-guard.sh`, which detects the canonical source checkout, fails if `specs/` exists there, and verifies the validation/release evidence surfaces are present. When run against downstream or hermetic fixture repositories, the guard keeps the numbered-spec evidence model: at least one `specs/[0-9]*-*/state.json` must have top-level `.status == "done"`. The guard exits 0 (source no-specs evidence clean or downstream done spec exists), 1 (source contains `specs/` / missing evidence surfaces / downstream zero done specs), or 2 (malformed input, missing repo root, malformed downstream state JSON, or jq unavailable where spec counting is required). State-transition-guard.sh invokes this guard as Check 26. Hermetic selftest: `bubbles/scripts/framework-dogfood-guard-selftest.sh`. Persistent regression: `tests/regression/test_04_framework_dogfooding.sh`. Wired into `bubbles/scripts/framework-validate.sh`. Cross-references: G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral) — G082/G083/G084 keep individual execution packets honest; G085 keeps the framework evidence model honest without storing source-repo specs.
+  G086:
+    name: orchestrator_persistence_lint_gate
+    description: >-
+      BLOCKING gate. Orchestrator prompt files MUST make autonomous persistence the default operating mode: after any non-terminal phase, automatically continue to the next phase, stopping only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced mechanically by `bubbles/scripts/orchestrator-persistence-lint.sh`, which scans exactly `agents/bubbles.goal.agent.md`, `agents/bubbles.workflow.agent.md`, `agents/bubbles.iterate.agent.md`, and `agents/bubbles.sprint.agent.md` for forbidden continuation-prompt phrases outside explicit FORBIDDEN examples and for the required persistence-default language. The guard exits 0 (clean), 1 (findings), or 2 (missing/unreadable target files or invalid invocation). State-transition-guard.sh invokes this guard as Check 27. Hermetic selftest: `bubbles/scripts/orchestrator-persistence-lint-selftest.sh`. Persistent regression: `tests/regression/test_05_orchestrator_persistence.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G087:
+    name: planning_packet_implementation_linkage_gate
+    description: >-
+      BLOCKING gate. Hardened planning packets MUST NOT remain orphaned from implementation. For any `state.json` with top-level `status == "specs_hardened"` and `planningOnly != true`, `linkedImplementationSpec` MUST point to a real spec directory containing `state.json`. If the linked implementation spec is `status == "done"`, its `linkedPlanningPacket` MUST point back to the hardened planning packet. `planningOnly:true` is allowed only with a non-empty `planningOnlyJustification`. Dangling implementation pointers fail, and implementation targets with `status == "archived"` are invalid active targets; the owner must relink to a non-archived implementation spec or classify the packet as planning-only with justification. Enforced mechanically by `bubbles/scripts/planning-packet-linkage-guard.sh`, which exits 0 (clean), 1 (G087 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 29. Hermetic selftest: `bubbles/scripts/planning-packet-linkage-guard-selftest.sh`. Persistent regression: `tests/regression/test_10_planning_packet_linkage.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G088:
+    name: post_certification_spec_edit_gate
+    description: >-
+      BLOCKING gate. Certified specs MUST NOT silently change planning truth after certification. For any `state.json` with top-level `status == "done"` or legacy read-only `status == "done_with_concerns"`, top-level `certifiedAt` MUST be present and parseable, and commits after `certifiedAt` touching `spec.md`, `design.md`, `scopes.md`, `scopes/_index.md`, or `scopes/*/scope.md` are violations unless the spec is demoted out of done, carries `requiresRevalidation:true`, or has been recertified by a current `bubbles.spec-review` with a newer `certifiedAt`. G092 compatibility boundary: legacy `done_with_concerns` is read-only only; any touched or recertified legacy spec must migrate to `done` plus observations or `blocked`. Enforced mechanically by `bubbles/scripts/post-cert-spec-edit-guard.sh`, which exits 0 (clean), 1 (G088 findings), or 2 (runtime error / malformed date / git inspection error). State-transition-guard.sh invokes this guard as Check 30. Hermetic selftest: `bubbles/scripts/post-cert-spec-edit-guard-selftest.sh`. Persistent regression: `tests/regression/test_11_post_cert_spec_edit.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G089:
+    name: inter_spec_dependency_gate
+    description: >-
+      BLOCKING gate. Explicit inter-spec dependencies MUST point to real, stable specs. For any `state.json` `specDependsOn[]` entry, the dependency path MUST resolve to a spec directory containing `state.json`, dependency status MUST be `done` unless the dependency is an old untouched legacy read-only `done_with_concerns` state with `legacyStatusCompatibility:true` or the current spec carries `requiresRevalidation:true`, and dependency cycles MUST fail. G092 compatibility boundary: newly certified or recertified `done_with_concerns` dependencies are not stable; recertification must write `done` plus observations or `blocked`. Demoted dependencies are propagated by `bubbles/scripts/inter-spec-dependency-revalidation.sh`, which additively marks direct and transitive dependents with `requiresRevalidation:true`. Enforced mechanically by `bubbles/scripts/inter-spec-dependency-guard.sh`, which exits 0 (clean), 1 (G089 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 31. Hermetic selftest: `bubbles/scripts/inter-spec-dependency-guard-selftest.sh`. Persistent regression: `tests/regression/test_12_inter_spec_dependency.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G090:
+    name: retro_convergence_health_evidence_gate
+    description: >-
+      BLOCKING gate. Retrospectives MUST surface a Convergence Health section backed by session data rather than narrative impressions. Enforced mechanically by `bubbles/scripts/retro-convergence-health.sh`, which reads `.specify/memory/bubbles.session.json` or an explicit transcript/session-store export, computes the legacy R7 metrics (`avgLoopIterations`, `maxConvergenceIterations`, `compactionFrequency`, `preExistingDeferralCount`, `snapshotCompleteness`) plus the retro output schema `convergenceHealth: {recapCount, handoffCount, summarizeHistoryCount, turnCount, slo}`, and exits 0 for `pass`/`degraded`, 1 for `failed`, or 2 for usage/runtime errors. More than 2 combined recap/handoff invocations is a P0 convergence regression and forces `slo: failed`. State-transition-guard.sh invokes this guard as Check 33. Hermetic selftest: `bubbles/scripts/retro-convergence-health-selftest.sh`. Persistent regression: `tests/regression/test_07_retro_convergence_health.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G091:
+    name: planning_workflow_chain_gate
+    description: >-
+      BLOCKING gate. Delivery-capable planning, bootstrap, and fallback paths MUST preserve the ordered canonical planning chain `bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan`. UX is mandatory even for framework/operator/non-UI work because non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling. Enforced mechanically by `bubbles/scripts/planning-workflow-chain-guard.sh`, which scans `modeTemplates.delivery-quality-constraints`, `autoEscalation.inlineActions`, delivery-capable `bootstrapAgents`, `improvementPreludeProfiles`, and active prompt/shared workflow prose for unmarked design-to-plan shortcuts. The guard exits 0 (clean), 1 (G091 findings), or 2 (missing/malformed input). State-transition-guard.sh invokes this guard as Check 28. Hermetic selftest: `bubbles/scripts/planning-workflow-chain-guard-selftest.sh`. Persistent regression: `tests/regression/test_15_planning_workflow_chain.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G092:
+    name: strict_terminal_status_gate
+    description: >-
+      BLOCKING gate. New delivery certification writes MUST use only `done` or `blocked` as terminal statuses. Non-blocking notes live in `observations[]`, `certification.observations[]`, or an equivalent non-status collection and never alter terminal status, waive gates, or satisfy missing evidence. Legacy `done_with_concerns` is read-only compatibility only for old untouched specs; when touched or recertified, it MUST migrate to `done` plus observations if all gates pass, or `blocked` when required work remains. High-severity or remediation-required observations cannot accompany `done`. Enforced mechanically by `bubbles/scripts/strict-terminal-status-guard.sh`, which exits 0 (clean), 1 (G092 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 32. Hermetic selftest: `bubbles/scripts/strict-terminal-status-guard-selftest.sh`. Persistent regression: `tests/regression/test_16_strict_terminal_status.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
+  G093:
+    name: delivery_implementation_delta_gate
+    description: >-
+      BLOCKING gate. Done-ceiling delivery modes MUST prove real implementation/runtime/config/contract/test/docs delta outside planning bookkeeping paths (`specs/**` and `.specify/**`) before certification can reach `done`. G053 remains the Code Diff Evidence shape check; G093 consumes git diff paths and/or G053-compatible report Code Diff Evidence, classifies changed paths as planning-only/source/runtime/config/contract/test/docs/other, and blocks spec-only delivery runs with a blocked RESULT-ENVELOPE that includes changed-path classification plus next-owner routing to implementation/test/docs or a below-done planning-only downgrade. Planning-only and docs-only modes with status ceilings below `done` are exempt from G093; `specs_hardened` planning packets remain governed by G087 linkage. Enforced mechanically by `bubbles/scripts/delivery-implementation-delta-guard.sh`, which exits 0 (clean or lower-ceiling exemption), 1 (G093 delivery delta violation), or 2 (runtime error / malformed input / bad refs). State-transition-guard.sh invokes this guard as Check 29B after G087 and before final promotion. Hermetic selftest: `bubbles/scripts/delivery-implementation-delta-guard-selftest.sh`. Persistent regression: `tests/regression/test_17_delivery_implementation_delta.sh`. Wired into `bubbles/scripts/framework-validate.sh`.
 
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
 # anchor: outcome-states
 outcomeStates:
   done:
-    description: "All DoD items checked, all gates pass, zero concerns."
+    description: "All DoD items checked and all gates pass. Non-blocking observations may be recorded in observations[] but do not alter status."
     requiresEvidence: true
+    supportsObservations: true
     permittedFollowUps: []
-  done_with_concerns:
-    description: >
-      All DoD items checked and all blocking gates pass, but at least one non-blocking concern is recorded. Concerns MUST be enumerated in the RESULT-ENVELOPE under `concerns: []` with a `severity: low|medium` and a `followUpOwner` for each. Concerns NEVER include policy violations (those are blocking — use `blocked` instead). Carries the same gate-passage privileges as `done` (G024, G027 treat it as Done- equivalent) and the same `state.json` certification privileges (only bubbles.validate may write `certification.status: done_with_concerns`). Authoritative spec: agents/bubbles_shared/completion-governance.md #outcome-state-done_with_concerns.
-    requiresEvidence: true
-    requiresConcernsArray: true
-    permittedFollowUps: [ "new-spec", "issue-doc", "next-sprint-todo" ]
   blocked:
     description: "A required gate failed. Cannot ship without remediation."
     requiresEvidence: true
     permittedFollowUps: [ "bugfix-fastlane", "stabilize-spec" ]
+
+legacyOutcomeStates:
+  done_with_concerns:
+    description: >-
+      Deprecated legacy read-only compatibility state. New certification writes MUST NOT use this status. Old specs may be read until touched or recertified; recertification migrates to `done` plus observations when all gates pass, or `blocked` when required work remains.
+    readOnlyCompatibility: true
+    replacement: done_with_observations_or_blocked
 
 # Mode-template inheritance bundles (T2C-B3).
 # Modes under `modes:` may declare `inherits: [<template-name>...]` to pull in
@@ -285,6 +335,11 @@ modeTemplates:
   # entire point.
   delivery-quality-constraints:
     constraints:
+      specReviewDefault: once-before-implement
+      specReviewDefaultScope: done-ceiling-delivery-modes
+      specReviewOptOutRequiresReason: true
+      requireCanonicalPlanningChain: true
+      planningChainAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
       sequentialSpecCompletion: true
       crossAgentVerification: true
       antiFabricationDetection: true
@@ -353,10 +408,10 @@ autoEscalation:
   inlineActions:
     missingArtifacts:
       description: Required artifacts (spec.md, design.md, scopes.md) are missing or incomplete
-      action: invoke bubbles.design → bubbles.plan → continue current workflow
+      action: invoke bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan → continue current workflow
     missingDesignBeforeImplement:
       description: implement phase reached but design.md or scopes.md are missing/stubs (G033 failure)
-      action: invoke bubbles.design → bubbles.plan inline → then proceed to implement
+      action: invoke bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan inline → then proceed to implement
     specsNeedHardening:
       description: Specs/scopes are underspecified, missing Gherkin, weak DoD
       action: invoke bubbles.harden inline → continue current workflow
@@ -383,7 +438,10 @@ autoEscalation:
       action: reconcile state inline → continue current workflow
     artifactFreshnessDrift:
       description: spec.md, design.md, or scopes.md contain stale active content that no longer matches current truth
-      action: invoke bubbles.analyst and/or bubbles.ux and/or bubbles.design and/or bubbles.plan inline to reconcile active artifacts before continuing
+      action: invoke bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan inline to reconcile active artifacts before continuing
+    specReviewDoneSpecMajorOrObsolete:
+      description: bubbles.spec-review returned MAJOR_DRIFT or OBSOLETE for a spec whose state is done or legacy read-only done_with_concerns
+      action: invoke bubbles.workflow with mode=improve-existing for the reviewed spec inline; parent-expand the child workflow if nested delegation is unavailable; in read-only docs-only/spec-review-only modes emit route_required with agent=bubbles.workflow and mode=improve-existing instead of making code changes
     modeOrAgentFit:
       description: The active mode or agent is not the best vehicle for the user's requested outcome, but another Bubbles mode or owner can perform the work
       action: invoke the better-fit Bubbles mode, child workflow, or owning specialist inline via runSubagent, then resume the original workflow context
@@ -772,7 +830,7 @@ modeDefaults:
     requireSmallWellDefinedScopes: true
     requireRedGreenEvidence: true
     enableMicroFixLoops: true
-    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080, G081 ]
+    inheritedRequiredGates: [ G036, G037, G038, G040, G042, G047, G048, G051, G052, G053, G063, G064, G066, G074, G075, G076, G077, G079, G080, G081, G093 ]
 
 # Batch Execution Parameter (NON-NEGOTIABLE)
 #
@@ -863,7 +921,7 @@ executionOptions:
       default: off
       values:
         off: Do not run a planning prelude before lockdown rounds
-        analyze-design-plan: Run analyst → design → plan before each eligible lockdown round
+        analyze-design-plan: Run analyst → ux → design → plan before each eligible lockdown round
         analyze-ux-design-plan: Run analyst → ux → design → plan before each eligible lockdown round
       meaning: Full-delivery only. Optional planning prelude to run before each implementation round.
     improvementPreludeRounds:
@@ -1154,7 +1212,7 @@ modes:
     constraints:
       valueFirstSelection: true
       allowBootstrapIterations: true
-      bootstrapAgents: [ bubbles.design, bubbles.plan ]
+      bootstrapAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
       bootstrapLoopExit: design_spec_scopes_ready
       executionWorkflowMode: full-delivery
       usePriorityScoring: true
@@ -1211,7 +1269,7 @@ modes:
       finalGlobalPassRequired: true
       requireDesignBeforeImplement: true
       allowBootstrapIterations: true
-      bootstrapAgents: [ bubbles.design, bubbles.plan ]
+      bootstrapAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
       bootstrapLoopExit: design_spec_scopes_ready
       forceSequentialPerSpec: true
       requirePerSpecPhaseCompletion: [ simplify, gaps, harden, stabilize, security, validate, audit, chaos, docs ]
@@ -1228,7 +1286,7 @@ modes:
         validationCertification: validate-to-doc
         bugClosure: bugfix-fastlane
       improvementPreludeProfiles:
-        analyze-design-plan: [ bubbles.analyst, bubbles.design, bubbles.plan ]
+        analyze-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
         analyze-ux-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
       blockedOnlyWhenValidateBlocked: true
       requireImplementedVsClaimedReconciliation: true
@@ -1272,18 +1330,32 @@ modes:
     statusCeiling: docs_updated
     phaseOrder: [ select, docs, validate, audit, finalize ]
     requiredGates: [ G001, G006, G007, G008, G011, G012, G073 ]
+    constraints:
+      modeClass: docs-only
+      specReviewDefault: off
+      specReviewOptOutReason: docs-only has statusCeiling docs_updated and cannot run pre-implementation hooks
+      planningTruthMutation: false
 
   validate-only:
     description: Validation-only run with evidence output.
     statusCeiling: validated
     phaseOrder: [ select, validate, finalize ]
     requiredGates: [ G001, G007, G011, G012, G073 ]
+    constraints:
+      modeClass: validate-only
+      specReviewDefault: off
+      specReviewOptOutReason: validate-only has statusCeiling validated and cannot run pre-implementation hooks
+      planningTruthMutation: false
 
   audit-only:
     description: Audit-only run for already validated scopes.
     statusCeiling: validated
     phaseOrder: [ select, audit, finalize ]
     requiredGates: [ G001, G008, G011, G012, G073 ]
+    constraints:
+      modeClass: validate-only
+      specReviewDefault: off
+      specReviewOptOutReason: audit-only has statusCeiling validated and cannot run pre-implementation hooks
 
   chaos-hardening:
     description: Start with chaos probes, then run the remediation, verification, docs, and finalize chain until clean or retry limit.
@@ -1630,6 +1702,10 @@ modes:
     phaseOrder: [ select, spec-review, docs, finalize ]
     requiredGates: [ G001, G010, G011, G012, G073 ]
     constraints:
+      modeClass: spec-review-only
+      specReviewDefault: off
+      specReviewOptOutReason: spec-review-to-doc already runs spec-review as its primary phase and is read-only
+      planningTruthMutation: false
       requireExistingImplementation: true
       readOnlyAudit: true
       noCodeChanges: true

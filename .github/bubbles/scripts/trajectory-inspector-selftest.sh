@@ -17,14 +17,21 @@
 #     sessionFound=false, both with exit 0
 #   - --last 1 trims turnSnapshots to 1 in JSON output
 #   - usage error (--last bogus) exits 2
+#   - --health reads JSON input and re-derives metrics from session state
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSPECTOR="$SCRIPT_DIR/trajectory-inspector.sh"
+RETRO_HEALTH="$SCRIPT_DIR/retro-convergence-health.sh"
 
 if [[ ! -f "$INSPECTOR" ]]; then
   echo "[selftest trajectory-inspector] FAIL: missing $INSPECTOR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$RETRO_HEALTH" ]]; then
+  echo "[selftest trajectory-inspector] FAIL: missing $RETRO_HEALTH" >&2
   exit 1
 fi
 
@@ -62,7 +69,7 @@ cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
       "scopeId": "01-scope-a",
       "mode": "implement",
       "agent": "bubbles.design",
-      "note": "design started"
+      "note": "design recap started"
     },
     {
       "turnNumber": 2,
@@ -71,7 +78,34 @@ cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
       "scopeId": "02-scope-b",
       "mode": "implement",
       "agent": "bubbles.implement",
-      "note": "implement scope B"
+      "note": "implement handoff for scope B"
+    }
+  ],
+  "envelopesReceived": [
+    {
+      "specDir": "specs/777-fake",
+      "rawSizeBytes": 1200,
+      "compactedAt": "2026-05-09T11:45:00Z"
+    },
+    {
+      "specDir": "specs/777-fake",
+      "rawSizeBytes": 700
+    }
+  ],
+  "executionHistory": [
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["design"],
+      "featureDir": "specs/777-fake",
+      "runStartedAt": "2026-05-09T10:00:00Z",
+      "runCompletedAt": "2026-05-09T10:05:00Z"
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "featureDir": "specs/777-fake",
+      "runStartedAt": "2026-05-09T10:10:00Z",
+      "runCompletedAt": "2026-05-09T10:25:00Z"
     }
   ]
 }
@@ -264,6 +298,144 @@ if [[ "$usage_rc" -eq 2 ]]; then
 else
   fail "invalid --last expected exit 2, got $usage_rc"
 fi
+
+# --- Test 6: --latency bridge appends validation latency report ----------
+
+set +e
+latency_log="$TMPDIR/latency.log"
+bash "$INSPECTOR" --repo-root "$repo" --latency --since 365 >"$latency_log" 2>&1
+latency_rc=$?
+set -e
+
+if [[ "$latency_rc" -eq 0 ]]; then
+  pass "--latency bridge exits 0"
+else
+  fail "--latency bridge expected exit 0, got $latency_rc"
+  sed -n '1,120p' "$latency_log"
+fi
+
+for token in \
+  "6. Validation Latency (--latency)" \
+  "# Validation Latency Report" \
+  "| Phase |" \
+  "| implement | all | specs/777-fake | 1 | 15m0s | 15m0s | 15m0s | 30m0s | yes |"
+do
+  if grep -Fq "$token" "$latency_log"; then
+    pass "--latency output contains '$token'"
+  else
+    fail "--latency output missing token: '$token'"
+    sed -n '1,160p' "$latency_log"
+  fi
+done
+
+# --- Test 7: --health with JSON input -----------------------------------
+
+repo_health_input="$TMPDIR/repo-health-input"
+mkdir -p "$repo_health_input/.specify/memory"
+cat > "$repo_health_input/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "selftest-health-input-session",
+  "turnSnapshots": [
+    {
+      "specDir": "specs/777-fake",
+      "turnNumber": 1,
+      "startedAt": "2026-05-09T11:00:00Z",
+      "completedAt": "2026-05-09T11:05:00Z",
+      "content": "implementation"
+    },
+    {
+      "specDir": "specs/777-fake",
+      "turnNumber": 2,
+      "startedAt": "2026-05-09T11:06:00Z",
+      "completedAt": "2026-05-09T11:10:00Z",
+      "content": "validation"
+    }
+  ],
+  "envelopesReceived": [
+    {
+      "specDir": "specs/777-fake",
+      "rawSizeBytes": 1200,
+      "compactedAt": "2026-05-09T11:45:00Z"
+    }
+  ]
+}
+EOF
+
+health_json="$TMPDIR/convergence-health.json"
+set +e
+retro_json_log="$TMPDIR/retro-json.log"
+bash "$RETRO_HEALTH" specs/777-fake --repo-root "$repo_health_input" --format json >"$health_json" 2>"$retro_json_log"
+retro_json_rc=$?
+set -e
+
+if [[ "$retro_json_rc" -eq 0 ]]; then
+  pass "retro-convergence-health produces JSON for --health input"
+else
+  fail "retro-convergence-health JSON expected exit 0, got $retro_json_rc"
+  sed -n '1,80p' "$retro_json_log"
+fi
+
+set +e
+health_input_log="$TMPDIR/health-input.log"
+bash "$INSPECTOR" --health --input "$health_json" >"$health_input_log" 2>&1
+health_input_rc=$?
+set -e
+
+if [[ "$health_input_rc" -eq 0 ]]; then
+  pass "--health --input exits 0"
+else
+  fail "--health --input expected exit 0, got $health_input_rc"
+  sed -n '1,80p' "$health_input_log"
+fi
+
+for token in \
+  "Convergence Health:" \
+  "turnCount=2" \
+  "compactionInvocations=0" \
+  "recapInvocations=0" \
+  "handoffInvocations=0" \
+  "blockedFindings=0" \
+  "status=HEALTHY"
+do
+  if grep -Fq "$token" "$health_input_log"; then
+    pass "--health --input output contains '$token'"
+  else
+    fail "--health --input output missing token: '$token'"
+    sed -n '1,80p' "$health_input_log"
+  fi
+done
+
+# --- Test 8: --health re-derives from session/spec ----------------------
+
+set +e
+health_spec_log="$TMPDIR/health-spec.log"
+bash "$INSPECTOR" --repo-root "$repo" --health --spec specs/777-fake >"$health_spec_log" 2>&1
+health_spec_rc=$?
+set -e
+
+if [[ "$health_spec_rc" -eq 0 ]]; then
+  pass "--health --spec exits 0"
+else
+  fail "--health --spec expected exit 0, got $health_spec_rc"
+  sed -n '1,80p' "$health_spec_log"
+fi
+
+for token in \
+  "Convergence Health:" \
+  "turnCount=2" \
+  "compactionInvocations=1" \
+  "recapInvocations=1" \
+  "handoffInvocations=1" \
+  "blockedFindings=0" \
+  "status=DEGRADED"
+do
+  if grep -Fq "$token" "$health_spec_log"; then
+    pass "--health --spec output contains '$token'"
+  else
+    fail "--health --spec output missing token: '$token'"
+    sed -n '1,80p' "$health_spec_log"
+  fi
+done
 
 # --- Summary --------------------------------------------------------------
 

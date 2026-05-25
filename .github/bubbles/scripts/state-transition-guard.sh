@@ -46,6 +46,46 @@ if [[ ! -d "$feature_dir" ]]; then
   exit 2
 fi
 
+resolve_script_repo_root() {
+  if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
+    (cd "$SCRIPT_DIR/../../.." && pwd -P)
+  else
+    (cd "$SCRIPT_DIR/../.." && pwd -P)
+  fi
+}
+
+resolve_feature_repo_root() {
+  local feature_abs parent git_repo_root=""
+
+  feature_abs="$(cd "$feature_dir" && pwd -P)"
+  parent="$(dirname "$feature_abs")"
+  if [[ "$(basename "$parent")" == "specs" ]]; then
+    (cd "$(dirname "$parent")" && pwd -P)
+    return 0
+  fi
+
+  if command -v git >/dev/null 2>&1 && git -C "$feature_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git_repo_root="$(git -C "$feature_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  fi
+  if [[ -n "$git_repo_root" ]]; then
+    (cd "$git_repo_root" && pwd -P)
+    return 0
+  fi
+
+  resolve_script_repo_root
+}
+
+script_repo_root="$(resolve_script_repo_root)"
+guard_repo_root="$(resolve_feature_repo_root)"
+
+run_guard_in_feature_repo() {
+  BUBBLES_REPO_ROOT="$guard_repo_root" "$@"
+}
+
+run_guard_in_script_repo() {
+  BUBBLES_REPO_ROOT="$script_repo_root" "$@"
+}
+
 failures=0
 warnings=0
 
@@ -2370,10 +2410,10 @@ echo ""
 #        followUpAction, followUpTarget, followUps) are added to the
 #        exclusion pattern. They are mandated by completion-governance.md
 #        and must never count as deferral prose.
-#   (ii) When state.json status is "done_with_concerns" the entire check
-#        is skipped — that status explicitly authorizes follow-up
-#        narrative per the schema, so running the deferral grep against
-#        authorized narrative is a category error.
+#   (ii) When state.json status is legacy read-only "done_with_concerns"
+#        and legacyStatusCompatibility:true is present, the entire check is
+#        skipped for compatibility. New done_with_concerns writes are blocked
+#        by Gate G092.
 #   (iii) Content between <!-- bubbles:g040-skip-begin --> and
 #        <!-- bubbles:g040-skip-end --> HTML-comment markers is excluded
 #        from the scan, letting governance docs / post-mortems quote
@@ -2381,8 +2421,8 @@ echo ""
 # =============================================================================
 echo "--- Check 18: Deferral Language Scan (Gate G040) ---"
 
-if [[ "$state_status" == "done_with_concerns" ]]; then
-  info "Check 18 skipped: state.json status is 'done_with_concerns' — follow-up narrative is permitted by completion-governance.md schema (Gate G040)"
+if [[ "$state_status" == "done_with_concerns" && "$(json_first_bool "legacyStatusCompatibility" "$state_file" || true)" == "true" ]]; then
+  info "Check 18 skipped: state.json status is legacy read-only 'done_with_concerns' with legacyStatusCompatibility:true (Gate G040/G092)"
 else
   deferral_pattern='deferred|defer to|deferred to|future scope|future work|future iteration|follow-up|follow up|followup|out of scope|not in scope|beyond scope|will address later|address later|revisit later|separate ticket|separate issue|separate PR|tracked separately|handled separately|punt\b|punted|postpone|postponed|skip for now|skipped for now|not implemented yet|not yet implemented|placeholder|temporary workaround'
   # Strategy (i): exclude schema-canonical follow-up field names mandated
@@ -2747,6 +2787,322 @@ elif [[ "$dod_fidelity_failures" -gt 0 ]]; then
   info "If a DoD item was rewritten to describe different behavior, route to bubbles.plan for plan correction"
 else
   pass "All $dod_fidelity_total Gherkin scenarios have faithful DoD items (Gate G068)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 23: Convergence Cap Enforcement (Gate G082)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/convergence-cap-guard.sh.
+# The guard reads `.specify/memory/bubbles.session.json` and checks every
+# `convergenceLoops[]` entry whose `specDir` matches the spec under
+# inspection. If the highest observed `iterationCount` exceeds
+# `maxConvergenceIterations` (default 10, from `bubbles/workflows.yaml`),
+# the guard exits 1 and this check fails. Missing session.json, missing
+# convergenceLoops[], or entries scoped to other specs all pass cleanly.
+echo "--- Check 23: Convergence Cap Enforcement (Gate G082) ---"
+conv_guard="$SCRIPT_DIR/convergence-cap-guard.sh"
+if [[ -x "$conv_guard" ]]; then
+  if run_guard_in_feature_repo bash "$conv_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Convergence cap not exceeded (Gate G082)"
+  else
+    fail "Convergence cap exceeded — Gate G082 violation. Run 'bash $conv_guard $feature_dir' for full diagnostic"
+    info "maxConvergenceIterations lives in bubbles/workflows.yaml (default 10)"
+    info "Orchestrator agents (workflow, goal, iterate, sprint) MUST emit a 'blocked' RESULT-ENVELOPE with finding G082 when the cap is reached"
+  fi
+else
+  info "convergence-cap-guard.sh not present at $conv_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 24: Compaction Discipline Enforcement (Gate G083)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/compaction-discipline-guard.sh.
+# The guard reads `.specify/memory/bubbles.session.json`, isolates
+# `envelopesReceived[]` entries whose `specDir` matches the spec under
+# inspection, sorts by `receivedAt`, drops the latest 2 (kept raw by
+# policy), then checks the eligible slice for BOTH `count <= 3` AND
+# `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope
+# carries a `compactedAt` timestamp. Thresholds are framework constants
+# (NOT workflows.yaml-configurable). Missing session.json or no
+# envelopesReceived[] entries for this spec both pass cleanly.
+echo "--- Check 24: Compaction Discipline Enforcement (Gate G083) ---"
+comp_guard="$SCRIPT_DIR/compaction-discipline-guard.sh"
+if [[ -x "$comp_guard" ]]; then
+  if run_guard_in_feature_repo bash "$comp_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Compaction discipline respected (Gate G083)"
+  else
+    fail "Compaction discipline violation — Gate G083. Run 'bash $comp_guard $feature_dir' for full diagnostic"
+    info "Eligible slice (envelopes except latest 2) MUST satisfy count<=3 AND rawSizeBytes<=8192 UNLESS each over-budget envelope has compactedAt"
+    info "Orchestrator agents MUST run bubbles/scripts/context-compactor.sh on over-budget envelopes (additively stamps compactedAt) BEFORE the next dispatch"
+    info "Thresholds are framework constants; see agents/bubbles_shared/operating-baseline.md → 'Context Compaction Discipline'"
+  fi
+else
+  info "compaction-discipline-guard.sh not present at $comp_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 25: Pre-Existing Deferral Block Enforcement (Gate G084)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/pre-existing-deferral-guard.sh.
+# The guard recursively scans every `scope.md` and `report.md` under
+# `<feature_dir>/scopes/*/` for two classes of pre-existing deferral
+# markers:
+#   - Forbidden phrases (case-insensitive substring):
+#       "pre-existing failure", "pre-existing test failure",
+#       "carried forward", "out of session scope",
+#       "previous-session failure", "not introduced by this spec"
+#   - Forbidden markers (colon-anchored, case-sensitive):
+#       TODO:  FIXME:  HACK:  STUB:
+# H2 subsections named `## Superseded Decisions`, `## Historical Notes`,
+# and `## Out of Scope` are exempt (allowed to discuss historical
+# deferrals for traceability). Inline `...` backticked spans and
+# ```fenced code blocks``` are also exempt so the guard never
+# self-triggers when the language is used as enumeration prose or
+# captured raw terminal output. Any active hit produces exit 1 and
+# blocks promotion to `done`.
+echo "--- Check 25: Pre-Existing Deferral Block Enforcement (Gate G084) ---"
+pre_guard="$SCRIPT_DIR/pre-existing-deferral-guard.sh"
+if [[ -x "$pre_guard" ]]; then
+  if run_guard_in_feature_repo bash "$pre_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "No active pre-existing-deferral markers in scope.md / report.md (Gate G084)"
+  else
+    fail "Pre-existing deferral marker detected — Gate G084. Run 'bash $pre_guard $feature_dir' for full diagnostic"
+    info "Forbidden phrases: 'pre-existing failure', 'pre-existing test failure', 'carried forward', 'out of session scope', 'previous-session failure', 'not introduced by this spec'"
+    info "Forbidden markers (colon-anchored): TODO:  FIXME:  HACK:  STUB:"
+    info "Move historical language under '## Superseded Decisions', '## Historical Notes', or '## Out of Scope', OR wrap enumeration prose in inline backticks"
+    info "Pre-existing failures MUST be fixed inline; deferring to a follow-up session is forbidden by Gate G084"
+  fi
+else
+  info "pre-existing-deferral-guard.sh not present at $pre_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 26: Framework Dogfood Evidence Enforcement (Gate G085)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/framework-dogfood-guard.sh.
+# The guard is source-aware. In the Bubbles source repository, persistent
+# `specs/` are forbidden and dogfood evidence comes from framework
+# validation, hermetic selftests, release manifests, and downstream or
+# fixture specs. In downstream/fixture repositories, the traditional
+# evidence model still applies: at least one numbered spec at status
+# `done` demonstrates the installed framework can drive work to
+# certification.
+echo "--- Check 26: Framework Dogfood Evidence Enforcement (Gate G085) ---"
+dog_guard="$SCRIPT_DIR/framework-dogfood-guard.sh"
+if [[ -x "$dog_guard" ]]; then
+  if run_guard_in_script_repo bash "$dog_guard" --repo-root "$script_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Framework dogfood evidence contract is satisfied (Gate G085)"
+  else
+    fail "Framework dogfood evidence contract failed — Gate G085. Run 'bash $dog_guard' for full diagnostic"
+    info "Bubbles source requirement: no persistent specs/ tree; use framework validation, selftests, release manifest, and downstream/fixture specs as evidence"
+    info "Downstream/fixture requirement: at least one specs/[0-9]*-*/state.json has top-level \"status\": \"done\""
+    info "Recipe: docs/recipes/framework-dogfood.md"
+    info "Cross-references: G082 (convergence cap), G083 (compaction discipline), G084 (pre-existing deferral)"
+  fi
+else
+  info "framework-dogfood-guard.sh not present at $dog_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 27: Orchestrator Persistence Prompt Lint (Gate G086)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/orchestrator-persistence-lint.sh.
+# The guard scans the 4 orchestrator prompt files and rejects language
+# that makes continuation depend on a fresh user prompt. Orchestrators
+# must default to persistence after non-terminal phases, stopping only
+# for convergence achieved, max iterations reached, user requests stop,
+# or fundamental impossibility.
+echo "--- Check 27: Orchestrator Persistence Prompt Lint (Gate G086) ---"
+persistence_guard="$SCRIPT_DIR/orchestrator-persistence-lint.sh"
+if [[ -x "$persistence_guard" ]]; then
+  if run_guard_in_script_repo bash "$persistence_guard" --root "$script_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Orchestrator prompt files satisfy persistence-default lint (Gate G086)"
+  else
+    fail "Orchestrator persistence prompt lint failed — Gate G086. Run 'bash $persistence_guard' for full diagnostic"
+    info "Target files: agents/bubbles.goal.agent.md, agents/bubbles.workflow.agent.md, agents/bubbles.iterate.agent.md, agents/bubbles.sprint.agent.md"
+    info "Required default: after non-terminal phases, automatically continue to the next phase"
+    info "Stop reasons: convergence achieved, max iterations reached, user requests stop, fundamental impossibility"
+  fi
+else
+  info "orchestrator-persistence-lint.sh not present at $persistence_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 28: Planning Workflow Chain Enforcement (Gate G091)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/planning-workflow-chain-guard.sh.
+# Delivery-capable planning/bootstrap/fallback paths MUST preserve the ordered
+# canonical chain: bubbles.analyst -> bubbles.ux -> bubbles.design ->
+# bubbles.plan. UX is mandatory even for framework/operator/non-UI work;
+# non-UI UX defines workflow behavior, status language, blocked envelopes,
+# and exception handling.
+echo "--- Check 28: Planning Workflow Chain Enforcement (Gate G091) ---"
+planning_chain_guard="$SCRIPT_DIR/planning-workflow-chain-guard.sh"
+if [[ -x "$planning_chain_guard" ]]; then
+  planning_chain_repo_root="$script_repo_root"
+  if bash "$planning_chain_guard" --root "$planning_chain_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Planning workflow chain preserves analyst -> ux -> design -> plan (Gate G091)"
+  else
+    fail "Planning workflow chain guard failed — Gate G091. Run 'bash $planning_chain_guard --root $planning_chain_repo_root' for full diagnostic"
+    info "Required chain: bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan"
+    info "Targets: workflows.yaml delivery constraints, inline auto-escalations, bootstrapAgents, improvementPreludeProfiles, and prompt/shared fallback prose"
+    info "UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling"
+  fi
+else
+  info "planning-workflow-chain-guard.sh not present at $planning_chain_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 29: Planning Packet Implementation Linkage (Gate G087)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/planning-packet-linkage-guard.sh.
+# Hardened planning packets (`state.status == specs_hardened`) must either
+# link to a real implementation spec with state.json or classify themselves
+# as planning-only with a non-empty justification. If the linked
+# implementation spec is done, it must point back with linkedPlanningPacket.
+# Archived implementation targets are not valid active implementation links.
+echo "--- Check 29: Planning Packet Implementation Linkage (Gate G087) ---"
+planning_linkage_guard="$SCRIPT_DIR/planning-packet-linkage-guard.sh"
+if [[ -x "$planning_linkage_guard" ]]; then
+  if run_guard_in_feature_repo bash "$planning_linkage_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Planning packet implementation linkage is coherent (Gate G087)"
+  else
+    fail "Planning packet implementation linkage failed — Gate G087. Run 'bash $planning_linkage_guard $feature_dir' for full diagnostic"
+    info "specs_hardened packets with planningOnly != true MUST set linkedImplementationSpec to a real spec directory with state.json"
+    info "If the linked implementation spec is done, linkedPlanningPacket MUST point back to the planning packet"
+    info "planningOnly:true requires a non-empty planningOnlyJustification; archived implementation targets must be relinked or classified planning-only"
+  fi
+else
+  info "planning-packet-linkage-guard.sh not present at $planning_linkage_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 29B: Delivery Implementation Delta (Gate G093)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/delivery-implementation-delta-guard.sh.
+# G053 owns Code Diff Evidence shape; G087 owns planning packet linkage; G093
+# owns status-ceiling-aware path classification for done-ceiling delivery modes.
+echo "--- Check 29B: Delivery Implementation Delta (Gate G093) ---"
+delivery_delta_guard="$SCRIPT_DIR/delivery-implementation-delta-guard.sh"
+if [[ -x "$delivery_delta_guard" ]]; then
+  if run_guard_in_feature_repo bash "$delivery_delta_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Delivery implementation delta is present or mode ceiling exempts it (Gate G093)"
+  else
+    fail "Delivery implementation delta guard failed — Gate G093. Run 'bash $delivery_delta_guard $feature_dir' for changed-path classification and owner routing"
+    info "Done-ceiling delivery modes MUST show implementation/runtime/config/contract/test/docs delta outside specs/ and .specify/"
+    info "Spec-only delivery output must route to implementation/test/docs work, or downgrade to a below-done planning-only workflow governed by G087"
+    info "G053 remains the Code Diff Evidence shape check; G093 is the delivery-mode status-level path gate"
+  fi
+else
+  info "delivery-implementation-delta-guard.sh not present at $delivery_delta_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 30: Post-Certification Spec Edit Detection (Gate G088)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/post-cert-spec-edit-guard.sh.
+# Certified specs (`state.status == done` or legacy read-only
+# `done_with_concerns`) must carry
+# top-level certifiedAt and must not have later planning-truth commits touching
+# spec.md, design.md, scopes.md, scopes/_index.md, or per-scope scope.md files
+# unless the spec is demoted, explicitly requires revalidation, or has been
+# recertified by current spec review with a newer certifiedAt.
+echo "--- Check 30: Post-Certification Spec Edit Detection (Gate G088) ---"
+post_cert_guard="$SCRIPT_DIR/post-cert-spec-edit-guard.sh"
+if [[ -x "$post_cert_guard" ]]; then
+  if run_guard_in_feature_repo bash "$post_cert_guard" "$feature_dir" --quiet > /dev/null 2>&1; then
+    pass "Post-certification planning truth is aligned with certification state (Gate G088)"
+  else
+    fail "Post-certification spec edit guard failed — Gate G088. Run 'bash $post_cert_guard $feature_dir' for full diagnostic"
+    info "Certified specs MUST have top-level certifiedAt and no later planning truth commits"
+    info "Tracked files: spec.md, design.md, scopes.md, scopes/_index.md, scopes/*/scope.md"
+    info "Remediation: demote status, set requiresRevalidation:true, or complete bubbles.spec-review recertification and update certifiedAt after the edit"
+  fi
+else
+  info "post-cert-spec-edit-guard.sh not present at $post_cert_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 31: Inter-Spec Dependency Enforcement (Gate G089)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/inter-spec-dependency-guard.sh.
+# Explicit specDependsOn[] entries must resolve to real specs with stable
+# states (done, with legacy read-only done_with_concerns accepted only for
+# untouched old specs), unless the current spec has already been flagged with
+# requiresRevalidation:true. Cycles are always blocking.
+echo "--- Check 31: Inter-Spec Dependency Enforcement (Gate G089) ---"
+inter_spec_dependency_guard="$SCRIPT_DIR/inter-spec-dependency-guard.sh"
+if [[ -x "$inter_spec_dependency_guard" ]]; then
+  if run_guard_in_feature_repo bash "$inter_spec_dependency_guard" "$feature_dir" --repo-root "$guard_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Inter-spec dependencies are stable or explicitly flagged for revalidation (Gate G089)"
+  else
+    fail "Inter-spec dependency guard failed — Gate G089. Run 'bash $inter_spec_dependency_guard $feature_dir' for full diagnostic"
+    info "Every specDependsOn[] path MUST resolve to a spec directory containing state.json"
+    info "Dependency statuses allowed without revalidation: done; legacy read-only done_with_concerns remains compatible only until touched or recertified"
+    info "If a dependency is demoted, run inter-spec-dependency-revalidation.sh on that dependency so dependents carry requiresRevalidation:true"
+    info "Dependency cycles are always blocking"
+  fi
+else
+  info "inter-spec-dependency-guard.sh not present at $inter_spec_dependency_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 32: Strict Terminal Status Enforcement (Gate G092)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/strict-terminal-status-guard.sh.
+# New delivery certification writes may use only `done` or `blocked` as
+# terminal statuses. Legacy done_with_concerns remains readable only for old,
+# untouched specs until recertification migrates to done plus observations or
+# blocked. High/remediation-required observations cannot accompany done.
+echo "--- Check 32: Strict Terminal Status Enforcement (Gate G092) ---"
+strict_terminal_status_guard="$SCRIPT_DIR/strict-terminal-status-guard.sh"
+if [[ -x "$strict_terminal_status_guard" ]]; then
+  if run_guard_in_script_repo bash "$strict_terminal_status_guard" "$feature_dir" --repo-root "$script_repo_root" --quiet > /dev/null 2>&1; then
+    pass "Terminal certification statuses are strict (Gate G092)"
+  else
+    fail "Strict terminal status guard failed — Gate G092. Run 'bash $strict_terminal_status_guard $feature_dir' for full diagnostic"
+    info "Valid new terminal delivery statuses: done, blocked"
+    info "Non-blocking notes belong in observations[] / certification.observations[], not status"
+    info "Legacy done_with_concerns is read-only only; touched or recertified specs migrate to done+observations or blocked"
+    info "High/remediation-required observations block done"
+  fi
+else
+  info "strict-terminal-status-guard.sh not present at $strict_terminal_status_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
+# CHECK 33: Retro Convergence Health Evidence (Gate G090)
+# =============================================================================
+# Mechanical wrapper around bubbles/scripts/retro-convergence-health.sh.
+# Retrospectives must compute convergence health from session data. More than
+# 2 combined recap/handoff invocations is a P0 convergence regression and
+# fails the gate with slo=failed.
+echo "--- Check 33: Retro Convergence Health Evidence (Gate G090) ---"
+retro_convergence_health="$SCRIPT_DIR/retro-convergence-health.sh"
+if [[ -f "$retro_convergence_health" ]]; then
+  retro_repo_root="$script_repo_root"
+  if bash "$retro_convergence_health" "$feature_dir" --repo-root "$retro_repo_root" --schema full > /dev/null 2>&1; then
+    pass "Retro convergence health SLO is pass/degraded (Gate G090)"
+  else
+    fail "Retro convergence health failed — Gate G090. Run 'bash $retro_convergence_health $feature_dir --repo-root $retro_repo_root' for full diagnostic"
+    info "Required retro schema: convergenceHealth: {recapCount, handoffCount, summarizeHistoryCount, turnCount, slo}"
+    info "P0 regression threshold: recapCount + handoffCount MUST be <= 2"
+    info "Snapshot completeness threshold: snapshotCompleteness MUST be 1.0"
+  fi
+else
+  info "retro-convergence-health.sh not present at $retro_convergence_health; skipping (advisory)"
 fi
 echo ""
 
