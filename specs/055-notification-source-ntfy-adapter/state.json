@@ -118,7 +118,23 @@
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
-    }
+    },
+    "concerns": [
+      {
+        "id": "CONCERN-055-001-legacy-evidence-fence-cleanup-parent",
+        "severity": "low",
+        "summary": "Validation classified the stale evidence-signal warnings on the parent report.md as non-blocking planning/interpreted sections and promoted certification.status to done_with_concerns; legacy report.md evidence-fence cleanup remains as documentation hygiene follow-up.",
+        "followUpOwner": "bubbles.docs",
+        "followUpAction": "next-sprint-todo"
+      },
+      {
+        "id": "CONCERN-055-002-legacy-evidence-fence-cleanup-blocks-child-literal-done",
+        "severity": "low",
+        "summary": "Literal child (BUG-CHAOS-20260524-001) done promotion remains blocked by the same legacy report evidence-fence cleanup; the child bug is independently certified done_with_concerns and does not gate parent certification.",
+        "followUpOwner": "bubbles.docs",
+        "followUpAction": "next-sprint-todo"
+      }
+    ]
   },
   "policySnapshot": {
     "workflowMode": {

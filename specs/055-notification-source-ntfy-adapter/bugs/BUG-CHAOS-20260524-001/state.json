@@ -75,13 +75,55 @@
     },
     "blockers": [],
     "concerns": [
-      "Replay correctness is regression_verified and stabilize-clean for the focused integration/E2E ntfy replay/source-sink risk surface.",
-      "The prior transient test-stack start failure did not reproduce after DevOps port-release remediation; two consecutive current-session focused ntfy stress runs passed through pre-clean, stack startup, readiness, ntfy workload, and exit teardown.",
-      "Regression and stabilization runtime coverage are focused and do not claim a fresh full-repo regression baseline.",
-      "Security phase verified the replay idempotency fix and bug-packet docs do not reintroduce raw payload exposure, credential leakage, output-channel coupling, or unsafe repeated replay behavior.",
-      "Audit independently reran focused integration, E2E, unit boundary, and stress selectors; all passed in the current session.",
-      "G048 repair added direct implementation file references to scopes.md so implementation-reality scan no longer needs design.md fallback for this bug packet.",
-      "Validate certification reran focused unit, integration, E2E, stress, format, lint, implementation reality, artifact lint, traceability, and state-transition gates on 2026-05-24; the standalone bug packet is certified as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+      {
+        "id": "CONCERN-BUG-CHAOS-001-001-replay-regression-verified",
+        "severity": "low",
+        "summary": "Replay correctness is regression_verified and stabilize-clean for the focused integration/E2E ntfy replay/source-sink risk surface.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-002-transient-test-stack-port-release",
+        "severity": "low",
+        "summary": "The prior transient test-stack start failure did not reproduce after DevOps port-release remediation; two consecutive current-session focused ntfy stress runs passed through pre-clean, stack startup, readiness, ntfy workload, and exit teardown.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-003-focused-regression-coverage",
+        "severity": "low",
+        "summary": "Regression and stabilization runtime coverage are focused and do not claim a fresh full-repo regression baseline.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-004-security-replay-idempotency-verified",
+        "severity": "low",
+        "summary": "Security phase verified the replay idempotency fix and bug-packet docs do not reintroduce raw payload exposure, credential leakage, output-channel coupling, or unsafe repeated replay behavior.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-005-audit-focused-rerun-passed",
+        "severity": "low",
+        "summary": "Audit independently reran focused integration, E2E, unit boundary, and stress selectors; all passed in the current session.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-006-g048-repair-direct-impl-refs",
+        "severity": "low",
+        "summary": "G048 repair added direct implementation file references to scopes.md so implementation-reality scan no longer needs design.md fallback for this bug packet.",
+        "followUpOwner": "human",
+        "followUpAction": "accept"
+      },
+      {
+        "id": "CONCERN-BUG-CHAOS-001-007-legacy-evidence-fence-cleanup-blocks-literal-done",
+        "severity": "low",
+        "summary": "Validate certification reran focused unit, integration, E2E, stress, format, lint, implementation reality, artifact lint, traceability, and state-transition gates on 2026-05-24; the standalone bug packet is certified as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix.",
+        "followUpOwner": "bubbles.docs",
+        "followUpAction": "next-sprint-todo"
+      }
     ]
   },
   "policySnapshot": {
