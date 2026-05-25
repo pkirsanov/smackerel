@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-003-alert-producer-failures-metric",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric",
+  "generatedBy": "bubbles.workflow",
+  "generatedAt": "2026-05-25T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-021-003-001",
+      "name": "Producer failure increments per-type counter",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/scopes.md",
+      "requiredTestType": ["unit", "regression"],
+      "linkedTests": [
+        {
+          "file": "internal/metrics/metrics_test.go",
+          "function": "TestAlertProducerFailuresMetric"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "post-fix-unit-pass",
+          "location": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/report.md::Test Evidence"
+        },
+        {
+          "type": "regression-pass",
+          "location": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/report.md::Regression Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-021-003-001",
+        "scope-1::DOD-BUG-021-003-002",
+        "scope-1::DOD-BUG-021-003-005",
+        "scope-1::DOD-BUG-021-003-006",
+        "scope-1::DOD-BUG-021-003-007"
+      ]
+    },
+    {
+      "scenarioId": "SCN-BUG-021-003-002",
+      "name": "Producer failure does not silently drop signal",
+      "scope": "scope-1",
+      "status": "active",
+      "source": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/scopes.md",
+      "requiredTestType": ["unit", "regression"],
+      "linkedTests": [
+        {
+          "file": "internal/metrics/metrics_test.go",
+          "function": "TestAlertProducerFailuresMetric"
+        },
+        {
+          "file": "internal/intelligence/alert_producers.go",
+          "function": "ProduceBillAlerts/ProduceTripPrepAlerts/ProduceReturnWindowAlerts/ProduceRelationshipCoolingAlerts"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "type": "code-diff",
+          "location": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/report.md::Code Diff Evidence"
+        },
+        {
+          "type": "grep-count-verification",
+          "location": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric/report.md::Implementation Evidence"
+        }
+      ],
+      "linkedDoD": [
+        "scope-1::DOD-BUG-021-003-003",
+        "scope-1::DOD-BUG-021-003-004",
+        "scope-1::DOD-BUG-021-003-006",
+        "scope-1::DOD-BUG-021-003-007"
+      ]
+    }
+  ]
+}

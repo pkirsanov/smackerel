@@ -1,0 +1,84 @@
+{
+  "sweepId": "sweep-2026-05-25-r10",
+  "mode": "stochastic-quality-sweep",
+  "requestedRounds": 10,
+  "startedAt": "2026-05-25T06:00:00Z",
+  "executionModel": "parent-expanded-child-mode",
+  "baselineHead": "73267f24c3b3d271b5d46bba3fa524b8e2bb6b0d",
+  "previousSweepId": "sweep-2026-05-24-r10",
+  "specPool": "auto-discovered-55-specs",
+  "policy": {
+    "requireTriggerOwnedChildWorkflows": true,
+    "requireTerminalFindingClosure": true,
+    "allowParentExpandedChildWorkflow": true,
+    "recordChildWorkflowExecutionModel": true,
+    "noBypassFlag": true,
+    "noShellFileWrites": true,
+    "noBaselineRationalizationSkip": true,
+    "noTestSuiteSubstitution": true,
+    "pathLimitedAdd": true,
+    "piiRedaction": true
+  },
+  "triggerWorkflowModes": {
+    "chaos": "chaos-hardening",
+    "harden": "harden-to-doc",
+    "gaps": "gaps-to-doc",
+    "simplify": "simplify-to-doc",
+    "stabilize": "stabilize-to-doc",
+    "test": "test-to-doc",
+    "devops": "devops-to-doc",
+    "validate": "reconcile-to-doc",
+    "improve": "improve-existing",
+    "security": "security-to-doc",
+    "regression": "regression-to-doc"
+  },
+  "plannedRounds": [
+    {"round": 1, "spec": "021-intelligence-delivery", "trigger": "improve", "mappedMode": "improve-existing"},
+    {"round": 2, "spec": "004-phase3-intelligence", "trigger": "gaps", "mappedMode": "gaps-to-doc"},
+    {"round": 3, "spec": "027-user-annotations", "trigger": "stabilize", "mappedMode": "stabilize-to-doc"},
+    {"round": 4, "spec": "041-qf-companion-connector", "trigger": "devops", "mappedMode": "devops-to-doc"},
+    {"round": 5, "spec": "013-guesthost-connector", "trigger": "stabilize", "mappedMode": "stabilize-to-doc"},
+    {"round": 6, "spec": "050-ml-sidecar-health-isolation", "trigger": "harden", "mappedMode": "harden-to-doc"},
+    {"round": 7, "spec": "034-expense-tracking", "trigger": "simplify", "mappedMode": "simplify-to-doc"},
+    {"round": 8, "spec": "053-ci-ops-evidence-hardening", "trigger": "improve", "mappedMode": "improve-existing"},
+    {"round": 9, "spec": "007-google-keep-connector", "trigger": "test", "mappedMode": "test-to-doc"},
+    {"round": 10, "spec": "009-bookmarks-connector", "trigger": "stabilize", "mappedMode": "stabilize-to-doc"}
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "spec": "specs/021-intelligence-delivery",
+      "trigger": "improve",
+      "mappedMode": "improve-existing",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T06:00:00Z",
+      "completedAt": "2026-05-25T09:00:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 1,
+      "findingsClosedThisRound": 1,
+      "bugsSpawned": 1,
+      "bugId": "BUG-021-003-alert-producer-failures-metric",
+      "bugFinalStatus": "done",
+      "guardsClean": true,
+      "guardEvidence": {
+        "stateTransitionGuard": "PERMITTED with 1 warning (placeholder test-file paths)",
+        "artifactLintBug": "PASSED",
+        "artifactLintParent": "PASSED",
+        "traceabilityGuard": "PASSED (0 warnings, 15 scenarios mapped)"
+      },
+      "implementationSurfaces": [
+        "internal/metrics/metrics.go (AlertProducerFailures CounterVec + MustRegister)",
+        "internal/intelligence/alert_producers.go (4 .Inc() call sites at lines 100/170/235/301)",
+        "internal/metrics/metrics_test.go (TestAlertProducerFailuresMetric, 52 lines)"
+      ],
+      "testExecution": {
+        "unitVerbose": "go test -v ./internal/metrics/... -> TestAlertProducerFailuresMetric PASS + TestAlertDeliveryMetrics PASS (1.067s)",
+        "regressionAcrossPackages": "go test ./internal/metrics/... ./internal/intelligence/... ./internal/scheduler/... ./internal/api/... -> ALL GREEN (1.305s + 1.208s + 6.148s + 18.666s)",
+        "vet": "go vet ./... CLEAN",
+        "build": "go build ./... exit 0"
+      },
+      "note": "Observability symmetry restored — AlertProducerFailures counter wired into all 4 alert producers (Bill, TripPrep, ReturnWindow, Relationship) closing the gap with AlertsProduced and AlertDelivery* metric families."
+    }
+  ]
+}

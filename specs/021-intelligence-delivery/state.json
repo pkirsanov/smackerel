@@ -367,12 +367,25 @@
       "runStartedAt": "2026-05-13T00:00:00Z",
       "runEndedAt": "2026-05-13T00:20:00Z",
       "summary": "Round 16 of 20 stochastic-quality-sweep stabilize phase (mode: stabilize-to-doc, parent-expanded — nested runtime lacked runSubagent so the workflow agent invoked the stabilize work directly). Probed the intelligence delivery code surface (internal/intelligence, internal/scheduler, internal/digest) for stability regressions, resource leaks, flake-prone timing, and observability gaps. Real test execution: (1) go test -count=1 -race -timeout 240s ./internal/intelligence/... ./internal/scheduler/... ./internal/digest/... -> ALL GREEN (intelligence 1.146s, scheduler 6.117s, digest 5.315s); (2) flake repeat go test -count=5 -race -timeout 360s ./internal/intelligence/... -> GREEN 1.841s; (3) go test -count=5 -race -timeout 360s ./internal/scheduler/... -> GREEN 26.346s (stable across 5 repeats); (4) go vet ./internal/intelligence/... ./internal/scheduler/... ./internal/digest/... -> CLEAN; (5) go build ./... -> exit 0. Resource-lifecycle audit: 12/12 SQL Query call sites in internal/intelligence have matching defer rows.Close() (alerts.go x1, alert_producers.go x4, synthesis.go x5, lookups.go x2). Goroutine spawn audit: only one production spawn site (scheduler/jobs.go:90 digest delivery poller), properly tracked via s.wg.Add(1)/Done() with bounded pollCtx 60s timeout, cancellable via s.done — no leak risk. Shutdown discipline (lifecycle.go) uses sync.Once for stopOnce, baseCancel for context propagation, cron.Stop() with 5s timeout, wg.Wait() with 5s timeout. Bounded queue: alert sweep is hard-capped at 2/day via SQL LIMIT GREATEST(0, 2 - (delivered today)) plus 7-day age filter (SEC-021-001) preventing poison-alert retry loops. Mutex topology: 8 independent mutexes (muAlerts, muAlertProd, muRelCool, muDaily, muWeekly, muLookups, muResurface, muSubs) re-confirmed intact from R6. runGuarded TryLock pattern still prevents overlapping cron callbacks. Detached markCtx (chaos C2) intact. No production time.Sleep flake risks (only bounded shutdown timeouts in lifecycle.go). No TODO/FIXME/HACK markers in production intelligence/scheduler/digest code. No new code defects. One observability concern surfaced (synthesis lacks dedicated Prometheus metric — duration histogram, last-run timestamp gauge, success/fail counter); routed to concerns[] for analyst/design triage rather than mechanically fixed because metric-schema/label-cardinality/alert-threshold choices are judgment-requiring. Spec status remains done; no de-promotion. R16 stabilize section appended to report.md."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "improve"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T03:00:00Z",
+      "summary": "sweep-2026-05-25-r10 round 1 (mode: stochastic-quality-sweep, trigger: improve, mappedMode: improve-existing, executionModel: parent-expanded-child-mode). Probed 9 intelligence-delivery surfaces (alerts producers, alerts delivery, lookups, synthesis, freshness, scheduler jobs, telegram delivery, metrics, search logging) for observability/symmetry/discoverability gaps. One actionable finding: alert producers (Bill/TripPrep/ReturnWindow/Relationship) logged CreateAlert failures via slog.Warn but had no Prometheus counter, breaking observability symmetry with the AlertsProduced and AlertDelivery* metric families already present. Spawned BUG-021-003-alert-producer-failures-metric and drove it through full bugfix-fastlane closure (bug -> design -> plan -> implement -> test -> regression -> simplify -> stabilize -> security -> validate -> audit -> docs). Implementation: added smackerel_alert_producer_failures_total CounterVec to internal/metrics/metrics.go with type label, registered in init(), wired into all 4 producers in internal/intelligence/alert_producers.go (4 .Inc() call sites at lines 100/170/235/301), added TestAlertProducerFailuresMetric (52 lines) to internal/metrics/metrics_test.go walking the Prometheus default-gatherer and asserting the family is present with each type label and value >= 1. Verification: go test -v ./internal/metrics/... -> TestAlertProducerFailuresMetric PASS + TestAlertDeliveryMetrics PASS preserved (1.067s); broader regression go test ./internal/metrics/... ./internal/intelligence/... ./internal/scheduler/... ./internal/api/... -> ALL GREEN (1.305s + 1.208s + 6.148s + 18.666s); go vet ./... CLEAN; go build ./... exit 0. Bug guards clean: state-transition-guard.sh PERMITTED with 1 warning (test-file placeholders), artifact-lint.sh PASSED, traceability-guard.sh PASSED (0 warnings, 15 scenarios mapped). Spec status remains done; one-to-one finding closure (1 finding -> 1 bug -> 1 fix -> all guards green)."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    "BUG-021-003-alert-producer-failures-metric"
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T00:20:00Z",
+  "lastUpdatedAt": "2026-05-25T03:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
