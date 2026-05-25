@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "featureDir": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10",
+  "generatedAt": "2026-05-25T17:20:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BK-FIX-003-001",
+      "scope": "01-guard-topic-mapping-loop-against-ctx-cancellation",
+      "title": "Cancelled context stops the topic-mapping loop before issuing the next round of DB calls",
+      "gherkin": {
+        "given": "a BookmarksConnector with topicMapper initialised (pool-nil-safe) and 10 RawArtifacts each carrying folder_path metadata and a context that has already been cancelled before the call",
+        "when": "mapFolderTopics(ctx, artifacts) is invoked",
+        "then": "it returns 0 (zero artifacts processed), emits exactly one slog.Warn 'bookmarks topic mapping cancelled mid-loop' with processed=0 and remaining=10, and the topicMapper is NOT called for any artifact"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/connector_test.go",
+          "function": "TestStabR10_TopicMappingRespectsContextCancel",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10/scopes.md",
+          "anchor": "T-BK-FIX-003-01"
+        },
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10/report.md",
+          "anchor": "Adversarial Fidelity Transcript"
+        }
+      ],
+      "requiredTestType": ["unit", "regression-e2e"],
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BK-FIX-003-002",
+      "scope": "01-guard-topic-mapping-loop-against-ctx-cancellation",
+      "title": "Cancellation is detected before the very first iteration body runs",
+      "gherkin": {
+        "given": "a BookmarksConnector with topicMapper initialised and exactly 1 RawArtifact in the slice and a context that has already been cancelled",
+        "when": "mapFolderTopics(ctx, artifacts) is invoked",
+        "then": "it returns 0 (proving the ctx.Err() check runs BEFORE the iteration body, not AFTER)"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/connector_test.go",
+          "function": "TestStabR10_TopicMappingCancelBeforeFirstIteration",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10/scopes.md",
+          "anchor": "T-BK-FIX-003-02"
+        },
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10/report.md",
+          "anchor": "Adversarial Fidelity Transcript"
+        }
+      ],
+      "requiredTestType": ["unit", "regression-e2e"],
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BK-FIX-003-003",
+      "scope": "01-guard-topic-mapping-loop-against-ctx-cancellation",
+      "title": "Nil topicMapper path is preserved (no-op when constructor lacks pool)",
+      "gherkin": {
+        "given": "a BookmarksConnector built via NewConnector (no pool, so topicMapper is nil) and 2 RawArtifacts in the slice",
+        "when": "mapFolderTopics(ctx, artifacts) is invoked with a live context",
+        "then": "it returns 0 without panic (the nil-topicMapper early-return wins)"
+      },
+      "linkedTests": [
+        {
+          "file": "internal/connector/bookmarks/connector_test.go",
+          "function": "TestStabR10_TopicMappingNilMapper",
+          "type": "unit"
+        }
+      ],
+      "evidenceRefs": [
+        {
+          "kind": "test-output",
+          "file": "specs/009-bookmarks-connector/bugs/BUG-009-003-topic-mapping-cancel-r10/scopes.md",
+          "anchor": "T-BK-FIX-003-03"
+        }
+      ],
+      "requiredTestType": ["unit"],
+      "status": "passed"
+    }
+  ]
+}

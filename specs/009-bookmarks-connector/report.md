@@ -701,3 +701,38 @@ ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.109s
 $ go vet ./internal/connector/bookmarks/...
 (no output — clean)
 ```
+
+## Stabilize R10 — Topic-mapping cancel hardening
+
+**Sweep:** `sweep-2026-05-25-r10` round 10 (final). **Trigger:** `stabilize`. **Mapped child workflow mode:** `stabilize-to-doc` (parent-expanded). **Bug:** [BUG-009-003-topic-mapping-cancel-r10](bugs/BUG-009-003-topic-mapping-cancel-r10/spec.md) — status `done`.
+
+The stabilize probe of `Sync()`'s post-dedup topic-mapping loop in `internal/connector/bookmarks/connector.go` surfaced one MEDIUM defect: the inline `for _, a := range allArtifacts { ... }` block ignored `ctx.Err()` between iterations, so a cancelled supervisor context (shutdown, deadline) burned one (or more) DB roundtrips per artifact against a doomed context — each producing its own stale `slog.Warn` from `MapFolder` / `CreateTopicEdge` / `UpdateTopicMomentum`. On a large bookmark export this manifested as an O(N) post-shutdown warning storm that delayed supervisor teardown.
+
+**Finding:**
+
+| ID | Severity | Description | Status |
+|---|---|---|---|
+| F-STAB-R10-001 | MEDIUM | Topic-mapping loop in `Sync()` ignored `ctx.Err()` between iterations; on cancel the loop completed all artifacts, each emitting one stale `slog.Warn` per failed call. | Fixed |
+
+**Fix scope (boundary):** `internal/connector/bookmarks/connector.go` (extract the 30-line inline `if c.topicMapper != nil { for ... }` block to a new private method `func (c *BookmarksConnector) mapFolderTopics(ctx context.Context, artifacts []connector.RawArtifact) int` with a top-of-iteration `ctx.Err()` guard that emits exactly one structured `slog.Warn("bookmarks topic mapping cancelled mid-loop", "error", err, "processed", processed, "remaining", len(artifacts)-processed)` and returns `processed`; `Sync()` collapses to a single `c.mapFolderTopics(ctx, allArtifacts)` call site) and `internal/connector/bookmarks/connector_test.go` (3 new adversarial regression tests). No DB schema, no connector contract, no config change. `Sync()` signature unchanged.
+
+**Adversarial fidelity proof:** Reverting the top-of-iteration `if err := ctx.Err(); err != nil { ... return processed }` guard inside `mapFolderTopics` causes `TestStabR10_TopicMappingRespectsContextCancel` and `TestStabR10_TopicMappingCancelBeforeFirstIteration` to FAIL with concrete diagnostics (`mapFolderTopics processed=%d on pre-cancelled ctx, want 0` and `ctx guard must run BEFORE the iteration body, not after: processed=%d on pre-cancelled ctx with 1 artifact, want 0`); restoring the guard returns all three R10 tests to PASS. Full transcript in [BUG-009-003 report](bugs/BUG-009-003-topic-mapping-cancel-r10/report.md).
+
+**Verification:**
+
+```
+$ go test ./internal/connector/bookmarks/... -count=1
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     0.158s
+
+$ go vet ./internal/connector/bookmarks/...
+(no output — clean)
+
+$ gofmt -l internal/connector/bookmarks/connector.go internal/connector/bookmarks/connector_test.go
+(no output — clean)
+
+$ go test ./internal/connector/... ./internal/scheduler/...
+ok      github.com/smackerel/smackerel/internal/connector       43.616s
+ok      github.com/smackerel/smackerel/internal/connector/bookmarks     (cached)
+... (21 connector packages + scheduler all PASS) ...
+ok      github.com/smackerel/smackerel/internal/scheduler       5.069s
+```
