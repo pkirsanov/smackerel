@@ -148,7 +148,8 @@
       "bugId": "BUG-027-002-annotation-stability-fixes",
       "bugFinalStatus": "done",
       "guardsClean": true,
-      "commits": ["<filled-on-commit>"],
+      "commits": ["5af8fc0b75fd20e336fa935f8462bc21634ba4c3"],
+      "newHead": "5af8fc0b75fd20e336fa935f8462bc21634ba4c3",
       "pushed": true,
       "pushedTo": "origin/main",
       "guardEvidence": {
