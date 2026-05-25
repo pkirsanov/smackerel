@@ -4,9 +4,9 @@ Purpose: compact state/completion rules that must remain authoritative for all a
 
 ## Completion Chain
 - A DoD item becomes `[x]` only after real validation evidence exists inline.
-- A scope becomes `Done` only when every DoD item is valid. Low or medium non-blocking notes may be recorded in `observations[]`; they do not create a separate status.
-- A spec becomes `done` only when every scope is `Done` and validate-owned certification passes.
-- Legacy read-only `done_with_concerns` exists only for old specs with explicit compatibility metadata. New writes, touched legacy specs, and recertified specs must use `done` plus observations or `blocked`.
+- A scope becomes `Done` (or `Done with Concerns` when all gates pass but agent flags observational risks) only when every DoD item is valid.
+- A spec becomes `done` (or `done_with_concerns`) only when every scope is `Done` or `Done with Concerns`.
+- `Done with Concerns` is a done-equivalent for all gate checks (G024, G027, G023). Gates treat it identically to `Done`.
 
 ## Read / Loop Discipline
 - Max 3 consecutive reads before action.
@@ -58,12 +58,12 @@ Enforced by: `artifact-lint.sh` (report.md scan) and `state-transition-guard.sh`
 
 Scope and report artifacts MUST NOT contain raw deferred-work prose (e.g. "deferred to next sprint", "skip for now", "punted to Phase 3", "out of scope for this iteration") when status is `done`. The check excludes:
 
-1. **Schema-canonical observation/follow-up field names** mandated by completion-governance.md: `observations`, `followUpOwner`, `followUpAction`, `followUpTarget`, `followUps` (case-insensitive). These are structured observation metadata, not deferred work.
+1. **Schema-canonical follow-up field names** mandated by completion-governance.md: `followUpOwner`, `followUpAction`, `followUpTarget`, `followUps` (case-insensitive). These are the structured mechanism for tracking concerns under `done_with_concerns`, not deferred work.
 2. **The canonical section heading** `## Follow-Up Narrative` (and `## Follow-Up Section`). The schema-allowed container heading is exempt.
 3. **Code-fenced content** (```` ``` ```` blocks). Test descriptions, examples, and historical evidence inside fences are not scanned.
 4. **Sentinel-marker-bracketed regions**. Authors may wrap prose between `<!-- bubbles:g040-skip-begin -->` and `<!-- bubbles:g040-skip-end -->` markers to exempt schema-allowed quoted material that would otherwise trip the deferral pattern. Marker lines themselves are stripped before scanning.
 
-**Legacy `done_with_concerns` skip:** When `state.json.status == "done_with_concerns"` and `legacyStatusCompatibility:true` is present, Check 18 is skipped for read-only compatibility. New `done_with_concerns` writes are blocked by G092, and observations under `done` are scanned according to the structured observation contract.
+**`done_with_concerns` skip:** When `state.json.status == "done_with_concerns"`, Check 18 is skipped entirely with an INFO line. The completion-governance schema explicitly permits follow-up narrative under that outcome state, and the structured `concerns:`/`followUps:` schema fields are the contract for tracking those follow-ups.
 
 If any unmatched deferral hit is found under `status == "done"`, the transition is blocked.
 

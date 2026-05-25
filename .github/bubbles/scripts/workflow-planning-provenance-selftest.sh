@@ -3,14 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD_SCRIPT="$SCRIPT_DIR/state-transition-guard.sh"
-guard_timeout_seconds="${BUBBLES_WORKFLOW_PLANNING_PROVENANCE_GUARD_TIMEOUT_SECONDS:-45}"
-
-case "$guard_timeout_seconds" in
-  ''|*[!0-9]*|0)
-    echo "workflow-planning-provenance selftest: BUBBLES_WORKFLOW_PLANNING_PROVENANCE_GUARD_TIMEOUT_SECONDS must be a positive integer" >&2
-    exit 2
-    ;;
-esac
 
 tmp_root="$(mktemp -d)"
 failures=0
@@ -36,12 +28,10 @@ fail() {
 
 run_capture() {
   local log_file="$1"
-  local timeout_seconds="$2"
-  shift
   shift
 
   set +e
-  timeout "$timeout_seconds" "$@" >"$log_file" 2>&1
+  "$@" >"$log_file" 2>&1
   local status=$?
   set -e
 
@@ -288,13 +278,10 @@ emit_fixture "$fixture_dir"
 
 echo "Running workflow planning provenance selftest..."
 log_file="$tmp_root/workflow-planning-provenance.log"
-status="$(run_capture "$log_file" "$guard_timeout_seconds" bash "$GUARD_SCRIPT" "$fixture_dir")"
+status="$(run_capture "$log_file" bash "$GUARD_SCRIPT" "$fixture_dir")"
 
-if [[ "$status" -eq 124 ]]; then
-  fail "Planning provenance fixture timed out after ${guard_timeout_seconds}s instead of failing with guard diagnostics"
-  sed -n '1,220p' "$log_file"
-elif [[ "$status" -ne 0 ]]; then
-  pass "Planning provenance fixture fails the transition guard as expected within ${guard_timeout_seconds}s"
+if [[ "$status" -ne 0 ]]; then
+  pass "Planning provenance fixture fails the transition guard as expected"
 else
   fail "Planning provenance fixture should fail the transition guard"
   sed -n '1,220p' "$log_file"

@@ -102,7 +102,7 @@ If gap remediation spans multiple specialist phases (implement/test/docs/harden/
 - Use `completed_diagnostic` when the gap analysis completed cleanly without requiring routed follow-up.
 - Use `route_required` when implementation, tests, docs, hardening, bug work, or any other foreign-owned remediation is still required.
 - Use `blocked` when a concrete blocker prevents credible gap analysis.
-- Per [completion-governance.md → Legacy Status: done_with_concerns](bubbles_shared/completion-governance.md#legacy-status-done_with_concerns), gaps MAY surface observation-shaped findings (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies `done`. Gaps MUST NOT recommend or certify new `done_with_concerns`; high-severity or remediation-required findings stay `blocked` / `route_required`.
+- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), gaps MAY surface `done_with_concerns`-shaped findings (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies. Gaps does NOT certify the state — only `bubbles.validate` writes `certification.status: done_with_concerns`.
 
 Agent-specific: Action-First Mandate applies. If target is a bug directory, enforce Bug Artifacts Gate. If feature directory, do not perform implicit bug work.
 

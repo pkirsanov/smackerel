@@ -98,8 +98,6 @@ An honest gap with explanation is preferred over fabricated evidence (see Honest
 
 ### Code Diff Evidence (Required for implementation-bearing work)
 
-For done-ceiling delivery modes, include G093-compatible changed-path classification. At minimum, record the git command or report-backed window and list changed paths by family: planning-only (`specs/**`, `.specify/**`), source, runtime, config, contract, test, docs, and other. A delivery completion packet must include at least one source/runtime/config/contract/test/docs path outside planning-only families; otherwise the result remains blocked or the work must be downgraded to a below-done planning-only mode governed by G087.
-
 ### Test Evidence (ALL TYPES REQUIRED)
 
 Evidence format per block:
@@ -137,13 +135,6 @@ Evidence format per block:
 ```json
 {
   "status": "not_started",
-  "linkedImplementationSpec": null,
-  "linkedPlanningPacket": null,
-  "planningOnly": false,
-  "planningOnlyJustification": null,
-  "specDependsOn": [],
-  "certifiedAt": null,
-  "requiresRevalidation": false,
   "execution": {
     "currentPhase": null,
     "currentScope": null,

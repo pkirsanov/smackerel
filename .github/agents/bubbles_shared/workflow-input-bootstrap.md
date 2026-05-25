@@ -23,19 +23,8 @@ This section owns the one-shot `bubbles.spec-review` contract, including:
 - post-analysis timing for modes that include `analyze`
 - pre-implementation timing for modes that do not include `analyze`
 - batch and full-delivery placement rules
-- stale-artifact routing rules for `CURRENT`, `MINOR_DRIFT`, `PARTIAL`, `MAJOR_DRIFT`, `OBSOLETE`, and `route_required`, including the certified-spec route where `MAJOR_DRIFT` or `OBSOLETE` on a `done` / legacy read-only `done_with_concerns` spec dispatches `bubbles.workflow mode=improve-existing`
+- stale-artifact routing rules for `CURRENT`, `MINOR_DRIFT`, `PARTIAL`, `MAJOR_DRIFT`, `OBSOLETE`, and `route_required`
 - rerouting to `reconcile-to-doc`, `product-to-delivery`, or the narrower planning owners when the active artifacts are not trustworthy
-
-For the certified-spec route, consume the `bubbles.spec-review` dispatch packet as executable workflow work rather than narrative advice:
-
-```text
-agent: bubbles.workflow
-mode: improve-existing
-spec: <reviewed-spec-dir>
-reason: spec-review:<MAJOR_DRIFT|OBSOLETE>
-```
-
-Done-ceiling workflow modes MUST invoke or parent-expand that packet inline before implementation-capable phases continue. Read-only `spec-review-to-doc`, docs-only, validate-only, and audit-only modes preserve their lower status ceiling by returning `route_required` with the packet instead of making code changes.
 
 ### Phase 0.65: Validation Reconciliation Loop
 
@@ -81,7 +70,7 @@ This section owns the mandatory pre-implement readiness gate, including:
 - substantive `design.md` requirements
 - `scopes.md` Gherkin, Test Plan, and DoD checkbox requirements
 - re-verification of `spec.md`
-- inline auto-escalation to `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.clarify`, and `bubbles.plan` when artifacts are incomplete. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling.
+- inline auto-escalation to `bubbles.design`, `bubbles.clarify`, and `bubbles.plan` when artifacts are incomplete
 - three-iteration retry budget before terminal `blocked`
 - the documented exemptions for `bugfix-fastlane` and modes whose analyze/bootstrap phases run first
 
