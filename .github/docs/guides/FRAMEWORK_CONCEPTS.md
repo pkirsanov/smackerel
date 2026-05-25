@@ -82,7 +82,7 @@ Work is broken into **scopes** — small, independent, testable units with expli
 
 Each scope contains:
 
-- **Status** — `Not Started | In Progress | Done | Done with Concerns | Blocked`
+- **Status** — `Not Started | In Progress | Done | Blocked`; non-blocking notes live in `observations[]`, and legacy `done_with_concerns` is read-only compatibility only
 - **Dependencies** — explicit DAG (directed acyclic graph) of prerequisite scopes
 - **Gherkin Scenarios** — behavioral specifications in Given/When/Then format
 - **Implementation Plan** — concrete steps
