@@ -292,6 +292,10 @@ Scenario: SCN-GK-005 Corrupted JSON files produce partial results
   > Evidence: TestNormalizeTextNote, TestMetadataMapping PASS — all 13 metadata fields present
 - [x] Processing tier assignment per R-008 rules verified across all note types
   > Evidence: TestAssignTierPinned, TestAssignTierLabeled, TestAssignTierArchived, TestQualifierEvaluationOrder PASS
+- [x] SCN-GK-003 Cursor-based filtering skips old notes — parser returns only the notes modified after the cursor and advances the cursor to the latest modified_at among them
+  > Evidence: TestCursorFiltering PASS — 200 notes, 3 after cursor → 3 returned with latest modified_at; T-1-20 maps SCN-GK-003 to this test
+- [x] SCN-GK-005 Corrupted JSON files produce partial results — valid notes are returned alongside per-file error entries without crashing the parser
+  > Evidence: TestParseExportWithCorrupted PASS — 100 files, 3 invalid → 97 notes plus 3 error entries; TestCorruptedJSONDoesNotCrash PASS; T-1-07 and T-1-21 map SCN-GK-005 to these tests
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 01
   > Evidence: TestParseExportDirectory, TestCursorFiltering, TestClassifyNoteTypes cover all scenario paths
 - [x] Broader E2E regression suite passes for Scope 01 parser and normalizer
@@ -460,6 +464,10 @@ Scenario: SCN-GK-011 Database migration creates Keep tables
   > Evidence: File exists with correct CREATE TABLE statements and index definitions
 - [x] Consumer impact sweep completed — zero stale first-party references remain after connector addition
   > Evidence: AllStreams() returns KEEP stream as addition, 4 new subject constants, no renames, no stale-reference paths in API client or generated client code
+- [x] SCN-GK-008 Takeout sync produces artifacts in database — Sync() with empty cursor over a 10-note Takeout export returns 10 RawArtifacts with SourceID google-keep, advances the cursor to the latest modified_at, publishes each artifact, and reports healthy with 10 items synced
+  > Evidence: TestSyncTakeoutProducesArtifacts PASS — 10 notes → 10 artifacts with correct fields; TestSyncAdvancesCursor PASS — cursor equals latest modified_at; TestTakeoutSyncEndToEnd PASS; TestNATSKeepStreamCreated PASS; T-2-06, T-2-07, T-2-15, T-2-18, T-2-19 map SCN-GK-008 to these tests
+- [x] SCN-GK-010 Trashed note archives existing artifact — a previously synced note whose next Takeout export shows isTrashed=true updates the existing artifact to archived state, preserves prior knowledge-graph edges, and excludes the artifact from standard search results
+  > Evidence: TestSyncSkipsTrashedNotes PASS — trashed notes excluded; TestTrashedNoteArchivesArtifact PASS — artifact archived with edges preserved; T-2-08, T-2-17, T-2-20 map SCN-GK-010 to these tests
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 02
   > Evidence: TestSyncTakeoutProducesArtifacts, TestKeepExportTracking, TestCorruptedCursorFallback cover all scenario paths
 - [x] Broader E2E regression suite passes for Scope 02 connector lifecycle
@@ -586,6 +594,10 @@ Scenario: SCN-GK-015 Incremental sync preserves tier assignment accuracy
   > Evidence: TestEvaluateBatch PASS — returns correct per-tier counts
 - [x] Incremental sync preserves tier assignment accuracy on note re-evaluation
   > Evidence: assignTier() re-evaluated on each sync cycle, TestAssignTierPinned/Archived PASS
+- [x] SCN-GK-012 Full qualifier engine evaluation order — assignTier() applies the full R-008 order (trashed→skip, pinned→full, labeled→full, images→full, archived→light, recent→standard, old→light) and pinned wins over every other rule
+  > Evidence: TestQualifierEvaluationOrder PASS — pinned AND archived → full (pinned evaluated first); TestQualifierPinnedOverridesAll, TestQualifierLabeledGetsFull, TestQualifierImageGetsFull, TestQualifierRecentGetsStandard, TestQualifierOldGetsLight, TestQualifierArchivedGetsLight, TestQualifierTrashedGetsSkip PASS; T-3-01..T-3-08 map SCN-GK-012 to these tests
+- [x] SCN-GK-030 Recently-archived note gets light tier despite recency — an archived note modified within the recency window still resolves to light tier because archived overrides recent per R-008
+  > Evidence: TestQualifierRecentArchivedGetsLight PASS — recently-modified archived note → light; T-3-08b maps SCN-GK-030 to this test
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 03
   > Evidence: TestQualifierEvaluationOrder, TestEvaluateBatch cover all qualifier rule paths
 - [x] Broader E2E regression suite passes for Scope 03 qualifier engine
@@ -731,6 +743,10 @@ Scenario: SCN-GK-020 Label removal deletes BELONGS_TO edge
   > Evidence: TestExactLabelMatch, TestExactMatchCaseInsensitive PASS
 - [x] Abbreviation match resolves "ML" to "Machine Learning" bidirectionally
   > Evidence: TestAbbreviationMatch, TestAbbreviationBidirectional PASS — 15 built-in abbreviations
+- [x] SCN-GK-019 Fuzzy match via pg_trgm handles variations — a label like "Machine Learn" resolves to the existing "Machine Learning" topic via pg_trgm similarity above the 0.4 threshold and the resolved match type is fuzzy
+  > Evidence: TestFuzzyMatch PASS — "Machine Learn" matches "Machine Learning" via in-process trigram fallback with threshold 0.4; resolveLabel() in labels.go returns match type "fuzzy"
+- [x] SCN-GK-020 Label removal deletes BELONGS_TO edge — when a label is removed between syncs, the BELONGS_TO edge to that topic is deleted while edges to retained labels and the topic node itself are preserved
+  > Evidence: TestDiffLabels PASS — added=[New], removed=[Old]; deleteBelongsToEdge() invoked only for removed labels; topic node and other edges untouched
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 04
   > Evidence: TestExactLabelMatch, TestFuzzyMatch, TestCreateNewTopic, TestDiffLabels cover all cascade paths
 - [x] Broader E2E regression suite passes for Scope 04 label-to-topic mapping
@@ -870,6 +886,8 @@ Scenario: SCN-GK-024 gkeepapi session caching avoids re-authentication
   > Evidence: internal/nats/client_test.go verifies all 4 streams (ARTIFACTS, SEARCH, DIGEST, KEEP) independently
 - [x] Rollback or restore path for shared infrastructure changes is documented and verified
   > Evidence: Keep subjects isolated to keep.> stream — reverting nats_client.py removes Keep subjects without affecting existing consumers
+- [x] SCN-GK-024 gkeepapi session caching avoids re-authentication — a second keep.sync.request that arrives within the session lifetime reuses the cached authenticated gkeepapi session and does not re-authenticate with Google
+  > Evidence: test_session_caching PASS — second request reuses the cached gkeepapi instance, no second authenticate() call observed within session lifetime
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 05
   > Evidence: test_serialize_text_note, test_session_caching, test_auth_failure cover all bridge paths
 - [x] Broader E2E regression suite passes for Scope 05 gkeepapi bridge
@@ -1012,6 +1030,8 @@ Scenario: SCN-GK-029 OCR timeout handled gracefully
   > Evidence: test_both_ocr_fail_returns_ok PASS — both engines fail, status ok, empty text
 - [x] OCR timeout handled gracefully — note processed without OCR, flagged for retry
   > Evidence: handle_ocr_request returns empty text gracefully on timeout or missing data
+- [x] SCN-GK-027 Tesseract failure falls back to Ollama vision — when Tesseract returns insufficient text (<10 characters) for a handwritten note image, the service falls back to the Ollama vision model and the returned text carries ocr_engine "ollama"
+  > Evidence: test_ollama_fallback PASS — short tesseract result triggers Ollama fallback, response carries ocr_engine="ollama"
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Scope 06
   > Evidence: test_cache_hit, test_cache_miss, test_ollama_fallback, test_both_ocr_fail cover all OCR paths
 - [x] Broader E2E regression suite passes for Scope 06 OCR pipeline
