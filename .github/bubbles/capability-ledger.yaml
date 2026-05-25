@@ -216,13 +216,13 @@ capabilities:
     - docs/generated/competitive-capabilities.md
 
   done-with-concerns-outcome-state:
-    label: strict terminal observations
+    label: done_with_concerns outcome state
     state: shipped
-    summary: Gate G092 narrows new terminal certification writes to `done` or `blocked`. Non-blocking low/medium notes attach to `done` through `observations[]` or `certification.observations[]`; high-severity or remediation-required findings remain `blocked`. Legacy `done_with_concerns` is read-only compatibility for old untouched specs only and must migrate to `done` plus observations or `blocked` when touched or recertified. Defined in `bubbles/workflows.yaml`, `agents/bubbles_shared/completion-governance.md`, and `bubbles/scripts/strict-terminal-status-guard.sh`.
+    summary: >
+      Workflow modes now support `done_with_concerns` as a third terminal outcome alongside `done` and `blocked`. Permits agents to ship work while honestly recording non-blocking follow-ups in a structured `concerns: []` array (each entry with `id`, `severity: low|medium`, `summary`, `followUpOwner`, `followUpAction`). Removes the false dichotomy that previously forced agents to choose between fabricated success and stall. Defined in `bubbles/workflows.yaml#outcome-states` with the authoritative contract in `agents/bubbles_shared/completion-governance.md#outcome-state-done_with_concerns`. Wired into workflow, validate, audit, harden, and gaps agents.
     ownerSurface: bubbles/workflows.yaml
     releaseIntroduced: v3.8.0
     docsRefs:
-    - bubbles/workflows.yaml
     - agents/bubbles_shared/completion-governance.md
     - agents/bubbles.workflow.agent.md
     - agents/bubbles.validate.agent.md
@@ -232,7 +232,6 @@ capabilities:
     evidenceRefs:
     - bubbles/workflows.yaml
     - agents/bubbles_shared/completion-governance.md
-    - bubbles/scripts/strict-terminal-status-guard.sh
     competitorTags:
     - swe-agent
     freshnessTargets:

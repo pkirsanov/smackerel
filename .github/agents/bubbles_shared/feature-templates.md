@@ -261,13 +261,6 @@ Rules:
   "featureName": "Feature Name",
   "status": "not_started",
   "workflowMode": "full-delivery | spec-scope-hardening | docs-only | validate-only | audit-only | resume-only",
-  "linkedImplementationSpec": null,
-  "linkedPlanningPacket": null,
-  "planningOnly": false,
-  "planningOnlyJustification": null,
-  "specDependsOn": [],
-  "certifiedAt": null,
-  "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "context | discover | bootstrap | implement | test | regression | docs | validate | audit | chaos | finalize",
@@ -354,13 +347,6 @@ Rules:
 
 **Status values:** `not_started`, `in_progress`, `blocked`, `specs_hardened`, `docs_updated`, `validated`, `done`.  
 **`workflowMode`:** Records which workflow mode last set the status.  
-**`linkedImplementationSpec`:** Planning-packet linkage to the implementation spec that consumes the planning packet; `null` when absent.
-**`linkedPlanningPacket`:** Implementation-spec back-link to the planning packet it implements; `null` when absent.
-**`planningOnly`:** Explicit boolean; defaults to `false` and may be `true` only with a non-empty `planningOnlyJustification`.
-**`planningOnlyJustification`:** Non-empty reason when `planningOnly` is `true`; otherwise `null`.
-**`specDependsOn`:** Explicit array of repo-relative spec paths; empty array when no dependency exists.
-**`certifiedAt`:** Top-level certification timestamp; `null` until certification or backfill from scope-level certification timestamps.
-**`requiresRevalidation`:** Explicit boolean used by inter-spec dependency/revalidation flows; defaults to `false`.
 Only modes with `statusCeiling: done` (in `bubbles/workflows.yaml`) may set `status: "done"`.
 Artifact-only modes set their ceiling status (e.g., `specs_hardened` for `spec-scope-hardening`).
 **`execution` vs `certification`:** execution records runtime claims; certification is the validate-owned authoritative state that must match top-level `status` before promotion.

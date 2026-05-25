@@ -22,11 +22,6 @@
 #                       (searches .specify/memory/bubbles.session.json and
 #                        .specify/memory/sessions/*.json)
 #   --last <N>          Show only the last N turn snapshots (default 10)
-#   --health           Emit a single-line convergence health summary
-#   --input <file>     Health-mode JSON input from retro-convergence-health.sh
-#   --latency          Append the validation latency report
-#   --since <days>     Latency report window when --latency is present
-#   --spec <path>      Health/latency report spec filter
 #   --format text|json  Output format (default text)
 #   --repo-root <path>  Repo root (default: cwd resolved upward to a repo
 #                       containing .specify/memory or the script's repo)
@@ -44,18 +39,12 @@ last_n=10
 format="text"
 repo_root=""
 verbose="false"
-show_health="false"
-health_input=""
-show_latency="false"
-latency_since="7"
-spec_filter=""
 
 usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/trajectory-inspector.sh \
          [--session <id>] [--last <N>] [--format text|json] \
-         [--repo-root <path>] [--verbose] [--health] [--input <file>] \
-         [--latency] [--since <days>] [--spec <path>]
+         [--repo-root <path>] [--verbose]
 
 Print a human-readable trajectory report from the current Bubbles session,
 turn snapshots, lessons, and per-spec state. Always exits 0 unless invoked
@@ -65,35 +54,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --health)
-      show_health="true"
-      shift
-      ;;
-    --input)
-      shift
-      health_input="${1:?--input requires a file}"
-      shift
-      ;;
-    --latency)
-      show_latency="true"
-      shift
-      ;;
-    --since)
-      shift
-      latency_since="${1:?--since requires days}"
-      if ! [[ "$latency_since" =~ ^[0-9]+$ ]]; then
-        echo "trajectory-inspector: --since requires a non-negative integer" >&2
-        exit 2
-      fi
-      shift
-      ;;
-    --spec)
-      shift
-      spec_filter="${1:?--spec requires a path}"
-      spec_filter="${spec_filter#./}"
-      spec_filter="${spec_filter%/}"
-      shift
-      ;;
     --session)
       shift
       session_id_filter="${1:?--session requires an id}"
@@ -204,217 +164,6 @@ fi
 
 have_jq=false
 command -v jq >/dev/null 2>&1 && have_jq=true
-
-as_int() {
-  local value="${1:-0}"
-  if [[ "$value" =~ ^[0-9]+$ ]]; then
-    printf '%s\n' "$value"
-  elif [[ "$value" =~ ^[0-9]+[.][0-9]+$ ]]; then
-    printf '%s\n' "${value%%.*}"
-  else
-    printf '0\n'
-  fi
-}
-
-derive_health_status() {
-  local raw_status="${1:-}"
-  local compaction_invocations
-  local recap_invocations
-  local handoff_invocations
-  local blocked_findings
-  compaction_invocations="$(as_int "${2:-0}")"
-  recap_invocations="$(as_int "${3:-0}")"
-  handoff_invocations="$(as_int "${4:-0}")"
-  blocked_findings="$(as_int "${5:-0}")"
-
-  if [[ "$blocked_findings" -gt 0 ]]; then
-    printf 'FAILED\n'
-    return 0
-  fi
-
-  case "${raw_status,,}" in
-    healthy|pass|passed|ok)
-      printf 'HEALTHY\n'
-      return 0
-      ;;
-    degraded|warn|warning)
-      printf 'DEGRADED\n'
-      return 0
-      ;;
-    failed|fail|failure|error)
-      printf 'FAILED\n'
-      return 0
-      ;;
-  esac
-
-  if [[ $((recap_invocations + handoff_invocations)) -gt 2 ]]; then
-    printf 'FAILED\n'
-  elif [[ "$recap_invocations" -gt 0 || "$handoff_invocations" -gt 0 || "$compaction_invocations" -gt 0 ]]; then
-    printf 'DEGRADED\n'
-  else
-    printf 'HEALTHY\n'
-  fi
-}
-
-print_health_line() {
-  local turn_count
-  local compaction_invocations
-  local recap_invocations
-  local handoff_invocations
-  local blocked_findings
-  local raw_status
-  local status
-
-  turn_count="$(as_int "${1:-0}")"
-  compaction_invocations="$(as_int "${2:-0}")"
-  recap_invocations="$(as_int "${3:-0}")"
-  handoff_invocations="$(as_int "${4:-0}")"
-  blocked_findings="$(as_int "${5:-0}")"
-  raw_status="${6:-}"
-  status="$(derive_health_status "$raw_status" "$compaction_invocations" "$recap_invocations" "$handoff_invocations" "$blocked_findings")"
-
-  printf 'Convergence Health: turnCount=%s compactionInvocations=%s recapInvocations=%s handoffInvocations=%s blockedFindings=%s status=%s\n' \
-    "$turn_count" "$compaction_invocations" "$recap_invocations" "$handoff_invocations" "$blocked_findings" "$status"
-}
-
-health_from_json_input() {
-  local input_file="$1"
-  local resolved_input="$input_file"
-  if [[ ! -f "$resolved_input" && -f "$repo_root/$input_file" ]]; then
-    resolved_input="$repo_root/$input_file"
-  fi
-
-  if [[ ! -f "$resolved_input" || ! -r "$resolved_input" ]]; then
-    print_health_line 0 0 0 0 1 failed
-    return 0
-  fi
-
-  if ! $have_jq; then
-    print_health_line 0 0 0 0 1 degraded
-    return 0
-  fi
-
-  local metrics_line
-  metrics_line="$(jq -r '
-    def numeric($value):
-      if ($value | type) == "number" then $value
-      elif ($value | type) == "array" then ($value | length)
-      elif ($value | type) == "object" and (($value.count? | type) == "number") then $value.count
-      elif ($value | type) == "string" and ($value | test("^[0-9]+$")) then ($value | tonumber)
-      else 0
-      end;
-    [
-      numeric(.turnCount // .metrics.turnCount // .convergenceHealth.turnCount // 0),
-      numeric(.compactionInvocations // .compactionEvents // .compactionCount // .convergenceHealth.compactionInvocations // .convergenceHealth.compactionEvents // .convergenceHealth.compactionCount // 0),
-      numeric(.recapInvocations // .recapCount // .convergenceHealth.recapInvocations // .convergenceHealth.recapCount // 0),
-      numeric(.handoffInvocations // .handoffCount // .convergenceHealth.handoffInvocations // .convergenceHealth.handoffCount // 0),
-      numeric(.blockedFindings // .blockedFindingsCount // .convergenceHealth.blockedFindings // .convergenceHealth.blockedFindingsCount // 0),
-      (.status // .healthStatus // .convergenceHealth.status // .convergenceHealth.slo // .slo // "")
-    ] | @tsv
-  ' "$resolved_input" 2>/dev/null || true)"
-
-  if [[ -z "$metrics_line" ]]; then
-    print_health_line 0 0 0 0 1 failed
-    return 0
-  fi
-
-  local turn_count compaction_invocations recap_invocations handoff_invocations blocked_findings raw_status
-  IFS=$'\t' read -r turn_count compaction_invocations recap_invocations handoff_invocations blocked_findings raw_status <<< "$metrics_line"
-  print_health_line "$turn_count" "$compaction_invocations" "$recap_invocations" "$handoff_invocations" "$blocked_findings" "$raw_status"
-}
-
-blocked_findings_from_spec_state() {
-  local target_spec="$1"
-  local spec_state=""
-  if [[ -n "$target_spec" && -f "$repo_root/$target_spec/state.json" ]]; then
-    spec_state="$repo_root/$target_spec/state.json"
-  fi
-
-  if [[ -z "$spec_state" || ! -r "$spec_state" || "$have_jq" != "true" ]]; then
-    printf '0\n'
-    return 0
-  fi
-
-  jq -r '
-    def unresolved_rework:
-      [(.reworkQueue // [])[] | select(((.resolved // false) != true) and ((.status // "") != "resolved"))] | length;
-    def pending_transitions:
-      ((.transitionRequests // []) | length) + ((.execution.pendingTransitionRequests // []) | length);
-    def blocked_arrays:
-      ([.. | objects | .blockedFindings? | if type == "array" then length elif type == "number" then . else 0 end] | add // 0);
-    unresolved_rework + pending_transitions + blocked_arrays
-  ' "$spec_state" 2>/dev/null || printf '0\n'
-}
-
-health_from_session() {
-  local target_spec="${spec_filter:-${feat:-}}"
-
-  if [[ -z "${active_session_file:-}" || ! -f "$active_session_file" || "$have_jq" != "true" ]]; then
-    local blocked_without_session
-    blocked_without_session="$(blocked_findings_from_spec_state "$target_spec")"
-    print_health_line 0 0 0 0 "$blocked_without_session" ""
-    return 0
-  fi
-
-  local metrics_line
-  metrics_line="$(jq -r --arg spec "$target_spec" '
-    def norm: tostring | sub("^\\./"; "") | sub("/+$"; "");
-    def object_matches($target):
-      ($target == "") or (((.specDir // .featureDir // .spec // .feature // "") | norm) == $target);
-    def related_records($target):
-      if $target == "" then [.]
-      elif object_matches($target) then [.]
-      else ([.. | objects | select(object_matches($target))]) as $records |
-      if ($records | length) > 0 then $records
-      elif (has("turnSnapshots") or has("turns") or has("messages") or has("transcript") or has("executionHistory") or has("envelopesReceived")) then [.]
-      else []
-      end
-      end;
-    def strings_from($records): [$records[] | .. | strings];
-    def count_regex($records; $pattern):
-      (strings_from($records) | map(select(test($pattern; "i"))) | length);
-    def envelope_records($records):
-      [$records[] | .. | objects | select(has("rawSizeBytes") or has("incomingMessage") or has("rawPointer") or has("compactedAt"))];
-    def snapshot_records($records):
-      [$records[] | .. | objects | select(has("turnNumber") or has("turnIndex"))];
-    def message_records($records):
-      [$records[] | .. | objects | select(has("role") or has("message") or has("content"))];
-    def blocked_arrays($records):
-      ([ $records[] | .. | objects | .blockedFindings? | if type == "array" then length elif type == "number" then . else 0 end ] | add // 0);
-    def blocked_statuses($records):
-      [$records[] | .. | objects | select(((.outcome? // .status? // "") | tostring | ascii_downcase) == "blocked")] | length;
-    related_records(($spec | norm)) as $records |
-    envelope_records($records) as $envelopes |
-    snapshot_records($records) as $snapshots |
-    message_records($records) as $messages |
-    ([ $records[] | .. | objects | .turnCount? | numbers ] | max // (if ($snapshots | length) > 0 then ($snapshots | length) else ($messages | length) end)) as $turnCount |
-    ($envelopes | map(select((.compactedAt? // null) != null)) | length) as $compactionInvocations |
-    count_regex($records; "(^|[^A-Za-z0-9_])recap([^A-Za-z0-9_]|$)") as $recapInvocations |
-    count_regex($records; "(^|[^A-Za-z0-9_])handoff([^A-Za-z0-9_]|$)") as $handoffInvocations |
-    (blocked_arrays($records) + blocked_statuses($records)) as $blockedFindings |
-    [$turnCount, $compactionInvocations, $recapInvocations, $handoffInvocations, $blockedFindings, ""] | @tsv
-  ' "$active_session_file" 2>/dev/null || true)"
-
-  if [[ -z "$metrics_line" ]]; then
-    metrics_line=$'0\t0\t0\t0\t0\t'
-  fi
-
-  local turn_count compaction_invocations recap_invocations handoff_invocations blocked_findings raw_status
-  IFS=$'\t' read -r turn_count compaction_invocations recap_invocations handoff_invocations blocked_findings raw_status <<< "$metrics_line"
-  local spec_blocked_findings
-  spec_blocked_findings="$(blocked_findings_from_spec_state "$target_spec")"
-  blocked_findings=$(( $(as_int "$blocked_findings") + $(as_int "$spec_blocked_findings") ))
-  print_health_line "$turn_count" "$compaction_invocations" "$recap_invocations" "$handoff_invocations" "$blocked_findings" "$raw_status"
-}
-
-if [[ "$show_health" == "true" ]]; then
-  if [[ -n "$health_input" ]]; then
-    health_from_json_input "$health_input"
-  else
-    health_from_session
-  fi
-  exit 0
-fi
 
 field_text() {
   local file="$1" field="$2"
@@ -624,23 +373,6 @@ else
   echo "    (no specs/ directory)"
 fi
 echo
-
-if [[ "$show_latency" == "true" ]]; then
-  print_header "6. Validation Latency (--latency)"
-  latency_report="$SCRIPT_DIR/validation-latency-report.sh"
-  if [[ -f "$latency_report" ]]; then
-    latency_args=(--repo-root "$repo_root" --since "$latency_since")
-    if [[ -n "$spec_filter" ]]; then
-      latency_args+=(--spec "$spec_filter")
-    elif [[ -n "${feat:-}" ]]; then
-      latency_args+=(--spec "$feat")
-    fi
-    bash "$latency_report" "${latency_args[@]}"
-  else
-    echo "  validation-latency-report.sh not found at $latency_report"
-  fi
-  echo
-fi
 
 print_header "End of trajectory report"
 exit 0
