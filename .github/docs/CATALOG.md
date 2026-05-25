@@ -56,6 +56,8 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 44 | [Autonomous Sprint](recipes/autonomous-sprint.md) | `autonomous-sprint` | Multiple goals + time budget, fully autonomous |
 | 45 | [Release Planning](recipes/release-planning.md) | `bubbles.releases` | Phase release packets + cross-product coordination (Sonny "Iron Lung" Smith) |
 | 46 | [Idea → Release Completion](recipes/idea-to-release.md) | `idea-to-release-completion` | Full lifecycle: idea → packet bootstrap → specs → ship → packet refresh (Sonny "Iron Lung" Smith) |
+| 47 | [Framework Dogfood](recipes/framework-dogfood.md) | `framework-validate` / G085 | Source repo no-specs dogfood evidence model |
+| 48 | [Validation Latency Budgets](recipes/validation-latency-budgets.md) | `validation-latency-report.sh` | Phase latency report and budget interpretation |
 
 ---
 
