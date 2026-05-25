@@ -271,13 +271,18 @@ func renderDeepLink(ctx context.Context, metadata map[string]any, surface string
 
 	signedURL := stringFromMetadata(metadata, "packet_url_signed")
 	expiresAt := stringFromMetadata(metadata, "signature_expires_at")
+	if signedURL == "" {
+		metrics.QFDeepLinkRenderTotal.WithLabelValues(surface, DeepLinkStatusUnsignedOnly).Inc()
+		emitDeepLinkAudit(metadata, surface, packetID, DeepLinkStatusUnsignedOnly, now)
+		return DeepLinkRender{URL: unsignedURL, Status: DeepLinkStatusUnsignedOnly}
+	}
 	if signedURL != "" && signatureIsFresh(expiresAt, now) {
 		metrics.QFDeepLinkRenderTotal.WithLabelValues(surface, DeepLinkStatusSignedUsed).Inc()
 		emitDeepLinkAudit(metadata, surface, packetID, DeepLinkStatusSignedUsed, now)
 		return DeepLinkRender{URL: signedURL, Status: DeepLinkStatusSignedUsed}
 	}
 
-	if signedURL != "" && options.FetchPacket != nil {
+	if options.FetchPacket != nil {
 		refetched, err := options.FetchPacket(ctx, packetID)
 		if err == nil && refetched.PacketURLSigned != "" && signatureIsFresh(refetched.SignatureExpiresAt, now) {
 			metrics.QFDeepLinkRenderTotal.WithLabelValues(surface, DeepLinkStatusSignedUsed).Inc()
