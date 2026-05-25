@@ -3,13 +3,31 @@ package graph
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/smackerel/smackerel/internal/db"
+)
+
+// Counter op_kind constants for hospitality_counter_applications dedup ledger.
+// BUG-013-001 (sweep R5 / stabilize-to-doc): the artifacts.processed NATS
+// consumer is configured with AckPolicy=AckExplicitPolicy, AckWait=30s, and
+// MaxDeliver>1, so HandleProcessedResult — and therefore LinkArtifact — can be
+// invoked more than once for the same artifact_id on AckWait expiry, process
+// crash before ack, or transient handler-error Naks. Each counter mutation
+// claims its (artifact_id, op_kind) pair via ON CONFLICT DO NOTHING before
+// applying the underlying repo increment, so redelivery is a no-op for
+// counters. Edge writes remain unchanged because they are already idempotent
+// via ON CONFLICT DO UPDATE on the edges unique constraint.
+const (
+	hospitalityOpKindGuestStayIncrement      = "guest_stay_increment"
+	hospitalityOpKindPropertyBookingIncrement = "property_booking_increment"
+	hospitalityOpKindPropertyIssueDelta       = "property_issue_delta"
 )
 
 // HospitalityLinker extends the standard graph linker with hospitality-specific
@@ -150,14 +168,32 @@ func (l *HospitalityLinker) linkBooking(ctx context.Context, artifactID string, 
 			count++
 		}
 
-		// Update guest stay stats
-		if err := l.guestRepo.IncrementStay(ctx, guest.ID, meta.Revenue); err != nil {
-			slog.Warn("hospitality linker: increment guest stay failed", "guest_id", guest.ID, "error", err)
+		// Update guest stay stats — BUG-013-001: gated behind
+		// hospitality_counter_applications so NATS redelivery does not drift
+		// guests.total_stays / total_spend.
+		claimed, claimErr := l.tryClaimCounterApplication(ctx, artifactID, hospitalityOpKindGuestStayIncrement)
+		if claimErr != nil {
+			slog.Warn("hospitality linker: claim guest stay idempotency failed", "artifact_id", artifactID, "guest_id", guest.ID, "error", claimErr)
+		} else if claimed {
+			if err := l.guestRepo.IncrementStay(ctx, guest.ID, meta.Revenue); err != nil {
+				slog.Warn("hospitality linker: increment guest stay failed", "guest_id", guest.ID, "error", err)
+			}
+		} else {
+			slog.Debug("hospitality linker: guest stay counter already applied (NATS redelivery dedup)", "artifact_id", artifactID, "guest_id", guest.ID)
 		}
 
-		// Update property booking stats
-		if err := l.propertyRepo.IncrementBookings(ctx, property.ID, meta.Revenue); err != nil {
-			slog.Warn("hospitality linker: increment property bookings failed", "property_id", property.ID, "error", err)
+		// Update property booking stats — BUG-013-001: gated behind
+		// hospitality_counter_applications so NATS redelivery does not drift
+		// properties.total_bookings / total_revenue.
+		claimed, claimErr = l.tryClaimCounterApplication(ctx, artifactID, hospitalityOpKindPropertyBookingIncrement)
+		if claimErr != nil {
+			slog.Warn("hospitality linker: claim property booking idempotency failed", "artifact_id", artifactID, "property_id", property.ID, "error", claimErr)
+		} else if claimed {
+			if err := l.propertyRepo.IncrementBookings(ctx, property.ID, meta.Revenue); err != nil {
+				slog.Warn("hospitality linker: increment property bookings failed", "property_id", property.ID, "error", err)
+			}
+		} else {
+			slog.Debug("hospitality linker: property booking counter already applied (NATS redelivery dedup)", "artifact_id", artifactID, "property_id", property.ID)
 		}
 	}
 
@@ -211,8 +247,20 @@ func (l *HospitalityLinker) linkTask(ctx context.Context, artifactID string, pro
 		if meta.Status == "completed" {
 			delta = -1
 		}
-		if err := l.propertyRepo.UpdateIssueCount(ctx, property.ID, delta); err != nil {
-			slog.Warn("hospitality linker: update issue count failed", "property_id", property.ID, "error", err)
+		// BUG-013-001: gate UpdateIssueCount behind
+		// hospitality_counter_applications so NATS redelivery does not drift
+		// properties.issue_count. The same artifact_id always reduces to the
+		// same delta because meta.Status is parsed from the immutable
+		// content_raw payload on each call.
+		claimed, claimErr := l.tryClaimCounterApplication(ctx, artifactID, hospitalityOpKindPropertyIssueDelta)
+		if claimErr != nil {
+			slog.Warn("hospitality linker: claim property issue delta idempotency failed", "artifact_id", artifactID, "property_id", property.ID, "error", claimErr)
+		} else if claimed {
+			if err := l.propertyRepo.UpdateIssueCount(ctx, property.ID, delta); err != nil {
+				slog.Warn("hospitality linker: update issue count failed", "property_id", property.ID, "error", err)
+			}
+		} else {
+			slog.Debug("hospitality linker: property issue delta already applied (NATS redelivery dedup)", "artifact_id", artifactID, "property_id", property.ID)
 		}
 	}
 
@@ -267,6 +315,35 @@ func (l *HospitalityLinker) linkMessage(ctx context.Context, artifactID string, 
 // createEdge creates an edge in the graph, ignoring duplicates.
 func (l *HospitalityLinker) createEdge(ctx context.Context, srcType, srcID, dstType, dstID, edgeType string, weight float32) error {
 	return l.createEdgeWithMetadata(ctx, srcType, srcID, dstType, dstID, edgeType, weight, "{}")
+}
+
+// tryClaimCounterApplication attempts to claim a one-time counter mutation
+// against hospitality_counter_applications. Returns (true, nil) when this is
+// the first time (artifactID, opKind) has been seen and the caller MUST
+// proceed with the counter mutation. Returns (false, nil) when the row
+// already exists (NATS redelivery; counter MUST be skipped). Returns
+// (false, err) on infrastructure errors — callers MUST NOT apply the counter
+// in this case because we cannot tell whether it has already been applied.
+//
+// See BUG-013-001 for the redelivery scenarios this guards against.
+func (l *HospitalityLinker) tryClaimCounterApplication(ctx context.Context, artifactID, opKind string) (bool, error) {
+	var inserted bool
+	err := l.pool.QueryRow(ctx, `
+		WITH ins AS (
+			INSERT INTO hospitality_counter_applications (artifact_id, op_kind)
+			VALUES ($1, $2)
+			ON CONFLICT (artifact_id, op_kind) DO NOTHING
+			RETURNING 1
+		)
+		SELECT EXISTS (SELECT 1 FROM ins)
+	`, artifactID, opKind).Scan(&inserted)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("claim counter application: %w", err)
+	}
+	return inserted, nil
 }
 
 // createEdgeWithMetadata creates an edge with JSON metadata, ignoring duplicates.
