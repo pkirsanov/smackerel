@@ -304,6 +304,69 @@
       "runStartedAt": "2026-05-24T00:00:00Z",
       "runEndedAt": "2026-05-24T00:00:00Z",
       "summary": "BUG-024-002 reconcile-sweep finalize: single atomic commit lands with subject prefix 'bubbles(024/bug-024-002):'. git diff --cached --name-status review confirmed zero stray staging. Sweep ledger entry .specify/memory/sweep-2026-05-23-r30.json round 29 updated locally only (NOT in the commit) to status: completed_owned with bugId BUG-024-002, bugFinalStatus resolved, executionModel parent-expanded-child-mode."
+    },
+    {
+      "agent": "bubbles.chaos",
+      "phasesExecuted": ["chaos"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "Sweep round 9 of sweep-2026-05-24-r10 (mapped child mode chaos-hardening, parent-expanded) probed spec 024 for runtime/docs/spec drift and forward-detection robustness. 3 findings surfaced: F1 docs/Development.md L31 said '15 passive connectors' while live registry has 16; F2 spec 024 spec.md R-006 + R-PRD-011 + AC-5 said '15 implemented/committed connectors' without QF Decisions; F3 no Go contract test forward-detects 3-surface connector-count disagreement. All 3 findings rolled into single BUG-024-003 packet."
+    },
+    {
+      "agent": "bubbles.implement",
+      "phasesExecuted": ["implement"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep implement: docs/Development.md L31 reconciled 15->16 with QF Decisions companion appended via spec 041 read-only packet flow text preserved. spec.md 8 edits propagate 15->16 across problem, hard constraints, goals, UC-003, scenarios, R-PRD-011, R-006 (16-item list with qfdecisions), and AC-5. New Go contract test internal/deploy/docs_connector_count_contract_test.go (~360 LOC) defines assertConnectorCountContract pure function + TestConnectorCountContract_LiveFile + 3 adversarial sub-tests. All 4 tests PASS. Full internal/deploy suite green at 21.354s (24 tests)."
+    },
+    {
+      "agent": "bubbles.test",
+      "phasesExecuted": ["test"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep test: SCN-001..005 red->green verified end-to-end. SCN-001 pre-edit grep '15 passive connectors' docs/Development.md returned 1 hit; post-edit returns 0. SCN-002 pre-edit grep 'the 15 implemented connectors' spec.md returned 1 hit; post-edit returns 0. SCN-003 pre-creation ls of contract test returned ENOENT + scratch simulation exited 0 (no guard); post-creation TestConnectorCountContract_LiveFile + 3 adversarial sub-tests all PASS with precise diagnostics. SCN-004/005 verified by BUG state.json + report.md content. Regression E2E baseline preserved."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": ["validate"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep validate: all 4 framework guards GREEN on BUG-024-003 packet (state-transition-guard TRANSITION PERMITTED with 3 advisory warnings only; artifact-lint PASSED; traceability-guard PASSED with 5/5 scenarios mapped; artifact-freshness-guard PASS). Single Scope 1 DoD all 16 items checked with concrete evidence including Gate G053 git-backed proof + Check 8B Consumer Impact Sweep + Check 8C canary/rollback + Check 8D change-boundary. Certification: status resolved, lockdownState.active=false, certifiedBy=bubbles.validate, certifiedAt=2026-05-25, blockers=[], concerns=[]."
+    },
+    {
+      "agent": "bubbles.audit",
+      "phasesExecuted": ["audit"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep audit: git diff --cached --name-status review confirmed Change Boundary held (only 13 paths: docs/Development.md + 8 BUG packet files + spec.md + state.json + report.md + internal/deploy contract test); zero excluded surfaces touched (cmd/, internal/connector/, internal/api/, ml/, deploy/, config/, scripts/, smackerel.sh, docker-compose*, .github/bubbles/, specs/055-*, specs/044-per-user-bearer-auth/state.json, docs/smackerel.md). Path-discipline grep contract returned 0 hits as predicted."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": ["docs"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep docs: docs/Development.md L31 now accurately enumerates 16 connectors including 'QF Decisions companion via spec 041 read-only packet flow' preserving spec 041 Principle 10 boundary semantics (no financial advice generation). BUG-024-003 Chaos-Sweep Resolution + Code Diff Evidence + Git-Backed Proof block appended to this parent report.md. resolvedBugs[] entry added to this parent state.json. lastUpdatedAt advanced from 2026-05-24 to 2026-05-25."
+    },
+    {
+      "agent": "bubbles.finalize",
+      "phasesExecuted": ["finalize"],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runEndedAt": "2026-05-25T00:00:00Z",
+      "summary": "BUG-024-003 chaos-sweep finalize: single atomic commit lands with subject prefix 'bubbles(024/bug-024-003):'. git diff --cached --name-status review confirmed zero stray staging. Sweep ledger entry .specify/memory/sweep-2026-05-24-r10.json round 9 updated locally only (NOT in the commit) to status: completed_owned with bugId BUG-024-003-dev-doc-connector-drift, bugFinalStatus resolved, executionModel parent-expanded-child-mode. RESULT-ENVELOPE emitted."
     }
   ],
   "activeBugs": [],
@@ -313,6 +376,12 @@
       "title": "Reconcile artifact drift to current gate standards + close real \u00a722.7 connector-inventory drift (15 \u2192 16, QF Decisions)",
       "resolvedAt": "2026-05-24T00:00:00Z",
       "resolution": "Sweep round 29 of sweep-2026-05-23-r30 (mode: reconcile-to-doc) surfaced 32 state-transition-guard BLOCKS + 19 artifact-freshness sub-failures + 1 real docs/smackerel.md \u00a722.7 + \u00a724-A connector-inventory drift. All closed via single Scope 1 four-layer execution: Layer 1 docs/smackerel.md edits (5 lines: header 15\u219216, intro 15\u219216, new \u00a722.7 row 16 with Principle 10 boundary, \u00a724-A count 15\u219216, new \u00a724-A leaf 16); Layer 2 BUG-024-002 8-artifact packet authored; Layer 3 parent governance backfill (spec.md heading rename + design.md bash-comment rewording + scopes.md Regression E2E + Stress + Shared-Infra + canary + rollback + Scenario-First TDD Evidence subsections + report.md Code Diff Evidence + Reconcile-Sweep Resolution + state.json 5-phase extension + 13-provenance executionHistory append + resolvedBugs entry + scenario-manifest.json SCN-024-06 15\u219216); Layer 4 single atomic commit with structured prefix + local-only sweep ledger update. All 4 guards GREEN on parent + BUG packet. Parent spec 024 stays status: done end-to-end. No runtime / schema / NATS / compose / web template / prompt contract / Telegram command / deploy script change."
+    },
+    {
+      "bugId": "BUG-024-003-dev-doc-connector-drift",
+      "title": "docs/Development.md L31 + spec 024 R-006 said 15 connectors while runtime + spec 024 BS-004 + docs/smackerel.md \u00a722.7 said 16; no forward-detection contract test pinned 3-surface agreement",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolution": "Sweep round 9 of sweep-2026-05-24-r10 (mapped child mode chaos-hardening, parent-expanded) surfaced 3 findings (F1 docs/Development.md L31 said '15 passive connectors'; F2 spec 024 R-006 + R-PRD-011 + AC-5 said '15 implemented/committed connectors' without QF Decisions; F3 no forward-detection Go contract test). All 3 closed via single BUG-024-003 packet with single Scope 1 / SCN-001..005 / 16-item DoD execution: Layer 1 docs/Development.md L31 reconciliation (15\u219216 + QF Decisions companion via spec 041 read-only packet flow); Layer 2 spec.md 8 edits (problem L9, hard constraints L23, goals L33, UC-003 L84, scenarios L219, R-PRD-011 L211, R-006 intro + 16-item list with qfdecisions, AC-5); Layer 3 new internal/deploy/docs_connector_count_contract_test.go (~360 LOC) with assertConnectorCountContract pure function + TestConnectorCountContract_LiveFile + 3 adversarial sub-tests (4 tests PASS; full internal/deploy suite green at 21.354s); Layer 4 BUG packet 8 artifacts + parent state.json 8-entry executionHistory + resolvedBugs append + report.md Chaos-Sweep Resolution section + atomic commit with bubbles(024/bug-024-003): prefix + local-only sweep ledger R9 append. All 4 framework guards GREEN on parent + BUG packet. Parent spec 024 stays status: done end-to-end."
     }
   ],
   "failures": [
@@ -322,7 +391,7 @@
       "resolution": "All 32 BLOCKS, 19 sub-failures, and 1 real drift remediated by BUG-024-002 reconcile-sweep close-out commit landing 2026-05-24. state-transition-guard.sh now exits 0 with \ud83d\udfe2 TRANSITION ALLOWED; artifact-freshness-guard.sh now exits 0 with RESULT: PASS; artifact-lint.sh continues to PASS; traceability-guard.sh continues to PASS with 6/6 scenarios mapped. Parent spec 024 status stays done end-to-end."
     }
   ],
-  "lastUpdatedAt": "2026-05-24T00:00:00Z",
+  "lastUpdatedAt": "2026-05-25T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
