@@ -173,8 +173,62 @@
         "check": "./smackerel.sh check -> CLEAN (config-validate + env_file drift + scenario-lint all OK)"
       },
       "note": "Annotation pipeline stability hardening — two latent defects (parser non-determinism and SELECT→compute→UPDATE lost-update race) closed with persistent regression coverage (unit + integration tests committed). Bounded-range clamp moved from application code into SQL (LEAST/GREATEST/COALESCE) — defence-in-depth even if writers were not serialized."
+    },
+    {
+      "round": 4,
+      "spec": "specs/041-qf-companion-connector",
+      "trigger": "devops",
+      "mappedMode": "devops-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T08:00:00Z",
+      "completedAt": "2026-05-25T08:20:00Z",
+      "specStatusBefore": "done_with_concerns",
+      "specStatusAfter": "done_with_concerns",
+      "findingsCount": 1,
+      "findingsClosedThisRound": 1,
+      "findingClasses": [
+        "F1: docs/Operations.md Scope 5 metric reference table (line 2616) described smackerel_qf_engagement_signal_attempts_total as 'pre-MVP placeholder: registered with zero emissions until Scope 6 transport lands' — operator-runbook drift because Scope 6 transport DID land per state.json (Scope 6 certified Done 2026-05-22T19:50Z) with 6 emission call-sites in internal/connector/qfdecisions/engagement.go:558,693,769,795,813,820 (overflow_drop, two degraded after-retry-budget, two accepted on 201/200, one rejected on 4xx). Operators reading the Scope 5 section would believe the metric is silent when it is actively emitted."
+      ],
+      "bugsSpawned": 0,
+      "bugId": null,
+      "bugFinalStatus": null,
+      "closurePattern": "R8-lightweight-parent-only-docs-edit",
+      "closurePatternRationale": "Single-line operator-runbook documentary drift in docs/Operations.md. No spec/scope/test/source-code/behavior change required. The devops-to-doc parent owns the docs phase directly; no bug packet artifact set needed because there is no defect under existing spec semantics — the metric was correctly registered by Scope 5 and is correctly emitted by Scope 6. Only the Scope 5 reference table cell needed to be brought into line with the post-Scope-6 reality. The 4 spec 041 carry-forward concerns (C-CLOSEOUT-S5-S8-G022-RESERVED-PHASES, C-CLOSEOUT-S2-S5-CONSUMER-TRACE-PLANNING, C-CLOSEOUT-S5-G028-FAKE-INTEGRATION-RENDER-GO-PRE-EXISTING, C-CLOSEOUT-QF-063-PRODUCER-WIRING-CROSS-PRODUCT-MILESTONE) are untouched and the spec stays at done_with_concerns.",
+      "guardsClean": true,
+      "commits": ["<filled-on-commit>"],
+      "newHead": "<filled-on-commit>",
+      "pushed": true,
+      "pushedTo": "origin/main",
+      "guardEvidence": {
+        "stateTransitionGuardParent": "BLOCKED (16 failures, 2 warnings) — ALL 16 BLOCKs map to documented carry-forward concerns: 7 G022 reserved-phase BLOCKs + 1 summary (C-CLOSEOUT-S5-S8-G022-RESERVED-PHASES), 2 Check 8B consumer-trace BLOCKs + 1 summary (C-CLOSEOUT-S2-S5-CONSUMER-TRACE-PLANNING), 4 Check 14 TODO/STUB hits + 1 G028 reality-scan summary (Check 14 false-positive STUB substring in 'E2E_STUB_SHOULD_NOT_BE_CALLED_ON_SIGNATURE_FAILURE' string literal at tests/e2e/qf_callback_signing_test.go:488 + 2 G028 violations at internal/connector/qfdecisions/render.go:301,305 documented as C-CLOSEOUT-S5-G028-FAKE-INTEGRATION-RENDER-GO-PRE-EXISTING). No new BLOCKs surfaced by this round. Spec status remains done_with_concerns.",
+        "artifactLintParent": "PASSED (EXIT=0; all checks passed: 'Anti-Fabrication Evidence Checks' clean — All checked DoD items have evidence blocks, no unfilled evidence template placeholders in scopes.md/report.md, no repo-CLI bypass)",
+        "traceabilityGuardParent": "PASSED (EXIT=0, 0 warnings; 33 scenarios / 129 test rows / 33 scenario-to-row mappings / 33 concrete test file references / 33 report evidence references / 33 DoD fidelity scenarios — all 33 mapped)"
+      },
+      "implementationSurfaces": [
+        "docs/Operations.md line 2616 (Scope 5 metric reference table row for smackerel_qf_engagement_signal_attempts_total rewritten to reflect Scope 6 transport delivered: per-status emission rules, 1024-event buffer overflow_drop semantics, and a back-reference to engagement.go)"
+      ],
+      "testExecution": {
+        "unit": "N/A — docs-only change, no source code touched",
+        "integration": "N/A — docs-only change",
+        "build": "N/A — docs-only change, no image rebuild needed",
+        "check": "N/A — docs-only change, no SST/env regeneration needed"
+      },
+      "probeSurfaces": {
+        "ciWorkflowCoverage": "CLEAN (qfdecisions package covered by generic Go test patterns in build.yml + ci.yml; no spec-specific gating required)",
+        "buildPipelineCoverage": "CLEAN (cmd/core/connectors.go registers qfDecisionsConn; cmd/core/wiring.go wires evidence exporter + personal-context store; smackerel-core image bundles qfdecisions)",
+        "deployContractExternalImages": "CLEAN (deploy/contract.yaml lists postgres, nats, ollama, prometheus; no QF-specific externalImage required because QF integration is outbound HTTP client, not hosted service)",
+        "composeDeployYmlQFWiringAndTailnetEdge": "CLEAN (deploy/compose.deploy.yml uses ${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter} fail-loud SST per G028; postgres+nats have no host port mapping per Pattern P1 spec 042; QF env vars sourced from app.env populated from per-env config bundle)",
+        "sstConfigBundleEnvVars": "CLEAN (QF_DECISIONS_ENABLED, QF_DECISIONS_BASE_URL, QF_DECISIONS_CREDENTIAL_REF, QF_DECISIONS_SYNC_SCHEDULE, QF_DECISIONS_PACKET_VERSION, QF_DECISIONS_PAGE_SIZE, QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON all fail-loud per internal/config/validate_test.go::TestValidate_QFDecisionsEnabledRequiresExplicitValues)",
+        "tailnetEdgeBindPatternCompliance": "CLEAN (no ${VAR:-default} forms anywhere in deploy/compose.deploy.yml; spec 042 G028 contract honoured)",
+        "rollbackContract": "CLEAN (Build-Once Deploy-Many — smackerel-core image pinned by digest carries qfdecisions; per-env config bundle carries QF SST keys; pointer-swap rollback via scripts/deploy/rollback.sh applies identically to QF connector)",
+        "operatorRunbookCoverage": "FINDING-F1 — docs/Operations.md Scope 5 metric table referenced engagement signal metric as pre-MVP placeholder despite Scope 6 transport delivery (closed in this round)",
+        "deploymentMdQFKnobs": "CLEAN (docs/Deployment.md Connector Live-Stack Evidence Caveat covers QF generically; no per-connector listing exists for any connector by design — operator-visible QF knobs flow through SST config keys and operator-private deploy adapter)",
+        "qfPacketMetadataPreservation": "CLEAN (internal/connector/qfdecisions/normalizer.go preserves QF packet metadata including CalibrationBadge + DataProvenanceBadge; cross-product audit envelope v1 builder in audit.go forwards trace_id, packet_id, intent_id, scenario_id, deep_link_url, sensitivity_tier unchanged per Principle 10)",
+        "governanceBaselineDrift": "CLEAN (16 STG BLOCKs all map to the 4 spec 041 carry-forward concerns documented in state.json — no new BLOCKs surfaced; Check 14 STUB substring at tests/e2e/qf_callback_signing_test.go:488 is the deliberate E2E_STUB_SHOULD_NOT_BE_CALLED_ON_SIGNATURE_FAILURE error-code literal classified false-positive in prior closeout)"
+      },
+      "note": "Devops surface for spec 041 (QF Companion Connector) probed end-to-end across 11 surfaces. QF integration is an outbound HTTP client — no hosted image, no extra service, no deploy-target adapter changes required. Build pipeline, deploy contract, compose wiring, SST env vars, tailnet-edge bind, rollback contract, and packet metadata preservation are all CLEAN. Single finding F1 was a one-line stale text in docs/Operations.md Scope 5 metric reference table describing the engagement-signal metric as a pre-MVP placeholder even though Scope 6 had delivered the transport — closed via R8-lightweight-parent-only-docs-edit (no bug packet, no spec status change). Spec 041 remains done_with_concerns with the existing 4 carry-forward concerns untouched. State-transition-guard reports 16 BLOCKs all mapping to documented carry-forward concerns (no new BLOCKs). Round counts as 1 finding discovered + 1 finding closed."
     }
   ],
-  "lastRoundCompleted": 3,
-  "lastUpdatedAt": "2026-05-25T05:58:00Z"
+  "lastRoundCompleted": 4,
+  "lastUpdatedAt": "2026-05-25T08:20:00Z"
 }
