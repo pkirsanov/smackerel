@@ -107,9 +107,11 @@
       "bugId": "BUG-004-003-governance-baseline-drift",
       "bugFinalStatus": "validated",
       "guardsClean": true,
-      "commits": ["<PENDING-COMMIT-SHA>"],
-      "pushed": false,
+      "commits": ["eba0e8df02c8244b48ffd8bca41c38eaa25297d7"],
+      "pushed": true,
+      "pushedTo": "origin/main",
       "baselineHead": "554e620f",
+      "newHead": "eba0e8df02c8244b48ffd8bca41c38eaa25297d7",
       "guardEvidence": {
         "stateTransitionGuardParent": "PERMITTED (EXIT=0, 0 BLOCKs, 1 warning — baseline scopeProgress deprecation)",
         "stateTransitionGuardBug": "PERMITTED at validate-to-doc ceiling (EXIT=0, 0 BLOCKs, 2 warnings — baseline scopeProgress deprecation + state-canonicalization)",
