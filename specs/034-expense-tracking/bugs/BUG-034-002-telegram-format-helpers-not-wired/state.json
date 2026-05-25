@@ -1,0 +1,83 @@
+{
+  "version": 3,
+  "specId": "034-expense-tracking",
+  "bugId": "BUG-034-002-telegram-format-helpers-not-wired",
+  "featureDir": "specs/034-expense-tracking/bugs/BUG-034-002-telegram-format-helpers-not-wired",
+  "featureName": "BUG-034-002: Telegram expense format helpers and fix-flow state machine not wired in production (~150 LOC orphan code under Scope 08 DoD claim)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-25T00:00:00Z",
+    "completedPhaseClaims": [
+      "implement",
+      "test",
+      "docs",
+      "validate",
+      "audit",
+      "chaos"
+    ],
+    "executionHistory": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: created 6-artifact bug packet under specs/034-expense-tracking/bugs/BUG-034-002-telegram-format-helpers-not-wired/ (spec.md, design.md, scopes.md, state.json, uservalidation.md, report.md) documenting the production-wiring gap. Inserted one prose `**Production-wiring status note (BUG-034-002, 2026-05-25):**` block in specs/034-expense-tracking/scopes.md under `## Scope 08: Telegram Expense Commands` between the existing `**Replacement:**` block and the `### Gherkin Scenarios` heading, enumerating the unwired symbol families (FormatExpenseConfirmation, FormatOCRFailure, FormatPartialExtraction, FormatAmountMissing, FormatExpenseList, FormatExpenseCSVMessage, FormatFixPrompt, FormatFieldUpdated; intent helpers isExpenseEntry / isSuggestionAccept / isSuggestionDismiss; expenseStateStore Get/Set/Clear methods; expenseAmountReplyPattern and expenseEntryAmountRe regexps; truncateVendor helper; maxTelegramVendorLen constant) and pointing to BUG-034-002 + Scope 15 for final disposition. No production code, no tests, no scenario-manifest entries, no Test Plan rows, no DoD checkboxes were modified."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:06:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix: regression test is the four-guard sweep itself (state-transition-guard parent + bug, artifact-lint parent + bug, traceability-guard parent). Underlying behavior tests (internal/telegram/expenses_test.go, internal/telegram/photo_upload_test.go, internal/api/expenses_test.go, internal/digest/expenses_test.go, ml/tests/test_receipt_*.py) are unchanged and remain part of the parent feature's existing test suite. The unwired symbol families remain test-covered exactly as they were before this bug fix; only the wiring gap is now documented."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:07:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug folder artifacts (spec.md, design.md, scopes.md, state.json, uservalidation.md, report.md) populated with full content. Parent spec 034 scopes.md updated with status note pointing to BUG-034-002 + Scope 15. Parent state.json updated with executionHistory entry and resolvedBugs[] entry. No external doc syncing required (artifact-only fix; no API surface, runtime behavior, deployment workflow, or operator workflow changed)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Four-guard sweep PASS: state-transition-guard against bug folder and against parent both return EXIT=0 with no new BLOCKs (baseline deprecated-field warnings on parent state.json validStatuses set are preserved unchanged from BUG-034-001 baseline); artifact-lint PASSED for both parent and bug folder; traceability-guard PASSED against parent with 100/100 scenarios preserved from baseline (this fix adds no new scenarios and does not alter Test Plan tables or scenario-manifest.json). Full guard output captured in report.md > Validation Evidence (with /home/<user>/ paths redacted to ~/)."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:09:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Boundary preserved: `git diff --name-only` (against pre-fix baseline e750d742) shows changes confined to specs/034-expense-tracking/scopes.md (one prose block added), specs/034-expense-tracking/state.json (executionHistory + resolvedBugs appended), specs/034-expense-tracking/bugs/BUG-034-002-telegram-format-helpers-not-wired/* (new bug folder), and .specify/memory/sweep-2026-05-25-r10.json (round-7 entry appended). Zero changes under internal/, cmd/, ml/, config/, tests/, web/, deploy/, scripts/, or any other parent spec artifact. Pre-existing unrelated working-tree drift (smackerel.sh, internal/graph/hospitality_linker.go, deploy/, etc.) was NOT staged; only the four bug-scoped paths above were path-limited git-added."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.simplify",
+        "timestamp": "2026-05-25T00:09:30Z",
+        "outcome": "completed_owned",
+        "evidence": "Chaos N/A for artifact-only documentation/traceability fix: no runtime code path, no concurrency, no failure injection surface affected. Recorded for ceiling compliance per workflow simplify-to-doc convergence policy."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-25T00:10:00Z",
+    "certifiedBy": "bubbles.simplify",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["implement", "test", "docs", "validate", "audit", "chaos"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
