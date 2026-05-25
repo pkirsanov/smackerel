@@ -514,5 +514,30 @@
     }
   ],
   "lastRoundCompleted": 10,
-  "lastUpdatedAt": "2026-05-25T17:30:00Z"
+  "lastUpdatedAt": "2026-05-25T18:00:00Z",
+  "sweepStatus": "complete",
+  "completedAt": "2026-05-25T18:00:00Z",
+  "finalHead": "9a7d19854ed3b596d6123d4115a22b8029e544fc",
+  "summary": {
+    "requestedRounds": 10,
+    "completedRounds": 10,
+    "totalFindings": 11,
+    "totalFindingsClosed": 11,
+    "totalBugsSpawned": 6,
+    "bugIds": [
+      "BUG-021-003-alert-producer-failures-metric",
+      "BUG-004-003-governance-baseline-drift",
+      "BUG-027-002-annotation-stability-fixes",
+      "BUG-013-001-hospitality-linker-counter-idempotency",
+      "BUG-034-002-telegram-format-helpers-not-wired",
+      "BUG-009-003-topic-mapping-cancel-r10"
+    ],
+    "roundsWithFindings": [1, 2, 3, 4, 5, 6, 7, 10],
+    "roundsWithZeroFindings": [8, 9],
+    "noOpRounds": [8, 9],
+    "incidentsRemediated": [
+      "R5: subagent updated ledger with placeholder SHA then crashed before commit — parent recovered and committed legitimate R5 work as 7cd21cdd and pinned ledger as f2e548a6",
+      "R6: subagent over-staged 70 framework drift files in 1-line-intended ledger flip e7dd57c4 — self-remediated by clean revert d3c3011c + re-apply e750d742, all 70 framework files restored to baseline"
+    ]
+  }
 }
