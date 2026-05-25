@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "spec": "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift",
+  "lockingPolicy": {
+    "lockOnPhases": ["validate", "audit", "docs"],
+    "lockReason": "Guard-verification scenarios are the contractual proof of the governance baseline restoration; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "off",
+    "rationale": "Artifact-only governance baseline restoration with zero runtime delta — no failing implementation test exists to drive red→green on; the state-transition-guard re-run IS the proof artifact. Red state captured in spec.md § Finding Ledger (40 atomic BLOCK lines across 7 finding classes F1-F7 at parent specs/014-discord-connector). Green state captured in report.md § Validation Evidence (state-transition-guard.sh on parent and bug packet both return Exit 0 TRANSITION PERMITTED with zero BLOCKs)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-014-003-GUARD-CLEAN",
+      "scope": 1,
+      "title": "Guard re-run on parent spec exits 0 with zero BLOCKs",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:check-state-transition-guard-parent-spec-014"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/report.md#guard-re-run-on-parent-spec",
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/scopes.md#scope-1-governance-baseline-restoration-artifact-only"
+      ],
+      "liveTestExpectation": "Exit 0 with 🟡 TRANSITION PERMITTED on parent spec 014-discord-connector; zero BLOCK lines in output; parent status=done ceiling preserved.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-014-003-BUG-CLEAN",
+      "scope": 1,
+      "title": "Guard run on bug packet exits 0 with zero BLOCKs",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        ".github/bubbles/scripts/state-transition-guard.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:check-state-transition-guard-bug-packet-014-003"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/report.md#guard-re-run-on-bug-packet",
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/scopes.md#scope-1-governance-baseline-restoration-artifact-only"
+      ],
+      "liveTestExpectation": "Exit 0 with 🟡 TRANSITION PERMITTED on the BUG-014-003 bug packet folder; zero BLOCK lines in output; bug status may be set to 'validated' (validate-to-doc ceiling).",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-014-003-NO-RUNTIME",
+      "scope": 1,
+      "title": "Zero runtime files modified in staged diff",
+      "requiredTestType": ["change-boundary-verification"],
+      "testFiles": [
+        "git"
+      ],
+      "linkedTests": [
+        {
+          "file": "git",
+          "function": "manual:check-git-diff-cached-name-status-no-runtime-paths"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/report.md#path-limited-diff-boundary-verification",
+        "specs/014-discord-connector/bugs/BUG-014-003-governance-baseline-drift/scopes.md#change-boundary"
+      ],
+      "liveTestExpectation": "git diff --cached --name-status emits only specs/014-discord-connector/{scopes.md,report.md,state.json}, the BUG-014-003 bug packet artifacts, and .specify/memory/sweep-2026-05-24-r10.json; zero matches for internal/connector/discord/**, config/**, .github/workflows/**, deploy/**, .github/bubbles/scripts/**, or docs/** paths.",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}
