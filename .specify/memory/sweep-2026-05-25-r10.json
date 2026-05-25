@@ -395,8 +395,47 @@
         "specContract": "FINDING-F1 — design.md L690/L712 + Scope 08 DoD claim wiring is delivered; production caller graph shows otherwise"
       },
       "note": "Simplify probe for spec 034 (Expense Tracking) surfaced a single high-confidence finding: ~150 LOC of Telegram format helpers / intent helpers / fix-flow state machine that the Scope 08 DoD lists as 'implemented' but that have zero production callers — only test-file references. The format functions, intent helpers, regex patterns, vendor truncation helper, and state-store Get/Set/Clear methods exist and are unit-test covered, but the production message dispatch in internal/telegram/bot.go bypasses every one of them. Spec design.md L690 (claims an artifacts.processed NATS subscriber exists in internal/telegram/) and L712 (claims all T-001..T-011 responses go through expenses.go format functions) are both false. Disposition: NOT a simplify-delete (would invalidate Scope 08 DoD evidence and SCN-034-048..058 test surface) and NOT a feature-build (Scope 15 owns the wire-or-replace migration and is gated on spec 037). Closed via R2-style artifact-only documentary bug pattern: filed 6-artifact BUG-034-002 packet, inserted one prose Production-wiring status note block under Scope 08 in parent scopes.md, appended bubbles.simplify executionHistory entry + resolvedBugs entry in parent state.json. Round counts as 1 finding discovered + 1 finding closed."
+    },
+    {
+      "round": 8,
+      "spec": "specs/053-ci-ops-evidence-hardening",
+      "trigger": "improve",
+      "mappedMode": "improve-existing",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T16:20:00Z",
+      "completedAt": "2026-05-25T16:40:00Z",
+      "specStatusBefore": "specs_hardened",
+      "specStatusAfter": "specs_hardened",
+      "findingsCount": 0,
+      "findingsClosedThisRound": 0,
+      "bugsSpawned": 0,
+      "bugId": null,
+      "bugFinalStatus": null,
+      "guardsClean": false,
+      "guardsCleanReason": "spec-053-internal checks all PASSED; only non-clean signal is Gate G073 source-code-edit-lockout BLOCK from pre-existing unrelated worktree source dirtiness (internal/graph/hospitality_linker.go etc.) owned by parent for separate reconciliation outside this sweep; not a spec-053-actionable finding",
+      "commits": ["ddc651dadf78bcdbc3b46f3b5da2b54784ee6561"],
+      "pushed": false,
+      "pushedTo": null,
+      "baselineHead": "814de4782466294c3482896e90a43d9802a6c3d3",
+      "newHead": "ddc651dadf78bcdbc3b46f3b5da2b54784ee6561",
+      "guardEvidence": {
+        "artifactLintParent": "PASSED (exit 0, all required artifacts present, DoD checkbox format clean, no anti-fabrication violations)",
+        "traceabilityGuardParent": "PASSED (exit 0, 0 warnings, 7/7 SCN-053 scenarios mapped to DoD, 30 test rows, 7 concrete test file references, 7 report evidence references)",
+        "stateTransitionGuardParent": "BLOCKED (exit 1) — 2 BLOCKs from Gate G073 source-code-edit-lockout triggered by pre-existing unrelated worktree dirtiness (internal/graph/hospitality_linker.go) owned by parent for separate reconciliation; spec-053-internal checks all PASSED including DoD 45/45 checked, 5/5 scopes Done canonical, scenario manifest integrity, scenario-first TDD evidence, transition/rework queues empty, phase provenance for design/plan/harden/docs/validate/audit/finalize, change boundary, consumer trace, regression E2E coverage, framework ownership lint, deferral language scan, artifact-lint nested check; spec 053 itself is not the source of the BLOCK"
+      },
+      "probeSurfaces": {
+        "staleReferenceScan": "CLEAN — `grep -rn 'ci.yml|test integration|integration job' docs/ specs/053-ci-ops-evidence-hardening/ .github/copilot-instructions.md README.md` returned only references already inventoried in C-053-003-001..017; no new references, no removed references",
+        "ciWorkflowInventory": "CLEAN — actual `.github/workflows/` contains build.yml + ci.yml + gitleaks.yml; all 3 are inventoried (C-053-003-001 ci.yml, C-053-003-003 build.yml, C-053-003-007 gitleaks.yml)",
+        "contractTestInventory": "CLEAN — actual CI-consumer contract tests are ci_integration_topology_contract_test.go (C-053-003-004) and ci_workflow_no_parallel_publish_test.go (C-053-003-005); both inventoried; state_audit_reconciliation_test.go is unrelated (different concern)",
+        "docConsumerInventory": "CLEAN — all 5 doc consumers (Branch_Protection.md, Development.md, Operations.md, Testing.md, smackerel.md) referenced in stale-reference scan are inventoried as C-053-003-008..012",
+        "stateJsonHealth": "CLEAN — top-level status=specs_hardened matches certification.status; activeBugs empty; transitionRequests empty; reworkQueue empty; resolvedBugs[] correctly records BUG-053-001 with status validated and findingsResolved=24",
+        "bugClosureProvenance": "CLEAN — BUG-053-001-trim-broke-hardened-integrity closed 2026-05-25T15:30:00Z via validate-to-doc, restored 24 trim-regression integrity losses from prior post-finalize trim commit d4596c45",
+        "carryForwardTRDispositions": "CLEAN — TR-BUG-045-002-008/009/010/011/012 all dispositioned closed-by-current-proof; TR-BUG-045-002-014 routed upstream per DD-053-008; per-scope certifiedAt timestamps stable from 2026-05-18T15:11:13Z..23:55:00Z",
+        "g073Block": "PRE-EXISTING NON-FINDING — G073 source-code-edit-lockout fires whenever working tree contains source-file modifications under a spec with statusCeiling=specs_hardened; R8 spec 053 is the first specs_hardened spec in this sweep so this is the first round to surface the BLOCK; the dirty source files (internal/graph/hospitality_linker.go among unrelated docs/specs/scripts) are pre-existing parent-owned worktree state explicitly reserved for separate reconciliation outside this sweep per parent contract; not a spec-053-actionable finding"
+      },
+      "note": "Improve probe for spec 053 (artifact-only planning packet at specs_hardened ceiling) ran substantive checks: artifact-lint PASSED, traceability-guard PASSED 0 warnings, state-transition-guard spec-internal checks all PASSED (G073 BLOCK is from pre-existing unrelated worktree dirtiness owned by parent), S3-D6 named stale-reference scan CLEAN, consumer inventory verified against actual `.github/workflows/` + `internal/deploy/` + docs surfaces (all current), state.json shape healthy, BUG-053-001 restoration provenance verified, all 5 carry-forward TR dispositions stable. Spec 053 is intentionally artifact-only and has no runtime to refactor; the spec is sealed at specs_hardened and no promotion is attempted. Zero spec-053-actionable findings after a substantive probe — not a baseline-rationalization skip. Recorded as no-op commit ddc651da."
     }
   ],
-  "lastRoundCompleted": 7,
-  "lastUpdatedAt": "2026-05-25T16:30:00Z"
+  "lastRoundCompleted": 8,
+  "lastUpdatedAt": "2026-05-25T16:40:00Z"
 }
