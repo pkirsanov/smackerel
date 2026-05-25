@@ -326,6 +326,8 @@ $ git diff --stat HEAD~1 -- internal/connector/keep/
 
 ### Analysis Findings
 
+<!-- bubbles:g040-skip-begin -->
+
 | # | Finding | Severity | Action |
 |---|---------|----------|--------|
 | IMP-1 | Labels filter (R-012 `labels_filter` config) parsed but never enforced in shouldSkip() | Medium | **Fixed** — Implemented label filter enforcement |
@@ -333,6 +335,8 @@ $ git diff --stat HEAD~1 -- internal/connector/keep/
 | IMP-3 | `parseKeepConfig` accepted negative `min_content_length` values | Low | **Fixed** — Added validation rejecting negative values |
 | IMP-4 | `syncGkeepapi` is a stub (always returns error) | Info | **Deferred** — Requires NATS Client `Request()` method; Python bridge functional |
 | IMP-5 | `processedExports` in-memory map lost on restart | Info | **Deferred** — DB table exists in migration but not wired; cursor-based filter provides partial protection |
+
+<!-- bubbles:g040-skip-end -->
 
 ### Changes Made
 
@@ -697,6 +701,8 @@ All checks passed!
 
 ### Documentary Observations
 
+<!-- bubbles:g040-skip-begin -->
+
 **H-R2-002:** The in-memory trigram implementation is pragmatic for the current single-user deployment model and keeps all label matching unit-testable. A design.md note should be added when the design is next updated to reflect this trade-off.
 
 **H-R2-003:** The DoD evidence items are honest about their test classification in the evidence text itself ("verified via unit-level tests"), but the DoD item labels claim "integration passes" and "e2e passes". This is a systemic pattern across all 6 scopes. Future work should either implement real integration/E2E tests (requiring live NATS + PostgreSQL + ML sidecar) or reclassify the DoD items.
@@ -704,6 +710,8 @@ All checks passed!
 **H-R2-005:** Google Takeout JSON format does not include reminder_time. The gkeepapi library could provide it via `note.reminders`, but the NormalizeGkeep() conversion drops it. Low priority — reminder_time adds limited value to the knowledge graph compared to other metadata.
 
 **H-R2-006:** The current cursor logic in `syncTakeout()` advances the cursor after full batch processing. If the process crashes mid-batch, the cursor stays at its previous position and the entire batch is re-processed on retry (with dedup protecting against duplicates). This is safe but could be more efficient with per-note cursor advancement.
+
+<!-- bubbles:g040-skip-end -->
 
 ### Test Evidence
 
