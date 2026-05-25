@@ -1,0 +1,139 @@
+{
+  "version": 3,
+  "featureDir": "specs/053-ci-ops-evidence-hardening/bugs/BUG-053-001-trim-broke-hardened-integrity",
+  "featureName": "BUG-053-001: Post-Hardening Trim Broke State.json/Scopes.md Integrity Markers",
+  "status": "validated",
+  "workflowMode": "validate-to-doc",
+  "lastUpdatedAt": "2026-05-25T15:00:00Z",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": "1",
+    "runStartedAt": "2026-05-25T13:00:00Z",
+    "completedPhaseClaims": [
+      "select",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.select",
+        "phasesExecuted": [
+          "select"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-25T13:00:00Z",
+        "runEndedAt": "2026-05-25T13:05:00Z",
+        "summary": "bubbles.gaps trigger probe in sweep-2026-05-24-r10 round 4 (parent-expanded child workflow mode gaps-to-doc) identified 25 atomic state-transition-guard.sh BLOCK findings against parent specs/053-ci-ops-evidence-hardening grouped into 5 finding classes (F1 status format drift, F2 regression E2E DoD/Test Plan drift, F3 Scope 5 sweep/boundary DoD drift, F4 G040 sentinel drift, F5 SLA-stress reword reversion). Drift attributed to trim commit d4596c45 ('spec(053): trim report + scopes after promote-to-hardened') that over-aggressively removed structural markers added by the prior bubbles.harden phase. Routed to validate-to-doc artifact-only bug packet."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": [
+          "validate"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "validated",
+        "runStartedAt": "2026-05-25T13:10:00Z",
+        "runEndedAt": "2026-05-25T14:00:00Z",
+        "summary": "Re-ran state-transition-guard on parent specs/053-ci-ops-evidence-hardening after artifact restorations. F1 (5 bold **Status:** Done markers restored on scope headers), F2 (10 regression E2E DoD items + 3 Test Plan rows V-053-S1-004/V-053-S3-005/V-053-S4-006 restored), F3 (Scope 5 Consumer Impact Sweep section + S5-D12 + S5-D13 DoD items restored), F4 (16 g040-skip sentinel pairs restored in scopes.md + 2 sentinel pairs added to report.md), F5 (slated→scheduled, Reserve a slot→Reserve a row) all closed. Final verdict: TRANSITION PERMITTED zero BLOCKs, 13 advisory warnings carry over unchanged from spec-scope-hardening ceiling. Parent status=specs_hardened preserved."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": [
+          "audit"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "runStartedAt": "2026-05-25T14:05:00Z",
+        "runEndedAt": "2026-05-25T14:20:00Z",
+        "summary": "Audit confirms only specs/053-ci-ops-evidence-hardening/ paths + one sweep-ledger entry under .specify/memory/sweep-2026-05-24-r10.json in staged diff. No production code, test code, config, CI/CD, deploy/, or framework file touched. PII redaction verified (no /home/<user>/... in evidence blocks). artifact-lint PASSED on both parent and bug packet; traceability-guard PASSED on parent with G068 fidelity 7/7 mapped, 0 unmapped. Commit prefix bubbles(053/bug-053-001-trim-broke-hardened-integrity): satisfies Check 17 on parent."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": [
+          "docs"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "runStartedAt": "2026-05-25T14:25:00Z",
+        "runEndedAt": "2026-05-25T14:40:00Z",
+        "summary": "Bug packet 6-artifact set created at specs/053-ci-ops-evidence-hardening/bugs/BUG-053-001-trim-broke-hardened-integrity/: spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json. Parent scopes.md updated with 5 bold **Status:** Done markers, 10 regression E2E N/A-with-justification DoD items, 3 Test Plan regression artifact-validation rows, Scope 5 Consumer Impact Sweep section + S5-D12 + S5-D13, 16 g040-skip sentinel pairs, 2 reword fixes. Parent report.md updated with 2 g040-skip sentinel pairs (lines ~545 and ~1102). Parent state.json updated with bubbles.gaps:gaps + bubbles.workflow:bug-route executionHistory entries, BUG-053-001 appended to resolvedBugs[], lastUpdatedAt updated. No other artifact touched."
+      },
+      {
+        "agent": "bubbles.finalize",
+        "phasesExecuted": [
+          "finalize"
+        ],
+        "statusBefore": "validated",
+        "statusAfter": "validated",
+        "runStartedAt": "2026-05-25T14:45:00Z",
+        "runEndedAt": "2026-05-25T15:00:00Z",
+        "summary": "Bug closed at validate-to-doc ceiling 'validated'. All 16 numbered DoD items satisfied with evidence captured in report.md. Sweep ledger entry recorded round=4 spec=053-ci-ops-evidence-hardening trigger=gaps mappedMode=gaps-to-doc executionModel=parent-expanded-child-mode bugFinalStatus=validated findings=25 findingsClosedThisRound=25 (5/5 classes). Parent spec 053 returns to guard-clean state with status=specs_hardened ceiling preserved (NOT promoted to done)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "validated",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "select",
+      "validate",
+      "audit",
+      "docs",
+      "finalize"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Restore Hardened Artifact Integrity After Trim Regression",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-25T15:00:00Z"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "validate-to-doc",
+      "source": "bubbles.gaps"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": []
+}
