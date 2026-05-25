@@ -1349,10 +1349,23 @@ change a value, edit `config/smackerel.yaml`, regenerate the env file
 `embedding_queue_max` to `2 * embedding_workers` for steady-state load
 and reduce it to `embedding_workers` for stricter backpressure. The
 `health_latency_sla_ms` default of `500` is generous for a healthy
-sidecar; if your observability platform should alert on sustained
-breaches, point your alert at `histogram_quantile(0.95,
-rate(smackerel_ml_request_latency_seconds_bucket{endpoint="/health"}[5m]))`
-and compare against the SLA value.
+sidecar. This SLA budget is enforced at three layers today:
+(1) the dev-time adversarial regression in
+`ml/tests/test_embedder.py::test_spec050_health_handler_unblocked_by_busy_executor`
+pins median `/health` latency below the budget while the embedding
+executor is saturated; (2) the deploy compose container healthcheck
+(`deploy/compose.deploy.yml` `smackerel-ml.healthcheck`) probes `/health`
+every 10s with a 10s timeout, so docker marks the ML container
+unhealthy if a probe exceeds that envelope; and (3) the
+`SmackerelMLEmbeddingStarvation` alert in
+`config/prometheus/alerts.yml` fires on sustained
+`smackerel_ml_embedding_rejected_total` increase, which is the
+operator-actionable signal that the bounded executor is shedding work.
+There is currently no runtime histogram on `/health` itself; if your
+observability platform needs a per-scrape `/health` latency series,
+deploy the Prometheus `blackbox_exporter` pointed at the ML sidecar
+`/health` URL and alert on `probe_duration_seconds` against
+`ML_HEALTH_LATENCY_SLA_MS / 1000`.
 
 ## TLS Setup
 
