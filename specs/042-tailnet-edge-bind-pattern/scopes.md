@@ -1,3 +1,360 @@
+# Scopes - 042 Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
+
+Single-file mode.
+
+Links: [spec.md](spec.md) | [design.md](design.md) |
+[uservalidation.md](uservalidation.md)
+
+## Planning Reconciliation Note
+
+This plan supersedes the original Spec 042 active scopes that treated a
+compose-level loopback fallback as expected behavior. The current active
+contract is fail-loud: `deploy/compose.deploy.yml` requires
+`${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}` for
+backend host-published ports, and the deploy adapter must write any concrete
+value explicitly. `127.0.0.1` remains valid only when supplied as an explicit
+value by generated local config or by the deploy adapter; Compose must never
+invent it through fallback syntax.
+
+Prior completion evidence that validated fallback behavior is historical only
+and must not be used to mark these repaired scopes complete. Revalidation must
+run against the fail-loud contract before any active scope status changes to
+Done.
+
+## Execution Outline
+
+### Phase Order
+
+1. **Scope 1 - Fail-loud compose contract and mechanical guard.** Update the
+   deploy compose contract, SST comment, and Go unit contract test so backend
+   port mappings require an adapter-provided `HOST_BIND_ADDRESS`, infra
+   services publish no host ports, and missing values fail at Compose
+   substitution time.
+2. **Scope 2 - Operator docs and agent guardrails.** Update the Smackerel
+   operations documentation and Copilot guardrail text so future operators and
+   agents learn the fail-loud deploy contract, Pattern P1 infra access, and
+   product-repo genericity boundary.
+
+### New Types & Signatures
+
+- Compose backend port signature:
+  `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`
+- Compose ML port signature:
+  `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}`
+- Go contract test helper: `assertComposeContract(yamlBytes []byte) error`
+- Go contract tests:
+  `TestComposeContract_LiveFile`,
+  `TestComposeContract_AdversarialLiteralBind`,
+  `TestComposeContract_AdversarialFallbackBind`,
+  `TestComposeContract_AdversarialInfraHasPorts`,
+  `TestComposeContract_AdversarialHostNetwork`
+- Documentation sections:
+  `.github/copilot-instructions.md` ->
+  `Tailnet-Edge Bind Pattern (home-lab/production targets)`;
+  `docs/Operations.md` ->
+  `DevOps Access on Home-Lab (Tailnet-Edge Bind Pattern)`
+
+### Validation Checkpoints
+
+- Scope 1 gates the implementation with the Go unit contract test, fail-loud
+  Compose render proof, explicit-loopback render proof, SST regeneration, and
+  `./smackerel.sh check` before Scope 2 starts.
+- Scope 2 gates the documentation repair with doc-lint searches, fallback
+  wording scans, product-genericity scans, and artifact lint after Scope 1 is
+  complete.
+- No live deploy, `up`, `apply`, or adapter commands are part of this plan;
+  validation is limited to static file parsing, config generation, and
+  read-only Compose rendering.
+
+## Active Scope Inventory
+
+| Scope | Name                                           | Surfaces                             | Required validation summary                                      | Status      | Depends On |
+|-------|------------------------------------------------|--------------------------------------|------------------------------------------------------------------|-------------|------------|
+| 1     | Fail-loud compose contract and mechanical guard | deploy compose, SST comment, Go test | Go unit contract, Compose fail-loud render, explicit value render | Not started | -          |
+| 2     | Operator docs and agent guardrails              | Operations docs, Copilot instructions | Doc-lint, forbidden fallback scan, artifact lint                 | Not started | 1          |
+
+---
+
+## Scope 1: Fail-loud compose contract and mechanical guard
+
+**Status:** Not started
+**Priority:** P0
+**Depends On:** None
+
+### Gherkin Scenarios
+
+- **SCN-042-001 - Backend ports require adapter-provided bind address**
+  ```gherkin
+  Given the deploy compose file `deploy/compose.deploy.yml`
+  When the file is parsed by the Go compose contract test
+  Then the `smackerel-core` `ports:` entry uses the exact prefix
+       `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:`
+  And the `smackerel-ml` `ports:` entry uses the exact prefix
+       `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:`
+  And neither backend service uses a literal bind prefix or fallback bind syntax
+  ```
+
+- **SCN-042-002 - Infra services have no host port mapping**
+  ```gherkin
+  Given the deploy compose file `deploy/compose.deploy.yml`
+  When the file is parsed by the Go compose contract test
+  Then the `postgres` service has no `ports:` block
+  And the `nats` service has no `ports:` block
+  And neither service uses `network_mode: host`
+  ```
+
+- **SCN-042-003 - Missing bind address fails loud**
+  ```gherkin
+  Given the deploy compose file `deploy/compose.deploy.yml`
+  When `docker compose -f deploy/compose.deploy.yml config` renders the file
+       without `HOST_BIND_ADDRESS` in the environment or env file
+  Then Compose exits non-zero with `HOST_BIND_ADDRESS must be set by deploy adapter`
+  And no backend service can start from an implicit bind address
+  ```
+
+- **SCN-042-004 - Explicit loopback is supplied, not defaulted**
+  ```gherkin
+  Given an adapter-style env file contains `HOST_BIND_ADDRESS=127.0.0.1`
+  When `docker compose -f deploy/compose.deploy.yml config` renders the file
+  Then the rendered backend port mappings bind to `127.0.0.1:`
+  And the loopback value is traceable to explicit environment input
+  And the compose source contains no fallback bind syntax
+  ```
+
+### Implementation Plan
+
+- Modify `deploy/compose.deploy.yml`:
+  - Set `services.smackerel-core.ports[0]` to the fail-loud
+    `HOST_BIND_ADDRESS` form shown in the Execution Outline.
+  - Set `services.smackerel-ml.ports[0]` to the fail-loud
+    `HOST_BIND_ADDRESS` form shown in the Execution Outline.
+  - Remove any `ports:` block from `services.postgres` and preserve only
+    in-network access.
+  - Remove any `ports:` block from `services.nats` and preserve only
+    in-network access.
+  - Leave `services.ollama` unchanged because it is profile-gated and out of
+    scope for Spec 042.
+- Modify `config/smackerel.yaml` comment above `runtime.host_bind_address`:
+  - State that deploy compose fails loudly unless `HOST_BIND_ADDRESS` is set.
+  - State that loopback is an explicit generated or adapter-provided value.
+  - Avoid describing loopback as a default, fallback, or implicit-safety
+    behavior.
+  - Keep the product repo generic; do not add real hostnames, IP addresses,
+    tailnet roots, or operator-private topology.
+- Update or create `internal/deploy/compose_contract_test.go`:
+  - Parse `deploy/compose.deploy.yml` with `gopkg.in/yaml.v3`.
+  - Assert the exact fail-loud backend port strings.
+  - Assert `postgres` and `nats` have no host-published ports and no host
+    network bypass.
+  - Include adversarial fixtures proving the helper rejects literal bind
+    prefixes, fallback bind syntax, infra `ports:` blocks, and host networking.
+
+#### Change Boundary
+
+Allowed file families for Scope 1:
+- `deploy/compose.deploy.yml` (compose contract only)
+- `config/smackerel.yaml` (comment-only change above
+  `runtime.host_bind_address`)
+- `internal/deploy/compose_contract_test.go` (contract guard only)
+
+Excluded surfaces for Scope 1:
+- `docker-compose.yml` dev/test compose
+- `scripts/commands/config.sh`
+- `scripts/runtime/go-unit.sh`
+- `smackerel.sh`
+- Any other `internal/**` package
+- Any other `deploy/**` file
+- Any `specs/020-*` historical artifact
+- `.github/copilot-instructions.md` and `docs/Operations.md` (Scope 2 owns
+  those)
+- Any deploy-adapter file outside this product repo
+
+### Test Plan
+
+| Test Type | Category | File / Location | Description | Command | Live System | Scenario |
+|-----------|----------|-----------------|-------------|---------|-------------|----------|
+| Unit | unit | `internal/deploy/compose_contract_test.go::TestComposeContract_LiveFile` | Parses the live deploy compose and asserts exact fail-loud backend port strings plus no infra host ports or host networking. | `./smackerel.sh test unit --go` | No | SCN-042-001, SCN-042-002 |
+| Regression | unit | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialLiteralBind` | Proves a literal backend bind prefix is rejected by the contract helper. | `./smackerel.sh test unit --go` | No | SCN-042-001 |
+| Regression | unit | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialFallbackBind` | Proves fallback bind syntax is rejected by the contract helper. | `./smackerel.sh test unit --go` | No | SCN-042-001, SCN-042-004 |
+| Regression | unit | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialInfraHasPorts` | Proves a `ports:` block on `postgres` or `nats` is rejected. | `./smackerel.sh test unit --go` | No | SCN-042-002 |
+| Regression | unit | `internal/deploy/compose_contract_test.go::TestComposeContract_AdversarialHostNetwork` | Proves `network_mode: host` on contract services is rejected. | `./smackerel.sh test unit --go` | No | SCN-042-002 |
+| Render proof | deploy-contract | `report.md` evidence section | Read-only Compose render without `HOST_BIND_ADDRESS` fails with the named error. This is not a live deploy command. | `docker compose -f deploy/compose.deploy.yml config` with no `HOST_BIND_ADDRESS` | No | SCN-042-003 |
+| Render proof | deploy-contract | `report.md` evidence section | Read-only Compose render with explicit `HOST_BIND_ADDRESS=127.0.0.1` produces loopback-bound backend mappings and keeps infra without host ports. This is not a live deploy command. | `HOST_BIND_ADDRESS=127.0.0.1 docker compose -f deploy/compose.deploy.yml config` | No | SCN-042-004, SCN-042-002 |
+| Static guard | unit | `./smackerel.sh check` | Existing Smackerel validation still exits 0 after the compose and config-comment changes. | `./smackerel.sh check` | No | SCN-042-001 |
+| SST regen | unit | `./smackerel.sh config generate` | Config generation still emits an explicit `HOST_BIND_ADDRESS` value for local/generated contracts without relying on Compose fallback syntax. | `./smackerel.sh config generate` | No | SCN-042-004 |
+| Artifact lint | artifact | `specs/042-tailnet-edge-bind-pattern` | Spec artifacts pass lint after the scope repair. | `bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern` | No | governance |
+
+E2E API/UI tests are intentionally not planned for Scope 1 because this scope
+does not start services, change API behavior, or change a UI surface. The
+end-to-end proof for this static deploy contract is the read-only Compose
+render in both missing-value and explicit-value modes.
+
+### Definition of Done
+
+#### Core Items
+
+- [ ] `deploy/compose.deploy.yml` `smackerel-core` and `smackerel-ml` backend
+      port mappings use the fail-loud `HOST_BIND_ADDRESS` substitution exactly.
+- [ ] `deploy/compose.deploy.yml` `postgres` and `nats` have no `ports:` block
+      and no host-network bypass.
+- [ ] `config/smackerel.yaml` documents `runtime.host_bind_address` as an
+      explicit generated or adapter-provided value and contains no fallback or
+      default language for the deploy compose path.
+- [ ] `internal/deploy/compose_contract_test.go` validates the live compose
+      file and includes adversarial coverage for literal bind prefixes,
+      fallback bind syntax, infra `ports:`, and host networking.
+- [ ] `./smackerel.sh test unit --go` exits 0 with the compose contract tests
+      included.
+- [ ] Read-only Compose render without `HOST_BIND_ADDRESS` exits non-zero with
+      `HOST_BIND_ADDRESS must be set by deploy adapter`.
+- [ ] Read-only Compose render with explicit `HOST_BIND_ADDRESS=127.0.0.1`
+      renders loopback-bound backend mappings and no infra host-published ports.
+- [ ] `./smackerel.sh check` exits 0.
+- [ ] `./smackerel.sh config generate` exits 0 and generated local env
+      artifacts contain an explicit `HOST_BIND_ADDRESS` value.
+- [ ] Change Boundary is respected; no excluded file family changes in Scope 1.
+
+#### Build Quality Gate
+
+- [ ] Zero warnings in unit test, check, config generation, and artifact lint
+      output.
+- [ ] Zero deferrals; all Scope 1 invariants are implemented and validated in
+      this scope.
+- [ ] Lint/format clean for the Go test and edited YAML.
+- [ ] Artifact lint exits 0 for `specs/042-tailnet-edge-bind-pattern`.
+
+---
+
+## Scope 2: Operator docs and agent guardrails
+
+**Status:** Not started
+**Priority:** P1
+**Depends On:** 1
+
+### Gherkin Scenarios
+
+- **SCN-042-005 - Operations doc explains infra access without host ports**
+  ```gherkin
+  Given the home-lab deploy compose has no host port for `postgres` or `nats`
+  When a devops user reads `docs/Operations.md`
+  Then the document shows a `docker exec` command for `psql` against the
+       Smackerel Postgres container through a generic `<deploy-host>` placeholder
+  And the document shows a `docker exec` command for NATS CLI access through a
+       generic `<deploy-host>` placeholder
+  And the document explains that HTTP access flows through host Caddy on the
+       tailnet edge
+  ```
+
+- **SCN-042-006 - Copilot guardrail prevents fallback regression**
+  ```gherkin
+  Given a future agent reads `.github/copilot-instructions.md`
+  When that agent edits `deploy/compose.deploy.yml` or `HOST_BIND_ADDRESS` docs
+  Then the Tailnet-Edge Bind Pattern subsection requires fail-loud
+       `HOST_BIND_ADDRESS` substitution for deploy compose backend ports
+  And it states that `127.0.0.1` is valid only as an explicit value supplied by
+       generated config or the deploy adapter
+  And it identifies fallback bind syntax as forbidden active deploy guidance
+  ```
+
+### Implementation Plan
+
+- Update `.github/copilot-instructions.md`:
+  - Keep the Tailnet-Edge Bind Pattern subsection under Required Runtime
+    Standards.
+  - Replace any backend host port examples with the fail-loud
+    `HOST_BIND_ADDRESS` compose form.
+  - State that the deploy adapter must set `HOST_BIND_ADDRESS` explicitly in
+    `app.env` before Compose runs.
+  - State that missing or empty values abort Compose substitution.
+  - State that explicit loopback means the adapter or generated env wrote
+    `127.0.0.1`; it is not a Compose fallback.
+  - Keep real target topology out of the product repo.
+- Update `docs/Operations.md`:
+  - Document Pattern P1 access for Postgres and NATS via `tailscale ssh
+    <deploy-host> -- docker exec ...` using generic placeholders only.
+  - Document HTTP access through host Caddy with generic FQDN placeholders.
+  - Avoid telling operators to connect to Postgres or NATS through host ports.
+  - Avoid fallback/default wording for backend bind behavior.
+
+#### Change Boundary
+
+Allowed file families for Scope 2:
+- `.github/copilot-instructions.md` (Tailnet-Edge Bind Pattern subsection only)
+- `docs/Operations.md` (DevOps Access on Home-Lab section only)
+
+Excluded surfaces for Scope 2:
+- Anything under `deploy/`
+- Anything under `internal/`
+- Anything under `config/`
+- Any deploy-adapter file outside this product repo
+- Any spec artifact other than this `scopes.md` repair
+- Any other `docs/*.md` file
+
+### Test Plan
+
+| Test Type | Category | File / Location | Description | Command | Live System | Scenario |
+|-----------|----------|-----------------|-------------|---------|-------------|----------|
+| Doc-lint | doc-lint | `.github/copilot-instructions.md` | Tailnet-Edge Bind Pattern subsection contains the fail-loud `HOST_BIND_ADDRESS` compose form and explicit adapter-value wording. | `grep -nE 'Tailnet-Edge Bind Pattern|HOST_BIND_ADDRESS must be set by deploy adapter|explicit' .github/copilot-instructions.md` | No | SCN-042-006 |
+| Doc-lint | doc-lint | `docs/Operations.md` | DevOps Access section contains generic Pattern P1 `docker exec` shapes for Postgres and NATS and host-Caddy HTTPS access wording. | `grep -nE 'DevOps Access on Home-Lab|docker exec.*psql|docker exec.*nats|host Caddy' docs/Operations.md` | No | SCN-042-005 |
+| Regression | doc-lint | `.github/copilot-instructions.md` and `docs/Operations.md` | Active docs do not describe backend bind behavior as fallback, defaulted, or implicit-safety behavior. | `grep -nE 'safe.by.default|loopback default|fallback' .github/copilot-instructions.md docs/Operations.md` with any matches reviewed as forbidden-only historical text | No | SCN-042-006 |
+| Genericity scan | doc-lint | `.github/copilot-instructions.md` and `docs/Operations.md` | Product repo docs use placeholders and contain no real hostnames, IP addresses, tailnet roots, or operator-private topology. | project PII/genericity scan or targeted grep documented in report | No | SCN-042-005, SCN-042-006 |
+| Artifact lint | artifact | `specs/042-tailnet-edge-bind-pattern` | Spec artifacts pass lint after Scope 2 doc repair. | `bash .github/bubbles/scripts/artifact-lint.sh specs/042-tailnet-edge-bind-pattern` | No | governance |
+
+E2E API/UI tests are intentionally not planned for Scope 2 because the scope is
+documentation and agent-governance text only. The regression proof is the
+doc-lint scan that prevents stale fallback guidance from remaining active.
+
+### Definition of Done
+
+#### Core Items
+
+- [ ] `.github/copilot-instructions.md` teaches the fail-loud deploy compose
+      form for Smackerel backend host-published ports.
+- [ ] `.github/copilot-instructions.md` states that the deploy adapter sets
+      `HOST_BIND_ADDRESS` explicitly and Compose fails if it is missing or
+      empty.
+- [ ] `.github/copilot-instructions.md` states that loopback is an explicit
+      value, not fallback behavior.
+- [ ] `docs/Operations.md` documents Postgres and NATS access via Pattern P1
+      `docker exec` over a generic `<deploy-host>` placeholder.
+- [ ] `docs/Operations.md` documents HTTP access through host Caddy using
+      generic placeholders only.
+- [ ] Active docs do not teach fallback/default/implicit-safety backend bind
+      behavior except as explicitly forbidden or superseded historical text.
+- [ ] Product-repo genericity is preserved; no real hostnames, IP addresses,
+      tailnet identifiers, or operator-private topology are introduced.
+- [ ] Change Boundary is respected; no excluded file family changes in Scope 2.
+
+#### Build Quality Gate
+
+- [ ] Zero warnings in doc-lint and artifact-lint output.
+- [ ] Zero deferrals; all Scope 2 docs and guardrails are repaired in this
+      scope.
+- [ ] Artifact lint exits 0 for `specs/042-tailnet-edge-bind-pattern`.
+- [ ] Scope 1 validation remains passing after Scope 2 docs-only changes.
+
+---
+
+## Superseded Historical Note (Do Not Execute)
+
+The original Spec 042 planning artifact used a colon-dash compose fallback
+string and described it as implicit loopback safety
+behavior. That plan is superseded by BUG-029-003 and the Smackerel
+NO-DEFAULTS / fail-loud SST policy. This note is retained only so reviewers can
+understand why stale report evidence may mention the older form. It is not an
+active scope, not a Test Plan row, not a DoD item, and not deploy guidance.
+
+Current active behavior is fail-loud substitution plus explicit generated or
+adapter-provided values. Any future occurrence of fallback bind syntax in active
+requirements, scopes, tests, compose examples, operations docs, or guardrails is
+a regression unless the text labels it only as forbidden or superseded.
+
+<!--
+Superseded historical prior scope content follows. It is intentionally hidden
+from rendered Markdown and is not an active scope inventory, Test Plan,
+Definition of Done, or completion record. Do not execute or certify this
+legacy content.
+
 # Scopes — 042 Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
 
 Single-file mode.
@@ -27,9 +384,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) |
   Given the deploy compose file `deploy/compose.deploy.yml`
   When the file is parsed by the Go unit lint test
   Then the `smackerel-core` `ports:` entry uses the prefix
-       `${HOST_BIND_ADDRESS:-127.0.0.1}:`
+      `[superseded colon-dash HOST_BIND_ADDRESS fallback]:`
   And the `smackerel-ml` `ports:` entry uses the prefix
-       `${HOST_BIND_ADDRESS:-127.0.0.1}:`
+      `[superseded colon-dash HOST_BIND_ADDRESS fallback]:`
   ```
 - **SCN-042-002 — Infra services have no host port mapping**
   ```gherkin
@@ -59,10 +416,10 @@ Links: [spec.md](spec.md) | [design.md](design.md) |
 - Modify `deploy/compose.deploy.yml`:
   - In `services.smackerel-core.ports[0]` change
     `"127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"` to
-    `"${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"`.
+    `"[superseded colon-dash HOST_BIND_ADDRESS fallback]:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"`.
   - In `services.smackerel-ml.ports[0]` change
     `"127.0.0.1:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"` to
-    `"${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"`.
+    `"[superseded colon-dash HOST_BIND_ADDRESS fallback]:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"`.
   - Delete the entire `ports:` block from `services.postgres`. Replace with a
     single comment explaining Pattern P1 access via `docker exec`.
   - Delete the entire `ports:` block from `services.nats`. Replace with a
@@ -141,17 +498,17 @@ transition-guard's mechanical regression-planning check is satisfied.
 #### Core Items
 
 - [x] `deploy/compose.deploy.yml` `smackerel-core` `ports:` entry uses prefix
-      `${HOST_BIND_ADDRESS:-127.0.0.1}:` (raw `cat`/`grep` evidence in
+      `[superseded colon-dash HOST_BIND_ADDRESS fallback]:` (raw `cat`/`grep` evidence in
       [report.md#dod-1-1](report.md#dod-11--smackerel-core-ports-entry-uses-host_bind_address-prefix))
 
   **Inline Evidence (G025):**
 
   ```bash
   $ grep -nE 'HOST_BIND_ADDRESS' deploy/compose.deploy.yml
-  16:#     ${HOST_BIND_ADDRESS:-127.0.0.1} on the host. The default keeps the deploy
-  17:#     bundle safe-by-default; a deploy adapter MAY override HOST_BIND_ADDRESS
-  109:      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
-  155:      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+  16:#     [superseded colon-dash HOST_BIND_ADDRESS fallback] on the host. The default keeps the deploy
+  17:#     bundle implicit-safety; a deploy adapter MAY override HOST_BIND_ADDRESS
+  109:      - "[superseded colon-dash HOST_BIND_ADDRESS fallback]:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+  155:      - "[superseded colon-dash HOST_BIND_ADDRESS fallback]:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
 
   $ sed -n '105,115p' deploy/compose.deploy.yml
       image: ${SMACKEREL_CORE_IMAGE}
@@ -159,16 +516,16 @@ transition-guard's mechanical regression-planning check is satisfied.
       env_file:
         - ./app.env
       ports:
-        - "${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+        - "[superseded colon-dash HOST_BIND_ADDRESS fallback]:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
       healthcheck:
         test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider",
                "http://127.0.0.1:${CORE_CONTAINER_PORT}/api/health"]
   ```
 
   Line 109 confirms `smackerel-core` `ports[0]` uses prefix
-  `${HOST_BIND_ADDRESS:-127.0.0.1}:` per REQ-1 / SCN-042-001.
+  `[superseded colon-dash HOST_BIND_ADDRESS fallback]:` per old REQ-1 / SCN-042-001.
 - [x] `deploy/compose.deploy.yml` `smackerel-ml` `ports:` entry uses prefix
-      `${HOST_BIND_ADDRESS:-127.0.0.1}:` (raw `cat`/`grep` evidence in
+      `[superseded colon-dash HOST_BIND_ADDRESS fallback]:` (raw `cat`/`grep` evidence in
       [report.md#dod-1-2](report.md#dod-12--smackerel-ml-ports-entry-uses-host_bind_address-prefix))
 
   **Inline Evidence (G025):**
@@ -180,7 +537,7 @@ transition-guard's mechanical regression-planning check is satisfied.
       env_file:
         - ./app.env
       ports:
-        - "${HOST_BIND_ADDRESS:-127.0.0.1}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+        - "[superseded colon-dash HOST_BIND_ADDRESS fallback]:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
       healthcheck:
         test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${ML_CONTAINER_PORT}/health', timeout=5).read()"]
         interval: 10s
@@ -189,7 +546,7 @@ transition-guard's mechanical regression-planning check is satisfied.
   ```
 
   Line 155 confirms `smackerel-ml` `ports[0]` uses prefix
-  `${HOST_BIND_ADDRESS:-127.0.0.1}:` per REQ-1 / SCN-042-001.
+  `[superseded colon-dash HOST_BIND_ADDRESS fallback]:` per old REQ-1 / SCN-042-001.
 - [x] `deploy/compose.deploy.yml` `postgres` service has no `ports:` block
       (raw `grep -c '^ *ports:'` against the postgres section in [report.md#dod-1-3](report.md#dod-13--postgres-service-has-no-ports-block))
 
@@ -263,7 +620,7 @@ transition-guard's mechanical regression-planning check is satisfied.
     # the home-lab/production targets adapter-ready: a deploy adapter-adapter MAY override
     # HOST_BIND_ADDRESS in the bundled `deploy/app.env` to bind the Tailscale IP
     # so a host Caddy can front the backends with TLS. The default (`127.0.0.1`)
-    # keeps every other compose project safe-by-default.
+    # keeps every other compose project implicit-safety.
     # Canonical pattern: `bubbles/skills/bubbles-tailnet-edge-pattern/SKILL.md`.
     # Tracking spec: `specs/042-tailnet-edge-bind-pattern/`.
     # Infra (Postgres, NATS) deliberately has no host port mapping — DevOps uses
@@ -400,7 +757,7 @@ transition-guard's mechanical regression-planning check is satisfied.
   `nats:` and `postgres:` blocks have no `host_ip`/`published`/`protocol`
   triple (no host port). `smackerel-core:` renders to
   `127.0.0.1:41001:8080` and `smackerel-ml:` to `127.0.0.1:41002:8081`,
-  proving substitution of `${HOST_BIND_ADDRESS:-127.0.0.1}` =
+  proving substitution of `[superseded colon-dash HOST_BIND_ADDRESS fallback]` =
   `127.0.0.1` (from home-lab.env) and the per-service host/container
   ports. Per REQ-3 / SCN-042-003.
 - [x] Adversarial regression: `TestComposeContract_AdversarialLiteralBind`
@@ -555,7 +912,7 @@ transition-guard's mechanical check.
 
   | Service              | Host port mapping                                                            | DevOps access path |
   |----------------------|------------------------------------------------------------------------------|--------------------|
-  | `smackerel-core`     | `${HOST_BIND_ADDRESS:-127.0.0.1}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`   | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
+  | `smackerel-core`     | `[superseded colon-dash HOST_BIND_ADDRESS fallback]:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`   | HTTP UI fronted by host Caddy on the tailnet IP (Pattern P5) |
   ```
 
   Subsection at line 189, sandwiched between `### Build-Once
@@ -713,3 +1070,4 @@ transition-guard's mechanical check.
 - [x] Docs aligned — `docs/Operations.md` and
       `.github/copilot-instructions.md` are mutually consistent and both
       reference spec 042. Evidence: `report.md` -> Build Quality Gate — Scope 2.
+-->

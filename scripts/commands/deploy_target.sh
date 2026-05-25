@@ -15,7 +15,9 @@
 # Actions: preconditions | bootstrap | apply | rollback | verify | teardown |
 #          status | manifest | params
 #
-# Adapter contract (per bubbles G074): each action delegates to <adapter>/<action>.sh.
+# Adapter contract (per bubbles G074): mutating and verification actions delegate
+# to <adapter>/<action>.sh. The status action delegates to <adapter>/status.sh
+# when available; otherwise it prints a generic read-only fallback summary.
 # This dispatcher MUST NOT inline target-specific logic. All target knobs live in
 # <adapter>/params.yaml.
 set -euo pipefail
@@ -92,6 +94,30 @@ list_targets() {
   fi
 }
 
+generic_status_fallback() {
+  local target="$1"
+  local adapter_dir="$2"
+  local status_script="$adapter_dir/status.sh"
+  local compose_project="smackerel-${target}"
+
+  echo "adapter status script unavailable: ${status_script} is missing or not executable"
+  echo "fallback mode: read-only generic fallback; adapter-specific drift checks are unavailable"
+  echo "target: ${target}"
+  echo "adapterDir: ${adapter_dir}"
+  echo "composeProject: ${compose_project}"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "docker: unavailable; no generic container summary can be queried"
+    return 0
+  fi
+
+  echo "Generic Docker container summary:"
+  if ! docker ps --filter "label=com.docker.compose.project=${compose_project}" \
+    --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'; then
+    echo "docker: status query failed; fallback remains read-only"
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: ./smackerel.sh deploy-target <target> <action> [args]
@@ -144,8 +170,11 @@ case "$ACTION" in
     exec "$SCRIPT" "$@"
     ;;
   status)
-    docker ps --filter "label=com.docker.compose.project=smackerel-${TARGET}" \
-      --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+    SCRIPT="$TARGET_DIR/status.sh"
+    if [[ -x "$SCRIPT" ]]; then
+      exec "$SCRIPT" "$@"
+    fi
+    generic_status_fallback "$TARGET" "$TARGET_DIR"
     ;;
   manifest)
     MANIFEST="$TARGET_DIR/manifest.yaml"

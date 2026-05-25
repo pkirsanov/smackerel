@@ -33,6 +33,36 @@ Production secret prerequisites are enumerated in
 Prerequisites (Product Contract)" — confirm them before invoking any
 adapter `apply.sh`.
 
+### Home-Lab Activation Boundary
+
+This product repo proves generic artifact production, status delegation, and
+runtime contracts. It does not prove live home-lab activation by itself. A live
+home-lab apply requires the operator-private adapter packet:
+
+| Input | Source |
+|-------|--------|
+| Source SHA | Upstream build manifest for the chosen release. |
+| Core and ML image digests | Upstream build manifest, passed as digest-only apply flags. |
+| Config bundle ref | `home-lab-<sourceSha>` from the build manifest. |
+| Config bundle SHA | Build-manifest `sha256` value for the same bundle. |
+| Out-of-tree adapter root | `DEPLOY_TARGETS_ROOT` resolving to `<adapter-root>/smackerel/<target>/`. |
+| Concrete params | Adapter `params.yaml`, including target identity, ports, paths, Caddy, and bind address. |
+| Encrypted secrets | Adapter-owned SOPS/age ciphertext for the target. |
+| Release proof | Cosign, SLSA, SBOM, vulnerability proof, and bundle/source identity receipts. |
+| Live approval | Human operator authorization; static docs and fixture tests do not mutate the home-lab host. |
+
+Current KNB home-lab port guidance is `41001` for `smackerel-core` and `41002`
+for `smackerel-ml`. Local dev remains on `40001/40002`; do not treat those dev
+ports as home-lab activation values.
+
+| Surface | Placeholder-only access path | Home-lab adapter port | Owner boundary |
+|---------|------------------------------|-----------------------|----------------|
+| Core API and web UI | `https://smk.<tailnet>.ts.net` through host Caddy to `127.0.0.1:41001` | `41001` | KNB adapter writes explicit `HOST_BIND_ADDRESS`; host Caddy owns TLS/tailnet identity. |
+| ML sidecar health/devops | `https://smk-ml.<tailnet>.ts.net` through host Caddy to `127.0.0.1:41002` | `41002` | KNB adapter writes route and bind; host-owned `devops_auth` gates access. |
+| PostgreSQL | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-postgres ...` | No host port | Compose service is internal only. |
+| NATS | `tailscale ssh <deploy-host> -- docker exec -it smackerel-home-lab-nats ...` | No host port | Compose service is internal only. |
+| Status | `./smackerel.sh deploy-target <target> status` or adapter `status.sh` | Read-only | Product dispatcher delegates to adapter `status.sh` when executable and otherwise prints a generic read-only fallback. |
+
 ### First-Time Setup (Local Dev)
 
 > **Production-class operators:** see Production Deploy (Build-Once
@@ -181,9 +211,9 @@ curl --max-time 5 https://smackerel.<host-tailnet-fqdn>/api/health
 curl --max-time 5 https://ml.smackerel.<host-tailnet-fqdn>/health
 ```
 
-`<host-tailnet-fqdn>` is the host's Tailscale FQDN (e.g.,
-`<deploy-host-fqdn>`). The exact subdomain shape is owned by the deploy adapter
-adapter and can be customized per deployment.
+`<host-tailnet-fqdn>` is the host's Tailscale FQDN placeholder. The exact
+subdomain shape is owned by the deploy adapter and can be customized per
+deployment.
 
 ### PostgreSQL (Pattern P1: docker exec over Tailscale SSH)
 
@@ -1369,6 +1399,11 @@ deploy the Prometheus `blackbox_exporter` pointed at the ML sidecar
 
 ## TLS Setup
 
+This section is generic local/self-hosted reverse-proxy guidance for the product
+stack. It is not the KNB home-lab activation path. KNB home-lab activation uses
+the out-of-tree adapter packet, explicit `HOST_BIND_ADDRESS`, host Caddy, and
+adapter ports `41001/41002`.
+
 Smackerel services bind to `127.0.0.1` by default (localhost only). To expose the stack over a network with HTTPS, use a reverse proxy.
 
 ### Caddy (Recommended — Automatic HTTPS)
@@ -1442,6 +1477,10 @@ sudo systemctl reload nginx
 Certbot automatically configures HTTPS and sets up a renewal cron job.
 
 ### Which Ports to Expose
+
+The `40001/40002` values below are product dev/local values. Current KNB
+home-lab guidance uses `41001/41002` behind host Caddy and fail-loud
+`HOST_BIND_ADDRESS` assignment by the adapter.
 
 | Port | Service | Expose Externally? |
 |------|---------|-------------------|
@@ -1619,7 +1658,7 @@ On a fresh deployment with `auth.enabled=true` AND zero enrolled users:
 
    ```bash
    docker exec -it smackerel-<env>-smackerel-core-1 \
-     env SMACKEREL_BOOTSTRAP_TOKEN='<bootstrap secret>' \
+     env SMACKEREL_BOOTSTRAP_TOKEN='<bootstrap-token>' \
      smackerel-core auth bootstrap '<user-id>'
    ```
 

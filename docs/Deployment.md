@@ -91,7 +91,7 @@ For `dev` and `test` environments, the bundle continues to ship literal
 secret values inline (FR-052-011) — there is no placeholder mode for local
 development. The placeholder mode is opt-in **by environment**, never by flag.
 
-**Layer 2 — Deploy adapter** (`<knb-repo>/smackerel/<target>/apply.sh`):
+**Layer 2 — Deploy adapter** (`<adapter-root>/smackerel/<target>/apply.sh`):
 
 The per-target adapter is the single layer responsible for substituting
 real secret values into the bundle. The adapter:
@@ -103,15 +103,23 @@ real secret values into the bundle. The adapter:
 4. For each declared key, replaces every occurrence of
    `__SECRET_PLACEHOLDER__<KEY>__` in the bundle's `app.env` with
    the real value.
-5. Writes the resulting `app.env` to the target host with `chmod 0600`.
-6. Logs `substituted N of N keys` to the apply audit log
-   (`/var/log/smackerel/apply.log`).
+5. Writes one marker-free effective `app.env` to the target host with
+  `chmod 0600`. The adapter must not pass a second secret env file to
+  Compose as an active deploy contract.
+6. Logs safe metadata only: declared key names, substituted counts,
+  placeholder remaining count, encrypted-file identity, cleanup status,
+  and outcome. It never logs secret values.
 7. Starts the container against the substituted env file.
 
-The substitution is the adapter's contract; the product repo does not
-ship adapter code. See `<knb-repo>/smackerel/<target>/apply.sh` and
-[`<knb-repo>/AGENTS.md`](#)
-for adapter-author rules.
+The substitution is the adapter's contract; the product repo does not ship
+operator-coupled home-lab adapter code. For operator-private overlays, the
+adapter root is resolved by `DEPLOY_TARGETS_ROOT`. The KNB Smackerel home-lab
+adapter also writes an explicit `HOST_BIND_ADDRESS` value into `app.env`; deploy
+Compose then fails loudly with
+`${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}` if the
+value is absent. The `${HOST_BIND_ADDRESS:-127.0.0.1}` fallback form is
+historical/superseded, forbidden for Smackerel deploy surfaces, and is not
+active deploy guidance.
 
 **Layer 3 — Go runtime** (`config.Validate()` + `auth.ValidateRuntimeAuthStartup()`):
 
@@ -149,15 +157,15 @@ asserts no canary value appears in any error path.
    placeholder check there too (mirror the existing
    AUTH_SIGNING_ACTIVE_PRIVATE_KEY / AUTH_AT_REST_HASHING_KEY pattern).
 6. Provide the real value through the deploy adapter overlay
-   (`<knb-repo>/smackerel/secrets/<target>.enc.env` for sops/age targets;
-   inline in `.env.secrets` for local dev only).
+  (`<adapter-root>/smackerel/secrets/<target>.enc.env` for sops/age targets;
+  inline in `.env.secrets` for local dev only).
 7. Run `./smackerel.sh test unit --go` — the contract test
    (`internal/deploy/bundle_secret_contract_test.go::TestBundleSecretContract_NoLiteralSecretsInHomeLab`)
    catches yaml↔Go↔shell drift before merge.
 
 **Operator workflow — rotating a managed secret:**
 
-1. Update the value in `<knb-repo>/smackerel/secrets/<target>.enc.env`
+1. Update the value in `<adapter-root>/smackerel/secrets/<target>.enc.env`
    (sops/age encrypt: `sops --encrypt --in-place ...`).
 2. Re-run `./smackerel.sh deploy-target <target> apply` — the adapter
    re-pulls the bundle (unchanged sha256 because secrets are not in the
@@ -206,7 +214,7 @@ removed.
 | Application image (`smackerel-ml`)   | `ghcr.io/pkirsanov/smackerel-ml@sha256:<digest>`   | No (immutable) | `.github/workflows/build.yml` |
 | Config bundle (per env)              | `ghcr.io/pkirsanov/smackerel-config-bundles:<env>-<sourceSha>` | No (immutable, deterministic) | `./smackerel.sh config generate --env <env> --bundle` |
 | Build manifest                       | `build-manifest-<sourceSha>.yaml`                  | No (immutable) | CI workflow artifact |
-| Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like home-lab adapters). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates to the adapter's `apply.sh`. |
+| Deployment manifest (per target)     | `<adapter-root>/<target>/manifest.yaml`            | **Yes** (pointer)              | The per-target deploy adapter (in-tree under `deploy/<target>/` for generic targets, out-of-tree under `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` for operator-coupled targets like home-lab adapters). Adapter actions are invoked via `./smackerel.sh deploy-target <target> <action>`; the dispatcher (`scripts/commands/deploy_target.sh`) delegates mutating and verification actions to adapter scripts and delegates `status` to adapter `status.sh` when executable. |
 
 Image tags like `:latest`, `:main`, `:staging-latest` MUST NOT be used in any
 deployment manifest. Adapters consume images by digest only.
@@ -281,6 +289,28 @@ Matrix coverage AND threshold-tuning policy cannot drift silently.
 
 ---
 
+## Home-Lab Activation Packet
+
+Home-lab deployability in this product repo is non-live and static until the
+operator-private adapter supplies target values and release artifacts. Before a
+live home-lab apply, the operator-owned packet must contain all of the following:
+
+| Input | Owner | Purpose |
+|-------|-------|---------|
+| Source SHA | Upstream build manifest | Ties images, config bundle, attestations, and target manifest to one immutable source revision. |
+| Core and ML image digests | Upstream build manifest | Consumed as `--image-core=sha256:<digest>` and `--image-ml=sha256:<digest>`; mutable tags are not accepted. |
+| Config bundle ref | Upstream build manifest | Uses the `home-lab-<sourceSha>` bundle identity for the target environment. |
+| Config bundle SHA | Upstream build manifest | Passed as `--config-bundle-sha=<sha256-hex>` so the adapter verifies bundle bytes before extraction. |
+| Out-of-tree adapter root | Operator environment | `DEPLOY_TARGETS_ROOT` points the product CLI at `<adapter-root>/smackerel/<target>/` for operator-coupled targets. |
+| Concrete params | Deploy adapter overlay | Hostname, tailnet placeholders, bind address, Caddy paths, ports, install paths, and rollout strategy are adapter-owned. |
+| Encrypted secrets | Deploy adapter overlay | SOPS/age ciphertext supplies managed secret values and first-user bootstrap material without committing plaintext. |
+| Release proof | Upstream registry/build artifacts | Cosign signature, SLSA provenance, SBOM, vulnerability proof, bundle hash, and source identity checks. |
+| Live approval | Human operator | Static/docs/fixture readiness does not mutate the home-lab host or authorize live activation. |
+
+Current KNB home-lab adapter guidance uses `41001` for `smackerel-core` and
+`41002` for `smackerel-ml`. The product dev environment still uses `40001` and
+`40002`; do not copy those dev ports into home-lab activation runbooks.
+
 ## Operator workflow
 
 ```bash
@@ -292,10 +322,11 @@ bash scripts/deploy/promote.sh --target home-lab --build-manifest /tmp/sm-releas
 
 # 2b) Or apply directly with explicit digests
 ./smackerel.sh deploy-target home-lab apply \
-    --image-core=sha256:abc123... \
-    --image-ml=sha256:def456... \
-    --config-bundle=home-lab-9f8a7b6c \
-    --config-bundle-sha=<sha256-hex>
+  --image-core=sha256:<core-image-digest> \
+  --image-ml=sha256:<ml-image-digest> \
+  --config-bundle=home-lab-<sourceSha> \
+  --config-bundle-sha=<sha256-hex> \
+  --source-sha=<sourceSha>
 
 # 3) Verify
 ./smackerel.sh deploy-target home-lab verify
@@ -368,11 +399,15 @@ adapter lives in-tree under `deploy/<target>/` or out-of-tree under
 3. Verify cosign signature + transparency-log entry against the configured
    identity/issuer (`signing.cosignIdentity`, `signing.cosignIssuer` in `params.yaml`)
 4. Pull the config bundle by `<env>-<sourceSha>` tag and verify its sha256
-5. Write the new pointer into `manifest.yaml` (preserving the prior pointer in
-   `previousManifest`) BEFORE starting any container
-6. Run the rollout strategy declared in `params.yaml` (home-lab adapters usually
+5. Render the target runtime env, including explicit `HOST_BIND_ADDRESS`, and
+  fail before Compose if any required value is missing or still a placeholder
+6. Stage the new pointer while preserving the prior pointer in
+  `previousManifest`; the home-lab KNB adapter commits the pointer only after
+  staged verification succeeds so late failures cannot look like a clean deploy
+7. Run the rollout strategy declared in `params.yaml` (home-lab adapters usually
   declare `recreate`; `blue-green` is also available)
-7. On verify failure, invoke the adapter's `rollback.sh` (pointer-swap, no rebuild)
+8. On verify failure, leave the committed pointer truthful, reconcile runtime
+  state or record explicit drift, and never rebuild
 
 Each adapter's `rollback.sh` MUST:
 
@@ -411,6 +446,21 @@ Then:
    `DEPLOY_TARGETS_ROOT` to be set per the strict resolution rule in
    [`scripts/commands/deploy_target.sh`](../scripts/commands/deploy_target.sh))
 
+## Status delegation
+
+`./smackerel.sh deploy-target <target> status` uses the same strict adapter
+resolution rule as `apply`, `verify`, and `rollback`. When the resolved adapter
+contains an executable `status.sh`, the product dispatcher transfers control to
+that script so the adapter can report target-specific manifest, runtime, health,
+Caddy, and contract drift without product-side target logic.
+
+If `status.sh` is absent or not executable, the product dispatcher does not
+guess target state and does not mutate anything. It prints an
+`adapter status script unavailable` notice, identifies the resolved adapter
+directory, and then attempts only a generic read-only Docker container summary
+for the product/target Compose project. Operators should treat that fallback as
+an adapter-status gap, not as deploy readiness proof.
+
 ---
 
 ## Forbidden patterns (G074)
@@ -436,6 +486,11 @@ Then:
 The remainder of this guide covers production deployment concerns: TLS termination, auth token management, Docker Compose overrides, and HTTPS requirements for webhooks and OAuth.
 
 ## Reverse Proxy Setup for TLS
+
+This section is generic self-hosted/local-dev guidance for a product-owned
+stack. It is not the KNB home-lab activation path. KNB home-lab activation uses
+the out-of-tree adapter packet above, explicit `HOST_BIND_ADDRESS`, and current
+adapter ports `41001` and `41002` behind host Caddy.
 
 Smackerel services bind to `127.0.0.1` by default. For production, terminate TLS at a reverse proxy and forward to the core service on port `40001`.
 
@@ -848,6 +903,12 @@ OAuth2 providers (Google) require HTTPS callback URLs in production. When switch
 - After updating, existing OAuth tokens remain valid — only new authorization flows use the updated URL
 
 ## Port Exposure Summary
+
+The `40001/40002` rows below describe the product dev/self-hosted local port
+allocation from `config/smackerel.yaml`. They are not active KNB home-lab
+activation guidance. The current KNB Smackerel home-lab adapter uses `41001` for
+core and `41002` for ML, with `HOST_BIND_ADDRESS` set explicitly by the adapter
+and Compose fail-loud if it is missing.
 
 | Port | Service | Expose via reverse proxy? |
 |------|---------|--------------------------|
