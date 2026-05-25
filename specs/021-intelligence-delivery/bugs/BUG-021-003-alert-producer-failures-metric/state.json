@@ -1,0 +1,55 @@
+{
+  "version": 3,
+  "specId": "021-intelligence-delivery",
+  "bugId": "BUG-021-003-alert-producer-failures-metric",
+  "featureDir": "specs/021-intelligence-delivery/bugs/BUG-021-003-alert-producer-failures-metric",
+  "featureName": "BUG-021-003: AlertProducerFailures counter restores producer-side observability symmetry (improve R1)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-25T00:00:00Z",
+    "completedPhaseClaims": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "executionHistory": [
+      {"phase": "plan", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:00:00Z", "completedAt": "2026-05-25T00:05:00Z", "outcome": "completed_owned"},
+      {"phase": "implement", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:05:00Z", "completedAt": "2026-05-25T00:14:00Z", "outcome": "completed_owned"},
+      {"phase": "test", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:14:00Z", "completedAt": "2026-05-25T00:18:00Z", "outcome": "completed_owned"},
+      {"phase": "regression", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:18:00Z", "completedAt": "2026-05-25T00:23:00Z", "outcome": "completed_owned"},
+      {"phase": "simplify", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:23:00Z", "completedAt": "2026-05-25T00:25:00Z", "outcome": "completed_owned"},
+      {"phase": "stabilize", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:25:00Z", "completedAt": "2026-05-25T00:28:00Z", "outcome": "completed_owned"},
+      {"phase": "security", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:28:00Z", "completedAt": "2026-05-25T00:30:00Z", "outcome": "completed_owned"},
+      {"phase": "validate", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:30:00Z", "completedAt": "2026-05-25T00:35:00Z", "outcome": "completed_owned"},
+      {"phase": "audit", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:35:00Z", "completedAt": "2026-05-25T00:40:00Z", "outcome": "completed_owned"},
+      {"phase": "docs", "agent": "bubbles.workflow", "startedAt": "2026-05-25T00:40:00Z", "completedAt": "2026-05-25T00:43:00Z", "outcome": "completed_owned"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-25T00:43:00Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Add AlertProducerFailures counter + producer wiring + unit test", "status": "Done", "completedDoD": 19, "totalDoD": 19, "completedAt": "2026-05-25T00:43:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane single-scope additive observability; no convergence loop required",
+      "lastUpdatedAt": "2026-05-25T00:43:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

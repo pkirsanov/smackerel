@@ -97,6 +97,7 @@ func (e *Engine) ProduceBillAlerts(ctx context.Context) error {
 			ArtifactID: id,
 		}); err != nil {
 			slog.Warn("failed to create bill alert", "subscription", serviceName, "error", err)
+			metrics.AlertProducerFailures.WithLabelValues(string(AlertBill)).Inc()
 		} else {
 			metrics.AlertsProduced.WithLabelValues(string(AlertBill)).Inc()
 			created++
@@ -166,6 +167,7 @@ func (e *Engine) ProduceTripPrepAlerts(ctx context.Context) error {
 			ArtifactID: id,
 		}); err != nil {
 			slog.Warn("failed to create trip prep alert", "trip", destination, "error", err)
+			metrics.AlertProducerFailures.WithLabelValues(string(AlertTripPrep)).Inc()
 		} else {
 			metrics.AlertsProduced.WithLabelValues(string(AlertTripPrep)).Inc()
 			created++
@@ -230,6 +232,7 @@ func (e *Engine) ProduceReturnWindowAlerts(ctx context.Context) error {
 			ArtifactID: id,
 		}); err != nil {
 			slog.Warn("failed to create return window alert", "artifact", id, "error", err)
+			metrics.AlertProducerFailures.WithLabelValues(string(AlertReturnWindow)).Inc()
 		} else {
 			metrics.AlertsProduced.WithLabelValues(string(AlertReturnWindow)).Inc()
 			created++
@@ -295,6 +298,7 @@ func (e *Engine) ProduceRelationshipCoolingAlerts(ctx context.Context) error {
 			ArtifactID: id,
 		}); err != nil {
 			slog.Warn("failed to create relationship cooling alert", "person", name, "error", err)
+			metrics.AlertProducerFailures.WithLabelValues(string(AlertRelationship)).Inc()
 		} else {
 			metrics.AlertsProduced.WithLabelValues(string(AlertRelationship)).Inc()
 			created++
