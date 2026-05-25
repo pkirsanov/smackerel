@@ -1,0 +1,91 @@
+{
+  "version": 3,
+  "specId": "007-google-keep-connector",
+  "bugId": "BUG-007-002-harden-baseline-drift",
+  "featureDir": "specs/007-google-keep-connector/bugs/BUG-007-002-harden-baseline-drift",
+  "featureName": "BUG-007-002: Harden baseline drift (state-transition-guard 13 BLOCKs)",
+  "workflowMode": "harden-to-doc",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-05-24T04:00:00Z",
+    "completedPhaseClaims": [
+      "harden",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "chaos",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "phase": "harden",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:02:00Z",
+        "outcome": "findings_recorded",
+        "evidence": "Round 7 of sweep-2026-05-24-r10 dispatched mapped harden-to-doc against specs/007-google-keep-connector. state-transition-guard returned 13 BLOCKs (1 commit-convention + 1 aggregate G040 covering 3 deferral hits + 10 individual G068 DoD-Gherkin fidelity gaps + 1 aggregate G068) and 1 WARN. Findings catalogued in report.md > Harden Evidence and Pre-fix Validation Evidence."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:05:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact-only fix executed across two files. (a) specs/007-google-keep-connector/scopes.md: appended 10 additive Scenario Fidelity DoD items (SCN-GK-003, 005 to Scope 01; 008, 010 to Scope 02; 012, 030 to Scope 03; 019, 020 to Scope 04; 024 to Scope 05; 027 to Scope 06). Each item embeds the literal SCN-GK-NNN id plus the full scenario title verbatim plus an Evidence line citing the existing passing test. (b) specs/007-google-keep-connector/report.md: wrapped the 2026-04-14 Improve-Existing Analysis Findings table and the Round-N Documentary Observations narrative with `<!-- bubbles:g040-skip-begin -->` / `<!-- bubbles:g040-skip-end -->` markers per state-transition-guard.sh CHECK 18 escape hatch. No existing DoD item rewritten, no scenario reworded, no production code touched."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:08:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Regression test for an artifact-only fix is the state-transition-guard itself. Underlying behavior tests cited from the new Scenario Fidelity DoD items continue to pass (already verified by spec 007's existing certified test phases for TestCursorFiltering, TestParseExportWithCorrupted, TestSyncTakeoutProducesArtifacts, TestSyncSkipsTrashedNotes, TestTrashedNoteArchivesArtifact, TestQualifierEvaluationOrder, TestQualifierRecentArchivedGetsLight, TestFuzzyMatch, TestDiffLabels, test_session_caching, test_ollama_fallback)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Post-fix state-transition-guard returns 0 BLOCKs against specs/007-google-keep-connector. Pre-fix baseline was 13 BLOCKs (1 commit-convention + 1 G040 covering 3 deferral hits + 10 G068 DoD-Gherkin fidelity gaps + 1 aggregate G068). All 13 cleared via additive scope DoD edits, additive report.md G040 skip markers, and the bug-packet commit that supplies the required bubbles(007/...) prefix. Recorded in report.md > Post-fix Validation Evidence."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:12:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Artifact lint PASS for both parent (`bash .github/bubbles/scripts/artifact-lint.sh specs/007-google-keep-connector`) and bug folder (`bash .github/bubbles/scripts/artifact-lint.sh specs/007-google-keep-connector/bugs/BUG-007-002-harden-baseline-drift`). Boundary preserved: zero changes under internal/, cmd/, ml/, config/, tests/. All edits confined to specs/007-google-keep-connector/scopes.md, specs/007-google-keep-connector/report.md, the new bug folder, and the sweep ledger .specify/memory/sweep-2026-05-24-r10.json. state.json.certification.lockdownState.lockedScenarioIds unchanged."
+      },
+      {
+        "phase": "chaos",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:13:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Adversarial chaos check confirmed: no existing DoD item deleted or weakened (zero `^-(?!--).*\\[(x| )\\]` lines in scopes.md diff), no Gherkin scenario text reworded (zero `^-(?!--).*Scenario:` diff lines), no locked scenario ID invalidated (24 lockedScenarioIds preserved verbatim in parent state.json.certification.lockdownState), G040 skip markers wrap only historical post-mortem narratives in report.md (4 marker tokens), and state-transition-guard reports no Gate G041 anti-manipulation flags post-fix. See report.md > Chaos Evidence."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.workflow",
+        "timestamp": "2026-05-24T04:14:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Documentary trail captured in (a) this bug packet's 6 artifacts (spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json), (b) the 10 additive Scenario Fidelity DoD items in specs/007-google-keep-connector/scopes.md which now make the DoD-to-Gherkin trace explicit and self-documenting, and (c) the G040 skip-marker pairs in specs/007-google-keep-connector/report.md which document that the 2026-04-14 Improve-Existing Analysis Findings table and Round-N Documentary Observations are historical post-mortem evidence, not current deferred work. Zero files under docs/ required updates because the Keep connector's product-level behavior and operator-facing interfaces are unchanged. See report.md > Docs Evidence."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-24T04:14:30Z",
+    "certifiedBy": "bubbles.workflow",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["harden", "implement", "test", "validate", "audit", "chaos", "docs"]
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "provenance": "repo-default"},
+    "tdd": {"value": "scenario-first", "provenance": "workflow-forced"},
+    "autoCommit": {"value": "off", "provenance": "repo-default"},
+    "lockdown": {"value": "off", "provenance": "repo-default"},
+    "regressionStrictness": {"value": "standard", "provenance": "repo-default"},
+    "validateCertificationRequired": {"value": true, "provenance": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
