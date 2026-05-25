@@ -154,6 +154,16 @@ var AlertsProduced = prometheus.NewCounterVec(
 	[]string{"type"},
 )
 
+// AlertProducerFailures counts alert-producer CreateAlert failures by type
+// (BUG-021-003 — improve R1 observability symmetry with AlertDeliveryFailures).
+var AlertProducerFailures = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_alert_producer_failures_total",
+		Help: "Alert-producer CreateAlert failures by type",
+	},
+	[]string{"type"},
+)
+
 // --- Actionable Lists (Spec 028) ---
 
 // ListsGenerated counts list generation attempts by list_type and domain.
@@ -452,6 +462,7 @@ func init() {
 		AlertsDelivered,
 		AlertDeliveryFailures,
 		AlertsProduced,
+		AlertProducerFailures,
 		ListsGenerated,
 		ListGenerationLatency,
 		ListItemStatusChanges,

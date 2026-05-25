@@ -441,3 +441,55 @@ func TestAlertDeliveryMetrics(t *testing.T) {
 		}
 	}
 }
+
+// TestAlertProducerFailuresMetric verifies the producer-side failure counter
+// (BUG-021-003) exposes the smackerel_alert_producer_failures_total family
+// with the expected `type` label vocabulary and accepts increments for
+// every alert-producer type.
+func TestAlertProducerFailuresMetric(t *testing.T) {
+	AlertProducerFailures.WithLabelValues("bill").Inc()
+	AlertProducerFailures.WithLabelValues("trip_prep").Inc()
+	AlertProducerFailures.WithLabelValues("return_window").Inc()
+	AlertProducerFailures.WithLabelValues("relationship_cooling").Inc()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather failed: %v", err)
+	}
+
+	typesSeen := map[string]bool{
+		"bill":                 false,
+		"trip_prep":            false,
+		"return_window":        false,
+		"relationship_cooling": false,
+	}
+	familyFound := false
+
+	for _, fam := range families {
+		if fam.GetName() != "smackerel_alert_producer_failures_total" {
+			continue
+		}
+		familyFound = true
+		for _, m := range fam.GetMetric() {
+			if m.GetCounter().GetValue() < 1 {
+				continue
+			}
+			for _, lbl := range m.GetLabel() {
+				if lbl.GetName() == "type" {
+					if _, want := typesSeen[lbl.GetValue()]; want {
+						typesSeen[lbl.GetValue()] = true
+					}
+				}
+			}
+		}
+	}
+
+	if !familyFound {
+		t.Fatal("metric family smackerel_alert_producer_failures_total not found in gather output")
+	}
+	for typ, seen := range typesSeen {
+		if !seen {
+			t.Errorf("type label %q not observed with counter value >= 1", typ)
+		}
+	}
+}
