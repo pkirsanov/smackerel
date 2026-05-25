@@ -55,7 +55,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 - `async def handle_domain_extract(data, provider, model, api_key, ollama_url) -> dict`
 - `def build_domain_prompt(contract, artifact) -> str`
 
-**SQL (`internal/db/migrations/015_domain_extraction.sql`):**
+**SQL (`internal/db/migrations/archive/015_domain_extraction.sql` — preserved historically; consolidated into `internal/db/migrations/001_initial_schema.sql`):**
 - `ALTER TABLE artifacts ADD COLUMN domain_data JSONB`
 - `ALTER TABLE artifacts ADD COLUMN domain_extraction_status TEXT`
 - `ALTER TABLE artifacts ADD COLUMN domain_schema_version TEXT`
@@ -131,7 +131,7 @@ Scenario: Domain extraction response handles success and failure
 ### Implementation Plan
 
 **Files to create:**
-- `internal/db/migrations/015_domain_extraction.sql` — migration adding domain columns and indexes
+- `internal/db/migrations/archive/015_domain_extraction.sql` (consolidated into `internal/db/migrations/001_initial_schema.sql`) — migration adding domain columns and indexes
 - `internal/pipeline/domain_types.go` — `DomainExtractRequest`, `DomainExtractResponse` structs with validation
 
 **Files to modify:**
@@ -148,7 +148,7 @@ Scenario: Domain extraction response handles success and failure
 | T1-03 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse validates artifact_id required |
 | T1-04 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse success=true requires DomainData |
 | T1-05 | unit | `internal/pipeline/domain_types_test.go` | SCN-026-01 | DomainExtractResponse success=false allows empty DomainData |
-| T1-06 | unit | `internal/db/migrations_test.go` | SCN-026-01 | Migration 015 applies cleanly after 014 |
+| T1-06 | integration | `tests/integration/db_migration_test.go::TestMigrations_ArtifactsColumns` | SCN-026-01 | Migration applies cleanly and adds the domain extraction columns (covers former migration 015 behavior after consolidation into 001_initial_schema.sql) |
 | T1-07 | integration | `tests/integration/db_migration_test.go` | SCN-026-01 | Domain extraction columns are added by migration — `TestMigrations_DomainColumnsExist` and `TestMigrations_ArtifactsColumns` verify domain_data, domain_extraction_status, domain_schema_version, domain_extracted_at present on artifacts table; `TestMigrations_IndexesExist` verifies idx_artifacts_domain_data_gin |
 | T1-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-01 | `TestE2E_DomainExtraction` covers migration columns + GIN index end-to-end via live PostgreSQL persistence and JSONB lookup |
 
@@ -773,8 +773,8 @@ Scenario: Domain extraction lifecycle completes end-to-end
 | T7-02 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-07 | handleMessage skips domain extraction when DomainRegistry is nil |
 | T7-03 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-07 | handleMessage acks even when publishDomainExtractionRequest fails (fail-open) |
 | T7-04 | unit | `internal/pipeline/subscriber_test.go` | SCN-026-07 | Domain extraction and synthesis both called for eligible artifact |
-| T7-05 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Recipe artifact → domain.extract → ML sidecar → domain.extracted → domain_data in DB |
-| T7-06 | integration | `tests/integration/domain_extraction_test.go` | SCN-026-07 | Article artifact → no domain extraction, domain_extraction_status is NULL |
+| T7-05 | e2e | `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` | SCN-026-07 | Recipe artifact → domain.extract → ML sidecar → domain.extracted → domain_data in DB (covered by the canonical live-stack E2E suite) |
+| T7-06 | e2e | `tests/e2e/domain_e2e_test.go::TestE2E_DomainExtraction` | SCN-026-07 | Article artifact → no domain extraction, domain_extraction_status is NULL (negative path asserted in the same canonical E2E suite) |
 | T7-07 | integration | `internal/pipeline/domain_subscriber_test.go` | SCN-026-07 | Short-content recipe artifact → status=skipped, no domain.extract published — `TestPublishDomainExtractionRequest_NilRegistrySkips` covers the no-publish skip-path; min_content_length gating in `internal/pipeline/subscriber.go` `publishDomainExtractionRequest` exercised end-to-end via `tests/e2e/domain_e2e_test.go` |
 | T7-12 | Regression E2E | `tests/e2e/domain_e2e_test.go` | SCN-026-07 | `TestE2E_DomainExtraction` is the canonical pipeline integration regression — ingestion → parallel publish → ML sidecar response → handleDomainMessage → DB persistence with status transitions |
 
