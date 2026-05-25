@@ -223,8 +223,7 @@ EOF
     "autoCommit": { "mode": "off", "source": "repo-default" },
     "lockdown": { "mode": "off", "source": "repo-default" },
     "regression": { "mode": "protect-existing-scenarios", "source": "repo-default" },
-    "validation": { "mode": "required", "source": "workflow-forced" },
-    "workflowMode": "docs-only"
+    "validation": { "mode": "required", "source": "workflow-forced" }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -365,8 +364,7 @@ EOF
     "autoCommit": { "mode": "off", "source": "repo-default" },
     "lockdown": { "mode": "off", "source": "repo-default" },
     "regression": { "mode": "protect-existing-scenarios", "source": "repo-default" },
-    "validation": { "mode": "required", "source": "workflow-forced" },
-    "workflowMode": "docs-only"
+    "validation": { "mode": "required", "source": "workflow-forced" }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -486,8 +484,7 @@ EOF
     "autoCommit": { "mode": "off", "source": "repo-default" },
     "lockdown": { "mode": "off", "source": "repo-default" },
     "regression": { "mode": "protect-existing-scenarios", "source": "repo-default" },
-    "validation": { "mode": "required", "source": "workflow-forced" },
-    "workflowMode": "docs-only"
+    "validation": { "mode": "required", "source": "workflow-forced" }
   },
   "transitionRequests": [],
   "reworkQueue": [],
@@ -679,9 +676,6 @@ with open(path, encoding="utf-8") as handle:
 data["status"] = status
 data["workflowMode"] = "product-to-planning"
 data["planMaturityOnly"] = plan_maturity_only == "true"
-if status == "specs_hardened":
-  data["planningOnly"] = True
-  data["planningOnlyJustification"] = "Selftest planning packet intentionally has no implementation target."
 
 snapshot = data.get("policySnapshot")
 if isinstance(snapshot, dict):
@@ -709,14 +703,11 @@ emit_g040_fixture() {
   #                            <!-- bubbles:g040-skip-begin/end -->; "no" otherwise
   #   include_followup_yaml  — "yes" to also append a worked done_with_concerns
   #                            schema example with followUpOwner/Action/Target/Follows
-  #   legacy_compatibility   — "yes" to mark the fixture as a legacy read-only
-  #                            done_with_concerns artifact under G092
   local feature_dir="$1"
   local status="$2"
   local prose="$3"
   local use_skip_markers="$4"
   local include_followup_yaml="$5"
-  local legacy_compatibility="${6:-no}"
 
   emit_base_fixture "$feature_dir"
 
@@ -730,21 +721,17 @@ emit_g040_fixture() {
   # docs-only/done mismatch (Check 3 ceiling fail) is harmless to our
   # assertions here. The unrelated checks may emit failures, but the script
   # continues and Check 18 runs to completion.
-  python3 - "$feature_dir/state.json" "$status" "$legacy_compatibility" <<'PY'
+  python3 - "$feature_dir/state.json" "$status" <<'PY'
 import json
 import sys
 
-path, new_status, legacy_compatibility = sys.argv[1], sys.argv[2], sys.argv[3]
+path, new_status = sys.argv[1], sys.argv[2]
 with open(path, encoding="utf-8") as handle:
     data = json.load(handle)
 
 data["status"] = new_status
 cert = data.setdefault("certification", {})
 cert["status"] = new_status
-if legacy_compatibility == "yes":
-    data["legacyStatusCompatibility"] = True
-else:
-    data.pop("legacyStatusCompatibility", None)
 
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
@@ -902,17 +889,6 @@ g040_pos_strict_done_mixed_dir="$tmp_root/specs/927-g040-positive-strict-done-mi
 g064_framework_root="$tmp_root/framework-g064"
 g064_feature_dir="$g064_framework_root/specs/902-transition-guard-selftest-illegal-child-workflow"
 mkdir -p "$tmp_root/specs"
-clone_framework_surface "$tmp_root"
-git -C "$tmp_root" init -q
-export BUBBLES_REPO_ROOT="$tmp_root"
-
-dogfood_done_dir="$tmp_root/specs/899-transition-guard-selftest-dogfood-done"
-mkdir -p "$dogfood_done_dir"
-cat <<'EOF' > "$dogfood_done_dir/state.json"
-{
-  "status": "done"
-}
-EOF
 
 emit_base_fixture "$positive_feature_dir"
 cp -R "$positive_feature_dir" "$negative_feature_dir"
@@ -944,7 +920,7 @@ emit_g040_fixture "$g040_neg_followup_fields_dir" "done" \
   "no" "yes"
 emit_g040_fixture "$g040_neg_done_with_concerns_dir" "done_with_concerns" \
   "Concern routed to bubbles.bug for follow-up tracking; nothing was deferred." \
-  "no" "yes" "yes"
+  "no" "yes"
 emit_g040_fixture "$g040_neg_skip_markers_dir" "done" \
   "The historical narrative below is bracketed because it discusses content that was deferred to next sprint in a prior release." \
   "yes" "no"
@@ -961,7 +937,7 @@ emit_g040_fixture "$g040_pos_skip_marker_outside_dir" "done" \
 
 emit_g040_fixture "$g040_neg_spec_063_excerpt_dir" "done_with_concerns" \
   "Audit narrative: each concern listed in the followUps section was tracked separately under bubbles.bug ownership." \
-  "no" "yes" "yes"
+  "no" "yes"
 emit_g040_fixture "$g040_pos_strict_done_mixed_dir" "done" \
   "The schema field name followUpOwner appears here intentionally as part of the mixed-content fixture, but real deferral prose follows." \
   "no" "yes"
@@ -1153,8 +1129,7 @@ assert_log_contains "$lockdown_round_log" "lockdownState.round=3" "Negative fixt
 
 echo "Running negative child-workflow-policy selftest..."
 g064_log="$tmp_root/g064-guard.log"
-g064_timeout_seconds="${BUBBLES_G064_SELFTEST_TIMEOUT_SECONDS:-120}"
-g064_status="$(run_capture "$g064_log" timeout "$g064_timeout_seconds" env BUBBLES_REPO_ROOT="$g064_framework_root" bash "$g064_framework_root/bubbles/scripts/state-transition-guard.sh" "$g064_feature_dir")"
+g064_status="$(run_capture "$g064_log" bash "$g064_framework_root/bubbles/scripts/state-transition-guard.sh" "$g064_feature_dir")"
 if [[ "$g064_status" -ne 0 ]]; then
   pass "Illegal child-workflow caller fixture fails the transition guard as expected"
 else

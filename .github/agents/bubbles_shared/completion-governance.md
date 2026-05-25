@@ -28,7 +28,7 @@ If any link in that chain is false, completion state must be lowered immediately
 
 ## Scope Completion Rules
 
-A scope cannot be `Done` when any of these are true:
+A scope cannot be `Done` (or `Done with Concerns`) when any of these are true:
 
 - any DoD item is unchecked (unless it has an approved Uncertainty Declaration that was resolved by audit)
 - any checked DoD item lacks inline evidence
@@ -37,20 +37,20 @@ A scope cannot be `Done` when any of these are true:
 - the scope contains deferral language
 - the scope claims behavior that the tests do not prove
 
-### Done With Observations
+### Done with Concerns
 
-A scope may be marked `Done` with an `observations[]` collection when ALL DoD items pass with evidence AND ALL gates pass, but the agent identified concrete non-blocking notes worth recording. This shape:
+A scope may be marked `Done with Concerns` instead of `Done` when ALL DoD items pass with evidence AND ALL gates pass, but the agent identified concrete non-blocking follow-ups worth recording. This status:
 
 - Does NOT bypass any gate — every gate must still pass identically to plain `Done`
-- Does NOT introduce a third terminal status — the status remains `Done`
-- MUST include observations following the schema below (id, severity, summary, followUpOwner, followUpAction)
-- Is subject to `bubbles.validate` review — validate may downgrade to `In Progress` or `Blocked` if an observation is actually a gate failure in disguise
+- Does NOT count as incomplete — `Done with Concerns` is a `Done`-equivalent for all gate checks (G024, G027)
+- MUST include a `concerns` list following the schema below (id, severity, summary, followUpOwner, followUpAction)
+- Is subject to `bubbles.validate` review — validate may downgrade to `In Progress` or `Blocked` if a concern is actually a gate failure in disguise
 
-Legacy read-only `done_with_concerns` is documented in [Legacy Status: done_with_concerns](#legacy-status-done_with_concerns). It is compatibility-only for old specs and is not a valid new outcome.
+See the canonical [Outcome State: done_with_concerns](#outcome-state-done_with_concerns) section below for the full contract, the RESULT-ENVELOPE schema, severity rules, anti-fabrication tie-in, and worked examples.
 
 ## Spec Completion Rules
 
-A spec cannot be `done` when any scope is:
+A spec cannot be `done` (or `done_with_concerns`) when any scope is:
 
 - `Not Started`
 - `In Progress`
@@ -58,7 +58,7 @@ A spec cannot be `done` when any scope is:
 
 `state.json` must reflect the lower truth immediately when artifacts and status disagree.
 
-Implementation-bearing specs also cannot be `done` when report artifacts lack code-diff evidence showing real non-artifact runtime, config, contract, or source files in the delivery delta. For done-ceiling delivery modes, Gate G093 adds the status-level path check: the certification window must include at least one implementation/runtime/config/contract/test/docs path outside `specs/` and `.specify/`. If the changed-path classification is planning-only, the result is `blocked` with finding `G093`, next owner `bubbles.implement` / `bubbles.test` / `bubbles.docs` as appropriate, or a below-done planning-only downgrade governed by G087.
+Implementation-bearing specs also cannot be `done` when report artifacts lack code-diff evidence showing real non-artifact runtime, config, contract, or source files in the delivery delta.
 
 ## Deferral Is Incomplete Work
 
@@ -183,19 +183,19 @@ If state is stale, lower it immediately.
 Only `bubbles.validate` may certify completion state. Other agents submit execution claims and transition requests.
 
 - Only `bubbles.validate` may write `certification.status`, `certification.completedScopes`, `certification.certifiedCompletedPhases`, `certification.scopeProgress`, or `certification.lockdownState`
-- Valid new `certification.status` values: `not_started`, `in_progress`, `done`, `blocked`
-- Legacy read-only `done_with_concerns` may be read only when `legacyStatusCompatibility:true` is present; new writes and recertification MUST migrate to `done` plus observations or `blocked`
+- Valid `certification.status` values: `not_started`, `in_progress`, `done`, `done_with_concerns`, `blocked`
+- `done_with_concerns` carries all done-equivalent privileges but includes a `certification.concerns` array
 - Other agents may write `execution.*` fields (current phase, active agent, execution claims)
 - The top-level `status` field mirrors `certification.status` and must not contradict it
 
-### Observations Schema (state.json certification)
+### Concerns Schema (state.json certification)
 
 ```json
 "certification": {
-  "status": "done",
-  "observations": [
+  "status": "done_with_concerns",
+  "concerns": [
     {
-      "id": "OBS-1",
+      "id": "CONCERN-1",
       "scope": "02-api-handlers",
       "summary": "Stress test p99 is 48ms, just under 50ms SLA. Monitor in production.",
       "severity": "low",
@@ -207,42 +207,41 @@ Only `bubbles.validate` may certify completion state. Other agents submit execut
 }
 ```
 
-Severity levels: `low` (informational, accept-and-note), `medium` (warrants tracked follow-up). `high` is **NOT** a permitted severity for observations attached to `done` — anything that would warrant `high` is a real gate failure and MUST use `blocked` instead.
+Severity levels: `low` (informational, accept-and-note), `medium` (warrants tracked follow-up). `high` is **NOT** a permitted severity for `done_with_concerns` — anything that would warrant `high` is a real gate failure and MUST use `blocked` instead. The full contract (RESULT-ENVELOPE schema, severity rules, anti-fabrication tie-in, worked examples) lives in the [Outcome State: done_with_concerns](#outcome-state-done_with_concerns) section below.
 
-## Legacy Status: done_with_concerns
+## Outcome State: done_with_concerns
 
 ### What it is
 
-`done_with_concerns` is a legacy read-only compatibility status. It may appear in old specs that were certified before Gate G092 and explicitly carry `legacyStatusCompatibility:true`. It is not a valid new RESULT-ENVELOPE outcome, top-level status, certification status, workflow outcome state, or dependency-stability state for newly certified or recertified work.
+`done_with_concerns` is a first-class workflow outcome state — a third terminal alternative to `done` and `blocked` for any workflow mode whose `statusCeiling` is `done`. It exists because real-world delivery sometimes finishes cleanly *for the work in scope* while surfacing a genuinely-out-of-scope follow-up worth recording. Without it, agents are forced to choose between fabricating success (`done`) or stalling (`blocked`), and both are dishonest. The state is defined in [`bubbles/workflows.yaml#outcome-states`](../../bubbles/workflows.yaml) and certified via `state.json` `certification.status` by `bubbles.validate` only.
 
-### New terminal status contract
+### When to use it (vs `done` vs `blocked`)
 
 | Situation | Outcome |
 |----------|--------|
-| All DoD items checked with real evidence, all gates pass, zero notes | `done` |
-| All DoD items checked with real evidence, all gates pass, AND one or more non-blocking notes worth tracking | `done` with `observations[]` |
+| All DoD items checked with real evidence, all gates pass, zero follow-ups | `done` |
+| All DoD items checked with real evidence, all gates pass, AND ≥1 non-blocking follow-up worth tracking | `done_with_concerns` |
 | Any required gate fails, any DoD item lacks evidence, any HIGH-severity risk discovered, scope contains deferral language | `blocked` |
-| Required work was deferred to "later" or "a follow-up ticket" instead of done now | `blocked` (deferral, not an observation — see G040) |
+| Required work was deferred to "later" or "a follow-up ticket" instead of done now | `blocked` (deferral, not a concern — see G040) |
 
-### RESULT-ENVELOPE observations array
+### RESULT-ENVELOPE concerns array
 
-When an agent emits `outcome: completed_owned` or validate certifies `done` with non-blocking notes, the RESULT-ENVELOPE may include an `observations: []` array. Each entry MUST follow this shape:
+When an agent emits `outcome: done_with_concerns`, the RESULT-ENVELOPE MUST include a non-empty `concerns: []` array. Each entry MUST follow this shape:
 
 ```yaml
-outcome: completed_owned
-observations:
-  - id: OBS-1
-    severity: low | medium
-    summary: >
+concerns:
+  - id: CONCERN-1                        # short stable id, scoped to this envelope
+    severity: low | medium               # ONLY low or medium permitted (see severity rules)
+    summary: >                            # 1-2 sentences describing the concern
       Stress test p99 is 48ms, just under the 50ms SLA threshold. Recommend
       production monitoring before adding more load.
-    followUpOwner: <agent-name> | human
+    followUpOwner: <agent-name> | human  # who should pick this up
     followUpAction: new-spec | issue-doc | next-sprint-todo | accept
 ```
 
 Field rules:
 
-- **id** — short stable identifier (e.g., `OBS-1`, `OBS-2`); MUST be unique within the envelope.
+- **id** — short stable identifier (e.g., `CONCERN-1`, `CONCERN-2`); MUST be unique within the envelope.
 - **severity** — only `low` or `medium` are permitted. See severity rules below.
 - **summary** — 1-2 sentences. Concrete and observable. Not "might be slow" — "p99 was 48ms during stress run".
 - **followUpOwner** — a concrete owner: a Bubbles agent name (e.g., `bubbles.test`, `bubbles.devops`, `bubbles.implement`) or `human`. NEVER `everyone` or `tbd`.
@@ -254,54 +253,40 @@ Field rules:
 
 ### Severity rules (NON-NEGOTIABLE)
 
-| Severity | Meaning | Permitted with `done` observations? |
+| Severity | Meaning | Permitted with `done_with_concerns`? |
 |---------|--------|--------------------------------------|
-| `low` | Informational; observed during this work; no production impact expected | yes |
-| `medium` | Warrants tracked follow-up but does not block shipping the current scope | yes |
-| `high` | Close to or actually a gate failure; ships unsafe behavior or violates a required gate | NO — use `blocked` instead |
+| `low` | Informational; observed during this work; no production impact expected | ✅ yes |
+| `medium` | Warrants tracked follow-up but does not block shipping the current scope | ✅ yes |
+| `high` | Close to or actually a gate failure; ships unsafe behavior or violates a required gate | ⛔ NO — use `blocked` instead |
 
-If you find yourself wanting to write `severity: high`, the outcome is `blocked`, not `done` with observations. Observations make honest notes auditable; they do not launder gate failures.
+If you find yourself wanting to write `severity: high`, the outcome is `blocked`, not `done_with_concerns`. The state exists to make honest tradeoffs auditable, not to launder gate failures.
 
 ### Anti-fabrication tie-in (NON-NEGOTIABLE)
 
-Observations are **NOT** a deferral mechanism. Agents MUST NOT use them to dodge required work. Observations are for genuinely non-blocking notes discovered during the in-scope work — not for deferred-required-work that the agent simply did not finish.
+`done_with_concerns` is **NOT** a deferral mechanism. Agents MUST NOT use it to dodge required work. Concerns are for genuinely-out-of-scope follow-ups discovered during the in-scope work — not for deferred-required-work that the agent simply didn't finish.
 
 The following patterns are FORBIDDEN and constitute fabrication (Gate G021 + G040):
 
 | Forbidden pattern | Why it's wrong | Correct outcome |
 |------------------|---------------|----------------|
-| "Skipped one DoD item, recording as observation" | A DoD item without evidence = `[ ]`, scope stays In Progress | `blocked` or finish the item |
-| "E2E test was flaky, accepting as low observation" | Flaky test is a real gate failure | `blocked` until test is stable |
-| "Will address error handling in follow-up — observation severity medium" | Deferral language; G040 violation | `blocked` until handled now |
-| "Found unrelated bug, marking as medium observation with followUpAction: accept" | Unrelated bug needs `new-spec` or `issue-doc`, not silent acceptance | `done` with the right observation `followUpAction` |
-| "Code coverage is 87%, recording as low observation" | If 100% is required by the spec, this is a gate failure | `blocked` until coverage >= required |
+| "Skipped one DoD item, recording as concern" | A DoD item without evidence = `[ ]`, scope stays In Progress | `blocked` or finish the item |
+| "E2E test was flaky, accepting as low concern" | Flaky test is a real gate failure | `blocked` until test is stable |
+| "Will address error handling in follow-up — concern severity medium" | Deferral language; G040 violation | `blocked` until handled now |
+| "Found unrelated bug, marking as medium concern with followUpAction: accept" | Unrelated bug needs `new-spec` or `issue-doc`, not silent acceptance | `done_with_concerns` with the right `followUpAction` |
+| "Code coverage is 87%, recording as low concern" | If 100% is required by the spec, this is a gate failure | `blocked` until coverage ≥ required |
 
-The validate agent (`bubbles.validate`) MUST inspect every observation and downgrade to `blocked` if any observation is actually a gate failure in disguise.
-
-### Legacy read-only compatibility
-
-Old specs may retain top-level `status: done_with_concerns` and/or `certification.status: done_with_concerns` only when both conditions hold:
-
-- `legacyStatusCompatibility:true` is present at top level or under `certification`
-- the spec is not being touched, recertified, or revalidated in the current run
-
-On recertification, migrate legacy concerns into `observations[]` and write one of the valid new terminal statuses:
-
-- all gates pass: `done` plus observations
-- required work remains: `blocked`
-
-New `done_with_concerns` writes are FORBIDDEN by Gate G092.
+The validate agent (`bubbles.validate`) MUST inspect every `done_with_concerns` envelope and downgrade to `blocked` if any concern is actually a gate failure in disguise.
 
 ### Worked examples
 
-**Example 1 — discovered an unrelated flaky test outside scope**
+**Example 1 — discovered an unrelated flake test outside scope**
 ```yaml
-outcome: completed_owned
-observations:
-  - id: OBS-1
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
     severity: medium
     summary: >
-      During regression run, observed a flaky test in
+      During regression run, observed pre-existing flake in
       `services/foo/test_unrelated_thing.rs::test_timeout_path` (unrelated to
       this scope). Failed once across 5 runs.
     followUpOwner: bubbles.bug
@@ -310,9 +295,9 @@ observations:
 
 **Example 2 — lint warning unrelated to changed files**
 ```yaml
-outcome: completed_owned
-observations:
-  - id: OBS-1
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
     severity: low
     summary: >
       `cargo clippy` flagged 1 warning in `services/legacy/old_module.rs`
@@ -321,11 +306,11 @@ observations:
     followUpAction: issue-doc
 ```
 
-**Example 3 — feature shipped, audit found observation worth tracking**
+**Example 3 — feature shipped, audit found follow-up worth tracking**
 ```yaml
-outcome: completed_owned
-observations:
-  - id: OBS-1
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
     severity: medium
     summary: >
       Audit confirmed all DoD items met. Spotted that the new endpoint
@@ -337,9 +322,9 @@ observations:
 
 **Example 4 — third-party latency observed during stress test**
 ```yaml
-outcome: completed_owned
-observations:
-  - id: OBS-1
+outcome: done_with_concerns
+concerns:
+  - id: CONCERN-1
     severity: low
     summary: >
       Stress run observed external upstream API p95 latency of 380ms
@@ -353,16 +338,16 @@ observations:
 
 The schema, severity rules, and follow-up-action vocabulary above MUST stay in sync with [`bubbles/workflows.yaml#outcome-states`](../../bubbles/workflows.yaml). When updating one, update the other in the same change.
 
-### Mechanical Enforcement Note (Gate G040 / G092)
+### Mechanical Enforcement Note (Gate G040 — Check 18)
 
-`state-transition-guard.sh` Check 18 (Deferral Language Scan) understands observations and legacy read-only `done_with_concerns` compatibility. Specifically:
+`state-transition-guard.sh` Check 18 (Deferral Language Scan) understands the `done_with_concerns` schema and treats it correctly. Specifically:
 
-1. **Legacy status-conditional skip:** When `state.json.status == "done_with_concerns"` and `legacyStatusCompatibility:true` is present, Check 18 emits an INFO line and skips entirely for read-only compatibility. New `done_with_concerns` writes are blocked by G092.
+1. **Status-conditional skip:** When `state.json.status == "done_with_concerns"`, Check 18 emits an INFO line and skips entirely. The follow-up narrative permitted by this outcome state would otherwise trip the deferral-language pattern (e.g. "deferred", "follow-up", "out of scope"), so the check defers to the schema contract.
 2. **Schema field exclusion:** When `status == "done"`, Check 18 still runs but excludes lines containing the schema-canonical follow-up field names: `followUpOwner`, `followUpAction`, `followUpTarget`, `followUps` (case-insensitive). These are the structured tracking mechanism, not deferred-work prose.
 3. **Section heading exclusion:** The canonical section heading `## Follow-Up Narrative` (and `## Follow-Up Section`) is excluded from the scan. The container heading itself is schema-allowed.
-4. **Sentinel markers:** Authors may wrap quoted historical material in `<!-- bubbles:g040-skip-begin -->` ... `<!-- bubbles:g040-skip-end -->` to exempt it from the scan. Marker lines themselves are stripped before scanning. This complements the existing code-fence exemption.
+4. **Sentinel markers:** Authors may wrap quoted historical material in `<!-- bubbles:g040-skip-begin -->` … `<!-- bubbles:g040-skip-end -->` to exempt it from the scan. Marker lines themselves are stripped before scanning. This complements the existing code-fence exemption.
 
-These exemptions exist because structured observation schemas require authors to write tokens that the deferral pattern could otherwise catch. The exclusions are intentional and narrow — raw deferred-work prose under `status == "done"` is still blocked.
+These exemptions exist because the `done_with_concerns` schema requires authors to write the very tokens the deferral pattern was designed to catch. The exclusions are intentional and narrow — raw deferred-work prose under `status == "done"` is still blocked.
 
 ## Related Modules
 

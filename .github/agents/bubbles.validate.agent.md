@@ -164,9 +164,8 @@ In `deep`/`full` mode, command green status alone is insufficient. Validation MU
 | 2.16 | Implementation Reality Scan (G028) | `implementation-reality-scan.sh` | 0 violations |
 | 2.17 | Artifact Freshness Guard (G052) | `artifact-freshness-guard.sh` | Superseded content isolated; superseded scopes non-executable |
 | 2.18 | Implementation Delta Evidence (G053) | Guard script Check 13B | Report artifacts include git-backed implementation proof with non-artifact file paths |
-| 2.19 | Delivery Implementation Delta (G093) | Guard script Check 29B | Done-ceiling delivery has non-planning implementation/runtime/config/contract/test/docs delta outside `specs/` and `.specify/`, or lower-ceiling mode is exempt |
-| 2.20 | Impact-Aware Validation Plan (G079) | `test-impact-plan.sh` when project config exists | Changed paths map to expected first-pass test categories/checks; full-suite triggers honored |
-| 2.21 | Trace Contract Evidence (G080) | `trace-contract-guard.sh` when project config exists and trace output is available | Required workflow spans/attributes/invariants present; error red flags absent |
+| 2.19 | Impact-Aware Validation Plan (G079) | `test-impact-plan.sh` when project config exists | Changed paths map to expected first-pass test categories/checks; full-suite triggers honored |
+| 2.20 | Trace Contract Evidence (G080) | `trace-contract-guard.sh` when project config exists and trace output is available | Required workflow spans/attributes/invariants present; error red flags absent |
 
 All commands from `agents.md`. Run each step, record output in validation report.
 
@@ -331,19 +330,6 @@ bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
 - Report evidence must include a `### Code Diff Evidence` section
 - That section must contain executed git-backed proof and at least one non-artifact runtime/source/config/contract file path
 - Docs-only or artifact-only deltas cannot satisfy delivered implementation claims
-
-#### 2C.9A: Delivery Implementation Delta (Gate G093)
-
-For done-ceiling delivery workflow modes, verify the certification window changed real delivery surfaces outside `specs/` and `.specify/`:
-
-```bash
-bash bubbles/scripts/state-transition-guard.sh {FEATURE_DIR}
-```
-
-- Check 29B enforces G093 after G087 planning-linkage metadata is available
-- Changed paths are classified as planning-only, source, runtime, config, contract, test, docs, or other
-- Done-ceiling delivery with only planning-only paths MUST remain blocked with a G093 result envelope and next-owner routing
-- Planning-only or docs-only lower-ceiling modes are exempt from G093; `specs_hardened` packets remain subject to G087
 
 #### 2C.10: Handoff Cycle Check (if applicable)
 
@@ -809,7 +795,7 @@ If `bubbles.validate` is invoked by `bubbles.workflow` or `bubbles.iterate`, it 
 Rules:
 - Emit exactly one `## RESULT-ENVELOPE` block per invocation.
 - Valid outcomes for `bubbles.validate` are `completed_diagnostic`, `route_required`, or `blocked`.
-- Per [completion-governance.md → Legacy Status: done_with_concerns](bubbles_shared/completion-governance.md#legacy-status-done_with_concerns), new certification writes MUST NOT emit `outcome: done_with_concerns` or write `certification.status: done_with_concerns`. When all DoD items pass with evidence and all gates pass but non-blocking notes exist, certify `done` and record them in `observations[]` / `certification.observations[]` with `severity: low|medium`, a concrete `followUpOwner`, and a valid `followUpAction`. High-severity or remediation-required observations require `blocked`.
+- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), you MAY also emit `outcome: done_with_concerns` (writing `certification.status: done_with_concerns` to `state.json`) when all DoD items pass with evidence and all gates pass but you are recording one or more non-blocking follow-ups. The envelope MUST include a non-empty `concerns: []` array with every entry at `severity: low|medium` plus a concrete `followUpOwner` and `followUpAction`. Validate is the ONLY agent permitted to certify this state.
 - If `outcome` is `route_required`, `nextRequiredOwner` MUST be a single concrete specialist (`bubbles.plan`, `bubbles.test`, `bubbles.implement`, `bubbles.docs`, `bubbles.design`, `bubbles.analyst`, `bubbles.ux`, or `bubbles.bug`) and `packetRef` or an embedded packet payload MUST identify the concrete follow-up work.
 - If `outcome` is `blocked`, `blockedReason` MUST contain the exact blocker and `evidenceRefs` MUST point to real evidence.
 - Do NOT emit `✅ ALL VALIDATIONS PASSED` while the envelope outcome is `route_required` or `blocked`.

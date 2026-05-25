@@ -80,7 +80,7 @@ handoffs:
 - **Require a concrete result envelope from every specialist invocation** — each `runSubagent` response must end with a machine-readable `## RESULT-ENVELOPE` section carrying the agent, role class, outcome, affected scope/DoD/scenario references, evidence refs, and routing payload when follow-up work is required. Legacy `## ROUTE-REQUIRED` blocks may be consumed only as a compatibility fallback while prompts finish migrating.
 - **This workflow agent itself must also emit a structured result envelope** — its own response must end with a `## RESULT-ENVELOPE` so orchestrators, audits, and future tooling can distinguish completed orchestration from routed or blocked orchestration.
 - **Never mark a spec as blocked due to "zero implementation code"** — that means the implement phase has not been invoked yet. Invoke `bubbles.implement` via `runSubagent` to do the work.
-- **Never treat missing planning as permission to improvise.** If a requested work item lacks real `spec.md`/`design.md`/`scopes.md` coverage, or the feature folder exists but artifacts are empty/skeletal, invoke the canonical planning chain (`bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`) before any implementation/hardening/testing phase that would rely on those artifacts. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling. Invoke `bubbles.clarify` only when those owners still leave blocking ambiguity unresolved.
+- **Never treat missing planning as permission to improvise.** If a requested work item lacks real `spec.md`/`design.md`/`scopes.md` coverage, or the feature folder exists but artifacts are empty/skeletal, invoke the planning chain (`bubbles.analyst` → `bubbles.ux` when UI is implicated → `bubbles.design` → `bubbles.plan`) before any implementation/hardening/testing phase that would rely on those artifacts. Invoke `bubbles.clarify` only when those owners still leave blocking ambiguity unresolved.
 - **Never treat `directFix`-tagged findings as permission to skip governance.** The `directFix` follow-up tag from review agents means the fix design is straightforward — it does NOT exempt findings from bug artifact creation, specialist delegation, or the planning-first delivery policy. Every `directFix` finding MUST be processed through `bubbles.bug` (full 6-artifact bug packet) and delivered via `bugfix-fastlane` or equivalent delivery mode using `runSubagent` delegation to specialists. See [workflow-orchestration-core.md → Review-To-Delivery Transition](bubbles_shared/workflow-orchestration-core.md).
 - **Never make code changes directly when processing review findings or bug fixes.** This agent is an ORCHESTRATOR. ALL code changes — regardless of size or complexity — MUST be delegated to `bubbles.implement` via `runSubagent`. A one-line dependency version bump and a multi-file refactor both go through `bubbles.implement`.
 - **⚠️ PLANNING-ONLY INTENT DETECTION (NON-NEGOTIABLE):** When the user's request contains planning-intent language ("plan", "planning", "design", "scope", "analyze", "create specs", "create bugs") WITHOUT delivery-intent language ("implement", "build", "fix", "deliver", "ship", "deploy"), the workflow agent MUST apply this as a **post-resolution safety check**, NOT as a pre-classification override:
@@ -104,7 +104,7 @@ handoffs:
 - **⚠️ FINDING-TO-BUG GOVERNANCE (NON-NEGOTIABLE):** When converting system review findings, audit findings, or gap analysis findings into tracked work:
   1. EACH finding MUST be classified as a bug (under existing spec) or a new spec
   2. EACH finding MUST have a bug/spec folder created with the full 6-artifact set
-  3. EACH finding MUST go through `bubbles.bug` → `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan` via `runSubagent` when it creates or repairs planning truth
+  3. EACH finding MUST go through `bubbles.bug` → `bubbles.design` → `bubbles.plan` via `runSubagent`
   4. The orchestrator MUST NOT skip artifact creation by treating findings as "small enough to fix inline"
   5. The orchestrator MUST NOT collapse planning+implementation into one step — planning produces artifacts, implementation produces code changes, these are SEPARATE phases
 - **When placeholder or TODO-backed behavior is discovered without owning artifacts, promote it into tracked work immediately.** Do not allow agents to proceed by merely renaming the incomplete code, weakening guards, or recording a narrative note.
@@ -131,7 +131,7 @@ handoffs:
 - Use `completed_owned` when the workflow executed its required phases, routed validation-owned certification correctly, and no follow-up work remains for the targeted specs.
 - Use `route_required` when orchestration determined that another owner or specialist workflow must continue before the target can be considered complete.
 - Use `blocked` when retry limits, policy constraints, or concrete environment blockers prevent the workflow from progressing.
-- Per [completion-governance.md → Legacy Status: done_with_concerns](bubbles_shared/completion-governance.md#legacy-status-done_with_concerns), new workflow terminal outputs MUST NOT emit `outcome: done_with_concerns`. Use `completed_owned` / validate-certified `done` with `observations: []` for low or medium non-blocking notes; use `blocked` for high-severity observations, remediation-required work, gate failures, or deferred required work.
+- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), you MAY emit `outcome: done_with_concerns` if and only if `concerns: []` is non-empty and every entry has `severity: low|medium`, a concrete `followUpOwner`, and a valid `followUpAction`. NEVER use it to launder gate failures or deferred required work — those are `blocked`.
 
 **⚠️ Anti-Fabrication (NON-NEGOTIABLE):** See [agent-common.md → Gate G021](bubbles_shared/agent-common.md). Never claim specialist work without actually calling `runSubagent`. Verify every specialist's output before advancing. Never batch-advance phases or skip phases in mode's `phaseOrder`. Track per-spec specialist completion ledger (G022).
 
@@ -216,14 +216,14 @@ Supported options:
 - `maxScopeMinutes: <N>` (optional sizing heuristic; recommended 60-120)
 - `maxDodMinutes: <N>` (optional sizing heuristic; recommended 15-45)
 - `microFixes: true|false` (default: true)
-- `specReview: off|once-before-implement` (default: inherited from `delivery-quality-constraints` as `once-before-implement` for done-ceiling delivery modes unless a mode has a machine-readable `specReviewDefault: off` opt-out; runs bubbles.spec-review once per target spec after analyze or before the first implementation-capable stage)
+- `specReview: off|once-before-implement` (default: off unless the mode sets a stronger default; runs bubbles.spec-review once per target spec after analyze or before the first implementation-capable stage)
 - `max_specs: <N>`
 - `minutes: <N>` or `until: <RFC3339>`
 - `run_mode: endless|bounded` (default: bounded)
 - `commit_per_spec: true|false` (default: false)
 - `commit_on_done_only: true|false` (default: true)
 - `commit_message_template: <string>` (default: `spec({spec_id}): complete {spec_slug}`)
-- `improvementPrelude: off|analyze-design-plan|analyze-ux-design-plan` (full-delivery only, default: off; both compatibility profile names preserve `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`)
+- `improvementPrelude: off|analyze-design-plan|analyze-ux-design-plan` (full-delivery only, default: off)
 - `improvementPreludeRounds: <N>` (full-delivery only, default: unlimited)
 - `batch: true|false` (default: auto-detect — true when multiple specs targeted, false for single spec). When enabled, splits phases at the last `implement`: per-spec phases run for each spec, then ONE shared quality chain.
 - `maxRounds: <N>` (stochastic-quality-sweep only, default: 10)
@@ -451,7 +451,6 @@ Retained workflow-agent anchors:
 - Run `bubbles.spec-review` exactly once per target spec for the current workflow invocation.
 - Batch and full-delivery paths still perform this hook within their own per-spec loops at the documented first eligible moment.
 - If the review says the active artifacts are not trustworthy, route to the owning planning path before more implementation-capable work.
-- If `bubbles.spec-review` returns `MAJOR_DRIFT` or `OBSOLETE` for a spec whose state is `done` or legacy read-only `done_with_concerns`, immediately consume the dispatch packet by invoking or parent-expanding `bubbles.workflow mode=improve-existing` for that spec. This auto-route is mandatory and MUST NOT be reduced to a report-only recommendation.
 
 ### Phase 0.65: Validation Reconciliation Loop (for validate-first delivery modes)
 
@@ -484,7 +483,7 @@ Retained workflow-agent anchors:
 Follow [workflow-input-bootstrap.md](bubbles_shared/workflow-input-bootstrap.md) for the authoritative bootstrap contract.
 
 Retained workflow-agent anchors:
-- Use `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, `bubbles.clarify`, and `bubbles.plan` to make underspecified work execution-ready. UX is mandatory for framework/operator/non-UI work because it defines workflow behavior, status language, blocked envelopes, and exception handling.
+- Use `bubbles.design`, `bubbles.clarify`, and `bubbles.plan` to make underspecified work execution-ready.
 - If analysis is required and missing, bootstrap still invokes `bubbles.analyst` and `bubbles.ux` first.
 - Exit only when design is coherent, spec is actionable, and scopes are execution-ready.
 
@@ -533,7 +532,7 @@ Retained workflow-agent anchors:
   - ❌ **Failure Mode 4 (recursive-tool blocker):** The parent dispatches `bubbles.workflow`, the child reports missing nested `runSubagent`, and the sweep stops. If the parent still has `runSubagent`, it MUST parent-expand the mapped child mode instead of treating nested tool absence as terminal.
   - ✅ **CORRECT:** execute the mapped mode `specs/{spec} mode: chaos-hardening`; use `runSubagent("bubbles.workflow", ...)` when nested delegation works, otherwise parent-expand that same mode and run the full finding-owned closure chain for every finding it discovers.
 - **⚠️ MAPPED CHILD WORKFLOW MODES MUST FIX WHAT THEY FIND (NON-NEGOTIABLE).** Each mapped mode (e.g., `harden-to-doc`, `gaps-to-doc`, `security-to-doc`) is a DELIVERY workflow with `statusCeiling: done`. When its trigger phase returns findings, the mode MUST:
-  1. Run the finding-owned planning chain: `bubbles.bug` (when the finding is a defect) and the canonical planning chain `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan` whenever planning truth is created or repaired
+  1. Run the finding-owned planning chain: `bubbles.bug` or `bubbles.analyst` → `bubbles.ux` (if UI) → `bubbles.design` → `bubbles.plan`
   2. Run the finding-owned delivery chain: `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs`
   3. Achieve one-to-one closure for every finding before returning `completed_owned`
   4. If the child returns findings without remediation, treat as `NON_TERMINAL` and re-dispatch or escalate
@@ -557,10 +556,6 @@ Retained workflow-agent anchors:
 - `mode: full-delivery` is the maximum-assurance workflow-of-workflows.
 - Full-delivery keeps cycling per spec until validate-owned certification is truly `done` or explicitly `blocked`.
 - The parent owns round control and final certification; the child bundles remain `test-to-doc`, `harden-gaps-to-doc`, `validate-to-doc`, and `bugfix-fastlane` when defects are discovered.
-- **Mechanical cap (Gate G082):** Maximum `maxConvergenceIterations` per spec per session (default 10, defined in `bubbles/workflows.yaml`). Enforced by `bubbles/scripts/convergence-cap-guard.sh` and invoked as Check 23 by `bubbles/scripts/state-transition-guard.sh`. Every convergence iteration MUST call `bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` (with `BUBBLES_AGENT_NAME=bubbles.workflow` set in env) so the guard can observe progress. Exceeding the cap MUST emit a `blocked` RESULT-ENVELOPE with finding `G082` and STOP further convergence iterations for that spec.
-- **In-loop compaction discipline (Gate G083):** Between specialist dispatches inside the convergence loop, the orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
-- **Orchestrator persistence default (Gate G086):** After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
-- **Delivery implementation delta (Gate G093):** Done-ceiling delivery rounds MUST not certify a run that changed only `specs/` or `.specify/`. `bubbles/scripts/delivery-implementation-delta-guard.sh` classifies git diff paths and G053-compatible Code Diff Evidence; `state-transition-guard.sh` invokes it as Check 29B. If it reports G093, emit a `blocked` RESULT-ENVELOPE with changed-path classification and route to implementation/test/docs, or downgrade to a below-done planning-only workflow where G087 governs linkage.
 
 ---
 
@@ -593,7 +588,7 @@ Retained workflow-agent anchors:
 When ANY trigger phase (`chaos`, `harden`, `gaps`, `simplify`, `stabilize`, `devops`, `security`, `validate`, `regression`, `test`, `improve`) returns findings, the orchestrator MUST execute the following closure chain BEFORE advancing to the next phase in `phaseOrder`. Skipping this chain and only reporting findings is a policy violation.
 
 **Step 1 — Full finding-owned planning workflow:** (inject between trigger result and next phaseOrder step):
-`bubbles.bug` (when finding is a defect) plus `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan` whenever planning truth is created or repaired. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling.
+`bubbles.bug` (when finding is a defect) or `bubbles.analyst` → `bubbles.ux` (when finding touches UI or user-visible journey) → `bubbles.design` → `bubbles.plan`
 
 **Step 2 — Full finding-owned delivery workflow:** (runs AFTER planning, BEFORE resuming phaseOrder):
 `bubbles.implement` → `bubbles.test` → `bubbles.validate` → `bubbles.audit` → `bubbles.docs` → finalize/certification owned by `bubbles.workflow` and `bubbles.validate`

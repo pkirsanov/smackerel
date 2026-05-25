@@ -276,31 +276,11 @@ When compact mode is enabled, condense spec artifacts for completed specs (statu
 - **ALWAYS preserve `state.json` and `uservalidation.md` unchanged**
 - **Create a backup note** at the top of each compacted file: `<!-- Compacted by bubbles.spec-review on [date]. Original evidence in git history. -->`
 
-### Phase 5: Auto-Dispatch Drift Handoffs (MANDATORY)
+### Phase 5: Auto-Invoke Docs Agent on Drift (MANDATORY)
 
-When ANY spec is classified as **MAJOR_DRIFT** or **OBSOLETE**, the spec-review agent MUST automatically dispatch the owning follow-up. For specs whose `state.json` top-level status is `done` or legacy read-only `done_with_concerns`, severe drift means the certified implementation contract has changed and MUST route through `bubbles.workflow mode=improve-existing` for that exact spec before more implementation-capable work relies on the stale artifacts.
+When ANY spec is classified as **MAJOR_DRIFT** or **OBSOLETE**, the spec-review agent MUST automatically invoke `bubbles.docs` via `runSubagent` to update standard documentation.
 
-**Invocation is MANDATORY, not a handoff suggestion.** The spec-review agent does not complete until the required dispatch is invoked or, in a read-only `spec-review-to-doc` / `noCodeChanges` mode, a concrete `route_required` RESULT-ENVELOPE is emitted with the same dispatch packet.
-
-#### Machine-Readable Handoff Map
-
-| Source status | Trust level | Required dispatch |
-|---------------|-------------|-------------------|
-| `done` / legacy read-only `done_with_concerns` | **MAJOR_DRIFT** | **MUST invoke `bubbles.workflow` with `mode=improve-existing` and `spec=<reviewed-spec-dir>`** |
-| `done` / legacy read-only `done_with_concerns` | **OBSOLETE** | **MUST invoke `bubbles.workflow` with `mode=improve-existing` and `spec=<reviewed-spec-dir>`** |
-| not done | **MAJOR_DRIFT** | Invoke the owning planning path (`bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`) and `bubbles.docs` when managed docs are affected |
-| not done | **OBSOLETE** | Invoke the owning planning path for rewrite/delete decision and `bubbles.docs` when managed docs are affected |
-
-Dispatch packet shape for certified severe drift:
-
-```text
-agent: bubbles.workflow
-mode: improve-existing
-spec: <reviewed-spec-dir>
-reason: spec-review:<MAJOR_DRIFT|OBSOLETE>
-```
-
-In read-only modes (`modeClass: spec-review-only`, `readOnlyAudit: true`, or `noCodeChanges: true`), do not perform code changes inside spec-review. Emit `route_required` with the packet above so the parent done-ceiling workflow can honor it automatically.
+**Invocation is MANDATORY, not a handoff suggestion.** The spec-review agent does not complete until docs are synced.
 
 #### Trigger Conditions
 
@@ -308,8 +288,8 @@ In read-only modes (`modeClass: spec-review-only`, `readOnlyAudit: true`, or `no
 |-------------|-------------------|
 | **CURRENT** | No docs invocation needed |
 | **MINOR_DRIFT** | No automatic invocation — add to handoff suggestions |
-| **MAJOR_DRIFT** | **MUST invoke `bubbles.workflow mode=improve-existing`** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with drift details |
-| **OBSOLETE** | **MUST invoke `bubbles.workflow mode=improve-existing`** when source status is `done` / legacy read-only `done_with_concerns`; otherwise invoke `bubbles.docs` with obsolescence details |
+| **MAJOR_DRIFT** | **MUST invoke `bubbles.docs`** with drift details |
+| **OBSOLETE** | **MUST invoke `bubbles.docs`** with obsolescence details |
 | **PARTIAL** | **MUST invoke `bubbles.docs`** if any scope is MAJOR_DRIFT or OBSOLETE |
 
 #### Invocation Pattern
@@ -373,7 +353,7 @@ Before reporting results, verify:
 - [ ] Report written to appropriate location
 - [ ] If compact mode was used: all compacted artifacts preserve decision-relevant info (Gherkin, test plans, API contracts, architecture decisions)
 - [ ] If compact mode was used: no `in_progress` or `not_started` specs were compacted
-- [ ] If MAJOR_DRIFT or OBSOLETE found: the required dispatch was invoked via `runSubagent` or emitted as a concrete `route_required` packet in read-only mode (certified specs route to `bubbles.workflow mode=improve-existing`; non-certified specs route to docs/planning owners as applicable)
+- [ ] If MAJOR_DRIFT or OBSOLETE found: `bubbles.docs` was invoked via `runSubagent` (not just suggested as handoff)
 - [ ] If docs agent was invoked: docs agent output is summarized in the report
 
 ---
