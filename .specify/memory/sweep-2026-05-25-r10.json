@@ -309,8 +309,8 @@
       "guardsClean": true,
       "guardsCleanCarryForwardNote": "Parent spec 050 state-transition-guard shows 23 PRE-EXISTING carry-forward BLOCKs (G022 reserved-phase impersonation for security/simplify/stabilize on pre-G022 executionHistory; G028 stub/fake detection on test scaffold; G053 missing Code Diff Evidence in legacy report sections; G055 policySnapshot regression/validation/provenance entries; G056 certification block missing lockdownState + scopeProgress; G086 orchestrator persistence prompt lint; G088 post-certification spec edit guard; G090 retro convergence health schema; G091 planning workflow chain guard; G092 strict terminal status guard; G093 delivery implementation delta — all post-2026-05-15-certification gate tightening). NONE introduced by R6. Spec status remains done. Round commits prefix 'bubbles(050/...)' satisfies any go-forward structured-commit requirement.",
       "commits": ["bd7bbe28684c7d222f5a14284247f8d769df1433"],
-      "pushed": false,
-      "pushedTo": null,
+      "pushed": true,
+      "pushedTo": "origin/main",
       "baselineHead": "f2e548a671a4066315da6af04a47a5a9e07b9911",
       "newHead": "bd7bbe28684c7d222f5a14284247f8d769df1433",
       "guardEvidence": {
