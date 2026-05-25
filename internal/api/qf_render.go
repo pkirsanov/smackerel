@@ -22,6 +22,15 @@ func renderQFCard(artifact connector.RawArtifact, metadata any, surface string) 
 	return &card
 }
 
+func renderQFSearchCard(artifactType, title, sourceURL string, metadata any, capturedAt time.Time) *qfdecisions.PacketCard {
+	return renderQFCard(connector.RawArtifact{
+		ContentType: artifactType,
+		Title:       title,
+		URL:         sourceURL,
+		CapturedAt:  capturedAt,
+	}, metadata, qfdecisions.SurfaceSearch)
+}
+
 func qfMetadataMap(metadata any) map[string]any {
 	switch value := metadata.(type) {
 	case map[string]any:
