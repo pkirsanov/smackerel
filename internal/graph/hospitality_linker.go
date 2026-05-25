@@ -25,7 +25,7 @@ import (
 // counters. Edge writes remain unchanged because they are already idempotent
 // via ON CONFLICT DO UPDATE on the edges unique constraint.
 const (
-	hospitalityOpKindGuestStayIncrement      = "guest_stay_increment"
+	hospitalityOpKindGuestStayIncrement       = "guest_stay_increment"
 	hospitalityOpKindPropertyBookingIncrement = "property_booking_increment"
 	hospitalityOpKindPropertyIssueDelta       = "property_issue_delta"
 )
