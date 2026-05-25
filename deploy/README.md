@@ -37,6 +37,7 @@ deploy/
     ├── apply.sh
     ├── rollback.sh
     ├── verify.sh
+    ├── status.sh       ← optional read-only adapter status; product CLI falls back if absent
     └── teardown.sh
 ```
 
@@ -57,6 +58,19 @@ Per-target adapters carry **operator-coupled topology** (real FQDNs, real LAN/VP
 | **set**               | `${DEPLOY_TARGETS_ROOT}/smackerel/<target>/` only (out-of-tree) |
 
 If the resolved path is missing, the CLI fails with a structured error listing the path it tried, the path it deliberately did NOT try, and the opt-in/opt-out hint for `DEPLOY_TARGETS_ROOT`. Setting `DEPLOY_TARGETS_ROOT` is an explicit operator opt-in: "all my adapters live out-of-tree now". The CLI will NOT fall back to a stale in-tree leftover.
+
+## Status action
+
+`./smackerel.sh deploy-target <target> status` first resolves the adapter through
+the same strict locality rule. If the resolved adapter provides an executable
+`status.sh`, the CLI delegates to it and passes through any remaining status
+arguments. This keeps manifest, runtime, edge, and contract-drift knowledge in
+the adapter that owns the target.
+
+When `status.sh` is missing or not executable, the CLI prints an explicit
+`adapter status script unavailable` message and shows only a generic read-only
+Docker container summary for `smackerel-<target>`. The fallback does not replace
+adapter drift checks and must not be treated as readiness proof.
 
 ## Required Bind-Address Contract
 

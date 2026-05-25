@@ -1200,6 +1200,7 @@ case "$COMMAND" in
           # restart, and teardown semantics.
           e2e_lifecycle_scripts=(
             test_timeout_process_cleanup.sh
+            test_deploy_target_status.sh
             test_compose_start.sh
             test_persistence.sh
             test_postgres_readiness_gate.sh
