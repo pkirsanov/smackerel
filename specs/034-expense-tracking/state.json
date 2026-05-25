@@ -316,12 +316,32 @@
       "runStartedAt": "2026-05-13T00:00:00Z",
       "runCompletedAt": "2026-05-13T00:00:00Z",
       "summary": "Stochastic-quality-sweep round 13 (seed 20260513) — child mode harden-to-doc against specs/034-expense-tracking. Probed input validation, classifier rules, vendor normalizer cache, CSV export, LIKE-clause construction, and request-body limits. Two mechanical hardening fixes landed with adversarial regression tests: (1) HARDEN-R13-A — VendorNormalizer.put() now floors evictCount to >=1 when at capacity; previously evictCount = maxSize/2 yielded 0 for maxSize <= 1 so the cache grew unbounded one entry per put despite the capacity gate firing. New TestVendorNormalizer_CacheEvictionMinSize covers maxSize=1, maxSize=2 with eviction assertion, and a 50-put loop at maxSize=1. (2) HARDEN-R13-B — ExpenseHandler.List vendor filter now uses escapeLikeValue() and ESCAPE '\\\\' clause; previously raw user input flowed into LIKE '%' || LOWER($n) || '%' so ?vendor=%abc over-matched (any vendor literally containing 'abc'), a wildcard-injection over-match, not SQL injection. New TestEscapeLikeValue covers \\, %, _, mixed, leading wildcards, ASCII, unicode; new TestExpenseList_VendorFragmentUsesEscape asserts the SQL fragment shape contains ESCAPE clause. Logged four judgment-bearing concerns rather than fixing without design intent: C-1 ExpensesSuggestionsMinConfidence config field set but never compared in GenerateSuggestions; C-2 currency validated only as ^[A-Z]{3}$ not against ISO 4217; C-3 prefix-alias LIKE pattern doesn't escape %/_ in alias text (defense-in-depth); C-4 CSV Export silently skips rows on rows.Scan failure with no warning written. Verification: ./smackerel.sh test unit --go exit 0 (internal/intelligence ok 0.047s, internal/api ok 6.516s); ./smackerel.sh lint exit 0. No file edits via shell redirection — all mutations via IDE replace_string_in_file tools."
+    },
+    {
+      "agent": "bubbles.simplify",
+      "phasesExecuted": [
+        "simplify"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-25T00:00:00Z",
+      "runCompletedAt": "2026-05-25T00:10:00Z",
+      "summary": "Stochastic-quality-sweep round 7 (sweep-2026-05-25-r10) — parent-expanded child mode simplify-to-doc against specs/034-expense-tracking. Probe surfaced ~150 LOC of test-only orphan code in internal/telegram/expenses.go: 8 exported Format* helpers (FormatExpenseConfirmation, FormatOCRFailure, FormatPartialExtraction, FormatAmountMissing, FormatExpenseList, FormatExpenseCSVMessage, FormatFixPrompt, FormatFieldUpdated) backing T-001..T-007/T-009/T-010 wireframes; 3 intent helpers (isExpenseEntry, isSuggestionAccept, isSuggestionDismiss); expenseStateStore methods Get / Set / Clear backing the multi-turn fix-flow state machine; expenseAmountReplyPattern and expenseEntryAmountRe regexps; truncateVendor helper; maxTelegramVendorLen constant. None have a production caller: priority-7 expense router at internal/telegram/bot.go:438-443 only invokes isExpenseQuery/isExpenseExport; handleExpenseQuery (bot.go:1188-1245) and handleExpenseExport (bot.go:1248-1289) build minimal inline reply text via local strings.Builder; photo path uses handlePhotoUpload posting to /v1/photos/upload with no artifacts.processed NATS subscriber in internal/telegram/, contrary to design.md L690; newExpenseStateStore(120).StartCleanup TTL goroutine runs against a map no production code mutates. This is real spec-vs-code drift (Scope 08 DoD claims wiring is delivered; code shows otherwise). Disposition: classified as artifact-only documentation bug BUG-034-002-telegram-format-helpers-not-wired (NOT a simplify-delete because the symbols are tested and Scope 15 reserves final disposition of wire-or-replace; NOT a feature-build because Scope 15 is gated on spec 037 LLM-agent migration). Authored 6-artifact bug packet; inserted one prose Production-wiring status note block in scopes.md under Scope 08; appended this executionHistory entry and BUG-034-002 to resolvedBugs[]. Four-guard sweep PASS (state-transition-guard parent + bug, artifact-lint parent + bug, traceability-guard parent 100/100 preserved). Boundary preserved: changes confined to specs/034-expense-tracking/scopes.md, specs/034-expense-tracking/state.json, the new bug folder, and .specify/memory/sweep-2026-05-25-r10.json. No production code, no tests, no scenario-manifest entries, no Test Plan rows, no DoD checkboxes modified. Real production wiring deferred to Scope 15."
     }
   ],
   "activeBugs": [],
-  "resolvedBugs": [],
+  "resolvedBugs": [
+    {
+      "bugId": "BUG-034-002-telegram-format-helpers-not-wired",
+      "status": "validated",
+      "summary": "Telegram expense Format* helpers (T-001..T-007/T-009/T-010), intent helpers (isExpenseEntry/isSuggestionAccept/isSuggestionDismiss), and expenseStateStore Get/Set/Clear methods declared in internal/telegram/expenses.go are reachable only from internal/telegram/expenses_test.go — never from production internal/telegram/bot.go dispatch. Scope 08 DoD evidence and design.md L690/L712 claim otherwise. Resolved as artifact-only documentation bug; real production wiring deferred to spec 034 Scope 15 (gated on spec 037).",
+      "resolvedAt": "2026-05-25T00:10:00Z",
+      "resolvedBy": "bubbles.simplify",
+      "sweepRound": "sweep-2026-05-25-r10 / round 7"
+    }
+  ],
   "failures": [],
-  "lastUpdatedAt": "2026-05-13T00:00:00Z",
+  "lastUpdatedAt": "2026-05-25T00:10:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
