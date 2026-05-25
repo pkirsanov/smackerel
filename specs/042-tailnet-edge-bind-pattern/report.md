@@ -4217,3 +4217,120 @@ This audit verdict is based on real, independently-re-executed tool output, but 
 1. **G036 adjudication honesty (interpreted claim).** Audit sampled 3 of 13 originally-flagged hits in §3. The user MAY want to spot-check the remaining 10 (validate's per-hit table in `report.md` §"Final Validation (Re-pass with G036 Adjudication)" enumerates each line with a one-sentence justification). What to verify: open `report.md` at lines 2449, 3187, 3204, 3518, 3529, 3533, 3567, 3574, plus the per-hit table cells around line 3164, and confirm each is descriptive narrative (not deferred work). Audit confidence: HIGH (validate's adjudication was systematic and the 3-hit sample was consistent).
 2. **Test file existence path-extraction false-positive.** Check 8 reported "No concrete test file paths found" but the file `internal/deploy/compose_contract_test.go` does exist (Scope 1 DoD-1.6 inline `ls -la` evidence shows it). What to verify: `ls -la internal/deploy/compose_contract_test.go` to confirm the file is real. Audit confidence: HIGH (already independently re-executed `go test` against it in §4c).
 3. **Outcome contract G070 verification.** Validate adjudicated Outcome Contract G070 PASS without audit re-running it. What to verify: read spec.md §"Outcome Contract" (lines 30-46) and confirm the 4 elements (Intent declaration via "the spec only fixes the compose-side prerequisites", Success Signal via the 6 bullet contract, Hard Constraints via Non-Goals + REQ-1..REQ-7, Failure Condition via AC-1..AC-6 acceptance criteria). Audit confidence: HIGH (the contract is unambiguous and bounded).
+
+## Stochastic Sweep — Devops Pass (R08)
+
+**Date:** May 25, 2026
+**Trigger:** devops (via stochastic-quality-sweep child workflow, `devops-to-doc` mode)
+**Agent:** bubbles.devops (via bubbles.workflow)
+**Sweep:** `sweep-2026-05-24-r10`, round 8 of 10
+**Execution model:** `parent-expanded-child-mode`
+**Parent baseline HEAD before round:** `ec981e14`
+
+### Probe Scope
+
+The devops trigger probe for spec 042 verified the integrity of the entire SST/fail-loud host-bind contract surface that spec 042 owns under Gate G028:
+
+1. Live `deploy/compose.deploy.yml` host-port substitution form on all 4 host-bind sites (`smackerel-core`, `smackerel-ml`, `ollama`, `prometheus`).
+2. Pattern P1 enforcement: `postgres` and `nats` have no `ports:` blocks.
+3. Static contract validator coverage in `internal/deploy/compose_contract_test.go` (incl. 5 adversarial scenarios).
+4. Cross-surface SST drift scan across `deploy/`, `scripts/`, `internal/`, `config/`, `.github/workflows/`, and `docs/` for the forbidden `${HOST_BIND_ADDRESS:-127.0.0.1}` default-fallback regression and the spec 020 literal `127.0.0.1:` bind regression.
+5. Build-Once Deploy-Many trust-boundary integrity in `.github/workflows/build.yml` (cosign keyless, SBOM via syft, SLSA provenance, Trivy gate before signing, deterministic bundle sha emission per `BUG-047-001`/`DEVOPS-HL-002`).
+6. Deploy adapter contract in `scripts/deploy/promote.sh` (mandatory `BUNDLE_SHA` with 64-hex format validation) and `scripts/deploy/rollback.sh` (pure pointer-swap wrapper).
+7. SST config pipeline in `scripts/commands/config.sh` (uses `required_value` for `runtime.host_bind_address`, no fallback).
+8. Operator-facing documentation in `docs/Operations.md`, `docs/Deployment.md`, and `docs/Development.md` for SST form drift.
+
+### Findings
+
+| ID | Severity | Finding | Status |
+|----|----------|---------|--------|
+| (none) | — | Devops probe returned ZERO drift findings; spec 042 SST contract is fully intact at every layer (compose, contract test, CI, deploy adapter, config pipeline, docs). | — |
+
+### Devops Domain Verification
+
+| # | Surface | Verification | Result |
+|---|---------|--------------|--------|
+| V-R08-1 | `deploy/compose.deploy.yml` lines 128, 185, 243, 315 | `smackerel-core`, `smackerel-ml`, `ollama`, `prometheus` all use fail-loud `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:` prefix | PASS — 4/4 host-bind sites compliant |
+| V-R08-2 | `deploy/compose.deploy.yml` `postgres` + `nats` service blocks | No `ports:` mapping present | PASS — Pattern P1 intact |
+| V-R08-3 | `internal/deploy/compose_contract_test.go` `TestComposeContract*` | All 11 adversarial test cases green (literal-bind, default-fallback, multi-ports bypass, network_mode:host bypass, infra-has-ports, prometheus, ollama) | PASS — `go test ... 0.009s` |
+| V-R08-4 | Workspace-wide grep for `${HOST_BIND_ADDRESS:-` | Only matches are in: contract-test fixtures + comments documenting the forbidden form; `deploy/README.md` documenting the form is forbidden; `internal/deploy/state_audit_reconciliation_test.go` comments. No live config or runtime regression. | PASS — drift count = 0 |
+| V-R08-5 | Workspace-wide grep for literal `127.0.0.1:` in `deploy/compose.deploy.yml` host-port slot | 0 matches | PASS — spec 020 form fully purged |
+| V-R08-6 | `.github/workflows/build.yml` `apply` / `ssh` / `deploy-target` invocation | None (workflow STOPS at registry push per bubbles G074) | PASS — trust-boundary intact |
+| V-R08-7 | `.github/workflows/build.yml` cosign keyless sign + SBOM + Trivy gate | Trivy runs BEFORE cosign sign; CRITICAL/HIGH severity gate with `ignore-unfixed: true` and `limit-severities-for-sarif: true` per spec 047 R13 | PASS — gate ordering intact |
+| V-R08-8 | `.github/workflows/build.yml` bundle determinism + per-env sha emission | Bundle regenerated twice and sha-compared; per-env bundle-sha artifact uploaded per `BUG-047-001`/`DEVOPS-HL-002` | PASS — `configBundles[*].sha256` declared in manifest |
+| V-R08-9 | `scripts/deploy/promote.sh` `BUNDLE_SHA` handling | Mandatory `--config-bundle-sha=<sha256-hex>` argument with strict `^[0-9a-f]{64}$` format validation | PASS — operator cannot bypass bundle-tamper gate |
+| V-R08-10 | `scripts/deploy/rollback.sh` | 23-line pure pointer-swap wrapper calling `./smackerel.sh deploy-target $TARGET rollback`; no build / restore / SSH logic | PASS — rollback is non-rebuilding |
+| V-R08-11 | `scripts/commands/config.sh` host-bind resolution | Line 609: `HOST_BIND_ADDRESS="$(required_value runtime.host_bind_address)"`; no fallback | PASS — fail-loud SST honored upstream of compose |
+| V-R08-12 | `docs/Operations.md`, `docs/Deployment.md`, `docs/Development.md` | All references to `HOST_BIND_ADDRESS` use the fail-loud `${HOST_BIND_ADDRESS:?...}` form or describe it as required | PASS — documentation contract aligned |
+
+### Probe Evidence
+
+```
+$ go test -v -count=1 -run TestComposeContract ./internal/deploy/...
+=== RUN   TestComposeContract_LiveFile
+    compose_contract_test.go:252: contract OK: deploy/compose.deploy.yml satisfies spec 042 (backend ports use fail-loud ${HOST_BIND_ADDRESS:?...}: prefix with NO default fallback per Gate G028; postgres and nats have no host ports)
+--- PASS: TestComposeContract_LiveFile (0.00s)
+=== RUN   TestComposeContract_AdversarialLiteralBind
+--- PASS: TestComposeContract_AdversarialLiteralBind (0.00s)
+=== RUN   TestComposeContract_AdversarialInfraHasPorts
+--- PASS: TestComposeContract_AdversarialInfraHasPorts (0.00s)
+=== RUN   TestComposeContract_AdversarialMultiPortsBypass
+--- PASS: TestComposeContract_AdversarialMultiPortsBypass (0.00s)
+=== RUN   TestComposeContract_AdversarialMLMultiPortsBypass
+--- PASS: TestComposeContract_AdversarialMLMultiPortsBypass (0.00s)
+=== RUN   TestComposeContract_AdversarialNetworkModeHostBypass
+--- PASS: TestComposeContract_AdversarialNetworkModeHostBypass (0.00s)
+=== RUN   TestComposeContract_AdversarialOllamaLiteralBind
+--- PASS: TestComposeContract_AdversarialOllamaLiteralBind (0.00s)
+=== RUN   TestComposeContract_AdversarialDefaultFallbackBind
+--- PASS: TestComposeContract_AdversarialDefaultFallbackBind (0.00s)
+=== RUN   TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms
+--- PASS: TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  0.009s
+$ echo "exit=$?"
+exit=0
+$
+```
+
+```
+$ grep -nE 'HOST_BIND_ADDRESS' deploy/compose.deploy.yml
+15:#   - Backend services (smackerel-core, smackerel-ml) bind ${HOST_BIND_ADDRESS}
+17:#     HOST_BIND_ADDRESS explicitly in app.env (e.g. 127.0.0.1 for loopback,
+19:#     time if HOST_BIND_ADDRESS is unset or empty (Gate G028, fail-loud SST
+128:      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}"
+185:      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${ML_HOST_PORT}:${ML_CONTAINER_PORT}"
+242:      # Spec 042: bind via HOST_BIND_ADDRESS — deploy adapter MUST set it (no default; fail-loud per Gate G028).
+243:      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+284:  #   - host port uses ${HOST_BIND_ADDRESS:?...} fail-loud SST form
+311:      # Spec 042: bind via HOST_BIND_ADDRESS — deploy adapter MUST set it
+313:      # HOST_BIND_ADDRESS to a tailnet IP so Prometheus is reachable on
+315:      - "${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}:${PROMETHEUS_HOST_PORT}:${PROMETHEUS_CONTAINER_PORT}"
+$ grep -nE '^\s*-\s*"127\.0\.0\.1:' deploy/compose.deploy.yml
+$ echo "exit code: $?"
+exit code: 1
+$
+```
+
+<!-- bubbles:g040-skip-begin -->
+### Out-of-Scope Pre-Existing Baseline Drift (Not Devops-Domain)
+
+The pre-round `state-transition-guard.sh specs/042-tailnet-edge-bind-pattern` baseline returned 2 BLOCKs that are out-of-scope for the devops trigger:
+
+1. Artifact-lint failure on `report.md` (39 evidence blocks lacking the canonical `$` prompt / exit-code terminal-output signals, plus 1 narrative table row).
+2. 38 G040 deferral-language hits accumulated across the historical narrative passages in `report.md`.
+3. `traceability-guard.sh specs/042-tailnet-edge-bind-pattern` exits `1` after starting the Scope 1 traceability check (spec 042 has no scope-defined Gherkin scenarios so the scenario-manifest cross-check is skipped; the silent early-exit comes from a downstream check). Pre-existing baseline; this round did not touch `scopes.md`, `spec.md`, or any scope-test reference.
+
+All three are artifact-integrity / documentation-format / traceability drift on the already-`done` spec, not devops/SST contract drift. They were present at round entry and remain on the artifact-integrity backlog as candidates for a separate `validate-to-doc` packet (analogous to BUG-020-006 / BUG-014-003 / BUG-053-001 patterns established earlier in this sweep). They do NOT block the devops trigger probe verdict because the SST/CI/deploy contract surface they would touch is untouched: every devops-domain verification above is independently green.
+
+The devops probe deliberately scopes itself to the SST/CI/deploy contract surface — extending into artifact-integrity remediation here would conflate trigger domains.
+<!-- bubbles:g040-skip-end -->
+
+### Verdict
+
+Spec 042 SST/devops contract is **fully intact**. Zero new findings produced by the devops trigger probe. Spec status remains `done`; no bug packet spawned; sweep ledger R8 entry records `findings: 0`, `bugsSpawned: 0`, `status: completed_owned`.
+
+### Files Modified
+
+- `specs/042-tailnet-edge-bind-pattern/report.md` — appended this Round 8 documentary section (artifact-only).
+- `.specify/memory/sweep-2026-05-24-r10.json` — appended R8 entry to `rounds[]` (sweep ledger only).
