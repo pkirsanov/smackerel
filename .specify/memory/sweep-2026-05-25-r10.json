@@ -61,6 +61,11 @@
       "bugId": "BUG-021-003-alert-producer-failures-metric",
       "bugFinalStatus": "done",
       "guardsClean": true,
+      "commits": ["6a7341e1e2fbcedc7cedab035a426c35d3c3c874"],
+      "pushed": true,
+      "pushedTo": "origin/main",
+      "baselineHead": "73267f24c3b3d271b5d46bba3fa524b8e2bb6b0d",
+      "newHead": "6a7341e1e2fbcedc7cedab035a426c35d3c3c874",
       "guardEvidence": {
         "stateTransitionGuard": "PERMITTED with 1 warning (placeholder test-file paths)",
         "artifactLintBug": "PASSED",
