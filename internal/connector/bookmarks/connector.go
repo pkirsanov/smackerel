@@ -226,38 +226,8 @@ func (c *BookmarksConnector) Sync(ctx context.Context, cursor string) ([]connect
 		}
 	}
 
-	// Map folder paths to topics and create edges
-	if c.topicMapper != nil {
-		for _, a := range allArtifacts {
-			folder, _ := a.Metadata["folder_path"].(string)
-			if folder == "" {
-				folder, _ = a.Metadata["folder"].(string)
-			}
-			if folder == "" {
-				continue
-			}
-
-			matches, err := c.topicMapper.MapFolder(ctx, folder)
-			if err != nil {
-				slog.Warn("topic mapping failed", "folder", folder, "error", err)
-				continue
-			}
-
-			// Create BELONGS_TO edges to the most specific (last) topic
-			if len(matches) > 0 {
-				leafTopic := matches[len(matches)-1]
-				if err := c.topicMapper.CreateTopicEdge(ctx, a.SourceRef, leafTopic.TopicID); err != nil {
-					slog.Warn("create topic edge failed", "artifact", a.SourceRef, "topic", leafTopic.TopicID, "error", err)
-				}
-				// Update momentum for all matched topics
-				for _, m := range matches {
-					if err := c.topicMapper.UpdateTopicMomentum(ctx, m.TopicID); err != nil {
-						slog.Warn("update topic momentum failed", "topic", m.TopicID, "error", err)
-					}
-				}
-			}
-		}
-	}
+	// Map folder paths to topics and create edges (respects ctx cancellation).
+	c.mapFolderTopics(ctx, allArtifacts)
 
 	c.mu.Lock()
 	c.lastSyncCount = len(allArtifacts)
@@ -298,6 +268,71 @@ func (c *BookmarksConnector) Close() error {
 	c.health = connector.HealthDisconnected
 	slog.Info("bookmarks connector closed")
 	return nil
+}
+
+// mapFolderTopics resolves the folder_path metadata on each artifact to topics
+// via the TopicMapper, creating BELONGS_TO edges to the leaf topic, CHILD_OF
+// edges for hierarchy, and momentum updates. Returns the number of artifacts
+// iterated before completion or context cancellation.
+//
+// F-STAB-R10-001: This loop checks ctx.Err() at the top of every iteration so a
+// cancelled supervisor context (shutdown, deadline) exits cleanly with a single
+// observable log entry instead of firing one DB roundtrip per artifact, each of
+// which would fail with context.Canceled and emit its own slog.Warn. A large
+// bookmark export with thousands of entries previously produced thousands of
+// stale warnings after shutdown began and delayed supervisor teardown.
+func (c *BookmarksConnector) mapFolderTopics(ctx context.Context, artifacts []connector.RawArtifact) int {
+	if c.topicMapper == nil {
+		return 0
+	}
+
+	processed := 0
+	for _, a := range artifacts {
+		// F-STAB-R10-001: stop iterating once the caller's context is
+		// cancelled. Without this guard the loop would burn one (or more)
+		// DB queries per artifact against a doomed context, each producing a
+		// stale slog.Warn.
+		if err := ctx.Err(); err != nil {
+			slog.Warn("bookmarks topic mapping cancelled mid-loop",
+				"error", err,
+				"processed", processed,
+				"remaining", len(artifacts)-processed,
+			)
+			return processed
+		}
+
+		folder, _ := a.Metadata["folder_path"].(string)
+		if folder == "" {
+			folder, _ = a.Metadata["folder"].(string)
+		}
+		if folder == "" {
+			processed++
+			continue
+		}
+
+		matches, err := c.topicMapper.MapFolder(ctx, folder)
+		if err != nil {
+			slog.Warn("topic mapping failed", "folder", folder, "error", err)
+			processed++
+			continue
+		}
+
+		// Create BELONGS_TO edges to the most specific (last) topic.
+		if len(matches) > 0 {
+			leafTopic := matches[len(matches)-1]
+			if err := c.topicMapper.CreateTopicEdge(ctx, a.SourceRef, leafTopic.TopicID); err != nil {
+				slog.Warn("create topic edge failed", "artifact", a.SourceRef, "topic", leafTopic.TopicID, "error", err)
+			}
+			// Update momentum for all matched topics.
+			for _, m := range matches {
+				if err := c.topicMapper.UpdateTopicMomentum(ctx, m.TopicID); err != nil {
+					slog.Warn("update topic momentum failed", "topic", m.TopicID, "error", err)
+				}
+			}
+		}
+		processed++
+	}
+	return processed
 }
 
 // findNewFiles scans the import directory for bookmark export files not yet processed.
