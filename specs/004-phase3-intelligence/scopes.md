@@ -82,8 +82,10 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 - Queue noteworthy insights for weekly synthesis
 
 ### Implementation Files
-- `internal/intelligence/engine.go`
+- `internal/intelligence/engine.go` (type/constant definitions: `InsightType`, `InsightContradiction`, `SynthesisInsight`)
 - `internal/intelligence/engine_test.go`
+- `internal/intelligence/synthesis.go` (RunSynthesis, synthesisConfidence, GenerateWeeklySynthesis, assembleWeeklySynthesisText, GetLastSynthesisTime — moved out of engine.go in the post-certification file split; see BUG-004-003)
+- `internal/intelligence/synthesis_test.go`
 
 ### Test Plan
 
@@ -99,25 +101,25 @@ Scenario: SCN-004-003c Synthesis with insufficient data
 
 ### Definition of Done
 - [x] Daily synthesis cron identifies cross-domain artifact clusters
-  > Evidence: `internal/intelligence/engine.go` RunSynthesis queries topic_groups with `COUNT(*) >= 3` and `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001 fix), `LIMIT 10` cluster cap
+  > Evidence: `internal/intelligence/synthesis.go` RunSynthesis queries topic_groups with `COUNT(*) >= 3` and `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001 fix), `LIMIT 10` cluster cap
 - [x] LLM analysis generates through-lines with source citations
-  > Evidence: `internal/intelligence/engine.go` RunSynthesis generates SynthesisInsight structs synchronously from DB CTE query (ADR-001 — originally planned as NATS `synthesis.analyze` publish); `SynthesisInsight` struct stores `ThroughLine` and `SourceArtifactIDs`
+  > Evidence: `internal/intelligence/synthesis.go` RunSynthesis generates SynthesisInsight structs synchronously from DB CTE query (ADR-001 — originally planned as NATS `synthesis.analyze` publish); `SynthesisInsight` struct (defined in `internal/intelligence/engine.go`) stores `ThroughLine` and `SourceArtifactIDs`
 - [x] Surface-level overlaps silently discarded
-  > Evidence: `internal/intelligence/engine.go` cluster query requires `COUNT(*) >= 3` artifacts sharing a topic; ML sidecar evaluates `has_genuine_connection`
+  > Evidence: `internal/intelligence/synthesis.go` cluster query requires `COUNT(*) >= 3` artifacts sharing a topic; ML sidecar evaluates `has_genuine_connection`
 - [x] Contradictions flagged with both positions
   > Evidence: `internal/intelligence/engine.go` `InsightContradiction` type; `engine_test.go` `TestSynthesisInsight_Contradiction` verifies `KeyTension` field stores both positions
 - [x] Synthesis insights stored as first-class entities
   > Evidence: `internal/intelligence/engine.go` `SynthesisInsight` struct with ID, InsightType, ThroughLine, SourceArtifactIDs, Confidence, CreatedAt
 - [x] SCN-004-001: Cross-domain connection detected — cluster detection query finds artifacts from 3+ different sources converging on theme, generates through-line citing all sources
-  > Evidence: `internal/intelligence/engine.go` RunSynthesis with `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001), `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields verifies 3 source artifact IDs and through-line text
+  > Evidence: `internal/intelligence/synthesis.go` RunSynthesis with `COUNT(DISTINCT a.source_id) >= 2` cross-domain filter (RGR-004-001), `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields verifies 3 source artifact IDs and through-line text
 - [x] SCN-004-002: Surface-level overlap discarded — clusters without genuine connection are not stored as insights
-  > Evidence: `internal/intelligence/engine.go` ML sidecar returns `has_genuine_connection=false` for shallow overlap; only genuine connections stored
+  > Evidence: `internal/intelligence/synthesis.go` ML sidecar returns `has_genuine_connection=false` for shallow overlap; only genuine connections stored
 - [x] SCN-004-003: Contradiction flagged — conflicting claims detected and both positions stated without taking sides
   > Evidence: `internal/intelligence/engine_test.go` TestSynthesisInsight_Contradiction verifies InsightContradiction type with KeyTension storing both positions
 - [x] SCN-004-003b: Synthesis cites sources accurately — every insight references specific artifact titles via SourceArtifactIDs
   > Evidence: `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields confirms 3 source artifact references and ThroughLine text
 - [x] SCN-004-003c: Synthesis with insufficient data — fewer than 3 multi-source artifacts produces no clusters
-  > Evidence: `internal/intelligence/engine.go` cluster query `HAVING COUNT(*) >= 3` ensures no evaluation below threshold; `engine_test.go` TestSynthesisInsight_SourceCount verifies minimum 2 sources
+  > Evidence: `internal/intelligence/synthesis.go` cluster query `HAVING COUNT(*) >= 3` ensures no evaluation below threshold; `engine_test.go` TestSynthesisInsight_SourceCount verifies minimum 2 sources
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Spec 004 Scope 1 run against `tests/e2e/test_synthesis.sh` + `internal/intelligence/engine_test.go` (synthesis schema validation + struct/field assertions cover SCN-004-001/002/003/003b/003c) — **Phase:** regression
   > Evidence: `internal/intelligence/engine_test.go` TestSynthesisInsight_Fields, TestSynthesisInsight_Contradiction, TestSynthesisInsight_SourceCount, TestRunSynthesis_EmptyPool, TestSynthesisInsight_ConfidenceBounds (verified present at 82225 bytes on disk); `tests/e2e/test_synthesis.sh` (verified present at 2253 bytes, executable). Closes BUG-004-002:Scope-1 G016/Check-8A finding for spec-004 scope-1.
 - [x] Broader E2E regression suite passes for Spec 004 Scope 1 — `./smackerel.sh test e2e` runs `tests/e2e/test_synthesis.sh` against the disposable test stack; GREEN at spec 004 original `done` promotion (per spec 004 report.md `## Test Evidence` / `## Validation Evidence`) and preserved by BUG-004-002 zero-source-modified change manifest (verified by bubbles.regression) — **Phase:** regression
@@ -176,9 +178,11 @@ Scenario: SCN-004-007b False positive commitment rejection
 - Generate contextual alert for overdue items (R-304)
 
 ### Implementation Files
-- `internal/intelligence/engine.go`
+- `internal/intelligence/engine.go` (type/constant definitions: `Alert`, `AlertType`, `AlertCommitmentOverdue`)
 - `internal/intelligence/engine_test.go`
-- `internal/digest/generator.go`
+- `internal/intelligence/briefs.go` (CheckOverdueCommitments, collectOverdueItems — moved out of engine.go in the post-certification file split; see BUG-004-003)
+- `internal/intelligence/briefs_test.go`
+- `internal/digest/generator.go` (defines the `ActionItem` Go type and getPendingActionItems)
 - `internal/digest/generator_test.go`
 
 ### Test Plan
@@ -195,23 +199,23 @@ Scenario: SCN-004-007b False positive commitment rejection
 
 ### Definition of Done
 - [x] User-made promises detected from email text with >80% precision
-  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments queries `action_items` with `status='open'` and `expected_date < CURRENT_DATE`; commitment detection integrated into email processing LLM prompt
+  > Evidence: `internal/intelligence/briefs.go` CheckOverdueCommitments queries `action_items` with `status='open'` and `expected_date < CURRENT_DATE`; commitment detection integrated into email processing LLM prompt
 - [x] Contact-made promises detected and tracked
-  > Evidence: `internal/intelligence/engine.go` `ActionItem` model supports `type=contact-promise`; tracked via `action_items` table with person_id link
+  > Evidence: `internal/digest/generator.go` `ActionItem` Go type supports `type=contact-promise`; tracked via `action_items` table with person_id link
 - [x] Reply-thread emails trigger auto-resolve prompts
-  > Evidence: `internal/intelligence/engine.go` action_item status transitions from open→resolved; reply-thread detection integrated into email processing pipeline; no dedicated behavioral test exists — coverage is structural via `engine_test.go` TestAlert_Lifecycle status transitions
+  > Evidence: `internal/intelligence/briefs.go` action_item status transitions from open→resolved; reply-thread detection integrated into email processing pipeline; no dedicated behavioral test exists — coverage is structural via `engine_test.go` TestAlert_Lifecycle status transitions
 - [x] Overdue commitments generate contextual alerts
-  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments creates `AlertCommitmentOverdue` alerts with days-overdue context and person name; dedup via NOT EXISTS subquery prevents duplicate alerts for already-alerting overdue items
+  > Evidence: `internal/intelligence/briefs.go` CheckOverdueCommitments creates `AlertCommitmentOverdue` alerts with days-overdue context and person name; dedup via NOT EXISTS subquery prevents duplicate alerts for already-alerting overdue items
 - [x] Action items surfaced in daily digest under TOP ACTIONS
   > Evidence: `internal/digest/generator.go` getPendingActionItems queries open action_items sorted by created_at; DigestContext includes ActionItems with Person and DaysWaiting
 - [x] SCN-004-004: User promise detected — email containing "I'll send you the report by Friday" creates action_item with type=user-promise and deadline
-  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments processes action_items; `engine_test.go` verifies alert lifecycle for overdue commitments
+  > Evidence: `internal/intelligence/briefs.go` CheckOverdueCommitments processes action_items; `engine_test.go` verifies alert lifecycle for overdue commitments
 - [x] SCN-004-005: Contact promise detected — colleague email "I'll have the budget numbers" creates action_item with type=contact-promise
   > Evidence: `internal/intelligence/engine.go` Alert model supports commitment tracking; `engine_test.go` TestAlertType_Constants includes AlertCommitmentOverdue
 - [x] SCN-004-006: Auto-resolve on reply-thread detection — reply-thread email in same conversation triggers resolve prompt
-  > Evidence: `internal/intelligence/engine.go` action_item status lifecycle (open→resolved); `engine_test.go` TestAlert_Lifecycle verifies pending→delivered→dismissed and snooze→pending transitions. No dedicated auto-resolve behavioral test exists — structural coverage only
+  > Evidence: `internal/intelligence/briefs.go` action_item status lifecycle (open→resolved); `engine_test.go` TestAlert_Lifecycle verifies pending→delivered→dismissed and snooze→pending transitions. No dedicated auto-resolve behavioral test exists — structural coverage only
 - [x] SCN-004-007: Overdue commitment surfaced — 3+ days overdue generates alert with person context
-  > Evidence: `internal/intelligence/engine.go` CheckOverdueCommitments calculates daysOverdue and creates alert with person name and overdue count
+  > Evidence: `internal/intelligence/briefs.go` CheckOverdueCommitments calculates daysOverdue and creates alert with person name and overdue count
 - [x] SCN-004-007b: False positive commitment rejection — casual language "I'll think about it" does not create action_item
   > Evidence: Commitment detection relies on ML sidecar LLM prompt to distinguish casual language from genuine commitments; no dedicated behavioral test for false-positive rejection exists — coverage is design-level only
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Spec 004 Scope 2 run against `tests/e2e/test_commitments.sh` + `internal/intelligence/engine_test.go` + `internal/digest/generator_test.go` (commitment schema + alert/lifecycle structs + digest TOP ACTIONS cover SCN-004-004/005/006/007/007b) — **Phase:** regression
@@ -271,8 +275,10 @@ Scenario: SCN-004-010b Brief with shared topic context
 - Mark event as briefed to prevent duplicate alerts
 
 ### Implementation Files
-- `internal/intelligence/engine.go`
+- `internal/intelligence/engine.go` (type/constant definitions: `AlertMeetingBrief`)
 - `internal/intelligence/engine_test.go`
+- `internal/intelligence/briefs.go` (GeneratePreMeetingBriefs, buildAttendeeBrief, assembleBriefText, MeetingBrief, AttendeeBrief — moved out of engine.go in the post-certification file split; see BUG-004-003)
+- `internal/intelligence/briefs_test.go`
 
 ### Test Plan
 
@@ -287,21 +293,21 @@ Scenario: SCN-004-010b Brief with shared topic context
 
 ### Definition of Done
 - [x] Pre-meeting briefs delivered 30 min before events
-  > Evidence: `internal/intelligence/engine.go` AlertMeetingBrief type; calendar check cron design targets 25-35 minute window; `engine_test.go` TestMeetingBrief_Struct verifies attendee assembly with StartsAt 30min ahead
+  > Evidence: `internal/intelligence/engine.go` AlertMeetingBrief type; calendar check cron design targets 25-35 minute window; `briefs_test.go` TestMeetingBrief_Struct verifies attendee assembly with StartsAt 30min ahead
 - [x] Brief includes: recent emails, shared topics, pending commitments
-  > Evidence: `engine_test.go` TestAssembleBriefText_FullContext verifies brief contains meeting title, attendee name, shared topics, and pending items; `engine_test.go` TestMeetingBrief_Struct confirms attendee context fields (RecentThreads, SharedTopics, PendingItems)
+  > Evidence: `briefs_test.go` TestAssembleBriefText_FullContext verifies brief contains meeting title, attendee name, shared topics, and pending items; `briefs_test.go` TestMeetingBrief_Struct confirms attendee context fields (RecentThreads, SharedTopics, PendingItems)
 - [x] New contacts get "no prior context" message
-  > Evidence: `engine_test.go` TestAssembleBriefText_NewContact verifies brief contains "New contact" for unknown attendees; `TestMeetingBrief_Struct` confirms IsNewContact=true path
+  > Evidence: `briefs_test.go` TestAssembleBriefText_NewContact verifies brief contains "New contact" for unknown attendees; `TestMeetingBrief_Struct` confirms IsNewContact=true path
 - [x] No duplicate briefs for same event
-  > Evidence: `internal/intelligence/engine.go` MeetingBrief uses EventID as dedup key; E2E script `tests/e2e/test_premeeting.sh` verifies `ON CONFLICT (event_id) DO NOTHING` prevents duplicate rows
+  > Evidence: `internal/intelligence/briefs.go` MeetingBrief uses EventID as dedup key; E2E script `tests/e2e/test_premeeting.sh` verifies `ON CONFLICT (event_id) DO NOTHING` prevents duplicate rows
 - [x] SCN-004-008: Brief with full context — meeting with David Kim in 30 minutes generates brief with email context and commitment references
-  > Evidence: `engine_test.go` TestAssembleBriefText_FullContext verifies full-context brief with attendee name, shared topics, pending items; `TestMeetingBrief_Struct` confirms 2-attendee assembly with known + unknown contacts
+  > Evidence: `briefs_test.go` TestAssembleBriefText_FullContext verifies full-context brief with attendee name, shared topics, pending items; `TestMeetingBrief_Struct` confirms 2-attendee assembly with known + unknown contacts
 - [x] SCN-004-009: Brief for new contact — unknown attendee gets "No prior context" message
-  > Evidence: `engine_test.go` TestAssembleBriefText_NewContact verifies "New contact" appears in brief text for IsNewContact=true attendees
+  > Evidence: `briefs_test.go` TestAssembleBriefText_NewContact verifies "New contact" appears in brief text for IsNewContact=true attendees
 - [x] SCN-004-010: No duplicate briefs — brief already sent for event X prevents second brief on re-run
-  > Evidence: `internal/intelligence/engine.go` MeetingBrief.EventID dedup; `tests/e2e/test_premeeting.sh` inserts duplicate event_id and verifies COUNT=1 via ON CONFLICT
+  > Evidence: `internal/intelligence/briefs.go` MeetingBrief.EventID dedup; `tests/e2e/test_premeeting.sh` inserts duplicate event_id and verifies COUNT=1 via ON CONFLICT
 - [x] SCN-004-010b: Brief with shared topic context — Sarah's book recommendation and shared negotiation interest included in brief
-  > Evidence: `engine_test.go` TestAssembleBriefText_FullContext verifies shared topics appear in brief text; `people_test.go` TestAssembleBriefText_MixedNewAndKnownContacts verifies mixed-attendee context assembly
+  > Evidence: `briefs_test.go` TestAssembleBriefText_FullContext verifies shared topics appear in brief text; `people_test.go` TestAssembleBriefText_MixedNewAndKnownContacts verifies mixed-attendee context assembly
 - [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in Spec 004 Scope 3 run against `tests/e2e/test_premeeting.sh` + `internal/intelligence/engine_test.go` (brief dedup ON CONFLICT + AssembleBriefText full-context/new-contact paths cover SCN-004-008/009/010/010b) — **Phase:** regression
   > Evidence: `internal/intelligence/engine_test.go` TestMeetingBrief_Struct, TestAssembleBriefText_FullContext, TestAssembleBriefText_NewContact, TestGeneratePreMeetingBriefs_NilPool (in 82225-byte engine_test.go on disk); `tests/e2e/test_premeeting.sh` (verified present at 1677 bytes, executable). Closes BUG-004-002:Scope-1 G016/Check-8A finding for spec-004 scope-3.
 - [x] Broader E2E regression suite passes for Spec 004 Scope 3 — `./smackerel.sh test e2e` runs `tests/e2e/test_premeeting.sh` against the disposable test stack; GREEN at spec 004 original `done` promotion (per spec 004 report.md `## Test Evidence` / `## Validation Evidence`) and preserved by BUG-004-002 zero-source-modified change manifest — **Phase:** regression
@@ -368,8 +374,12 @@ Scenario: SCN-004-013d Trip prep alert
 - Delivery via unified channel abstraction (Telegram, web notification)
 
 ### Implementation Files
-- `internal/intelligence/engine.go`
+- `internal/intelligence/engine.go` (type/constant definitions: `Alert`, `AlertType`, `AlertStatus`, `AlertBill`, `AlertReturnWindow`, `AlertTripPrep`, `AlertRelationship`)
 - `internal/intelligence/engine_test.go`
+- `internal/intelligence/alerts.go` (CreateAlert, DismissAlert, SnoozeAlert, GetPendingAlerts, MarkAlertDelivered, HasStalePendingAlerts — moved out of engine.go in the post-certification file split; see BUG-004-003)
+- `internal/intelligence/alerts_test.go`
+- `internal/intelligence/alert_producers.go` (ProduceBillAlerts, ProduceTripPrepAlerts, ProduceReturnWindowAlerts, ProduceRelationshipCoolingAlerts — added by spec 021 to satisfy this scope's acceptance)
+- `internal/intelligence/alert_producers_test.go`
 
 ### Test Plan
 
@@ -394,15 +404,15 @@ Scenario: SCN-004-013d Trip prep alert
 - [x] Relationship cooling alerts generated for significant interaction drops
   > Evidence: `internal/intelligence/engine.go` AlertRelationship type; interaction frequency analysis against historical baseline
 - [x] Alerts batched to maximum 2 per day
-  > Evidence: `internal/intelligence/engine.go` GetPendingAlerts checks `deliveredToday >= 2` and returns nil if at max; `remaining := 2 - deliveredToday` caps query LIMIT
+  > Evidence: `internal/intelligence/alerts.go` GetPendingAlerts checks `deliveredToday >= 2` and returns nil if at max; `remaining := 2 - deliveredToday` caps query LIMIT
 - [x] Dismiss/snooze actions respected
-  > Evidence: `internal/intelligence/engine.go` DismissAlert sets status='dismissed' with existence validation (returns error if alert not found); SnoozeAlert sets status='snoozed' with snooze_until and validates future-time constraint; GetPendingAlerts includes snoozed alerts past their snooze_until; CreateAlert validates AlertType against known constants
+  > Evidence: `internal/intelligence/alerts.go` DismissAlert sets status='dismissed' with existence validation (returns error if alert not found); SnoozeAlert sets status='snoozed' with snooze_until and validates future-time constraint; GetPendingAlerts includes snoozed alerts past their snooze_until; CreateAlert validates AlertType against known constants
 - [x] SCN-004-011: Bill reminder — electric bill $142 due in 3 days generates alert with amount and due date
-  > Evidence: `internal/intelligence/engine.go` CreateAlert with AlertBill type; `engine_test.go` TestAlertType_Constants verifies AlertBill
+  > Evidence: `internal/intelligence/alerts.go` CreateAlert with AlertBill type; `engine_test.go` TestAlertType_Constants verifies AlertBill
 - [x] SCN-004-012: Alert batching — 3 pending alerts batched into max 2 deliveries per day
-  > Evidence: `internal/intelligence/engine.go` GetPendingAlerts enforces `deliveredToday >= 2` cap; `engine_test.go` TestAlertPriority validates priority ordering
+  > Evidence: `internal/intelligence/alerts.go` GetPendingAlerts enforces `deliveredToday >= 2` cap; `engine_test.go` TestAlertPriority validates priority ordering
 - [x] SCN-004-013: Alert dismissal — dismissed alert not re-sent on subsequent delivery runs
-  > Evidence: `internal/intelligence/engine.go` DismissAlert updates status to 'dismissed' with row-count existence check; GetPendingAlerts only queries status='pending' or expired snooze; `engine_test.go` TestDismissAlert_EmptyID, TestSnoozeAlert_EmptyID, TestSnoozeAlert_PastTime verify input validation
+  > Evidence: `internal/intelligence/alerts.go` DismissAlert updates status to 'dismissed' with row-count existence check; GetPendingAlerts only queries status='pending' or expired snooze; `engine_test.go` TestDismissAlert_EmptyID, TestSnoozeAlert_EmptyID, TestSnoozeAlert_PastTime verify input validation
 - [x] SCN-004-013b: Return window closing alert — purchase with 30-day return policy generates alert 4 days before closing
   > Evidence: `internal/intelligence/engine.go` AlertReturnWindow type; detection from purchase emails with return policy language
 - [x] SCN-004-013c: Relationship cooling alert — contact silent for 6 weeks generates alert respecting max 2/day limit
@@ -482,7 +492,7 @@ Scenario: SCN-004-016b Pattern observation in weekly synthesis
 
 ### Definition of Done
 - [x] Weekly synthesis generated under 250 words with required sections
-  > Evidence: `internal/intelligence/engine.go` GenerateWeeklySynthesis enforces 250-word cap by truncating assembled text to 250 words before storing; weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001)
+  > Evidence: `internal/intelligence/synthesis.go` GenerateWeeklySynthesis enforces 250-word cap by truncating assembled text to 250 words before storing; weekly context assembled synchronously by digest.Generator and intelligence.Resurface (ADR-001)
 - [x] Cross-domain connections cited with source artifacts
   > Evidence: `internal/intelligence/engine.go` SynthesisInsight stores SourceArtifactIDs; weekly context assembly aggregates synthesis insights with artifact references
 - [x] Topic momentum reported with trends
@@ -492,7 +502,7 @@ Scenario: SCN-004-016b Pattern observation in weekly synthesis
 - [x] Serendipity resurfaces one archive item (calendar/topic matched when possible)
   > Evidence: `internal/intelligence/resurface.go` Resurface method combines dormant high-value artifacts with serendipityPick; calendar affinity boosts matching items
 - [x] Pattern observation included
-  > Evidence: `internal/intelligence/engine.go` WeeklySynthesis.Patterns field; `engine_test.go` TestAssembleWeeklySynthesisText_FullWeek verifies "PATTERNS NOTICED" section appears in output; TestWeeklySynthesis_Struct confirms Patterns slice storage
+  > Evidence: `internal/intelligence/synthesis.go` WeeklySynthesis type owns the `Patterns` field; `synthesis_test.go` TestAssembleWeeklySynthesisText_FullWeek verifies "PATTERNS NOTICED" section appears in output; TestWeeklySynthesis_Struct confirms Patterns slice storage
 - [x] Quiet weeks handled gracefully
   > Evidence: `internal/digest/generator.go` storeQuietDigest generates minimal "All quiet" digest when no data; empty sections skipped
 - [x] SCN-004-014: Full weekly synthesis — 47 artifacts with 1 cross-domain connection generates under 250 words with all 6 sections
@@ -584,7 +594,7 @@ Scenario: SCN-004-018b Digest with no intelligence data
 - [x] Hot topic acceleration context included
   > Evidence: `internal/digest/generator.go` getHotTopics queries topics with state IN ('hot', 'active') sorted by momentum_score
 - [x] Today's meetings include pre-meeting brief previews
-  > Evidence: `internal/intelligence/engine.go` AlertMeetingBrief type integrated into alert delivery; `engine_test.go` TestMeetingBrief_Struct and TestAssembleBriefText_FullContext verify brief generation with attendee context. Meeting preview in digest relies on brief data via AlertMeetingBrief
+  > Evidence: `internal/intelligence/engine.go` AlertMeetingBrief type integrated into alert delivery; `briefs_test.go` TestMeetingBrief_Struct and TestAssembleBriefText_FullContext verify brief generation with attendee context. Meeting preview in digest relies on brief data via AlertMeetingBrief
 - [x] 150-word cap maintained with graceful prioritization
   > Evidence: `internal/digest/generator.go` storeFallbackDigest generates concise text; LLM digest prompt enforces word limit; `generator_test.go` TestSCN002043_DigestLLMFailureFallback verifies output
 - [x] Graceful fallback when no intelligence data exists
