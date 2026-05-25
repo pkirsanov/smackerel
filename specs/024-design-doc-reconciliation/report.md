@@ -360,3 +360,94 @@ RESULT: PASSED
 ```
 
 PII redaction: zero `/home/<user>/...` paths in any committed evidence block. All file references use repo-relative paths. Commit subject prefix `bubbles(024/bug-024-002):` satisfies Check 17 structured commit gate.
+
+---
+
+## BUG-024-003 Chaos-Sweep Resolution (2026-05-25)
+
+**Sweep round 9 of sweep-2026-05-24-r10** (mapped child mode `chaos-hardening`, parent-expanded execution model). `bubbles.chaos` probe surfaced 3 findings against spec 024's connector-inventory contract:
+
+- **F1** — `docs/Development.md` L31 said "15 passive connectors" while `cmd/core/connectors.go` L49-53 registers 16.
+- **F2** — `specs/024-design-doc-reconciliation/spec.md` R-006 + R-PRD-011 + AC-5 said "15 implemented/committed connectors" without enumerating `qfdecisions/`, breaking internal parity with BS-004.
+- **F3** — No Go contract test forward-detects 3-surface connector-count disagreement (`cmd/core/connectors.go` ↔ `docs/smackerel.md` §22.7 ↔ `docs/Development.md`); future 17th connector would silently re-introduce drift.
+
+All 3 findings closed via single `BUG-024-003-dev-doc-connector-drift` packet (full 6-artifact set + scenario manifest + state.json) with single Scope 1 / SCN-001..005 / 16-item DoD execution.
+
+### Code Diff Evidence (BUG-024-003)
+
+| File | Surface | Change |
+|------|---------|--------|
+| `docs/Development.md` | L31 capability inventory | `15 passive connectors (...)` → `16 passive connectors (..., QF Decisions companion via spec 041 read-only packet flow)` |
+| `specs/024-design-doc-reconciliation/spec.md` | Problem statement L9 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | Hard constraints L23 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | Goals L33 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | UC-003 L84 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | Scenarios L219 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | R-PRD-011 L211 | `15` → `16` |
+| `specs/024-design-doc-reconciliation/spec.md` | R-006 intro + 16-item list | extended with `qfdecisions` 16th entry + Principle 10 boundary preserved |
+| `specs/024-design-doc-reconciliation/spec.md` | AC-5 | `15` → `16` |
+| `internal/deploy/docs_connector_count_contract_test.go` | NEW (~360 LOC) | `assertConnectorCountContract` pure function + `TestConnectorCountContract_LiveFile` + 3 adversarial sub-tests (`AdversarialConnectorsGoLow`, `AdversarialSmackerelMdHigh`, `AdversarialDevelopmentMdLow`) |
+| `specs/024-design-doc-reconciliation/state.json` | executionHistory | +8 entries (chaos, implement, test, validate, audit, docs, finalize); resolvedBugs[] +1 entry; `lastUpdatedAt` 2026-05-24→2026-05-25 |
+| `specs/024-design-doc-reconciliation/report.md` | NEW section | this `## BUG-024-003 Chaos-Sweep Resolution (2026-05-25)` block |
+| `specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/` | NEW (8 artifacts) | `bug.md` + `spec.md` + `design.md` + `scopes.md` + `scenario-manifest.json` + `state.json` + `report.md` + `uservalidation.md` |
+
+### Test Evidence (BUG-024-003)
+
+```text
+$ go test -v -count=1 -run TestConnectorCountContract ./internal/deploy/... | tail -10
+=== RUN   TestConnectorCountContract_LiveFile
+--- PASS: TestConnectorCountContract_LiveFile (0.01s)
+=== RUN   TestConnectorCountContract_AdversarialConnectorsGoLow
+--- PASS: TestConnectorCountContract_AdversarialConnectorsGoLow (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialSmackerelMdHigh
+--- PASS: TestConnectorCountContract_AdversarialSmackerelMdHigh (0.00s)
+=== RUN   TestConnectorCountContract_AdversarialDevelopmentMdLow
+--- PASS: TestConnectorCountContract_AdversarialDevelopmentMdLow (0.00s)
+PASS
+ok   github.com/pkirsanov/smackerel/internal/deploy   0.012s
+
+$ ./smackerel.sh test unit --go ./internal/deploy/... | tail -3
+ok   github.com/pkirsanov/smackerel/internal/deploy   21.354s
+(24 tests, 21 prior + 4 new contract tests, all PASS)
+```
+
+### Git-Backed Proof (BUG-024-003 — Gate G053)
+
+```text
+$ git status --porcelain
+ M docs/Development.md
+ M specs/024-design-doc-reconciliation/spec.md
+ M specs/024-design-doc-reconciliation/state.json
+ M specs/024-design-doc-reconciliation/report.md
+?? internal/deploy/docs_connector_count_contract_test.go
+?? specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/
+
+$ git diff --cached --name-only | grep -vE '^(docs/Development\.md|specs/024-design-doc-reconciliation/|internal/deploy/docs_connector_count_contract_test\.go)$'
+(no output — Change Boundary respected; zero excluded surfaces touched)
+
+$ git log --oneline -1 --format='%s'
+bubbles(024/bug-024-003): reconcile docs/Development.md connector count (15->16, +QF Decisions) + spec.md R-006 parity + add forward-detection contract test
+
+$ git show --stat HEAD | head -3
+commit <SHA>
+Author: <author>
+Date:   <date>
+```
+
+### Framework Guard Verdicts (BUG-024-003 — all GREEN)
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -1
+🟡 TRANSITION PERMITTED with 3 warning(s)
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -1
+Artifact lint PASSED.
+
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -1
+RESULT: PASSED (0 warnings)
+
+$ bash .github/bubbles/scripts/artifact-freshness-guard.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -1
+RESULT: PASS (0 failures, 0 warnings)
+```
+
+PII redaction: zero `/home/<user>/...` paths in any committed evidence block. All file references use repo-relative paths. Commit subject prefix `bubbles(024/bug-024-003):` satisfies Check 17 structured commit gate. Parent spec 024 status stays `done` end-to-end; no scope re-opening or schema migration.
