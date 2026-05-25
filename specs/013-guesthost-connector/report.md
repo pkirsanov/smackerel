@@ -660,3 +660,71 @@ ok  github.com/smackerel/smackerel/cmd/core  0.194s
 ok  github.com/smackerel/smackerel/internal/config  0.035s
 ok  github.com/smackerel/smackerel/internal/connector/guesthost  (cached)
 ```
+
+## Stabilize-to-Doc Sweep (2026-05-25, Stochastic Quality Sweep Round 5)
+
+**Sweep ID:** `sweep-2026-05-25-r10`
+**Round:** 5 / 10
+**Mode:** Stochastic quality sweep child (`stabilize-to-doc`),
+parent-expanded because nested `runSubagent` is unavailable in the
+active workflow runtime.
+**Trigger:** Stabilize probe of the hospitality-graph pipeline.
+**Findings:** 1 finding (F1 — HospitalityLinker counter mutations not
+idempotent under NATS at-least-once redelivery). Closed via
+[BUG-013-001](bugs/BUG-013-001-hospitality-linker-counter-idempotency/).
+
+### Probe surfaces (11 surveyed)
+
+| # | Surface | Result | Note |
+|---|---------|--------|------|
+| 1 | NATS consumer config (`subscriber.go:40-260`) | CLEAN | `AckPolicy=AckExplicitPolicy`, `AckWait=30s`, `MaxDeliver>1`, Nak on handler error, dead-letter on exhaust |
+| 2 | Base `Linker.LinkArtifact` edge writes | CLEAN | `ON CONFLICT DO UPDATE` — idempotent |
+| 3 | `HospitalityLinker.LinkArtifact` edge writes | CLEAN | Same idempotent ON CONFLICT pattern |
+| 4 | `HospitalityLinker.linkBooking` counter mutations | **F1** | `IncrementStay` and `IncrementBookings` unconditional |
+| 5 | `HospitalityLinker.linkTask` issue delta | **F1** | `UpdateIssueCount` unconditional |
+| 6 | `HospitalityLinker.linkReview` property metrics | CLEAN | `UpdateMetrics` OVERWRITES (last-write-wins on derived ratings) |
+| 7 | Connector cursor advancement | CLEAN | Already hardened by CHAOS-013-R20-001/002 |
+| 8 | Normalizer dedup | CLEAN | `content_hash` + existing ON CONFLICT on `artifacts` |
+| 9 | Web server response caps | CLEAN | `MaxBytesReader` + entity ID length cap |
+| 10 | `HospitalityLinker` goroutine usage | CLEAN | No internal goroutines |
+| 11 | Existing GuestHost STUB integration tests | OUT-OF-SCOPE | Pre-existing carry-forward baseline drift |
+
+### Finding F1: HospitalityLinker counter mutations not idempotent under NATS redelivery
+
+`HospitalityLinker.linkBooking` and `HospitalityLinker.linkTask` apply
+counter mutations (`guestRepo.IncrementStay`,
+`propertyRepo.IncrementBookings`, `propertyRepo.UpdateIssueCount`)
+unconditionally on every `LinkArtifact` invocation. The standard
+linker's edge writes are idempotent because of `ON CONFLICT DO UPDATE`,
+but the counters are arithmetic mutations on a single row and cannot
+be made idempotent at the row level. The `artifacts.processed` NATS
+consumer is configured with at-least-once delivery, so any of three
+concrete redelivery causes — AckWait expiry, process crash between DB
+UPDATE and `msg.Ack()` at `subscriber.go:258`, or Nak retry from
+`handleDeliveryFailure` — drives the counters upward silently with no
+operator-visible signal.
+
+**Fix:** Introduce per-`(artifact_id, op_kind)` dedup ledger
+(`hospitality_counter_applications` via migration
+`039_hospitality_counter_applications.sql`); add
+`tryClaimCounterApplication` helper to `hospitality_linker.go` using
+`WITH ins AS (INSERT … ON CONFLICT DO NOTHING RETURNING 1) SELECT
+EXISTS (SELECT 1 FROM ins)`; gate the three counter mutators behind
+the claim. Edges remain unchanged.
+
+**Tests:** 3 persistent build-tagged integration regression tests in
+`tests/integration/guesthost_counter_idempotency_test.go` —
+booking idempotency on 3 redeliveries, task issue delta idempotency on
+3 redeliveries, dedup-ledger inverse on 3 distinct artifacts × 2
+deliveries each. All PASS (0.20s + 0.11s + 0.42s) against the live
+test stack. Race-mode unit regression on `internal/graph` clean
+(1.049s).
+
+### Closure
+
+| Finding | Closure | Owner |
+|---------|---------|-------|
+| F1 | BUG-013-001 (done) | bubbles.workflow (parent-expanded `stabilize-to-doc`) |
+
+**1 / 1 findings closed.** Spec 013 status `done` (unchanged).
+
