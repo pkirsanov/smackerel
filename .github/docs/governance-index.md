@@ -65,6 +65,15 @@ agent reads.
 
 ---
 
+## Framework Maintainer Docs (`docs/`)
+
+Durable source-repo framework behavior and maintainer contracts.
+
+- [Framework_Convergence_Health.md](Framework_Convergence_Health.md)
+- [Spec_Implementation_Alignment.md](Spec_Implementation_Alignment.md)
+
+---
+
 ## Instructions (`instructions/`)
 
 Project-installable instruction modules consumed by IDE agents via
@@ -121,6 +130,7 @@ end-to-end flows.
 - [end-of-day.md](recipes/end-of-day.md)
 - [explore-idea.md](recipes/explore-idea.md)
 - [fix-a-bug.md](recipes/fix-a-bug.md)
+- [framework-dogfood.md](recipes/framework-dogfood.md)
 - [framework-ops.md](recipes/framework-ops.md)
 - [grill-an-idea.md](recipes/grill-an-idea.md)
 - [idea-to-release.md](recipes/idea-to-release.md)
@@ -154,3 +164,4 @@ end-to-end flows.
 - [tdd-first-execution.md](recipes/tdd-first-execution.md)
 - [update-docs.md](recipes/update-docs.md)
 - [ux-single-file-sweep.md](recipes/ux-single-file-sweep.md)
+- [validation-latency-budgets.md](recipes/validation-latency-budgets.md)

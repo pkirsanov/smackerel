@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 68 Gates · 35 Workflow Modes · 26 Phases**
+> **37 Agents · 80 Gates · 35 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -260,7 +260,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 68 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 80 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
@@ -321,6 +321,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G051 | Test env dependency | Tests must not rely on hidden environment dependencies |
 | G052 | Artifact freshness | Superseded content must be isolated from active truth; stale scope appendices cannot keep executable structure |
 | G053 | Implementation delta evidence | Implementation-bearing workflows must prove runtime delivery with git-backed code-diff evidence |
+| G093 | Delivery implementation delta | Done-ceiling delivery modes must include non-planning source/runtime/config/contract/test/docs delta outside `specs/` and `.specify/` |
 | G042 | Capability delegation | Foreign-owned work must route through the registered specialist; agents must not perform cross-owner actions inline |
 | G055 | Policy provenance | Active execution modes (grill, TDD, lockdown, etc.) must record value plus source in policySnapshot |
 | G056 | Validate certification | Only bubbles.validate may certify completion state; other agents submit execution claims and transition requests |
@@ -341,6 +342,17 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G079 | Impact-aware validation plan | Project `testImpact` maps changed paths to first-pass categories/checks and full-suite triggers; never weakens final gates |
 | G080 | Trace contract evidence | Project `traceContracts` validate actual trace/log evidence for required spans, attributes, invariants, and red-flag absence |
 | G081 | Build-Once Deploy-Many integrity | Deployment surfaces preserve immutable artifacts, digest pinning, CI/deploy separation, verified adapters, deterministic bundles, and pointer-swap rollback |
+| G082 | Convergence cap | Orchestrators cannot exceed `maxConvergenceIterations` for one spec session |
+| G083 | Context compaction discipline | Orchestrators must compact result envelopes before count/size thresholds are breached |
+| G084 | Pre-existing deferral block | Pre-existing failures cannot be hidden behind deferral language in active artifacts |
+| G085 | Framework dogfood evidence | Bubbles source has no persistent `specs/`; evidence comes from validation, selftests, release manifest, and downstream/fixture specs |
+| G086 | Orchestrator persistence lint | Orchestrators auto-continue non-terminal phases and do not ask continuation questions |
+| G087 | Planning packet linkage | Hardened planning packets link to implementation specs or declare planning-only intent |
+| G088 | Post-certification edit guard | Done specs cannot silently change planning truth after certification |
+| G089 | Inter-spec dependency | Dependencies must resolve to stable specs and cycles fail |
+| G090 | Retro convergence health | Retrospectives compute loop, compaction, deferral, and snapshot health |
+| G091 | Planning workflow chain | Delivery-capable planning preserves analyst -> UX -> design -> plan |
+| G092 | Strict terminal status | New terminal certifications use `done` or `blocked`; observations attach to `done` |
 
 ---
 
