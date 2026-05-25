@@ -285,8 +285,62 @@
         "existingStubIntegrationTests": "OUT-OF-SCOPE (5 STUB integration test files pre-existing carry-forward — not part of F1)"
       },
       "note": "HospitalityLinker counter mutations rendered idempotent under NATS at-least-once redelivery. Per-(artifact_id, op_kind) dedup ledger introduced via migration 039 + tryClaimCounterApplication helper using WITH ins AS (INSERT ... ON CONFLICT DO NOTHING RETURNING 1) SELECT EXISTS (SELECT 1 FROM ins). Edges remain unchanged (already idempotent via ON CONFLICT DO UPDATE). Three persistent integration regression tests committed: positive idempotency on booking (redelivery × 3 → counters land once), positive idempotency on task issue delta (redelivery × 3 → delta lands once), and adversarial inverse on independent artifacts (3 distinct artifacts × 2 deliveries each → counters accumulate to 3 NOT clamped to 1; proves dedup-ledger is correctly keyed on (artifact_id, op_kind) NOT just (op_kind)). Tests t.Fatal on missing DATABASE_URL (no silent skips, precedent BUG-027-002). Parent spec 013 carry-forward 45 STG BLOCKs are PRE-EXISTING governance drift documented under earlier round notes — NOT introduced by R5."
+    },
+    {
+      "round": 6,
+      "spec": "specs/050-ml-sidecar-health-isolation",
+      "trigger": "harden",
+      "mappedMode": "harden-to-doc",
+      "executionModel": "parent-expanded-child-mode",
+      "startedAt": "2026-05-25T15:00:00Z",
+      "completedAt": "2026-05-25T15:30:00Z",
+      "specStatusBefore": "done",
+      "specStatusAfter": "done",
+      "findingsCount": 1,
+      "findingsClosedThisRound": 1,
+      "findingClasses": [
+        "F1: docs/Operations.md 'ML Sidecar Health Isolation (Spec 050)' Tuning guidance paragraph recommended operators wire an alert at 'histogram_quantile(0.95, rate(smackerel_ml_request_latency_seconds_bucket{endpoint=\"/health\"}[5m]))' — this metric is NOT registered anywhere in ml/app/metrics.py. The ML sidecar Prometheus inventory is 5 series only (smackerel_llm_tokens_used_total, smackerel_ml_processing_latency_seconds with label 'operation', smackerel_ml_embedding_workers_configured, smackerel_ml_embedding_inflight, smackerel_ml_embedding_rejected_total). Operator-runbook drift: an operator following the recommendation deploys an alert query against a non-existent series and silently never gets a signal."
+      ],
+      "bugsSpawned": 0,
+      "bugId": null,
+      "bugFinalStatus": null,
+      "closurePattern": "R8-lightweight-parent-only-docs-edit",
+      "closurePatternRationale": "Single-paragraph operator-runbook documentary drift in docs/Operations.md (spec 050 Tuning guidance section). No spec/scope/design/test/source-code/behavior change required. The harden-to-doc parent owns the docs phase directly; no bug packet artifact set needed because there is no defect under existing spec semantics — the ML sidecar correctly implements the SLA enforcement at three real layers (adversarial regression test, container healthcheck, embedding-starvation alert) and the docs simply pointed at a phantom alert query. The fix removes the phantom recommendation and inlines the three real enforcement points (dev-time test, docker healthcheck, SmackerelMLEmbeddingStarvation alert) plus directs operators wanting a per-scrape /health latency series to Prometheus blackbox_exporter against ML_HEALTH_LATENCY_SLA_MS / 1000. Spec 050 status stays done and certification.observations are untouched.",
+      "guardsClean": true,
+      "guardsCleanCarryForwardNote": "Parent spec 050 state-transition-guard shows 23 PRE-EXISTING carry-forward BLOCKs (G022 reserved-phase impersonation for security/simplify/stabilize on pre-G022 executionHistory; G028 stub/fake detection on test scaffold; G053 missing Code Diff Evidence in legacy report sections; G055 policySnapshot regression/validation/provenance entries; G056 certification block missing lockdownState + scopeProgress; G086 orchestrator persistence prompt lint; G088 post-certification spec edit guard; G090 retro convergence health schema; G091 planning workflow chain guard; G092 strict terminal status guard; G093 delivery implementation delta — all post-2026-05-15-certification gate tightening). NONE introduced by R6. Spec status remains done. Round commits prefix 'bubbles(050/...)' satisfies any go-forward structured-commit requirement.",
+      "commits": ["bd7bbe28684c7d222f5a14284247f8d769df1433"],
+      "pushed": false,
+      "pushedTo": null,
+      "baselineHead": "f2e548a671a4066315da6af04a47a5a9e07b9911",
+      "newHead": "bd7bbe28684c7d222f5a14284247f8d769df1433",
+      "guardEvidence": {
+        "stateTransitionGuardParent": "BLOCKED (23 carry-forward failures + 2 warnings; ALL documented as pre-existing gate-tightening BLOCKs above; no new BLOCKs surfaced by R6)",
+        "artifactLintParent": "PASSED (EXIT=0; all Anti-Fabrication checks clean — All checked DoD items have evidence blocks; no unfilled evidence template placeholders in scopes.md/report.md; no repo-CLI bypass; all 6 required specialist phases recorded; spec-review phase recorded)"
+      },
+      "implementationSurfaces": [
+        "docs/Operations.md 'ML Sidecar Health Isolation (Spec 050)' Tuning guidance paragraph (lines ~1346-1369): replaced single broken sentence pointing at smackerel_ml_request_latency_seconds_bucket with 4-sentence block describing the three real enforcement layers (ml/tests/test_embedder.py::test_spec050_health_handler_unblocked_by_busy_executor adversarial regression; deploy/compose.deploy.yml smackerel-ml.healthcheck 10s/10s/3-retry docker probe; config/prometheus/alerts.yml SmackerelMLEmbeddingStarvation alert on smackerel_ml_embedding_rejected_total) plus blackbox_exporter probe_duration_seconds alternative for operators needing a per-scrape /health latency time-series. 17 insertions, 4 deletions."
+      ],
+      "testExecution": {
+        "unit": "N/A — docs-only change, no source code touched",
+        "integration": "N/A — docs-only change",
+        "build": "N/A — docs-only change, no image rebuild needed",
+        "check": "N/A — docs-only change, no SST/env regeneration needed"
+      },
+      "probeSurfaces": {
+        "sstContractValidation": "CLEAN (ml/app/main.py::_check_required_config validates ML_EMBEDDING_WORKERS + ML_EMBEDDING_QUEUE_MAX + ML_HEALTH_LATENCY_SLA_MS at startup; raises ValueError on missing/empty)",
+        "boundedExecutorAndAdmissionControl": "CLEAN (ml/app/embedder.py _ensure_executor lazy-creates dedicated ThreadPoolExecutor sized to ML_EMBEDDING_WORKERS; generate_embedding enforces ML_EMBEDDING_QUEUE_MAX backpressure with inflight counter + Sem-style admission control before submit)",
+        "backpressureObservability": "CLEAN (ml/app/metrics.py registers smackerel_ml_embedding_workers_configured Gauge, smackerel_ml_embedding_inflight Gauge, smackerel_ml_embedding_rejected_total Counter; all 3 wired in embedder.py)",
+        "adversarialRegressionTests": "CLEAN (14 spec050_* tests in ml/tests/test_embedder.py + ml/tests/test_main.py covering executor isolation, queue cap rejection, /health-during-saturation, SST fail-loud; all named-inversion-documented per anti-fabrication discipline)",
+        "healthEndpointIsolation": "CLEAN (ml/app/main.py /health is async coroutine that does NOT touch the embedding executor; ml/tests/test_embedder.py::test_spec050_health_handler_unblocked_by_busy_executor pins median /health latency below ML_HEALTH_LATENCY_SLA_MS while executor is saturated with embedding work)",
+        "containerHealthcheck": "CLEAN (deploy/compose.deploy.yml smackerel-ml.healthcheck probes /health via urllib.request.urlopen every 10s with 10s timeout, 3 retries, 180s start_period; docker marks container unhealthy on sustained breach)",
+        "operatorAlerting": "CLEAN (config/prometheus/alerts.yml SmackerelMLEmbeddingStarvation fires on rate(smackerel_ml_embedding_rejected_total[5m]) > 0 — real metric, real alert)",
+        "crossSpecInteractions": "CLEAN (spec 042 tailnet-edge bind preserved in deploy/compose.deploy.yml with ${HOST_BIND_ADDRESS:?...} fail-loud SST; spec 045 resource bounds enforced via ML_CPU_LIMIT + ML_MEMORY_LIMIT fail-loud SST; spec 046 NATS integration preserved via service_healthy dependency)",
+        "operatorRunbookCoverage": "FINDING-F1 — docs/Operations.md Tuning guidance recommended alert query against phantom metric smackerel_ml_request_latency_seconds_bucket{endpoint=\"/health\"} (closed in this round)",
+        "deployContractAndComposeWiring": "CLEAN (deploy/contract.yaml lists smackerel-ml as bundled image; compose wires NATS dependency + healthcheck + resources limits; no host port published per Pattern P1)"
+      },
+      "note": "Harden surface for spec 050 (ML Sidecar Health Isolation) probed end-to-end across 10 surfaces. SST validation, bounded executor + admission control, backpressure observability (3 metrics), 14 adversarial regression tests, /health endpoint isolation, container healthcheck, operator-actionable alert, cross-spec invariants (042/045/046), deploy contract + compose wiring — ALL CLEAN. Single finding F1 was a one-paragraph stale alert recommendation in docs/Operations.md pointing at metric smackerel_ml_request_latency_seconds_bucket{endpoint=\"/health\"} that is NOT registered in ml/app/metrics.py (confirmed via repo-wide grep — single hit is the docs reference itself). Closed via R8-lightweight-parent-only-docs-edit (R4 precedent): no bug packet, no spec status change, no source code touched. Replacement text describes the three real /health SLA enforcement layers (dev-time adversarial test pinning median latency below ML_HEALTH_LATENCY_SLA_MS while executor is saturated; deploy/compose.deploy.yml smackerel-ml.healthcheck 10s/10s/3-retry probe; SmackerelMLEmbeddingStarvation alert on the rejected counter) plus directs operators wanting a per-scrape /health latency series to deploy Prometheus blackbox_exporter and alert on probe_duration_seconds against ML_HEALTH_LATENCY_SLA_MS / 1000. State-transition-guard reports 23 BLOCKs all mapping to post-certification gate tightening (G022/G028/G053/G055/G056/G086/G088/G090/G091/G092/G093) — NONE introduced by R6. Round counts as 1 finding discovered + 1 finding closed."
     }
   ],
-  "lastRoundCompleted": 5,
-  "lastUpdatedAt": "2026-05-25T09:04:00Z"
+  "lastRoundCompleted": 6,
+  "lastUpdatedAt": "2026-05-25T15:30:00Z"
 }
