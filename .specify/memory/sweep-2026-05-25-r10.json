@@ -195,8 +195,8 @@
       "closurePattern": "R8-lightweight-parent-only-docs-edit",
       "closurePatternRationale": "Single-line operator-runbook documentary drift in docs/Operations.md. No spec/scope/test/source-code/behavior change required. The devops-to-doc parent owns the docs phase directly; no bug packet artifact set needed because there is no defect under existing spec semantics — the metric was correctly registered by Scope 5 and is correctly emitted by Scope 6. Only the Scope 5 reference table cell needed to be brought into line with the post-Scope-6 reality. The 4 spec 041 carry-forward concerns (C-CLOSEOUT-S5-S8-G022-RESERVED-PHASES, C-CLOSEOUT-S2-S5-CONSUMER-TRACE-PLANNING, C-CLOSEOUT-S5-G028-FAKE-INTEGRATION-RENDER-GO-PRE-EXISTING, C-CLOSEOUT-QF-063-PRODUCER-WIRING-CROSS-PRODUCT-MILESTONE) are untouched and the spec stays at done_with_concerns.",
       "guardsClean": true,
-      "commits": ["<filled-on-commit>"],
-      "newHead": "<filled-on-commit>",
+      "commits": ["5fb9f12a"],
+      "newHead": "5fb9f12a",
       "pushed": true,
       "pushedTo": "origin/main",
       "guardEvidence": {
