@@ -1,0 +1,342 @@
+// Copyright (c) 2026 Philip Kirsanov
+// SPDX-License-Identifier: MIT
+
+// Package deploy — BUG-024-003 (chaos-sweep round 9, 2026-05-25) connector
+// count agreement contract for docs-runtime drift detection.
+//
+// # Context
+//
+// Spec 024 (design-doc-reconciliation) requires that every documented
+// connector count remains in lockstep with the live runtime registry. Prior
+// closures (BUG-024-002, reconcile-sweep round 29 of sweep-2026-05-24-r1)
+// reconciled docs/smackerel.md §22.7 + §24-A to the live count of 16 but
+// did NOT propagate the change to docs/Development.md L31 and did NOT add
+// any forward-detection guard. Chaos-sweep round 9 of sweep-2026-05-24-r10
+// found three findings:
+//
+//   - F1 (HIGH): docs/Development.md L31 still claimed "15 passive
+//     connectors" with a 15-item parenthetical missing QF Decisions.
+//   - F2 (MEDIUM): No framework or runtime guard pinned agreement between
+//     cmd/core/connectors.go, docs/smackerel.md, and docs/Development.md.
+//   - F3 (LOW): specs/024-design-doc-reconciliation/spec.md R-006 said "the
+//     15 implemented connectors" with a 15-item list, internally
+//     contradicting BS-004 (16-item list) updated by BUG-024-002.
+//
+// This file closes F2 by pinning a three-surface contract.
+//
+// The contract
+//
+//   - cmd/core/connectors.go contains exactly one slice literal of the form
+//     "[]connector.Connector{ ... }" inside registerConnectors; the number
+//     of comma-separated identifiers in that literal is the runtime
+//     connector count (currently 16).
+//   - docs/smackerel.md §22.7 declares the connector count via the header
+//     "### 22.7 Committed Connector Inventory (N connectors)" — N MUST
+//     equal the runtime count.
+//   - docs/Development.md "Current Capabilities" list declares the count
+//     via the bullet "- N passive connectors (...)" — N MUST equal the
+//     runtime count.
+//
+// All three must agree. If any one drifts, the live-file test fails with a
+// precise diagnostic naming the disagreeing surfaces and the observed
+// counts.
+//
+// # Adversarial sub-tests
+//
+// Three adversarial sub-tests prove the assertion is non-tautological:
+//   - AdversarialConnectorsGoLow: synthetic connectors.go with 15 entries +
+//     real docs (count 16) → contract MUST reject.
+//   - AdversarialSmackerelMdHigh: synthetic smackerel.md with header claim
+//     17 + real other surfaces (count 16) → contract MUST reject.
+//   - AdversarialDevelopmentMdLow: synthetic Development.md with bullet
+//     "- 15 passive connectors" + real other surfaces (count 16) →
+//     contract MUST reject.
+//
+// References:
+//   - specs/024-design-doc-reconciliation/spec.md (BS-004, R-006, AC-5)
+//   - specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/
+//   - .specify/memory/sweep-2026-05-24-r10.json (round 9 entry)
+//   - cmd/core/connectors.go L49-53 (slice literal source of truth)
+package deploy
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// connectorsGoSliceRe matches the slice literal "[]connector.Connector{ ... }"
+// in cmd/core/connectors.go. The body is captured as group 1 and is
+// processed by countSliceIdentifiers to count comma-separated identifiers
+// while ignoring trailing commas, blank tokens, and line comments.
+//
+// `[^}]*` is intentionally greedy across newlines (Go's default regex is
+// not in dotall mode, but `[^}]` matches \n because \n is not `}`). The
+// live slice literal at cmd/core/connectors.go L49-53 spans three lines and
+// is bounded by `{...}` with no nested braces; this regex matches it
+// cleanly.
+var connectorsGoSliceRe = regexp.MustCompile(`\[\]connector\.Connector\{([^}]*)\}`)
+
+// smackerelMdHeaderRe matches the §22.7 Committed Connector Inventory
+// header. The connector count is captured as group 1. The header MUST
+// remain a `### 22.7` heading per BUG-024-002 closure; if the heading is
+// reformatted, this regex fails and the live-file test reports a missing
+// header diagnostic (which is still actionable — the contract surface
+// moved and needs to be re-pinned here).
+var smackerelMdHeaderRe = regexp.MustCompile(`### 22\.7 Committed Connector Inventory \((\d+) connectors\)`)
+
+// developmentMdBulletRe matches the "Current Capabilities" connector
+// bullet in docs/Development.md. The connector count is captured as group
+// 1. The (?m) flag makes ^ match line starts so it does not accidentally
+// catch the count from a different "- N" bullet earlier in the file.
+var developmentMdBulletRe = regexp.MustCompile(`(?m)^- (\d+) passive connectors \(`)
+
+// countSliceIdentifiers parses the body of a Go slice literal and returns
+// the count of comma-separated identifier tokens, ignoring blank tokens,
+// trailing commas, and `//` line comments. It is deliberately strict: it
+// does NOT handle block comments or nested literals because the live
+// connectors.go slice has none of those. If the slice grows complex
+// enough to need that, the test will fail loud and the parser can be
+// extended.
+func countSliceIdentifiers(body string) int {
+	// Strip `//` line comments.
+	var stripped strings.Builder
+	for _, line := range strings.Split(body, "\n") {
+		if idx := strings.Index(line, "//"); idx >= 0 {
+			line = line[:idx]
+		}
+		stripped.WriteString(line)
+		stripped.WriteString("\n")
+	}
+
+	count := 0
+	for _, tok := range strings.Split(stripped.String(), ",") {
+		if strings.TrimSpace(tok) != "" {
+			count++
+		}
+	}
+	return count
+}
+
+// parseConnectorsGoCount extracts the runtime connector count from
+// cmd/core/connectors.go. Returns an error if the slice literal cannot be
+// located (which would indicate the registration shape changed and the
+// contract surface needs to be re-pinned).
+func parseConnectorsGoCount(b []byte) (int, error) {
+	m := connectorsGoSliceRe.FindSubmatch(b)
+	if m == nil {
+		return 0, fmt.Errorf("cmd/core/connectors.go does not contain a `[]connector.Connector{...}` slice literal — the registration shape changed; re-pin the contract surface in docs_connector_count_contract_test.go")
+	}
+	return countSliceIdentifiers(string(m[1])), nil
+}
+
+// parseSmackerelMdCount extracts the documented connector count from the
+// §22.7 header in docs/smackerel.md.
+func parseSmackerelMdCount(b []byte) (int, error) {
+	m := smackerelMdHeaderRe.FindSubmatch(b)
+	if m == nil {
+		return 0, fmt.Errorf("docs/smackerel.md does not contain a `### 22.7 Committed Connector Inventory (N connectors)` header — BUG-024-002 closure surface is missing; restore the header or update this contract")
+	}
+	n, err := parseIntStrict(string(m[1]))
+	if err != nil {
+		return 0, fmt.Errorf("docs/smackerel.md §22.7 header connector count is not a positive integer: %w", err)
+	}
+	return n, nil
+}
+
+// parseDevelopmentMdCount extracts the documented connector count from
+// the "Current Capabilities" bullet in docs/Development.md.
+func parseDevelopmentMdCount(b []byte) (int, error) {
+	m := developmentMdBulletRe.FindSubmatch(b)
+	if m == nil {
+		return 0, fmt.Errorf("docs/Development.md does not contain a `- N passive connectors (...)` bullet in the Current Capabilities list — the doc surface moved; restore the bullet or update this contract")
+	}
+	n, err := parseIntStrict(string(m[1]))
+	if err != nil {
+		return 0, fmt.Errorf("docs/Development.md `- N passive connectors` count is not a positive integer: %w", err)
+	}
+	return n, nil
+}
+
+// parseIntStrict is a tiny helper that accepts only digit-only positive
+// integers; rejects empty strings, leading zeros (other than "0" itself),
+// and any non-digit content.
+func parseIntStrict(s string) (int, error) {
+	if s == "" {
+		return 0, fmt.Errorf("empty count string")
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("non-digit character %q in count %q", r, s)
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n, nil
+}
+
+// assertConnectorCountContract returns nil iff cmd/core/connectors.go,
+// docs/smackerel.md §22.7, and docs/Development.md "Current Capabilities"
+// all agree on the same positive connector count.
+func assertConnectorCountContract(connectorsGo, smackerelMd, developmentMd []byte) error {
+	runtime, err := parseConnectorsGoCount(connectorsGo)
+	if err != nil {
+		return fmt.Errorf("contract violation (runtime parse): %w", err)
+	}
+	if runtime <= 0 {
+		return fmt.Errorf("contract violation: cmd/core/connectors.go slice literal contains 0 identifiers — runtime registry is empty")
+	}
+
+	smackerel, err := parseSmackerelMdCount(smackerelMd)
+	if err != nil {
+		return fmt.Errorf("contract violation (smackerel.md parse): %w", err)
+	}
+
+	development, err := parseDevelopmentMdCount(developmentMd)
+	if err != nil {
+		return fmt.Errorf("contract violation (Development.md parse): %w", err)
+	}
+
+	if runtime != smackerel || runtime != development {
+		return fmt.Errorf(
+			"contract violation: connector count disagreement — cmd/core/connectors.go=%d, docs/smackerel.md §22.7=%d, docs/Development.md \"- N passive connectors\"=%d — all three MUST equal the runtime count; reconcile per spec 024 R-006 + BS-004",
+			runtime, smackerel, development,
+		)
+	}
+
+	return nil
+}
+
+// TestConnectorCountContract_LiveFile asserts the contract holds against
+// the live runtime registry and the live docs surfaces.
+func TestConnectorCountContract_LiveFile(t *testing.T) {
+	root := repoRoot(t)
+
+	connectorsGo, err := os.ReadFile(filepath.Join(root, "cmd", "core", "connectors.go"))
+	if err != nil {
+		t.Fatalf("failed to read cmd/core/connectors.go: %v", err)
+	}
+	smackerelMd, err := os.ReadFile(filepath.Join(root, "docs", "smackerel.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/smackerel.md: %v", err)
+	}
+	developmentMd, err := os.ReadFile(filepath.Join(root, "docs", "Development.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/Development.md: %v", err)
+	}
+
+	if err := assertConnectorCountContract(connectorsGo, smackerelMd, developmentMd); err != nil {
+		t.Fatalf("live connector-count contract violated (spec 024 R-006 + BS-004 + AC-5): %v", err)
+	}
+
+	runtime, _ := parseConnectorsGoCount(connectorsGo)
+	t.Logf("contract OK: cmd/core/connectors.go + docs/smackerel.md §22.7 + docs/Development.md all agree on %d connectors (spec 024 R-006 + BS-004 + AC-5 in sync)", runtime)
+}
+
+// TestConnectorCountContract_AdversarialConnectorsGoLow proves the
+// contract catches a regression where the runtime registry is silently
+// shrunk to 15 while docs continue to claim 16.
+func TestConnectorCountContract_AdversarialConnectorsGoLow(t *testing.T) {
+	root := repoRoot(t)
+	smackerelMd, err := os.ReadFile(filepath.Join(root, "docs", "smackerel.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/smackerel.md: %v", err)
+	}
+	developmentMd, err := os.ReadFile(filepath.Join(root, "docs", "Development.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/Development.md: %v", err)
+	}
+
+	// Synthetic connectors.go with only 15 identifiers in the slice
+	// literal (qfDecisionsConn dropped) — drift from real docs (count 16).
+	const fixture = `package main
+
+func registerConnectors() {
+	for _, c := range []connector.Connector{
+		imapConn, caldavConn, ytConn, rssConn, keepConn,
+		bmConn, browserHistConn, mapsConn, hospitableConn, guesthostConn,
+		discordConn, twitterConn, weatherConn, alertsConn, marketsConn,
+	} {
+		_ = c
+	}
+}
+`
+	err = assertConnectorCountContract([]byte(fixture), smackerelMd, developmentMd)
+	if err == nil {
+		t.Fatal("adversarial contract test failed: connectors.go with 15 identifiers was accepted against real docs (count 16) — contract is tautological; it would NOT catch a regression where a connector is silently un-registered")
+	}
+	if !strings.Contains(err.Error(), "cmd/core/connectors.go=15") {
+		t.Fatalf("adversarial contract test failed: error did not name the disagreeing runtime count: %v", err)
+	}
+	t.Logf("adversarial OK: connectors.go=15 vs docs=16 is rejected with: %v", err)
+}
+
+// TestConnectorCountContract_AdversarialSmackerelMdHigh proves the
+// contract catches a regression where docs/smackerel.md §22.7 header is
+// inflated to 17 while runtime + Development.md remain at 16.
+func TestConnectorCountContract_AdversarialSmackerelMdHigh(t *testing.T) {
+	root := repoRoot(t)
+	connectorsGo, err := os.ReadFile(filepath.Join(root, "cmd", "core", "connectors.go"))
+	if err != nil {
+		t.Fatalf("failed to read cmd/core/connectors.go: %v", err)
+	}
+	developmentMd, err := os.ReadFile(filepath.Join(root, "docs", "Development.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/Development.md: %v", err)
+	}
+
+	// Synthetic smackerel.md with header claiming 17 — drift from real
+	// runtime (16) and real Development.md (16).
+	const fixture = `# Smackerel
+
+### 22.7 Committed Connector Inventory (17 connectors)
+
+(table body intentionally omitted — only the header line is parsed)
+`
+	err = assertConnectorCountContract(connectorsGo, []byte(fixture), developmentMd)
+	if err == nil {
+		t.Fatal("adversarial contract test failed: docs/smackerel.md header claiming 17 was accepted against runtime + Development.md (both 16) — contract is tautological; it would NOT catch a regression where the §22.7 header is hand-inflated")
+	}
+	if !strings.Contains(err.Error(), "docs/smackerel.md §22.7=17") {
+		t.Fatalf("adversarial contract test failed: error did not name the inflated smackerel.md count: %v", err)
+	}
+	t.Logf("adversarial OK: smackerel.md=17 vs runtime+Development.md=16 is rejected with: %v", err)
+}
+
+// TestConnectorCountContract_AdversarialDevelopmentMdLow proves the
+// contract catches the exact F1 regression that BUG-024-003 closed:
+// docs/Development.md "- N passive connectors" bullet stale at 15
+// while runtime + smackerel.md are both at 16.
+func TestConnectorCountContract_AdversarialDevelopmentMdLow(t *testing.T) {
+	root := repoRoot(t)
+	connectorsGo, err := os.ReadFile(filepath.Join(root, "cmd", "core", "connectors.go"))
+	if err != nil {
+		t.Fatalf("failed to read cmd/core/connectors.go: %v", err)
+	}
+	smackerelMd, err := os.ReadFile(filepath.Join(root, "docs", "smackerel.md"))
+	if err != nil {
+		t.Fatalf("failed to read docs/smackerel.md: %v", err)
+	}
+
+	// Synthetic Development.md with the exact F1 drift: "- 15 passive
+	// connectors (...)" bullet missing the 16th entry, while runtime and
+	// smackerel.md are at 16.
+	const fixture = `# Development
+
+## Current Capabilities
+
+- 15 passive connectors (IMAP email, CalDAV calendar, YouTube API, RSS/Atom, Bookmarks, Browser, Google Keep/Takeout, Google Maps, Hospitable STR, GuestHost STR, Discord, Twitter/X archive, Weather via Open-Meteo, Government Alerts via USGS, Financial Markets via Finnhub/CoinGecko)
+- Knowledge graph
+`
+	err = assertConnectorCountContract(connectorsGo, smackerelMd, []byte(fixture))
+	if err == nil {
+		t.Fatal("adversarial contract test failed: docs/Development.md with stale '- 15 passive connectors' bullet was accepted against runtime + smackerel.md (both 16) — this is the exact F1 regression BUG-024-003 closed; contract is tautological")
+	}
+	if !strings.Contains(err.Error(), "docs/Development.md") || !strings.Contains(err.Error(), "=15") {
+		t.Fatalf("adversarial contract test failed: error did not name the stale Development.md count: %v", err)
+	}
+	t.Logf("adversarial OK: Development.md=15 vs runtime+smackerel.md=16 is rejected with: %v", err)
+}

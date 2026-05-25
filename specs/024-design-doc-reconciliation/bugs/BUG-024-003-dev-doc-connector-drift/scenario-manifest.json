@@ -1,0 +1,155 @@
+{
+  "bugId": "BUG-024-003-dev-doc-connector-drift",
+  "version": 1,
+  "generatedAt": "2026-05-25T00:00:00Z",
+  "parentSpec": "specs/024-design-doc-reconciliation",
+  "scenarios": [
+    {
+      "scenarioId": "BUG-024-003-SCN-001",
+      "scope": "scope-1",
+      "title": "docs/Development.md L31 reflects live registry count of 16",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "docs/Development.md",
+          "function": "grep -nE '15 passive connectors' docs/Development.md  # → 0 hits",
+          "type": "grep-validation"
+        },
+        {
+          "file": "docs/Development.md",
+          "function": "grep -nE '16 passive connectors' docs/Development.md  # → 1 hit at L31",
+          "type": "grep-validation"
+        },
+        {
+          "file": "docs/Development.md",
+          "function": "grep -cE 'qfdecisions|QF Decisions' docs/Development.md  # → >= 1",
+          "type": "grep-validation"
+        },
+        {
+          "file": "cmd/core/connectors.go",
+          "function": "find internal/connector -maxdepth 1 -mindepth 1 -type d -not -name photos -not -name adapters | wc -l == 16",
+          "type": "directory-count"
+        }
+      ],
+      "evidenceRefs": [
+        "docs/Development.md:31",
+        "cmd/core/connectors.go:49-53"
+      ],
+      "linkedDoD": "Scope 1 DoD: docs/Development.md L31 reads '- 16 passive connectors (...QF Decisions companion via spec 041 read-only packet flow)' with exactly 16 parenthetical items — Scenario 'SCN-001 docs/Development.md L31 reflects live registry count of 16'."
+    },
+    {
+      "scenarioId": "BUG-024-003-SCN-002",
+      "scope": "scope-1",
+      "title": "spec 024 spec.md R-006 + R-PRD-011 + AC-5 propagate the 15→16 change to internal parity with BS-004",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/spec.md",
+          "function": "grep -nE 'the 15 implemented connectors|the 15 committed connectors|match the 15 committed connectors' specs/024-design-doc-reconciliation/spec.md  # → 0 hits",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/spec.md",
+          "function": "grep -cE 'qfdecisions' specs/024-design-doc-reconciliation/spec.md  # → >= 2 (BS-004 + R-006)",
+          "type": "grep-validation"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/spec.md",
+          "function": "grep -nE 'no financial advice generation' specs/024-design-doc-reconciliation/spec.md  # → >= 1 (R-006 16th entry)",
+          "type": "boundary-preservation"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/spec.md:119-121",
+        "specs/024-design-doc-reconciliation/spec.md:211",
+        "specs/024-design-doc-reconciliation/spec.md:217-235",
+        "specs/024-design-doc-reconciliation/spec.md:AC-5"
+      ],
+      "linkedDoD": "Scope 1 DoD: spec.md R-006 + R-PRD-011 + AC-5 reconciled from 15 to 16 with qfdecisions added; internal parity with BS-004 restored — Scenario 'SCN-002 spec 024 spec.md R-006 + R-PRD-011 + AC-5 propagate the 15→16 change to internal parity with BS-004'."
+    },
+    {
+      "scenarioId": "BUG-024-003-SCN-003",
+      "scope": "scope-1",
+      "title": "New Go contract test pins 3-surface connector-count agreement with adversarial proof",
+      "requiredTestType": "unit",
+      "linkedTests": [
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_LiveFile",
+          "type": "unit-go"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_AdversarialConnectorsGoLow",
+          "type": "unit-go-adversarial"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_AdversarialSmackerelMdHigh",
+          "type": "unit-go-adversarial"
+        },
+        {
+          "file": "internal/deploy/docs_connector_count_contract_test.go",
+          "function": "TestConnectorCountContract_AdversarialDevelopmentMdLow",
+          "type": "unit-go-adversarial"
+        }
+      ],
+      "evidenceRefs": [
+        "internal/deploy/docs_connector_count_contract_test.go",
+        "internal/deploy/monitoring_docs_contract_test.go (reference pattern)",
+        "internal/deploy/compose_contract_test.go:103 (repoRoot helper)"
+      ],
+      "linkedDoD": "Scope 1 DoD: internal/deploy/docs_connector_count_contract_test.go created with assertConnectorCountContract pure function + TestConnectorCountContract_LiveFile + 3 adversarial sub-tests; go test exits 0 against live files; adversarial sub-tests prove non-tautological — Scenario 'SCN-003 New Go contract test pins 3-surface connector-count agreement with adversarial proof'."
+    },
+    {
+      "scenarioId": "BUG-024-003-SCN-004",
+      "scope": "scope-1",
+      "title": "Parent spec 024 governance backfill records BUG-024-003 chaos closure",
+      "requiredTestType": "doc-review",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c 'import json; d=json.load(open(\"specs/024-design-doc-reconciliation/state.json\")); assert any(b[\"bugId\"]==\"BUG-024-003\" for b in d[\"resolvedBugs\"])' # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/state.json",
+          "function": "python3 -c 'import json; d=json.load(open(\"specs/024-design-doc-reconciliation/state.json\")); assert d[\"lastUpdatedAt\"] >= \"2026-05-25\"' # exits 0",
+          "type": "json-shape-check"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/report.md",
+          "function": "grep -cE '^## BUG-024-003 Chaos-Sweep Resolution' specs/024-design-doc-reconciliation/report.md == 1",
+          "type": "grep-validation"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/024-design-doc-reconciliation/state.json",
+        "specs/024-design-doc-reconciliation/report.md"
+      ],
+      "linkedDoD": "Scope 1 DoD: Parent state.json gets 7 BUG-024-003 executionHistory entries + resolvedBugs entry + lastUpdatedAt bump; report.md carries '## BUG-024-003 Chaos-Sweep Resolution (2026-05-25)' section with Code Diff Evidence + Git-Backed Proof block — Scenario 'SCN-004 Parent spec 024 governance backfill records BUG-024-003 chaos closure'."
+    },
+    {
+      "scenarioId": "BUG-024-003-SCN-005",
+      "scope": "scope-1",
+      "title": "Single atomic commit with bubbles(024/bug-024-003) prefix satisfies Check 17 + path discipline",
+      "requiredTestType": "commit-discipline",
+      "linkedTests": [
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/report.md",
+          "function": "git log --oneline -1 --format='%s' begins with 'bubbles(024/bug-024-003):'",
+          "type": "commit-prefix"
+        },
+        {
+          "file": "specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/report.md",
+          "function": "! git diff --name-only HEAD~1 | grep -E '^(specs/055-|cmd/|internal/(?!deploy/docs_connector_count_contract_test\\.go)|ml/|scripts/|smackerel\\.sh|config/|docker-compose|specs/044-per-user-bearer-auth/state\\.json|\\.github/bubbles/)' # → 0 stray files",
+          "type": "commit-discipline"
+        }
+      ],
+      "evidenceRefs": [
+        "git log --oneline -1"
+      ],
+      "linkedDoD": "Scope 1 DoD: Single atomic commit with subject prefix 'bubbles(024/bug-024-003):' lands all changes; commit --name-status confirms zero stray files; git push origin main succeeds without --no-verify — Scenario 'SCN-005 Single atomic commit with bubbles(024/bug-024-003) prefix satisfies Check 17 + path discipline'."
+    }
+  ]
+}
