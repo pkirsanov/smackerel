@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v3.11.1</div>
+  <div class="subtitle">Agent Orchestration System v4.0.0-alpha.1</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1250,6 +1250,18 @@
     <div class="wf-desc">Capability-first design fires only when reuse signals exist. Premature abstraction is not decent either.</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">skills-first discovery</div>
+    <div class="wf-desc">v4.0 architectural posture: agents lean on auto-loaded discovery skills (anti-fabrication, evidence capture, DoD validation, status transition, result envelope, ownership routing, quality gates, scope workflow) instead of eager-loading the full governance corpus. Rules and mechanical guards are unchanged — skills route into the same authoritative modules.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">policy skill</div>
+    <div class="wf-desc">A <code>.github/skills/bubbles-*</code> skill whose description triggers on a recurring agent decision (marking a DoD, capturing evidence, returning a result envelope) and routes the agent to the canonical governance module.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">grandfather clause</div>
+    <div class="wf-desc">Historical <code>done</code> specs stay green under new framework policy unless their <code>state.json</code> is touched in the same commit. Enforced by <code>done-spec-audit.sh --profile advisory</code> (the default) and the pre-push hook's changed-spec profile. The v4.0 skills-first refactor preserves this contract.</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
     <div class="wf-desc">Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from <code>bubbles.validate</code> certification.</div>
   </div>
@@ -1923,7 +1935,7 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v3.11.1 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v4.0.0-alpha.1 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
   <p>81 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>

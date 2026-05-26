@@ -290,3 +290,38 @@ capabilities:
     - docs/recipes/impact-aware-validation.md
     - agents/bubbles_shared/project-config-contract.md
     - bubbles/workflows.yaml
+
+  skills-first-discovery-layer:
+    label: Skills-first discovery layer
+    state: shipped
+    summary: >
+      v4.0 architectural posture: agents lean on auto-loaded discovery skills (anti-fabrication, evidence capture, DoD validation, status transition, result envelope, ownership routing, quality gates, scope workflow, and a top-level discovery entry point) instead of eager-loading the full governance corpus into every prompt. Skills are thin shims that route to the authoritative `agents/bubbles_shared/*.md` modules and `bubbles/scripts/*.sh` enforcement; rules, mechanical guards, and the grandfather clause for historical done specs are unchanged.
+    ownerSurface: skills/bubbles-skills-first-discovery/SKILL.md
+    releaseIntroduced: v4.0.0
+    docsRefs:
+    - README.md
+    - docs/CHEATSHEET.md
+    - docs/its-not-rocket-appliances.html
+    - docs/recipes/framework-ops.md
+    - agents/bubbles_shared/agent-common.md
+    evidenceRefs:
+    - skills/bubbles-skills-first-discovery/SKILL.md
+    - skills/bubbles-anti-fabrication/SKILL.md
+    - skills/bubbles-evidence-capture/SKILL.md
+    - skills/bubbles-dod-validation/SKILL.md
+    - skills/bubbles-status-transition/SKILL.md
+    - skills/bubbles-result-envelope/SKILL.md
+    - skills/bubbles-artifact-ownership-routing/SKILL.md
+    - skills/bubbles-quality-gates-catalog/SKILL.md
+    - skills/bubbles-scope-workflow-runtime/SKILL.md
+    - agents/bubbles_shared/agent-common.md
+    competitorTags:
+    - skills-discovery
+    - lazy-context-loading
+    - policy-as-skill
+    freshnessTargets:
+    - README.md
+    - docs/CHEATSHEET.md
+    - docs/its-not-rocket-appliances.html
+    - docs/recipes/framework-ops.md
+    - docs/generated/competitive-capabilities.md
