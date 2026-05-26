@@ -47,6 +47,21 @@ bash .github/bubbles/scripts/cli.sh guard-selftest
 
 `framework-events` exposes the typed framework event stream, and `run-state` shows the active and recent workflow-run records that make resume and runtime attachment explicit.
 
+## Skills-First Discovery (v4.0+)
+
+The framework ships discovery skills that route agents and humans to the right governance module on demand instead of bulk-loading `agent-common.md`. When an agent (or you) is unsure which Bubbles rule applies, start at [`skills/bubbles-skills-first-discovery/SKILL.md`](../../skills/bubbles-skills-first-discovery/SKILL.md). It maps common situations to:
+
+- [`bubbles-anti-fabrication`](../../skills/bubbles-anti-fabrication/SKILL.md) — before marking any DoD `[x]` or claiming a command passed
+- [`bubbles-evidence-capture`](../../skills/bubbles-evidence-capture/SKILL.md) — recording terminal output ≥10 lines
+- [`bubbles-dod-validation`](../../skills/bubbles-dod-validation/SKILL.md) — Tier 1/Tier 2 pre-completion audit
+- [`bubbles-status-transition`](../../skills/bubbles-status-transition/SKILL.md) — `state.json` changes and grandfather clause
+- [`bubbles-result-envelope`](../../skills/bubbles-result-envelope/SKILL.md) — end-of-run packet shape
+- [`bubbles-artifact-ownership-routing`](../../skills/bubbles-artifact-ownership-routing/SKILL.md) — own it or route it
+- [`bubbles-quality-gates-catalog`](../../skills/bubbles-quality-gates-catalog/SKILL.md) — gate ID lookup
+- [`bubbles-scope-workflow-runtime`](../../skills/bubbles-scope-workflow-runtime/SKILL.md) — scope structure + DoD shape
+
+Skills are discovery shims. The authoritative policy still lives in `agents/bubbles_shared/*.md` and the mechanical guards in `bubbles/scripts/`. Skills do not change the grandfather clause for historical `done` specs.
+
 When you are in a downstream repo, `doctor` and `framework-write-guard` now consume `.github/bubbles/release-manifest.json` plus `.github/bubbles/.install-source.json` so the trust story stays explicit:
 - installed version and upstream git SHA
 - install mode (`remote-ref` vs `local-source`)
