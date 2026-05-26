@@ -210,14 +210,14 @@ func New(id string) *Connector {
 // smackerel hosts and is clamped to zero so the window never produces a
 // misleading negative p95.
 func (c *Connector) recordFreshness(stage string, latencySeconds float64) {
-	recordFreshnessSample(c.freshness, stage, latencySeconds)
+	recordFreshnessObservation(c.freshness, stage, latencySeconds)
 }
 
-func RecordFreshnessSample(stage string, latencySeconds float64) {
-	recordFreshnessSample(globalFreshness, stage, latencySeconds)
+func RecordFreshnessObservation(stage string, latencySeconds float64) {
+	recordFreshnessObservation(globalFreshness, stage, latencySeconds)
 }
 
-func recordFreshnessSample(windows map[string]*freshnessWindow, stage string, latencySeconds float64) {
+func recordFreshnessObservation(windows map[string]*freshnessWindow, stage string, latencySeconds float64) {
 	if latencySeconds < 0 {
 		latencySeconds = 0
 	}

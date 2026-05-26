@@ -485,7 +485,7 @@ func TestQFCallbackSignatureFailureMatrixThroughLiveSurfaceNoNetworkSendAndDiagn
 			// because Scope 8 must abort BEFORE any network send when
 			// signing fails.
 			stub := newE2ECallbackStub(t, e2eDefaultCapability())
-			stub.SetResponse(http.StatusInternalServerError, `{"code":"E2E_STUB_SHOULD_NOT_BE_CALLED_ON_SIGNATURE_FAILURE"}`)
+			stub.SetResponse(http.StatusInternalServerError, `{"code":"E2E_FORBIDDEN_NETWORK_CALL_ON_SIGNATURE_FAILURE"}`)
 
 			conn := connectQFWithKeystore(t, ctx, stub.URL(), healthyKeystore,
 				fmt.Sprintf("qf-decisions-e2e-callback-sigfail-%d", idx))

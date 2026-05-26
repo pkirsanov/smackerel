@@ -2,6 +2,7 @@ package qfdecisions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -142,8 +143,10 @@ func TestTrustObjectRendererKeepsOnlyPublicFieldsForAllBadgeTypes(t *testing.T) 
 func TestTrustObjectMissingRequiredFieldFallsBackAndEmitsMetric(t *testing.T) {
 	metrics.QFTrustObjectRenderFailures.Reset()
 	env := renderableEnvelope()
+	env.DataProvenanceBadge["confidence"] = 0.73
 	delete(env.DataProvenanceBadge, "severity")
 	artifact := artifactFromEnvelope(t, env)
+	artifact.Title = artifact.RawContent
 
 	card, err := RenderPacketCard(context.Background(), artifact, RenderOptions{
 		Surface:                  SurfaceDigest,
@@ -162,6 +165,18 @@ func TestTrustObjectMissingRequiredFieldFallsBackAndEmitsMetric(t *testing.T) {
 	}
 	if card.PacketID != env.PacketID || card.TraceID != env.TraceID || card.ApprovalState != env.ApprovalState || card.DeepLink.URL != env.PacketURLSigned {
 		t.Fatalf("fallback lost packet identity/trust boundary/deep link: %#v", card)
+	}
+	if card.Title != env.Thesis || card.Thesis != env.Thesis || card.WhyNow != env.WhyNow {
+		t.Fatalf("fallback lost QF-authored title/content: %#v", card)
+	}
+	encodedCard, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("marshal fallback card: %v", err)
+	}
+	for _, forbidden := range []string{"confidence", "score", "value"} {
+		if strings.Contains(string(encodedCard), forbidden) {
+			t.Fatalf("fallback card leaked non-public trust field %q: %s", forbidden, encodedCard)
+		}
 	}
 	got := testutil.ToFloat64(metrics.QFTrustObjectRenderFailures.WithLabelValues(TrustFallbackMissingRequiredField))
 	if got != 1 {
