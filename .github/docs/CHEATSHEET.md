@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 80 Gates · 35 Workflow Modes · 26 Phases**
+> **37 Agents · 81 Gates · 35 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -200,6 +200,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | Goal | What To Run | What Shows Up |
 |------|-------------|---------------|
 | Explore an idea before code | `/bubbles.workflow  mode: brainstorm for <idea>` | Planning artifacts only, no code |
+| Design a multi-implementation capability | `/bubbles.workflow  design capability <name>` | Domain model, capability foundation, concrete implementations, variation axes, UI primitives when needed, and foundation-first scopes |
 | Improve an existing feature | `/bubbles.workflow  improve <feature>` | Objective research pass, then Design Brief + Execution Outline |
 | Fix a bug in existing code | `/bubbles.workflow  fix the <bug>` | Bugfix-fastlane with objective research and reproduce/fix/verify flow |
 | Keep moving the current work forward | `/bubbles.workflow  continue` | Resume active workflow or fall back to `iterate` |
@@ -256,11 +257,15 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `full-suite trigger` | A high-blast-radius path pattern in `testImpact` that forces broad validation even when the direct change looks small. |
 | `trace contract` | Optional project-owned `traceContracts` config that describes required trace/log evidence for a workflow: spans, attributes, invariants, and red flags. Validate checks actual evidence, not predictions. |
 | `trace evidence` | Captured runtime trace/log output used by G080. Code inspection, expected spans, or planned instrumentation do not count. |
+| `capability foundation` | Provider-, screen-, service-, or variant-neutral domain and technical base that concrete implementations plug into. |
+| `concrete implementation` | A provider, adapter, channel, connector, driver, strategy, plugin, screen, or variant layered on the foundation. |
+| `variation axis` | A dimension where implementations differ, such as provider protocol, delivery policy, schema shape, authorization surface, storage behavior, runtime environment, or UI composition. |
+| `proportionality clause` | The rule that capability-first design applies only when reuse signals exist; premature abstraction is a violation too. |
 
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 80 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 81 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
@@ -353,6 +358,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 | G090 | Retro convergence health | Retrospectives compute loop, compaction, deferral, and snapshot health |
 | G091 | Planning workflow chain | Delivery-capable planning preserves analyst -> UX -> design -> plan |
 | G092 | Strict terminal status | New terminal certifications use `done` or `blocked`; observations attach to `done` |
+| G094 | Capability foundation | New proportional specs model the reusable capability before concrete providers, adapters, channels, connectors, variants, or shared UI overlays |
 
 ---
 
@@ -372,6 +378,7 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | <img src="../icons/ted-badge.svg" width="28"> | `bubbles-docker-port-standards` | Ted Johnson | *"You can't just park wherever you want. There's a system."* |
 | <img src="../icons/sam-binoculars.svg" width="28"> | `bubbles-skill-authoring` | Sam Losco | *"I used to be a vet, you know. I got specialties."* |
 | <img src="../icons/lahey-badge.svg" width="28"> | `bubbles-repo-readiness` | Mr. Lahey | *"Before the liquor starts talking, make sure the trailer's still standing."* |
+| <img src="../icons/barb-keys.svg" width="28"> | `bubbles-capability-foundation-design` | Barb Lahey | *"Build the trailer, then park the cars in it."* |
 
 ### What Each Skill Does
 
@@ -481,6 +488,7 @@ Skills are portable procedural checklists auto-installed to every repo. They act
 | `sunnyvale no-port-squatting` | `bubbles-docker-port-standards` | *"You can't just squat on standard ports, Ricky."* |
 | `sunnyvale sams-specialties` | `bubbles-skill-authoring` | *"I used to be a vet, you know."* |
 | `sunnyvale walk-the-lot` | `bubbles-repo-readiness` | *"Before we start, walk the lot and see what's actually standing."* |
+| `sunnyvale foundation-before-overlay` | `bubbles-capability-foundation-design` | *"Capability first. Provider second."* |
 
 ---
 

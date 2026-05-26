@@ -53,6 +53,7 @@ Common source modules:
 - `completion-governance.md`
 - `quality-gates.md`
 - `artifact-lifecycle.md`
+- `capability-foundation.md`
 - `operating-baseline.md`
 - `validation-core.md`
 - `validation-profiles.md`
@@ -79,10 +80,10 @@ Orchestrator rule:
 
 | Agent | Use When | Primary References |
 |------|----------|--------------------|
-| `bubbles.analyst` | define or improve business requirements and scenarios | `analysis-bootstrap.md`, `artifact-ownership.md` |
-| `bubbles.ux` | define wireframes, flows, and UX-specific spec content | `ux-bootstrap.md`, `artifact-ownership.md` |
-| `bubbles.design` | create or repair technical design | `design-bootstrap.md`, `artifact-ownership.md` |
-| `bubbles.plan` | break work into scopes, tests, DoD, and scenario contracts | `plan-bootstrap.md`, `planning-core.md`, `artifact-lifecycle.md`, `scope-templates.md` |
+| `bubbles.analyst` | define or improve business requirements and scenarios; model domain capability foundations when proportionality applies | `analysis-bootstrap.md`, `artifact-ownership.md`, `capability-foundation.md` |
+| `bubbles.ux` | define wireframes, flows, UX-specific spec content, and reusable UI primitives for multi-screen capability surfaces | `ux-bootstrap.md`, `artifact-ownership.md`, `capability-foundation.md` |
+| `bubbles.design` | create or repair technical design; split capability foundations from concrete implementations when proportionality applies | `design-bootstrap.md`, `artifact-ownership.md`, `capability-foundation.md` |
+| `bubbles.plan` | break work into scopes, tests, DoD, scenario contracts, and foundation-before-overlay dependency order | `plan-bootstrap.md`, `planning-core.md`, `artifact-lifecycle.md`, `scope-templates.md`, `capability-foundation.md` |
 | `bubbles.implement` | implement a planned scope | `implement-bootstrap.md`, `execution-core.md`, `completion-governance.md`, `quality-gates.md` |
 | `bubbles.test` | execute tests, close test gaps, and prove changed behavior | `test-bootstrap.md`, `test-core.md`, `quality-gates.md`, `test-fidelity.md` |
 | `bubbles.docs` | publish managed docs for changed behavior and close out published truth | `docs-bootstrap.md`, `artifact-lifecycle.md`, `managed-docs.md` |

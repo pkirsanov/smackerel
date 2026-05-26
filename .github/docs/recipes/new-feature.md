@@ -48,6 +48,8 @@ If UX sections are needed, run `bubbles.ux` after analyst work. If you skip that
 
 **What happens:** The design agent reads the spec, creates data models, API contracts, service boundaries, and writes `design.md`.
 
+When capability-first proportionality applies, design also creates the foundation/overlay split: `## Capability Foundation`, `## Concrete Implementations`, and `### Variation Axes` before provider-, adapter-, connector-, channel-, or variant-specific details.
+
 **You'll get:** A `design.md` with architecture, schemas, and technical decisions.
 
 ### Step 3: Break Into Scopes

@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v3.10.0</div>
+  <div class="subtitle">Agent Orchestration System v3.11.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -1035,6 +1035,12 @@
     <div class="wf-quote">"Freedom 35, boys! This is the one!"</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">Capability Foundation</div>
+    <div class="wf-alias">→ foundation before overlay</div>
+    <div class="wf-desc">Design the reusable capability first, then layer providers, adapters, channels, connectors, variants, or shared UI overlays on top.</div>
+    <div class="wf-quote">"Design the capability. Plug in the provider. Don't bake the provider into the capability."</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">docs-only</div>
     <div class="wf-alias">→ sunnyvale gnome-sayin</div>
     <div class="wf-desc">Managed-doc maintenance only. J-Roc publishes the truth.</div>
@@ -1226,6 +1232,22 @@
   <div class="workflow-card">
     <div class="wf-name">trace evidence</div>
     <div class="wf-desc">Captured runtime trace/log output used by G080. Code inspection, expected spans, or planned instrumentation do not count.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">capability foundation</div>
+    <div class="wf-desc">Provider-, screen-, service-, or variant-neutral base that concrete implementations plug into.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">concrete implementation</div>
+    <div class="wf-desc">A provider, adapter, channel, connector, driver, strategy, plugin, screen, or variant layered on the foundation.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">variation axis</div>
+    <div class="wf-desc">A dimension where implementations differ: protocol, delivery policy, schema shape, authorization, storage, runtime, or UI composition.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">proportionality clause</div>
+    <div class="wf-desc">Capability-first design fires only when reuse signals exist. Premature abstraction is not decent either.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
@@ -1447,6 +1469,15 @@
       <div class="quote">"Before the liquor starts talking, make sure the trailer's still standing."</div>
     </div>
   </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/barb-keys.svg" alt="Barb"></div>
+    <div class="info">
+      <div class="agent-name">bubbles-capability-foundation-design</div>
+      <div class="character">Foundation Before Overlay</div>
+      <div class="role">Capability-first design for providers, adapters, channels, connectors, variants, and shared UI surfaces. Proportionality first; no premature abstraction.</div>
+      <div class="quote">"Capability first. Provider second. That's the way she goes, boys."</div>
+    </div>
+  </div>
 </div>
 
 <!-- SKILL VOCABULARY -->
@@ -1473,6 +1504,7 @@
     <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Walk the lot first"</span><span class="context">— check repo surfaces before declaring the framework ready to operate there</span></div>
     <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Advisory, not certification"</span><span class="context">— repo-readiness informs framework ops, but it does not satisfy bubbles.validate</span></div>
     <div class="gate-msg"><span class="status">🛠️</span><span class="msg">"Foundation first"</span><span class="context">— choose the adoption profile that matches repo maturity; it changes guidance, not the finish line</span></div>
+    <div class="gate-msg"><span class="status">🧱</span><span class="msg">"Foundation before overlay"</span><span class="context">— G094: model the capability before the provider, adapter, connector, channel, or variant</span></div>
     <div class="gate-msg"><span class="status">📦</span><span class="msg">"Read the manifest"</span><span class="context">— the release manifest is the trust bundle for what actually shipped</span></div>
     <div class="gate-msg"><span class="status">📦</span><span class="msg">"Where'd this trailer come from?"</span><span class="context">— install provenance explains whether the current framework copy came from a release or a local source checkout</span></div>
     <div class="gate-msg"><span class="status">📦</span><span class="msg">"Trust preview"</span><span class="context">— upgrade dry-run compares current installed trust metadata with the target release before replacing managed files</span></div>
@@ -1619,6 +1651,10 @@
   <div class="line">
     <span class="situation">Brownfield feature improvement starts</span>
     <span class="quote-text">"Check what the trailer actually looks like before you start renovating it."</span>
+  </div>
+  <div class="line">
+    <span class="situation">Capability-first design starts</span>
+    <span class="quote-text">"Design the capability. Plug in the provider. Don't bake the provider into the capability."</span>
   </div>
   <div class="line">
     <span class="situation">Pick the right onboarding posture</span>
@@ -1797,6 +1833,9 @@
     <tr><td class="cmd">"Water under the fridge"</td><td class="maps-to">Water under the bridge</td><td class="quote-col">Simplification complete, move on</td></tr>
     <tr><td class="cmd">"I toad a so"</td><td class="maps-to">I told you so</td><td class="quote-col">When Conky (harden) was right</td></tr>
     <tr><td class="cmd">"Same lot, new trailer"</td><td class="maps-to">Major redesign on top of the existing feature footprint</td><td class="quote-col">Reconcile stale artifacts, then rebuild the active plan</td></tr>
+    <tr><td class="cmd">"Build the trailer, then park the cars in it"</td><td class="maps-to">Design the capability foundation before concrete implementations</td><td class="quote-col">G094 capability foundation gate</td></tr>
+    <tr><td class="cmd">"One shed, many tools"</td><td class="maps-to">Shared foundation with multiple adapters or variants</td><td class="quote-col">Capability-first design vocabulary</td></tr>
+    <tr><td class="cmd">"Capability first. Provider second."</td><td class="maps-to">Foundation before provider-specific delivery</td><td class="quote-col">AN5/DE4/UX9/P4 planning profile checks</td></tr>
     <tr><td class="cmd">"Make like a tree and f*** off"</td><td class="maps-to">Make like a tree and leave</td><td class="quote-col">Cleaning up dead code</td></tr>
     <tr><td class="cmd">"Keep your friends close and get your enemies toaster"</td><td class="maps-to">Keep your friends close and your enemies closer</td><td class="quote-col">Dependency management</td></tr>
     <tr><td class="cmd">"What comes around is all around"</td><td class="maps-to">What goes around comes around</td><td class="quote-col">Circular dependency detected</td></tr>
@@ -1845,8 +1884,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 80 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 80 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 81 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 81 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -1871,7 +1910,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "80 gates, boys. That's more security than the trailer park has ever had.
+  "81 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -1884,10 +1923,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v3.10.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v3.11.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>80 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>81 Gates • 37 Agents • 35 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>

@@ -17,6 +17,7 @@ This runs: `analyze → bootstrap → harden → finalize`
 **What you get:**
 - `spec.md` — Business analysis, actors, use cases, competitive landscape
 - `design.md` — Technical design with alternatives explored, including a short **Design Brief** at the top
+- Capability Foundation — reusable capability model, concrete implementations, and variation axes when proportionality applies
 - `scopes.md` — Hardened scopes with Gherkin scenarios and DoD, including a short **Execution Outline** at the top
 - A decision document — Ready for implementation in a separate session
 

@@ -68,6 +68,11 @@ adoption_profile_ids() {
 }
 
 mapfile -t managed_entries < <(bubbles_framework_manifest_entries "$REPO_ROOT" false)
+source_only_entries=()
+while IFS= read -r regression_test_path; do
+  [[ -f "$regression_test_path" ]] || continue
+  source_only_entries+=("${regression_test_path#$REPO_ROOT/}")
+done < <(find "$REPO_ROOT/tests/regression" -maxdepth 1 -type f -name '*.sh' 2>/dev/null | LC_ALL=C sort)
 
 payload_git_sha=''
 payload_generated_at=''
@@ -117,6 +122,7 @@ for docs_file in \
 done
 docs_digest="$(printf '%s' "$docs_digest_material" | bubbles_sha256_stdin)"
 managed_file_count="${#managed_entries[@]}"
+source_only_file_count="${#source_only_entries[@]}"
 
 temp_output="$(mktemp)"
 trap 'rm -f "$temp_output"' EXIT
@@ -161,6 +167,19 @@ trap 'rm -f "$temp_output"' EXIT
     checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
     printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
     if [[ "$idx" -lt $((managed_file_count - 1)) ]]; then
+      echo ','
+    else
+      echo
+    fi
+  done
+  echo '  ],'
+  printf '  "sourceOnlyFileCount": %s,\n' "$source_only_file_count"
+  echo '  "sourceOnlyFileChecksums": ['
+  for idx in "${!source_only_entries[@]}"; do
+    entry="${source_only_entries[$idx]}"
+    checksum_value="$(bubbles_sha256_file "$REPO_ROOT/$entry")"
+    printf '    {"path": "%s", "sha256": "%s"}' "$entry" "$checksum_value"
+    if [[ "$idx" -lt $((source_only_file_count - 1)) ]]; then
       echo ','
     else
       echo

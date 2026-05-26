@@ -12,3 +12,4 @@ Agents reference these when creating first specs for a new project. After 2-3 sp
 |---------|--------------|
 | [REST API endpoint](rest-api-endpoint.example.md) | Complete spec→design→scopes for adding a backend endpoint |
 | [Bug fix](bug-fix.example.md) | Complete bug.md→spec→design→scopes for a bug investigation and fix |
+| [Capability foundation](capability-foundation.example.md) | Complete capability-first spec→design→scopes for a notification foundation with ntfy and email adapters |

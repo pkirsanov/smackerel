@@ -19,6 +19,7 @@ handoffs:
 - Tests MUST be derived from spec/design requirements (spec-first), not from current behavior.
 - Enforce `planning-core.md`, `test-fidelity.md`, `consumer-trace.md`, `e2e-regression.md`, and `evidence-rules.md` when writing scope artifacts.
 - If project config defines `testImpact` or `traceContracts`, incorporate those maps into Test Plan rows and DoD evidence requirements while keeping analyst-owned Success Signals tech-agnostic.
+- When design.md splits `## Capability Foundation` from `## Concrete Implementations`, plan foundation scopes before overlays; satisfy P4 by tagging the foundation scope `foundation:true` and making overlay scopes depend on it.
 - Honor optional sizing hints (`maxScopeMinutes`, `maxDodMinutes`) when provided, but keep scopes small even when no time boundary is given.
 - Treat shared fixtures, harnesses, bootstrap/auth/session/storage infrastructure, and other high-fan-out helper surfaces as protected planning targets: require blast-radius planning, canary coverage, rollback, and explicit change boundaries before downstream execution.
 - Follow tiered context loading and loop limits (below) to avoid read loops.
@@ -261,6 +262,7 @@ Scope sizing rules:
 - Keep cross-surface work in the same scope only when it forms one vertical slice for one outcome.
 - If frontend, backend, and ops changes are unrelated, split them into separate scopes.
 - DoD items must map cleanly to one validation step each; if one item needs multiple unrelated validations, split it.
+- Capability foundation ordering (P4): if `design.md` contains `## Capability Foundation`, `## Concrete Implementations`, and `### Variation Axes`, create at least one foundation scope tagged `foundation:true`; provider/adapter/channel/variant/overlay scopes MUST declare `Depends On` referencing that foundation scope.
 
 Each scope must include:
 

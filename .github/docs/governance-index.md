@@ -26,6 +26,7 @@ agent reads.
 - [audit-bootstrap.md](../agents/bubbles_shared/audit-bootstrap.md)
 - [audit-core.md](../agents/bubbles_shared/audit-core.md)
 - [bug-templates.md](../agents/bubbles_shared/bug-templates.md)
+- [capability-foundation.md](../agents/bubbles_shared/capability-foundation.md)
 - [clarify-bootstrap.md](../agents/bubbles_shared/clarify-bootstrap.md)
 - [completion-governance.md](../agents/bubbles_shared/completion-governance.md)
 - [consumer-trace.md](../agents/bubbles_shared/consumer-trace.md)
@@ -93,6 +94,7 @@ Project-installable instruction modules consumed by IDE agents via
 Discoverable procedural workflows packaged as model skills.
 
 - [bubbles-config-sst](../skills/bubbles-config-sst/SKILL.md)
+- [bubbles-capability-foundation-design](../skills/bubbles-capability-foundation-design/SKILL.md)
 - [bubbles-deployment-target-adapter](../skills/bubbles-deployment-target-adapter/SKILL.md)
 - [bubbles-docker-lifecycle-governance](../skills/bubbles-docker-lifecycle-governance/SKILL.md)
 - [bubbles-docker-port-standards](../skills/bubbles-docker-port-standards/SKILL.md)
@@ -127,6 +129,7 @@ end-to-end flows.
 - [custom-gates.md](recipes/custom-gates.md)
 - [devops-release-coordination.md](recipes/devops-release-coordination.md)
 - [devops-work.md](recipes/devops-work.md)
+- [design-a-capability.md](recipes/design-a-capability.md)
 - [end-of-day.md](recipes/end-of-day.md)
 - [explore-idea.md](recipes/explore-idea.md)
 - [fix-a-bug.md](recipes/fix-a-bug.md)
@@ -165,3 +168,11 @@ end-to-end flows.
 - [update-docs.md](recipes/update-docs.md)
 - [ux-single-file-sweep.md](recipes/ux-single-file-sweep.md)
 - [validation-latency-budgets.md](recipes/validation-latency-budgets.md)
+
+---
+
+## Capability-First Design Governance
+
+- Validation IDs: `AN5`, `DE4`, `UX9`, `P4` in [validation-profiles.md](../agents/bubbles_shared/validation-profiles.md)
+- Gate: `G094 capability_foundation_gate` in [workflows.yaml](../bubbles/workflows.yaml)
+- Guard: [capability-foundation-guard.sh](../bubbles/scripts/capability-foundation-guard.sh)

@@ -13,6 +13,7 @@ Load on demand:
 - Design system/theme references only for surfaces being designed
 - Competitor pages only when competitive UI research is requested or clearly useful
 - `consumer-trace.md` when renamed or removed user journeys would strand downstream navigation
+- `capability-foundation.md` when two or more screens or cross-feature reuse share UI primitives
 
 Constraints:
 - One feature-resolution attempt, then fail fast if the target is still ambiguous

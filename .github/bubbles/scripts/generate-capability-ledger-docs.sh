@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -n "${BUBBLES_REPO_ROOT:-}" ]]; then
   REPO_ROOT="$BUBBLES_REPO_ROOT"
@@ -30,7 +35,7 @@ replace_block() {
   local end_marker="$3"
   local content_file="$4"
   local temp_file
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
 
   awk -v start_marker="$start_marker" -v end_marker="$end_marker" -v content_file="$content_file" '
     BEGIN {
@@ -200,7 +205,7 @@ mkdir -p "$GENERATED_DIR"
   exit 1
 }
 
-records_file="$(mktemp)"
+records_file="$(_btmp)"
 awk '
 function trim(value) {
   sub(/^[[:space:]]+/, "", value)
@@ -285,7 +290,7 @@ while IFS=$'\t' read -r kind _ _ state _ _ _ _ _ _ issue_refs; do
   fi
 done < "$records_file"
 
-competitive_doc_temp="$(mktemp)"
+competitive_doc_temp="$(_btmp)"
 {
   echo '# Competitive Capabilities'
   echo
@@ -312,7 +317,7 @@ competitive_doc_temp="$(mktemp)"
   done < "$records_file"
 } > "$competitive_doc_temp"
 
-issue_doc_temp="$(mktemp)"
+issue_doc_temp="$(_btmp)"
 {
   echo '# Issue Status'
   echo
@@ -338,7 +343,7 @@ issue_doc_temp="$(mktemp)"
   done < "$records_file"
 } > "$issue_doc_temp"
 
-interop_records_file="$(mktemp)"
+interop_records_file="$(_btmp)"
 awk '
 function trim(value) {
   sub(/^[[:space:]]+/, "", value)
@@ -398,7 +403,7 @@ END {
 }
 ' "$INTEROP_REGISTRY_FILE" > "$interop_records_file"
 
-interop_doc_temp="$(mktemp)"
+interop_doc_temp="$(_btmp)"
 {
   echo '# Interop Migration Matrix'
   echo
@@ -429,11 +434,11 @@ interop_doc_temp="$(mktemp)"
   done < "$interop_records_file"
 } > "$interop_doc_temp"
 
-readme_block_temp="$(mktemp)"
+readme_block_temp="$(_btmp)"
 {
-  printf '| [Competitive Capabilities](docs/generated/competitive-capabilities.md) | Ledger-backed competitive posture guide — %s shipped, %s partial, %s proposed |\n' "$shipped_count" "$partial_count" "$proposed_count"
-  printf '| [Issue Status](docs/generated/issue-status.md) | Ledger-backed status for %s tracked framework gaps and proposals |\n' "$issue_backed_count"
-  echo '| [Interop Migration Matrix](docs/generated/interop-migration-matrix.md) | Ledger + registry-backed migration matrix for Claude Code, Roo Code, Cursor, and Cline |'
+  printf '<tr><td><a href="docs/generated/competitive-capabilities.md">Competitive Capabilities</a></td><td>Ledger-backed competitive posture guide — %s shipped, %s partial, %s proposed</td></tr>\n' "$shipped_count" "$partial_count" "$proposed_count"
+  printf '<tr><td><a href="docs/generated/issue-status.md">Issue Status</a></td><td>Ledger-backed status for %s tracked framework gaps and proposals</td></tr>\n' "$issue_backed_count"
+  echo '<tr><td><a href="docs/generated/interop-migration-matrix.md">Interop Migration Matrix</a></td><td>Ledger + registry-backed migration matrix for Claude Code, Roo Code, Cursor, and Cline</td></tr>'
 } > "$readme_block_temp"
 
 apply_block_to_copy() {
@@ -442,7 +447,7 @@ apply_block_to_copy() {
   local end_marker="$3"
   local block_file="$4"
   local temp_copy
-  temp_copy="$(mktemp)"
+  temp_copy="$(_btmp)"
   cp "$source_file" "$temp_copy"
   replace_block "$temp_copy" "$start_marker" "$end_marker" "$block_file"
   printf '%s' "$temp_copy"
@@ -453,7 +458,7 @@ render_issue_block_file() {
   local state="$2"
   local competitor_tags="$3"
   local temp_file
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
   {
     printf '**Ledger Status:** %s\n' "$state"
     printf '**Related Capability:** %s\n' "$label"

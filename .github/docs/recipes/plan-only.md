@@ -48,6 +48,8 @@ This also applies when an existing feature's active planning artifacts are stale
 
 Planning ownership is strict: if later validation or hardening finds missing Gherkin, Test Plan, DoD, or `uservalidation.md` structure, those agents route the changes back to `bubbles.plan` instead of editing planning artifacts directly.
 
+When `design.md` contains a capability foundation plus concrete implementations, `bubbles.plan` orders the foundation scope first, tags it `foundation:true`, and makes provider/adapter/channel/variant overlay scopes depend on it.
+
 ## What You Get
 
 A complete `specs/NNN-feature/` folder with:

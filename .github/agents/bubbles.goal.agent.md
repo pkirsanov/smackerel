@@ -111,8 +111,8 @@ phase_2_plan:
       fallback_if_nested_runtime_lacks_runSubagent: parent-expand bugfix-fastlane phaseOrder from workflows.yaml and invoke each phase owner directly via workflows.yaml.phases[<phase>].owner
 
     goal_type == feature AND (no spec.md OR no design.md OR no scopes.md OR planning_skeletal):
-      preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: {spec_path}. Goal: {goal_text}. improvementPrelude: {analyze-design-plan|analyze-ux-design-plan based on UI_detection}"
-      fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery — invoke bootstrapAgents [bubbles.design, bubbles.plan] in loop until design_spec_scopes_ready; if improvementPrelude requested, invoke profile chain (analyst[+ux]→design→plan) FIRST
+      preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: {spec_path}. Goal: {goal_text}. improvementPrelude: analyze-design-plan"
+      fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery — invoke bootstrapAgents [bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan] in loop until design_spec_scopes_ready; if improvementPrelude requested, invoke the same canonical chain FIRST
 
     goal_type == planning-only:
       preferred: runSubagent(bubbles.workflow): "mode: spec-scope-hardening specs: {spec_path}"
@@ -129,7 +129,7 @@ phase_2_plan:
       preferred: runSubagent(bubbles.workflow): "mode: stabilize-to-doc specs: {spec_path}"  # or devops-to-doc
 
   detection:
-    UI_detection: scope/goal text contains UI/UX/dashboard/page/screen/widget OR spec already declares user-facing components → use analyze-ux-design-plan
+    UI_detection: UX is mandatory for all implementation-capable planning. For UI work, UX covers screens and journeys; for framework/operator/non-UI work, UX covers workflow behavior, status language, blocked envelopes, and exception handling. The compatibility profile name `analyze-design-plan` still expands to bubbles.analyst → bubbles.ux → bubbles.design → bubbles.plan.
     planning_skeletal: G014 (bootstrap_readiness) fails OR G032 (business_analysis) fails OR G033 (design_readiness) fails — treat skeletal/stub artifacts as missing planning per workflow-orchestration-core Planning-First Recovery rule 3
 
 phase_3_execute:
@@ -218,6 +218,12 @@ exit_conditions:
   - fundamental_impossibility → EXIT_BLOCKED
 ```
 
+**Mechanical cap (Gate G082):** `max_iterations: 10` is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate G082 in `bubbles/workflows.yaml` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). The authoritative cap value lives in `bubbles/workflows.yaml` under `maxConvergenceIterations` (default 10). Every convergence iteration MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` with `BUBBLES_AGENT_NAME=bubbles.goal` set in env. When the guard reports the cap exceeded, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration.
+
+**In-loop compaction discipline (Gate G083):** Between specialist dispatches inside the convergence loop, the orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
+
+**Orchestrator persistence default (Gate G086):** After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
+
 ## Context Compaction
 
 When accumulating specialist `RESULT-ENVELOPE`s across convergence iterations, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
@@ -227,8 +233,8 @@ When accumulating specialist `RESULT-ENVELOPE`s across convergence iterations, f
 ```yaml
 on_obstacle:
   missing_spec:
-    preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: <path>"  # bootstrap phase auto-creates missing artifacts via bootstrapAgents [design, plan] + autoEscalation
-    fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery bootstrap phase — invoke bubbles.design + bubbles.plan in loop until design_spec_scopes_ready; add bubbles.analyst (+ bubbles.ux for UI work) ONLY when an improvementPrelude profile is selected
+    preferred: runSubagent(bubbles.workflow): "mode: full-delivery specs: <path>"  # bootstrap phase auto-creates missing artifacts via bootstrapAgents [analyst, ux, design, plan] + autoEscalation
+    fallback_if_nested_runtime_lacks_runSubagent: parent-expand full-delivery bootstrap phase — invoke bubbles.analyst + bubbles.ux + bubbles.design + bubbles.plan in loop until design_spec_scopes_ready
   test_failure:        runSubagent(bubbles.implement) with failure context
   build_failure:       runSubagent(bubbles.implement) with error output
   lint_warnings:       runSubagent(bubbles.implement)

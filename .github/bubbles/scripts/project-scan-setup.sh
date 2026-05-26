@@ -28,6 +28,11 @@
 # =============================================================================
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/fun-mode.sh" 2>/dev/null || true
 
@@ -442,7 +447,7 @@ if [[ -f "$PROJECT_YAML" ]]; then
     if [[ "$FORCE" == "true" ]]; then
       # Remove existing scans section and regenerate
       # Preserve everything before 'scans:' (gates, comments, etc.)
-      tmp_file="$(mktemp)"
+      tmp_file="$(_btmp)"
       sed '/^scans:/,$d' "$PROJECT_YAML" > "$tmp_file"
       # Append new scans section
       echo "$YAML_CONTENT" | sed -n '/^# Scan pattern/,$p' >> "$tmp_file"

@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
@@ -71,7 +76,7 @@ write_proposals() {
     return 0
   fi
 
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
   {
     echo "# Skill Proposals"
     echo

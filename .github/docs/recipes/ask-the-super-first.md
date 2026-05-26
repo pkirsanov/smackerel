@@ -34,6 +34,9 @@ Use this recipe when any of these are true:
 /bubbles.super  I have a rough idea and want to think it through before we write code
 → /bubbles.workflow  mode: brainstorm for <idea>
 
+/bubbles.super  should this notification feature be provider-first or capability-first?
+→ /bubbles.workflow  design capability notifications with provider adapters
+
 /bubbles.super  I want the brownfield improvement path that researches current reality before it starts designing fixes
 → /bubbles.workflow  <feature-spec> mode: improve-existing
 

@@ -10,6 +10,7 @@ Load on demand:
 - Project architecture/API docs only when they materially affect the feature analysis
 - Routes, handlers, models, and UI inventory only for the feature area being analyzed
 - `consumer-trace.md` when rename/removal fallout or downstream consumers are part of the analysis
+- `capability-foundation.md` when proportionality triggers are present or the work introduces a new reusable capability
 - Competitor pages only when competitive research is requested or clearly useful
 
 Constraints:

@@ -75,7 +75,7 @@ handoffs:
 **Behavioral Rules (follow Autonomous Operation within Guardrails in agent-common.md):**
 - Pick ONE highest-priority work item per iteration
 - The `tools` frontmatter MUST include the VS Code `agent` tool alias so this dispatcher can actually invoke the owners it selects.
-- Prepare all required artifacts (spec.md, design.md, scopes.md) if missing — by invoking `bubbles.design` and `bubbles.plan` via `runSubagent`
+- Prepare all required artifacts (spec.md, design.md, scopes.md) if missing — by invoking the canonical planning chain `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan` via `runSubagent`. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling.
 - Determine the correct workflow mode for the identified work
 - If the picked item requires a different mode or owner than initially selected, invoke that mode or owner via `runSubagent` and continue. Do not stop and ask the user to switch modes.
 - Dispatch execution to specialist agents following the mode's `phaseOrder` from `bubbles/workflows.yaml`
@@ -256,7 +256,7 @@ Dispatch rules:
 - Invoke `bubbles.system-review` when the uncertainty is broader: feature, component, journey, UX, runtime behavior, trust, or whole-system coherence
 - Do NOT invoke review agents as a routine phase once an executable scope is already clear
 - Do NOT stop at review output alone; consume the findings, update planning artifacts through the owning specialists if needed, then continue into execution when feasible within the same iteration
-- If review findings imply new or repaired scopes, route artifact updates through `bubbles.design` and `bubbles.plan` rather than editing foreign-owned planning artifacts directly
+- If review findings imply new or repaired scopes, route artifact updates through `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, and `bubbles.plan` rather than editing foreign-owned planning artifacts directly
 
 ---
 
@@ -267,6 +267,18 @@ Use `bubbles/workflows.yaml`, [execution-core.md](bubbles_shared/execution-core.
 ## Context Compaction
 
 When accumulating subagent `RESULT-ENVELOPE`s across the iterate work loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 subagent results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked findings or `nextRequiredOwner` chains.
+
+## Convergence Cap (Gate G082 — MANDATORY)
+
+The iterate work loop is bounded by `maxConvergenceIterations` in `bubbles/workflows.yaml` (default 10). The cap is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate `G082` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). Every iteration of this loop MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` with `BUBBLES_AGENT_NAME=bubbles.iterate` in env. When the guard reports the cap exceeded for a given spec, this agent MUST emit a `blocked` RESULT-ENVELOPE whose `unresolvedFindings[]` includes finding `G082` and MUST NOT start another iteration for that spec in the same session.
+
+## In-Loop Compaction Discipline (Gate G083 — MANDATORY)
+
+Between specialist dispatches inside the iterate work loop, this orchestrator MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083`; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
+
+## Orchestrator Persistence Default (Gate G086 — MANDATORY)
+
+After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086`.
 
 ## Key Difference from bubbles.implement
 
@@ -314,7 +326,7 @@ When accumulating subagent `RESULT-ENVELOPE`s across the iterate work loop, foll
 **Review fallback:** If no defensible next executable action can be selected from the existing artifacts, iterate may run a diagnostic review first:
 - Use `bubbles.code-review` for engineering-only uncertainty
 - Use `bubbles.system-review` for feature/system uncertainty
-- Then convert the findings into repaired or new scopes via `bubbles.design` and `bubbles.plan`, or resume execution directly if the next action becomes obvious
+- Then convert the findings into repaired or new scopes via `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, and `bubbles.plan`, or resume execution directly if the next action becomes obvious
 
 ### Priority 0: User Validation Regressions
 If `uservalidation.md` has unchecked `[ ]` items:
@@ -379,7 +391,7 @@ If the repo carries the Product Direction Surfaces trio (`docs/INVESTOR_OVERVIEW
 
 ### No Work Found
 If nothing actionable:
-- If artifacts are missing (no spec.md, design.md, or scopes.md): auto-create them by invoking the appropriate specialist role (design, plan) inline, then re-evaluate scope selection.
+- If artifacts are missing (no spec.md, design.md, or scopes.md): auto-create them by invoking the canonical planning chain (`bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`) inline, then re-evaluate scope selection.
 - If all scopes are complete and validation passes: report feature complete.
 - If all scopes are complete but validation fails: create a hardening scope and continue.
 - Only STOP if no feature folder can be resolved from the input AND `allow_new_feature_dir` is false.
@@ -497,7 +509,7 @@ If no suitable feature folder exists and `allow_new_feature_dir: true`:
   - `bubbles.code-review` for engineering-only ambiguity
   - `bubbles.system-review` for feature/system ambiguity
   - Convert the review findings into the next executable action inside the same iteration when feasible
-  - Route any required scope/design updates through `bubbles.design` and `bubbles.plan`
+  - Route any required scope/design updates through `bubbles.analyst`, `bubbles.ux`, `bubbles.design`, and `bubbles.plan`
 3. If scope needs to be created:
    - Update or create `{FEATURE_DIR}/scopes.md`
    - Ensure `design.md` exists (REQUIRED for new scope work)
@@ -515,7 +527,7 @@ Execute the selected mode's `phaseOrder` from `bubbles/workflows.yaml` by invoki
 | Phase | Specialist Agent | What it does |
 |-------|-----------------|--------------|
 | `analyze` | `bubbles.analyst` + `bubbles.ux` | Business analysis, competitive research, UX wireframes (see Analyze Phase Protocol below) |
-| `bootstrap` | `bubbles.design` + `bubbles.plan` | Create/update design.md and scopes.md (see Bootstrap Phase Protocol below) |
+| `bootstrap` | `bubbles.analyst` + `bubbles.ux` + `bubbles.design` + `bubbles.plan` | Create/update planning truth (see Bootstrap Phase Protocol below) |
 | `implement` | `bubbles.implement` | Write code, wire services, satisfy scope DoD |
 | `test` | `bubbles.test` | Run all required test types, fix failures |
 | `docs` | `bubbles.docs` | Sync documentation |
@@ -547,7 +559,7 @@ When the selected mode's `phaseOrder` includes `analyze` (e.g., `improve-existin
    - Create wireframes, interaction flows, responsive layouts
    - Update spec.md with UI requirements and screen inventory
 
-3. **Design + Planning** — invoke `runSubagent` with `bubbles.design` (auto-detects `from-analysis` mode when analyst+UX sections are present) → contract-grade design.md. Then invoke `bubbles.plan` if scopes.md needs updating.
+3. **Canonical Planning Chain** — invoke `runSubagent` with `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling.
 
 **Skip conditions:**
 - spec.md already has `## Actors & Personas` → analyst was already run (skip analyst, still run UX if applicable)
