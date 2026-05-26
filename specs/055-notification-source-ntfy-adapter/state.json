@@ -2,13 +2,14 @@
   "version": 3,
   "featureDir": "specs/055-notification-source-ntfy-adapter",
   "featureName": "Notification Source ntfy Adapter",
-  "status": "blocked",
+  "status": "done",
   "workflowMode": "full-delivery",
+  "certifiedAt": "2026-05-26T14:15:13Z",
   "execution": {
     "activeAgent": "bubbles.validate",
     "currentPhase": "validate",
-    "currentScope": "final-certification-g088-worktree-blocked",
-    "runStartedAt": "2026-05-26T07:35:35Z",
+    "currentScope": "final-certification",
+    "runStartedAt": "2026-05-26T14:15:13Z",
     "completedPhaseClaims": [
       "plan",
       "implement",
@@ -26,7 +27,8 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "blocked",
+    "status": "done",
+    "certifiedAt": "2026-05-26T14:15:13Z",
     "completedScopes": [
       "scope-1-config-and-source-identity",
       "scope-2-event-mapping-and-core-ingest",
@@ -121,15 +123,7 @@
       "active": false,
       "lockedScenarioIds": []
     },
-    "blockers": [
-      {
-        "id": "BLOCK-055-20260526-G088-WORKTREE-PLANNING-TRUTH",
-        "severity": "high",
-        "summary": "Final parent done promotion remains blocked by Gate G088 because the post-promotion guard reports uncommitted WORKTREE planning-truth edits in spec.md, design.md, and scopes.md as post-certification edits. The user explicitly requested no commit, so validate cannot make the done-state guard pass in this invocation.",
-        "nextOwner": "human",
-        "requiredAction": "Stabilize the spec-review-recertified planning truth in git or otherwise remove the WORKTREE post-certification planning edit condition, then return to validate for final parent promotion guard reruns."
-      }
-    ],
+    "blockers": [],
     "observations": []
   },
   "policySnapshot": {
@@ -434,6 +428,17 @@
       "startedAt": "2026-05-26T07:35:35Z",
       "completedAt": "2026-05-26T07:41:19Z",
       "summary": "Attempted final parent promotion after current-session parent artifact-lint, traceability guard, and pre-promotion state-transition guard permitted the transition following spec-review CURRENT recertification. Post-promotion state-transition guard blocked at Gate G088 because uncommitted WORKTREE planning-truth edits in spec.md, design.md, and scopes.md are treated as post-certification edits under done state. Parent remains blocked; observations are preserved."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "done",
+      "startedAt": "2026-05-26T14:15:13Z",
+      "completedAt": "2026-05-26T14:15:13Z",
+      "summary": "Completed final parent promotion after commit ebff7226 stabilized the recertified planning truth in git. Parent artifact-lint passed, traceability guard passed with 0 warnings, pre-promotion post-cert-spec-edit guard passed for blocked state, and state-transition guard permitted done with one non-blocking warning before validate-owned certification metadata was refreshed. Post-edit guard reruns are recorded by the current validate invocation."
     }
   ],
   "activeBugs": [],
@@ -451,7 +456,7 @@
       "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
     }
   ],
-  "lastUpdatedAt": "2026-05-26T07:41:19Z",
+  "lastUpdatedAt": "2026-05-26T14:15:13Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
@@ -465,10 +470,10 @@
     "reworkQueue": "rework-queue.json"
   },
   "routing": {
-    "nextOwner": "human",
+    "nextOwner": "none",
     "targetSpec": "specs/055-notification-source-ntfy-adapter",
-    "targetScope": "final-certification-g088-worktree-blocked",
-    "constraint": "Gate G088 still blocks done certification because spec.md, design.md, and scopes.md remain uncommitted WORKTREE planning-truth edits; this no-commit invocation cannot stabilize those edits for done-state certification."
+    "targetScope": "final-certification",
+    "constraint": "Final parent certification completed after the recertified planning truth was stabilized in commit ebff7226; no owner route remains."
   },
-  "notes": "Docs/governance cleanup reconciled parent active status/current-state prose and demoted low-signal historical report fences while preserving transcript text. Post-cleanup spec-review recertified the current dirty parent spec.md, design.md, and scopes.md as CURRENT against implemented ntfy behavior and the done BUG-CHAOS child. Validate attempted final parent promotion, but the post-promotion state-transition guard still blocked Gate G088 because those planning-truth files remain uncommitted WORKTREE edits. Parent remains blocked; no commit, proposal recreation, or runtime/source/config/deploy change was made."
+  "notes": "Docs/governance cleanup reconciled parent active status/current-state prose and demoted low-signal historical report fences while preserving transcript text. Post-cleanup spec-review recertified parent spec.md, design.md, and scopes.md as CURRENT against implemented ntfy behavior and the done BUG-CHAOS child. Commit ebff7226 stabilized the recertified planning truth in git, making the prior G088 WORKTREE blocker obsolete. Validate promoted the parent to done with refreshed certification metadata; no proposal recreation or runtime/source/config/deploy change was made."
 }
