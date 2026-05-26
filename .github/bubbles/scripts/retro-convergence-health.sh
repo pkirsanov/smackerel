@@ -175,10 +175,33 @@ metrics_program='
     )];
   def message_records($records):
     [$records[] | .. | objects | select(has("role") or has("message") or has("content"))];
+  def state_snapshot_mode:
+    ((.mode? // "") == "start" or (.mode? // "") == "end");
+  def state_snapshot_key:
+    [
+      ((.phase? // "") | tostring),
+      (((.scopeId? // .scopeID? // .scope? // .specDir? // .featureDir? // .spec? // .feature? // "") | norm)),
+      ((.agent? // "") | tostring)
+    ] | @json;
   def start_present:
     ((.runStartedAt? // .startedAt? // .phaseStartedAt? // .startAt? // .startTime?) != null);
   def end_present:
     ((.runCompletedAt? // .completedAt? // .phaseCompletedAt? // .endAt? // .endTime?) != null);
+  def mode_snapshot_groups($snapshots):
+    [$snapshots[] | select(state_snapshot_mode) | . + {__stateSnapshotKey: state_snapshot_key}]
+    | group_by(.__stateSnapshotKey)
+    | map({
+        startCount: (map(select((.mode? // "") == "start")) | length),
+        endCount: (map(select((.mode? // "") == "end")) | length)
+      });
+  def logical_snapshot_counts($snapshots):
+    ($snapshots | map(select(state_snapshot_mode | not))) as $classicSnapshots |
+    (mode_snapshot_groups($snapshots)) as $modeGroups |
+    ($classicSnapshots | map(select(start_present and end_present)) | length) as $classicComplete |
+    ($classicSnapshots | length) as $classicTotal |
+    ($modeGroups | map(([.startCount, .endCount] | min)) | add // 0) as $modeComplete |
+    ($modeGroups | map(([.startCount, .endCount] | max)) | add // 0) as $modeTotal |
+    {complete: ($classicComplete + $modeComplete), total: ($classicTotal + $modeTotal)};
   def average($values):
     if ($values | length) == 0 then 0 else (($values | add) / ($values | length)) end;
   def ratio($num; $den; $empty):
@@ -189,14 +212,15 @@ metrics_program='
   envelope_records($records) as $envelopes |
   snapshot_records($records) as $snapshots |
   message_records($records) as $messages |
+  logical_snapshot_counts($snapshots) as $snapshotCounts |
   ([ $records[] | .. | objects | .turnCount? | numbers ] | max // (if ($snapshots | length) > 0 then ($snapshots | length) else ($messages | length) end)) as $turnCount |
   ($envelopes | map(select((.compactedAt? // null) != null)) | length) as $compactionEvents |
-  ($snapshots | map(select(start_present and end_present)) | length) as $completeSnapshots |
+  ($snapshotCounts.complete) as $completeSnapshots |
   count_regex($records; "(^|[^A-Za-z0-9_])recap([^A-Za-z0-9_]|$)") as $recapCount |
   count_regex($records; "(^|[^A-Za-z0-9_])handoff([^A-Za-z0-9_]|$)") as $handoffCount |
   count_regex($records; "summarizeConversationHistory|summarize[[:space:]_-]+conversation[[:space:]_-]+history") as $summarizeHistoryCount |
   count_regex($records; "pre-existing failure|pre-existing test failure|carried forward|out of session scope|previous-session failure|not introduced by this spec") as $preExistingDeferralCount |
-  (ratio($completeSnapshots; ($snapshots | length); 1)) as $snapshotCompleteness |
+  (ratio($completeSnapshots; $snapshotCounts.total; 1)) as $snapshotCompleteness |
   (ratio($compactionEvents; ($envelopes | length); 1)) as $compactionFrequency |
   (($recapCount + $handoffCount) > 2 or $summarizeHistoryCount > 2 or $snapshotCompleteness < 1) as $failed |
   (($recapCount + $handoffCount) == 2 or $summarizeHistoryCount > 0) as $degraded |

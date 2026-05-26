@@ -32,6 +32,12 @@ write_workflows() {
   cp "$SCRIPT_DIR/../workflows.yaml" "$repo/bubbles/workflows.yaml"
 }
 
+write_downstream_workflows() {
+  local repo="$1"
+  mkdir -p "$repo/.github/bubbles"
+  cp "$SCRIPT_DIR/../workflows.yaml" "$repo/.github/bubbles/workflows.yaml"
+}
+
 write_state() {
   local repo="$1"
   local mode="$2"
@@ -206,6 +212,23 @@ assert_exit "S4 docs-only exemption" 0
 assert_stdout_contains "S4" "SKIP Gate G093"
 assert_stdout_contains "S4" "statusCeiling=docs_updated"
 assert_stdout_contains "S4" "lower ceiling prevents done certification"
+
+echo ""
+echo "--- S4b: downstream .github-installed workflows layout resolves ---"
+repo="$(stage_repo s4b-downstream-layout docs-only docs_updated false null)"
+rm -rf "$repo/bubbles"
+write_downstream_workflows "$repo"
+base="$(git -C "$repo" rev-parse HEAD)"
+mkdir -p "$repo/docs"
+cat > "$repo/docs/downstream-layout.md" <<'EOF'
+# Downstream layout fixture
+EOF
+commit_all "$repo" "downstream docs-only update"
+head="$(git -C "$repo" rev-parse HEAD)"
+run_guard "$repo" --base "$base" --head "$head"
+assert_exit "S4b downstream workflows layout" 0
+assert_stdout_contains "S4b" "SKIP Gate G093"
+assert_stdout_contains "S4b" "statusCeiling=docs_updated"
 
 echo ""
 echo "--- S5: report Code Diff Evidence classifies delivery paths when git window is unavailable ---"

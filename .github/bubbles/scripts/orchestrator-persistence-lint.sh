@@ -29,6 +29,20 @@ TARGET_FILES=(
   "agents/bubbles.sprint.agent.md"
 )
 
+resolve_repo_file() {
+  local rel="$1"
+  local candidate
+
+  for candidate in "$REPO_ROOT/$rel" "$REPO_ROOT/.github/$rel"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 FORBIDDEN_PHRASES=(
   "should i continue"
   "shall i proceed"
@@ -142,8 +156,8 @@ fi
 
 missing_count=0
 for rel in "${TARGET_FILES[@]}"; do
-  path="$REPO_ROOT/$rel"
-  if [[ ! -f "$path" ]]; then
+  path="$(resolve_repo_file "$rel" || true)"
+  if [[ -z "$path" ]]; then
     echo "orchestrator-persistence-lint: missing target file: $rel" >&2
     missing_count=$((missing_count + 1))
   elif [[ ! -r "$path" ]]; then
@@ -237,7 +251,7 @@ check_required_language() {
 }
 
 for rel in "${TARGET_FILES[@]}"; do
-  path="$REPO_ROOT/$rel"
+  path="$(resolve_repo_file "$rel" || true)"
   scan_forbidden_phrases "$rel" "$path"
   check_required_language "$rel" "$path"
 done
