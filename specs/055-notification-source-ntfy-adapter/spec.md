@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress - analyst specification created. This feature defines the concrete ntfy notification source adapter that plugs into the source-neutral Notification Intelligence Handler Service from spec 054. It does not duplicate core notification processing, does not create a separate ntfy incident model, and does not forward ntfy messages directly to Telegram or any other output channel.
+Blocked for final artifact certification only. The concrete ntfy notification source adapter has been implemented and spec-review recertification found the runtime behavior aligned with this contract. Parent state remains `blocked` until validate-owned certification metadata, done-mode artifact-lint, traceability, and state-transition guard checks are rerun after governance reconciliation. The adapter plugs into the source-neutral Notification Intelligence Handler Service from spec 054; it does not duplicate core notification processing, create a separate ntfy incident model, or forward ntfy messages directly to Telegram or any other output channel.
 
 ## Problem Statement
 
@@ -16,13 +16,13 @@ This feature turns ntfy into a thin, source-qualified adapter. It owns ntfy tran
 
 | Capability | Existing Surface | Current Status | Gap for Spec 055 |
 |------------|------------------|----------------|------------------|
-| Source-neutral notification core | `internal/notification.SourceAdapter`, `SourceEventSink`, `SourceEventEnvelope`, and `SourceHealthReport` | Present in spec 054 implementation | No concrete ntfy adapter exists to implement the contract |
-| Raw and normalized notification pipeline | `internal/notification.Service.SubmitSourceEvent` and `Process` | Present | ntfy events are not yet translated into `SourceEventEnvelope` values |
-| Source health model | `SourceHealthConnected`, `SourceHealthDisconnected`, `SourceHealthDegraded` plus redacted health reporting | Present | ntfy-specific connection, subscription, retry, lag, and dead-letter health need adapter ownership |
-| Core ntfy boundary guard | `internal/notification/no_ntfy_core_dependency_test.go` and source contract tests | Present | Spec 055 must keep ntfy code outside the core package and satisfy the same conformance expectations |
-| Operator source status API | `/api/notifications/sources` documented in `docs/API.md` | Present | ntfy source instances need to appear through this existing source health surface, not through ntfy-only APIs |
-| Core notification config | `notification_intelligence` and `notification_outputs` in `config/smackerel.yaml` | Present | ntfy-specific configuration must live in an adapter-owned config surface, not in core notification blocks |
-| ntfy source adapter | No existing spec 055 artifact or source adapter implementation found at analysis time | Missing | This spec defines the concrete business contract |
+| Source-neutral notification core | `internal/notification.SourceAdapter`, `SourceEventSink`, `SourceEventEnvelope`, and `SourceHealthReport` | Present in spec 054 implementation | Spec 055 consumes the contract through the implemented ntfy adapter. |
+| Raw and normalized notification pipeline | `internal/notification.Service.SubmitSourceEvent` and `Process` | Present | Implemented ntfy mapping submits message events as `SourceEventEnvelope` values through the source sink. |
+| Source health model | `SourceHealthConnected`, `SourceHealthDisconnected`, `SourceHealthDegraded` plus redacted health reporting | Present | Implemented ntfy health covers connection, subscription, retry, lag, dead-letter pressure, and redacted failure state. |
+| Core ntfy boundary guard | `internal/notification/no_ntfy_core_dependency_test.go` and source contract tests | Present | Implemented guard coverage keeps ntfy code outside the core package and preserves source-neutral processing. |
+| Operator source status API | `/api/notifications/sources` documented in `docs/API.md` plus adapter-owned ntfy detail/reconnect/dead-letter/replay routes | Present | Implemented ntfy source instances appear through source health and authenticated ntfy operational APIs. |
+| Core notification config | `notification_intelligence`, `notification_outputs`, and generated `NTFY_SOURCES_JSON` from SST-managed config | Present | Implemented ntfy configuration is adapter-owned, explicit, and fail-loud; core notification blocks remain source-neutral. |
+| ntfy source adapter | `internal/notification/source/ntfy` with runtime startup and API wiring | Present | Current blocker is artifact certification reconciliation, not a missing adapter implementation. |
 
 ## Dependency On Spec 054
 

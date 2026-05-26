@@ -6,7 +6,7 @@
 
 Spec 054 has implemented the source-neutral notification core under `internal/notification`: `SourceAdapter`, `SourceEventSink`, `SourceEventEnvelope`, source health, raw event storage, normalization, classification, correlation, decisioning, loop guard, and dashboard output dispatch. The authenticated source health API already exposes `GET /api/notifications/sources`, and the core package has a static guard that rejects ntfy-specific or Telegram-specific production coupling.
 
-Spec 055 has an analyst and UX specification for ntfy as a concrete notification source adapter. There is no ntfy adapter package, ntfy transport client, ntfy topic state store, ntfy dead-letter store, replay control, or ntfy source detail API yet.
+Spec 055 now has an implemented ntfy adapter package, explicit adapter config parsing, runtime startup from generated `NTFY_SOURCES_JSON`, stream/webhook handling, topic health state, dead-letter and replay storage, authenticated ntfy operator APIs, source detail views, and focused unit/integration/E2E/stress coverage. Spec-review recertification found runtime behavior aligned with this design. The active blocker is final artifact certification reconciliation: validate still owns final `certifiedAt`, certified phase metadata, and the promotion rerun after done-mode artifact-lint, traceability guard, and state-transition guard are clean.
 
 ### Target State
 

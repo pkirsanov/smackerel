@@ -2,13 +2,13 @@
   "version": 3,
   "featureDir": "specs/055-notification-source-ntfy-adapter",
   "featureName": "Notification Source ntfy Adapter",
-  "status": "done_with_concerns",
+  "status": "blocked",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.validate",
     "currentPhase": "validate",
-    "currentScope": "final-certification",
-    "runStartedAt": "2026-05-24T20:11:12Z",
+    "currentScope": "final-certification-g088-worktree-blocked",
+    "runStartedAt": "2026-05-26T07:35:35Z",
     "completedPhaseClaims": [
       "plan",
       "implement",
@@ -20,12 +20,13 @@
       "security",
       "chaos",
       "audit",
-      "validate"
+      "validate",
+      "spec-review"
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done_with_concerns",
+    "status": "blocked",
     "completedScopes": [
       "scope-1-config-and-source-identity",
       "scope-2-event-mapping-and-core-ingest",
@@ -48,7 +49,8 @@
       "security",
       "chaos",
       "audit",
-      "validate"
+      "validate",
+      "spec-review"
     ],
     "scopeProgress": [
       {
@@ -119,22 +121,16 @@
       "active": false,
       "lockedScenarioIds": []
     },
-    "concerns": [
+    "blockers": [
       {
-        "id": "CONCERN-055-001-legacy-evidence-fence-cleanup-parent",
-        "severity": "low",
-        "summary": "Validation classified the stale evidence-signal warnings on the parent report.md as non-blocking planning/interpreted sections and promoted certification.status to done_with_concerns; legacy report.md evidence-fence cleanup remains as documentation hygiene follow-up.",
-        "followUpOwner": "bubbles.docs",
-        "followUpAction": "next-sprint-todo"
-      },
-      {
-        "id": "CONCERN-055-002-legacy-evidence-fence-cleanup-blocks-child-literal-done",
-        "severity": "low",
-        "summary": "Literal child (BUG-CHAOS-20260524-001) done promotion remains blocked by the same legacy report evidence-fence cleanup; the child bug is independently certified done_with_concerns and does not gate parent certification.",
-        "followUpOwner": "bubbles.docs",
-        "followUpAction": "next-sprint-todo"
+        "id": "BLOCK-055-20260526-G088-WORKTREE-PLANNING-TRUTH",
+        "severity": "high",
+        "summary": "Final parent done promotion remains blocked by Gate G088 because the post-promotion guard reports uncommitted WORKTREE planning-truth edits in spec.md, design.md, and scopes.md as post-certification edits. The user explicitly requested no commit, so validate cannot make the done-state guard pass in this invocation.",
+        "nextOwner": "human",
+        "requiredAction": "Stabilize the spec-review-recertified planning truth in git or otherwise remove the WORKTREE post-certification planning edit condition, then return to validate for final parent promotion guard reruns."
       }
-    ]
+    ],
+    "observations": []
   },
   "policySnapshot": {
     "workflowMode": {
@@ -377,15 +373,76 @@
       "startedAt": "2026-05-24T20:11:12Z",
       "completedAt": "2026-05-24T20:24:00Z",
       "summary": "Validated the seven remaining Scope 1, Scope 4, and Scope 6 DoD items against later implementation, test, security, chaos, and audit evidence; manually classified evidence-signal warnings as stale planning/interpreted sections not used for promotion; certified Scopes 1-9 and promoted spec 055 to done_with_concerns because historical report evidence fences need cleanup but do not contradict the latest executed evidence."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "startedAt": "2026-05-26T05:41:00Z",
+      "completedAt": "2026-05-26T05:45:40Z",
+      "runCompletedAt": "2026-05-26T05:45:40Z",
+      "reviewStatus": "MINOR_DRIFT",
+      "trustLevel": "MINOR_DRIFT",
+      "summary": "Full-delivery spec-review recertification checked parent spec.md, design.md, scopes.md, report.md, and state.json against the implemented ntfy adapter and BUG-CHAOS child. Runtime behavior and child replay/G048 repairs align with the final contract, but active status/current-state prose in parent planning artifacts and historical report evidence fences required docs/governance cleanup before validate-owned final promotion. See spec-review.md."
+    },
+    {
+      "agent": "bubbles.docs",
+      "phasesExecuted": [
+        "docs"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "startedAt": "2026-05-26T06:00:00Z",
+      "completedAt": "2026-05-26T06:20:00Z",
+      "summary": "Reconciled stale active status/current-state prose in parent spec.md, design.md, and scopes.md; demoted historical low-signal report fences in parent and BUG-CHAOS reports while preserving transcript text; reran required parent and child artifact lint, traceability guard, and state-transition guard in blocked state. Final certification remains validate-owned."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "startedAt": "2026-05-26T06:50:10Z",
+      "completedAt": "2026-05-26T07:12:16Z",
+      "summary": "Pre-promotion parent and child artifact-lint, traceability guard, and state-transition guard runs permitted done status, but the post-edit parent state-transition guard blocked final done promotion at Gate G088 because spec.md, design.md, and scopes.md are still uncommitted planning-truth edits. Child BUG-CHAOS-20260524-001 was promoted to done; parent remains blocked for current spec-review/stable-planning certification."
+    },
+    {
+      "agent": "bubbles.spec-review",
+      "phasesExecuted": [
+        "spec-review"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "startedAt": "2026-05-26T07:19:13Z",
+      "completedAt": "2026-05-26T07:19:13Z",
+      "runCompletedAt": "2026-05-26T07:19:13Z",
+      "reviewStatus": "CURRENT",
+      "trustLevel": "CURRENT",
+      "summary": "Post-docs/governance spec-review recertification checked the current dirty parent spec.md, design.md, and scopes.md against the implemented ntfy adapter and validate-certified BUG-CHAOS child state. The active parent planning truth is current and coherent with implemented behavior; final parent promotion remains validate-owned for certification metadata and guard reruns. See spec-review.md."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "blocked",
+      "startedAt": "2026-05-26T07:35:35Z",
+      "completedAt": "2026-05-26T07:41:19Z",
+      "summary": "Attempted final parent promotion after current-session parent artifact-lint, traceability guard, and pre-promotion state-transition guard permitted the transition following spec-review CURRENT recertification. Post-promotion state-transition guard blocked at Gate G088 because uncommitted WORKTREE planning-truth edits in spec.md, design.md, and scopes.md are treated as post-certification edits under done state. Parent remains blocked; observations are preserved."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [
     {
       "bugId": "BUG-CHAOS-20260524-001",
-      "status": "validated_done_with_concerns",
+      "status": "done",
       "resolvedAt": "2026-05-24T23:17:08Z",
-      "summary": "Repeated ntfy dead-letter replay returns the existing accepted attempt and does not repeat source-sink side effects after a successful replay. Seed 20260524 closure rerun showed replay_attempt_rows=1, replay_raw=1, replay_normalized=1. G048 redaction_state decode rework is repaired and validate-certified with concerns in the standalone bug packet."
+      "summary": "Repeated ntfy dead-letter replay returns the existing accepted attempt and does not repeat source-sink side effects after a successful replay. Seed 20260524 closure rerun showed replay_attempt_rows=1, replay_raw=1, replay_normalized=1. G048 redaction_state decode rework is repaired and validate-certified in the standalone bug packet."
     }
   ],
   "failures": [
@@ -394,7 +451,7 @@
       "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
     }
   ],
-  "lastUpdatedAt": "2026-05-24T23:17:08Z",
+  "lastUpdatedAt": "2026-05-26T07:41:19Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
@@ -407,5 +464,11 @@
     "transitionRequests": "transition-requests.json",
     "reworkQueue": "rework-queue.json"
   },
-  "notes": "Analyst, UX, design, planning, implementation, test, docs, stabilize, regression, simplify, security, chaos, final audit, and validation certification evidence exists in report.md. Implementation evidence for the production ntfy webhook receiver/route, NTFY_SOURCES_JSON runtime startup path, invalid-config disconnected health rows, and dead-letter pressure degraded health is recorded and mapped to Scopes 1-9. Security initially found replayable ntfy dead-letter RawPayload exposure through operator API JSON and routed remediation to implementation/test/docs; the security closure rerun recorded in report.md closes SEC-055-001 and SEC-055-002 for the reviewed operator API/docs/log-surface surfaces. Chaos seed 20260524 created BUG-CHAOS-20260524-001 for replay-burst side-effect idempotency; implementation and chaos closure evidence for the repair is recorded in the bug report and parent report. Final audit reran artifact lint, traceability, implementation reality, focused ntfy unit/integration/e2e/stress, regression-quality, and bug artifact gates; no new critical implementation, security, docs, or focused-test gap was found. Validation classified the stale evidence-signal warnings as non-blocking planning/interpreted sections and promoted certification.status to done_with_concerns. Standalone validation later certified BUG-CHAOS-20260524-001 as validated_done_with_concerns after the G048 redaction_state decode rework passed focused unit, integration, E2E, stress, lint, format, implementation reality, artifact, traceability, and state-transition gates; literal child done remains blocked by legacy report evidence-fence cleanup."
+  "routing": {
+    "nextOwner": "human",
+    "targetSpec": "specs/055-notification-source-ntfy-adapter",
+    "targetScope": "final-certification-g088-worktree-blocked",
+    "constraint": "Gate G088 still blocks done certification because spec.md, design.md, and scopes.md remain uncommitted WORKTREE planning-truth edits; this no-commit invocation cannot stabilize those edits for done-state certification."
+  },
+  "notes": "Docs/governance cleanup reconciled parent active status/current-state prose and demoted low-signal historical report fences while preserving transcript text. Post-cleanup spec-review recertified the current dirty parent spec.md, design.md, and scopes.md as CURRENT against implemented ntfy behavior and the done BUG-CHAOS child. Validate attempted final parent promotion, but the post-promotion state-transition guard still blocked Gate G088 because those planning-truth files remain uncommitted WORKTREE edits. Parent remains blocked; no commit, proposal recreation, or runtime/source/config/deploy change was made."
 }

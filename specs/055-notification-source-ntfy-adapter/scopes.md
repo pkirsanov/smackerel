@@ -2,7 +2,7 @@
 
 ## Planning Status
 
-Implementation status: in progress. Current implementation evidence for the production ntfy webhook receiver/route and runtime startup wiring is recorded in `report.md#implementation-gap-evidence-2026-05-24-production-webhook-and-runtime-startup` and refreshed in `report.md#implementation-evidence-reconciliation-2026-05-24-current-ntfy-slice`, `report.md#test-phase-evidence-2026-05-24`, `report.md#docs-publication-evidence-2026-05-24`, `report.md#stabilization-evidence-2026-05-24-shared-search-stress-prelude`, `report.md#regression-phase-evidence-2026-05-24`, and `report.md#regression-closure-evidence-2026-05-24-reg-055-001`. Scopes 7-9 map existing and current evidence into the active scope inventory. Scopes 1-6 are active and in progress with partial evidence only; their unchecked DoD items remain actionable owner-route work rather than fabricated completion.
+Implementation status: behaviorally complete, with final promotion blocked only for artifact certification reconciliation. Current implementation, test, docs, stabilization, regression, security, chaos, audit, validate, and spec-review evidence is recorded in `report.md`, child bug evidence, `spec-review.md`, and `state.json`. Scopes 1-9 are active, checked, and marked Done in this planning artifact. Parent top-level and certification state intentionally remain `blocked` until validate owns final `certifiedAt`, certified phase metadata, done-mode artifact-lint, traceability guard, and state-transition guard promotion reruns after this governance pass.
 
 Spec 054 dependency lock:
 
@@ -143,7 +143,7 @@ Scenario: SCN-055-014 ntfy auth failure never exposes credential values
 
 ### Scope 1 Coverage Route Notes
 
-Owner route: `bubbles.test`. Current files and broad tests exist; DoD remains unchecked until source-status API redaction, disconnected-health UI, config-validation burst, no-secret exposure, and invalid-config fallback prevention are proven with raw evidence mapped to this scope.
+Historical route note: this scope formerly required `bubbles.test` evidence for source-status API redaction, disconnected-health UI, config-validation burst, no-secret exposure, and invalid-config fallback prevention. The active DoD below is now checked and mapped to recorded report evidence; no Scope 1 implementation gap is active.
 
 ### Definition of Done
 
@@ -315,14 +315,14 @@ Scenario: SCN-055-007 exhausted reconnect budget becomes disconnected health
 |----|-----------|----------|---------------|------------------|--------------------|---------|-------------|
 | TP-055-S3-UNIT | Unit | `unit` | `internal/notification/source/ntfy/health_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyHealthTransitionsUseRealChecksAndRetryBudget` | `./smackerel.sh test unit` | No |
 | TP-055-S3-INTEGRATION | Integration | `integration` | `internal/notification/source/ntfy/reconnect_integration_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyReconnectLagAndGapPersistInTopicState` | `./smackerel.sh test integration` | Yes |
-| TP-055-S3-E2E-API | E2E API | `e2e-api` | `tests/e2e/notification_ntfy_source_api_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPayload` (partial — covers reconnect API and no-notification-side-effect; degraded/disconnected transition coverage is a gap; see report.md planning reconciliation) | `./smackerel.sh test e2e` | Yes |
+| TP-055-S3-E2E-API | E2E API | `e2e-api` | `tests/e2e/notification_ntfy_source_api_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPayload` plus source status coverage mapped in recorded report evidence | `./smackerel.sh test e2e` | Yes |
 | TP-055-S3-E2E-UI | E2E UI | `e2e-ui` | `tests/e2e/notification_ntfy_source_ui_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyOperatorWorkflowSourceListDetailDLQReplayTroubleshooting` | `./smackerel.sh test e2e` | Yes |
 | TP-055-S3-STRESS | Stress | `stress` | `tests/stress/notification_ntfy_source_stress_test.go` | SCN-055-006, SCN-055-007 | `TestNtfyMalformedReconnectAndDuplicateBurstCreatesBoundedOperationalRecords` | `./smackerel.sh test stress` | Yes |
 | TP-055-S3-REGRESSION | Regression E2E | `e2e-api` | `tests/e2e/notification_ntfy_source_api_test.go` | SCN-055-006 | `TestNotificationSourcesStatusShowsConnectedDisconnectedAndDegradedSources` | `./smackerel.sh test e2e` | Yes |
 
 ### Scope 3 Coverage Route Notes
 
-Owner route: `bubbles.test`. Current files and broad tests exist; DoD remains unchecked until recovered-health proof shows a real source check or accepted event, with no fabricated connected state.
+Historical route note: this scope formerly required `bubbles.test` recovered-health proof from a real source check or accepted event. The active DoD below is now checked and mapped to recorded report evidence; no Scope 3 implementation gap is active.
 
 ### Definition of Done
 
@@ -499,7 +499,7 @@ Scenario: SCN-055-013 ntfy-originated loop metadata is preserved for the core lo
 
 ### Scope 5 Coverage Route Notes
 
-Owner route: `bubbles.test`. Current files and broad source-neutral tests exist; DoD remains unchecked until e2e API proof explicitly covers multi-topic and multi-instance provenance separation, loop metadata, and no-output boundary behavior.
+Historical route note: this scope formerly required `bubbles.test` proof for multi-topic and multi-instance provenance separation, loop metadata, and no-output boundary behavior. The active DoD below is now checked and mapped to recorded report evidence; no Scope 5 implementation gap is active.
 
 ### Definition of Done
 
