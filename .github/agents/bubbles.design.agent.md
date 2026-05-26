@@ -27,6 +27,7 @@ handoffs:
 - Align design to repo conventions and governance; do not invent defaults or unsupported behavior.
 - **Design testable behaviors** — every design decision must produce behavior that can be tested from the user/consumer perspective. If a behavior can't be tested as a user scenario, redesign it.
 - **Include testing strategy** — design.md must describe how each major feature will be validated (which test types, what user scenarios)
+- Model reusable capabilities foundation-first when `capability-foundation.md` proportionality triggers apply; satisfy DE4 before finalizing design.md
 - **Auto-detect analysis depth** — if spec.md contains `## Actors & Personas` and `## UI Wireframes` sections (analyst + UX output), automatically use `from-analysis` depth to produce contract-grade design.md
 - Reconcile stale design sections before adding new architecture, contract, or rollout decisions; active design must expose one current truth
 - Ensure state.json exists using the version 3 control-plane template from feature-templates.md if missing
@@ -211,6 +212,23 @@ Core requirements:
 - **Scenario-to-Test Mapping:**
   | Scenario | Test Type | Test Location | Assertion |
   |----------|-----------|---------------|-----------|
+
+  ### Phase 1.75: Capability Foundation Split (DE4)
+
+  Use `capability-foundation.md` for this phase. Run it whenever proportionality triggers apply:
+
+  - brand-new reusable capability
+  - second or later provider/adapter/component/variant
+  - adapter/provider/strategy/plugin/channel/driver/connector/variant language
+  - shared UI/data/contract surface across two or more screens, features, or services
+
+  When it applies, write these active design sections:
+
+  - `## Capability Foundation` — contracts, extension points, shared behavior, foundation-owned policies
+  - `## Concrete Implementations` — each provider/adapter/channel/variant layered on the foundation
+  - `### Variation Axes` — at least two axes such as provider protocol, delivery policy, schema shape, authorization surface, storage behavior, runtime environment, or UI composition
+
+  If a single implementation is intentionally concrete, write `### Single-Implementation Justification` with a concrete reason. Empty justifications fail DE4/G094.
 
 ### Phase 2: Draft Design Structure
 Create a structured design.md with sections:

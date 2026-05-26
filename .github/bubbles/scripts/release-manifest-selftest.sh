@@ -57,6 +57,19 @@ else
   fail "Managed checksum inventory includes shared CLI surface"
 fi
 
+source_only_count="$(bubbles_json_number_field "$manifest_file" sourceOnlyFileCount)"
+if [[ -n "$source_only_count" && "$source_only_count" -gt 0 ]]; then
+  pass "Manifest records source-only file count (${source_only_count})"
+else
+  fail "Manifest records source-only file count"
+fi
+
+if grep -q '"path": "tests/regression/test_18_capability_foundation_gate.sh"' "$manifest_file"; then
+  pass "Source-only checksum inventory includes G094 regression test"
+else
+  fail "Source-only checksum inventory includes G094 regression test"
+fi
+
 profiles="$(bubbles_json_array_joined "$manifest_file" supportedProfiles ', ')"
 [[ "$profiles" == *foundation* ]] && pass "Manifest exposes foundation as a supported profile" || fail "Manifest exposes foundation as a supported profile"
 [[ "$profiles" == *delivery* ]] && pass "Manifest exposes delivery as a supported profile" || fail "Manifest exposes delivery as a supported profile"

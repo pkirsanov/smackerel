@@ -72,6 +72,8 @@ The new capability lands in `features.md` with status `planned` (or `in-progress
 
 `bubbles.analyst` reads the new release packet's `vision.md` + `features.md` row for this capability, then produces `spec.md`. `bubbles.ux` adds the wireframes when UI is in scope. `bubbles.design` drafts `design.md`. `bubbles.plan` decomposes into scopes with Gherkin scenarios and DoD.
 
+Capability-foundation checkpoint: if the idea introduces a reusable capability, a second provider/adapter/variant, or shared UI/data/contract surfaces, the planning chain must produce the Domain Capability Model, Capability Foundation, Concrete Implementations, Variation Axes, UI Primitives where applicable, and foundation-before-overlay scope dependencies before implementation starts.
+
 ### Step 5 — Implement the scopes through full delivery
 
 The `product-to-delivery` mode invoked above continues automatically: `implement → test → regression → simplify → stabilize → devops → security → docs → validate → audit → chaos → finalize`.

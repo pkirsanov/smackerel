@@ -31,6 +31,7 @@ The control plane is not just a greenfield template system. Existing repos need 
 Framework upgrade invariant:
 - Framework upgrades improve future gates; they do not retroactively invalidate specs that were already closed under an older policy epoch.
 - Historical `done` specs are grandfathered under their closure epoch until they are touched, reopened, used as authority for new work, or explicitly recertified.
+- G094 capability-first design follows the same brownfield rule: specs whose `state.json.createdAt` predates 2026-05-25 are grandfathered until touched or recertified, while new specs must satisfy the proportionality-based foundation sections when the gate applies.
 - Active, reopened, and changed specs must migrate to current control-plane schemas before recertification.
 - Spec freshness review is diagnostic by default. It builds a trust map and recommends migration or recertification work, but it must not mutate spec state unless the user explicitly requests mutation.
 - Historical all-spec recertification is a deliberate action, separate from routine framework refreshes and routine validation.

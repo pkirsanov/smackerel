@@ -134,8 +134,31 @@ Compacted records still satisfy the framework's anti-fabrication contract:
 
 - **Gate G021 (Anti-Fabrication):** The `evidenceRefs` array in each compact record IS the cited evidence. Each `rawPointer` MUST resolve to a real file on disk; orchestrators MUST NOT invent compact records.
 - **Gate G023 (State Transition Guard):** When a compact record claims an `outcome` of `completed_owned` for a scope's specialist, the underlying raw envelope at `rawPointer` MUST itself satisfy G023 (real DoD evidence, real scope status). Compaction never bypasses this — it only relocates the proof.
+- **Gate G083 (Context Compaction Discipline):** The compaction thresholds above (`count > 3` OR `cumulative rawSizeBytes > 8192` for the eligible slice, keeping the latest 2 raw) are enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`. Eligible envelopes that breach either threshold without a `compactedAt` timestamp fail Gate G083 (exit 1). Orchestrators receiving a Gate G083 violation MUST emit a `blocked` RESULT-ENVELOPE with finding `G083` and remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes — the compactor additively stamps `compactedAt` so the guard reads the next run as clean. `state-transition-guard.sh` invokes the guard as Check 24; `framework-validate.sh` runs the hermetic selftest on every framework validation pass.
 
 If `rawPointer` ever points to a file that does not exist, the compact record is invalid and MUST be discarded; the orchestrator MUST re-dispatch the specialist to obtain a fresh envelope.
+
+## Trajectory Inspector Health Mode
+
+Orchestrators SHOULD include the single-line trajectory health summary in periodic status updates for long-running framework work:
+
+```bash
+bash bubbles/scripts/trajectory-inspector.sh --health --spec specs/<feature>
+```
+
+When a retrospective has already produced convergence-health JSON with `bubbles/scripts/retro-convergence-health.sh`, pass it directly:
+
+```bash
+bash bubbles/scripts/trajectory-inspector.sh --health --input /tmp/convergence-health.json
+```
+
+The output is intentionally one line so it can be pasted into status updates without burying the active finding set:
+
+```text
+Convergence Health: turnCount=12 compactionInvocations=2 recapInvocations=1 handoffInvocations=0 blockedFindings=0 status=HEALTHY
+```
+
+Use the status as a quick operator signal: `HEALTHY` means no blocked finding or recap/handoff breach was observed, `DEGRADED` means convergence-support activity occurred but did not breach the health threshold, and `FAILED` means blocked findings or recap/handoff overuse need immediate routing attention. This complements Gate G090 retro convergence health: G090 remains the retrospective evidence gate, while `trajectory-inspector.sh --health` is the live status surface.
 
 ## Per-Turn State Snapshot
 

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 # Source fun mode support
 source "$(dirname "${BASH_SOURCE[0]}")/fun-mode.sh"
 
@@ -147,7 +152,7 @@ for report_file in "${report_files[@]}"; do
     insert_block+=$'\n'
   done
 
-  tmp_file="$(mktemp)"
+  tmp_file="$(_btmp)"
 
   if grep -Eq '^Links:' "$report_file"; then
     awk -v block="$insert_block" '

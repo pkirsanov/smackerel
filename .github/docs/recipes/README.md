@@ -106,6 +106,7 @@ Control-plane law also requires owner-only remediation and concrete result envel
 | Recipe | Problem → Solution |
 |--------|-------------------|
 | [Brainstorm an Idea](brainstorm-idea.md) | "I have an idea and want to explore it thoroughly before writing any code — like YC office hours" |
+| [Design A Capability](design-a-capability.md) | "I need a reusable foundation before adding providers, adapters, channels, connectors, variants, or shared UI screens" |
 | [Plan Only](plan-only.md) | "I want to plan and scope a feature without implementing" |
 | [Explore an Idea](explore-idea.md) | "I have a vague product idea and need to flesh it out" |
 | [Reconcile Or Redesign An Existing Feature](reconcile-redesign-existing-feature.md) | "The feature exists, but the current spec/design/scopes are stale or need a major rewrite" |

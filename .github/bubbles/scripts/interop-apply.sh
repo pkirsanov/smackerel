@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "$SCRIPT_DIR" == *"/.github/bubbles/scripts" ]]; then
@@ -157,7 +162,7 @@ write_replaceable_block() {
 
   start_marker="$(apply_marker_start "$source_id")"
   end_marker="$(apply_marker_end "$source_id")"
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
 
   if [[ -f "$target_file" ]] && grep -Fq "$start_marker" "$target_file"; then
     awk -v start_marker="$start_marker" -v end_marker="$end_marker" -v content_file="$content_file" '
@@ -331,7 +336,7 @@ run_apply() {
 
     for target_path in "${target_paths[@]}"; do
       mapfile -t grouped_source_files < <(printf '%s\n' "${target_sources[$target_path]}")
-      render_file="$(mktemp)"
+      render_file="$(_btmp)"
       render_target_content "$target_path" "$source_id" "$source_display" "${grouped_source_files[@]}" > "$render_file"
       target_file="$REPO_ROOT/$target_path"
 

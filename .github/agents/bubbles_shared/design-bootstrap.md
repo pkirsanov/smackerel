@@ -7,6 +7,7 @@ Always load:
 - Feature `design.md` when updating an existing design
 - Feature `state.json`
 - `artifact-freshness.md` when updating an existing design artifact
+- `capability-foundation.md`
 
 Load on demand:
 - Project architecture/API/operations docs only for impacted surfaces

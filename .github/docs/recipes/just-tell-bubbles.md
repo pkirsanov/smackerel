@@ -56,6 +56,7 @@ Workflow has a Phase -1 (Intent Resolution) that classifies your input:
 The planning improvements are mostly artifact-driven:
 
 - **Design Brief** appears at the top of `design.md`
+- **Capability Foundation** appears in spec/design/scopes when a request implies reusable providers, adapters, connectors, channels, variants, or shared UI surfaces
 - **Execution Outline** appears at the top of `scopes.md`
 - **Objective Research Pass** runs automatically inside brownfield modes instead of requiring a separate user command
 

@@ -72,6 +72,21 @@ Every specification must declare an **Outcome Contract** with four fields:
 
 This forces planning to focus on real-world outcomes rather than process compliance.
 
+### 2.4 Capability-First Design
+
+When work has more than one concrete implementation, provider, screen, service, connector, channel, strategy, plugin, driver, or variant, Bubbles now requires the planning chain to model the reusable capability before concrete overlays. The doctrine is proportional: a one-off utility or bug fix should stay concrete, while a notification capability with ntfy and email providers should define provider-neutral domain primitives, contracts, extension points, UI primitives, and foundation-first scopes.
+
+Layer ownership stays explicit:
+
+| Layer | Capability-First Responsibility |
+|-------|--------------------------------|
+| Analyst | `## Domain Capability Model` in `spec.md` (AN5) |
+| UX | `### UI Primitives` when two or more screens share reusable UI behavior (UX9) |
+| Design | `## Capability Foundation`, `## Concrete Implementations`, and `### Variation Axes` with at least two axes (DE4) |
+| Plan | foundation scope tagged `foundation:true`, with overlay/provider scopes depending on it (P4) |
+
+Gate G094 enforces this only for specs whose `state.json.createdAt` is on or after the gate introduction date, so historical brownfield packets are not retroactively blocked.
+
 ---
 
 ## 3. Scope Decomposition Model

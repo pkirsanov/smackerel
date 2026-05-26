@@ -25,6 +25,7 @@ handoffs:
 - Create business-level scenarios (pre-BDD — higher level than Gherkin technical scenarios)
 - Propose improvements ranked by business impact with competitive edge rationale
 - Discover edge cases commonly missed (validation, error states, concurrency, accessibility)
+- When capability-first proportionality triggers apply, define the domain capability model before concrete providers, screens, variants, or adapters; satisfy AN5 from `validation-profiles.md`
 - Reconcile stale analyst-owned sections before writing new ones; do not leave invalidated requirements active beside current truth
 - Review-shaped requests default to diagnostic output. Do NOT mutate artifacts unless the caller explicitly asks for analyst-owned spec reconciliation or an orchestrator explicitly requests promotion work.
 - Handoffs are recommendations, not automatic chained execution. Do NOT auto-invoke `bubbles.design`, `bubbles.plan`, or `bubbles.ux` as a side effect of a standalone analyst review unless the caller explicitly requested downstream artifact promotion.
@@ -169,6 +170,24 @@ Run this phase only when `socratic: true`.
 |-----------|---------|----------|--------|
 | [capability] | [endpoints] | [screens] | Complete/Partial/Missing |
 ```
+
+### Phase 1.5: Domain Capability Model (AN5)
+
+Run this phase when `capability-foundation.md` proportionality triggers apply:
+
+- The work introduces a brand-new capability with no existing foundation
+- The work adds a second or later implementation/provider/component/variant
+- The spec/design references adapter, provider, strategy, plugin, channel, driver, connector, or variant patterns
+- Two or more screens, features, or services share the same UI/data/contract surface
+
+Write `## Domain Capability Model` in `spec.md` with:
+
+- Domain primitives and lifecycle states
+- Relationships between primitives
+- Business policies every concrete implementation must obey
+- Provider-/screen-/class-neutral behavior vocabulary
+
+If the doctrine does not apply but trigger words appear, write `### Single-Capability Justification` with a concrete reason. Empty justifications fail AN5/G094.
 
 ### Phase 2: Competitive Research
 
