@@ -193,6 +193,44 @@ resolve_mode_to_file() {
   echo "$out"
 }
 
+# Validate inheritance references without materializing fully merged modes.
+# Full resolution is covered by targeted selftests; --validate only needs to
+# prove that every inherits edge is known and acyclic.
+validate_template_chain_cached() {
+  local name="$1"
+  local visited="$2"
+
+  if [[ -z "${template_seen[$name]+x}" ]]; then
+    echo "ERROR: unknown template referenced via inherits: $name" >&2
+    return 1
+  fi
+
+  if [[ ",$visited," == *",$name,"* ]]; then
+    echo "ERROR: cycle detected in template inherits chain: ${visited//,/ -> } -> $name" >&2
+    return 1
+  fi
+
+  local new_visited="${visited:+$visited,}$name"
+  local parents="${template_parents[$name]-}"
+  if [[ -n "$parents" ]]; then
+    while IFS= read -r parent; do
+      [[ -z "$parent" ]] && continue
+      validate_template_chain_cached "$parent" "$new_visited" || return 1
+    done <<< "$parents"
+  fi
+}
+
+validate_mode_inherits_cached() {
+  local name="$1"
+  local parents="${mode_parents[$name]-}"
+  if [[ -n "$parents" ]]; then
+    while IFS= read -r parent; do
+      [[ -z "$parent" ]] && continue
+      validate_template_chain_cached "$parent" "" || return 1
+    done <<< "$parents"
+  fi
+}
+
 cmd_list_modes() {
   yq -r '.modes | keys | .[]' "$WORKFLOWS_FILE"
 }
@@ -212,20 +250,43 @@ cmd_resolve_mode() {
 
 cmd_validate() {
   local errors=0
+  local template_names mode_names template_edges mode_edges
+
+  template_names="$(yq -r '(.modeTemplates // {}) | keys | .[]' "$WORKFLOWS_FILE")"
+  mode_names="$(yq -r '(.modes // {}) | keys | .[]' "$WORKFLOWS_FILE")"
+  template_edges="$(yq -r '(.modeTemplates // {}) | to_entries[] | .key as $name | (.value.inherits // [])[] | [$name, .] | @tsv' "$WORKFLOWS_FILE")"
+  mode_edges="$(yq -r '(.modes // {}) | to_entries[] | .key as $name | (.value.inherits // [])[] | [$name, .] | @tsv' "$WORKFLOWS_FILE")"
+
+  declare -A template_seen=()
+  declare -A template_parents=()
+  declare -A mode_parents=()
+
+  while IFS= read -r tname; do
+    [[ -z "$tname" ]] && continue
+    template_seen["$tname"]=1
+  done <<< "$template_names"
+
+  while IFS=$'\t' read -r child parent; do
+    [[ -z "$child" && -z "$parent" ]] && continue
+    template_parents["$child"]+="${parent}"$'\n'
+  done <<< "$template_edges"
+
+  while IFS=$'\t' read -r child parent; do
+    [[ -z "$child" && -z "$parent" ]] && continue
+    mode_parents["$child"]+="${parent}"$'\n'
+  done <<< "$mode_edges"
 
   # Validate each template resolves cleanly (catches cycles + unknown parents).
-  if [[ "$(node_kind '.modeTemplates')" == '!!map' ]]; then
-    while IFS= read -r tname; do
-      [[ -z "$tname" ]] && continue
-      local err_file
-      err_file="$(mktemp -p "$TMP_DIR")"
-      if ! resolve_template_to_file "$tname" "" > /dev/null 2> "$err_file"; then
-        echo "FAIL: template '$tname' failed to resolve:" >&2
-        cat "$err_file" >&2
-        errors=$((errors + 1))
-      fi
-    done < <(yq -r '.modeTemplates | keys | .[]' "$WORKFLOWS_FILE")
-  fi
+  while IFS= read -r tname; do
+    [[ -z "$tname" ]] && continue
+    local err_file
+    err_file="$(mktemp -p "$TMP_DIR")"
+    if ! validate_template_chain_cached "$tname" "" > /dev/null 2> "$err_file"; then
+      echo "FAIL: template '$tname' failed to resolve:" >&2
+      cat "$err_file" >&2
+      errors=$((errors + 1))
+    fi
+  done <<< "$template_names"
 
   # Validate each mode resolves cleanly (catches cycles + unknown parents
   # + malformed inheritance). Gate-registry consistency is the dedicated
@@ -235,12 +296,12 @@ cmd_validate() {
     [[ -z "$mname" ]] && continue
     local err_file
     err_file="$(mktemp -p "$TMP_DIR")"
-    if ! resolve_mode_to_file "$mname" > /dev/null 2> "$err_file"; then
+    if ! validate_mode_inherits_cached "$mname" > /dev/null 2> "$err_file"; then
       echo "FAIL: mode '$mname' failed to resolve:" >&2
       cat "$err_file" >&2
       errors=$((errors + 1))
     fi
-  done < <(yq -r '.modes | keys | .[]' "$WORKFLOWS_FILE")
+  done <<< "$mode_names"
 
   if (( errors > 0 )); then
     echo "Validation failed with $errors error(s)." >&2

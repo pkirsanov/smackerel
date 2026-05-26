@@ -12,4 +12,5 @@ Load on demand:
 - `test-fidelity.md`
 - `consumer-trace.md`
 - `e2e-regression.md`
+- `capability-foundation.md` when foundation/overlay scope ordering may apply
 - Project command/policy files only when needed for command or repo-specific rule resolution

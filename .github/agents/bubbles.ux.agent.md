@@ -25,6 +25,7 @@ handoffs:
 - Create ASCII wireframes as the **primary, machine-readable** format (consumed by downstream agents)
 - Create mermaid flow diagrams as **complementary visualization** for user flows
 - Map every business scenario to a screen flow
+- When two or more screens or cross-feature reuse share UI behavior, define reusable UI primitives and composition rules; satisfy UX9 from `validation-profiles.md`
 - Ensure accessibility (WCAG), responsive design, and design system compliance
 - Reference project design system from ui-design instructions or equivalent
 - Reconcile stale wireframes, screen inventories, and flows before adding new UX truth
@@ -167,6 +168,19 @@ Compatibility: if `redesign: true` is present, treat it as `mode: redesign`.
 | Dashboard | Host | Existing - Modify | BS-001, BS-003 |
 | Booking Form | Guest | New | BS-005, BS-006 |
 ```
+
+### Phase 1.5: UI Primitives Inventory (UX9)
+
+Run this phase when two or more screens, features, or user journeys share the same UI pattern, data surface, or interaction behavior.
+
+Write `### UI Primitives` under `## UI Wireframes` with:
+
+- reusable primitives such as controls, badges, timelines, selectors, panels, empty/error states, or status vocabulary
+- every screen that consumes each primitive
+- composition rules that downstream implementation must follow
+- accessibility and responsive constraints that belong to the primitive rather than one screen
+
+If the UX surface is intentionally one screen only, write `### Single-Screen Justification` with a concrete reason. Empty justifications fail UX9/G094.
 
 ### Phase 2: ASCII Wireframe Creation
 

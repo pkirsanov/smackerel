@@ -106,6 +106,22 @@ phase_4_wrap_up:
 
 When accumulating goal-level `RESULT-ENVELOPE`s across the queued-goal sprint loop, follow [operating-baseline.md → Context Compaction Discipline (Orchestrator Agents)](bubbles_shared/operating-baseline.md). Compact every 3 goal results OR when the accumulated raw envelope text exceeds 8 KB, whichever fires first. Use `bash bubbles/scripts/context-compactor.sh <raw-envelope-file>` and append the resulting record to `compactedHistory[]` in `.specify/memory/bubbles.session.json`. Keep the latest 2 raw envelopes in working memory; never drop blocked goals or `nextRequiredOwner` routing.
 
+## Convergence Cap (Gate G082 — MANDATORY)
+
+Every goal that this sprint dispatches inherits the convergence-cap contract. The cap value `maxConvergenceIterations` lives in `bubbles/workflows.yaml` (default 10) and is mechanically enforced by `bubbles/scripts/convergence-cap-guard.sh` (registered as Gate `G082` and invoked as Check 23 inside `bubbles/scripts/state-transition-guard.sh`). Each per-goal convergence iteration that this sprint orchestrates MUST record progress by calling `bash bubbles/scripts/state-snapshot.sh --convergence-iteration <N> --spec-dir <specDir>` with `BUBBLES_AGENT_NAME=bubbles.sprint` in env (or the dispatched goal agent's name, when expanded). When the guard reports the cap exceeded for any spec, the affected goal MUST surface a `blocked` RESULT-ENVELOPE with finding `G082` to the sprint ledger and the sprint MUST NOT restart that goal in the same session.
+
+## In-Loop Compaction Discipline (Gate G083 — MANDATORY)
+
+Every goal that this sprint dispatches also inherits the in-loop compaction contract. Between specialist (or goal) dispatches, this sprint MUST keep its trailing transition-packet log inside per-spec budgets: the eligible slice (all envelopes for the active spec EXCEPT the latest 2 kept raw) MUST satisfy BOTH `count <= 3` AND `cumulative rawSizeBytes <= 8192` UNLESS each over-budget envelope carries a `compactedAt` timestamp. Enforced mechanically by `bubbles/scripts/compaction-discipline-guard.sh` against `.specify/memory/bubbles.session.json` `envelopesReceived[]`; invoked as Check 24 by `bubbles/scripts/state-transition-guard.sh`. A guard violation MUST surface a `blocked` RESULT-ENVELOPE with finding `G083` to the sprint ledger; remediate by running `bubbles/scripts/context-compactor.sh` on the over-budget envelopes (it additively stamps `compactedAt`) BEFORE proceeding to the next dispatch. See `agents/bubbles_shared/operating-baseline.md` → "Context Compaction Discipline" for the full operating contract.
+
+## Orchestrator Persistence Default (Gate G086 — MANDATORY)
+
+After any non-terminal phase, this orchestrator MUST automatically continue to the next phase. It may stop only for convergence achieved, max iterations reached, user requests stop, or fundamental impossibility. Enforced by `bubbles/scripts/orchestrator-persistence-lint.sh` (registered as Gate `G086` and invoked as Check 27 inside `bubbles/scripts/state-transition-guard.sh`); lint findings MUST surface in a `blocked` RESULT-ENVELOPE with finding `G086` to the sprint ledger.
+
+## Planning Workflow Chain (Gate G091 — MANDATORY)
+
+Any sprint-dispatched goal that creates or repairs planning truth inherits the canonical planning chain: `bubbles.analyst` → `bubbles.ux` → `bubbles.design` → `bubbles.plan`. UX is mandatory even for framework/operator/non-UI work; non-UI UX defines workflow behavior, status language, blocked envelopes, and exception handling. Enforced by `bubbles/scripts/planning-workflow-chain-guard.sh` (registered as Gate `G091` and invoked as Check 28 inside `bubbles/scripts/state-transition-guard.sh`).
+
 ## Time Management
 
 ```yaml

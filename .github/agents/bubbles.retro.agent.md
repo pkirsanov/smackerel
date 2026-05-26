@@ -72,11 +72,11 @@ git shortlog --since="N days ago" -sn --no-merges
 ### Step 2: Gather Spec Metrics
 
 For each `specs/*/state.json`:
-- Count specs by status (`done`, `done_with_concerns`, `in_progress`, `blocked`, `not_started`)
+- Count specs by status (`done`, legacy read-only `done_with_concerns`, `in_progress`, `blocked`, `not_started`)
 - Extract `workflowMode` used per spec
 - Count `completedScopes` vs total scopes
 - Count completed phases per spec
-- Extract `concerns` from `done_with_concerns` specs
+- Extract `observations[]` from `done` specs and legacy observations/concerns from legacy read-only `done_with_concerns` specs
 
 ### Step 3: Analyze Gate Health
 
@@ -186,6 +186,32 @@ Recommended actions based on highest-rate metric.}
 
 **Net forward progress** is the inverse of weighted slop: `100% - (scope_reopen_rate * 0.3 + phase_retry_rate * 0.2 + post_validate_reversion_rate * 0.3 + design_reversal_rate * 0.1 + fix_on_fix_rate * 0.1)`. This is a rough heuristic — the weights emphasize reopens and reversions because those represent the most expensive rework.
 
+### Step 5b: Convergence-Health Signals
+
+Every retrospective MUST include a `## Convergence Health` section populated by:
+
+```bash
+bash bubbles/scripts/retro-convergence-health.sh <specDir> --out <retro-health-section.md>
+```
+
+The script reads `.specify/memory/bubbles.session.json` by default, or an explicit transcript/session-store export passed with `--session <path>`. Gate G090 (`retro_convergence_health_evidence_gate`) enforces the machine-readable signal. More than 2 combined recap/handoff invocations is a P0 convergence regression and MUST surface as `slo: failed`.
+
+Required output schema in the retrospective data model:
+
+```json
+{
+	"convergenceHealth": {
+		"recapCount": 0,
+		"handoffCount": 0,
+		"summarizeHistoryCount": 0,
+		"turnCount": 0,
+		"slo": "pass"
+	}
+}
+```
+
+Allowed `slo` values are `pass`, `degraded`, and `failed`. A retrospective may include the legacy R7 metric keys (`avgLoopIterations`, `maxConvergenceIterations`, `compactionFrequency`, `preExistingDeferralCount`, `snapshotCompleteness`) as supporting context, but the `convergenceHealth` object is the required handoff schema.
+
 ### Step 6: Produce Retrospective
 
 Write to `.specify/memory/retros/YYYY-MM-DD.md`:
@@ -194,14 +220,14 @@ Write to `.specify/memory/retros/YYYY-MM-DD.md`:
 # Retro: {date}
 
 ## Velocity
-- **Specs completed:** N (done: X, done_with_concerns: Y)
+- **Specs completed:** N (done: X, legacy read-only done_with_concerns: Y)
 - **Scopes completed:** N / M total
 - **DoD items validated:** N
 - **Git stats:** +{added} / -{removed} lines across {files} files, {commits} commits
 - **Sessions:** {count} (estimated from commit timestamp gaps)
 
-## Concerns Carried
-{List any concerns from done_with_concerns specs — these are things to monitor}
+## Observations Carried
+{List observations from done specs plus any migrated legacy read-only done_with_concerns notes — these are things to monitor}
 
 ## Gate Health
 | Gate | Pass | Fail | Failure Rate |
@@ -258,6 +284,9 @@ Write to `.specify/memory/retros/YYYY-MM-DD.md`:
 | **Net forward progress** | — | {pct}% | {↑↓→} |
 
 *Slop tax > 30% means the framework is generating more rework than value. Target: < 15%.*
+
+## Convergence Health
+{Paste or synthesize the section emitted by `retro-convergence-health.sh`. Required structured payload: `convergenceHealth: {recapCount, handoffCount, summarizeHistoryCount, turnCount, slo}`. Gate G090 fails if `slo` is `failed`; more than 2 combined recap/handoff invocations is a P0 convergence regression.}
 
 ## Trends (vs {prior_retro_date})
 - Scope velocity: {delta}% ({old} → {new} per session)

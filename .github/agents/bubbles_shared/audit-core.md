@@ -40,7 +40,7 @@ Purpose: mandatory audit/validation rules for `bubbles.audit` and `bubbles.valid
 | DoD item was unchecked `[ ]` and then checked `[x]` in a later edit (re-check) | Late completion may indicate initial difficulty worth verifying |
 | Evidence shows warnings in output (even if exit code was 0) | Warnings may indicate non-critical but real issues |
 | Test passed on first attempt for a non-trivial change | "Too clean" execution pattern — legitimate but worth a glance |
-| Scope has `Done with Concerns` status | Concerns exist that the user should be aware of |
+| Scope is `Done` with `observations[]` | Non-blocking observations exist that the user should be aware of |
 | Any Uncertainty Declaration was resolved by this audit pass | Resolution of uncertainty is inherently higher-risk |
 
 ### Output Format

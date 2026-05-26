@@ -16,6 +16,7 @@ REAL_WORKFLOWS="$ROOT_DIR/bubbles/workflows.yaml"
 _selftest_tmp_base="${TMPDIR:-$HOME/.cache}"
 mkdir -p "$_selftest_tmp_base"
 TMP_DIR="$(mktemp -d -p "$_selftest_tmp_base" bubbles-mode-resolver-test.XXXXXX)"
+selftest_timeout_seconds="${BUBBLES_MODE_RESOLVER_SELFTEST_TIMEOUT_SECONDS:-30}"
 
 failures=0
 cleanup() {
@@ -38,7 +39,7 @@ run_resolver() {
   local out_file
   out_file="$(mktemp -p "$TMP_DIR")"
   set +e
-  BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2>&1
+  timeout "$selftest_timeout_seconds" env BUBBLES_WORKFLOWS_FILE="$fixture" "$RESOLVER" "$@" > "$out_file" 2>&1
   RC=$?
   set -e
   OUT="$(cat "$out_file")"
@@ -194,6 +195,121 @@ if (( RC == 0 )) && grep -q 'Validation passed' <<< "$OUT"; then
   pass "Case 6: real workflows.yaml --validate"
 else
   fail "Case 6: real workflows.yaml --validate (rc=$RC)"
+  echo "$OUT" >&2
+fi
+
+# -----------------------------------------------------------------------
+# Fixture 7: SCOPE-13 inherited spec-review default flows from template.
+# -----------------------------------------------------------------------
+fixture7="$TMP_DIR/fixture7.yaml"
+cat > "$fixture7" <<'YAML'
+gates: {}
+modeTemplates:
+  base-delivery:
+    statusCeiling: done
+  delivery-quality-constraints:
+    constraints:
+      specReviewDefault: once-before-implement
+modes:
+  inherited-delivery:
+    description: Inherited delivery mode
+    inherits: [ base-delivery, delivery-quality-constraints ]
+YAML
+
+run_resolver "$fixture7" inherited-delivery
+sr_default="$(yq -r '.constraints.specReviewDefault // "MISSING"' <<< "$OUT" 2>/dev/null || echo 'BAD')"
+if (( RC == 0 )) && [[ "$sr_default" == "once-before-implement" ]]; then
+  pass "Case 7: SCOPE-13 inherited spec-review default flows from template"
+else
+  fail "Case 7: SCOPE-13 inherited spec-review default flows from template (rc=$RC, specReviewDefault=$sr_default)"
+  echo "$OUT" >&2
+fi
+
+# -----------------------------------------------------------------------
+# Fixture 8: SCOPE-13 explicit mode opt-out remains machine-readable.
+# -----------------------------------------------------------------------
+fixture8="$TMP_DIR/fixture8.yaml"
+cat > "$fixture8" <<'YAML'
+gates: {}
+modeTemplates:
+  base-delivery:
+    statusCeiling: done
+  delivery-quality-constraints:
+    constraints:
+      specReviewDefault: once-before-implement
+      specReviewOptOutRequiresReason: true
+modes:
+  deliberate-opt-out:
+    description: Deliberate opt-out mode
+    inherits: [ base-delivery, delivery-quality-constraints ]
+    constraints:
+      specReviewDefault: off
+      specReviewOptOutReason: read-only spec-review-only mode
+YAML
+
+run_resolver "$fixture8" deliberate-opt-out
+sr_override="$(yq -r '.constraints.specReviewDefault // "MISSING"' <<< "$OUT" 2>/dev/null || echo 'BAD')"
+sr_reason="$(yq -r '.constraints.specReviewOptOutReason // "MISSING"' <<< "$OUT" 2>/dev/null || echo 'BAD')"
+if (( RC == 0 )) && [[ "$sr_override" == "off" && "$sr_reason" != "MISSING" ]]; then
+  pass "Case 8: SCOPE-13 explicit mode opt-out remains machine-readable"
+else
+  fail "Case 8: SCOPE-13 explicit mode opt-out remains machine-readable (rc=$RC, specReviewDefault=$sr_override, reason=$sr_reason)"
+  echo "$OUT" >&2
+fi
+
+# -----------------------------------------------------------------------
+# Fixture 9: real inherited done-ceiling delivery mode receives default.
+# -----------------------------------------------------------------------
+run_resolver "$REAL_WORKFLOWS" bugfix-fastlane
+real_sr_default="$(yq -r '.constraints.specReviewDefault // "MISSING"' <<< "$OUT" 2>/dev/null || echo 'BAD')"
+if (( RC == 0 )) && [[ "$real_sr_default" == "once-before-implement" ]]; then
+  pass "Case 9: real inherited done-ceiling mode receives spec-review default"
+else
+  fail "Case 9: real inherited done-ceiling mode receives spec-review default (rc=$RC, specReviewDefault=$real_sr_default)"
+  echo "$OUT" >&2
+fi
+
+# -----------------------------------------------------------------------
+# Fixture 10: SCOPE-13/G091 planning-chain metadata validates without full
+# mode materialization.
+# -----------------------------------------------------------------------
+fixture10="$TMP_DIR/fixture10.yaml"
+cat > "$fixture10" <<'YAML'
+gates: {}
+modeTemplates:
+  base-delivery:
+    statusCeiling: done
+  delivery-quality-constraints:
+    constraints:
+      specReviewDefault: once-before-implement
+      specReviewDefaultScope: done-ceiling-delivery-modes
+      specReviewOptOutRequiresReason: true
+      requireCanonicalPlanningChain: true
+      planningChainAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+modes:
+  delivery-with-chain:
+    description: Delivery mode with canonical planning-chain metadata
+    inherits: [ base-delivery, delivery-quality-constraints ]
+    phaseOrder: [ select, bootstrap, implement ]
+    constraints:
+      bootstrapAgents: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+      improvementPreludeProfiles:
+        analyze-ux-design-plan: [ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]
+  read-only-opt-out:
+    description: Read-only opt-out mode
+    statusCeiling: validated
+    phaseOrder: [ select, validate, finalize ]
+    constraints:
+      modeClass: validate-only
+      specReviewDefault: off
+      specReviewOptOutReason: validate-only has no implementation-capable phase
+YAML
+
+run_resolver "$fixture10" --validate
+if (( RC == 0 )) && grep -q 'Validation passed' <<< "$OUT"; then
+  pass "Case 10: SCOPE-13/G091 planning-chain metadata validates without stall"
+else
+  fail "Case 10: SCOPE-13/G091 planning-chain metadata validates without stall (rc=$RC)"
   echo "$OUT" >&2
 fi
 

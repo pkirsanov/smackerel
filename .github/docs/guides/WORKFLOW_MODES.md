@@ -65,7 +65,7 @@ When `bubbles.plan` or `bubbles.design` are invoked by the orchestrator (not dir
 
 Taste decisions are batched at phase boundaries (max 5 per phase). When `grillMode` is active, taste decisions are pressure-tested by `bubbles.grill` first. When `socratic: true`, taste decisions become the Socratic questions (within the `socraticQuestions` limit).
 
-Baseline workflow law already requires spec/design/plan coherence, explicit Gherkin scenarios, scenario-specific test planning, and scenario-driven E2E/integration proof before implementation is allowed to proceed. The **Outcome Contract** (G070) additionally requires every spec to declare Intent, Success Signal, Hard Constraints, and Failure Condition before bootstrap completes — and validation verifies the outcome was actually achieved, not just that the process was followed. Those are not optional tags.
+Baseline workflow law already requires spec/design/plan coherence, explicit Gherkin scenarios, scenario-specific test planning, and scenario-driven E2E/integration proof before implementation is allowed to proceed. The **Outcome Contract** (G070) additionally requires every spec to declare Intent, Success Signal, Hard Constraints, and Failure Condition before bootstrap completes — and validation verifies the outcome was actually achieved, not just that the process was followed. Capability-first design (G094) now applies to delivery-capable modes when proportionality triggers fire: reusable capability foundation first, concrete providers/adapters/variants second, with old specs grandfathered by `state.json.createdAt`. Those are not optional tags.
 
 ### Planning Alignment Checkpoints (v3.4)
 

@@ -117,7 +117,7 @@ When hardening requires cross-domain work: do NOT fix inline. Emit a concrete ro
 - Use `completed_diagnostic` when hardening review completed without requiring routed follow-up.
 - Use `route_required` when implementation, tests, docs, or other foreign-owned remediation is still required.
 - Use `blocked` when a concrete blocker prevents a credible hardening verdict.
-- Per [completion-governance.md → Outcome State: done_with_concerns](bubbles_shared/completion-governance.md#outcome-state-done_with_concerns), harden MAY surface `done_with_concerns`-shaped findings (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies. Harden does NOT certify the state — only `bubbles.validate` writes `certification.status: done_with_concerns`.
+- Per [completion-governance.md → Legacy Status: done_with_concerns](bubbles_shared/completion-governance.md#legacy-status-done_with_concerns), harden MAY surface observation-shaped findings (each with `severity: low|medium`, `followUpOwner`, `followUpAction`) for the orchestrator to attach when validate certifies `done`. Harden MUST NOT recommend or certify new `done_with_concerns`; high-severity or remediation-required findings stay `blocked` / `route_required`.
 
 ---
 

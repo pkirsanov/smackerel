@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+# Temp-file cleanup: register every mktemp via _btmp so EXIT/INT/TERM removes them.
+_BTMPS=()
+trap '[[ ${#_BTMPS[@]} -gt 0 ]] && rm -rf "${_BTMPS[@]}" 2>/dev/null || true' EXIT INT TERM
+_btmp() { local t; t="$(mktemp "$@")"; _BTMPS+=("$t"); printf '%s' "$t"; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SPECS_DIR="$REPO_ROOT/specs"
@@ -232,7 +237,7 @@ recent_surface_focus() {
 
 write_observations() {
   local temp_file
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
 
   mkdir -p "$(dirname "$OBSERVATIONS_FILE")"
 
@@ -341,7 +346,7 @@ write_profile() {
   current_posture="$(adoption_profile_scalar "$current_profile" repoReadinessPosture)"
   current_doctor_readiness="$(adoption_profile_scalar "$current_profile" doctorProjectReadiness)"
 
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
   {
     echo "# Developer Profile"
     echo
@@ -464,7 +469,7 @@ clear_stale() {
   fi
 
   cutoff="$(date -u -d "${stale_cutoff_days} days ago" +"%Y-%m-%dT%H:%M:%SZ")"
-  temp_file="$(mktemp)"
+  temp_file="$(_btmp)"
   awk -v cutoff="$cutoff" '
     match($0, /"timestamp":"([^"]+)"/, ts) {
       if (ts[1] >= cutoff) {
