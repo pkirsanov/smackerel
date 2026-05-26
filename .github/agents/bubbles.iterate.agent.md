@@ -64,6 +64,13 @@ handoffs:
     prompt: Resolve vague user intent into structured parameters (mode, specTargets, tags, workType). Return a RESOLUTION-ENVELOPE only.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-skills-first-discovery`](../skills/bubbles-skills-first-discovery/SKILL.md) — pick the right skill for the work selected
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — DAG-based scope pickup, scope isolation, Test Plan ↔ DoD parity
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — status ceiling per workflow mode
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — continuation envelope shape when emitting dispatch packets
+
 ## Agent Identity
 
 **Name:** bubbles.iterate  

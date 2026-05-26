@@ -58,6 +58,14 @@ handoffs:
     prompt: Identify the next highest-priority work item. Return a WORK-ENVELOPE only (spec, scope, mode, workType) without executing the work.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-skills-first-discovery`](../skills/bubbles-skills-first-discovery/SKILL.md) — situation-to-skill map for routed work
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — envelope shape; finding accounting; workflow-only continuation
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — `route_required` packets; freshness/supersession
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — status ceiling per workflow mode; mechanical guard
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate IDs returned by guards mid-orchestration
+
 ## Agent Identity
 
 **Name:** bubbles.workflow  
