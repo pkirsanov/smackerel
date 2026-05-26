@@ -47,6 +47,55 @@ if [[ "$enable_autofix" == "true" ]]; then
   bash "$autofix_script" "$feature_dir" --write
 fi
 
+resolve_script_repo_root() {
+  if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "bubbles" && "$(basename "$(dirname "$(dirname "$SCRIPT_DIR")")")" == ".github" ]]; then
+    (cd "$SCRIPT_DIR/../../.." && pwd -P)
+  else
+    (cd "$SCRIPT_DIR/../.." && pwd -P)
+  fi
+}
+
+resolve_artifact_repo_root() {
+  local feature_abs parent git_repo_root=""
+
+  feature_abs="$(cd "$feature_dir" && pwd -P)"
+  parent="$(dirname "$feature_abs")"
+  if [[ "$(basename "$parent")" == "specs" ]]; then
+    (cd "$(dirname "$parent")" && pwd -P)
+    return 0
+  fi
+
+  if command -v git >/dev/null 2>&1 && git -C "$feature_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git_repo_root="$(git -C "$feature_dir" rev-parse --show-toplevel 2>/dev/null || true)"
+  fi
+  if [[ -n "$git_repo_root" ]]; then
+    (cd "$git_repo_root" && pwd -P)
+    return 0
+  fi
+
+  resolve_script_repo_root
+}
+
+script_repo_root="$(resolve_script_repo_root)"
+artifact_repo_root="$(resolve_artifact_repo_root)"
+
+resolve_workflow_registry_file() {
+  local candidate
+  for candidate in \
+    "$artifact_repo_root/bubbles/workflows.yaml" \
+    "$artifact_repo_root/.github/bubbles/workflows.yaml" \
+    "$script_repo_root/bubbles/workflows.yaml" \
+    "$script_repo_root/.github/bubbles/workflows.yaml"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+workflow_registry_file="$(resolve_workflow_registry_file || true)"
+
 failures=0
 dod_total_checkboxes=0
 dod_unchecked_count=0
@@ -111,6 +160,32 @@ json_first_bool() {
     | sed -E 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*(true|false)/\1/'
 }
 
+resolve_workflow_status_ceiling_from_registry() {
+  local workflow_mode="$1"
+  local status_ceiling=""
+
+  [[ -n "$workflow_mode" ]] || return 1
+  [[ -n "$workflow_registry_file" && -f "$workflow_registry_file" ]] || return 1
+
+  status_ceiling="$(awk -v mode="$workflow_mode" '
+    $0 ~ "^  " mode ":[[:space:]]*$" { in_mode = 1; next }
+    in_mode && $0 ~ "^  [[:alnum:]_-]+:[[:space:]]*$" { exit }
+    in_mode {
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (line ~ /^statusCeiling:[[:space:]]*/) {
+        sub(/^statusCeiling:[[:space:]]*/, "", line)
+        gsub(/"/, "", line)
+        print line
+        exit
+      }
+    }
+  ' "$workflow_registry_file")"
+
+  [[ -n "$status_ceiling" ]] || return 1
+  printf '%s\n' "$status_ceiling"
+}
+
 resolve_workflow_status_ceiling() {
   local workflow_mode="$1"
   local resolver="$SCRIPT_DIR/mode-resolver.sh"
@@ -120,11 +195,16 @@ resolve_workflow_status_ceiling() {
   [[ -n "$workflow_mode" ]] || return 1
   [[ -f "$resolver" ]] || return 1
 
-  if ! resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null)"; then
-    return 1
+  if [[ -n "$workflow_registry_file" ]]; then
+    resolved="$(BUBBLES_WORKFLOWS_FILE="$workflow_registry_file" bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
+  else
+    resolved="$(bash "$resolver" "$workflow_mode" 2>/dev/null || true)"
   fi
 
   status_ceiling="$(printf '%s\n' "$resolved" | awk -F':[[:space:]]*' '$1 == "statusCeiling" { gsub(/"/, "", $2); print $2; exit }')"
+  if [[ -z "$status_ceiling" ]]; then
+    status_ceiling="$(resolve_workflow_status_ceiling_from_registry "$workflow_mode" || true)"
+  fi
   [[ -n "$status_ceiling" ]] || return 1
   printf '%s\n' "$status_ceiling"
 }
