@@ -176,6 +176,24 @@ Use [quality-gates.md](quality-gates.md) plus [state-gates.md](state-gates.md) a
 - phase-scope coherence
 - mandatory completion checkpoint
 
+## Skills-First Discovery Layer (v4.0+)
+
+The framework ships discovery skills that map common tasks to the right governance module. Prefer skill-driven discovery over eager-loading this whole file. Each skill is a thin shim that auto-loads via description match and routes back into the authoritative modules below.
+
+| Trigger | Skill | Authoritative modules |
+|---------|-------|------------------------|
+| About to mark a DoD `[x]` or claim a command passed | [`bubbles-anti-fabrication`](../../skills/bubbles-anti-fabrication/SKILL.md) | `critical-requirements.md`, `evidence-rules.md` |
+| Recording terminal output as evidence | [`bubbles-evidence-capture`](../../skills/bubbles-evidence-capture/SKILL.md) | `evidence-rules.md`, `quality-gates.md` |
+| Closing out a scope; running pre-completion audit | [`bubbles-dod-validation`](../../skills/bubbles-dod-validation/SKILL.md) | `validation-core.md`, `validation-profiles.md` |
+| Editing `state.json` status; pre-push status checks | [`bubbles-status-transition`](../../skills/bubbles-status-transition/SKILL.md) | `state-gates.md`, `completion-governance.md` |
+| End of agent run; composing a result envelope | [`bubbles-result-envelope`](../../skills/bubbles-result-envelope/SKILL.md) | `workflow-orchestration-core.md`, `workflow-delegation-core.md` |
+| About to edit any artifact; confirm ownership | [`bubbles-artifact-ownership-routing`](../../skills/bubbles-artifact-ownership-routing/SKILL.md) | `artifact-ownership.md`, `artifact-freshness.md` |
+| Guard rejected work with a `G0XX` label | [`bubbles-quality-gates-catalog`](../../skills/bubbles-quality-gates-catalog/SKILL.md) | `quality-gates.md`, `state-gates.md`, `test-fidelity.md` |
+| Authoring or revising scope artifacts | [`bubbles-scope-workflow-runtime`](../../skills/bubbles-scope-workflow-runtime/SKILL.md) | `scope-workflow.md`, `scope-templates.md`, `artifact-lifecycle.md` |
+| Unsure which policy applies — start here | [`bubbles-skills-first-discovery`](../../skills/bubbles-skills-first-discovery/SKILL.md) | (entry-point map) |
+
+Skills do not add new rules. They surface existing rules at the moment they are needed. The mechanical guards, the grandfather clause for historical `done` specs, the anti-fabrication policy, and the sequential-completion contract are unchanged by this layer.
+
 ## Compatibility Note
 
 Older prompts, instructions, or downstream repos may still refer to `agent-common.md` as the universal governance file. That remains valid because this file is the stable index into the shared governance modules. New prompt work should prefer the smallest specific module set instead of treating this file as the default full load.

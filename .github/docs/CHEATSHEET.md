@@ -261,6 +261,9 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `concrete implementation` | A provider, adapter, channel, connector, driver, strategy, plugin, screen, or variant layered on the foundation. |
 | `variation axis` | A dimension where implementations differ, such as provider protocol, delivery policy, schema shape, authorization surface, storage behavior, runtime environment, or UI composition. |
 | `proportionality clause` | The rule that capability-first design applies only when reuse signals exist; premature abstraction is a violation too. |
+| `skills-first discovery` | v4.0 architectural posture: agents lean on auto-loaded discovery skills (`bubbles-anti-fabrication`, `bubbles-evidence-capture`, `bubbles-dod-validation`, `bubbles-status-transition`, `bubbles-result-envelope`, `bubbles-artifact-ownership-routing`, `bubbles-quality-gates-catalog`, `bubbles-scope-workflow-runtime`) instead of eager-loading the full governance corpus. Skills are shims pointing to the authoritative `agents/bubbles_shared/*.md` modules; rules and mechanical guards do not change. |
+| `policy skill` | A `.github/skills/bubbles-*` skill whose description triggers on a recurring agent decision (marking a DoD, capturing evidence, returning a result envelope) and routes the agent to the canonical governance module. |
+| `grandfather clause` | Historical `done` specs remain green under new framework policy unless their `state.json` is touched in the same commit. Enforced by `done-spec-audit.sh --profile advisory` (default) and the pre-push hook's changed-spec profile. Skills-first refactor preserves this contract. |
 
 ---
 
