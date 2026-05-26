@@ -40,9 +40,21 @@ stage_repo() {
   printf '%s' "$repo"
 }
 
+stage_downstream_repo() {
+  local sid="$1"
+  local repo="$WORKSPACE/$sid"
+  rm -rf "$repo"
+  mkdir -p "$repo/specs/100-current" "$repo/.github/bubbles" "$repo/.github/agents/bubbles_shared" "$repo/.github/agents" "$repo/.github/bubbles/scripts" "$repo/tests/regression"
+  write_clean_workflows "$repo" ".github/"
+  write_clean_text_contracts "$repo" ".github/"
+  printf '%s' "$repo"
+}
+
 write_clean_workflows() {
   local repo="$1"
-  cat > "$repo/bubbles/workflows.yaml" <<'EOF'
+  local prefix="${2:-}"
+  mkdir -p "$repo/${prefix}bubbles"
+  cat > "$repo/${prefix}bubbles/workflows.yaml" <<'EOF'
 version: 1
 gates:
   G092:
@@ -67,29 +79,32 @@ EOF
 
 write_clean_text_contracts() {
   local repo="$1"
-  cat > "$repo/agents/bubbles_shared/completion-governance.md" <<'EOF'
+  local prefix="${2:-}"
+  mkdir -p "$repo/${prefix}agents/bubbles_shared" "$repo/${prefix}agents" "$repo/${prefix}bubbles/scripts" "$repo/tests/regression"
+  cat > "$repo/${prefix}agents/bubbles_shared/completion-governance.md" <<'EOF'
 # Completion Governance
 
 New terminal certification writes may use `done` or `blocked` only. Legacy `done_with_concerns` is read-only compatibility metadata until migration, and migrated notes live in observations[].
 EOF
   for agent in bubbles.validate.agent.md bubbles.workflow.agent.md bubbles.audit.agent.md bubbles.harden.agent.md bubbles.gaps.agent.md bubbles.retro.agent.md bubbles.spec-review.agent.md; do
-    cat > "$repo/agents/$agent" <<'EOF'
+    cat > "$repo/${prefix}agents/$agent" <<'EOF'
 # Agent Fixture
 
 Use observations[] for non-blocking notes. Legacy done_with_concerns is read-only compatibility only and MUST NOT be emitted as a new outcome.
 EOF
   done
-  cat > "$repo/bubbles/scripts/post-cert-spec-edit-guard.sh" <<'EOF'
+  cat > "$repo/${prefix}bubbles/scripts/post-cert-spec-edit-guard.sh" <<'EOF'
 # G088 fixture: legacy done_with_concerns is read-only compatible until touched; recertification migrates to done plus observations or blocked.
 EOF
-  cat > "$repo/bubbles/scripts/post-cert-spec-edit-guard-selftest.sh" <<'EOF'
+  cat > "$repo/${prefix}bubbles/scripts/post-cert-spec-edit-guard-selftest.sh" <<'EOF'
 # G088 selftest fixture: legacy read-only done_with_concerns compatibility.
 EOF
-  cat > "$repo/bubbles/scripts/inter-spec-dependency-guard.sh" <<'EOF'
+  cat > "$repo/${prefix}bubbles/scripts/inter-spec-dependency-guard.sh" <<'EOF'
 # G089 fixture: legacy done_with_concerns dependencies are read-only compatibility only; new done_with_concerns is forbidden.
 EOF
-  cat > "$repo/bubbles/scripts/inter-spec-dependency-guard-selftest.sh" <<'EOF'
+  cat > "$repo/${prefix}bubbles/scripts/inter-spec-dependency-guard-selftest.sh" <<'EOF'
 # G089 selftest fixture: legacy read-only done_with_concerns compatibility.
+dependency_status="done_with_concerns"
 EOF
   cat > "$repo/tests/regression/test_11_post_cert_spec_edit.sh" <<'EOF'
 # G088 regression fixture: legacy read-only done_with_concerns compatibility.
@@ -202,6 +217,15 @@ run_guard "$repo" "specs/100-current"
 assert_exit "S2 done observations" 0
 assert_stdout_contains "S2" "PASS Gate G092"
 assert_stdout_contains "S2" "terminalStatuses=done,blocked"
+
+echo ""
+echo "--- S2b: downstream .github-installed workflows and agent contracts pass ---"
+repo="$(stage_downstream_repo s2b-downstream-layout)"
+write_state "$repo" "specs/100-current" "done" "done" '[{"severity":"low","summary":"Monitor latency trend."}]'
+run_guard "$repo" "specs/100-current"
+assert_exit "S2b downstream done observations" 0
+assert_stdout_contains "S2b" "PASS Gate G092"
+assert_stdout_contains "S2b" "terminalStatuses=done,blocked"
 
 echo ""
 echo "--- S3: legacy done_with_concerns is read-only compatible ---"

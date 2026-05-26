@@ -105,6 +105,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPEC_DIR_ABS="$(cd "$SPEC_DIR_INPUT" && pwd -P)"
 STATE_FILE="$SPEC_DIR_ABS/state.json"
 
+resolve_repo_file() {
+  local rel="$1"
+  local candidate
+
+  for candidate in "$REPO_ROOT/$rel" "$REPO_ROOT/.github/$rel"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 if [[ ! -f "$STATE_FILE" ]]; then
   echo "delivery-implementation-delta-guard: state.json not found: $STATE_FILE" >&2
   exit 2
@@ -131,7 +145,7 @@ resolve_repo_root() {
   local dir
   dir="$SPEC_DIR_ABS"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/specs" && ( -f "$dir/bubbles/workflows.yaml" || -d "$dir/.specify/memory" ) ]]; then
+    if [[ -d "$dir/specs" && ( -f "$dir/bubbles/workflows.yaml" || -f "$dir/.github/bubbles/workflows.yaml" || -d "$dir/.specify/memory" ) ]]; then
       printf '%s\n' "$dir"
       return 0
     fi
@@ -147,9 +161,9 @@ if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
   exit 2
 fi
 
-WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
-if [[ ! -f "$WORKFLOWS_FILE" ]]; then
-  echo "delivery-implementation-delta-guard: workflows.yaml not found: $WORKFLOWS_FILE" >&2
+WORKFLOWS_FILE="$(resolve_repo_file "bubbles/workflows.yaml" || true)"
+if [[ -z "$WORKFLOWS_FILE" ]]; then
+  echo "delivery-implementation-delta-guard: workflows.yaml not found under $REPO_ROOT/bubbles or $REPO_ROOT/.github/bubbles" >&2
   exit 2
 fi
 

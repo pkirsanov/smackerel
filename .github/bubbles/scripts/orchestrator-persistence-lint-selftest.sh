@@ -39,6 +39,14 @@ stage_repo() {
   printf '%s' "$repo"
 }
 
+stage_downstream_repo() {
+  local sid="$1"
+  local repo="$WORKSPACE/$sid"
+  rm -rf "$repo"
+  mkdir -p "$repo/.specify/memory"
+  printf '%s' "$repo"
+}
+
 write_prompt() {
   local path="$1"
   local extra="$2"
@@ -56,9 +64,10 @@ EOF
 
 write_all_clean() {
   local repo="$1"
+  local prefix="${2:-}"
   local rel
   for rel in "${TARGET_FILES[@]}"; do
-    write_prompt "$repo/$rel" "Clean persistence-default fixture for $rel."
+    write_prompt "$repo/$prefix$rel" "Clean persistence-default fixture for $rel."
   done
 }
 
@@ -117,6 +126,15 @@ run_guard "$repo"
 assert_exit "S0 clean fixtures" 0
 assert_stdout_contains "S0" "PASS Gate G086"
 assert_stdout_contains "S0" "scannedFiles=4"
+
+echo ""
+echo "--- S0b: downstream .github-installed prompt fixtures pass ---"
+repo="$(stage_downstream_repo s0b-downstream-layout)"
+write_all_clean "$repo" ".github/"
+run_guard "$repo"
+assert_exit "S0b downstream fixtures" 0
+assert_stdout_contains "S0b" "PASS Gate G086"
+assert_stdout_contains "S0b" "scannedFiles=4"
 
 echo ""
 echo "--- S1: active forbidden prompt language fails ---"

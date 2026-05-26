@@ -56,6 +56,31 @@ write_healthy_session() {
 EOF
 }
 
+write_state_snapshot_pair_session() {
+  local repo="$1"
+  cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "retro-health-state-snapshot-pair-session",
+  "turnSnapshots": [
+    {"specDir": "specs/900-retro-fixture", "turnNumber": 1, "timestamp": "2026-05-24T17:31:49Z", "phase": "simplify", "scopeId": null, "mode": "start", "note": "turn start", "agent": "bubbles.simplify"},
+    {"specDir": "specs/900-retro-fixture", "turnNumber": 2, "timestamp": "2026-05-24T17:49:23Z", "phase": "simplify", "scopeId": null, "mode": "end", "note": "turn end", "agent": "bubbles.simplify"}
+  ]
+}
+EOF
+}
+
+write_state_snapshot_single_sided_session() {
+  local repo="$1"
+  cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
+{
+  "sessionId": "retro-health-state-snapshot-single-sided-session",
+  "turnSnapshots": [
+    {"specDir": "specs/900-retro-fixture", "turnNumber": 1, "timestamp": "2026-05-24T17:31:49Z", "phase": "simplify", "scopeId": null, "mode": "start", "note": "turn start", "agent": "bubbles.simplify"}
+  ]
+}
+EOF
+}
+
 write_snapshot_breach_session() {
   local repo="$1"
   cat > "$repo/.specify/memory/bubbles.session.json" <<'EOF'
@@ -172,6 +197,16 @@ assert_json "S1b full schema"
 assert_jq "S1b convergenceHealth schema" '.convergenceHealth == {"recapCount": 0, "handoffCount": 0, "summarizeHistoryCount": 0, "turnCount": 2, "slo": "pass"}'
 
 echo ""
+echo "--- S1c: paired state-snapshot records count as one complete snapshot ---"
+repo="$(stage_repo s1c-state-snapshot-pair)"
+write_state_snapshot_pair_session "$repo"
+run_health "$repo"
+assert_exit "S1c state-snapshot pair" 0
+assert_json "S1c state-snapshot pair"
+assert_jq "S1c snapshot completeness" '.snapshotCompleteness == 1'
+assert_jq "S1c SLO pass" '.convergenceHealth.slo == "pass"'
+
+echo ""
 echo "--- S2: snapshotCompleteness breach exits 1 and cites G090 ---"
 repo="$(stage_repo s2-snapshot-breach)"
 write_snapshot_breach_session "$repo"
@@ -179,6 +214,15 @@ run_health "$repo"
 assert_exit "S2 snapshot breach" 1
 assert_stderr_contains "S2" "G090"
 assert_stderr_contains "S2" "snapshotCompleteness"
+
+echo ""
+echo "--- S2a: single-sided state-snapshot record still fails G090 ---"
+repo="$(stage_repo s2a-state-snapshot-single-sided)"
+write_state_snapshot_single_sided_session "$repo"
+run_health "$repo"
+assert_exit "S2a state-snapshot single-sided" 1
+assert_stderr_contains "S2a" "G090"
+assert_stderr_contains "S2a" "snapshotCompleteness=0"
 
 echo ""
 echo "--- S2b: more than two recap/handoff invocations is P0 failed ---"
