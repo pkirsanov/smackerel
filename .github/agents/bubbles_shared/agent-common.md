@@ -190,6 +190,11 @@ The framework ships discovery skills that map common tasks to the right governan
 | About to edit any artifact; confirm ownership | [`bubbles-artifact-ownership-routing`](../../skills/bubbles-artifact-ownership-routing/SKILL.md) | `artifact-ownership.md`, `artifact-freshness.md` |
 | Guard rejected work with a `G0XX` label | [`bubbles-quality-gates-catalog`](../../skills/bubbles-quality-gates-catalog/SKILL.md) | `quality-gates.md`, `state-gates.md`, `test-fidelity.md` |
 | Authoring or revising scope artifacts | [`bubbles-scope-workflow-runtime`](../../skills/bubbles-scope-workflow-runtime/SKILL.md) | `scope-workflow.md`, `scope-templates.md`, `artifact-lifecycle.md` |
+| Creating or refreshing a feature folder (spec/design/scopes/report/uservalidation/state.json) | [`bubbles-feature-template`](../../skills/bubbles-feature-template/SKILL.md) | `feature-templates.md`, `artifact-lifecycle.md` |
+| Filing or working a bug under `specs/<feature>/bugs/BUG-*` | [`bubbles-bug-template`](../../skills/bubbles-bug-template/SKILL.md) | `bug-templates.md`, `e2e-regression.md` |
+| Orchestrating a workflow round; dispatch-and-wait per round | [`bubbles-workflow-execution-loops`](../../skills/bubbles-workflow-execution-loops/SKILL.md) | `workflow-execution-loops.md`, `workflow-orchestration-core.md` |
+| Translating natural-language intent to a workflow mode; resolving template inheritance | [`bubbles-workflow-mode-resolution`](../../skills/bubbles-workflow-mode-resolution/SKILL.md) | `workflow-mode-resolution.md`, `bubbles/workflows.yaml` |
+| Running a fix-cycle round; finding-set closure; cherry-pick prevention | [`bubbles-fix-cycle-protocol`](../../skills/bubbles-fix-cycle-protocol/SKILL.md) | `workflow-fix-cycle-protocol.md`, `completion-governance.md` |
 | Unsure which policy applies — start here | [`bubbles-skills-first-discovery`](../../skills/bubbles-skills-first-discovery/SKILL.md) | (entry-point map) |
 
 Skills do not add new rules. They surface existing rules at the moment they are needed. The mechanical guards, the grandfather clause for historical `done` specs, the anti-fabrication policy, and the sequential-completion contract are unchanged by this layer.

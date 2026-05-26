@@ -6,6 +6,14 @@ handoffs:
     prompt: Run final compliance audit before merge.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — Tier 1/Tier 2 pre-completion audit, mode ceiling pre-flight
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — ≥10-line raw-output evidence shape
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — `state.json` certification.* ownership; grandfather clause
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — canonical test taxonomy, live-stack authenticity
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — session-bound evidence, no narrative substitutes
+
 ## Agent Identity
 
 **Name:** bubbles.validate  

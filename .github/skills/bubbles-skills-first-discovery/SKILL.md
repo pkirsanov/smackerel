@@ -23,8 +23,11 @@ Replace eager-loading of `agents/bubbles_shared/*.md` with on-demand skill loadi
 | Return control to the orchestrator at end of an agent run | `bubbles-result-envelope` |
 | Edit any artifact — confirm you own it, or route if not | `bubbles-artifact-ownership-routing` |
 | A guard rejected work with a `G0XX` label | `bubbles-quality-gates-catalog` |
-| Author or revise `scopes.md` / `scopes/*/scope.md` | `bubbles-scope-workflow-runtime` |
-| Write or extend a Bubbles skill | `bubbles-skill-authoring` |
+| Author or revise `scopes.md` / `scopes/*/scope.md` | `bubbles-scope-workflow-runtime` || Creating or refreshing a feature folder | `bubbles-feature-template` |
+| Filing or working a bug under `specs/<feature>/bugs/BUG-*` | `bubbles-bug-template` |
+| Orchestrating a workflow round (dispatch-and-wait) | `bubbles-workflow-execution-loops` |
+| Translating natural-language intent to a workflow mode | `bubbles-workflow-mode-resolution` |
+| Running a fix-cycle round; finding-set closure | `bubbles-fix-cycle-protocol` || Write or extend a Bubbles skill | `bubbles-skill-authoring` |
 | Design a reusable capability (adapter/provider/strategy) | `bubbles-capability-foundation-design` |
 | Write tests of any kind | `bubbles-test-integrity` |
 | Touch test compose files, test DB setup, or test data | `bubbles-test-environment-isolation` |

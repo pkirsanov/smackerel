@@ -1,8 +1,8 @@
 {
-  "installedVersion": "4.0.0-alpha.1",
+  "installedVersion": "4.0.0",
   "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "fad1407b69fc01337211ff4506c7f4ed726700a4",
+  "sourceGitSha": "846466b78f680fe98d32fa8c63bf466d36e0892a",
   "sourceDirty": false,
-  "installedAt": "2026-05-26T06:21:37Z"
+  "installedAt": "2026-05-26T07:27:13Z"
 }

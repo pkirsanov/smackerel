@@ -15,6 +15,14 @@ handoffs:
     prompt: Analyze velocity, gate health, and shipping patterns.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+Before handling a request, scan these skills for the matching trigger:
+
+- [`bubbles-skills-first-discovery`](../skills/bubbles-skills-first-discovery/SKILL.md) — top-level map: which skill applies to which situation
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — end-of-run packet shape, continuation envelope for advisory routing
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate ID lookup when explaining a failure
+
 ## Agent Identity
 
 **Name:** bubbles.super  

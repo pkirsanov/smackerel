@@ -6,6 +6,13 @@ handoffs:
     prompt: When the audited spec just transitioned to `done` AND a phase release packet under `docs/releases/<phase>/features.md` references this spec, recommend a release packet refresh so the capability flips from `planned`/`in-progress` to `delivered` with the audit-certified evidence link. Skip silently when no packet references this spec.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — detection heuristics for fabricated evidence; auto-reject patterns
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — Tier 1/Tier 2 audit; Spot-Check Recommendations
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate catalog for audit findings
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — grandfather clause; recertification semantics; no implicit reopen
+
 ## Agent Identity
 
 **Name:** bubbles.audit  

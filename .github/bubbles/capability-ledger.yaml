@@ -314,6 +314,11 @@ capabilities:
     - skills/bubbles-artifact-ownership-routing/SKILL.md
     - skills/bubbles-quality-gates-catalog/SKILL.md
     - skills/bubbles-scope-workflow-runtime/SKILL.md
+    - skills/bubbles-feature-template/SKILL.md
+    - skills/bubbles-bug-template/SKILL.md
+    - skills/bubbles-workflow-execution-loops/SKILL.md
+    - skills/bubbles-workflow-mode-resolution/SKILL.md
+    - skills/bubbles-fix-cycle-protocol/SKILL.md
     - agents/bubbles_shared/agent-common.md
     competitorTags:
     - skills-discovery
