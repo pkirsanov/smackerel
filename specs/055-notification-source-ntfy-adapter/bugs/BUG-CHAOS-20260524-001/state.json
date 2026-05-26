@@ -4,13 +4,14 @@
   "parentFeatureDir": "specs/055-notification-source-ntfy-adapter",
   "featureName": "ntfy Dead-Letter Replay Burst Re-submits Through Source Sink",
   "bugId": "BUG-CHAOS-20260524-001",
-  "status": "done_with_concerns",
+  "status": "done",
   "workflowMode": "chaos-hardening",
+  "certifiedAt": "2026-05-26T06:50:10Z",
   "execution": {
     "activeAgent": "bubbles.validate",
     "currentPhase": "validate",
     "currentScope": "final-certification",
-    "runStartedAt": "2026-05-24T23:17:08Z",
+    "runStartedAt": "2026-05-26T06:50:10Z",
     "completedPhaseClaims": [
       "chaos",
       "implement",
@@ -26,7 +27,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done_with_concerns",
+    "status": "done",
     "completedScopes": [
       "scope-1-idempotent-replay-burst"
     ],
@@ -69,12 +70,13 @@
         "certifiedAt": "2026-05-24T23:17:08Z"
       }
     ],
+    "certifiedAt": "2026-05-26T06:50:10Z",
     "lockdownState": {
       "active": false,
       "lockedScenarioIds": []
     },
     "blockers": [],
-    "concerns": [
+    "observations": [
       {
         "id": "CONCERN-BUG-CHAOS-001-001-replay-regression-verified",
         "severity": "low",
@@ -116,13 +118,6 @@
         "summary": "G048 repair added direct implementation file references to scopes.md so implementation-reality scan no longer needs design.md fallback for this bug packet.",
         "followUpOwner": "human",
         "followUpAction": "accept"
-      },
-      {
-        "id": "CONCERN-BUG-CHAOS-001-007-legacy-evidence-fence-cleanup-blocks-literal-done",
-        "severity": "low",
-        "summary": "Validate certification reran focused unit, integration, E2E, stress, format, lint, implementation reality, artifact lint, traceability, and state-transition gates on 2026-05-24; the standalone bug packet is certified as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix.",
-        "followUpOwner": "bubbles.docs",
-        "followUpAction": "next-sprint-todo"
       }
     ]
   },
@@ -325,13 +320,24 @@
       "startedAt": "2026-05-24T23:17:08Z",
       "completedAt": "2026-05-24T23:17:08Z",
       "summary": "Validated BUG-CHAOS-20260524-001 after G048 audit rework. Focused unit, integration, E2E, stress, format, lint, implementation reality scan, artifact lint, traceability guard, and pre-promotion state-transition guard passed or were blocked only by missing validate phase. Certified the standalone bug packet as done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+    },
+    {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "statusBefore": "blocked",
+      "statusAfter": "done",
+      "startedAt": "2026-05-26T06:50:10Z",
+      "completedAt": "2026-05-26T06:50:10Z",
+      "summary": "Pre-promotion child artifact-lint, traceability guard, and state-transition guard runs permitted done status. Validate-owned certification metadata now records final certifiedAt, low observations, cleared blocker state, and done status for final post-edit guard verification."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [
     {
       "bugId": "BUG-CHAOS-20260524-001",
-      "status": "validated_done_with_concerns",
+      "status": "done",
       "resolvedAt": "2026-05-24T23:17:08Z",
       "summary": "Repeated ntfy dead-letter replay returns the existing accepted attempt and does not repeat source-sink side effects after a successful replay. Seed 20260524 closure rerun showed replay_attempt_rows=1, replay_raw=1, replay_normalized=1; G048 redaction_state decode repair is covered by deterministic scanner regressions; validate reran focused unit, integration, E2E, stress, lint, format, artifact, traceability, and implementation-reality gates."
     }
@@ -342,7 +348,7 @@
       "summary": "Three replay calls for one replay-eligible ntfy dead-letter produced three accepted raw event IDs while replay_attempt_rows remained 1."
     }
   ],
-  "lastUpdatedAt": "2026-05-24T23:17:08Z",
+  "lastUpdatedAt": "2026-05-26T06:50:10Z",
   "artifacts": {
     "bug": "bug.md",
     "spec": "spec.md",
@@ -356,7 +362,7 @@
     "nextOwner": null,
     "targetSpec": "specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001",
     "targetScope": "scope-1-idempotent-replay-burst",
-    "constraint": "Validation-owned certification completed with concerns; no routed owner remains for the replay/G048 behavior fix. Literal done remains blocked by legacy report evidence-fence cleanup."
+    "constraint": "Validation-owned final certification completed; no routed owner remains for the replay/G048 behavior fix."
   },
-  "notes": "Chaos-owned closure verification, bubbles.test phase certification, focused bubbles.regression provenance, bubbles.simplify cleanup provenance, bubbles.devops test-stack lifecycle remediation, bubbles.stabilize closure rerun, bubbles.security provenance, bubbles.docs managed-doc publication, bubbles.audit diagnostic provenance, G048 implementation repair, and validation certification are recorded for BUG-CHAOS-20260524-001. The prior disposable test-stack host-port release blocker is closed by current-session stabilization, audit, and validate stress evidence. Security found no raw payload exposure, credential leakage, output-channel coupling, or unsafe replay behavior. Docs updated the managed replay contract for first accepted replay versus idempotent repeat replay. G048 silent redaction_state decode rework is repaired with contextual decode propagation and deterministic scanner regressions. The standalone bug packet is done_with_concerns because literal done artifact lint exposes legacy report evidence-fence cleanup outside the current behavior fix."
+  "notes": "Chaos-owned closure verification, bubbles.test phase certification, focused bubbles.regression provenance, bubbles.simplify cleanup provenance, bubbles.devops test-stack lifecycle remediation, bubbles.stabilize closure rerun, bubbles.security provenance, bubbles.docs managed-doc publication, bubbles.audit diagnostic provenance, G048 implementation repair, and validation certification are recorded for BUG-CHAOS-20260524-001. The prior disposable test-stack host-port release blocker is closed by current-session stabilization, audit, and validate stress evidence. Security found no raw payload exposure, credential leakage, output-channel coupling, or unsafe replay behavior. Docs updated the managed replay contract for first accepted replay versus idempotent repeat replay. G048 silent redaction_state decode rework is repaired with contextual decode propagation and deterministic scanner regressions. The standalone bug packet is done with low observations preserved in certification.observations."
 }

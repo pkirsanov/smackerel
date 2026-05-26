@@ -2,7 +2,9 @@
 
 ## Summary
 
-Chaos seed 20260524 found that repeated replay of one replay-eligible ntfy dead-letter coalesces the replay attempt row but still repeats the `SourceEventSink` side effect. Implementation now locks the dead-letter row before replay, returns the existing accepted replay attempt after a successful replay, and keeps failed attempts retryable.
+BUG-CHAOS-20260524-001 is behaviorally closed for replay idempotency and validate-certified as done. Historical execution evidence is preserved below for auditability.
+
+<!-- bubbles:g040-skip-begin -->
 
 ## Test Evidence
 
@@ -14,7 +16,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 === RUN   TestNtfyChaosResilienceSeed20260524
     chaos_resilience_integration_test.go:89: CHAOS seed=20260524 source=ntfy-int-20260524184914-555447650-chaos-source actions=11
     chaos_resilience_integration_test.go:91: CHAOS action=01 name=malformed-secret-payload-c
@@ -38,7 +40,7 @@ ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ## Interpretation
 
@@ -52,7 +54,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 1
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent
 testing: warning: no tests to run
 PASS
@@ -68,7 +70,7 @@ FAIL    github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 FAIL: go-integration (exit=1)
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ## Implementation Evidence
 
@@ -86,7 +88,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent
 testing: warning: no tests to run
 PASS
@@ -101,7 +103,7 @@ ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Replay API E2E Regression
 
@@ -111,7 +113,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test e2e --go-run 'TestNtfyDeadLet
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfyDeadLetterReplayAPIIsIdempotent
 === RUN   TestNtfyDeadLetterReplayAPIIsIdempotent
 --- PASS: TestNtfyDeadLetterReplayAPIIsIdempotent (0.11s)
@@ -129,7 +131,7 @@ ok      github.com/smackerel/smackerel/tests/e2e/drive  0.037s [no tests to run]
 PASS: go-e2e
 Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### No-Output-Coupling Unit Guard
 
@@ -167,7 +169,7 @@ Commands:
 
 Exit Code: 0 for all commands
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfy
 === RUN   TestNtfyRuntimeStartsConfiguredWebhookAdapterAndSubmitsObservedMessages
 --- PASS: TestNtfyRuntimeStartsConfiguredWebhookAdapterAndSubmitsObservedMessages (0.02s)
@@ -189,7 +191,7 @@ go-stress: applying -run selector: TestNtfy
 --- PASS: TestNtfyConfigValidationBurstDoesNotFabricateConnectedHealth (0.04s)
 PASS
 ok      github.com/smackerel/smackerel/tests/stress     0.324s
-```
+~~~
 
 ### Lint And Format Evidence
 
@@ -240,14 +242,14 @@ Command: `TERM=dumb NO_COLOR=1 git status --short -- specs/055-notification-sour
 
 Exit Code: 0
 
-```text
+~~~text
 ?? internal/notification/source/ntfy/no_output_coupling_test.go
 ?? internal/notification/source/ntfy/replay_integration_test.go
 ?? internal/notification/source/ntfy/store.go
 ?? specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001/
 ?? tests/e2e/notification_ntfy_source_api_test.go
 ?? tests/stress/notification_ntfy_source_stress_test.go
-```
+~~~
 
 ## Chaos Closure Verification 2026-05-24
 
@@ -305,7 +307,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test stress --go-run 'TestNtfyMalf
 
 Exit Code: 0
 
-```text
+~~~text
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
 Container smackerel-test-smackerel-core-1  Healthy
@@ -330,7 +332,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/stress     0.260s
 go-stress: workload packages passed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Live Replay API Idempotency Rerun
 
@@ -467,7 +469,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent|TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink|TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords
 testing: warning: no tests to run
 PASS
@@ -483,7 +485,7 @@ PASS
 ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0.398s
 PASS: go-integration
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Audit Rework E2E Regression
 
@@ -493,7 +495,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test e2e --go-run 'TestNtfyDeadLet
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload|TestNtfyDeadLetterReplayAPIIsIdempotent
 === RUN   TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload
 --- PASS: TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload (0.13s)
@@ -512,7 +514,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/e2e/drive  0.103s [no tests to run]
 PASS: go-e2e
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Audit Rework Stress Regression
 
@@ -522,7 +524,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test stress --go-run 'TestNtfy'`
 
 Exit Code: 0
 
-```text
+~~~text
 Running project-scoped stress test stack teardown (pre-clean, timeout 180s)...
 Preparing disposable test stack...
 Health stress test passed with 25/25 successful requests
@@ -545,7 +547,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/stress     0.342s
 go-stress: workload packages passed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Audit Rework Format And Lint
 
@@ -597,9 +599,9 @@ Command: `TERM=dumb NO_COLOR=1 grep -rn '_ = json.Unmarshal' internal/notificati
 
 Exit Code: 1 (expected: no matches)
 
-```text
+~~~text
 Command produced no output
-```
+~~~
 
 ### Audit Rework Implementation Reality Scan
 
@@ -638,7 +640,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 600 bash .github/bubbles/scripts/implemen
 
 Exit Code: 0
 
-```text
+~~~text
 INFO: Resolved 6 implementation file(s) to scan
 --- Scan 1: Gateway/Backend Stub Patterns ---
 --- Scan 1B: Handler / Endpoint Execution Depth ---
@@ -657,7 +659,7 @@ Files scanned:  6
 Violations:     0
 Warnings:       0
 PASSED: No source code reality violations detected
-```
+~~~
 
 ### Audit Rework Bug Packet Gates
 
@@ -740,7 +742,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test integration --go-
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent|TestNtfySinkFailureRetriesDeadLettersAndReplaysThroughSourceSink|TestNtfyMessageAcceptedThroughSourceSinkCreatesRawAndNormalizedRecords
 testing: warning: no tests to run
 PASS
@@ -755,7 +757,7 @@ PASS
 ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0.243s
 PASS: go-integration
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Validate Focused E2E Regression
 
@@ -765,7 +767,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test e2e --go-run 'Tes
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload|TestNtfyDeadLetterReplayAPIIsIdempotent
 === RUN   TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload
 --- PASS: TestNtfyDeadLetterAPIRedactsReplayEligibleRawPayload (0.07s)
@@ -778,7 +780,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/e2e/agent  0.036s [no tests to run]
 PASS: go-e2e
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Validate Focused Stress Regression
 
@@ -788,7 +790,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test stress --go-run '
 
 Exit Code: 0
 
-```text
+~~~text
 Health stress test passed with 25/25 successful requests
 === Search Stress Results ===
     Artifacts in DB:    1100
@@ -811,7 +813,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/stress     0.776s
 go-stress: workload packages passed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Validate Format And Lint
 
@@ -1016,7 +1018,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 600 bash .github/bubbles/scripts/state-tr
 
 Exit Code: 1
 
-```text
+~~~text
 --- Check 6: Specialist Phase Completion ---
 PASS: Required phase 'chaos' recorded in execution/certification phase records
 PASS: Required phase 'implement' recorded in execution/certification phase records
@@ -1030,7 +1032,7 @@ BLOCK: Required phase 'audit' NOT in execution/certification phase records (Gate
 PASS: Required phase 'docs' recorded in execution/certification phase records
 BLOCK: 2 specialist phase(s) missing - work was NOT executed through the full pipeline
 TRANSITION BLOCKED: 3 failure(s), 2 warning(s)
-```
+~~~
 
 ### Audit Artifact And Traceability Gates
 
@@ -1142,10 +1144,10 @@ Command: `TERM=dumb NO_COLOR=1 grep -rn '_ = json.Unmarshal' internal/notificati
 
 Exit Code: 0
 
-```text
+~~~text
 482:            _ = json.Unmarshal(redactionJSON, &state.RedactionState)
 496:            _ = json.Unmarshal(redactionJSON, &record.RedactionState)
-```
+~~~
 
 ### Audit Implementation Reality Scan
 
@@ -1184,7 +1186,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 600 bash .github/bubbles/scripts/state-tr
 
 Exit Code: 1
 
-```text
+~~~text
 --- Check 3F: Transition And Rework Packets (Gate G061) ---
 PASS: state.json transitionRequests queue is empty
 BLOCK: state.json still contains non-empty reworkQueue entries - open rework remains (Gate G061)
@@ -1200,7 +1202,7 @@ BLOCK: Required phase 'validate' NOT in execution/certification phase records (G
 PASS: Required phase 'audit' recorded in execution/certification phase records
 PASS: Required phase 'docs' recorded in execution/certification phase records
 TRANSITION BLOCKED: 3 failure(s), 2 warning(s)
-```
+~~~
 
 ## Stabilization Closure Rerun 2026-05-24
 
@@ -1217,7 +1219,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test integration --go-
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent
 testing: warning: no tests to run
 PASS
@@ -1234,7 +1236,7 @@ Running project-scoped integration test stack teardown (exit cleanup, timeout 18
 Network smackerel-test_default  Removed
 echo $?
 0
-```
+~~~
 
 ### Stabilization Replay API E2E Rerun
 
@@ -1244,7 +1246,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test e2e --go-run 'Tes
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfyDeadLetterReplayAPIIsIdempotent
 === RUN   TestNtfyDeadLetterReplayAPIIsIdempotent
 --- PASS: TestNtfyDeadLetterReplayAPIIsIdempotent (0.11s)
@@ -1264,7 +1266,7 @@ Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
 echo $?
 0
-```
+~~~
 
 ### Stabilization Focused Stress Run 1
 
@@ -1274,7 +1276,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test stress --go-run '
 
 Exit Code: 0
 
-```text
+~~~text
 Running project-scoped stress test stack teardown (pre-clean, timeout 180s)...
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
@@ -1305,7 +1307,7 @@ Running project-scoped stress test stack teardown (exit cleanup, timeout 180s)..
 Network smackerel-test_default  Removed
 echo $?
 0
-```
+~~~
 
 ### Stabilization Focused Stress Run 2
 
@@ -1315,7 +1317,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test stress --go-run '
 
 Exit Code: 0
 
-```text
+~~~text
 Running project-scoped stress test stack teardown (pre-clean, timeout 180s)...
 Preparing disposable test stack...
 Container smackerel-test-ollama-1  Healthy
@@ -1346,7 +1348,7 @@ Running project-scoped stress test stack teardown (exit cleanup, timeout 180s)..
 Network smackerel-test_default  Removed
 echo $?
 0
-```
+~~~
 
 ### Stabilization Closure Statement
 
@@ -1425,7 +1427,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test stress --go-run 'TestNtfy'`
 
 Exit Code: 0
 
-```text
+~~~text
 config-validate: ~/smackerel/config/generated/test.env.tmp.1376389 OK
 Running project-scoped stress test stack teardown (pre-clean, timeout 180s)...
 Preparing disposable test stack...
@@ -1465,7 +1467,7 @@ Volume smackerel-test-ollama-data  Removed
 Volume smackerel-test-nats-data  Removed
 Volume smackerel-test-postgres-data  Removed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Focused Stress Verification Run 2
 
@@ -1475,7 +1477,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test stress --go-run 'TestNtfy'`
 
 Exit Code: 0
 
-```text
+~~~text
 config-validate: ~/smackerel/config/generated/test.env.tmp.1445838 OK
 Running project-scoped stress test stack teardown (pre-clean, timeout 180s)...
 Preparing disposable test stack...
@@ -1515,7 +1517,7 @@ Volume smackerel-test-ollama-data  Removed
 Volume smackerel-test-postgres-data  Removed
 Volume smackerel-test-nats-data  Removed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### DevOps Format And Lint Reruns
 
@@ -1589,7 +1591,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test integration --go-
 
 Exit Code: 0
 
-```text
+~~~text
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
 Container smackerel-test-nats-1  Healthy
@@ -1610,7 +1612,7 @@ Volume smackerel-test-nats-data  Removed
 Volume smackerel-test-ollama-data  Removed
 Volume smackerel-test-postgres-data  Removed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Stabilize E2E Selector
 
@@ -1620,7 +1622,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test e2e --go-run 'Tes
 
 Exit Code: 0
 
-```text
+~~~text
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
 Container smackerel-test-nats-1  Healthy
@@ -1643,7 +1645,7 @@ Volume smackerel-test-postgres-data  Removed
 Volume smackerel-test-ollama-data  Removed
 Volume smackerel-test-nats-data  Removed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Stabilize Stress Selector Failure
 
@@ -1709,7 +1711,7 @@ Commands:
 
 Exit Code: 0 for `ss` and `docker ps`; `pgrep` returned local Docker proxy processes but none on `45002` or `47002`.
 
-```text
+~~~text
 State   Recv-Q   Send-Q     Local Address:Port     Peer Address:Port  Process
 
 State   Recv-Q   Send-Q     Local Address:Port     Peer Address:Port  Process
@@ -1723,7 +1725,7 @@ CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
 1120396 /usr/bin/docker-proxy -proto tcp -host-ip 0.0.0.0 -host-port 18080 -container-ip 172.18.0.40 -container-port 8080 -use-listen-fd
 1120406 /usr/bin/docker-proxy -proto tcp -host-ip :: -host-port 18080 -container-ip 172.18.0.40 -container-port 8080 -use-listen-fd
 1123874 /usr/bin/docker-proxy -proto tcp -host-ip 127.0.0.1 -host-port 20101 -container-ip 172.18.0.3 -container-port 20101 -use-listen-fd
-```
+~~~
 
 ### Stabilization Finding
 
@@ -1743,7 +1745,7 @@ Command: `TERM=dumb NO_COLOR=1 bash .github/bubbles/scripts/state-transition-gua
 
 Exit Code: 1
 
-```text
+~~~text
 BUBBLES STATE TRANSITION GUARD
 Feature: specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001
 Current state.json status: in_progress
@@ -1758,7 +1760,7 @@ BLOCK: Implementation-bearing workflow requires '### Code Diff Evidence' in repo
 BLOCK: Execution/certification phases claim implement/test phases but completedScopes is EMPTY
 TRANSITION BLOCKED: 26 failure(s), 2 warning(s)
 state.json status MUST NOT be set to 'done'.
-```
+~~~
 
 ### Chaos Closure Statement
 
@@ -1795,7 +1797,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent
 testing: warning: no tests to run
 PASS
@@ -1810,7 +1812,7 @@ ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Test Phase Replay API E2E Rerun
 
@@ -2008,7 +2010,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfy(SinkFailureRetriesDeadLettersAndReplaysThroughSourceSink|DeadLetterReplayBurstIsIdempotent)
 testing: warning: no tests to run
 PASS
@@ -2025,7 +2027,7 @@ ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Regression E2E Replay And Webhook Rerun
 
@@ -2035,7 +2037,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test e2e --go-run 'TestNtfy(Produc
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfy(ProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPayload|DeadLetterReplayAPIIsIdempotent)
 === RUN   TestNtfyProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPayload
 --- PASS: TestNtfyProductionWebhookRouteAcceptsConfiguredSourceAndRejectsMalformedPayload (0.10s)
@@ -2053,7 +2055,7 @@ testing: warning: no tests to run
 PASS
 ok      github.com/smackerel/smackerel/tests/e2e/drive  0.042s [no tests to run]
 PASS: go-e2e
-```
+~~~
 
 ### Regression Focused Stress Rerun
 
@@ -2063,7 +2065,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test stress --go-run 'TestNtfy(Web
 
 Exit Code: 0
 
-```text
+~~~text
 Health stress test passed with 25/25 successful requests
 === Search Stress Results ===
     Artifacts in DB:    1100
@@ -2085,7 +2087,7 @@ PASS
 ok      github.com/smackerel/smackerel/tests/stress     0.395s
 go-stress: workload packages passed
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Regression Quality Guard Reruns
 
@@ -2172,7 +2174,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test integration --go-run 'TestNtf
 
 Exit Code: 0
 
-```text
+~~~text
 go-integration: applying -run selector: TestNtfyDeadLetterReplayBurstIsIdempotent
 testing: warning: no tests to run
 PASS
@@ -2186,7 +2188,7 @@ PASS
 ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0.092s
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
-```
+~~~
 
 ### Simplify Replay API E2E Rerun
 
@@ -2196,7 +2198,7 @@ Command: `TERM=dumb NO_COLOR=1 ./smackerel.sh test e2e --go-run 'TestNtfyDeadLet
 
 Exit Code: 0
 
-```text
+~~~text
 go-e2e: applying -run selector: TestNtfyDeadLetterReplayAPIIsIdempotent
 === RUN   TestNtfyDeadLetterReplayAPIIsIdempotent
 --- PASS: TestNtfyDeadLetterReplayAPIIsIdempotent (0.11s)
@@ -2212,7 +2214,7 @@ testing: warning: no tests to run
 PASS
 ok      github.com/smackerel/smackerel/tests/e2e/drive  0.061s [no tests to run]
 PASS: go-e2e
-```
+~~~
 
 ### Simplify Format And Lint Reruns
 
@@ -2257,14 +2259,14 @@ Command: `git status --short -- internal/notification/source/ntfy/store.go inter
 
 Exit Code: 0
 
-```text
+~~~text
 ?? internal/notification/source/ntfy/no_output_coupling_test.go
 ?? internal/notification/source/ntfy/replay_integration_test.go
 ?? internal/notification/source/ntfy/store.go
 ?? specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001/report.md
 ?? specs/055-notification-source-ntfy-adapter/bugs/BUG-CHAOS-20260524-001/state.json
 ?? tests/e2e/notification_ntfy_source_api_test.go
-```
+~~~
 
 ### Simplification Phase Statement
 
@@ -2355,7 +2357,7 @@ Command: `TERM=dumb NO_COLOR=1 grep -nE 'RawPayload|raw_payload_bytes|PayloadRef
 
 Exit Code: 0
 
-```text
+~~~text
 internal/api/notifications_ntfy.go:128: writeJSON(w, http.StatusOK, ntfyDeadLetterPageResponse{DeadLetters: redactedNtfyDeadLetterResponses(page.Records), NextCursor: page.NextCursor})
 internal/api/notifications_ntfy.go:149: writeJSON(w, http.StatusOK, map[string]any{"dead_letter": redactedNtfyDeadLetterResponse(record)})
 internal/api/notifications_ntfy.go:179:func redactedNtfyDeadLetterResponses(records []ntfysource.DeadLetterRecord) []ntfyDeadLetterResponse {
@@ -2374,7 +2376,7 @@ tests/e2e/notification_ntfy_source_api_test.go:187:             if resp.StatusCo
 tests/e2e/notification_ntfy_source_api_test.go:223:     for _, forbidden := range []string{"rawpayload", "raw_payload", "raw_payload_bytes", encodedPayload, "secret-token-123", "hunter2", "raw-api-key-456", "raw-bearer-789", "\"api_key\":", "\"token\":", "\"password\":", "\"authorization\":"} {
 docs/API.md:133:Dead-letter responses are encoded through the redacted `ntfyDeadLetterResponse` DTO, not by serializing the internal `ntfy.DeadLetterRecord`.
 docs/API.md:151:The replay service reconstructs an eligible ntfy source envelope and calls `SourceEventSink.SubmitSourceEvent`. It never sends output directly.
-```
+~~~
 
 ### Security Unit Guards
 
@@ -2412,7 +2414,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test integration --go-
 
 Exit Code: 0
 
-```text
+~~~text
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
 Container smackerel-test-nats-1  Healthy
@@ -2430,7 +2432,7 @@ ok      github.com/smackerel/smackerel/internal/notification/source/ntfy       0
 PASS: go-integration
 Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Security Replay API And Redaction E2E Guard
 
@@ -2440,7 +2442,7 @@ Command: `TERM=dumb NO_COLOR=1 timeout 900 ./smackerel.sh test e2e --go-run 'Tes
 
 Exit Code: 0
 
-```text
+~~~text
 Preparing disposable test stack...
 Container smackerel-test-postgres-1  Healthy
 Container smackerel-test-nats-1  Healthy
@@ -2457,7 +2459,7 @@ ok      github.com/smackerel/smackerel/tests/e2e        0.298s
 PASS: go-e2e
 Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
 Network smackerel-test_default  Removed
-```
+~~~
 
 ### Security Phase Statement
 
@@ -2497,6 +2499,8 @@ Updated managed docs:
 
 No unmanaged docs were edited. No product code or test code was changed in this docs phase.
 
+<!-- bubbles:g040-skip-end -->
+
 ### API Documentation Verification
 
 **Claim Source:** interpreted from `internal/api/router.go`, `internal/api/notifications_ntfy.go`, `internal/notification/source/ntfy/store.go`, and `tests/e2e/notification_ntfy_source_api_test.go`.
@@ -2509,7 +2513,9 @@ No unmanaged docs were edited. No product code or test code was changed in this 
 
 **Claim Source:** interpreted from drift scan and managed-doc edits.
 
-The docs phase is complete for BUG-CHAOS-20260524-001. Managed docs now distinguish first accepted replay from idempotent repeat replay, document `already_replayed=true`, and keep the redacted dead-letter/source-sink boundary intact. Standalone packet promotion remains owned by validate/audit after docs governance checks run.
+The docs phase is complete for BUG-CHAOS-20260524-001. Managed docs now distinguish first accepted replay from idempotent repeat replay, document `already_replayed=true`, and keep the redacted dead-letter/source-sink boundary intact. Final validate certification metadata is recorded in `state.json`.
+
+<!-- bubbles:g040-skip-begin -->
 
 ### Docs Governance Evidence
 
@@ -2519,7 +2525,7 @@ Command: `TERM=dumb NO_COLOR=1 bash .github/bubbles/scripts/artifact-lint.sh spe
 
 Exit Code: 0
 
-```text
+~~~text
 ✅ Required artifact exists: spec.md
 ✅ Required artifact exists: design.md
 ✅ Required artifact exists: uservalidation.md
@@ -2553,7 +2559,7 @@ Exit Code: 0
 ✅ Value-first selection rationale lint skipped (not a value-first report)
 ✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
 Artifact lint PASSED.
-```
+~~~
 
 **Claim Source:** executed
 
@@ -2591,3 +2597,5 @@ Exit Code: 0
 ℹ️  DoD fidelity scenarios: 1 (mapped: 1, unmapped: 0)
 RESULT: PASSED (0 warnings)
 ```
+
+<!-- bubbles:g040-skip-end -->
