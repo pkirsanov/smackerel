@@ -295,12 +295,12 @@ func TestQFFreshnessRollingP95UsesPerStageGaugeAfterRecord(t *testing.T) {
 // C-S2-321B-SCOPE-5-RENDER and Scope 5 V3 (12-metric label parity) both
 // depend on:
 //
-//  1. RecordFreshnessSample(FreshnessStageRender, ...) — the package-level
+//  1. RecordFreshnessObservation(FreshnessStageRender, ...) — the package-level
 //     entrypoint called from render.go:301 — emits a sample on the
 //     smackerel_qf_freshness_p95_seconds gauge with the documented stage
 //     label value "render" exactly (no whitespace, no synonym).
 //
-//  2. RecordFreshnessSample(FreshnessStageTotal, ...) — the package-level
+//  2. RecordFreshnessObservation(FreshnessStageTotal, ...) — the package-level
 //     entrypoint called from render.go:305 for the combined
 //     QF-create-to-render measurement derived from the qf_created_at
 //     metadata field — emits a sample on the same gauge with the
@@ -332,12 +332,12 @@ func TestQFRenderAndCombinedFreshnessMetricsAreRecorded(t *testing.T) {
 	metrics.QFFreshnessP95Seconds.Reset()
 	resetGlobalFreshnessForTest()
 
-	// --- Part 1: render-stage emission via the public RecordFreshnessSample
+	// --- Part 1: render-stage emission via the public RecordFreshnessObservation
 	// entrypoint (the same call-site render.go:301 uses).
-	RecordFreshnessSample(FreshnessStageRender, 12.5)
+	RecordFreshnessObservation(FreshnessStageRender, 12.5)
 	renderKeys, renderFound := sampleLabelKeysFor(t, "smackerel_qf_freshness_p95_seconds", map[string]string{"stage": FreshnessStageRender})
 	if !renderFound {
-		t.Fatalf("render-stage sample not found after RecordFreshnessSample(FreshnessStageRender, 12.5)")
+		t.Fatalf("render-stage sample not found after RecordFreshnessObservation(FreshnessStageRender, 12.5)")
 	}
 	if !slicesEqualUnordered(renderKeys, []string{"stage"}) {
 		t.Fatalf("render-stage sample label keys = %v, want [stage] (QF design 063 label parity)", renderKeys)
@@ -347,12 +347,12 @@ func TestQFRenderAndCombinedFreshnessMetricsAreRecorded(t *testing.T) {
 	}
 
 	// --- Part 2: combined (stage="total") emission via the public
-	// RecordFreshnessSample entrypoint (the same call-site render.go:305
+	// RecordFreshnessObservation entrypoint (the same call-site render.go:305
 	// uses for the qf_created_at-to-render-observation span).
-	RecordFreshnessSample(FreshnessStageTotal, 47.0)
+	RecordFreshnessObservation(FreshnessStageTotal, 47.0)
 	totalKeys, totalFound := sampleLabelKeysFor(t, "smackerel_qf_freshness_p95_seconds", map[string]string{"stage": FreshnessStageTotal})
 	if !totalFound {
-		t.Fatalf("total-stage sample not found after RecordFreshnessSample(FreshnessStageTotal, 47.0)")
+		t.Fatalf("total-stage sample not found after RecordFreshnessObservation(FreshnessStageTotal, 47.0)")
 	}
 	if !slicesEqualUnordered(totalKeys, []string{"stage"}) {
 		t.Fatalf("total-stage sample label keys = %v, want [stage] (QF design 063 label parity)", totalKeys)
@@ -365,7 +365,7 @@ func TestQFRenderAndCombinedFreshnessMetricsAreRecorded(t *testing.T) {
 	// observations do not bleed into render. Drive additional render
 	// observations and assert total stays put; drive additional total
 	// observations and assert render stays put.
-	RecordFreshnessSample(FreshnessStageRender, 18.0)
+	RecordFreshnessObservation(FreshnessStageRender, 18.0)
 	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageTotal)); got != 47.0 {
 		t.Fatalf("total p95 after render update = %v, want 47.0 (no cross-stage bleed)", got)
 	}
@@ -375,7 +375,7 @@ func TestQFRenderAndCombinedFreshnessMetricsAreRecorded(t *testing.T) {
 		t.Fatalf("render p95 after 2 samples = %v, want 18.0 (max of {12.5, 18.0})", got)
 	}
 
-	RecordFreshnessSample(FreshnessStageTotal, 55.0)
+	RecordFreshnessObservation(FreshnessStageTotal, 55.0)
 	if got := testutil.ToFloat64(metrics.QFFreshnessP95Seconds.WithLabelValues(FreshnessStageRender)); got != 18.0 {
 		t.Fatalf("render p95 after total update = %v, want 18.0 (no cross-stage bleed)", got)
 	}

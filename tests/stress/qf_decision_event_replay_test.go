@@ -276,10 +276,10 @@ func TestQFDecisionsFreshnessSLAP95IngestRender(t *testing.T) {
 //     by TestQFDecisionsFreshnessSLAP95IngestRender — render-driving
 //     MUST NOT regress the ingest budget)
 //   - render p95 ≤ 30s (Scope 5 render-stage budget, recorded via
-//     RecordFreshnessSample(FreshnessStageRender, ...) inside
+//     RecordFreshnessObservation(FreshnessStageRender, ...) inside
 //     render.go:301 from observedAt - artifact.CapturedAt)
 //   - combined ingest+render p95 ≤ 60s (Scope 5 combined budget,
-//     recorded via RecordFreshnessSample(FreshnessStageTotal, ...) inside
+//     recorded via RecordFreshnessObservation(FreshnessStageTotal, ...) inside
 //     render.go:305 from observedAt - parsed qf_created_at; this span
 //     transparently includes both the ingest leg and the render leg
 //     and is the canonical "derived combined measurement" the spec
