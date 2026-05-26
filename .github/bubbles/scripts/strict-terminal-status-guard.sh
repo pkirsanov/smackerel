@@ -92,6 +92,20 @@ fi
 SPEC_DIR_ABS="$(cd "$SPEC_DIR_INPUT" && pwd -P)"
 STATE_FILE="$SPEC_DIR_ABS/state.json"
 
+resolve_repo_file() {
+  local rel="$1"
+  local candidate
+
+  for candidate in "$REPO_ROOT/$rel" "$REPO_ROOT/.github/$rel"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 if [[ ! -f "$STATE_FILE" ]]; then
   echo "strict-terminal-status-guard: state.json not found: $STATE_FILE" >&2
   exit 2
@@ -123,7 +137,7 @@ resolve_repo_root() {
   local dir
   dir="$SPEC_DIR_ABS"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/specs" && ( -f "$dir/bubbles/workflows.yaml" || -d "$dir/.specify/memory" ) ]]; then
+    if [[ -d "$dir/specs" && ( -f "$dir/bubbles/workflows.yaml" || -f "$dir/.github/bubbles/workflows.yaml" || -d "$dir/.specify/memory" ) ]]; then
       printf '%s\n' "$dir"
       return 0
     fi
@@ -139,9 +153,9 @@ if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
   exit 2
 fi
 
-WORKFLOWS_FILE="$REPO_ROOT/bubbles/workflows.yaml"
-if [[ ! -f "$WORKFLOWS_FILE" ]]; then
-  echo "strict-terminal-status-guard: workflows.yaml not found: $WORKFLOWS_FILE" >&2
+WORKFLOWS_FILE="$(resolve_repo_file "bubbles/workflows.yaml" || true)"
+if [[ -z "$WORKFLOWS_FILE" ]]; then
+  echo "strict-terminal-status-guard: workflows.yaml not found under $REPO_ROOT/bubbles or $REPO_ROOT/.github/bubbles" >&2
   exit 2
 fi
 
@@ -364,7 +378,7 @@ check_text_file() {
   text_files_scanned=$((text_files_scanned + 1))
   rel="$(relative_path "$file")"
   detection_context="false"
-  if [[ "$rel" == bubbles/scripts/* || "$rel" == tests/regression/* ]]; then
+  if [[ "$rel" == bubbles/scripts/* || "$rel" == .github/bubbles/scripts/* || "$rel" == tests/regression/* ]]; then
     detection_context="true"
   fi
 
@@ -400,25 +414,27 @@ check_text_file() {
 }
 
 check_active_text_contracts() {
-  local targets=(
-    "$REPO_ROOT/agents/bubbles_shared/completion-governance.md"
-    "$REPO_ROOT/agents/bubbles.validate.agent.md"
-    "$REPO_ROOT/agents/bubbles.workflow.agent.md"
-    "$REPO_ROOT/agents/bubbles.audit.agent.md"
-    "$REPO_ROOT/agents/bubbles.harden.agent.md"
-    "$REPO_ROOT/agents/bubbles.gaps.agent.md"
-    "$REPO_ROOT/agents/bubbles.retro.agent.md"
-    "$REPO_ROOT/agents/bubbles.spec-review.agent.md"
-    "$REPO_ROOT/bubbles/scripts/post-cert-spec-edit-guard.sh"
-    "$REPO_ROOT/bubbles/scripts/post-cert-spec-edit-guard-selftest.sh"
-    "$REPO_ROOT/bubbles/scripts/inter-spec-dependency-guard.sh"
-    "$REPO_ROOT/bubbles/scripts/inter-spec-dependency-guard-selftest.sh"
-    "$REPO_ROOT/tests/regression/test_11_post_cert_spec_edit.sh"
-    "$REPO_ROOT/tests/regression/test_12_inter_spec_dependency.sh"
+  local target_rels=(
+    "agents/bubbles_shared/completion-governance.md"
+    "agents/bubbles.validate.agent.md"
+    "agents/bubbles.workflow.agent.md"
+    "agents/bubbles.audit.agent.md"
+    "agents/bubbles.harden.agent.md"
+    "agents/bubbles.gaps.agent.md"
+    "agents/bubbles.retro.agent.md"
+    "agents/bubbles.spec-review.agent.md"
+    "bubbles/scripts/post-cert-spec-edit-guard.sh"
+    "bubbles/scripts/post-cert-spec-edit-guard-selftest.sh"
+    "bubbles/scripts/inter-spec-dependency-guard.sh"
+    "bubbles/scripts/inter-spec-dependency-guard-selftest.sh"
+    "tests/regression/test_11_post_cert_spec_edit.sh"
+    "tests/regression/test_12_inter_spec_dependency.sh"
   )
 
-  local target
-  for target in "${targets[@]}"; do
+  local rel target
+  for rel in "${target_rels[@]}"; do
+    target="$(resolve_repo_file "$rel" || true)"
+    [[ -n "$target" ]] || continue
     check_text_file "$target"
   done
 }

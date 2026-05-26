@@ -33,6 +33,24 @@ REQUIRED_PROMPT_FILES=(
   "agents/bubbles_shared/workflow-input-bootstrap.md"
 )
 
+resolve_repo_file() {
+  local rel="$1"
+  local candidate
+
+  for candidate in "$REPO_ROOT/$rel" "$REPO_ROOT/.github/$rel"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+resolve_workflows_file() {
+  resolve_repo_file "bubbles/workflows.yaml"
+}
+
 usage() {
   cat <<'EOF'
 Usage: bash bubbles/scripts/planning-workflow-chain-guard.sh [--root <repoRoot>] [--quiet]
@@ -114,7 +132,7 @@ resolve_repo_root() {
   local dir
   dir="$(pwd)"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/.specify/memory" && -f "$dir/bubbles/workflows.yaml" ]]; then
+    if [[ -d "$dir/.specify/memory" && ( -f "$dir/bubbles/workflows.yaml" || -f "$dir/.github/bubbles/workflows.yaml" ) ]]; then
       printf '%s' "$dir"
       return 0
     fi
@@ -135,13 +153,13 @@ if [[ ! -d "$REPO_ROOT" ]]; then
   exit 2
 fi
 
-WORKFLOWS="$REPO_ROOT/bubbles/workflows.yaml"
-if [[ ! -f "$WORKFLOWS" ]]; then
-  echo "planning-workflow-chain-guard: missing workflows file: bubbles/workflows.yaml" >&2
+WORKFLOWS="$(resolve_workflows_file || true)"
+if [[ -z "$WORKFLOWS" ]]; then
+  echo "planning-workflow-chain-guard: missing workflows file: bubbles/workflows.yaml or .github/bubbles/workflows.yaml" >&2
   exit 2
 fi
 if [[ ! -r "$WORKFLOWS" ]]; then
-  echo "planning-workflow-chain-guard: unreadable workflows file: bubbles/workflows.yaml" >&2
+  echo "planning-workflow-chain-guard: unreadable workflows file: $WORKFLOWS" >&2
   exit 2
 fi
 
@@ -417,8 +435,9 @@ line_has_active_shortcut() {
 
 scan_prompt_file() {
   local rel="$1"
-  local path="$REPO_ROOT/$rel"
-  if [[ ! -f "$path" ]]; then
+  local path
+  path="$(resolve_repo_file "$rel" || true)"
+  if [[ -z "$path" ]]; then
     finding "required prompt/shared-doc file missing: $rel"
     return 0
   fi
@@ -481,6 +500,12 @@ collect_prompt_files() {
       rel="${prompt_path#"$REPO_ROOT/"}"
       printf '%s\n' "$rel"
     done < <(find "$REPO_ROOT/prompts" -type f -name 'bubbles.*.prompt.md' | sort)
+  fi
+  if [[ -d "$REPO_ROOT/.github/prompts" ]]; then
+    while IFS= read -r prompt_path; do
+      rel="${prompt_path#"$REPO_ROOT/"}"
+      printf '%s\n' "$rel"
+    done < <(find "$REPO_ROOT/.github/prompts" -type f -name 'bubbles.*.prompt.md' | sort)
   fi
 }
 

@@ -32,8 +32,17 @@ stage_repo() {
   printf '%s' "$repo"
 }
 
+stage_downstream_repo() {
+  local sid="$1"
+  local repo="$WORKSPACE/$sid"
+  rm -rf "$repo"
+  mkdir -p "$repo/.specify/memory" "$repo/.github/bubbles" "$repo/.github/agents/bubbles_shared" "$repo/.github/prompts"
+  printf '%s' "$repo"
+}
+
 write_prompts_clean() {
   local repo="$1"
+  local prefix="${2:-}"
   local rel
   for rel in \
     agents/bubbles.goal.agent.md \
@@ -43,8 +52,8 @@ write_prompts_clean() {
     agents/bubbles_shared/workflow-orchestration-core.md \
     agents/bubbles_shared/workflow-input-bootstrap.md
   do
-    mkdir -p "$(dirname "$repo/$rel")"
-    cat > "$repo/$rel" <<'EOF'
+    mkdir -p "$(dirname "$repo/$prefix$rel")"
+    cat > "$repo/$prefix$rel" <<'EOF'
 # Clean planning-chain prompt fixture
 
 When planning truth is missing or repaired, invoke the canonical chain:
@@ -56,6 +65,7 @@ EOF
 
 write_workflows() {
   local repo="$1"
+  local prefix="${2:-}"
   local missing_artifacts_action="${MISSING_ARTIFACTS_ACTION:-invoke bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan -> continue current workflow}"
   local missing_design_action="${MISSING_DESIGN_ACTION:-invoke bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan inline -> then proceed to implement}"
   local freshness_action="${FRESHNESS_ACTION:-invoke bubbles.analyst -> bubbles.ux -> bubbles.design -> bubbles.plan inline to reconcile active artifacts before continuing}"
@@ -64,7 +74,8 @@ write_workflows() {
   local prelude="${PRELUDE_ANALYZE:-[ bubbles.analyst, bubbles.ux, bubbles.design, bubbles.plan ]}"
   local docs_mutation="${DOCS_PLANNING_TRUTH:-false}"
 
-  cat > "$repo/bubbles/workflows.yaml" <<EOF
+  mkdir -p "$repo/${prefix}bubbles"
+  cat > "$repo/${prefix}bubbles/workflows.yaml" <<EOF
 version: 1
 
 gates:
@@ -216,6 +227,16 @@ run_guard "$repo"
 assert_exit "S4 canonical chain" 0
 assert_stdout_contains "S4" "PASS Gate G091"
 assert_stdout_contains "S4" "ordered planning chain valid"
+
+echo ""
+echo "--- S4b: downstream .github-installed layout passes ---"
+repo="$(stage_downstream_repo s4b-downstream-layout)"
+write_prompts_clean "$repo" ".github/"
+write_workflows "$repo" ".github/"
+run_guard "$repo"
+assert_exit "S4b downstream canonical chain" 0
+assert_stdout_contains "S4b" "PASS Gate G091"
+assert_stdout_contains "S4b" "ordered planning chain valid"
 
 echo ""
 echo "--- S5: docs/validate/spec-review exceptions require no planning mutation ---"
