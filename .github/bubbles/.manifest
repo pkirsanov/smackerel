@@ -356,6 +356,7 @@ instructions/bubbles-skills.instructions.md
 instructions/bubbles-test-environment-isolation.instructions.md
 skills/bubbles-anti-fabrication/SKILL.md
 skills/bubbles-artifact-ownership-routing/SKILL.md
+skills/bubbles-bug-template/SKILL.md
 skills/bubbles-capability-foundation-design/SKILL.md
 skills/bubbles-config-sst/SKILL.md
 skills/bubbles-deployment-target-adapter/SKILL.md
@@ -363,6 +364,8 @@ skills/bubbles-docker-lifecycle-governance/SKILL.md
 skills/bubbles-docker-port-standards/SKILL.md
 skills/bubbles-dod-validation/SKILL.md
 skills/bubbles-evidence-capture/SKILL.md
+skills/bubbles-feature-template/SKILL.md
+skills/bubbles-fix-cycle-protocol/SKILL.md
 skills/bubbles-product-principle-discovery/SKILL.md
 skills/bubbles-quality-gates-catalog/SKILL.md
 skills/bubbles-repo-readiness/SKILL.md
@@ -374,3 +377,5 @@ skills/bubbles-spec-template-bdd/SKILL.md
 skills/bubbles-status-transition/SKILL.md
 skills/bubbles-test-environment-isolation/SKILL.md
 skills/bubbles-test-integrity/SKILL.md
+skills/bubbles-workflow-execution-loops/SKILL.md
+skills/bubbles-workflow-mode-resolution/SKILL.md

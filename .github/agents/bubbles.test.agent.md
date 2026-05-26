@@ -9,6 +9,13 @@ handoffs:
     prompt: Run final audit after validation passes.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — canonical test taxonomy (8 categories); live-stack authenticity
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — per-test evidence; ≥10-line raw terminal output
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — Test Plan ↔ DoD parity; Gherkin scenario coverage
+- [`bubbles-scope-workflow-runtime`](../skills/bubbles-scope-workflow-runtime/SKILL.md) — stress tests when latency SLAs present
+
 ## Agent Identity
 
 **Name:** bubbles.test  

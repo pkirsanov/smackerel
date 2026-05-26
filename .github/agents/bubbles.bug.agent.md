@@ -22,6 +22,13 @@ handoffs:
     prompt: Run regression tests and full test suite to verify the fix.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — bug folder artifact ownership; route fix to specialist (do not patch inline)
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — bug reproduction evidence (before fix AND after fix)
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — adversarial regression-test rule for bug fixes
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — bugfix-fastlane handoff packet shape
+
 ## Agent Identity
 
 **Name:** bubbles.bug  

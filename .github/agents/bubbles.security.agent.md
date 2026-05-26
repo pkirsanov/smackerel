@@ -18,6 +18,13 @@ handoffs:
     prompt: Before security review, check whether the spec describes current auth/security architecture — stale specs lead to wrong threat models.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — security findings routed to owning specialist; framework-managed boundary
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — security scan output, dependency audit, threat-model evidence shape
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — finding accounting; addressedFindings + unresolvedFindings
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate IDs that intersect with security review
+
 ## Agent Identity
 
 **Name:** bubbles.security

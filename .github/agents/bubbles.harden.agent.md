@@ -12,6 +12,13 @@ handoffs:
     prompt: Run final compliance/security audit before merge.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-dod-validation`](../skills/bubbles-dod-validation/SKILL.md) — every DoD item individually validated with inline evidence
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — session-bound proof; no batch-checking
+- [`bubbles-quality-gates-catalog`](../skills/bubbles-quality-gates-catalog/SKILL.md) — gate IDs G024–G095 catalog; canonical test taxonomy
+- [`bubbles-status-transition`](../skills/bubbles-status-transition/SKILL.md) — sequential completion contract; spec cannot be done until all scopes Done
+
 ## Agent Identity
 
 **Name:** bubbles.harden  

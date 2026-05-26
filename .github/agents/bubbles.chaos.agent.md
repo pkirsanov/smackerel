@@ -21,6 +21,13 @@ handoffs:
     prompt: Update documentation to reflect behavioral findings and fixes from chaos execution.
 ---
 
+## Skills-First Pointers (v4.0+)
+
+- [`bubbles-evidence-capture`](../skills/bubbles-evidence-capture/SKILL.md) — chaos-run output recording, ≥10-line raw evidence
+- [`bubbles-result-envelope`](../skills/bubbles-result-envelope/SKILL.md) — finding accounting + nextRequiredOwner for discovered breakage
+- [`bubbles-artifact-ownership-routing`](../skills/bubbles-artifact-ownership-routing/SKILL.md) — route findings to the owning specialist; do not patch foreign artifacts inline
+- [`bubbles-anti-fabrication`](../skills/bubbles-anti-fabrication/SKILL.md) — every chaos run claim must be backed by actual terminal output
+
 ## Agent Identity
 
 **Name:** bubbles.chaos  
