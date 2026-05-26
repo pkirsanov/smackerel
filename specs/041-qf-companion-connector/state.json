@@ -3,8 +3,8 @@
   "featureDir": "specs/041-qf-companion-connector",
   "featureName": "QF Companion Connector",
   "status": "done",
-  "certifiedAt": "2026-05-23T04:15:00Z",
-  "requiresRevalidation": true,
+  "certifiedAt": "2026-05-26T22:05:53Z",
+  "requiresRevalidation": false,
   "currentPhase": "validate",
   "workflowMode": "full-delivery",
   "execution": {
