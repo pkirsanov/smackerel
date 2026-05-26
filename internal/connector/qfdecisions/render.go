@@ -120,7 +120,7 @@ func RenderPacketCard(ctx context.Context, artifact connector.RawArtifact, optio
 	card := PacketCard{
 		CardKind:            CardKindQFPacket,
 		DisplayLabel:        defaultQFPacketDisplayLabel,
-		Title:               artifact.Title,
+		Title:               publicPacketTitle(metadata, artifact.Title, packetID),
 		PacketID:            packetID,
 		TraceID:             stringFromMetadata(metadata, "trace_id"),
 		ApprovalState:       stringFromMetadata(metadata, "approval_state"),
@@ -131,9 +131,6 @@ func RenderPacketCard(ctx context.Context, artifact connector.RawArtifact, optio
 		ActionEligible:      false,
 		UnknownDecisionType: unknownDecisionType,
 		Placement:           placementFor(metadata, decisionType, options.PreferredSurfaceHintSupported),
-	}
-	if card.Title == "" {
-		card.Title = card.Thesis
 	}
 	if unknownDecisionType {
 		card.CardKind = CardKindGenericPacket
@@ -150,6 +147,25 @@ func RenderPacketCard(ctx context.Context, artifact connector.RawArtifact, optio
 
 	card.DeepLink = renderDeepLink(ctx, metadata, surface, options, packetID)
 	return card, nil
+}
+
+func publicPacketTitle(metadata map[string]any, artifactTitle string, packetID string) string {
+	if thesis := stringFromMetadata(metadata, "thesis"); thesis != "" {
+		return thesis
+	}
+	artifactTitle = strings.TrimSpace(artifactTitle)
+	if artifactTitle != "" && !looksLikeStructuredPayload(artifactTitle) {
+		return artifactTitle
+	}
+	if packetID != "" {
+		return packetID
+	}
+	return defaultQFPacketDisplayLabel
+}
+
+func looksLikeStructuredPayload(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
 }
 
 // enforceRenderBoundary applies SCN-SM-041-020 defense-in-depth to the render
@@ -303,11 +319,11 @@ func recordRenderFreshness(artifact connector.RawArtifact, observedAt time.Time)
 		observedAt = observedAt.UTC()
 	}
 	if !artifact.CapturedAt.IsZero() {
-		RecordFreshnessSample(FreshnessStageRender, observedAt.Sub(artifact.CapturedAt.UTC()).Seconds())
+		RecordFreshnessObservation(FreshnessStageRender, observedAt.Sub(artifact.CapturedAt.UTC()).Seconds())
 	}
 	if rawCreatedAt := stringFromMetadata(artifact.Metadata, "qf_created_at"); rawCreatedAt != "" {
 		if createdAt, err := parseQFTime(rawCreatedAt); err == nil {
-			RecordFreshnessSample(FreshnessStageTotal, observedAt.Sub(createdAt).Seconds())
+			RecordFreshnessObservation(FreshnessStageTotal, observedAt.Sub(createdAt).Seconds())
 		}
 	}
 }

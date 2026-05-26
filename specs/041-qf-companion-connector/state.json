@@ -2,7 +2,9 @@
   "version": 3,
   "featureDir": "specs/041-qf-companion-connector",
   "featureName": "QF Companion Connector",
-  "status": "done_with_concerns",
+  "status": "done",
+  "certifiedAt": "2026-05-23T04:15:00Z",
+  "requiresRevalidation": true,
   "currentPhase": "validate",
   "workflowMode": "full-delivery",
   "execution": {
@@ -201,7 +203,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done_with_concerns",
+    "status": "done",
     "completedScopes": [
       "Scope 1: Connector Configuration And QF Client Contract",
       "Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage",
@@ -214,9 +216,17 @@
       "Scope 9: Watch Signal Proposal Endpoint"
     ],
     "certifiedCompletedPhases": [
-      "test",
       "implement",
-      "validate"
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "docs",
+      "validate",
+      "audit",
+      "chaos",
+      "spec-review"
     ],
     "scopeProgress": [
       {

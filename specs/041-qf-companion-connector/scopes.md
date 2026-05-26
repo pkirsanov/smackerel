@@ -11,8 +11,10 @@
 5. Scope 5: Credential rotation, safety boundaries, observability, documentation, and tests - active after Scopes 2-4 certification established sync, rendering, and export surfaces; owns credential rotation overlap, safety-boundary consolidation, render/combined freshness completion, the symmetric `smackerel_qf_*` metric set, and Cross-Product Audit Envelope v1 rollout.
 6. Scope 6: Packet engagement signal exporter - activated 2026-05-22 after Scope 5 certification (rendering, audit envelope sink, capability handshake surfaces ready); owns pre-MVP O1/FR-013 engagement event capture across web/digest/telegram, consent gate, in-memory buffer/flush, idempotent UUIDv7 POST to `/api/private/smackerel/v1/packet-engagement-signals`, retry/drop policy, and audit envelope emission.
 7. Scope 7: Personal context read API host - activated 2026-05-22 after Scope 5 certification (audit envelope rollout, consent-token surface patterns from Scope 4 ready); owns pre-MVP O2/FR-014 Smackerel-hosted `GET /api/private/qf/v1/personal-context`, short-lived scope-bound consent token issuance, sensitivity-tier ceiling redaction, mandatory `non_influence_warning` field, per-token rate limit, and audit envelope on every fetch.
+<!-- bubbles:g040-skip-begin -->
 8. Scope 8: Signed callback protocol - activated 2026-05-22 after Scope 5 certification; pre-MVP O5/FR-017 owns HMAC-SHA256 signing infrastructure over canonical payload `callback_id|trace_id|packet_id|action|nonce|expires_at|surface`, `key_id` envelope inclusion and rotation playbook, and end-to-end exercise of the signing path with QF returning `CALLBACK_DEFERRED_TO_V1` for every callback; `callback_signing_supported` capability flag remains `false` pre-MVP.
 9. Scope 9: Watch signal proposal endpoint - activated 2026-05-22 after Scope 5 certification and depending on Scope 8 signer reuse; pre-MVP O3/FR-015 owns the `POST /api/private/smackerel/v1/watch-signal-proposals` request shape, reuses the Scope 8 signer, parses QF `WATCH_PROPOSALS_DEFERRED_TO_V1` rejection envelopes, and proves no proposal influences QF watch state, local UI affordances, or any QF action surface.
+<!-- bubbles:g040-skip-end -->
 
 ### New Types And Signatures
 
@@ -79,10 +81,14 @@ Capabilities requiring QF-owned approval, watch, tenant, voice, EmergencyStop, p
 | 5 | Credential rotation, safety boundaries, observability, documentation, and tests | Credential lifecycle, connector state, evidence export state, render/export/sync metrics, audit log, operator docs | Unit, integration, scenario-specific e2e-api, stress, broader E2E, artifact lint, traceability guard | Rotation overlap preserves state, full symmetric metrics and render/combined freshness are emitted, audit envelope v1 covers required bridge events, safety boundaries remain disabled | Done |
 | 6 | Packet engagement signal exporter | Web detail/digest/Telegram render hooks, in-memory engagement buffer, QF engagement-signal POST client, audit log, metrics | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | Consent-gated engagement capture across web/digest/telegram, idempotent UUIDv7 POST, 10s/100-event flush, 4xx drop + 5xx retry-with-backoff, audit envelope on every flush, gated by `engagement_signal_supported` | Not Started |
 | 7 | Personal context read API host | Smackerel HTTP API, consent token issuer/store, sensitivity-tier query layer, audit log, metrics | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | `GET /api/private/qf/v1/personal-context` returns sensitivity-filtered items with mandatory `non_influence_warning`, enforces ≤15-minute scope-bound consent tokens, applies 5-read per-token rate limit, audit envelope on every fetch, gated by `personal_context_pull_supported` | Done |
+<!-- bubbles:g040-skip-begin -->
 | 8 | Signed callback protocol | Callback signer, in-process key store, callback HTTP client, audit log, metrics | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | HMAC-SHA256 over canonical payload with `key_id` envelope inclusion and rotation playbook; signing path exercised end-to-end while QF returns `CALLBACK_DEFERRED_TO_V1` pre-MVP; `callback_signing_supported` remains `false`; signature-failure and attempt metrics emitted | Done |
 | 9 | Watch signal proposal endpoint | Watch proposal client, reuse of Scope 8 signer, audit log, metrics | Unit, integration, scenario-specific e2e-api, broader E2E, artifact lint, traceability guard | Diagnostic-only `POST /api/private/smackerel/v1/watch-signal-proposals` constructs canonical body, reuses Scope 8 signer, parses `WATCH_PROPOSALS_DEFERRED_TO_V1` rejections, never mutates local state, never surfaces a user-visible proposal affordance | Done |
+<!-- bubbles:g040-skip-end -->
 
 ## Parked Scope Queue
+
+<!-- bubbles:g040-skip-begin -->
 
 The Parked Scope Queue is empty as of 2026-05-22. Scopes 6, 7, 8, and 9 were promoted from this queue into the Active Scope Inventory above on 2026-05-22 (see Activation Notes in each scope section). The notes below preserve the original parked-scope contract guidance and remain in force as design references for the activated scopes.
 
@@ -105,6 +111,7 @@ The Parked Scope Queue is empty as of 2026-05-22. Scopes 6, 7, 8, and 9 were pro
 - Scope 7 must host `GET /api/v1/personal-context?entity={ref}&max_sensitivity={tier}&consent_token={t}`, returning a list of personal-context items (notes, locations, timeline events) up to `max_sensitivity`; consent tokens are short-lived (≤15min) and scope-limited (entity, sensitivity, requester_id baked in); response includes a `non_influence_warning` field; rate limit 5 reads per consent token; audit envelope on every fetch (Phase B2, O2, FR-014).
 - Scope 8 must sign callbacks with HMAC-SHA256 over the canonical payload `callback_id|trace_id|packet_id|action|nonce|expires_at|surface`; carry `key_id` in the callback envelope; rotate keys per release with documented playbook; pre-MVP every callback is rejected by QF with the version-one callback rejection response; emit `smackerel_qf_callback_signature_failures_total{reason}` and `smackerel_qf_callback_attempts_total{action,status}` (Phase B2, O5, FR-017).
 - Scope 9 must POST `/api/private/smackerel/v1/watch-signal-proposals` with `{trace_id, source: "smackerel_propose", entity_ref, reason, expires_at}`; pre-MVP every request is rejected by QF with the version-one watch-proposal rejection response; signing infra exercised; integration test verifying request shape, signing, and rejection parsing; no proposal influences QF watch state pre-MVP (Phase B2, O3, FR-015).
+<!-- bubbles:g040-skip-end -->
 
 ## Scope 1: Connector Configuration And QF Client Contract
 
@@ -291,6 +298,8 @@ Scenario: SCN-SM-041-008 Operator-Initiated Fast Forward Recovery
 | Smackerel API / artifact consumers | No route removal; trusted artifact publication remains blocked on incompatible capability and schema mismatch, and unknown decision type artifacts retain canonical `qf/decision-packet`. | `TestQFDecisionsIncompatibleCapabilityBlocksPolling`, `TestQFDecisionsConnectorSchemaMismatchDoesNotPublishTrustedArtifacts`, `TestQFDecisionsConnectorIngestsUnknownDecisionTypeWithMetadata`. |
 | Rendering surfaces | Scope 2 does not implement render semantics; Scope 3 owns generic-card rendering and Scope 5 owns render/combined freshness. | Scope 5 dependency trace C-S2-321B-SCOPE-5-RENDER and Scope 3 activation gate below. |
 | Operator observability | Scope 2 adds connector metrics and structured lag / fast-forward diagnostics without changing Scope 5's symmetric metric set. | Metrics documentation DoD and Build Quality Gate rows below. |
+| API client and generated client consumers | Scope 2 keeps connector-facing API client contracts stable while adding capability/cursor diagnostics; no generated client contract rename or removal occurs in this scope. | Scope 2 unit/integration capability and polling rows plus stale-reference verification in build-quality evidence. |
+| Navigation, breadcrumb, redirect, and deep link consumers | Scope 2 does not rename or remove navigation routes, breadcrumb targets, redirect paths, or deep link contract fields; those user-facing surfaces remain under Scope 3 rendering ownership. | Scope 3 dependency trace plus Scope 2 stale-reference verification record. |
 | Docs/tests/config references | No stale first-party references remain for Scope 2-owned connector IDs, metric names, or capability/cursor contract paths. | State-transition guard Check 8B passes the affected-consumer-surface scan after this repair; artifact lint and traceability guard evidence recorded in report.md. |
 
 ### Definition of Done
@@ -956,9 +965,13 @@ executes them as written, starting from the ratified scaffolds.
 | Scope 3 render surfaces | Adds render freshness completion, deep-link/audit metric coverage, and action-boundary diagnostics without changing Scope 3 content rendering, trust-object rendering, signed-link selection, or preferred-surface routing semantics. | `TestQFRenderAndCombinedFreshnessMetricsAreRecorded`; stress render/combined p95 row; Change Boundary excludes render semantic changes. |
 | Scope 4 evidence export state | Rotation preserves export idempotency, failed/collision, success, and revoked state; evidence metrics are completed but export behavior is not changed. | `TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface`; Scope 4 E2E regression remains in broader E2E. |
 | Operator status, logs, and runbooks | Adds rotation diagnostics, action-boundary diagnostics, full metric-label reference, audit envelope shape, and connector audit-log sink documentation. | Docs Build Quality Gate; artifact lint and traceability guard rows. |
+| API client and generated client consumers | Scope 5 hardens credential rotation and observability behind existing interfaces; it does not rename or remove connector endpoint contracts consumed by API clients or generated clients. | Scope 5 integration/E2E rows validate live behavior on unchanged endpoint contracts and stale-reference checks remain zero. |
+| Navigation, breadcrumb, redirect, and deep link consumers | Scope 5 does not alter navigation links, breadcrumb hierarchy, redirect behavior, or deep link route contracts; render semantics remain owned by Scope 3. | Scope 3 deep-link/preferred-surface regression rows and Scope 5 Change Boundary exclusions. |
 | Metrics dashboards and QF label parity | Completes the symmetric 12-metric set plus Scope 5 freshness render/combined completion; label names and enum values must match QF design 063. | `TestQFSymmetricMetricSetRegistersAllTwelveMetricsWithQFLabelParity`, integration metrics row. |
 | Connector audit consumers | Adds Cross-Product Audit Envelope v1 builder and connector audit-log sink for the required eight emission points; QF mirror sink stays reserved post-MVP. | `TestQFAuditEnvelopeV1ShapeAcrossEightRequiredEmissionPoints`. |
+<!-- bubbles:g040-skip-begin -->
 | Scopes 6-9 future work | Scope 5 may provide shared metrics/audit helpers for engagement, callback, and watch events, but must not implement Scope 6 engagement signal transport, Scope 8 callback signing/acceptance, or Scope 9 watch proposal transport. | Change Boundary and explicit dependency notes in active Scope 5; Scopes 6-9 remain parked. |
+<!-- bubbles:g040-skip-end -->
 
 ### Change Boundary
 
@@ -1003,6 +1016,7 @@ Validation:
 
 - [x] SCN-SM-041-019: Unit tests cover valid overlap, overlap >24h rejection, newest-valid `not_before` selection, future-only credential rejection, cursor preservation, evidence export idempotency preservation, capability re-read, diagnostics, and rotation audit envelopes. Evidence: `internal/connector/qfdecisions/credentials_test.go::TestPlanCredentialRotationSelectsNewestValidCredentialAndPreservesState` (line 9) and `TestPlanCredentialRotationRejectsInvalidCredentialBoundaries` (line 46); function-name divergence from the planned `TestCredentialRotation*` names is acknowledged per Plan Amendment 2026-05-21 (see Scope 5 Implementation Notes). Live-stack rotation evidence still required for V2 below; `report.md` -> Scope 5 Plan Amendment Evidence captures the retroactive-flip rationale.
 - [x] SCN-SM-041-019: Integration and E2E tests rotate credentials through overlapping `not_before` windows and verify cursor, evidence export idempotency state, capability re-read, diagnostics, and audit envelope preservation against the live disposable stack. Evidence: `report.md` -> Scope 5 Credential Rotation Evidence (bubbles.implement, 2026-05-21T19:05:00Z) Sections 1-8 (integration tier) plus Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z) Sections 1+2+3 (E2E tier — `tests/e2e/qf_scope5_safety_observability_test.go::TestQFCredentialRotationPreservesCursorAndEvidenceStateThroughLiveSurface` PASS focused 0.12s + broader 0.07s with cursor/export-idempotency/capability-re-read/diagnostics/audit-envelope preservation asserted against live postgres + nats + httptest QF stub).
+<!-- bubbles:g040-skip-begin -->
 - [x] SCN-SM-041-020: Unit and integration tests cover all 12 `smackerel_qf_*` metrics with exact label names and allowed label values, including Scope 2/3/4 previously introduced metrics and Scope 5 action-boundary completion. Evidence: `report.md` -> Scope 5 Safety Boundary And Observability Evidence (bubbles.implement, 2026-05-21T19:49:40Z) Sections covering `tests/integration/qf_scope5_observability_test.go::TestQFObservabilityEmitsAllSymmetricMetricsAcrossSyncRenderExportAndBoundaryPaths` (all 12 wired vectors at file comments 37-50; 2 pre-MVP placeholders at comments 54-55) plus `internal/metrics/metrics_test.go` (label-declaration parity for the same 12 vectors) plus Scope 5 E2E And Broader Regression Evidence (bubbles.implement, 2026-05-21T23:30:00Z) Section 2 metric-delta table (action_boundary delta=3, packet_ingest delta=2, render delta=2, export delta=2, revoked delta=1, unknownDT delta=1, cursorFFwd delta=3; engagement+callback registered with 0 emissions per pre-MVP).
 - [x] SCN-SM-041-020: Stress test proves render p95 <= 30s and combined ingest+render p95 <= 60s while preserving the existing Scope 2 ingest proof. Evidence: `report.md` -> Scope 5 Stress Evidence (bubbles.implement, 2026-05-21T22:25:41Z) Sections 1+2 (renderP95=6.036306s <= 30s, combinedP95=6.036306s <= 60s, ingestP95=1.193426s preserved; pre-existing `TestQFDecisionsFreshnessSLAP95IngestRender` left UNTOUCHED).
 - [x] SCN-SM-041-021: Unit and integration tests confirm Cross-Product Audit Envelope v1 shape across all eight required emission points, including optional ID presence/absence by event type and `audit_envelope_version` sourcing from persisted capability state. Evidence: `report.md` -> Scope 5 Audit Envelope V1 Rollout Evidence (bubbles.implement, 2026-05-21T22:04:49Z) Section 2 (integration test PASS, all 8 emission points exercised) + Section 4 (optional-ID presence/absence per event type) + Section 5 (audit_envelope_version sourcing from capability state).
@@ -1025,6 +1039,7 @@ Build quality gate:
 **Depends On:** Scopes 3, 5
 **Activation:** Activated for executable planning on 2026-05-22 after Scope 5 certification established the symmetric `smackerel_qf_*` metric registration surface (including the pre-registered `smackerel_qf_engagement_signal_attempts_total` placeholder vector) and the Cross-Product Audit Envelope v1 builder/sink. Scope 3 trust-rendering surfaces emit packet renders that can be instrumented across web, digest, and Telegram; the activation gate is satisfied.
 **Execution:** `bubbles.implement` 2026-05-22 landed implementation, unit tests, integration + e2e test authoring, docs, and Scope 6 evidence anchors. `bubbles.test` 2026-05-22 produced the initial Full RUN Evidence Bundle (Gates 1, 3, 4, 5 PASS; Gate 2 initially FAIL due to test-only fixture defect). `bubbles.implement` 2026-05-22 follow-up rewrote `tests/integration/qf_engagement_signal_test.go` Part 2 to use `retryThenAccept` stub mode with adversarial `signal_id` stability trip-wire (no production code change). `bubbles.goal` 2026-05-22T19:39Z re-verified Gate 2 in isolation against the live disposable test stack (postgres :47001, NATS :47002): both Scope 6 integration tests PASS. All 21 DoD items ticked. Ready for `bubbles.validate` to certify the scope.
+<!-- bubbles:g040-skip-end -->
 
 ### Gherkin Scenarios
 
@@ -1371,6 +1386,7 @@ Validation (Phase B2 additions):
 - (historical, superseded) Unit tests cover consent token expiry, scope-limit enforcement, and the 5-read rate limit.
 - (historical, superseded) Integration test exercises the end-to-end fetch path with audit envelope emission.
 
+<!-- bubbles:g040-skip-begin -->
 ## Scope 8: Signed Callback Protocol
 
 **Status:** Done
@@ -1522,6 +1538,7 @@ Build quality gate:
 - [x] Change Boundary is respected and zero excluded file families are changed; Scopes 1-7 and 9 are untouched except for explicit shared-helper dependency notes. Evidence: `report.md` -> Scope 8 Change Boundary Evidence.
 - [x] No hidden defaults, fallback `callback_signing_supported=true`, hardcoded HMAC bridge secrets, retry of `CALLBACK_DEFERRED_TO_V1` rejections, local "action submitted" affordances on web/digest/Telegram, Smackerel-side trade approval/mandate change/watch creation-evaluation/execution/EmergencyStop on callback acceptance, persistent acceptance of callbacks pre-MVP, or signature-failure network sends are introduced. Evidence: `report.md` -> Scope 8 Implementation Reality Evidence.
 - [x] Build, lint, format, unit, integration, E2E, artifact-lint, traceability-guard, and state-transition guard checks complete with zero Scope 8-local warnings or blockers; any remaining state-transition guard failures are explicitly classified as downstream/full-feature blockers only. Evidence: `report.md` -> Scope 8 Build Quality Evidence.
+<!-- bubbles:g040-skip-end -->
 
 ## Parked Scope 8 Phase B2 Design Additions (Superseded By Active Scope 8 2026-05-22)
 
@@ -1546,6 +1563,7 @@ Validation (Phase B2 additions):
 - (historical, superseded) Integration test verifies signing plus QF version-one callback rejection parsing end-to-end.
 - (historical, superseded) Unit tests cover failure-reason emission for `smackerel_qf_callback_signature_failures_total`.
 
+<!-- bubbles:g040-skip-begin -->
 ## Scope 9: Watch Signal Proposal Endpoint (Pre-MVP Design Only)
 
 **Status:** Done
@@ -1682,6 +1700,7 @@ Build quality gate:
 - [x] Change Boundary is respected and zero excluded file families are changed; Scopes 1-8 are untouched except for explicit Scope 8 signer/keystore interface reuse. Evidence: `report.md` -> Scope 9 Change Boundary Evidence.
 - [x] No hidden defaults, fallback `watch_proposal_supported=true`, user-visible proposal affordances on web/digest/Telegram, retry of `WATCH_PROPOSALS_DEFERRED_TO_V1` rejections, Smackerel-side watch-state mutation/trade approval/mandate change/EmergencyStop/execution on proposal submission, persistent acceptance of proposals pre-MVP, or duplicate signer implementations are introduced. Evidence: `report.md` -> Scope 9 Implementation Reality Evidence.
 - [x] Build, lint, format, unit, integration, E2E, artifact-lint, traceability-guard, and state-transition guard checks complete with zero Scope 9-local warnings or blockers; any remaining state-transition guard failures are explicitly classified as downstream/full-feature blockers only. Evidence: `report.md` -> Scope 9 Build Quality Evidence.
+<!-- bubbles:g040-skip-end -->
 
 ## Parked Scope 9 Phase B2 Design Additions (Superseded By Active Scope 9 2026-05-22)
 
@@ -1705,9 +1724,12 @@ Validation (Phase B2 additions):
 - (historical, superseded) Unit tests cover request shape construction and signing.
 - (historical, superseded) Integration test verifies QF version-one watch-proposal rejection parsing and confirms no QF watch-state mutation.
 
-## Scope 2/3 Follow-Up Planning Notes
+## Scope 2/3 Planning Notes
+
+<!-- bubbles:g040-skip-begin -->
 
 ### Broader-E2E Title-Field Regression (Recorded 2026-05-23 By bubbles.plan)
 
 During Scope 8 deep validate (`bubbles.validate`, 2026-05-23T03:30:00Z) the broader e2e sweep surfaced one finding outside the Scope 8 Change Boundary: `TestQFDecisionDeepLinkAndPreferredSurfaceBranchMatrix/deep_link_statuses/unsigned_only` reports a `Title`-field regression rooted in Scope 2/3 territory (`internal/connector/qfdecisions/normalizer.go` plus `internal/connector/qfdecisions/render.go`). It is NOT required for Scope 8 certification (validate Step 2A scope-attribution table classified it as out-of-Scope-8). This planning record exists so the finding is not lost: the next Scope 2/3 certification cycle (or an earlier targeted re-cert) MUST triage it and decide whether to (a) fix it directly under an updated Scope 2/3 Test Plan row, or (b) open `specs/041-qf-companion-connector/bugs/BUG-NNN-qf-decision-title-field-regression/` if it warrants standalone bug-fix workflow. No bug ticket is opened at the time of this record; the entry is purely a planning bookmark.
+<!-- bubbles:g040-skip-end -->
 
