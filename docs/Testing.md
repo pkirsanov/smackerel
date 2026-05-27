@@ -553,3 +553,13 @@ Smackerel inherits the Bubbles evidence rules:
 - Long-running commands must use explicit timeouts.
 
 When new runtime categories are added, update this file, the command registry, and copilot instructions in the same change set so the documented test surface matches reality.
+
+## Spec 053 Delivery Evidence Requirements
+
+When a spec transitions to done under full-delivery workflow mode, its report must include phase-owned evidence sections for validation, audit, and chaos.
+
+- Validation evidence section: include executed command output and the phase marker for bubbles.validate.
+- Audit evidence section: include executed command output and the phase marker for bubbles.audit.
+- Chaos evidence section: include executed command output and the phase marker for bubbles.chaos.
+
+This requirement is enforced by the artifact lint and state transition guards, and prevents done-level promotions that only contain planning artifacts without delivery-phase evidence provenance.
