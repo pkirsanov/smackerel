@@ -150,4 +150,4 @@ RESULT: PASS (0 failures, 0 warnings)
 
 ### Promotion Decision
 
-All full-delivery blocking gates passed on this rerun. Promotion from blocked to done is applied in `state.json` with recertification timestamp `2026-05-27T04:27:26Z`.
+All full-delivery blocking gates passed on this rerun. Promotion from blocked to done is applied in `state.json` with recertification timestamp `2026-05-27T04:43:41Z`.
