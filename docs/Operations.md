@@ -2,6 +2,32 @@
 
 This guide covers deployment, daily operations, connector management, troubleshooting, backup/restore, and monitoring for a self-hosted Smackerel instance.
 
+## Terminal Status by Workflow Mode
+
+A spec or bug's `state.json` status is **terminal** (the work is complete for its workflow mode) when ANY of these are true:
+
+1. `status == "done"` — universal terminal status, OR
+2. `status == mode.statusCeiling` — the mode's declared completion status, OR
+3. `status ∈ mode.terminalAliases` — explicit synonyms declared in [`.github/bubbles/workflows.yaml`](../.github/bubbles/workflows.yaml).
+
+Some Bubbles modes intentionally have ceilings below `done` because the work they describe legitimately stops there. The following Smackerel-relevant modes are terminal at their ceiling — they are **NOT** open backlog items, and re-orchestrating them through `bugfix-fastlane` to force `done` is fake make-work:
+
+| Mode | Terminal status | Meaning |
+|------|-----------------|---------|
+| `validate-only`, `audit-only`, `validate-to-doc` | `validated` | Certification or audit pass; no new code shipped |
+| `docs-only`, `spec-review-to-doc`, `retro-to-review`, `release-planning-to-doc` | `docs_updated` | Documentation maintenance; no source-code changes |
+| `spec-scope-hardening`, `product-to-planning` | `specs_hardened` | Spec/design/scopes hardened; no implementation |
+| `adapter-readiness-to-packet`, `dark-launch-shipped`, `migration-shipped-pending-cutover` | `delivered_pending_activation` | Implementation + tests + audit shipped; live runtime evidence deferred to operator/cutover/rollout |
+
+To check terminal-for-mode status mechanically, use:
+
+```bash
+bash .github/bubbles/scripts/is-terminal-for-mode.sh "$status" "$mode"
+# exit 0 = terminal-for-mode; exit 1 = not terminal; exit 2 = error
+```
+
+Portfolio sweeps (`spec-dashboard.sh`, `bubbles.status`, `bubbles.recap`, retro tooling) use this helper so ceiling-bound packets are counted as completed work. The mechanical `state-transition-guard.sh` continues to block actual ceiling violations — promotion past a mode's ceiling is forbidden and is not loosened by this rule.
+
 ## Deployment
 
 ### Production Deploy (Build-Once Deploy-Many)

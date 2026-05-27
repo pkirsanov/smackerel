@@ -1337,6 +1337,7 @@ modes:
   spec-scope-hardening:
     description: Harden spec/design/scopes quality and expand Gherkin-to-E2E coverage before implementation.
     statusCeiling: specs_hardened
+    terminalAliases: [ specs_hardened ]
     phaseOrder: [ select, bootstrap, harden, docs, validate, audit, finalize ]
     requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G073 ]
     constraints:
@@ -1350,6 +1351,7 @@ modes:
   product-to-planning:
     description: Full analysis and planning pipeline from business analysis through UX, design, and scope planning — no implementation. Use when creating specs, designs, scopes, or bug artifacts from findings, requirements, or review outputs.
     statusCeiling: specs_hardened
+    terminalAliases: [ specs_hardened ]
     phaseOrder: [ analyze, select, bootstrap, harden, docs, validate, audit, finalize ]
     requiredGates: [ G001, G002, G006, G007, G008, G010, G011, G012, G014, G015, G016, G032, G073 ]
     constraints:
@@ -1432,6 +1434,7 @@ modes:
   docs-only:
     description: Documentation maintenance without implementation changes.
     statusCeiling: docs_updated
+    terminalAliases: [ docs_updated ]
     phaseOrder: [ select, docs, validate, audit, finalize ]
     requiredGates: [ G001, G006, G007, G008, G011, G012, G073 ]
     constraints:
@@ -1443,6 +1446,7 @@ modes:
   validate-only:
     description: Validation-only run with evidence output.
     statusCeiling: validated
+    terminalAliases: [ validated ]
     phaseOrder: [ select, validate, finalize ]
     requiredGates: [ G001, G007, G011, G012, G073 ]
     constraints:
@@ -1454,6 +1458,7 @@ modes:
   audit-only:
     description: Audit-only run for already validated scopes.
     statusCeiling: validated
+    terminalAliases: [ validated ]
     phaseOrder: [ select, audit, finalize ]
     requiredGates: [ G001, G008, G011, G012, G073 ]
     constraints:
@@ -1597,6 +1602,7 @@ modes:
   validate-to-doc:
     description: Run validation, audit, and docs sync. For specs needing final quality verification without re-running tests or chaos.
     statusCeiling: validated
+    terminalAliases: [ validated ]
     phaseOrder: [ select, validate, audit, docs, finalize ]
     requiredGates: [ G001, G006, G007, G008, G011, G012, G073 ]
     constraints:
@@ -1803,6 +1809,7 @@ modes:
   spec-review-to-doc:
     description: Audit all or selected specs for freshness, classify trust levels, and produce a maintenance context report. Read-only — no code changes, only spec trust classification and reporting.
     statusCeiling: docs_updated
+    terminalAliases: [ docs_updated ]
     phaseOrder: [ select, spec-review, docs, finalize ]
     requiredGates: [ G001, G010, G011, G012, G073 ]
     constraints:
@@ -1863,6 +1870,7 @@ modes:
   retro-to-review:
     description: "Data-driven code review: run retro hotspot analysis to identify the highest-risk files, then perform a targeted code review on those areas. Read-only diagnostic — produces findings and recommendations, no code changes."
     statusCeiling: docs_updated
+    terminalAliases: [ docs_updated ]
     phaseOrder: [ select, retro, code-review, docs, finalize ]
     requiredGates: [ G001, G010, G011, G012 ]
     constraints:
@@ -1876,6 +1884,7 @@ modes:
   release-planning-to-doc:
     description: "Phase release packet planning. Owned by bubbles.releases (Sonny Iron Lung Smith). Reads the Product Direction Surfaces trio (docs/INVESTOR_OVERVIEW.md, docs/Product-Principles.md, .github/instructions/product-principles.instructions.md), reconciles current product capabilities, then produces or refreshes a phase release packet (vision, features, actions, business-plan, deployment, marketing, monetization, ops-scalability) under docs/plans/<phase>/ and docs/releases/<phase>.md, plus updates the Phase Overview table in docs/INVESTOR_OVERVIEW.md. Refuses to run on a repo missing the trio — routes to bubbles.setup first. Supports modes: bootstrap, refresh, extend, cross-product."
     statusCeiling: docs_updated
+    terminalAliases: [ docs_updated ]
     phaseOrder: [ select, releases, docs, finalize ]
     requiredGates: [ G001, G010, G011, G012 ]
     constraints:
@@ -2173,6 +2182,7 @@ modes:
   adapter-readiness-to-packet:
     description: "Deploy-adapter readiness mode. Ships an adapter (apply.sh / verify.sh / rollback.sh / manifest schema) plus an operator activation packet to `delivered_pending_activation`. Contract-level tests, shellcheck, yamllint, manifest schema validation, and dry-run apply are required. Live runtime E2E is honestly deferred until the operator commits per-host params and runs the activation packet. Every deferred DoD item MUST cite the lockdown FR (typically the explicit live-activation lockdown FR in the spec)."
     statusCeiling: delivered_pending_activation
+    terminalAliases: [ delivered_pending_activation ]
     phaseOrder: [ select, bootstrap, implement, test, validate, audit, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G027, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073, G074 ]
     constraints:
@@ -2193,6 +2203,7 @@ modes:
   dark-launch-shipped:
     description: "Dark-launch mode. Ships a feature behind an off-by-default feature flag to `delivered_pending_activation`. Full implement + test + audit + integration tests with flag forced on in a sealed test env required. Live production E2E is honestly deferred until rollout. Every deferred runtime-E2E DoD item MUST cite the rollout lockdown FR plus the rollout owner (unblocker) and expectedActivation milestone."
     statusCeiling: delivered_pending_activation
+    terminalAliases: [ delivered_pending_activation ]
     phaseOrder: [ select, bootstrap, implement, test, validate, audit, regression, simplify, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073 ]
     constraints:
@@ -2211,6 +2222,7 @@ modes:
   migration-shipped-pending-cutover:
     description: "Migration mode. Ships forward/backward-compatible migration code (DB schema, API version, protocol upgrade) to `delivered_pending_activation`. Backward-compat contract tests, dual-read or dual-write tests, and explicit rollback plan are required. Live cutover E2E is honestly deferred until the scheduled cutover window. Every deferred DoD item MUST cite the cutover lockdown FR, the cutover window (expectedActivation), and the rollback path (unblocker)."
     statusCeiling: delivered_pending_activation
+    terminalAliases: [ delivered_pending_activation ]
     phaseOrder: [ select, bootstrap, implement, test, validate, audit, regression, security, docs, finalize ]
     requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G027, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073 ]
     constraints:

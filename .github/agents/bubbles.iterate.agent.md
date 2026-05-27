@@ -342,10 +342,17 @@ If `uservalidation.md` has unchecked `[ ]` items:
 - Next scope MUST be minimal fix to restore broken behavior
 
 ### Priority 0.5: Incomplete Bug Fixes
-If `{FEATURE_DIR}/bugs/*/state.json` has `status` != `"done"`:
+If `{FEATURE_DIR}/bugs/*/state.json` has `status` that is NOT terminal-for-mode
+(use `bash bubbles/scripts/is-terminal-for-mode.sh "$status" "$mode"` — exit 0
+means terminal-for-mode, i.e., `done` OR the mode's `statusCeiling` OR any
+entry in the mode's `terminalAliases`):
 - Check for incomplete bug fixes for this feature
 - WARN user: "Found N incomplete bug fixes. Complete them in the relevant bug folder(s) or acknowledge to proceed"
 - If bug is `status: "in_progress"`, strongly recommend finishing it first
+- DO NOT flag ceiling-bound bugs (e.g., a `validate-to-doc` bug at `validated`,
+  a `docs-only` bug at `docs_updated`) — they are already complete for their
+  workflow mode and cannot be promoted further. Re-orchestrating them through
+  `bugfix-fastlane` to force `done` is fake make-work.
 
 **If the user explicitly requests bug pickup** (either `type: bugfix` or `pick_up_incomplete_bugs: true`):
 - Select the highest-priority incomplete bug folder that already has canonical bug artifacts and a `scopes.md` with at least one incomplete DoD item

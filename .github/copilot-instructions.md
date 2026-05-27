@@ -367,6 +367,24 @@ All work must be organized under feature or bug folders:
 - Features: `specs/NNN-feature-name/`
 - Bugs: `specs/[feature]/bugs/BUG-NNN-description/`
 
+### Terminal Status Is Per-Mode (Not Always `done`)
+
+A spec or bug is **complete for its workflow mode** when its `state.json` status is terminal-for-mode, NOT only when it equals the literal string `"done"`. Terminal-for-mode means: `status == "done"` OR `status == mode.statusCeiling` OR `status ∈ mode.terminalAliases` (see [`docs/Operations.md` → Terminal Status by Workflow Mode](../docs/Operations.md#terminal-status-by-workflow-mode)).
+
+| Mode family | Terminal status |
+|-------------|-----------------|
+| `validate-only`, `audit-only`, `validate-to-doc` | `validated` |
+| `docs-only`, `spec-review-to-doc`, `retro-to-review`, `release-planning-to-doc` | `docs_updated` |
+| `spec-scope-hardening`, `product-to-planning` | `specs_hardened` |
+| `adapter-readiness-to-packet`, `dark-launch-shipped`, `migration-shipped-pending-cutover` | `delivered_pending_activation` |
+| everything else | `done` |
+
+Rules for agents:
+
+- DO NOT attempt to "promote" a ceiling-bound packet to `done`. The state-transition guard will (correctly) refuse, and re-orchestrating through `bugfix-fastlane` to force `done` is fake make-work — the actual fix already shipped.
+- When sweeping the portfolio for "open work," use `bash .github/bubbles/scripts/is-terminal-for-mode.sh "$status" "$mode"` (exit 0 = terminal-for-mode) instead of comparing to `"done"`. The `spec-dashboard.sh`, `bubbles.status`, `bubbles.recap`, and retro tooling already do this.
+- Ceiling enforcement in `state-transition-guard.sh` is unchanged — promotion past the ceiling remains forbidden.
+
 ---
 
 ## Language Discipline

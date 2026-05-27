@@ -62,6 +62,7 @@ bubbles/scripts/interop-apply.sh
 bubbles/scripts/interop-import-selftest.sh
 bubbles/scripts/interop-intake.sh
 bubbles/scripts/interop-registry.sh
+bubbles/scripts/is-terminal-for-mode.sh
 bubbles/scripts/mode-resolver-selftest.sh
 bubbles/scripts/mode-resolver.sh
 bubbles/scripts/orchestrator-persistence-lint-selftest.sh

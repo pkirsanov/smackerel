@@ -31,6 +31,15 @@ Each workflow mode in `bubbles/workflows.yaml` declares a `statusCeiling`. The s
 
 If the ceiling is below `done`, the agent MUST refuse to mark the spec `done` even if the work feels complete. Set the ceiling status instead and emit a `route_required` packet for the next-stage workflow.
 
+## Ceiling status is terminal-for-mode (not a backlog item)
+
+When a workflow mode has `statusCeiling` other than `done` (e.g., `validate-to-doc` → `validated`, `docs-only` → `docs_updated`, `adapter-readiness-to-packet` → `delivered_pending_activation`), the ceiling status IS the completion signal for that mode. Each such mode also declares `terminalAliases: [<ceiling>]` so that portfolio tooling can treat it as terminal.
+
+- **Terminal-for-mode** means: `status == "done"` OR `status == mode.statusCeiling` OR `status ∈ mode.terminalAliases`.
+- Use the helper `bash bubbles/scripts/is-terminal-for-mode.sh <status> <mode>` (exit 0 = terminal) instead of comparing to the literal string `"done"`.
+- Promotion past the ceiling is forbidden by `state-transition-guard.sh`. Re-orchestrating a ceiling-bound spec/bug through `bugfix-fastlane` to force `done` is fake make-work — the actual work already shipped.
+- Portfolio sweeps (`spec-dashboard.sh`, `bubbles.status`, `bubbles.recap`, retro tooling) MUST use `is-terminal-for-mode.sh` so ceiling-bound packets are counted as completed work, not as open items.
+
 ## Done is sequential
 - A spec cannot be `done` until ALL scopes show `Status: Done` (Gate G024).
 - A scope cannot be `Done` until ALL DoD items are `[x]` with inline raw-output evidence (Gate G025).
