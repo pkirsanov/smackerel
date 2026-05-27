@@ -231,9 +231,13 @@ T-1-04 markets-suite baseline runs above under § Verification Evidence → Regr
 
 ## Validation Evidence
 
+### Validation Evidence
+
 The 5 SCN-BUG-018-001-NNN scenarios are validated against the post-reconcile HEAD; each scenario's `liveTestExpectation` is met (state-transition-guard / artifact-lint / traceability-guard return Exit 0; `go test ./internal/connector/markets/... -count=1 -cover` reports 151 PASS at 97.2% coverage; `git diff --name-only HEAD~1..HEAD -- internal/connector/markets/` returns empty). The verdict for the BUG packet status is **resolved**.
 
 ## Audit Evidence
+
+### Audit Evidence
 
 The artifact mutations applied by this bug were authored according to the precedent set by BUG-015-002 (R25, 2026-05-22), BUG-029-006 (R23, 2026-05-19), and BUG-028-003 (R22, 2026-05-18). Each mutation in scopes.md, state.json, and report.md (parent spec 018) is traceable to one of the 50 BLOCK findings catalogued in § Diagnostic Evidence. The audit lineage is captured in this report's § Diagnostic Evidence (red state) and § Verification Evidence (green state) sections.
 
