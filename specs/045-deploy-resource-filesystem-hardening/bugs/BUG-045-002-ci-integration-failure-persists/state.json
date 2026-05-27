@@ -342,12 +342,12 @@
       "owner": "bubbles.plan",
       "openedAt": "2026-05-17T19:00:00Z",
       "openedBy": "bubbles.goal",
-      "resolvedAt": null,
-      "resolvedBy": null,
-      "status": "open",
+      "resolvedAt": "2026-05-27T05:59:32Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
       "knownDriftLink": "KD-1",
       "evidenceRequired": ["new spec or amendment that defines next-iteration G068 DoD-Gherkin fidelity coverage items beyond the 11 mapped at audit-time", "traceability-guard.sh executed against the new spec returns exit 0 with the next-iteration scenario set fully mapped", "report.md \u00a7 Follow-up Work \u2014 G068 fidelity backlog cited as the source surface"],
-      "openNote": "Audit surfaced residual G068 DoD-Gherkin fidelity items as informational backlog under G040 skip-region wrappers in report.md \u00a7 Follow-up Work. Routing to bubbles.plan to author the next-iteration coverage plan; not blocking this BUG-045-002 verdict."
+      "resolutionNote": "Closed-by-current-proof via spec 053 Scope 1 (G068 Fidelity Proof-Or-Close) — see specs/053-ci-ops-evidence-hardening/state.json scopeProgress[1] (status=Done, certifiedAt=2026-05-18T15:11:13Z) and specs/053-ci-ops-evidence-hardening/scopes.md → Scope 1 Planning Records / specs/053-ci-ops-evidence-hardening/report.md. Disposition: 7 scenarios checked, 7 mapped to DoD, 0 unmapped; no next-iteration coverage required."
     },
     {
       "transitionRequestId": "TR-BUG-045-002-009",
@@ -356,12 +356,12 @@
       "owner": "bubbles.plan",
       "openedAt": "2026-05-17T19:00:00Z",
       "openedBy": "bubbles.goal",
-      "resolvedAt": null,
-      "resolvedBy": null,
-      "status": "open",
+      "resolvedAt": "2026-05-27T05:59:32Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
       "knownDriftLink": "KD-2",
       "evidenceRequired": ["new spec or amendment defining the next-iteration regression E2E coverage expansion (CI integration job, full-stack repro, contract-test surface)", "scopes.md DoD items for the expansion ticked with verbatim raw-output evidence", "report.md \u00a7 Follow-up Work \u2014 Regression E2E expansion paragraph cited as the source surface"],
-      "openNote": "Build-time topology guard + 3 adversarial sub-tests + Scope 1 BUG-029-004 contract update + live local repro all PASS at audit-phase. Broader regression E2E expansion (per audit-phase \u00a7 Follow-up Work) is the routed work; not blocking this packet."
+      "resolutionNote": "Closed-by-current-proof via spec 053 Scope 2 (Regression E2E Expansion Plan) — see specs/053-ci-ops-evidence-hardening/state.json scopeProgress[2] (status=Done, certifiedAt=2026-05-18T15:11:13Z) and specs/053-ci-ops-evidence-hardening/scopes.md → Scope 2 / specs/053-ci-ops-evidence-hardening/report.md. Disposition: all three candidate regression surfaces screened against the BUG-045-002 existing proof catalog and recorded rejected-duplicate; no new regression rows authored."
     },
     {
       "transitionRequestId": "TR-BUG-045-002-010",
@@ -370,12 +370,12 @@
       "owner": "bubbles.plan",
       "openedAt": "2026-05-17T19:00:00Z",
       "openedBy": "bubbles.goal",
-      "resolvedAt": null,
-      "resolvedBy": null,
-      "status": "open",
+      "resolvedAt": "2026-05-27T05:59:32Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
       "knownDriftLink": "KD-3",
       "evidenceRequired": ["new spec or planning packet authoring Consumer Trace Planning (Scope 1) capturing the planning shape called out in report.md \u00a7 Follow-up Work", "scope DoD items address every line of the surfaced Consumer Trace Planning paragraph", "G040 skip-region wrappers in report.md \u00a7 Follow-up Work either removed (after the new spec ships) or retained with cross-reference to the new spec"],
-      "openNote": "Consumer Trace Planning surfaced and isolated inside G040 skip-region wrappers in BUG-045-002 report.md \u00a7 Follow-up Work; ROUTED to bubbles.plan as future planning packet."
+      "resolutionNote": "Closed-by-current-proof via spec 053 Scope 3 (CI Consumer Trace Plan) — see specs/053-ci-ops-evidence-hardening/state.json scopeProgress[3] (status=Done, certifiedAt=2026-05-18T15:25:00Z) and specs/053-ci-ops-evidence-hardening/scopes.md → Scope 3 / specs/053-ci-ops-evidence-hardening/report.md. Disposition: 17 consumers inventoried across 4 DD-053-004 classes (direct=2, indirect=4, observational=1, documentation-facing=7) plus 3 framework consumers routed per DD-053-008; all 14 product-side rows carry no-change-with-evidence citing Scope 5 no-source-delta proof."
     },
     {
       "transitionRequestId": "TR-BUG-045-002-011",
@@ -384,12 +384,12 @@
       "owner": "bubbles.plan",
       "openedAt": "2026-05-17T19:00:00Z",
       "openedBy": "bubbles.goal",
-      "resolvedAt": null,
-      "resolvedBy": null,
-      "status": "open",
+      "resolvedAt": "2026-05-27T05:59:32Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
       "knownDriftLink": "KD-4",
       "evidenceRequired": ["new spec or planning packet authoring Shared Infrastructure Blast-Radius (Scopes 2/3) capturing the planning shape called out in report.md \u00a7 Follow-up Work", "scope DoD items address every line of the surfaced Shared Infrastructure Blast-Radius paragraph", "G040 skip-region wrappers in report.md \u00a7 Follow-up Work either removed (after the new spec ships) or retained with cross-reference to the new spec"],
-      "openNote": "Shared Infrastructure Blast-Radius surfaced and isolated inside G040 skip-region wrappers in BUG-045-002 report.md \u00a7 Follow-up Work; ROUTED to bubbles.plan as future planning packet."
+      "resolutionNote": "Closed-by-current-proof via spec 053 Scope 4 (Shared Infrastructure Blast-Radius Plan) — see specs/053-ci-ops-evidence-hardening/state.json scopeProgress[4] (status=Done, certifiedAt=2026-05-18T15:35:00Z) and specs/053-ci-ops-evidence-hardening/scopes.md → Scope 4 / specs/053-ci-ops-evidence-hardening/report.md. Disposition: four Blast-Radius Records authored for the four protected surfaces enumerated by DD-053-005 (Test stack lifecycle, CI workflow ordering, Contract-test parsing, CLI wrappers); every dependentSurfaces entry traces to a Scope 3 consumer ID."
     },
     {
       "transitionRequestId": "TR-BUG-045-002-012",
@@ -398,12 +398,12 @@
       "owner": "bubbles.plan",
       "openedAt": "2026-05-17T19:00:00Z",
       "openedBy": "bubbles.goal",
-      "resolvedAt": null,
-      "resolvedBy": null,
-      "status": "open",
+      "resolvedAt": "2026-05-27T05:59:32Z",
+      "resolvedBy": "bubbles.plan",
+      "status": "resolved",
       "knownDriftLink": "KD-5",
       "evidenceRequired": ["new spec or planning packet authoring Change Boundary Containment capturing the planning shape called out in report.md \u00a7 Follow-up Work", "scope DoD items address every line of the surfaced Change Boundary Containment paragraph", "G040 skip-region wrappers in report.md \u00a7 Follow-up Work either removed (after the new spec ships) or retained with cross-reference to the new spec"],
-      "openNote": "Change Boundary Containment surfaced and isolated inside G040 skip-region wrappers in BUG-045-002 report.md \u00a7 Follow-up Work; ROUTED to bubbles.plan as future planning packet."
+      "resolutionNote": "Closed-by-current-proof via spec 053 Scope 5 (Change Boundary + G040 Wrapper Disposition) — see specs/053-ci-ops-evidence-hardening/state.json scopeProgress[5] (status=Done, certifiedAt=2026-05-18T23:55:00Z) and specs/053-ci-ops-evidence-hardening/scopes.md → Scope 5 / specs/053-ci-ops-evidence-hardening/report.md. Disposition: five Boundary Records, six Wrapper Disposition Records (all historical-retain), Framework-Boundary Record routing TR-BUG-045-002-014 upstream, and Consolidation Record authored; validate-phase corrected-framing proof shows spec 053's only committed work (edcd8836) introduced zero out-of-boundary changes."
     },
     {
       "transitionRequestId": "TR-BUG-045-002-013",
