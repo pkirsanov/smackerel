@@ -2837,8 +2837,8 @@ func TestChaosR8_BuildThreads_HighFanout(t *testing.T) {
 		t.Fatalf("expected exactly 1 thread for high-fanout root, got %d", len(threads))
 	}
 	if got := len(threads[0].Tweets); got != fanout+1 {
-			t.Errorf("expected %d tweets in thread, got %d", fanout+1, got)
-		}
+		t.Errorf("expected %d tweets in thread, got %d", fanout+1, got)
+	}
 }
 
 // ============================================================================
@@ -2870,7 +2870,8 @@ func archiveDirWithSingleTweet(t *testing.T, id, text string) string {
 // Given sync_mode "archive"
 // When Connect runs
 // Then c.apiClient is nil
-//   AND Sync runs without constructing any API client
+//
+//	AND Sync runs without constructing any API client
 //
 // Adversarial regression: this would fail if Connect's dispatcher gained an
 // accidental "construct apiClient unconditionally" branch — a regression
@@ -2908,11 +2909,14 @@ func TestTwitterAPI_ArchivePathUnaffectedByAPIClient(t *testing.T) {
 // TestTwitterAPI_HybridDedupAcrossArchiveAndAPI — SCN-056-004.
 //
 // Given sync_mode "hybrid"
-//   AND the local archive contains tweet ID 1234567890
-//   AND the API bookmarks endpoint also returns tweet ID 1234567890 plus a new ID 9999999999
+//
+//	AND the local archive contains tweet ID 1234567890
+//	AND the API bookmarks endpoint also returns tweet ID 1234567890 plus a new ID 9999999999
+//
 // When the connector runs Sync
 // Then exactly one RawArtifact for tweet ID 1234567890 exists (dedup)
-//   AND the new tweet ID 9999999999 is also published (no false dedup)
+//
+//	AND the new tweet ID 9999999999 is also published (no false dedup)
 func TestTwitterAPI_HybridDedupAcrossArchiveAndAPI(t *testing.T) {
 	dir := archiveDirWithSingleTweet(t, "1234567890", "overlap tweet from archive")
 

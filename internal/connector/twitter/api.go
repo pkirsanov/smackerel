@@ -62,10 +62,11 @@ type apiClient struct {
 	bearerToken string //nolint:unused // consumed by buildRequest below
 	baseURL     string
 	userAgent   string
-	logger      *slog.Logger	// sleeper / now are injected for tests. Nil values use the production
+	logger      *slog.Logger // sleeper / now are injected for tests. Nil values use the production
 	// defaults (defaultSleeper, time.Now).
 	sleeper sleeperFunc
-	now     nowFunc}
+	now     nowFunc
+}
 
 // newAPIClient constructs the API client for a given Twitter connector config.
 // Returns (ErrAPIBearerTokenRequired) when the mode requires API access AND the
