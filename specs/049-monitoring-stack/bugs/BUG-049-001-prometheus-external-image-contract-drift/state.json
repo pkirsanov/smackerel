@@ -6,7 +6,9 @@
   "featureName": "BUG-049-001 Prometheus external image contract drift",
   "parentSpec": "specs/049-monitoring-stack/",
   "title": "Prometheus external image missing from deploy/contract.yaml::externalImages",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "devops-to-doc",
   "severity": "medium",
   "class": "devops",
@@ -44,7 +46,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "BUG-049-001-S1"
     ],
