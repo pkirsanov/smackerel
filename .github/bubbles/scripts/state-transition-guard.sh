@@ -2252,7 +2252,32 @@ for scope_path in "${scope_files[@]}"; do
         else
           checked_with_evidence=$((checked_with_evidence + 1))
         fi
-      # 2. Inline evidence block within next 15 lines (v4.0.x behavior)
+      # 2. v4.1.x: markdown link to report.md (with or without #anchor) on the
+      # same line counts as evidence-by-reference. Anchored links are
+      # additionally validated by the resolver (≥10-line block required).
+      # Plain `report.md` links (no anchor) count as evidence if the file
+      # exists at the expected location.
+      elif echo "$line" | grep -qoE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)'; then
+        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/')"
+        if [[ "$link_target" == *"#"* ]]; then
+          if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
+            checked_with_evidence=$((checked_with_evidence + 1))
+          else
+            checked_without_evidence=$((checked_without_evidence + 1))
+            fail "DoD item [x] links '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+          fi
+        else
+          # Plain report.md link with no anchor — verify file presence
+          rel_report="${link_target##*/}"
+          [[ -z "$rel_report" ]] && rel_report="report.md"
+          if [[ -f "$scope_dir/report.md" ]]; then
+            checked_with_evidence=$((checked_with_evidence + 1))
+          else
+            checked_without_evidence=$((checked_without_evidence + 1))
+            fail "DoD item [x] links report.md but no report.md exists in $scope_dir: $(echo "$line" | head -c 80)"
+          fi
+        fi
+      # 3. Inline evidence block within next 15 lines (v4.0.x behavior)
       elif echo "$next_lines" | grep -qE '(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'; then
         checked_with_evidence=$((checked_with_evidence + 1))
       else
