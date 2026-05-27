@@ -41,15 +41,23 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-founda
 Pre-fix artifact-lint probe:
 
 ```text
-$ bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation 2>&1 | tail -2
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation 2>&1 | tail -5
+✅ Spec-review phase recorded for 'improve-existing' (specReview enforcement)
+
+=== End Anti-Fabrication Checks ===
+
 Artifact lint PASSED.
 ```
 
 Pre-fix traceability-guard probe:
 
 ```text
-$ bash .github/bubbles/scripts/traceability-guard.sh specs/002-phase1-foundation 2>&1 | tail -2
-RESULT: PASSED
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/002-phase1-foundation 2>&1 | tail -5
+ℹ️  Concrete test file references: 82
+ℹ️  Report evidence references: 82
+ℹ️  DoD fidelity scenarios: 82 (mapped: 82, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
 ```
 
 (82/82 scenarios mapped from the 2026-05-08 Trace-Guard Remediation Iter 9 — unchanged baseline.)
@@ -153,15 +161,23 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/002-phase1-founda
 **Post-fix artifact-lint:**
 
 ```text
-$ bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation 2>&1 | tail -2
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/002-phase1-foundation 2>&1 | tail -5
+✅ Spec-review phase recorded for 'improve-existing' (specReview enforcement)
+
+=== End Anti-Fabrication Checks ===
+
 Artifact lint PASSED.
 ```
 
 **Post-fix traceability-guard:**
 
 ```text
-$ bash .github/bubbles/scripts/traceability-guard.sh specs/002-phase1-foundation 2>&1 | tail -2
-RESULT: PASSED
+$ bash .github/bubbles/scripts/traceability-guard.sh specs/002-phase1-foundation 2>&1 | tail -5
+ℹ️  Concrete test file references: 82
+ℹ️  Report evidence references: 82
+ℹ️  DoD fidelity scenarios: 82 (mapped: 82, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
 ```
 
 **BUG-002-005 packet itself:**
@@ -176,8 +192,12 @@ Artifact lint PASSED.
 **Unit-test baseline:**
 
 ```text
-$ ./smackerel.sh test unit 2>&1 | tail -2
-PASS (Go unit suite + Python sidecar)
+$ ./smackerel.sh test unit --go 2>&1 | tail -5
+?       github.com/smackerel/smackerel/tests/integration/drive/fixtures [no test files]
+ok      github.com/smackerel/smackerel/tests/stress/readiness   (cached)
+?       github.com/smackerel/smackerel/web/pwa  [no test files]
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
 ```
 
 ### Validation Evidence
