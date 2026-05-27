@@ -3707,6 +3707,28 @@ fi
 echo ""
 
 # =============================================================================
+# CHECK 35: Discovered-Issue Disposition (Gate G095)
+# =============================================================================
+# Every issue an agent observes during work MUST have an explicit disposition.
+# "Pre-existing", "unrelated", "out of scope", "known issue", "skipping",
+# "will fix later", "not my session" without a filed BUG/spec/ops/routed
+# disposition is forbidden and counts as fabrication.
+echo "--- Check 35: Discovered-Issue Disposition (Gate G095) ---"
+discovered_issue_guard="$SCRIPT_DIR/discovered-issue-disposition-guard.sh"
+if [[ -x "$discovered_issue_guard" ]]; then
+  if bash "$discovered_issue_guard" "$feature_dir" > /dev/null 2>&1; then
+    pass "Discovered-issue disposition clean — no unfiled deferrals (Gate G095)"
+  else
+    fail "Discovered-issue disposition guard failed — Gate G095. Run 'bash $discovered_issue_guard $feature_dir' for full diagnostic"
+    info "Remediation: for every forbidden deferral phrase, either cite a concrete artifact (BUG-NNN, TR-NNN, spec path, ops URL) in the same paragraph, OR add a row to '## Discovered Issues' in report.md dated today with disposition + reference"
+    info "See agents/bubbles_shared/operating-baseline.md → 'Discovered-Issue Disposition' for the disposition table"
+  fi
+else
+  info "discovered-issue-disposition-guard.sh not present at $discovered_issue_guard; skipping (advisory)"
+fi
+echo ""
+
+# =============================================================================
 # FINAL VERDICT
 # =============================================================================
 echo "============================================================"
