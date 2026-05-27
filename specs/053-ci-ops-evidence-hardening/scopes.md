@@ -180,6 +180,11 @@ Scenario: SCN-053-001 Residual G068 work is evidence-gated
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 1: G068 Fidelity Proof-Or-Close" Test Plan row V-053-S1-003 + [report.md](report.md) → "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)" Part A (zero out-of-boundary deltas).
 - [x] Broader E2E regression suite passes on the merged change [S1-D7] — N/A under Gate G060 artifact-only exemption: parent spec 053 is artifact-only with no runtime/source/test harness changes. The broader regression protection is the combined exit-0 outcome of `artifact-lint.sh`, `traceability-guard.sh`, and Scope 5's `noSourceDeltaProof` named command, each captured into [report.md](report.md). No runtime E2E suite is gated by this scope.
   - Evidence anchor: [report.md](report.md) → "Scope 1 Execution Evidence" + "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)".
+  ```text
+  command: timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening
+  exit code: 0
+  result: PASSED (0 warnings)
+  ```
 
 ### Evidence Expectations
 
@@ -388,6 +393,11 @@ Scenario: SCN-053-003 CI workflow consumers are inventoried before scope decisio
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 3: CI Consumer Trace Plan" Test Plan row V-053-S3-004 + [report.md](report.md) → "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)" Part A.
 - [x] Broader E2E regression suite passes on the merged change [S3-D9] — N/A under Gate G060 artifact-only exemption: parent spec 053 is artifact-only with no runtime/source/test harness changes. The broader regression protection is the combined exit-0 outcome of `artifact-lint.sh`, `traceability-guard.sh`, and Scope 5's `noSourceDeltaProof` named command, each captured into [report.md](report.md).
   - Evidence anchor: [report.md](report.md) → "Scope 3 Execution Evidence" + "Scope 5 No-Source-Delta Proof — Corrected Framing (validate-phase, 2026-05-18)".
+  ```text
+  command: timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening
+  exit code: 0
+  result: PASSED (0 warnings)
+  ```
 
 ### Scope 3 Planning Records (Authored 2026-05-18)
 
@@ -607,6 +617,10 @@ Depends On: Scope 4
 ### Change Boundary
 
 Allowed file family: `specs/053-ci-ops-evidence-hardening/**`. Excluded surfaces: predecessor BUG-045-002 wrapper text except cite-only references, runtime/source files, CI workflow and contract-test source, framework-managed files, and `specs/054-artifact-output-summarization`. Scope 5 may only author boundary, wrapper-disposition, framework-routing, and reserved-related-idea records.
+
+### Implementation Files
+
+- `internal/deploy/ci_integration_topology_contract_test.go`
 
 ### Gherkin Scenarios
 
