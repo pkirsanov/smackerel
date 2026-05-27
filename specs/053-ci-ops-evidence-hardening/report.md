@@ -678,7 +678,7 @@ Authored Scope 2 Planning Records (TR-BUG-045-002-009 matrix row, source-surface
 Artifact lint PASSED.
 ```
 
-**Interpretation for V-053-S2-001 and V-053-S2-004 (artifact-lint regression):** Artifact lint exits 0 after Scope 2 Planning Records were authored into scopes.md and S2-D1..S2-D6 were checked. The three deprecated-field warnings on `scopeProgress`, `statusDiscipline`, and `scopeLayout` are non-blocking schema-version hints carried forward from the planning reconciliation and do not affect exit code; their remediation is outside the Scope 2 DoD surface. S2-D6 is satisfied by this exit-0 result.
+**Interpretation for V-053-S2-001 and V-053-S2-004 (artifact-lint regression):** Artifact lint exits 0 after Scope 2 Planning Records were authored into scopes.md and S2-D1..S2-D6 were checked. The three deprecated-field warnings on `scopeProgress`, `statusDiscipline`, and `scopeLayout` are non-blocking schema-version hints retained from the planning reconciliation and do not affect exit code; their remediation is outside the Scope 2 DoD surface. S2-D6 is satisfied by this exit-0 result.
 
 ### Scope 2 Traceability Guard (post-edit run)
 

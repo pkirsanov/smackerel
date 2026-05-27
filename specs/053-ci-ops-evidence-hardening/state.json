@@ -3,6 +3,8 @@
   "featureDir": "specs/053-ci-ops-evidence-hardening",
   "featureName": "CI Ops Evidence Hardening",
   "status": "specs_hardened",
+  "planningOnly": true,
+  "planningOnlyJustification": "Spec 053 is an artifact-only planning packet under workflowMode spec-scope-hardening and intentionally introduces no runtime/source/CI/deploy/framework code delta.",
   "workflowMode": "spec-scope-hardening",
   "execution": {
     "activeAgent": "bubbles.workflow",
