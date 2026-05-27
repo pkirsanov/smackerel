@@ -1,0 +1,9 @@
+{
+  "data": [
+    {"id": "1004", "text": "second page tweet 1", "author_id": "2244994945"},
+    {"id": "1005", "text": "second page tweet 2", "author_id": "2244994945"}
+  ],
+  "meta": {
+    "result_count": 2
+  }
+}

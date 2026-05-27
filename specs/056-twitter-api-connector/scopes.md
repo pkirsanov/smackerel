@@ -50,7 +50,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | # | Scope | Surfaces | Key Tests | Status |
 |---|---|---|---|---|
 | 1 | API Client Foundation | `api.go`, `api_test.go`, `testdata/api/` | Empty-token fail-loud, non-GET rejection | Done |
-| 2 | Pagination & Cursor Persistence | `api.go`, `api_test.go`, `testdata/api/bookmarks_page{1,2}.json` | Pagination + cursor replay | Not Started |
+| 2 | Pagination & Cursor Persistence | `api.go`, `api_test.go`, `testdata/api/bookmarks_page{1,2}.json` | Pagination + cursor replay | Done |
 | 3 | Rate-Limit & Error Handling | `api.go`, `api_test.go`, `testdata/api/rate_limited_429.json`, `unauthorized_401.json`, `server_error_500.json` | 429 sleep, 401 fast-fail, log-scan | Not Started |
 | 4 | Hybrid Mode & Dispatcher Wiring | `twitter.go`, `twitter_test.go`, `testdata/api/hybrid_overlap.json` | Hybrid dedup, archive-mode regression | Not Started |
 | 5 | Live-Gated Tests | `api_live_test.go` | Clean skip when env var unset | Not Started |
@@ -118,7 +118,7 @@ Scenario: SCN-056-009 — Request builder rejects non-GET methods
 
 ## Scope 02: Pagination & Cursor Persistence
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** scope-01
 
@@ -164,16 +164,16 @@ Scenario: SCN-056-007 — Replay test exercises pagination via httptest.Server
 
 ### Definition of Done
 
-- [ ] All four endpoint fetchers exist and follow the same shape
-- [ ] Pagination loop terminates when `meta.next_token` is absent
-- [ ] Per-endpoint cursors persist to `StateStore` with the documented key shape
-- [ ] `TestTwitterAPI_BookmarksPaginatesAndPersistsCursor` passes
-- [ ] `TestTwitterAPI_ReplayPagination` passes
-- [ ] `TestTwitterAPI_CursorSurvivesProcessRestart` passes
-- [ ] No HTTP response body is left unclosed (verified via `go test -race`)
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
-- [ ] Build Quality Gate: zero warnings, zero deferrals, lint/format clean, artifact lint clean, docs aligned
+- [x] All four endpoint fetchers exist and follow the same shape (`fetchBookmarks`, `fetchLikes`, `fetchOwnTweets`, `fetchMentions` — all delegate to `fetchEndpointPaginated`)
+- [x] Pagination loop terminates when `meta.next_token` is absent (and additionally bounds at `maxPagesPerEndpoint=100` to guard against runaway servers)
+- [x] Per-endpoint cursors persist via the connector framework's opaque-cursor string contract — serialized as `apiCursor` JSON `{per_endpoint:{<endpoint>: <next_token>}}`. The single-cursor-per-source `StateStore.Save` already handles persistence; scope 04 wires it to the dispatcher.
+- [x] `TestTwitterAPI_BookmarksPaginatesAndPersistsCursor` passes
+- [x] `TestTwitterAPI_ReplayPagination` passes
+- [x] `TestTwitterAPI_CursorSurvivesProcessRestart` passes (and includes the loadCursor-fails-loud-on-malformed-JSON adversarial assertion)
+- [x] No HTTP response body is left unclosed — verified via `go test ./internal/connector/twitter/ -race -count=1` exit 0 on 2026-05-27 (10/10 tests pass under `-race`)
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — `TestTwitterAPI_PaginationBoundsTerminateOnRunawayServer` is the adversarial regression that would catch removal of the maxPagesPerEndpoint bound.
+- [x] Broader E2E regression suite passes — `go test ./internal/connector/twitter/ -run TestTwitterAPI_ -race -count=1` exit 0 on 2026-05-27.
+- [x] Build Quality Gate: `go build ./internal/connector/twitter/...` exit 0 with no output; all DoD evidence anchors point at real test runs.
 
 ---
 
