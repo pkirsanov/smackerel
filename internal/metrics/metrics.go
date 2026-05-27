@@ -73,6 +73,43 @@ var ConnectorSync = prometheus.NewCounterVec(
 	[]string{"connector", "status"},
 )
 
+// --- Twitter API connector (spec 056) ---
+
+// ConnectorTwitterAPIRequests counts Twitter API v2 HTTP requests per
+// (endpoint, status_code). The endpoint label uses the apiEndpoint values
+// from internal/connector/twitter (bookmarks / liked_tweets / tweets /
+// mentions / users_me). status_code is the HTTP status as a string (e.g.
+// "200", "401", "429", "500") OR "error" for transport-level failures.
+var ConnectorTwitterAPIRequests = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_connector_twitter_api_requests_total",
+		Help: "Twitter API v2 HTTP requests by endpoint and status",
+	},
+	[]string{"connector", "endpoint", "status"},
+)
+
+// ConnectorTwitterAPIRetries counts Twitter API v2 retry attempts by
+// (endpoint, reason). reason is one of: "rate_limit" (HTTP 429),
+// "server_error" (HTTP 5xx), or "transport" (network-level failure).
+var ConnectorTwitterAPIRetries = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_connector_twitter_api_retries_total",
+		Help: "Twitter API v2 retry attempts by endpoint and reason",
+	},
+	[]string{"connector", "endpoint", "reason"},
+)
+
+// ConnectorTwitterAPIRateLimitReset records the seconds-until-reset
+// reported by the last x-rate-limit-reset header observed per endpoint.
+// Zero means the endpoint has not been rate-limited since startup.
+var ConnectorTwitterAPIRateLimitReset = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "smackerel_connector_twitter_api_rate_limit_reset_seconds",
+		Help: "Seconds until rate-limit reset for the most recent 429 per endpoint (0 = none observed)",
+	},
+	[]string{"connector", "endpoint"},
+)
+
 // --- NATS ---
 
 // NATSDeadLetter counts messages routed to dead letter by stream.
@@ -454,6 +491,10 @@ func init() {
 		DomainExtraction,
 		DomainExtractionLatency,
 		ConnectorSync,
+		// Spec 056 Twitter API connector metrics.
+		ConnectorTwitterAPIRequests,
+		ConnectorTwitterAPIRetries,
+		ConnectorTwitterAPIRateLimitReset,
 		NATSDeadLetter,
 		DBConnectionsActive,
 		DigestGeneration,

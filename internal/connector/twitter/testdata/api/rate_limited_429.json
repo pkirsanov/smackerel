@@ -1,0 +1,6 @@
+{
+  "title": "Too Many Requests",
+  "type": "https://api.twitter.com/2/problems/rate-limit",
+  "detail": "Too Many Requests",
+  "status": 429
+}
