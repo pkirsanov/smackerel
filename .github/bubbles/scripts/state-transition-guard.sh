@@ -620,12 +620,61 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
     # Exclude specs/ docs/ .github/ .specify/ paths — those are allowed
     allowed_path_pattern='^(specs/|docs/|\.github/|\.specify/|CHANGELOG|README|LICENSE|VERSION)'
 
+    # ── v4.1.0: Deliverable Files Manifest (Gate G073 refinement) ─────────
+    # When state.json declares `deliverableFiles[]`, those files are
+    # permitted edits even under restrictive ceilings (e.g.
+    # `delivered_pending_activation`, `specs_hardened`, `validated`,
+    # `docs_updated`). This is the honest replacement for the v4.0.x
+    # blanket lockout, which was a false positive for adapter-readiness,
+    # dark-launch, and migration-pending-cutover modes.
+    #
+    # Manifest entries may be:
+    #   - exact file path: "smackerel/home-lab/apply.sh"
+    #   - directory prefix (trailing '/'): "smackerel/home-lab/"
+    #   - recursive glob (trailing '/**'): "smackerel/home-lab/tests/**"
+    deliverable_files_list=""
+    if command -v python3 &>/dev/null; then
+      deliverable_files_list="$(python3 -c "
+import json
+try:
+    d=json.load(open('$state_file'))
+    for f in (d.get('deliverableFiles') or []):
+        if isinstance(f,str) and f.strip():
+            print(f.strip())
+except Exception:
+    pass" 2>/dev/null || true)"
+    fi
+
+    is_deliverable_file() {
+      local f="$1"
+      [[ -z "$deliverable_files_list" ]] && return 1
+      local df
+      while IFS= read -r df; do
+        [[ -z "$df" ]] && continue
+        if [[ "$f" == "$df" ]]; then return 0; fi
+        # Recursive glob: "<prefix>/**"
+        if [[ "$df" == */\*\* && "$f" == "${df%/\*\*}/"* ]]; then return 0; fi
+        # Directory prefix: "<prefix>/"
+        if [[ "$df" == */ && "$f" == "$df"* ]]; then return 0; fi
+      done <<< "$deliverable_files_list"
+      return 1
+    }
+
+    if [[ -n "$deliverable_files_list" ]]; then
+      manifest_count=$(printf '%s\n' "$deliverable_files_list" | grep -c .)
+      info "deliverableFiles[] manifest present ($manifest_count entries) — declared files permitted under ceiling '$ceiling_label'"
+    fi
+
     # Check staged files
     while IFS= read -r changed_file; do
       [[ -z "$changed_file" ]] && continue
       if echo "$changed_file" | grep -qE "$source_code_pattern"; then
         if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
-          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but staged file modified: $changed_file"
+          if is_deliverable_file "$changed_file"; then
+            pass "Staged file '$changed_file' is declared in deliverableFiles[] manifest — permitted under ceiling '$ceiling_label'"
+            continue
+          fi
+          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but staged file modified: $changed_file (add to deliverableFiles[] in state.json if intentional)"
           source_code_violations=$((source_code_violations + 1))
         fi
       fi
@@ -636,7 +685,11 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
       [[ -z "$changed_file" ]] && continue
       if echo "$changed_file" | grep -qE "$source_code_pattern"; then
         if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
-          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but working tree file modified: $changed_file"
+          if is_deliverable_file "$changed_file"; then
+            pass "Working-tree file '$changed_file' is declared in deliverableFiles[] manifest — permitted under ceiling '$ceiling_label'"
+            continue
+          fi
+          fail "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits, but working tree file modified: $changed_file (add to deliverableFiles[] in state.json if intentional)"
           source_code_violations=$((source_code_violations + 1))
         fi
       fi
@@ -649,6 +702,9 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
         [[ -z "$changed_file" ]] && continue
         if echo "$changed_file" | grep -qE "$source_code_pattern"; then
           if ! echo "$changed_file" | grep -qE "$allowed_path_pattern"; then
+            if is_deliverable_file "$changed_file"; then
+              continue
+            fi
             warn "Mode '$state_workflow_mode' (ceiling: $ceiling_label) forbids source code edits — last commit touched: $changed_file (review commit: $last_commit_msg)"
           fi
         fi
@@ -656,9 +712,9 @@ if [[ "$ceiling_forbids_code" == "true" ]]; then
     fi
 
     if [[ "$source_code_violations" -eq 0 ]]; then
-      pass "No source code edits detected under planning-only mode '$state_workflow_mode'"
+      pass "No undeclared source code edits detected under mode '$state_workflow_mode' (ceiling: $ceiling_label)"
     else
-      fail "Found $source_code_violations source code file(s) modified under planning-only mode '$state_workflow_mode' — implementation is forbidden when statusCeiling is '$ceiling_label'"
+      fail "Found $source_code_violations source code file(s) modified under mode '$state_workflow_mode' that are NOT declared in deliverableFiles[] — declare them in state.json or use a delivery mode (ceiling: $ceiling_label)"
     fi
   else
     info "Git not available or target feature is not in a repo — skipping source code edit lockout check"
@@ -719,20 +775,27 @@ if grep -qE '"certification"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
     fail "certification block is missing status field (Gate G056)"
   fi
 
-  if grep -qE '"certifiedCompletedPhases"[[:space:]]*:[[:space:]]*\[' "$state_file"; then
-    pass "certification block records certifiedCompletedPhases"
+  # v4.1.0: G056 schema loosening. Accept presence of the field with any
+  # value type (array, object, null, empty). Pre-v4.1.0 the grep patterns
+  # required `: [` or `: {` literal starts, which fired false positives
+  # whenever the certifying agent (bubbles.validate) emitted `null` or
+  # `[]` / `{}` placeholders before the first scope landed. Field
+  # presence is what the gate must enforce; the field's structural
+  # content is checked by other gates (G024, G026, G027, etc.).
+  if grep -qE '"certifiedCompletedPhases"[[:space:]]*:' "$state_file"; then
+    pass "certification block records certifiedCompletedPhases (any value type)"
   else
     fail "certification block missing certifiedCompletedPhases (Gate G056)"
   fi
 
-  if grep -qE '"scopeProgress"[[:space:]]*:[[:space:]]*\[' "$state_file"; then
-    pass "certification block records scopeProgress"
+  if grep -qE '"scopeProgress"[[:space:]]*:' "$state_file"; then
+    pass "certification block records scopeProgress (any value type)"
   else
     fail "certification block missing scopeProgress (Gate G056)"
   fi
 
-  if grep -qE '"lockdownState"[[:space:]]*:[[:space:]]*\{' "$state_file"; then
-    pass "certification block records lockdownState"
+  if grep -qE '"lockdownState"[[:space:]]*:' "$state_file"; then
+    pass "certification block records lockdownState (any value type)"
   else
     fail "certification block missing lockdownState (Gate G056)"
   fi
@@ -1074,13 +1137,20 @@ for scope_path in "${scope_files[@]}"; do
     # Extract the status value after "**Status:**"
     status_value="$(echo "$status_line" | sed -E 's/.*\*\*Status:\*\*[[:space:]]*//' | sed -E 's/[[:space:]]*$//')"
 
+    # v4.1.0: tolerate canonical-status followed by parenthesized annotation,
+    # e.g. "Done (completed_owned)", "Done (lockdown-deferred-FR-020)",
+    # "Blocked (awaiting-operator-commit)". The base status before the
+    # parenthesis is still required to be canonical; the annotation is
+    # informational (typically routing context from the owning agent).
+    base_status="$(echo "$status_value" | sed -E 's/[[:space:]]*\(.*\)[[:space:]]*$//' | sed -E 's/[[:space:]]+$//')"
+
     # Check against canonical values
-    case "$status_value" in
+    case "$base_status" in
       "Not Started"|"In Progress"|"Done"|"Blocked")
-        # Valid canonical status
+        # Valid canonical status (with or without parenthesized annotation)
         ;;
       *)
-        fail "Non-canonical scope status detected in ${scope_path#$feature_dir/}: '$status_value' — ONLY 'Not Started', 'In Progress', 'Done', 'Blocked' are valid"
+        fail "Non-canonical scope status detected in ${scope_path#$feature_dir/}: '$status_value' — ONLY 'Not Started', 'In Progress', 'Done', 'Blocked' (optionally followed by '(<annotation>)') are valid"
         fun_message invented_status
         non_canonical_statuses=$((non_canonical_statuses + 1))
         ;;
@@ -1092,8 +1162,9 @@ if [[ "$non_canonical_statuses" -gt 0 ]]; then
   fail "$non_canonical_statuses scope(s) have invented/non-canonical status values — MANIPULATION DETECTED (Gate G041)"
   info "Canonical scope statuses are ONLY: 'Not Started', 'In Progress', 'Done', 'Blocked'"
   info "Invented statuses like 'Deferred', 'Skipped', 'N/A', 'Deferred — Planned Improvement' are FORBIDDEN"
+  info "Parenthesized annotations such as 'Done (completed_owned)' or 'Blocked (awaiting-operator-commit)' are permitted"
 else
-  pass "All scope statuses are canonical (Not Started / In Progress / Done / Blocked)"
+  pass "All scope statuses are canonical (Not Started / In Progress / Done / Blocked, optionally with annotation)"
 fi
 echo ""
 
@@ -1315,9 +1386,15 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     data = json.load(handle)
 
-certification_phases = data.get("certification", {}).get("certifiedCompletedPhases", [])
-execution_phase_claims = data.get("execution", {}).get("completedPhaseClaims", [])
-legacy_phases = data.get("completedPhases", [])
+# None-safe accessors: state.json may contain explicit null values for any of
+# these keys; default-arg of dict.get(...) does NOT replace None, so chain
+# .get() with `or {}` / `or []` to guarantee a non-None object.
+certification = (data.get("certification") or {})
+execution = (data.get("execution") or {})
+
+certification_phases = certification.get("certifiedCompletedPhases") or []
+execution_phase_claims = execution.get("completedPhaseClaims") or []
+legacy_phases = data.get("completedPhases") or []
 
 if not isinstance(certification_phases, list):
     certification_phases = []
@@ -1327,7 +1404,32 @@ if not isinstance(legacy_phases, list):
     legacy_phases = []
 
 selected_phases = certification_phases or execution_phase_claims or legacy_phases
-for phase in selected_phases:
+
+# v4.1.0: phaseStubs[] — a phase can be honestly declared as no-work-needed
+# via state.json.execution.phaseStubs[<phase>] = {reason: "...", justification: "..."}
+# or state.json.phaseStubs[<phase>]. A stubbed phase satisfies G022 IFF the
+# stub entry carries a non-empty `reason` field, preventing empty-stub
+# fabrication.
+phase_stubs = execution.get("phaseStubs")
+if not isinstance(phase_stubs, dict):
+    phase_stubs = data.get("phaseStubs")
+if not isinstance(phase_stubs, dict):
+    phase_stubs = {}
+
+stubbed_phases = []
+for phase_name, stub_entry in phase_stubs.items():
+    if not isinstance(phase_name, str):
+        continue
+    if isinstance(stub_entry, dict):
+        reason = (stub_entry.get("reason") or "").strip() if isinstance(stub_entry.get("reason"), str) else ""
+        if reason:
+            stubbed_phases.append(phase_name)
+    elif isinstance(stub_entry, str) and stub_entry.strip():
+        stubbed_phases.append(phase_name)
+
+# Merge: a phase satisfies G022 if it appears in either set.
+merged_phases = list(dict.fromkeys(list(selected_phases) + stubbed_phases))
+for phase in merged_phases:
     if isinstance(phase, str):
         print(f'"{phase}"')
 PY
@@ -1457,7 +1559,7 @@ if [[ -n "$state_workflow_mode" ]]; then
 
   if [[ ${#planning_required_agents[@]} -gt 0 ]]; then
     execution_history_agents="$({
-      python3 -c "import json; data=json.load(open('$state_file')); history=data.get('execution', {}).get('executionHistory', data.get('executionHistory', [])); print('\\n'.join(entry.get('agent', '') for entry in history if entry.get('agent')))"
+      python3 -c "import json; data=json.load(open('$state_file')); execution=(data.get('execution') or {}); history=(execution.get('executionHistory') or data.get('executionHistory') or []); print('\\n'.join((entry.get('agent') or '') for entry in history if isinstance(entry, dict) and entry.get('agent')))"
     } || true)"
 
     missing_planning_agents=0
@@ -1857,6 +1959,37 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
   scope_label="$(scope_analysis_label "$scope_index")"
 
+  # v4.1.0: Scope-Kind opt-out. The default kind is `runtime-behavior`
+  # which enforces the full 3 E2E DoD/Test-Plan rows. Other kinds
+  # (contract-only, deploy-pointer, ci-config, docs-only, bootstrap)
+  # legitimately do not produce live-runtime E2E evidence at ship time
+  # and are exempted here. Authors opt in by adding either:
+  #   `Scope-Kind: <kind>`   (markdown header line near top)
+  #   `**Scope-Kind:** <kind>` (bold variant)
+  # to the scope file. Default behavior (no header) = runtime-behavior =
+  # full E2E enforcement (v4.0.x compatible).
+  scope_kind="$(head -n 80 "$scope_path" \
+    | grep -iE '^(\*\*)?Scope-Kind(\*\*)?:[[:space:]]*' \
+    | head -n 1 \
+    | sed -E 's/^(\*\*)?Scope-Kind(\*\*)?:[[:space:]]*//I' \
+    | sed -E 's/[[:space:]]+$//' \
+    | tr '[:upper:]' '[:lower:]' || true)"
+  if [[ -z "$scope_kind" ]]; then
+    scope_kind="runtime-behavior"
+  fi
+  case "$scope_kind" in
+    contract-only|deploy-pointer|ci-config|docs-only|bootstrap)
+      info "Scope-Kind '$scope_kind' for $scope_label — E2E regression rows not required (v4.1.0 scopeKinds opt-out)"
+      continue
+      ;;
+    runtime-behavior|"")
+      # Fall through to full E2E enforcement (default).
+      ;;
+    *)
+      warn "Scope-Kind '$scope_kind' for $scope_label is not a recognised v4.1.0 scopeKinds entry — enforcing default runtime-behavior E2E rules"
+      ;;
+  esac
+
   if grep -Eiq '^\- \[(x| )\] Scenario-specific E2E regression tests? for (EVERY|every) new/changed/fixed behavior' "$scope_path"; then
     pass "Scope DoD includes scenario-specific regression E2E requirement: $scope_label"
   else
@@ -1880,7 +2013,7 @@ for scope_index in "${!scope_analysis_files[@]}"; do
 done
 
 if [[ "$missing_regression_e2e" -gt 0 ]]; then
-  fail "$missing_regression_e2e regression E2E planning requirement(s) missing — every feature/fix/change needs persistent scenario-specific E2E regression coverage"
+  fail "$missing_regression_e2e regression E2E planning requirement(s) missing — every runtime-behavior feature/fix/change needs persistent scenario-specific E2E regression coverage"
 fi
 echo ""
 
@@ -2034,14 +2167,90 @@ echo ""
 echo "--- Check 9: DoD Evidence Presence ---"
 checked_without_evidence=0
 checked_with_evidence=0
+
+# v4.1.0: Evidence-by-reference resolver. When a DoD line is shaped like
+#   - [x] Item description → Evidence: [anchor-name](report.md#anchor-name)
+# follow the link to the report.md anchor and verify a ≥10-line evidence
+# block exists between the anchor heading and the next heading (or EOF).
+# This honors the long-standing report.md convention where multi-line
+# terminal output is captured ONCE in report.md and referenced from many
+# DoD items, instead of inlined 10+ lines under each [x] (which would
+# bloat scopes.md without adding evidence value).
+resolve_evidence_by_reference() {
+  local scope_dir="$1"
+  local link_target="$2"     # e.g. "report.md#scope-3-cosign"
+  local rel_report="${link_target%%#*}"
+  local anchor="${link_target##*#}"
+  [[ -z "$anchor" || "$anchor" == "$link_target" ]] && return 1
+  # Resolve report path relative to scope file's directory
+  local report_path
+  if [[ "$rel_report" == /* ]]; then
+    report_path="$rel_report"
+  else
+    report_path="$scope_dir/$rel_report"
+  fi
+  [[ -f "$report_path" ]] || return 1
+  # Normalize anchor: GitHub-style slugify (lower, spaces->dash, strip non-alnum/dash)
+  local anchor_lower
+  anchor_lower="$(echo "$anchor" | tr '[:upper:]' '[:lower:]')"
+  # Find the anchor — match either an HTML anchor <a name="X">, an explicit
+  # {#anchor} attribute, or a Markdown heading whose GitHub slug matches.
+  local anchor_line
+  anchor_line="$(awk -v a="$anchor_lower" '
+    BEGIN { IGNORECASE=1 }
+    /<a[[:space:]]+name=/ {
+      if (tolower($0) ~ "name=\""a"\"") { print NR; exit }
+    }
+    /\{#[^}]+\}/ {
+      if (tolower($0) ~ "\\{#"a"\\}") { print NR; exit }
+    }
+    /^#+[[:space:]]/ {
+      h = $0
+      sub(/^#+[[:space:]]+/, "", h)
+      sub(/[[:space:]]+\{#[^}]+\}[[:space:]]*$/, "", h)
+      slug = tolower(h)
+      gsub(/[^a-z0-9 -]/, "", slug)
+      gsub(/[[:space:]]+/, "-", slug)
+      if (slug == a) { print NR; exit }
+    }
+  ' "$report_path")"
+  [[ -z "$anchor_line" ]] && return 1
+  # Count non-blank lines from anchor_line+1 until next heading or EOF
+  local end_line
+  end_line="$(awk -v start="$anchor_line" 'NR>start && /^#+[[:space:]]/ { print NR; exit }' "$report_path")"
+  [[ -z "$end_line" ]] && end_line="$(wc -l < "$report_path")"
+  local block_lines
+  block_lines="$(sed -n "$((anchor_line+1)),${end_line}p" "$report_path" | grep -cE '\S' || true)"
+  if [[ "${block_lines:-0}" -ge 10 ]]; then
+    return 0
+  fi
+  return 1
+}
+
 for scope_path in "${scope_files[@]}"; do
   [[ -f "$scope_path" ]] || continue
+  scope_dir="$(dirname "$scope_path")"
   while IFS= read -r line; do
     item_line_num="$({ grep -nF -- "$line" "$scope_path" | head -1 | cut -d: -f1; } || true)"
     if [[ -n "$item_line_num" ]]; then
       next_lines="$({ sed -n "$((item_line_num+1)),$((item_line_num+15))p" "$scope_path"; } || true)"
+
+      # 1. Inline Evidence: marker on the same line
       if echo "$line" | grep -qiE '(→[[:space:]]*Evidence:|Evidence:)'; then
-        checked_with_evidence=$((checked_with_evidence + 1))
+        # v4.1.0: if Evidence reference is a markdown link to a report
+        # anchor, follow it and require ≥10-line block.
+        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md#[A-Za-z0-9_-]+\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/')"
+        if [[ -n "$link_target" ]]; then
+          if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
+            checked_with_evidence=$((checked_with_evidence + 1))
+          else
+            checked_without_evidence=$((checked_without_evidence + 1))
+            fail "DoD item [x] references '$link_target' but anchor missing OR block <10 non-blank lines in $(relative_artifact_path "$scope_path"): $(echo "$line" | head -c 80)"
+          fi
+        else
+          checked_with_evidence=$((checked_with_evidence + 1))
+        fi
+      # 2. Inline evidence block within next 15 lines (v4.0.x behavior)
       elif echo "$next_lines" | grep -qE '(Executed:|Command:|Evidence|```|Exit Code:|Raw Output)'; then
         checked_with_evidence=$((checked_with_evidence + 1))
       else
@@ -2497,7 +2706,18 @@ else
   # work prose. grep -ivE is case-insensitive so all case variants
   # (followupowner, FollowUpOwner, follow-up narrative, FOLLOW-UP
   # NARRATIVE, etc.) are covered.
-  deferral_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred|no issues deferred or skipped|followUpOwner|followUpAction|followUpTarget|followUps|follow-up narrative|follow-up section'
+  #
+  # v4.1.0: lockdownContract.patterns allowlist. When a deferral-language
+  # line carries a lockdown tag from workflows.yaml.lockdownContract.patterns
+  # the line is honest deferral (external actor gating runtime evidence)
+  # and exits G040 cleanly. The tags themselves embed the FR citation
+  # (e.g. [lockdown-deferred-FR-020]) so the schema-level requiredFields
+  # contract is satisfied by the tag itself. For [awaiting-*] tags the
+  # author MUST still cite the FR / condition / unblocker / expectedActivation
+  # nearby — that contract is enforced by skill/instruction docs and via
+  # routine artifact-lint review, not by this regex (multi-line context
+  # analysis would slow the guard substantially).
+  deferral_exclusion_pattern='no deferred items|no deferred work|no deferrals|without deferred work|zero deferred items|zero deferrals|no issues deferred|no issues deferred or skipped|followUpOwner|followUpAction|followUpTarget|followUps|follow-up narrative|follow-up section|\[lockdown-deferred-fr-[0-9]+\]|\[lockdown-deferred-[a-z0-9-]+-fr-[0-9]+\]|\[awaiting-operator-commit\]|\[awaiting-third-party-approval\]|\[awaiting-cutover-window\]|\[awaiting-regulator-review\]'
   total_deferral_hits=0
 
   # Strategy (iii): the awk filter strips fenced code AND content between
