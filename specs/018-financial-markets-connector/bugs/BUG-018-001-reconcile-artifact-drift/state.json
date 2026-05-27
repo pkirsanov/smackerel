@@ -1,7 +1,9 @@
 {
   "spec": "specs/018-financial-markets-connector/bugs/BUG-018-001-reconcile-artifact-drift",
   "parentSpec": "specs/018-financial-markets-connector",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "bugfix-fastlane",
   "executionModel": "parent-expanded-child-mode",
   "stochasticSweep": {
@@ -295,7 +297,9 @@
     }
   },
   "certification": {
-    "status": "resolved",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": ["1"],
     "certifiedCompletedPhases": [
       "analyze",
