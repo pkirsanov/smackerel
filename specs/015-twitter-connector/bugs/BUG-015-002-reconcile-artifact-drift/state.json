@@ -1,7 +1,10 @@
 {
   "spec": "BUG-015-002-reconcile-artifact-drift",
   "parentSpec": "015-twitter-connector",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
+  "closedBy": "spec-056-twitter-api-connector",
   "workflowMode": "bugfix-fastlane",
   "executionModel": "parent-expanded-child-mode",
   "stochasticSweep": {
@@ -23,7 +26,8 @@
     "security",
     "validate",
     "audit",
-    "docs"
+    "docs",
+    "spec-review"
   ],
   "certifiedCompletedPhases": [
     "bootstrap",
@@ -35,7 +39,8 @@
     "security",
     "validate",
     "audit",
-    "docs"
+    "docs",
+    "spec-review"
   ],
   "completedPhaseClaimDetails": [
     {
@@ -169,6 +174,20 @@
       "executionModel": "parent-expanded-specialist",
       "timestamp": "2026-05-24T00:00:00Z",
       "evidence": "Parent spec 015 report.md gained Code Diff Evidence + Git-Backed Proof subsection; packet report.md captures full reconcile narrative."
+    },
+    {
+      "phase": "spec-review",
+      "agent": "bubbles.goal",
+      "executionModel": "parent-expanded-child-mode",
+      "timestamp": "2026-05-27T00:00:00Z",
+      "evidence": "Re-verification after spec 056 (twitter-api-connector) shipped real net/http calls, OAuth bearer auth, rate-limit handling, and pagination into internal/connector/twitter/api.go and dispatcher wiring into twitter.go. Historical G028 FAKE_INTEGRATION residual is now genuinely resolved (no longer a false positive — real external-call substrings exist in the package). artifact-lint.sh exit 0; state-transition-guard.sh exit 0 with 0 BLOCKs on this packet.",
+      "expansionEvidenceRef": [
+        "649b5993",
+        "63d86de4",
+        "caa1a01f",
+        "b695123d",
+        "68c90d84"
+      ]
     }
   ],
   "scenarioCoverage": {
@@ -207,7 +226,9 @@
     }
   },
   "certification": {
-    "status": "resolved",
+    "status": "done",
+    "certifiedAt": "2026-05-27T00:00:00Z",
+    "certifiedBy": "bubbles.goal",
     "completedScopes": [
       "scope-1-reconcile-spec-015-artifact-drift"
     ],
@@ -221,7 +242,8 @@
       "security",
       "validate",
       "audit",
-      "docs"
+      "docs",
+      "spec-review"
     ],
     "scopeProgress": [
       {
