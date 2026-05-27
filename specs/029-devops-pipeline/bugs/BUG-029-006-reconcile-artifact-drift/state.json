@@ -1,7 +1,9 @@
 {
   "spec": "BUG-029-006-reconcile-artifact-drift",
   "parentSpec": "029-devops-pipeline",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "bugfix-fastlane",
   "executionModel": "parent-expanded-child-mode",
   "stochasticSweep": {
@@ -207,7 +209,9 @@
     }
   },
   "certification": {
-    "status": "resolved",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "scope-1-reconcile-spec-029-artifact-drift"
     ],
