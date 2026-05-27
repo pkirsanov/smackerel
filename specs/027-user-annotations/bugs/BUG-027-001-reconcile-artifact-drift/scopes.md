@@ -12,7 +12,7 @@ Links: [bug.md](bug.md) | [spec.md](spec.md) | [design.md](design.md) | [report.
 
 ---
 
-## Scope 1 — Restore regression E2E planning on 8 spec 027 scopes (+ Stress Test Plan row in Scope 1)
+## Scope 1: Restore regression E2E planning on 8 spec 027 scopes (+ Stress Test Plan row in Scope 1)
 
 **Status:** Done
 
@@ -80,7 +80,7 @@ Scenario: BUG-027-001-SCN-002 — Scope 1 adds a Stress Test Plan row to clear C
 
 ---
 
-## Scope 2 — G068 fidelity prefixes + G053 Code Diff Evidence + Check 8B Consumer Impact Sweep for Scope 4
+## Scope 2: G068 fidelity prefixes + G053 Code Diff Evidence + Check 8B Consumer Impact Sweep for Scope 4
 
 **Status:** Done
 
@@ -155,7 +155,7 @@ Scenario: BUG-027-001-SCN-005 — Scope 4 gains Consumer Impact Sweep for the ta
 
 ---
 
-## Scope 3 — Reconcile state.json against current G022 standards
+## Scope 3: Reconcile state.json against current G022 standards
 
 **Status:** Done
 
