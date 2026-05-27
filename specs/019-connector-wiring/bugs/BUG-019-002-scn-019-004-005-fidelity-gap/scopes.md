@@ -61,3 +61,19 @@ Scenario: SCN-019-002-FIX-001 Trace guard accepts SCN-019-004 and SCN-019-005 as
   > Evidence: `git diff --name-only` shows zero entries under `internal/`, `cmd/`, `ml/`, `config/`, `scripts/`, `tests/`; only `specs/019-connector-wiring/scopes.md` and `specs/019-connector-wiring/bugs/BUG-019-002-scn-019-004-005-fidelity-gap/*` appear. Captured in `report.md` `### Audit Evidence`.
 - [x] SCN-019-002-FIX-001: Trace guard accepts SCN-019-004 and SCN-019-005 as faithfully covered (post-fix `RESULT: PASSED`, 0 warnings, 6 mapped) — **Phase:** validate
   > Evidence: `bash .github/bubbles/scripts/traceability-guard.sh specs/019-connector-wiring` returns `RESULT: PASSED (0 warnings)`; `DoD fidelity: 6 scenarios checked, 6 mapped to DoD, 0 unmapped`. Captured verbatim in `report.md` `### Post-fix Validation Evidence`.
+
+### Regression E2E Test Plan
+
+| Regression E2E ID | Test Name | Type | Location | Assertion | Scenario ID |
+|---|---|---|---|---|---|
+| E2E-1-01 | scenario-specific regression: SCN-019-004 connector-wiring integration | integration | `tests/integration/test_connector_wiring.sh` | Persistent invariant — re-running in any future sweep round MUST report `32 passed, 0 failed` with last line `SCN-019-004: PASS`; regression detected if any assertion fails or last line changes | SCN-019-002-FIX-001 (covers SCN-019-004) |
+| E2E-1-02 | scenario-specific regression: SCN-019-005 health-endpoint connector listing | unit | `internal/api/health_test.go::TestHealthHandler_ConnectorHealth` | Persistent invariant — `go test -count=1 -run TestHealthHandler_ConnectorHealth ./internal/api/...` reports `--- PASS: TestHealthHandler_ConnectorHealth`; regression detected if test fails | SCN-019-002-FIX-001 (covers SCN-019-005) |
+| E2E-1-03 | scenario-specific regression: traceability-guard G068 fidelity | guard-verification | `.github/bubbles/scripts/traceability-guard.sh` | Persistent invariant — re-running on parent spec 019 MUST report `RESULT: PASSED (0 warnings)` with `DoD fidelity: 6 mapped, 0 unmapped`; regression detected if mapping count drops below 6 | SCN-019-002-FIX-001 |
+| E2E-1-04 | broader regression suite: full Bubbles guard triad + Go unit suite | guard-verification + unit | `state-transition-guard.sh` + `artifact-lint.sh` + `traceability-guard.sh` + `./smackerel.sh test unit --go` | Persistent invariant — guard triad returns Exit 0 (STG allows documented residuals) and the broader Go unit suite stays green; regression detected if any script regresses or any new failing Go test appears | SCN-019-002-FIX-001 |
+
+### Regression E2E Definition of Done
+
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — SCN-019-004 covered by `tests/integration/test_connector_wiring.sh` (32/32 PASS, last line `SCN-019-004: PASS`); SCN-019-005 covered by `internal/api/health_test.go::TestHealthHandler_ConnectorHealth` (PASS); SCN-019-002-FIX-001 covered by `traceability-guard.sh` persistent artifact probe
+  > Evidence: report.md `### Test Evidence` (SCN-019-004 + SCN-019-005 underlying tests) and `### Post-fix Validation Evidence` (traceability-guard PASSED, 6/6 mapped)
+- [x] Broader E2E regression suite passes — the Bubbles guard triad (`state-transition-guard.sh` + `artifact-lint.sh` + `traceability-guard.sh`) protects the artifact-only fidelity invariant on every future sweep; the broader Go unit suite under `./smackerel.sh test unit --go` covers the consumer-coupled `internal/api/health.go` code path
+  > Evidence: report.md `### Post-fix Validation Evidence` (traceability-guard PASSED) + `### Audit Evidence` (artifact-lint PASSED) + `## Re-Verification (2026-05-27 — Promotion to Done)` (live re-runs on 2026-05-27)
