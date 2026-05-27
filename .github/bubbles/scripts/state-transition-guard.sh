@@ -1964,14 +1964,16 @@ for scope_index in "${!scope_analysis_files[@]}"; do
   # (contract-only, deploy-pointer, ci-config, docs-only, bootstrap)
   # legitimately do not produce live-runtime E2E evidence at ship time
   # and are exempted here. Authors opt in by adding either:
-  #   `Scope-Kind: <kind>`   (markdown header line near top)
-  #   `**Scope-Kind:** <kind>` (bold variant)
-  # to the scope file. Default behavior (no header) = runtime-behavior =
-  # full E2E enforcement (v4.0.x compatible).
+  #   `Scope-Kind: <kind>`         (plain markdown line near top)
+  #   `**Scope-Kind:** <kind>`     (bold-key form — most common in templates)
+  #   `**Scope-Kind**: <kind>`     (bold-then-colon form)
+  # Default behavior (no header) = runtime-behavior = full E2E enforcement
+  # (v4.0.x compatible).
   scope_kind="$(head -n 80 "$scope_path" \
-    | grep -iE '^(\*\*)?Scope-Kind(\*\*)?:[[:space:]]*' \
+    | grep -iE '^(\*\*)?Scope-Kind(\*\*)?[[:space:]]*:[[:space:]]*(\*\*)?[[:space:]]*' \
     | head -n 1 \
-    | sed -E 's/^(\*\*)?Scope-Kind(\*\*)?:[[:space:]]*//I' \
+    | sed -E 's/^(\*\*)?Scope-Kind(\*\*)?[[:space:]]*:[[:space:]]*(\*\*)?[[:space:]]*//I' \
+    | sed -E 's/[[:space:]]*(\*\*)?[[:space:]]*$//' \
     | sed -E 's/[[:space:]]+$//' \
     | tr '[:upper:]' '[:lower:]' || true)"
   if [[ -z "$scope_kind" ]]; then
