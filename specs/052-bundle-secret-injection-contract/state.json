@@ -2,7 +2,7 @@
   "version": 3,
   "featureDir": "specs/052-bundle-secret-injection-contract",
   "featureName": "Bundle Secret Injection Contract",
-  "status": "done_with_concerns",
+  "status": "blocked",
   "workflowMode": "full-delivery",
   "execution": {
     "activeAgent": "bubbles.workflow",
@@ -68,7 +68,7 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "done_with_concerns",
+    "status": "blocked",
     "completedScopes": [
       "Scope 1",
       "Scope 2",

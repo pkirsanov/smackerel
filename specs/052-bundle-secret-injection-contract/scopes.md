@@ -319,6 +319,11 @@ Excluded surfaces (untouched by Scope 2):
   - Evidence: see [report.md#scope-2-implementation](report.md#scope-2-implementation).
 - [x] **A3.** Bundle staging block in `scripts/commands/config.sh` (lines 1495-1525 today) emits sibling `secret-keys.yaml` per design.md §4 step 4; the file is `chmod 0644`, listed in `TAR_FILES` (sorted), and registered in the bundle's `bundle-manifest.yaml` `files:` list.
   - Evidence: see [report.md#scope-2-implementation](report.md#scope-2-implementation).
+  ```text
+  PASS: tarball contains secret-keys.yaml at top level
+  PASS: secret-keys.yaml lists exactly 4 keys
+  PASS: bundle-manifest.yaml lists secret-keys.yaml in files
+  ```
 - [x] **A4.** dev and test bundles are byte-identical when generated twice (FR-052-011 preservation); the dev/test paths never enter placeholder mode because `home-lab` is the only entry in `production_class_targets`.
   - Evidence: see [report.md#scope-2-implementation](report.md#scope-2-implementation).
 - [x] **A5. DoD scenario validator: SCN-052-S03** — Given `config/smackerel.yaml` declares `infrastructure.secret_keys` with the 4 entries AND `infrastructure.production_class_targets` includes `home-lab` AND no env override of any secret key is in effect, When `./smackerel.sh config generate --env home-lab --bundle` is run against the fixture yaml, Then the loader exits 0 AND the staged `app.env` contains the 4 expected `<KEY>=__SECRET_PLACEHOLDER__<KEY>__` lines for the declared keys AND the bundle tar.gz includes a sibling `secret-keys.yaml` whose `secretKeys` field equals the canonical 4-entry list.
