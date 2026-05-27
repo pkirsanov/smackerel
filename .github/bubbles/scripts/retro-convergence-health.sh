@@ -150,6 +150,62 @@ if ! jq -e . "$session_file" >/dev/null 2>&1; then
   exit 2
 fi
 
+# ── v4.1.0: executionRuntime skip (Gate G090 refinement) ─────────────────
+# Convergence health metrics (recap/handoff/summarize ratios, snapshot
+# completeness) are only meaningful when the work was driven by an
+# orchestrated loop (sprint, goal-loop, workflow). For manual or
+# direct-implement runtimes those signals are not produced — refusing to
+# pass G090 in that case is a false positive.
+#
+# executionRuntime is read from (in priority order):
+#   1. session JSON top-level `executionRuntime`
+#   2. last entry under `runs[]` with field `runtime`
+#   3. spec-dir state.json `executionRuntime`
+exec_runtime="$(jq -r '
+  .executionRuntime //
+  (.runs // [] | last.runtime? // "") //
+  (.execution.runtime? // "") //
+  ""
+' "$session_file" 2>/dev/null || true)"
+if [[ -z "$exec_runtime" || "$exec_runtime" == "null" ]]; then
+  spec_state_file="$repo_root/$spec_dir/state.json"
+  if [[ -f "$spec_state_file" ]]; then
+    exec_runtime="$(jq -r '.executionRuntime // .execution.runtime? // ""' "$spec_state_file" 2>/dev/null || true)"
+  fi
+fi
+case "$exec_runtime" in
+  manual|direct-implement|direct|adhoc|ad-hoc)
+    skip_payload="$(jq -nc --arg rt "$exec_runtime" --arg spec "$spec_dir" '{
+      avgLoopIterations: 0,
+      maxConvergenceIterations: 0,
+      compactionFrequency: 0,
+      preExistingDeferralCount: 0,
+      snapshotCompleteness: 1,
+      convergenceHealth: {
+        recapCount: 0,
+        handoffCount: 0,
+        summarizeHistoryCount: 0,
+        turnCount: 0,
+        slo: "skipped",
+        skipReason: ("executionRuntime=" + $rt + " — convergence-loop metrics not applicable")
+      },
+      thresholds: {
+        recapHandoffFailedWhenGreaterThan: 2,
+        summarizeHistoryFailedWhenGreaterThan: 2,
+        snapshotCompletenessRequired: 1
+      }
+    }')"
+    if [[ -n "$out_file" ]]; then
+      printf '## Convergence Health\n\nSpec: `%s`\nSLO: `skipped` (executionRuntime=%s — convergence-loop metrics not applicable to non-orchestrated runtime)\n' "$spec_dir" "$exec_runtime" > "$out_file"
+    fi
+    case "$format" in
+      json|both) printf '%s\n' "$skip_payload" ;;
+      markdown)  printf '## Convergence Health\n\nSpec: `%s`\nSLO: `skipped` (executionRuntime=%s)\n' "$spec_dir" "$exec_runtime" ;;
+    esac
+    exit 0
+    ;;
+esac
+
 metrics_program='
   def norm: tostring | sub("^\\./"; "") | sub("/+$"; "");
   def spec_match($target):

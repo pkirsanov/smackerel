@@ -1137,6 +1137,101 @@ crossModelReview:
     example: "codex review --diff HEAD~1"
     fallback: "echo 'Cross-model review command not configured. Set crossModelReview.command in bubbles-project.yaml'"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Scope-Kind Taxonomy (added in v4.1.0)
+#
+# Scopes declare their kind via an optional `Scope-Kind:` header in
+# scopes.md / scopes/<NN>/scope.md. The kind controls which evidence
+# classes gates require. Default when omitted is `runtime-behavior`
+# (full E2E + runtime evidence required) to preserve v4.0.x behavior.
+#
+# Gates that consume scopeKinds:
+#   - G008A (Scenario-specific E2E regression coverage): only enforced
+#     when kind is runtime-behavior AND scope is not lockdown-deferred
+#   - G028 (Implementation Reality Scan): tightened for runtime-behavior,
+#     loosened to "contract or pointer verified" for contract-only /
+#     deploy-pointer / ci-config / docs-only
+#   - G029 (Integration Completeness): runtime wiring required for
+#     runtime-behavior; producer↔consumer contract sufficient for
+#     contract-only; manifest pointer + lint sufficient for deploy-pointer
+# ─────────────────────────────────────────────────────────────────────────────
+scopeKinds:
+  runtime-behavior:
+    description: "Scope changes runtime behavior visible to a user, API consumer, or external system. Full live-system E2E coverage required."
+    requiresLiveE2E: true
+    requiresIntegrationWiring: true
+    requiresImplementationRealityScan: true
+    isDefault: true
+  contract-only:
+    description: "Scope changes an interface contract (proto, OpenAPI, schema) without runtime behavior change. Contract tests + producer/consumer compatibility tests required; live runtime E2E not required."
+    requiresLiveE2E: false
+    requiresIntegrationWiring: false
+    requiresContractTests: true
+    requiresBackwardCompatTest: true
+  deploy-pointer:
+    description: "Scope updates a deployment manifest pointer, adapter script, or operator-facing config without changing the application image. Shellcheck/yamllint + dry-run validation required; live runtime E2E deferred to operator apply."
+    requiresLiveE2E: false
+    requiresIntegrationWiring: false
+    requiresShellLint: true
+    requiresManifestSchemaCheck: true
+  ci-config:
+    description: "Scope updates CI/CD workflow, build pipeline, or release automation. Workflow syntax check + dry-run required; live runtime E2E not applicable."
+    requiresLiveE2E: false
+    requiresIntegrationWiring: false
+    requiresWorkflowSyntaxCheck: true
+  docs-only:
+    description: "Scope updates documentation, ADRs, or governance artifacts. Markdown lint + cross-reference check required."
+    requiresLiveE2E: false
+    requiresIntegrationWiring: false
+    requiresMarkdownLint: true
+  bootstrap:
+    description: "Scope creates initial scaffolding (specs, templates, agent skeletons). Artifact lint required; runtime evidence not applicable."
+    requiresLiveE2E: false
+    requiresIntegrationWiring: false
+    requiresArtifactLint: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lockdown Contract (added in v4.1.0)
+#
+# Some work is honestly blocked on external actors (operator commit, third
+# party approval, scheduled cutover window, regulator review). Such work
+# can ship to `delivered_pending_activation` ceiling provided every
+# deferred DoD item or phase carries an explicit lockdown tag that names
+# the gating FR / condition / unblocker.
+#
+# Gates that consume lockdownContract:
+#   - G040 (Deferral Language Scan): allow-lists strings matching
+#     lockdownContract.patterns when they appear alongside a cited FR ID
+#     OR a structured `condition:` field
+#   - G008A: skips E2E enforcement when scope-level lockdown is declared
+#   - G022 (Specialist Phase Completion): accepts `phaseStubs[<phase>] =
+#     {reason: "lockdown-deferred-<FR-ID>"}` as honest completion
+# ─────────────────────────────────────────────────────────────────────────────
+lockdownContract:
+  patterns:
+  - "[lockdown-deferred-FR-NNN]"
+  - "[lockdown-deferred-<spec>-FR-NNN]"
+  - "[awaiting-operator-commit]"
+  - "[awaiting-third-party-approval]"
+  - "[awaiting-cutover-window]"
+  - "[awaiting-regulator-review]"
+  requiredFields:
+    # Every lockdown tag MUST be accompanied by at least one of these
+    # so the gate can verify the deferral is honest, not vague hand-waving.
+    anyOf:
+    - "FR-NNN citation in same line or following bullet"
+    - "condition: <free text> in same scope/DoD item"
+    - "unblocker: <actor + action> in same scope/DoD item"
+    - "expectedActivation: <ISO date or named milestone>"
+  forbiddenWithoutLockdown:
+  # These deferral strings continue to fail G040 unless tagged.
+  - "deferred"
+  - "future work"
+  - "TODO later"
+  - "punt"
+  - "placeholder"
+  - "stub for now"
+
 modes:
 
   # ── Phase Relevance: Smart Phase Routing ──
@@ -2053,3 +2148,78 @@ modes:
       requireImplementationRealityScan: true
       requireNoDefaultsNoFallbacks: true
       requireIntegrationCompleteness: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Modes that target the `delivered_pending_activation` ceiling (v4.1.0).
+  #
+  # These modes ship implementation + contract-level tests + audit + docs
+  # to an HONEST intermediate state when the final live-runtime evidence
+  # depends on an external actor (operator commit, third-party approval,
+  # scheduled cutover, regulator review). They are NOT a workaround to
+  # skip testing — every scope still requires the test classes that ARE
+  # possible at ship time (contract, integration with stubs/contracts,
+  # shell/manifest lint, dry-run apply). The deferred portion MUST be
+  # tagged with a lockdownContract pattern that cites the FR / condition
+  # / unblocker / expectedActivation.
+  #
+  # Gates G073, G008A, G022, G040 consult the scopeKinds / lockdownContract
+  # registries to evaluate these modes correctly.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  adapter-readiness-to-packet:
+    description: "Deploy-adapter readiness mode. Ships an adapter (apply.sh / verify.sh / rollback.sh / manifest schema) plus an operator activation packet to `delivered_pending_activation`. Contract-level tests, shellcheck, yamllint, manifest schema validation, and dry-run apply are required. Live runtime E2E is honestly deferred until the operator commits per-host params and runs the activation packet. Every deferred DoD item MUST cite the lockdown FR (typically the explicit live-activation lockdown FR in the spec)."
+    statusCeiling: delivered_pending_activation
+    phaseOrder: [ select, bootstrap, implement, test, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G027, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073, G074 ]
+    constraints:
+      defaultScopeKind: deploy-pointer
+      requiresLockdownDeclaration: true
+      requireDeliverableManifest: true
+      requireContractTestsInLieuOfLiveE2E: true
+      requireShellLint: true
+      requireManifestSchemaCheck: true
+      requireDryRunApply: true
+      requireActivationPacket: true
+      sequentialSpecCompletion: true
+      antiFabricationDetection: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireEvidenceByReference: true
+
+  dark-launch-shipped:
+    description: "Dark-launch mode. Ships a feature behind an off-by-default feature flag to `delivered_pending_activation`. Full implement + test + audit + integration tests with flag forced on in a sealed test env required. Live production E2E is honestly deferred until rollout. Every deferred runtime-E2E DoD item MUST cite the rollout lockdown FR plus the rollout owner (unblocker) and expectedActivation milestone."
+    statusCeiling: delivered_pending_activation
+    phaseOrder: [ select, bootstrap, implement, test, validate, audit, regression, simplify, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G026, G027, G028, G029, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073 ]
+    constraints:
+      defaultScopeKind: runtime-behavior
+      requiresLockdownDeclaration: true
+      requireDeliverableManifest: true
+      requireFeatureFlagOffByDefault: true
+      requireSealedEnvE2EWithFlagOn: true
+      requireRolloutPlanInActivationPacket: true
+      sequentialSpecCompletion: true
+      antiFabricationDetection: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireEvidenceByReference: true
+
+  migration-shipped-pending-cutover:
+    description: "Migration mode. Ships forward/backward-compatible migration code (DB schema, API version, protocol upgrade) to `delivered_pending_activation`. Backward-compat contract tests, dual-read or dual-write tests, and explicit rollback plan are required. Live cutover E2E is honestly deferred until the scheduled cutover window. Every deferred DoD item MUST cite the cutover lockdown FR, the cutover window (expectedActivation), and the rollback path (unblocker)."
+    statusCeiling: delivered_pending_activation
+    phaseOrder: [ select, bootstrap, implement, test, validate, audit, regression, security, docs, finalize ]
+    requiredGates: [ G001, G002, G003, G004, G005, G006, G007, G009, G010, G011, G012, G019, G020, G021, G022, G023, G024, G025, G027, G040, G044, G047, G048, G051, G055, G056, G057, G059, G061, G073 ]
+    constraints:
+      defaultScopeKind: contract-only
+      requiresLockdownDeclaration: true
+      requireDeliverableManifest: true
+      requireBackwardCompatTest: true
+      requireForwardCompatTest: true
+      requireDualReadOrDualWriteTest: true
+      requireRollbackPlanInActivationPacket: true
+      requireCutoverWindowDeclared: true
+      sequentialSpecCompletion: true
+      antiFabricationDetection: true
+      requireAllScopesDoneBeforeSpecDone: true
+      requirePerDodItemRawEvidence: true
+      requireEvidenceByReference: true
