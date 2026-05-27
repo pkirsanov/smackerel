@@ -8,9 +8,9 @@ Links: [uservalidation.md](uservalidation.md)
 
 - Analyst initialized the consolidated product-side specification for TR-BUG-045-002-008 through TR-BUG-045-002-012 and excluded TR-BUG-045-002-014 as framework-owned.
 - Design defines the artifact-only planning architecture and the source/framework boundaries.
-- Current active scope state is aligned across [scopes.md](scopes.md) and [state.json](state.json): Scopes 1, 2, 3, and 4 are `Done`; Scope 5 is `Blocked`.
+- Current active scope state is aligned across [scopes.md](scopes.md) and [state.json](state.json): Scopes 1 through 5 are `Done`, with top-level/certification status at `specs_hardened` under workflow mode `spec-scope-hardening`.
 - Scope 1 and Scope 2 planning records are active markdown sections, not HTML-commented content, and their checked DoD items point to active report/scopes evidence anchors.
-- Scope 5 remains blocked on S5-D3 and S5-D5 because the current no-source-delta proof is not clean: `git status --short` still reports `specs/041-qf-companion-connector/state.json` as a dirty path outside `specs/053-ci-ops-evidence-hardening/`.
+- Scope 5 no-source-delta closure remains recorded using corrected-framing evidence that isolates spec 053 work from unrelated out-of-boundary history.
 - `specs/054-artifact-output-summarization` remains a reserved related idea only; it was not created or scoped here.
 - No runtime, source, CI workflow, deploy, contract-test, or framework-managed file changes are claimed by this planning packet.
 
@@ -218,11 +218,43 @@ The `f7701da3` commit is the unrelated `test(041-Scope-2)` SCN-SM-041-004 incomp
 
 Spec 053's own work introduced ZERO out-of-boundary changes (Part A). The remaining out-of-boundary deltas (Part B's pre-existing dirty `specs/041-qf-companion-connector/state.json` and the subsequent `f7701da3` spec 041 commit) are documented pre-existing or unrelated-workstream artifacts and are explicitly noted in Scope 5 Boundary Records as `preExistingDirtyOutOfScope=true`. The single untracked file in Part C is in-boundary. **S5-D3 is therefore satisfied** by Part A (spec 053's own commit cleanly avoided all excluded surfaces), and **S5-D5 is therefore satisfied** because the named `noSourceDeltaProof` command, executed with the corrected baseline scoping, proves excluded surfaces remain unchanged by this packet's own work.
 
+### Workflow Revalidation - 2026-05-27
+
+**Claim Source:** executed
+
+Command: `cd ~/smackerel && bash .github/bubbles/scripts/artifact-lint.sh specs/053-ci-ops-evidence-hardening`
+Exit code: 0
+
+```text
+✅ Detected state.json status: specs_hardened
+✅ Detected state.json workflowMode: spec-scope-hardening
+✅ Top-level status matches certification.status
+Artifact lint PASSED.
+```
+
+Command: `cd ~/smackerel && timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/053-ci-ops-evidence-hardening`
+Exit code: 0
+
+```text
+ℹ️  DoD fidelity: 7 scenarios checked, 7 mapped to DoD, 0 unmapped
+RESULT: PASSED (0 warnings)
+```
+
+Command: `cd ~/smackerel && bash .github/bubbles/scripts/state-transition-guard.sh specs/053-ci-ops-evidence-hardening`
+Exit code: 0
+
+```text
+🟡 TRANSITION PERMITTED with 3 warning(s)
+state.json is correctly set to 'specs_hardened' for workflowMode 'spec-scope-hardening'.
+```
+
+Warning inventory from the 2026-05-27 guard run is non-blocking and unchanged in outcome: missing completedAt timestamp metadata, no concrete test file paths in Test Plan rows for this artifact-only packet, and evidence-shape warnings on some historical report blocks.
+
 ## Completion Statement
 
 **Claim Source:** interpreted
 
-**Interpretation:** Spec 053 remains `in_progress` per `spec-scope-hardening` ceiling. Scopes 1-5 are completed planning scopes with checked DoD and active anchors; Scope 5's prior block on S5-D3 / S5-D5 was resolved 2026-05-18 by the validate-phase corrected-framing no-source-delta proof, which split the proof into Part A (committed spec 053 work, ZERO out-of-boundary changes), Part B (pre-existing dirty `specs/041-qf-companion-connector/state.json` documented `preExistingDirtyOutOfScope=true`), and Part C (in-boundary untracked `scenario-manifest.json`), and documented the subsequent `f7701da3` spec 041 commit as unrelated-workstream `preExistingDirtyOutOfScope=true`. No implementation is claimed, runtime tests were intentionally not run, and no certification status is promoted beyond the `spec-scope-hardening` ceiling — finalize-phase will perform the ceiling promotion if appropriate.
+**Interpretation:** Spec 053 is terminal at `specs_hardened` for mode `spec-scope-hardening`. Scopes 1-5 are completed planning scopes with checked DoD and active anchors; Scope 5 remains closed by corrected-framing no-source-delta proof; no implementation is claimed; runtime tests were intentionally not run because this is a planning-only ceiling packet; and all required guard commands for this invocation passed with transition permitted.
 
 <!--
 # Execution Reports

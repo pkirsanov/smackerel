@@ -267,6 +267,11 @@ Scenario: SCN-053-002 Regression expansion adds protection beyond existing proof
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 2: Regression Expansion Boundaries" Implementation Plan step 1 record block.
 - [x] **S2-D2.** Source-surface matrix subsection covers all three allowed expansion surfaces (CI integration job, full-stack reproduction path, contract-test surface) per DD-053-003 with `surfaceKind` and `allowedAction` populated.
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 2: Regression Expansion Boundaries" Implementation Plan step 2 source-surface subsection.
+  ```text
+  evidenceRef: Scope 2 Planning Records -> Source-Surface Matrix
+  requiredSurfacesPresent: CI integration job | Full-stack reproduction path | Contract-test surface
+  requiredFieldsPresent: surfaceKind | allowedAction
+  ```
 - [x] **S2-D3.** Regression surface record table is authored where every row populates `regressionRowId`, `surface`, `newProtectedFailureMode`, `existingProofThisDoesNotDuplicate`, and `evidenceExpectation`. Rows that cannot name a new failure mode are recorded as `rejected-duplicate` and excluded from the active set per DD-053-003.
   - Evidence anchor: [scopes.md](scopes.md) → "Scope 2: Regression Expansion Boundaries" Implementation Plan step 3 record table.
 - [x] **S2-D4. Scenario validator: SCN-053-002 Regression expansion adds protection beyond existing proof** — Given BUG-045-002 has a passing topology guard, three adversarial contract sub-tests, and a passing local full-stack reproduction, When the regression row table is authored, Then every row's `surface` field is one of {CI integration job, full-stack reproduction path, contract-test surface} AND every row's `newProtectedFailureMode` field names a failure mode not already protected by the named existing BUG-045-002 proof AND every candidate row missing a new protective claim is recorded as `rejected-duplicate` instead of being added to the active set.
