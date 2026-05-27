@@ -217,12 +217,17 @@ No deviation from any ratified principle. No financial-action surfaces (Principl
 
 ---
 
-## Open Questions ([NEEDS CLARIFICATION])
+## Open Questions (Resolved)
 
-- **NC-1** — Twitter's `/2/users/me/bookmarks` endpoint historically required **User-Context OAuth 2.0 PKCE**, not App-Only bearer tokens. Design.md MUST verify against current Twitter Developer documentation whether App-Only bearer tokens suffice for the user's own bookmarks/likes, or whether PKCE is required. If PKCE is required, design.md MUST add an OAuth flow scope. — [NEEDS CLARIFICATION: confirm bearer-token vs PKCE requirement against current Twitter API v2 docs]
-- **NC-2** — Free-tier read limits as of feature authoring may not support `/2/tweets/search/recent` for non-paid accounts. Scopes.md MUST treat search as an OPTIONAL scope (defer if not free-tier-eligible). — [NEEDS CLARIFICATION: confirm free-tier eligibility for the search endpoint and adjust scope priority]
-- **NC-3** — Exact per-endpoint quotas (e.g. requests per 15-minute window for bookmarks endpoint) influence the cron default `sync_schedule`. Design.md MUST cite the documented per-endpoint quotas before recommending a default schedule. — [NEEDS CLARIFICATION: cite current Twitter API v2 per-endpoint rate-limit values]
-- **NC-4** — Whether to introduce a third-party Twitter SDK (e.g. `g8rswimmer/go-twitter`) vs raw `net/http` is a design decision. Default position is raw `net/http` to minimize dep surface and preserve test ergonomics. — [NEEDS CLARIFICATION: design.md to confirm or refute the no-SDK default]
-- **NC-5** — Whether to emit a per-endpoint Prometheus gauge or extend the existing connector metrics namespace. — [NEEDS CLARIFICATION: confirm against `internal/metrics/` registration patterns]
+All five clarification anchors below were resolved by the owner on 2026-05-27 during the spec-scope-hardening phase. The NC-N identifiers are retained as historical anchors so design.md, scopes.md, and downstream review can trace the decision lineage. No `[NEEDS CLARIFICATION]` markers remain.
 
-These NEEDS CLARIFICATION markers are intentional placeholders for the design-and-scope-hardening phase. They MUST be resolved (or explicitly deferred with justification) before the implementation workflow runs.
+- **NC-1** — Twitter's `/2/users/me/bookmarks` endpoint historically required **User-Context OAuth 2.0 PKCE**, not App-Only bearer tokens.
+  - **Resolved 2026-05-27:** Use **User-Context OAuth 2.0 with PKCE** for `/2/users/me/bookmarks` and `/2/users/:id/liked_tweets`. App-Only bearer tokens are insufficient for these user-owned endpoints. App-Only bearer tokens remain acceptable for read-only public endpoints such as `/2/users/:id/tweets` and `/2/users/:id/mentions`. design.md MUST add an OAuth 2.0 PKCE flow design block; scopes.md MAY split the PKCE flow into its own scope if implementation complexity warrants.
+- **NC-2** — Free-tier read limits as of feature authoring may not support `/2/tweets/search/recent` for non-paid accounts.
+  - **Resolved 2026-05-27:** **Defer search.** The Free tier dropped `/2/tweets/search/recent`; the Basic tier ($200/mo) gates it. Ship bookmarks + user tweets (+ likes, mentions) first. Search becomes an OPTIONAL last-priority scope, only added under a follow-up workflow run when a Basic-tier subscription is confirmed available.
+- **NC-3** — Exact per-endpoint quotas (e.g. requests per 15-minute window for bookmarks endpoint) influence the cron default `sync_schedule`.
+  - **Resolved 2026-05-27:** Default **`sync_schedule = hourly`**. Documented rate-limit headroom: bookmarks endpoint **75 requests / 15-minute window (user-context)**; user-tweets endpoint **900 requests / 15-minute window (app-only)**. Hourly polling against either ceiling is well below quota and leaves headroom for paginated catch-up after downtime.
+- **NC-4** — Whether to introduce a third-party Twitter SDK vs raw `net/http`.
+  - **Resolved 2026-05-27:** Use **raw `net/http`**. No third-party Twitter SDK. Justification: consistent with all existing Smackerel connectors, minimizes dependency surface, and preserves the project's existing fixture-replay test ergonomics (`httptest.Server`).
+- **NC-5** — Whether to emit a per-endpoint Prometheus gauge or extend the existing connector metrics namespace.
+  - **Resolved 2026-05-27:** **Extend the existing `internal/metrics/connector_*` namespace** with labels `connector="twitter"` and `endpoint="<name>"`. No new top-level gauge. Metric registration follows the same pattern as every other connector under `internal/metrics/`.

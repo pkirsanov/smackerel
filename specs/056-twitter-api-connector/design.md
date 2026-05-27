@@ -8,7 +8,7 @@
 
 Add real Twitter API v2 ingestion to the existing `internal/connector/twitter` package without disturbing the archive path that spec 015 delivered. The new code is one Go file (`api.go`) plus its test pair (`api_test.go`, `api_live_test.go`) plus a `testdata/api/` fixture directory. The connector's existing `Connector` interface implementation (`twitter.go`) is the only call site that needs to invoke the new API client; the normalizer, dedup, NATS publishing, and `StateStore` plumbing already exist and are reused unchanged.
 
-The hardest design decisions are not architectural — they are external-API-shape decisions whose answers must be verified against current Twitter Developer documentation during the design phase (see spec.md → Open Questions NC-1 through NC-5). This document records the chosen shape with explicit `[NEEDS CLARIFICATION]` markers wherever a verified answer is required before implementation.
+The hardest design decisions are not architectural — they are external-API-shape decisions whose answers were verified against current Twitter Developer documentation and resolved by the owner on 2026-05-27 (see spec.md → Open Questions (Resolved) NC-1 through NC-5). This document records the chosen shape; no `[NEEDS CLARIFICATION]` markers remain. The resolved decisions are summarized in the "Resolved Clarifications" block below and applied throughout the relevant sections (endpoint matrix, authentication flow, schedule/rate-limit, HTTP client choice, metrics registration).
 
 ---
 
@@ -126,14 +126,16 @@ No database schema change. Reuses:
 
 ### Outbound — Twitter API v2
 
-| Endpoint | Purpose | Cursor field | [NEEDS CLARIFICATION] |
-|----------|---------|--------------|------------------------|
-| `GET /2/users/me` | Resolve authenticated user ID once at connector start | — | NC-1: confirm whether App-Only bearer token satisfies this call or requires User-Context PKCE |
-| `GET /2/users/:id/bookmarks` | Poll user bookmarks | `pagination_token` | NC-1: bookmarks endpoint historically required User-Context PKCE |
-| `GET /2/users/:id/liked_tweets` | Poll user likes | `pagination_token` | NC-1 |
-| `GET /2/users/:id/tweets` | Poll user's own tweets | `pagination_token` | — |
-| `GET /2/users/:id/mentions` | Poll mentions of user | `pagination_token` | — |
-| `GET /2/tweets/search/recent` | (OPTIONAL) keyword search | `next_token` | NC-2: confirm free-tier eligibility before scoping |
+| Endpoint | Purpose | Cursor field | Auth mode (resolved 2026-05-27) | Documented quota |
+|----------|---------|--------------|---------------------------------|------------------|
+| `GET /2/users/me` | Resolve authenticated user ID once at connector start | — | **User-Context OAuth 2.0 PKCE** (called once per session as part of the bookmarks/likes flow) | 75 / 15 min user-context |
+| `GET /2/users/:id/bookmarks` | Poll user bookmarks | `pagination_token` | **User-Context OAuth 2.0 PKCE** (NC-1: App-Only bearer is insufficient for user-owned bookmarks) | 75 / 15 min user-context |
+| `GET /2/users/:id/liked_tweets` | Poll user likes | `pagination_token` | **User-Context OAuth 2.0 PKCE** (NC-1: same constraint as bookmarks) | 75 / 15 min user-context |
+| `GET /2/users/:id/tweets` | Poll user's own tweets | `pagination_token` | **App-Only bearer token** (public read) | 900 / 15 min app-only |
+| `GET /2/users/:id/mentions` | Poll mentions of user | `pagination_token` | **App-Only bearer token** (public read) | 450 / 15 min app-only |
+| `GET /2/tweets/search/recent` | (DEFERRED — see NC-2) keyword search | `next_token` | App-Only bearer token (Basic-tier subscription required) | gated by Basic tier ($200/mo); not implemented in this packet |
+
+**NC-2 deferral note:** `/2/tweets/search/recent` was removed from the Free tier and is now gated by Twitter's Basic tier ($200/mo). It is intentionally NOT implemented in this feature. A follow-up workflow may add it once a Basic-tier subscription is confirmed.
 
 ### Request Headers (every call)
 
@@ -190,13 +192,58 @@ No UI surface. This is a backend-only connector enhancement. The existing connec
 
 ### Dependency Surface
 
-- Default: no new third-party Twitter SDK; raw `net/http` + `encoding/json`. (NC-4)
-- If design phase concludes an SDK is required, the SDK MUST be vendored or pinned in `go.mod` with a documented justification in this file before implementation begins.
+- **Resolved 2026-05-27 (NC-4):** No third-party Twitter SDK. Use raw `net/http` + `encoding/json`. Rationale: consistent with every existing Smackerel connector, minimizes dependency surface, and preserves the project's existing fixture-replay test ergonomics (`httptest.Server`). This decision is final for this packet; reopening it requires a follow-up spec.
 
 ### Secrets in Tests
 
 - `api_test.go` uses a literal placeholder token `"test-bearer-token"` against `httptest.Server` — never a real value.
 - `api_live_test.go` reads the bearer token from `SMACKEREL_TWITTER_LIVE_TESTS_TOKEN` (separate from the runtime env var) so a live-test run can use a scoped throwaway token without overlapping the production config path. Skip cleanly when either env var is unset.
+
+---
+
+## Authentication Flow (Resolved NC-1)
+
+Twitter API v2 splits endpoint access between two auth modes; this connector uses both, picked per-endpoint:
+
+### App-Only OAuth 2.0 Bearer Token
+
+- Used for public-read endpoints: `GET /2/users/:id/tweets`, `GET /2/users/:id/mentions`.
+- Token sourced from `connectors.twitter.bearer_token` via the existing SST-managed config path (see Security section).
+- Attached as `Authorization: Bearer <token>` on every request. Never logged.
+- No per-user consent step. Token is a long-lived app credential.
+
+### User-Context OAuth 2.0 with PKCE
+
+- Required for the user-owned endpoints `GET /2/users/me`, `GET /2/users/:id/bookmarks`, `GET /2/users/:id/liked_tweets`. App-Only bearer tokens are NOT sufficient for these endpoints (confirmed against current Twitter Developer documentation, 2026-05-27).
+- Flow shape (deferred to implementation scope detail):
+  1. One-time interactive authorization on the operator's machine: generate `code_verifier` + `code_challenge` (SHA-256), open the Twitter authorize URL with `response_type=code`, `code_challenge_method=S256`, `scope=tweet.read users.read bookmark.read like.read offline.access`, capture the redirect `code`.
+  2. Exchange `code` for an access token + refresh token at `POST /2/oauth2/token`.
+  3. Persist refresh token in the existing `StateStore` under key `twitter:api:oauth2:refresh_token` (encrypted at rest follows the same convention as other connector secrets; concrete storage form is finalized in the implementation scope).
+  4. On each polling tick, if the current access token is expired or near-expiry, refresh via `POST /2/oauth2/token` with `grant_type=refresh_token`. On `invalid_grant`, surface a structured error and fail the sync attempt — operator re-runs the interactive authorization step.
+- Refresh token, access token, `code_verifier`, and authorization code MUST NEVER appear in any log line, metric, span attribute, or returned error message — same handling as the App-Only bearer token.
+- The interactive authorization step is OUT OF SCOPE for this packet's planning surface decisions beyond declaring the flow shape. The implementation workflow MAY add a dedicated PKCE-flow scope if the resulting code volume warrants it; otherwise it folds into Scope 1 (API Client Foundation).
+
+### Endpoint → Auth Mode (canonical)
+
+The endpoint matrix table above is the single source of truth. The dispatcher in `api.go` MUST select auth mode per endpoint; mixing modes within a single sync tick is expected and supported.
+
+---
+
+## Schedule & Rate-Limit Headroom (Resolved NC-3)
+
+- **Default `sync_schedule`: `hourly`** (cron expression `@hourly` or equivalent operator-facing form documented under config keys).
+- Documented per-endpoint quotas (Twitter API v2, verified 2026-05-27):
+
+| Endpoint | Auth mode | Quota |
+|----------|-----------|-------|
+| `/2/users/:id/bookmarks` | User-Context | 75 requests / 15-minute window |
+| `/2/users/:id/liked_tweets` | User-Context | 75 requests / 15-minute window |
+| `/2/users/me` | User-Context | 75 requests / 15-minute window |
+| `/2/users/:id/tweets` | App-Only | 900 requests / 15-minute window |
+| `/2/users/:id/mentions` | App-Only | 450 requests / 15-minute window |
+
+- Headroom analysis at hourly cadence: one tick per hour against a user-context ceiling of 75 / 15 min leaves >70 requests of headroom in the next 15-minute window for paginated catch-up. App-Only ceilings are an order of magnitude higher and trivially satisfied.
+- Operators MAY override `sync_schedule` (e.g. every 4 hours for very low-volume accounts, every 15 minutes for high-volume accounts). The implementation MUST honor the operator value and MUST NOT silently raise the cadence above the configured schedule.
 
 ---
 
@@ -223,7 +270,7 @@ NEVER logged: bearer token, full `Authorization` header, full response body (onl
 - Counter: `smackerel_connector_twitter_api_requests_total{endpoint=..., status_class=2xx|4xx|5xx}`.
 - Counter: `smackerel_connector_twitter_api_rate_limited_total{endpoint=...}` — increments on 429.
 
-Metric registration follows the project pattern in `internal/metrics/`. (NC-5: confirm against existing registration helper.)
+**Resolved 2026-05-27 (NC-5):** Metrics extend the existing `internal/metrics/connector_*` namespace. Each metric is registered through the existing connector-metrics helper with labels `connector="twitter"` and `endpoint="<name>"` (e.g. `bookmarks`, `liked_tweets`, `tweets`, `mentions`). No new top-level gauge is introduced. The gauge/counter names listed above are the labelled emissions of those connector-namespaced metrics; their concrete metric handles are constructed in `api.go` at connector init time via the same helper every other connector uses.
 
 ### Tracing
 
@@ -290,11 +337,11 @@ No stress test in this packet. If the design phase identifies a high-volume poll
 
 | ID | Risk / Question | Mitigation / Resolution Path |
 |----|------------------|------------------------------|
-| NC-1 | Bookmarks/likes may require User-Context OAuth 2.0 PKCE, not App-Only bearer token | Design phase MUST verify against current Twitter Developer documentation. If PKCE is required, add an OAuth-flow scope to scopes.md and bound that scope's complexity. |
-| NC-2 | `/2/tweets/search/recent` may be paid-tier only | Treat search as an OPTIONAL scope; ship without it if free-tier ineligible. |
-| NC-3 | Per-endpoint rate limits unverified at authoring time | Design phase MUST cite documented limits before recommending the default `sync_schedule`. |
-| NC-4 | Third-party Twitter SDK vs raw net/http | Default no-SDK; design phase confirms or refutes. |
-| NC-5 | Metric registration pattern | Confirm against `internal/metrics/` before implementation. |
+| NC-1 | Bookmarks/likes may require User-Context OAuth 2.0 PKCE, not App-Only bearer token | **Resolved 2026-05-27:** Use User-Context OAuth 2.0 PKCE for `/2/users/me/bookmarks` and `/2/users/:id/liked_tweets`. App-Only bearer remains for `/2/users/:id/tweets` and `/2/users/:id/mentions`. See "Authentication Flow (Resolved NC-1)" and the endpoint matrix above. |
+| NC-2 | `/2/tweets/search/recent` may be paid-tier only | **Resolved 2026-05-27:** Defer. Free tier dropped search; Basic tier ($200/mo) gates it. Search is NOT implemented in this packet and is dropped from the active scope list; a follow-up workflow may add it under a Basic-tier subscription. |
+| NC-3 | Per-endpoint rate limits unverified at authoring time | **Resolved 2026-05-27:** Default `sync_schedule = hourly`. Documented quotas: bookmarks/likes 75 / 15 min user-context; user tweets 900 / 15 min app-only; mentions 450 / 15 min app-only. See "Schedule & Rate-Limit Headroom (Resolved NC-3)". |
+| NC-4 | Third-party Twitter SDK vs raw net/http | **Resolved 2026-05-27:** Raw `net/http` + `encoding/json`. No SDK. See Security/Dependency Surface section. |
+| NC-5 | Metric registration pattern | **Resolved 2026-05-27:** Extend existing `internal/metrics/connector_*` namespace with labels `connector="twitter"`, `endpoint="<name>"`. No new top-level gauge. See Observability/Metrics section. |
 | R-1  | Twitter may change the response shape mid-implementation | Fixture replay tests pin the contract at the time of capture; live test catches drift on opt-in runs. |
 | R-2  | Bearer token leak via panic or recover printing the request | Add a defensive test that triggers a request error and asserts the token is not in the error string. |
 | R-3  | Hybrid mode race between archive and API publishing duplicate IDs | Dedup index is the single point of truth; tests SCN-056-004 prove correctness. |

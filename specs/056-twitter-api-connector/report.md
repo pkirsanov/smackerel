@@ -10,7 +10,7 @@ Planning packet authored under `spec-scope-hardening` mode targeting `specs_hard
 
 - New directory: `specs/056-twitter-api-connector/`
 - Files authored:
-  - `spec.md` — problem, outcome contract, 17 requirements (R-001…R-017), 8 Gherkin scenarios, 9 acceptance criteria, 5 open questions marked `[NEEDS CLARIFICATION]`
+  - `spec.md` — problem, outcome contract, 17 requirements (R-001…R-017), 8 Gherkin scenarios, 9 acceptance criteria, 5 open questions (NC-1…NC-5) resolved 2026-05-27 (no `[NEEDS CLARIFICATION]` markers remain)
   - `design.md` — component diagram, data flow, API endpoint matrix, security/observability/testing strategy, risk register
   - `scopes.md` — 5 sequential scopes with Gherkin, Test Plan rows naming actual planned file paths, Tiered DoD with mandatory regression/Build-Quality items
   - `scenario-manifest.json` — 10 planned `SCN-056-*` contracts mapped to scopes 01–05

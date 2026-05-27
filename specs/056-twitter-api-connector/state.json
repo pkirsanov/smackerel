@@ -168,7 +168,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-27T00:18:00Z",
+  "lastUpdatedAt": "2026-05-27T01:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -206,5 +206,5 @@
     ],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Planning packet authored under spec-scope-hardening mode. Status held at in_progress because state-transition-guard treats specs_hardened as terminal and requires Done scopes plus full DoD/TDD evidence. Implementation workflow will execute scopes 01-05 and is expected to unblock BUG-015-002 (Check 28 G028) on completion."
+  "notes": "Planning packet authored under spec-scope-hardening mode. All 5 NEEDS CLARIFICATION markers (NC-1…NC-5) resolved by owner 2026-05-27: NC-1 PKCE for bookmarks/likes, NC-2 defer search (Basic tier $200/mo), NC-3 default sync_schedule=hourly with documented quotas, NC-4 raw net/http no SDK, NC-5 extend internal/metrics/connector_* namespace. spec.md, design.md, scopes.md, report.md, uservalidation.md updated. artifact-lint exits 0. state-transition-guard still exits 1 with 16 BLOCKs (per-scope DoD unchecked, scopes Not Started, no execution evidence, deferral language for search, no red→green TDD markers, no stress coverage, DoD-Gherkin fidelity gaps) — all of which are structural conditions a fresh planning-only packet cannot satisfy. Status remains in_progress; promotion to specs_hardened requires the implementation workflow to execute scopes 01-05."
 }
