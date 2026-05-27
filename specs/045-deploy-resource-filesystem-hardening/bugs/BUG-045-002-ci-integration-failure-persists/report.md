@@ -1328,7 +1328,7 @@ Docs-phase deliverables: ZERO file edits to managed docs. ZERO file edits to use
 
 **Carry-forward concerns (one per open routing item):**
 
-| Concern ID                  | Severity | Category                                                                                       | Follow-up owner    | Follow-up action (truncated) |
+| Concern ID                  | Severity | Category                                                                                       | followUpOwner      | followUpAction (truncated)   |
 |-----------------------------|----------|------------------------------------------------------------------------------------------------|--------------------|------------------------------|
 | `TR-BUG-045-002-008`        | low      | G068 DoD-Gherkin fidelity backlog (residual surfaced items)                                    | `bubbles.plan`     | Address residual G068 gaps; preserve trace-ID anchor approach. |
 | `TR-BUG-045-002-009`        | low      | Regression E2E coverage expansion (surfaced DoD items)                                         | `bubbles.plan`     | Plan broader E2E regression coverage beyond build-time topology guard + 3 adversarials + local Path-A repro. |
