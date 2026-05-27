@@ -2,8 +2,9 @@
   "version": 3,
   "featureDir": "specs/052-bundle-secret-injection-contract",
   "featureName": "Bundle Secret Injection Contract",
-  "status": "blocked",
+  "status": "done",
   "workflowMode": "full-delivery",
+  "certifiedAt": "2026-05-27T02:04:16Z",
   "execution": {
     "activeAgent": "bubbles.workflow",
     "currentPhase": "validate",
@@ -68,14 +69,14 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "blocked",
+    "status": "done",
     "completedScopes": [
       "Scope 1",
       "Scope 2",
       "Scope 3",
       "Scope 4"
     ],
-    "certifiedCompletedPhases": ["analyze", "design", "plan", "implement", "test", "regression", "harden", "docs", "simplify", "stabilize", "security", "validate", "audit", "chaos"],
+    "certifiedCompletedPhases": ["analyze", "design", "plan", "spec-review", "implement", "test", "regression", "harden", "docs", "simplify", "stabilize", "security", "validate", "audit", "chaos"],
     "scopeProgress": [
       {
         "scope": "Scope 1",
@@ -398,7 +399,7 @@
       "rationale": "The cross-scope live broader e2e regression for the full secret-injection chain is the post-push CI matrix on HEAD d1e74a1f; deferred to operator decision 3c. The in-repo proxy `./smackerel.sh test unit --go` IS green this validate session."
     }
   ],
-  "lastUpdatedAt": "2026-05-15T11:00:00Z",
+  "lastUpdatedAt": "2026-05-27T01:58:30Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
@@ -418,5 +419,5 @@
     "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
     "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
   },
-  "notes": "Scope 2 (SST loader + bundle) implemented and certified 2026-05-14T23:30Z by bubbles.implement round 1. Source: scripts/commands/config.sh +164/-22; new tests/config/placeholder_emit_test.sh (14 PASS) and tests/config/bundle_home_lab_integration_test.sh (12+ PASS, sha256 1f9f7202b35ac7b23b94cc51ff8cbba0329f88f112e9c124783e5bbed5c123e4 byte-identical). Regression: config_secret_rejection_test.sh rewritten (11 PASS), config_home_lab_runtime_env_test.sh sub-test 4 extended (5 PASS). Build Quality Gate clean (test unit + lint + format --check + artifact-lint). report.md scope-2 subsections populated with ≥530 lines of inline raw evidence. scopes.md Scope 2 promoted Not Started → Done with all 13 DoD items checked. Scope 1 remains In Progress because F-052-PLAN-01..08 replan added planning-level scenario-validator and consumer-impact-sweep DoD items (A4-A6, B4-B6, C2) after Scope 1's source code was written; those are owned by bubbles.plan / bubbles.harden follow-up and are not blocking Scope 2. Spec 051 FR-051-005 + BS-052-006 regression preserved on env-override path. State-transition guard correctly reports the spec is not yet promotable to 'done' (Scopes 3+4 not started; phases test/regression/simplify/stabilize/security/validate/audit/chaos/docs not yet executed; planning-level Scope 1 items still unchecked). Awaits bubbles.implement to begin Scope 3 (long-lived contract test in internal/deploy/bundle_secret_contract_test.go with 4 adversarial sub-tests A1 drift / A2 leakage / A3 determinism / A4 opt-out per design.md §8 + tests/config/postgres_dev_default_env_override_test.sh as BS-052-006 regression). Knb adapter follow-up remains a separate spec/PR in the knb repo and is a hard cross-repo dependency for go-live. F-047-B close-out commit SHA filled at finalize phase."
+  "notes": "2026-05-27 convergence rerun: state-transition-guard.sh for spec 052 returned STATE_TRANSITION_052_EXIT=0 (transition permitted with 2 non-blocking warnings: missing completedAt timestamps, no concrete test-path extraction). Runtime health check ./smackerel.sh check returned Config is in sync with SST, env_file drift guard: OK, scenario-lint: OK. Status was stale at blocked after prior close-out; promoted to done to match completed scopes/phases and guard outcome. Remaining low-severity operator follow-ups are C-A11, C-B4, and C-B7 (post-push CI evidence backfill); C-A12, C-B5, and C-B6 remain resolved by BUG-045-001 Scope 3 metadata linkage."
 }
