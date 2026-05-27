@@ -24,6 +24,10 @@ This packet is artifact-only — **no `.go`, `.py`, `.yaml` (config), `.sh`, `.t
 ### Files touched (single closure commit)
 
 ```text
+$ git ls-files -- specs/029-devops-pipeline/bugs/BUG-029-006-reconcile-artifact-drift/ | wc -l
+8
+$ echo "Exit Code: $?"
+Exit Code: 0
 specs/029-devops-pipeline/scopes.md                                                  (per-scope regression evidence + Scope 5 Consumer Impact Sweep + deferral rewrite + TDD subsection)
 specs/029-devops-pipeline/report.md                                                  (BUG-029-006 Reconcile-Sweep Evidence + Code Diff Evidence + Git-Backed Proof)
 specs/029-devops-pipeline/state.json                                                 (completedPhaseClaims + certifiedCompletedPhases + executionHistory + resolvedBugs)
@@ -111,6 +115,8 @@ This is the canonical red→green scenario-first tdd evidence for the bugfix-fas
 
 ## Validation Evidence
 
+### Validation Evidence
+
 ```text
 $ bash .github/bubbles/scripts/artifact-lint.sh specs/029-devops-pipeline
 ✅ PASSED
@@ -134,6 +140,8 @@ $ bash .github/bubbles/scripts/state-transition-guard.sh specs/029-devops-pipeli
 ---
 
 ## Audit Evidence
+
+### Audit Evidence
 
 ```text
 $ git diff --cached --name-status
