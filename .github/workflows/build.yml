@@ -188,6 +188,99 @@ jobs:
         syft "${IMAGE_ML}@${{ steps.ml.outputs.digest }}" -o spdx-json > ml.sbom.spdx.json
         cosign attest --yes --predicate ml.sbom.spdx.json --type spdxjson "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
 
+    # ─────────────────────────────────────────────────────────────────
+    # SLSA provenance attestation (cosign-attested, Rekor-logged)
+    #
+    # docker/build-push-action@v6 with `provenance: true` produces
+    # BuildKit-style in-band SLSA provenance (visible in the OCI image
+    # index as an `attestation-manifest`). That representation is NOT
+    # discoverable via `cosign verify-attestation --type=slsaprovenance`,
+    # which downstream knb adapters use as their pre-apply trust gate.
+    #
+    # These steps emit a minimal SLSA v0.2 predicate (predicate type
+    # `https://slsa.dev/provenance/v0.2`) describing this build's
+    # builder ID, source repo, source SHA, and workflow run, then
+    # cosign-attest it so consumers can verify via the Rekor transparency
+    # log. The source SHA appears in `materials[].digest.sha1` so the
+    # knb adapter's source-SHA cross-check (preconditions.sh
+    # `verify_slsa_provenance`) passes.
+    #
+    # Drift detector: knb/smackerel/home-lab/preconditions.sh requires
+    # this predicate. Removing these steps re-orphans every downstream
+    # apply.
+    # ─────────────────────────────────────────────────────────────────
+    - name: SLSA provenance attestation — core
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+        SOURCE_SHA: ${{ steps.sha.outputs.sourceSha }}
+      run: |
+        cat > core.slsa.json <<JSON
+        {
+          "builder": { "id": "https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}" },
+          "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+          "invocation": {
+            "configSource": {
+              "uri": "git+https://github.com/${{ github.repository }}@${{ github.ref }}",
+              "digest": { "sha1": "${SOURCE_SHA}" },
+              "entryPoint": ".github/workflows/build.yml"
+            },
+            "parameters": {},
+            "environment": {
+              "github_run_id": "${{ github.run_id }}",
+              "github_run_attempt": "${{ github.run_attempt }}"
+            }
+          },
+          "metadata": {
+            "buildInvocationId": "${{ github.run_id }}-${{ github.run_attempt }}",
+            "completeness": { "parameters": true, "environment": false, "materials": false },
+            "reproducible": false
+          },
+          "materials": [
+            {
+              "uri": "git+https://github.com/${{ github.repository }}",
+              "digest": { "sha1": "${SOURCE_SHA}" }
+            }
+          ]
+        }
+        JSON
+        cosign attest --yes --predicate core.slsa.json --type slsaprovenance "${IMAGE_CORE}@${{ steps.core.outputs.digest }}"
+
+    - name: SLSA provenance attestation — ml
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+        SOURCE_SHA: ${{ steps.sha.outputs.sourceSha }}
+      run: |
+        cat > ml.slsa.json <<JSON
+        {
+          "builder": { "id": "https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}" },
+          "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+          "invocation": {
+            "configSource": {
+              "uri": "git+https://github.com/${{ github.repository }}@${{ github.ref }}",
+              "digest": { "sha1": "${SOURCE_SHA}" },
+              "entryPoint": ".github/workflows/build.yml"
+            },
+            "parameters": {},
+            "environment": {
+              "github_run_id": "${{ github.run_id }}",
+              "github_run_attempt": "${{ github.run_attempt }}"
+            }
+          },
+          "metadata": {
+            "buildInvocationId": "${{ github.run_id }}-${{ github.run_attempt }}",
+            "completeness": { "parameters": true, "environment": false, "materials": false },
+            "reproducible": false
+          },
+          "materials": [
+            {
+              "uri": "git+https://github.com/${{ github.repository }}",
+              "digest": { "sha1": "${SOURCE_SHA}" }
+            }
+          ]
+        }
+        JSON
+        cosign attest --yes --predicate ml.slsa.json --type slsaprovenance "${IMAGE_ML}@${{ steps.ml.outputs.digest }}"
+
   build-bundles:
     needs: build-images
     runs-on: ubuntu-latest
