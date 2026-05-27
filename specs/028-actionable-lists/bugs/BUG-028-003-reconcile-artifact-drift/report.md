@@ -57,6 +57,8 @@ Pre-fix git log probe (Check 17 structured commit prefix BLOCK):
 ```text
 $ git log --pretty='%h %s' -- specs/028-actionable-lists | grep -cE '^[0-9a-f]+ (spec\(028\)|bubbles\(028/)'
 0
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 Pre-fix Go test probe (production code clean baseline):
