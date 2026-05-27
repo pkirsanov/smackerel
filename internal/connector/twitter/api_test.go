@@ -530,8 +530,8 @@ func TestTwitterAPI_PaginationBoundsTerminateOnRunawayServer(t *testing.T) {
 	// The implementation keeps lastNonEmptyToken at the end of the loop so the
 	// next tick can resume — assert that's what we got back.
 	if finalCursor != "NEVER_ENDING" {
-			t.Fatalf("final cursor must be the last non-empty next_token, got %q", finalCursor)
-		}
+		t.Fatalf("final cursor must be the last non-empty next_token, got %q", finalCursor)
+	}
 }
 
 // ============================================================================
@@ -562,12 +562,15 @@ func (s *recordingSleeper) snapshot() []time.Duration {
 // TestTwitterAPI_RateLimit429HonorsResetWindow — SCN-056-003.
 //
 // Given the bookmarks endpoint returns 429 with x-rate-limit-reset = now+30s
-//   then 200 on the next attempt
+//
+//	then 200 on the next attempt
+//
 // When fetchBookmarks runs
 // Then the connector sleeps ~30s (per the recordingSleeper) before retrying
-//   AND the second request succeeds
-//   AND no further requests are issued during the wait
-//   AND the rate-limit-reset gauge is set to 30
+//
+//	AND the second request succeeds
+//	AND no further requests are issued during the wait
+//	AND the rate-limit-reset gauge is set to 30
 func TestTwitterAPI_RateLimit429HonorsResetWindow(t *testing.T) {
 	t.Parallel()
 
@@ -646,8 +649,9 @@ func extractData(envelope []byte) []byte {
 // Given the bookmarks endpoint returns 401
 // When fetchBookmarks runs
 // Then exactly one HTTP request is issued (no retry loop)
-//   AND the returned error wraps errAuthRejected
-//   AND the bearer token does not appear in the error message
+//
+//	AND the returned error wraps errAuthRejected
+//	AND the bearer token does not appear in the error message
 func TestTwitterAPI_Unauthorized401FailsWithoutRetry(t *testing.T) {
 	t.Parallel()
 
@@ -698,8 +702,9 @@ func TestTwitterAPI_Unauthorized401FailsWithoutRetry(t *testing.T) {
 // Given the endpoint always returns 500
 // When fetchBookmarks runs
 // Then exactly maxRetries+1 requests are issued (initial + retries)
-//   AND the recorded sleep intervals are exponential (1s, 2s, 4s)
-//   AND the returned error wraps errMaxRetriesExceeded
+//
+//	AND the recorded sleep intervals are exponential (1s, 2s, 4s)
+//	AND the returned error wraps errMaxRetriesExceeded
 func TestTwitterAPI_ServerError5xxBoundedBackoff(t *testing.T) {
 	t.Parallel()
 
