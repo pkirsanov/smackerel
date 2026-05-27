@@ -2,7 +2,9 @@
   "bugId": "BUG-004-002-strict-guard-gate-drift",
   "parentFeatureDir": "specs/004-phase3-intelligence",
   "title": "Strict-Guard Gate Drift on Spec 004",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T19:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "bugfix-fastlane",
   "createdAt": "2026-05-24T00:50:00Z",
   "createdBy": "bubbles.workflow",
@@ -262,7 +264,7 @@
     "governanceVersion": "2.2.0",
     "recordedAt": "2026-05-24T01:50:00Z",
     "grill": {"value": "off", "source": "repo-default"},
-    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced", "exempt": true, "exemptReason": "Planning-only closure: zero production .go/.py/.sql source modified; closure mutation set is restricted to scopes.md planning insertions + BUG packet + state.json + sweep memory; existing spec 004 GREEN baseline preserved unchanged so no red\u2192green TDD cycle exists to record."},
     "autoCommit": {"value": "off", "source": "user-request"},
     "lockdown": {"value": "off", "source": "repo-default"},
     "regression": {"value": "protected-scenarios", "source": "workflow-forced"},
@@ -272,6 +274,6 @@
   },
   "nextRequiredOwner": "bubbles.workflow",
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T01:50:00Z",
+  "lastUpdatedAt": "2026-05-27T00:00:00Z",
   "scopeLayout": "single-file"
 }
