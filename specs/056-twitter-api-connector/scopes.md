@@ -27,13 +27,13 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 
 ### Phase Order
 
-1. **Scope 1 — API Client Foundation:** Implement `api.go` with `http.Client`, request builder, bearer-token attachment, response parser, structured logging (no token). Cover the empty-token fail-loud path and the request-builder-rejects-non-GET defensive test.
+1. **Scope 1 — API Client Foundation (App-Only + User-Context PKCE):** Implement `api.go` with `http.Client`, request builder, App-Only bearer-token attachment for `/2/users/:id/tweets` and `/2/users/:id/mentions`, User-Context OAuth 2.0 PKCE flow for `/2/users/me`, `/2/users/:id/bookmarks`, `/2/users/:id/liked_tweets` (per NC-1 resolution 2026-05-27), response parser, structured logging (no token, no refresh token, no `code_verifier`). Cover the empty-token fail-loud path and the request-builder-rejects-non-GET defensive test.
 2. **Scope 2 — Pagination & Cursor Persistence:** Add pagination loop for `/2/users/:id/bookmarks` and parallel endpoints; persist cursors per endpoint in `StateStore`. Exercise pagination via fixture-replay `httptest.Server`.
-3. **Scope 3 — Rate-Limit & Error Handling:** Implement 429 sleep-until-reset, 5xx exponential backoff (bounded), 401/403 fast-fail. Add rate-limit gauges. Add the bearer-token-never-in-logs assertion.
-4. **Scope 4 — Hybrid Mode & Dispatcher Wiring:** Edit `twitter.go` to dispatch `SyncModeAPI` and `SyncModeHybrid`. Prove dedup across archive and API origins. Prove archive-only mode does not construct the API client.
+3. **Scope 3 — Rate-Limit & Error Handling:** Implement 429 sleep-until-reset, 5xx exponential backoff (bounded), 401/403 fast-fail. Add rate-limit gauges using the existing `internal/metrics/connector_*` namespace with `connector="twitter"`, `endpoint="<name>"` labels (per NC-5 resolution). Add the bearer-token-never-in-logs assertion.
+4. **Scope 4 — Hybrid Mode & Dispatcher Wiring:** Edit `twitter.go` to dispatch `SyncModeAPI` and `SyncModeHybrid` against `sync_schedule = hourly` default (per NC-3 resolution). Prove dedup across archive and API origins. Prove archive-only mode does not construct the API client.
 5. **Scope 5 — Live-Gated Tests:** Add `api_live_test.go` with `SMACKEREL_TWITTER_LIVE_TESTS` gating; verify clean skip when env var unset; document local opt-in.
 
-Scope 3 in the search endpoint (`/2/tweets/search/recent`) is intentionally NOT a standalone scope; it is deferred pending free-tier eligibility confirmation (spec.md NC-2). If the design phase resolves NC-2 affirmatively, a follow-up scope MAY be added before the implementation workflow.
+**Search endpoint (`/2/tweets/search/recent`) is OUT of this packet (NC-2 resolution 2026-05-27).** Free tier dropped search; Basic tier ($200/mo) gates it. A follow-up workflow MAY add a dedicated search scope once a Basic-tier subscription is confirmed; until then, no implementation work, no fixtures, no scope row in this packet.
 
 ### Validation Checkpoints
 
