@@ -2,7 +2,7 @@
   "installedVersion": "4.1.0",
   "installMode": "local-source",
   "sourceRef": "main",
-  "sourceGitSha": "bcef16b5da4a269eba0c199810825121302c857a",
-  "sourceDirty": false,
-  "installedAt": "2026-05-27T00:23:09Z"
+  "sourceGitSha": "1d79931e4056578ff823a001acd7778f892dfac2",
+  "sourceDirty": true,
+  "installedAt": "2026-05-27T11:48:43Z"
 }

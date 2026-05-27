@@ -114,6 +114,7 @@ bubbles/scripts/trajectory-inspector-selftest.sh
 bubbles/scripts/trajectory-inspector.sh
 bubbles/scripts/trust-doctor-selftest.sh
 bubbles/scripts/trust-metadata.sh
+bubbles/scripts/v4.1.0-selftest.sh
 bubbles/scripts/validation-latency-report-selftest.sh
 bubbles/scripts/validation-latency-report.sh
 bubbles/scripts/value-selection-lint-selftest.sh
@@ -217,6 +218,7 @@ docs/recipes/tdd-first-execution.md
 docs/recipes/update-docs.md
 docs/recipes/ux-single-file-sweep.md
 docs/recipes/validation-latency-budgets.md
+docs/v4.1.0-delivered-pending-activation.md
 bubbles/workflows.yaml
 bubbles/agnosticity-allowlist.txt
 bubbles/action-risk-registry.yaml
