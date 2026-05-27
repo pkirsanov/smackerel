@@ -907,29 +907,103 @@ echo ""
 # =============================================================================
 echo "--- Check 3E: Scenario-first TDD Evidence (Gate G060) ---"
 effective_tdd_mode="$({
-  grep -A6 '"tdd"' "$state_file" 2>/dev/null \
-    | grep -m1 '"mode"' \
-    | sed -E 's/.*:[[:space:]]*"([^"]+)".*/\1/'
-} || true)"
+  python3 -c "
+import json
+try:
+    with open('$state_file') as f:
+        data = json.load(f)
+    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
+    print(tdd.get('mode', '') or '')
+except Exception:
+    print('')
+" 2>/dev/null
+} || echo "")"
 
 if [[ -z "$effective_tdd_mode" && ( "$state_workflow_mode" == "bugfix-fastlane" || "$state_workflow_mode" == "chaos-hardening" ) ]]; then
   effective_tdd_mode="scenario-first"
 fi
 
-if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
-  tdd_evidence_found="false"
-  for artifact_path in "${scope_files[@]}" "${report_files[@]}"; do
-    [[ -f "$artifact_path" ]] || continue
-    if grep -qiE 'red[[:space:]-]*green|failing targeted|red evidence|green evidence|scenario-first|tdd' "$artifact_path"; then
-      tdd_evidence_found="true"
-      break
-    fi
-  done
+# Per-packet exemption support (per upstream fix proposal — artifact-only fastlanes)
+# Read policySnapshot.tdd.exempt + exemptReason from state.json.
+tdd_exempt="$({
+  python3 -c "
+import json
+try:
+    with open('$state_file') as f:
+        data = json.load(f)
+    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
+    print('true' if tdd.get('exempt') is True else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null
+} || echo "false")"
 
-  if [[ "$tdd_evidence_found" == "true" ]]; then
-    pass "Scenario-first TDD evidence is recorded in the scope/report artifacts"
+tdd_exempt_reason="$({
+  python3 -c "
+import json
+try:
+    with open('$state_file') as f:
+        data = json.load(f)
+    tdd = (data.get('policySnapshot', {}) or {}).get('tdd', {}) or {}
+    r = tdd.get('exemptReason', '') or ''
+    print(r.strip())
+except Exception:
+    print('')
+" 2>/dev/null
+} || echo "")"
+
+# Eligible modes for opt-in exemption (artifact-only fastlanes + always-exempt docs/reconcile)
+tdd_exemption_eligible_modes="docs-only reconcile-to-doc validate-to-doc gaps-to-doc devops-to-doc bugfix-fastlane chaos-hardening stabilize-to-doc audit-to-doc"
+tdd_forbidden_reasons="n/a none exempt no tests skip skipped tbd todo"
+
+if [[ "$effective_tdd_mode" == "scenario-first" ]]; then
+  if [[ "$tdd_exempt" == "true" ]]; then
+    # Validate exemption: mode eligible, reason present, reason substantive
+    mode_eligible="false"
+    for m in $tdd_exemption_eligible_modes; do
+      if [[ "$state_workflow_mode" == "$m" ]]; then
+        mode_eligible="true"
+        break
+      fi
+    done
+
+    if [[ "$mode_eligible" != "true" ]]; then
+      fail "policySnapshot.tdd.exempt=true is not allowed for workflow mode '$state_workflow_mode' — exemption only permitted for: $tdd_exemption_eligible_modes (Gate G060)"
+    elif [[ -z "$tdd_exempt_reason" ]]; then
+      fail "policySnapshot.tdd.exempt=true requires a non-empty exemptReason (Gate G060)"
+    elif [[ "${#tdd_exempt_reason}" -lt 20 ]]; then
+      fail "policySnapshot.tdd.exemptReason must be at least 20 characters describing why no runtime test surface exists (Gate G060). Got: '$tdd_exempt_reason'"
+    else
+      # Reject stop-word reasons
+      reason_lc="$(echo "$tdd_exempt_reason" | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | xargs)"
+      is_stop_word="false"
+      for sw in $tdd_forbidden_reasons; do
+        if [[ "$reason_lc" == "$sw" ]]; then
+          is_stop_word="true"
+          break
+        fi
+      done
+      if [[ "$is_stop_word" == "true" ]]; then
+        fail "policySnapshot.tdd.exemptReason is a stop-word ('$tdd_exempt_reason') — provide a substantive explanation (Gate G060)"
+      else
+        pass "Scenario-first TDD exempted under mode '$state_workflow_mode' — INFO[G060-EXEMPT] reason: $tdd_exempt_reason"
+      fi
+    fi
   else
-    fail "Effective TDD mode is scenario-first but no red→green evidence markers were found in scope/report artifacts (Gate G060)"
+    tdd_evidence_found="false"
+    for artifact_path in "${scope_files[@]}" "${report_files[@]}"; do
+      [[ -f "$artifact_path" ]] || continue
+      if grep -qiE 'red[[:space:]-]*green|failing targeted|red evidence|green evidence|scenario-first|tdd' "$artifact_path"; then
+        tdd_evidence_found="true"
+        break
+      fi
+    done
+
+    if [[ "$tdd_evidence_found" == "true" ]]; then
+      pass "Scenario-first TDD evidence is recorded in the scope/report artifacts"
+    else
+      fail "Effective TDD mode is scenario-first but no red→green evidence markers were found in scope/report artifacts (Gate G060)"
+    fi
   fi
 else
   info "Effective TDD mode is '${effective_tdd_mode:-off}' — scenario-first evidence check not required"
@@ -942,14 +1016,103 @@ echo ""
 echo "--- Check 3F: Transition And Rework Packets (Gate G061) ---"
 pending_transition_failures=0
 
-if grep -A6 '"transitionRequests"' "$state_file" | grep -qE '"TR-|"transitionRequestId"'; then
-  fail "state.json still contains non-empty transitionRequests — validation routing is not complete (Gate G061)"
-  pending_transition_failures=$((pending_transition_failures + 1))
+# Use python to inspect transitionRequests properly: allow status=="open" entries
+# ONLY when they carry routedTo + (routedToCommit|routedToSpec|routedToTicket) + productAction=="none"
+# (and crossRepoFollowUp:true when routed to an external/upstream owner).
+tr_analysis="$({
+  python3 -c "
+import json, re, sys
+try:
+    with open('$state_file') as f:
+        data = json.load(f)
+    trs = data.get('transitionRequests', []) or []
+    if not isinstance(trs, list):
+        trs = []
+    blocking = []
+    routed_open = []
+    for tr in trs:
+        if not isinstance(tr, dict):
+            continue
+        status = (tr.get('status') or '').strip()
+        tr_id = tr.get('id') or tr.get('transitionRequestId') or '<unknown>'
+        if status in ('', 'closed', 'resolved', 'done', 'cancelled', 'rejected'):
+            continue
+        if status == 'open':
+            routed_to = (tr.get('routedTo') or '').strip()
+            routed_commit = (tr.get('routedToCommit') or '').strip()
+            routed_spec = (tr.get('routedToSpec') or '').strip()
+            routed_ticket = (tr.get('routedToTicket') or '').strip()
+            product_action = (tr.get('productAction') or '').strip()
+            cross_repo = bool(tr.get('crossRepoFollowUp'))
+            problems = []
+            if not routed_to:
+                problems.append('missing routedTo')
+            if not (routed_commit or routed_spec or routed_ticket):
+                problems.append('missing routedToCommit/Spec/Ticket')
+            if product_action != 'none':
+                problems.append(f'productAction is \"{product_action}\" not \"none\"')
+            if routed_commit and not re.fullmatch(r'[0-9a-f]{7,40}', routed_commit):
+                problems.append(f'routedToCommit not a hex SHA: {routed_commit}')
+            if routed_ticket and not re.match(r'https?://', routed_ticket):
+                problems.append('routedToTicket not a URL')
+            looks_external = bool(re.search(r'upstream|external|bubbles\\.', routed_to, re.I))
+            if looks_external and not cross_repo:
+                problems.append('routed externally but crossRepoFollowUp is not true')
+            if problems:
+                blocking.append((tr_id, status, problems))
+            else:
+                routed_open.append((tr_id, routed_to))
+        else:
+            blocking.append((tr_id, status, ['status is not open/closed/resolved']))
+    for tr_id, status, probs in blocking:
+        print(f'BLOCK\\t{tr_id}\\t{status}\\t{\"; \".join(probs)}')
+    for tr_id, routed_to in routed_open:
+        print(f'OK\\t{tr_id}\\t{routed_to}')
+except Exception as e:
+    print(f'ERR\\t{e}')
+" 2>/dev/null
+} || true)"
+
+if echo "$tr_analysis" | grep -q '^ERR'; then
+  # Fall back to legacy check if state.json is malformed
+  if grep -A6 '"transitionRequests"' "$state_file" | grep -qE '"TR-|"transitionRequestId"'; then
+    fail "state.json still contains non-empty transitionRequests — validation routing is not complete (Gate G061)"
+    pending_transition_failures=$((pending_transition_failures + 1))
+  else
+    pass "state.json transitionRequests queue is empty"
+  fi
 else
-  pass "state.json transitionRequests queue is empty"
+  if echo "$tr_analysis" | grep -q '^BLOCK'; then
+    while IFS=$'\t' read -r marker tr_id status probs; do
+      [[ "$marker" == "BLOCK" ]] || continue
+      fail "transitionRequest $tr_id (status=$status) lacks routing fields: $probs (Gate G061)"
+      pending_transition_failures=$((pending_transition_failures + 1))
+    done <<< "$tr_analysis"
+  fi
+  if echo "$tr_analysis" | grep -q '^OK'; then
+    while IFS=$'\t' read -r marker tr_id routed_to; do
+      [[ "$marker" == "OK" ]] || continue
+      pass "transitionRequest $tr_id is open-but-routed to '$routed_to' (Gate G061 allowance)"
+    done <<< "$tr_analysis"
+  fi
+  if [[ -z "$tr_analysis" ]]; then
+    pass "state.json transitionRequests queue is empty"
+  fi
 fi
 
-if grep -A6 '"reworkQueue"' "$state_file" | grep -qE '"RW-|"reworkId"|"status"'; then
+rework_nonempty="$({
+  python3 -c "
+import json
+try:
+    with open('$state_file') as f:
+        data = json.load(f)
+    rq = data.get('reworkQueue', []) or []
+    print('true' if isinstance(rq, list) and len(rq) > 0 else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null
+} || echo "false")"
+if [[ "$rework_nonempty" == "true" ]]; then
   fail "state.json still contains non-empty reworkQueue entries — open rework remains (Gate G061)"
   pending_transition_failures=$((pending_transition_failures + 1))
 else
@@ -1589,23 +1752,29 @@ echo ""
 # =============================================================================
 echo "--- Check 6B: Phase-Claim Provenance (Gate G022 extension) ---"
 if [[ -n "$state_workflow_mode" ]]; then
-  # Extract executionHistory block (array of entries with agent + phasesExecuted)
+  # Extract executionHistory block (array of entries with agent + phasesExecuted
+  # + optional provenanceMode/expandedBy/expansionReason/expansionEvidenceRef).
+  # Emits one line per (agent, phase) with provenanceMode and parent-expansion metadata.
   execution_history_block="$({
     python3 -c "
-import json, sys
+import json, sys, os
+spec_dir = os.path.dirname('$state_file')
 with open('$state_file') as f:
     data = json.load(f)
 history = data.get('execution', {}).get('executionHistory', data.get('executionHistory', []))
 for entry in history:
     agent = entry.get('agent', '')
     phases = entry.get('phasesExecuted', [])
+    provenance = entry.get('provenanceMode', 'specialist')
+    expanded_by = entry.get('expandedBy', '')
+    reason = (entry.get('expansionReason', '') or '').replace('\\t', ' ').replace('\\n', ' ')
+    ev_ref = (entry.get('expansionEvidenceRef', '') or '').replace('\\t', ' ')
     for p in phases:
-        print(f'{agent}:{p}')
+        print(f'{agent}\\t{p}\\t{provenance}\\t{expanded_by}\\t{reason}\\t{ev_ref}')
 " 2>/dev/null
   } || true)"
 
   if [[ -n "$execution_history_block" ]]; then
-    # Check that each claimed phase has a matching executionHistory provenance
     claimed_phases="$({
       python3 -c "
 import json
@@ -1618,21 +1787,82 @@ for p in set(claims + certified):
 " 2>/dev/null
     } || true)"
 
+    # Orchestrator allowlist for parent-expansion (sourced from workflows.yaml is future work;
+    # for now hardcode the three registered orchestrators).
+    orchestrator_allowlist="bubbles.workflow bubbles.goal bubbles.sprint bubbles.iterate"
+    expansion_reason_regex='runSubagent|tool unavailable|nested runtime|capability missing|parent-expand|nested workflow'
+    spec_dir_for_evidence="$(dirname "$state_file")"
+
     if [[ -n "$claimed_phases" ]]; then
       provenance_failures=0
       while IFS= read -r claimed_phase; do
         [[ -z "$claimed_phase" ]] && continue
         expected_agent="bubbles.${claimed_phase}"
-        if echo "$execution_history_block" | grep -qE "^${expected_agent}:${claimed_phase}$"; then
-          pass "Phase '$claimed_phase' has provenance from $expected_agent in executionHistory"
-        else
-          # Allow bubbles.bug to claim implement/test phases via delegation
-          if [[ "$claimed_phase" == "implement" || "$claimed_phase" == "test" ]] && echo "$execution_history_block" | grep -qE "^bubbles\.bug:${claimed_phase}$"; then
-            pass "Phase '$claimed_phase' has delegated provenance from bubbles.bug in executionHistory"
-          else
-            fail "Phase '$claimed_phase' is in completedPhaseClaims but no executionHistory entry from $expected_agent — possible impersonation (Gate G022)"
-            provenance_failures=$((provenance_failures + 1))
+        matched="false"
+
+        # Pass 1: specialist provenance (existing behavior)
+        if echo "$execution_history_block" | awk -F'\t' -v a="$expected_agent" -v p="$claimed_phase" '$1==a && $2==p && ($3=="" || $3=="specialist") {found=1} END{exit !found}'; then
+          pass "Phase '$claimed_phase' has specialist provenance from $expected_agent"
+          matched="true"
+        # bubbles.bug delegation shortcut for implement/test
+        elif [[ "$claimed_phase" == "implement" || "$claimed_phase" == "test" ]] && echo "$execution_history_block" | awk -F'\t' -v p="$claimed_phase" '$1=="bubbles.bug" && $2==p && ($3=="" || $3=="specialist") {found=1} END{exit !found}'; then
+          pass "Phase '$claimed_phase' has delegated provenance from bubbles.bug"
+          matched="true"
+        fi
+
+        # Pass 2: parent-expanded provenance (new — per upstream fix proposal)
+        if [[ "$matched" == "false" ]]; then
+          # Find a parent-expanded entry for this phase
+          pe_line="$(echo "$execution_history_block" | awk -F'\t' -v p="$claimed_phase" '$2==p && $3=="parent-expanded" {print; exit}')"
+          if [[ -n "$pe_line" ]]; then
+            pe_agent="$(echo "$pe_line" | awk -F'\t' '{print $1}')"
+            pe_expanded_by="$(echo "$pe_line" | awk -F'\t' '{print $4}')"
+            pe_reason="$(echo "$pe_line" | awk -F'\t' '{print $5}')"
+            pe_ev_ref="$(echo "$pe_line" | awk -F'\t' '{print $6}')"
+
+            # Validate expandedBy in allowlist
+            ob_ok="false"
+            for o in $orchestrator_allowlist; do
+              if [[ "$pe_expanded_by" == "$o" ]]; then ob_ok="true"; break; fi
+            done
+
+            if [[ "$ob_ok" != "true" ]]; then
+              fail "Phase '$claimed_phase' claims parent-expansion but expandedBy='$pe_expanded_by' is not a registered orchestrator: $orchestrator_allowlist (Gate G022)"
+              provenance_failures=$((provenance_failures + 1))
+            elif [[ -z "$pe_reason" ]] || [[ "${#pe_reason}" -lt 20 ]]; then
+              fail "Phase '$claimed_phase' claims parent-expansion but expansionReason is empty or <20 chars (Gate G022). Got: '$pe_reason'"
+              provenance_failures=$((provenance_failures + 1))
+            elif ! echo "$pe_reason" | grep -qiE "$expansion_reason_regex"; then
+              fail "Phase '$claimed_phase' expansionReason does not name the missing capability (must mention one of: runSubagent, tool unavailable, nested runtime, capability missing, parent-expand). Got: '$pe_reason' (Gate G022)"
+              provenance_failures=$((provenance_failures + 1))
+            elif [[ -z "$pe_ev_ref" ]]; then
+              fail "Phase '$claimed_phase' claims parent-expansion but expansionEvidenceRef is empty (Gate G022)"
+              provenance_failures=$((provenance_failures + 1))
+            else
+              # Resolve evidence ref: relative to spec dir, repo root, or absolute
+              ev_resolved=""
+              for candidate in "$pe_ev_ref" "$spec_dir_for_evidence/$pe_ev_ref" "$(pwd)/$pe_ev_ref"; do
+                # Strip optional #anchor suffix for file existence check
+                candidate_path="${candidate%%#*}"
+                if [[ -f "$candidate_path" ]]; then
+                  ev_resolved="$candidate_path"
+                  break
+                fi
+              done
+              if [[ -z "$ev_resolved" ]]; then
+                fail "Phase '$claimed_phase' expansionEvidenceRef='$pe_ev_ref' does not resolve to a file (Gate G022)"
+                provenance_failures=$((provenance_failures + 1))
+              else
+                pass "Phase '$claimed_phase' has parent-expanded provenance from $pe_expanded_by — INFO[G022-PARENT-EXPANDED] reason: $pe_reason → $ev_resolved"
+                matched="true"
+              fi
+            fi
           fi
+        fi
+
+        if [[ "$matched" != "true" ]]; then
+          fail "Phase '$claimed_phase' is in completedPhaseClaims but no specialist or parent-expanded provenance found (Gate G022)"
+          provenance_failures=$((provenance_failures + 1))
         fi
       done <<< "$claimed_phases"
       if [[ "$provenance_failures" -gt 0 ]]; then
@@ -2241,7 +2471,13 @@ for scope_path in "${scope_files[@]}"; do
       if echo "$line" | grep -qiE '(→[[:space:]]*Evidence:|Evidence:)'; then
         # v4.1.0: if Evidence reference is a markdown link to a report
         # anchor, follow it and require ≥10-line block.
-        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md#[A-Za-z0-9_-]+\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/')"
+        # NOTE: `|| true` at end keeps `set -euo pipefail` from killing the
+        # whole guard silently when the line has an `Evidence:` marker but
+        # no `#anchor` in the link (e.g. plain `[report.md](report.md)`).
+        # Without it, the inner grep exits 1, pipefail propagates, and the
+        # EXIT trap fires before this branch can fall through to the plain
+        # link handler below.
+        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md#[A-Za-z0-9_-]+\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/' || true)"
         if [[ -n "$link_target" ]]; then
           if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
             checked_with_evidence=$((checked_with_evidence + 1))
@@ -2258,7 +2494,10 @@ for scope_path in "${scope_files[@]}"; do
       # Plain `report.md` links (no anchor) count as evidence if the file
       # exists at the expected location.
       elif echo "$line" | grep -qoE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)'; then
-        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/')"
+        # `|| true` guards against pipefail-killed silent exit on edge
+        # cases where the outer grep matched but the resubstitution does
+        # not (e.g. exotic link shapes).
+        link_target="$(echo "$line" | grep -oE '\[[^]]+\]\([^)]*report\.md(#[A-Za-z0-9_.-]+)?\)' | head -1 | sed -E 's/.*\(([^)]+)\)$/\1/' || true)"
         if [[ "$link_target" == *"#"* ]]; then
           if resolve_evidence_by_reference "$scope_dir" "$link_target"; then
             checked_with_evidence=$((checked_with_evidence + 1))
