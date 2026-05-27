@@ -4,7 +4,9 @@
   "parentFeatureDir": "specs/024-design-doc-reconciliation",
   "featureName": "BUG-024-003: docs/Development.md L31 connector-count drift (15 \u2192 16, missing QF Decisions) + missing forward-detection runtime guard + spec.md R-006/R-PRD-011/AC-5/problem-statement/goals/UC-003/scenarios internal inconsistency with BS-004",
   "bugId": "BUG-024-003",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "chaos-hardening",
   "execution": {
     "activeAgent": null,
@@ -123,9 +125,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
-    "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-05-25T00:00:00Z",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "Scope 1: Reconcile docs/Development.md + spec.md R-006 + Add Forward-Detection Contract Test"
     ],
