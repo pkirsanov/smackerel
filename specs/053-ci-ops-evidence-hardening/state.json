@@ -13,7 +13,7 @@
     "currentPhase": "done",
     "currentScope": "all-scopes-complete",
     "runStartedAt": "2026-05-18T00:00:00Z",
-    "lastUpdatedAt": "2026-05-27T04:39:08Z",
+    "lastUpdatedAt": "2026-05-27T04:43:41Z",
     "completedPhaseClaims": [
       "implement",
       "test",
@@ -31,8 +31,8 @@
   },
   "certification": {
     "status": "done",
-    "lastSpecialistVerdict": "FULL-DELIVERY-RECERTIFIED-POST-SPEC-REVIEW-2026-05-27T04:39:08Z",
-    "certifiedAt": "2026-05-27T04:39:08Z",
+    "lastSpecialistVerdict": "FULL-DELIVERY-RECERTIFIED-POST-SPEC-REVIEW-2026-05-27T04:43:41Z",
+    "certifiedAt": "2026-05-27T04:43:41Z",
     "certifiedBy": "bubbles.workflow",
     "completedScopes": [
       "Scope 1: G068 Fidelity Proof-Or-Close",
@@ -423,6 +423,17 @@
       "summary": "Security phase verified no new secrets/default-fallback regressions were introduced in this remediation and that evidence-only updates remained within approved artifact and docs boundaries."
     },
     {
+      "agent": "bubbles.validate",
+      "phasesExecuted": [
+        "validate"
+      ],
+      "runStartedAt": "2026-05-27T04:44:29Z",
+      "runEndedAt": "2026-05-27T04:44:29Z",
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "summary": "Post-commit recertification validate pass executed for done-promotion proof refresh: artifact-lint exit 0, traceability-guard exit 0 (G068 7/7 mapped), and state-transition-guard rerun for transition eligibility evidence capture."
+    },
+    {
       "agent": "bubbles.chaos",
       "phasesExecuted": [
         "chaos"
@@ -475,9 +486,9 @@
     }
   ],
   "failures": [],
-  "certifiedAt": "2026-05-27T04:39:08Z",
-  "completedAt": "2026-05-27T04:39:08Z",
-  "lastUpdatedAt": "2026-05-27T04:39:08Z",
+  "certifiedAt": "2026-05-27T04:43:41Z",
+  "completedAt": "2026-05-27T04:43:41Z",
+  "lastUpdatedAt": "2026-05-27T04:43:41Z",
   "artifacts": {
     "spec": "spec.md",
     "design": "design.md",
