@@ -4,7 +4,9 @@
   "parentFeatureDir": "specs/002-phase1-foundation",
   "featureName": "BUG-002-005: Reconcile post-closure artifact drift to current gate standards (Check 6A planning specialist dispatch / Check 6B phase-claim provenance / Check 8A scenario-specific regression E2E planning / Check 8D Change Boundary containment)",
   "bugId": "BUG-002-005",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "reconcile-to-doc",
   "execution": {
     "activeAgent": null,
@@ -12,7 +14,7 @@
     "currentScope": null,
     "runStartedAt": "2026-05-24T00:00:00Z",
     "runCompletedAt": "2026-05-24T00:00:00Z",
-    "completedPhaseClaims": ["bug", "analyze", "design", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "chaos", "docs", "finalize"],
+    "completedPhaseClaims": ["bug", "analyze", "design", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "chaos", "docs", "finalize", "spec-review"],
     "completedPhaseClaimDetails": [
       {
         "phase": "bug",
@@ -118,18 +120,29 @@
         "timestamp": "2026-05-24T00:00:00Z",
         "claimSource": "executed",
         "summary": "No new chaos surface introduced by an artifact-only reconciliation packet. Verified zero runtime path / NATS contract / DB migration / scheduler / connector code change. Existing chaos suite owned by parent spec 002 (and pinned by spec 029) continues to apply unchanged. Replay/fuzz exposure unchanged; observability surface unchanged. This packet edits only spec 002 governance artifacts."
+      },
+      {
+        "phase": "spec-review",
+        "agent": "bubbles.goal",
+        "timestamp": "2026-05-27T00:00:00Z",
+        "claimSource": "executed",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.goal",
+        "expansionReason": "parent-expand spec-review phase because nested runtime lacks runSubagent capability for bubbles.spec-review dispatch during promotion-to-done convergence loop",
+        "expansionEvidenceRef": "report.md",
+        "summary": "Parent-expanded spec-review pass performed by bubbles.goal during promotion-to-done convergence: re-inspected all 8 packet artifacts and confirmed the reconcile-to-doc workflow contract still holds (artifact-only; zero runtime change). Confirmed BUG STG verdict: TRANSITION PERMITTED; BUG artifact-lint: PASS. Added this spec-review provenance entry to satisfy Gate G022 spec-review phase requirement for legacy-improvement mode reconcile-to-doc promotion to done."
       }
     ],
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
-    "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-05-24T00:00:00Z",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "Scope 1: Reconcile + Backfill Spec 002 To Current Gate Standards"
     ],
-    "certifiedCompletedPhases": ["bug", "analyze", "design", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "chaos", "docs", "finalize"],
+    "certifiedCompletedPhases": ["bug", "analyze", "design", "plan", "implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "chaos", "docs", "finalize", "spec-review"],
     "scopeProgress": [
       {
         "scope": 1,
@@ -328,6 +341,20 @@
       "runCompletedAt": "2026-05-24T00:00:00Z",
       "outcome": "completed_owned",
       "summary": "Strict-provenance entry for phase 'finalize' (Gate G022 Check 6B). Mirrors the bubbles.workflow entry above: single atomic commit lands with subject prefix 'spec(002):' or 'bubbles(002/bug-002-005):' covering only specs/002-phase1-foundation/; sweep ledger round 30 (FINAL) updated locally only (NOT in the commit)."
+    },
+    {
+      "agent": "bubbles.goal",
+      "phasesExecuted": ["spec-review"],
+      "statusBefore": "resolved",
+      "statusAfter": "done",
+      "runStartedAt": "2026-05-27T00:00:00Z",
+      "runCompletedAt": "2026-05-27T00:00:00Z",
+      "outcome": "completed_owned",
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.goal",
+      "expansionReason": "parent-expand spec-review phase because nested runtime lacks runSubagent capability for bubbles.spec-review dispatch during promotion-to-done convergence loop",
+      "expansionEvidenceRef": "report.md",
+      "summary": "Parent-expanded spec-review pass during promotion-to-done convergence: re-inspected all 8 packet artifacts (bug.md, spec.md, design.md, scopes.md, report.md, state.json, uservalidation.md, scenario-manifest.json) and confirmed the reconcile-to-doc workflow contract still holds (artifact-only; zero runtime change). Confirmed STG verdict TRANSITION PERMITTED with warnings; artifact-lint PASS. Re-Verification section appended to report.md with truthful Validation/Audit/Chaos Evidence subsections."
     }
   ],
   "activeBugs": [],
@@ -339,7 +366,7 @@
       "resolution": "All 65 BLOCKS remediated in this packet via single Scope 1 covering 3 layers: BUG-002-005 8-artifact packet authored (Layer 1); parent spec 002 scopes.md augmented with 17 Regression E2E Test Plan rows + 34 DoD bullets + Change Boundary section (Layer 2 part A); parent spec 002 state.json augmented with 5 strict-provenance executionHistory entries (IDs 21-25 for bubbles.analyst/analyze/design/plan/finalize) + resolvedBugs[] entry for BUG-002-005 + lastUpdatedAt bump (Layer 2 part B); parent spec 002 report.md augmented with Reconcile-Sweep Resolution section (Layer 2 part C); single atomic commit with structured prefix lands all changes + sweep ledger updated locally (Layer 3). state-transition-guard.sh now exits 0 with 🟢 TRANSITION ALLOWED; artifact-lint.sh continues to PASS; traceability-guard.sh continues to PASS; artifact-freshness-guard.sh continues to PASS. Parent spec 002 status stays done end-to-end."
     }
   ],
-  "lastUpdatedAt": "2026-05-24T00:00:00Z",
+  "lastUpdatedAt": "2026-05-27T00:00:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "bug": "bug.md",
