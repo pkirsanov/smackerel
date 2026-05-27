@@ -534,9 +534,15 @@ These agents MUST check for incomplete bugs before starting new work:
 ## Pre-Work Bug Check
 
 Before starting new scope work, check:
-1. `specs/[feature]/bugs/*/state.json` where status != "done"
+1. `specs/[feature]/bugs/*/state.json` where status is NOT terminal-for-mode
+   (use `bash bubbles/scripts/is-terminal-for-mode.sh "$status" "$mode"` —
+   exit 0 means terminal-for-mode, including `done`, the mode's `statusCeiling`,
+   and any `terminalAliases`)
 2. If found, report: "Found N incomplete bugs for this feature"
 3. Recommend: "Complete bug fixes first in the relevant bug folder(s)"
+4. DO NOT count ceiling-bound bugs (e.g., a `validate-to-doc` bug at
+   `validated`, a `docs-only` bug at `docs_updated`) as incomplete — they are
+   terminal for their mode and promotion past the ceiling is forbidden.
 ```
 
 ### For bubbles.status

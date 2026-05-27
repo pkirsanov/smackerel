@@ -95,13 +95,27 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
 
   scope_info="${done_count}/${total_scopes}"
 
-  # Color status
+  # Color status — "done" or terminal-for-mode both count as completed.
+  is_terminal=1
+  if [[ -n "$mode" && "$mode" != "-" ]]; then
+    if bash "$(dirname "${BASH_SOURCE[0]}")/is-terminal-for-mode.sh" "$status" "$mode" >/dev/null 2>&1; then
+      is_terminal=0
+    fi
+  fi
   case "$status" in
     done) status_display="${GREEN}done${NC}"; ((done_specs++)) ;;
     in_progress) status_display="${YELLOW}in_progress${NC}"; ((in_progress_specs++)) ;;
     blocked) status_display="${RED}blocked${NC}"; ((blocked_specs++)) ;;
     not_started) status_display="not_started"; ((not_started_specs++)) ;;
-    *) status_display="$status"; ((other_specs++)) ;;
+    *)
+      if [[ "$is_terminal" -eq 0 ]]; then
+        # Terminal-for-mode but not literal "done" (e.g., validated, docs_updated,
+        # delivered_pending_activation). Count as completed work, not "other".
+        status_display="${GREEN}${status}${NC}"; ((done_specs++))
+      else
+        status_display="$status"; ((other_specs++))
+      fi
+      ;;
   esac
 
   ((total_specs++))
@@ -109,14 +123,25 @@ for state_file in $(find "$SPECS_DIR" -maxdepth 2 -name "state.json" -not -path 
   printf "%-40s %-16b %-24s %-8s %-8s\n" "$spec_name" "$status_display" "${mode:--}" "$scope_info" ""
 done
 
-# Bug summary
+# Bug summary — "done" OR terminal-for-mode (validated, docs_updated, etc.)
+# both count as fixed. A ceiling-bound bug is not open work.
 bug_total=0
 bug_done=0
 bug_open=0
 for bug_state in $(find "$SPECS_DIR" -path "*/bugs/*/state.json" | sort 2>/dev/null); do
   ((bug_total++))
   bug_status="$(grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]+"' "$bug_state" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || echo "unknown")"
-  if [[ "$bug_status" == "done" ]]; then
+  bug_mode="$(grep -oE '"workflowMode"[[:space:]]*:[[:space:]]*"[^"]+"' "$bug_state" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || true)"
+  if [[ -z "$bug_mode" ]]; then
+    bug_mode="$(grep -oE '"mode"[[:space:]]*:[[:space:]]*"[^"]+"' "$bug_state" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || true)"
+  fi
+  bug_terminal=1
+  if [[ -n "$bug_mode" ]]; then
+    if bash "$(dirname "${BASH_SOURCE[0]}")/is-terminal-for-mode.sh" "$bug_status" "$bug_mode" >/dev/null 2>&1; then
+      bug_terminal=0
+    fi
+  fi
+  if [[ "$bug_status" == "done" || "$bug_terminal" -eq 0 ]]; then
     ((bug_done++))
   else
     ((bug_open++))
