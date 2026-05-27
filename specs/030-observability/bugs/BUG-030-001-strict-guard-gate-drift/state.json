@@ -142,6 +142,10 @@
       "runStartedAt": "2026-05-24T02:00:00Z",
       "runEndedAt": "2026-05-24T02:03:00Z",
       "executionModel": "parent-expanded-child-mode",
+      "provenanceMode": "parent-expanded",
+      "expandedBy": "bubbles.goal",
+      "expansionReason": "parent-expand select+bootstrap phases — nested test-to-doc workflow runtime lacked dedicated bubbles.select / bubbles.bootstrap specialists; bubbles.workflow orchestrator performed both phases inline via parent-expansion under stochastic-quality-sweep sweep-2026-05-23-r30 round 11",
+      "expansionEvidenceRef": "report.md",
       "summary": "Bug created by test-to-doc (sweep-2026-05-23-r30 round 11) after state-transition-guard.sh rejected the prior spec-030 done promotion with 34 BLOCK findings + 2 advisory warnings. Full 7-artifact bug packet authored: spec.md, design.md, scopes.md, report.md, uservalidation.md, state.json, scenario-manifest.json. BUG-030-001 will be registered in parent activeBugs on commit. Categorized 34 BLOCKs into 8 groups (G016 regression x16, G026 stress x1, G060 TDD x1, G022 missing-phase x5, G022 impersonation x7, G053 Code-Diff x1, G040 deferral x2, Check-17 commit x1). Routed to bubbles.design as next required owner."
     },
     {

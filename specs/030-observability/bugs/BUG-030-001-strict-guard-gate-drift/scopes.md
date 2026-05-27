@@ -86,7 +86,9 @@
 | Test Type | Scenarios | Test Functions | Location |
 |-----------|-----------|----------------|----------|
 | Unit | `report.md` carries `### Code Diff Evidence` section with file/LOC/reference table | gate-line regex match for `### Code Diff Evidence` | `specs/030-observability/report.md` |
+<!-- bubbles:g040-skip-begin -->
 | Unit | `scopes.md` line 209 evidence text no longer matches Gate G040 deferral patterns (`deferred`, `future work`, `not yet`, `later`, `TBD`, `TODO`, `coming soon`) | grep test against Gate G040 regex | `specs/030-observability/scopes.md` |
+<!-- bubbles:g040-skip-end -->
 | Unit | `scopes.md` line 209 DoD claim sentence ("Python sidecar extracts trace context from NATS headers") preserved verbatim per G041 | exact substring match | `specs/030-observability/scopes.md` |
 | Unit | `report.md` line 241 text no longer matches Gate G040 deferral patterns | grep test against Gate G040 regex | `specs/030-observability/report.md` |
 | Integration | `state-transition-guard.sh specs/030-observability` Check 13B PASSes after closure | `bash .github/bubbles/scripts/state-transition-guard.sh specs/030-observability` | shell |
@@ -139,8 +141,33 @@
 - [x] Broader E2E regression suite passes for Spec 030 Scope 4 via `bash .github/bubbles/scripts/state-transition-guard.sh specs/030-observability` Check 17 PASS (closes BUG-030-001:Scope-4 broader-suite finding) — **Phase:** regression — see report.md regression phase Evidence section.
 - [x] `state-transition-guard.sh` Check 17 PASSes after commit. → Evidence: see verification block below.
 
-```text
-✅ Evidence captured in report.md "Phase: validate" + "Phase: audit" + "Phase: docs" sections after commit lands.
-   git log audit: closure commit prefix matches Check 17 regex; pre-commit gitleaks PASSes; no --no-verify.
-   git diff --cached --name-status before commit: 0 paths under cmd/ / config/ / docs/ / internal/ / ml/ / scripts/ / tests/e2e/notification_* / tests/stress/notification_* / internal/db/migrations/038_* / specs/055-* — i.e., zero spec 055 WIP swept in.
 ```
+
+---
+
+## Change Boundary
+
+This bug is an artifact-only repair (planning text + state.json provenance backfill). The change boundary is strictly contained to the BUG packet folder plus the parent spec's narrative artifacts; zero production source is touched.
+
+### Allowed file families (Included)
+
+- `specs/030-observability/bugs/BUG-030-001-strict-guard-gate-drift/**` (this BUG packet — spec.md, design.md, scopes.md, report.md, state.json, scenario-manifest.json, uservalidation.md)
+- `specs/030-observability/scopes.md` (parent spec planning rows + DoD inserts — Scope 1+3 closure surface)
+- `specs/030-observability/report.md` (parent spec retrospective Code Diff / TDD Evidence subsections + L241 rewrite)
+- `specs/030-observability/state.json` (parent spec executionHistory backfill + activeBugs/resolvedBugs registration)
+- `.specify/memory/sweep-2026-05-23-r30.json` (sweep memory round-11 status flip)
+
+### Excluded surfaces (Untouched)
+
+- `cmd/**`, `internal/**`, `ml/app/**` (Go core + Python ML sidecar production source — zero LOC delta)
+- `internal/db/migrations/**` (schema migrations — zero new migrations)
+- `tests/**`, `internal/**/*_test.go`, `ml/tests/**` (test source — zero new/modified tests; only planning rows reference existing tests)
+- `config/smackerel.yaml`, `config/generated/**`, `docker-compose*.yml`, `Dockerfile*`, `ml/Dockerfile`, `go.mod`, `ml/requirements.txt`, `ml/pyproject.toml` (SST / build / runtime config)
+- `docs/**` (operator docs already cover the spec 030 surface)
+- `.github/bubbles/scripts/**` (framework guard scripts — never touched by closure work)
+- `specs/055-**` and any other in-flight spec WIP (preserved in working tree; never staged)
+
+### Definition of Done
+
+- [x] Change Boundary is respected and zero excluded file families were changed — verified pre-commit via `git diff --cached --name-status` showing only the Allowed file family paths above. → Evidence: report.md "Phase: audit" section + Scope 4 DoD `git diff --cached --name-status` audit.
+
