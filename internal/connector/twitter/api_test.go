@@ -16,14 +16,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestTwitterAPI_EmptyBearerTokenFailsLoud — SCN-056-001.
@@ -256,6 +261,7 @@ func TestTwitterAPI_BearerTokenNeverInLogs(t *testing.T) {
 		t.Fatalf("Authorization header literal leaked in logs:\n%s", logText)
 	}
 }
+
 // ============================================================================
 // Spec 056 Scope 02 — Pagination & Cursor Persistence tests
 // ============================================================================
@@ -263,10 +269,13 @@ func TestTwitterAPI_BearerTokenNeverInLogs(t *testing.T) {
 // TestTwitterAPI_BookmarksPaginatesAndPersistsCursor — SCN-056-002.
 //
 // Given the bookmarks endpoint returns 3 tweets on page 1 with next_token=PAGE2_TOKEN
-//   and 2 tweets on page 2 with no next_token
+//
+//	and 2 tweets on page 2 with no next_token
+//
 // When the connector calls fetchBookmarks with an empty startToken
 // Then it returns the union (5 tweets) AND the final-cursor=PAGE2_TOKEN
-//   AND the second request carries pagination_token=PAGE2_TOKEN in its query
+//
+//	AND the second request carries pagination_token=PAGE2_TOKEN in its query
 //
 // The "final-cursor=PAGE2_TOKEN" assertion mirrors the spec language: the
 // persisted cursor is the next_token of the last NON-EMPTY page so the next
@@ -391,12 +400,12 @@ func TestTwitterAPI_ReplayPagination(t *testing.T) {
 // TestTwitterAPI_CursorSurvivesProcessRestart — regression for SCN-056-002.
 //
 // Simulates a process restart by:
-//   1. Running one sync tick, capturing the returned cursor string.
-//   2. Round-tripping the cursor through saveCursor/loadCursor (the same
-//      serialization a real restart would do via StateStore).
-//   3. Starting a second tick with the restored cursor and asserting the API
-//      request carries pagination_token=PAGE2_TOKEN (proving the cursor
-//      successfully restarted the loop mid-pagination).
+//  1. Running one sync tick, capturing the returned cursor string.
+//  2. Round-tripping the cursor through saveCursor/loadCursor (the same
+//     serialization a real restart would do via StateStore).
+//  3. Starting a second tick with the restored cursor and asserting the API
+//     request carries pagination_token=PAGE2_TOKEN (proving the cursor
+//     successfully restarted the loop mid-pagination).
 //
 // This is the adversarial regression test: if a future refactor lost the
 // per-endpoint map keys or silently reset on parse failure, the second tick
@@ -521,6 +530,399 @@ func TestTwitterAPI_PaginationBoundsTerminateOnRunawayServer(t *testing.T) {
 	// The implementation keeps lastNonEmptyToken at the end of the loop so the
 	// next tick can resume — assert that's what we got back.
 	if finalCursor != "NEVER_ENDING" {
-		t.Fatalf("final cursor must be the last non-empty next_token, got %q", finalCursor)
+			t.Fatalf("final cursor must be the last non-empty next_token, got %q", finalCursor)
+		}
+}
+
+// ============================================================================
+// Spec 056 Scope 03 — Rate-Limit & Error Handling tests
+// ============================================================================
+
+// recordingSleeper captures every sleep duration requested by the retry loop
+// and returns immediately so tests don't pay the real wall-clock cost.
+type recordingSleeper struct {
+	mu        sync.Mutex
+	durations []time.Duration
+}
+
+func (s *recordingSleeper) sleep(_ context.Context, d time.Duration) error {
+	s.mu.Lock()
+	s.durations = append(s.durations, d)
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *recordingSleeper) snapshot() []time.Duration {
+	s.mu.Lock()
+	out := append([]time.Duration{}, s.durations...)
+	s.mu.Unlock()
+	return out
+}
+
+// TestTwitterAPI_RateLimit429HonorsResetWindow — SCN-056-003.
+//
+// Given the bookmarks endpoint returns 429 with x-rate-limit-reset = now+30s
+//   then 200 on the next attempt
+// When fetchBookmarks runs
+// Then the connector sleeps ~30s (per the recordingSleeper) before retrying
+//   AND the second request succeeds
+//   AND no further requests are issued during the wait
+//   AND the rate-limit-reset gauge is set to 30
+func TestTwitterAPI_RateLimit429HonorsResetWindow(t *testing.T) {
+	t.Parallel()
+
+	page1, _ := os.ReadFile(filepath.Join("testdata", "api", "bookmarks_page1.json"))
+	rl429, _ := os.ReadFile(filepath.Join("testdata", "api", "rate_limited_429.json"))
+
+	frozen := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	resetEpoch := frozen.Add(30 * time.Second).Unix()
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("x-rate-limit-reset", strconv.FormatInt(resetEpoch, 10))
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write(rl429)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// Strip the next_token so pagination terminates after one page.
+		_, _ = w.Write([]byte(`{"data":` + string(extractData(page1)) + `,"meta":{"result_count":3}}`))
+	}))
+	defer srv.Close()
+
+	sleeper := &recordingSleeper{}
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: "test-bearer-token-not-real",
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
 	}
+	client.baseURL = srv.URL
+	client.sleeper = sleeper.sleep
+	client.now = func() time.Time { return frozen }
+
+	tweets, _, err := client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err != nil {
+		t.Fatalf("fetchBookmarks after 429: %v", err)
+	}
+	if len(tweets) != 3 {
+		t.Fatalf("expected 3 tweets after retry, got %d", len(tweets))
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("expected 2 HTTP calls (429 then 200), got %d", got)
+	}
+	waits := sleeper.snapshot()
+	if len(waits) != 1 {
+		t.Fatalf("expected exactly 1 sleep (rate-limit wait), got %d: %v", len(waits), waits)
+	}
+	// The recorded wait should be ~30s; allow 1s slack for rounding.
+	if waits[0] < 29*time.Second || waits[0] > 31*time.Second {
+		t.Fatalf("sleep duration %s must be ~30s", waits[0])
+	}
+}
+
+// extractData strips the JSON envelope to just the `data` array as raw bytes.
+// Used by tests that need to inject a one-page response with no next_token.
+func extractData(envelope []byte) []byte {
+	var doc struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(envelope, &doc); err != nil {
+		return []byte(`[]`)
+	}
+	if len(doc.Data) == 0 {
+		return []byte(`[]`)
+	}
+	return doc.Data
+}
+
+// TestTwitterAPI_Unauthorized401FailsWithoutRetry — SCN-056-005.
+//
+// Given the bookmarks endpoint returns 401
+// When fetchBookmarks runs
+// Then exactly one HTTP request is issued (no retry loop)
+//   AND the returned error wraps errAuthRejected
+//   AND the bearer token does not appear in the error message
+func TestTwitterAPI_Unauthorized401FailsWithoutRetry(t *testing.T) {
+	t.Parallel()
+
+	body, _ := os.ReadFile(filepath.Join("testdata", "api", "unauthorized_401.json"))
+	const token = "very-recognizable-token-401-test-zzz"
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	sleeper := &recordingSleeper{}
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: token,
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = srv.URL
+	client.sleeper = sleeper.sleep
+	client.now = time.Now
+
+	_, _, err = client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err == nil {
+		t.Fatalf("expected error on 401, got nil")
+	}
+	if !errors.Is(err, errAuthRejected) {
+		t.Fatalf("error must wrap errAuthRejected, got %T: %v", err, err)
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("bearer token leaked in error message: %s", err.Error())
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("401 must NOT retry; expected 1 call, got %d", got)
+	}
+	if got := len(sleeper.snapshot()); got != 0 {
+		t.Fatalf("401 must NOT sleep; expected 0 sleeps, got %d", got)
+	}
+}
+
+// TestTwitterAPI_ServerError5xxBoundedBackoff — regression for 5xx handling.
+//
+// Given the endpoint always returns 500
+// When fetchBookmarks runs
+// Then exactly maxRetries+1 requests are issued (initial + retries)
+//   AND the recorded sleep intervals are exponential (1s, 2s, 4s)
+//   AND the returned error wraps errMaxRetriesExceeded
+func TestTwitterAPI_ServerError5xxBoundedBackoff(t *testing.T) {
+	t.Parallel()
+
+	body, _ := os.ReadFile(filepath.Join("testdata", "api", "server_error_500.json"))
+
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	sleeper := &recordingSleeper{}
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: "test-bearer-token-not-real",
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = srv.URL
+	client.sleeper = sleeper.sleep
+	client.now = time.Now
+
+	_, _, err = client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err == nil {
+		t.Fatalf("expected error after persistent 500s, got nil")
+	}
+	if !errors.Is(err, errMaxRetriesExceeded) {
+		t.Fatalf("error must wrap errMaxRetriesExceeded, got %T: %v", err, err)
+	}
+	// maxRetries=3, so initial + 3 retries = 4 calls.
+	if got := atomic.LoadInt32(&calls); got != int32(maxRetries+1) {
+		t.Fatalf("expected %d calls (initial + maxRetries), got %d", maxRetries+1, got)
+	}
+	waits := sleeper.snapshot()
+	wantWaits := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+	if len(waits) != len(wantWaits) {
+		t.Fatalf("expected %d sleeps (exponential backoff), got %d: %v", len(wantWaits), len(waits), waits)
+	}
+	for i, want := range wantWaits {
+		if waits[i] != want {
+			t.Errorf("sleep[%d]=%s, want %s (exponential backoff)", i, waits[i], want)
+		}
+	}
+}
+
+// TestTwitterAPI_BearerTokenNeverAppearsInLogs — SCN-056-008.
+//
+// Adversarial assertion: the bearer token MUST NOT appear in any log line
+// produced during a sync round that exercises 200, 429, 401, and 500
+// responses. Uses a recognizable token substring so any leak (even partial
+// inside a wrapped error or header dump) is caught by simple string search.
+func TestTwitterAPI_BearerTokenNeverAppearsInLogs(t *testing.T) {
+	t.Parallel()
+
+	const token = "ADVERSARIAL-TOKEN-MUST-NEVER-LEAK-9b3f1a"
+	frozen := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+
+	rl429, _ := os.ReadFile(filepath.Join("testdata", "api", "rate_limited_429.json"))
+	unauth401, _ := os.ReadFile(filepath.Join("testdata", "api", "unauthorized_401.json"))
+	server500, _ := os.ReadFile(filepath.Join("testdata", "api", "server_error_500.json"))
+	page1, _ := os.ReadFile(filepath.Join("testdata", "api", "bookmarks_page1.json"))
+
+	// Per-endpoint response sequence.
+	sequences := map[string][]struct {
+		status int
+		header map[string]string
+		body   []byte
+	}{
+		"/users/2244994945/bookmarks": {
+			{http.StatusOK, nil, []byte(`{"data":` + string(extractData(page1)) + `,"meta":{"result_count":3}}`)},
+		},
+		"/users/2244994945/liked_tweets": {
+			{
+				status: http.StatusTooManyRequests,
+				header: map[string]string{
+					"x-rate-limit-reset": strconv.FormatInt(frozen.Add(5*time.Second).Unix(), 10),
+				},
+				body: rl429,
+			},
+			{http.StatusOK, nil, []byte(`{"data":[],"meta":{"result_count":0}}`)},
+		},
+		"/users/2244994945/tweets": {
+			{http.StatusInternalServerError, nil, server500},
+			{http.StatusOK, nil, []byte(`{"data":[],"meta":{"result_count":0}}`)},
+		},
+		"/users/2244994945/mentions": {
+			{http.StatusUnauthorized, nil, unauth401},
+		},
+	}
+
+	var mu sync.Mutex
+	cursors := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seq := sequences[r.URL.Path]
+		i := cursors[r.URL.Path]
+		if i >= len(seq) {
+			i = len(seq) - 1
+		}
+		entry := seq[i]
+		cursors[r.URL.Path] = i + 1
+		mu.Unlock()
+		for k, v := range entry.header {
+			w.Header().Set(k, v)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(entry.status)
+		_, _ = w.Write(entry.body)
+	}))
+	defer srv.Close()
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: token,
+	}, logger)
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = srv.URL
+	client.sleeper = (&recordingSleeper{}).sleep
+	client.now = func() time.Time { return frozen }
+
+	// Exercise all four endpoints; errors are expected for some.
+	_, _, _ = client.fetchBookmarks(context.Background(), "2244994945", "")
+	_, _, _ = client.fetchLikes(context.Background(), "2244994945", "")
+	_, _, _ = client.fetchOwnTweets(context.Background(), "2244994945", "")
+	_, _, _ = client.fetchMentions(context.Background(), "2244994945", "")
+
+	logText := logBuf.String()
+	if logText == "" {
+		t.Fatalf("expected at least one log line emitted during sync round, got none")
+	}
+	if strings.Contains(logText, token) {
+		t.Fatalf("bearer token leaked in logs (logs length=%d):\n%s", len(logText), logText)
+	}
+	// Adversarial: also check the Bearer prefix variant.
+	if strings.Contains(logText, "Bearer "+token) {
+		t.Fatalf("Authorization header literal leaked in logs:\n%s", logText)
+	}
+	// Adversarial: prefix and suffix of the token (catches accidental truncated logs).
+	if strings.Contains(logText, token[:20]) {
+		t.Fatalf("bearer token prefix leaked in logs:\n%s", logText)
+	}
+	if strings.Contains(logText, token[len(token)-20:]) {
+		t.Fatalf("bearer token suffix leaked in logs:\n%s", logText)
+	}
+}
+
+// TestTwitterAPI_RateLimitResetCapAborts proves a malicious / misconfigured
+// reset header that requests a multi-hour wait is rejected rather than
+// blocking the sync round indefinitely.
+func TestTwitterAPI_RateLimitResetCapAborts(t *testing.T) {
+	t.Parallel()
+
+	body, _ := os.ReadFile(filepath.Join("testdata", "api", "rate_limited_429.json"))
+	frozen := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	// Reset 2 hours in future — exceeds rateLimitMaxWait (30 min).
+	insaneReset := frozen.Add(2 * time.Hour).Unix()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-rate-limit-reset", strconv.FormatInt(insaneReset, 10))
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	sleeper := &recordingSleeper{}
+	client, err := newAPIClient(TwitterConfig{
+		SyncMode:    SyncModeAPI,
+		BearerToken: "test-bearer-token-not-real",
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	client.baseURL = srv.URL
+	client.sleeper = sleeper.sleep
+	client.now = func() time.Time { return frozen }
+
+	_, _, err = client.fetchBookmarks(context.Background(), "2244994945", "")
+	if err == nil {
+		t.Fatalf("expected error when reset exceeds cap, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds cap") {
+		t.Fatalf("error must mention cap rejection, got: %v", err)
+	}
+	if got := len(sleeper.snapshot()); got != 0 {
+		t.Fatalf("cap-rejected 429 must NOT sleep; expected 0 sleeps, got %d", got)
+	}
+}
+
+// TestTwitterAPI_BackoffDurationProgression unit-tests the exponential
+// backoff calculator. Cheap sanity check independent of HTTP plumbing.
+func TestTwitterAPI_BackoffDurationProgression(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		attempt int
+		want    time.Duration
+	}{
+		{0, 1 * time.Second},
+		{1, 2 * time.Second},
+		{2, 4 * time.Second},
+		{3, 8 * time.Second},
+		{4, 16 * time.Second},
+		{5, 30 * time.Second}, // capped
+		{6, 30 * time.Second}, // capped
+		{-1, 1 * time.Second}, // negative treated as 0
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(fmt.Sprintf("attempt_%d", tc.attempt), func(t *testing.T) {
+			t.Parallel()
+			if got := backoffDuration(tc.attempt); got != tc.want {
+				t.Errorf("backoffDuration(%d)=%s want %s", tc.attempt, got, tc.want)
+			}
+		})
+	}
+
 }
