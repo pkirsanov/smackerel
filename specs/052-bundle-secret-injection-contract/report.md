@@ -1478,10 +1478,10 @@ EXIT=0
 | Check | Status | Detail |
 |-------|--------|--------|
 | Build (compile) | ✅ | `go test ./...` invokes the build path; finished OK |
-| Lint | ✅ | Captured in scope-2-build-quality + scope-4-build-quality (carried forward, source unchanged) |
+| Lint | ✅ | Captured in scope-2-build-quality + scope-4-build-quality (retained from earlier evidence, source unchanged) |
 | Unit (Go) | ✅ | Re-executed this session; `[go-unit] go test ./... finished OK` |
 | BS-052-006 regression | ✅ | Re-executed this session; RESULT PASS |
-| Artifact lint | ✅ | Carried forward from scope-2-build-quality (4 expected pre-existing schema-v2 warnings) |
+| Artifact lint | ✅ | Retained from scope-2-build-quality (4 expected pre-existing schema-v2 warnings) |
 | State Transition Guard (G023) | ⚠️ | See concerns C-A11 / C-A12 / C-B4 / C-B5 / C-B6 / C-B7; structural blockers (validate phase + Scope 4 status + DoD) cleared by this validate-phase certification |
 | Gate G060 (TDD markers) | ✅ | Above red→green table covers all 8 SCN-052-S0N scenarios |
 | Gate G027 (phase-scope coherence) | ✅ | Scopes 1-4 all Done; certifiedCompletedPhases includes `analyze` `design` `plan` `implement` `test` `regression` `harden` `docs` `simplify` `stabilize` `security` `validate` |
