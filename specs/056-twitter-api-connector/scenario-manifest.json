@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "featureDir": "specs/056-twitter-api-connector",
+  "generatedAt": "2026-05-27T00:00:00Z",
+  "notes": "Planning packet scenario manifest authored under spec-scope-hardening mode. Scenarios cover the full Twitter API v2 integration target. linkedTests reference the planned test files that will exist after the implementation workflow runs; these are intentional forward references for planning-only state. All scenarios are status 'planned' until the implementation workflow advances them.",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-056-001",
+      "scope": "01-api-client-foundation",
+      "title": "Bearer token missing in api mode fails loud at startup",
+      "gherkin": {
+        "given": "config/smackerel.yaml has connectors.twitter.sync_mode set to \"api\" and the resolved bearer_token is the empty string",
+        "when": "the runtime starts the twitter connector",
+        "then": "Connect returns a non-nil error containing the phrase \"bearer_token\" and no API request is attempted and the runtime logs a fatal startup error"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_EmptyBearerTokenFailsLoud"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-002",
+      "scope": "02-pagination-cursor-persistence",
+      "title": "Polling bookmarks returns paginated tweets and persists cursor",
+      "gherkin": {
+        "given": "a valid bearer token and sync_mode \"api\" and the bookmarks endpoint returns 100 tweets with a non-empty next_token",
+        "when": "the connector runs one sync tick",
+        "then": "exactly 100 RawArtifacts are published to NATS and the StateStore key for the bookmarks endpoint contains the returned next_token and the next sync tick uses pagination_token equal to that next_token"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_BookmarksPaginatesAndPersistsCursor"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-003",
+      "scope": "03-rate-limit-error-handling",
+      "title": "Rate-limit 429 is honored",
+      "gherkin": {
+        "given": "the bookmarks endpoint responds with HTTP 429 and the x-rate-limit-reset header is 30 seconds in the future",
+        "when": "the connector receives the 429",
+        "then": "the connector sleeps until the reset timestamp and no further requests are issued to that endpoint during the window and after the window the connector retries the same request and the bearer token does not appear in any log line emitted during the wait"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_RateLimit429HonorsResetWindow"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-004",
+      "scope": "04-hybrid-mode-dispatcher-wiring",
+      "title": "Hybrid mode dedups across archive and API origins",
+      "gherkin": {
+        "given": "sync_mode \"hybrid\" and the local archive contains tweet ID 1234567890 and the API bookmarks endpoint also returns tweet ID 1234567890",
+        "when": "the connector runs an archive import followed by an API sync",
+        "then": "exactly one RawArtifact for tweet ID 1234567890 exists in the dedup index and no duplicate NATS publish occurs for that ID"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_HybridDedupAcrossArchiveAndAPI"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-005",
+      "scope": "03-rate-limit-error-handling",
+      "title": "Unauthorized (401) fails the sync attempt without retry",
+      "gherkin": {
+        "given": "a bearer token that the API rejects with HTTP 401",
+        "when": "the connector attempts a sync tick",
+        "then": "the connector logs a structured error including the endpoint and HTTP status and the error message does not contain the bearer token and no exponential backoff or retry loop is entered and the connector remains alive for the next scheduled tick"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_Unauthorized401FailsWithoutRetry"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-006",
+      "scope": "05-live-gated-tests",
+      "title": "Live-gated test skips cleanly when env var is unset",
+      "gherkin": {
+        "given": "the environment variable SMACKEREL_TWITTER_LIVE_TESTS is unset",
+        "when": "go test runs api_live_test.go",
+        "then": "the test skips with a clear message and does not contact api.twitter.com and the surrounding test run reports zero failures attributable to the live test"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_live_test.go",
+          "testId": "TestTwitterAPI_LiveTestSkipsWhenEnvVarUnset"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-007",
+      "scope": "02-pagination-cursor-persistence",
+      "title": "Replay test exercises pagination via httptest.Server",
+      "gherkin": {
+        "given": "an httptest.Server serving the bookmarks fixture sequence (page1 -> page2 -> empty)",
+        "when": "the connector polls the synthetic endpoint",
+        "then": "exactly the union of all fixture tweets is published as RawArtifacts and the final persisted cursor is the next_token of the last non-empty page and no panics, leaked goroutines, or unclosed bodies are reported"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_ReplayPagination"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-008",
+      "scope": "03-rate-limit-error-handling",
+      "title": "Bearer token never appears in any structured log",
+      "gherkin": {
+        "given": "a sync run that exercises 200, 429, 401, and 5xx responses",
+        "when": "all log lines produced during the run are concatenated and searched",
+        "then": "zero lines contain the bearer token substring and zero lines contain a full \"Authorization: Bearer ...\" header value"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_BearerTokenNeverAppearsInLogs"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-009",
+      "scope": "01-api-client-foundation",
+      "title": "Request builder rejects non-GET methods",
+      "gherkin": {
+        "given": "an instantiated apiClient",
+        "when": "code attempts to construct a request with method \"POST\"",
+        "then": "the request builder returns a non-nil error and no request is sent over the wire"
+      },
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/api_test.go",
+          "testId": "TestTwitterAPI_RequestBuilderRejectsNonGET"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-056-010",
+      "scope": "04-hybrid-mode-dispatcher-wiring",
+      "title": "Archive-only mode does not construct the API client",
+      "gherkin": {
+        "given": "sync_mode \"archive\"",
+        "when": "the connector runs Connect followed by Sync",
+        "then": "no apiClient is constructed and zero HTTP requests are issued to api.twitter.com"
+      },
+      "behaviorClass": "api",
+      "changeType": "regression",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "file": "internal/connector/twitter/twitter_test.go",
+          "testId": "TestTwitterAPI_ArchivePathUnaffectedByAPIClient"
+        }
+      ],
+      "evidenceRefs": [],
+      "replacedBy": null,
+      "invalidatedBy": null,
+      "status": "planned"
+    }
+  ]
+}
