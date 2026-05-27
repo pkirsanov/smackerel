@@ -87,6 +87,49 @@ The `agnosticity-lint.sh --staged` pre-commit check detects project-specific con
 - **Honesty over completion:** When evidence is ambiguous, prefer leaving a DoD item `[ ]` with an Uncertainty Declaration over marking `[x]` with uncertain evidence. A wrong answer is 3x worse than an honest gap. See `critical-requirements.md` → Honesty Incentive.
 - **Evidence provenance:** Every evidence block must include a `**Claim Source:**` tag (`executed`, `interpreted`, `not-run`). See `evidence-rules.md` → Evidence Provenance Taxonomy.
 
+## Discovered-Issue Disposition (NON-NEGOTIABLE — Gate G095)
+
+**Every issue an agent observes during work MUST have an explicit disposition. Saying "pre-existing", "unrelated", "out of scope", or "not my session" without filing is forbidden and counts as fabrication.**
+
+When an agent encounters any of the following — hang, crash, regression, broken test, broken script, broken doc, broken link, missing artifact, fragile pattern, security smell, policy violation, suspected bug, performance cliff, undocumented behavior — it MUST choose ONE of these dispositions BEFORE returning control:
+
+| Disposition | When to use | Required evidence |
+|---|---|---|
+| **fixed-in-session** | The fix is small, in-scope or trivially safe, and you applied it now | Diff / commit SHA, plus targeted re-verification output |
+| **bug-filed** | The issue is a defect that needs structured remediation | Path to `specs/<feature>/bugs/BUG-NNN-*/bug.md` you just created |
+| **spec-filed** | The issue requires new design / behavior change | Path to `specs/NNN-*/spec.md` you just created |
+| **ops-filed** | The issue is operational (infra, deploy, monitoring, governance hygiene) | Path to ops artifact / ticket URL / issue link you just created |
+| **routed** | The issue belongs to another owner and you emitted a transition packet | Path to `transition-requests.json` entry with `routedTo` + `routedToCommit\|Spec\|Ticket` |
+
+FORBIDDEN responses to a discovered issue:
+
+- ❌ "The hang in Check 3G is pre-existing and unrelated" — without a filed BUG / TR
+- ❌ "Out of scope, skipping" — without an `ops-filed` or `routed` entry
+- ❌ "I'll fix this later" — `later` is not a disposition
+- ❌ "Known issue" — known where? cite the BUG / TR ID
+- ❌ Silently moving on after observing a failure
+
+**Disposition record.** Every discovered-issue disposition MUST be recorded in the active spec's `report.md` under a `## Discovered Issues` section using this shape:
+
+```markdown
+## Discovered Issues
+
+| Observed | Description | Disposition | Reference |
+|---|---|---|---|
+| 2026-05-27 | state-transition-guard.sh Check 3G hangs >60s on real spec dir | bug-filed | specs/<feature>/bugs/BUG-NNN-check-3g-hang/bug.md |
+```
+
+If no `## Discovered Issues` section exists and the agent observed at least one issue, the agent MUST add it. If no issues were observed, omit the section entirely (do NOT write "None" — silence is the truthful default).
+
+**Enforcement.** Gate G095 (`discovered_issue_disposition_gate`) scans the agent's RESULT-ENVELOPE narrative for forbidden phrases (`pre-existing.*unrelated`, `out of scope`, `known issue`, `skipping`, `will (?:fix|file) later`, `not my session`) and requires either:
+
+1. The matching phrase to be paired with a concrete artifact reference on the same paragraph, OR
+2. The active spec's `report.md` to contain a `## Discovered Issues` row whose `Observed` date matches the current session.
+
+Failure to satisfy either condition emits a `blocked` RESULT-ENVELOPE with finding `G095` whose only remediation is filing the missing disposition.
+
+**This policy applies to ALL agents — orchestrators, specialists, advisory/read-only agents. Read-only agents that cannot file artifacts directly MUST emit a routed transition packet naming the disposition owner.**
+
 ## Auto-Approval And Timeouts
 
 - Avoid shell wrapper patterns that trigger approval prompts unless explicitly required.
