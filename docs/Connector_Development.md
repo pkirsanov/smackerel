@@ -381,6 +381,41 @@ func TestMyConnector_Health_Transitions(t *testing.T) {
 ./smackerel.sh test unit
 ```
 
+### Live-Gated Integration Tests (Opt-In)
+
+Some connectors hit external APIs whose quotas, credentials, or rate limits
+make live testing inappropriate for default CI. Those tests live in a
+`<connector>_live_test.go` file inside the connector package and short-circuit
+unless an opt-in environment variable is set. The default `go test ./...`
+run (CI, pre-push hook, contributor sandboxes) skips them silently.
+
+Active live-gated suites:
+
+| Connector | File | Master switch | Token var |
+|-----------|------|---------------|-----------|
+| Twitter (spec 056) | `internal/connector/twitter/api_live_test.go` | `SMACKEREL_TWITTER_LIVE_TESTS=1` | `SMACKEREL_TWITTER_LIVE_TESTS_TOKEN=<bearer>` |
+
+Run locally:
+
+```bash
+SMACKEREL_TWITTER_LIVE_TESTS=1 \
+SMACKEREL_TWITTER_LIVE_TESTS_TOKEN="<real-bearer>" \
+  go test ./internal/connector/twitter/ -run TestTwitterAPILive -v
+```
+
+Hard rules for any new live-gated suite:
+
+- Default behavior with both vars unset MUST be `SKIP` (never run).
+- Setting only the token (without the master switch) MUST NOT bypass the skip.
+  This is enforced by an adversarial regression test in the live file.
+- Live tests MUST NOT run inside a CI-detected environment. The suite's own
+  guard fails loud if the master switch is observed alongside `CI=true` or
+  `GITHUB_ACTIONS=true`.
+- Tokens MUST be read from env vars only, never persisted to source, fixture
+  files, or test artifacts. The standard bearer-token-never-in-logs
+  assertion (see `internal/connector/twitter/api_test.go`) covers the
+  production code path.
+
 ## Existing Connectors
 
 For reference, the codebase has these connector implementations:
