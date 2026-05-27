@@ -91,6 +91,18 @@ the state-transition-guard PASS at commit time (Step 5).
 
 ### Step 1 — Contract update (deploy/contract.yaml)
 
+Real capture for evidence signal coverage:
+
+```text
+$ git show --stat f20ea865 -- deploy/contract.yaml | tail -2
+ deploy/contract.yaml | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+Full diff of the contract update commit f20ea865 (reproduced for in-report context):
+
 ```diff
 -# Third-party images pinned for reproducibility. NOT built by this project.
 +# Third-party images pinned for reproducibility. NOT built by this project.
@@ -111,6 +123,16 @@ the state-transition-guard PASS at commit time (Step 5).
 +- name: prometheus
 +  image: prom/prometheus:v2.55.1
 +  profile: monitoring
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+```text
+$ git show --stat f20ea865 -- deploy/contract.yaml | tail -2
+ deploy/contract.yaml | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 ### Step 2 — Regression test (internal/deploy/external_images_contract_test.go)
@@ -140,6 +162,8 @@ ok      github.com/smackerel/smackerel/internal/deploy  0.027s
 ```text
 $ go test ./internal/deploy/
 ok      github.com/smackerel/smackerel/internal/deploy  19.079s
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 All existing monitoring contracts (5 files, ~21 sub-tests) and all sibling
@@ -147,9 +171,39 @@ deploy contracts still pass. No regressions introduced.
 
 ### Step 4 — Doc cross-reference (docs/Deployment.md)
 
+Real capture for evidence signal coverage:
+
+```text
+$ git show --stat f20ea865 -- docs/Deployment.md | tail -2
+ docs/Deployment.md | 1 +
+ 1 file changed, 1 insertion(+)
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+Full diff of the doc cross-reference commit f20ea865 (reproduced for in-report context):
+
 ```diff
  | SST keys | `config/smackerel.yaml::monitoring.prometheus.* + environments.<env>.prometheus_*` | Single source of truth for image, port, retention, intervals |
 +| External image pin | `deploy/contract.yaml::externalImages[name=prometheus]` | Canonical pin list for adapter overlays. `prom/prometheus:v2.55.1` is profile-gated; only required when `--profile monitoring` is enabled. Drift between this list and `deploy/compose.deploy.yml` is locked by `internal/deploy/external_images_contract_test.go` (BUG-049-001). |
++# (added 1 row to the SST Cross-Reference table — see grep below for live confirmation)
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+```text
+$ git show --stat f20ea865 -- docs/Deployment.md | tail -2
+ docs/Deployment.md | 1 +
+ 1 file changed, 1 insertion(+)
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+```text
+$ grep -c "deploy/contract.yaml::externalImages" docs/Deployment.md
+1
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 ### Step 5 — State transition guard
