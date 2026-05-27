@@ -4,7 +4,9 @@
   "parentFeatureDir": "specs/028-actionable-lists",
   "featureName": "BUG-028-003: Reconcile artifact drift to current gate standards (G022/G053/Check-5A/Check-8A/Check-13B/Check-17)",
   "bugId": "BUG-028-003",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": null,
@@ -88,9 +90,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
-    "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-05-23T00:00:00Z",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "Scope 1: Restore regression E2E planning on 8 spec 028 scopes (Check 8A) + Stress Test Plan row in Scope 5 (Check 5A)",
       "Scope 2: G053 Code Diff Evidence section added to report.md",
