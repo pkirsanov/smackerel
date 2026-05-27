@@ -15,6 +15,19 @@ Use the scope layout, DoD shape, dependency declarations, and isolation rules th
 - Writing the Test Plan table for a scope
 - Choosing between single-file and tiered DoD format
 
+## v4.1.0 scope-kind taxonomy
+
+Scopes may declare an optional `Scope-Kind:` header to opt out of E2E enforcement when the scope legitimately does not produce live-runtime evidence:
+
+```markdown
+## Scope 3 — Cosign signature verification
+Status: Done (completed_owned)
+Scope-Kind: deploy-pointer
+Lockdown-FRs: [FR-020]
+```
+
+Valid kinds (default `runtime-behavior`): `runtime-behavior`, `contract-only`, `deploy-pointer`, `ci-config`, `docs-only`, `bootstrap`. Only `runtime-behavior` enforces the 3-row E2E DoD/Test-Plan requirement (G008A). See [`docs/v4.1.0-delivered-pending-activation.md`](../../docs/v4.1.0-delivered-pending-activation.md) for the full taxonomy + lockdown tag patterns + evidence-by-reference anchor convention.
+
 ## Layout decision
 | Scope count | Layout |
 |-------------|--------|
