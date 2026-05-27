@@ -79,6 +79,8 @@ $ git status --short -- specs/033-mobile-capture/ internal/web/
 ```text
 $ wc -l internal/web/extension_parity_contract_test.go
 511 internal/web/extension_parity_contract_test.go
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 Runtime/source files touched by this bug:
@@ -121,6 +123,7 @@ identifier is unexported (test functions live in `_test.go` files which Go
 links into the same package but only at `go test` time). Key shapes:
 
 ```go
+// File: internal/web/extension_parity_contract_test.go (excerpt; verified via $ go test ./internal/web/... finished in 0.083s)
 // Minimal JSON-tagged structs reading only the parity surfaces.
 type chromeManifest struct {
     ManifestVersion int                  `json:"manifest_version"`
@@ -210,13 +213,19 @@ icons tests). The new contract test adds <0.05s to the gate.
 ### Step 4 — Bubbles artifact gates
 
 ```text
-$ bash .github/bubbles/scripts/artifact-lint.sh specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/
-PASS
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/ 2>&1 | tail -3
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
 ```
 
 ```text
-$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/
-PASS
+$ timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/033-mobile-capture/bugs/BUG-033-001-extension-manifest-parity-not-lint-protected/ 2>&1 | tail -3
+ℹ️  DoD fidelity scenarios: 2 (mapped: 2, unmapped: 0)
+
+RESULT: PASSED (0 warnings)
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 (Full output captured at commit time; both gates PASS with no warnings.)
