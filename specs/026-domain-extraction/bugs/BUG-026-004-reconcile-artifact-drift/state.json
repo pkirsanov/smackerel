@@ -4,7 +4,9 @@
   "parentFeatureDir": "specs/026-domain-extraction",
   "featureName": "BUG-026-004: Reconcile artifact drift to current gate standards (G022/G040/G053/G068/Check-8A/Check-17)",
   "bugId": "BUG-026-004",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "bugfix-fastlane",
   "execution": {
     "activeAgent": null,
@@ -88,9 +90,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
-    "certifiedBy": "bubbles.validate",
-    "certifiedAt": "2026-05-23T00:00:00Z",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "Scope 1: Restore regression E2E planning on 9 spec 026 scopes (Check 8A)",
       "Scope 2: G068 fidelity + G053 Code Diff Evidence + G040 deferral fixes",
