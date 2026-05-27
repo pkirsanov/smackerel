@@ -182,3 +182,210 @@ func (c *apiClient) fetchUsersMe(ctx context.Context) (*usersMeResponse, error) 
 	}
 	return &out, nil
 }
+// ============================================================================
+// Spec 056 Scope 02 — Pagination & Cursor Persistence
+// ============================================================================
+
+// apiEndpoint enumerates the four per-user endpoints we paginate. Values are
+// also used as cursor-map keys, so changing them is a forward-incompatible
+// schema change to persisted state.
+type apiEndpoint string
+
+const (
+	endpointBookmarks apiEndpoint = "bookmarks"
+	endpointLikes     apiEndpoint = "liked_tweets"
+	endpointOwnTweets apiEndpoint = "tweets"
+	endpointMentions  apiEndpoint = "mentions"
+)
+
+// apiTweet is the minimal v2 tweet shape we persist. Additional fields
+// (entities, attachments, public_metrics) land in later scopes as needed.
+type apiTweet struct {
+	ID       string `json:"id"`
+	Text     string `json:"text"`
+	AuthorID string `json:"author_id,omitempty"`
+}
+
+// tweetsResponse mirrors the documented v2 envelope for the four endpoints.
+// `meta.next_token` is absent on the final page, signalling pagination
+// termination.
+type tweetsResponse struct {
+	Data []apiTweet `json:"data"`
+	Meta struct {
+		ResultCount int    `json:"result_count"`
+		NextToken   string `json:"next_token,omitempty"`
+	} `json:"meta"`
+}
+
+// apiCursor is the JSON-encoded per-endpoint pagination state we marshal into
+// the single cursor string the connector framework persists per source. The
+// connector framework treats cursors opaquely; we re-serialize on every Sync.
+//
+// Forward-compatibility: unknown JSON keys are preserved by golang/json's
+// default behavior of dropping them on Unmarshal, so adding new endpoints in
+// later scopes is safe.
+type apiCursor struct {
+	// PerEndpoint maps endpoint name to the next_token returned by the last
+	// non-empty page. An empty string means "start from the beginning"; an
+	// absent map entry is equivalent to an empty string.
+	PerEndpoint map[apiEndpoint]string `json:"per_endpoint,omitempty"`
+}
+
+// loadCursor parses the connector framework's opaque cursor string into our
+// per-endpoint map. An empty or whitespace-only cursor returns a zero-value
+// cursor (i.e. start from the beginning for every endpoint), which is the
+// correct first-run behavior.
+//
+// loadCursor never returns a partial cursor on parse failure; it returns the
+// zero value plus the error, so the caller chooses between fail-loud (abort
+// the sync) and fail-fresh (restart pagination). For spec 056 the dispatcher
+// (scope 04) will choose fail-loud to avoid silently re-ingesting tweets.
+func loadCursor(raw string) (apiCursor, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return apiCursor{PerEndpoint: map[apiEndpoint]string{}}, nil
+	}
+	var c apiCursor
+	if err := json.Unmarshal([]byte(trimmed), &c); err != nil {
+		return apiCursor{PerEndpoint: map[apiEndpoint]string{}},
+			fmt.Errorf("twitter api client: parse cursor: %w", err)
+	}
+	if c.PerEndpoint == nil {
+		c.PerEndpoint = map[apiEndpoint]string{}
+	}
+	return c, nil
+}
+
+// saveCursor serializes the per-endpoint cursor map back to the opaque string
+// the connector framework persists. Returns the canonical JSON representation
+// (no surrounding whitespace).
+func saveCursor(c apiCursor) (string, error) {
+	if c.PerEndpoint == nil {
+		c.PerEndpoint = map[apiEndpoint]string{}
+	}
+	buf, err := json.Marshal(c)
+	if err != nil {
+		return "", fmt.Errorf("twitter api client: serialize cursor: %w", err)
+	}
+	return string(buf), nil
+}
+
+// maxPagesPerEndpoint bounds the pagination loop per endpoint per sync tick.
+// Prevents an unbounded loop if the API ever returns a non-terminating
+// next_token chain. Set to 100 to give 10,000 tweets per endpoint per tick
+// at the default 100-results-per-request limit, which exceeds any realistic
+// hourly delta.
+const maxPagesPerEndpoint = 100
+
+// fetchEndpointPaginated drives the pagination loop for a single per-user
+// endpoint. Starts from the provided pagination_token (empty = first page),
+// follows next_token across pages, terminates when next_token is absent OR
+// data is empty OR maxPagesPerEndpoint is hit (logs a warning when the bound
+// is hit).
+//
+// Returns the union of all returned tweets across pages, plus the last
+// non-empty page's next_token (or empty string if the last page had no
+// next_token). The caller persists the returned cursor.
+//
+// All requests carry the authenticated GET request built by buildRequest.
+// All response bodies are read under a 1 MiB limit and closed via defer.
+func (c *apiClient) fetchEndpointPaginated(ctx context.Context, endpoint apiEndpoint, userID, startToken string) ([]apiTweet, string, error) {
+	if c == nil {
+		return nil, "", errors.New("twitter api client: fetchEndpointPaginated called on nil client")
+	}
+	if userID == "" {
+		return nil, "", errors.New("twitter api client: userID is required for paginated endpoints")
+	}
+	path := endpointPath(endpoint, userID)
+	if path == "" {
+		return nil, "", fmt.Errorf("twitter api client: unknown endpoint %q", string(endpoint))
+	}
+
+	tweets := []apiTweet{}
+	cursor := startToken
+	lastNonEmptyToken := ""
+	for page := 0; page < maxPagesPerEndpoint; page++ {
+		query := url.Values{}
+		if cursor != "" {
+			query.Set("pagination_token", cursor)
+		}
+		req, err := c.buildRequest(ctx, http.MethodGet, path, query)
+		if err != nil {
+			return tweets, lastNonEmptyToken, err
+		}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return tweets, lastNonEmptyToken, fmt.Errorf("twitter api client: GET %s (page %d): %w", path, page, err)
+		}
+		body, decErr := decodeTweetsResponse(resp)
+		// decodeTweetsResponse closes resp.Body.
+		if decErr != nil {
+			return tweets, lastNonEmptyToken, fmt.Errorf("twitter api client: %s page %d: %w", endpoint, page, decErr)
+		}
+		tweets = append(tweets, body.Data...)
+		if body.Meta.NextToken == "" {
+			return tweets, lastNonEmptyToken, nil
+		}
+		lastNonEmptyToken = body.Meta.NextToken
+		cursor = body.Meta.NextToken
+	}
+	c.logger.Warn("pagination cap hit",
+		slog.String("endpoint", string(endpoint)),
+		slog.Int("pages", maxPagesPerEndpoint),
+		slog.Int("tweets_so_far", len(tweets)),
+	)
+	return tweets, lastNonEmptyToken, nil
+}
+
+// decodeTweetsResponse handles status check, body-size limit, JSON decode,
+// and body close for a single paginated request. Bounded body size protects
+// against memory exhaustion from a misbehaving server (CWE-770).
+func decodeTweetsResponse(resp *http.Response) (*tweetsResponse, error) {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		// Scope 03 will replace this with structured rate-limit / fast-fail
+		// handling; for scope 02 we surface the status as a plain error and
+		// expose the body excerpt for operator debugging.
+		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("status=%d body=%s", resp.StatusCode, string(excerpt))
+	}
+	var out tweetsResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return &out, nil
+}
+
+// endpointPath returns the Twitter v2 path for a given per-user endpoint, or
+// the empty string for an unknown endpoint.
+func endpointPath(endpoint apiEndpoint, userID string) string {
+	switch endpoint {
+	case endpointBookmarks:
+		return "/users/" + userID + "/bookmarks"
+	case endpointLikes:
+		return "/users/" + userID + "/liked_tweets"
+	case endpointOwnTweets:
+		return "/users/" + userID + "/tweets"
+	case endpointMentions:
+		return "/users/" + userID + "/mentions"
+	default:
+		return ""
+	}
+}
+
+// fetchBookmarks, fetchLikes, fetchOwnTweets, fetchMentions are typed
+// per-endpoint convenience wrappers. They all delegate to
+// fetchEndpointPaginated to keep behavior identical across endpoints; the
+// per-method shape matches the spec 056 scope 02 implementation plan.
+func (c *apiClient) fetchBookmarks(ctx context.Context, userID, startToken string) ([]apiTweet, string, error) {
+	return c.fetchEndpointPaginated(ctx, endpointBookmarks, userID, startToken)
+}
+func (c *apiClient) fetchLikes(ctx context.Context, userID, startToken string) ([]apiTweet, string, error) {
+	return c.fetchEndpointPaginated(ctx, endpointLikes, userID, startToken)
+}
+func (c *apiClient) fetchOwnTweets(ctx context.Context, userID, startToken string) ([]apiTweet, string, error) {
+	return c.fetchEndpointPaginated(ctx, endpointOwnTweets, userID, startToken)
+}
+func (c *apiClient) fetchMentions(ctx context.Context, userID, startToken string) ([]apiTweet, string, error) {
+	return c.fetchEndpointPaginated(ctx, endpointMentions, userID, startToken)
+}

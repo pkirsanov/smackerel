@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"id": "1001", "text": "first page tweet 1", "author_id": "2244994945"},
+    {"id": "1002", "text": "first page tweet 2", "author_id": "2244994945"},
+    {"id": "1003", "text": "first page tweet 3", "author_id": "2244994945"}
+  ],
+  "meta": {
+    "result_count": 3,
+    "next_token": "PAGE2_TOKEN"
+  }
+}
