@@ -14,6 +14,10 @@ Resolve "what is gate G0XX" and "which script enforces this" without re-reading 
 - Writing a test and need to know which gate IDs the test should cover
 - Auditing whether a scope's DoD covers all gates relevant to the change
 
+## v4.1.0 gate refinements
+
+Gates G073, G090, G022, G041, G040, G008A, G009, G056 received non-breaking refinements in v4.1.0. See [`docs/v4.1.0-delivered-pending-activation.md`](../../docs/v4.1.0-delivered-pending-activation.md) for the per-gate behavior change and how scopes opt in via `Scope-Kind:`, `Lockdown-FRs:`, `deliverableFiles[]`, `phaseStubs{}`, and report.md anchor references.
+
 ## High-frequency gate IDs (memorize these)
 | Gate | Topic | Enforced by |
 |------|-------|-------------|
