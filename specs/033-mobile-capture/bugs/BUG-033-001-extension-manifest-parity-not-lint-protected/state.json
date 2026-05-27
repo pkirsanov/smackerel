@@ -6,7 +6,9 @@
   "featureName": "BUG-033-001 Extension manifest parity not lint-protected",
   "parentSpec": "specs/033-mobile-capture/",
   "title": "Browser extension Chrome MV3 + Firefox MV2 manifest parity has no machine enforcement (GAP-F01 + GAP-F03 regression class)",
-  "status": "resolved",
+  "status": "done",
+  "certifiedAt": "2026-05-27T00:00:00Z",
+  "certifiedBy": "bubbles.goal",
   "workflowMode": "devops-to-doc",
   "severity": "medium",
   "class": "devops",
@@ -44,7 +46,9 @@
     "pendingTransitionRequests": []
   },
   "certification": {
-    "status": "resolved",
+    "status": "done",
+    "certifiedBy": "bubbles.goal",
+    "certifiedAt": "2026-05-27T00:00:00Z",
     "completedScopes": [
       "BUG-033-001-S1"
     ],
