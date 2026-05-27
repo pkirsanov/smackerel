@@ -2,7 +2,11 @@ package twitter
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -950,8 +954,15 @@ func TestConnect_APIModeRequiresBearerToken(t *testing.T) {
 	}
 }
 
-func TestConnect_HybridModeWithoutTokenAllowed(t *testing.T) {
-	// Hybrid mode without token should connect (archive is primary).
+func TestConnect_HybridModeRequiresToken(t *testing.T) {
+	// Spec 056 R-004 + NC-1 resolution (2026-05-27): hybrid mode REQUIRES a
+	// bearer_token because the API path is a first-class data source, not a
+	// bonus. The earlier placeholder test (HybridModeWithoutTokenAllowed)
+	// asserted the pre-spec-056 behavior where API was optional in hybrid
+	// — that contract is reversed by spec 056. This test enforces the new
+	// contract: Connect must return a non-nil error wrapping
+	// ErrAPIBearerTokenRequired so the runtime fails loud at startup
+	// rather than silently degrading to archive-only.
 	c := New("twitter")
 	dir := t.TempDir()
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
@@ -960,8 +971,14 @@ func TestConnect_HybridModeWithoutTokenAllowed(t *testing.T) {
 			"archive_dir": dir,
 		},
 	})
-	if err != nil {
-		t.Errorf("hybrid mode should allow missing token (archive is primary): %v", err)
+	if err == nil {
+		t.Fatalf("hybrid mode without bearer_token must fail loud per spec 056 R-004; got nil")
+	}
+	if !errors.Is(err, ErrAPIBearerTokenRequired) {
+		t.Fatalf("error must wrap ErrAPIBearerTokenRequired sentinel, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "bearer_token") {
+		t.Errorf("error must mention bearer_token for operator clarity, got: %v", err)
 	}
 }
 
@@ -1816,26 +1833,52 @@ func TestSyncArchive_TweetsJSNotFound(t *testing.T) {
 }
 
 func TestSync_APIModeSkipsArchive(t *testing.T) {
-	// API-only mode should not try to read archive files.
+	// Spec 056 Scope 04: API-only mode must NOT touch the archive code path.
+	// Pre-spec-056 this test asserted a not-implemented placeholder (empty
+	// result, no error). Spec 056 implements API mode, so this test now
+	// asserts the real wired behavior:
+	//   1. apiClient is constructed (non-nil) when sync_mode=api.
+	//   2. Sync drives the API path via httptest.Server (no archive read).
+	//   3. The returned cursor is a JSON combinedCursor envelope.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		switch r.URL.Path {
+		case "/users/me":
+			_, _ = w.Write([]byte(`{"data":{"id":"42","username":"u","name":"n"}}`))
+		default:
+			// Bookmarks/likes/tweets/mentions: empty pages, terminate immediately.
+			_, _ = w.Write([]byte(`{"data":[],"meta":{"result_count":0}}`))
+		}
+	}))
+	defer srv.Close()
+
 	c := New("twitter")
+	// Inject the httptest base URL via the package-private override field
+	// BEFORE Connect; Connect copies it into the apiClient.
+	c.apiBaseURLOverride = srv.URL
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
 		SourceConfig: map[string]interface{}{"sync_mode": "api"},
-		Credentials:  map[string]string{"bearer_token": "test-token"},
+		Credentials:  map[string]string{"bearer_token": "test-token-not-real"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if c.apiClient == nil {
+		t.Fatalf("API mode must construct apiClient; got nil")
+	}
 
-	// Sync in API mode with no API implementation yet — should return empty, no error.
 	artifacts, cursor, err := c.Sync(context.Background(), "")
 	if err != nil {
-		t.Errorf("API mode sync should not error (no archive access): %v", err)
+		t.Fatalf("API mode sync should not error against empty fixtures: %v", err)
 	}
 	if len(artifacts) != 0 {
-		t.Errorf("expected 0 artifacts from API-only sync (not implemented), got %d", len(artifacts))
+		t.Errorf("expected 0 artifacts from empty-fixture API sync, got %d", len(artifacts))
 	}
-	if cursor != "" {
-		t.Errorf("expected empty cursor, got %q", cursor)
+	// Cursor must be the JSON combinedCursor envelope (starts with '{'),
+	// not the empty string the placeholder test previously asserted.
+	if !strings.HasPrefix(cursor, "{") {
+		t.Errorf("API mode cursor must be JSON combinedCursor envelope, got %q", cursor)
 	}
 }
 
@@ -2794,6 +2837,269 @@ func TestChaosR8_BuildThreads_HighFanout(t *testing.T) {
 		t.Fatalf("expected exactly 1 thread for high-fanout root, got %d", len(threads))
 	}
 	if got := len(threads[0].Tweets); got != fanout+1 {
-		t.Errorf("expected %d tweets in thread, got %d", fanout+1, got)
+			t.Errorf("expected %d tweets in thread, got %d", fanout+1, got)
+		}
+}
+
+// ============================================================================
+// Spec 056 Scope 04 — Hybrid Mode & Dispatcher Wiring tests
+// ============================================================================
+
+// archiveDirWithSingleTweet writes a minimal Twitter archive into a temp dir
+// containing exactly one tweet with the given ID + text. Returns the dir
+// path; caller uses it as archive_dir in ConnectorConfig.
+func archiveDirWithSingleTweet(t *testing.T, id, text string) string {
+	t.Helper()
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir data: %v", err)
+	}
+	doc := fmt.Sprintf(
+		`window.YTD.tweet.part0 = [{"tweet":{"id":%q,"full_text":%q,"created_at":"Wed Mar 15 14:30:00 +0000 2026","favorite_count":0,"retweet_count":0,"entities":{"urls":[],"hashtags":[],"user_mentions":[]}}}]`,
+		id, text,
+	)
+	if err := os.WriteFile(filepath.Join(dataDir, "tweets.js"), []byte(doc), 0o600); err != nil {
+		t.Fatalf("write tweets.js: %v", err)
+	}
+	return dir
+}
+
+// TestTwitterAPI_ArchivePathUnaffectedByAPIClient — SCN-056-010.
+//
+// Given sync_mode "archive"
+// When Connect runs
+// Then c.apiClient is nil
+//   AND Sync runs without constructing any API client
+//
+// Adversarial regression: this would fail if Connect's dispatcher gained an
+// accidental "construct apiClient unconditionally" branch — a regression
+// the scope 04 dispatcher boundary explicitly forbids.
+func TestTwitterAPI_ArchivePathUnaffectedByAPIClient(t *testing.T) {
+	dir := archiveDirWithSingleTweet(t, "1000", "archive tweet")
+	c := New("twitter")
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "archive",
+			"archive_dir": dir,
+		},
+	})
+	if err != nil {
+		t.Fatalf("archive-mode Connect: %v", err)
+	}
+	if c.apiClient != nil {
+		t.Fatalf("archive mode must NOT construct apiClient; got %v", c.apiClient)
+	}
+	// Sync exercises the dispatcher's archive arm.
+	arts, cur, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("archive sync: %v", err)
+	}
+	if len(arts) == 0 {
+		t.Fatalf("expected at least one artifact from archive sync, got 0")
+	}
+	// Archive-only cursor is the RFC3339 timestamp — must NOT have been
+	// re-wrapped in JSON envelope by the dispatcher (backward compat).
+	if strings.HasPrefix(cur, "{") {
+		t.Fatalf("archive-only cursor must remain plain string (not JSON), got %q", cur)
 	}
 }
+
+// TestTwitterAPI_HybridDedupAcrossArchiveAndAPI — SCN-056-004.
+//
+// Given sync_mode "hybrid"
+//   AND the local archive contains tweet ID 1234567890
+//   AND the API bookmarks endpoint also returns tweet ID 1234567890 plus a new ID 9999999999
+// When the connector runs Sync
+// Then exactly one RawArtifact for tweet ID 1234567890 exists (dedup)
+//   AND the new tweet ID 9999999999 is also published (no false dedup)
+func TestTwitterAPI_HybridDedupAcrossArchiveAndAPI(t *testing.T) {
+	dir := archiveDirWithSingleTweet(t, "1234567890", "overlap tweet from archive")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		switch r.URL.Path {
+		case "/users/me":
+			_, _ = w.Write([]byte(`{"data":{"id":"42","username":"u","name":"n"}}`))
+		case "/users/42/bookmarks":
+			// Two tweets: one overlaps with archive, one is new.
+			_, _ = w.Write([]byte(`{"data":[{"id":"1234567890","text":"overlap from api","author_id":"42"},{"id":"9999999999","text":"new from api","author_id":"42"}],"meta":{"result_count":2}}`))
+		default:
+			// liked_tweets, tweets, mentions: empty.
+			_, _ = w.Write([]byte(`{"data":[],"meta":{"result_count":0}}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New("twitter")
+	c.apiBaseURLOverride = srv.URL
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "hybrid",
+			"archive_dir": dir,
+		},
+		Credentials: map[string]string{"bearer_token": "test-bearer-token-not-real"},
+	})
+	if err != nil {
+		t.Fatalf("hybrid Connect: %v", err)
+	}
+
+	arts, _, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("hybrid sync: %v", err)
+	}
+
+	// Count occurrences of each primary tweet ID. The archive may also emit
+	// child URL artifacts for entities; those have SourceRef containing
+	// ":url:" and are out of scope for the dedup assertion.
+	counts := map[string]int{}
+	origins := map[string]string{}
+	for _, a := range arts {
+		if !strings.Contains(a.SourceRef, ":") {
+			counts[a.SourceRef]++
+			if origin, _ := a.Metadata["origin"].(string); origin != "" {
+				origins[a.SourceRef] = origin
+			} else {
+				origins[a.SourceRef] = "archive"
+			}
+		}
+	}
+
+	if counts["1234567890"] != 1 {
+		t.Fatalf("overlap tweet 1234567890 must appear exactly once after dedup, got %d", counts["1234567890"])
+	}
+	if counts["9999999999"] != 1 {
+		t.Fatalf("new API tweet 9999999999 must appear exactly once, got %d", counts["9999999999"])
+	}
+	// The deduped overlap should be the archive's version (not the API's),
+	// because the dispatcher runs archive FIRST and deduplicates API results
+	// against the archive's primary IDs.
+	if origins["1234567890"] != "archive" {
+		t.Fatalf("overlap tweet should be retained from archive (not API); got origin=%q", origins["1234567890"])
+	}
+	if origins["9999999999"] != "api" {
+		t.Fatalf("new tweet should originate from API; got origin=%q", origins["9999999999"])
+	}
+}
+
+// TestTwitterAPI_HybridIdempotentArchiveImport proves the archive pass does
+// NOT re-emit the same tweets on the second tick (idempotence). After the
+// first tick the cursor advances past the archive's tweet timestamps; the
+// second tick's archive pass should return zero tweets.
+//
+// Adversarial regression for the hybrid dispatcher: this would fail if the
+// dispatcher dropped the archive cursor when wrapping into combinedCursor,
+// causing the archive to re-import everything every tick.
+func TestTwitterAPI_HybridIdempotentArchiveImport(t *testing.T) {
+	dir := archiveDirWithSingleTweet(t, "5000", "idempotence test")
+
+	// API server returns empty pages — we're testing archive idempotence.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		switch r.URL.Path {
+		case "/users/me":
+			_, _ = w.Write([]byte(`{"data":{"id":"42","username":"u","name":"n"}}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":[],"meta":{"result_count":0}}`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New("twitter")
+	c.apiBaseURLOverride = srv.URL
+	err := c.Connect(context.Background(), connector.ConnectorConfig{
+		SourceConfig: map[string]interface{}{
+			"sync_mode":   "hybrid",
+			"archive_dir": dir,
+		},
+		Credentials: map[string]string{"bearer_token": "test-bearer-token-not-real"},
+	})
+	if err != nil {
+		t.Fatalf("hybrid Connect: %v", err)
+	}
+
+	// Tick 1: archive should emit the tweet.
+	arts1, cur1, err := c.Sync(context.Background(), "")
+	if err != nil {
+		t.Fatalf("tick 1: %v", err)
+	}
+	primaryCount := func(arts []connector.RawArtifact) int {
+		n := 0
+		for _, a := range arts {
+			if !strings.Contains(a.SourceRef, ":") {
+				n++
+			}
+		}
+		return n
+	}
+	if primaryCount(arts1) != 1 {
+		t.Fatalf("tick 1: expected 1 primary archive artifact, got %d", primaryCount(arts1))
+	}
+	if !strings.HasPrefix(cur1, "{") {
+		t.Fatalf("hybrid tick 1 cursor must be JSON combined envelope, got %q", cur1)
+	}
+	// Confirm cursor.Archive was populated (not empty after first tick).
+	var parsed1 combinedCursor
+	if err := json.Unmarshal([]byte(cur1), &parsed1); err != nil {
+		t.Fatalf("parse cursor 1: %v", err)
+	}
+	if parsed1.Archive == "" {
+		t.Fatalf("hybrid tick 1 must populate cursor.Archive, got empty")
+	}
+
+	// Tick 2: archive pass must skip everything (cursor blocks re-imports).
+	arts2, cur2, err := c.Sync(context.Background(), cur1)
+	if err != nil {
+		t.Fatalf("tick 2: %v", err)
+	}
+	if got := primaryCount(arts2); got != 0 {
+		t.Fatalf("tick 2: archive must NOT re-emit (idempotence); got %d primary artifacts", got)
+	}
+	// Cursor should still parse cleanly; archive field unchanged or only advanced.
+	var parsed2 combinedCursor
+	if err := json.Unmarshal([]byte(cur2), &parsed2); err != nil {
+		t.Fatalf("parse cursor 2: %v", err)
+	}
+	if parsed2.Archive == "" {
+		t.Fatalf("tick 2: cursor.Archive must persist, got empty")
+	}
+}
+
+// TestTwitterAPI_LegacyArchiveCursorMigratesToCombined verifies that an
+// operator who switches from sync_mode=archive (plain RFC3339 cursor) to
+// sync_mode=hybrid does NOT lose archive idempotence. The legacy cursor
+// migrates into combinedCursor.Archive on the first hybrid tick.
+func TestTwitterAPI_LegacyArchiveCursorMigratesToCombined(t *testing.T) {
+	legacy := "2026-03-15T14:30:00Z"
+	cc, err := loadCombinedCursor(legacy)
+	if err != nil {
+		t.Fatalf("loadCombinedCursor(legacy): %v", err)
+	}
+	if cc.Archive != legacy {
+		t.Fatalf("legacy cursor must migrate into Archive field; got Archive=%q want %q", cc.Archive, legacy)
+	}
+	if cc.API.PerEndpoint == nil {
+		t.Fatalf("migrated cursor must have non-nil API.PerEndpoint")
+	}
+	if len(cc.API.PerEndpoint) != 0 {
+		t.Fatalf("migrated cursor must have empty API.PerEndpoint, got %v", cc.API.PerEndpoint)
+	}
+
+	// Round-trip the migrated cursor through saveCombinedCursor.
+	enc, err := saveCombinedCursor(cc)
+	if err != nil {
+		t.Fatalf("saveCombinedCursor: %v", err)
+	}
+	cc2, err := loadCombinedCursor(enc)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	if cc2.Archive != legacy {
+		t.Fatalf("round-trip lost Archive field: got %q want %q", cc2.Archive, legacy)
+	}
+}
+
+// Suppress unused-import warning when the file briefly has tests removed.
+var _ = time.Now

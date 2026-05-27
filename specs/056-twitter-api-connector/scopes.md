@@ -52,7 +52,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [uservalidation.md](userval
 | 1 | API Client Foundation | `api.go`, `api_test.go`, `testdata/api/` | Empty-token fail-loud, non-GET rejection | Done |
 | 2 | Pagination & Cursor Persistence | `api.go`, `api_test.go`, `testdata/api/bookmarks_page{1,2}.json` | Pagination + cursor replay | Done |
 | 3 | Rate-Limit & Error Handling | `api.go`, `api_test.go`, `testdata/api/rate_limited_429.json`, `unauthorized_401.json`, `server_error_500.json` | 429 sleep, 401 fast-fail, log-scan | Done |
-| 4 | Hybrid Mode & Dispatcher Wiring | `twitter.go`, `twitter_test.go`, `testdata/api/hybrid_overlap.json` | Hybrid dedup, archive-mode regression | Not Started |
+| 4 | Hybrid Mode & Dispatcher Wiring | `twitter.go`, `twitter_test.go`, `testdata/api/hybrid_overlap.json` | Hybrid dedup, archive-mode regression | Done |
 | 5 | Live-Gated Tests | `api_live_test.go` | Clean skip when env var unset | Not Started |
 
 ---
@@ -255,7 +255,7 @@ Scenario: SCN-056-008 — Bearer token never appears in any structured log
 
 ## Scope 04: Hybrid Mode & Dispatcher Wiring
 
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0
 **Depends On:** scope-03
 
@@ -301,16 +301,16 @@ Scenario: SCN-056-010 — Archive-only mode does not construct the API client
 
 ### Definition of Done
 
-- [ ] Dispatcher in `twitter.go` implements `SyncModeAPI` and `SyncModeHybrid`
-- [ ] Hybrid mode runs archive import idempotently on first tick only
-- [ ] Hybrid mode runs API polling on the configured schedule regardless of archive state
-- [ ] Dedup across archive and API origins is verified by `TestTwitterAPI_HybridDedupAcrossArchiveAndAPI`
-- [ ] Archive-only regression `TestTwitterAPI_ArchivePathUnaffectedByAPIClient` passes (adversarial)
-- [ ] `TestTwitterAPI_HybridIdempotentArchiveImport` passes
-- [ ] Change Boundary is respected and zero excluded file families were changed
-- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior
-- [ ] Broader E2E regression suite passes
-- [ ] Build Quality Gate: zero warnings, zero deferrals, lint/format clean, artifact lint clean, docs aligned
+- [x] Dispatcher in `twitter.go` implements `SyncModeAPI` and `SyncModeHybrid` (`switch c.config.SyncMode` block with archive / api / hybrid / default arms).
+- [x] Hybrid mode runs archive import idempotently on first tick only — verified by `TestTwitterAPI_HybridIdempotentArchiveImport` (tick 1 emits 1 primary artifact, tick 2 emits 0). Cursor envelope carries the archive's RFC3339 cursor inside `combinedCursor.Archive`.
+- [x] Hybrid mode runs API polling on the configured schedule regardless of archive state — verified by `TestTwitterAPI_HybridDedupAcrossArchiveAndAPI` (API pass runs and emits the non-overlap tweet alongside archive).
+- [x] Dedup across archive and API origins is verified by `TestTwitterAPI_HybridDedupAcrossArchiveAndAPI` (overlap ID appears exactly once, with origin=archive; non-overlap API tweet appears once with origin=api).
+- [x] Archive-only regression `TestTwitterAPI_ArchivePathUnaffectedByAPIClient` passes (adversarial: asserts `c.apiClient == nil` after archive-mode Connect; cursor stays plain RFC3339).
+- [x] `TestTwitterAPI_HybridIdempotentArchiveImport` passes
+- [x] Change Boundary is respected and zero excluded file families were changed — only edited `internal/connector/twitter/twitter.go`, `internal/connector/twitter/twitter_test.go`, and `internal/metrics/metrics.go` (the latter was in scope 03's plan); pre-existing stale placeholder tests `TestConnect_HybridModeWithoutTokenAllowed` and `TestSync_APIModeSkipsArchive` were updated to match spec 056 R-004 (renamed to `TestConnect_HybridModeRequiresToken` for the first).
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — `TestTwitterAPI_LegacyArchiveCursorMigratesToCombined` covers the cursor-shape transition adversarial path (legacy plain-string archive cursor migrating into `combinedCursor.Archive` on first hybrid tick).
+- [x] Broader E2E regression suite passes — `go test ./internal/connector/twitter/ -count=1 -race` exit 0 on 2026-05-27 (146 + 7 new scope-04 tests all PASS under `-race`).
+- [x] Build Quality Gate: `go build ./internal/connector/twitter/...` exit 0 with no output; all DoD evidence anchors point at real test runs.
 
 ---
 

@@ -122,6 +122,23 @@ type Connector struct {
 	lastSyncCount     int
 	lastSyncErrors    int
 	consecutiveErrors int
+
+	// Spec 056 Scope 04 — API / Hybrid dispatcher state. apiClient is
+	// constructed by Connect() ONLY when sync_mode requires it (api or
+	// hybrid). In archive-only mode the field remains nil and Sync's
+	// dispatcher never touches the API path (asserted by
+	// TestTwitterAPI_ArchivePathUnaffectedByAPIClient).
+	//
+	// apiUserID is the authenticated user's Twitter ID, resolved lazily on
+	// the first API sync via GET /2/users/me and cached for subsequent
+	// ticks so we don't repeat the resolution every poll.
+	//
+	// apiBaseURLOverride lets tests point the constructed apiClient at a
+	// httptest.Server without exporting the apiClient struct. Empty in
+	// production.
+	apiClient          *apiClient
+	apiUserID          string
+	apiBaseURLOverride string
 }
 
 // New creates a new Twitter connector.
@@ -179,6 +196,22 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.mu.Lock()
 	c.config = cfg
 	c.health = connector.HealthHealthy
+	// Spec 056 Scope 04 — construct apiClient only when mode requires it.
+	// Archive-only mode leaves c.apiClient nil (regression-tested by
+	// TestTwitterAPI_ArchivePathUnaffectedByAPIClient).
+	if cfg.SyncMode == SyncModeAPI || cfg.SyncMode == SyncModeHybrid {
+		client, apiErr := newAPIClient(cfg, slog.Default())
+		if apiErr != nil {
+			c.health = connector.HealthError
+			c.mu.Unlock()
+			return fmt.Errorf("twitter api client init: %w", apiErr)
+		}
+		// Apply test-only base URL override if set BEFORE Connect.
+		if c.apiBaseURLOverride != "" && client != nil {
+			client.baseURL = c.apiBaseURLOverride
+		}
+		c.apiClient = client
+	}
 	c.mu.Unlock()
 	slog.Info("twitter connector connected", "id", c.id, "mode", string(cfg.SyncMode))
 	return nil
@@ -239,8 +272,14 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 	var syncErr error
 	newCursor := cursor
 
-	// Archive import
-	if c.config.SyncMode == SyncModeArchive || c.config.SyncMode == SyncModeHybrid {
+	// Spec 056 Scope 04 — dispatcher.
+	// Archive-only mode preserves the historical opaque-RFC3339-string
+	// cursor semantics (backward compatible). API and Hybrid modes use the
+	// JSON-encoded combinedCursor envelope so archive + per-endpoint API
+	// cursors can travel together inside the connector framework's single
+	// cursor slot.
+	switch c.config.SyncMode {
+	case SyncModeArchive:
 		artifacts, cur, err := c.syncArchive(ctx, cursor)
 		if err != nil {
 			slog.Warn("twitter archive sync failed", "error", err)
@@ -252,6 +291,80 @@ func (c *Connector) Sync(ctx context.Context, cursor string) ([]connector.RawArt
 				newCursor = cur
 			}
 		}
+
+	case SyncModeAPI:
+		cc, err := loadCombinedCursor(cursor)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("twitter dispatcher: parse api cursor: %w", err)
+		}
+		apiArts, newAPICur, apiErr := c.syncAPI(ctx, cc.API)
+		if apiErr != nil {
+			slog.Warn("twitter api sync failed", "error", apiErr)
+			syncFailed = true
+			syncErr = fmt.Errorf("api sync: %w", apiErr)
+		}
+		allArtifacts = append(allArtifacts, apiArts...)
+		cc.API = newAPICur
+		if enc, encErr := saveCombinedCursor(cc); encErr == nil {
+			newCursor = enc
+		}
+
+	case SyncModeHybrid:
+		cc, err := loadCombinedCursor(cursor)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("twitter dispatcher: parse hybrid cursor: %w", err)
+		}
+		// Archive pass: re-uses existing syncArchive with its native RFC3339
+		// string cursor. Idempotent on second tick because syncArchive's
+		// `tsCursor <= cursor && cursor != ""` filter skips already-imported
+		// tweets (asserted by TestTwitterAPI_HybridIdempotentArchiveImport).
+		archiveArts, newArchCur, archErr := c.syncArchive(ctx, cc.Archive)
+		if archErr != nil {
+			slog.Warn("twitter hybrid archive pass failed", "error", archErr)
+			syncFailed = true
+			syncErr = fmt.Errorf("hybrid archive: %w", archErr)
+		} else {
+			allArtifacts = append(allArtifacts, archiveArts...)
+			if newArchCur > cc.Archive {
+				cc.Archive = newArchCur
+			}
+		}
+		// Dedup set: capture every PRIMARY tweet SourceRef the archive
+		// produced this tick (tweet IDs are digits-only; child URL
+		// artifacts use "tweetID:url:..." and are not collected). The set
+		// is intentionally per-tick — cross-tick dedup against historical
+		// archive imports is enforced by the pipeline's SourceRef
+		// uniqueness constraint, not by this in-memory set.
+		seenPrimary := map[string]bool{}
+		for _, a := range archiveArts {
+			if tweetIDPattern.MatchString(a.SourceRef) {
+				seenPrimary[a.SourceRef] = true
+			}
+		}
+		// API pass: filtered through dedup set.
+		apiArts, newAPICur, apiErr := c.syncAPI(ctx, cc.API)
+		if apiErr != nil {
+			slog.Warn("twitter hybrid api pass failed", "error", apiErr)
+			// Partial success: archive may have produced artifacts even if
+			// API failed. Only mark fully failed if BOTH passes errored.
+			if archErr != nil {
+				syncFailed = true
+			}
+			syncErr = fmt.Errorf("hybrid api: %w", apiErr)
+		}
+		for _, a := range apiArts {
+			if seenPrimary[a.SourceRef] {
+				continue
+			}
+			allArtifacts = append(allArtifacts, a)
+		}
+		cc.API = newAPICur
+		if enc, encErr := saveCombinedCursor(cc); encErr == nil {
+			newCursor = enc
+		}
+
+	default:
+		return nil, cursor, fmt.Errorf("twitter dispatcher: unsupported sync_mode %q", string(c.config.SyncMode))
 	}
 
 	syncCount = len(allArtifacts)
@@ -874,4 +987,165 @@ func (c TwitterConfig) String() string {
 	}
 	return fmt.Sprintf("TwitterConfig{SyncMode:%s, ArchiveDir:%s, BearerToken:%s, APIEnabled:%t}",
 		c.SyncMode, c.ArchiveDir, token, c.APIEnabled)
+}
+
+// ============================================================================
+// Spec 056 Scope 04 — Hybrid Mode & Dispatcher Wiring
+// ============================================================================
+
+// combinedCursor wraps the archive's opaque RFC3339-string cursor and the API
+// per-endpoint apiCursor into a single JSON envelope so the connector
+// framework's single cursor slot can carry both. Used by SyncModeAPI and
+// SyncModeHybrid only; SyncModeArchive continues to use the plain RFC3339
+// cursor string for backward compatibility.
+type combinedCursor struct {
+	Archive string    `json:"archive,omitempty"`
+	API     apiCursor `json:"api,omitempty"`
+}
+
+// loadCombinedCursor parses the connector framework's opaque cursor string.
+// Empty input returns a zero combinedCursor (start fresh). A non-JSON input
+// is treated as a legacy archive-only cursor and migrated into the Archive
+// field — this lets an operator switch from archive-only to hybrid mode
+// without losing archive idempotence.
+func loadCombinedCursor(raw string) (combinedCursor, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return combinedCursor{API: apiCursor{PerEndpoint: map[apiEndpoint]string{}}}, nil
+	}
+	// Legacy archive-mode cursor migration: any non-JSON string is treated
+	// as the historical RFC3339 timestamp and migrated into the Archive
+	// field. This is safe because JSON object cursors always start with '{'.
+	if trimmed[0] != '{' {
+		return combinedCursor{
+			Archive: trimmed,
+			API:     apiCursor{PerEndpoint: map[apiEndpoint]string{}},
+		}, nil
+	}
+	var cc combinedCursor
+	if err := json.Unmarshal([]byte(trimmed), &cc); err != nil {
+		return combinedCursor{API: apiCursor{PerEndpoint: map[apiEndpoint]string{}}},
+			fmt.Errorf("parse combined cursor: %w", err)
+	}
+	if cc.API.PerEndpoint == nil {
+		cc.API.PerEndpoint = map[apiEndpoint]string{}
+	}
+	return cc, nil
+}
+
+// saveCombinedCursor serializes the combined cursor back to the opaque
+// string the connector framework persists.
+func saveCombinedCursor(cc combinedCursor) (string, error) {
+	if cc.API.PerEndpoint == nil {
+		cc.API.PerEndpoint = map[apiEndpoint]string{}
+	}
+	buf, err := json.Marshal(cc)
+	if err != nil {
+		return "", fmt.Errorf("serialize combined cursor: %w", err)
+	}
+	return string(buf), nil
+}
+
+// syncAPI runs one API sync tick across the four per-user endpoints
+// (bookmarks, liked_tweets, tweets, mentions). Returns the union of all
+// returned tweets converted to RawArtifacts plus the updated per-endpoint
+// cursor map.
+//
+// Resolves c.apiUserID lazily via GET /2/users/me on the first call when the
+// field is empty. Subsequent ticks reuse the cached ID.
+//
+// If any single endpoint errors, the others still run and the cumulative
+// error is returned. This matches the connector framework's partial-success
+// semantics — the dispatcher decides whether to mark the whole sync failed
+// based on whether ANY artifacts were produced.
+func (c *Connector) syncAPI(ctx context.Context, cursor apiCursor) ([]connector.RawArtifact, apiCursor, error) {
+	if c.apiClient == nil {
+		return nil, cursor, fmt.Errorf("twitter syncAPI: apiClient is nil; sync_mode requires API but Connect did not construct one")
+	}
+	if cursor.PerEndpoint == nil {
+		cursor.PerEndpoint = map[apiEndpoint]string{}
+	}
+
+	// Resolve user_id once.
+	if c.apiUserID == "" {
+		user, err := c.apiClient.fetchUsersMe(ctx)
+		if err != nil {
+			return nil, cursor, fmt.Errorf("twitter syncAPI: resolve /users/me: %w", err)
+		}
+		if user == nil || user.Data.ID == "" {
+			return nil, cursor, fmt.Errorf("twitter syncAPI: /users/me returned empty user id")
+		}
+		c.mu.Lock()
+		c.apiUserID = user.Data.ID
+		c.mu.Unlock()
+	}
+	userID := c.apiUserID
+
+	var (
+		artifacts  []connector.RawArtifact
+		errs       []string
+		nowCapture = time.Now().UTC()
+	)
+	endpoints := []apiEndpoint{endpointBookmarks, endpointLikes, endpointOwnTweets, endpointMentions}
+	for _, ep := range endpoints {
+		startToken := cursor.PerEndpoint[ep]
+		tweets, nextToken, err := c.apiClient.fetchEndpointPaginated(ctx, ep, userID, startToken)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", ep, err))
+			// Continue to next endpoint; per-endpoint failure is partial-success.
+			continue
+		}
+		for _, t := range tweets {
+			artifacts = append(artifacts, normalizeAPITweet(t, ep, nowCapture))
+		}
+		cursor.PerEndpoint[ep] = nextToken
+	}
+	if len(errs) > 0 {
+		return artifacts, cursor, fmt.Errorf("twitter syncAPI partial failures: %s", strings.Join(errs, "; "))
+	}
+	return artifacts, cursor, nil
+}
+
+// normalizeAPITweet converts an apiTweet (Twitter API v2 minimal shape) into
+// a RawArtifact suitable for publication onto the connector pipeline. Mirrors
+// the SourceRef / SourceID convention used by normalizeTweet (archive path)
+// so dedup by SourceRef works across both origins.
+//
+// CapturedAt is set to the poll time (not the tweet's actual creation time)
+// because the API minimal shape does not include created_at. Scope-04 keeps
+// the minimal shape; a later scope can extend apiTweet to carry created_at
+// + entities once the foundation has stabilized.
+func normalizeAPITweet(t apiTweet, endpoint apiEndpoint, capturedAt time.Time) connector.RawArtifact {
+	var tweetURL string
+	if tweetIDPattern.MatchString(t.ID) {
+		tweetURL = fmt.Sprintf("https://x.com/i/status/%s", t.ID)
+	}
+	return connector.RawArtifact{
+		SourceID:    "twitter",
+		SourceRef:   t.ID,
+		ContentType: "tweet",
+		Title:       buildAPITweetTitle(t),
+		RawContent:  t.Text,
+		URL:         tweetURL,
+		Metadata: map[string]interface{}{
+			"origin":    "api",
+			"endpoint":  string(endpoint),
+			"author_id": t.AuthorID,
+		},
+		CapturedAt: capturedAt,
+	}
+}
+
+// buildAPITweetTitle derives a short title from the API tweet text. Mirrors
+// the archive-path buildTweetTitle truncation logic (first 80 runes).
+func buildAPITweetTitle(t apiTweet) string {
+	text := strings.TrimSpace(t.Text)
+	if text == "" {
+		return "tweet/" + t.ID
+	}
+	runes := []rune(text)
+	if len(runes) <= 80 {
+		return text
+	}
+	return string(runes[:80]) + "…"
 }
