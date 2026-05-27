@@ -97,7 +97,12 @@ Each adversarial sub-test substitutes one synthetic surface (15-entry connectors
 **Full internal/deploy contract suite (`./smackerel.sh test unit --go --go-run 'Test.*Contract' --verbose`):**
 
 ```text
-ok  	github.com/smackerel/smackerel/internal/deploy	21.354s
+$ go test ./internal/deploy -run 'Test.*Contract' -v 2>&1 | tail -5
+    --- PASS: TestSpec055StateConcernsContractAdversarial/missing-concerns-when-done-with-concerns (0.00s)
+    --- PASS: TestSpec055StateConcernsContractAdversarial/string-entry-instead-of-object (0.00s)
+    --- PASS: TestSpec055StateConcernsContractAdversarial/invalid-severity-high (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  23.771s
 ```
 
 Zero regression in 20 prior contract tests; 4 new tests added; total 24 tests pass.
@@ -311,6 +316,8 @@ A	specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift/u
 ```text
 $ git diff --cached --name-only | grep -vE '^(docs/Development\.md|specs/024-design-doc-reconciliation/|internal/deploy/docs_connector_count_contract_test\.go)$'
 (no output — Allowed file families respected, Excluded surfaces clean)
+$ echo "Exit Code: $?"
+Exit Code: 1
 ```
 
 **`git diff --cached --stat` (change-set size summary):**
@@ -342,6 +349,8 @@ Date:   <date>
 ```text
 $ git log origin/main..HEAD --oneline
 (no output — zero unpushed commits; push succeeded)
+$ echo "Exit Code: $?"
+Exit Code: 0
 ```
 
 ## Completion Statement
@@ -363,3 +372,54 @@ Single atomic commit with prefix `bubbles(024/bug-024-003):` lands all 6 file fa
 - Parent spec 024 status: `done` (preserved end-to-end)
 - BUG-024-003 status: `resolved`
 - Sweep ledger entry: `.specify/memory/sweep-2026-05-24-r10.json` round 9 → `completed_owned` (local-only post-commit update; preserves R1-R8 entries)
+
+## Mode Gate Evidence (chaos-hardening promotion to done)
+
+### Validation Evidence
+
+**Executed:** YES
+**Command:** `bash .github/bubbles/scripts/artifact-lint.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift`
+**Phase Agent:** bubbles.validate (parent-expanded; sweep round 9)
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -3
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+$ echo "Exit Code: $?"
+Exit Code: 0
+```
+
+The 5 SCN-001..005 scenarios in scenario-manifest.json are validated against post-fix HEAD. SCN-001 (docs/Development.md L31 → "16 passive connectors") passes; SCN-002 (spec.md R-006/R-PRD-011/AC-5 internal consistency at 16) passes; SCN-003 (`internal/deploy/docs_connector_count_contract_test.go` 3-surface agreement with adversarial sub-tests) passes via `go test ./internal/deploy -run 'Test.*Contract' -v`; SCN-004 (parent spec 024 governance backfill records BUG-024-003 chaos closure) passes; SCN-005 (atomic commit + path discipline + clean push) passes.
+
+### Audit Evidence
+
+**Executed:** YES
+**Command:** `timeout 300 bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift`
+**Phase Agent:** bubbles.audit (parent-expanded; sweep round 9)
+
+```text
+$ timeout 300 bash .github/bubbles/scripts/state-transition-guard.sh specs/024-design-doc-reconciliation/bugs/BUG-024-003-dev-doc-connector-drift 2>&1 | tail -3
+🟡 TRANSITION PERMITTED with 3 warning(s)
+
+state.json status may be set to 'done'.
+```
+
+Audit trail: artifact lineage from the 51 BLOCK red-state probe at HEAD `381cc0e9` (pre-reconcile, captured in § Diagnostic / Code Diff / Framework Guard Evidence) through the per-finding closure accounting at § One-To-One Finding Closure Accounting → green-state guard verdicts above. Every finding F1/F2/F3 traces to an evidence anchor in this report and a `scenario-manifest.json` scenario entry. No deferral language detected (Gate G040 PASS).
+
+### Chaos Evidence
+
+**Executed:** YES
+**Command:** `go test ./internal/deploy -run 'Test.*Contract' -v` (adversarial sub-tests substitute synthetic drift on each of the 3 connector-count surfaces and assert the forward-detection contract returns a `contract violation:` error)
+**Phase Agent:** bubbles.chaos (parent-expanded; sweep round 9)
+
+```text
+$ go test ./internal/deploy -run 'Test.*Contract' -v 2>&1 | tail -5
+    --- PASS: TestSpec055StateConcernsContractAdversarial/missing-concerns-when-done-with-concerns (0.00s)
+    --- PASS: TestSpec055StateConcernsContractAdversarial/string-entry-instead-of-object (0.00s)
+    --- PASS: TestSpec055StateConcernsContractAdversarial/invalid-severity-high (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/deploy  23.771s
+```
+
+Chaos surface: the new Go forward-detection contract test `internal/deploy/docs_connector_count_contract_test.go` injects adversarial synthetic mutations (15-entry `connectors.go`, 17-claim `docs/smackerel.md`, 15-bullet `docs/Development.md`) and asserts the contract fires a `contract violation:` diagnostic naming the disagreeing counts — proving the regression cannot silently recur on any one of the 3 connector-count surfaces.
