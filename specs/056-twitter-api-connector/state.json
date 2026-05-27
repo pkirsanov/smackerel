@@ -1,0 +1,210 @@
+{
+  "version": 3,
+  "featureDir": "specs/056-twitter-api-connector",
+  "featureName": "Twitter API Connector",
+  "status": "in_progress",
+  "workflowMode": "spec-scope-hardening",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": true,
+  "planningOnlyJustification": "Planning packet authored under spec-scope-hardening mode. Implementation will follow under a separate workflow run that consumes this packet and unblocks specs/015-twitter-connector/bugs/BUG-015-002-reconcile-artifact-drift via real Twitter API v2 integration.",
+  "specDependsOn": [
+    "specs/015-twitter-connector"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.goal",
+    "currentPhase": "harden",
+    "currentScope": null,
+    "runStartedAt": "2026-05-27T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "select",
+        "agent": "bubbles.analyst",
+        "timestamp": "2026-05-27T00:00:00Z",
+        "summary": "Selected spec slot 056 and confirmed BUG-015-002 unblock relationship; surveyed predecessor spec 015 and current internal/connector/twitter package shape."
+      },
+      {
+        "phase": "bootstrap",
+        "agent": "bubbles.design",
+        "timestamp": "2026-05-27T00:05:00Z",
+        "summary": "Authored spec.md, design.md, scopes.md, scenario-manifest.json, uservalidation.md, report.md, state.json for the Twitter API v2 integration packet under spec-scope-hardening mode. Captured 17 requirements, 8 spec-level Gherkin scenarios, 5 sequential scopes with real DoD checkboxes, and 10 SCN-056-* contracts."
+      },
+      {
+        "phase": "harden",
+        "agent": "bubbles.plan",
+        "timestamp": "2026-05-27T00:10:00Z",
+        "summary": "Hardened scope decomposition: per-scope Gherkin, Test Plan rows naming actual planned file paths, Tiered DoD with Build Quality Gate, change boundaries for the dispatcher edit scope, adversarial regression rows for the bearer-token-never-in-logs and archive-mode-no-api-client assertions."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "timestamp": "2026-05-27T00:12:00Z",
+        "summary": "Cross-referenced BUG-015-002 in spec.md Related section noting AC-9 closure responsibility. No other docs touched in this planning packet."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "timestamp": "2026-05-27T00:14:00Z",
+        "summary": "Executed bash .github/bubbles/scripts/artifact-lint.sh specs/056-twitter-api-connector and bash .github/bubbles/scripts/state-transition-guard.sh specs/056-twitter-api-connector against the planning packet; exit codes recorded in the closing summary of the authoring run."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "timestamp": "2026-05-27T00:16:00Z",
+        "summary": "Confirmed scope of commit is limited to specs/056-twitter-api-connector/ only; no internal/connector/twitter source code, no .github/bubbles/scripts/** changes, no other spec folder touched."
+      },
+      {
+        "phase": "finalize",
+        "agent": "bubbles.goal",
+        "timestamp": "2026-05-27T00:18:00Z",
+        "summary": "Planning packet authored. Status held at in_progress because the state-transition-guard treats specs_hardened (workflow ceiling) as terminal and requires Done scopes plus full DoD evidence — conditions a fresh planning packet by definition does not satisfy. Promotion to specs_hardened will occur in a future hardening run that executes the per-scope DoD or under an authoritative planning-only ceiling escape recognized by the guard."
+      }
+    ],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [
+      "select",
+      "bootstrap",
+      "harden",
+      "docs",
+      "validate",
+      "audit",
+      "finalize"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "API Client Foundation",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "Pagination & Cursor Persistence",
+        "status": "not_started",
+        "dependsOn": [
+          "scope-01"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "Rate-Limit & Error Handling",
+        "status": "not_started",
+        "dependsOn": [
+          "scope-02"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "Hybrid Mode & Dispatcher Wiring",
+        "status": "not_started",
+        "dependsOn": [
+          "scope-03"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "name": "Live-Gated Tests",
+        "status": "not_started",
+        "dependsOn": [
+          "scope-04"
+        ],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "scenario-first",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-05-27T00:18:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": [
+      "not_started",
+      "in_progress",
+      "blocked",
+      "specs_hardened",
+      "docs_updated",
+      "validated",
+      "done"
+    ],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": [
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G055",
+      "G056",
+      "G057",
+      "G058",
+      "G059",
+      "G060",
+      "G061"
+    ],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Planning packet authored under spec-scope-hardening mode. Status held at in_progress because state-transition-guard treats specs_hardened as terminal and requires Done scopes plus full DoD/TDD evidence. Implementation workflow will execute scopes 01-05 and is expected to unblock BUG-015-002 (Check 28 G028) on completion."
+}
