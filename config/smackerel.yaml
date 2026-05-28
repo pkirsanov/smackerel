@@ -389,7 +389,14 @@ connectors:
     source_weather: true
     source_tsunami: true
     source_volcano: false
-    source_wildfire: true
+    # InciWeb v3 (the post-2024 site rewrite) removed the public
+    # /incidents/rss feed; the new endpoint returns HTML, not RSS, and
+    # there is no documented JSON API replacement. Enabling source_wildfire
+    # today produces consecutive 403 errors that trip the connector's
+    # max-retries circuit breaker and starve the other sources. Leave
+    # disabled until a follow-up spec ships an InciWeb v3 client. See
+    # internal/connector/alerts/alerts.go::fetchWildfireAlerts.
+    source_wildfire: false
     source_airnow: false
     source_gdacs: false
     airnow_api_key: "" # REQUIRED when source_airnow enabled: free key from airnow.gov
