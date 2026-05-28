@@ -787,17 +787,20 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
             )
             context_parts.append(f"HOT TOPICS:\n{topics_text}")
 
-        prompt = f"""Generate a daily briefing digest. Rules:
+        prompt = f"""/no_think
+Generate a daily briefing digest. Rules:
 - Under 150 words total
 - Calm, direct, warm tone — no fluff, no emoji
 - Use text markers: ! for action needed, > for information, - for list items
 - Structure: action items first, then overnight summary, then hot topics
 - If action items exist, lead with the most urgent
+- Do NOT emit <think>...</think> tags or any chain-of-thought preamble.
+- Output the final digest prose ONLY.
 
 Context:
 {chr(10).join(context_parts)}
 
-Write the digest text only, no JSON wrapper."""
+Write the digest text only, no JSON wrapper. Begin output now."""
 
         try:
             model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
@@ -855,6 +858,11 @@ Write the digest text only, no JSON wrapper."""
             # the fallback path so the operator still gets the metadata
             # summary instead of an empty/rejected digest.
             if not text:
+                raw = response.choices[0].message.content or ""
+                logger.error(
+                    "Digest LLM returned no usable text. raw_len=%d raw_head=%r",
+                    len(raw), raw[:300],
+                )
                 raise ValueError(
                     "LLM digest response empty after <think>/fence strip; "
                     "falling through to metadata fallback"
