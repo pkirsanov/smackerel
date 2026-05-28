@@ -16,7 +16,7 @@ How to build and integrate a new passive data connector into Smackerel.
 | Google Maps | `internal/connector/maps` | None (file import) | Takeout location history | `011-maps-connector` |
 | Hospitable | `internal/connector/hospitable` | API token | Hospitable REST API | `012-hospitable-connector` |
 | Discord | `internal/connector/discord` | Bot token | Discord REST API | `014-discord-connector` |
-| Twitter / X | `internal/connector/twitter` | Bearer token (optional) | Data archive + API v2 | `015-twitter-connector` |
+| Twitter / X | `internal/connector/twitter` | Bearer token (optional) | Data archive + API v2 | `015-twitter-connector`, `056-twitter-api-connector` |
 | Weather | `internal/connector/weather` | None | Open-Meteo API | `016-weather-connector` |
 | Government Alerts | `internal/connector/alerts` | None | USGS Earthquake API | `017-gov-alerts-connector` |
 | Financial Markets | `internal/connector/markets` | Finnhub API key | Finnhub + CoinGecko | `018-financial-markets-connector` |
