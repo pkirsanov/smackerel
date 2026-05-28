@@ -102,6 +102,26 @@ type AssistantConfig struct {
 	TelegramWebhookSecretRef string
 	TelegramWebhookSecret    string
 	TelegramWebhookPath      string
+
+	// Spec 061 SCOPE-10 — offline evaluation harness acceptance gates.
+	// Read from ASSISTANT_EVAL_* env vars. Consumed by the harness in
+	// tests/eval/assistant/harness.go to fail the acceptance suite when
+	// either threshold is missed.
+	Eval AssistantEvalConfig
+}
+
+// AssistantEvalConfig holds the spec 061 SCOPE-10 offline evaluation
+// harness thresholds. Both fields are REQUIRED at the SST boundary.
+// design.md §13 names this "Acceptance Gate".
+type AssistantEvalConfig struct {
+	// RoutingAccuracyMin is the minimum fraction of corpus rows whose
+	// ground_truth_intent matches the facade's selected scenario_id.
+	// Spec 061 §17 contracts this at 0.85; lowering is a regression.
+	RoutingAccuracyMin float64
+	// CaptureFallbackMin is the minimum fraction of capture-expected
+	// rows that took a capture path. Spec 061 §17 contracts this at
+	// 1.0 (MUST capture every time the ground truth says so).
+	CaptureFallbackMin float64
 }
 
 // loadAssistantConfig populates cfg.Assistant from ASSISTANT_* env vars
@@ -226,6 +246,10 @@ func loadAssistantConfig(cfg *Config) error {
 	permissiveString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF", &cfg.Assistant.TelegramWebhookSecretRef)
 	mustString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH", &cfg.Assistant.TelegramWebhookPath)
 
+	// Spec 061 SCOPE-10 — offline evaluation harness acceptance gates.
+	mustFloat("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN", &cfg.Assistant.Eval.RoutingAccuracyMin)
+	mustFloat("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN", &cfg.Assistant.Eval.CaptureFallbackMin)
+
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
 	}
@@ -322,6 +346,17 @@ func (c *Config) validateAssistantConfig() error {
 	// Rule #10 — switching modes requires process restart. This is
 	// enforced by the fact that loadAssistantConfig + validate run
 	// only at startup; there is no runtime swap path.
+
+	// Spec 061 SCOPE-10 — acceptance-gate threshold range checks.
+	// Both values are fractions in [0.0, 1.0]; out-of-range values
+	// produce a fail-loud error so a typo (e.g., 85 instead of 0.85)
+	// never silently inverts a gate.
+	if c.Assistant.Eval.RoutingAccuracyMin < 0 || c.Assistant.Eval.RoutingAccuracyMin > 1 {
+		return fmt.Errorf("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN (%.4f) must be in [0.0, 1.0] (spec 061 SCOPE-10)", c.Assistant.Eval.RoutingAccuracyMin)
+	}
+	if c.Assistant.Eval.CaptureFallbackMin < 0 || c.Assistant.Eval.CaptureFallbackMin > 1 {
+		return fmt.Errorf("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN (%.4f) must be in [0.0, 1.0] (spec 061 SCOPE-10)", c.Assistant.Eval.CaptureFallbackMin)
+	}
 	return nil
 }
 
