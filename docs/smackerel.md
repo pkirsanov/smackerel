@@ -776,6 +776,26 @@ in-process fake searcher and asserts p95 < 5s (design §5.1 `LatencyBudget`).
 This is the skill-layer slice of the G026 budget; the facade-overhead
 slice is measured independently by `assistant_facade_p95_test.go`.
 
+**Production wiring of the source-assembly hook** —
+`cmd/core/wiring_assistant_facade.go::buildAssistantSourceAssemblers`
+constructs the `map[string]contracts.SourceAssembler` registered on
+`assistant.FacadeConfig.SourceAssemblers`. The first registered
+scenario is `"retrieval_qa"`, bound to
+`retrieval.NewFacadeAssembler(newPostgresArtifactLookup(svc),
+cfg.Assistant.SourcesMax)`. The lookup is a closure over
+`svc.PG.GetArtifact(ctx, id)` that maps `pgx.ErrNoRows` (and the
+wrapped `"no rows in result set"` substring fallback) to
+`("", time.Time{}, false, nil)` so graph drift is the normal
+not-found signal; every other error returns verbatim. Non-retrieval
+scenarios do not register and the facade no-ops the assembler call
+(verified by `TestFacadeHighBandSourceAssemblerNotRegisteredIsNoOp`).
+Additional retrieval-style scenarios register here too. The
+capability-level integration test
+`internal/assistant/facade_source_assembly_integration_test.go`
+(//go:build integration) drives the full `Facade.Handle` path on
+real PostgreSQL for both BS-002 (seeded artifacts → sourced answer)
+and BS-007 (unseeded IDs → canonical refusal + capture).
+
 #### 3.8.4 Telegram Reference Adapter — `internal/telegram/assistant_adapter/`
 
 The Telegram reference adapter is the spec 061 SCOPE-05 implementation
