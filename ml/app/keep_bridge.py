@@ -260,7 +260,9 @@ async def handle_handshake_request(data: dict) -> dict:
     The reply MUST NOT echo the value, its length, or any hash — only the
     field name appears in the error string.
     """
-    password = os.environ.get(APP_PASSWORD_ENV, "")
+    # Fail-loud SST: no fallback default. Missing/empty env returns a
+    # structured error envelope (sidecar contract) without leaking value.
+    password = os.environ.get(APP_PASSWORD_ENV)
     if not password:
         return {
             "status": "error",

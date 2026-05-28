@@ -849,7 +849,7 @@ func TestConnectFailsLoudWhenKeepEmailMissingInLiveMode(t *testing.T) {
 // SCN-059-004 adversarial: error MUST NOT contain the password value.
 func TestConnectDoesNotLeakKeepAppPasswordInError(t *testing.T) {
 	const passwordFixture = "uniq-fixture-pw-7Q9mZ" // gitleaks:allow — adversarial fixture; the test asserts it is NEVER leaked
-	t.Setenv("KEEP_GOOGLE_EMAIL", "") // force the email-missing branch
+	t.Setenv("KEEP_GOOGLE_EMAIL", "")               // force the email-missing branch
 	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", passwordFixture)
 	c := New("google-keep")
 	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))

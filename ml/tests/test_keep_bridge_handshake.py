@@ -9,10 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 
 class _FakeMsg:
@@ -25,6 +22,7 @@ class _FakeMsg:
 
 
 # ---------- SCN-059-019: handshake handler ----------
+
 
 def test_handle_handshake_request_rejects_empty_app_password(monkeypatch):
     from app import keep_bridge
@@ -51,6 +49,7 @@ def test_handle_handshake_request_accepts_non_empty_app_password(monkeypatch):
 
 
 # ---------- SCN-059-007: sync handler envelopes ----------
+
 
 def test_handle_sync_request_wraps_exception_as_error_envelope(monkeypatch):
     """When the sidecar handler raises, register_nats_handler's wrapper
