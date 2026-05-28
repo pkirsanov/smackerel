@@ -120,4 +120,12 @@ type Store interface {
 	// strictly before NOW() - idleTTL. Returns the number of rows
 	// removed so the ticker can record a per-sweep metric.
 	SweepIdle(ctx context.Context, idleTTL time.Duration) (int64, error)
+
+	// CountActiveByTransport returns the per-transport row count of
+	// the assistant_conversations table. A transport with zero rows
+	// MAY be omitted from the returned map; callers MUST treat
+	// "missing key" as count=0. Spec 061 SCOPE-09 — the
+	// ActiveThreadsRefresher samples this method periodically to
+	// refresh the smackerel_assistant_active_threads gauge.
+	CountActiveByTransport(ctx context.Context) (map[string]int, error)
 }
