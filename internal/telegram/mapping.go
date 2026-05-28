@@ -25,7 +25,7 @@ func (b *Bot) recordMessageArtifact(ctx context.Context, messageID int, chatID i
 		"artifact_id": artifactID,
 	})
 
-	url := b.baseURL + "/internal/telegram-message-artifact"
+	url := b.baseURL + "/api/internal/telegram-message-artifact"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		slog.Warn("failed to create message-artifact mapping request", "error", err)
@@ -54,7 +54,7 @@ func (b *Bot) recordMessageArtifact(ctx context.Context, messageID int, chatID i
 // Returns empty string if no mapping exists.
 func (b *Bot) resolveArtifactFromMessage(ctx context.Context, messageID int, chatID int64) string {
 	url := b.baseURL +
-		fmt.Sprintf("/internal/telegram-message-artifact?message_id=%d&chat_id=%d", messageID, chatID)
+		fmt.Sprintf("/api/internal/telegram-message-artifact?message_id=%d&chat_id=%d", messageID, chatID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
