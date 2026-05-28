@@ -811,7 +811,16 @@ Write the digest text only, no JSON wrapper."""
                 api_key=api_key,
                 api_base=api_base,
                 temperature=0.3,
-                max_tokens=300,
+                # Budget large enough to absorb gemma4:26b's <think>...</think>
+                # chain-of-thought preamble (typically 1.5-3K tokens) PLUS the
+                # post-think digest text (~150 words = ~250 tokens). The prior
+                # 300-token cap was being entirely consumed by the think block,
+                # leaving the actual digest empty (the <think>/fence strip then
+                # raised the "empty after strip" sentinel and forced the
+                # metadata-only fallback every cycle). 4000 tokens is well below
+                # gemma4:26b's 8K context limit and gives the model headroom to
+                # think AND write.
+                max_tokens=4000,
                 timeout=180,
             )
 
