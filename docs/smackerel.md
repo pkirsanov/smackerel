@@ -544,6 +544,329 @@ fields. ntfy details can guide normalization through mapping hints, but final
 severity/domain/intent, incidents, approvals, safe reactions, suppressions, and
 output delivery remain source-neutral core behavior.
 
+### 3.8 Assistant Capability — Conversational Surface
+
+Spec 061 adds a transport-agnostic conversational capability layer on top of
+the existing Spec 037 agent substrate (`agent.Router`, `agent.Bridge`,
+`agent.Executor`, `agent.NATSLLMDriver`, `agent.PostgresTracer`). The capability
+is a **thin facade**: it owns five net-new packages
+(`internal/assistant/{contracts, provenance, context, confirm,
+telegram_adapter}`), the `assistant.*` SST configuration block, the
+`config/assistant/scenarios.yaml` sibling lookup file for user-facing
+metadata, and three v1 user-facing scenarios authored as Spec 037 prompt
+contracts under `config/prompt_contracts/`. It does **not** introduce a
+parallel router, registry, executor, tracer, loader, llm client, or NATS
+package — those are reused from Spec 037 unchanged.
+
+Authoritative source: `specs/061-conversational-assistant/spec.md` +
+`specs/061-conversational-assistant/design.md` (§3 main flow, §4 facade,
+§5 v1 scenarios, §6 conversational state, §7 SST schema, §10 module layout,
+§11.3 architecture tests).
+
+#### 3.8.1 Assistant SST Configuration Reference
+
+Every `assistant.*` key below is a **required literal value** in
+`config/smackerel.yaml` enforced by `scripts/commands/config.sh
+required_value` + Go validators in `internal/config/assistant.go`. The
+loader (`loadAssistantConfig`) tags missing values with the
+`[F061-SST-MISSING]` prefix and names the offending env var. Smackerel's
+NO-DEFAULTS / fail-loud SST policy applies: the `${VAR:?...}` substitution
+form is reserved for `deploy/compose.deploy.yml` (Gate G028); the
+capability config block uses literal values consistent with the rest of
+`smackerel.yaml`.
+
+| YAML key | Env var | Type | Purpose | Recommended value |
+|----------|---------|------|---------|-------------------|
+| `assistant.enabled` | `ASSISTANT_ENABLED` | bool | Master switch for the capability layer. When `false`, all skill-enable + transport flags remain valid (dehydrated config) and rules #2/#3/#4 are skipped. | `true` once SCOPE-04 facade ships; `false` until then. |
+| `assistant.borderline_floor` | `ASSISTANT_BORDERLINE_FLOOR` | float (0,1) | Three-band routing post-processor threshold (design §3.2). `RoutingDecision.TopScore >= floor` → executor; `agent.routing.confidence_floor <= TopScore < floor` → disambiguation; below → capture. | `0.75`. Validator rule #2 enforces `> agent.routing.confidence_floor` (strict). |
+| `assistant.context.window_turns` | `ASSISTANT_CONTEXT_WINDOW_TURNS` | int ≥ 1 | Max prior turns retained per `(user_id, transport)` in `assistant_conversations.working_context`. | `12`. |
+| `assistant.context.idle_timeout` | `ASSISTANT_CONTEXT_IDLE_TIMEOUT` | Go duration | Idle TTL before a conversation row is swept and any pending confirm/disambig is discarded (audit-row `outcome="discarded_timeout"`). | `30m`. |
+| `assistant.context.idle_sweep_interval` | `ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL` | Go duration | Single-SQL idle-sweep ticker cadence (design §6.2). | `5m`. |
+| `assistant.context.state_key` | `ASSISTANT_CONTEXT_STATE_KEY` | enum | Conversation primary-key shape. Validator rule #4 logs a WARN on `"user"` (transport-bleed risk) and rejects unknown values. | `transport_user` (recommended); `user` accepted with WARN. |
+| `assistant.sources_max` | `ASSISTANT_SOURCES_MAX` | int ≥ 1 | Hard cap on `AssistantResponse.Sources[]` length emitted by skills. | `5`. |
+| `assistant.body_max_chars` | `ASSISTANT_BODY_MAX_CHARS` | int ≥ 1 | Hard cap on `AssistantResponse.Body` length before adapter truncation. | `2000`. |
+| `assistant.status_max_duration` | `ASSISTANT_STATUS_MAX_DURATION` | Go duration | SLO ceiling for the in-flight `StatusToken` window (UI/UX freshness budget). | `8s`. |
+| `assistant.disambiguate_timeout` | `ASSISTANT_DISAMBIGUATE_TIMEOUT` | Go duration | TTL on a pending `DisambiguationPrompt` before it is swept. | `5m`. |
+| `assistant.error.capture_timeout` | `ASSISTANT_ERROR_CAPTURE_TIMEOUT` | Go duration | Outer deadline for the capture-as-fallback path on skill error. | `10s`. |
+| `assistant.rate_limit.retrieval.requests_per_minute` | `ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM` | int ≥ 1 | Per-user RPM cap on the retrieval skill (token bucket per `(user, skill)`). | `30`. |
+| `assistant.rate_limit.weather.requests_per_minute` | `ASSISTANT_RATE_LIMIT_WEATHER_RPM` | int ≥ 1 | Per-user RPM cap on the weather skill. | `30`. |
+| `assistant.rate_limit.notifications.requests_per_minute` | `ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM` | int ≥ 1 | Per-user RPM cap on the notifications skill. | `10`. |
+| `assistant.skills.retrieval.enabled` | `ASSISTANT_SKILLS_RETRIEVAL_ENABLED` | bool | Per-skill enable flag. Validator rule #3 requires at least one transport `enabled=true` when `assistant.enabled=true`; skill-enable flags are independent. | `true`. |
+| `assistant.skills.retrieval.top_k` | `ASSISTANT_SKILLS_RETRIEVAL_TOP_K` | int ≥ 1 | Hard cap on `retrieval_search` tool `top_k` argument. | `8`. |
+| `assistant.skills.weather.enabled` | `ASSISTANT_SKILLS_WEATHER_ENABLED` | bool | Per-skill enable flag for the weather skill. | `true`. |
+| `assistant.skills.weather.provider` | `ASSISTANT_SKILLS_WEATHER_PROVIDER` | string | Provider selector consumed by `internal/agent/tools/weather/provider.go`. v1 supports `open-meteo`. | `open-meteo`. |
+| `assistant.skills.weather.api_key_ref` | `ASSISTANT_SKILLS_WEATHER_API_KEY_REF` | string (optional) | Infisical secret reference. Empty string is valid for providers that do not require an API key (e.g. open-meteo). The loader uses `permissiveString` for this single key. | `""` for open-meteo. |
+| `assistant.skills.weather.cache_ttl` | `ASSISTANT_SKILLS_WEATHER_CACHE_TTL` | Go duration | In-process LRU TTL per `(provider, location, forecast_window)`. Cache hits emit ORIGINAL `retrieved_at`, NOT cache-hit time. | `10m`. |
+| `assistant.skills.notifications.enabled` | `ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED` | bool | Per-skill enable flag for the notifications skill. | `true`. |
+| `assistant.skills.notifications.confirm_timeout` | `ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT` | Go duration | TTL on a pending notification `ConfirmCard` before it is auto-discarded (audit-row `outcome="discarded_timeout"`). | `5m`. |
+| `assistant.transports.telegram.enabled` | `ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED` | bool | Enable the Telegram reference adapter (SCOPE-05). Validator rule #3 requires at least one transport `enabled=true` when `assistant.enabled=true`. | `true`. |
+| `assistant.transports.telegram.markdown_mode` | `ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE` | enum | Telegram message parse mode. | `MarkdownV2`. |
+| `assistant.transports.telegram.max_message_chars` | `ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS` | int ≥ 1 | Telegram per-message char cap (Telegram API limit is 4096). | `4000`. |
+
+Validator rules implemented in `internal/config/assistant.go::validateAssistantConfig`
+(design §7.2 rules #1–#4; rules #5 + #6 are hook-only in SCOPE-01 and are
+injected with concrete predicates by SCOPE-03/06/07/08):
+
+1. **#1 — Required values.** Every key above is required (except
+   `assistant.skills.weather.api_key_ref` which is permissive). Enforced
+   inline in `loadAssistantConfig` with the `[F061-SST-MISSING]` prefix.
+2. **#2 — Borderline floor strictly greater than agent confidence floor.**
+   `ASSISTANT_BORDERLINE_FLOOR > AGENT_ROUTING_CONFIDENCE_FLOOR`. Equal or
+   less collapses the borderline band entirely and is rejected.
+3. **#3 — Enabled requires a transport.** `ASSISTANT_ENABLED=true` requires
+   at least one `assistant.transports.*.enabled=true`.
+4. **#4 — State-key advisory.** `assistant.context.state_key=user` is
+   accepted but logs a WARN about cross-transport conversation bleed;
+   `transport_user` is the recommended value; unknown values are rejected.
+5. **#5 — Skill reachability hook** (owned by SCOPE-06/07/08): each enabled
+   skill must register its concrete reachability predicate at startup.
+6. **#6 — Scenario YAML presence hook** (owned by SCOPE-03): the three v1
+   scenario YAMLs must be present in `AGENT_SCENARIO_DIR` and pass
+   Spec 037 `loader.Load` validation.
+
+Functional regression: `tests/config/assistant_config_generate_test.sh`
+asserts (a) `./smackerel.sh config generate` emits every `ASSISTANT_*` env
+var into `dev.env`, and (b) a tampered `smackerel.yaml` with
+`assistant.borderline_floor` removed fails loudly with
+`Missing config key: assistant.borderline_floor` from the SST loader.
+
+#### 3.8.2 Assistant Scenarios — Sibling-Lookup Pattern + Extensibility Recipe
+
+Spec 061 SCOPE-03 ships three v1 user-facing scenarios authored as Spec 037
+prompt contracts (`retrieval_qa`, `weather_query`, `notification_schedule`)
+backed by four tools registered against the existing Spec 037 tool registry:
+
+| Scenario id | Prompt contract | Tool(s) registered via `agent.RegisterTool` in `init()` | Side-effect class |
+|-------------|-----------------|---------------------------------------------------------|-------------------|
+| `retrieval_qa` | `config/prompt_contracts/retrieval-qa-v1.yaml` | `retrieval_search` (`internal/agent/tools/retrieval/`) | read |
+| `weather_query` | `config/prompt_contracts/weather-query-v1.yaml` | `weather_lookup` (`internal/agent/tools/weather/`) | external |
+| `notification_schedule` | `config/prompt_contracts/notification-schedule-v1.yaml` | `notification_propose` + `notification_execute` (`internal/agent/tools/notification/`) | read + write |
+
+Each scenario lives **twice**:
+
+1. As a Spec 037 scenario YAML in `config/prompt_contracts/<id>-v1.yaml`
+   — the agent loader scans this directory, validates the schemas, and
+   registers the scenario with `agent.RegisterTool`-bound handlers. This
+   half is identical to every other Spec 037 scenario; the assistant does
+   **not** introduce a parallel loader.
+2. As a row in `config/assistant/scenarios.yaml` — the sibling skills
+   manifest that maps scenario ids to user-facing labels and the
+   `enable_sst_key` that gates the scenario on a runtime SST flag
+   (`assistant.skills.<name>.enabled`). This is **SUBSTRATE-TOUCHPOINT-1
+   Option (b)**: the assistant package consults the sibling YAML on
+   construction and resolves enable keys via an `EnableResolver` injected
+   from `cfg.Assistant.*Enabled`. Unknown keys cause manifest construction
+   to fail loud (BS-008).
+
+The two files are kept in lockstep by **design §7.2 validator rule #6**
+(`scenario YAMLs present`). The concrete predicate lives in
+`internal/assistant/scenarios_validator.go::ValidateScenariosPresent` and
+runs in two places:
+
+- `cmd/core` startup, right after `wireAgentBridge` succeeds — production
+  fails loud with the `[F061-SCENARIO-MISSING]` prefix if any
+  manifest-declared id has no loadable YAML.
+- `cmd/scenario-lint -assistant-manifest <path>` — CI-time check exercised
+  by `tests/config/assistant_scenarios_present_test.sh`, which covers both
+  the happy path and an adversarial path that deletes
+  `weather-query-v1.yaml` from a temp copy and asserts the CLI exits
+  non-zero with the `[F061-SCENARIO-MISSING] ... weather_query` message.
+
+**Extensibility recipe — adding a fourth v1 scenario** (4 steps, no new
+packages, no Spec 037 changes):
+
+1. Drop a Spec 037 prompt contract at
+   `config/prompt_contracts/<new-id>-v1.yaml` declaring `id`, `version`,
+   `system`, `allowed_tools[]`, input/output JSON schemas, `limits`, and
+   `side_effect_class`. The loader validates the file the next time it
+   runs.
+2. Append a row to `config/assistant/scenarios.yaml`:
+
+   ```yaml
+   - id: <new-id>
+     user_facing_label: "<verb-phrase>"
+     requires_provenance: true|false
+     confirm_required: true|false
+     enable_sst_key: assistant.skills.<name>.enabled
+   ```
+
+3. Register the new tool(s) under
+   `internal/agent/tools/<name>/` with `agent.RegisterTool` in `init()`
+   and a `SetServices`/`ResetForTest` DI surface. Add a blank import to
+   both `cmd/core/wiring_agent.go` and `cmd/scenario-lint/main.go` so
+   `init()` runs in those binaries.
+4. Add the SST key `assistant.skills.<name>.enabled` to
+   `config/smackerel.yaml`, register it in `scripts/commands/config.sh`
+   (`required_value` for the env var), expose `cfg.Assistant.<Name>Enabled`
+   in `internal/config/assistant.go`, and extend
+   `cmd/core/wiring_assistant_scenarios.go::assistantEnableResolver` with
+   the new switch case so rule #6 resolves it.
+
+Rule #6 will reject the new manifest entry until step 1 lands, and the
+loader will reject the YAML until the tool handler (step 3) registers
+its name with `agent.RegisterTool`. Both halves fail loud — there is no
+default that silently disables the scenario.
+
+#### 3.8.3 Retrieval Skill — `internal/agent/tools/retrieval/`
+
+The Retrieval skill is the spec 061 SCOPE-06 implementation of the
+`retrieval_qa` scenario. It is the first read-class skill wired into
+the assistant capability layer and is the canonical example of how a
+skill participates in the provenance contract for `requires_provenance:
+true` scenarios.
+
+**Tool surface** — `retrieval_search`, registered via blank-import side
+effect from `internal/agent/tools/retrieval/tool.go` `init()`. Input:
+`{query: string, user_id: string, top_k?: int}`. Output:
+`{hits: [{artifact_id, title, snippet, kind, captured_at}], total,
+mode: "vector"|"text"|"hybrid"}`. The handler:
+
+- Validates input against the registered JSON schema (registry-level).
+- Caps `top_k` at `cfg.Assistant.Skills.Retrieval.TopK` (SST,
+  per-skill enable + cap fields in §3.8.1). Zero/missing `top_k`
+  resolves to the cap.
+- Delegates to a `Searcher` interface (the abstract seam) whose
+  production implementation is `*api.SearchEngine` (pgvector +
+  hybrid rerank) — wired by `cmd/core/wiring_assistant_skills.go`
+  `wireRetrievalSkillServices()`. The wiring is **fail-loud** when
+  the skill is enabled but the search engine is nil or `TopK < 1`.
+- Returns `retrieval_tools_not_configured` if the handler is invoked
+  before production wiring runs (test-skip path; production always
+  wires).
+
+**Source-assembly invariant (BS-002 + BS-007)** —
+`internal/agent/tools/retrieval/source_assembly.go` exposes the pure
+function `AssembleSources(ctx, citedIDs, lookup, sourcesMax) →
+(sources, overflowCount)` that any caller upstream of the
+`provenance.Enforce` gate uses to translate cited `artifact_id`s
+(emitted by the LLM in the `cited_artifact_ids` output-schema field)
+into `contracts.Source{Kind: SourceArtifact, ...}` entries. The
+function:
+
+- Dedups duplicate citations before lookup.
+- Drops missing artifacts (graph drift) and increments
+  `smackerel_assistant_source_assembly_drops_total{cause="missing_artifact"}`.
+- Drops transient lookup errors and increments the same counter with
+  `cause="lookup_error"`. The `ErrArtifactNotFound` sentinel is
+  treated identically to a nil-error-not-found result so callers do
+  not need to disambiguate.
+- Caps the result slice at `cfg.Assistant.SourcesMax` and reports the
+  exact overflow count via the second return value (consumed by
+  `AssistantResponse.SourcesOverflowCount`).
+- Never returns an error and never panics — graph drift is the normal
+  path, not an exceptional one.
+
+When **all** cited IDs drop (full graph drift), the returned
+`sources` slice is empty. Combined with `requires_provenance: true`
+this guarantees the downstream `provenance.Enforce` gate rewrites the
+response to the canonical refusal `"I don't have a sourced answer for
+that."` and increments
+`smackerel_assistant_provenance_violations_total{scenario="retrieval_qa"}`
+— BS-007 contract proven at the unit boundary.
+
+**Metric vocabulary (closed)** — exactly two label values are emitted
+by the source-assembly counter: `missing_artifact` and `lookup_error`.
+Cardinality is bounded and asserted by
+`internal/assistant/metrics/source_assembly_test.go
+TestSourceAssemblyDropsCounter_LabelVocabularyClosed`.
+
+**Latency contract** — `tests/stress/assistant_retrieval_p95_test.go`
+drives an 800-turn / 32-worker burst against the tool handler with an
+in-process fake searcher and asserts p95 < 5s (design §5.1 `LatencyBudget`).
+This is the skill-layer slice of the G026 budget; the facade-overhead
+slice is measured independently by `assistant_facade_p95_test.go`.
+
+#### 3.8.4 Telegram Reference Adapter — `internal/telegram/assistant_adapter/`
+
+The Telegram reference adapter is the spec 061 SCOPE-05 implementation
+of the `contracts.TransportAdapter` interface. It lives at
+`internal/telegram/assistant_adapter/` as a **subpackage of
+`internal/telegram`**. This placement is deliberate:
+
+- The capability layer (`internal/assistant/...`) MUST NOT import any
+  transport package — enforced mechanically by
+  `internal/assistant/contracts/architecture_test.go::TestArchitecture_NoCapabilityToTransportImports`,
+  which AST-walks every `.go` under `internal/assistant/...` and
+  rejects imports beginning with `internal/{telegram,whatsapp,webchat,mobile}`.
+- The adapter therefore lives **outside** `internal/assistant/`; the
+  architecture invariant test ignores it.
+- The adapter is a child of `internal/telegram/`, so it may import
+  `tgbotapi` and other Telegram-specific code without cycle risk, but
+  it MUST NOT import its parent `internal/telegram` package — coupling
+  to the bot flows through narrow function-pointer hooks (`Sender`
+  interface, `CaptureFn`, `UserResolver`).
+
+**Files in the package (design §10):**
+
+| File | Purpose |
+|------|---------|
+| `doc.go` | Package architectural invariants + import direction. |
+| `adapter.go` | `Adapter` struct, `Sender` interface, `CaptureFn` / `UserResolver` function types, `Options` (all required, no defaults), `NewAdapter` fail-loud constructor, `Translate` / `Render` / `HandleUpdate` / `Start` / `Stop` / `IsBound` / `Assistant` methods, `Name() == "telegram"`. |
+| `translate_inbound.go` | `*tgbotapi.Update` → `AssistantMessage` translation. Precedence: callback → `/reset` → other slash (returns `ErrNotAssistantMessage` so existing handlers run) → empty (also `ErrNotAssistantMessage`) → plain text. |
+| `render_outbound.go` | `AssistantResponse` → outbound Telegram message. Honors status token, body, sources block, confirm card, disambiguation prompt, error cause. Silent-path short-circuit when body+keyboard are both empty. Pure helper `buildTelegramRendering` powers golden tests. |
+| `render_sources.go` | Trailing numbered sources block (UX §14.B.1). Artifact references render as `  N. <8-hex> — <title> (<YYYY-MM-DD>)`; external as `  N. <provider> — <title> (<RFC3339>)`. |
+| `render_confirm.go` | Inline-keyboard confirm card with `[positive][negative]` row + `callback_data` encoding the `ConfirmRef`. |
+| `render_disambig.go` | Numbered disambiguation list + optional inline-keyboard shortcut row (≤3 buttons). |
+| `callbacks.go` | Callback-data scheme `a:c:<confirmRef>:<pos|neg>` / `a:d:<disambigRef>:<num>`. Public `IsAssistantCallback(data)` predicate lets the bot dispatch only assistant-owned callbacks to the adapter. |
+| `identity.go`, `reset.go` | Documentation stubs for the identity-type-assertion contract and the `/reset` command shape. |
+
+**Bot wiring (`internal/telegram/bot.go` + `internal/telegram/assistant_wiring.go`):**
+
+The adapter is reached through three narrow couplings — there is no
+shared state with the legacy bot pipeline beyond these:
+
+1. `*Bot.assistantAdapter` field + `SetAssistantAdapter(*Adapter)`
+   setter, populated by `cmd/core/wiring_assistant_facade.go` after
+   the facade is constructed.
+2. `safeHandleCallback` checks `assistant_adapter.IsAssistantCallback(cb.Data)`
+   BEFORE the legacy list/cook callback handlers; assistant-prefix
+   callbacks are dispatched via `HandleUpdate` and acked.
+3. `handleMessage` plain-text branch invokes the adapter BEFORE the
+   existing `handleTextCapture`. If the adapter returns
+   `(handled=false, nil)` (either because no facade is bound or
+   because the message is not addressed to the assistant), the legacy
+   `handleTextCapture` runs — **BS-001 regression-safe fallthrough**.
+4. `handleSlashCommand` has a new `case "reset":` arm that dispatches
+   to the adapter when bound, or replies "assistant is not enabled in
+   this install" when unbound. All other slash commands (`/find`,
+   `/list`, `/watch`, `/digest`, …) continue through their existing
+   handlers verbatim.
+
+`internal/telegram/assistant_wiring.go` exposes `NewBotSender(b)`,
+`NewBotCaptureFn(b)`, and `NewBotChatResolver(b)` so `cmd/core` can
+construct the adapter without depending on bot internals.
+
+**Production wiring (`cmd/core/wiring_assistant_facade.go`):**
+
+Called from `cmd/core/main.go`. Short-circuits when
+`!cfg.Assistant.Enabled || tgBot == nil || !cfg.Assistant.TelegramEnabled`.
+Otherwise: loads the SST-resolved skills manifest, builds the router +
+scenario registry + Postgres-backed context store + idle-sweep ticker,
+constructs `assistant.NewFacade(...)`, instantiates the adapter via
+`assistant_adapter.NewAdapter(Options{...})` with the three bot wiring
+helpers, then `adapter.Start(ctx, facade)` and
+`tgBot.SetAssistantAdapter(adapter)`.
+
+**`/reset` command:**
+
+`/reset` is the only slash command the adapter claims. It causes the
+facade to delete the `assistant_conversations` row for
+`(user_id, "telegram")` per design §13 OQ #2. Subsequent messages
+start with a fresh borderline/lookup state machine.
+
+**Regression-safety contract (BS-001):**
+
+- Legacy installs (no `assistant.enabled`, OR no telegram transport
+  enabled, OR adapter not yet wired) MUST continue to capture every
+  plain-text message via `handleTextCapture`. This is proven by
+  `internal/telegram/bot_assistant_intercept_test.go::TestHandleMessage_AdapterUnbound_LegacyCapturePreserved`.
+- New installs with the adapter bound MUST still capture every plain
+  text that the facade returns as `CaptureRoute=true`. Proven by
+  `TestHandleMessage_AssistantCaptureRoute_FallsThroughToCapture`.
+- The adapter MUST NEVER bypass `handleTextCapture` when the facade
+  asks for capture. Proven by `TestHandleMessage_AssistantHandled_DoesNotCallCapture`
+  in combination with the prior two tests.
+
 ---
 
 ## 4. OpenClaw Integration Strategy

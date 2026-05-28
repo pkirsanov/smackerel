@@ -1,0 +1,56 @@
+id: retrieval_qa
+version: "retrieval-qa-v1"
+type: "scenario"
+description: "Answer a user question over the user's knowledge graph with artifact-ID citations."
+
+intent_examples:
+- "what did I save about Tailscale last month?"
+- "did I capture anything on sourdough?"
+- "find my notes on ACL tags"
+- "do I have anything on CGNAT?"
+- "remind me what I wrote about the home lab"
+
+system_prompt: |
+  You are Smackerel's retrieval assistant. Answer ONLY from artifacts
+  returned by the retrieval_search tool. Cite every artifact you used
+  by its artifact_id. Never invent citations. If no artifacts match,
+  return an empty answer and let the capability layer handle the
+  refusal.
+
+allowed_tools:
+- name: retrieval_search
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ query, user_id ]
+  properties:
+    query: { type: string, minLength: 1 }
+    user_id: { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ answer, cited_artifact_ids ]
+  properties:
+    answer:
+      type: string
+    cited_artifact_ids:
+      type: array
+      items: { type: string }
+
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 5000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2500
+
+token_budget: 1200
+temperature: 0.2
+model_preference: "default"
+side_effect_class: read
+
+# Spec-061 user-facing metadata (user_facing, requires_provenance,
+# user_facing_label, slash_shortcut, confirm_required, enable_sst_key)
+# lives in the sibling file `config/assistant/scenarios.yaml` per
+# SUBSTRATE-TOUCHPOINT-1 Option (b) ratified in specs/061-conversational-assistant/scopes.md.
+# This file stays 100% Spec 037 loader-compliant.

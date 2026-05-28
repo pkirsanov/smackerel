@@ -3,129 +3,208 @@
 **Owner:** `bubbles.design`
 **Status ceiling:** `specs_hardened` (no code changes; planning-only)
 **Workflow mode:** `product-to-planning`
-**Depends on:** spec 044 (per-user bearer auth, chat→user mapping),
-spec 054 (notification scheduler), spec 060 (PASETO scope claims),
-existing `ml/` Python sidecar, existing `internal/telegram/bot.go`,
-existing `/api/search` endpoint backed by pgvector.
-**Replaces:** the high-level sketch previously at this path (preserved
-in git history). The pre-revision Telegram-specific design at
-`specs/061-telegram-assistant-mode/design.md` (also in git history)
-provided source material for the capability-layer portions and was
-mined where its content was transport-agnostic.
+**Depends on:**
+- spec 037 (LLM agent runtime — terminal `done`; this design CONSUMES
+  it as substrate and MUST NOT re-implement any of its parts)
+- spec 044 (per-user bearer auth, chat→user mapping)
+- spec 054 (notification scheduler)
+- spec 060 (PASETO scope claims)
+- existing `ml/` Python sidecar
+- existing `internal/telegram/bot.go`
+- existing `/api/search` endpoint backed by pgvector
+**Supersedes:** the prior design draft at this path (archived outside
+the repo). The pre-revision draft proposed a parallel
+`internal/assistant/{router,registry,executor,tracer}` stack that
+re-implemented machinery already shipped by spec 037; spec.md §3.1
+and Hard Constraint 6 made that approach a blocking failure. This
+revision collapses the capability layer onto the spec 037 substrate.
 
 ---
 
 ## 0. Design Brief (REQUIRED alignment checkpoint)
 
-**Current state.** `internal/telegram/bot.go::handleMessage` is the
-only conversational entry point Smackerel has. Every non-command,
-non-special, non-media plain-text message is routed to
-`handleTextCapture` → `POST /api/capture` and persisted as an `idea`
-artifact. The `ml/` FastAPI sidecar is online and reachable via
-`http://ml:8000` from the core process, but no code path currently
-calls it for query/answer. PostgreSQL + pgvector backs `/api/search`.
-Spec 054 ships a notification scheduler. Spec 044 owns the
-`chat_id → user_id` mapping table. Spec 060 owns the PASETO scope
-claim catalog.
+**Current state.** Spec 037 (`specs/037-llm-agent-tools/`, terminal
+`done`, full-delivery) already shipped a complete LLM-scenario agent
+runtime: `agent.Router` (similarity + explicit-id + floor + fallback),
+`agent.Executor` (loop, retry budget, allowlist, schema validation),
+`agent.Bridge` (YAML scenario loader + hot-reload), `agent.NATSLLMDriver`,
+`agent.PostgresTracer` (with `agent_traces` table + `smackerel agent
+replay/traces/scenarios/tools` CLI), and `internal/telegram/agent_bridge.go::AgentBridge.Handle(ctx, chatID, text)`
+which renders any `InvocationResult` via `internal/agent/userreply`
+within a 4-line Telegram budget. The bridge is constructed in
+`cmd/core/wiring_agent.go` but is wired ONLY to the REST handler
+`POST /v1/agent/invoke`; `internal/telegram/bot.go::handleMessage`
+(line 534) still routes every plain-text message straight to
+`handleTextCapture`. 15 backend-only scenarios live under
+`config/prompt_contracts/` (recommendation, digest assembly, drive
+classification, etc.); none are user-facing. The `ml/` FastAPI sidecar
+is online, NATS JetStream brokers the Go↔Python LLM channel, and
+PostgreSQL + pgvector backs `/api/search`.
 
 **Target state.** Introduce a **transport-agnostic assistant capability
-layer** (`internal/assistant/`) that owns ALL business logic — intent
-router, skill registry, three v1 skills (retrieval, weather,
-notifications), conversational state, source attribution, provenance
-enforcement. Layer a **`TransportAdapter` interface** on top of that
-capability with **one v1 reference implementation: Telegram**
-(`internal/telegram/assistant_adapter/`). The Telegram adapter
-intercepts the plain-text branch of `handleMessage`, translates to
-`AssistantMessage`, calls `Assistant.Handle(ctx, msg)`, and renders
-the returned `AssistantResponse` using Telegram-native widgets. When
-the capability returns `captureRoute=true`, the Telegram adapter
-delegates to the existing `handleTextCapture` path byte-for-byte.
+layer** (`internal/assistant/`) that is a **thin facade over the spec
+037 substrate** PLUS exactly five net-new packages enumerated in
+spec.md §3.1.4 (contracts, provenance, context, confirm,
+telegram_adapter). The capability layer:
+
+- Reuses `agent.Router` for intent classification (no new router).
+- Reuses `agent.Bridge` (loader + hot-reload) as the "skill registry"
+  (no new registry).
+- Reuses `agent.Executor` for skill execution (no new executor).
+- Reuses `agent.PostgresTracer` for per-turn trace persistence (no
+  new tracer; turns are agent traces tagged with `transport=...`).
+- Reuses `agent.NATSLLMDriver` (no new LLM driver).
+- Reuses `internal/telegram/agent_bridge.go::AgentBridge.Handle` as
+  the inner core of the v1 Telegram adapter.
+
+Three v1 "skills" ship as **YAML scenarios** under
+`config/prompt_contracts/` (retrieval, weather, notifications) PLUS
+their tool handlers added to the existing tool registry. They are
+ordinary spec 037 scenarios distinguished only by user-facing
+`intent_examples` and a user-facing tool surface.
+
+Layer a `TransportAdapter` interface on top of that capability with
+**one v1 reference implementation: Telegram** in
+`internal/telegram/assistant_adapter/`. The Telegram adapter
+intercepts the plain-text branch of `handleMessage` BEFORE
+`handleTextCapture`, builds an `agent.IntentEnvelope`, delegates to
+the existing `AgentBridge`, transforms the resulting
+`agent.InvocationResult` + `agent.RoutingDecision` into an
+`AssistantResponse` via the capability facade, and renders using
+Telegram-native widgets. When the capability returns
+`captureRoute=true`, the Telegram adapter delegates to the existing
+`handleTextCapture` byte-for-byte.
 
 **Patterns to follow.**
-- Capability-foundation-first per
+- **Substrate reuse (spec.md §3.1).** Every machinery layer of spec
+  037 is consumed as-is. Net-new code is limited to thin facades and
+  the five packages in spec.md §3.1.4. Any departure from this list
+  is a Hard Constraint 6 violation and a P0 architectural rollback
+  trigger.
+- **Capability-foundation-first** per
   `.github/skills/bubbles-capability-foundation-design/SKILL.md`:
-  proportionality is satisfied on TWO axes simultaneously (≥3 skills
-  share `Skill`; ≥1 v1 plus ≥3 planned future transports share
-  `TransportAdapter`).
-- NO-DEFAULTS / fail-loud SST per
+  proportionality is satisfied on the `TransportAdapter` axis
+  (≥1 v1 plus ≥3 planned future transports — WhatsApp, web chat,
+  mobile in-app). The agent-runtime axis is NOT a new foundation —
+  spec 037 already owns it; this spec EXTENDS the existing
+  foundation by adding three user-facing scenarios plus a
+  user-facing facade layer.
+- **NO-DEFAULTS / fail-loud SST** per
   `.github/instructions/smackerel-no-defaults.instructions.md`. Every
-  `assistant.*` key uses `${VAR:?...}` substitution.
-- Test environment isolation per
+  net-new `assistant.*` and `assistant.transports.*` key uses
+  `${VAR:?...}` substitution. Existing spec 037 `agent.*` keys are
+  reused unchanged.
+- **Capture-as-fallback is inviolable** (spec Hard Constraint 1,
+  `policySnapshot.captureAsFallback="inviolable"`). The capability
+  defaults to `CaptureRoute=true` on every uncertainty path
+  (low-band router score, borderline-timeout, confirm-discarded,
+  confirm-timeout, error-offered-capture).
+- **Test environment isolation** per
   `.github/instructions/bubbles-test-environment-isolation.instructions.md`:
-  integration/e2e tests use ephemeral PostgreSQL via the existing
-  test compose project; mocks only at external transport / external
-  provider boundaries.
-- Existing module conventions: per-package `doc.go`, exported
+  integration/e2e/stress tests use ephemeral PostgreSQL via the
+  existing test compose project; the spec 037 `NATSLLMDriver` and
+  Python sidecar are real; only the Telegram `tgbotapi` boundary is
+  in-process-faked (external dep).
+- **Existing module conventions:** per-package `doc.go`, exported
   interfaces in `contracts.go`, table-driven tests in `*_test.go`.
-- Reuse spec 054 scheduler directly for the notifications skill (do
-  not fork a parallel scheduler) — analyst Open Q #2 resolved by
-  owner preference and capability-foundation skill.
-- Reuse `ml/` sidecar for both intent classification and LLM
-  synthesis. The sidecar is the only LLM gateway; new skills MUST
-  call it, not Ollama or external LLM APIs directly.
 
 **Patterns to avoid.**
-- The pre-revision `internal/telegram/assistant/` layout (everything
-  under `internal/telegram/`). That collocation made the capability
-  layer transport-coupled by accident and would have to be undone
-  the day a second transport ships. Capability moves under
-  `internal/assistant/`; only the v1 Telegram adapter stays under
-  `internal/telegram/`.
-- String-formatted source blocks emitted by the capability. The
-  capability emits structured `Source` values; each adapter renders.
-  The pre-revision design embedded the trailing-numbered-block
-  format in the capability layer; that decision is reversed here.
-- Per-transport intent classification or per-transport confidence
-  floors. Floors live under `assistant.capability.intent.*` (UX §14.D
-  decision 3); any drift would create user-visible semantic
-  inconsistency across frontends.
-- Plain-text `yes`/`no` interpreted as confirm callbacks (UX §14.D
-  decision 5). The capability accepts only
-  `AssistantMessage{kind: "confirm", confirmRef: ...}`.
-- Adding a 5th name to `.env.secrets` for weather/LLM API keys. All
-  managed secrets go through Infisical per spec 150; SST keys
-  reference `${WEATHER_PROVIDER_API_KEY:?...}` and Infisical resolves
-  the value.
+- **FORBIDDEN — parallel agent runtime.** No `internal/assistant/router/`,
+  no `internal/assistant/registry/`, no `internal/assistant/executor/`,
+  no `internal/assistant/tracer/`, no second LLM driver, no second
+  scenario loader, no second hot-reload mechanism. Reuse
+  `internal/agent/*` types exclusively. Per spec.md §3.1.4, the
+  presence of any such package is a P0 architectural rollback
+  trigger and a Hard Constraint 6 violation. A build-time
+  package-lint test (§11.3) fails the build if any of these
+  package paths exist.
+- **FORBIDDEN — wrapping `agent.Router` in a new `Router` interface
+  inside `internal/assistant/`.** The capability layer USES
+  `agent.Router` directly (or through `agent.Bridge` which already
+  composes router+executor). Wrapping it would re-export the same
+  machinery under a new name and is a covert duplication.
+- **FORBIDDEN — `AssistantResponse` that mutates / re-encodes
+  `agent.InvocationResult`.** The response is a thin facade that
+  embeds (or references) the underlying `InvocationResult` and adds
+  exactly six net-new fields. Anything more is duplication.
+- **FORBIDDEN — direct Spec 037 mutation.** Spec 037 is in terminal
+  `done` status; per `bubbles-artifact-ownership-routing`, this spec
+  CANNOT edit Spec 037 files directly. The recommended
+  borderline-band design (§3.2 below) is **additive in the
+  capability layer**, not a `agent.Router` change. If any change to
+  Spec 037 substrate becomes unavoidable, it MUST be routed via a
+  Spec 037 bug folder (`specs/037-llm-agent-tools/bugs/BUG-NNN-.../`)
+  and is OUT OF SCOPE for this spec until that bug ships.
+- **FORBIDDEN — string-formatted source blocks from the capability.**
+  The facade emits structured `Source` values; each adapter renders.
+- **FORBIDDEN — typed `yes`/`no` interpreted as confirm callbacks**
+  (UX §14.A.6). The capability accepts only
+  `AssistantMessage{Kind: KindConfirm, ConfirmRef: ...}`.
 
 **Resolved decisions.**
-- Conversational state key: `(user_id, transport)` (UX Open Q #1,
-  ratified — design §6).
-- SST naming: existing `assistant.intent.*` keys rename to
-  `assistant.capability.intent.*` as part of SCOPE-01 (UX Open Q #2,
-  ratified — design §7 + §13).
-- Per-skill PASETO scopes (analyst Open Q #3, ratified): three new
-  scopes added to spec 060 catalog —
+- **OQ #5 (substrate reconciliation, BLOCKING) — RESOLVED.**
+  Eliminate parallel agent runtime. Capability layer = thin facade
+  over spec 037 substrate + five net-new packages from spec.md
+  §3.1.4. See §1, §3, §4, §10.
+- **OQ #6 (borderline-band placement) — RESOLVED.** The
+  capability-layer facade post-processes
+  `agent.RoutingDecision.TopScore` against a NEW SST key
+  `assistant.borderline_floor` (additive; zero Spec 037 mutation).
+  When `agent.RoutingDecision.OK==true` AND
+  `TopScore >= agent.confidence_floor` AND
+  `TopScore < assistant.borderline_floor`, the facade SHORT-CIRCUITS
+  before calling the executor and emits a
+  `DisambiguationPrompt` whose `Choices` are derived from
+  `agent.RoutingDecision.Considered[:3]`. See §3.2.
+- **OQ #7 (confirm-card primitive ownership) — RESOLVED.** Net-new
+  capability-layer state machine in `internal/assistant/confirm/`.
+  Two-phase flow: (a) **propose phase** — the scenario's tool
+  handler returns a structured proposal payload (not an executed
+  side effect); the facade detects the propose marker in the
+  scenario `output_schema` and surfaces a `ConfirmCard`. (b)
+  **confirm phase** — on the user's confirm callback, the facade
+  re-invokes the SAME scenario with a `confirm_ref` in the input
+  envelope; the scenario's tool handler reads the pending payload
+  from the state store and EXECUTES the side effect. State store
+  is the PostgreSQL `assistant_conversations.pending_confirm`
+  column (§6). See §5.3 (notifications skill) and §5.4 (confirm
+  state machine).
+- **Conversational state key:** `(user_id, transport)` (UX Open Q
+  #1, ratified — §6).
+- **Intent classifier substrate:** reuse spec 037 `agent.Router`
+  which is similarity-based via the existing embeddings model
+  (`nomic-embed-text` per spec 037 SST). No new classifier path.
+  Analyst Open Q #1 thereby resolves to "use spec 037 substrate";
+  the `assistant.capability.intent.model` SST key from the prior
+  design draft is REMOVED (model selection lives in spec 037
+  `agent.*` config).
+- **Notifications skill:** reuse spec 054 scheduler directly; small
+  additive extension to scheduler payload (`Source`, `Originator`)
+  for audit. Analyst Open Q #2 resolved.
+- **Per-skill PASETO scopes** (analyst Open Q #3, ratified): three
+  new scopes added to spec 060 catalog —
   `assistant.skill.retrieval` (read),
   `assistant.skill.weather` (read),
   `assistant.skill.notifications.write` (write). See §9 + §14.
-- Intent classifier substrate (analyst Open Q #1, ratified): LLM
-  classifier via existing `ml/` sidecar. Model is SST-driven via
-  `assistant.capability.intent.model` (fail-loud). The sidecar is
-  the only allowed gateway.
-- Notifications skill (analyst Open Q #2, ratified): reuse spec 054
-  scheduler directly; small extension to scheduler payload to carry
-  a `source: assistant.skill.notifications` discriminator and the
-  originating `(user_id, transport, confirmRef)` tuple for audit.
-- Source attribution UX (analyst Open Q #4 / UX decision 1):
+- **Source attribution UX** (analyst Open Q #4 / UX decision 1):
   capability emits structured `sources[]`; Telegram adapter renders
   trailing numbered block per UX §14.B.1.
 
 **Open items deferred to bubbles.plan.**
-- Whether `/reset` ships in Telegram v1 adapter SCOPE-05 or is held
-  for a follow-up (UX deferred this; design §13 recommends shipping
-  in SCOPE-05 since the adapter already handles command dispatch).
+- Whether `/reset` ships in Telegram v1 adapter SCOPE-05 or is
+  deferred. Design recommends shipping in SCOPE-05.
 - Eval harness corpus size, refresh cadence, intent-ground-truth set
-  shape (SCOPE-10 sizing).
-- Whether SCOPE-01 (SST rename + capability/transport sub-block) can
-  ship in parallel with SCOPE-02 (canonical contracts) or strictly
-  before. Design recommends strict before because contracts validate
-  config keys at startup.
+  shape (SCOPE-10 sizing; bubbles.plan owns).
+- Scope ordering (see §13).
 
-**Blockers requiring owner clarification.** None. All open questions
-from analyst + UX have a recommended resolution backed by a
-referenced principle / skill / spec. Owner ratification is still
-required for the Principle 1 deviation (already flagged in spec.md
-§11).
+**Blockers requiring owner clarification.** None. The Principle 1
+deviation is already flagged in spec.md §11 and requires owner
+ratification at user-validation time (not at design time).
+
+**Pre-existing portfolio findings (out of scope, passed through).**
+10 hardening gaps and SCOPE-01 blockers identified in prior runs are
+NOT addressed here per packet directive and are forwarded as
+`preExisting: true` in the result envelope.
 
 ---
 
@@ -137,34 +216,50 @@ required for the Principle 1 deviation (already flagged in spec.md
 flowchart TD
     subgraph TRANSPORTS["Transport Adapter Layer (per-frontend, translation-only)"]
       direction LR
-      TG["Telegram Adapter (v1 reference)<br/>internal/telegram/assistant_adapter/"]
+      TG["Telegram Adapter (v1 reference)<br/>internal/telegram/assistant_adapter/<br/>+ existing AgentBridge"]
       WA["WhatsApp Adapter (future)"]:::future
       WEB["Web Chat Adapter (future)"]:::future
       MOB["Mobile In-App Adapter (future)"]:::future
     end
 
-    subgraph CAPABILITY["Assistant Capability Layer (transport-agnostic)"]
+    subgraph CAPABILITY["Assistant Capability Layer (thin facade — net-new)"]
       FACADE["Assistant Facade<br/>internal/assistant/facade.go"]
-      ROUTER["Intent Router<br/>internal/assistant/router/"]
-      REG["Skill Registry<br/>internal/assistant/registry/"]
-      CTX["Conversational State Store<br/>internal/assistant/context/<br/>key: (user_id, transport)"]
-      PROV["Provenance Enforcer (RequireProvenance gate)"]
-      SOURCES["Source Attribution<br/>internal/assistant/sources/"]
       CONTRACTS["Canonical Contracts<br/>internal/assistant/contracts/"]
+      PROV["Provenance Enforcer<br/>internal/assistant/provenance/"]
+      CTX["Conversational State Store<br/>internal/assistant/context/<br/>key: (user_id, transport)"]
+      CONF["Confirm-Card State Machine<br/>internal/assistant/confirm/"]
+    end
 
-      subgraph SKILLS["v1 Skills (transport-agnostic)"]
-        SK_R["Retrieval Q&A<br/>internal/assistant/skills/retrieval/"]
-        SK_W["Weather<br/>internal/assistant/skills/weather/"]
-        SK_N["Notifications<br/>internal/assistant/skills/notifications/"]
-      end
+    subgraph SUBSTRATE["Spec 037 Substrate (REUSED AS-IS — DO NOT FORK)"]
+      direction LR
+      ROUTER["agent.Router<br/>internal/agent/router.go"]
+      BRIDGE["agent.Bridge (loader + hot-reload)<br/>internal/agent/bridge.go"]
+      EXEC["agent.Executor<br/>internal/agent/executor.go"]
+      DRV["agent.NATSLLMDriver<br/>internal/agent/nats_driver.go"]
+      TRC["agent.PostgresTracer<br/>internal/agent/tracer.go"]
+      AB["telegram.AgentBridge<br/>internal/telegram/agent_bridge.go"]
+      UR["agent/userreply"]
+    end
+
+    subgraph SCENARIOS["3 v1 Scenario YAMLs (net-new content; existing loader)"]
+      SC_R["retrieval-qa-v1.yaml<br/>config/prompt_contracts/"]
+      SC_W["weather-query-v1.yaml<br/>config/prompt_contracts/"]
+      SC_N["notification-schedule-v1.yaml<br/>config/prompt_contracts/"]
+    end
+
+    subgraph TOOLS["Net-new tool handlers (in existing tool registry)"]
+      T_R["retrieval_search<br/>internal/agent/tools/retrieval/"]
+      T_W["weather_lookup<br/>internal/agent/tools/weather/"]
+      T_N1["notification_propose<br/>internal/agent/tools/notification/"]
+      T_N2["notification_execute"]
     end
 
     subgraph EXTERNAL["External / Existing dependencies (unchanged)"]
-      ML["ml/ sidecar (FastAPI)<br/>intent classify + LLM synthesis"]
+      ML["ml/ sidecar (FastAPI over NATS)<br/>intent embed + LLM synthesis"]
       SEARCH["/api/search → pgvector"]
       SCHED["spec 054 notification scheduler"]
       WX["External weather provider<br/>(open-meteo or compatible)"]
-      DB["PostgreSQL<br/>artifacts + assistant_proposal audit"]
+      DB["PostgreSQL<br/>artifacts + agent_traces + assistant_conversations"]
       INF["Infisical secret store"]
       AUTH["spec 044 chat→user_id mapping<br/>spec 060 PASETO scopes"]
     end
@@ -174,21 +269,33 @@ flowchart TD
     WEB <-.->|future| FACADE
     MOB <-.->|future| FACADE
 
-    FACADE --> ROUTER
-    FACADE --> CTX
+    FACADE -->|build IntentEnvelope| AB
+    AB --> ROUTER
+    AB --> EXEC
+    ROUTER --> BRIDGE
+    BRIDGE --> SC_R
+    BRIDGE --> SC_W
+    BRIDGE --> SC_N
+    EXEC --> DRV
+    EXEC --> T_R
+    EXEC --> T_W
+    EXEC --> T_N1
+    EXEC --> T_N2
+    DRV --> ML
+    T_R --> SEARCH
+    T_W -->|HTTPS| WX
+    T_W --> INF
+    T_N2 --> SCHED
+    EXEC --> TRC
+    TRC --> DB
+
+    FACADE -->|borderline post-processor| ROUTER
     FACADE --> PROV
-    ROUTER --> ML
-    REG --> SK_R
-    REG --> SK_W
-    REG --> SK_N
-    SK_R --> SEARCH
-    SK_R --> ML
-    SK_W -->|HTTPS| WX
-    SK_W --> INF
-    SK_N --> SCHED
-    PROV --> SOURCES
-    FACADE -->|assistant_turn audit artifact| DB
+    FACADE --> CTX
+    FACADE --> CONF
     CTX --> DB
+    CONF --> DB
+    AB --> UR
 
     TG --> AUTH
     TG -->|captureRoute=true| CAPRT["existing handleTextCapture<br/>internal/telegram/bot.go"]
@@ -199,49 +306,55 @@ flowchart TD
 
 ### 1.2 Invariants
 
-1. **Adapters never call skills or the router directly.** They call
+1. **Adapters never call skills, scenarios, the agent runtime, or the
+   facade's internals directly.** They call
    `Assistant.Handle(ctx, AssistantMessage) (AssistantResponse, error)`
-   on the capability facade. The facade is the single in-process
-   entry point.
-2. **The capability layer has zero transport-specific imports.** No
-   `tgbotapi` import, no Telegram payload shapes, no per-transport
-   feature flags inside skills. Enforced by a build-time package-lint
-   in SCOPE-02 (a small Go test that walks the AST of
-   `internal/assistant/...` and fails on any import path beginning
-   with `internal/telegram/`, `internal/whatsapp/`, etc.).
-3. **`handleMessage` becomes a thin adapter.** Inside `bot.go`, the
-   existing plain-text branch is replaced with: parse Telegram update
-   → build `AssistantMessage` (with `chat_id`-resolved `user_id`) →
-   call `assistant.Handle(...)` → either render
-   `AssistantResponse` via Telegram renderer OR, on
-   `captureRoute=true`, delegate to existing `handleTextCapture`.
-4. **Capture-as-fallback is inviolable on every transport** (spec
-   Hard Constraint 1; `policySnapshot.captureAsFallback="inviolable"`
-   in state.json). The capability defaults to `captureRoute=true` on
-   every uncertainty path; adapters MUST honor it.
-5. **Synthesis without sources is rejected at the capability layer.**
-   The `RequireProvenance` gate runs after every skill that returns
-   a synthesized `body`; an empty `sources[]` on a non-empty
-   synthesized body is dropped and replaced with the canonical "I
-   don't have a sourced answer" response (BS-007, UX §14.A.1
-   principle 3).
+   on the capability facade.
+2. **The capability layer has zero transport-specific imports.**
+   No `tgbotapi` import, no Telegram payload shapes, no per-transport
+   flags. Enforced by a build-time package-lint (§11.3).
+3. **The capability layer does NOT re-implement spec 037 substrate.**
+   Enforced by a build-time package-existence test (§11.3) that
+   fails if any of `internal/assistant/{router,registry,executor,tracer,loader}/`
+   exist.
+4. **`handleMessage` becomes a thin shim.** Inside `bot.go`, the
+   plain-text branch is rewritten to delegate to the Telegram
+   `assistant_adapter` BEFORE `handleTextCapture`. Adapter calls
+   `assistant.Handle(...)` → renders response OR, on
+   `CaptureRoute=true`, delegates to existing `handleTextCapture`
+   byte-for-byte.
+5. **Capture-as-fallback is inviolable on every transport**
+   (spec Hard Constraint 1).
+6. **Synthesis without sources is rejected at the capability layer.**
+   The `provenance` gate runs after every scenario whose manifest
+   marks `requires_provenance: true` (a new YAML key — additive in
+   net-new scenarios only; existing 15 scenarios omit it and behave
+   exactly as today). Empty `sources[]` on a non-empty synthesized
+   `body` is dropped and replaced with the canonical refusal +
+   capture (BS-007).
+7. **Per-turn trace persistence reuses spec 037 `PostgresTracer`.**
+   No new trace store. The capability layer adds a `transport=<name>`
+   label to existing trace rows via the existing `Routing` metadata
+   slot on `agent.IntentEnvelope` (no schema change to the
+   `agent_traces` table is required; the executor already passes
+   the routing context through).
 
 ### 1.3 Process boundary
 
-All capability + adapter code compiles into the same `cmd/core` Go
-binary in v1. There is **no new process boundary**. The only
-out-of-process dependencies remain the existing ones: `ml/` sidecar
-(HTTP/JSON), PostgreSQL (libpq), Infisical (HTTP), external weather
-provider (HTTPS), and the Telegram Bot API (HTTPS via existing
-`tgbotapi`).
+All capability + adapter code compiles into the same `cmd/core`
+binary. There is **no new process boundary**. Out-of-process
+dependencies are unchanged: `ml/` sidecar (NATS), PostgreSQL (libpq),
+Infisical (HTTP), external weather provider (HTTPS), Telegram Bot API
+(HTTPS via existing `tgbotapi`).
 
 ---
 
-## 2. Canonical Contracts
+## 2. Canonical Contracts (net-new — `internal/assistant/contracts/`)
 
-All canonical Go types live in `internal/assistant/contracts/`. They
-are imported by the facade, every skill, every adapter, and the test
-suites.
+All canonical Go types live in `internal/assistant/contracts/`.
+Imported by the facade, every adapter, and the test suites. They are
+the ONLY net-new top-level type surface this spec introduces; all
+runtime mechanics use the spec 037 types directly.
 
 ### 2.1 `AssistantMessage` (inbound: adapter → capability)
 
@@ -251,21 +364,21 @@ package contracts
 import "time"
 
 // AssistantMessage is the canonical inbound message handed to the
-// capability layer by any transport adapter.
+// capability layer by any transport adapter. It is trivially
+// convertible to an agent.IntentEnvelope (see facade.go).
 type AssistantMessage struct {
-    UserID             string             // resolved by adapter from transport identity
-    Transport          string             // closed vocab: "telegram", "whatsapp", "web", "mobile"
-    TransportMessageID string             // opaque, adapter-side idempotency
-    Text               string             // plain text, transport markup stripped
-    Kind               MessageKind        // text | confirm | disambiguation | reset
-    ConfirmRef         string             // echo of prior ConfirmCard.ConfirmRef
-    ConfirmChoice      ConfirmChoice      // positive | negative (when Kind=confirm)
-    DisambiguationRef  string             // echo of prior DisambiguationPrompt.DisambiguationRef
-    DisambiguationChoice int              // 1-indexed (when Kind=disambiguation)
-    Attachments        []Attachment       // v1 unused
-    ReplyTo            string             // optional; transport-opaque
-    ReceivedAt         time.Time          // adapter-side observe time
-    TransportMetadata  map[string]string  // opaque to capability
+    UserID               string             // resolved by adapter from transport identity
+    Transport            string             // closed vocab: "telegram", "whatsapp", "web", "mobile"
+    TransportMessageID   string             // opaque, adapter-side idempotency
+    Text                 string             // plain text, transport markup stripped
+    Kind                 MessageKind        // text | confirm | disambiguation | reset
+    ConfirmRef           string             // echo of prior ConfirmCard.ConfirmRef
+    ConfirmChoice        ConfirmChoice      // positive | negative (when Kind=confirm)
+    DisambiguationRef    string             // echo of prior DisambiguationPrompt.DisambiguationRef
+    DisambiguationChoice int                // 1-indexed (when Kind=disambiguation)
+    Attachments          []Attachment       // v1 unused
+    ReceivedAt           time.Time          // adapter-side observe time
+    TransportMetadata    map[string]string  // opaque to capability
 }
 
 type MessageKind string
@@ -285,7 +398,7 @@ const (
 )
 
 type Attachment struct {
-    Kind        string // image | audio | document
+    Kind        string
     MimeType    string
     URL         string
     SizeBytes   int64
@@ -295,21 +408,42 @@ type Attachment struct {
 
 ### 2.2 `AssistantResponse` (outbound: capability → adapter)
 
+`AssistantResponse` is a **thin facade over `agent.InvocationResult`
++ `agent.RoutingDecision`**. It carries a reference (NOT a copy) to
+the underlying invocation result so trace IDs and tool-call details
+are reachable without duplication, plus exactly **six net-new
+fields** added by this spec (status, sources[], confirmCard,
+disambiguationPrompt, errorCause, captureRoute) per spec.md §3.1.3.
+
 ```go
 package contracts
 
-import "time"
+import (
+    "time"
+
+    "github.com/smackerel/smackerel/internal/agent"
+)
 
 type AssistantResponse struct {
-    Status               StatusToken           // closed vocab §14.A.2
-    Body                 string                // transport-neutral plain text; bounded by body_max_chars
+    // --- Substrate references (REUSED, NOT COPIED) ---
+    // Invocation may be nil for short-circuit paths that never reached
+    // the executor (e.g. low-band capture, borderline disambiguation,
+    // confirm-card propose phase shortcut).
+    Invocation *agent.InvocationResult // spec 037 substrate
+    Routing    *agent.RoutingDecision  // spec 037 substrate; nil iff no router call
+
+    // --- Six net-new fields added by spec 061 ---
+    Status               StatusToken           // closed vocab §14.A.2 / spec.md UX
     Sources              []Source              // structured; bounded by sources_max
-    SourcesOverflowCount int                   // adapter MAY render "+N more"
     ConfirmCard          *ConfirmCard          // §14.A.6
     DisambiguationPrompt *DisambiguationPrompt // §14.A.3
     ErrorCause           ErrorCause            // when Status=unavailable
     CaptureRoute         bool                  // adapter MUST invoke local capture path
-    EmittedAt            time.Time             // capability-side emit time (SLO)
+
+    // --- Convenience derivatives (computed from above; not new state) ---
+    Body                 string                // derived from Invocation.Final OR refusal text
+    SourcesOverflowCount int
+    EmittedAt            time.Time
 }
 
 type StatusToken string
@@ -366,28 +500,34 @@ func (ExternalProviderRef) isSourceRef() {}
 
 type ConfirmCard struct {
     ProposedAction string
-    Payload        []byte        // opaque, capability-private
+    Payload        []byte        // opaque; capability persists; adapter echoes
     Timeout        time.Duration
     ConfirmRef     string
-    PositiveLabel  string        // e.g. "schedule"
-    NegativeLabel  string        // e.g. "cancel"
+    PositiveLabel  string
+    NegativeLabel  string
 }
 
 type DisambiguationPrompt struct {
-    Choices           []DisambiguationChoice // length 1..3, "save_as_note" always last
+    Choices           []DisambiguationChoice // length 1..3; "save_as_note" always last
     Timeout           time.Duration
     DisambiguationRef string
 }
 
 type DisambiguationChoice struct {
     Number   int
-    ID       string // "weather", "save_as_note", ...
+    ID       string // matches a scenario id, or "save_as_note"
     Label    string
-    Shortcut string // "/weather"
+    Shortcut string
 }
 ```
 
-### 2.3 `TransportAdapter` interface (capability ← adapter)
+**Net-new field count check:** Status, Sources, ConfirmCard,
+DisambiguationPrompt, ErrorCause, CaptureRoute = exactly 6 per
+spec.md §3.1.3. Body / SourcesOverflowCount / EmittedAt are
+derivatives (not net-new state) but are exposed as convenience
+fields so adapters do not have to re-derive them.
+
+### 2.3 `TransportAdapter` interface
 
 ```go
 package contracts
@@ -395,7 +535,7 @@ package contracts
 import "context"
 
 type TransportAdapter interface {
-    Name() string  // closed vocab; registered at NewBot/NewServer time
+    Name() string                                                                   // closed vocab
     Translate(ctx context.Context, payload TransportPayload) (AssistantMessage, error)
     Render(ctx context.Context, identity TransportIdentity, resp AssistantResponse) error
     Identity(ctx context.Context, payload TransportPayload) (TransportIdentity, error)
@@ -411,37 +551,12 @@ type TransportIdentity struct {
 }
 ```
 
-**Adapter MUST.**
+**Adapter MUST.** See spec.md §6.2 — unchanged. (Translate, call
+`Assistant.Handle`, render, honor `CaptureRoute=true`, translate
+confirm/disambig callbacks, emit per-transport telemetry, resolve
+identity.)
 
-- Resolve transport identity → `user_id` before constructing
-  `AssistantMessage`. If resolution fails, the adapter handles it
-  natively (Telegram v1 ignores; future adapters may prompt for
-  linking) and MUST NOT call `Assistant.Handle`.
-- Call `Assistant.Handle` for every non-command, non-special user
-  message that would historically have hit `handleTextCapture`. The
-  adapter MUST NOT pre-classify intent.
-- Render every populated field of `AssistantResponse` per UX §14.A
-  semantics.
-- Honor `CaptureRoute=true` by delegating to the existing transport-
-  local capture path (Telegram v1: `handleTextCapture`).
-- Translate transport-native confirm/disambiguation callbacks back
-  into `AssistantMessage{Kind: KindConfirm|KindDisambiguation, ...Ref: ...}`.
-- Emit per-transport telemetry tagged `transport=<Name()>` (§8).
-
-**Adapter MUST NOT.**
-
-- Implement intent classification or call the router directly.
-- Invoke skills directly (bypassing router/registry).
-- Mutate the knowledge graph or call `/api/capture` except via
-  `CaptureRoute=true` delegation.
-- Embed any skill-specific rendering (e.g. a Telegram-specific
-  "weather" formatter — weather uses the generic status+body+sources
-  pipeline).
-- Hold per-skill secrets.
-- Implement its own conversational state.
-- Render a non-empty synthesized `Body` with empty `Sources[]`
-  (belt-and-braces; the capability already drops these via
-  `RequireProvenance`).
+**Adapter MUST NOT.** See spec.md §6.2 — unchanged.
 
 ### 2.4 `Assistant` facade interface
 
@@ -451,400 +566,576 @@ package contracts
 import "context"
 
 type Assistant interface {
-    // Handle processes one canonical inbound and returns the
-    // canonical outbound. Synchronous, in-process. The error return
-    // is reserved for capability-layer infrastructure failures;
-    // user-visible failures return AssistantResponse with
-    // Status=StatusUnavailable + ErrorCause.
     Handle(ctx context.Context, msg AssistantMessage) (AssistantResponse, error)
 }
 ```
 
 ---
 
-## 3. Intent Router
+## 3. Intent Routing via Spec 037 Substrate
 
-Package: `internal/assistant/router/`.
+There is **no `internal/assistant/router` package**. Intent routing IS
+`agent.Router` (spec 037 substrate). The capability-layer facade
+adds a **borderline-band post-processor** on top of
+`agent.RoutingDecision` (resolves OQ #6).
 
-### 3.1 Contract
+### 3.1 Routing flow inside the facade
 
-```go
-type Router interface {
-    Classify(ctx context.Context, msg contracts.AssistantMessage) (Decision, error)
-}
-
-type Decision struct {
-    Intent     string
-    Confidence float64
-    Slots      map[string]string
-    Band       ConfidenceBand     // computed from SST floors
-    Candidates []IntentCandidate  // top-3 for borderline
-}
-
-type IntentCandidate struct {
-    Intent     string
-    Confidence float64
-    SkillID    string
-}
-
-type ConfidenceBand string
-
-const (
-    BandHigh       ConfidenceBand = "high"
-    BandBorderline ConfidenceBand = "borderline"
-    BandLow        ConfidenceBand = "low"
-)
+```text
+AssistantMessage (KindText)
+    │
+    ▼
+facade.Handle:
+  1. Resolve "/reset" / reference phrases (capability concerns).
+  2. Build agent.IntentEnvelope{
+        Source:   msg.Transport,        // "telegram" | ...
+        RawInput: msg.Text,
+     }
+  3. Call agent.Router.Route(env) → RoutingDecision
+  4. Apply BORDERLINE-BAND POST-PROCESSOR (§3.2):
+        - If decision.OK == false:
+            → CaptureRoute=true, Status=saved_as_idea  (BS-001)
+        - If decision.OK == true AND
+             decision.TopScore < assistant.borderline_floor:
+            → emit DisambiguationPrompt; do NOT call executor
+        - Else (above borderline_floor):
+            → proceed to executor (via existing AgentBridge.Handle
+              composition or a direct executor call — see §3.3)
+  5. After executor: apply provenance gate, source assembly,
+     confirm-card detection, error mapping. Build AssistantResponse.
 ```
 
-### 3.2 Confidence bands
+### 3.2 Borderline-Band Post-Processor (resolves OQ #6)
 
-| Band | Bound | Capability action |
-|------|-------|-------------------|
-| **High** | `confidence ≥ assistant.capability.intent.high_floor` | Invoke top skill. |
-| **Borderline** | `borderline_floor ≤ confidence < high_floor` | Emit `DisambiguationPrompt` (≤3 candidates; `save_as_note` always last). |
-| **Low** | `confidence < borderline_floor` | `CaptureRoute=true`. |
+`agent.Router` is binary: a score is above or below `confidence_floor`
+(SST `agent.routing.confidence_floor`). Spec 061 needs a three-band
+decision (high / borderline / low) per UX §14.A.3. The recommended
+resolution is **option (a) from spec.md §13 OQ #6**: a
+capability-layer post-processor on `RoutingDecision.TopScore` against
+a NEW SST key. This is purely additive — zero Spec 037 mutation, zero
+new scenarios, zero new `Outcome` values.
 
-SST keys (NO-DEFAULTS, fail-loud):
-- `assistant.capability.intent.high_floor` — float [0,1]
-- `assistant.capability.intent.borderline_floor` — float [0,1], MUST
-  be `≤ high_floor` (startup validation; abort on violation)
-- `assistant.capability.intent.disambiguate_timeout` — duration
-- `assistant.capability.intent.model` — string (e.g. `"llama3.1:8b"`)
+| Band | Bound (uses spec 037 + new key) | Capability action |
+|------|---------------------------------|-------------------|
+| **High** | `decision.OK == true` AND `TopScore >= assistant.borderline_floor` | Proceed to executor; invoke top scenario. |
+| **Borderline** | `decision.OK == true` AND `agent.routing.confidence_floor <= TopScore < assistant.borderline_floor` | Emit `DisambiguationPrompt` (≤3 choices from `decision.Considered`; `save_as_note` always last). DO NOT call executor. |
+| **Low** | `decision.OK == false` (router fell through floor with no fallback OR ReasonUnknownIntent) | `CaptureRoute=true`, `Status=saved_as_idea`. |
 
-> **Naming note.** UX §14.A.3 used `min_confidence` /
-> `disambiguate_floor`. Design adopts `high_floor` /
-> `borderline_floor` for self-documenting symmetry. SCOPE-01 ships
-> both legacy aliases (`min_confidence` accepted as alias for
-> `high_floor`; `disambiguate_floor` accepted as alias for
-> `borderline_floor`) so the rename plus the move-under-capability
-> can land in one config edit; aliases removed in a follow-up.
+**New SST key (only addition to the routing surface):**
 
-### 3.3 Implementation
+- `assistant.borderline_floor` — float [0, 1]; MUST be **strictly
+  greater than** `agent.routing.confidence_floor`. Validated at
+  startup; abort on violation.
 
-- Router calls the `ml/` sidecar's existing classification endpoint
-  (POST `/v1/intent/classify`) with
-  `{user_id, transport, text, intent_labels, context_window}`.
-- `intent_labels` comes from the skill registry at request time
-  (every registered skill's manifest declares its intent labels).
-- `context_window` is the last N turns from
-  `internal/assistant/context/`, capped at
-  `assistant.capability.context.window_turns` (SST).
-- Sidecar returns
-  `{top_intent, top_confidence, candidates[≤3], slots{}}`.
-- Latency SLO: **p95 < 800ms** end-to-end (router enter → router
-  return). Enforced via `assistant_intent_latency_seconds` histogram
-  (§8) AND the `assistant.capability.status_max_duration` cutoff
-  (UX §14.A.2). If the sidecar exceeds the SLO budget, the facade
-  emits `Status=StatusUnavailable, ErrorCause=ErrInternalError` and
-  routes to capture.
-- Sidecar non-2xx is treated as low-confidence
-  (`band=Low`, capture-as-fallback) and increments
-  `assistant_intent_classifications_total{label="unavailable",confidence_band="low"}`
-  + `assistant_sidecar_unavailable_total{endpoint="classify"}`.
+> **Note.** This places the borderline band ABOVE the existing
+> confidence floor, NOT below it. Below the existing floor, the
+> router already produces `OK=false` (capture). Between the existing
+> floor and `assistant.borderline_floor`, the capability asks once.
+
+**`DisambiguationPrompt.Choices` construction:**
+
+```go
+choices := make([]DisambiguationChoice, 0, 3)
+for i, c := range decision.Considered {
+    if i >= 2 { break } // leave room for save_as_note
+    skill := lookupSkillManifest(c.ScenarioID)
+    choices = append(choices, DisambiguationChoice{
+        Number:   i + 1,
+        ID:       c.ScenarioID,
+        Label:    skill.UserFacingLabel,
+        Shortcut: skill.SlashShortcut,
+    })
+}
+choices = append(choices, DisambiguationChoice{
+    Number:   len(choices) + 1,
+    ID:       "save_as_note",
+    Label:    "save as note",
+    Shortcut: "/save",
+})
+```
+
+On the user's disambiguation reply (`Kind=KindDisambiguation`), the
+facade looks up the chosen scenario ID and re-routes via
+`agent.IntentEnvelope{Source, RawInput, ScenarioID: chosen}` —
+which causes `agent.Router` to take the **explicit-id fast path**
+(`ReasonExplicitScenarioID`, no embedding call). On timeout or
+`save_as_note`, the facade emits `CaptureRoute=true`.
+
+### 3.3 Calling the executor
+
+The facade has two equivalent options for invoking the executor:
+
+**Option A — reuse `telegram.AgentBridge.AgentRunner`-shaped seam
+(RECOMMENDED).** Extract the production wiring of
+`agent.Router + agent.Executor` (built in `cmd/core/wiring_agent.go`)
+behind a small `Runner` interface that the facade depends on. This
+is the same interface `telegram.AgentBridge` already consumes
+(`AgentRunner.Invoke(ctx, env) → (*InvocationResult, *RoutingDecision)`)
+— zero new abstraction; both bridges share one runner.
+
+```go
+// Already exists in internal/telegram/agent_bridge.go as AgentRunner;
+// move the type to internal/agent/runner.go (no behavior change) so
+// the facade can import without depending on telegram.
+type Runner interface {
+    Invoke(ctx context.Context, env IntentEnvelope) (*InvocationResult, *RoutingDecision)
+    KnownIntents() []string
+}
+```
+
+**Option B — facade composes `Router` + `Executor` directly.** Also
+acceptable; trade-off is the facade duplicates the small composition
+glue in `wireAgentBridge`. Recommend A.
+
+If Option A's `Runner` type move requires touching spec 037 files
+(`internal/agent/`), it MUST go through a Spec 037 bug folder (§0
+"FORBIDDEN — direct Spec 037 mutation"). Alternative: define the
+interface in `internal/assistant/contracts/` and have the facade
+adapt the existing `agent.Bridge`-composed runner at construction
+time. Either way, no spec 037 logic moves.
 
 ### 3.4 Fast-path command shortcuts
 
-Slash commands (`/ask`, `/weather`, `/save`) MAY bypass the
-classifier and short-circuit to `band=High, confidence=1.0` with a
-fixed intent. This is a **capability** decision (uniform across
-transports), not an adapter one: the facade pre-checks a
-`RouterShortcut` text-prefix map before calling the router. Adapters
-pass `Text` verbatim; future WhatsApp gets the same `/ask` for free.
+Slash commands (`/ask`, `/weather`, `/save`, `/reset`) map to
+explicit scenario IDs (or to capability-level actions for `/reset`).
+The facade pre-checks a small `RouterShortcut` text-prefix map and,
+on a hit, builds the envelope with `ScenarioID=<id>` so
+`agent.Router` takes the explicit-id fast path. This is a
+capability-layer concern (uniform across transports) — adapters pass
+`Text` verbatim.
 
 ---
 
-## 4. Skill Registry
+## 4. "Skill Registry" = Spec 037 Scenario Loader
 
-Package: `internal/assistant/registry/`. Skill impls under
-`internal/assistant/skills/<name>/`.
+There is **no `internal/assistant/registry` package**. The "skill
+registry" IS `agent.Bridge` (the scenario loader + SIGHUP-triggered
+hot-reload — `internal/agent/bridge.go` + `loader.go`). Three v1
+"skills" ship as YAML scenarios under `config/prompt_contracts/`
+exactly like the existing 15 backend-only scenarios; their tool
+handlers are registered in the existing tool registry from each
+tool's owning package `init()` (per the spec 037 loader rule —
+see `loader.go:311`).
 
-### 4.1 `Skill` interface
+### 4.1 Scenario YAML conventions for user-facing scenarios
 
-```go
-type Skill interface {
-    Manifest() Manifest
-    Execute(ctx context.Context, req SkillRequest) (SkillResponse, error)
-}
+Net-new conventions added in this spec (all are additive YAML keys
+the loader already tolerates per spec 037's `top` map — or, if a key
+needs new loader recognition, a tiny additive change to `loader.go`
+which MUST be routed via a Spec 037 bug folder):
 
-type Manifest struct {
-    ID                 string        // "retrieval", "weather", "notifications"
-    IntentLabels       []string
-    RequiredScopes     []string      // PASETO scopes (spec 060)
-    SideEffects        SideEffects   // ReadOnly | Write
-    LatencyBudget      time.Duration // per-skill SLO
-    RequiresProvenance bool          // true for synthesized-answer skills
-    EnableConfigKey    string        // SST key controlling enablement
-}
+| Key | Purpose | Required for v1 user-facing scenarios? |
+|-----|---------|-----------------------------------------|
+| `user_facing: true` | Distinguishes user-facing scenarios from backend-only. Capability facade considers only scenarios with this flag for router intent matching against user input. | Yes |
+| `requires_provenance: true` | Capability provenance gate (§4.3) drops empty-`sources[]` synthesis. | Yes for retrieval + weather; No for notifications (scheduler record IS provenance) |
+| `user_facing_label: "weather"` | Human label used in `DisambiguationPrompt.Choices`. | Yes |
+| `slash_shortcut: "/weather"` | Slash-command fast path (§3.4). | Yes |
+| `confirm_required: true` | Marks a side-effect scenario needing the confirm-card state machine (§5.4). | Yes for notifications |
 
-type SideEffects string
+These keys are additive metadata. If the loader rejects unknown
+top-level keys (per `loader.go` `reject` paths), the loader needs a
+small allowlist addition — that single-line addition is the ONE
+unavoidable Spec 037 substrate change and MUST be routed via a
+Spec 037 bug folder. **Alternative (preferred if loader change is
+deemed risky):** stash the new keys under an existing tolerated
+key such as `description` or carry them in a sibling
+`config/assistant/scenarios.yaml` lookup file that the capability
+facade reads at startup, keyed by scenario `id`. The lookup file
+keeps spec 037 untouched. See §13 plan-time decision.
 
-const (
-    ReadOnly SideEffects = "read_only"
-    Write    SideEffects = "write"
-)
+### 4.2 Enabled/disabled gating (BS-008 preserved)
 
-type SkillRequest struct {
-    UserID    string
-    Transport string
-    Text      string
-    Slots     map[string]string
-    Context   []ContextTurn // recent turns, read-only
-    Now       time.Time
-}
+For each v1 user-facing scenario, an SST key controls enablement:
 
-type ContextTurn struct {
-    UserText      string
-    SkillID       string
-    ResultSummary string
-    SourceIDs     []string
-    Timestamp     time.Time
-}
+| Scenario | SST enable key |
+|----------|----------------|
+| `retrieval-qa-v1` | `assistant.skills.retrieval.enabled` |
+| `weather-query-v1` | `assistant.skills.weather.enabled` |
+| `notification-schedule-v1` | `assistant.skills.notifications.enabled` |
 
-type SkillResponse struct {
-    Body                 string
-    Sources              []contracts.Source
-    SourcesOverflowCount int
-    ConfirmCard          *contracts.ConfirmCard
-    Status               contracts.StatusToken
-    ErrorCause           contracts.ErrorCause
-}
-```
+The capability layer filters disabled scenarios out of the router's
+candidate set at facade construction time (or, equivalently, after
+`agent.Router.Route` returns, if the executor would otherwise run
+them). The disabled scenarios stay registered in `agent.Bridge`
+(spec 037 cares about the registry contents for tracer integrity and
+for the REST `POST /v1/agent/invoke` surface) — the capability layer
+just refuses to dispatch them and emits `ErrMissingScope` +
+capture per BS-008.
 
-### 4.2 Registry contract
-
-```go
-type Registry interface {
-    Register(s Skill) error            // init-time only; double-register is an error
-    Dispatch(intent string) (Skill, error)
-    ListEnabled() []Manifest           // feeds router intent labels
-}
-```
-
-- Registration at `NewAssistant(...)` construction.
-- `Dispatch` keyed on `Decision.Intent`.
-- A skill whose `EnableConfigKey` resolves to `false` is NOT
-  registered. Intent labels owned by a disabled skill are NOT fed to
-  the router. A user message whose top-intent maps to a disabled
-  skill therefore lands as low confidence (the classifier never sees
-  that label) and routes to capture — BS-008 preserved by
-  construction.
-- Skill isolation: skills MUST NOT import each other's packages.
-  Enforced by a build-time import-graph test (SCOPE-03).
-
-### 4.3 Provenance gate
+### 4.3 Provenance Enforcement Gate (net-new — `internal/assistant/provenance/`)
 
 ```go
-if skill.Manifest().RequiresProvenance && len(resp.Body) > 0 && len(resp.Sources) == 0 {
-    return AssistantResponse{
-        Status:       StatusSavedAsIdea,
-        Body:         "I don't have a sourced answer for that.",
-        CaptureRoute: true,
-    }, nil
+package provenance
+
+import "github.com/smackerel/smackerel/internal/assistant/contracts"
+
+// Enforce wraps a completed agent.InvocationResult plus the candidate
+// sources extracted from the executor turn messages. Returns a
+// possibly-rewritten AssistantResponse where empty-sources synthesis
+// has been replaced with the canonical refusal + capture.
+func Enforce(scenarioRequiresProvenance bool, resp contracts.AssistantResponse) contracts.AssistantResponse {
+    if !scenarioRequiresProvenance { return resp }
+    if len(resp.Body) > 0 && len(resp.Sources) == 0 {
+        return contracts.AssistantResponse{
+            Status:       contracts.StatusSavedAsIdea,
+            Body:         "I don't have a sourced answer for that.",
+            CaptureRoute: true,
+        }
+    }
+    return resp
 }
 ```
 
 Guarantees BS-007 mechanically. Counter
-`assistant_provenance_violations_total{skill}` increments on every
-trigger (§8) so drift is observable.
+`smackerel_assistant_provenance_violations_total{scenario}` (§8)
+increments on every trigger so drift is observable.
 
 ---
 
-## 5. v1 Skill Designs
+## 5. v1 Skill Designs (as Spec 037 Scenarios)
 
-### 5.1 Retrieval Q&A skill
+Each "skill" is a YAML scenario consumed by the spec 037 loader +
+executor, plus its tool handlers registered in the existing tool
+registry. Spec 061 contributes ZERO new runtime mechanics — only
+content (YAML + tool Go code).
 
-Package: `internal/assistant/skills/retrieval/`.
+### 5.1 Retrieval Q&A — `retrieval-qa-v1.yaml`
 
-**Manifest:**
+```yaml
+id: retrieval_qa
+version: "retrieval-qa-v1"
+type: "scenario"
+description: "Answer a user question over the user's knowledge graph with artifact-ID citations."
 
-| Field | Value |
-|-------|-------|
-| `ID` | `"retrieval"` |
-| `IntentLabels` | `["retrieval.query"]` |
-| `RequiredScopes` | `["assistant.skill.retrieval"]` |
-| `SideEffects` | `ReadOnly` |
-| `LatencyBudget` | `5s` (search + LLM synthesis) |
-| `RequiresProvenance` | `true` |
-| `EnableConfigKey` | `assistant.capability.skills.retrieval.enabled` |
+user_facing: true
+requires_provenance: true
+user_facing_label: "search my notes"
+slash_shortcut: "/ask"
 
-**Flow.**
-1. `POST /api/search` with `{query: req.Text, top_k: K, user_id: req.UserID}`
-   where `K = assistant.capability.skills.retrieval.top_k`.
-2. Zero hits → return `{Body: "", Sources: []}` — the
-   `RequireProvenance` gate converts this into the canonical refusal
-   + capture.
-3. Hits → call `ml/` sidecar `POST /v1/synthesize` with
-   `{query, hits[]: {artifact_id, content_snippet}}`. Sidecar
-   returns `{body, cited_artifact_ids[]}`.
-4. Assemble `[]contracts.Source` from `cited_artifact_ids` (each
-   becomes `Source{Kind: SourceArtifact, Ref: ArtifactRef{...}}`).
-   Look up `Title` + `CapturedAt` from the existing artifact
-   metadata API.
-5. Cap at `assistant.capability.sources_max`; set
-   `SourcesOverflowCount` if truncated.
-6. Return `SkillResponse{Body, Sources, Status: StatusThinking}`.
+intent_examples:
+- "what did I save about Tailscale last month?"
+- "did I capture anything on sourdough?"
+- "find my notes on ACL tags"
+- "do I have anything on CGNAT?"
+- "remind me what I wrote about the home lab"
 
-**Source-assembly invariant.** The skill never emits a `Source` for
-an `artifact_id` the sidecar did not cite. If the sidecar cites an
-`artifact_id` that does not exist (graph drift), the skill drops it,
+system_prompt: |
+  You are Smackerel's retrieval assistant. Answer ONLY from artifacts
+  returned by the retrieval_search tool. Cite every artifact you used
+  by its artifact_id. Never invent citations. If no artifacts match,
+  return an empty answer and let the capability layer handle the
+  refusal.
+
+allowed_tools:
+- name: retrieval_search
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ query, user_id ]
+  properties:
+    query:    { type: string, minLength: 1 }
+    user_id:  { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ answer, cited_artifact_ids ]
+  properties:
+    answer:
+      type: string
+    cited_artifact_ids:
+      type: array
+      items: { type: string }
+
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 5000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2500
+
+token_budget: 1200
+temperature: 0.2
+model_preference: "default"
+side_effect_class: read
+```
+
+**Tool handler — `retrieval_search`** (package
+`internal/agent/tools/retrieval/`): wraps existing `/api/search`
+backed by pgvector. Input `{query, user_id, top_k}`; output
+`{hits: [{artifact_id, title, snippet, captured_at}]}`. `top_k` is
+capped at `assistant.skills.retrieval.top_k` (SST). Capability
+facade assembles `[]contracts.Source` from `cited_artifact_ids`
+(NOT from the raw hits — only what the LLM actually cited).
+Drops `cited_artifact_ids` for missing artifacts (graph drift) and
 increments
-`assistant_source_assembly_drops_total{cause="missing_artifact"}`,
-and continues. If ALL cited artifacts are missing, `Sources` is
-empty, the provenance gate fires, and the response is a refusal +
-capture. Honest behavior under drift.
+`smackerel_assistant_source_assembly_drops_total{cause="missing_artifact"}`.
+If ALL citations are missing, `Sources` is empty and the
+provenance gate fires (refusal + capture).
 
-### 5.2 Weather skill
+### 5.2 Weather — `weather-query-v1.yaml`
 
-Package: `internal/assistant/skills/weather/`.
+```yaml
+id: weather_query
+version: "weather-query-v1"
+type: "scenario"
+description: "Answer a current/forecast weather question from an external provider with provider+timestamp attribution."
 
-**Manifest:**
+user_facing: true
+requires_provenance: true
+user_facing_label: "check weather"
+slash_shortcut: "/weather"
 
-| Field | Value |
-|-------|-------|
-| `ID` | `"weather"` |
-| `IntentLabels` | `["weather.query"]` |
-| `RequiredScopes` | `["assistant.skill.weather"]` |
-| `SideEffects` | `ReadOnly` |
-| `LatencyBudget` | `3s` |
-| `RequiresProvenance` | `true` |
-| `EnableConfigKey` | `assistant.capability.skills.weather.enabled` |
+intent_examples:
+- "weather in Seattle today"
+- "is it going to rain in Reykjavík tomorrow?"
+- "what's the forecast for Portland this weekend?"
+- "temperature in London right now"
 
-**Provider abstraction.**
+system_prompt: |
+  You are Smackerel's weather assistant. Call the weather_lookup tool
+  with the parsed location and time window. Render a single, terse
+  forecast line. Always emit the provider name and retrieved_at in
+  your output so the capability layer can attach external_provider
+  attribution.
 
-```go
-type Provider interface {
-    Name() string                                            // "open-meteo"
-    Lookup(ctx context.Context, q LookupQuery) (Forecast, error)
-}
+allowed_tools:
+- name: weather_lookup
+  side_effect_class: external
+
+input_schema:
+  type: object
+  required: [ raw_query, user_id ]
+  properties:
+    raw_query: { type: string, minLength: 1 }
+    user_id:   { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ forecast_line, provider_name, retrieved_at ]
+  properties:
+    forecast_line: { type: string }
+    provider_name: { type: string }
+    retrieved_at:  { type: string, format: "date-time" }
+    slot_missing:
+      type: string
+      enum: [ "location" ]
+
+limits:
+  max_loop_iterations: 3
+  timeout_ms: 3000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2000
+
+token_budget: 600
+temperature: 0.1
+model_preference: "default"
+side_effect_class: external
 ```
 
-v1 ships ONE concrete provider (open-meteo or compatible — owner
-picks at SCOPE-07 time; design treats them as equivalent under the
-interface). Selection via SST:
-`assistant.capability.skills.weather.provider`. API key via
-`assistant.capability.skills.weather.api_key_ref` → Infisical secret
-name (spec 150 policy).
+**Tool handler — `weather_lookup`** (package
+`internal/agent/tools/weather/`): wraps an external provider via
+HTTPS. v1 ships one concrete provider (open-meteo or compatible —
+owner picks at SCOPE-07 time). Selection via SST
+`assistant.skills.weather.provider`; API key via
+`assistant.skills.weather.api_key_ref` → Infisical secret name.
+In-process LRU keyed `(provider, location, forecast_window)` with
+TTL = `assistant.skills.weather.cache_ttl` (SST, fail-loud). Cache
+hits emit the ORIGINAL `retrieved_at`, not cache-hit time.
 
-**Caching.** Weather is read-only EXTERNAL data, NOT business data,
-so the Operations "no business-data cache" rule does NOT apply.
-In-process LRU keyed on `(provider, location, forecast_window)` with
-TTL = `assistant.capability.skills.weather.cache_ttl` (SST,
-fail-loud, no default; recommend `300s` for current conditions,
-`1800s` for daily forecasts). Cache hits still emit
-`ExternalProviderRef{RetrievedAt: <original retrieval time>}` (NOT
-cache hit time) so the user sees true data freshness.
+Failure mapping (tool returns error → executor records
+`OutcomeToolError` → capability facade translates):
+- HTTP 5xx / timeout / DNS → `ErrorCause=ErrProviderUnavailable`,
+  `Status=StatusUnavailable`, body `"weather: unavailable"`.
+- `slot_missing="location"` in output → `ErrorCause=ErrSlotMissing`
+  + one-choice disambiguation prompt asking for the city.
 
-**Failure mode.** Provider 5xx / timeout / DNS failure →
-`SkillResponse{ErrorCause: ErrProviderUnavailable,
-Status: StatusUnavailable, Body: "weather: unavailable"}`. Facade
-attaches an offer-to-capture `ConfirmCard` with timeout =
-`assistant.capability.error.capture_timeout` (UX §14.A.7,
-Transcript 6).
+### 5.3 Notifications — `notification-schedule-v1.yaml`
 
-**Slot extraction.** Location required; if the router didn't
-extract it, the skill returns `ErrSlotMissing` with a one-choice
-disambiguation prompt asking for the city (UX Transcript 5).
+```yaml
+id: notification_schedule
+version: "notification-schedule-v1"
+type: "scenario"
+description: "Propose a scheduled reminder; on user confirm, register it with the spec 054 scheduler."
 
-### 5.3 Notifications skill
+user_facing: true
+requires_provenance: false        # scheduler record IS the provenance
+confirm_required: true            # triggers capability confirm-card state machine
+user_facing_label: "remind me"
+slash_shortcut: "/remind"
 
-Package: `internal/assistant/skills/notifications/`.
+intent_examples:
+- "remind me to take out the trash at 7pm"
+- "remind me to call mom tomorrow at 9am"
+- "set a reminder for the meeting at 14:30"
+- "ping me about the laundry in 2 hours"
 
-**Manifest:**
+system_prompt: |
+  You are Smackerel's reminder assistant. PROPOSE the reminder by calling
+  notification_propose with the parsed {what, when}. Do NOT call
+  notification_execute on the first turn; the capability layer will
+  re-invoke this scenario with a confirm_ref after the user confirms.
+  When confirm_ref is present in the input, call notification_execute
+  with the same confirm_ref to commit.
 
-| Field | Value |
-|-------|-------|
-| `ID` | `"notifications"` |
-| `IntentLabels` | `["notification.schedule"]` |
-| `RequiredScopes` | `["assistant.skill.notifications.write"]` |
-| `SideEffects` | `Write` |
-| `LatencyBudget` | `3s` |
-| `RequiresProvenance` | `false` (scheduler record IS provenance) |
-| `EnableConfigKey` | `assistant.capability.skills.notifications.enabled` |
+allowed_tools:
+- name: notification_propose
+  side_effect_class: read
+- name: notification_execute
+  side_effect_class: write
 
-**Flow (confirm path).**
-1. Extract `{when, what}` slots. If `when` is ambiguous (e.g.
-   `tomorrow at 9` — am/pm?), return `ErrSlotMissing` +
-   disambiguation prompt with up-to-3 candidate times.
-2. Both slots present → build a `ConfirmCard`:
-   - `ProposedAction: 'schedule "<what>" at <ISO local time>'`
-   - `Payload`: opaque encoding of `{what, when_utc, user_id, transport}`
-   - `Timeout`: `assistant.capability.skills.notifications.confirm_timeout`
-   - `ConfirmRef`: ULID
-   - `PositiveLabel: "schedule"`, `NegativeLabel: "cancel"`
-3. Return `SkillResponse{Status: StatusReminderProposed,
-   Body: 'schedule: "<what>" at <ISO local time>', ConfirmCard: ...}`.
+input_schema:
+  type: object
+  required: [ user_id, raw_query ]
+  properties:
+    user_id:     { type: string, minLength: 1 }
+    raw_query:   { type: string, minLength: 1 }
+    transport:   { type: string, minLength: 1 }
+    confirm_ref: { type: string }     # present iff this is the confirm-phase re-invocation
 
-**On confirm callback** (`AssistantMessage{Kind: KindConfirm,
-ConfirmRef: ...}`), the facade resolves the `ConfirmRef` against an
-in-process pending-confirm map, decodes `Payload`, and re-enters the
-skill via a dedicated `ExecuteConfirmed(payload)` method which calls
-spec 054's scheduler:
+output_schema:
+  type: object
+  required: [ phase ]
+  properties:
+    phase:
+      type: string
+      enum: [ "proposed", "confirmed", "slot_missing" ]
+    proposed_action: { type: string }
+    payload:         { type: string }   # opaque base64 — capability stores in pending_confirm
+    confirm_ref:     { type: string }
+    scheduled_job_id:{ type: string }
+    slot_missing_options:
+      type: array
+      items: { type: string }
 
-```go
-err := s.scheduler.Schedule(ctx, scheduler.Job{
-    UserID:     payload.UserID,
-    FireAt:     payload.WhenUTC,
-    Source:     "assistant.skill.notifications",
-    Originator: scheduler.Originator{
-        Transport:  payload.Transport,
-        ConfirmRef: payload.ConfirmRef,
-    },
-    Body: payload.What,
-})
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 3000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2000
+
+token_budget: 800
+temperature: 0.1
+model_preference: "default"
+side_effect_class: write
 ```
 
-**Spec 054 extension.** Spec 054's `scheduler.Job` gains two
-optional, backward-compatible fields (`Source`, `Originator`).
-Zero-valued fields preserve current behavior. Audit dashboards
-filter on `Source="assistant.skill.notifications"`. SCOPE-08 owns
-the spec 054 file edit with the spec 054 owner in the loop.
+**Tool handlers — `notification_propose` and `notification_execute`**
+(package `internal/agent/tools/notification/`):
+
+- `notification_propose` extracts `{what, when}` slots. On
+  ambiguity, returns `phase="slot_missing"` + up-to-3 candidate
+  times. Otherwise returns
+  `phase="proposed", proposed_action, payload (opaque-encoded
+  {what, when_utc, user_id, transport}), confirm_ref (ULID)`. NO
+  side effect.
+- `notification_execute` reads the pending payload from the
+  capability state store via the supplied `confirm_ref`, calls
+  spec 054's `scheduler.Schedule(...)` with `Source` and
+  `Originator` set, and returns `phase="confirmed",
+  scheduled_job_id`.
+
+**Spec 054 extension.** Additive, backward-compatible — two optional
+`Job` fields: `Source string` (e.g. `"assistant.skill.notifications"`)
+and `Originator struct{Transport, ConfirmRef string}`. Zero-valued
+fields preserve current behavior. Spec 054 file edits routed via a
+packet per `bubbles-artifact-ownership-routing` (spec 054 is the
+owner). SCOPE-08 owns the coordination.
+
+### 5.4 Confirm-Card State Machine (net-new — `internal/assistant/confirm/`) — resolves OQ #7
+
+Spec 037's executor invokes tools directly with no "propose then
+execute" primitive. The notifications skill (BS-004) requires
+**explicit user confirmation between proposal and execution**.
+
+**State machine (capability-layer, scenario-agnostic):**
+
+```text
+PHASE 1 — propose
+─────────────────
+facade.Handle(KindText) → router → executor invokes scenario with
+  no confirm_ref. Scenario's first tool (e.g. notification_propose)
+  returns:
+    {phase: "proposed", proposed_action, payload (opaque), confirm_ref}
+facade detects (a) scenario manifest has confirm_required: true AND
+  (b) output.phase == "proposed", then:
+    1. Persist {payload, scenario_id, confirm_ref, expires_at} into
+       assistant_conversations.pending_confirm (§6.1).
+    2. Build ConfirmCard{ProposedAction, Timeout, ConfirmRef, ...}.
+    3. Build AssistantResponse{
+         Status: StatusReminderProposed,
+         Body:   proposed_action,
+         ConfirmCard: ...,
+       }
+    4. Write assistant_turn audit row (§6.3) with outcome="proposed".
+
+PHASE 2 — confirm callback
+──────────────────────────
+adapter delivers AssistantMessage{Kind: KindConfirm, ConfirmRef,
+  ConfirmChoice} → facade:
+  1. Lookup pending_confirm by (user_id, transport, confirm_ref).
+     Not-found OR expired → emit StatusUnavailable + ErrInternalError
+     OR CaptureRoute=true; clear pending row.
+  2. If ConfirmChoice == ConfirmNegative → emit
+     Status=StatusReminderCancelled then a follow-up
+     AssistantResponse{Status=StatusSavedAsIdea, CaptureRoute=true}
+     for the ORIGINAL message text (carried in pending payload).
+     Clear pending row. Write assistant_proposal audit
+     outcome="discarded_user".
+  3. If ConfirmChoice == ConfirmPositive → build
+     agent.IntentEnvelope{
+       ScenarioID: pending.scenario_id,    // explicit-id fast path
+       RawInput:   pending.original_text,
+       StructuredContext: jsonEncode({confirm_ref: pending.confirm_ref}),
+     }
+     and re-invoke the runner. The scenario re-runs with confirm_ref
+     in input → calls notification_execute → returns
+     phase="confirmed". Facade emits
+     Status=StatusReminderConfirmed. Clear pending row. Write
+     assistant_proposal audit outcome="confirmed",
+     scheduled_job_id=<from output>.
+
+PHASE 3 — timeout (no callback within ConfirmCard.Timeout)
+─────────────────────────────────────────────────────────
+idle-sweep ticker (§6.2) deletes the pending_confirm row. NO
+  follow-up message is pushed to the user proactively (Principle 6 —
+  bot never initiates). On the user's NEXT message that references
+  the stale confirm_ref (e.g. tapping a stale Telegram button), the
+  facade returns a brief "that proposal expired" body + captures
+  the new message. Audit row written with outcome="discarded_timeout"
+  at sweep time.
+```
+
+**Idempotency.** `confirm_ref` is a ULID. Repeated positive callbacks
+with the same ref are no-ops after the first execute (single-flight
+guarded by row deletion in step 3). The notification scheduler also
+deduplicates via spec 054's own idempotency.
 
 **Audit invariant.** Per UX §14.A.6, the facade writes an
 `assistant_proposal` artifact on EVERY proposal regardless of
-outcome (confirmed / discarded_user / discarded_timeout). Schema
-extension is additive on the existing `artifacts` table:
-
-```sql
--- SCOPE-08 migration; additive
-ALTER TABLE artifacts ADD COLUMN assistant_proposal_payload JSONB;
--- Populated only on kind='assistant_proposal' rows; NULL elsewhere.
-```
-
-Payload shape:
-
-```json
-{
-  "skill": "notifications",
-  "proposed_action": "schedule \"call mom\" at 2026-05-28T18:00:00-07:00",
-  "outcome": "confirmed | discarded_user | discarded_timeout",
-  "confirm_ref": "01H...",
-  "user_id": "...",
-  "transport": "telegram",
-  "scheduled_job_id": "..."   // populated iff outcome=confirmed
-}
-```
+outcome (`confirmed | discarded_user | discarded_timeout`). Schema
+extension is additive on the existing `artifacts` table (one
+nullable JSONB column).
 
 ---
 
 ## 6. Conversational State
 
-Package: `internal/assistant/context/`.
+Package: `internal/assistant/context/` (net-new — per spec.md §3.1.4).
 
 ### 6.1 Schema
 
-**Storage:** PostgreSQL table `assistant_conversations`, NOT
-in-memory. Rationale: survives capability-layer restart for the
-rolling window; idle sweep is a single SQL query; honors "server is
-single source of truth" Operations principle. (UX §14.A.5 was
-provisional in-memory; design ratifies PostgreSQL.)
+**Storage:** PostgreSQL table `assistant_conversations`. Survives
+capability-layer restart for the rolling window; idle sweep is a
+single SQL query. (UX §14.A.5 was provisional in-memory; design
+ratifies PostgreSQL.)
 
 ```sql
 CREATE TABLE assistant_conversations (
     user_id          TEXT        NOT NULL,
     transport        TEXT        NOT NULL,
     last_activity_at TIMESTAMPTZ NOT NULL,
-    working_context  JSONB       NOT NULL,   -- list of ContextTurn entries
-    pending_confirm  JSONB,                  -- nullable; in-flight ConfirmCard
+    working_context  JSONB       NOT NULL,   -- last N turns
+    pending_confirm  JSONB,                  -- nullable; in-flight ConfirmCard payload
     pending_disambig JSONB,                  -- nullable; in-flight DisambiguationPrompt
     schema_version   INT         NOT NULL DEFAULT 1,
     PRIMARY KEY (user_id, transport)
@@ -854,194 +1145,225 @@ CREATE INDEX idx_assistant_conversations_idle
     ON assistant_conversations (last_activity_at);
 ```
 
-**Key:** `(user_id, transport)` (UX Open Q #1 ratified — design §0).
+`pending_confirm` JSONB shape:
+```json
+{
+  "confirm_ref": "01H...",
+  "scenario_id": "notification_schedule",
+  "original_text": "remind me to call mom at 6pm",
+  "payload_b64": "...",
+  "expires_at": "2026-05-28T18:01:00Z"
+}
+```
 
-**Per turn.** Facade reads the row, prepends the prior turn summary
-(capped at `assistant.capability.context.window_turns`), and on
-response writes `working_context` + updates `last_activity_at`.
-Confirm/disambig in-flight state lives in `pending_confirm` /
-`pending_disambig` (serialized payload + ULID ref + expiry).
+`working_context` JSONB shape: list of `ContextTurn`:
+```json
+[{"user_text":"...","scenario_id":"retrieval_qa","summary":"...","source_ids":["a1b2..."],"ts":"..."}]
+```
 
 ### 6.2 Idle timeout sweep
 
-**Mechanism:** in-process ticker (NOT scheduler-based). Scheduler is
-reserved for user-visible jobs; idle sweep is internal maintenance.
-Ticker runs every
-`assistant.capability.context.idle_sweep_interval` (SST, fail-loud;
-recommend `60s`):
+In-process ticker (NOT scheduler-based — scheduler is for user-visible
+jobs; idle sweep is internal maintenance). Ticker runs every
+`assistant.context.idle_sweep_interval` (SST, fail-loud; recommend
+`60s`):
 
 ```sql
 DELETE FROM assistant_conversations
 WHERE last_activity_at < NOW() - INTERVAL '<idle_timeout>';
 ```
 
-`idle_timeout` = `assistant.capability.context.idle_timeout` (SST,
-no default; recommend `10m`). Row deletion drops any pending
-confirm/disambig (user has moved on).
+`idle_timeout` = `assistant.context.idle_timeout` (SST, fail-loud;
+recommend `10m`). Row deletion drops any pending confirm/disambig
+and writes a final `assistant_proposal` audit row with
+`outcome="discarded_timeout"` for each cleared confirm.
 
 ### 6.3 Audit boundary
 
-`working_context` is ephemeral. The permanent record lives in the
-existing `artifacts` table: every assistant turn writes one
-`kind='assistant_turn'` artifact:
+`working_context` is ephemeral. The permanent record reuses TWO
+write paths:
 
-```json
-{
-  "user_id": "...",
-  "transport": "telegram",
-  "user_text": "...",
-  "router_decision": {"intent": "...", "confidence": 0.91, "band": "high"},
-  "skill_invoked": "retrieval",
-  "response_status": "thinking",
-  "response_body": "...",
-  "source_ids": ["a1b2...", "f7e8..."],
-  "outcome": "answered | captured | proposed | confirmed | discarded | error",
-  "error_cause": null,
-  "timestamp": "2026-05-28T14:03:00Z"
-}
-```
+1. **Per-turn trace** — every executor invocation already writes a
+   row to `agent_traces` via spec 037 `PostgresTracer`. Spec 061
+   adds NO new trace table; instead the capability facade ensures
+   `transport` is recorded in the trace's existing routing/context
+   payload (via `agent.IntentEnvelope.StructuredContext` JSONB or
+   the existing `Routing` field — both already pass through to the
+   tracer). No `agent_traces` schema change.
+2. **`assistant_turn` artifact** — one row per FACADE turn (even
+   for short-circuit paths like low-band capture that never reach
+   the executor). Written via the existing artifacts table; payload
+   shape:
+   ```json
+   {
+     "user_id": "...",
+     "transport": "telegram",
+     "user_text": "...",
+     "router_decision": {"scenario_id":"retrieval_qa","top_score":0.91,"band":"high","reason":"similarity_match"},
+     "agent_trace_id": "...",
+     "response_status": "thinking",
+     "outcome": "answered | captured | proposed | confirmed | discarded | error",
+     "error_cause": null,
+     "timestamp": "2026-05-28T14:03:00Z"
+   }
+   ```
+3. **`assistant_proposal` artifact** — one row per confirm proposal
+   regardless of outcome (§5.4). Stored in the existing `artifacts`
+   table with a new nullable JSONB column (additive migration in
+   SCOPE-08).
 
-Honors Principle 3 (Knowledge Breathes) + Principle 8 (Transparency).
+Honors Principle 3 + Principle 8.
 
 ### 6.4 Reference resolution
 
-On `AssistantMessage{Kind: KindText}` whose text contains a
-reference phrase ("that one", "the second one", "open 2"), the
-facade pre-processes against the most recent `ContextTurn`'s
-`SourceIDs` (1-indexed for numeric; most-relevant-first for "that").
-Resolution is a capability-layer concern, NOT a skill concern.
-Unresolvable refs short-circuit the router and emit
+On `KindText` whose text contains a reference phrase ("that one",
+"the second one", "open 2"), the facade pre-processes against the
+most recent `ContextTurn.SourceIDs` (1-indexed for numeric;
+most-relevant-first for "that"). Resolution is a capability-layer
+concern; scenarios receive the resolved artifact id in their input
+slot. Unresolvable refs short-circuit BEFORE the router and emit
 `Status=StatusUnavailable, ErrorCause=ErrSlotMissing,
 Body="cannot resolve reference. last result has <N> sources."`
 (UX §14.A.5).
 
 ---
 
-## 7. SST Configuration Surface
+## 7. SST Configuration Surface (NO-DEFAULTS / fail-loud)
 
-All keys NO-DEFAULTS, fail-loud per
+All net-new keys NO-DEFAULTS, fail-loud per
 `.github/instructions/smackerel-no-defaults.instructions.md`. Every
 substitution uses `${VAR:?...}`. Secrets reference Infisical secret
-names (spec 150).
+names (spec 150). **Existing spec 037 `agent.*` keys are reused
+unchanged** — there is NO `assistant.capability.intent.*` block;
+classifier/model selection lives entirely in `agent.*`.
 
-### 7.1 Full YAML schema (fragment of `config/smackerel.yaml`)
+### 7.1 Full YAML schema fragment
 
 ```yaml
 assistant:
-  enabled: ${ASSISTANT_ENABLED:?ASSISTANT_ENABLED required}
+  enabled:             ${ASSISTANT_ENABLED:?ASSISTANT_ENABLED required}
 
-  capability:
-    intent:
-      model:                ${ASSISTANT_INTENT_MODEL:?required, e.g. "llama3.1:8b"}
-      high_floor:           ${ASSISTANT_INTENT_HIGH_FLOOR:?required, float 0..1}
-      borderline_floor:     ${ASSISTANT_INTENT_BORDERLINE_FLOOR:?required, float 0..1, <= high_floor}
-      disambiguate_timeout: ${ASSISTANT_INTENT_DISAMBIGUATE_TIMEOUT:?required, duration e.g. 30s}
+  # Three-band confidence rule (§3.2). agent.routing.confidence_floor
+  # is the spec 037 SST key; this borderline_floor is the only new
+  # routing knob spec 061 introduces.
+  borderline_floor:    ${ASSISTANT_BORDERLINE_FLOOR:?required, float 0..1, MUST be > agent.routing.confidence_floor}
 
-    context:
-      window_turns:         ${ASSISTANT_CONTEXT_WINDOW_TURNS:?required, int recommend 4..6}
-      idle_timeout:         ${ASSISTANT_CONTEXT_IDLE_TIMEOUT:?required, duration recommend 10m}
-      idle_sweep_interval:  ${ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL:?required, duration recommend 60s}
-      state_key:            ${ASSISTANT_CONTEXT_STATE_KEY:?required, enum "user_transport"|"user"}
+  context:
+    window_turns:        ${ASSISTANT_CONTEXT_WINDOW_TURNS:?required, int 4..6}
+    idle_timeout:        ${ASSISTANT_CONTEXT_IDLE_TIMEOUT:?required, duration recommend 10m}
+    idle_sweep_interval: ${ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL:?required, duration recommend 60s}
+    state_key:           ${ASSISTANT_CONTEXT_STATE_KEY:?required, enum "user_transport"|"user"}
 
-    sources_max:            ${ASSISTANT_SOURCES_MAX:?required, int recommend 5}
-    body_max_chars:         ${ASSISTANT_BODY_MAX_CHARS:?required, int}
-    status_max_duration:    ${ASSISTANT_STATUS_MAX_DURATION:?required, duration recommend 10s}
+  sources_max:           ${ASSISTANT_SOURCES_MAX:?required, int recommend 5}
+  body_max_chars:        ${ASSISTANT_BODY_MAX_CHARS:?required, int}
+  status_max_duration:   ${ASSISTANT_STATUS_MAX_DURATION:?required, duration recommend 10s}
 
-    error:
-      capture_timeout:      ${ASSISTANT_ERROR_CAPTURE_TIMEOUT:?required, duration recommend 30s}
+  disambiguate_timeout:  ${ASSISTANT_DISAMBIGUATE_TIMEOUT:?required, duration recommend 30s}
 
-    rate_limit:
-      retrieval:     {requests_per_minute: ${ASSISTANT_RL_RETRIEVAL_RPM:?required, int}}
-      weather:       {requests_per_minute: ${ASSISTANT_RL_WEATHER_RPM:?required, int}}
-      notifications: {requests_per_minute: ${ASSISTANT_RL_NOTIFICATIONS_RPM:?required, int}}
+  error:
+    capture_timeout:     ${ASSISTANT_ERROR_CAPTURE_TIMEOUT:?required, duration recommend 30s}
 
-    skills:
-      retrieval:
-        enabled:            ${ASSISTANT_SKILL_RETRIEVAL_ENABLED:?required, bool}
-        top_k:              ${ASSISTANT_SKILL_RETRIEVAL_TOP_K:?required, int}
+  rate_limit:
+    retrieval:     {requests_per_minute: ${ASSISTANT_RL_RETRIEVAL_RPM:?required, int}}
+    weather:       {requests_per_minute: ${ASSISTANT_RL_WEATHER_RPM:?required, int}}
+    notifications: {requests_per_minute: ${ASSISTANT_RL_NOTIFICATIONS_RPM:?required, int}}
 
-      weather:
-        enabled:            ${ASSISTANT_SKILL_WEATHER_ENABLED:?required, bool}
-        provider:           ${ASSISTANT_SKILL_WEATHER_PROVIDER:?required, e.g. "open-meteo"}
-        api_key_ref:        ${ASSISTANT_SKILL_WEATHER_API_KEY_REF:?required, Infisical secret name}
-        cache_ttl:          ${ASSISTANT_SKILL_WEATHER_CACHE_TTL:?required, duration recommend 300s}
-
-      notifications:
-        enabled:            ${ASSISTANT_SKILL_NOTIFICATIONS_ENABLED:?required, bool}
-        confirm_timeout:    ${ASSISTANT_SKILL_NOTIFICATIONS_CONFIRM_TIMEOUT:?required, duration recommend 60s}
+  skills:
+    retrieval:
+      enabled:           ${ASSISTANT_SKILL_RETRIEVAL_ENABLED:?required, bool}
+      top_k:             ${ASSISTANT_SKILL_RETRIEVAL_TOP_K:?required, int}
+    weather:
+      enabled:           ${ASSISTANT_SKILL_WEATHER_ENABLED:?required, bool}
+      provider:          ${ASSISTANT_SKILL_WEATHER_PROVIDER:?required, e.g. "open-meteo"}
+      api_key_ref:       ${ASSISTANT_SKILL_WEATHER_API_KEY_REF:?required, Infisical secret name}
+      cache_ttl:         ${ASSISTANT_SKILL_WEATHER_CACHE_TTL:?required, duration recommend 300s}
+    notifications:
+      enabled:           ${ASSISTANT_SKILL_NOTIFICATIONS_ENABLED:?required, bool}
+      confirm_timeout:   ${ASSISTANT_SKILL_NOTIFICATIONS_CONFIRM_TIMEOUT:?required, duration recommend 60s}
 
   transports:
     telegram:
       enabled:              ${ASSISTANT_TRANSPORT_TELEGRAM_ENABLED:?required, bool}
       markdown_mode:        ${ASSISTANT_TRANSPORT_TELEGRAM_MARKDOWN_MODE:?required, enum "plain"|"markdown_v2"}
       max_message_chars:    ${ASSISTANT_TRANSPORT_TELEGRAM_MAX_MESSAGE_CHARS:?required, int recommend 3500}
-    # whatsapp: {...}  # future adapter
-    # web:      {...}  # future adapter
-    # mobile:   {...}  # future adapter
+    # whatsapp: {...}   # future adapter
+    # web:      {...}   # future adapter
+    # mobile:   {...}   # future adapter
 ```
 
 ### 7.2 Validation rules (startup; abort on violation)
 
-1. Every key resolves to a non-empty value.
-2. `borderline_floor ≤ high_floor`.
+1. Every key resolves to a non-empty value (NO-DEFAULTS / fail-loud).
+2. `assistant.borderline_floor > agent.routing.confidence_floor`.
+   Abort if equal or less (would erase the borderline band).
 3. `assistant.enabled=true` requires at least one
    `assistant.transports.*.enabled=true`.
-4. Every `skills.*.enabled=true` has its dependencies present
-   (weather `api_key_ref` resolves in Infisical; notifications spec
-   054 scheduler reachable on startup ping; retrieval `/api/search`
-   responds 200 on startup ping).
-5. `state_key="user"` (non-recommended) emits a startup WARN noting
-   cross-transport thread-collision risk; the alternative is allowed
-   but visibly flagged.
-6. `intent.model` matches a model the `ml/` sidecar reports as
-   available at `/v1/models`.
+4. Every `skills.*.enabled=true` has its dependencies present:
+   - weather `api_key_ref` resolves in Infisical;
+   - notifications spec 054 scheduler reachable on startup ping;
+   - retrieval `/api/search` responds 200 on startup ping.
+5. `state_key="user"` (non-recommended) emits a startup WARN.
+6. The three v1 scenario YAMLs are present in `AGENT_SCENARIO_DIR`
+   and pass spec 037 loader validation (per `loader.go`). Abort if
+   missing or invalid (so the user-facing capability cannot silently
+   ship without its content).
 
-### 7.3 Migration: `assistant.intent.*` → `assistant.capability.intent.*`
+### 7.3 Fail-loud error envelopes
 
-| Legacy key (spec.md §12) | New key | Alias accepted? |
-|--------------------------|---------|-----------------|
-| `assistant.intent.min_confidence` | `assistant.capability.intent.high_floor` | Yes, with WARN log |
-| `assistant.intent.classifier_model` | `assistant.capability.intent.model` | Yes, with WARN log |
+On startup, any failed validation emits a single-line error to
+stderr in the form:
 
-SCOPE-01 ships the new keys + aliases + WARN logs. A follow-up spec
-removes the aliases.
+```
+FATAL assistant config invalid: <key>: <reason>
+```
+
+and aborts before any HTTP listener binds, any Telegram polling loop
+starts, or any NATS subscription is created. No partial-startup
+state is reachable.
 
 ### 7.4 Secrets
 
 | Secret | SST key (ref) | Infisical secret name |
 |--------|---------------|------------------------|
-| Weather provider API key | `assistant.capability.skills.weather.api_key_ref` | `WEATHER_PROVIDER_API_KEY` |
+| Weather provider API key | `assistant.skills.weather.api_key_ref` | `WEATHER_PROVIDER_API_KEY` |
 
-Bootstrap secrets (Infisical's own 4) unchanged. Weather key is a
-managed secret per spec 150; NO `.env.secrets` entry, NO literal in
-YAML, NO default.
+LLM API keys (if any non-local model is ever configured) reuse the
+existing spec 037 secret indirection — NOT a new path.
+
+### 7.5 No legacy aliases
+
+The prior draft kept `assistant.intent.*` aliases. This revision
+DROPS them — the prior draft never shipped, so there is nothing to
+migrate from. Net is a single clean key namespace.
 
 ---
 
 ## 8. Observability
 
-### 8.1 Prometheus metrics (cardinality bounded by closed vocabularies)
+### 8.1 Prometheus metrics (cardinality bounded)
 
 | Metric | Type | Labels | Purpose |
 |--------|------|--------|---------|
-| `smackerel_assistant_intent_classifications_total` | counter | `label, confidence_band, transport` | Router decisions over time |
-| `smackerel_assistant_intent_latency_seconds` | histogram | `transport` | Router p50/p95/p99 (SLO p95 < 800ms) |
-| `smackerel_assistant_skill_invocations_total` | counter | `skill, outcome, transport` (`success`/`provider_unavailable`/`missing_scope`/`slot_missing`/`internal_error`) | Per-skill success/failure |
-| `smackerel_assistant_skill_latency_seconds` | histogram | `skill, transport` | Per-skill SLO from manifest |
-| `smackerel_assistant_capture_fallback_total` | counter | `cause, transport` (`low_confidence`/`borderline_timeout`/`confirm_discarded`/`confirm_timeout`/`error_offered_capture`/`unresolvable_reference`) | Capture-as-fallback drift |
-| `smackerel_assistant_confirm_card_outcomes_total` | counter | `skill, outcome, transport` (`confirmed`/`discarded_user`/`discarded_timeout`) | Confirm flow health |
-| `smackerel_assistant_disambiguation_outcomes_total` | counter | `outcome, transport` (`resolved_user`/`resolved_timeout_capture`/`resolved_non_matching_reply_capture`) | Disambig health |
+| `smackerel_assistant_facade_turns_total` | counter | `transport, outcome` | Facade-level turn count (`answered`/`captured`/`proposed`/`confirmed`/`discarded`/`error`) |
+| `smackerel_assistant_facade_latency_seconds` | histogram | `transport, outcome` | Facade enter → response emit |
+| `smackerel_assistant_router_band_total` | counter | `band, transport` | High / borderline / low decision counts (post-processor §3.2) |
+| `smackerel_assistant_skill_invocations_total` | counter | `scenario_id, outcome, transport` | Per-scenario success/failure (maps to spec 037 `Outcome`) |
+| `smackerel_assistant_capture_fallback_total` | counter | `cause, transport` | `low_confidence`/`borderline_timeout`/`confirm_discarded`/`confirm_timeout`/`error_offered_capture`/`unresolvable_reference` |
+| `smackerel_assistant_confirm_card_outcomes_total` | counter | `scenario_id, outcome, transport` | `confirmed`/`discarded_user`/`discarded_timeout` |
+| `smackerel_assistant_disambiguation_outcomes_total` | counter | `outcome, transport` | `resolved_user`/`resolved_timeout_capture`/`resolved_non_matching_reply_capture` |
 | `smackerel_assistant_active_threads` | gauge | `transport` | Rows in `assistant_conversations` per transport |
-| `smackerel_assistant_provenance_violations_total` | counter | `skill` | RequireProvenance gate trips |
-| `smackerel_assistant_source_assembly_drops_total` | counter | `skill, cause` (`missing_artifact`/`malformed_ref`) | Graph drift |
-| `smackerel_assistant_sidecar_unavailable_total` | counter | `endpoint` (`classify`/`synthesize`) | `ml/` sidecar outage |
+| `smackerel_assistant_provenance_violations_total` | counter | `scenario_id` | Provenance gate trips |
+| `smackerel_assistant_source_assembly_drops_total` | counter | `scenario_id, cause` | Graph drift |
+
+Spec 037 metrics (router latency, executor outcomes, tracer counts)
+are reused unchanged.
 
 ### 8.2 Structured log fields
 
 Every assistant log line includes: `user_id` (hashed if policy
-requires), `transport`, `assistant_turn_id` (ULID), `intent`,
-`confidence`, `confidence_band`, `skill_id`, `status`, `error_cause`,
-`latency_ms`.
+requires), `transport`, `assistant_turn_id` (ULID), `scenario_id`,
+`top_score`, `band`, `status`, `error_cause`, `latency_ms`,
+`agent_trace_id` (spec 037 trace cross-ref).
 
 ### 8.3 OpenTelemetry trace spans
 
@@ -1049,29 +1371,27 @@ requires), `transport`, `assistant_turn_id` (ULID), `intent`,
 assistant.adapter.translate           (adapter: transport.translate)
   └─ assistant.facade.handle          (facade entry)
      ├─ assistant.context.load
-     ├─ assistant.router.classify     (calls ml/ sidecar)
-     ├─ assistant.registry.dispatch
-     ├─ assistant.skill.<id>.execute  (per-skill span)
-     │  └─ assistant.skill.<id>.<external_call>  (e.g. weather.provider.lookup)
+     ├─ assistant.router.classify     (calls agent.Router.Route)
+     ├─ assistant.router.band         (borderline post-processor §3.2)
+     ├─ agent.executor.run            (spec 037 span; reused)
+     │  └─ agent.tool.<name>.invoke   (spec 037 span per tool)
      ├─ assistant.provenance.check
+     ├─ assistant.confirm.persist     (when confirm_required + propose phase)
      ├─ assistant.context.persist
      └─ assistant.audit.write
   └─ assistant.adapter.render         (adapter: transport.render)
 ```
 
-Every span attributes `transport`, `user_id`, `assistant_turn_id`.
+Spans attribute `transport`, `user_id`, `assistant_turn_id`, and the
+cross-referenced `agent_trace_id`.
 
 ### 8.4 Operator dashboards
 
 SCOPE-09 ships a Grafana panel fragment under
-`deploy/observability/grafana/dashboards/` covering:
-- Per-transport intent classification volume + confidence-band mix
-- Per-skill success/failure pie chart
-- Capture-as-fallback rate with `cause` breakdown (drift early-warning)
-- Router latency p50/p95/p99 vs SLO line (800ms)
-- Per-skill latency vs per-manifest SLO
-- Provenance violation counter (target: 0)
-- Active threads per transport (gauge)
+`deploy/observability/grafana/dashboards/` covering: per-transport
+turn volume + band mix; per-scenario success/failure; capture-as-
+fallback rate with `cause` breakdown; provenance violation counter
+(target 0); active threads per transport.
 
 ---
 
@@ -1085,189 +1405,212 @@ SCOPE-09 ships a Grafana panel fragment under
 | `assistant.skill.weather` | read | Granted by default to existing bot-shared tokens |
 | `assistant.skill.notifications.write` | write | NOT granted by default; explicit owner grant per user |
 
-**Migration shape (coordinated with spec 060 owner; see §14).**
+Coordinated via a packet to spec 060 (owner edits its own catalog
+per `bubbles-artifact-ownership-routing`). See §14.
 
-1. spec 060 catalog gets three new constants.
-2. Existing bot-shared tokens (spec 044) get the two read scopes
-   added to their default scope set on migration day.
-3. The write scope requires explicit per-user grant via the
-   existing spec 060 grant API. v1 ships the owner's own user with
-   the write scope pre-granted; other users get it only on explicit
-   owner action.
-4. `Assistant.Handle` checks `Skill.Manifest().RequiredScopes`
-   against the caller's PASETO scope claim BEFORE dispatching the
-   skill. On scope mismatch: `Status=StatusUnavailable,
-   ErrorCause=ErrMissingScope, Body="<skill>: not permitted"` +
-   offer-to-capture.
-5. Adapters surface the PASETO scope claim from their transport's
-   auth surface (Telegram v1: existing spec 044 token lookup).
+`Assistant.Handle` checks the caller's PASETO scope claim against
+each enabled scenario's required scope BEFORE invoking the executor.
+On scope mismatch: `Status=StatusUnavailable,
+ErrorCause=ErrMissingScope, Body="<scenario>: not permitted"` +
+offer-to-capture.
 
 ### 9.2 Tool API key handling
 
-- Weather API key: SST
-  `assistant.capability.skills.weather.api_key_ref` → Infisical
-  `WEATHER_PROVIDER_API_KEY`. Resolved at deploy time by the
-  existing env-var generator; the core process reads the resolved
-  env var. No plaintext in YAML. No `.env.secrets` entry.
-- LLM API key (if a non-local model is ever configured): same
-  pattern. v1 default is local Ollama via `ml/` sidecar — no API
-  key needed.
+- Weather API key: SST `assistant.skills.weather.api_key_ref` →
+  Infisical `WEATHER_PROVIDER_API_KEY`. Resolved at deploy time. No
+  plaintext in YAML. No `.env.secrets` entry.
 - No secret in logs, traces, or metrics labels.
 
 ### 9.3 Rate limiting
 
-Per `(user_id, transport, skill_id)` counter-based limiter, reusing
-`internal/middleware/ratelimit/`. SST keys per §7.1
-`assistant.capability.rate_limit.*`. Exceed → `Status=StatusUnavailable,
-ErrorCause=ErrInternalError, Body="<skill>: rate limited"`. The
-router itself is NOT rate-limited (it MUST always run so
-capture-as-fallback remains available).
+Per `(user_id, transport, scenario_id)` counter-based limiter via
+existing `internal/middleware/ratelimit/`. SST keys per §7.1
+`assistant.rate_limit.*`. Exceed → `Status=StatusUnavailable,
+ErrorCause=ErrInternalError, Body="<scenario>: rate limited"`.
 
 ### 9.4 Audit artifacts
 
 Every assistant turn writes one `kind='assistant_turn'` artifact
 (§6.3). Every confirm-card proposal writes one
-`kind='assistant_proposal'` artifact (§5.3). Both honor Principle 3
-+ Principle 8. Capability-layer writes; adapters MUST NOT mutate
-audit state directly.
+`kind='assistant_proposal'` artifact (§5.4). Both honor Principle 3
++ Principle 8.
 
 ---
 
-## 10. Module Layout
+## 10. Module Layout (net-new only; spec 037 substrate untouched)
 
 ```
 internal/
-├── assistant/                                 # NEW — capability layer
+├── assistant/                                 # NEW — capability facade (NO router/registry/executor/tracer)
 │   ├── doc.go
-│   ├── facade.go                              # Assistant interface impl
+│   ├── facade.go                              # Assistant interface impl; thin orchestration over agent.Runner
 │   ├── facade_test.go
-│   ├── contracts/
+│   ├── borderline.go                          # §3.2 post-processor on agent.RoutingDecision
+│   ├── shortcuts.go                           # §3.4 slash-command → ScenarioID map
+│   ├── contracts/                             # spec.md §3.1.4 — package 1
 │   │   ├── doc.go
 │   │   ├── message.go                         # AssistantMessage + kinds
-│   │   ├── response.go                        # AssistantResponse + tokens
+│   │   ├── response.go                        # AssistantResponse (facade over agent.InvocationResult) + tokens
 │   │   ├── source.go                          # Source, SourceRef, refs
 │   │   ├── adapter.go                         # TransportAdapter interface
 │   │   ├── assistant.go                       # Assistant interface
 │   │   └── contracts_test.go
-│   ├── router/
+│   ├── provenance/                            # spec.md §3.1.4 — package 2
 │   │   ├── doc.go
-│   │   ├── router.go                          # Router interface
-│   │   ├── ml_router.go                       # ml/ sidecar impl
-│   │   ├── shortcuts.go                       # fast-path command map
-│   │   └── router_test.go                     # golden tests
-│   ├── registry/
-│   │   ├── doc.go
-│   │   ├── registry.go                        # Registry interface + impl
-│   │   ├── skill.go                           # Skill interface + Manifest
-│   │   ├── provenance.go                      # RequireProvenance gate
-│   │   └── registry_test.go
-│   ├── context/
+│   │   ├── gate.go                            # Enforce()
+│   │   └── gate_test.go
+│   ├── context/                               # spec.md §3.1.4 — package 3
 │   │   ├── doc.go
 │   │   ├── store.go                           # Store interface
 │   │   ├── pg_store.go                        # PostgreSQL impl
 │   │   ├── ticker.go                          # idle sweep
 │   │   ├── reference_resolver.go              # "that one" / numeric
-│   │   └── store_test.go                      # uses test PostgreSQL
-│   ├── sources/
+│   │   └── store_test.go                      # uses test PostgreSQL (ephemeral)
+│   ├── confirm/                               # spec.md §3.1.4 — package 4 — OQ #7 state machine
 │   │   ├── doc.go
-│   │   ├── assembler.go                       # SkillResponse → []Source
-│   │   └── assembler_test.go
-│   ├── audit/
-│   │   ├── doc.go
-│   │   ├── writer.go                          # assistant_turn + assistant_proposal
-│   │   └── writer_test.go
-│   └── skills/
+│   │   ├── machine.go                         # propose / confirm / cancel / timeout
+│   │   ├── machine_test.go
+│   │   └── audit.go                           # assistant_proposal writes
+│   └── skills_manifest.go                     # capability-side view of user-facing scenarios
+│                                              # (user_facing_label, slash_shortcut, requires_provenance,
+│                                              #  enable SST mapping). Sourced either from additive YAML
+│                                              #  keys in the scenario files OR from config/assistant/
+│                                              #  scenarios.yaml — see §4.1.
+│
+├── agent/                                     # SPEC 037 SUBSTRATE — UNTOUCHED
+│   ├── (router.go, executor.go, bridge.go,
+│   │    nats_driver.go, tracer.go, loader.go,
+│   │    schema.go, registry.go, replay.go,
+│   │    userreply/, render/, ...)
+│   └── tools/                                 # NEW subpackages registering tool handlers in existing registry
 │       ├── retrieval/
 │       │   ├── doc.go
-│       │   ├── retrieval.go
-│       │   └── retrieval_test.go
+│       │   ├── tool.go                        # retrieval_search — wraps /api/search
+│       │   └── tool_test.go
 │       ├── weather/
 │       │   ├── doc.go
-│       │   ├── weather.go
+│       │   ├── tool.go                        # weather_lookup
 │       │   ├── provider.go                    # Provider interface
 │       │   ├── open_meteo.go                  # concrete provider
 │       │   ├── cache.go                       # LRU
-│       │   └── weather_test.go
-│       └── notifications/
+│       │   └── tool_test.go
+│       └── notification/
 │           ├── doc.go
-│           ├── notifications.go
-│           ├── scheduler_bridge.go            # calls spec 054
-│           └── notifications_test.go
+│           ├── propose.go                     # notification_propose tool
+│           ├── execute.go                     # notification_execute tool — calls spec 054 scheduler
+│           └── tool_test.go
 │
-└── telegram/
-    ├── bot.go                                 # EDITED — register telegram adapter at NewBot
-    ├── handlers.go                            # unchanged
-    ├── handleTextCapture.go                   # unchanged (adapter delegates on CaptureRoute)
-    └── assistant_adapter/                     # NEW — v1 reference adapter
-        ├── doc.go
-        ├── adapter.go                         # TransportAdapter impl
-        ├── translate_inbound.go               # *tgbotapi.Update → AssistantMessage
-        ├── render_outbound.go                 # AssistantResponse → *tgbotapi.MessageConfig
-        ├── render_sources.go                  # trailing numbered block (UX §14.B.1)
-        ├── render_confirm.go                  # inline keyboard pair
-        ├── render_disambig.go                 # numbered list + optional inline kbd
-        ├── callbacks.go                       # callback_data → AssistantMessage{Kind:Confirm|Disambig}
-        ├── identity.go                        # chat_id → user_id via spec 044
-        ├── reset.go                           # /reset command surface
-        └── adapter_test.go                    # golden tests vs UX §14.B.1
+├── telegram/
+│   ├── bot.go                                 # EDITED — handleMessage plain-text branch delegates to assistant_adapter
+│   ├── agent_bridge.go                        # SPEC 037 — REUSED AS THE INNER CORE OF THE TELEGRAM ADAPTER
+│   ├── handleTextCapture.go                   # unchanged (adapter delegates on CaptureRoute=true)
+│   └── assistant_adapter/                     # spec.md §3.1.4 — package 5 — NEW v1 reference adapter
+│       ├── doc.go
+│       ├── adapter.go                         # TransportAdapter impl; wraps existing AgentBridge
+│       ├── translate_inbound.go               # *tgbotapi.Update → AssistantMessage
+│       ├── render_outbound.go                 # AssistantResponse → *tgbotapi.MessageConfig (uses agent/userreply for base body)
+│       ├── render_sources.go                  # trailing numbered block (UX §14.B.1)
+│       ├── render_confirm.go                  # inline keyboard pair
+│       ├── render_disambig.go                 # numbered list + optional inline keyboard
+│       ├── callbacks.go                       # callback_data → AssistantMessage{Kind: Confirm|Disambig}
+│       ├── identity.go                        # chat_id → user_id via spec 044
+│       ├── reset.go                           # /reset command surface
+│       └── adapter_test.go                    # golden tests vs UX §14.B.1
+│
+└── config/
+    └── prompt_contracts/                      # NEW user-facing scenarios (alongside the existing 15)
+        ├── retrieval-qa-v1.yaml               # §5.1
+        ├── weather-query-v1.yaml              # §5.2
+        └── notification-schedule-v1.yaml      # §5.3
 ```
+
+**Forbidden paths (build-time package-existence test fails if any of
+these exist):** `internal/assistant/router/`,
+`internal/assistant/registry/`, `internal/assistant/executor/`,
+`internal/assistant/tracer/`, `internal/assistant/loader/`,
+`internal/assistant/llm/`, `internal/assistant/nats/`.
 
 **Future adapter slots (NOT implemented in v1; documented as
 future):** `internal/whatsapp/assistant_adapter/`,
 `internal/webchat/assistant_adapter/`,
-`internal/mobile/assistant_adapter/`. These directories do NOT
-exist in v1.
+`internal/mobile/assistant_adapter/`.
+
+---
+
+## 10.1 Wiring Plan (`cmd/core/`)
+
+Two edits in v1, both small:
+
+1. **`cmd/core/wiring_agent.go`** — already constructs the
+   production `agent.Router + agent.Executor` and the existing
+   `telegram.AgentBridge`. Add: also construct
+   `assistant.Facade{Runner, ContextStore, ConfirmMachine,
+   SkillManifest, Borderline}` and return it on `coreServices` /
+   `api.Dependencies` so downstream wiring can pass it to the
+   Telegram bot constructor. Spec 037 substrate construction does
+   NOT move.
+2. **`cmd/core/wiring.go::startTelegramBotIfConfigured`** — extend
+   `telegram.Config` (and the `NewBot` signature) with an
+   `AssistantBridge contracts.Assistant` field; pass the
+   capability facade through. Inside `internal/telegram/bot.go`,
+   `handleMessage` plain-text branch delegates to the new
+   `assistant_adapter.Adapter` (constructed once at `NewBot` time
+   with the supplied `AssistantBridge`).
+
+The existing `AgentBridge.Handle(ctx, chatID, text)` REST flow
+(`POST /v1/agent/invoke` via `cmd/core/wiring_agent.go`) continues
+to work unchanged — it's a separate caller of the same runner.
 
 ---
 
 ## 11. Testing Strategy (design-level; bubbles.plan owns per-scope Test Plan)
 
 Per `bubbles-test-environment-isolation` and the Canonical Test
-Taxonomy in `agent-common.md`. The capability + adapter split is
-testable as an explicit design property by substituting a fake
-adapter.
+Taxonomy in `agent-common.md`.
 
 ### 11.1 Per-category coverage
 
 | Category | Coverage | Live system | Notes |
 |----------|----------|-------------|-------|
-| **unit** | Canonical contract round-trip; intent router classification (golden); skill manifest validation; capability-layer source assembly; Telegram adapter rendering (golden tests vs UX §14.B.1); package-import lint (capability MUST NOT import any `internal/<transport>/...`) | No | Pure Go; no external deps |
-| **functional** | Skill execution against real `ml/` sidecar + test PostgreSQL + ephemeral state store; confirm-card timeout state machine; provenance gate enforcement; context store CRUD; idle sweep ticker | Yes (test PG + test ml/) | Ephemeral `docker-compose.test.yml` per `bubbles-test-environment-isolation` |
-| **integration** | Capability + Telegram adapter end-to-end against real local stack; confirm/disambig callbacks; spec 044 chat→user resolution; spec 054 scheduler reuse; provenance refusal path | Yes | Telegram transport itself mocked at the `tgbotapi` boundary (external dep); capability MUST be real |
-| **e2e-api** | Full Telegram update → adapter → router → skill → response → render flow. Real `ml/` sidecar, real PostgreSQL, real spec 054 scheduler. Exercises BS-001..BS-010. | Yes | Driven by Telegram webhook fixture POSTs |
-| **stress** | Intent classifier p95 latency under burst load (SLO < 800ms; Gate G026); routing throughput per chat; conversational-state sweep job under load; concurrent confirm callbacks against the same `confirmRef` (idempotency) | Yes | Required per Gate G026 for the router SLO; owned by SCOPE-04 + SCOPE-09 |
+| **unit** | Canonical contract round-trip; borderline post-processor (golden); provenance gate; confirm state machine transitions (table-driven); reference resolver; Telegram adapter rendering (golden tests vs UX §14.B.1); package-import lint (capability MUST NOT import any `internal/<transport>/...`); **forbidden-package-existence lint** (no `internal/assistant/{router,registry,executor,tracer,loader,llm}/`) | No | Pure Go; no external deps |
+| **functional** | Three v1 scenarios round-trip through real `agent.Bridge` loader → `agent.Router` → `agent.Executor` against real `ml/` sidecar + test PostgreSQL; confirm-card state persistence; context store CRUD; idle sweep | Yes (test PG + real `ml/` sidecar via NATS) | Ephemeral `docker-compose.test.yml` per `bubbles-test-environment-isolation` |
+| **integration** | Capability + Telegram adapter end-to-end against real local stack via existing `AgentBridge`; confirm/disambig callbacks; spec 044 chat→user resolution; spec 054 scheduler reuse; provenance refusal path; borderline disambig→re-route via explicit scenario id | Yes | Telegram `tgbotapi` boundary mocked in-process (external dep); capability + spec 037 substrate REAL |
+| **e2e-api** | Full Telegram update → adapter → facade → router → executor → response → render. Real `ml/` sidecar, real PostgreSQL, real spec 054 scheduler. Exercises BS-001..BS-010. | Yes | Driven by Telegram webhook fixture POSTs |
+| **stress** | Router p95 latency under burst load (SLO from spec 037 + per-scenario `limits.timeout_ms`); concurrent confirm callbacks against the same `confirmRef` (single-flight) | Yes | Required per Gate G026; owned by SCOPE-04 + SCOPE-09 |
 
-### 11.2 Adapter-substitution test (design invariant)
+### 11.2 Adapter-substitution test (capability/adapter split is real)
 
-`internal/assistant/facade_test.go` drives the capability layer via
-a `fakeTransportAdapter` (implements `TransportAdapter`,
-`Name()="fake"`, captures emitted `AssistantResponse`s in memory).
-Asserts:
-- Every UX §14.A primitive is observable from the canonical response
-  alone (no transport-specific fields required).
-- The capability NEVER reaches into the adapter (the fake panics if
+`internal/assistant/facade_test.go` drives the facade via a
+`fakeTransportAdapter` and asserts:
+- Every UX §14.A primitive is observable from `AssistantResponse`
+  alone (no transport-specific fields needed).
+- The facade NEVER reaches into the adapter (the fake panics if
   any method other than `Identity()` is called from inside
   `Handle`).
 
-This is the design's proof that the capability/adapter split is
-real and enforceable — not just doctrinal.
+### 11.3 Build-time architecture tests
 
-### 11.3 Skill isolation test
+Two tests in `internal/assistant/contracts/architecture_test.go`:
 
-`internal/assistant/registry/registry_test.go` walks the import
-graph of `internal/assistant/skills/*/` and fails if any skill
-imports any other. Prevents covert coupling.
+1. **Forbidden-package existence.** Fails if any of
+   `internal/assistant/{router,registry,executor,tracer,loader,llm,nats}/`
+   directories exist. Catches re-introduction of parallel substrate.
+2. **Import direction.** Walks the AST of `internal/assistant/...`
+   and fails on any import path beginning with
+   `internal/telegram/`, `internal/whatsapp/`, `internal/webchat/`,
+   `internal/mobile/`. Catches capability→transport leaks.
+
+A third optional test asserts the facade imports
+`internal/agent` (proving substrate reuse).
 
 ### 11.4 Anti-fabrication / live-stack authenticity
 
-- Integration / e2e-api / stress tests MUST NOT use `httptest.Server`
-  to stand in for the `ml/` sidecar or for the spec 054 scheduler.
-  Both real.
-- The Telegram `tgbotapi` boundary IS allowed to be a thin in-process
-  fake (external dep per `bubbles-test-environment-isolation`).
-- Provenance gate: every retrieval/weather test that asserts a
-  non-empty `Body` MUST also assert non-empty `Sources` — by
-  construction, since the gate would otherwise drop the response.
+- Integration/e2e/stress MUST NOT use `httptest.Server` in place
+  of the `ml/` sidecar or spec 054 scheduler.
+- Telegram `tgbotapi` boundary MAY be a thin in-process fake.
+- Every retrieval/weather test asserting non-empty `Body` MUST also
+  assert non-empty `Sources` — otherwise the provenance gate would
+  drop it.
 
 ---
 
@@ -1275,134 +1618,136 @@ imports any other. Prevents covert coupling.
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|-----------|
-| **LLM hallucination on retrieval** (plausible but unsourced answers) | High | High (Principle 8 breach) | `RequireProvenance` gate (§4.3) at the facade; capability MUST NOT emit non-empty synthesized body with empty `sources[]`. `assistant_provenance_violations_total` counter exposes drift. |
-| **Intent misclassification causing data loss** (real capture goes to a skill) | Medium | Critical (Principle 1 + Hard Constraint 1) | Default-to-capture on low confidence; borderline-band disambiguation prompt; `assistant_capture_fallback_total{cause}` exposes drift. |
-| **Provider outages** (weather, `ml/` sidecar) | Medium | Medium | Closed `ErrorCause` vocabulary; terse degraded UX (§14.A.7); offer-to-capture confirm card; `assistant_sidecar_unavailable_total`. Router-unavailable falls through to capture (BS-001 preserved). |
-| **Spec 060 PASETO scope migration breaks existing bot-shared tokens** | Low | High | Two read scopes granted by default to existing tokens; only `notifications.write` requires explicit grant; SCOPE-08 ships the migration in lockstep with spec 060 owner. |
-| **Adapter business-logic leak** (Hard Constraint 4 violation) | Low | High | `TransportAdapter` MUST/MUST NOT documented (§2.3); adapter-substitution test (§11.2) panics if the capability calls adapter methods other than `Identity`; package-import lint (§11.1) fails on cross-direction imports; SCOPE-05 code-review checklist line item. |
-| **Cross-transport thread collision** if `state_key="user"` | Low (recommended is `user_transport`) | Medium | Startup WARN (§7.2 rule 5); UX §14.D decision 4 documents the recommended choice; `assistant_active_threads{transport}` gauge surfaces drift. |
-| **`assistant_conversations` table growth unbounded** | Low | Medium | Idle sweep ticker (§6.2) deletes rows past TTL; rows are tiny; ops dashboard tracks row count gauge. |
-| **`confirmRef` / `disambiguationRef` race** (two clients tap same callback) | Low | Medium | In-process pending-confirm map keyed on ULID; single-flight per ref (second tap → "already confirmed" no-op response). |
-| **Eval harness flakiness** masking real regressions | Medium | Low | SCOPE-10 deterministic corpus + seeded RNG; CI gate at ≥85% routing accuracy per spec Success Signal. |
-| **Spec 054 scheduler schema extension breaks spec 054's own tests** | Medium | Medium | New `Job` fields are optional + zero-valued by default; SCOPE-08 owns spec 054 test updates in the same PR; spec 054 owner reviews. |
+| **Re-introduction of parallel agent runtime** (Hard Constraint 6 regression) | Medium (it was the prior design) | Critical | Forbidden-package-existence test (§11.3); explicit module-layout §10; FORBIDDEN list in §0 patterns-to-avoid. |
+| **LLM hallucination on retrieval** (unsourced answers) | High | High | `requires_provenance: true` on retrieval scenario + `provenance.Enforce` gate (§4.3). `assistant_provenance_violations_total` exposes drift. |
+| **Intent misclassification causing data loss** (capture goes to a skill) | Medium | Critical | Default-to-capture on low band; borderline disambiguation; `assistant_capture_fallback_total{cause}` exposes drift. |
+| **Provider outages** (weather, `ml/` sidecar) | Medium | Medium | Closed `ErrorCause` vocabulary; offer-to-capture confirm card; router unavailable → fall through to capture. |
+| **Confirm-card race** (two callbacks for same `confirm_ref`) | Low | Medium | ULID `confirm_ref`; PostgreSQL `pending_confirm` row deletion is the single-flight gate (UPDATE…RETURNING semantics or DELETE…RETURNING). |
+| **Stale confirm callback after timeout** | Low | Low | Pending row already deleted by sweep; second callback resolves to "expired" body + capture. |
+| **Spec 060 PASETO scope migration** | Low | High | Three new scopes; two read scopes granted to existing bot-shared tokens; write scope explicit-grant only; coordinated via packet (§14). |
+| **Adapter business-logic leak** | Low | High | TransportAdapter MUST/MUST NOT (§2.3); adapter-substitution test (§11.2); package-import lint (§11.3). |
+| **Spec 054 scheduler payload extension breaks spec 054 tests** | Medium | Medium | Additive optional fields; routed via packet; SCOPE-08 ships spec 054 owner-reviewed change. |
+| **Loader rejects additive scenario YAML keys** | Medium | Low | Two fallback options (§4.1): either route a one-line allowlist addition via a Spec 037 bug folder, OR keep new keys in a sibling `config/assistant/scenarios.yaml` lookup. bubbles.plan chooses. |
+| **`assistant_conversations` unbounded growth** | Low | Medium | Idle sweep (§6.2); active-threads gauge. |
+| **Eval harness flakiness** masking regressions | Medium | Low | SCOPE-10 deterministic corpus + seeded RNG; CI gate ≥85% routing accuracy. |
 
 ---
 
 ## 13. Open Items for bubbles.plan
 
-1. **`/reset` Telegram command in SCOPE-05.** Recommend shipping in
-   SCOPE-05 (adapter already handles command dispatch; incremental
-   cost is trivial). Owner ratifies if it should be deferred.
-2. **SST rename + alias.** SCOPE-01 MUST include the
-   `assistant.intent.*` → `assistant.capability.intent.*` rename
-   with backward-compatible aliases per §7.3. Alias removal is a
-   follow-up spec.
-3. **Per-skill enable flags.** All three in §7.1, all fail-loud, no
-   defaults. SCOPE-01 wires them; SCOPE-03 ensures
-   `Registry.Register` short-circuits when disabled.
-4. **Eval harness sizing (SCOPE-10).** Recommend ≥30 messages per
-   intent label (retrieval, weather, notifications, capture,
-   ambiguous) = ≥150 total; quarterly refresh; seeded RNG; owner-
-   labeled ground truth cross-checked. CI gate at ≥85% routing
-   accuracy.
-5. **SCOPE ordering.** SCOPE-02 (contracts) MUST land before
-   SCOPE-05 (adapter). SCOPE-01 (SST) MUST land before SCOPE-03
-   (registry reads SST at construction). SCOPE-04 (router) depends
-   on SCOPE-03. SCOPE-06/07/08 depend on SCOPE-03 + SCOPE-04.
-   SCOPE-09 (telemetry) ships incrementally with each prior scope;
-   final dashboard in SCOPE-09's own scope. SCOPE-10 (eval) ships
-   last.
-6. **Conversational state PostgreSQL vs in-process.** Design chose
-   PostgreSQL (§6.1) overriding UX's provisional in-memory
-   recommendation. bubbles.plan ratifies in SCOPE-04 DoD.
-7. **Stress-test SLO ownership.** SCOPE-04 owns intent-router
-   p95 < 800ms; SCOPE-06/07/08 each own their per-skill latency
-   budget; SCOPE-09 owns the SLO panels.
+1. **YAML metadata channel for user-facing scenarios (§4.1).**
+   Choose between (a) additive top-level keys + one-line Spec 037
+   loader allowlist (routed via Spec 037 bug folder), OR (b)
+   sibling `config/assistant/scenarios.yaml` lookup keyed by
+   scenario id (zero Spec 037 change). Recommend (b) — strictly
+   additive, no cross-spec coordination cost. bubbles.plan ratifies.
+2. **`/reset` Telegram command** in SCOPE-05. Recommend shipping
+   in SCOPE-05.
+3. **Borderline-band runtime placement.** Design recommends the
+   capability-layer post-processor (§3.2). Already resolves OQ #6
+   per analyst packet directive; bubbles.plan needs only to
+   schedule SCOPE-04 around it.
+4. **`Runner` interface location (§3.3).** Recommend Option A
+   (small `Runner` extraction in `internal/agent/runner.go`,
+   routed via Spec 037 bug folder if any movement is needed),
+   else Option B (facade composes directly).
+5. **SCOPE ordering.** SCOPE-02 (contracts) before SCOPE-05
+   (adapter). SCOPE-01 (SST) before SCOPE-04 (borderline). SCOPE-03
+   (scenarios+tools) parallelizable with SCOPE-04. SCOPE-06/07/08
+   depend on SCOPE-03. SCOPE-09 ships incrementally; final
+   dashboard in SCOPE-09. SCOPE-10 last.
+6. **Eval harness sizing (SCOPE-10).** Recommend ≥30 messages per
+   intent label × 5 labels = ≥150 total; quarterly refresh; seeded
+   RNG; CI gate ≥85%.
 
 ---
 
 ## 14. Spec 060 PASETO Scope Migration Plan
 
-Cross-spec coordination required for the per-skill scope decision
-(§9.1). Owned by the spec 060 owner; spec 061 SCOPE-05 and SCOPE-08
-reference this plan.
-
-**Step 1 — Catalog additions (spec 060 file edit).** Three new
-constants:
-- `assistant.skill.retrieval` (read)
-- `assistant.skill.weather` (read)
-- `assistant.skill.notifications.write` (write)
-
-**Step 2 — Default-grant migration (one-time SQL).**
-
-```sql
--- Spec 060 owner specifies exact table/column names; shape:
-UPDATE user_tokens
-SET scopes = scopes || ARRAY['assistant.skill.retrieval','assistant.skill.weather']
-WHERE token_kind = 'bot_shared'
-  AND NOT (scopes @> ARRAY['assistant.skill.retrieval','assistant.skill.weather']);
-```
-
-**Step 3 — Owner-only write scope.**
-
-```sql
-UPDATE user_tokens
-SET scopes = scopes || ARRAY['assistant.skill.notifications.write']
-WHERE user_id = '<owner-user-id>'
-  AND token_kind = 'bot_shared';
-```
-
-Other users get the write scope only via explicit owner action via
-the existing spec 060 grant API.
-
-**Step 4 — Cross-spec dependency declaration.**
-- `state.json.specDependsOn` already lists spec 060.
-- SCOPE-05 DoD: "spec 060 catalog additions merged" as blocking
-  prerequisite.
-- SCOPE-08 DoD: "write-scope migration applied in dev/test/prod" as
-  blocking prerequisite.
-- Spec 060 file edits routed via a Packet per
-  `bubbles-artifact-ownership-routing` (spec 060 owned by spec 060
-  author; spec 061 does NOT edit it directly).
-
-**Step 5 — Backward compatibility.**
-- Before catalog additions land: spec 061 startup rejects the
-  migration (SST validation §7.2 rule 4 verifies the scopes exist;
-  abort if missing).
-- After catalog additions, before grant migration: existing capture
-  path still works (capture doesn't require any assistant scope);
-  retrieval/weather/notifications skills return `ErrMissingScope`
-  until the grant migration runs.
-- After full migration: full assistant capability online.
+Routed via packet to spec 060 owner per
+`bubbles-artifact-ownership-routing`. Three new constants:
+`assistant.skill.retrieval` (read), `assistant.skill.weather`
+(read), `assistant.skill.notifications.write` (write). Default-grant
+migration adds the two read scopes to existing bot-shared tokens;
+write scope requires explicit per-user grant via existing spec 060
+grant API. SCOPE-05/08 each declare the matching catalog version as
+blocking prerequisite. Full step-by-step migration shape is in the
+prior draft (preserved in git history) and is unchanged by this
+revision.
 
 ---
 
-## 15. References
+## 15. Product Principle Alignment
 
-- `spec.md` §6 (Transport Adapter Contract) — canonical message
-  contracts and adapter responsibilities.
-- `spec.md` §14 (UX & Interaction Model) — transport-neutral
-  semantics (§14.A) + Telegram v1 binding (§14.B.1).
+Per `.github/instructions/product-principles.instructions.md`.
+
+### Principle 2 — Vague In, Precise Out
+The retrieval scenario takes imprecise input ("what did I save
+about Tailscale?") and returns precise sourced answers via semantic
+search + LLM synthesis. The borderline-band disambiguation prompt
+(§3.2) preserves precision in the face of ambiguity by ASKING
+ONCE rather than guessing. Default-to-capture on uncertainty
+preserves the input value rather than degrading it.
+
+### Principle 6 — Invisible By Default, Felt Not Heard
+- The capability NEVER initiates a conversation; every turn is
+  user-initiated (UX §14.A.1).
+- Borderline asks at most ONE clarifying question per turn
+  (§3.2); a non-matching reply is captured.
+- Confirm cards have a single ask + cancel + timeout (§5.4); the
+  capability does NOT escalate or re-prompt.
+- Capture-as-fallback emits no extra chatter — uses the existing
+  `handleTextCapture` reply byte-for-byte.
+
+### Principle 8 — Trust Through Transparency
+- Every synthesized answer carries `sources[]` with either
+  `artifact` (Smackerel knowledge graph ID + capture timestamp) or
+  `external_provider` (provider name + retrieval timestamp). The
+  `provenance.Enforce` gate (§4.3) mechanically drops un-sourced
+  synthesis (BS-007).
+- Every facade turn writes an `assistant_turn` artifact with
+  `agent_trace_id` cross-reference (§6.3). Spec 037's
+  `PostgresTracer` records every tool call. Trace lineage is
+  reachable end-to-end: user message → router decision →
+  scenario invocation → tool calls → cited artifacts.
+- Every confirm proposal writes an `assistant_proposal` artifact
+  regardless of outcome (§5.4). The user can audit what was
+  proposed AND what was confirmed/discarded.
+
+### Principle 1 — Observe First, Ask Second (justified deviation)
+Already flagged in spec.md §11. The capability defaults to capture
+on every uncertainty path; the active-ask path is reserved for
+operations that cannot be inferred from capture alone (weather is
+inherently action-time; retrieval is the read-side of the graph;
+notifications are explicit time-bound user requests). Owner
+ratification required at user-validation time.
+
+---
+
+## 16. References
+
+- `spec.md` §3.1 — Substrate reuse contract (binding).
+- `spec.md` §6 — Transport Adapter Contract.
+- `spec.md` §14 — UX & Interaction Model.
+- `specs/037-llm-agent-tools/` — agent runtime substrate; terminal
+  `done`; consumed as-is.
+- `internal/agent/router.go`, `executor.go`, `bridge.go`,
+  `nats_driver.go`, `tracer.go`, `loader.go` — substrate types.
+- `internal/telegram/agent_bridge.go` — existing reusable bridge.
+- `internal/agent/userreply/` — existing 4-line Telegram budget renderer.
+- `config/prompt_contracts/recommendation-why-v1.yaml` (and 14 others)
+  — scenario YAML shape exemplar.
 - `.github/skills/bubbles-capability-foundation-design/SKILL.md` —
-  proportionality trigger satisfied on TWO axes (multi-skill,
-  multi-transport).
-- `.github/instructions/smackerel-no-defaults.instructions.md` —
-  fail-loud SST policy applied to every `assistant.*` and
-  `assistant.transports.*` key.
-- `.github/instructions/bubbles-test-environment-isolation.instructions.md`
-  — ephemeral test PostgreSQL for functional/integration/e2e/stress.
+  proportionality satisfied on the `TransportAdapter` axis.
 - `.github/skills/bubbles-artifact-ownership-routing/SKILL.md` —
-  spec 060 scope catalog edits routed as a packet.
-- `.github/skills/bubbles-quality-gates-catalog/SKILL.md` — Gate
-  G026 (stress tests for SLA scopes) applies to SCOPE-04 router SLO.
-- spec 044 — per-user bearer auth, chat→user_id mapping (Telegram
-  adapter identity surface).
-- spec 054 — notification scheduler (reused by notifications skill;
-  additive `Source` + `Originator` field extension owned by SCOPE-08).
-- spec 060 — PASETO scope claim catalog (three new scopes added per
-  §14).
-- spec 150 — Infisical-only secrets policy (weather API key managed
-  via Infisical, NOT `.env.secrets`).
-- Pre-rename path `specs/061-telegram-assistant-mode/design.md` (git
-  history) — pre-revision design mined for capability-layer content;
-  Telegram-specific rendering migrated to UX §14.B.1.
+  spec 037 / 054 / 060 edits routed via packets.
+- `.github/instructions/smackerel-no-defaults.instructions.md` —
+  fail-loud SST policy.
+- `.github/instructions/bubbles-test-environment-isolation.instructions.md`
+  — ephemeral test backing stores.
+- spec 044 — per-user bearer auth, chat→user_id mapping.
+- spec 054 — notification scheduler (reused; additive payload
+  extension via SCOPE-08 packet).
+- spec 060 — PASETO scope claim catalog (three new scopes via
+  packet — §14).
+- spec 150 — Infisical-only secrets policy.

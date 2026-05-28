@@ -866,6 +866,39 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("BACKUP_RETENTION_DAILY", "7")
 	t.Setenv("BACKUP_RETENTION_WEEKLY", "4")
 	t.Setenv("BACKUP_WATCHER_POLL_SECONDS", "60")
+
+	// Spec 061 SCOPE-01 — Conversational Assistant SST envelope.
+	// Defaults mirror smackerel.yaml so test Load() succeeds; per-test
+	// overrides exercise the fail-loud + rule-based validation paths in
+	// loadAssistantConfig / validateAssistantConfig.
+	t.Setenv("ASSISTANT_ENABLED", "true")
+	t.Setenv("ASSISTANT_BORDERLINE_FLOOR", "0.75")
+	t.Setenv("ASSISTANT_CONTEXT_WINDOW_TURNS", "8")
+	t.Setenv("ASSISTANT_CONTEXT_IDLE_TIMEOUT", "30m")
+	t.Setenv("ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL", "5m")
+	t.Setenv("ASSISTANT_CONTEXT_STATE_KEY", "transport_user")
+	t.Setenv("ASSISTANT_SOURCES_MAX", "5")
+	t.Setenv("ASSISTANT_BODY_MAX_CHARS", "4000")
+	t.Setenv("ASSISTANT_STATUS_MAX_DURATION", "60s")
+	t.Setenv("ASSISTANT_DISAMBIGUATE_TIMEOUT", "2m")
+	t.Setenv("ASSISTANT_ERROR_CAPTURE_TIMEOUT", "10s")
+	t.Setenv("ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM", "30")
+	t.Setenv("ASSISTANT_RATE_LIMIT_WEATHER_RPM", "20")
+	t.Setenv("ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM", "10")
+	t.Setenv("ASSISTANT_SKILLS_RETRIEVAL_ENABLED", "true")
+	t.Setenv("ASSISTANT_SKILLS_RETRIEVAL_TOP_K", "8")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_ENABLED", "false")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_PROVIDER", "open-meteo")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_API_KEY_REF", "")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_CACHE_TTL", "10m")
+	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED", "false")
+	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT", "5m")
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", "true")
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE", "MarkdownV2")
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS", "4096")
+	// Spec 061 SCOPE-01 design §7.2 rule #2 — agent routing floor is
+	// referenced by validateAssistantConfig for the borderline check.
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
 	t.Setenv("NOTIFICATION_INTELLIGENCE_ENABLED", "true")
 	t.Setenv("NOTIFICATION_PERSISTENCE_THRESHOLD", "2")
 	t.Setenv("NOTIFICATION_ESCALATION_SEVERITY", "high")

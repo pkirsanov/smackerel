@@ -1,0 +1,30 @@
+{
+  "body": "answer body",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources": [
+    {
+      "id": "a-1",
+      "kind": "artifact",
+      "ref": {
+        "artifact_id": "art-1",
+        "captured_at": "2026-05-28T10:00:00Z",
+        "kind": "artifact"
+      },
+      "title": "first"
+    },
+    {
+      "id": "a-2",
+      "kind": "artifact",
+      "ref": {
+        "artifact_id": "art-2",
+        "captured_at": "2026-05-28T10:00:00Z",
+        "kind": "artifact"
+      },
+      "title": "second"
+    }
+  ],
+  "sources_overflow_count": 3,
+  "status": "thinking"
+}

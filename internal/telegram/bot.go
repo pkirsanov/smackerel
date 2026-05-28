@@ -15,6 +15,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/smackerel/smackerel/internal/stringutil"
+	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 )
 
 // Bot manages the Telegram bot lifecycle and message handling.
@@ -69,7 +70,16 @@ type Bot struct {
 	// attaches that token as the Authorization bearer instead of the
 	// legacy shared b.authToken. In dev/test (or when tokenMinter is
 	// nil), the legacy shared token path is preserved verbatim.
+	// Spec 044 Scope 04 — per-user PASETO minter (see SetPerUserTokenMinter).
 	tokenMinter *PerUserTokenMinter
+
+	// Spec 061 SCOPE-05 — conversational-assistant transport adapter.
+	// nil until SetAssistantAdapter wires it; when nil OR
+	// assistantAdapter.IsBound() is false, the plain-text branch falls
+	// through to the legacy handleTextCapture path (BS-001 regression
+	// contract). Safe for concurrent reads after the single startup
+	// SetAssistantAdapter call.
+	assistantAdapter *assistant_adapter.Adapter
 }
 
 // Config holds Telegram bot configuration.
@@ -195,6 +205,22 @@ func NewBot(cfg Config) (*Bot, error) {
 // concurrent use.
 func (b *Bot) SetPerUserTokenMinter(m *PerUserTokenMinter) {
 	b.tokenMinter = m
+}
+
+// SetAssistantAdapter wires the Spec 061 SCOPE-05 conversational
+// assistant adapter into an already-constructed Bot. Production
+// wiring (see `cmd/core/wiring.go::startTelegramBotIfConfigured`)
+// constructs an *assistant_adapter.Adapter with the SST-derived
+// markdown mode and message-char ceiling, then calls this setter
+// before invoking Start. When the setter is never called (dev/test
+// without assistant wiring), the plain-text branch in handleMessage
+// falls through to the legacy handleTextCapture path — BS-001
+// regression-safe.
+//
+// Safe to call exactly once at startup before Start; the field is
+// read-only after this call (no concurrent mutator).
+func (b *Bot) SetAssistantAdapter(a *assistant_adapter.Adapter) {
+	b.assistantAdapter = a
 }
 
 // bearerForChat returns the bearer token the Telegram bot should
@@ -332,6 +358,21 @@ func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		if _, err := b.resolveActorUserID(cb.Message.Chat.ID); err != nil {
 			return
 		}
+	}
+	// Spec 061 SCOPE-05 — route assistant inline-keyboard callbacks
+	// (confirm/disambiguation) to the assistant adapter when its
+	// callback_data prefix matches. Non-assistant callbacks fall
+	// through to the existing list/cook/expense handler unchanged.
+	if cb != nil && b.assistantAdapter != nil && b.assistantAdapter.IsBound() && assistant_adapter.IsAssistantCallback(cb.Data) {
+		update := &tgbotapi.Update{CallbackQuery: cb}
+		if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
+			slog.Error("assistant adapter callback failed", "error", err)
+		}
+		// Acknowledge the callback so Telegram clears the spinner.
+		if _, ackErr := b.api.Request(tgbotapi.NewCallback(cb.ID, "")); ackErr != nil {
+			slog.Warn("failed to ack assistant callback", "error", ackErr)
+		}
+		return
 	}
 	b.handleListCallback(ctx, cb)
 }
@@ -474,6 +515,22 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			b.handleDone(ctx, msg)
 		case "start", "help":
 			b.handleHelp(ctx, msg)
+		case "reset":
+			// Spec 061 SCOPE-05 — conversational-assistant /reset. When
+			// the adapter is bound, route via HandleUpdate so the
+			// capability layer can drop ConfirmCard/Disambiguation
+			// state for this (UserID, Transport) pair. When the adapter
+			// is not wired (legacy install), reply with a clear notice
+			// so the user knows the command was understood but unavailable.
+			if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
+				update := &tgbotapi.Update{Message: msg}
+				if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
+					slog.Error("assistant adapter /reset failed", "error", err)
+					b.reply(msg.Chat.ID, "reset failed; try again")
+				}
+			} else {
+				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
+			}
 		default:
 			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, or /recent")
 		}
@@ -531,6 +588,25 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 
 	// Handle plain text as idea/note capture
 	if text != "" {
+		// Spec 061 SCOPE-05 — try the conversational assistant first.
+		// The adapter is responsible for invoking handleTextCapture
+		// itself when AssistantResponse.CaptureRoute is true (see
+		// NewAdapter Options.Capture wiring in cmd/core); when the
+		// adapter returns handled=true the legacy capture path MUST
+		// NOT run a second time. When the adapter is unbound OR
+		// returns handled=false (no-op for non-text updates), the
+		// legacy handleTextCapture path runs unchanged — this is the
+		// BS-001 regression-safe fallthrough.
+		if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
+			update := &tgbotapi.Update{Message: msg}
+			handled, herr := b.assistantAdapter.HandleUpdate(ctx, update)
+			if herr != nil {
+				slog.Error("assistant adapter handle failed", "error", herr)
+			}
+			if handled {
+				return
+			}
+		}
 		b.handleTextCapture(ctx, msg, text)
 		return
 	}

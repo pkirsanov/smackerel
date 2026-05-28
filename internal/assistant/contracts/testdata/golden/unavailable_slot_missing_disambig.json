@@ -1,0 +1,26 @@
+{
+  "body": "missing required slot: location",
+  "capture_route": false,
+  "disambiguation_prompt": {
+    "choices": [
+      {
+        "id": "weather_query",
+        "label": "ask weather for Lisbon",
+        "number": 1,
+        "shortcut": "/weather Lisbon"
+      },
+      {
+        "id": "save_as_note",
+        "label": "save as note",
+        "number": 2,
+        "shortcut": ""
+      }
+    ],
+    "disambiguation_ref": "ULID-DR-1",
+    "timeout": "5m0s"
+  },
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "slot_missing",
+  "sources_overflow_count": 0,
+  "status": "unavailable"
+}

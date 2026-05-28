@@ -81,11 +81,30 @@ func run() error {
 	// Spec 037 Scope 10 — wire the agent runtime (bridge + router +
 	// executor) into deps so POST /v1/agent/invoke is live and
 	// scheduler/pipeline call sites have a runner to invoke.
-	agentBridge, err := wireAgentBridge(ctx, svc, deps)
+	agentBridge, agentRT, err := wireAgentBridge(ctx, svc, deps)
 	if err != nil {
 		// Fail-loud per SST: missing agent config or DB/NATS-derived
 		// dependencies must surface, not be silently disabled.
 		return fmt.Errorf("agent bridge wiring: %w", err)
+	}
+
+	// Spec 061 SCOPE-03 — design §7.2 rule #6 ("scenario YAMLs
+	// present"). Runs only when the assistant capability is enabled.
+	scenarioDir, err := agentScenarioDir()
+	if err != nil {
+		return fmt.Errorf("agent scenario dir lookup: %w", err)
+	}
+	if err := validateAssistantScenariosPresent(cfg, scenarioDir); err != nil {
+		return err
+	}
+
+	// Spec 061 SCOPE-06 — wire per-skill runtime services into the
+	// agent tool registry. Runs AFTER wireAgentBridge has populated
+	// the registry via blank-import side effects and BEFORE
+	// wireAssistantFacade is invoked. Fail-loud when an SST-enabled
+	// skill is missing its production dependency.
+	if err := wireAssistantSkillServices(cfg, svc); err != nil {
+		return fmt.Errorf("assistant skill services wiring: %w", err)
 	}
 
 	router := api.NewRouter(deps)
@@ -94,6 +113,16 @@ func run() error {
 	tgBot := startTelegramBotIfConfigured(ctx, cfg, deps)
 	attachDriveSaveBridgeToTelegram(svc, tgBot)
 	attachDriveRetrieveBridgeToTelegram(svc, tgBot)
+
+	// Spec 061 SCOPE-05 — construct the capability-layer facade +
+	// Telegram reference adapter and bind it to the bot AFTER the
+	// bot has started. Fail-loud per SST: when the assistant block
+	// is enabled but wiring fails, surface the error so operators
+	// see the misconfiguration; when the assistant is disabled this
+	// is a no-op.
+	if err := wireAssistantFacade(ctx, cfg, svc, agentRT, tgBot, scenarioDir); err != nil {
+		return fmt.Errorf("assistant facade wiring: %w", err)
+	}
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)

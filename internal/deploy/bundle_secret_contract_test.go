@@ -46,9 +46,9 @@
 // are NEVER mutated. All adversarial sub-tests assemble a temporary
 // REPO_ROOT under `t.TempDir()` whose `scripts/commands/config.sh` and/or
 // `config/smackerel.yaml` are tampered byte copies, and whose other paths
-// (`config/prometheus/`, `config/prompt_contracts/`, `config/nats_contract.json`,
-// `deploy/`) are symlinked to the live repo so the loader's other inputs
-// remain unchanged.
+// (`config/prometheus/`, `config/prompt_contracts/`, `config/assistant/`,
+// `config/nats_contract.json`, `deploy/`) are symlinked to the live repo so
+// the loader's other inputs remain unchanged.
 
 package deploy
 
@@ -146,6 +146,8 @@ func setupTestRepoRoot(t *testing.T, configShOverride []byte, smackerelYamlOverr
 		filepath.Join(tmpRoot, "config", "prometheus"))
 	symlink(filepath.Join(repoRoot, "config", "prompt_contracts"),
 		filepath.Join(tmpRoot, "config", "prompt_contracts"))
+	symlink(filepath.Join(repoRoot, "config", "assistant"),
+		filepath.Join(tmpRoot, "config", "assistant"))
 	symlink(filepath.Join(repoRoot, "config", "nats_contract.json"),
 		filepath.Join(tmpRoot, "config", "nats_contract.json"))
 

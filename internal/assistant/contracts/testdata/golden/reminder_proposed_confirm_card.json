@@ -1,0 +1,15 @@
+{
+  "body": "Schedule reminder?",
+  "capture_route": false,
+  "confirm_card": {
+    "confirm_ref": "ULID-CR-1",
+    "negative_label": "no",
+    "positive_label": "yes",
+    "proposed_action": "schedule notification",
+    "timeout": "5m0s"
+  },
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources_overflow_count": 0,
+  "status": "reminder_proposed"
+}
