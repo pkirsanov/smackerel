@@ -101,7 +101,7 @@ async def process_content(
 
         # For Ollama (and any local provider exposed via OLLAMA_URL in SST),
         # pass api_base explicitly. litellm only reads OLLAMA_API_BASE /
-        # OLLAMA_BASE_URL env vars and otherwise defaults to localhost:11434,
+        # OLLAMA_BASE_URL env vars and otherwise falls back to its own default,
         # which doesn't exist inside the smackerel-ml container — Ollama runs
         # in its own service. Reading OLLAMA_URL (the canonical SST key written
         # to *.env by scripts/commands/config.sh) keeps a single source of truth.
