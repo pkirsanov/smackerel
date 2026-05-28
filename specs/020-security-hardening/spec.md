@@ -43,13 +43,23 @@ These are not theoretical risks. Any device on the same network as the Docker ho
 
 ## Threat Model
 
+> **SUPERSEDED (host-bind pattern):** The host-bind prescription in this section
+> — "bind all host-forwarded ports to literal `127.0.0.1`" — has been
+> superseded by [specs/042-tailnet-edge-bind-pattern](../042-tailnet-edge-bind-pattern/spec.md).
+> The canonical pattern is now: `smackerel-core` and `smackerel-ml` use the
+> fail-loud `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`
+> form in `deploy/compose.deploy.yml` (per `.github/instructions/smackerel-no-defaults.instructions.md`
+> and gate G028); `postgres` and `nats` carry NO host `ports:` block at all and
+> are reached via `docker exec` over Tailscale SSH (Pattern P1). Treat the
+> literal-`127.0.0.1` text below as historical context, not as current guidance.
+
 ### Attack Surface: Network Exposure (SEC-005, SEC-007, SEC-016)
 
 **Current state:** `docker-compose.yml` port mappings for `postgres`, `nats`, `smackerel-ml`, and `ollama` use bare `${HOST_PORT}:${CONTAINER_PORT}` syntax, which Docker resolves to `0.0.0.0:PORT`. Only `smackerel-core` uses `127.0.0.1:${CORE_HOST_PORT}:${CORE_CONTAINER_PORT}`.
 
 **Threat:** Any LAN device can connect to PostgreSQL (read/write all data, drop tables), NATS (inject messages, read streams), ML sidecar (invoke LLM, embeddings), and Ollama (run arbitrary model inference).
 
-**Mitigation:** Bind all host-forwarded ports to `127.0.0.1` via `config/smackerel.yaml` host-bind address and the config generation pipeline.
+**Mitigation:** Bind all host-forwarded ports to `127.0.0.1` via `config/smackerel.yaml` host-bind address and the config generation pipeline. (Superseded — see spec [042-tailnet-edge-bind-pattern](../042-tailnet-edge-bind-pattern/spec.md) for the current host-bind contract.)
 
 ### Attack Surface: Unauthenticated ML Sidecar (SEC-007)
 
@@ -266,7 +276,7 @@ Scenario: Valid encrypted data decrypts successfully
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Host port binding | 100% of services bind to 127.0.0.1 | Verify `docker-compose.yml` port mappings and `ss -tlnp` on running stack |
+| Host port binding (SUPERSEDED by [042-tailnet-edge-bind-pattern](../042-tailnet-edge-bind-pattern/spec.md)) | Historical target was 100% of services bind to literal `127.0.0.1`; current contract is the fail-loud `${HOST_BIND_ADDRESS:?...}` form for `smackerel-core`/`smackerel-ml` and NO host `ports:` block for `postgres`/`nats` | Verify `deploy/compose.deploy.yml` invariants via `internal/deploy/compose_contract_test.go` (run as part of `./smackerel.sh test unit --go`); literal-`127.0.0.1` form is forbidden by gate G028 |
 | ML sidecar auth | 0 unauthenticated non-health requests succeed when token configured | Integration test with/without Bearer header |
 | Web UI auth | 0 unauthenticated Web UI requests succeed when token configured | Integration test with/without cookie/Bearer |
 | OAuth rate limiting | >10 req/min/IP blocked on start endpoint | Unit test with rapid sequential requests |
