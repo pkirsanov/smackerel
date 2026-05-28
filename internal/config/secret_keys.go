@@ -31,6 +31,7 @@ var secretKeys = []string{
 	"AUTH_SIGNING_ACTIVE_PRIVATE_KEY",
 	"AUTH_AT_REST_HASHING_KEY",
 	"AUTH_BOOTSTRAP_TOKEN",
+	"TELEGRAM_BOT_TOKEN",
 }
 
 // placeholderPrefix and placeholderSuffix bracket the deterministic,
