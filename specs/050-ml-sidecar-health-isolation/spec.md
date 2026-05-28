@@ -1,5 +1,7 @@
 # Feature: ML Sidecar Health Isolation
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 Resolved — implemented 2026-05-15 (matches `state.json::status` and `state.json::certification.status` = `done`)

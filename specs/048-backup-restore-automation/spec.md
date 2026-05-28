@@ -1,5 +1,7 @@
 # Feature: Backup and Restore Automation
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 Done - delivered via full-delivery workflow. Runtime owns the dump

@@ -1,5 +1,7 @@
 # Feature: 030 — Observability: Metrics & Tracing
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel's operational visibility is limited to structured logging (659 slog calls across the codebase). There are no Prometheus metrics, no Grafana dashboards, and no distributed tracing. When a user reports "search is slow" or "my recipe wasn't processed," the only diagnostic tool is grep through container logs. This scored 6/10 in the system review and is a production readiness gap.

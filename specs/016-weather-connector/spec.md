@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Sections 5.5 (Weather enrichment for Maps), 5.10 (Environmental Alerts, v3 priority), 9/12 (Digest/travel dossier weather)
 
 ---

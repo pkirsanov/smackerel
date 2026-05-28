@@ -1,5 +1,7 @@
 # Feature: Deploy Resource and Filesystem Hardening
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 In Progress - implementation underway

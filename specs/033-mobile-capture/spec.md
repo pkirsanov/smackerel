@@ -1,5 +1,7 @@
 # Feature: 033 — Mobile & Browser Capture Surfaces
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel's active capture channels are currently limited to Telegram bot and REST API. The design document (§6) describes share sheet and browser extension as planned capture surfaces, but neither exists. This means users on mobile must switch to Telegram to save something, and desktop users must copy-paste URLs into Telegram or use the web UI. Both add friction that contradicts the core product principle of "< 5 seconds per item" capture.

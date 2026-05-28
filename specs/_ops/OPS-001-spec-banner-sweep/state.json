@@ -1,0 +1,88 @@
+{
+  "version": 3,
+  "featureDir": "specs/_ops/OPS-001-spec-banner-sweep",
+  "featureName": "OPS-001: spec.md status-banner sweep across 54 certified specs",
+  "status": "in_progress",
+  "workflowMode": "spec-scope-hardening",
+  "planningOnly": true,
+  "planningOnlyJustification": "Portfolio-wide artifact-only documentation drift. Sweep edits exactly one line per affected spec.md across 54 specs (Categories A/B/C/D). No state.json, design.md, scopes.md, report.md, uservalidation.md, or scenario-manifest.json of the 54 target specs is touched. No runtime code, compose, or config. Per Gate G087 planning-only justification: there is no implementation spec to link because the deliverable IS the metadata reconciliation itself; gate G093 correctly blocks promotion past statusCeiling=specs_hardened.",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "bootstrap",
+    "currentScope": 1,
+    "runStartedAt": "2026-05-28T00:00:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": [
+          "discovery",
+          "documentation"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T00:00:00Z",
+        "runEndedAt": "2026-05-28T00:00:00Z",
+        "summary": "Spec-review P1-1 surfaced portfolio-wide drift: 54 of 56 certified specs carry a spec.md '**Status:**' banner that does not match state.json status=done. Breakdown: Category A (23 Draft: 001-017, 019, 025-028), Category B (27 no-banner: 021-024, 029-037, 039, 042-055), Category C (3 multi-word stale: 038, 040, 041), Category D (1 spec-056 planning-packet special case). Authored 8-artifact ops packet under specs/_ops/OPS-001-spec-banner-sweep/ mirroring the BUG-020-007 recipe (also tdd.exempt artifact-only, also terminating at specs_hardened ceiling). User will dispatch bubbles.implement separately for the 54 edits + guard pass + commit."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Reconcile spec.md status banners with state.json for all 54 affected specs",
+        "status": "Not started",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md"
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "exempt",
+      "source": "user-request",
+      "rationale": "Portfolio-wide artifact-only documentation drift; zero runtime code changed."
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "spec-scope-hardening",
+      "source": "user-request"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

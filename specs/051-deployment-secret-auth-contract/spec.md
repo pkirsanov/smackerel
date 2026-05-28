@@ -1,5 +1,7 @@
 # Feature: Deployment Secret and Auth Contract
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 In Progress — full-delivery active. Reconciled with the live spec 044 PASETO v4 (Ed25519) implementation contract and the SST + runtime defense-in-depth boundary.

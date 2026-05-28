@@ -4,7 +4,7 @@
 > **Depends On:** Domain-Aware Structured Extraction (spec 026), User Annotations (spec 027)
 > **Author:** bubbles.analyst
 > **Date:** April 17, 2026
-> **Status:** Draft
+> **Status:** Done
 
 ---
 

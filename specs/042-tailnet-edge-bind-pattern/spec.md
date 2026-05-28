@@ -1,5 +1,7 @@
 # Spec 042 — Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness)
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel is deployed self-hosted on the operator's home-lab machine (`<deploy-host>`,

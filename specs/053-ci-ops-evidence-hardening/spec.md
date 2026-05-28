@@ -1,5 +1,7 @@
 # Feature: 053 CI Ops Evidence Hardening
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 BUG-045-002 closed the chronic Smackerel `ci.yml` integration-job failure by routing CI through the canonical `./smackerel.sh test integration` path and by adding a topology contract guard. The close-out packet ended in `done_with_concerns` because five product-side planning concerns remained routed from BUG-045-002 into `bubbles.plan`:

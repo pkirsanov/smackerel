@@ -5,7 +5,7 @@
 > **Inspired By:** Andrej Karpathy's LLM Wiki concept (April 2025)
 > **Author:** bubbles.analyst
 > **Date:** April 15, 2026
-> **Status:** Draft
+> **Status:** Done
 
 ---
 

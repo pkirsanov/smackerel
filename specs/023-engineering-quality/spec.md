@@ -1,5 +1,7 @@
 # Feature: 023 Engineering Quality
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 An engineering review of the Smackerel codebase identified correctness bugs, SST config violations, type-safety gaps, dead code, inconsistent handler patterns, placeholder health checks, excessive logging, and hardcoded scheduling. These issues degrade reliability under concurrency, violate the project's Configuration Single Source of Truth (SST) policy, weaken compile-time safety, and reduce operational observability. Addressing them now prevents compounding technical debt as the feature surface grows.

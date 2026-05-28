@@ -1,5 +1,7 @@
 # Feature: 035 Recipe Enhancements — Serving Scaler & Cook Mode
 
+**Status:** Done (certified per state.json)
+
 > **Architectural alignment (added with spec 037).**
 > This feature is reframed onto the LLM-Agent + Tools pattern committed to in
 > [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)

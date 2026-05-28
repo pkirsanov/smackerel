@@ -1,5 +1,7 @@
 # Feature: 055 Notification Source ntfy Adapter
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 Blocked for final artifact certification only. The concrete ntfy notification source adapter has been implemented and spec-review recertification found the runtime behavior aligned with this contract. Parent state remains `blocked` until validate-owned certification metadata, done-mode artifact-lint, traceability, and state-transition guard checks are rerun after governance reconciliation. The adapter plugs into the source-neutral Notification Intelligence Handler Service from spec 054; it does not duplicate core notification processing, create a separate ntfy incident model, or forward ntfy messages directly to Telegram or any other output channel.

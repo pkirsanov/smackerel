@@ -1,5 +1,7 @@
 # Feature: 031 — Live-Stack Integration & E2E Testing
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 All 38 Go packages and 173 Python tests pass at the unit level using mocks, but zero tests have been executed against the real running Docker stack. The pipeline flow (artifact capture → NATS publish → ML sidecar processing → NATS response → DB write → graph linking → knowledge synthesis) has never been tested end-to-end against real PostgreSQL, real NATS JetStream, and the real ML sidecar. This scored 3/10 in the system review and is the most critical production readiness gap.

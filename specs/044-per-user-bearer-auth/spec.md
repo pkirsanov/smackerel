@@ -1,5 +1,7 @@
 # Feature 044 — Per-User Bearer Auth Foundation
 
+**Status:** Done (certified per state.json)
+
 ### Status
 
 Done

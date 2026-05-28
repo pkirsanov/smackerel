@@ -1,5 +1,7 @@
 # Feature: 037 LLM Scenario Agent & Tool Registry
 
+**Status:** Done (certified per state.json)
+
 > **Architectural alignment.** This spec is the foundational expression of the
 > LLM-Agent + Tools pattern committed to in:
 > - [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)

@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 26, 2026
-> **Status:** Draft (analyst-owned requirements sections only)
+> **Status:** Done
 > **Design Doc Reference:** [docs/smackerel.md](../../docs/smackerel.md) - extends Section 5 (Passive Sources) and Section 22 (Connector Ecosystem); cross-cuts 026 (Domain Extraction), 027 (User Annotations), 028 (Actionable Lists), 034 (Expense Tracking), 035 (Recipe Enhancements), 036 (Meal Planning), 008 (Telegram Share Capture).
 
 ---

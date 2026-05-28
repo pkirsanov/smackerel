@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 5.10 Source Priority Matrix (Environmental Alerts, v3)
 
 ---

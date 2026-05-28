@@ -1,5 +1,7 @@
 # Feature: 029 — DevOps Pipeline & Image Governance
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel has zero CI/CD automation. All testing, linting, and building is manual via `./smackerel.sh`. A broken commit can ship to `main` without gate checks. Docker images are tagged `latest` only — there is no version tagging, no image digest pinning, and no way to rollback to a known-good image. This is the single largest operational maturity gap in the system (scored 5/10 in system review).

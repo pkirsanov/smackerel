@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst  
 > **Date:** May 2, 2026  
-> **Status:** Draft (analyst-owned requirements sections)  
+> **Status:** Done  
 > **Related QF Feature:** `quantitativeFinance/specs/063-smackerel-companion-bridge`
 
 ## Problem Statement
