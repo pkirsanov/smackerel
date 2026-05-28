@@ -143,6 +143,32 @@ async def process_content(
             raise last_exc  # type: ignore[misc]
 
         result_text = response.choices[0].message.content
+
+        # Reasoning-model preamble strip: deepseek-r1 and other reasoning
+        # models emit a <think>...</think> chain-of-thought block BEFORE
+        # the actual JSON payload. litellm's response_format={"type":
+        # "json_object"} cannot suppress this for Ollama-served models —
+        # the constraint only applies to OpenAI-compatible providers.
+        # Strip the think block so json.loads() sees the real payload.
+        if result_text and "<think>" in result_text:
+            think_close = result_text.find("</think>")
+            if think_close != -1:
+                result_text = result_text[think_close + len("</think>"):].lstrip()
+
+        # Some models also wrap JSON in ```json ... ``` fences despite
+        # response_format being set. Strip the fence if present.
+        if result_text:
+            stripped = result_text.strip()
+            if stripped.startswith("```"):
+                # Drop the opening fence (with optional language tag) and the
+                # trailing fence. Keep only the inner payload.
+                first_nl = stripped.find("\n")
+                if first_nl != -1:
+                    stripped = stripped[first_nl + 1:]
+                if stripped.endswith("```"):
+                    stripped = stripped[: -3].rstrip()
+                result_text = stripped
+
         result = json.loads(result_text)
 
         # Validate required fields
