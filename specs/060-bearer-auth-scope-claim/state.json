@@ -3,7 +3,7 @@
   "featureDir": "specs/060-bearer-auth-scope-claim",
   "featureNumber": "060",
   "featureName": "Bearer Auth Scope Claim & RequireScope Middleware (Spec 044 Amendment)",
-  "status": "draft",
+  "status": "in_progress",
   "workflowMode": "full-delivery",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
@@ -20,9 +20,9 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": 2,
+    "currentScope": 4,
     "runStartedAt": "2026-05-28T00:00:00Z",
-    "lastUpdatedAt": "2026-05-28T08:00:00Z",
+    "lastUpdatedAt": "2026-05-28T16:00:00Z",
     "completedPhaseClaims": [
       {
         "phase": "implement",
@@ -37,9 +37,23 @@
         "agent": "bubbles.implement",
         "completedAt": "2026-05-28T08:00:00Z",
         "summary": "Implemented auth.RequireScope middleware + metrics: internal/auth/scope_middleware.go exporting RequireScope(required ...string) with AND semantics, construction-time panic on zero required, 500 middleware_misconfigured on absent session, SessionSourceSharedToken + SessionSourceBootstrap bypass with auth_scope_check_bypassed_total counter, 403 scope_required body + first-missing required label + auth_scope_rejected_total counter + structured WARN log; registered AuthScopeRejected and AuthScopeCheckBypassed in internal/metrics/auth.go. BS-002 adversarial headline regression test green (legacy token rejected, counter delta exactly 1). Zero endpoint wiring (spec 058 will wire its own). Unit + integration green (294 PASS / 0 FAIL via ./smackerel.sh test integration)."
+      },
+      {
+        "phase": "implement",
+        "scope": 3,
+        "agent": "bubbles.implement",
+        "completedAt": "2026-05-28T16:00:00Z",
+        "summary": "Implemented CLI scope surface: cmd/core/cmd_auth.go gained --scope (repeatable via flag.Func) + --allow-unknown-surface escape hatch on both runAuthEnroll and runAuthRotate; runAuthRotate gained --prior-token <wire> for the preserve path; new runAuthInspect subcommand wired into runAuthCommand dispatch; pure-logic helpers validateScopeFlags + resolveRotationScopes + buildAuthVerifyOptions + issueAndPersistWithScopes added. smackerel.sh gained an auth) passthrough case forwarding \"$@\" verbatim via smackerel_compose exec smackerel-core smackerel auth, with usage banner updated. New cmd/core/cmd_auth_test.go with 13 pure-logic test functions covers: BS-005 invalid scope name (7 sub-cases), BS-006 unknown surface + escape hatch, BS-008 preserve refuse + preserve roundtrip + legacy prior token safety, BS-009 demote + mixed-sentinel rejection, repeatable flag accumulation, explicit replace + explicit replace rejection. go build ./... CLEAN; go vet ./cmd/core ./internal/auth ./internal/api CLEAN; go test ./cmd/core ./internal/auth PASS. Uncertainty: passthrough wrapper live-stack integration test (tests/integration/cli_auth_passthrough_test.go) and dedicated TestAuthInspect_* tests intentionally deferred."
+      },
+      {
+        "phase": "implement",
+        "scope": 4,
+        "agent": "bubbles.implement",
+        "completedAt": "2026-05-28T16:00:00Z",
+        "summary": "Implemented operator docs: docs/Operations.md gained a new '### Scoped Token Enrollment (Spec 060)' subsection inserted after the manual-enrollment block (mint with --allow-unknown-surface escape-hatch behavior, three rotation modes preserve/replace/demote with the at-source refusal rule, auth inspect pure verification path, migration notes, scope registry maintenance, initial RequireScope endpoint wiring matrix). docs/API.md gained a new '### 403 scope_required (Spec 060)' subsection in the Error Behavior section (response shape, first-missing-vs-full-diff semantics, anonymous-vs-authenticated distinction, shared-token/bootstrap bypass, misconfigured-router 500 middleware_misconfigured body, auth_scope_rejected_total + auth_scope_check_bypassed_total metrics with label cardinality, initial wiring matrix) plus a 2026-05-28 Change Notes row. All examples use generic placeholders only. Uncertainty: regression-baseline-guard and pii-scan formal runs deferred to the next dispatch before flipping the spec to done."
       }
     ],
-    "completedScopes": ["1", "2"],
+    "completedScopes": ["1", "2", "3", "4"],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
@@ -77,6 +91,16 @@
         "statusAfter": "draft",
         "scopesImplemented": [1, 2],
         "summary": "Implemented Scopes 1 and 2 (the spec-058 unblocker). Scope 1 — PASETO scope claim foundation: internal/auth/scopes.go canonical registry, Session.Scopes + ParsedToken.Scopes + IssueOptions.Scopes + IssueAndPersistOptions.Scopes, ErrScopeClaimMalformed defense-in-depth parser, bearerAuthMiddleware session-population wire. Scope 2 — auth.RequireScope middleware + AuthScopeRejected/AuthScopeCheckBypassed counter vectors, AND semantics, construction panic, 500-on-misconfig, shared-token+bootstrap bypass, BS-002 adversarial regression headline (legacy token MUST 403 with counter delta exactly 1). Hard backward-compat preserved: legacy unscoped PASETO tokens continue to validate (Scopes: nil). Zero new SST keys, zero DB changes, zero endpoint wiring on pre-existing routes (spec 058 wires its own). Test evidence: full ./smackerel.sh test unit green; full ./smackerel.sh test integration green (294 PASS / 0 FAIL on disposable test stack). Scopes 3 (CLI) and 4 (docs) intentionally deferred to a follow-up per dispatch scope."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["bootstrap", "implement"],
+        "runStartedAt": "2026-05-28T15:30:00Z",
+        "runCompletedAt": "2026-05-28T16:00:00Z",
+        "statusBefore": "draft",
+        "statusAfter": "in_progress",
+        "scopesImplemented": [3, 4],
+        "summary": "Implemented Scopes 3 (CLI) and 4 (operator docs). Scope 3: cmd/core/cmd_auth.go gained --scope (repeatable via flag.Func) + --allow-unknown-surface + --prior-token flags on enroll/rotate, new runAuthInspect subcommand, pure-logic helpers validateScopeFlags + resolveRotationScopes + buildAuthVerifyOptions + issueAndPersistWithScopes. smackerel.sh gained an auth) passthrough case (smackerel_compose exec smackerel-core smackerel auth \"$@\") with usage-banner update. cmd/core/cmd_auth_test.go (new, 13 pure-logic test funcs) covers BS-005/BS-006/BS-008/BS-009 + repeatable-flag accumulation + legacy-roundtrip safety. Scope 4: docs/Operations.md '### Scoped Token Enrollment (Spec 060)' subsection (mint, three rotation modes, inspect, migration, registry maintenance, initial wiring matrix); docs/API.md '### 403 scope_required (Spec 060)' subsection (response shape, first-missing semantics, bypass behavior, metrics, wiring matrix) + Change Notes row. go build ./... CLEAN; go vet ./cmd/core ./internal/auth ./internal/api CLEAN; go test ./cmd/core ./internal/auth PASS. Spec status flipped to in_progress (NOT done) because two DoD items remain in Uncertainty Declaration territory: (a) passthrough-wrapper live-stack integration test (tests/integration/cli_auth_passthrough_test.go) was NOT added or run; (b) regression-baseline-guard + pii-scan for Scope 4 docs were NOT executed. Both gaps are honestly recorded in scopes.md with Claim Source tags; closing them is the next dispatch."
       }
     ]
   }

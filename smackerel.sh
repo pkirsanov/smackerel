@@ -18,6 +18,11 @@ Commands:
   build [--no-cache]          Build docker images for the current environment
   backup                      Create a compressed pg_dump backup in backups/
   backup-restore-test         Spec 048 — restore a backup into a disposable postgres and verify
+  auth <subcommand> [args]    Spec 060 — passthrough wrapper that forwards args
+                              verbatim to `smackerel auth ...` inside the running
+                              smackerel-core container (enroll|rotate|revoke|
+                              list-users|bootstrap|keygen|inspect). Embedded `,`
+                              in `--scope extension:bookmarks,history` is NOT split.
   check                       Validate generated config and docker-compose wiring
   lint                        Run Go vet, Python ruff, and web asset validation
   format [--check]            Format Go and Python files, or check formatting
@@ -572,6 +577,19 @@ case "$COMMAND" in
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     bash "$SCRIPT_DIR/scripts/commands/backup.sh" --env "$TARGET_ENV"
+    ;;
+  auth)
+    # Spec 060 Scope 3 — passthrough wrapper to `smackerel auth ...`
+    # inside the running smackerel-core container. Args are forwarded
+    # verbatim via "$@" — no flag rewriting, no comma splitting (the
+    # embedded `,` in `extension:bookmarks,history` belongs to one
+    # scope value). Operator MUST have `./smackerel.sh up` already; if
+    # the container is not running, docker compose exec fails loud
+    # (the wrapper does NOT silently start the stack or fall back to
+    # a host-installed binary — Gate G028 / NO-DEFAULTS SST).
+    require_docker
+    smackerel_generate_config "$TARGET_ENV" >/dev/null
+    smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel auth "$@"
     ;;
   backup-restore-test)
     require_docker
