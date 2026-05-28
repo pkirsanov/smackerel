@@ -2285,8 +2285,11 @@ func TestFetchNWSAlerts_PointInURL(t *testing.T) {
 	if !strings.Contains(requestedURL, "status=actual") {
 		t.Errorf("expected status=actual in URL, got: %s", requestedURL)
 	}
-	if !strings.Contains(requestedURL, "limit=50") {
-		t.Errorf("expected limit=50 in URL (IMP-017-IMPROVE-006), got: %s", requestedURL)
+	// NWS removed the &limit= query parameter circa 2026 (returns HTTP 400
+	// "Query parameter \"limit\" is not recognized"). Assert it is NOT
+	// present so a future re-introduction is caught loudly.
+	if strings.Contains(requestedURL, "limit=") {
+		t.Errorf("did not expect limit= in URL after NWS deprecated it, got: %s", requestedURL)
 	}
 }
 

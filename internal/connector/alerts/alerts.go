@@ -821,7 +821,11 @@ type NWSAlert struct {
 
 // fetchNWSAlerts fetches active weather alerts from the NWS API for a given point.
 func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWSAlert, error) {
-	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual&limit=50", c.nwsBaseURL, lat, lon)
+	// NWS removed the &limit= query parameter circa 2026; including it now triggers
+	// HTTP 400 Bad Request ("Query parameter \"limit\" is not recognized").
+	// /alerts/active is already scoped to ACTIVE alerts for the queried point so
+	// the natural result set is small enough that no client-side cap is required.
+	reqURL := fmt.Sprintf("%s/alerts/active?point=%.4f,%.4f&status=actual", c.nwsBaseURL, lat, lon)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
