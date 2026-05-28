@@ -69,7 +69,10 @@ type retrievalFinalPayload struct {
 // re-validate, because by the time the assembler runs we already
 // trust the wiring contract; misconfiguration here is a wiring bug,
 // not a runtime data condition.)
-func NewFacadeAssembler(lookup ArtifactLookupFn, sourcesMax int) contracts.SourceAssembler {
+func NewFacadeAssembler(scenarioID string, lookup ArtifactLookupFn, sourcesMax int) contracts.SourceAssembler {
+	if scenarioID == "" {
+		panic("retrieval: NewFacadeAssembler requires a non-empty scenarioID")
+	}
 	if lookup == nil {
 		panic("retrieval: NewFacadeAssembler requires a non-nil ArtifactLookupFn")
 	}
@@ -106,11 +109,33 @@ func NewFacadeAssembler(lookup ArtifactLookupFn, sourcesMax int) contracts.Sourc
 			// (spec 037 OutcomeSchemaFailure counter).
 			return contracts.SourceAssembly{}
 		}
-		sources, overflow := AssembleSources(ctx, payload.CitedArtifactIDs, lookup, sourcesMax)
+		sources, overflow := AssembleSources(ctx, scenarioID, payload.CitedArtifactIDs, lookup, sourcesMax)
+		// Spec 061 SCOPE-09 — when Sources is empty but the LLM
+		// emitted a body, classify the provenance-gate cause so
+		// dashboards can distinguish graph-drift from fabrication.
+		// We attribute by the most specific observable signal:
+		//   - LLM cited IDs but cap was 0     → dropped_for_quota
+		//   - LLM cited IDs but ALL dropped   → missing_artifact
+		//     (the dominant cause in this scenario; lookup_error is
+		//     observable on the assembly-drops counter for the
+		//     dashboard-side breakdown)
+		//   - LLM emitted body with 0 citations → fabricated_source
+		var cause contracts.ProvenanceCause
+		if payload.Answer != "" && len(sources) == 0 {
+			switch {
+			case sourcesMax <= 0:
+				cause = contracts.ProvenanceCauseDroppedForQuota
+			case len(payload.CitedArtifactIDs) == 0:
+				cause = contracts.ProvenanceCauseFabricatedSource
+			default:
+				cause = contracts.ProvenanceCauseMissingArtifact
+			}
+		}
 		return contracts.SourceAssembly{
 			Body:          payload.Answer,
 			Sources:       sources,
 			OverflowCount: overflow,
+			Cause:         cause,
 		}
 	}
 }

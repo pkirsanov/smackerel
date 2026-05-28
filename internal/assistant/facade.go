@@ -222,6 +222,16 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// because the closure runs on unwind regardless.
 	turnStart := f.cfg.Now()
 	transportLabel := normalizeTransportLabel(msg.Transport)
+	// Spec 061 design §18.6 — correlation_id propagation. The Telegram
+	// adapter stamps TransportMetadata["telegram_update_id"]; other
+	// adapters (web/mobile) stamp their own transport-native id. When
+	// no metadata is present we fall back to assistant_turn_id so the
+	// slog line always carries SOMETHING that uniquely identifies this
+	// turn (shell e2e fixtures inject a unique nonce in update_id).
+	correlationID := ""
+	if msg.TransportMetadata != nil {
+		correlationID = msg.TransportMetadata["telegram_update_id"]
+	}
 	var (
 		turnBand            Band
 		turnScenarioID      string
@@ -238,10 +248,19 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 		assistantmetrics.FacadeTurnsTotal.WithLabelValues(transportLabel, outcome).Inc()
 		assistantmetrics.FacadeLatencySeconds.WithLabelValues(transportLabel, outcome).Observe(latency)
-		// Spec 061 design §8.2 — one structured log line per turn.
+		// Fallback correlation_id when transport supplied none.
+		effectiveCorrelationID := correlationID
+		if effectiveCorrelationID == "" {
+			effectiveCorrelationID = turnAssistantTurnID
+		}
+		// Spec 061 design §8.2 + §18.5 — one structured log line per turn
+		// with the canonical shell-e2e assertion field set: correlation_id,
+		// scenario_id, status, error_cause, user_id, transport,
+		// body_redacted (Principle 8 affirmation; bodies never logged).
 		slog.Info("assistant_turn",
 			"user_id", msg.UserID,
 			"transport", transportLabel,
+			"correlation_id", effectiveCorrelationID,
 			"assistant_turn_id", turnAssistantTurnID,
 			"scenario_id", turnScenarioID,
 			"top_score", turnTopScore,
@@ -250,6 +269,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			"error_cause", string(resp.ErrorCause),
 			"latency_ms", latency*1000,
 			"agent_trace_id", agentTraceID(turnAssistantTurnID),
+			"body_redacted", true,
 		)
 	}()
 
@@ -441,6 +461,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// refusal path is the same code path: assembler runs,
 		// returns nil Sources because all citations were dropped,
 		// gate refuses).
+		var provenanceCause contracts.ProvenanceCause
 		if assembler, registered := f.sourceAssemblers[scenarioID]; registered && assembler != nil && result != nil {
 			assembly := assembler(ctx, result)
 			if assembly.Body != "" {
@@ -448,10 +469,15 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			}
 			resp.Sources = assembly.Sources
 			resp.SourcesOverflowCount = assembly.OverflowCount
+			// Forward the assembler's attribution hint to the
+			// provenance gate. Empty Cause means the assembler did
+			// not classify (or there were no citations to drop),
+			// and the gate falls back to fabricated_source.
+			provenanceCause = assembly.Cause
 		}
 
 		// Provenance gate (requires_provenance scenarios only).
-		resp = provenance.Enforce(f.manifest.RequiresProvenance(scenarioID), scenarioID, resp)
+		resp = provenance.Enforce(f.manifest.RequiresProvenance(scenarioID), scenarioID, provenanceCause, resp)
 
 	default:
 		// Unreachable — Band vocabulary is closed.

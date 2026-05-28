@@ -891,6 +891,9 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_SKILLS_WEATHER_PROVIDER", "open-meteo")
 	t.Setenv("ASSISTANT_SKILLS_WEATHER_API_KEY_REF", "")
 	t.Setenv("ASSISTANT_SKILLS_WEATHER_CACHE_TTL", "10m")
+	// Spec 061 design §18.3 — external-provider URL injection seam.
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_GEOCODE_URL", "https://geocoding-api.open-meteo.com/v1/search")
+	t.Setenv("ASSISTANT_SKILLS_WEATHER_FORECAST_URL", "https://api.open-meteo.com/v1/forecast")
 	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED", "false")
 	t.Setenv("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT", "5m")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", "true")

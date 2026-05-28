@@ -680,6 +680,14 @@ assistant:
       provider: "open-meteo" # REQUIRED: provider identifier
       api_key_ref: "" # REQUIRED ("" = no API key required for chosen provider)
       cache_ttl: "10m" # REQUIRED: weather LRU TTL
+      # Spec 061 design §18.3 — per-URL SST keys for external-provider
+      # URL injection seam. Production points at the real open-meteo
+      # endpoints; the TARGET_ENV=test override in scripts/commands/config.sh
+      # redirects these to http://stub-providers:8080/v1/{search,forecast}
+      # served by the smackerel-test-stub-providers nginx container under
+      # the `test` compose profile. Empty value is fail-loud at startup.
+      geocode_url: "https://geocoding-api.open-meteo.com/v1/search" # REQUIRED
+      forecast_url: "https://api.open-meteo.com/v1/forecast" # REQUIRED
     notifications:
       enabled: false # REQUIRED (off by default until SCOPE-08 wires spec 054 packet)
       confirm_timeout: "5m" # REQUIRED: confirm-card timeout before discarded_timeout

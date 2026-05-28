@@ -127,7 +127,11 @@ func wireWeatherSkillServices(cfg *config.Config, svc *coreServices) error {
 	var provider weather.Provider
 	switch cfg.Assistant.WeatherProvider {
 	case "open-meteo":
-		provider = weather.NewOpenMeteoProvider(&http.Client{Timeout: 2 * time.Second})
+		provider = weather.NewOpenMeteoProvider(
+			&http.Client{Timeout: 2 * time.Second},
+			cfg.Assistant.WeatherGeocodeURL,
+			cfg.Assistant.WeatherForecastURL,
+		)
 	default:
 		return fmt.Errorf("ASSISTANT_SKILLS_WEATHER_PROVIDER %q is not a recognized provider (v1 supports: open-meteo)", cfg.Assistant.WeatherProvider)
 	}
