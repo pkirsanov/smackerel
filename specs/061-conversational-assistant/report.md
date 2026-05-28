@@ -5841,3 +5841,276 @@ SCOPE-05-PACKET-060-ACCEPTANCE, SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06, SCOPE-07-B
 - **Spec 061 status:** `in_progress` (unchanged; this session does not promote spec 061).
 - **Next required owners:** (a) `bubbles.docs` — Operations Assistant Capability runbook (SCOPE-09 #5) + Testing Assistant Evaluation section (SCOPE-10 BQG); (b) `bubbles.implement` — SCOPE-09 emission-site closures (provenance violations metric emission, source-assembly `scenario_id` label, active-threads gauge refresher, disambig outcomes emission) + SCOPE-10 Telegram smoke + per-BS regression files + broader e2e; (c) `bubbles.validate` — when SCOPE-05..10 close, certify; (d) framework owners — TRACEABILITY-GUARD-PIPEFAIL + SPEC-058 duplicate-package.
 
+---
+
+## Round 20 — SCOPE-07 §18 Substrate Landing (bubbles.implement)
+
+**Date:** 2026-05-28
+**Owner:** `bubbles.implement` (full-delivery, parent-expanded)
+**User instruction (verbatim):** "land §18 substrate (steps 1-5 of Round 18 plan landing order)"
+**Claim Source:** executed (every command below ran in-session; outputs captured before claims).
+
+### Starting state (verified before edit)
+
+A `git status` at session start showed substantial WIP from prior orchestrator sessions already on disk but uncommitted, partially re-introducing the §18 cascade that Round 20 had previously shelved. Verified by `git diff` against `HEAD` (commit `8d6a8eaa`):
+
+- `internal/assistant/facade.go` — §18.6 `correlation_id` derivation + slog field already added (lines ~226-256).
+- `internal/telegram/assistant_adapter/translate_inbound.go` — §18.6 `TransportMetadata["telegram_update_id"]` propagation already added across text + reset + callback paths.
+- `internal/agent/tools/weather/open_meteo.go` — §18.3 constructor signature change `NewOpenMeteoProvider(httpClient, geocodeURL, forecastURL)` with panic-on-empty already applied.
+- `cmd/core/wiring_assistant_skills.go` — companion wiring update consuming `cfg.Assistant.WeatherGeocodeURL/ForecastURL`.
+- `docker-compose.yml` — §18.4 `stub-providers` service under profile `test` already declared with hardened security context (read-only rootfs, tmpfs mounts, no-new-privileges, dropped capabilities, 64 MiB memory cap).
+- `tests/e2e/stub-providers/` (untracked) — `nginx.conf` + `fixtures/{search.json,forecast.json}` already authored.
+- `internal/config/assistant.go` — `WeatherGeocodeURL`/`WeatherForecastURL` struct fields, loader entries, and the §18.3 production-safety guard (`[F061-PROD-SAFETY]` error code, runs BEFORE the `!Enabled` early-return) already added.
+- `internal/assistant/facade_correlation_id_test.go` (untracked) — facade-level slog-capture tests for the `correlation_id` field already authored.
+- `internal/agent/tools/retrieval/{source_assembly.go,facade_assembler.go,*_test.go}` — partial SCOPE-09 `scenario_id` label cascade (BROKEN — metric had 1-label arity but caller passed 2; pre-existing carry-forward `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING`).
+
+This Round 20 (continuation) session's contribution is therefore the *missing connective tissue* required to make that cascade compile, test, and validate cleanly.
+
+### Owned edits this turn
+
+1. **`config/smackerel.yaml`** — added literal-value `assistant.skills.weather.geocode_url` and `assistant.skills.weather.forecast_url` keys (REQUIRED, no fallback; comment block explains §18.3 production-safety guard + `TARGET_ENV=test` override).
+2. **`scripts/commands/config.sh`** — added `required_value` extraction for both new keys + the `TARGET_ENV=test` override block setting them to `http://stub-providers:8080/v1/{search,forecast}`.
+3. **`internal/config/validate_test.go`** — added both keys to `setRequiredEnv` (unblocked every existing test path through `Load()`).
+4. **`internal/config/assistant_test.go`** — added both keys to `minimalAssistantEnv` AND authored three new tests:
+   - `TestLoadAssistantConfig_WeatherURLsRequired` — adversarial: each key unset → fail-loud, error names the missing key.
+   - `TestLoadAssistantConfig_WeatherURLsRoundTrip` — adversarial: distinct (non-default) URL values round-trip verbatim through the loader; guards against a regression that hard-codes the production URLs.
+   - `TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard` — 8-case adversarial matrix covering the §18.3 production-safety guard: `production+stub-geocode→reject`, `production+stub-forecast→reject`, `production+both-stub→reject`, `development+stub→reject`, `home-lab+stub→reject`, `empty-env+stub→reject`, `production+real→pass`, **AND** the explicit tautology guard `test+stub→pass` (proves the guard does not block the actual test stack — without this case the test would be vacuously satisfied).
+5. **`internal/telegram/assistant_adapter/translate_inbound_test.go`** — authored `TestTranslateInbound_TelegramUpdateIDPropagatedAsMetadata` with four sub-tests:
+   - `text_path` — KindText carries `TransportMetadata["telegram_update_id"]`.
+   - `reset_path` — KindReset carries it.
+   - `callback_path` — KindConfirm (from CallbackQuery) carries it.
+   - `distinct_update_ids_round_trip_distinctly` — adversarial: two updates with distinct `UpdateID` produce distinct metadata; guards against a regression that hard-codes the field (e.g., always emits `"0"`).
+6. **`cmd/core/wiring_assistant_facade.go`** — one-line fix to the `retrieval.NewFacadeAssembler` caller (now passes `"retrieval_qa"` as the leading `scenarioID` argument the prior-session WIP added). Without this the `cmd/core` package did not build, which blocked test execution of every other change in this session.
+
+### Test evidence (PII-redacted; absolute home paths normalized to ~)
+
+```text
+$ go build ./...
+BUILD=0
+
+$ gofmt -l internal/config/assistant.go internal/config/assistant_test.go \
+            internal/config/validate_test.go \
+            internal/telegram/assistant_adapter/translate_inbound_test.go
+FMT_EXIT=0
+
+$ go vet ./internal/config/... ./internal/telegram/assistant_adapter/...
+VET_EXIT=0
+
+$ go test -count=1 ./internal/config/... ./internal/assistant/... \
+                   ./internal/telegram/assistant_adapter/...
+ok  github.com/smackerel/smackerel/internal/config                34.699s
+ok  github.com/smackerel/smackerel/internal/assistant              0.110s
+ok  github.com/smackerel/smackerel/internal/assistant/confirm      0.026s
+ok  github.com/smackerel/smackerel/internal/assistant/context      0.019s
+ok  github.com/smackerel/smackerel/internal/assistant/contracts    0.070s
+ok  github.com/smackerel/smackerel/internal/assistant/metrics      0.021s
+ok  github.com/smackerel/smackerel/internal/assistant/provenance   0.047s
+ok  github.com/smackerel/smackerel/internal/telegram/assistant_adapter 0.040s
+EXIT=0
+```
+
+The `internal/config` run includes all eight tests in the new
+`TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard` adversarial
+matrix (passed) plus the two new `TestLoadAssistantConfig_WeatherURLs*` tests
+(passed). The `internal/assistant` run includes the three pre-staged
+`TestFacade_AssistantTurnSlog_*` correlation_id tests (passed). The
+`internal/telegram/assistant_adapter` run includes all four new
+`TestTranslateInbound_TelegramUpdateIDPropagatedAsMetadata` sub-tests
+(passed).
+
+### Steps landed vs deferred
+
+| Step | Description | Status |
+|---|---|---|
+| 1 | §18.3 SST keys in yaml + config.sh + setRequiredEnv | **LANDED** |
+| 2 | §18.4 stub container (compose + nginx + fixtures) | **ALREADY ON DISK (prior session)** — verified by `git diff docker-compose.yml` + `ls tests/e2e/stub-providers/` |
+| 3 | §18.3 provider constructor injection | **ALREADY ON DISK (prior session)** — verified by `git diff internal/agent/tools/weather/open_meteo.go` (+ `cmd/core/wiring_assistant_skills.go`) |
+| 4 | §18.6 `correlation_id` slog field + Telegram `TransportMetadata` propagation | **ALREADY ON DISK + ADVERSARIAL TESTS ADDED THIS TURN** |
+| 5 | §18.3 production-safety guard | **ALREADY ON DISK + ADVERSARIAL TESTS ADDED THIS TURN** |
+| 6 | BS-003 + BS-006 shell fixtures | **NOT IN SCOPE this turn** (per user prompt) |
+
+### SCOPE-07 DoD updates this turn
+
+No DoD checkbox flipped this turn. The new DoD item `(NEW — design §18.3 production-safety guard)` bundles the SST validation *and* the architecture-test sibling assertion. The SST validation half is fully landed and adversarially tested; the architecture-test sibling that fails the build on any `internal/agent/tools/<skill>/*.go` provider constructor literal-URL is NOT landed. Per honesty discipline this DoD item stays `[ ]` until both halves are present.
+
+**Uncertainty Declaration:** the §18.3 production-safety guard SST validation is fully exercised in unit tests (8/8 adversarial cases pass). The architecture-test sibling assertion is unimplemented. Routing the architecture-test landing to a future `bubbles.implement` turn (it requires authoring a `go/ast` walker over `internal/agent/tools/**/*.go`).
+
+### Carry-forward findings (unchanged)
+
+`SCOPE-05-PACKET-060-ACCEPTANCE`, `SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06`,
+`SCOPE-07-BS-003-SHELL-E2E-NOT-YET-AUTHORED`, `SCOPE-07-BS-006-SHELL-E2E-NOT-YET-AUTHORED`,
+`SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` (new this round — see Uncertainty Declaration),
+`SCOPE-08-PACKET-054`, `SCOPE-08-PACKET-060-WRITE-SCOPE`,
+`SCOPE-09-OTEL-SIDECAR-MISSING`, `SCOPE-09-RUNBOOK-PENDING`,
+`SCOPE-09-PROVENANCE-VIOLATIONS-METRIC-EMISSION-PENDING`,
+`SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` (now BLOCKING test runs in `internal/agent/tools/retrieval` because the prior-session cascade left a 1-vs-2 label arity mismatch; this turn worked AROUND it by NOT modifying `internal/assistant/metrics/source_assembly.go` so the production runtime remains unaffected, but the retrieval-package test suite panics — closure is the next `bubbles.implement` priority outside this turn),
+`SCOPE-09-ACTIVE-THREADS-GAUGE-REFRESHER-PENDING`, `SCOPE-09-DISAMBIG-OUTCOMES-EMISSION-PENDING`,
+`SCOPE-10-TELEGRAM-SMOKE-PENDING`, `SCOPE-10-PER-BS-REGRESSION-PENDING`,
+`SCOPE-10-BROADER-E2E-PENDING`, `SCOPE-10-DOCS-PENDING`,
+`SCOPE-10-USERVALIDATION-RATIFICATION-PENDING`,
+`TRACEABILITY-GUARD-PIPEFAIL`, `SPEC-058-DUPLICATE-PACKAGE`,
+`ml/app` Python format debt, `PRE-EXISTING-CONFIG-VALIDATE-FAILURES`,
+`SMACKEREL-INTEGRATION-ORCHESTRATOR-OOM-FRAGILITY`.
+
+### Outcome envelope
+
+- **Outcome:** `completed_owned` — every owned edit (yaml/config.sh/setRequiredEnv/minimalAssistantEnv/adversarial tests/wiring caller fix) shipped clean; targeted test runs green; no DoD checkbox flipped this turn because the bundled architecture-test sibling remains unlanded.
+- **Spec 061 status:** `in_progress` (unchanged; this session does NOT promote spec 061).
+- **Next required owners:** (a) `bubbles.implement` — author BS-003 + BS-006 shell fixtures using the §18.5 canonical pattern (now unblocked: the slog field + adapter propagation are live in code and adversarially tested); (b) `bubbles.implement` — author the §18.3 architecture-test sibling (`go/ast`-based literal-URL forbidder over `internal/agent/tools/**/*.go`); (c) `bubbles.implement` — close `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` by updating the `SourceAssemblyDropsCounter` metric to 2-label arity so the prior-session retrieval cascade tests stop panicking.
+
+---
+
+## Round 21 — §18 cascade landed (bugfix-fastlane, parent-expanded under bubbles.implement)
+
+**Owner:** `bubbles.implement` (Round 21 user-prompt explicitly named this owner). Parent workflow: `bubbles.workflow mode: bugfix-fastlane specs: specs/061-conversational-assistant`. Parent-expanded because the active workflow runtime did not have nested `runSubagent`; phases executed inline.
+
+**Finding addressed:** `SPEC-061-§18-CASCADE-BROKEN-TESTS` (closed — see Honesty Declarations).
+
+### Starting state (verified against HEAD `b172ea4f`)
+
+Verified by `git status` + per-hunk `git diff` inspection:
+
+- 20 modified + 5 untracked files on disk before this session — substantial §18 cascade re-introduced and partially repaired by an intervening session after Round 20 shelved it.
+- **The two breakages the Round-21 prompt asked me to fix were ALREADY repaired in the working tree before this session.** Specifically:
+  - `internal/agent/tools/retrieval/facade_assembler_test.go` — all 3 `NewFacadeAssembler` call sites already pass `"retrieval_qa"` as the new leading `scenarioID` arg.
+  - `internal/config/assistant_test.go` `minimalAssistantEnv` already includes the two new `ASSISTANT_SKILLS_WEATHER_GEOCODE_URL` + `ASSISTANT_SKILLS_WEATHER_FORECAST_URL` keys.
+- The user's enumerated dirty surface listed 10 modified + 5 untracked = 15 files; the actual cascade is 20 modified + 5 untracked = 25 files. The 8 extras (see "Extras vs user-supplied list" below) were each verified to be cohesive §18 cascade follow-ons before staging.
+
+### This round's contribution (Claim Source: executed)
+
+- Phase-2 full verification suite (7 commands documented below).
+- Path-limited commit (no `-A`) + push of the cascade as commit `2198e045`.
+- Round-21 spec-maintenance update: `state.json` `executionHistory` prepend + this `report.md` section.
+- **No source-code edits were authored this turn** — the cascade was already cohesive when picked up.
+
+### Cascade contents landed (commit `2198e045`, +735 / −42, 25 files)
+
+| Group | Files | Purpose |
+|-------|-------|---------|
+| SST keys (§18.3) | `config/smackerel.yaml`, `internal/config/assistant.go`, `internal/config/assistant_test.go`, `internal/config/validate_test.go`, `scripts/commands/config.sh` | Two REQUIRED `ASSISTANT_SKILLS_WEATHER_{GEOCODE,FORECAST}_URL` keys end-to-end; `TARGET_ENV=test` override routes to `http://stub-providers:8080/v1/{search,forecast}` |
+| Production-safety guard (§18.3) | `internal/config/assistant.go` | `validateAssistantConfig` rejects non-test environments whose env contains the substring `stub-providers` |
+| Provider URL injection (§18.3) | `internal/agent/tools/weather/open_meteo.go`, `internal/agent/tools/weather/open_meteo_test.go` (NEW) | `NewOpenMeteoProvider` constructor takes `geocodeURL` + `forecastURL`; panic-on-empty |
+| Architecture-test sibling (§18.3) | `internal/assistant/contracts/architecture_test.go` | New `TestArchitecture_ProviderURLsNotHardCoded` walks `internal/agent/tools/<skill>/` and forbids hard-coded `http(s)://` literals assigned to URL struct fields |
+| Source-assembly signature extension (SCOPE-06) | `internal/agent/tools/retrieval/source_assembly.go`, `internal/agent/tools/retrieval/source_assembly_test.go`, `internal/agent/tools/retrieval/facade_assembler.go`, `internal/agent/tools/retrieval/facade_assembler_test.go`, `cmd/core/wiring_assistant_facade.go`, `cmd/core/wiring_assistant_skills.go` | `AssembleSources` + `NewFacadeAssembler` take leading `scenarioID string` (panic on empty); all call sites updated |
+| Provenance attribution (SCOPE-06) | `internal/assistant/contracts/source_assembler.go` | `ProvenanceCause` type with 4 values (`missing_artifact`, `lookup_error`, `fabricated_source`, `dropped_for_quota`) + `Cause` field on `SourceAssembly` |
+| Metric label expansion (SCOPE-09) | `internal/assistant/metrics/source_assembly.go`, `internal/assistant/metrics/source_assembly_test.go` | `SourceAssemblyDropsCounter` expanded from `{cause}` to `{scenario_id, cause}`; new `TestSourceAssemblyDropsCounter_ScenarioLabelIsolatesIncrements` adversarial test |
+| Stub container (§18.4) | `docker-compose.yml`, `scripts/lib/runtime.sh`, `tests/e2e/stub-providers/nginx.conf` (NEW), `tests/e2e/stub-providers/fixtures/search.json` (NEW), `tests/e2e/stub-providers/fixtures/forecast.json` (NEW) | `nginx:alpine` under `test` profile only (read-only rootfs, tmpfs, no-new-privileges, `cap_drop:ALL`, 64M memory cap, healthcheck, `lifecycle: ephemeral`); `scripts/lib/runtime.sh` appends `--profile test` iff `TARGET_ENV=test` |
+| Correlation ID (§18.6) | `internal/assistant/facade.go`, `internal/telegram/assistant_adapter/translate_inbound.go`, `internal/assistant/facade_correlation_id_test.go` (NEW) | `correlation_id` derived from `msg.TransportMetadata["telegram_update_id"]`; slog field on `assistant_turn`; 3 slog-capture tests |
+
+### Verification evidence (Claim Source: executed; PII-redacted)
+
+All commands run with absolute home paths normalized to ~ in captured output.
+
+```text
+# 1. go vet ./...  → confirms Breakage A is moot (test file already updated)
+VET_EXIT=0
+
+# 2. go build ./...
+BUILD_EXIT=0
+
+# 3. go build -tags=integration ./...
+INTBUILD_EXIT=0
+
+# 4. gofmt -l on all 12 cascade .go files
+(empty stdout)
+GOFMT_EXIT=0
+
+# 5. go test -count=1 -timeout 120s on the §18 surface
+# 10 packages tested, ALL ok:
+ok  github.com/pkirsanov/smackerel/internal/config                        30.046s
+ok  github.com/pkirsanov/smackerel/internal/agent/tools/retrieval          0.145s
+ok  github.com/pkirsanov/smackerel/internal/agent/tools/weather            0.063s
+ok  github.com/pkirsanov/smackerel/internal/assistant                      0.290s
+ok  github.com/pkirsanov/smackerel/internal/assistant/confirm              0.055s
+ok  github.com/pkirsanov/smackerel/internal/assistant/context              0.037s
+ok  github.com/pkirsanov/smackerel/internal/assistant/contracts            0.125s
+ok  github.com/pkirsanov/smackerel/internal/assistant/metrics              0.087s
+ok  github.com/pkirsanov/smackerel/internal/assistant/provenance           0.085s
+ok  github.com/pkirsanov/smackerel/internal/telegram/assistant_adapter     0.046s
+
+# 6. ./smackerel.sh format --check
+53 files already formatted
+FMT_EXIT=0
+
+# 7. ./smackerel.sh test unit --go
+go test ./... finished OK
+UNIT_EXIT=0
+```
+
+The `internal/agent/tools/retrieval` `0.145s` PASS line above is significant: Round 20-continuation reported `TestAssembleSources_HappyPath_AllPresent` panicking with inconsistent label cardinality under `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING`. The cascade landing physically resolves that panic by aligning the metric arity with the new `scenarioID` parameter. Per the Honesty Declarations below, this is observed but not marked addressed this round.
+
+### Commit + push evidence
+
+```text
+# Commit
+gitleaks  scanned 1 commit  no leaks found
+pii-scan  clean
+[main 2198e045] feat(061-§18): per-URL weather SST keys + stub provider infrastructure (Round 21)
+ 25 files changed, 735 insertions(+), 42 deletions(-)
+COMMIT_EXIT=0
+
+# Push
+To github.com:pkirsanov/smackerel.git
+   b172ea4f..2198e045  main -> main
+PUSH_EXIT=0
+```
+
+### Extras vs user-supplied dirty-surface list
+
+The Round-21 prompt enumerated 10 modified + 5 untracked = 15 files. The actual cascade was 20 modified + 5 untracked = 25 files. The 8 extras, each verified individually before staging:
+
+| File | Why it's cascade-related |
+|------|--------------------------|
+| `docker-compose.yml` | §18.4 stub container service block (matched in scope by the listed `scripts/lib/runtime.sh` profile toggle) |
+| `internal/assistant/contracts/architecture_test.go` | §18.3 architecture-test sibling — exactly the finding Round 20-continuation raised as `SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` |
+| `internal/assistant/contracts/source_assembler.go` | `ProvenanceCause` type + `Cause` field on `SourceAssembly`; required by the facade for provenance attribution downstream of source assembly |
+| `internal/assistant/metrics/source_assembly.go` | SCOPE-09 label expansion `{cause}` → `{scenario_id, cause}`; matches the new `scenarioID` parameter in `AssembleSources` |
+| `internal/assistant/metrics/source_assembly_test.go` | Mechanical mirror of the metric label change + new isolation test |
+| `internal/agent/tools/retrieval/source_assembly_test.go` | Mechanical mirror of the `AssembleSources` signature change at 6 call sites |
+| `internal/config/validate_test.go` | Adds the two new SST keys to `setRequiredEnv` — without this, every `Load()` test path would fail |
+| `scripts/lib/runtime.sh` | `--profile test` toggle so the stub container is invisible to production/dev (paired with `docker-compose.yml`) |
+
+### DoD flips this round
+
+NONE. Per user instruction, no DoD checkbox flipped without explicit owner re-verification. The cascade landing physically satisfies several DoD-eligible criteria but the formal close-out is reserved for the next `bubbles.test` / `bubbles.validate` pass.
+
+### Honesty Declarations
+
+1. **The two specific test fixes the Round-21 prompt asked me to apply were already in the working tree before this session** — I did not author them; I verified them and shipped them as part of the cohesive cascade. The Round-21 prompt's diagnostic was based on a stale snapshot; the underlying intent (a clean §18 cascade landing) is still satisfied.
+2. **The cascade COINCIDENTALLY physically resolves two prior carry-forward findings.** Verified by Phase-2 evidence above:
+   - `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` — Round 20-continuation reported `TestAssembleSources_HappyPath_AllPresent` panicking; my `go test ./internal/agent/tools/retrieval/... ` returned `ok 0.145s`.
+   - `SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` — Round 20-continuation raised this as a new finding because the §18.3 architecture-test was unimplemented; it is now present as `TestArchitecture_ProviderURLsNotHardCoded` in `internal/assistant/contracts/architecture_test.go`.
+   - Per user instruction these carry-forwards are NOT marked addressed by this round; they remain pending owner re-verification.
+3. **BS-003 and BS-006 shell fixtures themselves are still NOT authored** — the cascade only lands the substrate that unblocks them.
+4. **Substrate-freeze correction applied (Round 20 over-applied freeze).** Spec 037 freezes `internal/agent/*.go` *top-level only*; `internal/agent/tools/<skill>/` packages ARE editable. The cascade correctly touches `internal/agent/tools/retrieval/` and `internal/agent/tools/weather/` without violating any freeze.
+
+### Carry-forward findings (unchanged per user instruction)
+
+`SCOPE-05-PACKET-060-ACCEPTANCE`, `SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06`,
+`SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` (physically resolved — pending owner re-verification),
+`SCOPE-07-BS-003-SHELL-E2E-NOT-YET-AUTHORED` (now substrate-unblocked),
+`SCOPE-07-BS-006-SHELL-E2E-NOT-YET-AUTHORED` (now substrate-unblocked),
+`SCOPE-08-PACKET-054`, `SCOPE-08-PACKET-060-WRITE-SCOPE`,
+`SCOPE-09-OTEL-SIDECAR-MISSING`, `SCOPE-09-RUNBOOK-PENDING`,
+`SCOPE-09-PROVENANCE-VIOLATIONS-METRIC-EMISSION-PENDING`,
+`SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` (physically resolved — pending owner re-verification),
+`SCOPE-09-ACTIVE-THREADS-GAUGE-REFRESHER-PENDING`, `SCOPE-09-DISAMBIG-OUTCOMES-EMISSION-PENDING`,
+`SCOPE-10-TELEGRAM-SMOKE-PENDING`, `SCOPE-10-PER-BS-REGRESSION-PENDING`,
+`SCOPE-10-BROADER-E2E-PENDING`, `SCOPE-10-DOCS-PENDING`,
+`SCOPE-10-USERVALIDATION-RATIFICATION-PENDING`,
+`TRACEABILITY-GUARD-PIPEFAIL`, `SPEC-058-DUPLICATE-PACKAGE`,
+`ml/app` Python format debt, `PRE-EXISTING-CONFIG-VALIDATE-FAILURES`,
+`SMACKEREL-INTEGRATION-ORCHESTRATOR-OOM-FRAGILITY`,
+`BUG-051-SSTLOADER-LOAD-INDUCED-FLAKE`.
+
+### Outcome envelope
+
+- **Outcome:** `completed_owned` — the cascade is in `main` (`b172ea4f..2198e045`); verification chain ran clean; the named finding `SPEC-061-§18-CASCADE-BROKEN-TESTS` is closed.
+- **Spec 061 status:** `in_progress` (unchanged).
+- **Next required owners:**
+  - (a) `bubbles.implement` — author `BS-003` + `BS-006` shell fixtures using the §18.5 canonical pattern (now substrate-unblocked by this cascade).
+  - (b) `bubbles.implement` — author SCOPE-06 `BS-002` / `BS-007` adapter-composition shell legs (inherit §18.5).
+  - (c) `bubbles.implement` — author SCOPE-08 `BS-004` (inherit §18.5 / §18.6).
+  - (d) `bubbles.test` — re-verify `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` + `SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` are formally closeable now that the cascade is in `main`.
+  - (e) `bubbles.implement` — author SCOPE-10 Telegram smoke + per-BS regression + broader e2e.
+
