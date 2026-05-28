@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "SCOPE-06",
-    "runStartedAt": "2026-05-30T08:00:00Z",
-    "lastUpdatedAt": "2026-05-30T13:30:00Z",
+    "activeAgent": "bubbles.design",
+    "currentPhase": "design",
+    "currentScope": "SCOPE-05",
+    "runStartedAt": "2026-05-29T00:00:00Z",
+    "lastUpdatedAt": "2026-05-29T00:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
     "completedScopes": [
       "SCOPE-01",
@@ -332,6 +332,15 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "summary": "SCOPE-05 Round 12 (full-delivery continuation). Closed the one BQG honest gap from Round 7 that this agent owns. Re-ran the three deferred repo-wide BQG checks in this session: `./smackerel.sh lint` LINT_EXIT=0 (Go lint clean + web manifests/JS syntax/extension version OK), `./smackerel.sh format --check` FINAL_EXIT=0 (53 Python files already formatted, no gofmt drift), `bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant` PASSED (all anti-fabrication evidence checks green). Targeted re-verification `go test ./internal/telegram/... ./internal/assistant/...` 8 packages all `ok` (~28s total). `go build ./...` + `go vet ./...` both exit 0. SCOPE-05 DoD #12 (Build Quality Gate) flipped `[ ]` -> `[x]`; scope status updated to 'In Progress (Round 12 — BQG closed; 8/11 core DoD items met)'. SCOPE-05 NOT promoted to Done: per Gate G024, 3 DoD items remain genuinely external-blocked: (a) DoD #8 BS-001 live-stack e2e — bot uses tgbotapi.GetUpdatesChan long-poll, the literal 'Telegram webhook fixture POST' is not driveable without webhook mode addition (spec 044 territory); carry-forward finding `SCOPE-05-E2E-INJECTION-MECHANISM` routed for owner direction. (b) DoD #9 BS-010 — paired with SCOPE-06 retrieval-skill landing; routed to bubbles.implement SCOPE-06. (c) DoD #11 cross-spec packet — `cross-spec/packet-060-read-scopes.md` routed (status DRAFT); awaiting spec 060 owner acceptance. addressedFindings: SCOPE-05-BQG-DEFERRED-REPO-WIDE-CHECKS (resolved). unresolvedFindings: SCOPE-05-E2E-INJECTION-MECHANISM, SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06, SCOPE-05-PACKET-060-ACCEPTANCE. Files modified: specs/061-conversational-assistant/scopes.md (BQG `[ ]`->`[x]`, status line refresh), specs/061-conversational-assistant/report.md (Round 12 section appended), specs/061-conversational-assistant/state.json (this entry). No source code modified (the duplicate-package parse errors observed transiently in working tree reconciled themselves with HEAD — git status shows no changes to internal/telegram/assistant_adapter/* or internal/assistant/metrics/*). Next required owners: (1) workflow owner for SCOPE-05-E2E-INJECTION-MECHANISM direction, (2) bubbles.implement SCOPE-06 for BS-010 closure, (3) spec 060 owner for packet acceptance. SCOPE-05 cannot be added to completedScopes this round."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-29T00:00:00Z",
+        "runCompletedAt": "2026-05-29T00:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 14 — focused design extension (Option A — Telegram webhook mode). Operator-directed pass to unblock `SCOPE-05-E2E-INJECTION-MECHANISM` by design. design.md gained new §17 (Telegram Webhook Mode — Transport Entry-Point Capability Foundation) covering: §17.1 capability-foundation declaration per `.github/skills/bubbles-capability-foundation-design/SKILL.md` (Telegram transport entry-point now has two concrete implementations: long-poll + webhook; documented variation axes pull-vs-push and auth-surface); §17.2 three new SST keys all NO-DEFAULTS fail-loud (`assistant.transports.telegram.{mode,webhook_secret_ref,webhook_path}`); §17.3 endpoint shape (POST-only, constant-time `X-Telegram-Bot-Api-Secret-Token` header verify via `subtle.ConstantTimeCompare`, full behavior matrix: 401 missing/mismatch, 400 bad-JSON, 200 dispatch via existing `Bot.safeHandleMessage`/`safeHandleCallback`, 413 oversize, 405 non-POST; structured logs with NO body content); §17.4 lifecycle (exclusive mode branch at startup; webhook registered on existing chi router OUTSIDE bearer-auth, precedent ntfy webhook + OAuth; no separate HTTP server); §17.5 e2e test affordance (shell curl POST with secret header — resolves SCOPE-05-E2E-INJECTION-MECHANISM); §17.6 production rationale; §17.7 forbidden list (no separate dev-only debug endpoint — webhook IS the injection surface; no `setWebhook` automation; no mode coexistence; no substrate/adapter mutation); §17.8 scope allocation decision = Option (b) extend SCOPE-05 (~435 LOC; tightly coupled); §17.9 cross-spec posture (037/044/054/060 NO CHANGE — read-only awareness only; 150 consumed); §17.10 Principle 8 alignment extension; §17.11 plan/implement open items. scopes.md: SCOPE-05 extended with Implementation Plan steps 11–13, Test Plan rows (`internal/telegram/webhook_handler_test.go`, extended `internal/config/assistant_test.go`, rewritten `tests/e2e/telegram_assistant_bs001_test.sh`), DoD #13/#14/#15, status line refresh noting Round-14 design extension reopens 3 DoD items by design and supersedes the prior `SCOPE-05-E2E-INJECTION-MECHANISM` carry-forward. report.md: Round 14 section appended with full design-evidence summary, cross-spec posture matrix, owned-modified vs not-modified file lists. No code, tests, spec.md, uservalidation.md, certification.*, internal/agent/*, or any spec 037/044/060 artifact touched. addressedFindings: SCOPE-05-E2E-INJECTION-MECHANISM (resolved-by-design). unresolvedFindings: SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06 (unchanged owner: bubbles.implement SCOPE-06), SCOPE-05-PACKET-060-ACCEPTANCE (unchanged owner: spec 060 owner). Next required owner: bubbles.implement (SCOPE-05 round 13 — implement webhook handler + SST + wiring branch + router registration + BS-001 webhook shell test rewrite per design §17 and SCOPE-05 DoD #13/#14/#15)."
       }
     ]
   }

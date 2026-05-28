@@ -502,9 +502,36 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 		}
 	}
 
-	tgBot.Start(ctx)
+	// Spec 061 SCOPE-05 design §17.4 — exclusive transport ingress
+	// mode. mode=long_poll preserves the original GetUpdatesChan
+	// goroutine; mode=webhook DOES NOT start that goroutine — the
+	// webhook handler registered in main.go on the chi router IS the
+	// ingress for this mode. The two modes are forbidden to coexist
+	// (would cause double-dispatch in any environment that delivers
+	// updates via both paths).
+	mode := cfg.Assistant.TelegramMode
+	if mode == "" {
+		// Capability disabled or SST not loaded → preserve legacy
+		// long-poll behavior so non-assistant deployments are
+		// unaffected.
+		mode = "long_poll"
+	}
+	switch mode {
+	case "webhook":
+		slog.Info("telegram bot constructed; long-poll suppressed (assistant.transports.telegram.mode=webhook)",
+			"webhook_path", cfg.Assistant.TelegramWebhookPath)
+	case "long_poll":
+		tgBot.Start(ctx)
+		deps.TelegramBot = tgBot
+		slog.Info("telegram bot started")
+		return tgBot
+	default:
+		// validateAssistantConfig already rejects unknown modes; this
+		// is defense-in-depth.
+		slog.Error("unknown telegram transport mode; bot not started", "mode", mode)
+		return nil
+	}
 	deps.TelegramBot = tgBot
-	slog.Info("telegram bot started")
 	return tgBot
 }
 
