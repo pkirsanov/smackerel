@@ -172,6 +172,33 @@ DELETE FROM assistant_conversations
 	return tag.RowsAffected(), nil
 }
 
+// CountActiveByTransport implements Store.CountActiveByTransport.
+// Returns one entry per transport present in the table. Transports
+// with zero rows are omitted from the returned map (the refresher
+// fills in zeros for the known closed transport vocabulary).
+func (s *PgStore) CountActiveByTransport(ctx context.Context) (map[string]int, error) {
+	const q = `SELECT transport, COUNT(*)::bigint FROM assistant_conversations GROUP BY transport`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("assistantctx: CountActiveByTransport query: %w", err)
+	}
+	defer rows.Close()
+
+	counts := map[string]int{}
+	for rows.Next() {
+		var transport string
+		var count int64
+		if err := rows.Scan(&transport, &count); err != nil {
+			return nil, fmt.Errorf("assistantctx: CountActiveByTransport scan: %w", err)
+		}
+		counts[transport] = int(count)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("assistantctx: CountActiveByTransport rows: %w", err)
+	}
+	return counts, nil
+}
+
 // jsonbOrNull returns the supplied raw JSON or a typed nil so the
 // JSONB column receives SQL NULL when the pending struct is absent.
 func jsonbOrNull(raw []byte) any {

@@ -60,6 +60,16 @@ func (m *memStore) SweepIdle(_ context.Context, _ time.Duration) (int64, error) 
 	return 0, nil
 }
 
+func (m *memStore) CountActiveByTransport(_ context.Context) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	counts := map[string]int{}
+	for _, conv := range m.rows {
+		counts[conv.Transport]++
+	}
+	return counts, nil
+}
+
 // memWriter captures audit rows for assertion.
 type memWriter struct {
 	mu   sync.Mutex

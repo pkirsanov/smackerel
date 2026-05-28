@@ -423,3 +423,114 @@ func TestValidateAssistantConfig_Rule9_WebhookPath(t *testing.T) {
 		}
 	})
 }
+
+// TestLoadAssistantConfig_WeatherURLsRequired proves the new §18.3
+// external-provider URL injection seam keys are required at the loader
+// boundary — missing either ASSISTANT_SKILLS_WEATHER_GEOCODE_URL or
+// ASSISTANT_SKILLS_WEATHER_FORECAST_URL produces a fail-loud error
+// naming the exact missing key.
+func TestLoadAssistantConfig_WeatherURLsRequired(t *testing.T) {
+	for _, key := range []string{
+		"ASSISTANT_SKILLS_WEATHER_GEOCODE_URL",
+		"ASSISTANT_SKILLS_WEATHER_FORECAST_URL",
+	} {
+		t.Run(key, func(t *testing.T) {
+			envSet(t, minimalAssistantEnv())
+			_ = os.Unsetenv(key)
+			cfg := &Config{}
+			err := loadAssistantConfig(cfg)
+			if err == nil {
+				t.Fatalf("loadAssistantConfig should fail when %s is unset", key)
+			}
+			if !strings.Contains(err.Error(), key) {
+				t.Errorf("error should name %s, got: %v", key, err)
+			}
+		})
+	}
+}
+
+// TestLoadAssistantConfig_WeatherURLsRoundTrip proves the loader writes
+// the URLs to the typed struct verbatim — adversarial against a
+// regression that hard-codes the production URLs and ignores the env.
+func TestLoadAssistantConfig_WeatherURLsRoundTrip(t *testing.T) {
+	env := minimalAssistantEnv()
+	env["ASSISTANT_SKILLS_WEATHER_GEOCODE_URL"] = "http://stub-providers:8080/v1/search"
+	env["ASSISTANT_SKILLS_WEATHER_FORECAST_URL"] = "http://stub-providers:8080/v1/forecast"
+	envSet(t, env)
+	cfg := &Config{}
+	if err := loadAssistantConfig(cfg); err != nil {
+		t.Fatalf("loadAssistantConfig: %v", err)
+	}
+	if cfg.Assistant.WeatherGeocodeURL != "http://stub-providers:8080/v1/search" {
+		t.Errorf("WeatherGeocodeURL: want stub url, got %q", cfg.Assistant.WeatherGeocodeURL)
+	}
+	if cfg.Assistant.WeatherForecastURL != "http://stub-providers:8080/v1/forecast" {
+		t.Errorf("WeatherForecastURL: want stub url, got %q", cfg.Assistant.WeatherForecastURL)
+	}
+}
+
+// TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard proves
+// the design §18.3 adversarial guard refuses startup when a weather URL
+// contains the test-only marker "stub-providers" outside
+// Environment="test". Adversarial matrix: each URL alone, both URLs,
+// multiple non-test environments. Tautology guard: the same stub URL
+// MUST pass when Environment="test" (otherwise the guard would block
+// the actual test stack and this test would be vacuously satisfied).
+func TestValidateAssistantConfig_StubProviders_ProductionSafetyGuard(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+	build := func(env, geocode, forecast string) *Config {
+		return &Config{
+			Environment: env,
+			Assistant: AssistantConfig{
+				Enabled:                  true,
+				BorderlineFloor:          0.75,
+				ContextStateKey:          "transport_user",
+				TelegramEnabled:          true,
+				TelegramMode:             "long_poll",
+				TelegramWebhookSecretRef: "",
+				TelegramWebhookPath:      "/v1/telegram/webhook",
+				WeatherGeocodeURL:        geocode,
+				WeatherForecastURL:       forecast,
+				Eval:                     AssistantEvalConfig{RoutingAccuracyMin: 0.85, CaptureFallbackMin: 1.0},
+			},
+		}
+	}
+	prodURL := "https://api.open-meteo.com/v1/forecast"
+	prodGeo := "https://geocoding-api.open-meteo.com/v1/search"
+	stubGeo := "http://stub-providers:8080/v1/search"
+	stubFcst := "http://stub-providers:8080/v1/forecast"
+
+	cases := []struct {
+		name      string
+		env       string
+		geocode   string
+		forecast  string
+		wantError bool
+	}{
+		{"production_with_stub_geocode_rejects", "production", stubGeo, prodURL, true},
+		{"production_with_stub_forecast_rejects", "production", prodGeo, stubFcst, true},
+		{"production_with_both_stub_rejects", "production", stubGeo, stubFcst, true},
+		{"development_with_stub_rejects", "development", stubGeo, prodURL, true},
+		{"empty_environment_with_stub_rejects", "", stubGeo, prodURL, true},
+		{"production_with_real_urls_passes", "production", prodGeo, prodURL, false},
+		// Tautology guard: stub URLs MUST be accepted in the test env,
+		// otherwise the test stack itself would fail to boot.
+		{"test_env_with_both_stub_passes", "test", stubGeo, stubFcst, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := build(tc.env, tc.geocode, tc.forecast)
+			err := c.validateAssistantConfig()
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("expected production-safety guard to reject env=%q with stub url, got nil", tc.env)
+				}
+				if !strings.Contains(err.Error(), "stub-providers") || !strings.Contains(err.Error(), "F061-PROD-SAFETY") {
+					t.Errorf("error should name stub-providers and F061-PROD-SAFETY, got: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("expected no error for env=%q with urls %q/%q, got: %v", tc.env, tc.geocode, tc.forecast, err)
+			}
+		})
+	}
+}

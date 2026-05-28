@@ -37,6 +37,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
@@ -294,6 +296,32 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		return resp, nil
 	}
 
+	// --- Step 1.5: pending disambiguation resolver ---
+	//
+	// Spec 061 SCOPE-09 — when the prior turn left a PendingDisambig
+	// on the conversation, the next inbound turn is interpreted in
+	// that context. Three terminal outcomes are emitted on
+	// DisambiguationOutcomesTotal:
+	//
+	//   resolved_timeout_capture    — emittedAt > PendingDisambig.ExpiresAt
+	//   resolved_user               — typed disambig reply (Kind==
+	//                                 KindDisambiguation) OR text reply
+	//                                 whose trimmed body parses to a
+	//                                 valid 1-indexed choice number
+	//   resolved_non_matching_reply — PendingDisambig present but the
+	//                                 reply did not resolve to a choice
+	//
+	// In all three cases PendingDisambig is cleared. Capture-fallback
+	// counters get a paired increment for the two capture paths
+	// (borderline_timeout for TTL expiry, low_confidence for the
+	// non-matching reply) so the existing dashboards continue to
+	// reflect "capture happened" counts. The user_resolved path
+	// returns a short confirmation and asks the user to re-send the
+	// original request (the original RawInput is not stored).
+	if resp, handled := f.resolvePendingDisambig(ctx, msg, conv, transportLabel, emittedAt); handled {
+		return resp, nil
+	}
+
 	// --- Step 2: shortcut detection (text turns only) ---
 	var shortcutScenarioID string
 	if msg.Kind == contracts.KindText {
@@ -372,6 +400,24 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			DisambiguationPrompt: prompt,
 			Body:                 "did you mean one of these?",
 			EmittedAt:            emittedAt,
+		}
+		// Spec 061 SCOPE-09 — persist the disambig so the next user
+		// turn can be resolved against it. The Step-0.5 resolver at
+		// the top of Handle reads conv.PendingDisambig on the
+		// following turn and emits the matching outcome to
+		// DisambiguationOutcomesTotal. ExpiresAt is computed from
+		// the design-fixed timeout (assistant.disambiguate_timeout).
+		choiceIDs := make([]assistantctx.DisambigChoiceID, 0, len(prompt.Choices))
+		for _, c := range prompt.Choices {
+			choiceIDs = append(choiceIDs, assistantctx.DisambigChoiceID{
+				Number: c.Number,
+				ID:     c.ID,
+			})
+		}
+		conv.PendingDisambig = &assistantctx.PendingDisambig{
+			DisambiguationRef: prompt.DisambiguationRef,
+			Choices:           choiceIDs,
+			ExpiresAt:         emittedAt.Add(f.cfg.DisambigTimeout),
 		}
 
 	case BandHigh:
@@ -796,4 +842,135 @@ func agentTraceID(assistantTurnID string) string {
 		return ""
 	}
 	return "trace-" + assistantTurnID
+}
+
+// resolvePendingDisambig implements the Step-1.5 disambiguation
+// resolver. Returns (resp, true) when a pending disambig was present
+// and this turn closed it (capture, user-selection, or non-matching).
+// Returns (_, false) when no disambig is pending — Handle continues
+// with the normal Step-2 shortcut/Step-3 reference/Step-4 route flow.
+//
+// On every handled path PendingDisambig is cleared on the
+// conversation row before persist. The DisambiguationOutcomesTotal
+// counter is incremented exactly once per terminal outcome;
+// CaptureFallbackTotal gets a paired increment on the two capture
+// paths.
+func (f *Facade) resolvePendingDisambig(
+	ctx context.Context,
+	msg contracts.AssistantMessage,
+	conv assistantctx.Conversation,
+	transportLabel string,
+	emittedAt time.Time,
+) (contracts.AssistantResponse, bool) {
+	if conv.PendingDisambig == nil {
+		return contracts.AssistantResponse{}, false
+	}
+	pd := conv.PendingDisambig
+
+	// (a) TTL expired — capture and emit resolved_timeout_capture.
+	if emittedAt.After(pd.ExpiresAt) {
+		assistantmetrics.DisambiguationOutcomesTotal.WithLabelValues(
+			assistantmetrics.DisambigOutcomeResolvedTimeoutCapture,
+			transportLabel,
+		).Inc()
+		assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+			assistantmetrics.CauseBorderlineTimeout,
+			transportLabel,
+		).Inc()
+		conv.PendingDisambig = nil
+		resp := contracts.AssistantResponse{
+			Status:       contracts.StatusSavedAsIdea,
+			CaptureRoute: true,
+			Body:         "saved as an idea — earlier choice expired.",
+			EmittedAt:    emittedAt,
+		}
+		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+		return resp, true
+	}
+
+	// (b) Attempt to resolve a choice. Two acceptable inbound shapes:
+	//   1. Kind == KindDisambiguation with matching DisambiguationRef
+	//      and a 1-indexed DisambiguationChoice (typed disambig reply).
+	//   2. Kind == KindText whose trimmed body parses to a valid
+	//      1-indexed choice number (fallback for adapters that don't
+	//      track per-prompt state).
+	chosenID := ""
+	matched := false
+
+	if msg.Kind == contracts.KindDisambiguation && msg.DisambiguationRef == pd.DisambiguationRef {
+		for _, c := range pd.Choices {
+			if c.Number == msg.DisambiguationChoice {
+				chosenID = c.ID
+				matched = true
+				break
+			}
+		}
+	} else if msg.Kind == contracts.KindText {
+		if n, err := strconv.Atoi(strings.TrimSpace(msg.Text)); err == nil {
+			for _, c := range pd.Choices {
+				if c.Number == n {
+					chosenID = c.ID
+					matched = true
+					break
+				}
+			}
+		}
+	}
+
+	if matched {
+		assistantmetrics.DisambiguationOutcomesTotal.WithLabelValues(
+			assistantmetrics.DisambigOutcomeResolvedUser,
+			transportLabel,
+		).Inc()
+		conv.PendingDisambig = nil
+		var resp contracts.AssistantResponse
+		if chosenID == contracts.SaveAsNoteChoiceID {
+			// save_as_note is an explicit user choice to capture —
+			// emit the user-resolved outcome but skip
+			// CaptureFallbackTotal (capture WAS the user's request,
+			// not a fallback).
+			resp = contracts.AssistantResponse{
+				Status:       contracts.StatusSavedAsIdea,
+				CaptureRoute: true,
+				Body:         "saved as a note.",
+				EmittedAt:    emittedAt,
+			}
+		} else {
+			label, _ := f.manifest.UserFacingLabel(chosenID)
+			if label == "" {
+				label = chosenID
+			}
+			resp = contracts.AssistantResponse{
+				Status:    contracts.StatusSavedAsIdea,
+				Body:      fmt.Sprintf("ok, treating as %s — please re-send your request.", label),
+				EmittedAt: emittedAt,
+			}
+		}
+		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandHigh, nil, nil, resp)
+		return resp, true
+	}
+
+	// (c) Disambig was pending but reply did not resolve — emit
+	// resolved_non_matching_reply outcome, paired CaptureFallback,
+	// and capture.
+	assistantmetrics.DisambiguationOutcomesTotal.WithLabelValues(
+		assistantmetrics.DisambigOutcomeResolvedNonMatchingReply,
+		transportLabel,
+	).Inc()
+	assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+		assistantmetrics.CauseLowConfidence,
+		transportLabel,
+	).Inc()
+	conv.PendingDisambig = nil
+	resp := contracts.AssistantResponse{
+		Status:       contracts.StatusSavedAsIdea,
+		CaptureRoute: true,
+		Body:         "saved as an idea — i'll surface it later.",
+		EmittedAt:    emittedAt,
+	}
+	conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+	f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+	return resp, true
 }
