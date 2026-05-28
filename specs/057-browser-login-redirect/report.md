@@ -912,7 +912,7 @@ There is no in-band "skip-justified" facility that the guard honours. Marking a 
 |---|---|---|
 | `regression` | NO — record it | Spec 044 byte-for-byte sweep IS the regression for this spec; `TestE2E_Spec044` PASS evidence exists in `report.md#phase-test`. A `bubbles.regression` phase claim should be written pointing at that evidence. |
 | `simplify` | DEBATABLE | New code is already minimal-surface (5 runtime files, single embedded template, single sanitize fn). A `bubbles.simplify` pass could be a quick read-only sweep + no-op claim. |
-| `stabilize` | NO — record it | All tests are green and the surface is additive. A `bubbles.stabilize` claim referencing the green test runs would be honest. |
+| `stabilize` | NO — record it | Unit + e2e-api PASS first-green against the live container stack (see `report.md#phase-test-2026-05-28` — `TestE2E_Spec044` PASS, no flake). A `bubbles.stabilize` phase claim citing that evidence anchor would be honest. |
 | `security` | RECORDED in this audit run | This audit performed a real security review of the new surface (see Security Review table above). The audit phase claim below also asserts the security-equivalent work. A separate `bubbles.security` run is not behaviourally necessary; if the workflow agent prefers a dedicated phase record, it can be added pointing here. |
 | `docs` | NO — record it | `docs/Operations.md` and `docs/Architecture.md` should reference the new `/login` and `/admin_ui_static/*` routes. `bubbles.docs` should run (small, real work). |
 | `audit` | RECORDED HERE | This run. |
@@ -1010,5 +1010,89 @@ Once a commit `spec(057): <message>` (or `bubbles(057/...): <message>`) lands to
 - **F-057-T-003** (low) — dirty `internal/config/*` files, foreign-owned, pre-existing, routed to bug owner.
 - **F-057-V-001** (medium) — cross-cutting tests/e2e/ui/ browser harness gap; follow-up tracked at `specs/_ops/F-057-V-001-e2e-ui-harness/README.md` (discharged at plan@08:15Z).
 - Audit cookie-Secure environment-string spot-check + disabled-banner visual spot-check (see § Spot-Check Recommendations above).
+
+## Chaos Evidence
+
+**Determination: Not Applicable** — spec 057 introduces no chaos-eligible surface.
+
+### Surface Inspected (read-only)
+
+| File | LOC | Concurrency primitives |
+|------|----:|------------------------|
+| `internal/api/auth_browser_redirect.go` | 42 | none |
+| `internal/api/sanitize_next.go` | 60 | none |
+| `internal/api/web_login_page.go` | 67 | none |
+| `tests/e2e/auth/browser_login_test.go` | 186 | (test code) |
+
+Evidence command:
+
+```
+grep -nE 'go func|goroutine|sync\.|chan |context\.|mutex|atomic\.' \
+  internal/api/auth_browser_redirect.go internal/api/sanitize_next.go \
+  internal/api/web_login_page.go
+```
+
+Result: **zero matches** across all three source files.
+
+### Rationale
+
+Spec 057's implementation is a strictly synchronous HTTP request/response code path: a four-gate browser-navigation detector in `bearerAuthMiddleware` that issues a 303 to `/login?next=…`, a pure-function `sanitizeNext` open-redirect validator (single-call, no I/O, no shared state), and a stateless login page renderer + form-POST handler that delegates cookie issuance to the existing auth subsystem. The change introduces:
+
+- no goroutines, channels, mutexes, or atomic operations
+- no background workers, queue consumers, or schedulers
+- no retry loops, timers, or asynchronous boundaries
+- no new persistent state, caches, or shared mutable structures
+- no new connectors, NATS subjects, or distributed coordination
+
+The only state mutated per request is the standard response writer and the existing cookie/session machinery, both already covered by spec 044's byte-for-byte regression PASS and by the deterministic unit + e2e-api suites recorded in the Test Evidence section above. There is no stochastic-ordering, race-window, or recovery-path surface for chaos to exercise.
+
+Chaos run is therefore **Not Applicable** per the chaos agent's surface-applicability rule. No scenarios were generated, no live browser automation was written, no bug artifacts were created.
+
+## Docs Evidence (2026-05-28) — bubbles.docs
+
+**Agent:** `bubbles.docs`
+**Mode:** `full-delivery` (statusCeiling=done)
+**Invocation:** user-initiated docs phase
+**Determination:** Managed-doc update applied to `docs/Operations.md`; all other managed docs verified Not Applicable.
+
+### Managed-Doc Drift Scan
+
+Cross-referenced spec 057's user-visible surface (`GET /login` HTML page, `401 → 303 See Other` redirect for browser GETs with `Accept: text/html`, existing `POST /v1/web/login` + `POST /v1/web/logout` unchanged) against every doc that could plausibly describe browser auth or HTTP entry points.
+
+| Doc | Touches Spec 057 Surface? | Drift Found | Action |
+|---|---|---|---|
+| `docs/API.md` | No — API.md does not enumerate auth endpoints; defers to Operations.md per existing convention. `GET /login` is a browser HTML entry point, not part of the public JSON/API contract. | None | **Not Applicable** |
+| `docs/Operations.md` | Yes — already documents `POST /v1/web/login` (PWA Cookie-Derived Sessions, line ~2126). New browser-friendly entry point and 401→303 redirect are operator-visible behavior changes that belong in the same auth runbook section. | Operations.md described only the JSON `/v1/web/login` API; no mention of the `GET /login` HTML page or the content-negotiated 303 redirect. | **Applied** — inserted `#### Browser-Friendly Login Entry Point (GET /login, spec 057)` subsection between "PWA Cookie-Derived Sessions" and "Browser Extension Per-User PASETO". |
+| `docs/Architecture.md` | No — spec 057 adds zero new auth modes, zero new components, zero topology changes. Single-host Caddy + app-level auth preserved. | None | **Not Applicable** |
+| `docs/Deployment.md` | Already cites `POST /v1/web/login` (line ~719) in the existing per-user PASETO rollout flow. No deployment-procedure change introduced by spec 057. | None | **Not Applicable** |
+| `docs/Development.md` | Already documents the `/v1/web/login` cookie contract (lines ~266, ~318). Spec 057 does not alter the dev workflow or admin-cookie wiring. | None | **Not Applicable** |
+| `docs/smackerel.md` | Architecture reference cites `POST /v1/web/login` (line ~1961) as part of the per-user auth design. No architectural change introduced. | None | **Not Applicable** |
+| `README.md` | Getting-started has no login walkthrough today; spec 057's UX-only paste form does not warrant promotion to README. | None | **Not Applicable** |
+
+### Implementation Cross-Reference (Verification)
+
+Verified the documented behavior against committed implementation before publishing:
+
+| Documented Behavior | Implementation Evidence |
+|---|---|
+| `GET /login` serves HTML form | `internal/api/web_login_page.go` (`HandleLoginPage`), wired in `internal/api/router.go:245` (`r.Get("/login", deps.HandleLoginPage)`) |
+| 401 → 303 redirect for browser GETs | `internal/api/auth_browser_redirect.go` (`redirectToLogin` — "303 See Other to /login with the current request path") |
+| `next=` query preserves original path | `internal/api/sanitize_next.go` (login-loop guard at `u.Path == "/login"`) |
+| `POST /v1/web/login` / `POST /v1/web/logout` unchanged | `internal/api/web_login.go` (line 231 references the same `/login` redirect target) |
+
+No drift between docs and implementation after the Operations.md update.
+
+### Files Modified
+
+- `docs/Operations.md` — added 22-line subsection documenting `GET /login` and the content-negotiated 303 redirect (operator-facing runbook addition only; no API contract or SST change).
+- `specs/057-browser-login-redirect/report.md` — this Docs Evidence section.
+
+### Working-Tree Discipline
+
+Confirmed no edits to any of the 34 uncommitted files from parallel work. Only the two files listed above were modified. All edits used IDE file tools (`replace_string_in_file`); no shell redirection, no `tee`, no heredocs.
+
+### Result
+
+`completed_owned` — Operations.md drift fix applied; all other managed docs verified Not Applicable with explicit rationale per doc.
 
 
