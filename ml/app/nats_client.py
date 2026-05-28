@@ -839,7 +839,7 @@ Write the digest text only, no JSON wrapper. Begin output now."""
             if "<think>" in text:
                 close = text.find("</think>")
                 if close != -1:
-                    text = text[close + len("</think>"):]
+                    text = text[close + len("</think>") :]
 
             text = text.strip()
 
@@ -849,9 +849,9 @@ Write the digest text only, no JSON wrapper. Begin output now."""
             if text.startswith("```"):
                 nl = text.find("\n")
                 if nl != -1:
-                    text = text[nl + 1:]
+                    text = text[nl + 1 :]
                 if text.endswith("```"):
-                    text = text[: -3].rstrip()
+                    text = text[:-3].rstrip()
 
             # If the model returned nothing usable (empty, whitespace, or
             # ONLY a think block we stripped to nothing), fall through to
@@ -861,11 +861,11 @@ Write the digest text only, no JSON wrapper. Begin output now."""
                 raw = response.choices[0].message.content or ""
                 logger.error(
                     "Digest LLM returned no usable text. raw_len=%d raw_head=%r",
-                    len(raw), raw[:300],
+                    len(raw),
+                    raw[:300],
                 )
                 raise ValueError(
-                    "LLM digest response empty after <think>/fence strip; "
-                    "falling through to metadata fallback"
+                    "LLM digest response empty after <think>/fence strip; falling through to metadata fallback"
                 )
 
             word_count = len(text.split())
