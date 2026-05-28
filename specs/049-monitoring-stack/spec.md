@@ -1,5 +1,7 @@
 # Feature: Monitoring Stack
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 In Progress — implementation

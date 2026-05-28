@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 6, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 5.9 Notes Apps Sync
 
 ---

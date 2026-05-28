@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** May 27, 2026
-> **Status:** Draft (planning packet — `specs_hardened` target)
+> **Status:** Done (was planning packet — promoted on certification)
 > **Workflow Mode:** `spec-scope-hardening`
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 6.2 Capture Input Types (URL — Twitter/X post); [specs/015-twitter-connector/](../015-twitter-connector/) — archive-mode predecessor
 

@@ -1,5 +1,7 @@
 # Feature: 032 — Documentation Freshness & Operational Guides
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel's documentation has drifted from the implemented reality. `docs/Development.md` doesn't mention the 3 newest packages (`internal/domain/`, `internal/annotation/`, `internal/list/`) or migrations 015-017. There are no documented system requirements (the stack needs ~11.3GB RAM + ~9GB disk). There is no operational runbook for common tasks (restart stuck connector, re-run failed migration, force re-process artifact, set up TLS). This scored 7/10 in the system review.

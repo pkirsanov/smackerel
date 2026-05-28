@@ -1,5 +1,7 @@
 # Spec 043 — Ollama Test Infrastructure (close MIT-037-OLLAMA-001)
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Spec [037 LLM Scenario Agent & Tool Registry](../037-llm-agent-tools/spec.md)

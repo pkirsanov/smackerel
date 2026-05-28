@@ -1,5 +1,7 @@
 # Feature: 024 Design Document Reconciliation
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel's design document (`docs/smackerel.md` v2) has significant drift from the actual implementation. Three categories of inaccuracy undermine trust in the design doc as a reference:

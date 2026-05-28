@@ -1,5 +1,7 @@
 # Feature: 021 Intelligence Delivery
 
+**Status:** Done (certified per state.json)
+
 ## Problem Statement
 
 Smackerel's intelligence engine (`internal/intelligence/`) contains a comprehensive set of synthesis, alerting, people intelligence, expertise tracking, learning paths, subscription detection, frequent-lookup analysis, monthly reporting, and content resurfacing capabilities. These features are well-implemented and tested at the data-model and generation level.

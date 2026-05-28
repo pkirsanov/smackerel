@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 22.4 Chat & Messaging Connectors, Section 6.1 Active Capture Channels
 
 ---

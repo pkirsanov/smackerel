@@ -1,5 +1,7 @@
 # Feature: 052 Bundle Secret Injection Contract
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 Not Started — analyst-bootstrapped greenfield spec. Workflow has not advanced beyond the analyze phase. Routing decision (which structural option to adopt) is owned by the operator and the design phase.
