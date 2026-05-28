@@ -579,7 +579,7 @@ case "$COMMAND" in
     bash "$SCRIPT_DIR/scripts/commands/backup.sh" --env "$TARGET_ENV"
     ;;
   auth)
-    # Spec 060 Scope 3 — passthrough wrapper to `smackerel auth ...`
+    # Spec 060 Scope 3 — passthrough wrapper to `smackerel-core auth ...`
     # inside the running smackerel-core container. Args are forwarded
     # verbatim via "$@" — no flag rewriting, no comma splitting (the
     # embedded `,` in `extension:bookmarks,history` belongs to one
@@ -587,9 +587,16 @@ case "$COMMAND" in
     # the container is not running, docker compose exec fails loud
     # (the wrapper does NOT silently start the stack or fall back to
     # a host-installed binary — Gate G028 / NO-DEFAULTS SST).
+    #
+    # Note: the in-container binary is `smackerel-core` (per Dockerfile
+    # ENTRYPOINT). The first `smackerel-core` arg below is the docker
+    # compose service name; the second is the binary name. They are
+    # identical only because the service and binary share a name.
+    # Discovered by DI-060-02 integration test (cli_auth_passthrough_test.go)
+    # during the post-certification quick-win sweep.
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
-    smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel auth "$@"
+    smackerel_compose "$TARGET_ENV" exec smackerel-core smackerel-core auth "$@"
     ;;
   backup-restore-test)
     require_docker

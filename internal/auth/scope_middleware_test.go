@@ -171,3 +171,68 @@ func TestRequireScope_NotWiredOnExistingEndpoints(t *testing.T) {
 	// scopes.md DoD evidence and in CI's scope-2 manifest check.
 	_ = RequireScope
 }
+
+// BenchmarkRequireScope_PerUserPasetoSuccess measures the hot-path
+// per-request cost of auth.RequireScope on the success branch
+// (per-user PASETO session, all required scopes present). Spec 060
+// Scope 2 DoD DI-060-01: hot-path validation budget unchanged
+// (< 10 µs design budget). The middleware adds one SessionFromContext
+// lookup + slices.Contains per required scope (typically 1-3 scopes);
+// this benchmark proves the actual per-op cost.
+//
+// The handler downstream of RequireScope is a no-op httptest handler
+// so the measurement is dominated by the middleware itself plus the
+// httptest.ResponseRecorder bookkeeping.
+func BenchmarkRequireScope_PerUserPasetoSuccess(b *testing.B) {
+	mw := RequireScope("extension:bookmarks,history")
+	sess := Session{
+		Source: SessionSourcePerUserToken,
+		UserID: "bench-user",
+		Scopes: []string{"extension:bookmarks,history"},
+	}
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+
+	req := httptest.NewRequest("POST", "/v1/connectors/extension/ingest", nil)
+	req = req.WithContext(WithSession(req.Context(), sess))
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			b.Fatalf("iter %d: expected 202, got %d", i, rec.Code)
+		}
+	}
+}
+
+// BenchmarkRequireScope_AndSemanticsThreeScopes measures the cost
+// when three required scopes are all present (worst-case loop length
+// for the typical caller — chi route groups rarely require more than
+// 2-3 scopes per endpoint).
+func BenchmarkRequireScope_AndSemanticsThreeScopes(b *testing.B) {
+	mw := RequireScope("a:x", "b:y", "c:z")
+	sess := Session{
+		Source: SessionSourcePerUserToken,
+		UserID: "bench-user",
+		Scopes: []string{"a:x", "b:y", "c:z"},
+	}
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+
+	req := httptest.NewRequest("GET", "/v1/x", nil)
+	req = req.WithContext(WithSession(req.Context(), sess))
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			b.Fatalf("iter %d: expected 202, got %d", i, rec.Code)
+		}
+	}
+}
