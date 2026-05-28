@@ -124,3 +124,152 @@ specs/041-qf-companion-connector/state.json:641:      "workflowMode": "full-deli
 specs/041-qf-companion-connector/state.json:721:      "workflowMode": "full-delivery",
 Exit Code: 0
 ```
+
+## Post-Closeout Concern Resolutions
+
+### C-CLOSEOUT-S5-G028-FAKE-INTEGRATION-RENDER-GO-PRE-EXISTING — Resolved 2026-05-28
+
+**Claim Source:** executed
+**Phase Agent:** bubbles.implement
+**Original flag:** implementation-reality-scan reported 2 FAKE_INTEGRATION violations at `internal/qf/render.go:301,305` at 2026-05-23T02:21Z (verified by bubbles.validate during Scope 5 harden closeout).
+**Disposition:** False-positive eliminated by post-validate code reorganization (file moved from `internal/qf/render.go` to `internal/connector/qfdecisions/render.go`) plus scanner-rule refinement. Production code at the same logical location (`renderDeepLink` deep-link rendering block, lines ~275-315) uses real signature freshness (`signatureIsFresh`), real metric emission (`metrics.QFDeepLinkRenderTotal`), real audit emission (`emitDeepLinkAudit`), and a real injected refetch hook (`options.FetchPacket != nil`). No `FAKE_INTEGRATION` / `// TODO` / `panic("not implemented")` markers exist. No source-code change required.
+
+**Re-run command:** `bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose`
+**Exit Code:** 0
+**Output:**
+
+```text
+$ bash .github/bubbles/scripts/implementation-reality-scan.sh specs/041-qf-companion-connector --verbose
+ℹ️  INFO: Resolved 63 implementation file(s) to scan
+
+--- Scan 1: Gateway/Backend Stub Patterns ---
+
+--- Scan 1B: Handler / Endpoint Execution Depth ---
+
+--- Scan 1C: Endpoint Not-Implemented / Placeholder Responses ---
+
+--- Scan 1D: External Integration Authenticity ---
+
+--- Scan 2: Frontend Hardcoded Data Patterns ---
+
+--- Scan 2B: Sensitive Client Storage ---
+
+--- Scan 3: Frontend API Call Absence ---
+
+--- Scan 4: Prohibited Simulation Helpers in Production ---
+
+--- Scan 5: Default/Fallback Value Patterns ---
+
+--- Scan 6: Live-System Test Interception ---
+
+--- Scan 7: IDOR / Auth Bypass Detection (Gate G047) ---
+
+--- Scan 8: Silent Decode Failure Detection (Gate G048) ---
+
+============================================================
+  IMPLEMENTATION REALITY SCAN RESULT
+============================================================
+
+  Files scanned:  63
+  Violations:     0
+  Warnings:       0
+
+🟢 PASSED: No source code reality violations detected
+Exit Code: 0
+```
+
+### C-CLOSEOUT-S2-S5-CONSUMER-TRACE-PLANNING — Resolved 2026-05-28
+
+**Claim Source:** executed
+**Phase Agent:** bubbles.plan
+**Original flag:** state-transition-guard Check 8B 'Consumer Trace Planning For Renames/Removals' previously reported 2 BLOCKs (with 1 rollup) for Scope 2 + Scope 5 territory where the consumer-trace planning DoD anchor expected per-consumer trace propagation entries but the scopes.md planning narrative deferred them to the cross-product QF 063 producer-wiring milestone (Round 2L SCN-006 closeout + Scope 5 harden audit).
+**Disposition:** Option (a) — original symptom is no longer reproducible because the consumer-impact-sweep / consumer-trace planning content is now populated inline. Verified by re-running `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector` (2026-05-28T15:10:27Z, EXIT=1 — the sole remaining BLOCK is the unrelated Gate G088 post-cert spec edit detection from ops sweep OPS-001 commit 19b31c0a, which is outside this concern's scope). Check 8B reports all 9 sub-checks PASS across Scopes 2/5/8. Populated tables live at `specs/041-qf-companion-connector/scopes.md` L293-302 (Scope 2 — 7-row Consumer Impact Sweep table) and L960-975 (Scope 5 — 8-row Consumer Impact Sweep table); both anchor the DoD 'Consumer impact sweep completed and zero stale first-party references remain' items at L341 and L1030. No source-code, scopes, or framework-script change required.
+
+**Re-run command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector`
+**Exit Code:** 1 (the sole remaining BLOCK is Gate G088 post-cert spec edit from unrelated OPS-001 sweep — outside this concern's scope; Check 8B itself reports 9/9 sub-checks PASS)
+**Output:**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector
+
+--- Check 8B: Consumer Trace Planning For Renames/Removals ---
+✅ PASS: Scope includes Consumer Impact Sweep section: Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope DoD includes consumer impact sweep completion item: Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope lists affected consumer surfaces for rename/removal work: Scope 2: Capability Handshake, Cursor Sync Normalization, And Storage
+✅ PASS: Scope includes Consumer Impact Sweep section: Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+✅ PASS: Scope DoD includes consumer impact sweep completion item: Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+✅ PASS: Scope lists affected consumer surfaces for rename/removal work: Scope 5: Credential Rotation, Safety Boundaries, Observability, Documentation, And Tests
+✅ PASS: Scope includes Consumer Impact Sweep section: Scope 8: Signed Callback Protocol
+✅ PASS: Scope DoD includes consumer impact sweep completion item: Scope 8: Signed Callback Protocol
+✅ PASS: Scope lists affected consumer surfaces for rename/removal work: Scope 8: Signed Callback Protocol
+
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🔴 TRANSITION BLOCKED: 1 failure(s), 0 warning(s)
+
+state.json status MUST NOT be set to 'done'.
+Fix ALL blocking failures above before attempting promotion.
+
+Exit Code: 1
+```
+
+### C-CLOSEOUT-S5-S8-G022-RESERVED-PHASES — Resolved 2026-05-28
+
+**Claim Source:** executed
+**Phase Agent:** bubbles.audit
+**Original flag:** state-transition-guard Check 6 (G022) reported 7 reserved-phase BLOCKs plus 1 summary rollup across Scopes 5-8 at the 2026-05-23T02:22:37Z validate cycle. The original symptom was that the matcher's substring scan flagged reserved-phase tokens (`regression`, `simplify`, `stabilize`, `security`, `docs`, `audit`, `chaos`) appearing in design/scope narrative prose as if they were real "missing specialist phase claims".
+**Disposition:** Option (a) — original symptom is no longer reproducible because the upstream Check 6B matcher in `.github/bubbles/scripts/state-transition-guard.sh` (lines ~1750-1864) now iterates STRUCTURAL state.json arrays (`execution.completedPhaseClaims` ∪ `certification.certifiedCompletedPhases`) rather than free-form markdown body, so reserved-phase tokens in narrative lists no longer match. Re-ran the guard against spec 041 at 2026-05-28T15:24Z: Check 6B reports `ℹ️ INFO: No phase claims to verify provenance for` (zero G022 BLOCKs for this spec). The 2 remaining transition BLOCKs are unrelated portfolio-level issues (Gate G040 deferral language in report.md, classified-expected per spec notes; Gate G088 post-cert spec edit from ops sweep OPS-001) and are explicitly outside this concern's scope. No `bubbles-project.yaml` exemption needed; no spec edit required.
+
+**Re-run command:** `bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector`
+**Exit Code:** 1 (2 remaining BLOCKs are Gate G040 + Gate G088 — both unrelated to G022; Check 6B itself reports zero phase claims to verify and zero G022 BLOCKs)
+**Output (Check 6B section + final verdict):**
+
+```text
+$ bash .github/bubbles/scripts/state-transition-guard.sh specs/041-qf-companion-connector
+
+--- Check 6A: Planning Specialist Dispatch ---
+ℹ️  INFO: No planning-specialist dispatch requirement for mode 'full-delivery'
+
+--- Check 6B: Phase-Claim Provenance (Gate G022 extension) ---
+ℹ️  INFO: No phase claims to verify provenance for
+
+--- Check 7: Timestamp Plausibility ---
+✅ PASS: Timestamp intervals are variable (not uniformly fabricated)
+
+[... Checks 7A through 35 omitted for brevity ...]
+
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🔴 TRANSITION BLOCKED: 2 failure(s), 0 warning(s)
+
+state.json status MUST NOT be set to 'done'.
+Fix ALL blocking failures above before attempting promotion.
+
+(Remaining 2 BLOCKs surfaced — both outside this concern's scope:
+ 🔴 BLOCK: Report artifact contains 1 deferral language hit(s): report.md — evidence of deferred work (Gate G040)
+ 🔴 BLOCK: Post-certification spec edit guard failed — Gate G088. Run 'bash ~/smackerel/.github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/041-qf-companion-connector' for full diagnostic)
+```
+
+**Guard logic evidence — current Check 6B matcher (structural-only, not narrative-substring):**
+
+```bash
+$ sed -n '1778,1788p' .github/bubbles/scripts/state-transition-guard.sh
+claimed_phases="$({
+  python3 -c "
+import json
+with open('$state_file') as f:
+    data = json.load(f)
+claims = data.get('execution', {}).get('completedPhaseClaims', [])
+certified = data.get('certification', {}).get('certifiedCompletedPhases', [])
+for p in set(claims + certified):
+    print(p)
+" 2>/dev/null
+} || true)"
+```
+
+The iteration source is the parsed JSON arrays only; the markdown body is never scanned for reserved-phase tokens. The 7 original BLOCKs + 1 summary rollup from the 2026-05-23T02:22:37Z cycle are no longer reproducible against the current guard.
+
