@@ -41,11 +41,11 @@ Per [`docs/smackerel.md`](smackerel.md) §19 (Phased Implementation Plan):
 |-------|----------|------------------------|-------------------|
 | **Phase 1** | Foundation (MVP) | ✅ Delivered | Active capture + search + basic digest via Go core + Docker Compose |
 | **Phase 2** | Passive Ingestion | ✅ Delivered | Background ingestion (Gmail, YouTube, Calendar) + knowledge graph |
-| **Phase 3** | Intelligence | 🔜 In Progress | Synthesis engine, weekly digest, pre-meeting briefs, contextual alerts |
+| **Phase 3** | Intelligence | ✅ Delivered | Synthesis engine, weekly digest, pre-meeting briefs, contextual alerts |
 | **Phase 4** | Expansion | ✅ Delivered | Maps timeline, browser history, trip dossier, people intelligence |
 | **Phase 5** | Advanced Intelligence | ✅ Delivered | Expertise mapping, content fuel, learning paths, subscription tracking, serendipity |
 
-**IMPORTANT STATUS NOTE**: The design document marks Phases 1, 2, 4, 5 as ✅ Delivered and Phase 3 as 🔜 In Progress. The committed runtime scaffold (per `docs/smackerel.md` §20.2) confirms the foundation operational surface exists (`./smackerel.sh` commands all wired). Capability claims should be cross-validated against committed specs under `specs/` before any external claim of "delivered" — this overview defers to the design doc as the current authority.
+**IMPORTANT STATUS NOTE**: The design document marks Phases 1, 2, 3, 4, 5 as ✅ Delivered. Phase 3 (Intelligence) was certified delivered on 2026-05-25 (`specs/004-phase3-intelligence/state.json`, status=done); synthesis, digest, briefs, and contextual alerts are implemented under `internal/intelligence/` and `internal/digest/`. The committed runtime scaffold (per `docs/smackerel.md` §20.2) confirms the foundation operational surface exists (`./smackerel.sh` commands all wired). Capability claims should be cross-validated against committed specs under `specs/` before any external claim of "delivered" — this overview defers to the design doc as the current authority.
 
 For detailed exit criteria per phase, read [`docs/smackerel.md`](smackerel.md) §19.
 
@@ -97,7 +97,7 @@ System silently ingesting emails, videos, calendar events. Topics forming. Conne
 
 ---
 
-## Phase 3: Intelligence — 🔜 In Progress
+## Phase 3: Intelligence — ✅ Delivered
 
 **Source**: [`docs/smackerel.md`](smackerel.md) §19 Phase 3
 
@@ -105,7 +105,7 @@ System silently ingesting emails, videos, calendar events. Topics forming. Conne
 
 System generates insights the user wouldn't produce on their own.
 
-### Key Capabilities (In Progress)
+### Key Capabilities (Delivered)
 
 - Synthesis engine (cross-domain connection detection)
 - Weekly synthesis digest
@@ -119,7 +119,7 @@ Weekly synthesis surfaces genuine cross-domain insights. Pre-meeting briefs are 
 
 ### Investment Risk
 
-This is the **active investment phase**. Primary risk: synthesis quality is hard to measure objectively. Mitigation: the design doc requires "explainable synthesis" (constitution Principle 4) — every synthesis claim cites source artifacts. Quality regression detectable via lost source links.
+Phase 3 was certified delivered on 2026-05-25 (`specs/004-phase3-intelligence/state.json`). Ongoing risk: synthesis quality is hard to measure objectively. Mitigation: the design doc requires "explainable synthesis" (constitution Principle 4) — every synthesis claim cites source artifacts. Quality regression detectable via lost source links.
 
 ---
 
@@ -206,7 +206,7 @@ Smackerel is a **local-first, self-hosted** product. Capital exposure is dominat
 | Per-user infrastructure | Near-zero (runs on user's own hardware via Docker Compose) |
 | LLM inference | Variable: Ollama local (zero marginal cost) OR optional cloud LLM (per-user opt-in) |
 | Connector OAuth | Per-API-provider OAuth app fees (Gmail, YouTube, etc.) — fixed annual cost |
-| Engineering effort | Phase 3 (Intelligence) is the active investment phase |
+| Engineering effort | Phases 1–5 delivered; ongoing investment is connector breadth, synthesis-quality tuning, and operational hardening |
 | Distribution | Self-hosted reduces cloud-hosting capital requirement; documentation + onboarding effort scales |
 
 There is no SaaS hosting cost model in the constitution. Pricing/monetization is intentionally not surfaced in the current design doc — that is a planning artifact yet to be created.
@@ -217,7 +217,7 @@ There is no SaaS hosting cost model in the constitution. Pricing/monetization is
 
 These recommendations are surfaced from existing repo evidence. They are NOT new investment proposals.
 
-1. **Keep Phase 3 as the investment focus.** Phase 1, 2, 4, 5 are marked Delivered; Phase 3 (Intelligence — synthesis engine, pre-meeting briefs, contextual alerts) is the active in-progress work and the primary differentiator.
+1. **Defend synthesis quality as the primary differentiator.** Phases 1–5 are marked Delivered (Phase 3 certified 2026-05-25); the synthesis engine, pre-meeting briefs, and contextual alerts are the durable differentiator and require continued quality investment (explainability, source-link integrity, regression detection).
 2. **Defend Local-First as a brand commitment.** The market will pressure cloud-hosting and per-user pricing. Constitution Principle 1 is a moat, not a constraint.
 3. **Hold Python at the ML-sidecar boundary.** Constitution Principle 2 prevents Python sprawl into the orchestrator. Sliding this boundary erodes the Go-first operational guarantee.
 4. **QF Companion is bounded by §1.6 — do NOT extend beyond it.** Trade approval, mandate changes, execution, and financial advice MUST NOT enter Smackerel. Cross-product trust depends on this boundary.
@@ -233,8 +233,8 @@ These recommendations are surfaced from existing repo evidence. They are NOT new
 - ✅ Foundation runtime scaffold committed (Go core + PostgreSQL + NATS + Python ML sidecar via Docker Compose)
 - ✅ Repo CLI (`./smackerel.sh`) operational: config generate, build, check, lint, format, test (unit/integration/e2e/stress), up/down/status/logs, clean smart/full/status/measure
 - ✅ Bubbles framework governance committed (`bash .github/bubbles/scripts/cli.sh doctor`, framework-validate, artifact-lint, traceability-guard)
-- ✅ Phase 1, 2, 4, 5 marked delivered in design doc (cross-validate against `specs/` before external claims)
-- 🔜 Phase 3 (Intelligence) in progress
+- ✅ Phases 1, 2, 3, 4, 5 marked delivered in design doc (cross-validate against `specs/` before external claims)
+- ✅ Phase 3 (Intelligence) certified delivered 2026-05-25 (`specs/004-phase3-intelligence/state.json`)
 - ⚠️ "Capability claims should be cross-validated against committed specs under `specs/` before any external claim of 'delivered'" (per design doc §20.2)
 
 ---
@@ -260,6 +260,6 @@ These recommendations are surfaced from existing repo evidence. They are NOT new
 | Symbol | Meaning |
 |--------|---------|
 | ✅ Delivered | Per design doc §19 status — cross-validate against `specs/` before external claims |
-| 🔜 In Progress | Active investment phase |
+| 🔜 In Progress | Active investment phase (no phases currently in this state) |
 | TBD | Investor-facing summary intentionally defers detail to canonical design doc |
 | **Phased ✅/🔜 statuses** | Authoritative source is `docs/smackerel.md` §19 — that document wins on conflict |
