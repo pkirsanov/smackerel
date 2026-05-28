@@ -2,6 +2,14 @@
   "version": 3,
   "featureDir": "specs/015-twitter-connector",
   "featureName": "Twitter/X Connector",
+  "extensions": [
+    {
+      "scope": "api-and-hybrid-sync-modes",
+      "extendedBy": "056-twitter-api-connector",
+      "extendedAt": "2026-05-28",
+      "note": "Spec 015 ships the archive-import path only (SyncModeArchive). The SyncModeAPI and SyncModeHybrid paths described in this spec's 'API Access Strategy' section are implemented under spec 056-twitter-api-connector (certified specs_hardened 2026-05-27), with code in internal/connector/twitter/api.go and internal/connector/twitter/api_test.go. Treat spec 056 as the authoritative home for API/hybrid behavior, rate-limit handling, and OAuth flow."
+    }
+  ],
   "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
