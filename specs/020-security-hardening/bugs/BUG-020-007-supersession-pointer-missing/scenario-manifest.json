@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "spec": "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Artifact-shape regression scenarios are the contractual proof of the supersession-pointer fix; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "exempt",
+    "rationale": "Artifact-only documentation drift; zero runtime code changed. Per policySnapshot.tdd.mode = exempt with user-request provenance.",
+    "redGreenEvidence": "Red state: three greps for '042-tailnet-edge-bind-pattern' against state.json/spec.md/design.md exit 1 pre-fix (report.md). Green state: same three greps exit 0 post-fix; L269 bare-phrase no longer appears in spec.md; change-boundary confined to specs/020-security-hardening/."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-020-007-001",
+      "scope": 1,
+      "title": "state.json carries a supersededBy pointer to spec 042",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/020-security-hardening/state.json"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/020-security-hardening/state.json",
+          "function": "manual:grep-supersededBy-042-tailnet-edge-bind-pattern"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing/scopes.md#dod-state-json-supersededby"
+      ],
+      "liveTestExpectation": "grep -q '042-tailnet-edge-bind-pattern' specs/020-security-hardening/state.json exits 0",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-007-002",
+      "scope": 1,
+      "title": "spec.md carries an inline supersession note",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/020-security-hardening/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/020-security-hardening/spec.md",
+          "function": "manual:grep-042-tailnet-edge-bind-pattern-in-spec"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing/scopes.md#dod-spec-md-inline-note"
+      ],
+      "liveTestExpectation": "grep -q '042-tailnet-edge-bind-pattern' specs/020-security-hardening/spec.md exits 0 with match above or inside the Attack Surface: Network Exposure section",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-007-003",
+      "scope": 1,
+      "title": "design.md carries an inline supersession note",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/020-security-hardening/design.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/020-security-hardening/design.md",
+          "function": "manual:grep-042-tailnet-edge-bind-pattern-in-design"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing/scopes.md#dod-design-md-inline-note"
+      ],
+      "liveTestExpectation": "grep -q '042-tailnet-edge-bind-pattern' specs/020-security-hardening/design.md exits 0 at the top of the document",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-007-004",
+      "scope": 1,
+      "title": "L269 success-metric row is no longer misleading",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/020-security-hardening/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/020-security-hardening/spec.md",
+          "function": "manual:l269-bare-phrase-proximity-guard"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing/scopes.md#dod-l269-row"
+      ],
+      "liveTestExpectation": "Any occurrence of the bare phrase '100% of services bind to 127.0.0.1' in spec.md MUST have a '042-tailnet-edge-bind-pattern' reference within ±5 lines (currently passes vacuously: bare phrase no longer appears)",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-007-005",
+      "scope": 1,
+      "title": "Fix is artifact-only",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/020-security-hardening/state.json",
+        "specs/020-security-hardening/spec.md",
+        "specs/020-security-hardening/design.md"
+      ],
+      "linkedTests": [
+        {
+          "file": ".git",
+          "function": "manual:git-diff-name-only-change-boundary"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-007-supersession-pointer-missing/scopes.md#dod-artifact-only"
+      ],
+      "liveTestExpectation": "git diff --name-only main..HEAD returns only paths under specs/020-security-hardening/",
+      "regressionProtected": true,
+      "status": "done",
+      "changeType": "added"
+    }
+  ]
+}
