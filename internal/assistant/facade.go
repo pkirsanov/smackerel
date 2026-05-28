@@ -97,6 +97,21 @@ type FacadeConfig struct {
 	// Now overrides the clock. Tests inject this for deterministic
 	// EmittedAt; production passes time.Now.
 	Now func() time.Time
+
+	// SourceAssemblers is the per-scenario source-assembly registry
+	// the facade consults in BandHigh dispatch between executor.Run
+	// and provenance.Enforce. The map is keyed by scenario id
+	// (matching the manifest metadata key). nil/empty map is the
+	// supported "no assemblers wired" state — the facade then
+	// produces resp.Sources=nil for every scenario, and the
+	// provenance gate refuses every requires_provenance scenario
+	// (correct behavior when no real assembler has been wired).
+	//
+	// Spec 061 SCOPE-04 (facade-source-assembly-hook). For
+	// retrieval_qa wiring see cmd/core/wiring_assistant_facade.go.
+	// For per-scenario assembler implementations see
+	// internal/agent/tools/<skill>/.
+	SourceAssemblers map[string]contracts.SourceAssembler
 }
 
 // Validate enforces the required-field contract.
@@ -133,13 +148,14 @@ func (c FacadeConfig) Validate() error {
 
 // Facade implements contracts.Assistant.
 type Facade struct {
-	cfg          FacadeConfig
-	router       agent.Router
-	executor     ScenarioExecutor
-	registry     ScenarioRegistry
-	manifest     *SkillsManifest
-	contextStore assistantctx.Store
-	audit        AuditWriter
+	cfg              FacadeConfig
+	router           agent.Router
+	executor         ScenarioExecutor
+	registry         ScenarioRegistry
+	manifest         *SkillsManifest
+	contextStore     assistantctx.Store
+	audit            AuditWriter
+	sourceAssemblers map[string]contracts.SourceAssembler
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -175,13 +191,14 @@ func NewFacade(
 		return nil, errors.New("assistant: NewFacade requires a non-nil audit writer")
 	}
 	return &Facade{
-		cfg:          cfg,
-		router:       router,
-		executor:     executor,
-		registry:     registry,
-		manifest:     manifest,
-		contextStore: contextStore,
-		audit:        audit,
+		cfg:              cfg,
+		router:           router,
+		executor:         executor,
+		registry:         registry,
+		manifest:         manifest,
+		contextStore:     contextStore,
+		audit:            audit,
+		sourceAssemblers: cfg.SourceAssemblers,
 	}, nil
 }
 
@@ -350,6 +367,27 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 			Body:       truncateBody(body, f.cfg.BodyMaxChars),
 			EmittedAt:  emittedAt,
 		}
+
+		// Spec 061 SCOPE-04 facade-source-assembly-hook. When a
+		// per-scenario SourceAssembler is registered, invoke it
+		// BEFORE the provenance gate so resp.Sources is populated
+		// from the executor's Final (cited_artifact_ids → []Source
+		// via the skill-owned source-assembly invariant). A nil/
+		// missing assembler leaves resp.Sources empty — the
+		// provenance gate will then correctly refuse the response
+		// for requires_provenance scenarios (the BS-007 graph-drift
+		// refusal path is the same code path: assembler runs,
+		// returns nil Sources because all citations were dropped,
+		// gate refuses).
+		if assembler, registered := f.sourceAssemblers[scenarioID]; registered && assembler != nil && result != nil {
+			assembly := assembler(ctx, result)
+			if assembly.Body != "" {
+				resp.Body = truncateBody(assembly.Body, f.cfg.BodyMaxChars)
+			}
+			resp.Sources = assembly.Sources
+			resp.SourcesOverflowCount = assembly.OverflowCount
+		}
+
 		// Provenance gate (requires_provenance scenarios only).
 		resp = provenance.Enforce(f.manifest.RequiresProvenance(scenarioID), scenarioID, resp)
 
