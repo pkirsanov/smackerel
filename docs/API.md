@@ -271,6 +271,109 @@ The core decision engine selects `approval_request` for high-blast-radius risk, 
 
 Delivery attempts include decision ID, incident ID, approval request ID when present, output channel, destination reference, payload hash, redaction state, status (`queued`, `sent`, `failed`, `withheld`, or `retry_exhausted`), redacted error information, attempted timestamp, and completion timestamp.
 
+### Chrome Extension Bridge Ingestion
+
+**Endpoint:** `POST /v1/connectors/extension/ingest`
+
+The Chrome Extension Bridge (spec 058) streams live `chrome.bookmarks` and
+`chrome.history` events into the canonical artifact pipeline. The endpoint
+reuses the existing `ArtifactPublisher` so the same normalizers that handle
+import-dir captures process extension events without a parallel pipeline.
+
+| Aspect | Value |
+|--------|-------|
+| Auth | `Authorization: Bearer <PASETO>` (spec 044 per-user token) |
+| Required scopes | `extension:bookmarks` AND `extension:history` (AND-semantics, spec 060) |
+| Content-Type | `application/json` |
+| Max items per batch | `extension.ingest.max_batch_items` (SST; default 256) |
+| Max body bytes | `extension.ingest.max_body_bytes` (SST; default 1 MiB / 1048576) |
+| Idempotency key | `metadata.client_event_id` (UUIDv7, per-item) |
+
+**Request body** — JSON array of [`RawArtifact`](../internal/connector/connector.go)
+items, each constrained to:
+
+- `source_id` MUST equal `"browser-extension"`
+- `content_type` MUST be one of `extension.ingest.accepted_content_types`
+  (SST; default `["bookmark", "browser_history_visit"]`)
+- `metadata.source_device_id` 1–32 chars matching `[a-z0-9-]`
+- `metadata.client_event_id` UUIDv7
+- `metadata.extension_version` and `metadata.privacy_filter_version` REQUIRED
+- For `content_type == "bookmark"`: `metadata.bookmark_id`,
+  `metadata.bookmark_folder_path`, `metadata.bookmark_event`
+- For `content_type == "browser_history_visit"`:
+  `metadata.dwell_estimate_seconds`, `metadata.transition_type`,
+  `metadata.visit_started_at`
+
+**Response** — HTTP 200 with one per-item outcome:
+
+```json
+{
+  "items": [
+    {"client_event_id": "...", "outcome": "accepted", "artifact_id": "..."},
+    {"client_event_id": "...", "outcome": "deduped",  "artifact_id": "..."},
+    {"client_event_id": "...", "outcome": "rejected", "error": "..."}
+  ]
+}
+```
+
+**Error matrix** (transport-level; whole request fails):
+
+| Status | Code | When |
+|--------|------|------|
+| 401 | `unauthenticated` | Missing or invalid PASETO |
+| 403 | `scope_required`  | Token lacks one or both required scopes |
+| 413 | `body_too_large`  | Body exceeds `extension.ingest.max_body_bytes` |
+| 422 | `batch_too_large` | Item count exceeds `extension.ingest.max_batch_items` |
+| 400 | `bad_request`     | Malformed JSON or missing required metadata field |
+
+The 403 body shape matches the spec 060 envelope:
+
+```json
+{"error": {"code": "scope_required", "message": "...", "required_scopes": ["extension:bookmarks", "extension:history"]}}
+```
+
+**Server-side dedup.** Per spec 058 §2.3, the handler computes
+`SHA-256(url || \x00 || content_type || \x00 || source_device_id || \x00 || bucket)`
+and resolves through `raw_ingest_dedup`. Bookmarks use bucket `0` (no
+window); history visits use
+`floor(captured_at_unix / dedup_window_seconds)` with the window clamped to
+`[60, 86400]`. Collisions return the existing `artifact_id` with
+`outcome == "deduped"` and increment `visit_count` + `last_seen_at` without
+re-publishing.
+
+### Chrome Extension Bridge Admin Devices View
+
+**Endpoint:** `GET /v1/admin/extension/devices`
+
+Read-only aggregation over `raw_ingest_dedup` (spec 058 design §3.2).
+Returns one entry per `(owner_user_id, source_device_id)` pair that has
+posted at least one extension artifact.
+
+| Aspect | Value |
+|--------|-------|
+| Auth | `Authorization: Bearer <PASETO>` (spec 044) |
+| Authorization | Admin caller (spec 044 callerIsAdmin gate); non-admin callers see only rows whose `owner_user_id` matches their session user id |
+
+**Response:**
+
+```json
+{
+  "devices": [
+    {
+      "owner_user_id": "u-alice",
+      "source_device_id": "work-laptop",
+      "first_seen_at": "2026-05-01T08:30:00Z",
+      "last_seen_at":  "2026-05-28T11:42:13Z",
+      "visit_count_30d": 412
+    }
+  ]
+}
+```
+
+`visit_count_30d` sums `visit_count` over rows whose `last_seen_at` falls
+within the trailing 30 days; older rows still contribute first/last seen
+timestamps but a zero recent count.
+
 ## Error Behavior
 
 Notification API handlers use the shared API error envelope:
@@ -301,6 +404,7 @@ Error messages are redacted and must not include secret values, raw bearer token
 
 | Date | Change |
 |------|--------|
+| 2026-05-28 | Added spec 058 Chrome Extension Bridge ingestion endpoint (`POST /v1/connectors/extension/ingest`), per-item response shape, error matrix, and the admin devices read-only view (`GET /v1/admin/extension/devices`). |
 | 2026-05-24 | Corrected spec 055 ntfy dead-letter response documentation to match the redacted operator API contract: raw payload bytes are never returned; operators receive payload hash/size, replay status, redacted cause/category, safe preview, topic/event identifiers, and timestamps only. |
 | 2026-05-24 | Added spec 055 ntfy source adapter API documentation for source detail, webhook ingest, reconnect, dead-letter list/detail pagination, and replay-through-source-sink controls. |
 | 2026-05-22 | Added spec 054 source-neutral Notification Intelligence Handler API: authenticated `/api/notifications/*` operator endpoints for source health, manual ingest, event history, incidents, suppressions, quiet windows, approvals, summaries, and output delivery. ntfy-specific adapter behavior remains owned by spec 055. |
