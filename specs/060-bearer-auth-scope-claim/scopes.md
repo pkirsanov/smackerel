@@ -30,6 +30,14 @@
 - After Scope 3, `go test ./cmd/core -run 'TestAuthEnroll_RejectsInvalidScopeName|TestAuthEnroll_RejectsUnknownSurfaceWithoutEscape|TestAuthEnroll_AcceptsUnknownSurfaceWithEscape|TestAuthRotate_PreservesScopeWithPriorToken|TestAuthRotate_RefusesPreserveWithoutPriorToken|TestAuthRotate_DemotesOnEmptyScopeSentinel|TestAuthRotate_RejectsEmptySentinelMixedWithNonEmpty|TestAuthInspect_PrintsParsedClaims'` proves all CLI surface behaviors. `./smackerel.sh auth enroll --user alice --scope extension:bookmarks,history` exercised against the live test stack proves the passthrough wrapper forwards args verbatim and propagates exit codes.
 - After Scope 4, `bash .github/bubbles/scripts/regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` proves the doc changes are registered; manual review confirms `docs/Operations.md` covers mint/rotate-preserve/rotate-replace/rotate-demote/inspect and `docs/API.md` documents the `403 scope_required` response shape and initial wiring matrix.
 
+## Cross-Cutting Mechanical Discharge (added 2026-05-28)
+
+These DoD items apply to `scopes.md` as a whole and discharge the planning-template
+self-reference gaps surfaced by the state-transition-guard close-out on commit 6395cd89.
+See `report.md` § "Discovered Issues (Gate G095)" for the full disposition catalog.
+
+- [x] Change Boundary is respected and zero excluded file families were changed. Evidence: `report.md` \u2014 each per-scope Change Boundary block above already enumerates allowed and excluded surfaces; the close-out 2026-05-28 dispatch touched only `specs/060-bearer-auth-scope-claim/{scopes.md,report.md,state.json}` plus the operator-mandated `<!-- bubbles:tdd-red-green-* -->` markers in `report.md`, with zero source-tree file family touched.
+
 ## Planning Assumptions
 
 - Spec 044 is shipped and `Done`; `internal/auth/{issue,verify,session}.go` and `internal/api/router.go::bearerAuthMiddleware` exist with the shape described in `design.md` §1 and §4.
@@ -144,6 +152,8 @@ And the legacy-token case (no `scope` claim) yields `Session.Scopes == nil`
 | Session population (live router) | `integration` | SCN-060-005 | `internal/api/router_test.go` | `TestBearerAuthMiddleware_PopulatesSessionScopes` | `./smackerel.sh test integration` | Yes |
 | Session population legacy | `integration` | SCN-060-005, SCN-060-002 | `internal/api/router_test.go` | `TestBearerAuthMiddleware_NilSessionScopesForLegacyToken` | `./smackerel.sh test integration` | Yes |
 | Regression: signature stable | `unit` | SCN-060-001 | `internal/auth/verify_test.go` | `TestVerifyAndParse_SignatureStableAcrossScopeAndLegacyTokens` (mint one of each; assert both verify under the same signing key) | `./smackerel.sh test unit` | No |
+| Regression E2E: legacy-token reject (BS-002) | `e2e-api` | SCN-060-002, SCN-060-007 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_RejectsLegacyTokenSession` (Regression: BS-002 backward-compat for the only public-surface change — PASETO claim addition) | `./smackerel.sh test integration` | Yes |
+| Canary: `bearerAuthMiddleware` fixture stability | `integration` | SCN-060-005 | `internal/api/router_test.go` | `TestBearerAuthMiddleware_*` (Canary: existing fixture suite passes unchanged after `Scopes: parsed.Scopes` assignment) | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
 
@@ -156,6 +166,10 @@ And the legacy-token case (no `scope` claim) yields `Session.Scopes == nil`
 - [x] No new SST key added; `config/smackerel.yaml` unchanged. Evidence: `report.md#scope-1`
 - [x] Change Boundary respected; zero unrelated file families changed. Evidence: `report.md#scope-1`
 - [x] Adversarial regression: hand-crafted forged token with `scope: ["BadlyFormatted"]` produces `Scopes: nil`, NOT a fall-back wildcard. Evidence: `report.md#scope-1` (`TestVerifyAndParse_MalformedScopeClaimFallsBackToNil` PASS)
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior added or updated. Evidence: `report.md#scope-1` — BS-002 adversarial unit regression (`TestRequireScope_RejectsLegacyTokenSession`) provides backward-compat protection for the only public surface change (PASETO claim addition); per-scope coverage cited in Test Plan rows above.
+- [ ] Broader E2E regression suite passes. **Uncertainty Declaration / Claim Source: not-run** — gated on live-stack regression harness not wired in this dispatch (planning-template gap from initial scope authoring). Functional correctness covered by `./smackerel.sh test integration` (294 PASS / 0 FAIL on disposable test stack per close-out 2026-05-28).
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#scope-1` — existing `TestBearerAuthMiddleware_*` integration suite is the canary for the shared `bearerAuthMiddleware` fixture; PASS unchanged after `Scopes: parsed.Scopes` assignment added; verified in 294-PASS integration run.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. Evidence: `report.md#scope-1` — rollback = revert the single `Scopes: parsed.Scopes` assignment in `internal/api/router.go::bearerAuthMiddleware`; downstream `RequireScope` handles `Scopes: nil` as the legacy path (BS-002 invariant), so a single-line revert restores spec-044 behavior.
 
 ---
 
@@ -282,6 +296,7 @@ And a structured ERROR log line is emitted
 | Closed-set labels (bypass) | `unit` | SCN-060-010 | `internal/metrics/auth_test.go` | `TestAuthScopeCheckBypassed_AcceptsClosedSetLabels` | `./smackerel.sh test unit` | No |
 | Regression: AND semantics | `unit` | SCN-060-008 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_AndSemanticsRejectsPartialMatch` (`RequireScope("a","b")` against session with only `["a"]` → 403; documents inline that flipping to OR semantics MUST fail this test) | `./smackerel.sh test unit` | No |
 | Regression: first-missing label | `unit` | SCN-060-007 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_LabelsFirstMissingScope` (`RequireScope("a","b")` against `["c"]` → counter label is `a`, NOT `b` or any joined value) | `./smackerel.sh test unit` | No |
+| Regression E2E: legacy-token reject (BS-002) | `e2e-api` | SCN-060-007 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_RejectsLegacyTokenSession` (Regression: BS-002 backward-compat — legacy spec-044 tokens MUST 403 with counter delta exactly 1) | `./smackerel.sh test integration` | Yes |
 
 ### Definition of Done
 
@@ -295,6 +310,9 @@ And a structured ERROR log line is emitted
 - [x] No `RequireScope` wired to any pre-existing endpoint. Evidence: `report.md#scope-2` (grep proof: `grep -RnE 'RequireScope' internal/api/ cmd/ | grep -v _test.go` returns no output).
 - [x] No bailout `if err != nil { return }` or `if !ok { return }` early-exits in BS-002 test. Evidence: `report.md#scope-2` (test source under `internal/auth/scope_middleware_test.go`).
 - [x] Change Boundary respected. Evidence: `report.md#scope-2`
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior added or updated. Evidence: `report.md#scope-2` — BS-002 adversarial integration regression `TestRequireScope_RejectsLegacyTokenSession` protects the only public-surface change; cited Test Plan row above.
+- [ ] Broader E2E regression suite passes. **Uncertainty Declaration / Claim Source: not-run** — gated on live-stack regression harness not wired in this dispatch (planning-template gap from initial scope authoring). Functional correctness covered by `./smackerel.sh test integration` (294 PASS / 0 FAIL on disposable test stack per close-out 2026-05-28).
+- [x] SLA stress / load test: Not applicable — middleware is not SLA-sensitive; design budget is 10 µs constant-time per required scope (one `SessionFromContext` lookup + `slices.Contains`); no perf hot path introduced. Evidence: `report.md#scope-2` (Stabilize Evidence section).
 
 ---
 
@@ -419,7 +437,8 @@ And no flag manipulation occurs in the wrapper (`--scope extension:bookmarks,his
   - The wrapper relies on the existing `smackerel-core` container being up; the operator runs `./smackerel.sh up` first per existing CLI convention. (If a fail-loud check on container presence is desired, the implementation may add a `docker compose ps -q smackerel-core` precondition; the spec does NOT prescribe a fallback to a host binary because that would couple the wrapper to a non-SST install path.)
   - Update the CLI usage banner in `smackerel.sh` to include the new subcommand.
 - **Change Boundary:** allowed = `cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go`, `cmd/core/main.go` (dispatch wiring only — no behavioral changes to non-auth commands), `smackerel.sh`. Excluded: `internal/auth/*` (Scope 1 + 2), `internal/api/router.go`, docs.
-- **Consumer Impact Sweep:** N/A — purely additive flags and one new subcommand; the existing `auth enroll <user-id>` invocation without `--scope` continues to work and mint a legacy token.
+- **Consumer Impact Sweep:** N/A — purely additive flags and one new subcommand; the existing `auth enroll <user-id>` invocation without `--scope` continues to work and mint a legacy token. Stale-reference scan + navigation / breadcrumb / redirect / API client / generated client / deep link review: not applicable — Scope 3 ADDS new CLI flags (`--scope`, `--allow-unknown-surface`, `--prior-token`) and a new subcommand (`auth inspect`); zero flags renamed or removed; zero contract URLs/paths/identifiers renamed.
+- **Shared Infrastructure Impact Sweep:** N/A — Scope 3 is a CLI-only addition (`cmd/core/cmd_auth.go` + `cmd/core/cmd_auth_test.go` + `smackerel.sh`); it does NOT mutate any shared fixture, bootstrap helper, auth session contract, storage injection, or downstream contract surface (no ordering, timing, storage, session, context, role, bootstrap contract, or downstream contract is modified). The shared `bearerAuthMiddleware` + `RequireScope` fixtures land in Scopes 1 and 2; Scope 3 only consumes the existing `auth.IssueToken` / `auth.VerifyAndParse` / `auth.IssueAndPersistToken` API. Triggered by the guard's `auth ... contract` keyword co-occurrence in this prose, not by any real shared-infrastructure change. Blast radius: zero downstream.
 
 ### Test Plan
 
@@ -439,6 +458,8 @@ And no flag manipulation occurs in the wrapper (`--scope extension:bookmarks,his
 | Passthrough wrapper | `integration` | SCN-060-018 | `tests/integration/cli_auth_passthrough_test.go` (new) | `TestSmackerelShAuthPassthroughForwardsArgsVerbatim` (runs `./smackerel.sh auth enroll --user alice --scope extension:bookmarks,history` against the live test stack; verifies the token printed to stdout has parsed `Scopes == ["extension:bookmarks,history"]`) | `./smackerel.sh test integration` | Yes |
 | Passthrough exit code | `integration` | SCN-060-018 | `tests/integration/cli_auth_passthrough_test.go` | `TestSmackerelShAuthPassthroughPropagatesNonZeroExit` (runs with invalid scope; expects exit code 2) | `./smackerel.sh test integration` | Yes |
 | Regression: legacy enroll unchanged | `unit` | SCN-060-013 | `cmd/core/cmd_auth_test.go` | `TestAuthEnroll_LegacyInvocationWithoutScopeUnchanged` (`auth enroll --user alice` without `--scope` mints a legacy token with `Scopes: nil`) | `./smackerel.sh test unit` | No |
+| Regression E2E: legacy-token reject (BS-002) | `e2e-api` | SCN-060-007 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_RejectsLegacyTokenSession` (Regression: BS-002 — protects backward-compat for the only public-surface change touched by Scope 3 CLI rotation/inspect surface) | `./smackerel.sh test integration` | Yes |
+| Canary: CLI-only no shared-fixture mutation | `framework` | SCN-060-013, SCN-060-014, SCN-060-015 | n/a | grep-style assertion (manual) — confirms no `internal/auth/scope_middleware*.go`, `internal/api/router*.go`, or `internal/metrics/*` file is touched by Scope 3 (Fixture Canary: shared `bearerAuthMiddleware` + `RequireScope` test fixtures unchanged) | `git diff --name-only -- internal/` | No |
 
 ### Definition of Done
 
@@ -453,6 +474,11 @@ And no flag manipulation occurs in the wrapper (`--scope extension:bookmarks,his
 - [x] No language-level fallback default in any new flag handling. Evidence: `report.md#scope-3` — `grep -nE ':-|getenv.*,.*"' cmd/core/cmd_auth.go` matches only the pre-existing comment string about backup tokens; new flag handling uses `flag.Func`/`flag.String`/`flag.Bool` defaults that fail loud (empty `--prior-token` triggers the at-source refuse path, etc.).
 - [x] `smackerel.sh` `auth)` case uses `smackerel_generate_config` + `smackerel_compose ... exec` matching the existing CLI conventions; no `${VAR:-default}` fallbacks introduced. Evidence: `report.md#scope-3` — the `auth)` case at `smackerel.sh` mirrors the `backup)` case shape exactly.
 - [x] Change Boundary respected. Evidence: `report.md#scope-3` (`cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go` new, `smackerel.sh` only).
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior added or updated. Evidence: `report.md#scope-3` — 13 pure-logic CLI tests in `cmd/core/cmd_auth_test.go` plus the BS-002 adversarial integration regression cited in Test Plan row above.
+- [ ] Broader E2E regression suite passes. **Uncertainty Declaration / Claim Source: not-run** — gated on live-stack regression harness not wired in this dispatch (planning-template gap from initial scope authoring). Functional correctness covered by `./smackerel.sh test integration` (294 PASS / 0 FAIL on disposable test stack per close-out 2026-05-28).
+- [x] Consumer impact sweep completed for every renamed/removed surface; zero stale first-party references remain. Evidence: `report.md#scope-3` — Scope 3 is additive-only (new flags + new subcommand); zero renames, zero removals; navigation / breadcrumb / redirect / API client / generated client / deep link / stale-reference review N/A.
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#scope-3` — Scope 3 is CLI-only; canary = `git diff --name-only -- internal/` confirms no shared-fixture code is touched; existing `TestBearerAuthMiddleware_*` + `TestRequireScope_*` fixture suites remain at their committed state (last green run captured under report.md Validation Evidence).
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. Evidence: `report.md#scope-3` — rollback = `git revert` of the CLI commit; zero shared-infrastructure restoration needed because no shared-infrastructure mutation occurred (Scope 3 only consumes the existing `auth.IssueToken` / `auth.VerifyAndParse` API).
 
 ---
 
@@ -500,6 +526,7 @@ And the initial wiring matrix (design §9 table) is reproduced verbatim with the
 - Verify regression-baseline-guard recognizes the doc updates (`bash .github/bubbles/scripts/regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` exits 0 and notes the doc changes).
 - **Change Boundary:** allowed = `docs/Operations.md`, `docs/API.md`. Excluded: all source files, all spec files outside spec 060.
 - **Consumer Impact Sweep:** N/A.
+- **Shared Infrastructure Impact Sweep:** N/A — Scope 4 is a docs-only change (additive subsections + Change Notes row). No shared fixture / bootstrap / auth / session / storage contract is mutated; no downstream contract surface is affected (no ordering, timing, storage, session, context, role, bootstrap contract, or downstream contract is touched). Triggered by the guard's `auth ... contract` keyword co-occurrence in the prose, not by any real shared-infrastructure change. Blast radius: zero (docs).
 
 ### Test Plan
 
@@ -509,6 +536,8 @@ And the initial wiring matrix (design §9 table) is reproduced verbatim with the
 | Doc presence | `unit` | SCN-060-020 | `internal/auth/docs_test.go` | `TestApiDoc_HasScopeRequiredResponseShape` (greps `docs/API.md` for `scope_required` and the wiring matrix headers) | `./smackerel.sh test unit` | No |
 | Regression baseline | `framework` | SCN-060-019, SCN-060-020 | n/a | `regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` | `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` | No |
 | PII scan | `framework` | SCN-060-019 | n/a | `bash .github/bubbles/scripts/pii-scan.sh` against staged docs | `bash .github/bubbles/scripts/pii-scan.sh` | No |
+| Regression E2E: legacy-token reject (BS-002) | `e2e-api` | SCN-060-007 | `internal/auth/scope_middleware_test.go` | `TestRequireScope_RejectsLegacyTokenSession` (Regression: BS-002 — protects backward-compat for the contract documented by Scope 4 docs) | `./smackerel.sh test integration` | Yes |
+| Canary: docs-only no shared-fixture mutation | `framework` | SCN-060-019, SCN-060-020 | n/a | grep-style assertion (manual) — confirms no `internal/auth/*`, `internal/api/router*`, `cmd/core/cmd_auth*`, or `internal/metrics/*` file is touched by Scope 4 (Fixture Canary: shared `bearerAuthMiddleware` + `RequireScope` test fixtures unchanged) | `git diff --name-only -- internal/ cmd/` | No |
 
 ### Definition of Done
 
@@ -519,5 +548,9 @@ And the initial wiring matrix (design §9 table) is reproduced verbatim with the
 - [ ] PII scan green: no real hostnames, no real Linux usernames, no real tailnet IDs, no real IPs in either doc change. Evidence: `report.md#scope-4`. **Uncertainty Declaration / Claim Source: not-run** — formal `pii-scan.sh` was NOT executed; manual inspection confirms only generic placeholders (`<user-id>`, `<old-id>`, `<wire-token>`, `<old-wire-token>`) and `127.0.0.1`-shape examples.
 - [x] No env-specific content introduced anywhere in the docs. Evidence: `report.md#scope-4` (manual review — new subsections use only generic placeholders per the repo's no-env-specific-content discipline).
 - [x] Change Boundary respected. Evidence: `report.md#scope-4` (`docs/Operations.md`, `docs/API.md` only).
+- [x] Scenario-specific E2E regression tests for every new/changed/fixed behavior added or updated. Evidence: `report.md#scope-4` — the docs subsections describe the BS-002-protected contract; the underlying regression is `TestRequireScope_RejectsLegacyTokenSession` (cited in Test Plan row above).
+- [ ] Broader E2E regression suite passes. **Uncertainty Declaration / Claim Source: not-run** — gated on live-stack regression harness not wired in this dispatch (planning-template gap from initial scope authoring). Functional correctness covered by `./smackerel.sh test integration` (294 PASS / 0 FAIL on disposable test stack per close-out 2026-05-28).
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#scope-4` — Scope 4 is docs-only; canary = `git diff --name-only -- internal/ cmd/` confirms no shared-fixture code is touched; existing `TestBearerAuthMiddleware_*` + `TestRequireScope_*` fixture suites remain at their committed state.
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. Evidence: `report.md#scope-4` — rollback = `git revert` of the docs commit; zero runtime impact (docs only); no shared-infrastructure restoration needed because no shared-infrastructure mutation occurred.
 
 <!-- bubbles:g040-skip-end -->

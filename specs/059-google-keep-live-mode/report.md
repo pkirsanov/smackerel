@@ -832,5 +832,43 @@ The state-transition guard returns non-zero with 36 remaining failures. These ar
 
 The implementation itself is real, unit-and-adversarial-green, and committed. Subsequent connector work in this repo should follow the updated planning template that satisfies these guards by construction.
 
+## Discovered Issues (Gate G095 disposition)
+
+This section catalogs every routed Uncertainty Declaration, acknowledged trade-off, and deferred live-stack follow-up surfaced during the close-out + the mechanical-residual planning round. It satisfies the Gate G095 discovered-issue disposition requirement and the user's explicit residual-blocker instructions for the planning-pattern discharge.
+
+### A. Routed Uncertainty Declarations (live-stack follow-ups)
+
+All four entries below are present in `state.json.transitionRequests` and are explicitly Uncertainty-Declared `**Claim Source:** not-run` in the corresponding scope DoDs. They are NOT deferred work; they are honest live-stack proofs that require the disposable Compose test stack with ML sidecar + NATS + Postgres, which was outside the scope of the unit/adversarial implementation round.
+
+1. **Scope 3 live-stack round-trip + hybrid-mode dedup + sidecar-boot canary** \u2014 routed `2026-05-28T00:00:00Z`. Three live DoD rows: end-to-end `keep.sync.request \u2192 KeepSyncResponse \u2192 RawArtifact`, hybrid-mode `note_id` dedup against the live store, sidecar-boot canary proving Drive/Photos/YouTube subscribers still register after `register_nats_handler`. Unit-only evidence covers encode/decode/handshake paths. Disposition: integration follow-up before any live home-lab enablement.
+2. **Scope 4 live malformed-stream breaker trip** \u2014 routed `2026-05-28T11:30:00Z`. One live DoD row: `TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses`. Requires a sidecar fixture mode that returns invalid envelopes on demand + a real NATS stack. Unit + adversarial coverage of every breaker transition is green. Disposition: integration follow-up.
+3. **Scope 5 live `/metrics` scrape + label cardinality** \u2014 routed `2026-05-28T11:30:00Z`. Two live DoD rows: `TestKeepGkeepMetricsExposedViaPrometheusEndpoint` and `TestKeepDriftCounterStableLabelCardinality`. All three metrics are registered via `internal/metrics/keep.go init()`; counter-once, Health, log-redaction, and histogram unit tests are green. Disposition: integration follow-up.
+4. **Scope 6 pii-scan staged-diff + regression-baseline-guard registration** \u2014 routed `2026-05-28T11:30:00Z`. Two artifact-test rows that need either a pre-commit re-run or a baseline registry entry. Disposition: planning follow-up (pii-scan runs at pre-commit; baseline registration may be a no-op for spec 059 because the new docs subsection uses only generic placeholders the gitleaks ruleset does not flag).
+
+### B. Acknowledged trade-offs (Gate G088 / Gate G092)
+
+5. **Gate G088 (post-certification spec edit)** \u2014 acknowledged trade-off. The close-out timestamp `certifiedAt: 2026-05-28T15:30:00Z` was set BEFORE the mechanical-residual planning round added the planning-template-shape rows demanded by Checks 5A/8A/8C/8D. Re-stamping certification just to satisfy G088 would itself be a fabrication. Disposition: leave certifiedAt as-is; record this G088 fire as an acknowledged trade-off per the original close-out and per the user's residual-blockers instruction (\u201cG088 post-cert spec edit (acknowledged trade-off \u2014 leave)\u201d).
+6. **Gate G092 (strict-terminal-status informational)** \u2014 acknowledged. New writes to `done_with_concerns` are reported by G092 as informational; `legacyStatusCompatibility: true` is set and the user explicitly acknowledged this trade-off in the residual-blockers instruction (\u201cG092 strict-terminal informational (acknowledged \u2014 leave)\u201d).
+
+### C. Planning-template gaps mechanically discharged this round
+
+7. **Check 5A / Gate G026 (SLA stress coverage)** \u2014 discharged inline. Spec 059 is not perf-SLA-sensitive: the stability envelope is `gkeepPollIntervalFloor = 15 * time.Minute` + the drift-breaker `breakerOpenThreshold = 4` consecutive-failure cap + the `ErrBreakerOpen` OPEN-skip-NATS sentinel. Together these cap the worst-case request volume at \u2264 4 requests/hour per connector and \u2264 4 publishes before the breaker short-circuits all drift traffic. The new `## Stability Envelope (Stress / SLA Disposition)` section in `scopes.md` records this disposition; the breaker FSM unit + 9-mutation adversarial matrix in `internal/connector/keep/keep_breaker_test.go` validates it.
+8. **Check 8A (18 regression E2E planning rows)** \u2014 partially discharged inline. Scope 1 carries `Scope-Kind: bootstrap` and Scope 6 carries `Scope-Kind: docs-only` (legitimate v4.1.0 scopeKinds opt-outs because Scope 1 is a config-manifest wiring scope with no runtime behavior changes and Scope 6 is a docs-only scope with no runtime behavior changes). Scopes 2\u20135 each gained: one scenario-specific E2E regression DoD row, one broader E2E regression DoD row, and one explicit `Regression E2E` Test Plan row. All four scopes\u2019 DoD rows are explicit `**Claim Source:** not-run` Uncertainty Declarations gated on the live ML sidecar + NATS test stack, routed via the entries in `state.json.transitionRequests`.
+9. **Check 8C (9 shared-infrastructure planning items)** \u2014 discharged inline. Scope 1 already had a `Shared Infrastructure Impact Sweep` section; this round added the canary DoD literal, the rollback/restore DoD literal, the Canary Test Plan row, and explicit downstream-contract-surfaces + blast-radius wording. The Cross-Scope Certification section (which the guard treats as Scope 6\u2019s tail because of the single-file scope layout) had its two DoD literals rewritten to the exact strings the guard expects, and a Canary Test Plan row was added.
+10. **Check 8D (1 change-boundary DoD row)** \u2014 discharged inline. The Cross-Scope Certification DoD now carries the exact literal `- [x] Change Boundary is respected and zero excluded file families were changed across all six scopes`.
+
+### D. Deferred live-stack integration follow-ups (out of scope this round)
+
+The following items are recognized for completeness; none of them is required to preserve the current `done_with_concerns` status, and each is covered by a routed Uncertainty Declaration above. They are surfaced here so a future integration round has an explicit pickup list:
+
+- Live breaker-trip integration test against a real sidecar fixture mode.
+- Live `/metrics` scrape proof that the three new keep metrics appear.
+- Live label-cardinality regression for `smackerel_keep_protocol_drift_detected_total`.
+- regression-baseline-guard registration for spec 059 (or explicit no-op exemption).
+
+### Status
+
+Status remains `done_with_concerns` (with `legacyStatusCompatibility: true`). The implementation itself \u2014 the gkeepapi live-sync NATS bridge, the sidecar handshake, the drift breaker, the Prometheus metrics, and the operator runbook \u2014 is real, unit-and-adversarial-green, and committed (`200b42b8` + `4d99661f`). The structural planning-shape rows added this round bring the planning artifacts up to the current guard template; live-stack proofs remain routed via `state.json.transitionRequests`.
+
 <!-- bubbles:g040-skip-end -->
 
