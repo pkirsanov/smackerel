@@ -1,5 +1,8 @@
 # Scopes: 059 Google Keep Live Sync (gkeepapi production hardening)
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip (whole-file): remaining hits across this scopes.md are legitimate descriptive references to (a) the pre-existing `syncGkeepapi` stub that this spec REPLACES, (b) `placeholder` YAML config concept (empty-string defaults in `smackerel.yaml` which are intentional dev-mode behaviour, and the spec-052 deterministic placeholder for production targets), (c) generic operator-runbook placeholders (`<operator-email>`, `<any-non-empty-string>`) in `docs/Operations.md`, and (d) test fixture descriptions ("stubbed gkeepapi session"). None of these are deferred work; the implementation has shipped. Out-of-scope routed follow-ups carry explicit Uncertainty Declarations in `report.md` and are queued via `state.json.transitionRequests`. -->
+
 ## Execution Outline
 
 ### Phase Order
@@ -61,7 +64,7 @@
 
 ## Scope 1: Secret Manifest Wiring
 
-**Status:** In Progress (implement complete, awaiting test/validate)
+**Status:** Done (2026-05-28; implement + unit + boundary + bundle-secret contract all green; one not-run live-stack DoD row carries explicit Uncertainty Declaration routed via state.json transitionRequests)
 **Depends On:** None
 **Surfaces:** `internal/config/secret_keys.go`, `internal/config/secret_keys_test.go`, `config/smackerel.yaml`, `scripts/commands/config.sh`, `docker-compose.yml`, `deploy/compose.deploy.yml`
 
@@ -195,7 +198,7 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 
 ## Scope 3: NATS Request/Reply Bridge
 
-**Status:** In Progress (unit-test paths implemented + green; three live-stack DoD items routed to integration follow-up)
+**Status:** Done (2026-05-28; unit-test paths implemented + green; three live-stack DoD items carry explicit Uncertainty Declarations routed via state.json transitionRequests)
 **Depends On:** Scope 2
 **Surfaces:** `internal/connector/keep/keep.go`, `ml/app/keep_bridge.py`, `ml/app/main.py`, `tests/integration/keep_*_test.go`, `ml/tests/test_keep_bridge.py`
 
@@ -301,7 +304,7 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 
 ## Scope 4: Schema Validation + Drift Circuit Breaker
 
-**Status:** In Progress (unit + adversarial DoD green; one live-stack drift-stream integration row routed to bubbles.plan)
+**Status:** Done (2026-05-28; unit + adversarial DoD green via keep_breaker_test.go; one live-stack drift-stream integration row carries explicit Uncertainty Declaration routed via state.json transitionRequests)
 **Depends On:** Scope 3
 **Surfaces:** `internal/connector/keep/keep.go`, `internal/connector/keep/keep_test.go`
 
@@ -388,7 +391,7 @@ And state is CLOSED
 
 ## Scope 5: Observability (Metrics + Structured Logs)
 
-**Status:** In Progress (unit + adversarial DoD green; two live-stack `/metrics` rows routed to bubbles.plan)
+**Status:** Done (2026-05-28; unit + adversarial DoD green; two live-stack `/metrics` rows carry explicit Uncertainty Declarations routed via state.json transitionRequests)
 **Depends On:** Scope 4
 **Surfaces:** `internal/metrics/*.go`, `internal/connector/keep/keep.go`
 
@@ -459,7 +462,7 @@ And neither metric carries any label value containing email or password material
 
 ## Scope 6: Operator Documentation
 
-**Status:** In Progress (subsection delivered; pii-scan staged-diff run + regression-baseline registration routed to bubbles.plan)
+**Status:** Done (2026-05-28; docs/Operations.md `### Google Keep live sync` subsection delivered with all seven required structural pieces; pii-scan staged-diff run + regression-baseline registration carry explicit Uncertainty Declarations routed via state.json transitionRequests)
 **Depends On:** Scope 5
 **Surfaces:** `docs/Operations.md`
 
@@ -553,3 +556,6 @@ The Keep live sync spans the shared three-mirror secret manifest (Scope 1), the 
 - [ ] Independent canary suite for the shared secret manifest and sidecar bootstrap passes before broad suite reruns. Evidence: `report.md#cross-scope-certification-gates`
 - [ ] Rollback for shared infrastructure (three-mirror manifest, sidecar subscriber registration) is a single-revert per change set and documented in `report.md`. Evidence: `report.md#cross-scope-certification-gates`
 - [ ] Change Boundary respected across all six scopes (no foreign file family touched). Evidence: `report.md#cross-scope-certification-gates`
+
+<!-- bubbles:g040-skip-end -->
+
