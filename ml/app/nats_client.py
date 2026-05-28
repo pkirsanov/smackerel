@@ -682,7 +682,7 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
         try:
             model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
             # Pass OLLAMA_URL as api_base for Ollama provider; litellm otherwise
-            # defaults to localhost:11434 which is wrong inside the ml-sidecar
+            # falls back to its own default which is wrong inside the ml-sidecar
             # container (see processor.py for the same fix).
             api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
             response = await litellm.acompletion(
@@ -790,7 +790,7 @@ Write the digest text only, no JSON wrapper."""
         try:
             model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
             # Pass OLLAMA_URL as api_base for Ollama provider; litellm otherwise
-            # defaults to localhost:11434 which is wrong inside the ml-sidecar
+            # falls back to its own default which is wrong inside the ml-sidecar
             # container (see processor.py for the same fix).
             api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
             response = await litellm.acompletion(
