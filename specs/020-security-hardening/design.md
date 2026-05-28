@@ -1,5 +1,16 @@
 # Design: 020 Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene
 
+> **SUPERSEDED (host-bind pattern):** The host-bind design in this document
+> — "all 6 services use `127.0.0.1` binding in `docker-compose.yml`" — has
+> been superseded by [specs/042-tailnet-edge-bind-pattern](../042-tailnet-edge-bind-pattern/design.md).
+> Current canonical pattern: `smackerel-core` and `smackerel-ml` use the
+> fail-loud `${HOST_BIND_ADDRESS:?HOST_BIND_ADDRESS must be set by deploy adapter}`
+> form in `deploy/compose.deploy.yml` (gate G028 / smackerel-no-defaults SST
+> policy); `postgres` and `nats` carry NO host `ports:` block. The auth
+> enforcement, OAuth rate limiting, crypto fail-closed, and NATS config-file
+> work in this document remain in force. Only the host-bind prescription is
+> superseded.
+
 ## Design Brief
 
 **Current State:** Smackerel's Docker Compose stack binds postgres, nats, smackerel-ml, and ollama host ports to `0.0.0.0`, exposing them to the LAN. Only `smackerel-core` correctly uses `127.0.0.1`. The ML sidecar (`ml/app/main.py`) has zero HTTP auth middleware. The Web UI route group in `internal/api/router.go` has `webAuthMiddleware` implemented but intentionally not applied. OAuth start/callback endpoints have no rate limiting. `internal/auth/store.go` `decrypt()` silently falls back to plaintext on any failure. NATS auth token is passed as a `--auth` CLI arg visible in `docker ps`.

@@ -2,6 +2,14 @@
   "version": 3,
   "featureDir": "specs/020-security-hardening",
   "featureName": "Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene",
+  "supersessions": [
+    {
+      "scope": "host-bind-pattern",
+      "supersededBy": "042-tailnet-edge-bind-pattern",
+      "supersededAt": "2026-05-28",
+      "note": "Spec 020 prescribed literal 127.0.0.1 host binds for all services. Superseded by spec 042: smackerel-core/smackerel-ml use fail-loud ${HOST_BIND_ADDRESS:?...} form in deploy/compose.deploy.yml (gate G028 / smackerel-no-defaults SST policy); postgres/nats carry no host ports: block. Auth, OAuth rate-limiting, crypto fail-closed, and NATS config-file work in spec 020 remain in force."
+    }
+  ],
   "status": "done",
   "workflowMode": "full-delivery",
   "execution": {
