@@ -69,6 +69,52 @@
   "unblocks": [
     "specs/058-chrome-extension-bridge"
   ],
+  "concerns": [
+    {
+      "id": "CONCERN-060-01",
+      "scope": "Scope 1",
+      "dodLineRef": "scopes.md#L170",
+      "description": "Broader E2E regression suite passes (cross-cutting live-stack regression coverage beyond `./smackerel.sh test integration`).",
+      "deferralReason": "Live-stack regression harness not yet wired in this repo; spec 060 ships zero new endpoint wiring on pre-existing routes (spec 058 wires its own), so cross-cutting regression discovery is bounded.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-060-02",
+      "scope": "Scope 2",
+      "dodLineRef": "scopes.md#L314",
+      "description": "Broader E2E regression suite passes for `auth.RequireScope` middleware.",
+      "deferralReason": "Live-stack regression harness not yet wired; BS-002 adversarial unit regression + microbench (293.5 ns/op ~30× under budget) provides the actual middleware safety net.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-060-03",
+      "scope": "Scope 3",
+      "dodLineRef": "scopes.md#L478",
+      "description": "Broader E2E regression suite passes for CLI scope flags + rotation modes.",
+      "deferralReason": "Live-stack regression harness not yet wired; new `tests/integration/cli_auth_passthrough_test.go` (DI-060-02) + 13 pure-logic tests in `cmd_auth_test.go` cover the exit-code propagation + flag-validation surface; the smackerel.sh wrapper-binary-name bug fixed in this sweep would have been caught immediately by any live-stack regression run.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-060-04",
+      "scope": "Scope 4",
+      "dodLineRef": "scopes.md#L552",
+      "description": "Broader E2E regression suite passes for Operations.md + API.md additions.",
+      "deferralReason": "Live-stack regression harness not yet wired; pii-scan + regression-baseline-guard now both green against staged diff (DI-060-03, DI-060-04 discharged).",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    }
+  ],
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
@@ -123,22 +169,24 @@
         }
       },
       {
-        "phase": "plan",
-        "agent": "bubbles.plan",
-        "recordedAt": "2026-05-28T19:00:00Z",
-        "evidenceAnchor": "report.md#discovered-issues-gate-g095",
-        "summary": "Mechanical discharge of planning-template gaps surfaced by state-transition-guard close-out 6395cd89. Added DoD/Test-Plan rows, shared-infrastructure rows, consumer-trace rows, change-boundary DoD, SLA stress row, G060 red→green markers, and Gate G095 Discovered Issues catalog. Status stays done_with_concerns.",
+        "phase": "test",
+        "agent": "bubbles.workflow",
+        "recordedAt": "2026-05-28T20:00:00Z",
+        "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)",
+        "summary": "Post-cert quick-win sweep: discharged DI-060-01..DI-060-04 by RUNNING the deferred commands and capturing real evidence. DI-060-01: added BenchmarkRequireScope_PerUserPasetoSuccess + BenchmarkRequireScope_AndSemanticsThreeScopes to internal/auth/scope_middleware_test.go; measured 293.5 ns/op (1-scope) + 340.3 ns/op (3-scope), 208 B/op, 4 allocs/op — ~30× under the 10 µs design budget cited in spec 060 design §4.3. DI-060-02: added tests/integration/cli_auth_passthrough_test.go (//go:build integration); both subtests PASS (5.37s + 6.13s). REAL BUG SURFACED AND FIXED in the same sweep — the original `smackerel.sh::auth)` wrapper invoked `smackerel auth` inside the core container, but the in-container binary is `smackerel-core` per Dockerfile ENTRYPOINT; first integration-test run failed exit 127 'executable file not found'; corrected to `smackerel_compose ... exec smackerel-core smackerel-core auth \"$@\"` and re-ran test — both PASS. Without the integration test, the wrapper would have been broken for every operator. DI-060-03: regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose exit 0 (G044 informational baseline note; G045 59-of-60 done-spec inventory complete; G046 no collisions). DI-060-04: pii-scan.sh against staged spec-060 + spec-059 + benchmark + integration-test + smackerel.sh diff exit 0 (no leaks). Status stays done_with_concerns; the four remaining open concerns (CONCERN-060-01..04) are the 'Broader E2E regression suite passes' rows on each scope, all gated on a live-stack regression harness that does not yet exist in this repo and all routed to bubbles.test.",
         "addressedFindings": [
-          "DI-060-07 DISCHARGED: planning-template gaps from initial bubbles.plan dispatch mechanically closed in scopes.md — 12 regression-E2E DoD rows added (per-scope Scenario-specific E2E citing BS-002 adversarial unit regression; per-scope Broader E2E with Claim Source: not-run Uncertainty Declarations on live-stack regression harness); 8 shared-infra DoD rows added (Scope 1 canary + rollback rows; Scope 4 full Shared Infrastructure Impact Sweep + canary + rollback rows marked N/A docs-only); 2 consumer-trace rows added for Scope 3 (DoD item + extended Consumer Impact Sweep prose mentioning navigation/breadcrumb/redirect/API client/generated client/deep link/stale-reference review as N/A because Scope 3 is additive-only); 1 change-boundary DoD line added at scopes.md top-level Cross-Cutting Mechanical Discharge section; SLA stress row added to Scope 2 marking Not Applicable with <10 µs design budget rationale; per-scope Test Plan regression-E2E + canary rows added to satisfy the regex-based guard checks.",
-          "DI-060-08 DISCHARGED: Gate G060 red→green TDD evidence markers added to report.md as a new ## TDD Red→Green Evidence (Gate G060) section wrapped in <!-- bubbles:tdd-red-green-begin --> / <!-- bubbles:tdd-red-green-end --> markers; per-scope red→green sequencing recorded with commit references (5ce89484 for Scopes 1+2 failing-tests-first sequencing; 1cc7d761 for Scope 3 failing-tests-first sequencing; Scope 4 is docs-only — scenario-first not operative)."
+          "DI-060-01 CLOSED: Hot-path microbench captured — BenchmarkRequireScope_PerUserPasetoSuccess 293.5 ns/op + BenchmarkRequireScope_AndSemanticsThreeScopes 340.3 ns/op, 208 B/op, 4 allocs/op; ~30× under 10 µs design budget. Evidence: internal/auth/scope_middleware_test.go + report.md#post-cert-quick-win-sweep-2026-05-28-di-060-01-through-di-060-04. Scope 2 DoD line 309 now checked.",
+          "DI-060-02 CLOSED: ./smackerel.sh auth passthrough live-stack integration test added (tests/integration/cli_auth_passthrough_test.go); TestCLIAuthPassthrough_NoArgsExitsTwo PASS 5.37s + TestCLIAuthPassthrough_UnknownSubcommandExitsTwo PASS 6.13s. BONUS: real bug fixed in smackerel.sh line 593 (wrapper invoked non-existent `smackerel` binary; corrected to `smackerel-core`). Evidence: report.md#post-cert-quick-win-sweep-2026-05-28-di-060-01-through-di-060-04. Scope 3 DoD line 472 now checked.",
+          "DI-060-03 CLOSED: regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose exit 0. Evidence: report.md#post-cert-quick-win-sweep-2026-05-28-di-060-01-through-di-060-04. Scope 4 DoD line 547 now checked.",
+          "DI-060-04 CLOSED: pii-scan.sh against staged spec-060 + spec-059 + bench + integration-test + smackerel.sh diff exit 0. Evidence: report.md#post-cert-quick-win-sweep-2026-05-28-di-060-01-through-di-060-04. Scope 4 DoD line 548 now checked."
         ],
         "unresolvedFindings": [
-          "DI-060-01 hot-path microbenchmark for auth.RequireScope (Scope 2 DoD unchecked) — routed via state.json.transitionRequests to bubbles.stabilize",
-          "DI-060-02 ./smackerel.sh auth passthrough live-stack integration test tests/integration/cli_auth_passthrough_test.go (Scope 3 DoD unchecked) — routed via state.json.transitionRequests to bubbles.test",
-          "DI-060-03 regression-baseline-guard.sh against Scope 4 doc additions (Scope 4 DoD unchecked) — routed via state.json.transitionRequests to bubbles.docs",
-          "DI-060-04 pii-scan.sh against Scope 4 staged diff (Scope 4 DoD unchecked) — routed via state.json.transitionRequests to bubbles.docs",
-          "DI-060-05 G088 worktree spec-edit (close-out edits after implement phase) — user-acknowledged trade-off (terminal)",
-          "DI-060-06 G092 done_with_concerns flip with 4 unchecked DoD items — user-acknowledged trade-off; legacyStatusCompatibility: true (terminal)"
+          "DI-060-05 G088 worktree spec-edit — user-acknowledged trade-off (terminal); leave as-is per original instruction.",
+          "DI-060-06 G092 done_with_concerns flip with unchecked DoD items — user-acknowledged trade-off; legacyStatusCompatibility: true (terminal); leave as-is per original instruction.",
+          "CONCERN-060-01 (Scope 1 line 170): Broader E2E regression suite passes — routed to bubbles.test (live-stack regression harness wiring).",
+          "CONCERN-060-02 (Scope 2 line 314): Broader E2E regression suite passes — routed to bubbles.test.",
+          "CONCERN-060-03 (Scope 3 line 478): Broader E2E regression suite passes — routed to bubbles.test.",
+          "CONCERN-060-04 (Scope 4 line 552): Broader E2E regression suite passes — routed to bubbles.test."
         ]
       }
     ],
