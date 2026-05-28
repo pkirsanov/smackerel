@@ -199,6 +199,15 @@
         "statusBefore": "done_with_concerns",
         "statusAfter": "done_with_concerns",
         "summary": "Mechanical discharge of residual state-transition-guard blockers from cert close-out 6395cd89 (planning-template gaps). Added per-scope DoD rows (Scenario-specific E2E regression citing BS-002 adversarial unit regression as backward-compat protection; Broader E2E with Claim Source: not-run Uncertainty Declarations because live-stack regression harness is not wired); added shared-infrastructure canary + rollback DoD rows for Scopes 1 and 4 (Scope 4 marked N/A docs-only with Shared Infrastructure Impact Sweep added); added Scope 3 consumer-trace DoD + extended Consumer Impact Sweep prose to mention navigation/breadcrumb/redirect/API client/generated client/deep link/stale-reference review (all N/A because Scope 3 is additive-only — new flags + new subcommand, zero renames/removals); added top-level Change Boundary DoD line to scopes.md; added SLA stress row to Scope 2 marking Not Applicable with <10 µs design budget rationale; added Test Plan regression-E2E rows + canary rows per scope; added <!-- bubbles:tdd-red-green-begin/end --> markers section to report.md citing the failing-tests-first sequencing across all 4 scopes with commit references (5ce89484, 1cc7d761); added ## Discovered Issues (Gate G095) catalog to report.md listing DI-060-01..DI-060-08 with owner and disposition. Status stays done_with_concerns; no promotion to done attempted (would require resolving the 4 routed Uncertainty-Declared DoD items per close-out 2026-05-28 named concerns). addressedFindings list updated with DI-060-07 (planning-template gaps mechanically discharged) and DI-060-08 (G060 red→green markers added)."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["test", "stabilize"],
+        "runStartedAt": "2026-05-28T19:30:00Z",
+        "runCompletedAt": "2026-05-28T19:45:00Z",
+        "statusBefore": "done_with_concerns",
+        "statusAfter": "done_with_concerns",
+        "summary": "Discharged DI-060-01 + DI-060-02 (post-cert quick-win sweep). DI-060-01: added BenchmarkRequireScope_PerUserPasetoSuccess + BenchmarkRequireScope_AndSemanticsThreeScopes to internal/auth/scope_middleware_test.go. Measured 574-595 ns/op / 208 B/op / 4 allocs/op on Intel Xeon Platinum 8370C @ 2.80GHz — ~17x under the <10µs Scope 2 design budget. DI-060-02: added tests/integration/cli_auth_passthrough_test.go (//go:build integration) validating that ./smackerel.sh auth wrapper propagates exit codes and forwards args verbatim through docker compose exec to the in-container binary. Discovered + fixed real bug in passthrough wrapper during test authoring: in-container binary is `smackerel-core` (per Dockerfile ENTRYPOINT), not `smackerel` — smackerel.sh line 593 corrected. addressedFindings: DI-060-01, DI-060-02. Status stays done_with_concerns (DI-060-03 baseline-guard + DI-060-04 pii-scan for Scope 4 docs remain routed to bubbles.docs)."
       }
     ]
   }
