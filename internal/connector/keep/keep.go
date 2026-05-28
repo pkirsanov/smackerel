@@ -2,16 +2,85 @@ package keep
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/connector"
+	"github.com/smackerel/smackerel/internal/metrics"
 )
+
+// Spec 059 Scope 3 — NATS request/reply bridge subjects and schema version.
+// Single source of truth for both the Go core and the Python ML sidecar;
+// the Python side mirrors these constants in ml/app/keep_bridge.py.
+const (
+	gkeepHandshakeSubject = "keep.sidecar.handshake"
+	gkeepRequestSubject   = "keep.sync.request"
+	gkeepSchemaVersion    = 1
+	gkeepRequestTimeout   = 120 * time.Second
+	gkeepHandshakeTimeout = 10 * time.Second
+)
+
+// KeepNatsClient is the minimal NATS surface the Keep connector needs from
+// the core's NATS client. Defined as an interface so tests can supply a
+// scripted fake (see keep_bridge_test.go fakeNats).
+type KeepNatsClient interface {
+	Publish(ctx context.Context, subject string, data []byte) error
+	Request(ctx context.Context, subject string, data []byte, timeout time.Duration) ([]byte, error)
+}
+
+// KeepHandshakeRequest is sent on gkeepHandshakeSubject to verify the
+// ML sidecar bridge is ready (gkeepapi installed + the Bucket-2 Google App
+// Password env var non-empty on the sidecar side — SCN-059-019). That env
+// var is read ONLY by the sidecar; the Go core MUST NOT reference its name
+// in non-test source per the Scope 1 boundary test.
+type KeepHandshakeRequest struct {
+	RequestID     string `json:"request_id"`
+	SchemaVersion int    `json:"schema_version"`
+}
+
+// KeepHandshakeResponse is the sidecar's reply. Error is a pointer so a
+// successful "ok" response can omit the field entirely.
+type KeepHandshakeResponse struct {
+	Status        string  `json:"status"`
+	Error         *string `json:"error,omitempty"`
+	SchemaVersion int     `json:"schema_version"`
+}
+
+// KeepSyncRequest is sent on gkeepRequestSubject to request a sync cycle.
+type KeepSyncRequest struct {
+	RequestID     string `json:"request_id"`
+	Cursor        string `json:"cursor"`
+	SchemaVersion int    `json:"schema_version"`
+}
+
+// KeepSyncResponse is the sidecar's sync reply.
+type KeepSyncResponse struct {
+	Status        string      `json:"status"`
+	Notes         []GkeepNote `json:"notes"`
+	Cursor        string      `json:"cursor"`
+	Error         *string     `json:"error,omitempty"`
+	SchemaVersion int         `json:"schema_version"`
+}
+
+// newRequestID returns a short opaque correlation id of the form
+// "k-<unix-secs>-<6 hex>". Used purely for log correlation; no secret bits.
+func newRequestID() string {
+	var b [3]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// Fall back to a time-only id; collisions in logs are tolerable.
+		return fmt.Sprintf("k-%d-000000", time.Now().Unix())
+	}
+	return fmt.Sprintf("k-%d-%s", time.Now().Unix(), hex.EncodeToString(b[:]))
+}
 
 // SyncMode determines the sync strategy.
 type SyncMode string
@@ -64,6 +133,52 @@ type GkeepNote struct {
 	CreatedUsec  int64 `json:"created_usec"`
 }
 
+// breakerState is the drift circuit-breaker FSM state (spec 059 Scope 4).
+//
+// Transitions (driven exclusively inside syncGkeepapi):
+//
+//	closed   -- first non-auth failure       --> tripping (driftFailures=1)
+//	tripping -- next non-auth failures       --> tripping (driftFailures++)
+//	tripping -- 4th consecutive failure      --> open      (KeepProtocolDriftDetected++)
+//	tripping -- successful sync              --> closed    (driftFailures=0)
+//	open     -- any Sync()                   --> early-return ErrBreakerOpen (no NATS)
+//	open     -- Connect() with new ack token --> closed    (driftFailures=0)
+//
+// Open state never resets without a config-bump+restart-equivalent
+// (Connect() observes a changed DriftAckToken). Sidecar auth errors do
+// NOT advance the FSM — they are a Connect-class failure, not a drift
+// signal (SCN-059-011). Counter increments exactly once per OPEN entry.
+type breakerState int
+
+const (
+	breakerClosed breakerState = iota
+	breakerTripping
+	breakerOpen
+)
+
+func (b breakerState) String() string {
+	switch b {
+	case breakerClosed:
+		return "closed"
+	case breakerTripping:
+		return "tripping"
+	case breakerOpen:
+		return "open"
+	}
+	return "unknown"
+}
+
+// breakerOpenThreshold is the consecutive-failure count at which the
+// breaker transitions from TRIPPING to OPEN (SCN-059-010: "the 4th
+// consecutive failure").
+const breakerOpenThreshold = 4
+
+// ErrBreakerOpen is the stable sentinel returned by Sync() while the
+// drift circuit breaker is OPEN. Callers detect the OPEN state via
+// errors.Is(err, ErrBreakerOpen) so adversarial assertions in tests
+// can verify that ZERO NATS publishes happen during OPEN.
+var ErrBreakerOpen = fmt.Errorf("gkeepapi drift breaker open: bump drift_ack_token + restart to reset")
+
 // Connector implements the Google Keep connector.
 type Connector struct {
 	id     string
@@ -71,9 +186,7 @@ type Connector struct {
 	mu     sync.RWMutex
 	config KeepConfig
 
-	natsClient interface {
-		Publish(ctx context.Context, subject string, data []byte) error
-	}
+	natsClient KeepNatsClient
 	parser     *TakeoutParser
 	normalizer *Normalizer
 
@@ -82,6 +195,18 @@ type Connector struct {
 	lastSyncCount     int
 	lastSyncErrors    int
 	consecutiveErrors int
+
+	// Drift circuit breaker (spec 059 Scope 4 / Scope 5).
+	// breakerState is the FSM state; driftFailures is the consecutive
+	// non-auth failure counter; lastAckToken is the most recent
+	// DriftAckToken observed at Connect() time; openCounted ensures
+	// the protocol-drift Prometheus counter increments EXACTLY ONCE per
+	// OPEN entry (SCN-059-013) — repeated Sync() in OPEN must not
+	// advance it.
+	breakerState  breakerState
+	driftFailures int
+	lastAckToken  string
+	openCounted   bool
 
 	// Track processed exports
 	processedExports map[string]bool
@@ -97,6 +222,54 @@ func New(id string) *Connector {
 }
 
 func (c *Connector) ID() string { return c.id }
+
+// SetNatsClient injects the NATS client used for the gkeepapi sidecar bridge
+// (spec 059 Scope 3). Safe to call before Connect; required for gkeepapi/
+// hybrid modes (Connect performs a handshake on gkeepHandshakeSubject).
+func (c *Connector) SetNatsClient(nc KeepNatsClient) {
+	c.mu.Lock()
+	c.natsClient = nc
+	c.mu.Unlock()
+}
+
+// handshakeWithSidecar issues a synchronous request on gkeepHandshakeSubject
+// and returns the verbatim sidecar error string if status != "ok". The
+// sidecar is responsible for fail-loud validation of the Bucket-2 Google
+// App Password env var (SCN-059-019); the Go core MUST NOT reference that
+// env var by name in non-test source.
+func (c *Connector) handshakeWithSidecar(ctx context.Context) error {
+	c.mu.RLock()
+	nc := c.natsClient
+	c.mu.RUnlock()
+	if nc == nil {
+		return fmt.Errorf("gkeepapi handshake requires a NATS client (call SetNatsClient before Connect)")
+	}
+	reqID := newRequestID()
+	payload, err := json.Marshal(KeepHandshakeRequest{
+		RequestID:     reqID,
+		SchemaVersion: gkeepSchemaVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal handshake request: %w", err)
+	}
+	raw, err := nc.Request(ctx, gkeepHandshakeSubject, payload, gkeepHandshakeTimeout)
+	if err != nil {
+		return fmt.Errorf("sidecar handshake transport error: %w", err)
+	}
+	var resp KeepHandshakeResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return fmt.Errorf("decode handshake response: %w", err)
+	}
+	if resp.Status != "ok" {
+		msg := "sidecar handshake failed (no error string)"
+		if resp.Error != nil && *resp.Error != "" {
+			msg = *resp.Error
+		}
+		return fmt.Errorf("sidecar handshake: %s", msg)
+	}
+	slog.Info("gkeepapi sidecar handshake ok", "request_id", reqID)
+	return nil
+}
 
 // connectError sets health to error and returns a formatted error.
 func (c *Connector) connectError(format string, args ...interface{}) error {
@@ -153,7 +326,38 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	c.parser = NewTakeoutParser()
 	c.normalizer = NewNormalizer(keepCfg)
 	c.health = connector.HealthHealthy
+	// Spec 059 Scope 4 — reset the drift circuit breaker iff the
+	// operator-supplied drift_ack_token changed since the last Connect().
+	// First Connect() always seeds the token. A bump+restart equivalent
+	// is the ONLY way to clear an OPEN breaker; an unchanged token must
+	// preserve breaker state across Connect() calls (no silent reset).
+	if keepCfg.DriftAckToken != c.lastAckToken {
+		c.breakerState = breakerClosed
+		c.driftFailures = 0
+		c.openCounted = false
+		c.lastAckToken = keepCfg.DriftAckToken
+	}
 	c.mu.Unlock()
+
+	// Spec 059 Scope 3 — sidecar handshake for live modes. Runs AFTER config
+	// is persisted so error paths can still report state, but BEFORE Sync()
+	// is ever invoked. A failed handshake sets health=error and surfaces the
+	// sidecar's error string verbatim (SCN-059-019). When no NATS client has
+	// been injected we skip the handshake (degraded-but-not-failed): Sync()
+	// will then fail loud the first time it tries to talk to the bridge.
+	if (keepCfg.SyncMode == SyncModeGkeepapi || keepCfg.SyncMode == SyncModeHybrid) &&
+		keepCfg.GkeepEnabled {
+		c.mu.RLock()
+		hasNats := c.natsClient != nil
+		c.mu.RUnlock()
+		if hasNats {
+			if err := c.handshakeWithSidecar(ctx); err != nil {
+				return c.connectError("%s", err.Error())
+			}
+		} else {
+			slog.Warn("gkeepapi sidecar handshake skipped: no NATS client injected (SetNatsClient was not called)")
+		}
+	}
 
 	slog.Info("google keep connector connected",
 		"sync_mode", string(keepCfg.SyncMode),
@@ -343,26 +547,123 @@ func (c *Connector) syncTakeout(ctx context.Context, cursor string) ([]connector
 
 // syncGkeepapi syncs notes via the gkeepapi Python bridge using NATS request/reply.
 // Returns artifacts, new cursor, parse error count, and any fatal error.
+//
+// Spec 059 Scope 4 / Scope 5 — wraps the request/reply round-trip in the
+// drift circuit breaker FSM. Validation drift and sidecar status:"error"
+// (non-auth) advance the breaker; sidecar auth errors are surfaced as
+// Connect-class failures and do NOT advance the FSM (SCN-059-011).
 func (c *Connector) syncGkeepapi(ctx context.Context, cursor string) ([]connector.RawArtifact, string, int, error) {
 	if !c.config.GkeepEnabled {
 		return nil, cursor, 0, fmt.Errorf("gkeepapi not enabled in configuration")
 	}
 
-	slog.Info("gkeepapi sync requested", "cursor", cursor)
+	// Breaker OPEN: return early without any NATS publish (SCN-059-010,
+	// adversarial assertion in TestOpenBreakerSkipsNatsPublish).
+	c.mu.RLock()
+	if c.breakerState == breakerOpen {
+		c.mu.RUnlock()
+		return nil, cursor, 1, ErrBreakerOpen
+	}
+	nc := c.natsClient
+	normalizer := c.normalizer
+	c.mu.RUnlock()
+	if nc == nil {
+		return nil, cursor, 0, fmt.Errorf("gkeepapi bridge not connected: SetNatsClient was never called")
+	}
 
-	// gkeepapi sync requires the Python ML sidecar bridge to be running
-	// and subscribed to keep.sync.request. The bridge authenticates with
-	// Google Keep, fetches notes since cursor, and returns serialized notes.
-	// This is a NATS request/reply pattern with 120s timeout.
+	reqID := newRequestID()
+	reqPayload, err := json.Marshal(KeepSyncRequest{
+		RequestID:     reqID,
+		Cursor:        cursor,
+		SchemaVersion: gkeepSchemaVersion,
+	})
+	if err != nil {
+		return nil, cursor, 0, fmt.Errorf("marshal sync request: %w", err)
+	}
+	slog.Info("keep_sync_request", "request_id", reqID, "cursor", cursor)
 
-	// For Takeout-only deployments, this method is never called.
-	// For hybrid deployments, failure here does not block Takeout results.
-	return nil, cursor, 0, fmt.Errorf("gkeepapi bridge not connected: ensure ML sidecar is running with keep.sync.request subscription")
+	start := time.Now()
+	rawResp, err := nc.Request(ctx, gkeepRequestSubject, reqPayload, gkeepRequestTimeout)
+	if err != nil {
+		// Transport failure is treated as a drift signal: a working
+		// sidecar reachable on NATS must reply within the timeout, so
+		// a transport error during normal operation is the same class
+		// of fault as a protocol violation.
+		c.recordBreakerFailure(reqID, fmt.Sprintf("transport: %v", err))
+		return nil, cursor, 0, fmt.Errorf("gkeepapi sync transport error: %w", err)
+	}
+	var resp KeepSyncResponse
+	if err := json.Unmarshal(rawResp, &resp); err != nil {
+		c.recordBreakerFailure(reqID, "decode")
+		return nil, cursor, 0, fmt.Errorf("decode sync response: %w", err)
+	}
+
+	// Sidecar reported error: auth = Connect-class, everything else = drift.
+	if resp.Status == "error" {
+		msg := "sidecar sync failed (no error string)"
+		if resp.Error != nil && *resp.Error != "" {
+			msg = *resp.Error
+		}
+		if isSidecarAuthError(msg) {
+			// Auth failure: do NOT advance the breaker (SCN-059-011).
+			// Surface as fatal so the caller marks health=error.
+			return nil, cursor, 1, fmt.Errorf("gkeepapi sidecar auth: %s", msg)
+		}
+		c.recordBreakerFailure(reqID, fmt.Sprintf("sidecar_error: %s", msg))
+		return nil, cursor, 1, fmt.Errorf("gkeepapi sidecar: %s", msg)
+	}
+
+	// Schema validation (SCN-059-009). Any drift class trips the breaker.
+	if vErr := validateGkeepResponse(&resp); vErr != nil {
+		c.recordBreakerFailure(reqID, fmt.Sprintf("schema: %v", vErr))
+		return nil, cursor, 1, fmt.Errorf("gkeepapi schema drift: %w", vErr)
+	}
+
+	// Success path — record metrics and clear the breaker.
+	metrics.KeepGkeepSyncDuration.Observe(time.Since(start).Seconds())
+	metrics.KeepGkeepNotesReturned.Add(float64(len(resp.Notes)))
+	c.recordBreakerSuccess()
+
+	artifacts := make([]connector.RawArtifact, 0, len(resp.Notes))
+	parseErrors := 0
+	for i := range resp.Notes {
+		if err := ctx.Err(); err != nil {
+			return artifacts, cursor, parseErrors, fmt.Errorf("sync cancelled: %w", err)
+		}
+		artifact, err := normalizer.NormalizeGkeep(&resp.Notes[i])
+		if err != nil {
+			parseErrors++
+			slog.Warn("failed to normalize gkeepapi note", "note_id", resp.Notes[i].NoteID, "error", err)
+			continue
+		}
+		if artifact == nil {
+			continue
+		}
+		if payload, mErr := json.Marshal(artifact); mErr != nil {
+			slog.Warn("failed to serialize gkeepapi artifact for NATS", "note_id", resp.Notes[i].NoteID, "error", mErr)
+		} else if pubErr := nc.Publish(ctx, "artifacts.process", payload); pubErr != nil {
+			slog.Warn("failed to publish gkeepapi artifact to NATS", "note_id", resp.Notes[i].NoteID, "error", pubErr)
+		}
+		artifacts = append(artifacts, *artifact)
+	}
+	slog.Info("keep_sync_response", "request_id", reqID, "notes", len(resp.Notes), "cursor", resp.Cursor)
+
+	newCursor := resp.Cursor
+	if newCursor == "" {
+		newCursor = cursor
+	}
+	return artifacts, newCursor, parseErrors, nil
 }
 
 func (c *Connector) Health(ctx context.Context) connector.HealthStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	// Spec 059 Scope 5 — OPEN breaker masks any cached health value
+	// (SCN-059-014). Recovery requires Connect() with a rotated
+	// drift_ack_token, which resets breakerState back to closed.
+	if c.breakerState == breakerOpen {
+		return connector.HealthError
+	}
 	return c.health
 }
 
@@ -473,3 +774,101 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 
 // Ensure Connector implements the interface at compile time.
 var _ connector.Connector = (*Connector)(nil)
+
+// validateGkeepResponse enforces the wire-schema contract for a
+// KeepSyncResponse (spec 059 Scope 4, SCN-059-009). Any drift class
+// returns a non-nil error; a canonical fixture returns nil. The check
+// is intentionally strict — schema_version must equal the literal
+// gkeepSchemaVersion, status must be one of {"ok","error"}, the
+// error-shape invariants must hold, and on ok every note must carry
+// a non-empty note_id (the dedup key downstream).
+func validateGkeepResponse(resp *KeepSyncResponse) error {
+	if resp == nil {
+		return fmt.Errorf("response is nil")
+	}
+	if resp.SchemaVersion != gkeepSchemaVersion {
+		return fmt.Errorf("schema_version = %d, want %d", resp.SchemaVersion, gkeepSchemaVersion)
+	}
+	switch resp.Status {
+	case "ok":
+		// On ok: error must be absent or empty, notes may be empty,
+		// but every note must carry a non-empty note_id.
+		if resp.Error != nil && *resp.Error != "" {
+			return fmt.Errorf("status=ok must not carry a non-empty error string")
+		}
+		for i := range resp.Notes {
+			if resp.Notes[i].NoteID == "" {
+				return fmt.Errorf("note[%d] has empty note_id", i)
+			}
+		}
+		return nil
+	case "error":
+		if resp.Error == nil || *resp.Error == "" {
+			return fmt.Errorf("status=error must carry a non-empty error string")
+		}
+		if len(resp.Notes) != 0 {
+			return fmt.Errorf("status=error must carry zero notes, got %d", len(resp.Notes))
+		}
+		return nil
+	default:
+		return fmt.Errorf("invalid status %q (want ok|error)", resp.Status)
+	}
+}
+
+// isSidecarAuthError classifies a sidecar error string as an
+// authentication failure (Connect-class) versus a drift signal
+// (SCN-059-011). The Python sidecar emits the stable prefix
+// "gkeepapi authentication failed" for any login/2FA/App-Password
+// failure; matching is by HasPrefix on the trimmed message.
+func isSidecarAuthError(msg string) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg), "gkeepapi authentication failed")
+}
+
+// recordBreakerFailure advances the drift FSM by one consecutive
+// failure. On the breakerOpenThreshold-th failure the state transitions
+// to OPEN and the protocol-drift Prometheus counter increments exactly
+// once (openCounted guards repeat entries — SCN-059-013).
+func (c *Connector) recordBreakerFailure(reqID, reason string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.driftFailures++
+	if c.breakerState == breakerClosed {
+		c.breakerState = breakerTripping
+	}
+	slog.Warn("keep_protocol_drift",
+		"connector_id", c.id,
+		"request_id", reqID,
+		"reason", reason,
+		"consecutive_failures", c.driftFailures,
+		"state", c.breakerState.String(),
+	)
+	if c.driftFailures >= breakerOpenThreshold && c.breakerState != breakerOpen {
+		c.breakerState = breakerOpen
+		if !c.openCounted {
+			metrics.KeepProtocolDriftDetected.WithLabelValues(c.id).Inc()
+			c.openCounted = true
+		}
+		slog.Error("keep_protocol_drift_detected",
+			"connector_id", c.id,
+			"consecutive_failures", c.driftFailures,
+			"last_request_id", reqID,
+		)
+	}
+}
+
+// recordBreakerSuccess resets the consecutive-failure counter when a
+// sync succeeds. From CLOSED this is a no-op; from TRIPPING this
+// returns to CLOSED (SCN-059-012). Never clears OPEN — only a
+// Connect() with a rotated drift_ack_token does that.
+func (c *Connector) recordBreakerSuccess() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.breakerState == breakerOpen {
+		return
+	}
+	c.driftFailures = 0
+	c.breakerState = breakerClosed
+}
+
+// Compile-time sanity: keep the errors import live for ErrBreakerOpen.
+var _ = errors.New
