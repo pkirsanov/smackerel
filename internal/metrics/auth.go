@@ -142,6 +142,46 @@ var AuthFailure = prometheus.NewCounterVec(
 	[]string{"reason"},
 )
 
+// AuthScopeRejected counts 403 emissions from `auth.RequireScope`
+// middleware (spec 060). Labels:
+//
+//   - `required_scope` — the FIRST missing required scope (the same
+//     value echoed in the 403 response body's `required` field).
+//   - `user_id`        — the session's UserID; empty for non-per-user
+//     sources (which should never reach the reject branch because
+//     shared-token / bootstrap bypass the middleware).
+//
+// Label cardinality is bounded by the operator-controlled scope
+// registry and the user count; spec 060 BS-002 + BS-003 cover the
+// rejection paths.
+var AuthScopeRejected = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_auth_scope_rejected_total",
+		Help: "auth.RequireScope rejections by first-missing required scope and user_id",
+	},
+	[]string{"required_scope", "user_id"},
+)
+
+// AuthScopeCheckBypassed counts `auth.RequireScope` pass-throughs
+// for non-per-user session sources (spec 060). Allowed `source`
+// values (closed set):
+//
+//   - "shared_token" — SessionSourceSharedToken (dev/test ergonomic
+//     and the production opt-in fallback)
+//   - "bootstrap"    — SessionSourceBootstrap (one-shot first-user
+//     enrollment)
+//
+// Operators monitor this counter to confirm that production traffic
+// does NOT exercise the bypass paths once a deployment has fully
+// migrated off legacy sources.
+var AuthScopeCheckBypassed = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "smackerel_auth_scope_check_bypassed_total",
+		Help: "auth.RequireScope pass-throughs for non-per-user session sources",
+	},
+	[]string{"source"},
+)
+
 // NormalizeRevocationReason buckets free-text revocation reasons into
 // a closed-set label value so `AuthRevocation` stays bounded. Unknown
 // reasons land in `"other"`. Empty reasons land in `"unspecified"`.
@@ -203,5 +243,7 @@ func init() {
 		AuthValidationOutcome,
 		AuthLegacyFallbackUsed,
 		AuthFailure,
+		AuthScopeRejected,
+		AuthScopeCheckBypassed,
 	)
 }

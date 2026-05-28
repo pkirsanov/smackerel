@@ -371,6 +371,7 @@ SHELL_SECRET_KEYS=(
   AUTH_AT_REST_HASHING_KEY
   AUTH_BOOTSTRAP_TOKEN
   TELEGRAM_BOT_TOKEN
+  KEEP_GOOGLE_APP_PASSWORD
 )
 
 # Spec 052 FR-052-002 — production-class target mirror.
@@ -840,6 +841,19 @@ ML_EXTERNAL_URL="http://127.0.0.1:${ML_HOST_PORT}"
 IMAP_SYNC_SCHEDULE="$(yaml_get connectors.imap.sync_schedule 2>/dev/null)" || IMAP_SYNC_SCHEDULE=""
 CALDAV_SYNC_SCHEDULE="$(yaml_get connectors.caldav.sync_schedule 2>/dev/null)" || CALDAV_SYNC_SCHEDULE=""
 YOUTUBE_SYNC_SCHEDULE="$(yaml_get connectors.youtube.sync_schedule 2>/dev/null)" || YOUTUBE_SYNC_SCHEDULE=""
+
+# Spec 059 Scope 1 — Google Keep live-sync credentials.
+# KEEP_GOOGLE_EMAIL is non-secret (standard env contract, yaml-driven).
+# KEEP_GOOGLE_APP_PASSWORD is Bucket-2 secret: production-class targets get
+# the deterministic spec-052 placeholder; dev/test fall through to the yaml
+# literal (empty by default — fine for local dev; the connector fails loud
+# at Connect() time when sync_mode ∈ {gkeepapi, hybrid} and gkeep_enabled).
+KEEP_GOOGLE_EMAIL="$(yaml_get connectors.google-keep.email 2>/dev/null)" || KEEP_GOOGLE_EMAIL=""
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "KEEP_GOOGLE_APP_PASSWORD"; then
+  KEEP_GOOGLE_APP_PASSWORD="__SECRET_PLACEHOLDER__KEEP_GOOGLE_APP_PASSWORD__"
+else
+  KEEP_GOOGLE_APP_PASSWORD="$(yaml_get connectors.google-keep.app_password 2>/dev/null)" || KEEP_GOOGLE_APP_PASSWORD=""
+fi
 
 # CORS config
 CORS_ALLOWED_ORIGINS_JSON="$(yaml_get_json cors.allowed_origins 2>/dev/null)" || CORS_ALLOWED_ORIGINS_JSON="[]"
@@ -1371,6 +1385,8 @@ BROWSER_HISTORY_SOCIAL_MEDIA_INDIVIDUAL_THRESHOLD=${BROWSER_HISTORY_SOCIAL_MEDIA
 IMAP_SYNC_SCHEDULE=${IMAP_SYNC_SCHEDULE}
 CALDAV_SYNC_SCHEDULE=${CALDAV_SYNC_SCHEDULE}
 YOUTUBE_SYNC_SCHEDULE=${YOUTUBE_SYNC_SCHEDULE}
+KEEP_GOOGLE_EMAIL=${KEEP_GOOGLE_EMAIL}
+KEEP_GOOGLE_APP_PASSWORD=${KEEP_GOOGLE_APP_PASSWORD}
 DISCORD_ENABLED=${DISCORD_ENABLED}
 DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 DISCORD_SYNC_SCHEDULE=${DISCORD_SYNC_SCHEDULE}

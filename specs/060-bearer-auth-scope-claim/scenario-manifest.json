@@ -1,0 +1,272 @@
+{
+  "version": 1,
+  "featureDir": "specs/060-bearer-auth-scope-claim",
+  "featureName": "Bearer Auth Scope Claim & RequireScope Middleware (Spec 044 Amendment)",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-28T00:00:00Z",
+  "evidenceRefs": [
+    "report.md#test-evidence",
+    "report.md#implementation-evidence"
+  ],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-060-001" },
+    { "scenarioId": "SCN-060-002" },
+    { "scenarioId": "SCN-060-003" },
+    { "scenarioId": "SCN-060-004" },
+    { "scenarioId": "SCN-060-005" },
+    { "scenarioId": "SCN-060-006" },
+    { "scenarioId": "SCN-060-007" },
+    { "scenarioId": "SCN-060-008" },
+    { "scenarioId": "SCN-060-009" },
+    { "scenarioId": "SCN-060-010" },
+    { "scenarioId": "SCN-060-011" },
+    { "scenarioId": "SCN-060-012" },
+    { "scenarioId": "SCN-060-013" },
+    { "scenarioId": "SCN-060-014" },
+    { "scenarioId": "SCN-060-015" },
+    { "scenarioId": "SCN-060-016" },
+    { "scenarioId": "SCN-060-017" },
+    { "scenarioId": "SCN-060-018" },
+    { "scenarioId": "SCN-060-019" },
+    { "scenarioId": "SCN-060-020" }
+  ],
+  "scenarios": [
+    {
+      "id": "SCN-060-001",
+      "scopeId": "SCOPE-1",
+      "title": "PASETO scope claim round-trips through mint → parse",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/issue_test.go", "testTitle": "TestIssueToken_SetsScopeClaim", "category": "unit" },
+        { "file": "internal/auth/verify_test.go", "testTitle": "TestVerifyAndParse_PopulatesScopes", "category": "unit" },
+        { "file": "internal/auth/verify_test.go", "testTitle": "TestVerifyAndParse_SignatureStableAcrossScopeAndLegacyTokens", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit roundtrip proves IssueToken sets the PASETO scope claim and VerifyAndParse parses it back to []string equality; signature stability is asserted for both scoped and legacy shapes."
+    },
+    {
+      "id": "SCN-060-002",
+      "scopeId": "SCOPE-1",
+      "title": "Legacy spec-044 token yields Scopes: nil",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/verify_test.go", "testTitle": "TestVerifyAndParse_NilScopesForLegacyToken", "category": "unit" },
+        { "file": "internal/api/router_test.go", "testTitle": "TestBearerAuthMiddleware_NilSessionScopesForLegacyToken", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live router proves a legacy spec-044 token (no scope claim) flows through bearerAuthMiddleware with Session.Scopes == nil and no parse error."
+    },
+    {
+      "id": "SCN-060-003",
+      "scopeId": "SCOPE-1",
+      "title": "Parse-time regex catches malformed scope element",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/verify_test.go", "testTitle": "TestGetScopeClaim_RejectsMalformed", "category": "unit" }
+      ],
+      "liveTestExpectation": "Forged token with malformed scope element returns ErrScopeClaimMalformed; ParsedToken.Scopes is nil (NEVER wildcard)."
+    },
+    {
+      "id": "SCN-060-004",
+      "scopeId": "SCOPE-1",
+      "title": "internal/auth/scopes.go registry is the single source of truth",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scopes_test.go", "testTitle": "TestValidateScopeName", "category": "unit" },
+        { "file": "internal/auth/scopes_test.go", "testTitle": "TestRegisteredScopeSurfaces_ContainsExtension", "category": "unit" },
+        { "file": "internal/auth/scopes_test.go", "testTitle": "TestExtractScopeSurface", "category": "unit" }
+      ],
+      "liveTestExpectation": "Registry test enumerates RegisteredScopeSurfaces and proves regex + extractor behavior for canonical and malformed inputs."
+    },
+    {
+      "id": "SCN-060-005",
+      "scopeId": "SCOPE-1",
+      "title": "bearerAuthMiddleware populates Session.Scopes end-to-end",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/api/router_test.go", "testTitle": "TestBearerAuthMiddleware_PopulatesSessionScopes", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live router proves a scoped PASETO token populates Session.Scopes for downstream handlers."
+    },
+    {
+      "id": "SCN-060-006",
+      "scopeId": "SCOPE-2",
+      "title": "BS-001 — Scoped token accepted on wired endpoint",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_AcceptsContainedScope", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live chi router composed with bearerAuthMiddleware + RequireScope passes a scoped request through to the handler with no rejection metric increment."
+    },
+    {
+      "id": "SCN-060-007",
+      "scopeId": "SCOPE-2",
+      "title": "BS-002 ADVERSARIAL — Legacy token rejected on wired endpoint",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_RejectsLegacyTokenSession", "category": "integration" },
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_LabelsFirstMissingScope", "category": "unit" }
+      ],
+      "liveTestExpectation": "Live test proves legacy token yields exact 403 + body shape + counter delta 1 + structured WARN log; handler NOT invoked. Comment states: if getScopeClaim ever falls back to wildcard, this test MUST fail."
+    },
+    {
+      "id": "SCN-060-008",
+      "scopeId": "SCOPE-2",
+      "title": "BS-003 — Cross-scope replay rejected",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_RejectsMismatchedScope", "category": "integration" },
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_AndSemanticsRejectsPartialMatch", "category": "unit" }
+      ],
+      "liveTestExpectation": "Token scoped to extension:bookmarks,history is rejected by RequireScope(\"admin:users\") with counter labelled admin:users."
+    },
+    {
+      "id": "SCN-060-009",
+      "scopeId": "SCOPE-2",
+      "title": "BS-004 — Unwired endpoint remains backward compatible",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/api/router_test.go", "testTitle": "TestUnwiredEndpoint_AcceptsLegacyTokenUnchanged", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live router without RequireScope passes a legacy token through to the handler exactly as today; no scope metrics touched."
+    },
+    {
+      "id": "SCN-060-010",
+      "scopeId": "SCOPE-2",
+      "title": "BS-007 — Dev/test bypass + bootstrap bypass satisfy scope requirements",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_BypassesForSharedToken", "category": "integration" },
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_BypassesForBootstrap", "category": "unit" },
+        { "file": "internal/metrics/auth_test.go", "testTitle": "TestAuthScopeCheckBypassed_AcceptsClosedSetLabels", "category": "unit" }
+      ],
+      "liveTestExpectation": "Live shared-token bypass + unit bootstrap bypass each pass through with auth_scope_check_bypassed_total increment."
+    },
+    {
+      "id": "SCN-060-011",
+      "scopeId": "SCOPE-2",
+      "title": "RequireScope panics at construction when required is empty",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_PanicsOnZeroRequired", "category": "unit" }
+      ],
+      "liveTestExpectation": "RequireScope() with zero args panics at construction time, NEVER at request time."
+    },
+    {
+      "id": "SCN-060-012",
+      "scopeId": "SCOPE-2",
+      "title": "RequireScope returns 500 when session is absent",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/scope_middleware_test.go", "testTitle": "TestRequireScope_500OnAbsentSession", "category": "unit" }
+      ],
+      "liveTestExpectation": "Misconfigured router (RequireScope without bearerAuthMiddleware) returns 500 middleware_misconfigured with no scope-rejection metric increment."
+    },
+    {
+      "id": "SCN-060-013",
+      "scopeId": "SCOPE-3",
+      "title": "BS-005 — Invalid scope name rejected at enrollment",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthEnroll_RejectsInvalidScopeName", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthEnroll_LegacyInvocationWithoutScopeUnchanged", "category": "unit" }
+      ],
+      "liveTestExpectation": "CLI exits 2 with regex diagnostic; no token minted; legacy invocation (no --scope) still mints a spec-044-shape token."
+    },
+    {
+      "id": "SCN-060-014",
+      "scopeId": "SCOPE-3",
+      "title": "BS-006 — Unknown surface rejected unless --allow-unknown-surface",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthEnroll_RejectsUnknownSurfaceWithoutEscape", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthEnroll_AcceptsUnknownSurfaceWithEscape", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthEnroll_AccumulatesRepeatableScopeFlag", "category": "unit" }
+      ],
+      "liveTestExpectation": "Without escape hatch CLI exits 2; with escape hatch CLI mints + WARN log; repeatable --scope accumulates and does NOT split embedded commas."
+    },
+    {
+      "id": "SCN-060-015",
+      "scopeId": "SCOPE-3",
+      "title": "BS-008 — Rotation preserves scope with --prior-token",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthRotate_PreservesScopeWithPriorToken", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthRotate_RefusesPreserveWithoutPriorToken", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthRotate_AcceptsExplicitScopeReplacement", "category": "unit" }
+      ],
+      "liveTestExpectation": "Rotation preserves prior scopes via VerifyAndParse(<wire>); refuses preservation without --prior-token; accepts explicit replacement via --scope."
+    },
+    {
+      "id": "SCN-060-016",
+      "scopeId": "SCOPE-3",
+      "title": "BS-009 — Rotation can explicitly demote to no scope",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthRotate_DemotesOnEmptyScopeSentinel", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthRotate_RejectsEmptySentinelMixedWithNonEmpty", "category": "unit" }
+      ],
+      "liveTestExpectation": "--scope \"\" sentinel produces legacy token; mixed \"\" with non-empty exits 2 with diagnostic."
+    },
+    {
+      "id": "SCN-060-017",
+      "scopeId": "SCOPE-3",
+      "title": "auth inspect prints parsed claims",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthInspect_PrintsParsedClaims", "category": "unit" },
+        { "file": "cmd/core/cmd_auth_test.go", "testTitle": "TestAuthInspect_ExitsNonZeroOnVerifyFailure", "category": "unit" }
+      ],
+      "liveTestExpectation": "Inspect exits 0 with JSON claims on success; exits 1 on verify failure with stderr message."
+    },
+    {
+      "id": "SCN-060-018",
+      "scopeId": "SCOPE-3",
+      "title": "./smackerel.sh auth passthrough wrapper forwards args verbatim",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "tests/integration/cli_auth_passthrough_test.go", "testTitle": "TestSmackerelShAuthPassthroughForwardsArgsVerbatim", "category": "integration" },
+        { "file": "tests/integration/cli_auth_passthrough_test.go", "testTitle": "TestSmackerelShAuthPassthroughPropagatesNonZeroExit", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live test stack proves the wrapper forwards --scope extension:bookmarks,history verbatim (embedded comma NOT split) and propagates exit codes."
+    },
+    {
+      "id": "SCN-060-019",
+      "scopeId": "SCOPE-4",
+      "title": "docs/Operations.md Scoped Token Enrollment subsection present",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/docs_test.go", "testTitle": "TestOperationsDoc_HasScopedTokenEnrollmentSubsection", "category": "unit" }
+      ],
+      "liveTestExpectation": "Doc grep test proves subsection header + canonical command examples present; PII scan green."
+    },
+    {
+      "id": "SCN-060-020",
+      "scopeId": "SCOPE-4",
+      "title": "docs/API.md 403 scope_required response shape + wiring matrix present",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/auth/docs_test.go", "testTitle": "TestApiDoc_HasScopeRequiredResponseShape", "category": "unit" }
+      ],
+      "liveTestExpectation": "Doc grep test proves scope_required body shape and design §9 wiring matrix reproduced."
+    }
+  ]
+}

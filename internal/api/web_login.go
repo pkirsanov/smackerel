@@ -70,32 +70,67 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Spec 057 Scope 3 — accept application/x-www-form-urlencoded in
+	// addition to JSON. The JSON wire contract for existing spec 044
+	// callers remains byte-for-byte identical. Branching is driven by
+	// Content-Type; form-encoded requests get a 303 + cookie response,
+	// JSON requests get the existing JSON body response.
+	isForm := strings.HasPrefix(
+		strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0])),
+		"application/x-www-form-urlencoded",
+	)
+
 	// Reject requests when no auth token is configured at all (pure
 	// dev-bypass mode). The login flow has nothing to validate against
 	// in that case — the bearer middleware lets every request through.
 	if d.AuthToken == "" && !d.AuthConfig.Enabled {
+		if isForm {
+			d.renderLoginError(w, r, "/", "Login is not available on this deployment.")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "unsupported_no_auth_token",
 			"web login is not available when no auth token is configured (dev-bypass mode)")
 		return
 	}
 
-	// Limit body size — the request payload is a single short token.
-	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
-	defer r.Body.Close()
+	var (
+		token   string
+		nextRaw string
+	)
 
-	var req webLoginRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json",
-			"request body must be a JSON object with a single \"token\" field")
-		return
-	}
-	req.Token = strings.TrimSpace(req.Token)
-	if req.Token == "" {
-		writeError(w, http.StatusBadRequest, "missing_token",
-			"\"token\" field is required")
-		return
+	if isForm {
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+		defer r.Body.Close()
+		if err := r.ParseForm(); err != nil {
+			d.renderLoginError(w, r, "/", "Could not read login form.")
+			return
+		}
+		token = strings.TrimSpace(r.PostForm.Get("token"))
+		nextRaw = r.PostForm.Get("next")
+		if token == "" {
+			d.renderLoginError(w, r, sanitizeNext(nextRaw), "Token is required.")
+			return
+		}
+	} else {
+		// Limit body size — the request payload is a single short token.
+		r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+		defer r.Body.Close()
+
+		var req webLoginRequest
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json",
+				"request body must be a JSON object with a single \"token\" field")
+			return
+		}
+		req.Token = strings.TrimSpace(req.Token)
+		if req.Token == "" {
+			writeError(w, http.StatusBadRequest, "missing_token",
+				"\"token\" field is required")
+			return
+		}
+		token = req.Token
 	}
 
 	var (
@@ -105,13 +140,21 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 
 	if d.AuthConfig.Enabled {
 		// Production / per-user PASETO path.
-		parsed, err := auth.VerifyAndParse(req.Token, d.AuthVerifyOptions)
+		parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
 		if err != nil {
+			if isForm {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "invalid_token",
 				"token failed validation")
 			return
 		}
 		if d.RevocationCache != nil && d.RevocationCache.IsRevoked(parsed.TokenID) {
+			if isForm {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "revoked_token",
 				"token has been revoked")
 			return
@@ -120,7 +163,11 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 		expiresAt = parsed.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
 	} else {
 		// Dev/test shared-token path (constant-time compare).
-		if subtle.ConstantTimeCompare([]byte(req.Token), []byte(d.AuthToken)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(d.AuthToken)) != 1 {
+			if isForm {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid or expired token.")
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "invalid_token",
 				"token does not match shared dev token")
 			return
@@ -135,13 +182,22 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 	// 127.0.0.1.
 	cookie := &http.Cookie{
 		Name:     "auth_token",
-		Value:    req.Token,
+		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   strings.EqualFold(d.Environment, "production"),
 	}
 	http.SetCookie(w, cookie)
+
+	if isForm {
+		// Spec 057 Scope 3 — server-side re-sanitisation of the hidden
+		// `next` field. Client-supplied value is untrusted; defence in
+		// depth on top of the GET-time sanitisation.
+		dest := sanitizeNext(nextRaw)
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, webLoginResponse{
 		UserID:    userID,
@@ -167,7 +223,33 @@ func (d *Dependencies) HandleWebLogout(w http.ResponseWriter, r *http.Request) {
 		Secure:   strings.EqualFold(d.Environment, "production"),
 		MaxAge:   -1,
 	})
+	// Spec 057 Scope 3 — form POSTs from the logout button redirect to
+	// /login so the user lands on a usable page. JSON callers (spec 044
+	// PWA contract) keep the existing JSON body response.
+	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0]))
+	if ct == "application/x-www-form-urlencoded" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
 	writeJSON(w, http.StatusOK, struct {
 		Status string `json:"status"`
 	}{Status: "logged_out"})
+}
+
+// renderLoginError re-renders the /login page with a non-revealing
+// error banner and the supplied (already-sanitised) next value. Used
+// by the form POST failure paths so the user can correct their token
+// without losing the requested destination. The error message must
+// NEVER include the offending token value (privacy / log-injection).
+func (d *Dependencies) renderLoginError(w http.ResponseWriter, _ *http.Request, next, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusUnauthorized)
+	data := loginPageData{
+		AuthEnabled: d.AuthConfig.Enabled || d.AuthToken != "",
+		Next:        next,
+		Error:       msg,
+	}
+	_ = loginTemplate.Execute(w, data)
 }

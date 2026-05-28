@@ -44,6 +44,11 @@ type IssueOptions struct {
 	// Now is the injectable clock used to compute IssuedAt/ExpiresAt.
 	// Tests pass a deterministic fake; production passes time.Now.
 	Now func() time.Time
+
+	// Scopes is the optional PASETO `scope` claim (spec 060). When
+	// nil or empty, IssueToken OMITS the claim entirely so the wire
+	// shape matches a legacy spec-044 token byte-for-byte.
+	Scopes []string
 }
 
 // IssueResult is the PASETO v4.public wire token plus the IssuedAt /
@@ -99,6 +104,12 @@ func IssueToken(opts IssueOptions) (IssueResult, error) {
 	token.SetNotBefore(now)
 	token.SetExpiration(exp)
 	token.SetFooter([]byte(fmt.Sprintf(`{"kid":%q}`, opts.KeyID)))
+
+	if len(opts.Scopes) > 0 {
+		if err := token.Set("scope", opts.Scopes); err != nil {
+			return IssueResult{}, fmt.Errorf("auth: set scope claim: %w", err)
+		}
+	}
 
 	wire := token.V4Sign(secret, nil)
 	return IssueResult{
@@ -187,6 +198,10 @@ type IssueAndPersistOptions struct {
 	// RotatedFromTokenID is the prior token id when this is a
 	// rotation; empty for fresh enrollments.
 	RotatedFromTokenID string
+
+	// Scopes is the optional PASETO `scope` claim (spec 060). Nil or
+	// empty omits the claim entirely (legacy spec-044 wire shape).
+	Scopes []string
 }
 
 // IssueAndPersistResult is the wire token (only displayed once at
@@ -232,6 +247,7 @@ func IssueAndPersistToken(ctx context.Context, store *BearerStore, opts IssueAnd
 		TTL:        opts.TTL,
 		Issuer:     opts.Issuer,
 		Now:        opts.Now,
+		Scopes:     opts.Scopes,
 	})
 	if err != nil {
 		return IssueAndPersistResult{}, fmt.Errorf("issue token: %w", err)
