@@ -537,6 +537,26 @@ case "$COMMAND" in
     esac
     ;;
   build)
+    # Spec 058 Scope 4 — `./smackerel.sh build --extension chrome-bridge`
+    # dispatches to the Chrome Bridge extension build pipeline instead of
+    # the default core/ml image build. Any other `--extension <name>` is
+    # rejected fail-loud (no silent fallback to a default builder).
+    if [[ "${1:-}" == "--extension" ]]; then
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --extension requires a target name (e.g. chrome-bridge)" >&2
+        exit 1
+      fi
+      case "$2" in
+        chrome-bridge)
+          bash "$SCRIPT_DIR/scripts/commands/build-chrome-bridge.sh"
+          exit 0
+          ;;
+        *)
+          echo "ERROR: unknown --extension target: $2" >&2
+          exit 1
+          ;;
+      esac
+    fi
     require_docker
     smackerel_generate_config "$TARGET_ENV" >/dev/null
     build_args=(build)

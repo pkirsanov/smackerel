@@ -342,8 +342,97 @@ jobs:
         path: dist/bundle-shas/${{ matrix.env }}.sha
         if-no-files-found: error
 
+  # ─────────────────────────────────────────────────────────────────
+  # Spec 058 Scope 4 — Chrome Extension Bridge build + cosign keyless
+  # sign. Runs on the same source SHA as the core/ml images so the
+  # extension zip is pinned by Build-Once Deploy-Many alongside the
+  # server artifacts. Emits:
+  #   - smackerel-chrome-bridge-<version>-<sha-short>.zip
+  #   - <zip>.sha256
+  #   - <zip>.sig                  (cosign keyless, Rekor-logged)
+  #   - bundle-sha-chrome-bridge   (workflow artifact; consumed by
+  #     publish-build-manifest to write chromeBridge.zipSha256)
+  # ─────────────────────────────────────────────────────────────────
+  build-chrome-bridge:
+    needs: build-images
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    - name: Setup Node
+      uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+      with:
+        node-version: '20'
+
+    - name: Build chrome-bridge extension
+      run: ./smackerel.sh build --extension chrome-bridge
+
+    - name: Capture artifact metadata
+      id: artifact
+      run: |
+        zip_path="$(ls dist/extension/smackerel-chrome-bridge-*.zip | head -1)"
+        if [[ -z "$zip_path" ]]; then
+          echo "ERROR: build-chrome-bridge.sh did not produce a zip" >&2
+          exit 1
+        fi
+        zip_name="$(basename "$zip_path")"
+        zip_sha="$(awk '{print $1}' "${zip_path}.sha256")"
+        if ! [[ "$zip_sha" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "ERROR: invalid sha256 in ${zip_path}.sha256: $zip_sha" >&2
+          exit 1
+        fi
+        echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+        echo "zip_name=$zip_name" >> "$GITHUB_OUTPUT"
+        echo "zip_sha=$zip_sha"   >> "$GITHUB_OUTPUT"
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+    - name: Cosign keyless sign — chrome-bridge zip
+      env:
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        cosign sign-blob --yes \
+          --output-signature "${{ steps.artifact.outputs.zip_path }}.sig" \
+          "${{ steps.artifact.outputs.zip_path }}"
+
+    - name: Write chrome-bridge-sha artifact for build-manifest consumption
+      run: |
+        mkdir -p dist/chrome-bridge-shas
+        printf '%s' "${{ steps.artifact.outputs.zip_sha }}" \
+          > "dist/chrome-bridge-shas/chrome-bridge.sha"
+        printf '%s' "${{ steps.artifact.outputs.zip_name }}" \
+          > "dist/chrome-bridge-shas/chrome-bridge.name"
+
+    - name: Upload chrome-bridge zip + signature
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: chrome-bridge-${{ needs.build-images.outputs.sourceSha }}
+        path: |
+          ${{ steps.artifact.outputs.zip_path }}
+          ${{ steps.artifact.outputs.zip_path }}.sha256
+          ${{ steps.artifact.outputs.zip_path }}.sig
+        if-no-files-found: error
+
+    - name: Upload chrome-bridge sha artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: chrome-bridge-sha-${{ needs.build-images.outputs.sourceSha }}
+        path: dist/chrome-bridge-shas/
+        if-no-files-found: error
+
+    - name: Attach zip + signature to GitHub Release (tag pushes only)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2
+      with:
+        files: |
+          ${{ steps.artifact.outputs.zip_path }}
+          ${{ steps.artifact.outputs.zip_path }}.sha256
+          ${{ steps.artifact.outputs.zip_path }}.sig
+
   publish-build-manifest:
-    needs: [ build-images, build-bundles ]
+    needs: [ build-images, build-bundles, build-chrome-bridge ]
     runs-on: ubuntu-latest
     steps:
     # BUG-047-001 / DEVOPS-HL-002 — pull the per-env bundle-sha artifacts that
@@ -358,6 +447,30 @@ jobs:
         pattern: bundle-sha-*-${{ needs.build-images.outputs.sourceSha }}
         path: bundle-shas
         merge-multiple: false
+
+    - name: Download chrome-bridge sha artifact
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        name: chrome-bridge-sha-${{ needs.build-images.outputs.sourceSha }}
+        path: chrome-bridge-shas
+
+    - name: Resolve chrome-bridge artifact metadata
+      id: resolve-chrome-bridge
+      run: |
+        sha_file="chrome-bridge-shas/chrome-bridge.sha"
+        name_file="chrome-bridge-shas/chrome-bridge.name"
+        if [[ ! -s "$sha_file" || ! -s "$name_file" ]]; then
+          echo "ERROR: chrome-bridge artifact metadata missing" >&2
+          exit 1
+        fi
+        sha_value="$(cat "$sha_file")"
+        name_value="$(cat "$name_file")"
+        if ! [[ "$sha_value" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "ERROR: chrome-bridge zip sha256 invalid: $sha_value" >&2
+          exit 1
+        fi
+        echo "zipSha=$sha_value"   >> "$GITHUB_OUTPUT"
+        echo "zipName=$name_value" >> "$GITHUB_OUTPUT"
 
     - name: Resolve per-env bundle hashes
       id: resolve-bundle-shas
@@ -388,6 +501,8 @@ jobs:
         BUNDLE_SHA_DEV: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_DEV }}
         BUNDLE_SHA_TEST: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_TEST }}
         BUNDLE_SHA_HOME_LAB: ${{ steps.resolve-bundle-shas.outputs.BUNDLE_SHA_HOME_LAB }}
+        CHROME_BRIDGE_ZIP_SHA: ${{ steps.resolve-chrome-bridge.outputs.zipSha }}
+        CHROME_BRIDGE_ZIP_NAME: ${{ steps.resolve-chrome-bridge.outputs.zipName }}
       run: |
         cat > build-manifest.yaml <<EOF
         manifestVersion: 1
@@ -409,6 +524,13 @@ jobs:
           - env: home-lab
             ref: ${{ env.BUNDLE_REGISTRY }}:home-lab-${{ needs.build-images.outputs.sourceSha }}
             sha256: ${BUNDLE_SHA_HOME_LAB}
+        chromeBridge:
+          artifact: ${CHROME_BRIDGE_ZIP_NAME}
+          zipSha256: ${CHROME_BRIDGE_ZIP_SHA}
+          signature: ${CHROME_BRIDGE_ZIP_NAME}.sig
+          signatureScheme: cosign-keyless
+          transparencyLog: rekor
+          specReference: specs/058-chrome-extension-bridge/spec.md
         attestations:
           scheme: cosign-keyless
           transparencyLog: rekor

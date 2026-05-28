@@ -341,6 +341,33 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Get("/admin/auth/tokens", deps.HandleAdminTokensUI)
 	})
 
+	// Spec 058 — Chrome Extension Bridge.
+	//
+	// POST /v1/connectors/extension/ingest is mounted behind
+	// bearerAuthMiddleware AND auth.RequireScope("extension:bookmarks",
+	// "extension:history") (AND-semantics per spec 060 Scope 2). The
+	// extension client mints a per-user PASETO whose `scope` claim
+	// MUST contain both scopes for the request to reach the handler;
+	// bootstrap and (dev/test) shared-token sessions bypass the
+	// scope gate via SessionSourceBootstrap/SharedToken short-circuit.
+	//
+	// GET /v1/admin/extension/devices is mounted behind
+	// bearerAuthMiddleware only; the extensiondevices.Handler enforces
+	// admin scoping via the AdminPredicate supplied by wiring.go.
+	if deps.ExtensionIngestHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(deps.bearerAuthMiddleware)
+			r.With(auth.RequireScope("extension:bookmarks", "extension:history")).
+				Post("/v1/connectors/extension/ingest", deps.ExtensionIngestHandler.ServeHTTP)
+		})
+	}
+	if deps.ExtensionDevicesHandler != nil {
+		r.Group(func(r chi.Router) {
+			r.Use(deps.bearerAuthMiddleware)
+			r.Get("/v1/admin/extension/devices", deps.ExtensionDevicesHandler.ServeHTTP)
+		})
+	}
+
 	if deps.AgentInvokeHandler != nil || deps.DriveHandlers != nil || deps.PhotosHandlers != nil || deps.DriveRulesHandlers != nil || deps.DriveSaveHandlers != nil || deps.DriveConfirmationsHandlers != nil || deps.AuthAdminHandlers != nil {
 		r.Route("/v1", func(r chi.Router) {
 			r.Use(middleware.Throttle(100))
