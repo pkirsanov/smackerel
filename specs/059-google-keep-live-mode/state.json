@@ -2,23 +2,96 @@
   "version": 3,
   "featureDir": "specs/059-google-keep-live-mode",
   "featureName": "Google Keep Live Sync (gkeepapi production hardening)",
-  "status": "draft",
-  "workflowMode": "spec-scope-hardening",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
-  "planningOnly": true,
-  "planningOnlyJustification": "Initial intent scaffold only — needs bubbles.clarify pass to resolve NC-1 (build vs delete decision), NC-2 (python sidecar vs subprocess vs Go reimpl), and the remaining NCs before bubbles.design / bubbles.plan can decompose into scopes.",
+  "planningOnly": false,
+  "planningOnlyJustification": "Transitioned from spec-scope-hardening to full-delivery on 2026-05-28 by user request: planning artifacts (spec.md, design.md, scopes.md with 6 scopes, scenario-manifest.json with 18 scenarios SCN-059-001..018) are complete and the parent runtime is taking over implement→test→validate→audit→docs convergence to terminal status done.",
   "specDependsOn": [
     "specs/051-deployment-secret-auth-contract",
     "specs/052-bundle-secret-injection-contract"
   ],
   "execution": {
-    "activeAgent": null,
-    "currentPhase": "draft",
-    "currentScope": null,
-    "runStartedAt": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": 3,
+    "runStartedAt": "2026-05-28T00:00:00Z",
     "lastUpdatedAt": "2026-05-28T00:00:00Z",
-    "completedPhaseClaims": [],
-    "completedScopes": []
+    "completedPhaseClaims": [
+      {
+        "scope": 1,
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "recordedAt": "2026-05-28T00:00:00Z",
+        "summary": "Scope 1 (Secret Manifest Wiring) implemented: KEEP_GOOGLE_APP_PASSWORD added to all three Bucket-2 mirrors (config/smackerel.yaml, internal/config/secret_keys.go, scripts/commands/config.sh); KEEP_GOOGLE_EMAIL + KEEP_GOOGLE_APP_PASSWORD wired into the standard env template; spec-052 placeholder emission verified for home-lab; sidecar boundary enforced at the application layer via TestKeepAppPasswordReadOnlyFromSidecarNotCore; env_file shared-shape pinned via TestComposeEnvFileSharedAcrossCoreAndMlServices; A2 adversarial bundle-secret literal updated to match the new 6-key array.",
+        "evidenceRefs": [
+          "specs/059-google-keep-live-mode/report.md#scope-1"
+        ]
+      },
+      {
+        "scope": 2,
+        "phase": "implement-partial",
+        "agent": "bubbles.implement",
+        "recordedAt": "2026-05-28T00:00:00Z",
+        "summary": "Scope 2 implemented EXCEPT for the KEEP_GOOGLE_APP_PASSWORD half of the fail-loud secret precondition. Delivered: (a) drift_ack_token config field + YAML placeholder + parseKeepConfig present-check parsing (positive + negative tests); (b) gkeepPollIntervalFloor named constant (15m) resolving OQ-059-01 in code with rejection message referencing the constant; (c) Connect()-time fail-loud check for KEEP_GOOGLE_EMAIL when sync_mode ∈ {gkeepapi,hybrid} AND gkeep_enabled, runs BEFORE warning_acknowledged gate, field-name-only error language; (d) adversarial password-leak test confirming the error never contains the password fixture; (e) five pre-existing gkeepapi-mode tests updated to t.Setenv the now-required envs. BLOCKED: the KEEP_GOOGLE_APP_PASSWORD half of DoD item 2 conflicts with Scope 1's TestKeepAppPasswordReadOnlyFromSidecarNotCore boundary test (forbids any non-test Go literal reference to that env-key string). The corresponding Connect check was reverted and the corresponding test t.Skip'd, pending bubbles.plan reconciliation. Spec-narrative drift on poll-interval floor (spec.md/design.md say '10 min', code says 15m) recorded in report.md#scope-2 for follow-up.",
+        "evidenceRefs": [
+          "specs/059-google-keep-live-mode/report.md#scope-2"
+        ]
+      },
+      {
+        "scope": 2,
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "recordedAt": "2026-05-28T00:00:00Z",
+        "summary": "Scope 2 close-out after bubbles.plan reconciliation: KEEP_GOOGLE_APP_PASSWORD validation moved to Scope 3 sidecar handshake (SCN-059-019); Scope 2 narrows to KEEP_GOOGLE_EMAIL-only at Go-core Connect(). Removed the previously skipped TestConnectFailsLoudWhenKeepAppPasswordMissingInLiveMode test (replaced with reconciliation comment pointing to SCN-059-019). Scope 1 boundary test TestKeepAppPasswordReadOnlyFromSidecarNotCore remains green. All Scope 2 DoD items now satisfied per the reconciled wording: drift_ack_token parses (positive+negative), Connect() fails loud for missing KEEP_GOOGLE_EMAIL, gkeepPollIntervalFloor single constant (15m), no language-level fallback defaults, adversarial password-leak test passes, boundary test re-runs green, Change Boundary respected.",
+        "evidenceRefs": [
+          "specs/059-google-keep-live-mode/report.md#scope-2"
+        ]
+      }
+    ],
+    "completedScopes": ["1", "2"]
+  },
+  "executionHistory": [
+    {
+      "agent": "bubbles.design",
+      "phasesExecuted": ["bootstrap", "design-authored"],
+      "runStartedAt": "2026-05-28T00:00:00Z",
+      "runEndedAt": "2026-05-28T00:00:00Z",
+      "statusBefore": "draft",
+      "statusAfter": "draft",
+      "summary": "Authored design.md covering NATS subjects + GkeepNote schema, Bucket-2 secret manifest wiring for KEEP_GOOGLE_APP_PASSWORD, drift_ack_token circuit-breaker state machine replacing warning_acknowledged for drift recovery, config-bump-and-restart operator workflow, and deprecation path for future official-API migration. 3 open questions surfaced for bubbles.plan (poll-interval floor, response-timeout config, drift-counter split)."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap", "use-case-extraction", "scope-decomposition", "planning-authored"],
+      "runStartedAt": "2026-05-28T00:00:00Z",
+      "runEndedAt": "2026-05-28T00:00:00Z",
+      "statusBefore": "draft",
+      "statusAfter": "draft",
+      "summary": "Authored scopes.md with 6 sequential scopes: (1) three-mirror secret manifest wiring; (2) drift_ack_token config + fail-loud Connect validation; (3) NATS request/reply bridge wiring (Go + sidecar); (4) schema validation + drift circuit breaker state machine; (5) Prometheus metrics + redacted structured logs + Health() transitions; (6) docs/Operations.md operator runbook. Resolved 3 open questions inline: poll-interval floor = 15 min (matches current code), response timeout = 120 s constant, drift counter = single shared metric. Authored scenario-manifest.json with 18 scenarios (SCN-059-001..018), report.md template, uservalidation.md checked-by-default baseline."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["planning-revision"],
+      "runStartedAt": "2026-05-28T00:00:00Z",
+      "runEndedAt": "2026-05-28T00:00:00Z",
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "summary": "Resolved 2 implement-blocker planning issues. B1: SCN-059-002 originally required core container env to NOT include KEEP_GOOGLE_APP_PASSWORD, but core+ml share a single ${SMACKEREL_ENV_FILE} via env_file:. Adopted option (c) matching TELEGRAM_BOT_TOKEN precedent: password IS present in core env, sidecar boundary enforced at the application layer (zero Go-source references to KEEP_GOOGLE_APP_PASSWORD). Updated Scope 1 Gherkin, Test Plan (renamed compose test to TestComposeEnvFileSharedAcrossCoreAndMlServices, added TestKeepAppPasswordReadOnlyFromSidecarNotCore unit test, renamed live test to drop -Only suffix), DoD wording, and scenario-manifest SCN-059-002 linkedTests. B3: verified handle_sync_request DOES exist in ml/app/keep_bridge.py (module-scope async function with retry-with-reauth path); confirmed ml/app/main.py has zero keep references. Sharpened planning assumption to explicitly state register_nats_handler is the only new sidecar function and main.py registration is the only main.py change."
+    }
+  ],
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "certification": {
+    "status": "draft",
+    "lastEvaluatedAt": null,
+    "evidenceRefs": []
+  },
+  "policySnapshot": {
+    "capturedAt": "2026-05-28T00:00:00Z",
+    "capturedBy": "bubbles.plan",
+    "criticalRequirementsRef": ".github/bubbles_shared/critical-requirements.md",
+    "constitutionRef": ".specify/memory/constitution.md"
   }
 }

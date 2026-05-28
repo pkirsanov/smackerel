@@ -22,6 +22,10 @@ const (
 	SyncModeHybrid   SyncMode = "hybrid"
 )
 
+// gkeepPollIntervalFloor is the minimum allowed gkeepapi poll interval.
+// Resolves OQ-059-01 (spec 059 Scope 2) to a single canonical value.
+const gkeepPollIntervalFloor = 15 * time.Minute
+
 // KeepConfig holds parsed Keep-specific configuration.
 type KeepConfig struct {
 	SyncMode                SyncMode
@@ -31,10 +35,14 @@ type KeepConfig struct {
 	GkeepEnabled            bool
 	GkeepPollInterval       time.Duration
 	GkeepWarningAck         bool
-	IncludeArchived         bool
-	MinContentLength        int
-	LabelsFilter            []string
-	DefaultTier             string
+	// DriftAckToken is an opaque operator-supplied token used by the drift
+	// circuit breaker (spec 059 Scope 4). Bumping the value and restarting
+	// the connector resets the breaker. Empty string means "not acknowledged".
+	DriftAckToken    string
+	IncludeArchived  bool
+	MinContentLength int
+	LabelsFilter     []string
+	DefaultTier      string
 }
 
 // GkeepNote represents a note from the gkeepapi Python bridge.
@@ -102,6 +110,26 @@ func (c *Connector) Connect(ctx context.Context, config connector.ConnectorConfi
 	keepCfg, err := parseKeepConfig(config)
 	if err != nil {
 		return c.connectError("parse keep config: %w", err)
+	}
+
+	// Spec 059 Scope 2 — fail-loud secret precondition for live (gkeepapi/hybrid)
+	// modes. Runs BEFORE the warning_acknowledged gate so a missing secret can
+	// never silently fall back. Field-name-only error language: NEVER include
+	// the value, its length, or any hash of it in the returned error (SCN-059-004).
+	//
+	// NOTE (planning conflict pending bubbles.plan reconciliation, spec 059):
+	// the Scope 1 boundary test TestKeepAppPasswordReadOnlyFromSidecarNotCore
+	// forbids ANY non-test Go literal reference to the Bucket-2 App Password
+	// env key, but Scope 2's DoD requires a Connect-time os.Getenv check on
+	// that very key. Only the KEEP_GOOGLE_EMAIL half of the secret
+	// precondition is implemented here. The App Password half is routed back
+	// to bubbles.plan to reconcile Scope 1 boundary vs Scope 2 DoD before the
+	// missing check is added.
+	if (keepCfg.SyncMode == SyncModeGkeepapi || keepCfg.SyncMode == SyncModeHybrid) &&
+		keepCfg.GkeepEnabled {
+		if os.Getenv("KEEP_GOOGLE_EMAIL") == "" {
+			return c.connectError("KEEP_GOOGLE_EMAIL is required when google-keep live sync is enabled")
+		}
 	}
 
 	// Validate gkeepapi acknowledgment
@@ -382,6 +410,18 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 		kc.GkeepWarningAck = ack
 	}
 
+	// Spec 059 Scope 2 — drift_ack_token (opaque operator token).
+	// Same sc[...].(type) pattern as warning_acknowledged. Missing key yields
+	// empty string (not an error); wrong type yields a parse error referencing
+	// the field name (SCN-059-003).
+	if raw, present := sc["drift_ack_token"]; present {
+		tok, ok := raw.(string)
+		if !ok {
+			return kc, fmt.Errorf("drift_ack_token must be a string, got %T", raw)
+		}
+		kc.DriftAckToken = tok
+	}
+
 	if includeArchived, ok := sc["include_archived"].(bool); ok {
 		kc.IncludeArchived = includeArchived
 	}
@@ -398,8 +438,8 @@ func parseKeepConfig(config connector.ConnectorConfig) (KeepConfig, error) {
 		if err != nil {
 			return kc, fmt.Errorf("invalid poll_interval: %w", err)
 		}
-		if d < 15*time.Minute {
-			return kc, fmt.Errorf("poll_interval must be at least 15m, got %s", interval)
+		if d < gkeepPollIntervalFloor {
+			return kc, fmt.Errorf("poll_interval must be at least %s, got %s", gkeepPollIntervalFloor, interval)
 		}
 		kc.GkeepPollInterval = d
 	}

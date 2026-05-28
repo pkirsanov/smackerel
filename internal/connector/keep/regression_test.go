@@ -797,6 +797,11 @@ func TestRegression_NoteIDDistinctForDifferentFiles(t *testing.T) {
 // ===========================================================================
 
 func TestRegression_GkeepWarningGateEnforced(t *testing.T) {
+	// Spec 059 Scope 2 adds a secrets fail-loud check that runs BEFORE the
+	// warning_ack gate. Set both secret envs so the warning gate is the one
+	// asserted here (this regression covers ONLY the warning_ack gate).
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	dir := t.TempDir()
 
 	c := New("google-keep")
