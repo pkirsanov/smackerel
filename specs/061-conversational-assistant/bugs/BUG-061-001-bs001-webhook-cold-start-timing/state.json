@@ -1,0 +1,49 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-001",
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "createdAt": "2026-05-28T22:30:00Z",
+  "lastUpdatedAt": "2026-05-28T22:30:00Z",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "validation",
+    "currentScope": "BUG-061-001-SCOPE-01",
+    "completedScopes": [],
+    "lastUpdatedAt": "2026-05-28T22:30:00Z",
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-05-28T21:00:00Z",
+        "runCompletedAt": "2026-05-28T22:30:00Z",
+        "phasesExecuted": ["discovery", "analysis", "implementation", "verification"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-001 (BS-001 cold-start poll budget race). Code-read full webhook→dispatch→facade→capture chain; confirmed production behavior correct. Single-edit fix: bump tests/e2e/test_telegram_assistant_bs001.sh ROW-1 poll budget from 15s to 60s. Re-ran BS-001 against cold-restarted stack: all three rows PASS. Adversarial coverage (ROW-2/ROW-3) preserved unchanged."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 1,
+      "notStarted": 0
+    },
+    "lockdownState": "active"
+  },
+  "policySnapshot": {
+    "grillEnabled": false,
+    "tddEnforced": false,
+    "autoCommit": false,
+    "lockdownPolicy": "fastlane",
+    "regressionPolicy": "adversarial-required",
+    "validationProvenance": "bubbles.bug-self-verified-pending-validate"
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

@@ -1974,3 +1974,420 @@ This is at the boundary of "small enough to absorb into SCOPE-05" vs "warrants i
 - Whether test stack runs ONLY `mode=webhook` (cleanest) or both modes against parallel bot instances (unnecessary complexity). **Recommendation:** test stack uses `mode=webhook` exclusively; long-poll path retains existing Go unit coverage.
 
 ---
+
+## 18. Shell E2E Test Infrastructure for External-Provider Skills (Capability Foundation)
+
+**Status:** Ratified. Amendment date: 2026-05-28. Owner: `bubbles.design`.
+**Resolves:** `SCOPE-07-BS-003-SHELL-E2E-NOT-YET-AUTHORED`,
+`SCOPE-07-BS-006-SHELL-E2E-NOT-YET-AUTHORED`, and prospectively the
+shell-e2e legs of SCOPE-05/06/08 by ratifying ONE coherent
+test-infrastructure pattern that generalizes to every spec 061 skill
+that calls an external HTTP provider OR needs to assert skill-execution
+outcomes (as distinct from capture-fallback artifacts).
+
+### 18.1 Problem Statement (verified by Round 16 implementation discovery)
+
+Shell e2e fixtures for skill-execution paths cannot be authored today because:
+
+1. **No injection seam for external-provider URLs.**
+   `internal/agent/tools/weather/open_meteo.go::NewOpenMeteoProvider`
+   hard-codes `geocodeURL = "https://geocoding-api.open-meteo.com/v1/search"`
+   and `forecastURL = "https://api.open-meteo.com/v1/forecast"` inside
+   the constructor. The struct fields exist but are not parameterized.
+   Hitting real `api.open-meteo.com` from the test container is
+   non-deterministic (provider availability, rate-limit, network
+   weather), leaks egress traffic, and violates
+   `bubbles-test-environment-isolation` (no real-network egress in
+   test env).
+2. **No assertion mechanism for shell e2e skill-execution turns.**
+   `cmd/core/wiring_assistant_facade.go` constructs the facade with
+   `assistant.NewNoopAuditWriter()` (line ~138; comment: `// SCOPE-08
+   swaps in PG/NATS-backed writer`). On a read-only skill turn (weather,
+   retrieval) there is therefore no `assistant_turns` PG row to poll,
+   no graph mutation, no captured `idea` artifact (the only thing
+   `tests/e2e/test_telegram_assistant_bs001.sh` polls for today —
+   which works ONLY because BS-001 exercises the capture-fallback
+   path), and the webhook returns `200` with an empty body on success.
+3. **The same two blockers will affect every future skill** that is
+   read-only OR provider-backed: SCOPE-06 retrieval (BS-002 cited
+   sources), SCOPE-07 weather (BS-003 happy, BS-006 outage), and any
+   future search-provider / payment-provider / messaging-provider
+   skill the platform adds.
+
+### 18.2 Capability Foundation Declaration (DE4 / bubbles-capability-foundation-design)
+
+Per `bubbles-capability-foundation-design` proportionality triggers:
+brand-new reusable capability AND ≥2 future provider-backed skills
+planned. This section establishes a foundation, not a weather-only
+fixture.
+
+**Capability Foundation — "Provider-Backed Skill Test Infrastructure":**
+
+- **Contract 1 — Provider URL Injection Contract.** Every external HTTP
+  provider exposes ALL upstream URLs it calls as constructor inputs.
+  Production wiring (`cmd/core/wiring_assistant_skills.go`) supplies
+  the values from SST. Hard-coding URLs inside provider constructors is
+  forbidden going forward (architecture invariant in §18.6).
+- **Contract 2 — Hermetic Stub Container Contract.** The test stack
+  runs ONE stub HTTP container, `smackerel-test-stub-providers`,
+  declared under the `test` profile in `docker-compose.yml`. Every
+  provider that needs an external endpoint in test env routes to this
+  container. New providers register canned routes by extending the
+  stub's config; they do NOT add new test containers.
+- **Contract 3 — Turn-Level Assertion Contract.** Every facade turn
+  emits a structured `slog.Info("assistant_turn", ...)` line carrying
+  a `correlation_id` field. Shell e2e correlates by injecting a unique
+  nonce into the Telegram update and scraping `docker logs
+  smackerel-test-smackerel-core-1` for the line whose
+  `correlation_id` matches.
+
+**Concrete Implementations (the three variation axes):**
+
+| Variation axis | v1 concrete | v2+ planned |
+|----------------|-------------|-------------|
+| Provider protocol | HTTP/JSON (open-meteo) | HTTP/REST (search), HTTP/GraphQL (graph providers), gRPC (high-volume providers) |
+| Skill side-effect class | read-only (retrieval, weather) | write (notifications), confirm-gated (notifications), provenance-required (retrieval) |
+| Stub fidelity | canned static JSON per route | canned + status-code matrix per route (200/4xx/5xx for adversarial coverage) |
+
+Single-implementation justification does NOT apply — the foundation
+ships with multiple v1 concrete instances (weather + the v1 retrieval
+shape that SCOPE-06 will follow) plus three documented future axes.
+
+### 18.3 Decision 1 — External-Provider URL Injection Seam (Option A)
+
+**Ratified:** Option A — per-URL SST keys, fail-loud.
+
+**SST keys added** (NO-DEFAULTS per
+`.github/instructions/smackerel-no-defaults.instructions.md`; every
+substitution uses `${VAR:?...}`; `bubbles.plan` updates SCOPE-07 DoD
+wording; `bubbles.implement` lands the value):
+
+```yaml
+assistant:
+  skills:
+    weather:
+      provider: "open-meteo"            # existing
+      api_key_ref: ""                   # existing
+      cache_ttl: "10m"                  # existing
+      # NEW — Decision 18.3
+      geocode_url: "${ASSISTANT_SKILLS_WEATHER_GEOCODE_URL:?must be set: production points to https://geocoding-api.open-meteo.com/v1/search, test stack points to http://stub-providers:8080/v1/search}"
+      forecast_url: "${ASSISTANT_SKILLS_WEATHER_FORECAST_URL:?must be set: production points to https://api.open-meteo.com/v1/forecast, test stack points to http://stub-providers:8080/v1/forecast}"
+```
+
+**Constructor change** (provider author owns, `bubbles.implement`
+lands):
+
+```go
+// NEW shape — values injected, no hard-coded fallback
+func NewOpenMeteoProvider(httpClient *http.Client, geocodeURL, forecastURL string) *OpenMeteoProvider {
+    if httpClient == nil { panic("...") }
+    if geocodeURL == "" { panic("weather.NewOpenMeteoProvider: geocodeURL must not be empty") }
+    if forecastURL == "" { panic("weather.NewOpenMeteoProvider: forecastURL must not be empty") }
+    return &OpenMeteoProvider{httpClient: httpClient, geocodeURL: geocodeURL, forecastURL: forecastURL, now: time.Now}
+}
+```
+
+**Generalization rule (architecture invariant).** Every future
+provider package under `internal/agent/tools/<skill>/<provider>.go`
+MUST take ALL upstream URLs as constructor arguments. A unit test
+in the same package MUST assert this by constructing the provider
+with empty URL strings and asserting panic OR error. The
+build-time architecture-test fixture (`internal/assistant/contracts/
+architecture_test.go`, see design §11.3) gains a sibling assertion
+that fails the build if any provider constructor in
+`internal/agent/tools/**/*.go` instantiates a struct field named
+`*URL` from a string literal beginning with `http://` or `https://`.
+
+**Adversarial production-safety guard.** SST validation (in
+`internal/config/assistant.go`) MUST reject startup when
+`smackerel.environment != "test"` AND any URL key contains the
+literal substring `stub-providers`. This prevents test config from
+bleeding to production via misrouted env files.
+
+**Rationale for choosing Option A over B (provider-level BaseURL) and
+C (defer to integration tests only):**
+
+- vs. Option B: a single `BaseURL` per provider couples URL-path
+  changes to provider code and forces stub-container route names to
+  mirror real provider URL paths. Per-URL keys let the stub container
+  use simpler, canonical paths (`/v1/search`, `/v1/forecast`,
+  `/always-503`) independent of provider URL evolution.
+- vs. Option C: integration tests cannot exercise the
+  webhook→facade→adapter→executor→provider→stub→assertion path that
+  shell e2e exercises. Deferring forever means BS-003/BS-006 never
+  get honest shell-e2e coverage, which is a SCOPE-07 DoD blocker.
+
+### 18.4 Decision 2 — Stub HTTP Container (nginx:alpine, test profile)
+
+**Ratified:** Tiny in-tree stub declared in `docker-compose.yml` under
+profile `test`, served by `nginx:alpine` with canned JSON responses
+mounted from `tests/e2e/stub-providers/`. Lifecycle owned by
+`./smackerel.sh test e2e` (no manual operator step).
+
+**Compose fragment** (`bubbles.implement` lands the literal block):
+
+```yaml
+services:
+  stub-providers:
+    image: nginx:alpine
+    container_name: smackerel-test-stub-providers
+    profiles: ["test"]
+    networks: [smackerel]
+    volumes:
+      - ./tests/e2e/stub-providers/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tests/e2e/stub-providers/fixtures:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/healthz | grep -q ok"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    labels:
+      com.smackerel.component: test-stub
+      com.smackerel.lifecycle: ephemeral
+```
+
+**Route inventory (v1):**
+
+| Route | Status | Response | Used by |
+|-------|--------|----------|---------|
+| `/healthz` | 200 | `ok` | container healthcheck |
+| `/v1/search` | 200 | canned open-meteo geocode JSON (single result, deterministic lat/lon for the BS-003 probe location) | BS-003 happy path |
+| `/v1/forecast` | 200 | canned open-meteo forecast JSON (deterministic temperature_2m + weather_code) | BS-003 happy path |
+| `/always-503/v1/search` | 503 | `{"error":"provider_unavailable"}` | BS-006 outage path |
+| `/always-503/v1/forecast` | 503 | `{"error":"provider_unavailable"}` | BS-006 outage path |
+
+**Test-env SST routing** (extends the existing `scripts/commands/
+config.sh` `TARGET_ENV=test` override block that already flips
+`ASSISTANT_TRANSPORTS_TELEGRAM_MODE=webhook`):
+
+```text
+ASSISTANT_SKILLS_WEATHER_GEOCODE_URL=http://stub-providers:8080/v1/search
+ASSISTANT_SKILLS_WEATHER_FORECAST_URL=http://stub-providers:8080/v1/forecast
+```
+
+BS-006 outage path: the BS-006 shell fixture sets these to
+`http://stub-providers:8080/always-503/v1/search` and `.../v1/forecast`
+for the duration of that test ONLY, by overriding the two env vars
+on the `smackerel-test-smackerel-core-1` container restart that the
+BS-006 fixture orchestrates. Adversarial guard: the BS-006 fixture
+MUST restore the happy-path URLs in its `trap EXIT` so cross-fixture
+pollution is impossible.
+
+**Lifecycle.** `./smackerel.sh test e2e` invokes
+`docker compose --profile test up -d stub-providers` before any e2e
+fixture runs and `docker compose --profile test down stub-providers`
+in its `trap`. The stub container has zero persistent volumes and is
+fully recreated per test run (honors
+`bubbles-test-environment-isolation`).
+
+**Rationale for choosing nginx:alpine over WireMock / mountebank / a
+custom Go binary:**
+
+- `nginx:alpine` is a 12 MB image already widely used in the
+  smackerel container fleet; zero new transitive supply-chain surface.
+- Canned JSON responses are static files mounted read-only; the stub
+  has no state and cannot drift between test runs.
+- WireMock + mountebank are heavier (JVM / Node), introduce JSON
+  matching rules that themselves need tests, and trade route
+  static-file simplicity for matcher complexity.
+- A custom Go binary in `tests/e2e/stub-providers/` is acceptable as
+  a v2 evolution if/when a provider needs dynamic-response stubbing
+  (e.g., echo-back request fields); v1 routes are static and don't
+  justify the binary.
+
+### 18.5 Decision 3 — Assertion Mechanism (Option A, slog-line scrape)
+
+**Ratified:** Option A — shell e2e asserts by scraping
+`slog.Info("assistant_turn", ...)` lines from `docker logs
+smackerel-test-smackerel-core-1`. NO SCOPE-08 dependency. NO
+test-only HTTP surface.
+
+**Required `assistant_turn` slog field set** (additive on the
+existing line; `bubbles.implement` lands):
+
+| Field | Type | Source | Purpose |
+|-------|------|--------|---------|
+| `correlation_id` | string | propagated from inbound transport (§18.6) | uniquely identifies THIS turn vs concurrent turns |
+| `scenario_id` | string | router decision | which skill ran |
+| `status` | string | `AssistantResponse.Status` | `thinking`, `weather_ok`, `weather_unavailable`, etc. |
+| `error_cause` | string (nullable) | `AssistantResponse.ErrorCause` | machine-readable failure cause |
+| `user_id` | string | resolved chat→user mapping | scope to test user |
+| `transport` | string | `AssistantMessage.Transport` | `telegram` v1 |
+| `body_redacted` | bool | always `true` for production-shape audit | reaffirms no body content in logs (Principle 8) |
+
+**Shell e2e assertion pattern** (canonical; SCOPE-07 BS-003 fixture
+inherits this shape):
+
+```bash
+CORRELATION_ID="bs003-$(date +%s%N)-$$"
+UPDATE_ID=$((1000000 + $(date +%s) % 1000000))   # 7-digit unique
+SINCE_TS="$(date --utc +%Y-%m-%dT%H:%M:%S)"      # bound the log scan
+
+# Inject — Telegram update_id carries the correlation_id by convention
+update_json=$(make_update_json "weather in Reykjavík tomorrow" "$UPDATE_ID" "$CORRELATION_ID")
+curl --fail-with-body -s -X POST \
+  -H "X-Telegram-Bot-Api-Secret-Token: $WEBHOOK_SECRET" \
+  -d "$update_json" \
+  "$CORE_URL$WEBHOOK_PATH"
+
+# Wait + assert (60s budget, mirrors BS-001 cold-Ollama precedent)
+TURN_LINE=""
+for _ in $(seq 1 60); do
+  TURN_LINE="$(docker logs --since "$SINCE_TS" smackerel-test-smackerel-core-1 2>&1 \
+              | grep -F '"msg":"assistant_turn"' \
+              | grep -F "\"correlation_id\":\"$CORRELATION_ID\"" | head -1)"
+  if [ -n "$TURN_LINE" ]; then break; fi
+  sleep 1
+done
+[ -n "$TURN_LINE" ] || e2e_fail "BS-003: assistant_turn line with correlation_id=$CORRELATION_ID not observed in 60s"
+
+# Adversarial structured assertions (jq required for fail-loud parse)
+echo "$TURN_LINE" | jq -e '.scenario_id == "weather_query"'      >/dev/null || e2e_fail "BS-003: scenario_id mismatch — got $(echo "$TURN_LINE" | jq .scenario_id)"
+echo "$TURN_LINE" | jq -e '.status == "weather_ok"'              >/dev/null || e2e_fail "BS-003: status mismatch — got $(echo "$TURN_LINE" | jq .status)"
+echo "$TURN_LINE" | jq -e '.error_cause == null'                 >/dev/null || e2e_fail "BS-003: error_cause should be null on happy path"
+```
+
+**BS-006 fixture** uses the same pattern but asserts
+`status == "weather_unavailable"` AND
+`error_cause == "external_provider"`.
+
+**Adversarial substitution test** (test-integrity guard against
+tautological fixtures, per `bubbles-test-integrity` and the
+`regression-quality-guard.sh` adversarial rule applied repo-wide):
+the BS-006 fixture asserts the test would FAIL if the stub were
+swapped back to happy-path URLs (i.e., the assertion `status ==
+"weather_unavailable"` would not pass against the happy stub). This
+prevents a future regression that makes BS-006 silently pass on the
+happy path.
+
+**Rationale for choosing Option A over B (wait for SCOPE-08 PG audit
+writer) and C (test-only HTTP endpoint):**
+
+- vs. Option B: SCOPE-08 + spec 054 packet acceptance are still in
+  the carry-forward finding set; gating SCOPE-05/06/07 shell e2e on
+  them is an avoidable serialization. Option A unblocks all three
+  immediately with only an additive `correlation_id` field on an
+  already-emitted slog line.
+- vs. Option C: a test-only HTTP endpoint (e.g.,
+  `/debug/assistant/last-turn?correlation_id=X` gated by
+  `TARGET_ENV=test`) is faster (no log scrape) BUT introduces a
+  test-only HTTP surface that itself needs auth design, route
+  registration logic, and an architecture-test invariant ensuring it
+  cannot be enabled in production. The cost-benefit is worse than
+  log scraping a structured field that production audit already
+  needs anyway.
+
+### 18.6 Decision 4 — Correlation ID Propagation
+
+**Ratified:** the synthetic Telegram update's `update_id` field
+doubles as the correlation nonce. Production uses
+`update_id` as-is (Telegram-assigned monotonically increasing
+integer); test injects a unique nonce in the same field.
+
+**Propagation chain** (verified against §2.1 `AssistantMessage`
+contract; the existing contract already carries transport metadata):
+
+```text
+Telegram update.update_id
+  → webhook_handler.go::Bot.safeHandleMessage(ctx, msg)
+  → adapter builds AssistantMessage{
+        Transport: "telegram",
+        TransportMetadata: {"telegram_update_id": "<update_id>"},
+        ...
+    }
+  → facade.Handle(ctx, msg) extracts CorrelationID =
+      msg.TransportMetadata["telegram_update_id"]
+      (falls back to a generated ULID if absent — production-safe;
+       test always provides it explicitly)
+  → slog.Info("assistant_turn", "correlation_id", correlationID, ...)
+```
+
+**Why `update_id` and not a new dedicated field:** the §2.1 contract
+already preserves `TransportMetadata` as a free-form map; adding a
+new top-level `CorrelationID` field would be an additive contract
+change with multi-adapter ripple. Reading from
+`TransportMetadata["telegram_update_id"]` is zero-cost for
+non-Telegram transports (they supply their own metadata key OR fall
+back to the generated ULID).
+
+**`bubbles.implement` MUST verify** before landing: read
+`internal/assistant/contracts/message.go` (the on-disk
+`AssistantMessage` struct) to confirm `TransportMetadata
+map[string]string` exists. If §2.1 documents `transport_metadata` but
+the on-disk struct uses a different field name, the implementation
+follows the on-disk reality and `bubbles.plan` routes a finding to
+this design section to reconcile §2.1 in a subsequent round.
+
+### 18.7 Decision 5 — Documentation Impact
+
+`docs/smackerel.md` updates required (owned by `bubbles.docs`, NOT
+this design agent):
+
+1. **§3.x Operations → Test Stack Composition.** Document the
+   `smackerel-test-stub-providers` container under the `test`
+   compose profile: image, route inventory, lifecycle ownership by
+   `./smackerel.sh test e2e`, isolation guarantees (no persistent
+   volumes, recreated per test run).
+2. **§3.x Operations → Adding a New Provider-Backed Skill.** Operator
+   workflow:
+   (a) Add provider URL SST keys to `config/smackerel.yaml` with
+       `${VAR:?...}` fail-loud guards.
+   (b) Add `TARGET_ENV=test` env override in `scripts/commands/
+       config.sh` pointing to the stub container.
+   (c) Add canned routes to `tests/e2e/stub-providers/nginx.conf` +
+       fixtures.
+   (d) Author the provider constructor with URLs as required
+       arguments (per §18.3 architecture invariant).
+3. **§3.x Testing → Skill E2E Assertion Pattern.** Document the
+   `correlation_id` slog-scrape pattern as the canonical shell e2e
+   assertion shape for ANY skill turn (not just weather). Include
+   the BS-006 adversarial-substitution guard as the test-integrity
+   exemplar.
+
+### 18.8 Forbidden / Out of Scope
+
+- **No real-network egress in test env.** Any future change that
+  routes a provider URL back to a public DNS name in test env is a
+  blocking violation of `bubbles-test-environment-isolation`.
+- **No test-only HTTP surface on the core process.** Decision 3
+  Option C is explicitly rejected.
+- **No SCOPE-08 dependency for shell e2e of read-only skills.**
+  Decision 3 Option B is explicitly rejected for SCOPE-05/06/07; when
+  SCOPE-08 lands the PG audit writer, the slog-scrape pattern
+  REMAINS valid for transport-level correlation (PG audit is the
+  permanent record; slog scrape is the live-turn assertion).
+- **No hard-coded URLs in provider constructors going forward.**
+  Architecture invariant per §18.3.
+- **No stub-container leakage into production.** Adversarial guard
+  in `internal/config/assistant.go` rejects startup if a URL
+  contains `stub-providers` and `smackerel.environment != "test"`.
+- **No new `${VAR:-default}` colon-dash fallback shapes.** Per
+  `smackerel-no-defaults`; every new key uses `${VAR:?...}`.
+
+### 18.9 Capability Foundation Variation Axes Recap (DE4 evidence)
+
+| Axis | v1 instance | v2+ planned |
+|------|-------------|-------------|
+| Provider protocol | open-meteo HTTP/JSON | search HTTP/REST, gRPC providers |
+| Skill side-effect class | read-only (weather) | read-only (retrieval), confirm-gated (notifications), provenance-required (retrieval) |
+| Stub response policy | static canned JSON | status-code matrix per route (4xx/5xx adversarial) |
+| Correlation source | Telegram `update_id` | web-chat session id, mobile app request id (each adapter picks its `TransportMetadata` key) |
+
+### 18.10 Open Items (for bubbles.plan and bubbles.implement)
+
+- **bubbles.plan (next dispatch):** update SCOPE-07 DoD wording to
+  reference §18.3 SST keys, §18.4 stub container, §18.5 assertion
+  pattern. Update SCOPE-05/06/08 DoD wording so future shell-e2e
+  legs inherit §18.5 + §18.6 by reference. Update SCOPE-10 acceptance
+  evidence requirements to include §18.5-shaped assertions where
+  applicable.
+- **bubbles.implement (after bubbles.plan):** land the SST keys, the
+  provider constructor change, the stub container compose fragment,
+  the canned fixtures, the `correlation_id` slog field, the test-env
+  override in `scripts/commands/config.sh`, and the production-safety
+  guard in `internal/config/assistant.go`. Author BS-003 and BS-006
+  fixtures using the §18.5 canonical pattern.
+- **bubbles.docs:** §18.7 doc updates.
+
+---
