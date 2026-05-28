@@ -301,8 +301,12 @@ func TestValidate_QFDecisionsDisabledAllowsEmptyValues(t *testing.T) {
 	t.Setenv("QF_DECISIONS_BASE_URL", "")
 	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "")
 	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "")
-	t.Setenv("QF_DECISIONS_PACKET_VERSION", "")
-	t.Setenv("QF_DECISIONS_PAGE_SIZE", "")
+	// BUG-020-008 — QF_DECISIONS_PACKET_VERSION and QF_DECISIONS_PAGE_SIZE
+	// are unconditionally SST-required (the SST generator emits them for
+	// every environment, and the silent-default behavior they previously
+	// relied on was the bug). Even when QF is disabled, the env vars
+	// must be present and parseable; the string-form fields stay
+	// connector-conditional.
 
 	cfg, err := Load()
 	if err != nil {
@@ -319,8 +323,11 @@ func TestValidate_QFDecisionsEnabledRequiresExplicitValues(t *testing.T) {
 	t.Setenv("QF_DECISIONS_BASE_URL", "")
 	t.Setenv("QF_DECISIONS_CREDENTIAL_REF", "")
 	t.Setenv("QF_DECISIONS_SYNC_SCHEDULE", "")
-	t.Setenv("QF_DECISIONS_PACKET_VERSION", "")
-	t.Setenv("QF_DECISIONS_PAGE_SIZE", "")
+	// BUG-020-008 — PACKET_VERSION and PAGE_SIZE are now surfaced by the
+	// consolidated requiredVars()/intLoadErrs error in Load() BEFORE
+	// validateQFDecisionsConfig runs. To keep this test focused on the
+	// connector-conditional string fields, keep the int values valid via
+	// setRequiredEnv so validateQFDecisionsConfig is reached.
 
 	_, err := Load()
 	if err == nil {
@@ -330,8 +337,6 @@ func TestValidate_QFDecisionsEnabledRequiresExplicitValues(t *testing.T) {
 		"QF_DECISIONS_BASE_URL",
 		"QF_DECISIONS_CREDENTIAL_REF",
 		"QF_DECISIONS_SYNC_SCHEDULE",
-		"QF_DECISIONS_PACKET_VERSION",
-		"QF_DECISIONS_PAGE_SIZE",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Fatalf("error should include %s: %v", key, err)
@@ -863,6 +868,19 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("NOTIFICATION_MAX_RETRIES", "2")
 	t.Setenv("NOTIFICATION_OUTPUT_CHANNELS", `["dashboard"]`)
 	t.Setenv("NTFY_SOURCES_JSON", `[]`)
+
+	// BUG-020-008 — the 8 SST-required int env vars previously routed
+	// through the silent-default parseIntEnv helper. Defaults mirror
+	// config/smackerel.yaml so test Load() succeeds; per-test overrides
+	// exercise the fail-loud paths in mustParseIntEnv / Validate().
+	t.Setenv("BOOKMARKS_MIN_URL_LENGTH", "10")
+	t.Setenv("BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS", "30")
+	t.Setenv("BROWSER_HISTORY_REPEAT_VISIT_THRESHOLD", "3")
+	t.Setenv("BROWSER_HISTORY_CONTENT_FETCH_CONCURRENCY", "5")
+	t.Setenv("QF_DECISIONS_PACKET_VERSION", "1")
+	t.Setenv("QF_DECISIONS_PAGE_SIZE", "25")
+	t.Setenv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", "90")
+	t.Setenv("HOSPITABLE_PAGE_SIZE", "100")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
@@ -1255,18 +1273,20 @@ func TestLoad_BookmarksSST_AllConfigFieldsFlow(t *testing.T) {
 	}
 }
 
-// F-DEVOPS-009-002: Adversarial — if BookmarksMinURLLength env var is missing,
-// parseIntEnv should return 0, not crash or return a stale default.
+// BUG-020-008 — BOOKMARKS_MIN_URL_LENGTH is now SST-required and fail-loud.
+// Pre-fix this test pinned the silent-default-to-0 behavior, which WAS the
+// bug. Post-fix the contract is: an unset env var MUST cause Load() to
+// return an error naming the key, not silently return cfg.BookmarksMinURLLength=0.
 func TestLoad_BookmarksMinURLLength_MissingEnv(t *testing.T) {
 	setRequiredEnv(t)
-	// Deliberately NOT setting BOOKMARKS_MIN_URL_LENGTH
+	t.Setenv("BOOKMARKS_MIN_URL_LENGTH", "")
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when BOOKMARKS_MIN_URL_LENGTH is unset (BUG-020-008)")
 	}
-	if cfg.BookmarksMinURLLength != 0 {
-		t.Errorf("expected BookmarksMinURLLength=0 when env is unset, got %d", cfg.BookmarksMinURLLength)
+	if !strings.Contains(err.Error(), "BOOKMARKS_MIN_URL_LENGTH") {
+		t.Errorf("error should name BOOKMARKS_MIN_URL_LENGTH, got: %v", err)
 	}
 }
 
@@ -1325,7 +1345,7 @@ func TestLoad_HospitableEnabled_MissingLookbackDays_Fails(t *testing.T) {
 	t.Setenv("HOSPITABLE_ACCESS_TOKEN", "tok-test")
 	t.Setenv("HOSPITABLE_BASE_URL", "https://api.hospitable.com")
 	t.Setenv("HOSPITABLE_SYNC_SCHEDULE", "0 */2 * * *")
-	// HOSPITABLE_INITIAL_LOOKBACK_DAYS deliberately unset
+	t.Setenv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", "") // explicitly unset (BUG-020-008: fail-loud)
 	t.Setenv("HOSPITABLE_PAGE_SIZE", "100")
 	_, err := Load()
 	if err == nil {
@@ -1343,7 +1363,7 @@ func TestLoad_HospitableEnabled_MissingPageSize_Fails(t *testing.T) {
 	t.Setenv("HOSPITABLE_BASE_URL", "https://api.hospitable.com")
 	t.Setenv("HOSPITABLE_SYNC_SCHEDULE", "0 */2 * * *")
 	t.Setenv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", "90")
-	// HOSPITABLE_PAGE_SIZE deliberately unset
+	t.Setenv("HOSPITABLE_PAGE_SIZE", "") // explicitly unset (BUG-020-008: fail-loud)
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error when HOSPITABLE_PAGE_SIZE is missing and Hospitable is enabled")

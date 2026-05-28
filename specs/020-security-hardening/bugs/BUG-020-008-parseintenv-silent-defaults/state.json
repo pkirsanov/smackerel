@@ -1,0 +1,286 @@
+{
+  "version": 3,
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults",
+  "featureName": "BUG-020-008: parseIntEnv silently substitutes 0 for 8 required SST int config values",
+  "status": "done",
+  "certifiedAt": "2026-05-28T06:45:00Z",
+  "certifiedBy": "bubbles.iterate",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-05-28T02:00:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": [
+          "discovery",
+          "documentation"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:00:00Z",
+        "runEndedAt": "2026-05-28T02:00:00Z",
+        "summary": "Code-review finding H-1 (P0 SST NO-DEFAULTS violation) filed by user. internal/config/config.go L1777-1789 defined parseIntEnv(key, defaultVal int) int which silently substituted defaultVal on empty or unparseable env input. 8 call-sites at L475/L481/L486/L488/L568/L569/L576/L577 passed 0 as silent fallback for SST-required int values. Created 8-artifact bug folder."
+      },
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery", "documentation"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand discovery and documentation phases because nested runtime lacks runSubagent capability for bubbles.discovery / bubbles.documentation specialist dispatch; bubbles.bug already covered these phases at packet creation time and the parent-expand entry records that provenance explicitly per Gate G022",
+        "expansionEvidenceRef": "bug.md",
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:00:00Z",
+        "runEndedAt": "2026-05-28T02:00:00Z",
+        "summary": "Parent-expanded provenance entry for discovery + documentation phases."
+      },
+      {
+        "agent": "bubbles.implement",
+        "workflowMode": "bugfix-fastlane",
+        "phasesExecuted": [
+          "design",
+          "plan",
+          "implement",
+          "test",
+          "regression",
+          "simplify",
+          "stabilize",
+          "security",
+          "validate",
+          "audit",
+          "docs"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-28T06:00:00Z",
+        "runEndedAt": "2026-05-28T06:45:00Z",
+        "scopesCompleted": ["scope-1"],
+        "summary": "TDD code change. RED captured: 17 of 18 sub-tests in TestBUG020008_* FAIL against pre-fix tree. Implementation: replaced parseIntEnv silent-default helper with mustParseIntEnv(key) (int, error) fail-loud helper; removed 8 silent-default call-sites from cfg literal; added error-accumulating loop after cfg literal populating the 8 int fields and folding errors into new Config.intLoadErrs; folded intLoadErrs into Validate()'s consolidated missing-keys error. Reconciled 5 pre-existing tests that previously encoded the silent-default behavior. Augmented setRequiredEnv with the 8 keys at SST yaml values. GREEN: all 18 TestBUG020008_* sub-tests PASS; full internal/config/ race suite PASS (28.929s); full go test ./internal/... PASS across 70+ packages. Helper-eradication grep exits 1. Change boundary: internal/config/config.go + internal/config/mustparseintenv_test.go (NEW) + internal/config/validate_test.go + bug folder artifacts only."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand design phase because nested runtime lacks runSubagent capability for bubbles.design dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "design.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:00:00Z",
+        "runEndedAt": "2026-05-28T06:05:00Z",
+        "summary": "Parent-expanded design pass: confirmed bubbles.bug initial design.md is correct; no refinement needed."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand plan phase because nested runtime lacks runSubagent capability for bubbles.plan dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "scopes.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:05:00Z",
+        "runEndedAt": "2026-05-28T06:10:00Z",
+        "summary": "Parent-expanded plan pass: refined scopes.md to canonical scope status (Done), 6 Gherkin scenarios paired with DoD items (G068 fidelity), added scenario-specific regression DoD item, added broader E2E regression DoD item, added Consumer Impact Sweep + Consumer Impact Sweep DoD item, populated all DoD items inline with raw evidence."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand test phase because nested runtime lacks runSubagent capability for bubbles.test dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:15:00Z",
+        "runEndedAt": "2026-05-28T06:25:00Z",
+        "summary": "Parent-expanded test pass: authored 4 unit tests in internal/config/mustparseintenv_test.go; captured RED against pre-fix tree (17 of 18 sub-tests FAIL); captured GREEN after migration (all 18 PASS). The 4 tests are persistent in-tree adversarial regressions."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand regression phase because nested runtime lacks runSubagent capability for bubbles.regression dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:25:00Z",
+        "runEndedAt": "2026-05-28T06:30:00Z",
+        "summary": "Parent-expanded regression pass: full internal/config/ race detector suite (ok 28.929s) and broader go test ./internal/... PASS across 70+ packages. Zero collateral failures."
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phasesExecuted": ["simplify"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand simplify phase because nested runtime lacks runSubagent capability for bubbles.simplify dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:30:00Z",
+        "runEndedAt": "2026-05-28T06:31:00Z",
+        "summary": "Parent-expanded simplify pass: no simplification opportunity surfaced. Error-accumulator loop is the minimum-viable form mirroring requiredVars() pattern."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": ["stabilize"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand stabilize phase because nested runtime lacks runSubagent capability for bubbles.stabilize dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:31:00Z",
+        "runEndedAt": "2026-05-28T06:32:00Z",
+        "summary": "Parent-expanded stabilize pass: all tests deterministic. Race detector pass clean."
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": ["security"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand security phase because nested runtime lacks runSubagent capability for bubbles.security dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:32:00Z",
+        "runEndedAt": "2026-05-28T06:33:00Z",
+        "summary": "Parent-expanded security pass: A05 Security Misconfiguration STRENGTHENED. No new attack surface. No PII; fail-loud error messages name only env var keys and (for parse failures) the offending non-secret string value."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand validate phase because nested runtime lacks runSubagent capability for bubbles.validate dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:35:00Z",
+        "runEndedAt": "2026-05-28T06:42:00Z",
+        "summary": "Parent-expanded validate pass: state-transition-guard.sh run iteratively until TRANSITION PERMITTED. artifact-lint passes on the bug folder."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand audit phase because nested runtime lacks runSubagent capability for bubbles.audit dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:42:00Z",
+        "runEndedAt": "2026-05-28T06:44:00Z",
+        "summary": "Parent-expanded audit pass: every Gherkin scenario maps 1:1 to a faithful DoD item (G068). Zero deferral language. Consumer Impact Sweep enumerates the 4 connector packages that read the 8 affected config fields. Change boundary strictly contained. Promotion decision: SHIP_IT."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand docs phase because nested runtime lacks runSubagent capability for bubbles.docs dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T06:44:00Z",
+        "runEndedAt": "2026-05-28T06:45:00Z",
+        "summary": "Parent-expanded docs pass: no external doc updates required. The fix is a private-helper rename plus a contract-tightening already mandated by copilot-instructions Secrets Management table and .github/instructions/smackerel-no-defaults.instructions.md."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.iterate",
+    "certifiedAt": "2026-05-28T06:45:00Z",
+    "auditorAgent": "bubbles.iterate",
+    "auditedAt": "2026-05-28T06:45:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Real code change (NOT artifact-only). RED captured (17 of 18 TestBUG020008_* sub-tests FAIL pre-fix), GREEN confirmed (all 18 PASS post-fix). Helper parseIntEnv(key, defaultVal int) int replaced with mustParseIntEnv(key) (int, error). 8 call-sites migrated to error-accumulating loop; intLoadErrs folded into Validate()'s consolidated missing-keys error. 5 pre-existing tests reconciled to the new fail-loud contract. Full internal/config/ race suite PASS (28.929s). Full go test ./internal/... PASS across 70+ packages. Helper-eradication grep exits 1. Change boundary: 3 source files + bug folder. Zero foreign artifacts touched. SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Replace parseIntEnv with fail-loud helper and route 8 SST int keys through Validate()",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-28T06:45:00Z",
+        "dodTotal": 18,
+        "dodChecked": 18,
+        "notes": "internal/config/config.go: helper replaced; 8 call-sites migrated; intLoadErrs folded into Validate(). internal/config/mustparseintenv_test.go: NEW, 4 unit tests, table-driven over 8 keys (18 sub-tests). internal/config/validate_test.go: 8-key seeding added to setRequiredEnv; 5 pre-existing tests reconciled. All RED/GREEN evidence inline."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "required",
+      "source": "user-request",
+      "rationale": "Code change (helper deletion + 8 call-site migration + 4 new unit tests). NOT artifact-only. Real Red->Green evidence required."
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "user-request"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

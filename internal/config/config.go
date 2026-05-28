@@ -261,6 +261,19 @@ type Config struct {
 	Notification    NotificationConfig
 	NtfySourcesJSON string
 
+	// BUG-020-008 — fail-loud int env parsing. Populated by Load() after
+	// the cfg literal initializes; each entry is the error string produced
+	// by mustParseIntEnv for one of the 8 SST-required int env vars
+	// (BOOKMARKS_MIN_URL_LENGTH, BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS,
+	// BROWSER_HISTORY_REPEAT_VISIT_THRESHOLD,
+	// BROWSER_HISTORY_CONTENT_FETCH_CONCURRENCY, QF_DECISIONS_PACKET_VERSION,
+	// QF_DECISIONS_PAGE_SIZE, HOSPITABLE_INITIAL_LOOKBACK_DAYS,
+	// HOSPITABLE_PAGE_SIZE). Validate() folds these into the same
+	// consolidated missing-keys error as requiredVars() so a single boot
+	// surfaces every offending key in one message instead of silently
+	// substituting 0.
+	intLoadErrs []string
+
 	// Spec 044 — Per-user bearer auth foundation. SST-compliant; populated
 	// from AUTH_* env vars produced by `./smackerel.sh config generate`.
 	// Empty signing/hashing/bootstrap fields are accepted in dev/test
@@ -472,20 +485,16 @@ func Load() (*Config, error) {
 		BookmarksWatchInterval:                       os.Getenv("BOOKMARKS_WATCH_INTERVAL"),
 		BookmarksArchiveProcessed:                    os.Getenv("BOOKMARKS_ARCHIVE_PROCESSED") == "true",
 		BookmarksProcessingTier:                      os.Getenv("BOOKMARKS_PROCESSING_TIER"),
-		BookmarksMinURLLength:                        parseIntEnv("BOOKMARKS_MIN_URL_LENGTH", 0),
 		BookmarksExcludeDomains:                      os.Getenv("BOOKMARKS_EXCLUDE_DOMAINS"),
 		BrowserHistoryEnabled:                        os.Getenv("BROWSER_HISTORY_ENABLED") == "true",
 		BrowserHistoryPath:                           os.Getenv("BROWSER_HISTORY_PATH"),
 		BrowserHistorySyncSchedule:                   os.Getenv("BROWSER_HISTORY_SYNC_SCHEDULE"),
 		BrowserHistoryAccessStrategy:                 os.Getenv("BROWSER_HISTORY_ACCESS_STRATEGY"),
-		BrowserHistoryInitialLookbackDays:            parseIntEnv("BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS", 0),
 		BrowserHistoryDwellFullMin:                   os.Getenv("BROWSER_HISTORY_DWELL_FULL_MIN"),
 		BrowserHistoryDwellStandardMin:               os.Getenv("BROWSER_HISTORY_DWELL_STANDARD_MIN"),
 		BrowserHistoryDwellLightMin:                  os.Getenv("BROWSER_HISTORY_DWELL_LIGHT_MIN"),
 		BrowserHistoryRepeatVisitWindow:              os.Getenv("BROWSER_HISTORY_REPEAT_VISIT_WINDOW"),
-		BrowserHistoryRepeatVisitThreshold:           parseIntEnv("BROWSER_HISTORY_REPEAT_VISIT_THRESHOLD", 0),
 		BrowserHistoryContentFetchTimeout:            os.Getenv("BROWSER_HISTORY_CONTENT_FETCH_TIMEOUT"),
-		BrowserHistoryContentFetchConcurrency:        parseIntEnv("BROWSER_HISTORY_CONTENT_FETCH_CONCURRENCY", 0),
 		BrowserHistoryContentFetchDomainDelay:        os.Getenv("BROWSER_HISTORY_CONTENT_FETCH_DOMAIN_DELAY"),
 		BrowserHistoryCustomSkipDomains:              os.Getenv("BROWSER_HISTORY_CUSTOM_SKIP_DOMAINS"),
 		BrowserHistorySocialMediaIndividualThreshold: os.Getenv("BROWSER_HISTORY_SOCIAL_MEDIA_INDIVIDUAL_THRESHOLD"),
@@ -565,24 +574,20 @@ func Load() (*Config, error) {
 		QFDecisionsBaseURL:       os.Getenv("QF_DECISIONS_BASE_URL"),
 		QFDecisionsCredentialRef: os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
 		QFDecisionsSyncSchedule:  os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
-		QFDecisionsPacketVersion: parseIntEnv("QF_DECISIONS_PACKET_VERSION", 0),
-		QFDecisionsPageSize:      parseIntEnv("QF_DECISIONS_PAGE_SIZE", 0),
 
 		// Hospitable connector
-		HospitableEnabled:             os.Getenv("HOSPITABLE_ENABLED") == "true",
-		HospitableAccessToken:         os.Getenv("HOSPITABLE_ACCESS_TOKEN"),
-		HospitableBaseURL:             os.Getenv("HOSPITABLE_BASE_URL"),
-		HospitableSyncSchedule:        os.Getenv("HOSPITABLE_SYNC_SCHEDULE"),
-		HospitableInitialLookbackDays: parseIntEnv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", 0),
-		HospitablePageSize:            parseIntEnv("HOSPITABLE_PAGE_SIZE", 0),
-		HospitableSyncProperties:      os.Getenv("HOSPITABLE_SYNC_PROPERTIES") == "true",
-		HospitableSyncReservations:    os.Getenv("HOSPITABLE_SYNC_RESERVATIONS") == "true",
-		HospitableSyncMessages:        os.Getenv("HOSPITABLE_SYNC_MESSAGES") == "true",
-		HospitableSyncReviews:         os.Getenv("HOSPITABLE_SYNC_REVIEWS") == "true",
-		HospitableTierMessages:        os.Getenv("HOSPITABLE_TIER_MESSAGES"),
-		HospitableTierReviews:         os.Getenv("HOSPITABLE_TIER_REVIEWS"),
-		HospitableTierReservations:    os.Getenv("HOSPITABLE_TIER_RESERVATIONS"),
-		HospitableTierProperties:      os.Getenv("HOSPITABLE_TIER_PROPERTIES"),
+		HospitableEnabled:          os.Getenv("HOSPITABLE_ENABLED") == "true",
+		HospitableAccessToken:      os.Getenv("HOSPITABLE_ACCESS_TOKEN"),
+		HospitableBaseURL:          os.Getenv("HOSPITABLE_BASE_URL"),
+		HospitableSyncSchedule:     os.Getenv("HOSPITABLE_SYNC_SCHEDULE"),
+		HospitableSyncProperties:   os.Getenv("HOSPITABLE_SYNC_PROPERTIES") == "true",
+		HospitableSyncReservations: os.Getenv("HOSPITABLE_SYNC_RESERVATIONS") == "true",
+		HospitableSyncMessages:     os.Getenv("HOSPITABLE_SYNC_MESSAGES") == "true",
+		HospitableSyncReviews:      os.Getenv("HOSPITABLE_SYNC_REVIEWS") == "true",
+		HospitableTierMessages:     os.Getenv("HOSPITABLE_TIER_MESSAGES"),
+		HospitableTierReviews:      os.Getenv("HOSPITABLE_TIER_REVIEWS"),
+		HospitableTierReservations: os.Getenv("HOSPITABLE_TIER_RESERVATIONS"),
+		HospitableTierProperties:   os.Getenv("HOSPITABLE_TIER_PROPERTIES"),
 
 		// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and
 		// ML model memory profile. Raw env-var values are loaded here;
@@ -640,6 +645,34 @@ func Load() (*Config, error) {
 		BackupRetentionWeeklyRaw: os.Getenv("BACKUP_RETENTION_WEEKLY"),
 		BackupWatcherPollSecsRaw: os.Getenv("BACKUP_WATCHER_POLL_SECONDS"),
 		NtfySourcesJSON:          os.Getenv("NTFY_SOURCES_JSON"),
+	}
+
+	// BUG-020-008 — populate the 8 SST-required int env vars via the
+	// fail-loud mustParseIntEnv helper. Errors accumulate into
+	// cfg.intLoadErrs so Validate() can fold them into the single
+	// consolidated missing-keys error rather than failing on the first
+	// offender. This mirrors the requiredVars() pattern used by every
+	// other SST-required key.
+	intFields := []struct {
+		key string
+		dst *int
+	}{
+		{"BOOKMARKS_MIN_URL_LENGTH", &cfg.BookmarksMinURLLength},
+		{"BROWSER_HISTORY_INITIAL_LOOKBACK_DAYS", &cfg.BrowserHistoryInitialLookbackDays},
+		{"BROWSER_HISTORY_REPEAT_VISIT_THRESHOLD", &cfg.BrowserHistoryRepeatVisitThreshold},
+		{"BROWSER_HISTORY_CONTENT_FETCH_CONCURRENCY", &cfg.BrowserHistoryContentFetchConcurrency},
+		{"QF_DECISIONS_PACKET_VERSION", &cfg.QFDecisionsPacketVersion},
+		{"QF_DECISIONS_PAGE_SIZE", &cfg.QFDecisionsPageSize},
+		{"HOSPITABLE_INITIAL_LOOKBACK_DAYS", &cfg.HospitableInitialLookbackDays},
+		{"HOSPITABLE_PAGE_SIZE", &cfg.HospitablePageSize},
+	}
+	for _, f := range intFields {
+		v, err := mustParseIntEnv(f.key)
+		if err != nil {
+			cfg.intLoadErrs = append(cfg.intLoadErrs, err.Error())
+			continue
+		}
+		*f.dst = v
 	}
 
 	// Spec 046 — NATS production hardening. Raw env values are parsed
@@ -1547,6 +1580,11 @@ func (c *Config) Validate() error {
 	if !strings.EqualFold(c.LLMProvider, "ollama") && c.LLMAPIKey == "" {
 		missing = append(missing, "LLM_API_KEY")
 	}
+	// BUG-020-008 — fold fail-loud int parse errors (missing or
+	// unparseable values for the 8 SST-required int env vars) into the
+	// same consolidated missing-keys error so a single boot surfaces
+	// every offender at once.
+	missing = append(missing, c.intLoadErrs...)
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
 	}
@@ -1774,17 +1812,23 @@ func parseEnvJSONObject(key string) map[string]interface{} {
 	return result
 }
 
-// parseIntEnv reads an env var as an int, returning defaultVal when empty or unparseable.
-func parseIntEnv(key string, defaultVal int) int {
+// mustParseIntEnv reads an env var as an int, returning a fail-loud error
+// when the env var is unset/empty or unparseable. BUG-020-008 replaced the
+// previous silent-default parseIntEnv helper with this fail-loud variant
+// so each of the 8 SST-required int env vars surfaces at boot instead of
+// silently substituting 0. The error message names the env key and (for
+// parse failures) the offending value so the operator can fix every
+// problem in one pass.
+func mustParseIntEnv(key string) (int, error) {
 	s := os.Getenv(key)
 	if s == "" {
-		return defaultVal
+		return 0, fmt.Errorf("%s is required and unset", key)
 	}
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		return defaultVal
+		return 0, fmt.Errorf("%s has unparseable int value %q", key, s)
 	}
-	return v
+	return v, nil
 }
 
 // parseComposeMemoryToMiB parses a docker-compose-style memory string
