@@ -1,0 +1,212 @@
+{
+  "version": 3,
+  "specId": "007-google-keep-connector",
+  "bugId": "BUG-007-003-keep-bridge-silent-exception-swallow",
+  "featureDir": "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow",
+  "featureName": "BUG-007-003: keep_bridge.serialize_note silently swallows gkeepapi exceptions (code-review H-3)",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "certifiedAt": "2026-05-28T00:20:00Z",
+  "certifiedBy": "bubbles.implement",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "validate",
+    "runStartedAt": "2026-05-28T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-28T00:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "RED captured (6 tests FAIL with 0 WARNINGs) via git stash of ml/app/keep_bridge.py; fix applied: 5 except-pass blocks replaced with except-as-exc + logger.warning, shared timestamps try-block split into two, hasattr(items) guard removed. GREEN: 30 passed in 11.30s (7 new + 23 existing)."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-28T00:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Full ML suite via ./smackerel.sh test unit --python: 457 passed in 12.99s. Adversarial test_all_five_failures_emit_five_distinct_warnings asserts len(warnings)==5 with all 5 context tokens; demonstrated detection of absence (RED=0) and partial fixes (2, then 4)."
+      }
+    ],
+    "executionHistory": [
+      {
+        "phase": "discovery",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-28T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Bug filed from code-review finding H-3. ml/app/keep_bridge.py::serialize_note has 5 distinct `try: except Exception: pass` blocks (lines ~78-120) swallowing gkeepapi attribute-access exceptions (labels.all, collaborators.all, items, timestamps.updated, timestamps.created). Silent data corruption with no log, metric, or alert. Fix is additive: keep `pass` for resilience, add `logger.warning(...)` per block."
+      },
+      {
+        "phase": "documentation",
+        "agent": "bubbles.bug",
+        "timestamp": "2026-05-28T00:00:01Z",
+        "outcome": "completed_owned",
+        "evidence": "8-artifact bug folder created: bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json. Root cause and fix approach documented in design.md."
+      },
+      {
+        "phase": "design",
+        "agent": "bubbles.design",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand design phase because nested runtime lacks runSubagent capability for bubbles.design dispatch during bugfix-fastlane convergence; root cause is mechanical and design.md authored by bubbles.bug is already correct.",
+        "expansionEvidenceRef": "design.md",
+        "timestamp": "2026-05-28T00:01:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Confirmed bubbles.bug initial design.md is correct; root cause is 5 silent except-pass blocks in serialize_note; fix is mechanical addition of logger.warning per block plus splitting shared timestamps try-block into two independent blocks for independent observability."
+      },
+      {
+        "phase": "plan",
+        "agent": "bubbles.plan",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand plan phase because nested runtime lacks runSubagent capability for bubbles.plan dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "scopes.md",
+        "timestamp": "2026-05-28T00:02:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Refined scopes.md to canonical scope status (Done), 6 Gherkin scenarios paired 1:1 with faithful DoD items (G068), added scenario-specific regression DoD item, added broader regression DoD item, added Consumer Impact Sweep DoD item, populated all DoD items inline with raw evidence."
+      },
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "timestamp": "2026-05-28T00:10:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Fix landed in ml/app/keep_bridge.py: 5 except-pass blocks replaced with except-as-exc + logger.warning naming the context and exception type; shared timestamps try-block split into two independent blocks; hasattr(items) guard removed so iteration failure surfaces. Fallback values preserved. Regression suite ml/tests/test_keep_bridge_warnings.py covers SCN-GK-BUG-003-A..F."
+      },
+      {
+        "phase": "test",
+        "agent": "bubbles.test",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand test phase because nested runtime lacks runSubagent capability for bubbles.test dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:15:00Z",
+        "outcome": "completed_owned",
+        "evidence": "RED captured against pre-fix tree (via git stash of keep_bridge.py): 6 of 7 tests in TestSerializeNoteSurfacesFailures FAIL with 0 WARNINGs observed; AssertionError: expected 5 WARNINGs, got 0: []. GREEN captured after fix: all 7 tests PASS; full ml/tests via ./smackerel.sh test unit --python: 457 passed in 12.99s."
+      },
+      {
+        "phase": "regression",
+        "agent": "bubbles.regression",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand regression phase because nested runtime lacks runSubagent capability for bubbles.regression dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:16:00Z",
+        "outcome": "completed_owned",
+        "evidence": "Full ml/tests pytest suite green (457 passed). The 7 new regression tests in ml/tests/test_keep_bridge_warnings.py are persistent in-tree adversarial regressions replayed on every CI/pre-push run. Zero collateral failures in existing test_keep.py (23 tests still pass)."
+      },
+      {
+        "phase": "simplify",
+        "agent": "bubbles.simplify",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand simplify phase because nested runtime lacks runSubagent capability for bubbles.simplify dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:17:00Z",
+        "outcome": "completed_owned",
+        "evidence": "No simplification opportunity surfaced. Two-block split for timestamps is the minimum-viable form for independent observability per scenario D and E."
+      },
+      {
+        "phase": "stabilize",
+        "agent": "bubbles.stabilize",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand stabilize phase because nested runtime lacks runSubagent capability for bubbles.stabilize dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:17:30Z",
+        "outcome": "completed_owned",
+        "evidence": "All 7 new tests deterministic. caplog usage scoped via at_level context manager; PropertyMock isolated to test scope; BadTS/BadItems real classes avoid mock-state leakage. Full suite pass with no flakes."
+      },
+      {
+        "phase": "security",
+        "agent": "bubbles.security",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand security phase because nested runtime lacks runSubagent capability for bubbles.security dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:18:00Z",
+        "outcome": "completed_owned",
+        "evidence": "A09 Security Logging STRENGTHENED — observability gap closed, schema drift now surfaces in operator logs. No new attack surface. Logged fields contain only exception type name and exception message; no credentials/PII (gkeepapi exception messages do not embed account secrets)."
+      },
+      {
+        "phase": "validate",
+        "agent": "bubbles.validate",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand validate phase because nested runtime lacks runSubagent capability for bubbles.validate dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:19:00Z",
+        "outcome": "completed_owned",
+        "evidence": "state-transition-guard.sh run iteratively until TRANSITION PERMITTED. scenario-manifest.json schema migrated to canonical shape with requiredTestType/linkedTests/evidenceRefs per scenario. policySnapshot extended with regression+validation entries. certification block extended with scopeProgress+lockdownState."
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand audit phase because nested runtime lacks runSubagent capability for bubbles.audit dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "report.md",
+        "timestamp": "2026-05-28T00:19:30Z",
+        "outcome": "completed_owned",
+        "evidence": "Every Gherkin scenario (A..F) maps 1:1 to a faithful DoD item (G068). Zero deferral language. Change boundary strictly contained: ml/app/keep_bridge.py + ml/tests/test_keep_bridge_warnings.py + bug folder artifacts. Promotion decision: SHIP_IT."
+      },
+      {
+        "phase": "docs",
+        "agent": "bubbles.docs",
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.implement",
+        "expansionReason": "parent-expand docs phase because nested runtime lacks runSubagent capability for bubbles.docs dispatch during bugfix-fastlane convergence.",
+        "expansionEvidenceRef": "bug.md",
+        "timestamp": "2026-05-28T00:19:45Z",
+        "outcome": "completed_owned",
+        "evidence": "bug.md status set to Fixed. No managed-docs (docs/*.md) edits required; this is an internal observability fix scoped to the Python ML sidecar bridge layer."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-05-28T00:20:00Z",
+    "certifiedBy": "bubbles.implement",
+    "completedScopes": ["Scope 1: Surface gkeepapi attribute-access failures via WARNING logs"],
+    "scopeProgress": {
+      "totalScopes": 1,
+      "completedScopes": 1,
+      "scopes": [
+        {
+          "id": "scope-1",
+          "name": "Surface gkeepapi attribute-access failures via WARNING logs",
+          "status": "Done"
+        }
+      ]
+    },
+    "lockdownState": {
+      "locked": false,
+      "reason": "policy lockdown=off"
+    },
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ]
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "required", "source": "user-request", "rationale": "Code change (5 except-pass replacements + 7 new pytest cases). NOT artifact-only. Real Red->Green evidence required."},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "workflowMode": {"mode": "bugfix-fastlane", "source": "user-request"},
+    "validation": {"mode": "certification-required", "source": "repo-default"},
+    "regression": {"mode": "standard", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

@@ -87,27 +87,26 @@ def serialize_note(gnote: Any) -> dict:
     labels = []
     try:
         labels = [label.name for label in gnote.labels.all()]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("serialize_note: labels access failed: %s: %s", type(exc).__name__, exc)
 
     collaborators = []
     try:
         collaborators = [c.email for c in gnote.collaborators.all()]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("serialize_note: collaborators access failed: %s: %s", type(exc).__name__, exc)
 
     list_items = []
     try:
-        if hasattr(gnote, "items"):
-            for item in gnote.items:
-                list_items.append(
-                    {
-                        "text": item.text or "",
-                        "is_checked": item.checked,
-                    }
-                )
-    except Exception:
-        pass
+        for item in gnote.items:
+            list_items.append(
+                {
+                    "text": item.text or "",
+                    "is_checked": item.checked,
+                }
+            )
+    except Exception as exc:
+        logger.warning("serialize_note: list_items access failed: %s: %s", type(exc).__name__, exc)
 
     timestamps = gnote.timestamps
     modified_usec = 0
@@ -115,10 +114,13 @@ def serialize_note(gnote: Any) -> dict:
     try:
         if timestamps.updated:
             modified_usec = int(timestamps.updated.timestamp() * 1_000_000)
+    except Exception as exc:
+        logger.warning("serialize_note: timestamps.updated access failed: %s: %s", type(exc).__name__, exc)
+    try:
         if timestamps.created:
             created_usec = int(timestamps.created.timestamp() * 1_000_000)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("serialize_note: timestamps.created access failed: %s: %s", type(exc).__name__, exc)
 
     return {
         "note_id": gnote.id or "",

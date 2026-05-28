@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "spec": "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Regression scenarios encode the observability contract for 5 gkeepapi attribute-access failure points; any future change requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "required",
+    "rationale": "This IS a code change (5 except-pass blocks replaced + new pytest file); NOT artifact-only. Red→Green evidence mandatory.",
+    "redGreenEvidence": "Red: 6 new pytest cases in ml/tests/test_keep_bridge_warnings.py MUST FAIL against pre-fix tree (0 WARNINGs captured). Green: after replacing 5 except-pass with except-as-exc + logger.warning and splitting timestamps try-block, all 7 cases pass and 5 distinct WARNINGs are captured."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-GK-BUG-003-A",
+      "scope": 1,
+      "title": "serialize_note logs WARNING when labels.all raises",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_labels_failure_logs_warning"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#post-fix-test-evidence"
+      ],
+      "liveTestExpectation": "Mock gnote.labels.all to raise AttributeError; serialize_note runs; caplog captures exactly 1 WARNING from smackerel-ml.keep-bridge naming 'labels'; result['labels']==[].",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-GK-BUG-003-B",
+      "scope": 1,
+      "title": "serialize_note logs WARNING when collaborators.all raises",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_collaborators_failure_logs_warning"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#post-fix-test-evidence"
+      ],
+      "liveTestExpectation": "Mock gnote.collaborators.all to raise RuntimeError; caplog captures exactly 1 WARNING naming 'collaborators'; result['collaborators']==[].",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-GK-BUG-003-C",
+      "scope": 1,
+      "title": "serialize_note logs WARNING when items iteration raises",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_items_failure_logs_warning"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#post-fix-test-evidence"
+      ],
+      "liveTestExpectation": "PropertyMock on gnote.items raises TypeError; caplog captures exactly 1 WARNING naming 'list_items'; result['list_items']==[].",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-GK-BUG-003-D",
+      "scope": 1,
+      "title": "serialize_note logs WARNING when timestamps.updated raises",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_timestamps_updated_failure_logs_warning"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#post-fix-test-evidence"
+      ],
+      "liveTestExpectation": "Real class with @property raising AttributeError on updated; caplog captures exactly 1 WARNING naming 'timestamps.updated'; result['modified_usec']==0.",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-GK-BUG-003-E",
+      "scope": 1,
+      "title": "serialize_note logs WARNING when timestamps.created raises",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_timestamps_created_failure_logs_warning"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#post-fix-test-evidence"
+      ],
+      "liveTestExpectation": "Real class with @property raising AttributeError on created; caplog captures exactly 1 WARNING naming 'timestamps.created'; result['created_usec']==0. Independent split try-block proves no cross-failure masking.",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-GK-BUG-003-F",
+      "scope": 1,
+      "title": "All five failure points trigger five distinct WARNING records",
+      "requiredTestType": ["unit"],
+      "testFiles": ["ml/tests/test_keep_bridge_warnings.py"],
+      "linkedTests": [
+        {
+          "file": "ml/tests/test_keep_bridge_warnings.py",
+          "function": "TestSerializeNoteSurfacesFailures::test_all_five_failures_emit_five_distinct_warnings"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/scopes.md#dod-adversarial-regression",
+        "specs/007-google-keep-connector/bugs/BUG-007-003-keep-bridge-silent-exception-swallow/report.md#adversarial-regression-evidence"
+      ],
+      "liveTestExpectation": "All 5 failure paths active simultaneously; caplog captures exactly 5 WARNING records with all 5 distinct context tokens (labels, collaborators, list_items, timestamps.updated, timestamps.created); serialize_note does not raise; fallback shape preserved.",
+      "regressionProtected": true,
+      "status": "verified",
+      "changeType": "added"
+    }
+  ]
+}
+
