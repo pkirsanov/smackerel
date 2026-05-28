@@ -263,3 +263,105 @@ These recommendations are surfaced from existing repo evidence. They are NOT new
 | 🔜 In Progress | Active investment phase (no phases currently in this state) |
 | TBD | Investor-facing summary intentionally defers detail to canonical design doc |
 | **Phased ✅/🔜 statuses** | Authoritative source is `docs/smackerel.md` §19 — that document wins on conflict |
+
+---
+
+## Appendix: Spec Index
+
+This appendix surfaces every committed spec under [`specs/`](../specs/) for investor traceability. Each row links a spec ID to its capability name (from the spec's H1) and current lifecycle status (from its `state.json`). Grouping mirrors the phase narrative above; all rows below are `done` (delivered and certified per Bubbles governance).
+
+### Phase Specs (Foundation)
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [001](../specs/001-smackerel-mvp/) | Smackerel MVP | done |
+| [002](../specs/002-phase1-foundation/) | Phase 1: Foundation (Active Capture + Search + Digest) | done |
+| [003](../specs/003-phase2-ingestion/) | Phase 2: Passive Ingestion (Gmail + YouTube + Calendar + Topic Lifecycle) | done |
+| [004](../specs/004-phase3-intelligence/) | Phase 3: Intelligence (Synthesis + Alerts + Pre-Meeting Briefs) | done |
+| [005](../specs/005-phase4-expansion/) | Phase 4: Expansion (Maps + Browser + Trips + People Intelligence) | done |
+| [006](../specs/006-phase5-advanced/) | Phase 5: Advanced Intelligence (Expertise + Learning + Serendipity) | done |
+
+### Connectors
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [007](../specs/007-google-keep-connector/) | Google Keep Connector | done |
+| [008](../specs/008-telegram-share-capture/) | Telegram Share & Chat Capture | done |
+| [009](../specs/009-bookmarks-connector/) | Bookmarks Connector | done |
+| [010](../specs/010-browser-history-connector/) | Browser History Connector | done |
+| [011](../specs/011-maps-connector/) | Google Maps Timeline Connector | done |
+| [012](../specs/012-hospitable-connector/) | Hospitable Connector | done |
+| [013](../specs/013-guesthost-connector/) | GuestHost Connector & Hospitality Intelligence | done |
+| [014](../specs/014-discord-connector/) | Discord Connector | done |
+| [015](../specs/015-twitter-connector/) | Twitter/X Connector | done |
+| [016](../specs/016-weather-connector/) | Weather Connector | done |
+| [017](../specs/017-gov-alerts-connector/) | Government Alerts Connector | done |
+| [018](../specs/018-financial-markets-connector/) | Financial Markets Connector | done |
+| [019](../specs/019-connector-wiring/) | Connector Wiring — Register 5 Unwired Connectors | done |
+| [040](../specs/040-cloud-photo-libraries/) | Cloud Photo Libraries | done |
+| [041](../specs/041-qf-companion-connector/) | QF Companion Connector | done |
+| [056](../specs/056-twitter-api-connector/) | Twitter API Connector | done |
+
+### Security & Auth
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [020](../specs/020-security-hardening/) | Security Hardening — Docker Binding, Auth Enforcement, Crypto Hygiene | done |
+| [044](../specs/044-per-user-bearer-auth/) | Per-User Bearer Auth Foundation | done |
+| [051](../specs/051-deployment-secret-auth-contract/) | Deployment Secret and Auth Contract | done |
+| [052](../specs/052-bundle-secret-injection-contract/) | Bundle Secret Injection Contract | done |
+
+### Intelligence & Synthesis
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [021](../specs/021-intelligence-delivery/) | Intelligence Delivery | done |
+| [025](../specs/025-knowledge-synthesis-layer/) | Knowledge Synthesis Layer (LLM Wiki Pattern) | done |
+| [026](../specs/026-domain-extraction/) | Domain-Aware Structured Extraction | done |
+| [039](../specs/039-recommendations-engine/) | Recommendations Engine | done |
+| [054](../specs/054-notification-intelligence-handler/) | Notification Intelligence Handler Service | done |
+| [055](../specs/055-notification-source-ntfy-adapter/) | Notification Source ntfy Adapter | done |
+
+### DevOps & Operations
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [022](../specs/022-operational-resilience/) | Operational Resilience | done |
+| [029](../specs/029-devops-pipeline/) | DevOps Pipeline & Image Governance | done |
+| [030](../specs/030-observability/) | Observability: Metrics & Tracing | done |
+| [045](../specs/045-deploy-resource-filesystem-hardening/) | Deploy Resource and Filesystem Hardening | done |
+| [046](../specs/046-nats-production-hardening/) | NATS Production Hardening | done |
+| [047](../specs/047-ci-image-vulnerability-gate/) | CI Image Vulnerability Gate | done |
+| [049](../specs/049-monitoring-stack/) | Monitoring Stack | done |
+| [050](../specs/050-ml-sidecar-health-isolation/) | ML Sidecar Health Isolation | done |
+| [053](../specs/053-ci-ops-evidence-hardening/) | CI Ops Evidence Hardening | done |
+
+### Quality & Engineering
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [023](../specs/023-engineering-quality/) | Engineering Quality | done |
+| [024](../specs/024-design-doc-reconciliation/) | Design Document Reconciliation | done |
+| [031](../specs/031-live-stack-testing/) | Live-Stack Integration & E2E Testing | done |
+| [032](../specs/032-documentation-freshness/) | Documentation Freshness & Operational Guides | done |
+| [037](../specs/037-llm-agent-tools/) | LLM Scenario Agent & Tool Registry | done |
+
+### User Features
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [027](../specs/027-user-annotations/) | User Annotations & Interaction Tracking | done |
+| [028](../specs/028-actionable-lists/) | Actionable Lists & Resource Tracking | done |
+| [033](../specs/033-mobile-capture/) | Mobile & Browser Capture Surfaces | done |
+| [034](../specs/034-expense-tracking/) | Expense Tracking | done |
+| [035](../specs/035-recipe-enhancements/) | Recipe Enhancements — Serving Scaler & Cook Mode | done |
+| [036](../specs/036-meal-planning/) | Meal Planning Calendar | done |
+
+### Infrastructure & Deployment
+
+| Spec | Capability | Status |
+|------|------------|--------|
+| [038](../specs/038-cloud-drives-integration/) | Cloud Drives Integration | done |
+| [042](../specs/042-tailnet-edge-bind-pattern/) | Tailnet-Edge Bind Pattern (Home-Lab Compose Readiness) | done |
+| [043](../specs/043-ollama-test-infrastructure/) | Ollama Test Infrastructure | done |
+| [048](../specs/048-backup-restore-automation/) | Backup and Restore Automation | done |
