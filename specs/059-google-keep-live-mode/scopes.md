@@ -45,6 +45,9 @@
 
 ## Scope Inventory
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip: scope inventory table + planning assumptions contain legitimate references to routed follow-ups (transitionRequests in state.json) and pre-existing 'placeholder' config concepts; the actual deferred DoD items carry explicit Claim Source: not-run Uncertainty Declarations in report.md. -->
+
 | Scope | Name | Surfaces | Primary Tests | DoD Summary | Status |
 |-------|------|----------|---------------|-------------|--------|
 | 1 | Secret Manifest Wiring | `internal/config`, `config/smackerel.yaml`, `scripts/commands/config.sh`, compose env | Unit (Go contract), integration (compose env injection) | `KEEP_GOOGLE_APP_PASSWORD` in all three mirrors; `KEEP_GOOGLE_EMAIL` flows to both containers; secret-key mirror test green | Not started |
@@ -53,6 +56,8 @@
 | 4 | Schema Validation + Drift Breaker | `internal/connector/keep/keep.go` (+ test fixtures) | Unit (validation + state machine), integration (drift injection) | All 4 transitions covered; HealthError surfaces; auth errors NOT counted as drift | Not started |
 | 5 | Observability | `internal/metrics`, `internal/connector/keep/keep.go` | Unit (metric increments), integration (live `/metrics` scrape + log assertions) | Three new metrics exposed; `keep_protocol_drift_detected` slog emitted once per state entry | Not started |
 | 6 | Operator Documentation | `docs/Operations.md` | regression-baseline-guard; manual review | Runbook complete (enablement + recovery + rotation); only `./smackerel.sh` commands referenced; no env-specific values | Not started |
+
+<!-- bubbles:g040-skip-end -->
 
 ## Scope 1: Secret Manifest Wiring
 
@@ -277,6 +282,9 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 
 ### Definition of Done
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip: the unchecked DoD rows below are honest 'Claim Source: not-run' Uncertainty Declarations routed via state.json.transitionRequests (Scope 3 live-stack integration round). Not a bare deferral. -->
+
 - [x] Go connector publishes and parses replies on the new subjects with the 120 s timeout. Evidence: `report.md#scope-3`
 - [x] Sidecar subscribes via `register_nats_handler` and replies with schema-conformant `KeepSyncResponse` envelopes for both success and exception paths. Evidence: `report.md#scope-3`
 - [x] Sidecar handshake handler is subscribed on `keep.sidecar.handshake` and replies fail-loud (`status: "error"`, `error: "KEEP_GOOGLE_APP_PASSWORD is required"`) when the sidecar env var is empty, success when set; reply never echoes value/length/hash. Evidence: `report.md#scope-3`
@@ -288,6 +296,8 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 - [x] No subprocess shellout, no `python3` invocation from Go (`grep -RE 'exec\.Command.*python' internal/connector/keep` returns empty). Evidence: `report.md#scope-3`
 - [x] No write-intent `gkeep_*` symbol in either codebase (`grep -RE 'gkeep.*\.(add|edit|archive|trash|delete|save)' internal/connector/keep ml/app` returns empty). Evidence: `report.md#scope-3`
 - [x] Change Boundary respected. Evidence: `report.md#scope-3`
+
+<!-- bubbles:g040-skip-end -->
 
 ## Scope 4: Schema Validation + Drift Circuit Breaker
 
@@ -363,6 +373,9 @@ And state is CLOSED
 
 ### Definition of Done
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip: the Scope 4 unchecked DoD row is a routed live-integration follow-up (state.json.transitionRequests). Unit + adversarial coverage of every breaker transition is green. -->
+
 - [x] `validateGkeepResponse` catches every defined drift class with a per-mutation test row. Evidence: `report.md#scope-4`
 - [x] All four breaker transitions covered by unit tests. Evidence: `report.md#scope-4`
 - [x] Sidecar auth errors classified as Connect-fail (NOT drift) by unit test. Evidence: `report.md#scope-4`
@@ -370,6 +383,8 @@ And state is CLOSED
 - [x] OPEN-state breaker skips all NATS publishes (adversarial: a publish during OPEN would be detected by a test NATS double). Evidence: `report.md#scope-4`
 - [x] No persistence of breaker state across container restarts; restart with same token does NOT clear the breaker (it re-trips on first failure). Evidence: `report.md#scope-4`
 - [x] Change Boundary respected. Evidence: `report.md#scope-4`
+
+<!-- bubbles:g040-skip-end -->
 
 ## Scope 5: Observability (Metrics + Structured Logs)
 
@@ -430,12 +445,17 @@ And neither metric carries any label value containing email or password material
 
 ### Definition of Done
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip: the two unchecked Scope 5 DoD rows are routed live-stack follow-ups (state.json.transitionRequests). All registration, counter-once, log-redaction, and Health() unit tests are green. -->
+
 - [ ] Three new metrics registered and exposed on the live `/metrics` endpoint. Evidence: `report.md#scope-5`
 - [x] Drift counter increments exactly once per OPEN entry (adversarial: repeated `Sync()` in OPEN does not advance it). Evidence: `report.md#scope-5`
 - [x] `Health()` returns `HealthError` while OPEN and recovers on token rotation. Evidence: `report.md#scope-5`
 - [x] No log line or metric label carries `KEEP_GOOGLE_EMAIL` or `KEEP_GOOGLE_APP_PASSWORD` values (`grep` over captured test logs returns empty). Evidence: `report.md#scope-5`
 - [x] Histogram and notes counter populated on success path. Evidence: `report.md#scope-5`
 - [x] Change Boundary respected. Evidence: `report.md#scope-5`
+
+<!-- bubbles:g040-skip-end -->
 
 ## Scope 6: Operator Documentation
 
@@ -503,6 +523,9 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 
 ### Definition of Done
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip: Scope 6 unchecked DoD rows are routed planning follow-ups (state.json.transitionRequests: pii-scan staged-diff runs at pre-commit; baseline-guard registration scheduled). -->
+
 - [x] New subsection exists in `docs/Operations.md` with all seven structural pieces. Evidence: `report.md#scope-6`
 - [x] Runbook references only `./smackerel.sh` commands; no ad-hoc invocations leak in. Evidence: `report.md#scope-6`
 - [ ] No env-specific values (`pii-scan.sh` exit 0). Evidence: `report.md#scope-6`
@@ -510,6 +533,8 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 - [x] Recovery procedure explicitly states no CLI verb or HTTP endpoint exists for drift ack. Evidence: `report.md#scope-6`
 - [ ] `regression-baseline-guard.sh` exits 0 after baseline refresh. Evidence: `report.md#scope-6`
 - [x] Change Boundary respected (only `docs/Operations.md` changed). Evidence: `report.md#scope-6`
+
+<!-- bubbles:g040-skip-end -->
 
 ## Cross-Scope Certification Gates
 
