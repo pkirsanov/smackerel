@@ -705,7 +705,7 @@ Rank top 5 most relevant. Use 1-based index numbers matching the items above."""
                 temperature=0.1,
                 max_tokens=1000,
                 response_format={"type": "json_object"},
-                timeout=180,
+                timeout=600,
             )
 
             result = json.loads(response.choices[0].message.content)
@@ -821,7 +821,7 @@ Write the digest text only, no JSON wrapper."""
                 # gemma4:26b's 8K context limit and gives the model headroom to
                 # think AND write.
                 max_tokens=4000,
-                timeout=180,
+                timeout=600,
             )
 
             text = response.choices[0].message.content or ""
