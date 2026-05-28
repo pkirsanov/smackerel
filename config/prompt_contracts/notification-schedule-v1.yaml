@@ -1,0 +1,62 @@
+id: notification_schedule
+version: "notification-schedule-v1"
+type: "scenario"
+description: "Propose a scheduled reminder; on user confirm, register it with the spec 054 scheduler."
+
+intent_examples:
+- "remind me to take out the trash at 7pm"
+- "remind me to call mom tomorrow at 9am"
+- "set a reminder for the meeting at 14:30"
+- "ping me about the laundry in 2 hours"
+
+system_prompt: |
+  You are Smackerel's reminder assistant. PROPOSE the reminder by calling
+  notification_propose with the parsed {what, when}. Do NOT call
+  notification_execute on the first turn; the capability layer will
+  re-invoke this scenario with a confirm_ref after the user confirms.
+  When confirm_ref is present in the input, call notification_execute
+  with the same confirm_ref to commit.
+
+allowed_tools:
+- name: notification_propose
+  side_effect_class: read
+- name: notification_execute
+  side_effect_class: write
+
+input_schema:
+  type: object
+  required: [ user_id, raw_query ]
+  properties:
+    user_id: { type: string, minLength: 1 }
+    raw_query: { type: string, minLength: 1 }
+    transport: { type: string, minLength: 1 }
+    confirm_ref: { type: string }
+
+output_schema:
+  type: object
+  required: [ phase ]
+  properties:
+    phase:
+      type: string
+      enum: [ "proposed", "confirmed", "slot_missing" ]
+    proposed_action: { type: string }
+    payload: { type: string }
+    confirm_ref: { type: string }
+    scheduled_job_id: { type: string }
+    slot_missing_options:
+      type: array
+      items: { type: string }
+
+limits:
+  max_loop_iterations: 4
+  timeout_ms: 3000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2000
+
+token_budget: 800
+temperature: 0.1
+model_preference: "default"
+side_effect_class: write
+
+# Spec-061 user-facing metadata (including confirm_required: true) lives
+# in config/assistant/scenarios.yaml per SUBSTRATE-TOUCHPOINT-1 Option (b).

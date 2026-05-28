@@ -1,0 +1,50 @@
+# Spec 061 — Conversational Assistant capability-layer user-facing
+# metadata for each Spec 037 scenario id. SUBSTRATE-TOUCHPOINT-1
+# Option (b) ratified in specs/061-conversational-assistant/scopes.md:
+# sibling-file lookup keyed by scenario id; zero Spec 037 substrate touch.
+#
+# Schema (per design.md §4.1):
+#   scenarios:
+#     <scenario_id>:
+#       user_facing:         bool   # MUST be true; non-user-facing scenarios
+#                                   #   are NOT listed here at all
+#       user_facing_label:   string # short human label for menus / status
+#       slash_shortcut:      string # "/<word>"; empty = no shortcut
+#       requires_provenance: bool   # Principle 8 hard constraint enforced
+#                                   #   by internal/assistant/provenance/gate.go
+#       confirm_required:    bool   # triggers capability confirm-card SM
+#       enable_sst_key:      string # dotted SST key resolved at startup;
+#                                   #   when false the scenario is filtered
+#                                   #   from agent.Router candidate set
+#                                   #   (BS-008).
+#
+# SST keys referenced here MUST exist as REQUIRED literal-value entries
+# in config/smackerel.yaml (SCOPE-01 owns the SST block).
+
+scenarios:
+  retrieval_qa:
+    user_facing: true
+    user_facing_label: "search my notes"
+    slash_shortcut: "/ask"
+    requires_provenance: true
+    confirm_required: false
+    enable_sst_key: "assistant.skills.retrieval.enabled"
+
+  weather_query:
+    user_facing: true
+    user_facing_label: "check weather"
+    slash_shortcut: "/weather"
+    requires_provenance: true
+    confirm_required: false
+    enable_sst_key: "assistant.skills.weather.enabled"
+
+  notification_schedule:
+    user_facing: true
+    user_facing_label: "remind me"
+    slash_shortcut: "/remind"
+    # requires_provenance: false — the scheduler record IS the provenance
+    # for a reminder (design §5.3); the capability layer does NOT require
+    # an external citation for this skill.
+    requires_provenance: false
+    confirm_required: true
+    enable_sst_key: "assistant.skills.notifications.enabled"

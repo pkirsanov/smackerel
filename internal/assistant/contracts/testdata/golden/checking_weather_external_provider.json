@@ -1,0 +1,20 @@
+{
+  "body": "checking weather for Lisbon",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources": [
+    {
+      "id": "p-1",
+      "kind": "external_provider",
+      "ref": {
+        "kind": "external_provider",
+        "provider_name": "open-meteo",
+        "retrieved_at": "2026-05-28T10:00:00Z"
+      },
+      "title": "open-meteo"
+    }
+  ],
+  "sources_overflow_count": 0,
+  "status": "checking_weather"
+}

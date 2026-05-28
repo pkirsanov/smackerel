@@ -51,13 +51,13 @@ func TestValidateScopeFlags_EmptySliceAccepted(t *testing.T) {
 // — operators tooling distinguishes the two for CI gating.
 func TestValidateScopeFlags_RejectsInvalidScopeName(t *testing.T) {
 	cases := []string{
-		"ExtensionBookmarks",      // uppercase, no `:`
-		"extension",               // no `:`
-		":bookmarks",              // empty surface
-		"extension:",              // empty capability
-		"extension:Bookmarks",     // uppercase capability
+		"ExtensionBookmarks",          // uppercase, no `:`
+		"extension",                   // no `:`
+		":bookmarks",                  // empty surface
+		"extension:",                  // empty capability
+		"extension:Bookmarks",         // uppercase capability
 		"extension:bookmarks history", // space
-		"",                        // empty
+		"",                            // empty
 	}
 	for _, c := range cases {
 		t.Run(c, func(t *testing.T) {

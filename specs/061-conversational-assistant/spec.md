@@ -116,6 +116,44 @@ ambiguous, have the message captured exactly as today. The bot is
    existing Telegram chat→user_id mapping from spec 044 Scope 03 for
    the Telegram adapter) into a Smackerel `user_id`. The capability
    layer only sees `user_id`.
+6. **Reuse the Spec 037 agent runtime; do NOT fork it.** Spec 037
+   (`specs/037-llm-agent-tools/`, status `done`) already shipped the
+   intent router (similarity + explicit-id override + confidence floor
+   + fallback), the executor (loop, retry budget, tool allowlist,
+   schema validation), the YAML-driven scenario registry with
+   hot-reload, the NATS LLM driver, the PostgreSQL tracer, the REST
+   `POST /v1/agent/invoke` handler, and a callable
+   `internal/telegram/agent_bridge.go` (`AgentBridge.Handle`) that
+   renders results via `internal/agent/userreply` honoring a 4-line
+   Telegram budget. This spec's capability layer MUST consume that
+   substrate. Equivalence:
+   - "Skill" ≡ a Spec 037 `Scenario` (YAML in `AGENT_SCENARIO_DIR`)
+     whose `intent_examples` and tool allowlist target a user-facing
+     intent rather than a backend extraction job.
+   - "Intent Router" ≡ the existing `agent.Router` (no new router).
+   - "Skill Registry" ≡ the existing scenario loader + hot-reload.
+   - The canonical `AssistantResponse` is a thin projection of
+     `agent.InvocationResult` (Outcome, Final, ToolCalls, trace ref)
+     PLUS the net-new fields this spec adds: structured
+     `sources[]`, `confirmCard`, `disambiguationPrompt`,
+     `errorCause`, `captureRoute`, `status` token.
+   - Trace persistence and CLI (`smackerel agent traces|scenarios|
+     tools`) are reused as-is; no parallel trace store.
+
+   A parallel `internal/assistant/` runtime that re-implements router,
+   registry, executor, or tracer is a **blocking failure** (foundation
+   duplication). New code introduced by this spec is limited to:
+   (a) thin facade types (`AssistantMessage` / `AssistantResponse`)
+       and the `TransportAdapter` interface,
+   (b) the provenance-enforcement gate (BS-007) wrapping
+       `Runner.Invoke` results,
+   (c) the three v1 user-facing scenarios (retrieval, weather,
+       notifications) added as YAML scenarios + Go tool handlers in
+       the existing tool registry,
+   (d) the confirm/disambiguation/context primitives if they are
+       genuinely absent from Spec 037 (verify per scope),
+   (e) per-transport adapter packages (Telegram v1 in
+       `internal/telegram/assistant_adapter/`).
 
 **Failure Condition:**
 - Capture regression on ANY transport: any plain-note message saved as
@@ -126,6 +164,106 @@ ambiguous, have the message captured exactly as today. The bot is
 - Adapter business-logic leak: an adapter that classifies intent,
   invokes a skill, mutates graph state, or otherwise reaches around
   the canonical capability interface. Adapters are translation-only.
+- Substrate duplication: any new code in this spec that re-implements
+  Spec 037's router, executor, scenario registry, tracer, or LLM
+  driver instead of consuming them. This is a P0 architectural
+  rollback trigger because it forks the agent foundation and breaks
+  the capability-foundation doctrine.
+
+---
+
+## 3.1 Substrate Reuse — Spec 037 LLM Agent Runtime (FOUNDATION ALREADY SHIPPED)
+
+Spec 037 (`specs/037-llm-agent-tools/`, status `done`, full-delivery)
+shipped a complete LLM-scenario agent runtime that this spec's
+capability layer MUST consume. This subsection makes the substrate
+boundary explicit so design, plan, and implementation phases all
+treat it as a hard constraint.
+
+### 3.1.1 What Spec 037 Already Provides
+
+Verified by reading the Spec 037 state.json execution history and the
+on-disk packages as of 2026-05-28:
+
+| Concern | Spec 037 artifact | Location |
+|---------|-------------------|----------|
+| Intent envelope | `agent.IntentEnvelope` (Source, RawInput, ConfidenceFloor override) | `internal/agent/router.go` |
+| Intent router (similarity + explicit-id + floor + fallback) | `agent.Router` with `RoutingDecision` (Reason ∈ explicit_scenario_id, similarity_match, fallback_clarify, unknown_intent) | `internal/agent/router.go` |
+| Scenario registry (YAML + hot-reload) | `agent.Bridge` (loader, registry, SIGHUP-triggered `Reload`) | `internal/agent/bridge.go`, loader in same package |
+| Executor (loop, retry budget, allowlist, schema validation) | `agent.Executor` with the full `Outcome` enum (ok, allowlist-violation, hallucinated-tool, tool-error, tool-return-invalid, schema-failure, loop-limit, timeout, provider-error, input-schema-violation, unknown-intent) | `internal/agent/executor.go` |
+| LLM driver (Go ↔ Python over NATS) | `agent.NATSLLMDriver` + `ml/app/agent.py::handle_invoke` | `internal/agent/nats_driver.go`, `ml/app/agent.py` |
+| Trace persistence + replay | `agent.PostgresTracer`, migration `020_agent_traces.sql`, `smackerel agent replay/traces/scenarios/tools` CLI | `internal/agent/tracer.go`, `internal/agent/replay.go`, `cmd/core/cmd_agent.go` |
+| Telegram bridge (CALLABLE; NOT wired into bot.go) | `telegram.AgentBridge.Handle(ctx, chatID, text)` rendering via `internal/agent/userreply` (≤4-line Telegram budget, trace ref appended) | `internal/telegram/agent_bridge.go`, `internal/agent/userreply/` |
+| REST surface | `api.AgentInvokeHandler` on `POST /v1/agent/invoke` | wired in `cmd/core/wiring_agent.go` |
+| Admin web UI | `/admin/agent/*` views (traces, scenarios, tools) | `internal/web/` |
+| SST config | `agent.*` block with full NO-DEFAULTS contract; provider routing for `gemma3:4b` default+vision, `deepseek-r1:7b` reasoning, `deepseek-ocr:3b` OCR, `nomic-embed-text` embeddings | `config/smackerel.yaml`, `internal/agent/config.go` |
+
+### 3.1.2 The Single Real Wiring Gap
+
+`internal/telegram/bot.go::handleMessage` routes every non-command,
+non-special, non-media plain-text message directly to
+`handleTextCapture` (verified at line 534). It never invokes
+`AgentBridge`. The bridge is constructed in `cmd/core/wiring_agent.go`
+and attached only to the REST handler (`deps.AgentInvokeHandler`);
+the `*telegram.Bot` struct does not hold a reference to it. The
+"scope 10 work" comment near line 21 of `agent_bridge.go` was
+aspirational — Spec 037 closed at scope 9 without that wiring.
+
+Closing this single wiring gap is the irreducible minimum for the
+end-to-end "user sends free-form text via Telegram → Ollama replies"
+behavior described in the owner's 2026-05-28 directive. It belongs
+in this spec's **SCOPE-05** (Telegram adapter v1 reference). Per
+artifact-ownership rules (`bubbles-artifact-ownership-routing`),
+Spec 037 cannot be reopened because it is in terminal `done` status.
+
+### 3.1.3 Conceptual Mapping (Spec 061 ⇄ Spec 037)
+
+| Spec 061 concept | Spec 037 substrate | New code needed |
+|------------------|--------------------|------------------|
+| `AssistantMessage` (inbound) | `agent.IntentEnvelope` | Thin facade adding `userID`, `transport`, `kind`, `confirmRef`, `disambiguationRef` |
+| `AssistantResponse` (outbound) | `agent.InvocationResult` + `agent.RoutingDecision` | Thin facade adding `status` token, structured `sources[]`, `confirmCard`, `disambiguationPrompt`, `errorCause`, `captureRoute` |
+| Skill | Spec 037 Scenario (YAML) with user-facing `intent_examples` | 3 v1 scenario YAMLs (retrieval, weather, notifications) + their tool handlers in the existing tool registry |
+| Skill Registry | Spec 037 scenario loader + hot-reload | None — reuse as-is |
+| Intent Router (3-band: high / borderline / low) | Spec 037 `agent.Router` (binary: above-floor / below-floor) | Borderline-band logic on TOP of `RoutingDecision`. Could be (a) capability-layer post-processing of `Router.Route()`, (b) a new `Outcome` value in Spec 037 (would require Spec 037 amendment — DO NOT do without owner ratification), or (c) a separate scenario whose final response carries a `disambiguationPrompt`. Recommend (a). |
+| Capture-as-fallback | Today only the bot's default path; Spec 037 returns `OutcomeUnknownIntent` | Bot dispatch rule: on `OutcomeUnknownIntent` OR low-band routing, fall through to `handleTextCapture` |
+| Conversational state (multi-turn, idle reset) | Not present in Spec 037 | Net-new capability-layer component (state-store schema per Spec 061 design.md §6 stands) |
+| Confirm card (side-effect gate) | Not present in Spec 037 (its tools execute directly) | Net-new — implemented in the capability layer as a wrapper that holds the InvocationResult, surfaces a `confirmCard`, and only invokes the side-effecting tool after the confirm callback round-trip |
+| Provenance enforcement (BS-007) | Spec 037 records every tool call in the trace but does not REJECT empty-sources synthesis | Net-new — capability-layer gate over `InvocationResult.Final` |
+| Per-transport telemetry | Spec 037 has per-scenario metrics | Net-new `transport=<name>` label dimension; reuse existing Prometheus scrape |
+| Trace persistence + replay | Spec 037 `PostgresTracer` + `agent_traces` table | None — reuse; tag traces with `transport` |
+| Tool registry | Spec 037 already has retrieval-adjacent tools (e.g. `recommendation`) | Add weather + notifications tool handlers under `internal/agent/.../tools/` |
+| Telegram adapter | Existing `AgentBridge` is 80% of the adapter | Wrap `AgentBridge` in `internal/telegram/assistant_adapter/`, add rendering for the net-new `AssistantResponse` fields (status token, sources block, confirm card, disambiguation prompt, error line) per UX §14.B.1 |
+
+### 3.1.4 Forbidden Duplications
+
+The following packages/types MUST NOT be re-created under
+`internal/assistant/` (or any sibling) by Spec 061 implementation:
+
+- A new "Router" type. Use `agent.Router`.
+- A new "Executor" type. Use `agent.Executor`.
+- A new scenario loader / hot-reload mechanism. Use `agent.Bridge`.
+- A new trace persistence layer. Use `agent.PostgresTracer`.
+- A new NATS LLM driver. Use `agent.NATSLLMDriver`.
+- A new `IntentEnvelope` shape. `AssistantMessage` MUST embed or
+  trivially convert to `agent.IntentEnvelope`.
+
+Net-new packages that ARE expected:
+
+- `internal/assistant/contracts/` — `AssistantMessage`,
+  `AssistantResponse`, `TransportAdapter` interface, `Source`,
+  `ConfirmCard`, `DisambiguationPrompt`.
+- `internal/assistant/provenance/` — RequireProvenance gate (BS-007).
+- `internal/assistant/context/` — per-`(user_id, transport)` rolling
+  context with PostgreSQL backing per design §6.
+- `internal/assistant/confirm/` — confirm-card state machine + audit
+  artifact emission.
+- `internal/telegram/assistant_adapter/` — Telegram v1 adapter.
+- Three new scenario YAMLs in `AGENT_SCENARIO_DIR` + their tool Go
+  handlers.
+
+This subsection is binding on bubbles.design, bubbles.plan, and
+bubbles.implement. Any departure requires owner ratification recorded
+in `uservalidation.md`.
 
 ---
 
@@ -725,6 +863,62 @@ which assumes explicit-disable).
    blast-radius containment but defer to bubbles.design.
 4. **Provenance UX for retrieval answers.** Inline citations (`[1]
    [2]`) vs. trailing "Sources:" block? UX call for bubbles.ux.
+   **RESOLVED 2026-05-28** by bubbles.ux §14.B.1: trailing
+   `sources:` block on Telegram; structured `sources[]` on the
+   capability surface.
+5. **Substrate reconciliation against Spec 037 (BLOCKING on
+   bubbles.design).** Surfaced 2026-05-28 by bubbles.analyst.
+   `design.md` (authored 2026-05-28 by bubbles.design) proposes a
+   parallel `internal/assistant/{router,registry,executor,tracer}`
+   stack that re-implements machinery already shipped by Spec 037
+   (`internal/agent/{router,bridge,executor,tracer,nats_driver}`).
+   Hard Constraint 6 and §3.1 now make substrate reuse binding.
+   bubbles.design MUST revise `design.md` so that:
+   (a) the capability layer's intent router IS `agent.Router`
+       (with an additional borderline-band post-processor for the
+       three-band decision rule from UX §14.A.3);
+   (b) the "skill registry" IS Spec 037's scenario loader (the
+       three v1 skills ship as YAML scenarios under
+       `AGENT_SCENARIO_DIR` plus tool handlers in the existing
+       tool registry);
+   (c) the executor + tracer + LLM driver are reused as-is;
+   (d) `AssistantResponse` is constructed as a thin facade over
+       `agent.InvocationResult` PLUS the net-new fields
+       (`status`, structured `sources[]`, `confirmCard`,
+       `disambiguationPrompt`, `errorCause`, `captureRoute`);
+   (e) the module layout in design §10 collapses to the net-new
+       packages enumerated in §3.1.4 (contracts, provenance,
+       context, confirm, telegram adapter) PLUS three scenario
+       YAMLs + tool handlers — no parallel `internal/assistant/
+       router` / `executor` / `tracer` packages.
+   Until this reconciliation lands, scopes.md SCOPE-03 (skill
+   registry foundation) and SCOPE-04 (intent router) are
+   structurally wrong about what they are building, and the
+   capability-foundation-design proportionality satisfaction in
+   §11 partially over-claims (foundation already exists; the
+   spec is foundation-EXTENDING, not foundation-INTRODUCING on
+   the agent-runtime axis — it IS foundation-introducing on the
+   TransportAdapter axis).
+6. **Borderline-band placement.** Spec 037's `Router` is binary
+   (above/below floor). The three-band decision rule
+   (high/borderline/low) introduced by UX §14.A.3 requires either
+   (a) capability-layer post-processing of `RoutingDecision.TopScore`
+   against a new `borderline_floor` SST key, (b) a Spec 037
+   amendment to add a `BorderlineFloor` field and an extra
+   `Outcome` value (would need Spec 037 reopen via separate bug),
+   or (c) emitting the disambiguation prompt as the `Final` of a
+   dedicated "clarify" scenario. Recommend (a) — purely additive,
+   keeps Spec 037 terminal. Decision belongs to bubbles.design.
+7. **Confirm-card primitive ownership.** Spec 037's executor
+   invokes tools directly; there is no "propose, then execute
+   after user confirmation" primitive. The notifications skill
+   (BS-004) requires this. Net-new capability-layer component
+   (`internal/assistant/confirm/`) — confirmed in §3.1.3. Design
+   needs to specify the state machine: how does the capability
+   layer pause a tool invocation, surface `confirmCard`, persist
+   the pending action across the round-trip, and resume on
+   confirm callback (vs. drop on cancel/timeout and capture the
+   original message)?
 
 ---
 
