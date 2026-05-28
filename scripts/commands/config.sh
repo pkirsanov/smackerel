@@ -1217,6 +1217,11 @@ if [[ "$TARGET_ENV" == "test" ]]; then
   # `stub-providers`.
   ASSISTANT_SKILLS_WEATHER_GEOCODE_URL="http://stub-providers:8080/v1/search"
   ASSISTANT_SKILLS_WEATHER_FORECAST_URL="http://stub-providers:8080/v1/forecast"
+  # SCOPE-07 BS-003/BS-006 need the weather skill ENABLED in the test
+  # stack so the router dispatches "weather in <city>" to the weather
+  # scenario instead of falling through to capture. Production keeps
+  # the smackerel.yaml literal (false until packet 060 grants weather).
+  ASSISTANT_SKILLS_WEATHER_ENABLED="true"
 fi
 
 # HL-RESCAN-012 / Gate G028 — build-metadata SST resolution.
