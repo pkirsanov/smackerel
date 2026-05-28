@@ -1,0 +1,34 @@
+{
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-001",
+  "version": 1,
+  "scenarios": [
+    {
+      "scopeId": "BUG-061-001-SCOPE-01",
+      "scenarioId": "BUG-061-001-S01-cold-stack-row1-passes",
+      "label": "BS-001 ROW-1 succeeds on cold stack within 60s budget",
+      "type": "regression-e2e",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-001-bs001-webhook-cold-start-timing/scopes.md",
+      "test": "tests/e2e/test_telegram_assistant_bs001.sh",
+      "adversarial": false
+    },
+    {
+      "scopeId": "BUG-061-001-SCOPE-01",
+      "scenarioId": "BUG-061-001-S02-wrong-secret-401-zero-artifacts",
+      "label": "BS-001 ROW-2 adversarial wrong-secret returns 401 and writes zero artifacts",
+      "type": "adversarial-regression-e2e",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-001-bs001-webhook-cold-start-timing/scopes.md",
+      "test": "tests/e2e/test_telegram_assistant_bs001.sh",
+      "adversarial": true
+    },
+    {
+      "scopeId": "BUG-061-001-SCOPE-01",
+      "scenarioId": "BUG-061-001-S03-missing-header-401-zero-artifacts",
+      "label": "BS-001 ROW-3 adversarial missing-header returns 401 and writes zero artifacts",
+      "type": "adversarial-regression-e2e",
+      "source": "specs/061-conversational-assistant/bugs/BUG-061-001-bs001-webhook-cold-start-timing/scopes.md",
+      "test": "tests/e2e/test_telegram_assistant_bs001.sh",
+      "adversarial": true
+    }
+  ]
+}

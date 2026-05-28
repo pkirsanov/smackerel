@@ -93,7 +93,12 @@ fi
 
 SELECT_HAPPY="SELECT content_raw FROM artifacts WHERE content_raw = '$PROBE_HAPPY' LIMIT 1"
 CONTENT_RAW=""
-for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+# BUG-061-001 — 60s budget (was 15s). The webhook handler dispatches synchronously
+# into assistant.Handle, whose first invocation against a cold Ollama can take up
+# to ~45s for model load before CaptureRoute/handleTextCapture writes the artifact.
+# A genuine dispatch break still produces zero rows for the full window, so widening
+# the budget weakens neither the assertion nor the adversarial coverage in ROW-2/ROW-3.
+for i in $(seq 1 60); do
   CONTENT_RAW="$(e2e_psql "$SELECT_HAPPY" || true)"
   if [ -n "$CONTENT_RAW" ]; then
     break
@@ -101,7 +106,7 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   sleep 1
 done
 if [ -z "$CONTENT_RAW" ]; then
-  e2e_fail "ROW-1: artifact with content_raw='$PROBE_HAPPY' not present in PG after 15s"
+  e2e_fail "ROW-1: artifact with content_raw='$PROBE_HAPPY' not present in PG after 60s"
 fi
 NORMALIZED_HAPPY="$(printf '%s' "$PROBE_HAPPY" | tr -d '[:space:]')"
 e2e_assert_eq "$CONTENT_RAW" "$NORMALIZED_HAPPY" \
