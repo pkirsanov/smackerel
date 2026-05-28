@@ -87,6 +87,21 @@ type AssistantConfig struct {
 	TelegramEnabled         bool
 	TelegramMarkdownMode    string
 	TelegramMaxMessageChars int
+
+	// Spec 061 SCOPE-05 design §17 — Telegram webhook mode.
+	// TelegramMode is the transport ingress mode ("long_poll" | "webhook").
+	// TelegramWebhookSecretRef is the name of the env var that holds the
+	// webhook shared secret (Infisical-style indirection); validated
+	// non-empty when TelegramMode == "webhook".
+	// TelegramWebhookSecret is the resolved secret (read from
+	// os.Getenv(TelegramWebhookSecretRef) at config-load time when
+	// TelegramMode == "webhook"); the webhook handler uses this value
+	// directly for constant-time compare.
+	// TelegramWebhookPath is the chi route path; MUST start with "/".
+	TelegramMode             string
+	TelegramWebhookSecretRef string
+	TelegramWebhookSecret    string
+	TelegramWebhookPath      string
 }
 
 // loadAssistantConfig populates cfg.Assistant from ASSISTANT_* env vars
@@ -202,6 +217,14 @@ func loadAssistantConfig(cfg *Config) error {
 	mustBool("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", &cfg.Assistant.TelegramEnabled)
 	mustString("ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE", &cfg.Assistant.TelegramMarkdownMode)
 	mustInt("ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS", &cfg.Assistant.TelegramMaxMessageChars, 1)
+	// Spec 061 SCOPE-05 design §17 — Telegram webhook mode SST keys.
+	// `mode` and `webhook_path` are always REQUIRED (literal yaml has
+	// them). `webhook_secret_ref` is permissively-empty when
+	// mode=long_poll; validateAssistantConfig rules 7–10 enforce the
+	// fail-loud non-empty resolution when mode=webhook.
+	mustString("ASSISTANT_TRANSPORTS_TELEGRAM_MODE", &cfg.Assistant.TelegramMode)
+	permissiveString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF", &cfg.Assistant.TelegramWebhookSecretRef)
+	mustString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH", &cfg.Assistant.TelegramWebhookPath)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
@@ -253,5 +276,68 @@ func (c *Config) validateAssistantConfig() error {
 	// concrete predicates at registration time. SCOPE-01 ships the
 	// per-skill *Enabled fields above; downstream scopes read those
 	// flags to decide whether to wire their reachability predicate.
+
+	// Spec 061 SCOPE-05 design §17 §7.2 rules 7–10 — Telegram webhook
+	// mode SST enforcement.
+	switch c.Assistant.TelegramMode {
+	case "long_poll":
+		// No further constraint on webhook_secret_ref; webhook_path
+		// still MUST start with "/" because the literal yaml requires
+		// it. The path is unused in long_poll mode but kept valid so
+		// switching modes only requires flipping `mode`.
+		if !strings.HasPrefix(c.Assistant.TelegramWebhookPath, "/") {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH must start with \"/\"; got %q (spec 061 design §7.2 rule #9)", c.Assistant.TelegramWebhookPath)
+		}
+	case "webhook":
+		// Rule #8a — webhook_secret_ref MUST resolve in env to a
+		// non-empty string. We use os.Getenv-style indirection: the
+		// SST key names the env var that holds the actual secret
+		// (Infisical injection model). Empty resolution → abort.
+		if c.Assistant.TelegramWebhookSecretRef == "" {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF must be set when mode=webhook (spec 061 design §7.2 rule #8)")
+		}
+		resolved := os.Getenv(c.Assistant.TelegramWebhookSecretRef)
+		if resolved == "" {
+			return fmt.Errorf("FATAL assistant config invalid: assistant.transports.telegram.webhook_secret_ref: empty resolved secret (env var %q is unset or empty; spec 061 design §7.2 rule #8)", c.Assistant.TelegramWebhookSecretRef)
+		}
+		c.Assistant.TelegramWebhookSecret = resolved
+		// Rule #9 — webhook_path MUST start with "/".
+		if !strings.HasPrefix(c.Assistant.TelegramWebhookPath, "/") {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH must start with \"/\"; got %q (spec 061 design §7.2 rule #9)", c.Assistant.TelegramWebhookPath)
+		}
+		// Rule #9 — webhook_path MUST NOT collide with an existing API
+		// route. The full chi route tree is not available here, but
+		// the canonical fixed paths registered in internal/api/router.go
+		// are enumerated below so a misconfigured operator gets a
+		// fail-loud error at startup before the router boots.
+		for _, reserved := range reservedAPIRoutePrefixes {
+			if c.Assistant.TelegramWebhookPath == reserved ||
+				strings.HasPrefix(c.Assistant.TelegramWebhookPath, reserved+"/") {
+				return fmt.Errorf("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH %q collides with reserved API route %q (spec 061 design §7.2 rule #9)", c.Assistant.TelegramWebhookPath, reserved)
+			}
+		}
+	default:
+		return fmt.Errorf("ASSISTANT_TRANSPORTS_TELEGRAM_MODE must be one of \"long_poll\" | \"webhook\"; got %q (spec 061 design §7.2 rule #7)", c.Assistant.TelegramMode)
+	}
+	// Rule #10 — switching modes requires process restart. This is
+	// enforced by the fact that loadAssistantConfig + validate run
+	// only at startup; there is no runtime swap path.
 	return nil
+}
+
+// reservedAPIRoutePrefixes enumerates the static path prefixes already
+// registered in internal/api/router.go that the Telegram webhook path
+// MUST NOT collide with. This list is a conservative subset (Group
+// blocks under /api are owned by bearer-auth and are not at risk for a
+// /v1/... webhook path); it catches accidental misconfiguration like
+// webhook_path: "/metrics" or "/api".
+var reservedAPIRoutePrefixes = []string{
+	"/api",
+	"/metrics",
+	"/readyz",
+	"/ping",
+	"/login",
+	"/admin_ui_static",
+	"/auth",
+	"/v1/web",
 }

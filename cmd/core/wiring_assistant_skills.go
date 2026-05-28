@@ -25,11 +25,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"time"
 
+	"github.com/smackerel/smackerel/internal/agent/tools/notification"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
+	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/config"
 )
 
@@ -52,8 +57,12 @@ func wireAssistantSkillServices(cfg *config.Config, svc *coreServices) error {
 	if err := wireRetrievalSkillServices(cfg, svc); err != nil {
 		return fmt.Errorf("retrieval skill services: %w", err)
 	}
-	// SCOPE-07 (weather) and SCOPE-08 (notifications) will append
-	// their SetServices wiring blocks here.
+	if err := wireWeatherSkillServices(cfg, svc); err != nil {
+		return fmt.Errorf("weather skill services: %w", err)
+	}
+	if err := wireNotificationSkillServices(cfg, svc); err != nil {
+		return fmt.Errorf("notification skill services: %w", err)
+	}
 	return nil
 }
 
@@ -84,4 +93,119 @@ func wireRetrievalSkillServices(cfg *config.Config, svc *coreServices) error {
 		"max_top_k", cfg.Assistant.RetrievalTopK,
 	)
 	return nil
+}
+
+// wireWeatherSkillServices wires the weather Provider + LRU Cache
+// into the weather_lookup tool handler.
+//
+// SST gate (per smackerel-no-defaults): when
+// assistant.skills.weather.enabled is true AND
+//   - the configured provider is not one we know how to construct, OR
+//   - the cache TTL is not positive,
+//
+// return an error so startup aborts. There is NO silent default
+// provider and NO silent cache-TTL fallback.
+//
+// Provider selection: v1 ships open-meteo, which is a key-less
+// public endpoint. WeatherAPIKeyRef is read from SST but only
+// consulted when a provider that requires it is selected (a future
+// SCOPE-07 follow-on); selecting open-meteo with a non-empty
+// api_key_ref is allowed (the value is just ignored) so operators can
+// pre-stage a future provider's Infisical reference without
+// reconfiguring.
+//
+// HTTP client per-call timeout matches the tool's PerCallTimeoutMs
+// budget (2s, see internal/agent/tools/weather/tool.go init()).
+func wireWeatherSkillServices(cfg *config.Config, svc *coreServices) error {
+	if !cfg.Assistant.WeatherEnabled {
+		slog.Info("assistant.skills.weather.enabled=false; weather tool handler will return weather_tools_not_configured at call time")
+		return nil
+	}
+	if cfg.Assistant.WeatherCacheTTL <= 0 {
+		return fmt.Errorf("ASSISTANT_SKILLS_WEATHER_CACHE_TTL must be > 0, got %s", cfg.Assistant.WeatherCacheTTL)
+	}
+	var provider weather.Provider
+	switch cfg.Assistant.WeatherProvider {
+	case "open-meteo":
+		provider = weather.NewOpenMeteoProvider(&http.Client{Timeout: 2 * time.Second})
+	default:
+		return fmt.Errorf("ASSISTANT_SKILLS_WEATHER_PROVIDER %q is not a recognized provider (v1 supports: open-meteo)", cfg.Assistant.WeatherProvider)
+	}
+	// Cache capacity is a fixed per-process upper bound. 128 covers
+	// the v1 small-deployment expectation and is well within memory
+	// budget (one entry ≈ a Forecast struct + key string). If a
+	// future deployment needs a larger cache this becomes a new SST
+	// key — for v1 we intentionally do not expose it (smackerel-no-
+	// defaults: every SST key must be REQUIRED, so capacity is
+	// hard-coded here rather than introduced with a silent default).
+	const cacheCapacity = 128
+	weather.SetServices(&weather.Services{
+		Provider: provider,
+		Cache:    weather.NewCache(cfg.Assistant.WeatherCacheTTL, cacheCapacity),
+	})
+	slog.Info("weather skill services wired",
+		"provider", cfg.Assistant.WeatherProvider,
+		"cache_ttl", cfg.Assistant.WeatherCacheTTL,
+		"cache_capacity", cacheCapacity,
+	)
+	return nil
+}
+
+// wireNotificationSkillServices wires the notification tool's
+// ConfirmStore + Scheduler dependencies.
+//
+// SST gate: when assistant.skills.notifications.enabled is true AND
+//   - confirm_timeout is not positive, OR
+//   - the PG pool is unavailable,
+//
+// return an error so startup aborts. There is NO silent disable.
+//
+// Scheduler binding: spec 054's scheduler is the production target,
+// but the binding contract is not yet finalized (tracked by cross-
+// spec packet 054 — additive Job.Source/Originator fields). Until
+// that packet lands, we wire a guarded stub scheduler that fails
+// loud on every Schedule call so a misconfigured deployment surfaces
+// the gap in the first reminder attempt instead of silently dropping
+// it. Operators who do not intend to use notifications yet should
+// set assistant.skills.notifications.enabled=false at SST.
+//
+// The PG-backed ConfirmStore IS production-ready (migration 043
+// ships the underlying table); only the Scheduler binding is pending
+// the cross-spec packet.
+func wireNotificationSkillServices(cfg *config.Config, svc *coreServices) error {
+	if !cfg.Assistant.NotificationsEnabled {
+		slog.Info("assistant.skills.notifications.enabled=false; notification tool handlers will return notification_tools_not_configured at call time")
+		return nil
+	}
+	if cfg.Assistant.NotificationsConfirmTimeout <= 0 {
+		return fmt.Errorf("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT must be > 0, got %s", cfg.Assistant.NotificationsConfirmTimeout)
+	}
+	if svc.pg == nil || svc.pg.Pool == nil {
+		return errors.New("assistant.skills.notifications.enabled=true but coreServices.pg.Pool is nil — buildCoreServices must run before skill wiring")
+	}
+	notification.SetServices(&notification.Services{
+		Confirm:        notification.NewPgConfirmStore(svc.pg.Pool),
+		Scheduler:      &notificationSchedulerStub{},
+		ConfirmTimeout: cfg.Assistant.NotificationsConfirmTimeout,
+	})
+	slog.Info("notification skill services wired (scheduler=stub, pending cross-spec packet 054)",
+		"confirm_timeout", cfg.Assistant.NotificationsConfirmTimeout,
+	)
+	return nil
+}
+
+// notificationSchedulerStub is the temporary Scheduler binding that
+// fails loud on every Schedule call. Replaced by the spec 054
+// adapter once cross-spec packet 054 (additive Job.Source +
+// Job.Originator fields) is accepted by the spec 054 owner.
+type notificationSchedulerStub struct{}
+
+// errNotificationSchedulerUnbound is returned by the stub scheduler
+// on every Schedule call until the spec 054 binding lands. The error
+// text intentionally names the cross-spec packet so a trace reader
+// can route the issue without grepping for the ID.
+var errNotificationSchedulerUnbound = errors.New("notification.Scheduler: stub binding (cross-spec packet 054 pending — additive Job.Source/Originator on spec 054 scheduler API)")
+
+func (notificationSchedulerStub) Schedule(_ context.Context, _ time.Time, _ string, _ string, _ string) (string, error) {
+	return "", errNotificationSchedulerUnbound
 }

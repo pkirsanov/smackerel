@@ -896,6 +896,14 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", "true")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE", "MarkdownV2")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS", "4096")
+	// Spec 061 SCOPE-05 design §17 — Telegram webhook mode keys. The
+	// default test fixture uses long_poll so existing tests do not
+	// need a resolved webhook secret. The webhook-specific tests
+	// under TestValidateAssistant_*Webhook* override mode + ref + the
+	// resolved env var explicitly.
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MODE", "long_poll")
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH", "/v1/telegram/webhook")
 	// Spec 061 SCOPE-01 design §7.2 rule #2 — agent routing floor is
 	// referenced by validateAssistantConfig for the borderline check.
 	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
