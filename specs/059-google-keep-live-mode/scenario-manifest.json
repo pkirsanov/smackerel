@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "featureDir": "specs/059-google-keep-live-mode",
+  "featureName": "Google Keep Live Sync (gkeepapi production hardening)",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-28T00:00:00Z",
+  "evidenceRefs": [
+    "report.md#test-evidence",
+    "report.md#implementation-evidence"
+  ],
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-059-001" },
+    { "scenarioId": "SCN-059-002" },
+    { "scenarioId": "SCN-059-003" },
+    { "scenarioId": "SCN-059-004" },
+    { "scenarioId": "SCN-059-005" },
+    { "scenarioId": "SCN-059-006" },
+    { "scenarioId": "SCN-059-007" },
+    { "scenarioId": "SCN-059-008" },
+    { "scenarioId": "SCN-059-009" },
+    { "scenarioId": "SCN-059-010" },
+    { "scenarioId": "SCN-059-011" },
+    { "scenarioId": "SCN-059-012" },
+    { "scenarioId": "SCN-059-013" },
+    { "scenarioId": "SCN-059-014" },
+    { "scenarioId": "SCN-059-015" },
+    { "scenarioId": "SCN-059-016" },
+    { "scenarioId": "SCN-059-017" },
+    { "scenarioId": "SCN-059-018" },
+    { "scenarioId": "SCN-059-019" }
+  ],
+  "scenarios": [
+    {
+      "id": "SCN-059-001",
+      "scopeId": "SCOPE-1",
+      "title": "Three-Mirror Manifest Carries KEEP_GOOGLE_APP_PASSWORD",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/config/secret_keys_test.go", "testTitle": "TestSecretKeys_MirrorsYAMLManifest", "category": "unit" },
+        { "file": "internal/config/secret_keys_test.go", "testTitle": "TestSecretKeys_KeepAppPasswordRegistered", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit contract test proves all three mirrors (Go, YAML, shell) carry KEEP_GOOGLE_APP_PASSWORD; removing the key from any mirror fails the test."
+    },
+    {
+      "id": "SCN-059-002",
+      "scopeId": "SCOPE-1",
+      "title": "Compose Injects KEEP_GOOGLE_EMAIL and KEEP_GOOGLE_APP_PASSWORD Into Sidecar",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/deploy/compose_contract_test.go", "testTitle": "TestComposeEnvFileSharedAcrossCoreAndMlServices", "category": "integration" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestKeepAppPasswordReadOnlyFromSidecarNotCore", "category": "unit" },
+        { "file": "tests/integration/keep_secret_env_test.go", "testTitle": "TestKeepSecretEnvReachesMlContainer", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live disposable stack proves smackerel-ml has both env vars set. Per SCN-059-002 planning B1 resolution (option c), KEEP_GOOGLE_APP_PASSWORD IS materially present in the core container env via the shared app.env file (same precedent as TELEGRAM_BOT_TOKEN); the sidecar boundary is enforced at the application layer (zero references to KEEP_GOOGLE_APP_PASSWORD in Go source)."
+    },
+    {
+      "id": "SCN-059-003",
+      "scopeId": "SCOPE-2",
+      "title": "drift_ack_token Round-Trips Through parseKeepConfig",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestParseKeepConfigParsesDriftAckToken", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestParseKeepConfigRejectsNonStringDriftAckToken", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit tests prove positive parse, empty-default, and rejection of non-string values."
+    },
+    {
+      "id": "SCN-059-004",
+      "scopeId": "SCOPE-2",
+      "title": "Missing KEEP_GOOGLE_EMAIL Fails Loud At Go-Core Connect() When Live Mode Is Enabled",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestConnectFailsLoudWhenKeepEmailMissingInLiveMode", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestKeepAppPasswordReadOnlyFromSidecarNotCore", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit tests prove Connect() fails before any NATS publish when KEEP_GOOGLE_EMAIL is empty; the boundary regression proves the Go core still has zero references to KEEP_GOOGLE_APP_PASSWORD (password validation moved to the sidecar handshake — see SCN-059-019)."
+    },
+    {
+      "id": "SCN-059-005",
+      "scopeId": "SCOPE-2",
+      "title": "Poll-Interval Floor Is A Single Value",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestParseKeepConfigEnforcesPollIntervalFloor", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit test proves below-floor values are rejected at parse time using the single named constant."
+    },
+    {
+      "id": "SCN-059-006",
+      "scopeId": "SCOPE-3",
+      "title": "Go Connector Publishes keep.sync.request And Parses Reply",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestSyncGkeepapiPublishesRequestAndDecodesResponse", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestNewRequestIDMatchesPattern", "category": "unit" },
+        { "file": "tests/integration/keep_bridge_test.go", "testTitle": "TestKeepBridgeRoundTripsRequestReplyAgainstLiveSidecar", "category": "integration" },
+        { "file": "tests/integration/keep_bridge_test.go", "testTitle": "TestSyncGkeepapiReturnsLoudErrorOnNatsTimeout", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live integration proves end-to-end request/reply round-trip on the test stack."
+    },
+    {
+      "id": "SCN-059-007",
+      "scopeId": "SCOPE-3",
+      "title": "Sidecar Subscribes And Replies With Schema-Conformant Payload",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "ml/tests/test_keep_bridge.py", "testTitle": "test_handle_sync_request_returns_ok_envelope", "category": "unit" },
+        { "file": "ml/tests/test_keep_bridge.py", "testTitle": "test_handle_sync_request_wraps_exception_as_error_envelope", "category": "unit" },
+        { "file": "tests/integration/ml_sidecar_boot_test.go", "testTitle": "TestMlSidecarRegistersAllExistingSubscribersIncludingKeep", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live sidecar boot proves the keep subscriber registers alongside existing Drive/Photos/YouTube subscribers."
+    },
+    {
+      "id": "SCN-059-008",
+      "scopeId": "SCOPE-3",
+      "title": "Hybrid Mode Dedups By note_id Across Takeout And gkeepapi",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "tests/integration/keep_bridge_test.go", "testTitle": "TestKeepHybridModeDedupsNoteIdAcrossTakeoutAndGkeepapi", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live store proves a single artifact key collapses Takeout-origin and gkeepapi-origin notes with the same note_id."
+    },
+    {
+      "id": "SCN-059-009",
+      "scopeId": "SCOPE-4",
+      "title": "validateGkeepResponse Catches All Schema Drift Classes",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestValidateGkeepResponseAcceptsCanonicalFixtureAndRejectsEveryMutation", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit per-mutation matrix proves every defined drift class is rejected."
+    },
+    {
+      "id": "SCN-059-010",
+      "scopeId": "SCOPE-4",
+      "title": "Breaker Transitions closed -> tripping -> open -> closed",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestDriftBreakerTransitionsClosedTrippingOpenAndResetsOnTokenRotation", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestOpenBreakerSkipsNatsPublish", "category": "unit" },
+        { "file": "tests/integration/keep_bridge_test.go", "testTitle": "TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live integration proves a real malformed-response stream trips the breaker after the 4th failure."
+    },
+    {
+      "id": "SCN-059-011",
+      "scopeId": "SCOPE-4",
+      "title": "Sidecar Auth Errors Do NOT Count As Drift",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestSidecarAuthErrorDoesNotIncrementDriftFailures", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit test proves auth-error prefix is classified as Connect-fatal, not drift."
+    },
+    {
+      "id": "SCN-059-012",
+      "scopeId": "SCOPE-4",
+      "title": "Successful Sync Resets driftFailures In TRIPPING",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestDriftBreakerResetsOnSuccessFromTripping", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit test proves the TRIPPING -> CLOSED transition on success."
+    },
+    {
+      "id": "SCN-059-013",
+      "scopeId": "SCOPE-5",
+      "title": "Drift Counter Increments Exactly Once Per State Entry Into OPEN",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestDriftCounterIncrementsExactlyOncePerOpenEntry", "category": "unit" },
+        { "file": "tests/integration/keep_metrics_test.go", "testTitle": "TestKeepDriftCounterStableLabelCardinality", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live /metrics scrape proves counter cardinality and once-per-open-entry semantics."
+    },
+    {
+      "id": "SCN-059-014",
+      "scopeId": "SCOPE-5",
+      "title": "Health Reports HealthError While Breaker Is OPEN",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestHealthReportsErrorWhileBreakerOpenAndRecoversAfterTokenRotation", "category": "unit" }
+      ],
+      "liveTestExpectation": "Unit test proves Health() transitions track the breaker state."
+    },
+    {
+      "id": "SCN-059-015",
+      "scopeId": "SCOPE-5",
+      "title": "Sync Duration Histogram And Notes Counter Populated On Success",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestKeepStructuredLogsDoNotContainEmailOrPassword", "category": "unit" },
+        { "file": "tests/integration/keep_metrics_test.go", "testTitle": "TestKeepGkeepMetricsExposedViaPrometheusEndpoint", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live /metrics endpoint exposes the three new metrics with stable label sets and no credential material."
+    },
+    {
+      "id": "SCN-059-016",
+      "scopeId": "SCOPE-6",
+      "title": "Operator Can Complete Enablement Using Only Documented ./smackerel.sh Commands",
+      "requiredTestType": ["artifact"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "docs/Operations.md", "testTitle": "GoogleKeepLiveSyncRunbookUsesOnlySmackerelShCommands", "category": "artifact" }
+      ],
+      "liveTestExpectation": "Grep over the new subsection confirms zero ad-hoc docker compose / pytest / python3 / go test invocations."
+    },
+    {
+      "id": "SCN-059-017",
+      "scopeId": "SCOPE-6",
+      "title": "Operator Can Recover From A Tripped Breaker From The Runbook Alone",
+      "requiredTestType": ["artifact"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "docs/Operations.md", "testTitle": "GoogleKeepRecoveryRunbookIsConfigBumpAndRestartOnly", "category": "artifact" }
+      ],
+      "liveTestExpectation": "Manual review confirms recovery uses drift_ack_token rotation + restart and references docs/Deployment.md for bundle redeploy."
+    },
+    {
+      "id": "SCN-059-018",
+      "scopeId": "SCOPE-6",
+      "title": "Runbook Carries No Env-Specific Values",
+      "requiredTestType": ["artifact"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "docs/Operations.md", "testTitle": "GoogleKeepRunbookPassesPiiScan", "category": "artifact" }
+      ],
+      "liveTestExpectation": "pii-scan.sh exits 0 over the staged diff that introduces the new subsection."
+    },
+    {
+      "id": "SCN-059-019",
+      "scopeId": "SCOPE-3",
+      "title": "Sidecar Handshake Rejects Empty KEEP_GOOGLE_APP_PASSWORD And Surfaces As Fail-Loud Connect() Error",
+      "requiredTestType": ["unit", "integration"],
+      "regressionRequired": true,
+      "linkedTests": [
+        { "file": "ml/tests/test_keep_bridge.py", "testTitle": "test_handle_handshake_request_rejects_empty_app_password", "category": "unit" },
+        { "file": "ml/tests/test_keep_bridge.py", "testTitle": "test_handle_handshake_request_accepts_non_empty_app_password", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestConnectPublishesHandshakeAndSurfacesSidecarErrorVerbatim", "category": "unit" },
+        { "file": "internal/connector/keep/keep_test.go", "testTitle": "TestKeepAppPasswordReadOnlyFromSidecarNotCore", "category": "unit" },
+        { "file": "tests/integration/keep_bridge_test.go", "testTitle": "TestKeepConnectHandshakeFailsLoudWhenSidecarAppPasswordEmpty", "category": "integration" }
+      ],
+      "liveTestExpectation": "Live sidecar boot with empty KEEP_GOOGLE_APP_PASSWORD proves Go Connect() returns the sidecar error verbatim and emits zero keep.sync.request publishes; the boundary test proves the Go core never references the password key."
+    }
+  ]
+}

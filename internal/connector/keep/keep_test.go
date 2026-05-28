@@ -439,6 +439,8 @@ func TestConnectEmptyImportDirString(t *testing.T) {
 }
 
 func TestConnectGkeepWithAck(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	c := New("google-keep")
 	// gkeepapi mode with warning acknowledged — Connect should succeed
 	// (no import dir needed since gkeepapi doesn't use it)
@@ -460,6 +462,8 @@ func TestConnectHybridModeMissingDir(t *testing.T) {
 }
 
 func TestConnectHybridModeValid(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	dir := t.TempDir()
 	c := New("google-keep")
 	err := c.Connect(context.Background(), testConnectorConfig(dir, "hybrid", true, true))
@@ -474,6 +478,8 @@ func TestConnectHybridModeValid(t *testing.T) {
 // --- Sync mode and health transition tests ---
 
 func TestSyncGkeepModeReportsError(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	// gkeepapi mode always fails (bridge stub) — health should reflect that
 	c := New("google-keep")
 	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
@@ -495,6 +501,8 @@ func TestSyncGkeepModeReportsError(t *testing.T) {
 }
 
 func TestSyncHybridModeTakeoutSucceedsGkeepFails(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	dir := t.TempDir()
 	writeTestJSON(t, dir, "hybrid-note.json", `{
 		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
@@ -623,6 +631,8 @@ func TestCursorPrecisionPreventsDuplicates(t *testing.T) {
 }
 
 func TestHealthGraduatedEscalation(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	c := New("google-keep")
 	if err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true)); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -664,6 +674,8 @@ func TestHealthGraduatedEscalation(t *testing.T) {
 }
 
 func TestHealthRecoveryAfterFailures(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	dir := t.TempDir()
 	writeTestJSON(t, dir, "recovery-note.json", `{
 		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
@@ -734,6 +746,8 @@ func TestHealthDegradedOnPartialFailure(t *testing.T) {
 }
 
 func TestHybridModeCountsErrorsFromBothSources(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "user@example.com")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "test-app-password-fixture")
 	dir := t.TempDir()
 	writeTestJSON(t, dir, "note.json", `{
 		"color": "DEFAULT", "isTrashed": false, "isPinned": false, "isArchived": false,
@@ -768,4 +782,109 @@ func TestHybridModeCountsErrorsFromBothSources(t *testing.T) {
 	if c.Health(context.Background()) != "degraded" {
 		t.Errorf("health = %q, want degraded (hybrid with gkeep failure)", c.Health(context.Background()))
 	}
+}
+
+// --- Spec 059 Scope 2: drift_ack_token + fail-loud Connect ---
+
+// SCN-059-003 positive path.
+func TestParseKeepConfigParsesDriftAckToken(t *testing.T) {
+	cfg := testConnectorConfig("", "takeout", false, false)
+	cfg.SourceConfig["drift_ack_token"] = "2026-05-28"
+	kc, err := parseKeepConfig(cfg)
+	if err != nil {
+		t.Fatalf("parseKeepConfig: %v", err)
+	}
+	if kc.DriftAckToken != "2026-05-28" {
+		t.Errorf("DriftAckToken = %q, want %q", kc.DriftAckToken, "2026-05-28")
+	}
+
+	// Omitted field yields empty string (not an error).
+	cfg2 := testConnectorConfig("", "takeout", false, false)
+	kc2, err := parseKeepConfig(cfg2)
+	if err != nil {
+		t.Fatalf("parseKeepConfig (omitted): %v", err)
+	}
+	if kc2.DriftAckToken != "" {
+		t.Errorf("DriftAckToken (omitted) = %q, want empty", kc2.DriftAckToken)
+	}
+}
+
+// SCN-059-003 negative path.
+func TestParseKeepConfigRejectsNonStringDriftAckToken(t *testing.T) {
+	cfg := testConnectorConfig("", "takeout", false, false)
+	cfg.SourceConfig["drift_ack_token"] = 42
+	_, err := parseKeepConfig(cfg)
+	if err == nil {
+		t.Fatal("expected error for non-string drift_ack_token")
+	}
+	if !contains(err.Error(), "drift_ack_token") {
+		t.Errorf("error %q must reference field name drift_ack_token", err.Error())
+	}
+}
+
+// SCN-059-004: KEEP_GOOGLE_EMAIL missing.
+func TestConnectFailsLoudWhenKeepEmailMissingInLiveMode(t *testing.T) {
+	t.Setenv("KEEP_GOOGLE_EMAIL", "")
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", "set")
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
+	if err == nil {
+		t.Fatal("expected Connect to fail loud when KEEP_GOOGLE_EMAIL is empty")
+	}
+	if !contains(err.Error(), "KEEP_GOOGLE_EMAIL") {
+		t.Errorf("error %q must reference KEEP_GOOGLE_EMAIL", err.Error())
+	}
+	if c.Health(context.Background()) != "error" {
+		t.Errorf("health = %q, want error", c.Health(context.Background()))
+	}
+}
+
+// SCN-059-019 (Scope 3): KEEP_GOOGLE_APP_PASSWORD empty validation is owned
+// by the ML sidecar via the keep.sidecar.handshake NATS reply, not by the Go
+// core. The previous skipped Go-core test was removed per the spec 059
+// planning reconciliation: the Go core MUST NOT reference the
+// "KEEP_GOOGLE_APP_PASSWORD" literal (Scope 1 boundary test enforces this);
+// the contract moves to Scope 3's sidecar handshake.
+
+// SCN-059-004 adversarial: error MUST NOT contain the password value.
+func TestConnectDoesNotLeakKeepAppPasswordInError(t *testing.T) {
+	const passwordFixture = "uniq-fixture-pw-7Q9mZ" // gitleaks:allow — adversarial fixture; the test asserts it is NEVER leaked
+	t.Setenv("KEEP_GOOGLE_EMAIL", "") // force the email-missing branch
+	t.Setenv("KEEP_GOOGLE_APP_PASSWORD", passwordFixture)
+	c := New("google-keep")
+	err := c.Connect(context.Background(), testConnectorConfig("", "gkeepapi", true, true))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if contains(err.Error(), passwordFixture) {
+		t.Errorf("error %q leaks password fixture", err.Error())
+	}
+}
+
+// SCN-059-005: poll-interval floor is a single canonical value.
+func TestParseKeepConfigEnforcesPollIntervalFloor(t *testing.T) {
+	cfg := testConnectorConfig("", "takeout", false, false)
+	cfg.SourceConfig["poll_interval"] = "5m"
+	_, err := parseKeepConfig(cfg)
+	if err == nil {
+		t.Fatal("expected error for poll_interval below floor")
+	}
+	if !contains(err.Error(), gkeepPollIntervalFloor.String()) {
+		t.Errorf("error %q must reference floor constant value %s", err.Error(), gkeepPollIntervalFloor)
+	}
+	// At the floor: accepted.
+	cfg2 := testConnectorConfig("", "takeout", false, false)
+	cfg2.SourceConfig["poll_interval"] = gkeepPollIntervalFloor.String()
+	if _, err := parseKeepConfig(cfg2); err != nil {
+		t.Errorf("expected poll_interval = floor (%s) to be accepted, got: %v", gkeepPollIntervalFloor, err)
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
