@@ -34,9 +34,8 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	ytConn := youtubeConnector.New("youtube")
 	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
 	keepConn := keepConnector.New("google-keep")
-	if svc.nc != nil {
-		keepConn.SetNatsClient(svc.nc)
-	}
+	// NOTE: spec 059 NATS bridge wiring (keepConn.SetNatsClient) intentionally
+	// omitted here until the keep.go side of the bridge is committed.
 	bmConn := bookmarksConnector.NewConnectorWithPool("bookmarks", svc.pg.Pool)
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
