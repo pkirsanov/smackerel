@@ -84,7 +84,7 @@ llm:
 
 telegram:
   bot_token: ""
-  chat_ids: ""
+  chat_ids: "510638591"
   # Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram
   # bridge. Format: "<chat_id>:<user_id>" pairs, comma-separated
   # (mirrors chat_ids).
@@ -97,7 +97,7 @@ telegram:
   # to attribute captures to the wrong user. In development/test the
   # empty mapping is acceptable and existing single-user dev flows
   # keep working.
-  user_mapping: ""
+  user_mapping: "510638591:philip"
   assembly_window_seconds: 10
   assembly_max_messages: 100
   media_group_window_seconds: 3
@@ -1009,6 +1009,7 @@ infrastructure:
   - AUTH_SIGNING_ACTIVE_PRIVATE_KEY
   - AUTH_AT_REST_HASHING_KEY
   - AUTH_BOOTSTRAP_TOKEN
+  - TELEGRAM_BOT_TOKEN
   # Spec 052 FR-052-002 — explicit opt-in for placeholder emission.
   # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
   # every key in secret_keys above. dev/test environments are NEVER in

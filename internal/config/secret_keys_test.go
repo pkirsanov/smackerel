@@ -96,7 +96,7 @@ func TestSecretKeys_MirrorsYAMLManifest(t *testing.T) {
 }
 
 // TestSecretKeysMirror — supplementary in-memory check that the
-// canonical list contains exactly the four documented keys in the
+// canonical list contains exactly the five documented keys in the
 // documented order. This is the in-memory analogue of the yaml-driven
 // drift test above; both must hold.
 func TestSecretKeysMirror(t *testing.T) {
@@ -105,6 +105,7 @@ func TestSecretKeysMirror(t *testing.T) {
 		"AUTH_SIGNING_ACTIVE_PRIVATE_KEY",
 		"AUTH_AT_REST_HASHING_KEY",
 		"AUTH_BOOTSTRAP_TOKEN",
+		"TELEGRAM_BOT_TOKEN",
 	}
 	got := SecretKeys()
 	if !reflect.DeepEqual(got, want) {
