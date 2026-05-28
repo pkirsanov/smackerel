@@ -370,6 +370,7 @@ SHELL_SECRET_KEYS=(
   AUTH_SIGNING_ACTIVE_PRIVATE_KEY
   AUTH_AT_REST_HASHING_KEY
   AUTH_BOOTSTRAP_TOKEN
+  TELEGRAM_BOT_TOKEN
 )
 
 # Spec 052 FR-052-002 — production-class target mirror.
@@ -655,7 +656,16 @@ case "$TARGET_ENV" in
     SMACKEREL_ENV="production"
     ;;
 esac
-TELEGRAM_BOT_TOKEN="$(required_value telegram.bot_token)"
+# Spec 052 FR-052-007 — placeholder substitution: when TARGET_ENV is a
+# production-class target AND TELEGRAM_BOT_TOKEN is in SHELL_SECRET_KEYS, emit
+# the deterministic placeholder for the deploy adapter to substitute from sops.
+# In dev/test, fall back to the yaml-literal value (empty string is fine for
+# local dev — the bot stays disabled at startup until a real value is set).
+if is_production_class_target "$TARGET_ENV" && in_secret_keys "TELEGRAM_BOT_TOKEN"; then
+  TELEGRAM_BOT_TOKEN="__SECRET_PLACEHOLDER__TELEGRAM_BOT_TOKEN__"
+else
+  TELEGRAM_BOT_TOKEN="$(yaml_get telegram.bot_token 2>/dev/null)" || TELEGRAM_BOT_TOKEN=""
+fi
 TELEGRAM_CHAT_IDS="$(required_value telegram.chat_ids)"
 # Spec 044 Scope 03 — chat_id → user_id mapping for the Telegram bridge.
 # Optional in dev/test; production deployments populate this so the
