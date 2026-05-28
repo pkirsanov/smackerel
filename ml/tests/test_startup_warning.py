@@ -16,7 +16,7 @@ asyncio.run() and the unittest mock helpers (no pytest-asyncio needed).
 import asyncio
 import logging
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,6 +24,14 @@ import pytest
 class FakeNATSClient:
     def __init__(self):
         self.is_connected = True
+        # Spec 059 SCOPE-03 added `await keep_bridge.register_nats_handler(nats_client._nc)`
+        # to the FastAPI lifespan in `ml/app/main.py`. That handler calls
+        # `await nc.subscribe(subject, cb=...)` twice (see ml/app/keep_bridge.py
+        # ::register_nats_handler), so `_nc.subscribe` must be awaitable in this
+        # fixture. MagicMock auto-attributes; AsyncMock makes `.subscribe(...)`
+        # awaitable without forcing the test to drive any real NATS interaction.
+        self._nc = MagicMock()
+        self._nc.subscribe = AsyncMock()
 
     async def connect(self):
         self.is_connected = True

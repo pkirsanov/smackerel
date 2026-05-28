@@ -153,7 +153,7 @@ async def process_content(
         if result_text and "<think>" in result_text:
             think_close = result_text.find("</think>")
             if think_close != -1:
-                result_text = result_text[think_close + len("</think>"):].lstrip()
+                result_text = result_text[think_close + len("</think>") :].lstrip()
 
         # Some models also wrap JSON in ```json ... ``` fences despite
         # response_format being set. Strip the fence if present.
@@ -164,9 +164,9 @@ async def process_content(
                 # trailing fence. Keep only the inner payload.
                 first_nl = stripped.find("\n")
                 if first_nl != -1:
-                    stripped = stripped[first_nl + 1:]
+                    stripped = stripped[first_nl + 1 :]
                 if stripped.endswith("```"):
-                    stripped = stripped[: -3].rstrip()
+                    stripped = stripped[:-3].rstrip()
                 result_text = stripped
 
         result = json.loads(result_text)
