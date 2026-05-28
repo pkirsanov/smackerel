@@ -291,4 +291,3 @@ func newPostgresArtifactLookup(svc *coreServices) retrieval.ArtifactLookupFn {
 		return a.Title, a.CreatedAt, true, nil
 	}
 }
-
