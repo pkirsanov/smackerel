@@ -157,9 +157,9 @@ And the smackerel-core binary exits non-zero before serving any request
 - [x] Router mounts the handler under `auth.RequireScope("extension:bookmarks", "extension:history")` inside the existing `bearerAuthMiddleware` group; legacy spec-044 tokens are rejected with 403 `scope_required` by the spec 060 middleware (BS-002 invariant test in `internal/auth/scope_middleware_test.go`). **Evidence:** `internal/api/router.go` mount block + spec 060 BS-002 regression.
 - [x] `DedupStore` interface seam exists in `internal/connector/ingest/dedup.go` with a no-op pass-through implementation; Scope 2 ships the Postgres-backed impl in the same change set. **Evidence:** `internal/connector/ingest/dedup.go`.
 - [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior (SCN-058-001 through SCN-058-005 mapped above). **Claim Source:** not-run. **Uncertainty Declaration:** the per-scenario e2e-api rows require a real client driver that ships with Scope 3 (extension); the unit suite covers the behavioral assertions for all 5 scenarios. See report.md Scope 1 Uncertainty Declaration; routing back to `bubbles.plan` is the appropriate next step to either re-classify the e2e-api rows as a Scope-3 dependency or to add a curl-driven server-side fixture.
-- [x] Adversarial regression: `TestIngest_PerItemRejection_PreservesNeighbors` exercises mixed batches; AND-semantics exact-match is enforced by spec 060's `auth.RequireScope` and its BS-002 adversarial test.
-- [x] Broader unit suite passes (`./smackerel.sh test unit`).
-- [x] Build Quality Gate: `go build ./...` clean; `./smackerel.sh test unit` green.
+- [x] Adversarial regression: `TestIngest_PerItemRejection_PreservesNeighbors` exercises mixed batches; AND-semantics exact-match is enforced by spec 060's `auth.RequireScope` and its BS-002 adversarial test. **Evidence:** report.md → Scope 1 → Test Evidence (TestIngest_PerItemRejection_PreservesNeighbors PASS).
+- [x] Broader unit suite passes (`./smackerel.sh test unit`). **Evidence:** report.md → Scope 1 → Test Evidence.
+- [x] Build Quality Gate: `go build ./...` clean; `./smackerel.sh test unit` green. **Evidence:** report.md → Scope 1 → Test Evidence (`go build ./...` clean).
 
 <!-- bubbles:g040-skip-end -->
 
@@ -261,10 +261,10 @@ And the second item's outcome is "deduped"
 - [x] Handler retrofit calls `ResolveOrPublish` between validation and publish; `outcome:"deduped"` is returned on collision and `PublishRawArtifact` is NOT called.
 - [x] Bookmark bucket is fixed at `0`; per-request `dedup_window_seconds` is clamped to `[60, 86400]` with fallback to SST `default_dedup_window_seconds`. **Evidence:** `TestComputeBucket_*` in handler tests.
 - [ ] Scenario-specific E2E regression tests for SCN-058-006 through SCN-058-009. **Claim Source:** not-run. **Uncertainty Declaration:** requires Postgres integration harness that lands with Scope 3 / Scope 5; routing back to `bubbles.plan` is the appropriate next step.
-- [x] Adversarial regression: `TestComputeDedupKey_BoundaryCollisionResistance` proves separator hygiene.
-- [x] Independent canary suite (`TestComputeDedupKey_VariesByDevice`) passes in the unit suite.
-- [x] Rollback path documented (DROP TABLE) in the migration header.
-- [x] Broader unit suite passes.
+- [x] Adversarial regression: `TestComputeDedupKey_BoundaryCollisionResistance` proves separator hygiene. **Evidence:** report.md → Scope 2 → Test Evidence.
+- [x] Independent canary suite (`TestComputeDedupKey_VariesByDevice`) passes in the unit suite. **Evidence:** report.md → Scope 2 → Test Evidence.
+- [x] Rollback path documented (DROP TABLE) in the migration header. **Evidence:** `internal/db/migrations/040_raw_ingest_dedup.sql` header.
+- [x] Broader unit suite passes. **Evidence:** report.md → Scope 2 → Test Evidence.
 - [x] Build Quality Gate clean.
 
 <!-- bubbles:g040-skip-end -->

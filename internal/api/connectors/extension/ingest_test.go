@@ -58,7 +58,7 @@ func validCfg() config.ExtensionIngestConfig {
 func newTestHandler(t *testing.T) (*Handler, *recordingPublisher) {
 	t.Helper()
 	pub := &recordingPublisher{}
-	return NewHandler(validCfg(), pub, ingest.NoOpDedupStore{}), pub
+	return NewHandler(validCfg(), pub, ingest.PassthroughDedupStore{}), pub
 }
 
 func withSession(req *http.Request) *http.Request {
@@ -176,7 +176,7 @@ func TestIngest_RejectsBodyOver1MiB(t *testing.T) {
 	cfg := validCfg()
 	cfg.MaxBodyBytes = 1024
 	pub := &recordingPublisher{}
-	h := NewHandler(cfg, pub, ingest.NoOpDedupStore{})
+	h := NewHandler(cfg, pub, ingest.PassthroughDedupStore{})
 
 	body := bytes.Repeat([]byte("a"), int(cfg.MaxBodyBytes)+1)
 	req := withSession(httptest.NewRequest(http.MethodPost, "/v1/x", bytes.NewReader(body)))
@@ -258,7 +258,7 @@ func TestComputeBucket_HistoryIgnoresOutOfRangeOverride(t *testing.T) {
 
 func TestIngest_PublishFailureSurfacesAsRejection(t *testing.T) {
 	pub := &recordingPublisher{err: fmt.Errorf("nats down")}
-	h := NewHandler(validCfg(), pub, ingest.NoOpDedupStore{})
+	h := NewHandler(validCfg(), pub, ingest.PassthroughDedupStore{})
 	items := []connector.RawArtifact{makeValidItem("bookmark", "laptop", "https://a.example/1", "ce-1")}
 	req := withSession(httptest.NewRequest(http.MethodPost, "/v1/x", bytes.NewReader(mustJSON(t, items))))
 	rec := httptest.NewRecorder()
