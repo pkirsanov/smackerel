@@ -39,17 +39,32 @@ type OpenMeteoProvider struct {
 }
 
 // NewOpenMeteoProvider constructs an OpenMeteoProvider with the
-// default open-meteo endpoints. httpClient MUST NOT be nil; callers
-// should set a per-call timeout that fits within the SST
-// `assistant.skills.weather.timeout_ms` budget.
-func NewOpenMeteoProvider(httpClient *http.Client) *OpenMeteoProvider {
+// supplied open-meteo geocoding and forecast endpoints. All three
+// inputs are REQUIRED:
+//   - httpClient MUST NOT be nil; callers should set a per-call
+//     timeout that fits within the SST
+//     `assistant.skills.weather.timeout_ms` budget.
+//   - geocodeURL and forecastURL MUST NOT be empty. Per spec 061
+//     design §18.3, the URLs are injected from
+//     `assistant.skills.weather.{geocode_url,forecast_url}` so the
+//     test stack can redirect to the in-tree nginx stub without
+//     forking the provider code. Empty values panic at construction
+//     so a misconfigured env file is caught at startup, not at the
+//     first lookup.
+func NewOpenMeteoProvider(httpClient *http.Client, geocodeURL, forecastURL string) *OpenMeteoProvider {
 	if httpClient == nil {
 		panic("weather.NewOpenMeteoProvider: httpClient must not be nil")
 	}
+	if geocodeURL == "" {
+		panic("weather.NewOpenMeteoProvider: geocodeURL must not be empty (spec 061 design §18.3)")
+	}
+	if forecastURL == "" {
+		panic("weather.NewOpenMeteoProvider: forecastURL must not be empty (spec 061 design §18.3)")
+	}
 	return &OpenMeteoProvider{
 		httpClient:  httpClient,
-		geocodeURL:  "https://geocoding-api.open-meteo.com/v1/search",
-		forecastURL: "https://api.open-meteo.com/v1/forecast",
+		geocodeURL:  geocodeURL,
+		forecastURL: forecastURL,
 		now:         time.Now,
 	}
 }

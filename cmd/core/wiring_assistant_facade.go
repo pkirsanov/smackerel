@@ -269,7 +269,7 @@ func buildAssistantSourceAssemblers(svc *coreServices, sourcesMax int) map[strin
 	}
 	lookup := newPostgresArtifactLookup(svc)
 	return map[string]contracts.SourceAssembler{
-		"retrieval_qa":  retrieval.NewFacadeAssembler(lookup, sourcesMax),
+		"retrieval_qa":  retrieval.NewFacadeAssembler("retrieval_qa", lookup, sourcesMax),
 		"weather_query": weather.NewFacadeAssembler(sourcesMax),
 	}
 }

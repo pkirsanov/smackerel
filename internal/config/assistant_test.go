@@ -40,6 +40,8 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_SKILLS_WEATHER_PROVIDER":                "open-meteo",
 		"ASSISTANT_SKILLS_WEATHER_API_KEY_REF":             "",
 		"ASSISTANT_SKILLS_WEATHER_CACHE_TTL":               "10m",
+		"ASSISTANT_SKILLS_WEATHER_GEOCODE_URL":             "https://geocoding-api.open-meteo.com/v1/search",
+		"ASSISTANT_SKILLS_WEATHER_FORECAST_URL":            "https://api.open-meteo.com/v1/forecast",
 		"ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED":           "false",
 		"ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT":   "5m",
 		"ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED":            "true",

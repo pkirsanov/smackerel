@@ -309,6 +309,45 @@ services:
       com.smackerel.component: prometheus
       com.smackerel.lifecycle: ephemeral
 
+  # Spec 061 design §18.4 — In-tree stub HTTP container for external
+  # provider URLs (open-meteo and any future provider-backed skill).
+  # Lifecycle: ENABLED ONLY when the `test` profile is selected
+  # (scripts/lib/runtime.sh adds `--profile test` iff TARGET_ENV=test).
+  # Production and dev stacks NEVER see this container, and the
+  # §18.3 production-safety guard in internal/config/assistant.go
+  # rejects startup if any non-test env contains the substring
+  # `stub-providers` in a URL key. Zero persistent volume — fully
+  # recreated per test run per bubbles-test-environment-isolation.
+  stub-providers:
+    image: nginx:alpine
+    container_name: smackerel-test-stub-providers
+    profiles:
+      - test
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=8m,mode=1777,nosuid,noexec,nodev
+      - /var/run:size=8m,mode=1777,nosuid,nodev
+      - /tmp:size=8m,mode=1777,nosuid,noexec,nodev
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./tests/e2e/stub-providers/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tests/e2e/stub-providers/fixtures:/usr/share/nginx/html/fixtures:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    labels:
+      com.smackerel.component: test-stub
+      com.smackerel.lifecycle: ephemeral
+
 volumes:
   postgres-data:
     name: ${POSTGRES_VOLUME_NAME}
