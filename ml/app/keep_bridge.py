@@ -5,12 +5,24 @@ This is an OPTIONAL, opt-in feature that uses an UNOFFICIAL Google API.
 """
 
 import datetime
+import json
 import logging
 import os
 import time
 from typing import Any
 
 logger = logging.getLogger("smackerel-ml.keep-bridge")
+
+# Spec 059 Scope 3 — single source of truth for the NATS bridge contract
+# between the Go core and this sidecar. Mirrors internal/connector/keep/keep.go.
+KEEP_SYNC_SUBJECT = "keep.sync.request"
+KEEP_HANDSHAKE_SUBJECT = "keep.sidecar.handshake"
+KEEP_SCHEMA_VERSION = 1
+
+# The env-var name for the Google App Password is stored ONLY here in the
+# sidecar (SCN-059-019, Scope 1 boundary). The Go core MUST NOT reference
+# this name anywhere in non-test source.
+APP_PASSWORD_ENV = "KEEP_GOOGLE_APP_PASSWORD"
 
 # Cached gkeepapi session
 _keep_session = None
@@ -239,3 +251,96 @@ async def handle_sync_request(data: dict) -> dict:
 
     # Should not reach here, but guard anyway
     return {"status": "error", "notes": [], "cursor": cursor, "error": "unexpected retry exhaustion"}
+
+
+async def handle_handshake_request(data: dict) -> dict:
+    """Handle a keep.sidecar.handshake NATS message (spec 059 SCN-059-019).
+
+    Validates that ``APP_PASSWORD_ENV`` is set non-empty on the sidecar.
+    The reply MUST NOT echo the value, its length, or any hash — only the
+    field name appears in the error string.
+    """
+    password = os.environ.get(APP_PASSWORD_ENV, "")
+    if not password:
+        return {
+            "status": "error",
+            "error": f"{APP_PASSWORD_ENV} is required",
+            "schema_version": KEEP_SCHEMA_VERSION,
+        }
+    return {
+        "status": "ok",
+        "schema_version": KEEP_SCHEMA_VERSION,
+    }
+
+
+async def register_nats_handler(nc) -> None:
+    """Subscribe the Keep sync + handshake request/reply handlers.
+
+    ``nc`` must be a core-NATS client (or test double) that exposes
+    ``subscribe(subject, cb=...)`` where ``cb`` receives a message with
+    ``.data`` and an awaitable ``.respond(payload: bytes)``.
+
+    Each handler wraps its dispatch in a try/except so that any unhandled
+    exception is converted into a fail-loud error envelope rather than
+    dropped on the floor (SCN-059-007).
+    """
+
+    async def _sync_cb(msg):
+        try:
+            req = json.loads(msg.data.decode()) if msg.data else {}
+        except Exception as exc:
+            await msg.respond(
+                json.dumps(
+                    {
+                        "status": "error",
+                        "notes": [],
+                        "cursor": "",
+                        "error": type(exc).__name__,
+                        "schema_version": KEEP_SCHEMA_VERSION,
+                    }
+                ).encode()
+            )
+            return
+        cursor = req.get("cursor", "")
+        try:
+            result = await handle_sync_request(req)
+            result.setdefault("schema_version", KEEP_SCHEMA_VERSION)
+        except Exception as exc:
+            logger.exception("keep sync handler raised; returning error envelope")
+            result = {
+                "status": "error",
+                "notes": [],
+                "cursor": cursor,
+                "error": type(exc).__name__,
+                "schema_version": KEEP_SCHEMA_VERSION,
+            }
+        await msg.respond(json.dumps(result).encode())
+
+    async def _handshake_cb(msg):
+        try:
+            req = json.loads(msg.data.decode()) if msg.data else {}
+        except Exception as exc:
+            await msg.respond(
+                json.dumps(
+                    {
+                        "status": "error",
+                        "error": type(exc).__name__,
+                        "schema_version": KEEP_SCHEMA_VERSION,
+                    }
+                ).encode()
+            )
+            return
+        try:
+            result = await handle_handshake_request(req)
+        except Exception as exc:
+            logger.exception("keep handshake handler raised; returning error envelope")
+            result = {
+                "status": "error",
+                "error": type(exc).__name__,
+                "schema_version": KEEP_SCHEMA_VERSION,
+            }
+        await msg.respond(json.dumps(result).encode())
+
+    await nc.subscribe(KEEP_SYNC_SUBJECT, cb=_sync_cb)
+    await nc.subscribe(KEEP_HANDSHAKE_SUBJECT, cb=_handshake_cb)
+    logger.info("Google Keep NATS bridge subscribed (%s, %s)", KEEP_SYNC_SUBJECT, KEEP_HANDSHAKE_SUBJECT)
