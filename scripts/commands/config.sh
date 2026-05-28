@@ -1166,12 +1166,43 @@ ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT="$(required_value assistant.skill
 ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED="$(required_value assistant.transports.telegram.enabled)"
 ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE="$(required_value assistant.transports.telegram.markdown_mode)"
 ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS="$(required_value assistant.transports.telegram.max_message_chars)"
-# Spec 061 SCOPE-05 design §17 — Telegram webhook mode SST.
+# Spec 061 SCOPE-05 design §17.5 — Telegram webhook mode SST.
 ASSISTANT_TRANSPORTS_TELEGRAM_MODE="$(required_value assistant.transports.telegram.mode)"
 # webhook_secret_ref is permissively-empty when mode=long_poll; the Go
 # validator enforces non-empty resolution when mode=webhook.
 ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="$(yaml_get assistant.transports.telegram.webhook_secret_ref)"
 ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH="$(required_value assistant.transports.telegram.webhook_path)"
+# Spec 061 SCOPE-10 — offline evaluation harness acceptance gates.
+# Read by internal/config/assistant.go and consumed by
+# tests/eval/assistant/harness.go to assert routing accuracy and
+# capture-fallback coverage thresholds.
+ASSISTANT_EVAL_ROUTING_ACCURACY_MIN="$(required_value assistant.eval.routing_accuracy_min)"
+ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN="$(required_value assistant.eval.capture_fallback_min)"
+# Per-target override for the test e2e suite: force webhook mode and
+# inject a stable, known test secret so the BS-001 webhook e2e shell
+# test can POST authenticated requests against the live test stack.
+# Production/home-lab/dev targets retain whatever assistant.transports.telegram.mode
+# resolves from the SST yaml (default long_poll until a public HTTPS
+# deployment story exists per design §17.6).
+ASSISTANT_TELEGRAM_WEBHOOK_SECRET=""
+if [[ "$TARGET_ENV" == "test" ]]; then
+  ASSISTANT_TRANSPORTS_TELEGRAM_MODE="webhook"
+  ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF="ASSISTANT_TELEGRAM_WEBHOOK_SECRET"
+  ASSISTANT_TELEGRAM_WEBHOOK_SECRET="test-webhook-secret-061-scope-05-bs001-fixture"
+  # Spec 061 SCOPE-05 §17.5 — BS-001 fixture chat IDs need a user
+  # mapping so the assistant adapter's translateInbound path resolves
+  # an actor user_id and either (a) routes via assistant.Handle +
+  # CaptureRoute or (b) falls through to handleTextCapture. Without
+  # this mapping the adapter returns (handled=true, translate error)
+  # and swallows the message before the capture path runs, so the
+  # BS-001 e2e fails its PG artifact poll. The chat IDs match the
+  # fixtures hard-coded in tests/e2e/test_telegram_assistant_bs001.sh
+  # (CHAT_ID=99001) and the BS-002/BS-007/weather companion tests.
+  # OVERRIDE (not append) — the test stack MUST NOT inherit any
+  # dev/production mappings that would point capture artifacts at a
+  # real user_id.
+  TELEGRAM_USER_MAPPING="99001:test-user-061-bs001,99002:test-user-061-bs002,99007:test-user-061-bs007,99003:test-user-061-weather-bs003,99006:test-user-061-weather-bs006"
+fi
 
 # HL-RESCAN-012 / Gate G028 — build-metadata SST resolution.
 # Source-of-truth precedence at config-generate time:
@@ -1639,6 +1670,9 @@ ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS=${ASSISTANT_TRANSPORTS_TELEGRAM_
 ASSISTANT_TRANSPORTS_TELEGRAM_MODE=${ASSISTANT_TRANSPORTS_TELEGRAM_MODE}
 ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF=${ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF}
 ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH=${ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH}
+ASSISTANT_TELEGRAM_WEBHOOK_SECRET=${ASSISTANT_TELEGRAM_WEBHOOK_SECRET}
+ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=${ASSISTANT_EVAL_ROUTING_ACCURACY_MIN}
+ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=${ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN}
 POSTGRES_CPU_LIMIT=${POSTGRES_CPU_LIMIT}
 POSTGRES_MEMORY_LIMIT=${POSTGRES_MEMORY_LIMIT}
 NATS_CPU_LIMIT=${NATS_CPU_LIMIT}

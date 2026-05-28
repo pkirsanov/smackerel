@@ -444,6 +444,37 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 // bot token is configured. Returns nil when Telegram is disabled or fails.
 func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps *api.Dependencies) *telegram.Bot {
 	if cfg.TelegramBotToken == "" {
+		// Spec 061 SCOPE-05 design §17.5 — webhook test-mode bot
+		// construction. When the assistant transport is in webhook
+		// mode AND we're in dev/test AND no real bot token is set,
+		// construct a minimal *Bot so the webhook handler has a
+		// dispatcher targeting the SAME safeHandleMessage path the
+		// long-poll loop uses. Production deployments MUST have a
+		// real TELEGRAM_BOT_TOKEN (NewBotForWebhookTestMode refuses
+		// production callers explicitly).
+		if cfg.Assistant.TelegramMode == "webhook" && cfg.Environment != "production" {
+			minBot, err := telegram.NewBotForWebhookTestMode(telegram.Config{
+				CoreAPIURL:  cfg.CoreAPIURL,
+				AuthToken:   cfg.AuthToken,
+				Environment: cfg.Environment,
+				// Spec 061 SCOPE-05 §17.5 — propagate user_mapping so
+				// the assistant adapter's translateInbound can resolve
+				// actor user_ids for the BS-001/BS-002/BS-007 fixture
+				// chats. Without this, the adapter returns
+				// (handled=true, translate error) and swallows the
+				// message before handleTextCapture runs.
+				UserMapping: cfg.TelegramUserMapping,
+			})
+			if err != nil {
+				slog.Warn("telegram webhook test-mode bot construction failed; webhook route will not be registered",
+					"error", err)
+				return nil
+			}
+			deps.TelegramBot = minBot
+			slog.Info("telegram webhook test-mode bot constructed (no real token; long-poll suppressed)",
+				"webhook_path", cfg.Assistant.TelegramWebhookPath)
+			return minBot
+		}
 		return nil
 	}
 	tgBot, err := telegram.NewBot(telegram.Config{
