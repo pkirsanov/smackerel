@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "spec": "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Regression scenarios encode the SST single-ingestion-point contract for the QF-decisions callback signing keystore: the keystore source is Config (not os.Getenv) and Validate() catches malformed JSON at boot. Any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "required",
+    "rationale": "Real code change: Config field addition + Load + Validate wiring + keystore loader API change + 4 existing call-site migrations + 3 NEW regression tests. NOT artifact-only. Red->Green evidence is mandatory.",
+    "redGreenEvidence": "Red: the new BUG020010 tests authored against main MUST FAIL \u2014 tests as build failures (the QFDecisionsCallbackSigningKeysJSON Config field and parsed.CallbackSigningKeysJSON QFConfig field do not exist). Green: after the migration, all BUG020010 tests PASS and the migrated existing call sites still PASS."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-020-010-001",
+      "scope": 1,
+      "title": "Keystore is populated from Config, not from process environment (adversarial \u2014 env unset)",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/connector/qfdecisions/bug020010_config_ingestion_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/bug020010_config_ingestion_test.go",
+          "function": "TestBUG020010_KeystoreReadsFromConfigNotEnv"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-keystore-reads-from-config-when-env-var-is-unset-gherkin-scenario-1"
+      ],
+      "liveTestExpectation": "Use t.Setenv to clear QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON. Construct a ConnectorConfig with SourceConfig['callback_signing_keys_json'] set to a valid 1-key JSON string. Call parseConfig then LoadCallbackKeystoreFromJSON(parsed.CallbackSigningKeysJSON). Assert keystore is non-nil and keystore.KeyIDs() contains the expected key_id. Adversarial: if the loader still read from os.Getenv, the empty env would yield a nil keystore.",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-010-002",
+      "scope": 1,
+      "title": "Validate() fails loud on a malformed signing-keys JSON",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/bug020010_qf_signing_keys_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/bug020010_qf_signing_keys_test.go",
+          "function": "TestBUG020010_ValidateFailsLoudOnMalformedSigningKeysJSON"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-validate-fails-loud-on-malformed-signing-keys-json-gherkin-scenario-2"
+      ],
+      "liveTestExpectation": "cfg.QFDecisionsEnabled=true; other required QF-decisions fields set to valid values; cfg.QFDecisionsCallbackSigningKeysJSON='not-valid-json'; call Load() which invokes Validate(); assert non-nil error AND message contains QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON.",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-010-003",
+      "scope": 1,
+      "title": "Validate() permits empty signing-keys JSON when QF decisions is enabled (PERMISSIVE policy)",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/bug020010_qf_signing_keys_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/bug020010_qf_signing_keys_test.go",
+          "function": "TestBUG020010_ValidateAllowsEmptySigningKeysJSON"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-validate-permits-empty-signing-keys-json-gherkin-scenario-3-permissive-or-override-to-strict-per-designmd"
+      ],
+      "liveTestExpectation": "cfg.QFDecisionsEnabled=true; other required QF-decisions fields set to valid values; QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON=''; call Load(); assert nil error. PERMISSIVE policy finalized in report.md Naming Decision.",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-010-004",
+      "scope": 1,
+      "title": "os.Getenv literal is eradicated from the keystore source",
+      "requiredTestType": ["unit", "guard-verification"],
+      "testFiles": [
+        "internal/connector/qfdecisions/bug020010_config_ingestion_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/qfdecisions/bug020010_config_ingestion_test.go",
+          "function": "TestBUG020010_KeystoreEnvVarLiteralRemoved"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-osgetenv-literal-eradicated-from-keystore-source-gherkin-scenario-4"
+      ],
+      "liveTestExpectation": "exec.Command('grep', '-nE', 'os\\.Getenv\\(', 'internal/connector/qfdecisions/callback_keystore.go'); assert exit code 1 (no matches). Also asserts the file no longer imports \"os\". Permanent structural regression guard mirroring the BUG-020-008 and BUG-020-009 helper-eradication grep tests.",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-010-005",
+      "scope": 1,
+      "title": "Existing integration call sites still pass after migration",
+      "requiredTestType": ["integration"],
+      "testFiles": [
+        "tests/integration/qf_callback_signing_test.go",
+        "tests/integration/qf_watch_proposal_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "tests/integration/qf_callback_signing_test.go",
+          "function": "TestQFCallbackSigning"
+        },
+        {
+          "file": "tests/integration/qf_watch_proposal_test.go",
+          "function": "TestQFCallbackWatchProposal"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-existing-integration-tests-qf_callback_signing_testgo--qf_watch_proposal_testgo-migrated-and-passing"
+      ],
+      "liveTestExpectation": "go test -tags=integration ./tests/integration/ -run TestQFCallback -count=1; assert exit 0. The 3 existing call sites (qf_callback_signing_test.go L76, qf_watch_proposal_test.go L91 + L198) that previously called LoadCallbackKeystoreFromEnv() are migrated to LoadCallbackKeystoreFromJSON directly; semantics preserved; suite continues to exercise the QF callback signing flow end-to-end against the live test stack.",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "modified"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-010-006",
+      "scope": 1,
+      "title": "Build and unit test suite pass after the fix",
+      "requiredTestType": ["build", "unit"],
+      "testFiles": [
+        "internal/config/config.go",
+        "internal/connector/qfdecisions/callback_keystore.go",
+        "internal/connector/qfdecisions/connector.go",
+        "cmd/core/connectors.go",
+        "scripts/commands/config.sh"
+      ],
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "function": "manual:./smackerel.sh build && ./smackerel.sh test unit"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-full-unit-suite-passes-no-collateral-regressions",
+        "specs/020-security-hardening/bugs/BUG-020-010-qfdecisions-direct-env-read/scopes.md#dod-build-passes"
+      ],
+      "liveTestExpectation": "go build ./... exit 0; ./smackerel.sh test unit PASSES for every touched package (internal/config, internal/connector/qfdecisions, cmd/core). The pre-existing FAIL in internal/connector/keep is unrelated spec 059 work-in-progress (confirmed by git status not touching keep/).",
+      "regressionProtected": true,
+      "status": "passed",
+      "changeType": "added"
+    }
+  ]
+}

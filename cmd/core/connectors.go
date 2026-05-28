@@ -34,8 +34,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	ytConn := youtubeConnector.New("youtube")
 	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
 	keepConn := keepConnector.New("google-keep")
-	// NOTE: spec 059 NATS bridge wiring (keepConn.SetNatsClient) intentionally
-	// omitted here until the keep.go side of the bridge is committed.
+	// Spec 059 Scope 3 — wire the NATS request/reply bridge so live
+	// (gkeepapi / hybrid) sync modes can reach the ML sidecar. The
+	// connector falls back gracefully if the sidecar is unreachable.
+	keepConn.SetNatsClient(svc.nc)
 	bmConn := bookmarksConnector.NewConnectorWithPool("bookmarks", svc.pg.Pool)
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
@@ -221,9 +223,10 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 			Enabled:      true,
 			SyncSchedule: cfg.QFDecisionsSyncSchedule,
 			SourceConfig: map[string]interface{}{
-				"base_url":       cfg.QFDecisionsBaseURL,
-				"packet_version": cfg.QFDecisionsPacketVersion,
-				"page_size":      cfg.QFDecisionsPageSize,
+				"base_url":                   cfg.QFDecisionsBaseURL,
+				"packet_version":             cfg.QFDecisionsPacketVersion,
+				"page_size":                  cfg.QFDecisionsPageSize,
+				"callback_signing_keys_json": cfg.QFDecisionsCallbackSigningKeysJSON,
 			},
 		}
 		svc.supervisor.SetConfig("qf-decisions", qfCfg)

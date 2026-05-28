@@ -234,12 +234,13 @@ type Config struct {
 	GuestHostEventTypes   string
 
 	// QF decisions connector (SST-compliant — from smackerel.yaml via config generate)
-	QFDecisionsEnabled       bool
-	QFDecisionsBaseURL       string
-	QFDecisionsCredentialRef string
-	QFDecisionsSyncSchedule  string
-	QFDecisionsPacketVersion int
-	QFDecisionsPageSize      int
+QFDecisionsEnabled                  bool
+    QFDecisionsBaseURL                  string
+    QFDecisionsCredentialRef            string
+    QFDecisionsSyncSchedule             string
+    QFDecisionsPacketVersion            int
+    QFDecisionsPageSize                 int
+    QFDecisionsCallbackSigningKeysJSON  string
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
@@ -585,10 +586,17 @@ func Load() (*Config, error) {
 		GuestHostEventTypes:   os.Getenv("GUESTHOST_EVENT_TYPES"),
 
 		// QF decisions connector
-		QFDecisionsEnabled:       os.Getenv("QF_DECISIONS_ENABLED") == "true",
-		QFDecisionsBaseURL:       os.Getenv("QF_DECISIONS_BASE_URL"),
-		QFDecisionsCredentialRef: os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
-		QFDecisionsSyncSchedule:  os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
+		QFDecisionsEnabled:                 os.Getenv("QF_DECISIONS_ENABLED") == "true",
+		QFDecisionsBaseURL:                 os.Getenv("QF_DECISIONS_BASE_URL"),
+		QFDecisionsCredentialRef:           os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
+		QFDecisionsSyncSchedule:            os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
+		// BUG-020-010 — QF callback HMAC bridge signing keystore JSON.
+		// PERMISSIVE: empty means "callback signing not configured in this
+		// environment" and the connector continues to run for
+		// ingest/render/evidence flows. Non-empty values are validated by
+		// validateQFDecisionsConfig() at boot via
+		// qfdecisions.LoadCallbackKeystoreFromJSON (fail-loud on parse).
+		QFDecisionsCallbackSigningKeysJSON: os.Getenv("QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON"),
 
 		// Hospitable connector
 		HospitableEnabled:          os.Getenv("HOSPITABLE_ENABLED") == "true",
@@ -1783,6 +1791,20 @@ func (c *Config) validateQFDecisionsConfig() error {
 	}
 	if c.QFDecisionsPageSize < 1 || c.QFDecisionsPageSize > 100 {
 		configErrors = append(configErrors, "QF_DECISIONS_PAGE_SIZE (must be an integer in range [1, 100])")
+	}
+	// BUG-020-010 — PERMISSIVE policy: empty signing-keys JSON is allowed
+	// (preserves the "callback signing not configured in this environment"
+	// deployment shape Scope 8 of spec 041 explicitly designed for). When
+	// non-empty, the value MUST parse as a non-empty JSON array so a
+	// malformed env var is surfaced at the consolidated Validate() choke
+	// point rather than at Connect time.
+	if raw := strings.TrimSpace(c.QFDecisionsCallbackSigningKeysJSON); raw != "" {
+		var entries []json.RawMessage
+		if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+			configErrors = append(configErrors, fmt.Sprintf("QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON (must be a JSON array of {key_id,secret,not_before} entries: %v)", err))
+		} else if len(entries) == 0 {
+			configErrors = append(configErrors, "QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON (must be a non-empty JSON array)")
+		}
 	}
 	if len(configErrors) > 0 {
 		return fmt.Errorf("missing or invalid QF decisions connector configuration: %s", strings.Join(configErrors, ", "))
