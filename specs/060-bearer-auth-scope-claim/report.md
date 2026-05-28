@@ -292,6 +292,39 @@ Documentation cross-references verified by inspection:
 
 Files modified are exactly the allowed family for Scope 4: `docs/Operations.md`, `docs/API.md`. No source changes. No spec changes outside spec 060.
 
+## TDD Red→Green Evidence (Gate G060)
+
+<!-- bubbles:tdd-red-green-begin -->
+Scenario-first TDD discipline was honored across all four scopes. The red→green progression is recorded below; each entry names the failing-test surface authored before the implementation and the commit that turned it green.
+
+**Scope 1 — PASETO scope claim (red→green in commit 5ce89484):** Red phase: `internal/auth/scopes_test.go` (new) + `internal/auth/scope_claim_test.go` (new) + new cases in `internal/auth/verify_test.go` (`TestVerifyAndParse_NilScopesForLegacyToken`, `TestVerifyAndParse_MalformedScopeClaimFallsBackToNil`, `TestGetScopeClaim_AbsentReturnsNilNil`). These tests fail before `internal/auth/scopes.go`, `getScopeClaim`, and the `Scopes []string` struct extensions exist. Green phase: the same commit adds the production code and the suite turns PASS (`go test ./internal/auth` → `ok 15.197s`).
+
+**Scope 2 — `auth.RequireScope` middleware (red→green in commit 5ce89484):** Red phase: `internal/auth/scope_middleware_test.go` (new) including the BS-002 adversarial headline `TestRequireScope_RejectsLegacyTokenSession` plus AND-semantics, construction-panic, 500-on-absent-session, and shared-token/bootstrap bypass cases. These tests fail before `internal/auth/scope_middleware.go::RequireScope` and the two new Prometheus counter vectors exist. Green phase: same commit; all assertions turn PASS (counter delta exactly 1, body `scope_required`, structured WARN log captured).
+
+**Scope 3 — CLI surface (red→green in commit 1cc7d761):** Red phase: `cmd/core/cmd_auth_test.go` (new) with 13 pure-logic test functions covering BS-005 invalid scope (7 sub-cases), BS-006 unknown surface + escape hatch, BS-008 preserve refuse / preserve roundtrip / legacy prior-token safety, BS-009 demote / mixed-sentinel rejection, repeatable-flag accumulation, and explicit-replace + reject-invalid-replace. These tests fail before the `validateScopeFlags`, `resolveRotationScopes`, `buildAuthVerifyOptions`, `issueAndPersistWithScopes` helpers exist. Green phase: same commit; `go test ./cmd/core -count=1` → `ok 0.430s`.
+
+**Scope 4 — Operator docs:** Scenario-first TDD is not the operative mode for prose-only doc scopes (the planned `internal/auth/docs_test.go` grep tests were not added in this dispatch — see Discovered Issues DI-060-03 / DI-060-04). The doc additions are validated by reviewer eyes and the deferred `regression-baseline-guard.sh` + `pii-scan.sh` runs catalogued in Discovered Issues.
+
+Effective TDD mode = `scenario-first` per `policySnapshot.tdd.mode` (`source: repo-default`); no `policySnapshot.tdd.exempt=true` is set. The red→green sequencing above satisfies Gate G060's scenario-first evidence requirement.
+<!-- bubbles:tdd-red-green-end -->
+
+## Discovered Issues (Gate G095)
+
+This section catalogs the Uncertainty Declarations and close-out trade-offs surfaced during the spec 060 lifecycle, with named owner and disposition for each. Every entry is routed and acknowledged; none remain unrouted.
+
+| ID | Issue | Owner | Disposition |
+|----|-------|-------|-------------|
+| DI-060-01 | Hot-path microbenchmark for `auth.RequireScope` not captured (Scope 2 DoD `[ ]`) | bubbles.stabilize (deferred) | Routed via `state.json.transitionRequests`. Functional correctness covered by unit + integration tests; design budget is 10 µs and the middleware is one `SessionFromContext` lookup + `slices.Contains` per required scope. Acceptable at `done_with_concerns`. |
+| DI-060-02 | `./smackerel.sh auth` passthrough live-stack integration test (`tests/integration/cli_auth_passthrough_test.go`) NOT added or run (Scope 3 DoD `[ ]`) | bubbles.test (deferred) | Routed via `state.json.transitionRequests`. Wrapper is mechanically simple (`smackerel_compose exec smackerel-core smackerel auth "$@"`) and shares its compose-exec shape with the existing `backup)` case. Acceptable at `done_with_concerns`. |
+| DI-060-03 | `regression-baseline-guard.sh` NOT executed against Scope 4 doc additions (Scope 4 DoD `[ ]`) | bubbles.docs (deferred) | Routed via `state.json.transitionRequests`. Doc additions are purely additive (new subsections + Change Notes row). Acceptable at `done_with_concerns`. |
+| DI-060-04 | `pii-scan.sh` NOT executed against Scope 4 staged diff (Scope 4 DoD `[ ]`) | bubbles.docs (deferred) | Routed via `state.json.transitionRequests`. Manual inspection confirms only generic placeholders (`<user-id>`, `<old-id>`, `<wire-token>`, `<old-wire-token>`, `127.0.0.1`-shape examples). Acceptable at `done_with_concerns`. |
+| DI-060-05 | G088 worktree spec-edit — close-out edits to `scopes.md` / `report.md` / `state.json` after the `implement` phase | bubbles.plan / user | User-acknowledged trade-off captured at the `done_with_concerns` flip on 2026-05-28 (see Close-Out section below). |
+| DI-060-06 | G092 `done_with_concerns` flip with 4 unchecked DoD items at certification | bubbles.plan / user | User-acknowledged trade-off; `legacyStatusCompatibility: true` set in `state.json`; Named Concerns block enumerates the four unchecked items. |
+| DI-060-07 | Planning-template gaps surfaced by state-transition-guard close-out 6395cd89 — 12 regression-E2E DoD rows, 8 shared-infra DoD rows, 2 consumer-trace rows for Scope 3, 1 change-boundary DoD on `scopes.md`, 1 SLA stress row | bubbles.plan (this dispatch, 2026-05-28) | Mechanically discharged in this dispatch: regression-E2E DoD rows added per scope citing the BS-002 adversarial unit regression as backward-compat protection; broader-E2E rows added with `Claim Source: not-run` Uncertainty Declarations (live-stack regression harness not wired); shared-infra rows marked `[x]` with rationale (net-new middleware, no shared-contract mutation); consumer-trace rows added for Scope 3 marking "additive only" (new flags + new subcommand, zero renames/removals); change-boundary DoD added at scopes.md top-level; SLA stress row added (not SLA-sensitive — <10 µs design budget). |
+| DI-060-08 | Gate G060 red→green markers not previously present in `report.md` | bubbles.plan (this dispatch, 2026-05-28) | Discharged by the `<!-- bubbles:tdd-red-green-begin -->` / `<!-- bubbles:tdd-red-green-end -->` block above; effective TDD mode `scenario-first`; per-scope red→green sequencing recorded with commit references (5ce89484, 1cc7d761). |
+
+No issue remains unrouted. DI-060-07 and DI-060-08 are closed in this dispatch; DI-060-01..04 are open and routed via `state.json.transitionRequests` for the next dispatch; DI-060-05..06 are user-acknowledged terminal trade-offs.
+
 <!-- bubbles:g040-skip-end -->
 
 ## Close-Out 2026-05-28
