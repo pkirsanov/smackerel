@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "spec": "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Regression scenarios encode the SST NO-DEFAULTS contract for 8 required int config keys; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "required",
+    "rationale": "This IS a code change (helper deletion + 8 call-site migration + 4 new unit tests); NOT artifact-only. Red→Green evidence is mandatory.",
+    "redGreenEvidence": "Red: 4 new unit tests authored against main MUST FAIL (parseIntEnv returns 0 silently; 8 keys absent from requiredVars()). Green: after migration to mustParseIntEnv and registration with Validate(), the 4 tests pass."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-020-008-001",
+      "scope": 1,
+      "title": "Missing single int env key produces a Validate() error naming the key",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020008_MissingSingleIntKey_FailsLoud"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-pre-fix-regression-test-fails",
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Table-driven over the 8 keys; for each key, os.Unsetenv that key (other 7 valid), call Config.Validate(), assert returned error contains the missing key name.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-008-002",
+      "scope": 1,
+      "title": "All 8 int env keys missing produce a single consolidated error",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020008_MissingAllIntKeys_ConsolidatedError"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Unset all 8 simultaneously, call Validate(), assert the SINGLE returned error contains all 8 key names.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-008-003",
+      "scope": 1,
+      "title": "Unparseable int env value produces a Validate() error naming key and value",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020008_UnparseableIntKey_FailsLoud"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Table-driven over the 8 keys; set each to \"abc\", call Validate(), assert error names both key and offending value.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-008-004",
+      "scope": 1,
+      "title": "All 8 int env keys valid → Validate() returns nil",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020008_AllIntKeysValid_NoError"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-unit-suite-passes-after-fix"
+      ],
+      "liveTestExpectation": "Set all 8 to valid non-zero ints, assert Validate() returns nil (no false-positive failures).",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-008-005",
+      "scope": 1,
+      "title": "`parseIntEnv(..., 0)` pattern is eradicated from the codebase",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "internal/config/config.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/config.go",
+          "function": "manual:grep-parseIntEnv-eradicated"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-helper-eradication-grep"
+      ],
+      "liveTestExpectation": "`grep -nE \"parseIntEnv\\(.*,\\s*0\\)\" internal/config/config.go` exits 1 (no matches).",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-008-006",
+      "scope": 1,
+      "title": "Build and unit test suite pass after the fix",
+      "requiredTestType": ["build", "unit"],
+      "testFiles": [
+        "internal/config/config.go",
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "function": "manual:./smackerel.sh build && ./smackerel.sh test unit"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-build-passes-after-fix",
+        "specs/020-security-hardening/bugs/BUG-020-008-parseintenv-silent-defaults/scopes.md#dod-unit-suite-passes-after-fix"
+      ],
+      "liveTestExpectation": "`./smackerel.sh build` exit 0; `./smackerel.sh test unit` exit 0 with the 4 new tests in the output.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    }
+  ]
+}
