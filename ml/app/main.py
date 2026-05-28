@@ -178,6 +178,13 @@ async def lifespan(app: FastAPI):
     await nats_client.subscribe_all()
     logger.info("NATS subscriptions active")
 
+    # Spec 059 Scope 3 — Google Keep request/reply bridge (handshake + sync).
+    # Uses core-NATS subscribe (not JetStream pull) for synchronous reply
+    # semantics matching internal/connector/keep/keep.go's Request() calls.
+    from . import keep_bridge
+
+    await keep_bridge.register_nats_handler(nats_client._nc)
+
     yield
 
     # Shutdown

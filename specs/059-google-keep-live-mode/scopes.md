@@ -49,7 +49,7 @@
 |-------|------|----------|---------------|-------------|--------|
 | 1 | Secret Manifest Wiring | `internal/config`, `config/smackerel.yaml`, `scripts/commands/config.sh`, compose env | Unit (Go contract), integration (compose env injection) | `KEEP_GOOGLE_APP_PASSWORD` in all three mirrors; `KEEP_GOOGLE_EMAIL` flows to both containers; secret-key mirror test green | Not started |
 | 2 | `drift_ack_token` Config + Fail-Loud Connector | `internal/connector/keep/keep.go` | Unit (parseKeepConfig, Connect EMAIL validation, boundary regression) | New field parses; missing EMAIL Connect fails loud; Go core never references `KEEP_GOOGLE_APP_PASSWORD`; OQ-059-01 resolved with single floor | Done |
-| 3 | NATS Request/Reply Bridge + Sidecar Connect Handshake | `internal/connector/keep/keep.go`, `ml/app/keep_bridge.py`, `ml/app/main.py` | Unit (publisher + handler + handshake), integration (live stack + handshake fail-loud) | Go publishes and parses sync reply; sidecar subscribes and responds on both subjects; sidecar handshake validates non-empty `KEEP_GOOGLE_APP_PASSWORD` and Go core surfaces fail-loud error verbatim; canonical artifact flow proven end-to-end | Not started |
+| 3 | NATS Request/Reply Bridge + Sidecar Connect Handshake | `internal/connector/keep/keep.go`, `ml/app/keep_bridge.py`, `ml/app/main.py` | Unit (publisher + handler + handshake), integration (live stack + handshake fail-loud) | Go publishes and parses sync reply; sidecar subscribes and responds on both subjects; sidecar handshake validates non-empty `KEEP_GOOGLE_APP_PASSWORD` and Go core surfaces fail-loud error verbatim; canonical artifact flow proven end-to-end | In Progress (unit-only; integration follow-up routed) |
 | 4 | Schema Validation + Drift Breaker | `internal/connector/keep/keep.go` (+ test fixtures) | Unit (validation + state machine), integration (drift injection) | All 4 transitions covered; HealthError surfaces; auth errors NOT counted as drift | Not started |
 | 5 | Observability | `internal/metrics`, `internal/connector/keep/keep.go` | Unit (metric increments), integration (live `/metrics` scrape + log assertions) | Three new metrics exposed; `keep_protocol_drift_detected` slog emitted once per state entry | Not started |
 | 6 | Operator Documentation | `docs/Operations.md` | regression-baseline-guard; manual review | Runbook complete (enablement + recovery + rotation); only `./smackerel.sh` commands referenced; no env-specific values | Not started |
@@ -190,7 +190,7 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 
 ## Scope 3: NATS Request/Reply Bridge
 
-**Status:** Not started
+**Status:** In Progress (unit-test paths implemented + green; three live-stack DoD items routed to integration follow-up)
 **Depends On:** Scope 2
 **Surfaces:** `internal/connector/keep/keep.go`, `ml/app/keep_bridge.py`, `ml/app/main.py`, `tests/integration/keep_*_test.go`, `ml/tests/test_keep_bridge.py`
 
@@ -277,21 +277,21 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 
 ### Definition of Done
 
-- [ ] Go connector publishes and parses replies on the new subjects with the 120 s timeout. Evidence: `report.md#scope-3`
-- [ ] Sidecar subscribes via `register_nats_handler` and replies with schema-conformant `KeepSyncResponse` envelopes for both success and exception paths. Evidence: `report.md#scope-3`
-- [ ] Sidecar handshake handler is subscribed on `keep.sidecar.handshake` and replies fail-loud (`status: "error"`, `error: "KEEP_GOOGLE_APP_PASSWORD is required"`) when the sidecar env var is empty, success when set; reply never echoes value/length/hash. Evidence: `report.md#scope-3`
-- [ ] Go-core `Connect()` performs the handshake after the local EMAIL precondition, surfaces sidecar error verbatim, and emits zero `keep.sync.request` publishes when the handshake errors. Evidence: `report.md#scope-3`
-- [ ] Scope 1 boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` remains green after Scope 3 (Go core still has zero references to `KEEP_GOOGLE_APP_PASSWORD`). Evidence: `report.md#scope-3`
-- [ ] Live-stack integration proves end-to-end `keep.sync.request → KeepSyncResponse → RawArtifact`. Evidence: `report.md#scope-3`
-- [ ] Hybrid-mode dedup by `note_id` proven against the live store; zero duplicate artifacts. Evidence: `report.md#scope-3`
-- [ ] Sidecar-boot canary proves existing subscribers (Drive, Photos, YouTube) still register after the new one is wired. Evidence: `report.md#scope-3`
-- [ ] No subprocess shellout, no `python3` invocation from Go (`grep -RE 'exec\.Command.*python' internal/connector/keep` returns empty). Evidence: `report.md#scope-3`
-- [ ] No write-intent `gkeep_*` symbol in either codebase (`grep -RE 'gkeep.*\.(add|edit|archive|trash|delete|save)' internal/connector/keep ml/app` returns empty). Evidence: `report.md#scope-3`
-- [ ] Change Boundary respected. Evidence: `report.md#scope-3`
+- [x] Go connector publishes and parses replies on the new subjects with the 120 s timeout. Evidence: `report.md#scope-3`
+- [x] Sidecar subscribes via `register_nats_handler` and replies with schema-conformant `KeepSyncResponse` envelopes for both success and exception paths. Evidence: `report.md#scope-3`
+- [x] Sidecar handshake handler is subscribed on `keep.sidecar.handshake` and replies fail-loud (`status: "error"`, `error: "KEEP_GOOGLE_APP_PASSWORD is required"`) when the sidecar env var is empty, success when set; reply never echoes value/length/hash. Evidence: `report.md#scope-3`
+- [x] Go-core `Connect()` performs the handshake after the local EMAIL precondition, surfaces sidecar error verbatim, and emits zero `keep.sync.request` publishes when the handshake errors. Evidence: `report.md#scope-3`
+- [x] Scope 1 boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` remains green after Scope 3 (Go core still has zero references to `KEEP_GOOGLE_APP_PASSWORD`). Evidence: `report.md#scope-3`
+- [ ] Live-stack integration proves end-to-end `keep.sync.request → KeepSyncResponse → RawArtifact`. Evidence: `report.md#scope-3` (routed to integration follow-up — Claim Source: not-run)
+- [ ] Hybrid-mode dedup by `note_id` proven against the live store; zero duplicate artifacts. Evidence: `report.md#scope-3` (routed to integration follow-up — Claim Source: not-run)
+- [ ] Sidecar-boot canary proves existing subscribers (Drive, Photos, YouTube) still register after the new one is wired. Evidence: `report.md#scope-3` (routed to integration follow-up — Claim Source: not-run)
+- [x] No subprocess shellout, no `python3` invocation from Go (`grep -RE 'exec\.Command.*python' internal/connector/keep` returns empty). Evidence: `report.md#scope-3`
+- [x] No write-intent `gkeep_*` symbol in either codebase (`grep -RE 'gkeep.*\.(add|edit|archive|trash|delete|save)' internal/connector/keep ml/app` returns empty). Evidence: `report.md#scope-3`
+- [x] Change Boundary respected. Evidence: `report.md#scope-3`
 
 ## Scope 4: Schema Validation + Drift Circuit Breaker
 
-**Status:** Not started
+**Status:** In Progress (unit + adversarial DoD green; one live-stack drift-stream integration row routed to bubbles.plan)
 **Depends On:** Scope 3
 **Surfaces:** `internal/connector/keep/keep.go`, `internal/connector/keep/keep_test.go`
 
@@ -363,17 +363,17 @@ And state is CLOSED
 
 ### Definition of Done
 
-- [ ] `validateGkeepResponse` catches every defined drift class with a per-mutation test row. Evidence: `report.md#scope-4`
-- [ ] All four breaker transitions covered by unit tests. Evidence: `report.md#scope-4`
-- [ ] Sidecar auth errors classified as Connect-fail (NOT drift) by unit test. Evidence: `report.md#scope-4`
+- [x] `validateGkeepResponse` catches every defined drift class with a per-mutation test row. Evidence: `report.md#scope-4`
+- [x] All four breaker transitions covered by unit tests. Evidence: `report.md#scope-4`
+- [x] Sidecar auth errors classified as Connect-fail (NOT drift) by unit test. Evidence: `report.md#scope-4`
 - [ ] Live integration proves a real malformed-response stream trips the breaker after the 4th failure. Evidence: `report.md#scope-4`
-- [ ] OPEN-state breaker skips all NATS publishes (adversarial: a publish during OPEN would be detected by a test NATS double). Evidence: `report.md#scope-4`
-- [ ] No persistence of breaker state across container restarts; restart with same token does NOT clear the breaker (it re-trips on first failure). Evidence: `report.md#scope-4`
-- [ ] Change Boundary respected. Evidence: `report.md#scope-4`
+- [x] OPEN-state breaker skips all NATS publishes (adversarial: a publish during OPEN would be detected by a test NATS double). Evidence: `report.md#scope-4`
+- [x] No persistence of breaker state across container restarts; restart with same token does NOT clear the breaker (it re-trips on first failure). Evidence: `report.md#scope-4`
+- [x] Change Boundary respected. Evidence: `report.md#scope-4`
 
 ## Scope 5: Observability (Metrics + Structured Logs)
 
-**Status:** Not started
+**Status:** In Progress (unit + adversarial DoD green; two live-stack `/metrics` rows routed to bubbles.plan)
 **Depends On:** Scope 4
 **Surfaces:** `internal/metrics/*.go`, `internal/connector/keep/keep.go`
 
@@ -431,15 +431,15 @@ And neither metric carries any label value containing email or password material
 ### Definition of Done
 
 - [ ] Three new metrics registered and exposed on the live `/metrics` endpoint. Evidence: `report.md#scope-5`
-- [ ] Drift counter increments exactly once per OPEN entry (adversarial: repeated `Sync()` in OPEN does not advance it). Evidence: `report.md#scope-5`
-- [ ] `Health()` returns `HealthError` while OPEN and recovers on token rotation. Evidence: `report.md#scope-5`
-- [ ] No log line or metric label carries `KEEP_GOOGLE_EMAIL` or `KEEP_GOOGLE_APP_PASSWORD` values (`grep` over captured test logs returns empty). Evidence: `report.md#scope-5`
-- [ ] Histogram and notes counter populated on success path. Evidence: `report.md#scope-5`
-- [ ] Change Boundary respected. Evidence: `report.md#scope-5`
+- [x] Drift counter increments exactly once per OPEN entry (adversarial: repeated `Sync()` in OPEN does not advance it). Evidence: `report.md#scope-5`
+- [x] `Health()` returns `HealthError` while OPEN and recovers on token rotation. Evidence: `report.md#scope-5`
+- [x] No log line or metric label carries `KEEP_GOOGLE_EMAIL` or `KEEP_GOOGLE_APP_PASSWORD` values (`grep` over captured test logs returns empty). Evidence: `report.md#scope-5`
+- [x] Histogram and notes counter populated on success path. Evidence: `report.md#scope-5`
+- [x] Change Boundary respected. Evidence: `report.md#scope-5`
 
 ## Scope 6: Operator Documentation
 
-**Status:** Not started
+**Status:** In Progress (subsection delivered; pii-scan staged-diff run + regression-baseline registration routed to bubbles.plan)
 **Depends On:** Scope 5
 **Surfaces:** `docs/Operations.md`
 
@@ -503,13 +503,13 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 
 ### Definition of Done
 
-- [ ] New subsection exists in `docs/Operations.md` with all seven structural pieces. Evidence: `report.md#scope-6`
-- [ ] Runbook references only `./smackerel.sh` commands; no ad-hoc invocations leak in. Evidence: `report.md#scope-6`
+- [x] New subsection exists in `docs/Operations.md` with all seven structural pieces. Evidence: `report.md#scope-6`
+- [x] Runbook references only `./smackerel.sh` commands; no ad-hoc invocations leak in. Evidence: `report.md#scope-6`
 - [ ] No env-specific values (`pii-scan.sh` exit 0). Evidence: `report.md#scope-6`
-- [ ] Cross-references to specs 051, 052, 054 and `docs/Deployment.md` present. Evidence: `report.md#scope-6`
-- [ ] Recovery procedure explicitly states no CLI verb or HTTP endpoint exists for drift ack. Evidence: `report.md#scope-6`
+- [x] Cross-references to specs 051, 052, 054 and `docs/Deployment.md` present. Evidence: `report.md#scope-6`
+- [x] Recovery procedure explicitly states no CLI verb or HTTP endpoint exists for drift ack. Evidence: `report.md#scope-6`
 - [ ] `regression-baseline-guard.sh` exits 0 after baseline refresh. Evidence: `report.md#scope-6`
-- [ ] Change Boundary respected (only `docs/Operations.md` changed). Evidence: `report.md#scope-6`
+- [x] Change Boundary respected (only `docs/Operations.md` changed). Evidence: `report.md#scope-6`
 
 ## Cross-Scope Certification Gates
 
