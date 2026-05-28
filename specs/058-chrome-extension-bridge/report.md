@@ -602,4 +602,31 @@ Spec 058 Chrome Extension Bridge (Live Bookmarks + Browser History) delivers all
 
 **Skip justifications for the 9 specialist phases** are recorded in `state.json.execution.completedPhaseClaims[5].skipJustifications` (test, regression, simplify, stabilize, security, docs, validate, audit, chaos).
 
+---
+
+## Discovered Issues (Gate G095) — 2026-05-28 residual discharge
+
+This catalog dispositions every residual finding raised by `state-transition-guard.sh`
+against `specs/058-chrome-extension-bridge` after the 2026-05-28 close-out commit
+(`done_with_concerns` with `legacyStatusCompatibility: true`). Each entry names the
+ownership of the routed work; closed-with-trade-off items are accepted under the
+named close-out concerns above.
+
+| ID | Source check | Disposition | Owner / Routing |
+|----|--------------|-------------|-----------------|
+| DI-058-01 | Check 4 (12 unchecked DoD items) | Accepted as close-out concern. The 12 unchecked DoD rows are honest `Claim Source: not-run` Uncertainty Declarations covering live-stack tiers gated on infrastructure not in repo (Playwright harness F-057-V-001), live post-merge CI evidence (cosign verify-blob against a Rekor entry), router-mount follow-up shared with spec 060, and the HTMX admin page. Each row is annotated in scopes.md with its own UD. | `bubbles.plan` (future scope to land Playwright harness or downgrade tier); operator (future post-merge CI run for cosign verify) |
+| DI-058-02 | Check 5A (SLA stress coverage missing) | Discharged this run via Cross-Cutting Mechanical Discharge in scopes.md: "Not Applicable" with rationale (no published SLA, constant-time SHA-256 per item, bounded body cap, single ON-CONFLICT upsert per item, MV3 background worker on Chrome's event loop with already-adversarial-tested backoff curve). | Closed. |
+| DI-058-03 | Check 8 (3 nonexistent Playwright test files in Test Plan) | Accepted as close-out concern. The three Playwright e2e specs (`bookmark_roundtrip.spec.ts`, `auth_failure.spec.ts`) require the Playwright harness blocked by F-057-V-001. Test Plan rows remain so the contract is visible; file-existence will close once the harness lands. | `bubbles.plan` (future scope to either land Playwright harness or downgrade the planned tier to vitest-with-fake-indexeddb and rewrite the rows) |
+| DI-058-04 | Check 8A (7 missing broader-E2E DoD rows) | Discharged this run via per-scope DoD rows in scopes.md: Scope 1 (scenario-specific [x] + broader [ ] UD), Scope 2 (scenario-specific [x] + broader [ ] UD), Scope 3 (scenario-specific [x] — broader already had UD), Scope 4 (scenario-specific [x] + broader [ ] UD), Scope 5 (scenario-specific [x] — scenario-specific row covers SCN-058-019..021 catalog). | Closed for planning-template gap; the [ ] rows are tracked under DI-058-01. |
+| DI-058-05 | Check 8B (Scope 2 missing Consumer Impact Sweep section + DoD + enumeration; Scope 5 missing consumer-sweep DoD) | Discharged this run: Scope 2 now has a Consumer Impact Sweep section enumerating current consumers (Scope 1 handler, Scope 5 admin devices view), future consumers (mobile-capture / share-extension reuse path), and stale-reference scan (zero hits). Scope 5 gained an additional consumer-sweep DoD row for the new admin surface. | Closed. |
+| DI-058-06 | Check 8D (1 change-boundary DoD missing on scopes.md) | Discharged this run via Cross-Cutting Mechanical Discharge in scopes.md: "Change Boundary is respected and zero excluded file families were changed" with the close-out diff enumeration. | Closed. |
+| DI-058-07 | Check 30 (G088 post-cert spec edit) | Accepted as user-acknowledged trade-off, identical to specs 057/059/060 close-outs. Inherent to any close-out that edits the spec's own state.json/report.md/scopes.md to capture certification metadata. | Closed by acceptance. |
+| DI-058-08 | Check 35 (G095 discovered-issue disposition) | This catalog satisfies the gate; the prior pass already reported PASS, this entry codifies the disposition explicitly per the user-requested mirror of the 060 close-out shape. | Closed. |
+
+**Routing summary:**
+
+- `addressedFindings`: DI-058-02, DI-058-04, DI-058-05, DI-058-06, DI-058-08 (5 mechanical discharges this run).
+- `unresolvedFindings`: DI-058-01 (12 not-run UDs gated on infra not in repo), DI-058-03 (3 missing Playwright files), DI-058-07 (G088 inherent-to-close-out, user-accepted).
+- No code changes. Terminal discipline respected (IDE tools only).
+
 
