@@ -191,7 +191,99 @@
     }
   ],
   "reworkQueue": [],
+  "concerns": [
+    {
+      "id": "CONCERN-059-01",
+      "scope": "Scope 1",
+      "dodLineRef": "scopes.md § Scope 1 Definition of Done",
+      "description": "Live-stack secret-mirror smoke (KEEP_GOOGLE_APP_PASSWORD reachable from ml sidecar; absent from core process env) + canary + rollback proofs.",
+      "deferralReason": "Live ML sidecar + NATS test stack with bespoke fixture mode required; unit + compose-contract tests + Claim Source: not-run rows already cover encode/decode safety.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-059-02",
+      "scope": "Scope 2",
+      "dodLineRef": "scopes.md § Scope 2 Definition of Done",
+      "description": "Live-stack fail-loud Connect validation when drift_ack_token missing/empty (config-time crash proof against the live disposable stack).",
+      "deferralReason": "Live-stack regression harness not yet wired; unit test TestConnect_FailsLoudOnMissingDriftAckToken covers the fail-loud path deterministically.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-059-03",
+      "scope": "Scope 3",
+      "dodLineRef": "scopes.md § Scope 3 Definition of Done",
+      "description": "Three live-stack DoD items: end-to-end keep.sync.request → KeepSyncResponse → RawArtifact roundtrip; hybrid-mode note_id dedup against the live store; sidecar-boot canary proving Drive/Photos/YouTube subscribers still register after register_nats_handler.",
+      "deferralReason": "Live ML sidecar + NATS + Postgres test stack with stubbed gkeepapi session required; unit coverage for encode/decode/handshake is complete.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-059-04",
+      "scope": "Scope 4",
+      "dodLineRef": "scopes.md § Scope 4 Definition of Done",
+      "description": "Live malformed-stream breaker trip (TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses) against a real sidecar fixture returning invalid envelopes on demand.",
+      "deferralReason": "Requires bespoke sidecar fixture mode + live NATS stack; the FSM unit + 9-mutation adversarial matrix in internal/connector/keep/keep_breaker_test.go covers every breaker transition deterministically.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-059-05",
+      "scope": "Scope 5",
+      "dodLineRef": "scopes.md § Scope 5 Definition of Done",
+      "description": "Live /metrics scrape proving smackerel_keep_protocol_drift_detected_total / smackerel_keep_protocol_drift_retry_total / smackerel_keep_protocol_drift_breaker_state appear; live label-cardinality regression on smackerel_keep_protocol_drift_detected_total stable label set.",
+      "deferralReason": "Requires live Prometheus scrape against the disposable test stack; all three metrics are registered via internal/metrics/keep.go init() and unit tests (counter-once, Health, log redaction, histogram bounds) are green.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    },
+    {
+      "id": "CONCERN-059-06",
+      "scope": "Cross-Scope",
+      "dodLineRef": "scopes.md § Cross-Scope Certification",
+      "description": "Live-stack canary proof + live-stack rollback/restore proof for the keep-connector deployment.",
+      "deferralReason": "Live disposable stack with canary/rollback orchestration not yet wired in CI; scopes.md Cross-Scope Certification block carries Claim Source: not-run Uncertainty Declarations.",
+      "responsibleOwner": "bubbles.test",
+      "recordedAt": "2026-05-28T20:00:00Z",
+      "recordedBy": "bubbles.workflow",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)"
+    }
+  ],
   "addressedFindings": [
+    {
+      "addressedAt": "2026-05-28T20:00:00Z",
+      "addressedBy": "bubbles.workflow",
+      "round": "post-cert-quick-win-sweep",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)",
+      "kind": "di_059_scope6_pii_scan_run",
+      "summary": "Scope 6 DoD line 564 discharged: `bash .github/bubbles/scripts/pii-scan.sh` executed against the staged spec-060 + spec-059 + benchmark + integration-test + smackerel.sh wrapper-fix diff (same run as spec 060 Scope 4 line 548); exit 0 — no leaks. Doc additions use generic placeholders only.",
+      "evidenceRefs": [
+        "specs/059-google-keep-live-mode/scopes.md#L564",
+        "specs/059-google-keep-live-mode/report.md#post-cert-quick-win-sweep-2026-05-28-scope-6-lines-564-567"
+      ]
+    },
+    {
+      "addressedAt": "2026-05-28T20:00:00Z",
+      "addressedBy": "bubbles.workflow",
+      "round": "post-cert-quick-win-sweep",
+      "workflowMode": "parent-expanded-child-mode (cert-with-concerns sweep)",
+      "kind": "di_059_scope6_regression_baseline_guard_run",
+      "summary": "Scope 6 DoD line 567 discharged: `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/059-google-keep-live-mode --verbose` exit 0 (G044 informational baseline note; G045 59-of-60 done-spec inventory complete; G046 no route/endpoint collisions). Guard PASSED.",
+      "evidenceRefs": [
+        "specs/059-google-keep-live-mode/scopes.md#L567",
+        "specs/059-google-keep-live-mode/report.md#post-cert-quick-win-sweep-2026-05-28-scope-6-lines-564-567"
+      ]
+    },
     {
       "addressedAt": "2026-05-28T18:55:00Z",
       "addressedBy": "bubbles.plan",
