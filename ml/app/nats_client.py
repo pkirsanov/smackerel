@@ -484,6 +484,18 @@ class NATSClient:
                         from .photos import validate_photo_result
 
                         validate_photo_result(response_subject, result)
+                    elif subject == "digest.generate":
+                        # Digest results carry digest_date / text, not
+                        # artifact_id. validate_processed_result enforces
+                        # the artifact-ingestion schema and rejects valid
+                        # digest payloads with "artifact_id is required",
+                        # which blocked the digest.generated publish and
+                        # left the daily-digest pipeline stuck on the
+                        # storeFallbackDigest line ("N items processed
+                        # overnight."). Skip the artifact-shape check for
+                        # digest results; their shape is validated by the
+                        # core-side Go subscriber on receipt instead.
+                        pass
                     else:
                         # Validate outgoing result before publishing
                         try:
@@ -803,7 +815,42 @@ Write the digest text only, no JSON wrapper."""
                 timeout=180,
             )
 
-            text = response.choices[0].message.content.strip()
+            text = response.choices[0].message.content or ""
+
+            # Strip reasoning-model preamble: gemma4:26b and other Ollama
+            # models can emit <think>...</think> chain-of-thought BEFORE
+            # the actual digest text. Without this strip, the digest text
+            # was just the closing </think> tag (or empty) and the Go
+            # subscriber rejected the publish with "text is required".
+            # Mirrors processor.py's identical strip for the artifact
+            # ingestion path.
+            if "<think>" in text:
+                close = text.find("</think>")
+                if close != -1:
+                    text = text[close + len("</think>"):]
+
+            text = text.strip()
+
+            # Some models wrap their digest in ``` fences despite the
+            # explicit "no JSON wrapper" instruction. Strip the fence so
+            # the operator sees prose, not markdown noise.
+            if text.startswith("```"):
+                nl = text.find("\n")
+                if nl != -1:
+                    text = text[nl + 1:]
+                if text.endswith("```"):
+                    text = text[: -3].rstrip()
+
+            # If the model returned nothing usable (empty, whitespace, or
+            # ONLY a think block we stripped to nothing), fall through to
+            # the fallback path so the operator still gets the metadata
+            # summary instead of an empty/rejected digest.
+            if not text:
+                raise ValueError(
+                    "LLM digest response empty after <think>/fence strip; "
+                    "falling through to metadata fallback"
+                )
+
             word_count = len(text.split())
 
             return {
