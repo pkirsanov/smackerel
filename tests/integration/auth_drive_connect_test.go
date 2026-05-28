@@ -38,8 +38,8 @@ type fakeDriveProviderForAuth struct {
 	disp string
 }
 
-func (f *fakeDriveProviderForAuth) ID() string                     { return f.id }
-func (f *fakeDriveProviderForAuth) DisplayName() string            { return f.disp }
+func (f *fakeDriveProviderForAuth) ID() string                       { return f.id }
+func (f *fakeDriveProviderForAuth) DisplayName() string              { return f.disp }
 func (f *fakeDriveProviderForAuth) Capabilities() drive.Capabilities { return drive.Capabilities{} }
 func (f *fakeDriveProviderForAuth) BeginConnect(_ context.Context, _ drive.AccessMode, _ drive.Scope) (string, string, error) {
 	return "https://fake.example/auth", "fake-state", nil
@@ -86,16 +86,16 @@ func productionAuthDepsForDrive(t *testing.T) (*api.Dependencies, string) {
 	deps := &api.Dependencies{
 		Environment: "production",
 		AuthConfig: config.AuthConfig{
-			Enabled:                              true,
-			TokenFormat:                          "paseto_v4_public",
-			SigningActivePrivateKey:              priv,
-			SigningActiveKeyID:                   kid,
-			TokenTTLHours:                        24,
-			RotationGraceWindowHours:             24,
-			ClockSkewToleranceSeconds:            60,
+			Enabled:                               true,
+			TokenFormat:                           "paseto_v4_public",
+			SigningActivePrivateKey:               priv,
+			SigningActiveKeyID:                    kid,
+			TokenTTLHours:                         24,
+			RotationGraceWindowHours:              24,
+			ClockSkewToleranceSeconds:             60,
 			RevocationCacheRefreshIntervalSeconds: 60,
-			AtRestHashingKey:                     priv + "-drivetest-hash",
-			ProductionSharedTokenFallbackEnabled: false,
+			AtRestHashingKey:                      priv + "-drivetest-hash",
+			ProductionSharedTokenFallbackEnabled:  false,
 		},
 		AuthVerifyOptions: auth.VerifyOptions{
 			ActivePublicKey:    pub,
