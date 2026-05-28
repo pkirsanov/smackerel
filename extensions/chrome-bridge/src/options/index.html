@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smackerel Chrome Bridge — Options</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2em auto; padding: 0 1em; color: #222; }
+      h1 { font-size: 1.4em; }
+      label { display: block; margin-top: 1em; font-weight: 600; }
+      input[type=text], input[type=password], input[type=url], input[type=number], textarea {
+        width: 100%; box-sizing: border-box; padding: 0.5em; font-family: monospace; font-size: 0.95em;
+      }
+      textarea { min-height: 4em; }
+      .row { display: flex; gap: 0.5em; align-items: center; }
+      .row input { flex: 1; }
+      button { padding: 0.5em 1em; cursor: pointer; }
+      .hint { font-size: 0.85em; color: #555; margin-top: 0.25em; }
+      .errors { color: #b00; white-space: pre-wrap; margin-top: 1em; }
+      .ok { color: #060; margin-top: 1em; }
+      hr { margin: 2em 0; border: none; border-top: 1px solid #ddd; }
+    </style>
+  </head>
+  <body>
+    <h1>Smackerel Chrome Bridge</h1>
+    <p>Stream bookmarks and browser history to your operator's smackerel-core
+    instance. All fields are required; there are no defaults.</p>
+
+    <label for="base_url">Base URL</label>
+    <input type="url" id="base_url" placeholder="https://smackerel.example.org" />
+    <div class="hint">Operator's smackerel-core base URL. No trailing slash.</div>
+
+    <label for="bearer_token">Bearer token (PASETO, scope <code>extension:bookmarks,extension:history</code>)</label>
+    <div class="row">
+      <input type="password" id="bearer_token" autocomplete="off" />
+      <button type="button" id="reveal_token">Reveal</button>
+    </div>
+    <div class="hint">Issue with <code>./smackerel.sh auth enroll --scope extension:bookmarks,extension:history</code>. Never logged.</div>
+
+    <label for="source_device_id">Source device id</label>
+    <div class="row">
+      <input type="text" id="source_device_id" maxlength="32" placeholder="laptop-1" />
+      <button type="button" id="auto_device_id">Auto</button>
+    </div>
+    <div class="hint">1–32 chars from <code>[a-z0-9-]</code>; or click Auto for <code>auto-&lt;uuidv4&gt;</code>.</div>
+
+    <label for="dedup_window_seconds">Dedup window (seconds)</label>
+    <input type="number" id="dedup_window_seconds" min="60" max="86400" step="1" />
+    <div class="hint">History dedup bucket size. Range [60, 86400].</div>
+
+    <label for="dwell_threshold_seconds">Dwell threshold (seconds)</label>
+    <input type="number" id="dwell_threshold_seconds" min="0" max="3600" step="1" />
+    <div class="hint">History visits below this dwell are dropped. Range [0, 3600].</div>
+
+    <label for="privacy_allow_patterns">Privacy allow patterns (one regex per line, max 64)</label>
+    <textarea id="privacy_allow_patterns" spellcheck="false"></textarea>
+    <div class="hint">If non-empty, only URLs matching at least one allow pattern are captured.</div>
+
+    <label for="privacy_deny_patterns">Privacy deny patterns (one regex per line, max 64)</label>
+    <textarea id="privacy_deny_patterns" spellcheck="false"></textarea>
+    <div class="hint">URLs matching any deny pattern are dropped before they leave the browser.</div>
+
+    <hr />
+
+    <div class="row">
+      <button type="button" id="save">Save</button>
+      <button type="button" id="test">Test connection</button>
+    </div>
+    <div class="errors" id="errors"></div>
+    <div class="ok" id="ok"></div>
+
+    <script type="module" src="index.js"></script>
+  </body>
+</html>

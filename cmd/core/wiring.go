@@ -11,10 +11,13 @@ import (
 
 	"github.com/smackerel/smackerel/internal/annotation"
 	"github.com/smackerel/smackerel/internal/api"
+	extensiondevices "github.com/smackerel/smackerel/internal/api/admin/extensiondevices"
+	extensioningest "github.com/smackerel/smackerel/internal/api/connectors/extension"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
+	ingest "github.com/smackerel/smackerel/internal/connector/ingest"
 	photolib "github.com/smackerel/smackerel/internal/connector/photos"
 	qfdecisions "github.com/smackerel/smackerel/internal/connector/qfdecisions"
 	"github.com/smackerel/smackerel/internal/drive"
@@ -31,6 +34,7 @@ import (
 	"github.com/smackerel/smackerel/internal/mealplan"
 	"github.com/smackerel/smackerel/internal/notification"
 	ntfysource "github.com/smackerel/smackerel/internal/notification/source/ntfy"
+	"github.com/smackerel/smackerel/internal/pipeline"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/web"
@@ -373,6 +377,49 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		slog.Error("auth admin handlers wiring failed", "error", err)
 	} else {
 		deps.AuthAdminHandlers = authAdmin
+	}
+
+	// Spec 058 — Chrome Extension Bridge ingest + admin devices view.
+	//
+	// The ingest handler shares the existing pipeline.RawArtifactPublisher
+	// for downstream publishing and a per-pool PostgresDedupStore for the
+	// server-authoritative dedup contract. NewHandler panics on a nil
+	// publisher or dedup store; both are guaranteed non-nil here.
+	{
+		extPub := pipeline.NewRawArtifactPublisher(svc.pg.Pool, svc.nc)
+		extDedup := ingest.NewPostgresDedupStore(svc.pg.Pool)
+		deps.ExtensionIngestHandler = extensioningest.NewHandler(cfg.Extension.Ingest, extPub, extDedup)
+
+		// Admin predicate mirrors AuthAdminHandlers.callerIsAdmin:
+		// bootstrap is always admin; shared-token is admin in non-
+		// production OR when ProductionSharedTokenFallbackEnabled;
+		// per-user sessions are not admin until the SST allowlist
+		// surface lands in a later spec.
+		envCopy := cfg.Environment
+		sharedFallback := cfg.Auth.ProductionSharedTokenFallbackEnabled
+		adminPredicate := func(r *http.Request) (string, bool, bool) {
+			sess, ok := auth.SessionFromContext(r.Context())
+			if !ok {
+				return "", false, false
+			}
+			isAdmin := false
+			switch sess.Source {
+			case auth.SessionSourceBootstrap:
+				isAdmin = true
+			case auth.SessionSourceSharedToken:
+				if envCopy != "production" || sharedFallback {
+					isAdmin = true
+				}
+			}
+			return sess.UserID, isAdmin, true
+		}
+		extStore := extensiondevices.NewPostgresStore(svc.pg.Pool)
+		deps.ExtensionDevicesHandler = extensiondevices.NewHandler(extStore, adminPredicate)
+		slog.Info("spec 058 extension bridge wired",
+			"max_batch_items", cfg.Extension.Ingest.MaxBatchItems,
+			"max_body_bytes", cfg.Extension.Ingest.MaxBodyBytes,
+			"default_dedup_window_seconds", cfg.Extension.Ingest.DefaultDedupWindowSeconds,
+		)
 	}
 
 	// Wire actionable list handlers (spec 028)

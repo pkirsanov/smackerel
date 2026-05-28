@@ -927,6 +927,168 @@ curl -X POST -H "Authorization: Bearer <token>" \
 
 Or via the web UI at `http://127.0.0.1:40001/settings` → Import Bookmarks.
 
+### Google Keep live sync
+
+> **Spec reference:** [`specs/059-google-keep-live-mode`](../specs/059-google-keep-live-mode/).
+> Cross-references: [`docs/Deployment.md`](Deployment.md) for bundle redeploy
+> mechanics, and specs [`051`](../specs/051-bundle-secret-baseline/), [`052`](../specs/052-bundle-secret-substitution/),
+> [`054-notification-intelligence-escalation`](../specs/054-notification-intelligence-escalation/) for
+> the secret-bundle and notification escalation primitives this runbook reuses.
+
+#### Overview
+
+Live sync polls Google Keep through the Python ML sidecar's `gkeepapi`
+bridge over NATS request/reply. `gkeepapi` is an **unofficial** library
+that drives Google's internal Keep protocol — it can break at any time
+when Google ships an unannounced change. The drift circuit breaker
+trips after four consecutive malformed sidecar responses and refuses
+all further sync calls until an operator rotates `drift_ack_token`
+(see "Recovering from a tripped breaker" below). There is no CLI verb
+and no HTTP endpoint that acknowledges drift; rotation is the only
+path.
+
+#### Deprecation Path
+
+This entire live-sync surface is provisional. When Google publishes a
+stable Keep API, the connector will switch to it; `note_id` continuity
+will be preserved across the migration. The fields `warning_acknowledged`,
+`drift_ack_token`, and the secret `KEEP_GOOGLE_APP_PASSWORD` will be
+retired on the same schedule. Treat any runbook step that mentions
+these names as time-limited.
+
+#### Prerequisites
+
+1. A Google account with **2-Step Verification** enabled. Live sync
+   requires an App Password, which Google issues only to accounts that
+   already have 2SV turned on.
+2. Generate an App Password from the Google Account security page
+   (look for the "App passwords" entry under 2-Step Verification).
+   Treat the generated value as a secret of the same sensitivity as
+   the account password itself.
+
+#### Initial enablement
+
+1. Add the App Password to the deploy-overlay sops-encrypted secret
+   bundle as `KEEP_GOOGLE_APP_PASSWORD`. The deploy adapter substitutes
+   it into the resolved app.env at apply time; the value never lands
+   in this repo or in `config/generated/`.
+2. Set `KEEP_GOOGLE_EMAIL` in `config/smackerel.yaml` to the account
+   email (use a generic placeholder such as `<operator-email>` in any
+   documentation you derive from this runbook — never inline a real
+   value).
+3. Configure the connector block in `config/smackerel.yaml`:
+
+   ```yaml
+   connectors:
+     google-keep:
+       sync_mode: gkeepapi           # or hybrid for Takeout + live
+       gkeep_enabled: true
+       warning_acknowledged: true    # required acknowledgement
+       drift_ack_token: ""           # leave empty until first trip
+       poll_interval: 30m            # minimum 15m enforced
+   ```
+
+4. Regenerate the env bundle:
+
+   ```bash
+   ./smackerel.sh config generate --env <env> --bundle --source-sha <sha>
+   ```
+
+5. Deploy to the target:
+
+   ```bash
+   ./smackerel.sh deploy-target <target> apply \
+       --image-core=sha256:<digest> --image-ml=sha256:<digest> \
+       --config-bundle=<env>-<sha> --config-bundle-sha=<sha256-hex>
+   ```
+
+6. Verify health:
+
+   ```bash
+   ./smackerel.sh status
+   ./smackerel.sh logs
+   ```
+
+   Look for `gkeepapi sidecar handshake ok` at INFO. A failed handshake
+   surfaces the sidecar's verbatim error string and sets the connector
+   to `health=error`.
+
+#### Recovering from a tripped breaker
+
+When `smackerel_keep_protocol_drift_detected_total` increments, the
+breaker is OPEN and all sync calls return early without contacting the
+sidecar.
+
+1. Inspect logs for the drift signature:
+
+   ```bash
+   ./smackerel.sh logs | grep keep_protocol_drift
+   ```
+
+   The `reason` field tells you whether the drift was schema mismatch,
+   transport failure, or a non-auth sidecar error.
+
+2. If the failure is a schema mismatch, consider bumping the
+   `gkeepapi` pin in `ml/requirements.txt` to the latest release that
+   upstream confirms still works; rebuild the ML image.
+
+3. Rotate `drift_ack_token` in `config/smackerel.yaml` to any new
+   non-empty string (`<any-non-empty-string>`):
+
+   ```yaml
+   connectors:
+     google-keep:
+       drift_ack_token: "ack-<incrementing-counter>"
+   ```
+
+4. Regenerate the env bundle (`./smackerel.sh config generate --env
+   <env> --bundle --source-sha <sha>`).
+
+5. Redeploy using the standard pointer-swap apply (see
+   [`docs/Deployment.md`](Deployment.md) — do not duplicate those
+   mechanics here):
+
+   ```bash
+   ./smackerel.sh deploy-target <target> apply \
+       --image-core=sha256:<digest> --image-ml=sha256:<digest> \
+       --config-bundle=<env>-<sha> --config-bundle-sha=<sha256-hex>
+   ```
+
+6. Verify recovery:
+
+   ```bash
+   ./smackerel.sh status
+   ./smackerel.sh logs | grep keep_sync_response
+   ```
+
+   `Health()` returns to `healthy` after the next successful sync.
+
+Note explicitly: there is no `./smackerel.sh` verb and no HTTP endpoint
+that acknowledges drift. Rotation + redeploy is the only path.
+
+#### Rotating the App Password
+
+To rotate the secret without changing connector behaviour, repeat
+steps 2 and 5–7 of "Initial enablement": generate a new App Password,
+update the sops-encrypted secret bundle, regenerate the env bundle,
+redeploy, and verify health.
+
+#### What you must NOT do
+
+- Do not run ad-hoc container-runtime, Python test runner, Go test
+  runner, or Python interpreter commands as part of operating this
+  connector. Use only `./smackerel.sh`.
+- Do not hand-edit `config/generated/*.env`. Those files are derived
+  artifacts; the next `./smackerel.sh config generate` will overwrite
+  them.
+- Do not introduce language-level fallback values for
+  `KEEP_GOOGLE_EMAIL` or `KEEP_GOOGLE_APP_PASSWORD`. The repo enforces
+  fail-loud SST (see
+  [`.github/instructions/smackerel-no-defaults.instructions.md`](../.github/instructions/smackerel-no-defaults.instructions.md)).
+- Do not commit a real email, hostname, or App Password to this repo
+  or to any spec/doc derived from this runbook. Use generic
+  placeholders such as `<operator-email>` and `<any-non-empty-string>`.
+
 ## Troubleshooting
 
 ### Error Lookup Table
@@ -2386,6 +2548,113 @@ The PWA uses the Web Share Target API to receive shared content. It posts the sh
 | Share target not appearing? | The PWA must be installed to the home screen. Reinstall if missing |
 | Captures failing? | Verify the Smackerel stack is running and the server URL is reachable from your device |
 | Service worker not registering? | Check browser console for errors. The SW scope must match `/pwa/` |
+
+## Chrome Extension Bridge — Sideload Workflow
+
+The Chrome Extension Bridge (spec 058) is a separate Manifest V3 extension at
+[`extensions/chrome-bridge/`](../extensions/chrome-bridge/) that streams live
+`chrome.bookmarks` and `chrome.history` events into the smackerel-core ingest
+endpoint `POST /v1/connectors/extension/ingest`. It is distinct from the
+share-only extension under `web/extension/` and ships as its own signed
+sideload zip from CI.
+
+> **Authorization model:** the bridge requires a per-user PASETO minted with
+> BOTH `extension:bookmarks` AND `extension:history` scopes (AND-semantics,
+> spec 060). A legacy spec-044 token without scopes is rejected at the
+> server with HTTP 403 `scope_required`.
+
+### Sideload Workflow (Operator)
+
+1. **Pick the build manifest.** Identify the smackerel-core git SHA running
+   on your deployment (e.g. from `./smackerel.sh deploy-target home-lab
+   verify`), then download the matching `build-manifest-<sourceSha>.yaml`
+   from the GitHub Actions `build` workflow run. The manifest's
+   `chromeBridge` section names the artifact and its SHA-256.
+
+2. **Download the artifact triple** from the workflow-run artifacts (or, for
+   tag-released builds, from the GitHub Release for the SHA):
+   - `smackerel-chrome-bridge-<version>-<sha>.zip`
+   - `smackerel-chrome-bridge-<version>-<sha>.zip.sha256`
+   - `smackerel-chrome-bridge-<version>-<sha>.zip.sig`
+
+3. **Verify the SHA-256** matches the value in
+   `build-manifest-<sourceSha>.yaml` → `chromeBridge.zipSha256`:
+
+   ```bash
+   sha256sum -c smackerel-chrome-bridge-<version>-<sha>.zip.sha256
+   ```
+
+4. **Verify the cosign keyless signature** (Rekor-logged, no local keys
+   required). The certificate identity is the GitHub Actions workflow ref
+   under the project repository:
+
+   ```bash
+   cosign verify-blob \
+     --signature smackerel-chrome-bridge-<version>-<sha>.zip.sig \
+     --certificate-identity-regexp 'https://github.com/<owner>/smackerel/.github/workflows/build.yml@refs/.*' \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+     smackerel-chrome-bridge-<version>-<sha>.zip
+   ```
+
+5. **Unpack** the zip into a local directory (e.g. `~/chrome-bridge/`).
+
+6. **Load unpacked** in Chrome:
+   1. Open `chrome://extensions/`.
+   2. Enable **Developer mode** (top-right toggle).
+   3. Click **Load unpacked** and select the unpacked directory.
+   4. The Smackerel Chrome Bridge entry appears in the extensions list.
+
+7. **Configure the options page.** Click the extension's **Details** →
+   **Extension options** and fill in:
+   - **Base URL** — your smackerel-core URL (HTTPS in production; for local
+     development, `http://127.0.0.1:<core port>`).
+   - **Bearer token** — paste the wire token returned from
+     `./smackerel.sh auth enroll --scope extension:bookmarks,extension:history`
+     (the CLI flags ship with spec 060 Scope 3; until they land, mint the
+     token through the admin API and ensure the `scope` claim carries both
+     values). The token is masked by default after save.
+   - **Source device id** — operator-chosen 1–32 char `[a-z0-9-]` label
+     (e.g. `work-laptop`). The options page can auto-generate
+     `auto-<uuidv4>`.
+   - **Dedup window seconds** — accepted range `[60, 86400]`.
+   - **Privacy allow / deny patterns** — up to 64 regex entries each
+     (spec 058 OQ-DSN-3 — the cap protects the service-worker per-event
+     budget).
+
+8. **Verify by capturing.** Add or remove a bookmark; within ~60 seconds the
+   artifact should appear via `GET /v1/artifacts?source=browser-extension`.
+   The toolbar badge surfaces the current health:
+
+   | Badge | Meaning | Resolution |
+   |-------|---------|------------|
+   | (empty) | Healthy and connected | — |
+   | `SETUP` | Options page not yet configured | Open options and fill in base URL, token, device id |
+   | `AUTH`  | Token rejected (401 or 403) | Mint a fresh token with both required scopes; revoke the prior token id |
+   | `DEAD`  | Queue at the 24h dead-letter ceiling | Inspect server logs for the cause (rate-limit, schema reject); after fixing, reopen options and click **Drain queue** |
+
+### Operator Caveats
+
+- **Offline revocation latency (OQ-DSN-2).** Spec 044 propagates per-token
+  revocation via NATS within ≤ 60 s for connected callers, but an offline
+  extension only learns of a revoked token on its next POST. If you need
+  immediate cutoff, disable the extension in `chrome://extensions/` until
+  the device reconnects.
+- **Privacy filter pattern cap (OQ-DSN-3).** Allow/deny lists are capped at
+  64 entries each; exceeding the cap is rejected at options-page save time
+  rather than silently truncated.
+- **Chrome Sync.** When the operator's Chrome profile syncs bookmarks
+  across multiple devices, each device produces a distinct
+  `source_device_id` and the server-side dedup tuple treats them as
+  separate observations.
+
+### Admin Devices View
+
+`GET /v1/admin/extension/devices` (see
+[API.md](API.md#chrome-extension-bridge-ingestion)) aggregates rows from
+`raw_ingest_dedup` for the `browser-extension` source and returns one entry
+per `(owner_user_id, source_device_id)` pair with the first/last seen
+timestamps and 30-day visit count. Admin sessions see every owner; non-admin
+sessions see only their own devices.
 
 ## Cloud Drives Operations (Spec 038)
 

@@ -235,6 +235,17 @@ type Dependencies struct {
 	// Notification source status handlers (optional — nil until spec 054 is wired)
 	NotificationHandlers *NotificationHandlers
 
+	// Spec 058 — Chrome Extension Bridge ingest handler
+	// (POST /v1/connectors/extension/ingest). Mounted behind
+	// bearerAuthMiddleware + auth.RequireScope("extension:bookmarks",
+	// "extension:history"). Nil when extension wiring is absent.
+	ExtensionIngestHandler http.Handler
+
+	// Spec 058 Scope 5 — admin devices view
+	// (GET /v1/admin/extension/devices). Mounted behind
+	// bearerAuthMiddleware; the handler itself enforces admin scoping.
+	ExtensionDevicesHandler http.Handler
+
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 
