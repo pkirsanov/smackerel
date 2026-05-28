@@ -1135,6 +1135,38 @@ AGENT_PROVIDER_VISION_MODEL="$(required_value agent.provider_routing.vision.mode
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 AGENT_PROVIDER_OCR_MODEL="$(required_value agent.provider_routing.ocr.model)"
 
+# Assistant (spec 061 — Conversational Assistant, Transport-Agnostic). SST
+# zero-defaults: every key is REQUIRED. Missing values → exit non-zero with
+# the offending key named (the [F061-SST-MISSING] prefix is added by the Go
+# loader at startup; required_value exits earlier here at config-generate).
+ASSISTANT_ENABLED="$(required_value assistant.enabled)"
+ASSISTANT_BORDERLINE_FLOOR="$(required_value assistant.borderline_floor)"
+ASSISTANT_CONTEXT_WINDOW_TURNS="$(required_value assistant.context.window_turns)"
+ASSISTANT_CONTEXT_IDLE_TIMEOUT="$(required_value assistant.context.idle_timeout)"
+ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL="$(required_value assistant.context.idle_sweep_interval)"
+ASSISTANT_CONTEXT_STATE_KEY="$(required_value assistant.context.state_key)"
+ASSISTANT_SOURCES_MAX="$(required_value assistant.sources_max)"
+ASSISTANT_BODY_MAX_CHARS="$(required_value assistant.body_max_chars)"
+ASSISTANT_STATUS_MAX_DURATION="$(required_value assistant.status_max_duration)"
+ASSISTANT_DISAMBIGUATE_TIMEOUT="$(required_value assistant.disambiguate_timeout)"
+ASSISTANT_ERROR_CAPTURE_TIMEOUT="$(required_value assistant.error.capture_timeout)"
+ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM="$(required_value assistant.rate_limit.retrieval.requests_per_minute)"
+ASSISTANT_RATE_LIMIT_WEATHER_RPM="$(required_value assistant.rate_limit.weather.requests_per_minute)"
+ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM="$(required_value assistant.rate_limit.notifications.requests_per_minute)"
+ASSISTANT_SKILLS_RETRIEVAL_ENABLED="$(required_value assistant.skills.retrieval.enabled)"
+ASSISTANT_SKILLS_RETRIEVAL_TOP_K="$(required_value assistant.skills.retrieval.top_k)"
+ASSISTANT_SKILLS_WEATHER_ENABLED="$(required_value assistant.skills.weather.enabled)"
+ASSISTANT_SKILLS_WEATHER_PROVIDER="$(required_value assistant.skills.weather.provider)"
+# weather.api_key_ref is permissively-empty (provider may not require a key);
+# yaml_get returns "" when present with empty value, or aborts when missing.
+ASSISTANT_SKILLS_WEATHER_API_KEY_REF="$(yaml_get assistant.skills.weather.api_key_ref)"
+ASSISTANT_SKILLS_WEATHER_CACHE_TTL="$(required_value assistant.skills.weather.cache_ttl)"
+ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED="$(required_value assistant.skills.notifications.enabled)"
+ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT="$(required_value assistant.skills.notifications.confirm_timeout)"
+ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED="$(required_value assistant.transports.telegram.enabled)"
+ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE="$(required_value assistant.transports.telegram.markdown_mode)"
+ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS="$(required_value assistant.transports.telegram.max_message_chars)"
+
 # HL-RESCAN-012 / Gate G028 — build-metadata SST resolution.
 # Source-of-truth precedence at config-generate time:
 #   1. Shell environment (CI exports SMACKEREL_VERSION / SMACKEREL_COMMIT
@@ -1573,6 +1605,31 @@ AGENT_PROVIDER_VISION_PROVIDER=${AGENT_PROVIDER_VISION_PROVIDER}
 AGENT_PROVIDER_VISION_MODEL=${AGENT_PROVIDER_VISION_MODEL}
 AGENT_PROVIDER_OCR_PROVIDER=${AGENT_PROVIDER_OCR_PROVIDER}
 AGENT_PROVIDER_OCR_MODEL=${AGENT_PROVIDER_OCR_MODEL}
+ASSISTANT_ENABLED=${ASSISTANT_ENABLED}
+ASSISTANT_BORDERLINE_FLOOR=${ASSISTANT_BORDERLINE_FLOOR}
+ASSISTANT_CONTEXT_WINDOW_TURNS=${ASSISTANT_CONTEXT_WINDOW_TURNS}
+ASSISTANT_CONTEXT_IDLE_TIMEOUT=${ASSISTANT_CONTEXT_IDLE_TIMEOUT}
+ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL=${ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL}
+ASSISTANT_CONTEXT_STATE_KEY=${ASSISTANT_CONTEXT_STATE_KEY}
+ASSISTANT_SOURCES_MAX=${ASSISTANT_SOURCES_MAX}
+ASSISTANT_BODY_MAX_CHARS=${ASSISTANT_BODY_MAX_CHARS}
+ASSISTANT_STATUS_MAX_DURATION=${ASSISTANT_STATUS_MAX_DURATION}
+ASSISTANT_DISAMBIGUATE_TIMEOUT=${ASSISTANT_DISAMBIGUATE_TIMEOUT}
+ASSISTANT_ERROR_CAPTURE_TIMEOUT=${ASSISTANT_ERROR_CAPTURE_TIMEOUT}
+ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM=${ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM}
+ASSISTANT_RATE_LIMIT_WEATHER_RPM=${ASSISTANT_RATE_LIMIT_WEATHER_RPM}
+ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM=${ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM}
+ASSISTANT_SKILLS_RETRIEVAL_ENABLED=${ASSISTANT_SKILLS_RETRIEVAL_ENABLED}
+ASSISTANT_SKILLS_RETRIEVAL_TOP_K=${ASSISTANT_SKILLS_RETRIEVAL_TOP_K}
+ASSISTANT_SKILLS_WEATHER_ENABLED=${ASSISTANT_SKILLS_WEATHER_ENABLED}
+ASSISTANT_SKILLS_WEATHER_PROVIDER=${ASSISTANT_SKILLS_WEATHER_PROVIDER}
+ASSISTANT_SKILLS_WEATHER_API_KEY_REF=${ASSISTANT_SKILLS_WEATHER_API_KEY_REF}
+ASSISTANT_SKILLS_WEATHER_CACHE_TTL=${ASSISTANT_SKILLS_WEATHER_CACHE_TTL}
+ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED=${ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED}
+ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT=${ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT}
+ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED=${ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED}
+ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE=${ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE}
+ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS=${ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS}
 POSTGRES_CPU_LIMIT=${POSTGRES_CPU_LIMIT}
 POSTGRES_MEMORY_LIMIT=${POSTGRES_MEMORY_LIMIT}
 NATS_CPU_LIMIT=${NATS_CPU_LIMIT}
@@ -1743,21 +1800,26 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   #   ./prometheus.yml             — rendered Prometheus scrape config (spec 049)
   #   ./alerts.yml                 — Prometheus alert rules (spec 049)
   #   ./prompt_contracts/*.yaml    — prompt YAMLs mounted into core + ml
+  #   ./assistant/scenarios.yaml   — spec 061 sibling skills manifest mounted into core
   #   ./bundle-manifest.yaml       — manifest of files in this bundle
   #
   # Determinism: same (sourceSha, env, smackerel.yaml content,
-  # deploy/compose.deploy.yml, config/prompt_contracts/, config/nats_contract.json,
-  # config/prometheus/) MUST produce the same bundle bytes (and therefore the
-  # same sha256). Volatile content (the `Generated:` timestamp comment in the
-  # env file) is stripped from the bundle copy.
+  # deploy/compose.deploy.yml, config/prompt_contracts/, config/assistant/,
+  # config/nats_contract.json, config/prometheus/) MUST produce the same
+  # bundle bytes (and therefore the same sha256). Volatile content (the
+  # `Generated:` timestamp comment in the env file) is stripped from the
+  # bundle copy.
   COMPOSE_TEMPLATE="$REPO_ROOT/deploy/compose.deploy.yml"
   NATS_CONTRACT_FILE="$REPO_ROOT/config/nats_contract.json"
   PROMPT_CONTRACTS_DIR="$REPO_ROOT/config/prompt_contracts"
+  ASSISTANT_MANIFEST_DIR="$REPO_ROOT/config/assistant"
   PROMETHEUS_ALERTS_FILE="$REPO_ROOT/config/prometheus/alerts.yml"
 
   [[ -f "$COMPOSE_TEMPLATE" ]] || { echo "ERROR: deploy compose template not found: $COMPOSE_TEMPLATE" >&2; exit 1; }
   [[ -f "$NATS_CONTRACT_FILE" ]] || { echo "ERROR: nats contract not found: $NATS_CONTRACT_FILE" >&2; exit 1; }
   [[ -d "$PROMPT_CONTRACTS_DIR" ]] || { echo "ERROR: prompt contracts dir not found: $PROMPT_CONTRACTS_DIR" >&2; exit 1; }
+  [[ -d "$ASSISTANT_MANIFEST_DIR" ]] || { echo "ERROR: assistant manifest dir not found: $ASSISTANT_MANIFEST_DIR" >&2; exit 1; }
+  [[ -f "$ASSISTANT_MANIFEST_DIR/scenarios.yaml" ]] || { echo "ERROR: assistant scenarios manifest not found: $ASSISTANT_MANIFEST_DIR/scenarios.yaml" >&2; exit 1; }
   [[ -f "$PROM_OUT_FILE" ]] || { echo "ERROR: rendered prometheus.yml not found: $PROM_OUT_FILE" >&2; exit 1; }
   [[ -f "$PROMETHEUS_ALERTS_FILE" ]] || { echo "ERROR: prometheus alerts file not found: $PROMETHEUS_ALERTS_FILE" >&2; exit 1; }
 
@@ -1771,10 +1833,13 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   cp "$PROMETHEUS_ALERTS_FILE" "$STAGE_DIR/alerts.yml"
   mkdir -p "$STAGE_DIR/prompt_contracts"
   cp "$PROMPT_CONTRACTS_DIR"/*.yaml "$STAGE_DIR/prompt_contracts/"
+  mkdir -p "$STAGE_DIR/assistant"
+  cp "$ASSISTANT_MANIFEST_DIR"/*.yaml "$STAGE_DIR/assistant/"
   chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/nats.conf" \
     "$STAGE_DIR/docker-compose.yml" "$STAGE_DIR/nats_contract.json" \
     "$STAGE_DIR/prometheus.yml" "$STAGE_DIR/alerts.yml" \
-    "$STAGE_DIR/prompt_contracts"/*.yaml
+    "$STAGE_DIR/prompt_contracts"/*.yaml \
+    "$STAGE_DIR/assistant"/*.yaml
 
   # Spec 052 FR-052-003 / FR-052-006 — sibling secret-keys manifest.
   # Enumerates the canonical list of env-var keys whose values were emitted
@@ -1799,6 +1864,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
 
   # Deterministic file list for bundle-manifest.yaml (sorted).
   PROMPT_FILES_LIST="$(cd "$STAGE_DIR" && find prompt_contracts -maxdepth 1 -type f -name '*.yaml' | LC_ALL=C sort)"
+  ASSISTANT_FILES_LIST="$(cd "$STAGE_DIR" && find assistant -maxdepth 1 -type f -name '*.yaml' | LC_ALL=C sort)"
 
   {
     echo "bundleVersion: 1"
@@ -1814,6 +1880,9 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     echo "  - secret-keys.yaml"
     while IFS= read -r f; do
       echo "  - $f"
+    done <<< "$ASSISTANT_FILES_LIST"
+    while IFS= read -r f; do
+      echo "  - $f"
     done <<< "$PROMPT_FILES_LIST"
   } > "$STAGE_DIR/bundle-manifest.yaml"
   chmod 0644 "$STAGE_DIR/bundle-manifest.yaml"
@@ -1821,11 +1890,13 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   BUNDLE_FILE="$BUNDLE_OUTPUT_DIR/config-bundle-${TARGET_ENV}-${BUNDLE_SOURCE_SHA}.tar.gz"
 
   # Build deterministic file list. tar's --sort=name will recurse into the
-  # prompt_contracts directory automatically, so we only list it once. Top-level
-  # files are listed in LC_ALL=C name order to make the argv deterministic too.
+  # prompt_contracts and assistant directories automatically, so we only list
+  # each once. Top-level files are listed in LC_ALL=C name order to make the
+  # argv deterministic too.
   TAR_FILES=(
     "alerts.yml"
     "app.env"
+    "assistant"
     "bundle-manifest.yaml"
     "docker-compose.yml"
     "nats.conf"

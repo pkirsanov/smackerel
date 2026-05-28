@@ -234,13 +234,13 @@ type Config struct {
 	GuestHostEventTypes   string
 
 	// QF decisions connector (SST-compliant — from smackerel.yaml via config generate)
-QFDecisionsEnabled                  bool
-    QFDecisionsBaseURL                  string
-    QFDecisionsCredentialRef            string
-    QFDecisionsSyncSchedule             string
-    QFDecisionsPacketVersion            int
-    QFDecisionsPageSize                 int
-    QFDecisionsCallbackSigningKeysJSON  string
+	QFDecisionsEnabled                 bool
+	QFDecisionsBaseURL                 string
+	QFDecisionsCredentialRef           string
+	QFDecisionsSyncSchedule            string
+	QFDecisionsPacketVersion           int
+	QFDecisionsPageSize                int
+	QFDecisionsCallbackSigningKeysJSON string
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
@@ -296,6 +296,14 @@ QFDecisionsEnabled                  bool
 	// (preserves SMACKEREL_AUTH_TOKEN ergonomic) but rejected at startup
 	// when Environment == "production" AND Auth.Enabled == true.
 	Auth AuthConfig
+
+	// Spec 061 — Conversational Assistant (Transport-Agnostic) SST
+	// envelope. Populated by loadAssistantConfig() at the tail of Load()
+	// from ASSISTANT_* env vars emitted by `./smackerel.sh config generate`.
+	// Every field is REQUIRED; missing keys fail loud at Load() with the
+	// [F061-SST-MISSING] prefix. Rule-based startup validation runs in
+	// validateAssistantConfig() from Validate().
+	Assistant AssistantConfig
 
 	// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and ML
 	// model memory profile. SST-compliant; populated from
@@ -586,10 +594,10 @@ func Load() (*Config, error) {
 		GuestHostEventTypes:   os.Getenv("GUESTHOST_EVENT_TYPES"),
 
 		// QF decisions connector
-		QFDecisionsEnabled:                 os.Getenv("QF_DECISIONS_ENABLED") == "true",
-		QFDecisionsBaseURL:                 os.Getenv("QF_DECISIONS_BASE_URL"),
-		QFDecisionsCredentialRef:           os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
-		QFDecisionsSyncSchedule:            os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
+		QFDecisionsEnabled:       os.Getenv("QF_DECISIONS_ENABLED") == "true",
+		QFDecisionsBaseURL:       os.Getenv("QF_DECISIONS_BASE_URL"),
+		QFDecisionsCredentialRef: os.Getenv("QF_DECISIONS_CREDENTIAL_REF"),
+		QFDecisionsSyncSchedule:  os.Getenv("QF_DECISIONS_SYNC_SCHEDULE"),
 		// BUG-020-010 — QF callback HMAC bridge signing keystore JSON.
 		// PERMISSIVE: empty means "callback signing not configured in this
 		// environment" and the connector continues to run for
@@ -1383,6 +1391,13 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Spec 061 SCOPE-01 — Conversational Assistant SST envelope.
+	// Fails loud with [F061-SST-MISSING] if any ASSISTANT_* key is
+	// missing or unparseable.
+	if err := loadAssistantConfig(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -1765,6 +1780,14 @@ func (c *Config) Validate() error {
 	// names every offender in one message so the operator can fix all
 	// problems in one pass.
 	if err := c.validateModelEnvelopes(); err != nil {
+		return err
+	}
+
+	// Spec 061 SCOPE-01 — Conversational Assistant rule-based
+	// validation (design §7.2 rules #2–#4). Rule #1 (required values)
+	// is enforced inline by loadAssistantConfig at Load() time with
+	// the [F061-SST-MISSING] prefix.
+	if err := c.validateAssistantConfig(); err != nil {
 		return err
 	}
 

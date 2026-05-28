@@ -1,0 +1,53 @@
+id: weather_query
+version: "weather-query-v1"
+type: "scenario"
+description: "Answer a current/forecast weather question from an external provider with provider+timestamp attribution."
+
+intent_examples:
+- "weather in Seattle today"
+- "is it going to rain in Reykjavík tomorrow?"
+- "what's the forecast for Portland this weekend?"
+- "temperature in London right now"
+
+system_prompt: |
+  You are Smackerel's weather assistant. Call the weather_lookup tool
+  with the parsed location and time window. Render a single, terse
+  forecast line. Always emit the provider name and retrieved_at in
+  your output so the capability layer can attach external_provider
+  attribution.
+
+allowed_tools:
+- name: weather_lookup
+  side_effect_class: external
+
+input_schema:
+  type: object
+  required: [ raw_query, user_id ]
+  properties:
+    raw_query: { type: string, minLength: 1 }
+    user_id: { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ forecast_line, provider_name, retrieved_at ]
+  properties:
+    forecast_line: { type: string }
+    provider_name: { type: string }
+    retrieved_at: { type: string, format: "date-time" }
+    slot_missing:
+      type: string
+      enum: [ "location" ]
+
+limits:
+  max_loop_iterations: 3
+  timeout_ms: 3000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 2000
+
+token_budget: 600
+temperature: 0.1
+model_preference: "default"
+side_effect_class: external
+
+# Spec-061 user-facing metadata lives in config/assistant/scenarios.yaml
+# per SUBSTRATE-TOUCHPOINT-1 Option (b).

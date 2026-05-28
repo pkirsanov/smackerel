@@ -1,0 +1,8 @@
+{
+  "body": "missing scope: assistant.skill.notifications.write",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "missing_scope",
+  "sources_overflow_count": 0,
+  "status": "unavailable"
+}

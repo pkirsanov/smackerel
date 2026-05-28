@@ -21,6 +21,10 @@ import (
 	"path/filepath"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/notification"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
+	"github.com/smackerel/smackerel/internal/assistant"
 	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
 )
 
@@ -36,11 +40,14 @@ func run(args []string, stdout, stderr *os.File) int {
 	fs := flag.NewFlagSet("scenario-lint", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	glob := fs.String("glob", "", "filename glob (default: *.yaml + *.yml)")
+	assistantManifest := fs.String("assistant-manifest", "",
+		"optional path to the spec 061 assistant skills manifest (config/assistant/scenarios.yaml); "+
+			"when set, also runs design §7.2 rule #6 (every manifest scenario id MUST have a loadable YAML)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: scenario-lint <dir> [-glob PATTERN]")
+		fmt.Fprintln(stderr, "usage: scenario-lint <dir> [-glob PATTERN] [-assistant-manifest PATH]")
 		return 2
 	}
 	dir := fs.Arg(0)
@@ -62,6 +69,26 @@ func run(args []string, stdout, stderr *os.File) int {
 
 	if fatal != nil || len(rejected) > 0 {
 		return 1
+	}
+
+	// Optional spec 061 design §7.2 rule #6 — when the operator passes
+	// -assistant-manifest, also verify every manifest scenario id has a
+	// loadable YAML in the same directory the loader just scanned.
+	if *assistantManifest != "" {
+		manifestAbs, err := filepath.Abs(*assistantManifest)
+		if err != nil {
+			fmt.Fprintf(stderr, "resolve %s: %v\n", *assistantManifest, err)
+			return 2
+		}
+		// Linter-time resolver: every enable_sst_key is treated as
+		// enabled so rule #6 covers all manifest ids regardless of the
+		// runtime SST snapshot.
+		acceptAll := func(string) (bool, bool) { return true, true }
+		if err := assistant.ValidateScenariosPresent(manifestAbs, abs, acceptAll); err != nil {
+			fmt.Fprintln(stderr, err.Error())
+			return 1
+		}
+		fmt.Fprintf(stdout, "assistant manifest %s — rule #6 OK\n", manifestAbs)
 	}
 	return 0
 }

@@ -143,6 +143,11 @@ services:
         condition: service_healthy
     volumes:
       - ./prompt_contracts:/app/prompt_contracts:ro
+      # Spec 061 SUBSTRATE-TOUCHPOINT-1 Option (b): sibling skills manifest
+      # for the conversational assistant capability layer. The runtime
+      # resolves the manifest at `filepath.Dir(AGENT_SCENARIO_DIR)/assistant/scenarios.yaml`
+      # so the mount target MUST be a sibling of /app/prompt_contracts.
+      - ./assistant:/app/assistant:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${CORE_CONTAINER_PORT}/api/health"]
       interval: 10s

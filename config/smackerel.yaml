@@ -205,7 +205,7 @@ extension:
     max_batch_items: 256
     max_body_bytes: 1048576 # 1 MiB
     default_dedup_window_seconds: 1800 # 30 min
-    accepted_content_types: ["bookmark", "browser_history_visit"]
+    accepted_content_types: [ "bookmark", "browser_history_visit" ]
     required_token_scope: "extension:bookmarks,history"
 
 connectors:
@@ -636,6 +636,58 @@ auth:
   # as defense-in-depth. Dev/test environments retain the empty-string
   # default so local workflows do not require a bootstrap token.
   bootstrap_token: ""
+
+assistant:
+  # Spec 061 — Conversational Assistant (Transport-Agnostic). SST zero-defaults:
+  # every key is REQUIRED. The Go core refuses to start if any value is missing
+  # (fail-loud per smackerel-no-defaults). Literal values only — no ${VAR:?...}
+  # substitution here (that form is for deploy/compose.deploy.yml only per Gate
+  # G028). The 4 startup validation rules implemented in
+  # internal/config/assistant.go::validateAssistantConfig enforce:
+  #   1. Every key resolves to a non-empty value.
+  #   2. borderline_floor > agent.routing.confidence_floor (preserves the
+  #      borderline band; refuse equal-or-less).
+  #   3. enabled=true requires at least one transports.*.enabled=true.
+  #   4. context.state_key="user" (non-recommended) emits a startup WARN log.
+  enabled: true
+  # Three-band routing post-processor floor on agent.RoutingDecision.TopScore.
+  # Recommended 0.75; MUST be > agent.routing.confidence_floor (0.65).
+  borderline_floor: 0.75
+  context:
+    window_turns: 8 # REQUIRED: conversation window in turns
+    idle_timeout: "30m" # REQUIRED: idle-sweep TTL (Go time.Duration)
+    idle_sweep_interval: "5m" # REQUIRED: ticker cadence for idle sweep
+    state_key: "transport_user" # REQUIRED: "transport_user" recommended; "user" emits WARN
+  sources_max: 5 # REQUIRED: max Source entries returned per response
+  body_max_chars: 4000 # REQUIRED: max body characters (transport-agnostic cap)
+  status_max_duration: "60s" # REQUIRED: max time a status token may be displayed
+  disambiguate_timeout: "2m" # REQUIRED: ttl for disambiguation prompts
+  error:
+    capture_timeout: "10s" # REQUIRED: ttl for offer-to-capture on error
+  rate_limit:
+    retrieval:
+      requests_per_minute: 30 # REQUIRED
+    weather:
+      requests_per_minute: 20 # REQUIRED
+    notifications:
+      requests_per_minute: 10 # REQUIRED
+  skills:
+    retrieval:
+      enabled: true # REQUIRED
+      top_k: 8 # REQUIRED: cap on retrieval_search tool result count
+    weather:
+      enabled: false # REQUIRED (off by default until SCOPE-07 ships the provider key)
+      provider: "open-meteo" # REQUIRED: provider identifier
+      api_key_ref: "" # REQUIRED ("" = no API key required for chosen provider)
+      cache_ttl: "10m" # REQUIRED: weather LRU TTL
+    notifications:
+      enabled: false # REQUIRED (off by default until SCOPE-08 wires spec 054 packet)
+      confirm_timeout: "5m" # REQUIRED: confirm-card timeout before discarded_timeout
+  transports:
+    telegram:
+      enabled: true # REQUIRED: at least one transport MUST be enabled when assistant.enabled=true
+      markdown_mode: "MarkdownV2" # REQUIRED: "MarkdownV2" | "plain" | "HTML"
+      max_message_chars: 4096 # REQUIRED: Telegram per-message hard cap
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key

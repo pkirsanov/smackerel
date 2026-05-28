@@ -13,6 +13,7 @@
 - [x] Owner has ratified the Principle 1 deviation (additive assistant on top of preserved capture). — Ratified 2026-05-28.
 - [x] v1 / v2 split (email moved to its own spec) is accepted. — Ratified 2026-05-28.
 - [x] Owner ratifies transport-agnostic generalization (Telegram is v1 reference adapter; WhatsApp, web chat, mobile in-app are future adapters wired via the same `TransportAdapter` interface without capability-layer changes). — Ratified 2026-05-28.
+- [x] Owner authorizes mixed-commit boundaries on SCOPE-01's 4-file surface (`config/smackerel.yaml`, `internal/config/config.go`, `internal/config/validate_test.go`, `scripts/commands/config.sh`). Pre-existing in-flight work from spec 058 (Chrome Extension Bridge) and BUG-020-009 (per-call HTTP timeouts) on these same files MAY be commingled with SCOPE-01 commits; the owner accepts the resulting commit-boundary contamination as a known and authorized operating condition for this spec. SCOPE-01 implementation is NOT blocked on a clean working tree on these 4 files. — Authorized 2026-05-28.
 
 ## Per-Scope User-Visible Behavior (added by bubbles.plan)
 
