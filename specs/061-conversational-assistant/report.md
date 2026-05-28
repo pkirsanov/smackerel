@@ -6529,3 +6529,331 @@ Both DoD items remain `[ ]`. The carry-forward findings list (below) preserves t
   - (d) Owner — ratify `uservalidation.md` (closes `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING`).
   - (e) `bubbles.validate` — when SCOPE-05..10 close, certify.
 
+## Round 20 — SCOPE-09 / SCOPE-10 managed-doc closures (2026-05-30 — `bubbles.docs`, `full-delivery` mode) {#round-20-docs-managed-doc-closures}
+
+### Round 20 summary
+
+**Owner:** `bubbles.docs`. **Pre-flight:** parent `workflowMode = full-delivery`, `statusCeiling = done`. **User instruction (paraphrased to artifact form):** close `SCOPE-09-RUNBOOK-PENDING` by appending an "Assistant Capability" section to `docs/Operations.md` and close `SCOPE-10-DOCS-PENDING` by appending an "Assistant Evaluation Harness" section to `docs/Testing.md`, keeping edits minimal and grounded in shipped code with cite-able file paths and symbol names.
+
+**Anti-fabrication discipline applied.** Every fact cited in the two new doc sections was cross-referenced against shipped code before writing. Six user-stated values that conflicted with the code were corrected to the code-verified shape:
+
+| Topic | User-stated | Code-verified shape used in doc |
+|-------|-------------|---------------------------------|
+| Confirm-card TTL | "ULID confirm_ref → 24h TTL" | SST-configurable via `assistant.skills.notifications.confirm_timeout`; current literal in `config/smackerel.yaml` is `"5m"`. |
+| Routing accuracy gate | `0.99` | `assistant.eval.routing_accuracy_min: 0.85` (with capture-fallback `1.0`); Round-17 shipped values `1.0000 / 1.0000`. |
+| Corpus label vocabulary | `{capture, retrieval, weather, notification, fallback}` | Actual `AllLabels` in `tests/eval/assistant/harness.go`: `{retrieval, weather, notifications, capture, ambiguous-borderline}`. |
+| Determinism mechanism | "seeded RNG for determinism" | Deterministic keyword `Classify()` function in `tests/eval/assistant/harness.go` — no `rand` import, no seed. |
+| Active-threads gauge name | `assistant_active_threads_gauge` | Actual metric name: `smackerel_assistant_active_threads` (type `GaugeVec`). |
+| Acceptance test name | `TestAcceptance` | Actual: `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`. |
+
+### Round 20 — Deliverable 1: `docs/Operations.md` "Assistant Capability (Spec 061)" section
+
+**Claim Source:** written. New top-level section appended at EOF after the QF Companion Watch Signal Proposal section. Section content covers:
+
+- **Overview** — capability-layer / transport-adapter split; built on the spec 037 LLM Scenario Agent substrate; transport adapters never coupled to the capability layer.
+- **Observability And Alerts** — table of all 10 metric series with type, closed-vocabulary labels, increment semantics, and source-file citations to [`internal/assistant/metrics/metrics.go`](../../internal/assistant/metrics/metrics.go), [`internal/assistant/metrics/source_assembly.go`](../../internal/assistant/metrics/source_assembly.go), and [`internal/assistant/provenance/gate.go`](../../internal/assistant/provenance/gate.go). Cites `internal/assistant/metrics/labels_test.go` as the guard that proves no emission site uses a value outside the published label vocabularies. Cites the 7-panel Grafana dashboard at [`deploy/observability/grafana/dashboards/assistant.json`](../../deploy/observability/grafana/dashboards/assistant.json) (validated by `tests/observability/assistant_dashboard_test.go`).
+- **Service Budgets** — table covers facade p95 budget `< 5 ms` (Round-17 shipped `327.908 µs`; source: `tests/stress/assistant_facade_p95_test.go`); retrieval p95 budget `< 5 s` (Round-17 shipped `40.04 ms`; source: `tests/stress/assistant_retrieval_p95_test.go`); source-assembly drops `< 5%`; provenance violations expected `0` steady-state.
+- **Configuration SST** — cites [`config/smackerel.yaml`](../../config/smackerel.yaml) `assistant:` block (lines ~640–724) and [`internal/config/assistant.go`](../../internal/config/assistant.go) `loadAssistantConfig` + `validateAssistantConfig`. Enumerates the four startup validation rules (non-empty values; `borderline_floor > agent.routing.confidence_floor`; `enabled=true` requires ≥1 transport enabled; `context.state_key="user"` warns) and cross-references [`smackerel-no-defaults`](../../.github/instructions/smackerel-no-defaults.instructions.md).
+- **Confirm-Card Lifecycle** — cites [`internal/db/migrations/043_assistant_confirm_pending.sql`](../../internal/db/migrations/043_assistant_confirm_pending.sql) and [`internal/agent/tools/notification/pg_confirm_store.go`](../../internal/agent/tools/notification/pg_confirm_store.go). Documents the three SST TTL keys (`assistant.skills.notifications.confirm_timeout = "5m"`, `assistant.disambiguate_timeout = "2m"`, `assistant.error.capture_timeout = "10s"`) and the SELECT-time TTL filter (`AND expires_at > NOW()`) that makes the path process-restart-safe.
+- **Common Failure Modes** — table of 5 symptoms with PromQL queries and first-line diagnostic actions (covers `fabricated_source` provenance violations, `missing_artifact` source-assembly drops, capture-fallback `low_confidence` trending, `active_threads` not decaying, confirm `discarded_timeout > confirmed`).
+- **Recovery Actions** — capability-wide disable via `assistant.enabled: false`, per-skill disable via `assistant.skills.<name>.enabled: false`, prompt-contract hot-reload via `SIGHUP` with `agent.hot_reload: true`, and the explicit statement that pending confirms are process-restart-safe.
+
+### Round 20 — Deliverable 2: `docs/Testing.md` "Assistant Evaluation Harness" section
+
+**Claim Source:** written. New top-level section appended at EOF after the Spec 053 Delivery Evidence Requirements section. Section content covers:
+
+- **Purpose** — regression-grade routing + fallback evaluation that gives the §17 acceptance contract teeth in CI without requiring a live LLM endpoint.
+- **Corpus** — cites [`tests/eval/assistant/corpus.yaml`](../../tests/eval/assistant/corpus.yaml) (150 rows × 30 per label) and the 5-label closed vocabulary from [`tests/eval/assistant/harness.go`](../../tests/eval/assistant/harness.go): `retrieval`, `weather`, `notifications`, `capture`, `ambiguous-borderline`. Cites [`tests/eval/assistant/corpus_validation_test.go`](../../tests/eval/assistant/corpus_validation_test.go) as the invariant guard (≥150 rows, ≥30 per label, no duplicate IDs, closed-vocabulary intents).
+- **Acceptance Gate** — SST literals `routing_accuracy_min: 0.85` and `capture_fallback_min: 1.0` (under `assistant.eval:` in `config/smackerel.yaml`); shipped values `1.0000 / 1.0000`. Cites [`tests/eval/assistant/acceptance_test.go`](../../tests/eval/assistant/acceptance_test.go) function `TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` (build tag `integration`) and the `mustFloatEnv` helper with the literal failure message `"SST contract violation: <KEY> is empty"`.
+- **How To Run** — `./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback` (primary path; loads env vars from `config/generated/<env>.env` via [`scripts/commands/config.sh`](../../scripts/commands/config.sh)) and the direct `go test` invocation (`-count=1 -tags integration -run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ./tests/eval/assistant/...`).
+- **How To Add A Scenario** — 5-step procedure (append row to `corpus.yaml` with `id`/`text`/`ground_truth_intent`/`ground_truth_capture_expected`; ensure unique `id`; keep per-label floor; rerun harness; tune corpus or classifier on failure).
+- **Determinism And Anti-Tautology Guards** — cites `TestRun_Deterministic` for two-runs-identical assertion and `TestRun_AdversarialFailureSurfaces` (line 127 of `tests/eval/assistant/harness_test.go`) as the explicit anti-tautology guard that runs the harness with ground truth deliberately mismatched and asserts `IntentCorrect == 0` + `RoutingAccuracy == 0.0` + populated `Failures`.
+- **Per-Behavioral-Scenario Regression Files** — table of all 10 BS slots under `tests/e2e/assistant_regression/` showing 4 delegates (BS-001/003/006/010) and 6 `skip-77` slots (BS-002/004/005/007/008/009) with their named substrate-blocker IDs. Cites [`tests/e2e/assistant_regression/lib/regression_helpers.sh`](../../tests/e2e/assistant_regression/lib/regression_helpers.sh) `reg_skip_with_blocker` convention and the inline `:<<'EXECUTED_PATTERN'` heredoc shape so substrate-unblock rounds flip a single line. Cross-references the open SCOPE-10 findings `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` and `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING`.
+
+### Round 20 — Governance guards (executed)
+
+**Claim Source:** executed.
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant
+✅ Required artifact exists: spec.md
+✅ Required artifact exists: design.md
+✅ Required artifact exists: uservalidation.md
+✅ Required artifact exists: state.json
+✅ Required artifact exists: scopes.md
+✅ Required artifact exists: report.md
+✅ No forbidden sidecar artifacts present
+✅ Found DoD section in scopes.md
+✅ scopes.md DoD contains checkbox items
+✅ All DoD bullet items use checkbox syntax in scopes.md
+⚠️  uservalidation.md is using legacy checklist layout without '## Checklist' section
+✅ Detected state.json status: in_progress
+✅ Detected state.json workflowMode: full-delivery
+✅ state.json v3 has required field: status
+✅ state.json v3 has required field: execution
+✅ state.json v3 has required field: certification
+✅ state.json v3 has required field: policySnapshot
+✅ state.json v3 has recommended field: transitionRequests
+✅ state.json v3 has recommended field: reworkQueue
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+```text
+$ timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/061-conversational-assistant --verbose
+
+🐾 Regression Baseline Guard
+   Spec: specs/061-conversational-assistant
+
+── G044: Regression Baseline ──
+  ⚠️  No test baseline comparison table found in report.md (first run may establish baseline)
+
+── G045: Cross-Spec Regression ──
+  ℹ️  Found 60 done specs (of 60 total) that need cross-spec regression verification
+  ✅ Cross-spec inventory completed
+
+── G046: Spec Conflict Detection ──
+  ✅ No route/endpoint collisions detected across specs
+
+── Summary ──
+🐾 Regression baseline guard: PASSED
+   All 0 checks passed.
+
+REGRESSION_GUARD_EXIT=0
+```
+
+Both governance guards required for this round are GREEN. G044 baseline-comparison-table is not required for a docs-only round (no test runs in this round to baseline against). G045 cross-spec inventory completed across 60 done specs. G046 route/endpoint conflict detection passed.
+
+### Round 20 — Files modified (owned per managed-doc registry)
+
+- `docs/Operations.md` — appended new top-level section "## Assistant Capability (Spec 061)" at EOF (managed-doc owner: `bubbles.docs`).
+- `docs/Testing.md` — appended new top-level section "## Assistant Evaluation Harness" at EOF (managed-doc owner: `bubbles.docs`).
+- `specs/061-conversational-assistant/report.md` — this section.
+- `specs/061-conversational-assistant/state.json` — Round 20 `executionHistory` entry + `lastUpdatedAt` bump.
+
+### Round 20 — Files NOT modified (and NOT mine to claim)
+
+- `specs/061-conversational-assistant/spec.md` — `bubbles.analyst` owner.
+- `specs/061-conversational-assistant/design.md` — `bubbles.design` owner.
+- `specs/061-conversational-assistant/scopes.md` — `bubbles.plan` owner; SCOPE-09 and SCOPE-10 DoD checkboxes remain owned by their declared owners (`bubbles.docs` does NOT tick checkboxes outside its ownership).
+- `specs/061-conversational-assistant/uservalidation.md` — `bubbles.plan` owner; ratification is owner-only.
+- `specs/061-conversational-assistant/scenario-manifest.json` — out of scope.
+- `state.json` `certification.*`, `scopeProgress`, `completedScopes`, top-level `status`, `statusCeiling`, `workflowMode` — preserved unchanged (this agent has no certification ownership and writes no terminal-status promotion).
+- Any cross-spec/ artifact, any spec other than 061, any source code, any test file — preserved unchanged.
+
+### Round 20 — Finding closure summary
+
+**Closed by this round (`addressedFindings`):**
+
+- `SCOPE-09-RUNBOOK-PENDING` — closed via `docs/Operations.md` "Assistant Capability (Spec 061)" section covering Observability, Service Budgets, Configuration SST, Confirm-Card Lifecycle, Common Failure Modes, Recovery Actions, and dashboard reference.
+- `SCOPE-10-DOCS-PENDING` — closed via `docs/Testing.md` "Assistant Evaluation Harness" section covering Corpus, Acceptance Gate, How To Run, How To Add A Scenario, Determinism And Anti-Tautology Guards, and Per-Behavioral-Scenario Regression Files.
+
+**No new findings raised in this round.**
+
+**Carry-forward (unchanged from Round 19 — out of `bubbles.docs` ownership):**
+
+- `SCOPE-05-PACKET-060-ACCEPTANCE`, `SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06`
+- `SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING`
+- `SCOPE-07-BS-003-SHELL-E2E-NOT-YET-AUTHORED`, `SCOPE-07-BS-006-SHELL-E2E-NOT-YET-AUTHORED`
+- `SCOPE-08-PACKET-054`, `SCOPE-08-PACKET-060-WRITE-SCOPE`
+- `SCOPE-09-OTEL-SIDECAR-MISSING`
+- `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING`
+- `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING`
+- `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING` (owner-only)
+- `SCOPE-10-BROADER-E2E-GREEN-PENDING`
+- `SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED`, `SCOPE-04-LLM-NOSOURCE-STUB-NOT-YET-AUTHORED`, `SCOPE-04-MANIFEST-HOT-FLIP-NOT-YET-AUTHORED`, `SCOPE-04-SCOPE-06-SUBSTRATE-NOT-YET-AUTHORED-FOR-4-SCENARIO-SMOKE`
+- `SCOPE-06-GRAPH-SEEDING-NOT-YET-AUTHORED`
+- `SCOPE-07-BORDERLINE-SEEDING-NOT-YET-AUTHORED`
+- `SCOPE-10-BOOT-FAILURE-HARNESS-NOT-YET-AUTHORED`
+- `TRACEABILITY-GUARD-PIPEFAIL`, `SPEC-058-DUPLICATE-PACKAGE`
+- `ml/app` Python format debt, `PRE-EXISTING-CONFIG-VALIDATE-FAILURES`
+- `SMACKEREL-INTEGRATION-ORCHESTRATOR-OOM-FRAGILITY`
+- `BUG-051-SSTLOADER-LOAD-INDUCED-FLAKE`
+
+### Round 20 — Outcome envelope
+
+- **Outcome:** `completed_owned`. Both `bubbles.docs`-owned managed-doc findings are closed within owned artifacts with code-verified content; both required governance guards (`artifact-lint` + `regression-baseline-guard`) green.
+- **Spec 061 status:** `in_progress` (unchanged). `certification.*` preserved (this agent has no certification ownership and is not promoting a terminal status).
+- **Next required owners** (unchanged from Round 19, minus the two `bubbles.docs`-owned items now closed):
+  - (a) `bubbles.implement` — close the 6 SCOPE-04 / SCOPE-06 / SCOPE-07 / SCOPE-10 substrate-blocker findings.
+  - (b) `bubbles.implement` (or `bubbles.test`) — live-stack run of the 4-delegate + substrate-unblocked fixture set under `./smackerel.sh test e2e` to close the two live-stack-verification findings.
+  - (c) Owner — ratify `uservalidation.md` (closes `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING`).
+  - (d) `bubbles.validate` — when SCOPE-05..10 close, certify.
+
+## Round 23 — Bugfix-fastlane: SCOPE-09-DISAMBIG-OUTCOMES-EMISSION-PENDING test-isolation closure + Round-19/20 carry-forward landing
+
+**Owner:** `bubbles.implement` (user packet explicitly named this owner; runtime nested `runSubagent` unavailable so workflow parent-expanded to this role).
+**Mode:** `bugfix-fastlane` under parent `full-delivery` (`statusCeiling=done`).
+**Run window:** 2026-05-30T02:00Z → 2026-05-30T02:30Z (≤30 min wall-time budget honored).
+**Outcome envelope:** `completed_owned`.
+
+### Round 23 — User packet hypothesis vs investigation result
+
+The user packet asserted a duplicate-increment bug in `resolvePendingDisambig` causing `TestFacade_DisambigResolved_TextNumericFallback_EmitsResolvedUser` to fail with `DisambigOutcomeResolvedUser increment = 2.0; want 1`. **The hypothesis was wrong.**
+
+**Investigation evidence (Claim Source: executed):**
+
+- Failing test passes in isolation:
+
+```text
+$ go test -count=1 -run TestFacade_DisambigResolved_TextNumericFallback_EmitsResolvedUser ./internal/assistant/
+ok  github.com/pkirsanov/smackerel/internal/assistant 0.142s
+```
+
+- Production code at `internal/assistant/facade.go` line 923 has exactly ONE `DisambigOutcomeResolvedUser` increment site:
+
+```text
+$ grep -n 'DisambigOutcomeResolvedUser' internal/assistant/*.go
+internal/assistant/facade.go:923:    assistantmetrics.DisambiguationOutcomesTotal.WithLabelValues(transportLabel, "resolved_user").Inc()
+```
+
+- `design.md` §3.3 contract is `exactly once per resolved-user outcome` — already satisfied by Round-19 author's `resolvePendingDisambig` 7-branch helper.
+
+- Running `-count=10 -parallel=16` against the unfixed test file produces sporadic failures on **different** siblings across runs (one run fails on `TextNumericFallback`, another fails on `SaveAsNote`) — the classic fingerprint of a parallel-race, not a deterministic duplicate-increment bug.
+
+### Round 23 — Actual root cause
+
+Five of the seven new tests in `internal/assistant/facade_disambig_resolver_test.go` called `t.Parallel()` and asserted **before/after deltas on a package-global Prometheus counter** (`DisambigOutcomeResolvedUser{transport="telegram"}`). When run concurrently within the `internal/assistant` package, sibling increments from neighboring parallel tests leaked into each test's sandwich window, producing apparent over-counts of `2.0`, `3.0`, etc.
+
+### Round 23 — Fix applied (test file only, production code untouched)
+
+`internal/assistant/facade_disambig_resolver_test.go`:
+
+- Removed `t.Parallel()` from 5 counter-asserting tests: `TestFacade_DisambigResolved_TypedReply_EmitsResolvedUser`, `TestFacade_DisambigResolved_TextNumericFallback_EmitsResolvedUser`, `TestFacade_DisambigResolved_SaveAsNote_EmitsResolvedUserNoFallback`, `TestFacade_DisambigResolved_TTLExpired_EmitsTimeoutCapture`, `TestFacade_DisambigResolved_NonMatchingReply_EmitsNonMatching`, `TestFacade_DisambigResolved_NonNumericText_EmitsNonMatching`.
+- Kept `t.Parallel()` on `TestFacade_BandBorderline_PersistsPendingDisambig` because that test asserts persistence shape only and touches no counter.
+- Added an explanatory comment block above the first counter-asserting test documenting the rationale so future authors don't re-introduce the race.
+
+Production `internal/assistant/facade.go` was **not** modified — it never needed to be.
+
+### Round 23 — Verification evidence (Claim Source: executed; PII-redacted)
+
+```text
+$ gofmt -l internal/assistant/facade_disambig_resolver_test.go
+(empty)
+
+$ go vet ./...
+(no output) → VET_EXIT=0
+
+$ go build ./...
+(no output) → BUILD_EXIT=0
+
+$ go build -tags=integration ./...
+(no output) → INTBUILD_EXIT=0
+
+$ go test -count=10 -parallel=16 -run 'TestFacade_DisambigResolved' ./internal/assistant/
+ok  github.com/pkirsanov/smackerel/internal/assistant 12.34s
+→ 10/10 GREEN (proves deflake — pre-fix this command produced sporadic failures)
+
+$ go test -count=1 ./internal/assistant/...
+ok  github.com/pkirsanov/smackerel/internal/assistant 0.156s
+ok  github.com/pkirsanov/smackerel/internal/assistant/confirm 0.011s
+ok  github.com/pkirsanov/smackerel/internal/assistant/context 0.029s
+ok  github.com/pkirsanov/smackerel/internal/assistant/contracts 0.065s
+ok  github.com/pkirsanov/smackerel/internal/assistant/metrics 0.028s
+ok  github.com/pkirsanov/smackerel/internal/assistant/provenance 0.038s
+
+$ ./smackerel.sh format --check
+✅ No formatting changes needed.
+→ FMT_EXIT=0
+
+$ ./smackerel.sh test unit --go
+✅ unit-tests passed
+→ UNIT_EXIT=0
+
+$ for f in tests/e2e/assistant_*.sh tests/e2e/assistant_regression/**/*.sh; do bash -n "$f"; done
+(no errors) → all 14 new shell files syntax-clean
+```
+
+### Round 23 — Cluster shipped across 3 commits
+
+| # | SHA | Subject | Files | Net |
+|---|---|---|---|---|
+| 1 | `6b40554a` | `feat(061-scope-09): close disambig outcomes emission + harden parallel test isolation` | `internal/assistant/facade_disambig_resolver_test.go` (NEW) + `scripts/commands/config.sh` (+5) | +442/-0 |
+| 2 | `cc8a58b3` | `feat(061-scope-10): per-BS regression slots + Telegram smoke fixture (Round 19→23)` | 14 new shell files | +771/-0 |
+| 3 | this commit | `docs(061): Round 23 spec maintenance — Round-19 carry-forward landed + disambig outcomes closed` | `state.json` + `report.md` + `docs/Operations.md` (Round-20 carry-forward) + `docs/Testing.md` (Round-20 carry-forward) | (see commit) |
+
+All three pushed to `origin/main`; pre-commit `gitleaks` + `pii-scan` clean on each.
+
+### Round 23 — Extras detected vs packet inventory (honest scope expansion)
+
+User packet listed `Modified (2 files): scripts/commands/config.sh + specs/061-conversational-assistant/state.json` but `git status` against HEAD `3c73f7d7` showed 4 modified files. The two extras — `docs/Operations.md` (+129 lines, Round-20 Assistant Capability section) and `docs/Testing.md` (+50 lines, Round-20 Assistant Evaluation Harness section) — were Round-20 author's docs work documented in the working-tree Round-20 state.json entry. Leaving them unstaged would have created **artifact-state inconsistency** (state.json would have claimed docs that never landed). Honest decision: included them in Commit 3 alongside `state.json` + `report.md` to keep claims and artifacts in sync.
+
+### Round 23 — Finding closure summary
+
+**Closed by this round (`addressedFindings`):**
+
+- `SCOPE-09-DISAMBIG-OUTCOMES-EMISSION-PENDING` — closed via hermetic test coverage on `origin/main` (commit `6b40554a`); 10/10 high-parallelism runs green; production code was already exactly-once, test-isolation race fixed.
+
+**No new findings raised in this round.** The 9 substrate-blocker findings Round 19 raised remain carry-forward.
+
+**Carry-forward (unchanged, pending owner re-verification or downstream owner action):**
+
+- `SCOPE-05-PACKET-060-ACCEPTANCE`, `SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06`
+- `SCOPE-07-ARCHITECTURE-TEST-SIBLING-PENDING` (physically resolved Round 21)
+- `SCOPE-07-BS-003-SHELL-E2E-NOT-YET-AUTHORED` (substrate-unblocked + standalone fixture now in main via Commit 2)
+- `SCOPE-07-BS-006-SHELL-E2E-NOT-YET-AUTHORED` (substrate-unblocked + standalone fixture now in main via Commit 2)
+- `SCOPE-08-PACKET-054`, `SCOPE-08-PACKET-060-WRITE-SCOPE`
+- `SCOPE-09-OTEL-SIDECAR-MISSING`
+- `SCOPE-09-PROVENANCE-VIOLATIONS-METRIC-EMISSION-PENDING` (physically resolved Round 22)
+- `SCOPE-09-SOURCE-ASSEMBLY-METRIC-SCENARIO-ID-LABEL-PENDING` (physically resolved Round 21)
+- `SCOPE-09-ACTIVE-THREADS-GAUGE-REFRESHER-PENDING` (physically resolved Round 22)
+- `SCOPE-04-NOTIFICATION-PROPOSAL-FIXTURE-NOT-YET-AUTHORED`, `SCOPE-04-LLM-NOSOURCE-STUB-NOT-YET-AUTHORED`, `SCOPE-04-MANIFEST-HOT-FLIP-NOT-YET-AUTHORED`, `SCOPE-04-SCOPE-06-SUBSTRATE-NOT-YET-AUTHORED-FOR-4-SCENARIO-SMOKE`
+- `SCOPE-06-GRAPH-SEEDING-NOT-YET-AUTHORED`
+- `SCOPE-07-BORDERLINE-SEEDING-NOT-YET-AUTHORED`
+- `SCOPE-10-BOOT-FAILURE-HARNESS-NOT-YET-AUTHORED`
+- `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING`
+- `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING`
+- `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING` (owner-only)
+- `SCOPE-10-BROADER-E2E-GREEN-PENDING`
+- `TRACEABILITY-GUARD-PIPEFAIL`, `SPEC-058-DUPLICATE-PACKAGE`
+- `ml/app` Python format debt, `PRE-EXISTING-CONFIG-VALIDATE-FAILURES`
+- `SMACKEREL-INTEGRATION-ORCHESTRATOR-OOM-FRAGILITY`
+- `BUG-051-SSTLOADER-LOAD-INDUCED-FLAKE`
+
+### Round 23 — Honesty declarations
+
+1. **Production `internal/assistant/facade.go` was NOT modified.** Packet hypothesis was wrong; the test-file fix sufficed. Do NOT interpret this round as having fixed a duplicate-increment bug that did not exist.
+2. **Round-19 author's `tests/e2e/` fixtures and Round-20 author's `docs/Operations.md` + `docs/Testing.md`** were already in the working tree before this session. I verified them, scope-expanded Commit 3 to include the docs for artifact-state consistency, and shipped them.
+3. **Live-stack verification of the 4 delegate fixtures and the 6 skip-77 fixtures remains pending.** Fixtures land in `origin/main` but `./smackerel.sh test e2e` was not run this round (out of ≤30 min budget). Tracked as `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` + `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING`.
+4. **DoD checkboxes were NOT flipped.** SCOPE-09 + SCOPE-10 DoD remain owned by a future owner-re-verification round; this agent does not tick checkboxes outside its emission-site code-fix scope.
+
+### Round 23 — Constraints honored (NOT MODIFIED)
+
+- `spec.md`, `design.md`, `scopes.md` DoD checkboxes — preserved unchanged.
+- `uservalidation.md`, `scenario-manifest.json` — preserved unchanged.
+- `state.json` `certification.*`, `scopeProgress`, `completedScopes`, top-level `status`, `statusCeiling`, `workflowMode` — preserved unchanged.
+- `internal/agent/*.go` (top-level), `internal/assistant/facade.go` (production) — preserved unchanged.
+- Any cross-spec/ artifact, any spec other than 061 — preserved unchanged.
+
+### Round 23 — Outcome envelope
+
+- **Outcome:** `completed_owned`. The assigned bug-fix slice (`SCOPE-09-DISAMBIG-OUTCOMES-EMISSION-PENDING`) is closed with hermetic test coverage; Round-19 carry-forward fixtures and Round-20 docs landed alongside for artifact-state consistency; ledger-aligned.
+- **Spec 061 status:** `in_progress` (unchanged). `certification.*` preserved.
+- **Next required owners:**
+  - (a) `bubbles.implement` — close the 7 substrate-blocker findings in dependency order so the SCOPE-10 skip-77 fixtures flip to executed assertions.
+  - (b) `bubbles.implement` or `bubbles.test` — run live-stack `./smackerel.sh test e2e` against the 4 delegate fixtures + substrate-unblocked fixture set to close the two live-stack-verification findings.
+  - (c) Owner — ratify `uservalidation.md` (closes `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING`).
+  - (d) `bubbles.test` — owner re-verification pass for the 4 SCOPE-09 emission-site findings physically resolved Rounds 19/21/22.
+  - (e) `bubbles.validate` — when SCOPE-05..10 close, certify.
+
+
+
