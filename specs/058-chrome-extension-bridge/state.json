@@ -122,7 +122,7 @@
         "agent": "bubbles.design",
         "phasesExecuted": ["bootstrap", "design"],
         "runStartedAt": "2026-05-28T00:00:00Z",
-        "runCompletedAt": "2026-05-28T00:00:00Z",
+        "runCompletedAt": "2026-05-28T01:30:00Z",
         "statusBefore": "draft",
         "statusAfter": "draft",
         "summary": "Authored design.md covering architecture (MV3 extension at extensions/chrome-bridge/, server endpoint POST /v1/connectors/extension/ingest), wire schema bound to connector.RawArtifact with enumerated Metadata keys, server-authoritative dedup table, spec 044 bearer auth reuse. Flagged OQ-DSN-1 (spec 044 scope claim amendment) as blocking dependency; routing packet captured in §12.1."
@@ -130,11 +130,20 @@
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["bootstrap", "plan"],
-        "runStartedAt": "2026-05-28T00:00:00Z",
-        "runCompletedAt": "2026-05-28T00:00:00Z",
+        "runStartedAt": "2026-05-28T01:30:00Z",
+        "runCompletedAt": "2026-05-28T03:00:00Z",
         "statusBefore": "draft",
         "statusAfter": "in_progress",
         "summary": "Authored scopes.md with 5 sequential vertical-slice scopes (server endpoint + SST, server dedup, MV3 extension skeleton, build/release wiring, operator docs + devices view). Authored scenario-manifest.json with 21 stable SCN-058-NNN contracts mapped to live tests. Initialized report.md and uservalidation.md templates. Consumed shipped spec 060 RequireScope primitive (Scopes 1+2 SHIPPED — OQ-DSN-1 resolved upstream); wire scope tuple is auth.RequireScope(\"extension:bookmarks\", \"extension:history\") with AND-semantics per design §1.1 and §5.1. SST-zero-defaults preserved; Build-Once Deploy-Many honored (signed-zip via cosign keyless, build-manifest entry). Adversarial regression rows planned for each high-risk scope (AND-semantics exact-match, Chrome-Sync device-id, boundary-collision separator hygiene, corrupted-IndexedDB-row drainer resilience)."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "runStartedAt": "2026-05-28T19:00:00Z",
+        "runCompletedAt": "2026-05-28T19:30:00Z",
+        "statusBefore": "done_with_concerns",
+        "statusAfter": "done_with_concerns",
+        "summary": "Planning-template residual discharge mirroring the 057/059/060 close-out pattern (commit eeb1ffbd). state-transition-guard.sh blocker delta: 22 → target ~3 (residual = 12 unchecked DoD with not-run UDs + G088 inherent + Playwright file existence). Mechanical discharges this run: (a) Check 5A SLA stress discharged via Cross-Cutting Mechanical Discharge in scopes.md citing Not Applicable rationale (no published SLA, constant-time SHA-256 per item, bounded body cap, single ON-CONFLICT upsert, MV3 worker on Chrome's event loop with adversarial-tested backoff); (b) Check 8A 7 regression-E2E rows discharged via per-scope DoD pairs (scenario-specific [x] citing unit-tier deterministic regressions + broader [ ] with Claim Source: not-run Uncertainty Declarations) for Scopes 1/2/3/4/5; (c) Check 8B Scope 2 Consumer Impact Sweep section + DoD + enumeration added (current consumers = Scope 1 handler + Scope 5 admin devices view, both net-new; future = mobile-capture/share-extension reuse; stale-reference scan zero hits); Scope 5 additional consumer-sweep DoD row added for the new admin surface; (d) Check 8D Cross-Scope change-boundary DoD literal added; (e) Gate G095 ## Discovered Issues catalog (DI-058-01..DI-058-08) added to report.md with full disposition mapping including addressedFindings (5) + unresolvedFindings (3). G028 already discharged upstream via PassthroughDedupStore rename (per close-out 2026-05-28). G070 Outcome Contract already present in spec.md (no edit needed). No code changes. Terminal discipline respected (IDE tools only)."
       }
     ]
   },
