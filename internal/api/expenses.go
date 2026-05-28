@@ -34,8 +34,12 @@ func NewExpenseHandler(pool *pgxpool.Pool, engine *intelligence.ExpenseClassifie
 }
 
 // RegisterRoutes registers expense API routes on the given Chi router.
+// The prefix is relative; the production router mounts this handler
+// inside an outer r.Route("/api", ...) group (see internal/api/router.go).
+// Using an absolute "/api/expenses" prefix here would double the prefix
+// and make every route unreachable. See BUG-034-003.
 func (h *ExpenseHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/api/expenses", func(r chi.Router) {
+	r.Route("/expenses", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Get("/export", h.Export)
 		r.Get("/{id}", h.Get)

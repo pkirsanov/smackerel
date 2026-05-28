@@ -24,8 +24,12 @@ func NewMealPlanHandler(svc *mealplan.Service, shopping *mealplan.ShoppingBridge
 }
 
 // RegisterRoutes registers meal plan API routes on the given Chi router.
+// The prefix is relative; the production router mounts this handler
+// inside an outer r.Route("/api", ...) group (see internal/api/router.go).
+// Using an absolute "/api/meal-plans" prefix here would double the prefix
+// and make every route unreachable. See BUG-034-003.
 func (h *MealPlanHandler) RegisterRoutes(r chi.Router) {
-	r.Route("/api/meal-plans", func(r chi.Router) {
+	r.Route("/meal-plans", func(r chi.Router) {
 		r.Post("/", h.CreatePlan)
 		r.Get("/", h.ListPlans)
 		r.Get("/query", h.QueryByDate)
