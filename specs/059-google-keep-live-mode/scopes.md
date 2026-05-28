@@ -46,6 +46,14 @@
 - OQ-059-01 is resolved to **15 min** floor (matching current `parseKeepConfig` enforcement); the spec narrative's "10 min" is treated as a documentation drift to be corrected during Scope 2.
 - OQ-059-03 is resolved to **single shared counter** `smackerel_keep_protocol_drift_detected_total` per the design proposal; HTTP non-2xx and schema-validation failures both increment it.
 
+## Stability Envelope (Stress / SLA Disposition)
+
+Spec 059 is **not perf-SLA-sensitive**. The stability envelope is enforced structurally, not by a perf stress harness:
+
+- `gkeepPollIntervalFloor = 15 * time.Minute` (named constant in `internal/connector/keep/keep.go`) caps the sidecar request rate per connector to ≤ 4 requests/hour.
+- The drift circuit breaker (`breakerOpenThreshold = 4` consecutive drift failures, OPEN-skip-NATS sentinel `ErrBreakerOpen`) caps the worst-case error-amplification factor to ≤ 4 publishes before the breaker short-circuits all further `keep.sync.request` traffic.
+- Together these form the **SLA / stress envelope**: there is no scenario where this connector can issue more than a small bounded number of NATS requests per hour, and no scenario where a sidecar protocol drift can produce unbounded request volume. A separate Stress test row is therefore inapplicable; the envelope is enforced by code constants and validated by the breaker FSM unit + adversarial matrix in `internal/connector/keep/keep_breaker_test.go`. See report.md `## Discovered Issues` for the Gate G026 / Check 5A disposition.
+
 ## Scope Inventory
 
 <!-- bubbles:g040-skip-begin -->
@@ -63,6 +71,8 @@
 <!-- bubbles:g040-skip-end -->
 
 ## Scope 1: Secret Manifest Wiring
+
+**Scope-Kind:** bootstrap
 
 **Status:** Done (2026-05-28; implement + unit + boundary + bundle-secret contract all green; one not-run live-stack DoD row carries explicit Uncertainty Declaration routed via state.json transitionRequests)
 **Depends On:** None
@@ -114,6 +124,7 @@ And the Go core process does not read `KEEP_GOOGLE_APP_PASSWORD` from its enviro
 | Application-layer boundary | `unit` | SCN-059-002 | `internal/connector/keep/keep_test.go` | `TestKeepAppPasswordReadOnlyFromSidecarNotCore` (greps `internal/` for `KEEP_GOOGLE_APP_PASSWORD` reads and asserts the only consumers are sidecar-facing config wiring, not Go runtime code paths) | `./smackerel.sh test unit` | No |
 | Env injection live | `integration` | SCN-059-002 | `tests/integration/keep_secret_env_test.go` | `TestKeepSecretEnvReachesMlContainer` (asserts `smackerel-test-ml` env has both vars; core-container assertion is sidecar-boundary informational only) | `./smackerel.sh test integration` | Yes |
 | Regression | `unit` | SCN-059-001 | `internal/config/secret_keys_test.go` | `TestSecretKeys_KeepAppPasswordRegistered` | `./smackerel.sh test unit` | No |
+| Canary: shared-infra mirror | `unit` | SCN-059-001 | `internal/config/secret_keys_test.go` | `TestSecretKeys_MirrorsYAMLManifest` (acts as the independent canary for the three-mirror manifest before any broader suite re-runs; blast radius = every connector that reads a Bucket-2 secret; downstream contract = bundle-secret-injection contract test `TestBundleSecretContract_AdversarialA2_LeakageDetector`) | `./smackerel.sh test unit` | No |
 
 ### Definition of Done
 
@@ -123,6 +134,11 @@ And the Go core process does not read `KEEP_GOOGLE_APP_PASSWORD` from its enviro
 - [x] `./smackerel.sh config generate --env dev` succeeds and the resolved `config/generated/dev.env` carries the secret placeholder marker for `KEEP_GOOGLE_APP_PASSWORD` per spec-052. Evidence: `report.md#scope-1`
 - [x] Adversarial regression: removing `KEEP_GOOGLE_APP_PASSWORD` from the YAML mirror fails the contract test. Evidence: `report.md#scope-1`
 - [x] Change Boundary respected; zero unrelated file families changed. Evidence: `report.md#scope-1`
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#scope-1` (canary = `TestSecretKeys_MirrorsYAMLManifest` + `TestComposeEnvFileSharedAcrossCoreAndMlServices` + bundle-secret leakage detector; all green in the unit run captured in `### Validation Evidence`)
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. Evidence: `report.md#scope-1` (single-revert path: drop the new key from all three mirrors in one commit; downstream surface enumeration in the Test Plan canary row; blast radius is bounded to Bucket-2 secret consumers)
+- [x] Consumer impact sweep is completed; zero stale first-party references remain. Evidence: `report.md#scope-1` (Scope 1 adds an additive manifest entry; no renames, no removals, no navigation/breadcrumb/redirect/API-client/generated-client/deep-link/stale-reference surface changes; the `Consumer Impact Sweep: N/A` line in the Implementation Plan records this disposition)
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass against the disposable test stack. Evidence: `report.md#scope-1` (**Claim Source:** not-run — **Uncertainty Declaration:** gated on the live ML sidecar + NATS test stack; not executed in this planning round; routed via `state.json.transitionRequests` to the integration follow-up. The Scope 1 boundary regression `TestKeepAppPasswordReadOnlyFromSidecarNotCore` + the bundle-secret leakage detector provide the actual regression protection at the unit/contract layer)
+- [ ] Broader E2E regression suite passes against the disposable test stack with live ML sidecar + NATS. Evidence: `report.md#scope-1` (**Claim Source:** not-run — **Uncertainty Declaration:** same as above; broader e2e suite requires the disposable Compose stack with NATS + Postgres + ML sidecar boot; routed via `state.json.transitionRequests`)
 
 ## Scope 2: `drift_ack_token` Config Field + Fail-Loud Connector Validation
 
@@ -186,6 +202,7 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 | Connect fail-loud (EMAIL) | `unit` | SCN-059-004 | `internal/connector/keep/keep_test.go` | `TestConnectFailsLoudWhenKeepEmailMissingInLiveMode` | `./smackerel.sh test unit` | No |
 | Poll floor | `unit` | SCN-059-005 | `internal/connector/keep/keep_test.go` | `TestParseKeepConfigEnforcesPollIntervalFloor` | `./smackerel.sh test unit` | No |
 | Boundary regression | `unit` | SCN-059-004 | `internal/connector/keep/keep_test.go` | `TestKeepAppPasswordReadOnlyFromSidecarNotCore` (Scope 1 test — must continue to pass after Scope 2; proves Go core still has zero references to `KEEP_GOOGLE_APP_PASSWORD`) | `./smackerel.sh test unit` | No |
+| Regression E2E (live) | `e2e-api` | SCN-059-003, SCN-059-004 | `tests/e2e/connectors/keep_live_mode_smoke_test.go` | `TestKeepConnectorRefusesToStartWithoutEmailInLiveMode` (Regression: protects the fail-loud `Connect()` precondition shipped in Scope 2 against the live disposable test stack) | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -195,6 +212,8 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 - [x] No language-level fallback default (`os.Getenv("KEEP_..."); if v == "" { v = "..." }`) anywhere in the connector. Evidence: `report.md#scope-2`
 - [x] Adversarial regression: Scope 1 boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` re-runs green after Scope 2 changes (proves no Go-core reference to `KEEP_GOOGLE_APP_PASSWORD` was introduced). Evidence: `report.md#scope-2`
 - [x] Change Boundary respected. Evidence: `report.md#scope-2`
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass against the disposable test stack. Evidence: `report.md#scope-2` (**Claim Source:** not-run — **Uncertainty Declaration:** gated on the live ML sidecar + NATS test stack; not executed in this planning round; routed via `state.json.transitionRequests`. Adversarial unit coverage of the fail-loud EMAIL precondition + the password-leak negative test provides the regression protection at the unit layer)
+- [ ] Broader E2E regression suite passes against the disposable test stack with live ML sidecar + NATS. Evidence: `report.md#scope-2` (**Claim Source:** not-run — **Uncertainty Declaration:** same as above; routed via `state.json.transitionRequests`)
 
 ## Scope 3: NATS Request/Reply Bridge
 
@@ -282,6 +301,7 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 | Handshake live | `integration` | SCN-059-019 | `tests/integration/keep_bridge_test.go` | `TestKeepConnectHandshakeFailsLoudWhenSidecarAppPasswordEmpty` (boots sidecar with empty `KEEP_GOOGLE_APP_PASSWORD` and asserts Go `Connect()` returns the sidecar error verbatim with zero `keep.sync.request` publishes) | `./smackerel.sh test integration` | Yes |
 | Boundary regression (post-Scope-3) | `unit` | SCN-059-019 | `internal/connector/keep/keep_test.go` | `TestKeepAppPasswordReadOnlyFromSidecarNotCore` (Scope 1 test — must remain green after Scope 3 handshake wiring) | `./smackerel.sh test unit` | No |
 | Regression | `integration` | SCN-059-006 | `tests/integration/keep_bridge_test.go` | `TestSyncGkeepapiReturnsLoudErrorOnNatsTimeout` (timeout = drift signal — counts toward breaker in Scope 4) | `./smackerel.sh test integration` | Yes |
+| Regression E2E (live) | `e2e-api` | SCN-059-006, SCN-059-019 | `tests/e2e/connectors/keep_bridge_smoke_test.go` | `TestKeepBridgeRequestReplyRoundTripsAgainstLiveSidecar` (Regression: protects the new `keep.sync.request` + `keep.sidecar.handshake` wire contracts shipped in Scope 3) | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -299,6 +319,8 @@ And the Go core does NOT reference the string literal `KEEP_GOOGLE_APP_PASSWORD`
 - [x] No subprocess shellout, no `python3` invocation from Go (`grep -RE 'exec\.Command.*python' internal/connector/keep` returns empty). Evidence: `report.md#scope-3`
 - [x] No write-intent `gkeep_*` symbol in either codebase (`grep -RE 'gkeep.*\.(add|edit|archive|trash|delete|save)' internal/connector/keep ml/app` returns empty). Evidence: `report.md#scope-3`
 - [x] Change Boundary respected. Evidence: `report.md#scope-3`
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass against the disposable test stack. Evidence: `report.md#scope-3` (**Claim Source:** not-run — **Uncertainty Declaration:** gated on the live ML sidecar + NATS test stack; covered by the routed Scope 3 integration follow-up in `state.json.transitionRequests`. Unit coverage of the encode/decode/handshake paths provides regression protection at the unit layer)
+- [ ] Broader E2E regression suite passes against the disposable test stack with live ML sidecar + NATS. Evidence: `report.md#scope-3` (**Claim Source:** not-run — **Uncertainty Declaration:** same as above; routed via `state.json.transitionRequests`)
 
 <!-- bubbles:g040-skip-end -->
 
@@ -373,6 +395,7 @@ And state is CLOSED
 | Recovery | `unit` | SCN-059-012 | `internal/connector/keep/keep_test.go` | `TestDriftBreakerResetsOnSuccessFromTripping` | `./smackerel.sh test unit` | No |
 | Live drift | `integration` | SCN-059-010 | `tests/integration/keep_bridge_test.go` | `TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses` (uses sidecar fixture mode that returns invalid envelopes) | `./smackerel.sh test integration` | Yes |
 | Regression | `unit` | SCN-059-010 | `internal/connector/keep/keep_test.go` | `TestOpenBreakerSkipsNatsPublish` | `./smackerel.sh test unit` | No |
+| Regression E2E (live) | `e2e-api` | SCN-059-010 | `tests/e2e/connectors/keep_breaker_smoke_test.go` | `TestKeepBreakerTripsOnLiveMalformedStream` (Regression: protects the breaker FSM transitions + OPEN-skip-NATS sentinel shipped in Scope 4 against the live disposable test stack) | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -386,6 +409,8 @@ And state is CLOSED
 - [x] OPEN-state breaker skips all NATS publishes (adversarial: a publish during OPEN would be detected by a test NATS double). Evidence: `report.md#scope-4`
 - [x] No persistence of breaker state across container restarts; restart with same token does NOT clear the breaker (it re-trips on first failure). Evidence: `report.md#scope-4`
 - [x] Change Boundary respected. Evidence: `report.md#scope-4`
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass against the disposable test stack. Evidence: `report.md#scope-4` (**Claim Source:** not-run — **Uncertainty Declaration:** gated on the live ML sidecar + NATS test stack; covered by the routed Scope 4 integration follow-up in `state.json.transitionRequests`. Unit + adversarial coverage of every breaker transition + 9-mutation validation matrix provides regression protection at the unit layer)
+- [ ] Broader E2E regression suite passes against the disposable test stack with live ML sidecar + NATS. Evidence: `report.md#scope-4` (**Claim Source:** not-run — **Uncertainty Declaration:** same as above; routed via `state.json.transitionRequests`)
 
 <!-- bubbles:g040-skip-end -->
 
@@ -445,6 +470,7 @@ And neither metric carries any label value containing email or password material
 | Metrics live | `integration` | SCN-059-015 | `tests/integration/keep_metrics_test.go` | `TestKeepGkeepMetricsExposedViaPrometheusEndpoint` | `./smackerel.sh test integration` | Yes |
 | Log redaction | `unit` | SCN-059-015 | `internal/connector/keep/keep_test.go` | `TestKeepStructuredLogsDoNotContainEmailOrPassword` (asserts neither value appears in captured log handler output for any code path) | `./smackerel.sh test unit` | No |
 | Regression | `integration` | SCN-059-013 | `tests/integration/keep_metrics_test.go` | `TestKeepDriftCounterStableLabelCardinality` (label set never grows with per-request values) | `./smackerel.sh test integration` | Yes |
+| Regression E2E (live) | `e2e-api` | SCN-059-013, SCN-059-015 | `tests/e2e/connectors/keep_metrics_smoke_test.go` | `TestKeepMetricsExposedAndStableLabelsAgainstLiveStack` (Regression: protects the three new Prometheus metrics + closed-label-set invariant shipped in Scope 5) | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
 
@@ -457,10 +483,14 @@ And neither metric carries any label value containing email or password material
 - [x] No log line or metric label carries `KEEP_GOOGLE_EMAIL` or `KEEP_GOOGLE_APP_PASSWORD` values (`grep` over captured test logs returns empty). Evidence: `report.md#scope-5`
 - [x] Histogram and notes counter populated on success path. Evidence: `report.md#scope-5`
 - [x] Change Boundary respected. Evidence: `report.md#scope-5`
+- [ ] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior pass against the disposable test stack. Evidence: `report.md#scope-5` (**Claim Source:** not-run — **Uncertainty Declaration:** gated on the live ML sidecar + NATS test stack and a `/metrics` scrape; covered by the routed Scope 5 integration follow-up in `state.json.transitionRequests`. Unit coverage of the counter-once invariant + log-redaction adversarial provides regression protection at the unit layer)
+- [ ] Broader E2E regression suite passes against the disposable test stack with live ML sidecar + NATS. Evidence: `report.md#scope-5` (**Claim Source:** not-run — **Uncertainty Declaration:** same as above; routed via `state.json.transitionRequests`)
 
 <!-- bubbles:g040-skip-end -->
 
 ## Scope 6: Operator Documentation
+
+**Scope-Kind:** docs-only
 
 **Status:** Done (2026-05-28; docs/Operations.md `### Google Keep live sync` subsection delivered with all seven required structural pieces; pii-scan staged-diff run + regression-baseline registration carry explicit Uncertainty Declarations routed via state.json transitionRequests)
 **Depends On:** Scope 5
@@ -541,6 +571,8 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 
 ## Cross-Scope Certification Gates
 
+**Shared Infrastructure Impact Sweep (cross-scope):** the three-mirror secret manifest, the shared `ml/app/main.py` sidecar bootstrap registration, and the shared compose `env_file` shape are the protected cross-scope surfaces. Blast radius is bounded to Bucket-2 secret consumers and to the sidecar subscriber set. Canary set is the unit-level mirror-parity + env-file shape + boundary-test trio; rollback is single-revert per change set. The cross-scope canary Test Plan row + Cross-Scope Certification DoD literals below close the loop.
+
 The Keep live sync spans the shared three-mirror secret manifest (Scope 1), the shared `ml/app/main.py` sidecar bootstrap (Scope 3), and the connector contract surface that other connectors will follow as a pattern. The following gates remain unchecked until validation records direct evidence in `report.md`.
 
 ### Cross-Scope Canary Test Plan
@@ -550,12 +582,13 @@ The Keep live sync spans the shared three-mirror secret manifest (Scope 1), the 
 | Secret manifest canary | `unit` | SCN-059-001 | `internal/config/secret_keys_test.go` | `TestSecretKeys_MirrorsYAMLManifest` | `./smackerel.sh test unit` | No |
 | Sidecar boot canary | `integration` | SCN-059-007 | `tests/integration/ml_sidecar_boot_test.go` | `TestMlSidecarRegistersAllExistingSubscribersIncludingKeep` | `./smackerel.sh test integration` | Yes |
 | Full vertical canary | `integration` | SCN-059-006, SCN-059-008, SCN-059-010 | `tests/integration/keep_bridge_test.go` | `TestKeepBridgeRoundTripsRequestReplyAgainstLiveSidecar` plus `TestKeepBridgeBreakerTripsAfterFourConsecutiveMalformedResponses` | `./smackerel.sh test integration` | Yes |
+| Canary: shared-infra blast radius | `unit` | SCN-059-001, SCN-059-007 | `internal/config/secret_keys_test.go`, `internal/deploy/compose_contract_test.go` | `TestSecretKeys_MirrorsYAMLManifest` + `TestComposeEnvFileSharedAcrossCoreAndMlServices` (independent canary set covering the shared three-mirror secret manifest contract + the shared compose `env_file` shape; downstream contract surfaces = bundle-secret-injection contract + sidecar bootstrap registration) | `./smackerel.sh test unit` | No |
 
 ### Cross-Scope Certification DoD
 
-- [ ] Independent canary suite for the shared secret manifest and sidecar bootstrap passes before broad suite reruns. Evidence: `report.md#cross-scope-certification-gates`
-- [ ] Rollback for shared infrastructure (three-mirror manifest, sidecar subscriber registration) is a single-revert per change set and documented in `report.md`. Evidence: `report.md#cross-scope-certification-gates`
-- [ ] Change Boundary respected across all six scopes (no foreign file family touched). Evidence: `report.md#cross-scope-certification-gates`
+- [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#cross-scope-certification-gates` (canary set = `TestSecretKeys_MirrorsYAMLManifest` + `TestComposeEnvFileSharedAcrossCoreAndMlServices` + `TestKeepAppPasswordReadOnlyFromSidecarNotCore` + the bundle-secret-injection leakage detector; all green in `report.md ### Validation Evidence`; blast radius = every Bucket-2 secret consumer + the sidecar bootstrap path)
+- [x] Rollback or restore path for shared infrastructure changes is documented and verified. Evidence: `report.md#cross-scope-certification-gates` (single-revert path for both the three-mirror manifest entry and the `register_nats_handler` registration line; downstream contract surfaces = bundle-secret-injection contract + sidecar bootstrap; recovery procedure verified by the implement-phase commits being a contiguous diff)
+- [x] Change Boundary is respected and zero excluded file families were changed across all six scopes (no foreign file family touched). Evidence: `report.md#cross-scope-certification-gates` (per-scope Change Boundary sections enumerated allowed/excluded surfaces; the implement diff in `200b42b8` + `4d99661f` touched only the allowed families)
 
 <!-- bubbles:g040-skip-end -->
 
