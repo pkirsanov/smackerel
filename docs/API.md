@@ -400,10 +400,68 @@ Common status codes:
 
 Error messages are redacted and must not include secret values, raw bearer tokens, passwords, API keys, or unredacted source payload fragments.
 
+### 403 scope_required (Spec 060)
+
+Routes that wrap their handler with `auth.RequireScope(...)` enforce the
+PASETO `scope` claim introduced by spec 060. When the caller is authenticated
+but the session's `Scopes` does NOT contain every required scope, the
+middleware responds:
+
+```text
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{"error":"scope_required","required":["<first-missing-scope>"]}
+```
+
+Semantics:
+
+- The `required` field contains the FIRST missing required scope (not the
+  full intersection diff). This keeps the label cardinality of the
+  `auth_scope_rejected_total{required_scope,user_id}` counter bounded to the
+  closed set declared at middleware construction time.
+- The body shape is fixed (`{"error":"scope_required","required":[...]}`).
+  Tooling MAY match on either the `error` string or the HTTP status; both
+  are stable contract.
+- This response is emitted ONLY when the request successfully authenticated
+  (the bearer middleware short-circuits earlier with `401` for anonymous or
+  invalid tokens). A client that receives `403 scope_required` MUST NOT
+  retry without re-minting a scoped token via the operator CLI (spec 060
+  Operations.md → Scoped Token Enrollment).
+- For sessions whose `Source` is `SessionSourceSharedToken` or
+  `SessionSourceBootstrap`, `RequireScope` short-circuits as a bypass and
+  increments `auth_scope_check_bypassed_total{source}` instead. Those
+  sessions never receive a `403 scope_required`.
+- A misconfigured router (`RequireScope` mounted without
+  `bearerAuthMiddleware` upstream) responds with `500 Internal Server Error`
+  body `{"error":"middleware_misconfigured"}` and emits a structured ERROR
+  log. No `auth_scope_rejected_total` increment occurs for the
+  misconfiguration case — it is a wiring bug, not a scope rejection.
+
+Metrics:
+
+| Metric | Labels | Increments when |
+|---|---|---|
+| `smackerel_auth_scope_rejected_total` | `required_scope`, `user_id` | Per `403 scope_required` response. `required_scope` is the first-missing scope; cardinality bounded by the closed set of scopes wired at construction. |
+| `smackerel_auth_scope_check_bypassed_total` | `source` | Per `RequireScope` invocation against a `shared_token` or `bootstrap` session. `source` is a closed set of two values. |
+
+RequireScope endpoint wiring matrix (initial):
+
+| Route | Required Scope | Wired By |
+|---|---|---|
+| `POST /v1/connectors/extension/ingest` | `extension:bookmarks,history` | spec 058 implementation |
+
+Spec 060 ships the `RequireScope` primitive and the supporting CLI / docs
+only. Endpoint wiring of `RequireScope(...)` on pre-existing routes is OUT
+of scope for spec 060; consumer specs wire their own scope requirements as
+part of the same change set that introduces the route (spec 058 wires the
+extension ingest route above).
+
 ## Change Notes
 
 | Date | Change |
 |------|--------|
+| 2026-05-28 | Spec 060 — documented `403 scope_required` response shape (`{"error":"scope_required","required":[<first-missing>]}`), `auth_scope_rejected_total` / `auth_scope_check_bypassed_total` metrics, misconfigured-router `500 middleware_misconfigured` behavior, and the initial `RequireScope` endpoint wiring matrix (spec 058 extension ingest). |
 | 2026-05-28 | Added spec 058 Chrome Extension Bridge ingestion endpoint (`POST /v1/connectors/extension/ingest`), per-item response shape, error matrix, and the admin devices read-only view (`GET /v1/admin/extension/devices`). |
 | 2026-05-24 | Corrected spec 055 ntfy dead-letter response documentation to match the redacted operator API contract: raw payload bytes are never returned; operators receive payload hash/size, replay status, redacted cause/category, safe preview, topic/event identifiers, and timestamps only. |
 | 2026-05-24 | Added spec 055 ntfy source adapter API documentation for source detail, webhook ingest, reconnect, dead-letter list/detail pagination, and replay-through-source-sink controls. |

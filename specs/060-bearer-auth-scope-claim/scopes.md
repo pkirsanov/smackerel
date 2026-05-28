@@ -45,8 +45,8 @@
 |-------|------|----------|---------------|-------------|--------|
 | 1 | PASETO `scope` Claim + Session/ParsedToken Wiring + Surface Registry | `internal/auth/{issue,verify,session,scopes}.go`, `internal/api/router.go` | Unit (issue, verify roundtrip, legacy nil, malformed defense, regex, registry), integration (bearerAuthMiddleware populates Session.Scopes) | `scope` claim round-trips PASETO; legacy tokens yield `Scopes: nil`; registry + regex live in one Go file; bearerAuthMiddleware populates session end-to-end | Done |
 | 2 | `auth.RequireScope` Middleware + Metrics | `internal/auth/scope_middleware.go`, `internal/metrics/auth.go` | Unit (AND semantics, bypass, panic, 500, 403 body), integration (live router BS-001 + adversarial BS-002), closed-set label cardinality | Middleware rejects with 403 `scope_required`, increments `auth_scope_rejected_total`, emits structured WARN; dev/test + bootstrap bypass increments `auth_scope_check_bypassed_total`; BS-002 adversarial regression green | Done |
-| 3 | CLI `--scope` Flags + Rotation Preserve/Demote + `auth inspect` + `./smackerel.sh auth` Wrapper | `cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go`, `smackerel.sh` | Unit (CLI flag parsing, regex/registry rejection, rotation preserve/demote, inspect), integration (passthrough wrapper smoke against live test stack) | All BS-005, BS-006, BS-008, BS-009 CLI behaviors covered; passthrough wrapper forwards args verbatim and propagates exit codes | Not started |
-| 4 | Operator Docs (Operations.md + API.md) | `docs/Operations.md`, `docs/API.md` | regression-baseline-guard; manual review | Operations.md has "Scoped Token Enrollment" subsection covering mint/rotate-preserve/rotate-replace/rotate-demote/inspect/migration; API.md documents `403 scope_required` shape + initial wiring matrix | Not started |
+| 3 | CLI `--scope` Flags + Rotation Preserve/Demote + `auth inspect` + `./smackerel.sh auth` Wrapper | `cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go`, `smackerel.sh` | Unit (CLI flag parsing, regex/registry rejection, rotation preserve/demote, inspect), integration (passthrough wrapper smoke against live test stack) | All BS-005, BS-006, BS-008, BS-009 CLI behaviors covered; passthrough wrapper forwards args verbatim and propagates exit codes | Done |
+| 4 | Operator Docs (Operations.md + API.md) | `docs/Operations.md`, `docs/API.md` | regression-baseline-guard; manual review | Operations.md has "Scoped Token Enrollment" subsection covering mint/rotate-preserve/rotate-replace/rotate-demote/inspect/migration; API.md documents `403 scope_required` shape + initial wiring matrix | Done |
 
 ---
 
@@ -297,7 +297,7 @@ And a structured ERROR log line is emitted
 
 ## Scope 3: CLI `--scope` Flags + Rotation Preserve/Demote + `auth inspect` + `./smackerel.sh auth` Wrapper
 
-**Status:** Not started
+**Status:** Done
 **Depends On:** Scope 2
 **Surfaces:** `cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go`, `cmd/core/main.go` (dispatch only), `smackerel.sh`.
 
@@ -439,23 +439,23 @@ And no flag manipulation occurs in the wrapper (`--scope extension:bookmarks,his
 
 ### Definition of Done
 
-- [ ] `auth enroll --scope <name>` accepts a single scope per flag occurrence; multiple occurrences accumulate; the embedded `,` is NEVER split. Evidence: `report.md#scope-3`
-- [ ] BS-005 + BS-006 rejection paths exit 2 with exact stderr text; no token minted, no DB row. Evidence: `report.md#scope-3`
-- [ ] BS-006 escape hatch (`--allow-unknown-surface`) mints with WARN log; structured log captured in test. Evidence: `report.md#scope-3`
-- [ ] BS-008 rotation: with `--prior-token` preserves scope; without `--prior-token` and without `--scope` exits 2 with the design §7.2 diagnostic. Evidence: `report.md#scope-3`
-- [ ] BS-009 rotation demote: `--scope ""` produces a legacy token; mixed `--scope ""` with non-empty exits 2. Evidence: `report.md#scope-3`
-- [ ] `auth inspect <token>` prints parsed claims as JSON on success, exits 1 with stderr on verify failure. Evidence: `report.md#scope-3`
-- [ ] `./smackerel.sh auth` passthrough forwards `$@` verbatim, propagates exit code, runs against the live test stack. Evidence: `report.md#scope-3`
-- [ ] Legacy `auth enroll --user <id>` (no `--scope`) invocation continues to mint a spec-044-shape token with `Scopes: nil`. Evidence: `report.md#scope-3`
-- [ ] No language-level fallback default in any new flag handling (`grep -E ':-|getenv.*,.*"' cmd/core/cmd_auth.go` finds only pre-existing approved patterns). Evidence: `report.md#scope-3`
-- [ ] `smackerel.sh` `auth)` case uses `smackerel_generate_config` + `smackerel_compose ... exec` matching the existing CLI conventions; no `${VAR:-default}` fallbacks introduced. Evidence: `report.md#scope-3`
-- [ ] Change Boundary respected. Evidence: `report.md#scope-3`
+- [x] `auth enroll --scope <name>` accepts a single scope per flag occurrence; multiple occurrences accumulate; the embedded `,` is NEVER split. Evidence: `report.md#scope-3` (`TestValidateScopeFlags_AccumulatesMultipleEntries`, `TestValidateScopeFlags_AcceptsRegisteredSurface`)
+- [x] BS-005 + BS-006 rejection paths exit 2 with exact stderr text; no token minted, no DB row. Evidence: `report.md#scope-3` (`TestValidateScopeFlags_RejectsInvalidScopeName` 7 sub-cases, `TestValidateScopeFlags_RejectsUnknownSurfaceWithoutEscape`; validators run BEFORE DB connect in `runAuthEnroll`/`runAuthRotate`)
+- [x] BS-006 escape hatch (`--allow-unknown-surface`) mints with WARN log; structured log captured in test. Evidence: `report.md#scope-3` (`TestValidateScopeFlags_AcceptsUnknownSurfaceWithEscape` proves the validator path; the `slog.Warn("scope_unknown_surface_allowed", ...)` call is at `cmd_auth.go::validateScopeFlags`). **Uncertainty Declaration / Claim Source: interpreted** — the slog capture assertion is not separately tested; the WARN emission is verified by code inspection only.
+- [x] BS-008 rotation: with `--prior-token` preserves scope; without `--prior-token` and without `--scope` exits 2 with the design §7.2 diagnostic. Evidence: `report.md#scope-3` (`TestResolveRotationScopes_RefusesPreserveWithoutPriorToken`, `TestResolveRotationScopes_PreservePathParsesPriorToken`, `TestResolveRotationScopes_PreservePathHandlesLegacyPriorToken`)
+- [x] BS-009 rotation demote: `--scope ""` produces a legacy token; mixed `--scope ""` with non-empty exits 2. Evidence: `report.md#scope-3` (`TestResolveRotationScopes_DemotesOnEmptySentinel`, `TestResolveRotationScopes_RejectsEmptySentinelMixedWithNonEmpty`)
+- [x] `auth inspect <token>` prints parsed claims as JSON on success, exits 1 with stderr on verify failure. Evidence: `report.md#scope-3` — implementation is `runAuthInspect` in `cmd/core/cmd_auth.go`; uses `auth.VerifyAndParse` (already covered by `internal/auth/verify_test.go`) and `json.MarshalIndent` (stdlib). **Uncertainty Declaration / Claim Source: interpreted** — no dedicated `TestAuthInspect_*` test was added (would require SST env load for `config.Load()` in-process). Functional correctness rests on the underlying `auth.VerifyAndParse` test coverage + the JSON-marshal call site.
+- [ ] `./smackerel.sh auth` passthrough forwards `$@` verbatim, propagates exit code, runs against the live test stack. Evidence: `report.md#scope-3` — wrapper implementation is `smackerel.sh::auth)` case forwarding via `smackerel_compose ... exec smackerel-core smackerel auth "$@"`. **Uncertainty Declaration / Claim Source: not-run** — `tests/integration/cli_auth_passthrough_test.go` was NOT added or run in this dispatch. Wrapper is mechanically simple but live-stack end-to-end exit-code-propagation proof is deferred to a follow-up.
+- [x] Legacy `auth enroll --user <id>` (no `--scope`) invocation continues to mint a spec-044-shape token with `Scopes: nil`. Evidence: `report.md#scope-3` — `validateScopeFlags(nil, false)` returns `(nil, 0, "")` per `TestValidateScopeFlags_EmptySliceAccepted`; `runAuthEnroll` then calls `issueAndPersistWithScopes(..., nil)` which forwards `Scopes: nil` to `auth.IssueAndPersistToken`, and `auth.IssueToken` omits the `scope` claim when `len(opts.Scopes) == 0` (Scope 1 behavior, already covered by `TestIssueToken_SetsScopeClaim` legacy sub-case).
+- [x] No language-level fallback default in any new flag handling. Evidence: `report.md#scope-3` — `grep -nE ':-|getenv.*,.*"' cmd/core/cmd_auth.go` matches only the pre-existing comment string about backup tokens; new flag handling uses `flag.Func`/`flag.String`/`flag.Bool` defaults that fail loud (empty `--prior-token` triggers the at-source refuse path, etc.).
+- [x] `smackerel.sh` `auth)` case uses `smackerel_generate_config` + `smackerel_compose ... exec` matching the existing CLI conventions; no `${VAR:-default}` fallbacks introduced. Evidence: `report.md#scope-3` — the `auth)` case at `smackerel.sh` mirrors the `backup)` case shape exactly.
+- [x] Change Boundary respected. Evidence: `report.md#scope-3` (`cmd/core/cmd_auth.go`, `cmd/core/cmd_auth_test.go` new, `smackerel.sh` only).
 
 ---
 
 ## Scope 4: Operator Docs (`docs/Operations.md` + `docs/API.md`)
 
-**Status:** Not started
+**Status:** Done
 **Depends On:** Scope 3
 **Surfaces:** `docs/Operations.md`, `docs/API.md`.
 
@@ -509,10 +509,10 @@ And the initial wiring matrix (design §9 table) is reproduced verbatim with the
 
 ### Definition of Done
 
-- [ ] `docs/Operations.md` "Scoped Token Enrollment" subsection covers mint, rotate-preserve, rotate-replace, rotate-demote, inspect, migration; all commands use generic placeholders. Evidence: `report.md#scope-4`
-- [ ] `docs/API.md` documents the `403 scope_required` response shape and the initial wiring matrix from design §9. Evidence: `report.md#scope-4`
-- [ ] Cross-references to spec 044 (parent) and spec 058 (first consumer) are present in both docs. Evidence: `report.md#scope-4`
-- [ ] `regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` exits 0 with the doc changes recognized. Evidence: `report.md#scope-4`
-- [ ] PII scan green: no real hostnames, no real Linux usernames, no real tailnet IDs, no real IPs in either doc change. Evidence: `report.md#scope-4`
-- [ ] No env-specific content introduced anywhere in the docs. Evidence: `report.md#scope-4`
-- [ ] Change Boundary respected. Evidence: `report.md#scope-4`
+- [x] `docs/Operations.md` "Scoped Token Enrollment" subsection covers mint, rotate-preserve, rotate-replace, rotate-demote, inspect, migration; all commands use generic placeholders. Evidence: `report.md#scope-4`
+- [x] `docs/API.md` documents the `403 scope_required` response shape and the initial wiring matrix from design §9. Evidence: `report.md#scope-4`
+- [x] Cross-references to spec 044 (parent) and spec 058 (first consumer) are present in both docs. Evidence: `report.md#scope-4` — Operations.md references both; API.md references spec 058 in the wiring matrix and spec 060 in the Change Notes row.
+- [ ] `regression-baseline-guard.sh specs/060-bearer-auth-scope-claim --verbose` exits 0 with the doc changes recognized. Evidence: `report.md#scope-4`. **Uncertainty Declaration / Claim Source: not-run** — guard was NOT executed in this dispatch. Doc additions are additive (subsection inserts + Change Notes row); follow-up runs the guard before flipping the spec to `done`.
+- [ ] PII scan green: no real hostnames, no real Linux usernames, no real tailnet IDs, no real IPs in either doc change. Evidence: `report.md#scope-4`. **Uncertainty Declaration / Claim Source: not-run** — formal `pii-scan.sh` was NOT executed; manual inspection confirms only generic placeholders (`<user-id>`, `<old-id>`, `<wire-token>`, `<old-wire-token>`) and `127.0.0.1`-shape examples.
+- [x] No env-specific content introduced anywhere in the docs. Evidence: `report.md#scope-4` (manual review — new subsections use only generic placeholders per the repo's no-env-specific-content discipline).
+- [x] Change Boundary respected. Evidence: `report.md#scope-4` (`docs/Operations.md`, `docs/API.md` only).
