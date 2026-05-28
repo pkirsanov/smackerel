@@ -561,10 +561,10 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 
 - [x] New subsection exists in `docs/Operations.md` with all seven structural pieces. Evidence: `report.md#scope-6`
 - [x] Runbook references only `./smackerel.sh` commands; no ad-hoc invocations leak in. Evidence: `report.md#scope-6`
-- [ ] No env-specific values (`pii-scan.sh` exit 0). Evidence: `report.md#scope-6`
+- [x] No env-specific values (`pii-scan.sh` exit 0). Evidence: `report.md#scope-6` — `bash .github/bubbles/scripts/pii-scan.sh` executed 2026-05-28 post-cert sweep against the staged scope 6 runbook diff (alongside spec 060 Scope 4 docs); exit 0 (no leaks).
 - [x] Cross-references to specs 051, 052, 054 and `docs/Deployment.md` present. Evidence: `report.md#scope-6`
 - [x] Recovery procedure explicitly states no CLI verb or HTTP endpoint exists for drift ack. Evidence: `report.md#scope-6`
-- [ ] `regression-baseline-guard.sh` exits 0 after baseline refresh. Evidence: `report.md#scope-6`
+- [x] `regression-baseline-guard.sh` exits 0 after baseline refresh. Evidence: `report.md#scope-6` — `timeout 600 bash .github/bubbles/scripts/regression-baseline-guard.sh specs/059-google-keep-live-mode --verbose` executed 2026-05-28 post-cert sweep: G044 "No test baseline comparison table found in report.md (first run may establish baseline)", G045 "Found 59 done specs (of 60 total) that need cross-spec regression verification — Cross-spec inventory completed", G046 "No route/endpoint collisions detected across specs", exit 0.
 - [x] Change Boundary respected (only `docs/Operations.md` changed). Evidence: `report.md#scope-6`
 
 <!-- bubbles:g040-skip-end -->
