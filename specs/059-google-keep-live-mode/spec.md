@@ -2,8 +2,8 @@
 
 > **Author:** bubbles.analyst (draft scaffold)
 > **Date:** May 28, 2026
-> **Status:** Draft (intent only — `bubbles.specify` / `bubbles.clarify` should harden before `bubbles.plan`)
-> **Workflow Mode:** TBD (likely `full-delivery` if accepted; alternatively `docs-only` if owner decides fragility is too high)
+> **Status:** Clarified (NC-1..NC-5 resolved 2026-05-28 by `bubbles.clarify` against repo evidence — ready for `bubbles.design`)
+> **Workflow Mode:** `full-delivery` (NC-1 resolved to option A; see Clarifications)
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 6.2 Capture Input Types (Notes); [Connector_Development.md](../../docs/Connector_Development.md)
 
 ---
@@ -37,7 +37,7 @@ This spec defaults to **(A)** but explicitly surfaces (B) as a clarification for
 
 **Intent:** Implement the `gkeepapi`-backed live mode for the Keep connector so that an operator who has provisioned a `master_token` sees new and edited Keep notes appear in smackerel within the configured `gkeep_poll_interval` (default 60 min) without manual export.
 
-**Success Signal:** Operator follows the documented token-extraction runbook (Android device + `gpsoauth` one-time script — see Clarifications), sets `connectors.google-keep.sync_mode: gkeepapi` and `gkeep_enabled: true`, provides the master_token via SST-managed secret injection, runs `./smackerel.sh up`, and:
+**Success Signal:** Operator follows the documented app-password runbook (Google Account → Security → App passwords — see Clarifications NC-3), sets `connectors.google-keep.sync_mode: gkeepapi`, `gkeep_enabled: true`, and `warning_acknowledged: true`, provides `KEEP_GOOGLE_EMAIL` + `KEEP_GOOGLE_APP_PASSWORD` via SST-managed secret injection, runs `./smackerel.sh up`, and:
 
 1. Within the first poll interval, all existing Keep notes are ingested as `RawArtifact`s of kind `note` with provenance `google-keep`.
 2. A new note created on phone or web appears in smackerel within ≤ 1 poll interval + 30 s.
@@ -48,16 +48,16 @@ This spec defaults to **(A)** but explicitly surfaces (B) as a clarification for
 
 **Hard Constraints:**
 
-- **master_token treated as a Bucket-2 managed secret** (per [specs/051-deployment-secret-auth-contract](../051-deployment-secret-auth-contract)): added to the 3-mirror secret manifest (`config/smackerel.yaml` `infrastructure.secret_keys`, `internal/config/secret_keys.go`, `scripts/commands/config.sh`), value stored sops-encrypted in [knb/smackerel/secrets/home-lab.enc.env](https://github.com/pkirsanov/knb) under the operator-issued key name (e.g. `GOOGLE_KEEP_MASTER_TOKEN`), never in plaintext anywhere
-- **master_token MUST NEVER appear in logs, metrics, traces, error messages, or fixture data**
+- **`KEEP_GOOGLE_APP_PASSWORD` treated as a Bucket-2 managed secret** (per [specs/051-deployment-secret-auth-contract](../051-deployment-secret-auth-contract)): added to the 3-mirror secret manifest (`config/smackerel.yaml` `infrastructure.secret_keys`, `internal/config/secret_keys.go`, `scripts/commands/config.sh`), value stored sops-encrypted in the operator deploy-overlay secret store, never in plaintext anywhere. `KEEP_GOOGLE_EMAIL` is non-secret config and lives in the standard env contract.
+- **`KEEP_GOOGLE_APP_PASSWORD` MUST NEVER appear in logs, metrics, traces, error messages, or fixture data**
 - **Read-only — never write to Keep.** No note creation, no edit, no archive, no delete. The connector observes; the operator owns the data on Google's side.
-- **No fall-back path** — if `sync_mode: gkeepapi` is set and master_token is missing/invalid, the connector fails loudly at startup. NO silent fall-back to Takeout mode (NO-DEFAULTS policy).
+- **No fall-back path** — if `sync_mode: gkeepapi` is set and `KEEP_GOOGLE_EMAIL`/`KEEP_GOOGLE_APP_PASSWORD` are missing or rejected by Google, the connector fails loudly at startup. NO silent fall-back to Takeout mode (NO-DEFAULTS policy).
 - **Protocol drift detection is a first-class feature** — schema validation on every `gkeepapi` response; any unexpected field type, missing required field, or HTTP non-2xx for > 3 consecutive polls trips the `keep_protocol_drift_detected` circuit breaker, which:
   - Disables further polls until operator acknowledgment endpoint is hit
   - Surfaces an alert through the existing notification-intelligence pipeline (spec 054)
   - Continues to serve already-ingested data; does NOT delete prior artifacts
-- **Rate-limit conservative** — minimum `gkeep_poll_interval` floor of 10 min in code (config minimum); Google does not publish quotas for the unofficial endpoints, so we err on the side of caution
-- **Test isolation** — `gkeepapi` is a Python library; if we import it into smackerel-core (Go), we need a bridge. Options: (a) extend the existing ml-sidecar (Python) with a Keep-fetch endpoint that core polls over NATS; (b) shell out to a Python subprocess; (c) reimplement `gkeepapi` in Go. Recommend (a) — leverages existing Python sidecar, no shellouts, no rewrite. Clarify before design.
+- **Rate-limit conservative** — minimum `gkeep_poll_interval` floor of 15 min in code (config minimum); Google does not publish quotas for the unofficial endpoints, so we err on the side of caution
+- **Test isolation** — `gkeepapi` calls live in the Python ml-sidecar (`ml/app/keep_bridge.py`, already scaffolded). Go core dispatches `keep.sync.request` NATS messages and consumes structured `GkeepNote` payloads on the response subject. No subprocess shellouts, no Go reimplementation. (See Clarifications NC-2.)
 - **Dedup by Keep note ID across Takeout and gkeepapi origins** so users running `sync_mode: hybrid` don't double-ingest
 
 ---
@@ -72,13 +72,19 @@ This spec defaults to **(A)** but explicitly surfaces (B) as a clarification for
 
 ---
 
-## Open Questions for `bubbles.clarify`
+## Clarifications (Resolved 2026-05-28)
 
-- **NC-1:** Decision between option A (build live) and option B (delete dead config + close as wontfix). The default proposal is A; owner may prefer B given the fragility risk.
-- **NC-2:** Python sidecar vs Go subprocess vs Go reimplementation of `gkeepapi`. Recommend Python sidecar (lowest risk, leverages existing process).
-- **NC-3:** master_token extraction runbook — does the operator do this once on their personal Android device with `gpsoauth`, or do we ship a helper container that runs the extraction interactively? Recommend operator-side one-time procedure, documented in `docs/Operations.md`.
-- **NC-4:** Drift acknowledgment endpoint shape — admin HTTP endpoint? CLI command (`./smackerel.sh keep ack-drift`)? Recommend CLI for operator simplicity.
-- **NC-5:** Does this spec need to coexist with a future spec that integrates official Google APIs if Keep ever opens up? Recommend leaving an explicit "deprecation path" section in design.md.
+Resolved by `bubbles.clarify` against repo evidence (`ml/app/keep_bridge.py`, `internal/connector/keep/keep.go`, `specs/051-deployment-secret-auth-contract`, `specs/052-bundle-secret-injection-contract`). Each NC below is a binding decision for `bubbles.design`.
+
+- **NC-1 — Build vs delete (RESOLVED: A — build live).** Evidence: the connector already exposes `SyncModeGkeepapi` + `SyncModeHybrid` in `internal/connector/keep/keep.go`, the ml-sidecar already contains `ml/app/keep_bridge.py`, and the product principle "Knowledge Breathes" cannot be satisfied with Takeout-only latency (days). Removing the live mode would orphan committed scaffolding and leave the principle unmet. The fragility risk is mitigated by the drift-detection circuit breaker (Hard Constraints) and the `warning_acknowledged` config gate already in `keep.go`. Option B is explicitly rejected.
+
+- **NC-2 — Bridge architecture (RESOLVED: Python ml-sidecar over NATS).** Evidence: `ml/app/keep_bridge.py` already implements `authenticate()` and `serialize_note()`; the sidecar already participates in NATS request/response flows for other domains (Drive, Photos, YouTube). Go core publishes `keep.sync.request` and consumes `GkeepNote` payloads on the response subject (Go type `GkeepNote` already declared in `keep.go`). Subprocess shellouts and Go reimplementation of `gkeepapi` are rejected: shellouts violate the sidecar boundary; reimplementation duplicates a fast-moving reverse-engineered protocol surface.
+
+- **NC-3 — Credential extraction runbook (RESOLVED: Google App Password, operator-side, one-time, no helper container).** Evidence: `ml/app/keep_bridge.py` already reads `KEEP_GOOGLE_EMAIL` + `KEEP_GOOGLE_APP_PASSWORD` and calls `gkeepapi.Keep().login(email, password)` — the master_token + `gpsoauth` path is NOT what the codebase uses. The operator generates a Google App Password (Google Account → Security → 2-Step Verification → App passwords), stores it via the deploy-adapter secret bundle, and the value is injected at container start. A helper container is rejected as unnecessary attack surface for a one-time procedure. Runbook lives in `docs/Operations.md` under the Keep connector section (design.md to specify exact wording).
+
+- **NC-4 — Drift acknowledgment mechanism (RESOLVED: config-flag bump + restart, no new CLI verb).** Evidence: `keep.go` already gates startup on a `warning_acknowledged: true` config field; reusing that gate keeps the operator surface uniform with the existing risk-acknowledgment pattern. When the breaker trips it (a) emits `keep_protocol_drift_detected` log + Prometheus counter, (b) sets a sidecar/connector status to `drift_paused`, (c) requires the operator to inspect logs, decide whether to upgrade `gkeepapi`, and bump a dedicated `drift_ack_token` config field (free-form string, e.g. a timestamp or git SHA the operator picks) to a NEW value before restart. Reusing `warning_acknowledged` alone is insufficient because it is already `true` at steady state; the `drift_ack_token` rotation is the explicit "I have looked" signal. A new CLI verb (`./smackerel.sh keep ack-drift`) is rejected: it adds a runtime mutation surface for a procedure that is fundamentally a config + restart event.
+
+- **NC-5 — Future-official-API coexistence (RESOLVED: design.md MUST include a Deprecation Path section).** When/if Google ships an official Keep API, a successor spec replaces `SyncModeGkeepapi` with `SyncModeOfficial`; this spec's deprecation path defines (a) how `master`/`hybrid` mode interacts with a new official path, (b) the artifact-ID continuity requirement (Keep note ID remains the dedup key across modes), (c) the warning-acknowledgment field can be removed once on the official API. Owning agent: `bubbles.design` adds the section in `design.md`.
 
 ---
 
@@ -87,5 +93,5 @@ This spec defaults to **(A)** but explicitly surfaces (B) as a clarification for
 - This feature MUST NOT use any non-master_token authentication path (e.g. OAuth attempts against the unofficial endpoints, which Google blocks).
 - This feature MUST NOT silently retry indefinitely on protocol drift — must trip the circuit breaker after the configured failure window.
 - This feature MUST NOT scrape `keep.google.com` HTML as a fallback if `gkeepapi` fails — that is a separate, even-more-fragile path that the spec explicitly forbids.
-- This feature MUST NOT cache the master_token in any unencrypted location (in-memory only during connector lifetime; sourced from sops on each container restart).
-- This feature MUST NOT enable itself by default — operator must explicitly set `gkeep_enabled: true` AND provide a real master_token, otherwise the connector stays in takeout-only mode.
+- This feature MUST NOT cache `KEEP_GOOGLE_APP_PASSWORD` in any unencrypted on-disk location (in-memory only during sidecar lifetime; sourced from the SST-managed secret bundle on each container restart). The cached `gkeepapi` session object in `ml/app/keep_bridge.py` is in-process state only and MUST NOT be serialized.
+- This feature MUST NOT enable itself by default — operator must explicitly set `gkeep_enabled: true`, `warning_acknowledged: true`, AND provide real `KEEP_GOOGLE_EMAIL` + `KEEP_GOOGLE_APP_PASSWORD` values, otherwise the connector stays in takeout-only mode.
