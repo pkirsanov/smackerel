@@ -397,7 +397,7 @@ func (g *Generator) getQFPackets(ctx context.Context, digestDate string) ([]qfde
 	}
 
 	rows, err := g.Pool.Query(ctx, `
-		SELECT source_id, source_url, artifact_type, title, content, COALESCE(metadata::text, '{}')
+		SELECT source_id, source_url, artifact_type, title, content_raw, COALESCE(metadata::text, '{}')
 		FROM artifacts
 		WHERE artifact_type LIKE 'qf/%'
 		  AND created_at::date = $1::date
