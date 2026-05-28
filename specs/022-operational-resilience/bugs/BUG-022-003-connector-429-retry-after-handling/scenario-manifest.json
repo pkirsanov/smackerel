@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "spec": "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Regression scenarios encode the 429/Retry-After/bounded-backoff contract for the shared DoWithRetry helper and 9 migrated call sites (7 alerts sources + OAuthAPIGet + markets); any future change requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "required",
+    "rationale": "This IS a code change across ~5–6 Go files (helpers.go + alerts.go + markets + tests); NOT artifact-only. Red→Green evidence mandatory per bubbles.implement dispatch.",
+    "redGreenEvidence": "Red: per-connector httptest regression for at least one alerts source, OAuthAPIGet, and markets MUST FAIL against pre-fix tree (server hit count == 1, error string contains 'HTTP 429'). Green: after adding DoWithRetry and migrating call sites, all per-connector regressions PASS (hit count == 2, hit-2 payload parsed) and the full Go unit suite via ./smackerel.sh test unit --go passes."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-422-003-A",
+      "scope": 1,
+      "title": "DoWithRetry honors Retry-After delta-seconds",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/helpers_test.go",
+          "function": "TestDoWithRetry_429ThenOK"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass",
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/report.md#post-fix-test-evidence-green"
+      ],
+      "liveTestExpectation": "httptest server returns 429 + Retry-After: 1 on hit 1 and 200 on hit 2; assert exactly 2 hits, elapsed >= 1s, hit-2 body returned to caller.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-B",
+      "scope": 1,
+      "title": "DoWithRetry honors Retry-After HTTP-date",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/helpers_test.go",
+          "function": "TestDoWithRetry_429_HTTPDate"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "httptest server returns 429 + Retry-After HTTP-date 2s in future on hit 1, 200 on hit 2; assert exactly 2 hits, elapsed ~2s (±500ms), hit-2 body returned.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-C",
+      "scope": 1,
+      "title": "DoWithRetry bounds retries by MaxAttempts (adversarial)",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/helpers_test.go",
+          "function": "TestDoWithRetry_429_Exhausted"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-adversarial-regression-case"
+      ],
+      "liveTestExpectation": "httptest server returns 429 + Retry-After: 0 forever; assert exactly MaxAttempts hits, error == 'rate limited: max retries exceeded', total elapsed bounded by MaxAttempts * MaxDelay.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-D",
+      "scope": 1,
+      "title": "DoWithRetry respects ctx.Done() while sleeping",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/helpers_test.go",
+          "function": "TestDoWithRetry_ContextCancel"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "httptest server returns 429 + Retry-After: 60; ctx cancelled 100ms after DoWithRetry invocation; assert return within 200ms with err == ctx.Err().",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-E",
+      "scope": 1,
+      "title": "parseRetryAfter accepts delta-seconds and HTTP-date forms",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {
+          "file": "internal/connector/helpers_test.go",
+          "function": "TestParseRetryAfter"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "Table test: '60' -> (60s, true); HTTP-date future -> positive duration with ok=true; HTTP-date past -> (0, true); '' -> (0, false); 'garbage' -> (0, false).",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-F",
+      "scope": 1,
+      "title": "All 7 alerts sources honor 429 via DoWithRetry",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/alerts/alerts_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_USGS_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_NWS_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_Tsunami_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_Volcanoes_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_Inciweb_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_AirNow_HonorsRetryAfter"},
+        {"file": "internal/connector/alerts/alerts_test.go", "function": "TestAlerts_GDACS_HonorsRetryAfter"}
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "For each alerts source, httptest server returns 429 + Retry-After: 1 on hit 1 and a valid source-shaped payload on hit 2; assert exactly 2 hits, hit-2 payload parsed without error.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-G",
+      "scope": 1,
+      "title": "OAuthAPIGet honors 429 via DoWithRetry",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/helpers_test.go", "function": "TestOAuthAPIGet_HonorsRetryAfter"}
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "httptest server validates Bearer header; returns 429 + Retry-After: 1 on hit 1 and valid JSON on hit 2; assert exactly 2 hits, decoded JSON returned.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-H",
+      "scope": 1,
+      "title": "Markets connector honors 429 via DoWithRetry",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/markets/markets_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/markets/markets_test.go", "function": "TestMarkets_HonorsRetryAfter"}
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "httptest server returns 429 + Retry-After: 1 on hit 1 and a valid markets payload on hit 2; assert exactly 2 hits, parsed payload returned (replaces existing L561 opaque-error assertion).",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-422-003-I",
+      "scope": 1,
+      "title": "connector_429_total metric increments per 429 event",
+      "requiredTestType": ["unit"],
+      "testFiles": ["internal/connector/helpers_test.go"],
+      "linkedTests": [
+        {"file": "internal/connector/helpers_test.go", "function": "TestDoWithRetry_MetricIncrements"}
+      ],
+      "evidenceRefs": [
+        "specs/022-operational-resilience/bugs/BUG-022-003-connector-429-retry-after-handling/scopes.md#dod-post-fix-regression-tests-pass"
+      ],
+      "liveTestExpectation": "After DoWithRetry runs against a 429-then-200 server, assert connector_429_total{connector=<label>,outcome='retry'} increments per retry attempt and outcome='recovered' increments once; against an always-429 server, outcome='exhausted' increments once.",
+      "regressionProtected": true,
+      "status": "passing",
+      "changeType": "added"
+    }
+  ]
+}

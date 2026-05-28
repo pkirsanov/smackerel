@@ -353,6 +353,11 @@ func newTestConnector(serverURL string, locations []LocationConfig) *Connector {
 	c := New("gov-alerts-test")
 	c.baseURL = serverURL
 	c.nwsBaseURL = serverURL
+	// BUG-022-003: shrink the retry budget so test runtime stays fast even
+	// when servers return 429 without Retry-After.
+	c.retryOpts.MaxAttempts = 2
+	c.retryOpts.BaseDelay = 5 * time.Millisecond
+	c.retryOpts.MaxDelay = 50 * time.Millisecond
 	c.config = AlertsConfig{
 		Locations:        locations,
 		SourceEarthquake: true,

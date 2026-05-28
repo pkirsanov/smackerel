@@ -3,10 +3,21 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 )
+
+// oauthRetryOpts controls 429/Retry-After handling for OAuthAPIGet. It is a
+// package-level variable so tests in this package can shorten delays to keep
+// the unit suite fast (see helpers_test.go). Production callers get the
+// connector-wide defaults (see DefaultRetryOptions).
+var oauthRetryOpts = func() RetryOptions {
+	opts := DefaultRetryOptions()
+	opts.Label = "oauth"
+	return opts
+}()
 
 // GetCredential returns the value for key from a credentials map, or "" if
 // the map is nil or the key is absent. Shared across all connectors that
@@ -40,8 +51,11 @@ func OAuthAPIGet(ctx context.Context, client *http.Client, apiURL string, token 
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := client.Do(req)
+	resp, err := DoWithRetry(ctx, client, req, oauthRetryOpts)
 	if err != nil {
+		if errors.Is(err, ErrRateLimitExhausted) {
+			return nil, fmt.Errorf("API call: %w", err)
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
