@@ -51,6 +51,13 @@ type OAuth2Config struct {
 	RedirectURL   string
 	AuthEndpoint  string
 	TokenEndpoint string
+	// HTTPTimeoutSeconds is the per-call timeout (seconds) applied to
+	// every http.Client constructed inside tokenRequest. SST zero-defaults:
+	// MUST be > 0 in production wiring. Sourced from
+	// `cfg.AuthOAuthHTTPTimeoutSeconds` (yaml `auth.oauth.http_timeout_seconds`,
+	// env `AUTH_OAUTH_HTTP_TIMEOUT_SECONDS`). Replaces the pre-fix hardcoded
+	// 15-second HTTP client timeout literal (BUG-020-009).
+	HTTPTimeoutSeconds int
 }
 
 // GenericOAuth2 implements OAuth2Provider for generic OAuth2 providers.
@@ -114,7 +121,7 @@ func (g *GenericOAuth2) tokenRequest(ctx context.Context, data url.Values) (*Tok
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: time.Duration(g.Config.HTTPTimeoutSeconds) * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request to %s: %w", g.Name, err)

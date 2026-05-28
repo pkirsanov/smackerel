@@ -34,6 +34,9 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	ytConn := youtubeConnector.New("youtube")
 	rssConn := rssConnector.New("rss", nil) // feed URLs configured via source_config
 	keepConn := keepConnector.New("google-keep")
+	if svc.nc != nil {
+		keepConn.SetNatsClient(svc.nc)
+	}
 	bmConn := bookmarksConnector.NewConnectorWithPool("bookmarks", svc.pg.Pool)
 	browserHistConn := browserConnector.New("browser-history")
 	mapsConn := mapsConnector.New("google-maps-timeline")
@@ -44,7 +47,7 @@ func registerConnectors(ctx context.Context, cfg *config.Config, svc *coreServic
 	twitterConn := twitterConnector.New("twitter")
 	weatherConn := weatherConnector.New("weather")
 	alertsConn := alertsConnector.New("gov-alerts")
-	marketsConn := marketsConnector.New("financial-markets")
+	marketsConn := marketsConnector.New("financial-markets", cfg.FinancialMarketsHTTPTimeoutSeconds)
 	qfDecisionsConn := qfDecisionsConnector.New("qf-decisions")
 	for _, c := range []connector.Connector{
 		imapConn, caldavConn, ytConn, rssConn, keepConn,

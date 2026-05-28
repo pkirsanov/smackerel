@@ -1,0 +1,287 @@
+{
+  "version": 3,
+  "featureDir": "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts",
+  "featureName": "BUG-020-009: Hardcoded HTTP client timeouts violate SST config-driven runtime values",
+  "status": "done",
+  "certifiedAt": "2026-05-28T09:30:00Z",
+  "certifiedBy": "bubbles.iterate",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-05-28T07:30:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": [
+          "discovery",
+          "documentation"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T07:30:00Z",
+        "runEndedAt": "2026-05-28T07:30:00Z",
+        "summary": "Code-review finding H-4 (P2 promoted to actionable) filed by user. internal/connector/markets/markets.go L158 carries `httpClient: &http.Client{Timeout: 10 * time.Second}` and internal/auth/oauth.go L117 carries `client := &http.Client{Timeout: 15 * time.Second}`. Both violate the SST Zero-Defaults regime in .github/copilot-instructions.md and .github/instructions/smackerel-no-defaults.instructions.md. Created 8-artifact bug folder mirroring BUG-020-008's recipe."
+      },
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery", "documentation"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand discovery and documentation phases because nested runtime lacks runSubagent capability for bubbles.discovery / bubbles.documentation specialist dispatch; bubbles.bug already covered these phases at packet creation time and the parent-expand entry records that provenance explicitly per Gate G022",
+        "expansionEvidenceRef": "bug.md",
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T07:30:00Z",
+        "runEndedAt": "2026-05-28T07:30:00Z",
+        "summary": "Parent-expanded provenance entry for discovery + documentation phases."
+      },
+      {
+        "agent": "bubbles.implement",
+        "workflowMode": "bugfix-fastlane",
+        "phasesExecuted": [
+          "design",
+          "plan",
+          "implement",
+          "test",
+          "regression",
+          "simplify",
+          "stabilize",
+          "security",
+          "validate",
+          "audit",
+          "docs"
+        ],
+        "statusBefore": "in_progress",
+        "statusAfter": "done",
+        "runStartedAt": "2026-05-28T08:30:00Z",
+        "runEndedAt": "2026-05-28T09:30:00Z",
+        "scopesCompleted": ["scope-1"],
+        "summary": "TDD code change. Naming decision finalized in report.md before any code edits (yaml: connectors.financial-markets.http_timeout_seconds + auth.oauth.http_timeout_seconds; Config fields FinancialMarketsHTTPTimeoutSeconds + AuthOAuthHTTPTimeoutSeconds). RED captured: BUG020009 tests fail to BUILD against unmigrated tree (strongest possible RED — references symbols/signatures/struct fields that only exist post-migration). Implementation: 2 new Config int fields + 2 mustParseIntEnv entries + 2 Validate range guards (> 0); markets.New signature widened from New(id) to New(id, httpTimeoutSeconds) with httpClient construction now config-derived; OAuth2Config gained HTTPTimeoutSeconds field consumed by tokenRequest; 2 yaml keys added; scripts/commands/config.sh emits both env vars. GREEN: 8 BUG020009 test functions PASS post-migration (5 config + 1 markets + 2 oauth); race-detector suite PASS for all 3 primary packages; full internal/... PASS across 70+ packages; ./smackerel.sh test unit --go PASS after reconciling 2 cmd/core/markets.New callers. Helper-eradication grep exits 1. Change boundary primary: config/smackerel.yaml, internal/config/config.go, internal/connector/markets/markets.go, internal/auth/oauth.go + _test.go siblings + bug folder. Necessary plumbing deviations (audit-listed): scripts/commands/config.sh, cmd/core/connectors.go, cmd/core/main_test.go, internal/config/validate_test.go."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand design phase because nested runtime lacks runSubagent capability for bubbles.design dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "design.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T08:30:00Z",
+        "runEndedAt": "2026-05-28T08:32:00Z",
+        "summary": "Parent-expanded design pass: confirmed bubbles.bug initial design.md is correct; refined naming decision and recorded final yaml/field/env names in report.md BEFORE any source edits."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand plan phase because nested runtime lacks runSubagent capability for bubbles.plan dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "scopes.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T08:32:00Z",
+        "runEndedAt": "2026-05-28T08:35:00Z",
+        "summary": "Parent-expanded plan pass: refined scopes.md to canonical scope status (Done), 8 Gherkin scenarios paired with DoD items, added scenario-specific E2E regression DoD item, added broader E2E regression DoD item, added Consumer Impact Sweep DoD item + section, populated all DoD items with concrete test paths in the Test Plan table."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand test phase because nested runtime lacks runSubagent capability for bubbles.test dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T08:35:00Z",
+        "runEndedAt": "2026-05-28T08:50:00Z",
+        "summary": "Parent-expanded test pass: authored 5 unit tests in internal/config/bug020009_http_timeouts_test.go + 1 wiring test in internal/connector/markets/markets_test.go + 2 wiring tests in internal/auth/oauth_test.go. RED captured against pre-fix tree as build-failure errors (strongest RED). GREEN captured post-migration: all 8 test functions PASS. Tests are persistent in-tree adversarial regressions using non-default values (7 for markets, 1+9 for OAuth) — pre-fix literals (10 and 15) cannot satisfy them."
+      },
+      {
+        "agent": "bubbles.regression",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand regression phase because nested runtime lacks runSubagent capability for bubbles.regression dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T08:50:00Z",
+        "runEndedAt": "2026-05-28T09:00:00Z",
+        "summary": "Parent-expanded regression pass: race-detector suites PASS for internal/config (37.8s), internal/connector/markets (5.2s), internal/auth (33.4s). Broader go test ./internal/... PASS across 72 packages. ./smackerel.sh test unit --go PASS end-to-end after reconciling 2 cmd/core/markets.New callers. Zero collateral failures."
+      },
+      {
+        "agent": "bubbles.simplify",
+        "phasesExecuted": ["simplify"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand simplify phase because nested runtime lacks runSubagent capability for bubbles.simplify dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:00:00Z",
+        "runEndedAt": "2026-05-28T09:01:00Z",
+        "summary": "Parent-expanded simplify pass: no simplification opportunity surfaced. The mustParseIntEnv + intLoadErrs accumulator pattern is the minimum-viable form mirroring requiredVars() and BUG-020-008. markets.New signature widening is the minimal API change required to thread the config value without re-introducing a silent default."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "phasesExecuted": ["stabilize"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand stabilize phase because nested runtime lacks runSubagent capability for bubbles.stabilize dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:01:00Z",
+        "runEndedAt": "2026-05-28T09:02:00Z",
+        "summary": "Parent-expanded stabilize pass: all tests deterministic. The 3-second sleep in TestBUG020009_OAuthHTTPTimeoutFromConfig is bounded by HTTPTimeoutSeconds=1 (asserts elapsed < 3s); no flakiness window. Race detector clean."
+      },
+      {
+        "agent": "bubbles.security",
+        "phasesExecuted": ["security"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand security phase because nested runtime lacks runSubagent capability for bubbles.security dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:02:00Z",
+        "runEndedAt": "2026-05-28T09:03:00Z",
+        "summary": "Parent-expanded security pass: A05 Security Misconfiguration STRENGTHENED. Operator can now tighten or loosen per-call HTTP timeouts via SST config for incident response without a rebuild. No new attack surface. No PII; fail-loud error messages name only env var keys and (for parse failures) the offending non-secret string value. No secret material touched."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand validate phase because nested runtime lacks runSubagent capability for bubbles.validate dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:10:00Z",
+        "runEndedAt": "2026-05-28T09:25:00Z",
+        "summary": "Parent-expanded validate pass: state-transition-guard.sh run iteratively until TRANSITION PERMITTED. artifact-lint passes on the bug folder."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand audit phase because nested runtime lacks runSubagent capability for bubbles.audit dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:25:00Z",
+        "runEndedAt": "2026-05-28T09:27:00Z",
+        "summary": "Parent-expanded audit pass: every Gherkin scenario maps 1:1 to a faithful DoD item. Zero deferral language. Consumer Impact Sweep enumerates all non-test references (4 file groups) and confirms the single non-test markets.New caller updated. Change boundary primary set + 4 audit-listed necessary plumbing files. Promotion decision: SHIP_IT."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand docs phase because nested runtime lacks runSubagent capability for bubbles.docs dispatch during bugfix-fastlane convergence",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T09:27:00Z",
+        "runEndedAt": "2026-05-28T09:28:00Z",
+        "summary": "Parent-expanded docs pass: no external doc updates required. The fix is a contract-tightening already mandated by copilot-instructions SST Zero-Defaults Enforcement and .github/instructions/smackerel-no-defaults.instructions.md. Yaml comments inline at both new keys explain the SST contract and reference BUG-020-009."
+      }
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "regression",
+      "simplify",
+      "stabilize",
+      "security",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "certifierAgent": "bubbles.iterate",
+    "certifiedAt": "2026-05-28T09:30:00Z",
+    "auditorAgent": "bubbles.iterate",
+    "auditedAt": "2026-05-28T09:27:00Z",
+    "auditVerdict": "SHIP_IT",
+    "auditNote": "Real code change (NOT artifact-only). RED captured as build-failure errors (strongest possible RED — the BUG020009 tests reference symbols/signatures/struct fields that only exist post-migration; tautological pass is impossible). GREEN confirmed: all 8 BUG020009 test functions PASS post-fix; race-detector suite PASS for all 3 primary packages; full go test ./internal/... PASS across 72 packages; ./smackerel.sh test unit --go PASS end-to-end. 2 hardcoded `time.Duration` literals removed and replaced with `time.Duration(cfg.X) * time.Second`. 2 new SST yaml keys live in config/smackerel.yaml with explicit non-empty int values; SST generator emits both env vars into dev + test bundles. mustParseIntEnv + intLoadErrs accumulator + Validate range guards (> 0) provide fail-loud coverage for missing / unparseable / non-positive values. Adversarial regression cases use non-default values (markets=7 vs pre-fix 10; OAuth=1/9 vs pre-fix 15) so a reverted migration cannot tautologically pass. Helper-eradication grep exits 1. Change boundary primary: config/smackerel.yaml + internal/config/config.go + internal/connector/markets/markets.go + internal/auth/oauth.go + their _test.go + bug folder. Necessary plumbing (audit-listed): scripts/commands/config.sh (SST env emission), cmd/core/connectors.go (single non-test markets.New caller), cmd/core/main_test.go (single test markets.New caller), internal/config/validate_test.go (setRequiredEnv seeding). SHIP_IT.",
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Migrate two hardcoded http.Client{Timeout: ...} literals to SST config-driven fields",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-28T09:30:00Z",
+        "completedAt": "2026-05-28T09:30:00Z",
+        "dodTotal": 22,
+        "dodChecked": 22,
+        "notes": "internal/config/config.go: 2 fields + 2 mustParseIntEnv routes + 2 Validate range guards. internal/connector/markets/markets.go: New(id) -> New(id, httpTimeoutSeconds); config-derived httpClient. internal/auth/oauth.go: OAuth2Config.HTTPTimeoutSeconds added; tokenRequest consumes it. config/smackerel.yaml: 2 new keys (10, 15). scripts/commands/config.sh: 2 new env vars (required_value + heredoc). NEW test file internal/config/bug020009_http_timeouts_test.go (5 funcs). Updated markets_test.go (1 new + 7 reconciled callers), oauth_test.go (2 new), validate_test.go (2 seedings), cmd/core/connectors.go + main_test.go (signature reconciliation). All DoD evidence inline."
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "required",
+      "source": "user-request",
+      "rationale": "Code change (2 Config field additions + 2 call-site migrations + 2 yaml additions + 8 new unit tests). NOT artifact-only. Real Red->Green evidence required."
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "bugfix-fastlane",
+      "source": "user-request"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

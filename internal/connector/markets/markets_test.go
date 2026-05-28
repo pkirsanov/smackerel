@@ -25,7 +25,7 @@ var stableTestTime = time.Date(2026, 4, 11, 10, 0, 0, 0, time.UTC) // Saturday
 // time-dependent test flakiness from tryClaimDailySummary.
 // Sets configGen=1 so Sync() succeeds for tests that bypass Connect().
 func newTestConnector(id string) *Connector {
-	c := New(id)
+	c := New(id, 30)
 	c.nowFunc = func() time.Time { return stableTestTime }
 	c.configGen = 1                    // mark as configured for tests that set c.config directly
 	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
@@ -4190,7 +4190,7 @@ func TestCHAOS018_001_ConcurrentSyncDailySummaryNoDoubleGeneration(t *testing.T)
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := New("financial-markets", 30)
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
 	c.nowFunc = func() time.Time { return mockNow }
@@ -4340,7 +4340,7 @@ func TestCHAOS018_R02_001_CloseDuringSyncPreservesDisconnectedHealth(t *testing.
 	}))
 	defer slowSrv.Close()
 
-	c := New("financial-markets")
+	c := New("financial-markets", 30)
 	c.nowFunc = func() time.Time { return stableTestTime }
 	c.httpClient = slowSrv.Client()
 	c.finnhubBaseURL = slowSrv.URL
@@ -4386,7 +4386,7 @@ func TestCHAOS018_R02_002_SyncAfterCloseReturnsError(t *testing.T) {
 	// CHAOS-018-R02-002: After Connect → Close, a subsequent Sync() must return
 	// an error because the connector is in Disconnected state. Without the guard,
 	// Sync would run with stale config and overwrite HealthDisconnected.
-	c := New("financial-markets")
+	c := New("financial-markets", 30)
 	c.nowFunc = func() time.Time { return stableTestTime }
 
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
@@ -4433,7 +4433,7 @@ func TestCHAOS018_R02_003_ReconnectAfterCloseWorks(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("financial-markets")
+	c := New("financial-markets", 30)
 	c.nowFunc = func() time.Time { return stableTestTime }
 	c.httpClient = srv.Client()
 	c.finnhubBaseURL = srv.URL
@@ -4488,7 +4488,7 @@ func TestH018R60_001_SyncBeforeConnectErrors(t *testing.T) {
 	// H-018-R60-001: Sync() on a connector that hasn't had Connect() called must
 	// return an error instead of silently succeeding with 0 artifacts and setting
 	// health to Healthy. This masks misconfiguration.
-	c := New("financial-markets") // Use New(), NOT newTestConnector(), to get configGen=0.
+	c := New("financial-markets", 30) // Use New(), NOT newTestConnector(), to get configGen=0.
 	c.nowFunc = func() time.Time { return stableTestTime }
 
 	_, _, err := c.Sync(context.Background(), "")
@@ -4510,7 +4510,7 @@ func TestH018R60_001_SyncAfterCloseErrors(t *testing.T) {
 	// configGen itself is NOT reset by Close — a subsequent Connect()
 	// increments it. So after Close(), configGen > 0 but health is Disconnected.
 	// We need to verify the full lifecycle: Connect → Close → Sync should fail.
-	c := New("financial-markets")
+	c := New("financial-markets", 30)
 	c.nowFunc = func() time.Time { return stableTestTime }
 
 	err := c.Connect(context.Background(), connector.ConnectorConfig{
@@ -5065,5 +5065,26 @@ func TestCHAOS018_R17_003_DuplicateWatchlistSymbolsDeduped(t *testing.T) {
 	}
 	if len(cfg.Watchlist.Crypto) != 2 {
 		t.Errorf("CHAOS-018-R17-003: expected 2 unique crypto, got %d: %v", len(cfg.Watchlist.Crypto), cfg.Watchlist.Crypto)
+	}
+}
+
+// TestBUG020009_FinancialMarketsHTTPTimeoutFromConfig asserts the
+// connector's httpClient applies the config-derived HTTP timeout (NOT
+// the pre-fix literal of 10 seconds). Uses non-default value 7 so a
+// reverted migration that re-introduced
+// `httpClient: &http.Client{Timeout: 10 * time.Second}` would FAIL.
+func TestBUG020009_FinancialMarketsHTTPTimeoutFromConfig(t *testing.T) {
+	const wantSecs = 7
+	c := New("financial-markets", wantSecs)
+	if c.httpClient == nil {
+		t.Fatal("expected New to construct httpClient")
+	}
+	want := time.Duration(wantSecs) * time.Second
+	if c.httpClient.Timeout != want {
+		t.Errorf("httpClient.Timeout: want %v (from config), got %v — pre-fix literal 10s would yield %v",
+			want, c.httpClient.Timeout, 10*time.Second)
+	}
+	if c.httpClient.Timeout == 10*time.Second {
+		t.Errorf("httpClient.Timeout equals the pre-fix literal 10s — the hardcoded value was re-introduced")
 	}
 }

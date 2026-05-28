@@ -196,6 +196,18 @@ annotations:
     usage_max: 0.03 # max boost capped at 10 uses
     usage_cap: 10 # number of uses for full usage boost
 
+# Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
+# Every value flows through scripts/commands/config.sh into the
+# generated env file as EXTENSION_INGEST_*; no in-source defaults.
+extension:
+  ingest:
+    enabled: true
+    max_batch_items: 256
+    max_body_bytes: 1048576 # 1 MiB
+    default_dedup_window_seconds: 1800 # 30 min
+    accepted_content_types: ["bookmark", "browser_history_visit"]
+    required_token_scope: "extension:bookmarks,history"
+
 connectors:
   imap:
     sync_schedule: "*/15 * * * *" # Every 15 minutes (spec R-202)
@@ -440,6 +452,11 @@ connectors:
   financial-markets:
     enabled: false
     sync_schedule: "*/15 * * * *"
+    # BUG-020-009 — per-call HTTP client timeout (seconds). SST zero-defaults:
+    # value MUST be > 0; fail-loud in Validate() when missing/unparseable/<=0.
+    # Replaces the hardcoded `Timeout: 10 * time.Second` literal previously at
+    # internal/connector/markets/markets.go:158.
+    http_timeout_seconds: 10
     finnhub_api_key: "" # REQUIRED when enabled: free tier at finnhub.io
     fred_api_key: "" # Optional: FRED economic data
     fred_enabled: true # Enable FRED economic indicators (requires fred_api_key)
@@ -555,6 +572,14 @@ auth:
   # OQ-1 RESOLVED — PASETO v4.public (Ed25519). No algorithm-confusion
   # surface, compact wire size, no JWKS server requirement.
   token_format: paseto-v4-public
+
+  # BUG-020-009 — Generic OAuth2 token-endpoint HTTP client timeout
+  # (seconds). SST zero-defaults: value MUST be > 0; fail-loud in
+  # Validate() when missing/unparseable/<=0. Replaces the hardcoded
+  # `client := &http.Client{Timeout: 15 * time.Second}` previously at
+  # internal/auth/oauth.go:117.
+  oauth:
+    http_timeout_seconds: 15
 
   # Disabled by default; per-env overrides flip this on for production-class
   # environments. environments.<env>.auth_enabled wins via env_override_value.

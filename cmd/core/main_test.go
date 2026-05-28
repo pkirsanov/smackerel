@@ -53,7 +53,7 @@ func TestAllConnectorsRegistered(t *testing.T) {
 		twitterConnector.New("twitter"),
 		weatherConnector.New("weather"),
 		alertsConnector.New("gov-alerts"),
-		marketsConnector.New("financial-markets"),
+		marketsConnector.New("financial-markets", 30),
 	}
 
 	for _, c := range connectors {

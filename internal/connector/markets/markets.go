@@ -149,13 +149,20 @@ type FREDObservation struct {
 }
 
 // New creates a new Financial Markets connector.
-func New(id string) *Connector {
+//
+// BUG-020-009 — httpTimeoutSeconds is sourced from
+// `cfg.FinancialMarketsHTTPTimeoutSeconds` (SST yaml key
+// `connectors.financial-markets.http_timeout_seconds`). It MUST be > 0;
+// the caller is responsible for fail-loud validation (handled centrally
+// by internal/config.Validate). Replaces the pre-fix hardcoded 10-second
+// HTTP client timeout literal.
+func New(id string, httpTimeoutSeconds int) *Connector {
 	retryOpts := connector.DefaultRetryOptions()
 	retryOpts.Label = "financial-markets"
 	return &Connector{
 		id:               id,
 		health:           connector.HealthDisconnected,
-		httpClient:       &http.Client{Timeout: 10 * time.Second},
+		httpClient:       &http.Client{Timeout: time.Duration(httpTimeoutSeconds) * time.Second},
 		callCounts:       make(map[string][]time.Time),
 		finnhubBaseURL:   "https://finnhub.io",
 		coingeckoBaseURL: "https://api.coingecko.com",
