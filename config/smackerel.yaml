@@ -289,10 +289,16 @@ connectors:
       aggregate_only_below_tier: "metadata"
 
   rss:
-    enabled: false
+    enabled: true
     sync_schedule: "*/30 * * * *" # Every 30 minutes
     source_config:
-      feed_urls: [] # Add RSS/Atom feed URLs here
+      feed_urls:
+      - https://hnrss.org/best
+      - https://simonwillison.net/atom/everything/
+      - https://www.anthropic.com/news/rss.xml
+      - https://lobste.rs/rss
+      - https://danluu.com/atom.xml
+      - https://www.theverge.com/rss/index.xml
 
   hospitable:
     enabled: false
@@ -357,32 +363,50 @@ connectors:
     sync_schedule: "0 */6 * * *"
 
   weather:
-    enabled: false
+    enabled: true
     sync_schedule: "0 */3 * * *"
     enable_alerts: false
     forecast_days: 7
     precision: 2
     locations:
-    - name: ""
-      latitude: 0.0
-      longitude: 0.0
+    # Operator locations; concrete city names omitted from committed source
+    # per PII policy. lat/lon resolve unambiguously at the weather provider.
+    - name: "home"
+      latitude: 47.5404
+      longitude: -122.636
+    - name: "coast"
+      latitude: 46.9737
+      longitude: -124.1568
+    - name: "desert"
+      latitude: 33.8303
+      longitude: -116.5453
 
   gov-alerts:
-    enabled: false
+    enabled: true
     sync_schedule: "*/30 * * * *"
     min_earthquake_magnitude: 2.5
     source_earthquake: true
     source_weather: true
-    source_tsunami: false
+    source_tsunami: true
     source_volcano: false
-    source_wildfire: false
+    source_wildfire: true
     source_airnow: false
     source_gdacs: false
     airnow_api_key: "" # REQUIRED when source_airnow enabled: free key from airnow.gov
     locations:
-    - name: ""
-      latitude: 0.0
-      longitude: 0.0
+    # Operator locations; concrete city names omitted from committed source
+    # per PII policy. lat/lon are coarse enough to alert on regional events.
+    - name: "home"
+      latitude: 47.5404
+      longitude: -122.636
+      radius_km: 200
+    - name: "coast"
+      latitude: 46.9737
+      longitude: -124.1568
+      radius_km: 200
+    - name: "desert"
+      latitude: 33.8303
+      longitude: -116.5453
       radius_km: 200
     travel_locations: [] # Auto-derived from calendar events (future); manually configured for now
     # - name: "Trip Destination"
