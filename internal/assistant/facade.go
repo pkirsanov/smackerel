@@ -36,11 +36,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
 )
 
@@ -207,24 +209,63 @@ func NewFacade(
 // The flow is intentionally linear (no transport-keyed branching).
 // Every short-circuit path still ends with a persist + audit so the
 // conversation row stays coherent.
-func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (contracts.AssistantResponse, error) {
+func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (resp contracts.AssistantResponse, err error) {
 	if msg.UserID == "" || msg.Transport == "" {
 		return contracts.AssistantResponse{}, errors.New("assistant: AssistantMessage requires UserID and Transport")
 	}
 
-	conv, _, err := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
-	if err != nil {
-		return contracts.AssistantResponse{}, fmt.Errorf("assistant: load context: %w", err)
+	// Spec 061 SCOPE-09 — facade-level metrics + structured log.
+	// Capture turn start; the deferred closure reads the named
+	// return values (resp, err) and derives the outcome label,
+	// then emits FacadeTurnsTotal + FacadeLatencySeconds + one
+	// slog.Info per turn. Any panic still records OutcomeError
+	// because the closure runs on unwind regardless.
+	turnStart := f.cfg.Now()
+	transportLabel := normalizeTransportLabel(msg.Transport)
+	var (
+		turnBand            Band
+		turnScenarioID      string
+		turnTopScore        float64
+		turnAssistantTurnID string
+	)
+	defer func() {
+		latency := f.cfg.Now().Sub(turnStart).Seconds()
+		var outcome string
+		if err != nil {
+			outcome = assistantmetrics.OutcomeError
+		} else {
+			outcome = deriveFacadeOutcome(resp)
+		}
+		assistantmetrics.FacadeTurnsTotal.WithLabelValues(transportLabel, outcome).Inc()
+		assistantmetrics.FacadeLatencySeconds.WithLabelValues(transportLabel, outcome).Observe(latency)
+		// Spec 061 design §8.2 — one structured log line per turn.
+		slog.Info("assistant_turn",
+			"user_id", msg.UserID,
+			"transport", transportLabel,
+			"assistant_turn_id", turnAssistantTurnID,
+			"scenario_id", turnScenarioID,
+			"top_score", turnTopScore,
+			"band", string(turnBand),
+			"status", string(resp.Status),
+			"error_cause", string(resp.ErrorCause),
+			"latency_ms", latency*1000,
+			"agent_trace_id", agentTraceID(turnAssistantTurnID),
+		)
+	}()
+
+	conv, _, loadErr := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
+	if loadErr != nil {
+		return contracts.AssistantResponse{}, fmt.Errorf("assistant: load context: %w", loadErr)
 	}
 
 	emittedAt := f.cfg.Now()
 
 	// --- Step 1: /reset short-circuit ---
 	if msg.Kind == contracts.KindReset {
-		if err := f.contextStore.DeleteByKey(ctx, msg.UserID, msg.Transport); err != nil {
-			return contracts.AssistantResponse{}, fmt.Errorf("assistant: reset: %w", err)
+		if derr := f.contextStore.DeleteByKey(ctx, msg.UserID, msg.Transport); derr != nil {
+			return contracts.AssistantResponse{}, fmt.Errorf("assistant: reset: %w", derr)
 		}
-		resp := contracts.AssistantResponse{
+		resp = contracts.AssistantResponse{
 			Status:    contracts.StatusSavedAsIdea,
 			Body:      "context reset.",
 			EmittedAt: emittedAt,
@@ -239,10 +280,10 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 		scenarioID, isReset, ok := LookupShortcut(msg.Text)
 		if ok {
 			if isReset {
-				if err := f.contextStore.DeleteByKey(ctx, msg.UserID, msg.Transport); err != nil {
-					return contracts.AssistantResponse{}, fmt.Errorf("assistant: reset via shortcut: %w", err)
+				if derr := f.contextStore.DeleteByKey(ctx, msg.UserID, msg.Transport); derr != nil {
+					return contracts.AssistantResponse{}, fmt.Errorf("assistant: reset via shortcut: %w", derr)
 				}
-				resp := contracts.AssistantResponse{
+				resp = contracts.AssistantResponse{
 					Status:    contracts.StatusSavedAsIdea,
 					Body:      "context reset.",
 					EmittedAt: emittedAt,
@@ -263,7 +304,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 			} else if len(conv.WorkingContext.Turns) == 0 {
 				body = "cannot resolve reference. no prior result in this conversation."
 			}
-			resp := contracts.AssistantResponse{
+			resp = contracts.AssistantResponse{
 				Status:     contracts.StatusUnavailable,
 				ErrorCause: contracts.ErrSlotMissing,
 				Body:       body,
@@ -285,9 +326,11 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 
 	// --- Step 5: borderline post-processor ---
 	band := Borderline(decision, ok, f.cfg.BorderlineFloor, f.cfg.AgentConfidenceFloor)
+	turnBand = band
+	turnTopScore = decision.TopScore
+	assistantmetrics.RouterBandTotal.WithLabelValues(string(band), transportLabel).Inc()
 
 	// --- Step 6: band-driven dispatch ---
-	var resp contracts.AssistantResponse
 	var invocation *agent.InvocationResult
 
 	switch band {
@@ -299,6 +342,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 			Body:         "saved as an idea — i'll surface it later.",
 			EmittedAt:    emittedAt,
 		}
+		assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
 
 	case BandBorderline:
 		prompt := f.buildDisambiguationPrompt(decision, emittedAt)
@@ -322,16 +366,28 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 				Body:         "saved as an idea — i'll surface it later.",
 				EmittedAt:    emittedAt,
 			}
+			assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
 			break
 		}
+		turnScenarioID = scenarioID
 		// Manifest enable-gate
 		if !f.manifest.Enabled(scenarioID) {
+			// Spec 061 spec.md row "Skill disabled" (line 670) — the
+			// contract is `errorCause=missing_scope` PLUS
+			// `captureRoute=true` follow-up. Without CaptureRoute=true
+			// the user's input is silently dropped (the adapter sees
+			// CaptureRoute=false, skips the bot-side capture hook,
+			// then attempts to render a "capability not enabled"
+			// reply). BS-001's webhook regression hits this exact
+			// branch when the test stack has no enabled scenarios
+			// (e2e_ollama_smoke is enable-gated off in test env).
 			resp = contracts.AssistantResponse{
-				Routing:    &decision,
-				Status:     contracts.StatusUnavailable,
-				ErrorCause: contracts.ErrMissingScope,
-				Body:       "that capability is not enabled.",
-				EmittedAt:  emittedAt,
+				Routing:      &decision,
+				Status:       contracts.StatusUnavailable,
+				ErrorCause:   contracts.ErrMissingScope,
+				CaptureRoute: true,
+				Body:         "that capability is not enabled.",
+				EmittedAt:    emittedAt,
 			}
 			break
 		}
@@ -358,6 +414,11 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 		env.Routing = decision
 		result := f.executor.Run(ctx, sc, env)
 		invocation = result
+		assistantmetrics.SkillInvocationsTotal.WithLabelValues(
+			scenarioID,
+			normalizeSkillOutcome(result),
+			transportLabel,
+		).Inc()
 
 		body := translateFinalToBody(result)
 		resp = contracts.AssistantResponse{
@@ -408,6 +469,12 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 
 	// --- Step 8: audit ---
 	f.writeAudit(ctx, msg, band, &decision, invocation, resp)
+
+	// Spec 061 SCOPE-09 — surface the assistant turn id for the
+	// deferred structured-log closure; outcome derivation is
+	// performed inside the closure from the named (resp, err)
+	// return values so early-return paths are covered too.
+	turnAssistantTurnID = facadeTurnIDFromTime(emittedAt)
 
 	return resp, nil
 }
@@ -607,4 +674,100 @@ func truncateBody(body string, maxChars int) string {
 		return body
 	}
 	return string(runes[:maxChars])
+}
+
+// --- Spec 061 SCOPE-09 telemetry helpers ---
+
+// normalizeTransportLabel maps msg.Transport to one of the closed
+// vocabulary values declared in internal/assistant/metrics. Unknown
+// transports collapse to TransportFake so cardinality stays bounded
+// and a new transport being wired is loud but not crashing.
+func normalizeTransportLabel(t string) string {
+	switch t {
+	case assistantmetrics.TransportTelegram:
+		return assistantmetrics.TransportTelegram
+	case assistantmetrics.TransportFake:
+		return assistantmetrics.TransportFake
+	default:
+		// Defensive: collapse unknown transport to the fake bucket.
+		// The labels_test.go vocabulary check refuses any new value
+		// added to AllTransports without a corresponding constant, so
+		// this branch fires only for genuinely-unrouted callers.
+		return assistantmetrics.TransportFake
+	}
+}
+
+// deriveFacadeOutcome translates the response shape returned by
+// Handle into the closed Outcome* vocabulary used by FacadeTurnsTotal
+// + FacadeLatencySeconds. Pure mapping; no side effects.
+//
+// Ordering matters: DisambiguationPrompt first (proposed dominates
+// status), then capture-route (captured dominates the BandLow
+// StatusSavedAsIdea), then non-capture StatusSavedAsIdea (the
+// /reset short-circuit), then explicit error status, then answered.
+func deriveFacadeOutcome(resp contracts.AssistantResponse) string {
+	if resp.DisambiguationPrompt != nil {
+		return assistantmetrics.OutcomeProposed
+	}
+	if resp.CaptureRoute {
+		return assistantmetrics.OutcomeCaptured
+	}
+	if resp.ErrorCause != "" || resp.Status == contracts.StatusUnavailable {
+		return assistantmetrics.OutcomeError
+	}
+	if resp.Status == contracts.StatusSavedAsIdea {
+		// reached only by the /reset short-circuit (CaptureRoute=false)
+		return assistantmetrics.OutcomeDiscarded
+	}
+	return assistantmetrics.OutcomeAnswered
+}
+
+// normalizeSkillOutcome maps an *agent.InvocationResult.Outcome into
+// the closed SkillOutcome* vocabulary on
+// SkillInvocationsTotal{outcome=...}. A nil result is treated as
+// SkillOutcomeUnknownIntent (defensive — should not happen for
+// BandHigh dispatch).
+func normalizeSkillOutcome(r *agent.InvocationResult) string {
+	if r == nil {
+		return assistantmetrics.SkillOutcomeUnknownIntent
+	}
+	switch r.Outcome {
+	case agent.OutcomeOK:
+		return assistantmetrics.SkillOutcomeOK
+	case agent.OutcomeTimeout:
+		return assistantmetrics.SkillOutcomeTimeout
+	case agent.OutcomeProviderError:
+		return assistantmetrics.SkillOutcomeProviderError
+	case agent.OutcomeSchemaFailure:
+		return assistantmetrics.SkillOutcomeSchemaFailure
+	case agent.OutcomeToolReturnInvalid:
+		return assistantmetrics.SkillOutcomeToolReturnInvalid
+	case agent.OutcomeInputSchemaViolation:
+		return assistantmetrics.SkillOutcomeInputSchemaViolation
+	case agent.OutcomeLoopLimit:
+		return assistantmetrics.SkillOutcomeLoopLimit
+	case agent.OutcomeUnknownIntent:
+		return assistantmetrics.SkillOutcomeUnknownIntent
+	default:
+		return assistantmetrics.SkillOutcomeUnknownIntent
+	}
+}
+
+// facadeTurnIDFromTime builds a deterministic assistant turn id from
+// the turn's emittedAt timestamp. Format: "asst-<unix-nano>". The
+// adapter audit row uses the same value so a single turn can be
+// traced from /metrics → log line → conversation row.
+func facadeTurnIDFromTime(t time.Time) string {
+	return fmt.Sprintf("asst-%d", t.UnixNano())
+}
+
+// agentTraceID returns the spec 037 agent trace id associated with
+// an assistant turn. v1 derives it from the assistant turn id so
+// dashboards can join the two. Once spec 037 publishes a real
+// trace-id propagator the substrate executor will replace this.
+func agentTraceID(assistantTurnID string) string {
+	if assistantTurnID == "" {
+		return ""
+	}
+	return "trace-" + assistantTurnID
 }

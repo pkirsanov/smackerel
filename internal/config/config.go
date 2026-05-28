@@ -1398,6 +1398,17 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Spec 061 SCOPE-05 design §7.2 rules #2-#10 — assistant config
+	// validation runs AFTER loadAssistantConfig populates the struct.
+	// The earlier cfg.Validate() at the end of the env-load block
+	// short-circuited when Enabled was still false; re-run the
+	// assistant-specific portion here so that webhook-mode secret
+	// resolution (TelegramWebhookSecret = os.Getenv(SecretRef))
+	// actually populates before main() reads it.
+	if err := cfg.validateAssistantConfig(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 

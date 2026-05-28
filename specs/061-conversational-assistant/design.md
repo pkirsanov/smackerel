@@ -1884,7 +1884,7 @@ The test secret value is provisioned by the test bootstrap into the resolved env
 **Shell e2e pattern (BS-001 / BS-010):**
 
 ```bash
-# tests/e2e/telegram_assistant_bs001_test.sh (rewritten for webhook mode)
+# tests/e2e/test_telegram_assistant_bs001.sh (rewritten for webhook mode)
 update_json=$(cat <<JSON
 {
   "update_id": 100001,
@@ -1945,7 +1945,7 @@ The webhook work is bounded:
 | `cmd/core/wiring.go` mode branch | ~25 |
 | `internal/config/assistant.go` SST validation rules 7–10 | ~40 |
 | `config/smackerel.yaml` three new keys + dev-comment block | ~15 |
-| `tests/e2e/telegram_assistant_bs001_test.sh` rewrite to use webhook injection | ~30 (in place of the current placeholder) |
+| `tests/e2e/test_telegram_assistant_bs001.sh` rewrite to use webhook injection | ~30 (in place of the current placeholder) |
 | Test stack env additions | ~5 |
 | **Total** | **~435 LOC** |
 
