@@ -119,29 +119,30 @@ func TestCallbackKeystoreFailsLoudOnEmptyKeySetAndOnAllKeysWithFutureNotBefore(t
 	})
 }
 
-// LoadCallbackKeystoreFromEnv reads QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON
-// and returns nil-nil when unset, parsed keystore when set, error when
-// set but malformed.
-func TestLoadCallbackKeystoreFromEnvReturnsNilWhenUnsetAndKeystoreWhenSet(t *testing.T) {
-	t.Setenv(CallbackSigningKeysEnvVar, "")
-	got, err := LoadCallbackKeystoreFromEnv()
-	if err != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv unset: %v", err)
+// BUG-020-010 / SCN-SM-020-bug-010 — the env-bound
+// LoadCallbackKeystoreFromEnv() was removed when the keystore source
+// was migrated through Config SST. This migrated test exercises the
+// same empty / valid / malformed semantics directly against
+// LoadCallbackKeystoreFromJSON (the canonical structural parser), which
+// is what the connector's Connect() now calls with the resolved
+// Config.QFDecisionsCallbackSigningKeysJSON value.
+func TestLoadCallbackKeystoreFromJSONEmptyValidMalformed(t *testing.T) {
+	got, err := LoadCallbackKeystoreFromJSON("")
+	if err == nil {
+		t.Fatalf("LoadCallbackKeystoreFromJSON empty: want error, got nil (keystore=%v)", got)
 	}
 	if got != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv unset: want nil, got %v", got)
+		t.Fatalf("LoadCallbackKeystoreFromJSON empty: want nil keystore on error, got %v", got)
 	}
-	t.Setenv(CallbackSigningKeysEnvVar, `[{"key_id":"k","secret":"x","not_before":"2026-01-01T00:00:00Z"}]`)
-	got, err = LoadCallbackKeystoreFromEnv()
+	got, err = LoadCallbackKeystoreFromJSON(`[{"key_id":"k","secret":"x","not_before":"2026-01-01T00:00:00Z"}]`)
 	if err != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv set: %v", err)
+		t.Fatalf("LoadCallbackKeystoreFromJSON set: %v", err)
 	}
 	if got == nil || got.Len() != 1 {
-		t.Fatalf("LoadCallbackKeystoreFromEnv set: want 1-key keystore, got %v", got)
+		t.Fatalf("LoadCallbackKeystoreFromJSON set: want 1-key keystore, got %v", got)
 	}
-	t.Setenv(CallbackSigningKeysEnvVar, `{"this is not": "an array"}`)
-	if _, err := LoadCallbackKeystoreFromEnv(); err == nil {
-		t.Fatal("LoadCallbackKeystoreFromEnv malformed: want error, got nil")
+	if _, err := LoadCallbackKeystoreFromJSON(`{"this is not": "an array"}`); err == nil {
+		t.Fatal("LoadCallbackKeystoreFromJSON malformed: want error, got nil")
 	}
 }
 

@@ -82,18 +82,17 @@ func TestQFWatchProposalSignedEnvelopePostedAndScope8SignerReusedAgainstLiveQFSt
 	metrics.QFCallbackSignatureFailuresTotal.Reset()
 	metrics.QFWatchProposalAttemptsTotal.Reset()
 
-	// Load keystore the same way the connector does at Connect time:
-	// from the SST env var. Scope 9 REUSES the Scope 8 keystore
-	// verbatim — the integration boundary proves that the same
-	// keystore type and same selection algorithm sign Scope 9
-	// proposals as sign Scope 8 callbacks.
-	t.Setenv(qfdecisions.CallbackSigningKeysEnvVar, `[{"key_id":"k-wp-int","secret":"sek-wp-int-2026","not_before":"2026-01-01T00:00:00Z"}]`)
-	keystore, err := qfdecisions.LoadCallbackKeystoreFromEnv()
+	// BUG-020-010: keystore is now ingested via Config SST. Scope 9
+	// REUSES the Scope 8 keystore verbatim — the integration boundary
+	// proves that the same keystore type and same selection algorithm
+	// sign Scope 9 proposals as sign Scope 8 callbacks.
+	const wpKeystoreJSON = `[{"key_id":"k-wp-int","secret":"sek-wp-int-2026","not_before":"2026-01-01T00:00:00Z"}]`
+	keystore, err := qfdecisions.LoadCallbackKeystoreFromJSON(wpKeystoreJSON)
 	if err != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv: %v", err)
+		t.Fatalf("LoadCallbackKeystoreFromJSON: %v", err)
 	}
 	if keystore == nil {
-		t.Fatal("LoadCallbackKeystoreFromEnv: want non-nil keystore, got nil")
+		t.Fatal("LoadCallbackKeystoreFromJSON: want non-nil keystore, got nil")
 	}
 
 	nowFn := func() time.Time { return mustParseRFC3339(t, "2026-05-23T12:00:00Z") }
@@ -194,10 +193,12 @@ func TestQFWatchProposalPreMVPRejectionParsedAndNoLocalWatchStateMutatedAcrossLi
 	metrics.QFCallbackSignatureFailuresTotal.Reset()
 	metrics.QFWatchProposalAttemptsTotal.Reset()
 
-	t.Setenv(qfdecisions.CallbackSigningKeysEnvVar, `[{"key_id":"k-wp-int-2","secret":"sek-wp-int-2","not_before":"2026-01-01T00:00:00Z"}]`)
-	keystore, err := qfdecisions.LoadCallbackKeystoreFromEnv()
+	// BUG-020-010: keystore now via Config SST (LoadCallbackKeystoreFromJSON
+	// directly; LoadCallbackKeystoreFromEnv was removed).
+	const wpKeystoreJSON2 = `[{"key_id":"k-wp-int-2","secret":"sek-wp-int-2","not_before":"2026-01-01T00:00:00Z"}]`
+	keystore, err := qfdecisions.LoadCallbackKeystoreFromJSON(wpKeystoreJSON2)
 	if err != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv: %v", err)
+		t.Fatalf("LoadCallbackKeystoreFromJSON: %v", err)
 	}
 
 	// Snapshot tuple-counter sums for every table whose name

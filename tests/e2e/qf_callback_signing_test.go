@@ -159,10 +159,12 @@ func e2eDefaultCapability() qfdecisions.QFBridgeCapability {
 }
 
 // connectQFWithKeystore brings up a real Connector against the supplied QF stub
-// with the provided env-var keystore. Cleanup closes the connector.
+// with the provided keystore JSON. The keystore is plumbed through Config SST
+// via SourceConfig["callback_signing_keys_json"] (BUG-020-010 — the qfdecisions
+// package no longer reads QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON via os.Getenv).
+// Cleanup closes the connector.
 func connectQFWithKeystore(t *testing.T, ctx context.Context, stubURL, keystoreJSON, sourceID string) *qfdecisions.Connector {
 	t.Helper()
-	t.Setenv(qfdecisions.CallbackSigningKeysEnvVar, keystoreJSON)
 	c := qfdecisions.New(sourceID)
 	if err := c.Connect(ctx, connector.ConnectorConfig{
 		AuthType:     "token",
@@ -170,9 +172,10 @@ func connectQFWithKeystore(t *testing.T, ctx context.Context, stubURL, keystoreJ
 		Enabled:      true,
 		SyncSchedule: "*/5 * * * *",
 		SourceConfig: map[string]any{
-			"base_url":       stubURL,
-			"packet_version": 1,
-			"page_size":      25,
+			"base_url":                   stubURL,
+			"packet_version":             1,
+			"page_size":                  25,
+			"callback_signing_keys_json": keystoreJSON,
 		},
 	}); err != nil {
 		t.Fatalf("Connect: %v", err)
@@ -399,7 +402,7 @@ func TestQFCallbackStartupFailsLoudWhenKeystoreHasNoActiveKey(t *testing.T) {
 	}
 
 	stub := newE2ECallbackStub(t, e2eDefaultCapability())
-	t.Setenv(qfdecisions.CallbackSigningKeysEnvVar, string(raw))
+	// BUG-020-010: keystore now via Config SST SourceConfig.
 
 	c := qfdecisions.New("qf-decisions-e2e-callback-startup-fail")
 	connectErr := c.Connect(ctx, connector.ConnectorConfig{
@@ -408,9 +411,10 @@ func TestQFCallbackStartupFailsLoudWhenKeystoreHasNoActiveKey(t *testing.T) {
 		Enabled:      true,
 		SyncSchedule: "*/5 * * * *",
 		SourceConfig: map[string]any{
-			"base_url":       stub.URL(),
-			"packet_version": 1,
-			"page_size":      25,
+			"base_url":                   stub.URL(),
+			"packet_version":             1,
+			"page_size":                  25,
+			"callback_signing_keys_json": string(raw),
 		},
 	})
 	if connectErr == nil {

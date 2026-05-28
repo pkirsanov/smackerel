@@ -949,6 +949,11 @@ QF_DECISIONS_CREDENTIAL_REF="$(env_override_value qf_decisions_credential_ref co
 QF_DECISIONS_SYNC_SCHEDULE="$(env_override_value qf_decisions_sync_schedule connectors.qf-decisions.sync_schedule)"
 QF_DECISIONS_PACKET_VERSION="$(env_override_value qf_decisions_packet_version connectors.qf-decisions.packet_version)"
 QF_DECISIONS_PAGE_SIZE="$(env_override_value qf_decisions_page_size connectors.qf-decisions.page_size)"
+# BUG-020-010 — callback HMAC bridge signing keystore JSON. PERMISSIVE:
+# empty allowed ("signing not configured in this environment"); non-empty
+# parsed at boot by internal/config.Validate(). The deploy adapter MAY
+# override with QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON in the environment.
+QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON="$(env_override_value qf_decisions_callback_signing_keys_json connectors.qf-decisions.callback_signing_keys_json)"
 
 # Hospitable connector
 HOSPITABLE_ENABLED="$(yaml_get connectors.hospitable.enabled 2>/dev/null)" || HOSPITABLE_ENABLED="false"
@@ -1459,6 +1464,7 @@ QF_DECISIONS_CREDENTIAL_REF=${QF_DECISIONS_CREDENTIAL_REF}
 QF_DECISIONS_SYNC_SCHEDULE=${QF_DECISIONS_SYNC_SCHEDULE}
 QF_DECISIONS_PACKET_VERSION=${QF_DECISIONS_PACKET_VERSION}
 QF_DECISIONS_PAGE_SIZE=${QF_DECISIONS_PAGE_SIZE}
+QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON=${QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON}
 HOSPITABLE_ENABLED=${HOSPITABLE_ENABLED}
 HOSPITABLE_ACCESS_TOKEN=${HOSPITABLE_ACCESS_TOKEN}
 HOSPITABLE_BASE_URL=${HOSPITABLE_BASE_URL}

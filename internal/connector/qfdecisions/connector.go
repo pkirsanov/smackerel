@@ -53,6 +53,15 @@ type QFConfig struct {
 	// is operator-initiated via QF's POST /cursor:fast-forward (F13).
 	// SCN-SM-041-007.
 	CursorLagThresholdSeconds int
+	// CallbackSigningKeysJSON is the resolved HMAC bridge callback
+	// signing keystore JSON, sourced from Config SST via the per-connector
+	// SourceConfig["callback_signing_keys_json"] entry populated by
+	// cmd/core/connectors.go from cfg.QFDecisionsCallbackSigningKeysJSON.
+	// Empty means "callback signing not configured in this environment";
+	// non-empty is validated at boot by internal/config.Validate() and
+	// re-parsed at Connect time via LoadCallbackKeystoreFromJSON. The
+	// qfdecisions package NEVER reads the env var directly — SCN-SM-020-bug-010.
+	CallbackSigningKeysJSON string
 }
 
 const defaultCursorLagThresholdSeconds = 3600
@@ -374,15 +383,27 @@ func (c *Connector) Connect(ctx context.Context, cfg connector.ConnectorConfig) 
 	SetGlobalEngagementExporter(exporter)
 
 	// Scope 8: load the HMAC bridge callback signing keystore from
-	// the SST-managed env var QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON.
-	// An empty / unset env var means "callback signing not configured
-	// in this environment" and is permitted — the QF connector
+	// the resolved Config field (sourced from the SST-managed env var
+	// QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON at boot, plumbed in via
+	// parsed.CallbackSigningKeysJSON \u2014 see BUG-020-010 /
+	// SCN-SM-020-bug-010 for why the qfdecisions package no longer
+	// reads os.Getenv directly).
+	// An empty resolved JSON means "callback signing not configured
+	// in this environment" and is permitted \u2014 the QF connector
 	// continues to run for ingest/render/evidence flows. A non-empty
-	// but malformed env var is a fatal startup error; a non-empty
-	// well-formed env var whose every key has not_before in the
-	// future is also a fatal startup error (caught by the explicit
-	// SelectActiveKey probe below). SCN-SM-041-028 / SCN-SM-041-030.
-	keystore, keystoreErr := LoadCallbackKeystoreFromEnv()
+	// but malformed value is already rejected by
+	// internal/config.Validate() at boot; this Connect-time
+	// re-parse is the structural authority for keystore construction
+	// and remains fail-loud. A well-formed JSON whose every key has
+	// not_before in the future is fail-loud at the SelectActiveKey
+	// probe below. SCN-SM-041-028 / SCN-SM-041-030 / SCN-SM-020-bug-010.
+	var (
+		keystore    *CallbackKeystore
+		keystoreErr error
+	)
+	if strings.TrimSpace(parsed.CallbackSigningKeysJSON) != "" {
+		keystore, keystoreErr = LoadCallbackKeystoreFromJSON(parsed.CallbackSigningKeysJSON)
+	}
 	if keystoreErr != nil {
 		EmitConnectorAuditEnvelope(BuildCrossProductAuditEnvelopeV1(AuditEnvelopeInput{
 			Surface:    DefaultConnectorID,
@@ -879,6 +900,25 @@ func parseConfig(cfg connector.ConnectorConfig) (QFConfig, error) {
 		}
 	}
 
+	// callback_signing_keys_json is OPTIONAL (PERMISSIVE policy per
+	// BUG-020-010 / SCN-SM-020-bug-010). An empty/missing value means
+	// "callback signing not configured in this environment" and the
+	// connector continues to run for ingest/render/evidence flows
+	// without a signer. A non-empty value MUST be a string — type
+	// errors are surfaced as configuration errors. Structural
+	// validation (JSON shape) was already performed by
+	// internal/config.Validate() at boot; this field is the resolved
+	// JSON the Config layer accepted. SCN-SM-020-bug-010.
+	var callbackSigningKeysJSON string
+	if rawVal, present := cfg.SourceConfig["callback_signing_keys_json"]; present && rawVal != nil {
+		s, ok := rawVal.(string)
+		if !ok {
+			configErrors = append(configErrors, "callback_signing_keys_json must be a string")
+		} else {
+			callbackSigningKeysJSON = s
+		}
+	}
+
 	if len(configErrors) > 0 {
 		return QFConfig{}, fmt.Errorf("invalid qf-decisions connector configuration: %s", strings.Join(configErrors, ", "))
 	}
@@ -890,6 +930,7 @@ func parseConfig(cfg connector.ConnectorConfig) (QFConfig, error) {
 		PacketVersion:             packetVersion,
 		PageSize:                  pageSize,
 		CursorLagThresholdSeconds: cursorLagThreshold,
+		CallbackSigningKeysJSON:   callbackSigningKeysJSON,
 	}, nil
 }
 

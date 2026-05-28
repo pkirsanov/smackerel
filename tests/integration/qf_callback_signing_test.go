@@ -70,15 +70,18 @@ func TestQFCallbackSignedEnvelopePostedAndPreMVPRejectionParsedFromLiveQFStub(t 
 	metrics.QFCallbackAttemptsTotal.Reset()
 	metrics.QFCallbackSignatureFailuresTotal.Reset()
 
-	// Load keystore the same way the connector does at Connect time:
-	// from the SST env var.
-	t.Setenv(qfdecisions.CallbackSigningKeysEnvVar, `[{"key_id":"k-int","secret":"sek-int-2026","not_before":"2026-01-01T00:00:00Z"}]`)
-	keystore, err := qfdecisions.LoadCallbackKeystoreFromEnv()
+	// BUG-020-010: keystore is now ingested via Config SST, not
+	// via os.Getenv inside the qfdecisions package. The test
+	// constructs the keystore directly from the JSON, matching the
+	// resolved value the connector would consume at Connect time
+	// via parsed.CallbackSigningKeysJSON.
+	const keystoreJSON = `[{"key_id":"k-int","secret":"sek-int-2026","not_before":"2026-01-01T00:00:00Z"}]`
+	keystore, err := qfdecisions.LoadCallbackKeystoreFromJSON(keystoreJSON)
 	if err != nil {
-		t.Fatalf("LoadCallbackKeystoreFromEnv: %v", err)
+		t.Fatalf("LoadCallbackKeystoreFromJSON: %v", err)
 	}
 	if keystore == nil {
-		t.Fatal("LoadCallbackKeystoreFromEnv: want non-nil keystore, got nil")
+		t.Fatal("LoadCallbackKeystoreFromJSON: want non-nil keystore, got nil")
 	}
 
 	signer := qfdecisions.NewCallbackSigner(keystore, func() time.Time {
