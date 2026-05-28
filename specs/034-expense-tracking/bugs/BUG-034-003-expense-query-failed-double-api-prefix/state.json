@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "bugId": "BUG-034-003",
+  "parentSpec": "034-expense-tracking",
+  "coAffectedSpecs": ["036-meal-planning"],
+  "title": "/expense Telegram command returns \"Failed to query expenses\" — /api/expenses and /api/meal-plans never mounted (double-/api prefix)",
+  "severity": "high",
+  "status": "in_progress",
+  "workflowMode": "bugfix-fastlane",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "completedPhases": ["discovery", "documentation", "analysis", "design", "plan", "implement"],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-05-28T19:05:00Z",
+        "evidence": "report.md#bug-reproduction-after-fix-in-process-integration-regression"
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": []
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "routing": {
+    "nextOwner": "bubbles.validate",
+    "reason": "In-process fix complete (2 source files + 1 new adversarial regression test, all PASS; existing api unit suite + full smackerel.sh test integration green). Live-host DoD items (3) blocked on operator-run home-lab redeploy: ./smackerel.sh build → bash <knb>/smackerel/home-lab/apply.sh → bash <knb>/smackerel/home-lab/verify.sh. After deploy, bubbles.validate must capture live /api/expenses=401, /api/meal-plans=401, and Telegram /expense empty-state evidence to flip remaining DoD items and uservalidation.md checkboxes."
+  },
+  "createdAt": "2026-05-28T18:55:00Z",
+  "updatedAt": "2026-05-28T19:05:00Z"
+}
