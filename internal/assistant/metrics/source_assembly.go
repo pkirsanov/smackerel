@@ -42,9 +42,9 @@ import "github.com/prometheus/client_golang/prometheus"
 var SourceAssemblyDropsCounter = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "smackerel_assistant_source_assembly_drops_total",
-		Help: "Number of cited artifact IDs the capability-layer source-assembly invariant dropped because the artifact was missing from the knowledge graph (cause=\"missing_artifact\") or the lookup callback errored (cause=\"lookup_error\"). When ALL cited IDs drop, the resulting empty Sources[] makes the provenance gate fire a canonical refusal (BS-007).",
+		Help: "Number of cited artifact IDs the capability-layer source-assembly invariant dropped because the artifact was missing from the knowledge graph (cause=\"missing_artifact\") or the lookup callback errored (cause=\"lookup_error\"). When ALL cited IDs drop, the resulting empty Sources[] makes the provenance gate fire a canonical refusal (BS-007). Per spec 061 SCOPE-09, labeled by scenario_id so dashboards can attribute drops to the originating retrieval scenario.",
 	},
-	[]string{"cause"},
+	[]string{"scenario_id", "cause"},
 )
 
 // SourceAssemblyDropCause is the closed-vocabulary set of label

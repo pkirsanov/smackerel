@@ -1161,6 +1161,12 @@ ASSISTANT_SKILLS_WEATHER_PROVIDER="$(required_value assistant.skills.weather.pro
 # yaml_get returns "" when present with empty value, or aborts when missing.
 ASSISTANT_SKILLS_WEATHER_API_KEY_REF="$(yaml_get assistant.skills.weather.api_key_ref)"
 ASSISTANT_SKILLS_WEATHER_CACHE_TTL="$(required_value assistant.skills.weather.cache_ttl)"
+# Spec 061 design §18.3 — per-URL SST keys for external-provider URL
+# injection seam. Production reads literal values from smackerel.yaml;
+# the TARGET_ENV=test override below redirects them to the in-tree
+# stub container so shell e2e fixtures are hermetic.
+ASSISTANT_SKILLS_WEATHER_GEOCODE_URL="$(required_value assistant.skills.weather.geocode_url)"
+ASSISTANT_SKILLS_WEATHER_FORECAST_URL="$(required_value assistant.skills.weather.forecast_url)"
 ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED="$(required_value assistant.skills.notifications.enabled)"
 ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT="$(required_value assistant.skills.notifications.confirm_timeout)"
 ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED="$(required_value assistant.transports.telegram.enabled)"
@@ -1202,6 +1208,15 @@ if [[ "$TARGET_ENV" == "test" ]]; then
   # dev/production mappings that would point capture artifacts at a
   # real user_id.
   TELEGRAM_USER_MAPPING="99001:test-user-061-bs001,99002:test-user-061-bs002,99007:test-user-061-bs007,99003:test-user-061-weather-bs003,99006:test-user-061-weather-bs006"
+  # Spec 061 design §18.3+§18.4 — test stack flips weather provider URLs
+  # to the in-tree nginx stub container `smackerel-test-stub-providers`
+  # under the `test` compose profile. Production URLs are NEVER reached
+  # from the test stack (hermetic per bubbles-test-environment-isolation).
+  # The §18.3 production-safety guard in internal/config/assistant.go
+  # rejects startup if any non-test env contains the substring
+  # `stub-providers`.
+  ASSISTANT_SKILLS_WEATHER_GEOCODE_URL="http://stub-providers:8080/v1/search"
+  ASSISTANT_SKILLS_WEATHER_FORECAST_URL="http://stub-providers:8080/v1/forecast"
 fi
 
 # HL-RESCAN-012 / Gate G028 — build-metadata SST resolution.
@@ -1662,6 +1677,8 @@ ASSISTANT_SKILLS_WEATHER_ENABLED=${ASSISTANT_SKILLS_WEATHER_ENABLED}
 ASSISTANT_SKILLS_WEATHER_PROVIDER=${ASSISTANT_SKILLS_WEATHER_PROVIDER}
 ASSISTANT_SKILLS_WEATHER_API_KEY_REF=${ASSISTANT_SKILLS_WEATHER_API_KEY_REF}
 ASSISTANT_SKILLS_WEATHER_CACHE_TTL=${ASSISTANT_SKILLS_WEATHER_CACHE_TTL}
+ASSISTANT_SKILLS_WEATHER_GEOCODE_URL=${ASSISTANT_SKILLS_WEATHER_GEOCODE_URL}
+ASSISTANT_SKILLS_WEATHER_FORECAST_URL=${ASSISTANT_SKILLS_WEATHER_FORECAST_URL}
 ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED=${ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED}
 ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT=${ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT}
 ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED=${ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED}

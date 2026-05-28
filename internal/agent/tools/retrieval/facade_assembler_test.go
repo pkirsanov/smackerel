@@ -43,7 +43,7 @@ func TestNewFacadeAssembler_HappyPath_AnswerAndSources(t *testing.T) {
 		"art-1": {title: "Note A", capturedAt: now.Add(-24 * time.Hour), found: true},
 		"art-2": {title: "Note B", capturedAt: now.Add(-48 * time.Hour), found: true},
 	}
-	asm := NewFacadeAssembler(fakeLookup(entries), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(entries), 5)
 
 	result := &agent.InvocationResult{
 		Outcome: agent.OutcomeOK,
@@ -80,7 +80,7 @@ func TestNewFacadeAssembler_GraphDrift_DropsMissingArtifacts(t *testing.T) {
 	t.Parallel()
 
 	// lookup returns found=false for everything.
-	asm := NewFacadeAssembler(fakeLookup(map[string]fakeLookupEntry{}), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(map[string]fakeLookupEntry{}), 5)
 
 	result := &agent.InvocationResult{
 		Outcome: agent.OutcomeOK,
@@ -108,7 +108,7 @@ func TestNewFacadeAssembler_LookupError_DropsAndContinues(t *testing.T) {
 		"art-1": {title: "OK", capturedAt: now, found: true},
 		"art-2": {err: errors.New("transient: connection refused")},
 	}
-	asm := NewFacadeAssembler(fakeLookup(entries), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(entries), 5)
 
 	result := &agent.InvocationResult{
 		Outcome: agent.OutcomeOK,
@@ -132,7 +132,7 @@ func TestNewFacadeAssembler_LookupError_DropsAndContinues(t *testing.T) {
 func TestNewFacadeAssembler_MalformedFinal_ReturnsZeroValue(t *testing.T) {
 	t.Parallel()
 
-	asm := NewFacadeAssembler(fakeLookup(nil), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(nil), 5)
 
 	cases := []struct {
 		name  string
@@ -177,7 +177,7 @@ func TestNewFacadeAssembler_MalformedFinal_ReturnsZeroValue(t *testing.T) {
 func TestNewFacadeAssembler_NonOKOutcome_ReturnsZeroValue(t *testing.T) {
 	t.Parallel()
 
-	asm := NewFacadeAssembler(fakeLookup(nil), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(nil), 5)
 
 	cases := []agent.Outcome{
 		agent.OutcomeTimeout,
@@ -210,7 +210,7 @@ func TestNewFacadeAssembler_NonOKOutcome_ReturnsZeroValue(t *testing.T) {
 func TestNewFacadeAssembler_NilResult_ReturnsZeroValue(t *testing.T) {
 	t.Parallel()
 
-	asm := NewFacadeAssembler(fakeLookup(nil), 5)
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(nil), 5)
 	assembly := asm(context.Background(), nil)
 	if assembly.Body != "" {
 		t.Errorf("Body = %q; want empty", assembly.Body)
@@ -230,7 +230,20 @@ func TestNewFacadeAssembler_PanicsOnNilLookup(t *testing.T) {
 			t.Fatal("NewFacadeAssembler MUST panic on nil ArtifactLookupFn")
 		}
 	}()
-	_ = NewFacadeAssembler(nil, 5)
+	_ = NewFacadeAssembler("retrieval_qa", nil, 5)
+}
+
+// TestNewFacadeAssembler_PanicsOnEmptyScenarioID proves the
+// constructor catches a missing scenarioID immediately so wiring
+// bugs cannot silently corrupt metric labels.
+func TestNewFacadeAssembler_PanicsOnEmptyScenarioID(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("NewFacadeAssembler MUST panic on empty scenarioID")
+		}
+	}()
+	_ = NewFacadeAssembler("", fakeLookup(nil), 5)
 }
 
 func TestNewFacadeAssembler_PanicsOnZeroSourcesMax(t *testing.T) {
@@ -240,7 +253,7 @@ func TestNewFacadeAssembler_PanicsOnZeroSourcesMax(t *testing.T) {
 			t.Fatal("NewFacadeAssembler MUST panic on sourcesMax <= 0")
 		}
 	}()
-	_ = NewFacadeAssembler(fakeLookup(nil), 0)
+	_ = NewFacadeAssembler("retrieval_qa", fakeLookup(nil), 0)
 }
 
 // TestNewFacadeAssembler_RespectsSourcesMax proves the assembler
@@ -256,7 +269,7 @@ func TestNewFacadeAssembler_RespectsSourcesMax(t *testing.T) {
 		"art-3": {title: "C", capturedAt: now, found: true},
 		"art-4": {title: "D", capturedAt: now, found: true},
 	}
-	asm := NewFacadeAssembler(fakeLookup(entries), 2) // cap = 2
+	asm := NewFacadeAssembler("retrieval_qa", fakeLookup(entries), 2) // cap = 2
 
 	result := &agent.InvocationResult{
 		Outcome: agent.OutcomeOK,

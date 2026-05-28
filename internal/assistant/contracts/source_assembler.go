@@ -101,11 +101,61 @@ type SourceAssembler func(ctx context.Context, result *agent.InvocationResult) S
 //     ("…and N more sources").
 //
 // Cardinality and zero-value: a zero-value SourceAssembly
-// (Body == "" && Sources == nil && OverflowCount == 0) is the
-// canonical "no override" signal the Facade interprets as "this
-// assembler does not apply to this scenario's Final shape".
+// (Body == "" && Sources == nil && OverflowCount == 0 && Cause == "")
+// is the canonical "no override" signal the Facade interprets as
+// "this assembler does not apply to this scenario's Final shape".
 type SourceAssembly struct {
 	Body          string
 	Sources       []Source
 	OverflowCount int
+	// Cause is the spec 061 SCOPE-09 attribution hint the
+	// provenance gate uses when it has to rewrite to the canonical
+	// refusal. Set by the assembler when Sources is empty but the
+	// scenario emitted a non-empty body (i.e. the gate is about to
+	// fire). The Facade forwards Cause to provenance.Enforce so the
+	// ViolationsCounter can attribute the rewrite to the originating
+	// upstream condition (missing artifact, lookup error, fabricated
+	// source, or drop-for-quota). Empty Cause is valid and means
+	// "the assembler did not classify it"; the gate defaults to
+	// ProvenanceCauseFabricatedSource because a non-empty body with
+	// no Sources is — by definition — a fabricated answer.
+	Cause ProvenanceCause
+}
+
+// ProvenanceCause is the closed-vocabulary set of attribution causes
+// the provenance gate uses to label the
+// smackerel_assistant_provenance_violations_total counter (spec 061
+// SCOPE-09). Cardinality is bounded so dashboards can distinguish
+// graph-drift from LLM fabrication without unbounded label growth.
+type ProvenanceCause string
+
+const (
+	// ProvenanceCauseMissingArtifact — the LLM cited artifact IDs
+	// but the source-assembly lookup returned found=false for every
+	// citation (graph drift). Pair with the assembly-drops counter
+	// cause=missing_artifact to confirm the upstream signal.
+	ProvenanceCauseMissingArtifact ProvenanceCause = "missing_artifact"
+	// ProvenanceCauseLookupError — the LLM cited artifact IDs but
+	// every lookup errored (typically a transient PG outage). Pair
+	// with the assembly-drops counter cause=lookup_error.
+	ProvenanceCauseLookupError ProvenanceCause = "lookup_error"
+	// ProvenanceCauseFabricatedSource — the LLM emitted a non-empty
+	// body without any cited artifact IDs at all. This is the
+	// "model hallucinated context" case and is the default cause
+	// the gate falls back to when the assembler did not classify.
+	ProvenanceCauseFabricatedSource ProvenanceCause = "fabricated_source"
+	// ProvenanceCauseDroppedForQuota — the sources_max cap was
+	// configured to 0 (a misconfiguration) so even valid lookups
+	// were truncated to an empty Sources slice.
+	ProvenanceCauseDroppedForQuota ProvenanceCause = "dropped_for_quota"
+)
+
+// AllProvenanceCauses is the canonical iteration order for
+// closed-vocabulary tests. Adding a new cause MUST update this slice
+// + the labels_test vocabulary fixture in the metrics package.
+var AllProvenanceCauses = []ProvenanceCause{
+	ProvenanceCauseMissingArtifact,
+	ProvenanceCauseLookupError,
+	ProvenanceCauseFabricatedSource,
+	ProvenanceCauseDroppedForQuota,
 }

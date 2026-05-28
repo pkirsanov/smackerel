@@ -168,3 +168,111 @@ import (
 		t.Fatal("import-lint predicate did NOT detect a deliberately-broken fixture importing internal/telegram — the runtime check would also miss real regressions")
 	}
 }
+
+// TestArchitecture_ProviderURLsNotHardCoded — spec 061 design §18.3.
+// Every external-provider package under internal/agent/tools/<skill>/
+// MUST take upstream URLs as constructor arguments (no hard-coded
+// http:// / https:// string literals assigned to *URL struct fields).
+// This protects the capability foundation: new providers MUST inherit
+// the SST injection seam so the stub-container test infrastructure
+// works for them too.
+func TestArchitecture_ProviderURLsNotHardCoded(t *testing.T) {
+	root := repoRoot(t)
+	toolsDir := filepath.Join(root, "internal", "agent", "tools")
+	if _, err := os.Stat(toolsDir); os.IsNotExist(err) {
+		t.Skipf("%s does not exist — skipping", toolsDir)
+		return
+	}
+	var failures []string
+	fset := token.NewFileSet()
+	err := filepath.WalkDir(toolsDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			failures = append(failures, "parse error: "+path+": "+err.Error())
+			return nil
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			kv, ok := n.(*ast.KeyValueExpr)
+			if !ok {
+				return true
+			}
+			keyIdent, ok := kv.Key.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if !strings.HasSuffix(keyIdent.Name, "URL") && !strings.HasSuffix(keyIdent.Name, "Url") {
+				return true
+			}
+			lit, ok := kv.Value.(*ast.BasicLit)
+			if !ok {
+				return true
+			}
+			val := strings.Trim(lit.Value, "\"`")
+			if strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://") {
+				rel, _ := filepath.Rel(root, path)
+				failures = append(failures, "provider URL hard-coded (spec 061 §18.3): "+rel+": field "+keyIdent.Name+" = "+val+" — pass via constructor argument from SST")
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WalkDir(%q): %v", toolsDir, err)
+	}
+	for _, f := range failures {
+		t.Error(f)
+	}
+}
+
+// TestArchitecture_ProviderURLHardCodeCatchesDeliberatelyBrokenFixture —
+// adversarial proof that the URL hard-code lint above would catch a
+// regression. Parses a synthetic source file that assigns a literal
+// https:// URL to a `forecastURL:` struct-init field and asserts the
+// detection predicate fires.
+func TestArchitecture_ProviderURLHardCodeCatchesDeliberatelyBrokenFixture(t *testing.T) {
+	src := `package fixture
+type p struct{ forecastURL string }
+var _ = p{forecastURL: "https://api.example.com/v1/forecast"}
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "broken.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+	found := false
+	ast.Inspect(f, func(n ast.Node) bool {
+		kv, ok := n.(*ast.KeyValueExpr)
+		if !ok {
+			return true
+		}
+		keyIdent, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if !strings.HasSuffix(keyIdent.Name, "URL") && !strings.HasSuffix(keyIdent.Name, "Url") {
+			return true
+		}
+		lit, ok := kv.Value.(*ast.BasicLit)
+		if !ok {
+			return true
+		}
+		val := strings.Trim(lit.Value, "\"`")
+		if strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://") {
+			found = true
+			return false
+		}
+		return true
+	})
+	if !found {
+		t.Fatal("URL-hardcode lint did NOT detect a deliberately-broken fixture (spec 061 §18.3); real regressions would also slip through")
+	}
+}

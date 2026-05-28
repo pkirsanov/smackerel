@@ -49,6 +49,7 @@ func TestAssembleSources_HappyPath_AllPresent(t *testing.T) {
 	beforeError := readDropsCounter(t, assistantmetrics.DropCauseLookupError)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"a1", "a2", "a3"}, lookup, 5)
 
 	if overflow != 0 {
@@ -86,6 +87,7 @@ func TestAssembleSources_GraphDrift_PartialMissing(t *testing.T) {
 	beforeError := readDropsCounter(t, assistantmetrics.DropCauseLookupError)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"missing-1", "present-1", "missing-2", "present-2"},
 		lookup, 10)
 
@@ -119,6 +121,7 @@ func TestAssembleSources_AllMissing_TriggersRefusalContract(t *testing.T) {
 	beforeMissing := readDropsCounter(t, assistantmetrics.DropCauseMissingArtifact)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"gone-1", "gone-2", "gone-3"}, lookup, 5)
 
 	if sources == nil {
@@ -161,6 +164,7 @@ func TestAssembleSources_LookupError_DroppedAndCounted(t *testing.T) {
 	beforeError := readDropsCounter(t, assistantmetrics.DropCauseLookupError)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"errored", "ok", "errored"}, lookup, 10)
 
 	// "errored" appears twice but dedup collapses to one lookup; the
@@ -193,6 +197,7 @@ func TestAssembleSources_NotFoundSentinel_TreatedAsMissingArtifact(t *testing.T)
 	beforeError := readDropsCounter(t, assistantmetrics.DropCauseLookupError)
 
 	sources, _ := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"x", "y"}, lookup, 5)
 	if got := len(sources); got != 0 {
 		t.Fatalf("sources: want 0, got %d", got)
@@ -218,6 +223,7 @@ func TestAssembleSources_CapAndOverflow(t *testing.T) {
 	lookup := mapLookup(rows)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"s1", "s2", "s3", "s4", "s5", "s6", "s7"}, lookup, 5)
 
 	if got := len(sources); got != 5 {
@@ -254,6 +260,7 @@ func TestAssembleSources_DuplicateCitations_Collapsed(t *testing.T) {
 	beforeMissing := readDropsCounter(t, assistantmetrics.DropCauseMissingArtifact)
 
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"same", "same", "same"}, lookup, 5)
 
 	if got := len(sources); got != 1 {
@@ -278,6 +285,7 @@ func TestAssembleSources_EmptyStringID_TreatedAsMissingArtifact(t *testing.T) {
 	beforeMissing := readDropsCounter(t, assistantmetrics.DropCauseMissingArtifact)
 
 	sources, _ := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"", "keep", ""}, lookup, 5)
 	if got := len(sources); got != 1 {
 		t.Fatalf("sources: want 1 (only \"keep\"), got %d", got)
@@ -301,6 +309,7 @@ func TestAssembleSources_ZeroOrNegativeSourcesMax_ReturnsEmpty(t *testing.T) {
 
 	for _, max := range []int{0, -1, -100} {
 		sources, overflow := AssembleSources(context.Background(),
+			"retrieval_qa",
 			[]string{"a", "b", "c"}, lookup, max)
 		if sources != nil {
 			t.Fatalf("max=%d: want nil sources, got %#v", max, sources)
@@ -318,6 +327,7 @@ func TestAssembleSources_ZeroOrNegativeSourcesMax_ReturnsEmpty(t *testing.T) {
 // caller (forgot to wire the lookup) does NOT panic.
 func TestAssembleSources_NilLookup_ReturnsEmpty(t *testing.T) {
 	sources, overflow := AssembleSources(context.Background(),
+		"retrieval_qa",
 		[]string{"a"}, nil, 5)
 	if sources != nil {
 		t.Fatalf("nil lookup: want nil sources, got %#v", sources)
@@ -369,7 +379,7 @@ func assertArtifactSource(t *testing.T, s contracts.Source, wantID, wantTitle st
 
 func readDropsCounter(t *testing.T, cause assistantmetrics.SourceAssemblyDropCause) float64 {
 	t.Helper()
-	c := assistantmetrics.SourceAssemblyDropsCounter.WithLabelValues(string(cause))
+	c := assistantmetrics.SourceAssemblyDropsCounter.WithLabelValues("retrieval_qa", string(cause))
 	var m dto.Metric
 	if err := c.Write(&m); err != nil {
 		t.Fatalf("counter.Write(%q): %v", cause, err)

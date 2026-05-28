@@ -79,12 +79,18 @@ type ArtifactLookupFn func(ctx context.Context, artifactID string) (title string
 // make the canonical refusal vs. accept decision downstream.
 func AssembleSources(
 	ctx context.Context,
+	scenarioID string,
 	citedIDs []string,
 	lookup ArtifactLookupFn,
 	sourcesMax int,
 ) (sources []contracts.Source, sourcesOverflowCount int) {
 	if sourcesMax <= 0 || lookup == nil || len(citedIDs) == 0 {
 		return nil, 0
+	}
+
+	scenarioLabel := scenarioID
+	if scenarioLabel == "" {
+		scenarioLabel = "unknown"
 	}
 
 	seen := make(map[string]struct{}, len(citedIDs))
@@ -98,7 +104,7 @@ func AssembleSources(
 			// drift. This matches "ID that does not exist" in the
 			// design.md §5.1 contract.
 			assistantmetrics.SourceAssemblyDropsCounter.
-				WithLabelValues(string(assistantmetrics.DropCauseMissingArtifact)).
+				WithLabelValues(scenarioLabel, string(assistantmetrics.DropCauseMissingArtifact)).
 				Inc()
 			continue
 		}
@@ -111,12 +117,12 @@ func AssembleSources(
 		switch {
 		case err != nil && !errors.Is(err, ErrArtifactNotFound):
 			assistantmetrics.SourceAssemblyDropsCounter.
-				WithLabelValues(string(assistantmetrics.DropCauseLookupError)).
+				WithLabelValues(scenarioLabel, string(assistantmetrics.DropCauseLookupError)).
 				Inc()
 			continue
 		case !found:
 			assistantmetrics.SourceAssemblyDropsCounter.
-				WithLabelValues(string(assistantmetrics.DropCauseMissingArtifact)).
+				WithLabelValues(scenarioLabel, string(assistantmetrics.DropCauseMissingArtifact)).
 				Inc()
 			continue
 		}

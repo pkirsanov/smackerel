@@ -80,6 +80,15 @@ type AssistantConfig struct {
 	WeatherAPIKeyRef string
 	WeatherCacheTTL  time.Duration
 
+	// Spec 061 design §18.3 — per-URL SST keys for the external-provider
+	// URL injection seam. Both are REQUIRED; the test stack overrides
+	// them to http://stub-providers:8080/v1/{search,forecast} via the
+	// TARGET_ENV=test block in scripts/commands/config.sh. The
+	// production-safety guard in validateAssistantConfig rejects startup
+	// when any non-test environment contains the substring "stub-providers".
+	WeatherGeocodeURL  string
+	WeatherForecastURL string
+
 	NotificationsEnabled        bool
 	NotificationsConfirmTimeout time.Duration
 
@@ -232,6 +241,9 @@ func loadAssistantConfig(cfg *Config) error {
 	mustString("ASSISTANT_SKILLS_WEATHER_PROVIDER", &cfg.Assistant.WeatherProvider)
 	permissiveString("ASSISTANT_SKILLS_WEATHER_API_KEY_REF", &cfg.Assistant.WeatherAPIKeyRef)
 	mustDuration("ASSISTANT_SKILLS_WEATHER_CACHE_TTL", &cfg.Assistant.WeatherCacheTTL)
+	// Spec 061 design §18.3 — provider URLs are REQUIRED.
+	mustString("ASSISTANT_SKILLS_WEATHER_GEOCODE_URL", &cfg.Assistant.WeatherGeocodeURL)
+	mustString("ASSISTANT_SKILLS_WEATHER_FORECAST_URL", &cfg.Assistant.WeatherForecastURL)
 	mustBool("ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED", &cfg.Assistant.NotificationsEnabled)
 	mustDuration("ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT", &cfg.Assistant.NotificationsConfirmTimeout)
 	mustBool("ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED", &cfg.Assistant.TelegramEnabled)
@@ -261,6 +273,23 @@ func loadAssistantConfig(cfg *Config) error {
 // loadAssistantConfig above). Returns an error on any failure; logs a
 // WARN on the rule #4 advisory.
 func (c *Config) validateAssistantConfig() error {
+	// Spec 061 design §18.3 — production-safety guard runs BEFORE the
+	// !Enabled early-return below: the threat model is a misrouted env
+	// file leaking the test stub URLs into a production-class bundle.
+	// Skill-enable state is irrelevant — the value being present in
+	// SST at all is the leak signal. No bypass flag exists.
+	stubSubstring := "stub-providers"
+	urlKeys := map[string]string{
+		"assistant.skills.weather.geocode_url":  c.Assistant.WeatherGeocodeURL,
+		"assistant.skills.weather.forecast_url": c.Assistant.WeatherForecastURL,
+	}
+	if c.Environment != "test" {
+		for key, val := range urlKeys {
+			if strings.Contains(val, stubSubstring) {
+				return fmt.Errorf("[F061-PROD-SAFETY] URL %s contains test-only %q reference (value=%q) but SMACKEREL_ENV=%q (only \"test\" permitted); reject startup", key, stubSubstring, val, c.Environment)
+			}
+		}
+	}
 	if !c.Assistant.Enabled {
 		// When the capability is disabled there is no surface to
 		// constrain. Skill-enable flags and transport flags remain

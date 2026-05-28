@@ -38,7 +38,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 	receivedAt := time.Now().UTC()
 
 	if cb := update.CallbackQuery; cb != nil {
-		return translateCallback(cb, resolve, receivedAt)
+		return translateCallback(cb, resolve, receivedAt, update.UpdateID)
 	}
 
 	msg := update.Message
@@ -62,6 +62,13 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 
 	text := stripBotMention(msg.Text)
 	transportMessageID := strconv.Itoa(msg.MessageID)
+	// Spec 061 design §18.6 — propagate Telegram update_id via
+	// TransportMetadata so the facade can stamp it as correlation_id
+	// on the assistant_turn slog line. Shell e2e fixtures correlate
+	// each turn by injecting a unique nonce in update_id.
+	metadata := map[string]string{
+		"telegram_update_id": strconv.Itoa(update.UpdateID),
+	}
 
 	switch {
 	case isResetCommand(text):
@@ -72,6 +79,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 			Text:               text,
 			Kind:               contracts.KindReset,
 			ReceivedAt:         receivedAt,
+			TransportMetadata:  metadata,
 		}, nil
 	case strings.HasPrefix(text, "/"):
 		// Any other slash command is NOT for the assistant; the bot
@@ -91,6 +99,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 		Text:               text,
 		Kind:               contracts.KindText,
 		ReceivedAt:         receivedAt,
+		TransportMetadata:  metadata,
 	}, nil
 }
 
@@ -98,7 +107,7 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 // callback_data carries the assistant prefix. Non-assistant callbacks
 // return ErrNotAssistantMessage so the bot can route them to the
 // existing list/cook/expense handlers.
-func translateCallback(cb *tgbotapi.CallbackQuery, resolve UserResolver, receivedAt time.Time) (contracts.AssistantMessage, error) {
+func translateCallback(cb *tgbotapi.CallbackQuery, resolve UserResolver, receivedAt time.Time, updateID int) (contracts.AssistantMessage, error) {
 	if cb.Message == nil || cb.Message.Chat == nil {
 		return contracts.AssistantMessage{}, errors.New("assistant_adapter: callback query has no chat")
 	}
@@ -120,6 +129,12 @@ func translateCallback(cb *tgbotapi.CallbackQuery, resolve UserResolver, receive
 		Transport:          transportName,
 		TransportMessageID: strconv.Itoa(cb.Message.MessageID),
 		ReceivedAt:         receivedAt,
+		// Spec 061 design §18.6 — propagate Telegram update_id so the
+		// facade can stamp it as correlation_id (the inbound callback
+		// update is the user's confirm/disambig response).
+		TransportMetadata: map[string]string{
+			"telegram_update_id": strconv.Itoa(updateID),
+		},
 	}
 	switch decoded.kind {
 	case callbackKindConfirm:

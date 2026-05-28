@@ -72,6 +72,14 @@ smackerel_compose() {
   if smackerel_is_truthy "$enable_ollama"; then
     args+=(--profile ollama)
   fi
+  # Spec 061 design §18.4 — the `test` compose profile contains the
+  # in-tree nginx stub-providers container that shell e2e fixtures
+  # (BS-003/BS-006/...) target instead of real external HTTP providers.
+  # The profile is enabled iff TARGET_ENV=test so production/dev never
+  # bring up the stub.
+  if [[ "$target_env" == "test" ]]; then
+    args+=(--profile test)
+  fi
 
   # Prevent docker compose exec from hanging on stdin in non-interactive contexts
   # (e.g. when run under timeout or piped shells)
