@@ -14,7 +14,7 @@ func TestRecordMessageArtifact_CallsInternalEndpoint(t *testing.T) {
 	var gotBody map[string]interface{}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/telegram-message-artifact" && r.Method == http.MethodPost {
+		if r.URL.Path == "/api/internal/telegram-message-artifact" && r.Method == http.MethodPost {
 			called = true
 			json.NewDecoder(r.Body).Decode(&gotBody)
 			w.WriteHeader(http.StatusCreated)
@@ -72,7 +72,7 @@ func TestRecordMessageArtifact_EmptyArtifactIDSkips(t *testing.T) {
 
 func TestResolveArtifactFromMessage_Found(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/telegram-message-artifact" && r.Method == http.MethodGet {
+		if r.URL.Path == "/api/internal/telegram-message-artifact" && r.Method == http.MethodGet {
 			msgID := r.URL.Query().Get("message_id")
 			chatID := r.URL.Query().Get("chat_id")
 			if msgID == "1001" && chatID == "5555" {
@@ -125,7 +125,7 @@ func TestResolveArtifactFromMessage_MultipleMappings(t *testing.T) {
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/telegram-message-artifact" && r.Method == http.MethodGet {
+		if r.URL.Path == "/api/internal/telegram-message-artifact" && r.Method == http.MethodGet {
 			key := r.URL.Query().Get("message_id") + "-" + r.URL.Query().Get("chat_id")
 			if artID, ok := mappings[key]; ok {
 				w.Header().Set("Content-Type", "application/json")
