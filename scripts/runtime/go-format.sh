@@ -8,7 +8,7 @@ if [[ "${1:-}" == "--check" ]]; then
   mode="check"
 fi
 
-mapfile -t files < <(find cmd internal -name '*.go' -type f | sort)
+mapfile -t files < <(find cmd internal tests -name '*.go' -type f | sort)
 if [[ ${#files[@]} -eq 0 ]]; then
   exit 0
 fi

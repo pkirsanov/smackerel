@@ -54,16 +54,16 @@ func productionAdminUIDeps(t *testing.T) (deps *api.Dependencies, signingKey, ke
 	deps = &api.Dependencies{
 		Environment: "production",
 		AuthConfig: config.AuthConfig{
-			Enabled:                              true,
-			TokenFormat:                          "paseto_v4_public",
-			SigningActivePrivateKey:              priv,
-			SigningActiveKeyID:                   kid,
-			TokenTTLHours:                        24,
-			RotationGraceWindowHours:             24,
-			ClockSkewToleranceSeconds:            60,
+			Enabled:                               true,
+			TokenFormat:                           "paseto_v4_public",
+			SigningActivePrivateKey:               priv,
+			SigningActiveKeyID:                    kid,
+			TokenTTLHours:                         24,
+			RotationGraceWindowHours:              24,
+			ClockSkewToleranceSeconds:             60,
 			RevocationCacheRefreshIntervalSeconds: 60,
-			AtRestHashingKey:                     priv + "-hash-suffix-distinct",
-			ProductionSharedTokenFallbackEnabled: false,
+			AtRestHashingKey:                      priv + "-hash-suffix-distinct",
+			ProductionSharedTokenFallbackEnabled:  false,
 		},
 		AuthVerifyOptions: auth.VerifyOptions{
 			ActivePublicKey:    pub,
@@ -135,8 +135,8 @@ func TestAdminUI_WithBearer_Returns200HTML(t *testing.T) {
 	for _, marker := range []string{
 		"Smackerel — Per-User Bearer Tokens",
 		"/v1/auth/users",
-		"/v1/auth/users/'",                 // rotate path is built via string concat
-		"/v1/auth/tokens/'",                // revoke path is built via string concat
+		"/v1/auth/users/'",  // rotate path is built via string concat
+		"/v1/auth/tokens/'", // revoke path is built via string concat
 		"Mint a New User",
 		"Enrolled Users",
 		"Revoke a Specific Token",

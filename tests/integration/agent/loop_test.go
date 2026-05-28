@@ -29,12 +29,12 @@ import (
 // unique subject so the live ML sidecar's canonical
 // `agent.invoke.request` subscriber does not race with the fake.
 type fakeAgentResponder struct {
-	nc       *nats.Conn
-	t        *testing.T
-	subject  string
-	sub      *nats.Subscription
-	calls    atomic.Int64
-	respond  func(req map[string]any, calls int) (envelope map[string]any, delay time.Duration)
+	nc      *nats.Conn
+	t       *testing.T
+	subject string
+	sub     *nats.Subscription
+	calls   atomic.Int64
+	respond func(req map[string]any, calls int) (envelope map[string]any, delay time.Duration)
 }
 
 func startFakeResponder(t *testing.T, nc *nats.Conn, subject string, respond func(req map[string]any, calls int) (envelope map[string]any, delay time.Duration)) *fakeAgentResponder {

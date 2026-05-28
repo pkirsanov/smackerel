@@ -253,10 +253,10 @@ func TestRecommendationWatches_StaleSourceDataCannotAlert(t *testing.T) {
 		"trip_start": clock().Format(time.RFC3339),
 		"candidates": []any{
 			map[string]any{
-				"canonical_key":   "place:stale_cafe",
-				"title":           "Stale Cafe",
-				"provider_id":     "fixture_test_provider",
-				"category":        "place",
+				"canonical_key":     "place:stale_cafe",
+				"title":             "Stale Cafe",
+				"provider_id":       "fixture_test_provider",
+				"category":          "place",
 				"source_updated_at": stale.Format(time.RFC3339),
 			},
 		},

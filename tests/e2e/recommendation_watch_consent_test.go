@@ -92,11 +92,11 @@ func TestRecommendationWatchConsent_ScopeCannotBroadenSilently(t *testing.T) {
 // regression test required by the spec. It would FAIL if a future regression
 // allowed a watch update to broaden scope/sources/precision/rate without a new
 // consent confirmation. The test:
-//   1. creates a narrow watch with full confirmation
-//   2. sends an update that broadens scope (adds an extra category) WITHOUT
-//      confirmation — MUST receive 422 CONSENT_REQUIRED with broadened_fields
-//   3. proves the persisted watch is unchanged
-//   4. sends the SAME update WITH consent_confirmation flags set — MUST 200
+//  1. creates a narrow watch with full confirmation
+//  2. sends an update that broadens scope (adds an extra category) WITHOUT
+//     confirmation — MUST receive 422 CONSENT_REQUIRED with broadened_fields
+//  3. proves the persisted watch is unchanged
+//  4. sends the SAME update WITH consent_confirmation flags set — MUST 200
 func TestConsentRegression_BS022_NoSilentBroadening(t *testing.T) {
 	runScopeBroadeningRejectionScenario(t, "consent-regression-bs022")
 }
@@ -210,9 +210,9 @@ func runScopeBroadeningRejectionScenario(t *testing.T, prefix string) {
 		t.Fatalf("broaden silently returned %d, want 422 CONSENT_REQUIRED; body=%s", broadenResp.StatusCode, string(broadenBody))
 	}
 	var broadenErr struct {
-		Code             string   `json:"code"`
-		Reason           string   `json:"reason"`
-		BroadenedFields  []string `json:"broadened_fields"`
+		Code            string   `json:"code"`
+		Reason          string   `json:"reason"`
+		BroadenedFields []string `json:"broadened_fields"`
 	}
 	if err := json.Unmarshal(broadenBody, &broadenErr); err != nil {
 		t.Fatalf("parse broaden body: %v; body=%s", err, string(broadenBody))

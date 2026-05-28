@@ -116,4 +116,3 @@ func extractNtfyDeadLetterID(t *testing.T, html string) string {
 	}
 	return html[start:end]
 }
-
