@@ -77,8 +77,8 @@ func TestComputeDedupKey_BoundaryCollisionResistance(t *testing.T) {
 	}
 }
 
-func TestNoOpDedupStore_AlwaysPublishes(t *testing.T) {
-	store := NoOpDedupStore{}
+func TestPassthroughDedupStore_AlwaysPublishes(t *testing.T) {
+	store := PassthroughDedupStore{}
 	row := DedupRow{Key: []byte("k")}
 	calls := 0
 	got, deduped, err := store.ResolveOrPublish(context.Background(), row, func(ctx context.Context) (string, error) {
@@ -96,8 +96,8 @@ func TestNoOpDedupStore_AlwaysPublishes(t *testing.T) {
 	}
 }
 
-func TestNoOpDedupStore_PropagatesPublishError(t *testing.T) {
-	store := NoOpDedupStore{}
+func TestPassthroughDedupStore_PropagatesPublishError(t *testing.T) {
+	store := PassthroughDedupStore{}
 	sentinel := errors.New("publish failed")
 	_, _, err := store.ResolveOrPublish(context.Background(), DedupRow{Key: []byte("k")}, func(ctx context.Context) (string, error) {
 		return "", sentinel
@@ -107,8 +107,8 @@ func TestNoOpDedupStore_PropagatesPublishError(t *testing.T) {
 	}
 }
 
-func TestNoOpDedupStore_RejectsNilPublish(t *testing.T) {
-	_, _, err := NoOpDedupStore{}.ResolveOrPublish(context.Background(), DedupRow{Key: []byte("k")}, nil)
+func TestPassthroughDedupStore_RejectsNilPublish(t *testing.T) {
+	_, _, err := PassthroughDedupStore{}.ResolveOrPublish(context.Background(), DedupRow{Key: []byte("k")}, nil)
 	if err == nil {
 		t.Fatal("expected error when publish callback is nil")
 	}

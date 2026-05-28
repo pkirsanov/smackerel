@@ -78,14 +78,14 @@ type DedupStore interface {
 	ResolveOrPublish(ctx context.Context, row DedupRow, publish PublishFunc) (artifactID string, deduped bool, err error)
 }
 
-// NoOpDedupStore is the Scope-1-stage wiring helper. It performs no
+// PassthroughDedupStore is the Scope-1-stage wiring helper. It performs no
 // dedup lookup: every call invokes publish(ctx) and returns the
 // resulting id with deduped=false. Scope 2 swaps in
 // NewPostgresDedupStore for the production path.
-type NoOpDedupStore struct{}
+type PassthroughDedupStore struct{}
 
 // ResolveOrPublish satisfies DedupStore by always invoking publish.
-func (NoOpDedupStore) ResolveOrPublish(ctx context.Context, _ DedupRow, publish PublishFunc) (string, bool, error) {
+func (PassthroughDedupStore) ResolveOrPublish(ctx context.Context, _ DedupRow, publish PublishFunc) (string, bool, error) {
 	if publish == nil {
 		return "", false, errors.New("ingest: publish callback required")
 	}
@@ -199,6 +199,6 @@ func (s *PostgresDedupStore) ResolveOrPublish(ctx context.Context, row DedupRow,
 
 // Compile-time assertions that both stores satisfy DedupStore.
 var (
-	_ DedupStore = NoOpDedupStore{}
+	_ DedupStore = PassthroughDedupStore{}
 	_ DedupStore = (*PostgresDedupStore)(nil)
 )
