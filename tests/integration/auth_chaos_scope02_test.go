@@ -281,10 +281,10 @@ func TestAuthChaos_S02_ConcurrentMiddlewareVerify_NoRaceNoLeak(t *testing.T) {
 	const concurrent = 128
 
 	var wg sync.WaitGroup
-	var admitCount atomic.Int64    // HTTP 201: auth verified + handler succeeded
-	var throttleCount atomic.Int64 // HTTP 429: rate-limited (orthogonal to auth)
+	var admitCount atomic.Int64      // HTTP 201: auth verified + handler succeeded
+	var throttleCount atomic.Int64   // HTTP 429: rate-limited (orthogonal to auth)
 	var authRejectCount atomic.Int64 // HTTP 401/403: spurious auth failure (FAILURE)
-	var otherCount atomic.Int64    // any other status (FAILURE)
+	var otherCount atomic.Int64      // any other status (FAILURE)
 	var failureBodies []string
 	var failureBodiesMu sync.Mutex
 	startGate := make(chan struct{})
@@ -1009,10 +1009,10 @@ func TestAuthChaos_S02_MalformedAuthorizationHeaderStorm_Always401(t *testing.T)
 		"Bearer undefined",
 		"Bearer NaN",
 		`Bearer {"alg":"none"}`,
-		"Bearer eyJhbGciOiJub25lIn0.eyJ1c2VyIjoidGVzdCJ9.",     // jwt none-alg attempt // gitleaks:allow
-		"Bearer v4.public.short",                                // PASETO prefix but truncated
-		"Bearer v4.local.encrypted-not-public",                  // wrong PASETO purpose
-		"Bearer v3.public.legacy-version",                       // wrong PASETO version
+		"Bearer eyJhbGciOiJub25lIn0.eyJ1c2VyIjoidGVzdCJ9.", // jwt none-alg attempt // gitleaks:allow
+		"Bearer v4.public.short",                           // PASETO prefix but truncated
+		"Bearer v4.local.encrypted-not-public",             // wrong PASETO purpose
+		"Bearer v3.public.legacy-version",                  // wrong PASETO version
 	}
 
 	// Pseudo-random fuzz cases — 64 deterministic patterns of varied
@@ -1107,8 +1107,8 @@ func BenchmarkAuthChaos_S02_BearerMiddleware_HotPath(b *testing.B) {
 // for C2-B05. It records call counts so the test can assert that the
 // closure rejection happens BEFORE any store interaction.
 type chaosS02StubAnnotationStore struct {
-	mu                sync.Mutex
-	createFromParsed  int64
+	mu               sync.Mutex
+	createFromParsed int64
 }
 
 func (s *chaosS02StubAnnotationStore) CreateFromParsed(_ context.Context, _ string, _ annotation.ParsedAnnotation, _ annotation.SourceChannel) ([]annotation.Annotation, error) {

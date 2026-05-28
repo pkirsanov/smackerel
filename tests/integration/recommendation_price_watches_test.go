@@ -57,12 +57,12 @@ func TestRecommendationPriceWatches_FiresOnlyOnThresholdCrossing(t *testing.T) {
 		"threshold_pct": 0.15,
 		"products": []any{
 			map[string]any{
-				"canonical_key":   "product:espresso_machine",
-				"title":           "Espresso Machine",
-				"provider_id":     "fixture_price_provider",
-				"baseline_price":  500.0,
-				"current_price":   450.0, // 10% drop
-				"currency":        "USD",
+				"canonical_key":  "product:espresso_machine",
+				"title":          "Espresso Machine",
+				"provider_id":    "fixture_price_provider",
+				"baseline_price": 500.0,
+				"current_price":  450.0, // 10% drop
+				"currency":       "USD",
 			},
 		},
 	}}
@@ -83,12 +83,12 @@ func TestRecommendationPriceWatches_FiresOnlyOnThresholdCrossing(t *testing.T) {
 		"threshold_pct": 0.15,
 		"products": []any{
 			map[string]any{
-				"canonical_key":   "product:espresso_machine",
-				"title":           "Espresso Machine",
-				"provider_id":     "fixture_price_provider",
-				"baseline_price":  500.0,
-				"current_price":   400.0, // 20% drop
-				"currency":        "USD",
+				"canonical_key":  "product:espresso_machine",
+				"title":          "Espresso Machine",
+				"provider_id":    "fixture_price_provider",
+				"baseline_price": 500.0,
+				"current_price":  400.0, // 20% drop
+				"currency":       "USD",
 			},
 		},
 	}}
