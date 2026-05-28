@@ -1,0 +1,135 @@
+{
+  "__comment_spec": "Spec 061 SCOPE-09 dashboard fragment per design.md §8.4. Seven panels render the closed-vocabulary metrics declared in internal/assistant/metrics/metrics.go. Cardinality is bounded on every series so the dashboard remains usable across all transports and scenarios. Importable into an existing Grafana instance via the Grafana HTTP API (POST /api/dashboards/db) or via Grafana's filesystem provider. Not wired into deploy/compose.deploy.yml in this repo because Grafana is not a project-owned runtime; the deploy adapter overlay binds it.",
+  "title": "Smackerel — Assistant Capability (spec 061)",
+  "uid": "smackerel-assistant",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["smackerel", "assistant", "spec-061"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "transport",
+        "label": "Transport",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "$datasource" },
+        "query": "label_values(smackerel_assistant_facade_turns_total, transport)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Per-transport turn volume + band mix",
+      "description": "spec 061 design §8.4 panel 1. Rate of facade turns broken down by transport (Y axis) and router band (color). Sudden borderline spikes hint at a manifest gap; sudden low spikes hint at a routing-floor misconfiguration.",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (band, transport) (rate(smackerel_assistant_router_band_total{transport=~\"$transport\"}[5m]))",
+          "legendFormat": "{{transport}} / {{band}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Per-scenario success vs failure",
+      "description": "spec 061 design §8.4 panel 2. Rate of skill invocations split by outcome. The OK series rising while {timeout, provider_error, schema_failure} stay flat is the green-line shape.",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (scenario_id, outcome) (rate(smackerel_assistant_skill_invocations_total{transport=~\"$transport\"}[5m]))",
+          "legendFormat": "{{scenario_id}} / {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Capture-as-fallback rate (by cause)",
+      "description": "spec 061 design §8.4 panel 3. Rate of capture-fallback events split by cause. A sudden borderline_timeout or confirm_timeout climb means the operator-visible UX is degrading without throwing an error.",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cause, transport) (rate(smackerel_assistant_capture_fallback_total{transport=~\"$transport\"}[5m]))",
+          "legendFormat": "{{transport}} / {{cause}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Provenance violations (alert at >0)",
+      "description": "spec 061 design §8.4 panel 4. Provenance-gate violation counter. SLO target = 0 over any window; any non-zero value is a routable alert (gate fired = a scenario tried to answer without a Source).",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(smackerel_assistant_provenance_violations_total[5m]))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Active conversation threads per transport",
+      "description": "spec 061 design §8.4 panel 5. Gauge of active assistant_conversations rows per transport. The gauge is refreshed by the context store's idle-sweep ticker; a sustained climb past historical baseline indicates the idle TTL is too long (or context isn't being cleared on /reset).",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "smackerel_assistant_active_threads{transport=~\"$transport\"}",
+          "legendFormat": "{{transport}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Confirm-card outcome distribution",
+      "description": "spec 061 design §8.4 panel 6. Rate of confirm-card terminal outcomes. discarded_timeout climbing is the natural alert: it means users are seeing a card but the offer-window is too short OR the UX is unclear.",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (scenario_id, outcome) (rate(smackerel_assistant_confirm_card_outcomes_total{transport=~\"$transport\"}[5m]))",
+          "legendFormat": "{{scenario_id}} / {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Source-assembly drops (graph drift)",
+      "description": "spec 061 design §8.4 panel 7. Rate of cited-artifact drops by cause. missing_artifact climbing means graph drift between retrieval and synthesis (BS-007 path); lookup_error climbing means a transient store outage. Both should reconcile with provenance-violation events when ALL citations drop.",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cause) (rate(smackerel_assistant_source_assembly_drops_total[5m]))",
+          "legendFormat": "{{cause}}"
+        }
+      ]
+    }
+  ]
+}

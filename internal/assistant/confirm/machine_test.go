@@ -14,7 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
+	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 )
 
 // memStore is a minimal in-memory assistantctx.Store for unit tests.
@@ -325,4 +328,135 @@ func contains(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// ---- Spec 061 SCOPE-09 — metric emission tests ---------------------
+//
+// Pin the Prometheus emissions added by SCOPE-09 to the confirm
+// machine. The tests use the package-private metric vectors as the
+// observation surface (read via dto.Metric) so a regression that
+// removes an emission OR mutates the label vocabulary fails loudly.
+
+func metricCounterValue(t *testing.T, c prometheus.Counter) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := c.Write(&m); err != nil {
+		t.Fatalf("counter.Write: %v", err)
+	}
+	if m.Counter == nil {
+		t.Fatalf("counter.Write produced nil dto.Counter")
+	}
+	return m.Counter.GetValue()
+}
+
+func TestMachine_Confirm_EmitsConfirmedMetric(t *testing.T) {
+	m, _, _ := newFixture(t)
+	ctx := context.Background()
+	in := freshProposal()
+	now0 := time.Date(2026, 1, 1, 17, 40, 0, 0, time.UTC)
+	if err := m.Propose(ctx, in, now0); err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	counter, err := assistantmetrics.ConfirmCardOutcomesTotal.GetMetricWithLabelValues(
+		in.ScenarioID,
+		assistantmetrics.ConfirmOutcomeConfirmed,
+		assistantmetrics.TransportTelegram,
+	)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues: %v", err)
+	}
+	before := metricCounterValue(t, counter)
+
+	if _, err := m.Confirm(ctx, ConfirmInput{
+		UserID: in.UserID, Transport: in.Transport, ConfirmRef: in.ConfirmRef, ScheduledJobID: "job-9",
+	}, now0.Add(time.Second)); err != nil {
+		t.Fatalf("Confirm: %v", err)
+	}
+
+	after := metricCounterValue(t, counter)
+	if after-before != 1 {
+		t.Errorf("ConfirmCardOutcomesTotal{confirmed} delta = %.0f, want 1", after-before)
+	}
+}
+
+func TestMachine_Discard_EmitsDiscardedUserMetricAndCaptureFallback(t *testing.T) {
+	m, _, _ := newFixture(t)
+	ctx := context.Background()
+	in := freshProposal()
+	now0 := time.Date(2026, 1, 1, 17, 40, 0, 0, time.UTC)
+	if err := m.Propose(ctx, in, now0); err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+
+	confirmCounter, err := assistantmetrics.ConfirmCardOutcomesTotal.GetMetricWithLabelValues(
+		in.ScenarioID,
+		assistantmetrics.ConfirmOutcomeDiscardedUser,
+		assistantmetrics.TransportTelegram,
+	)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues confirm: %v", err)
+	}
+	fallbackCounter, err := assistantmetrics.CaptureFallbackTotal.GetMetricWithLabelValues(
+		assistantmetrics.CauseConfirmDiscarded,
+		assistantmetrics.TransportTelegram,
+	)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues fallback: %v", err)
+	}
+	confirmBefore := metricCounterValue(t, confirmCounter)
+	fallbackBefore := metricCounterValue(t, fallbackCounter)
+
+	if err := m.Discard(ctx, DiscardInput{
+		UserID: in.UserID, Transport: in.Transport, ConfirmRef: in.ConfirmRef,
+	}, now0.Add(45*time.Second)); err != nil {
+		t.Fatalf("Discard: %v", err)
+	}
+
+	if got := metricCounterValue(t, confirmCounter) - confirmBefore; got != 1 {
+		t.Errorf("ConfirmCardOutcomesTotal{discarded_user} delta = %.0f, want 1", got)
+	}
+	if got := metricCounterValue(t, fallbackCounter) - fallbackBefore; got != 1 {
+		t.Errorf("CaptureFallbackTotal{confirm_discarded} delta = %.0f, want 1", got)
+	}
+}
+
+func TestMachine_SweepTimeouts_EmitsDiscardedTimeoutMetric(t *testing.T) {
+	m, _, _ := newFixture(t)
+	ctx := context.Background()
+	in := freshProposal()
+	now0 := time.Date(2026, 1, 1, 17, 40, 0, 0, time.UTC)
+	if err := m.Propose(ctx, in, now0); err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+
+	confirmCounter, err := assistantmetrics.ConfirmCardOutcomesTotal.GetMetricWithLabelValues(
+		in.ScenarioID,
+		assistantmetrics.ConfirmOutcomeDiscardedTimeout,
+		assistantmetrics.TransportTelegram,
+	)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues confirm: %v", err)
+	}
+	fallbackCounter, err := assistantmetrics.CaptureFallbackTotal.GetMetricWithLabelValues(
+		assistantmetrics.CauseConfirmTimeout,
+		assistantmetrics.TransportTelegram,
+	)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues fallback: %v", err)
+	}
+	confirmBefore := metricCounterValue(t, confirmCounter)
+	fallbackBefore := metricCounterValue(t, fallbackCounter)
+
+	if _, err := m.SweepTimeouts(ctx, []ExpiredPending{{
+		UserID: in.UserID, Transport: in.Transport, ConfirmRef: in.ConfirmRef,
+	}}, in.ExpiresAt.Add(time.Minute)); err != nil {
+		t.Fatalf("SweepTimeouts: %v", err)
+	}
+
+	if got := metricCounterValue(t, confirmCounter) - confirmBefore; got != 1 {
+		t.Errorf("ConfirmCardOutcomesTotal{discarded_timeout} delta = %.0f, want 1", got)
+	}
+	if got := metricCounterValue(t, fallbackCounter) - fallbackBefore; got != 1 {
+		t.Errorf("CaptureFallbackTotal{confirm_timeout} delta = %.0f, want 1", got)
+	}
 }

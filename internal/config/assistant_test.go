@@ -48,6 +48,9 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_TRANSPORTS_TELEGRAM_MODE":               "long_poll",
 		"ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF": "",
 		"ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH":       "/v1/telegram/webhook",
+		// Spec 061 SCOPE-10 — acceptance-gate thresholds.
+		"ASSISTANT_EVAL_ROUTING_ACCURACY_MIN": "0.85",
+		"ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN": "1.0",
 	}
 }
 
@@ -84,6 +87,13 @@ func TestLoadAssistantConfig_HappyPath(t *testing.T) {
 	}
 	if cfg.Assistant.TelegramMaxMessageChars != 4096 {
 		t.Errorf("TelegramMaxMessageChars: want 4096, got %v", cfg.Assistant.TelegramMaxMessageChars)
+	}
+	// Spec 061 SCOPE-10 — acceptance-gate field reads.
+	if cfg.Assistant.Eval.RoutingAccuracyMin != 0.85 {
+		t.Errorf("Eval.RoutingAccuracyMin: want 0.85, got %v", cfg.Assistant.Eval.RoutingAccuracyMin)
+	}
+	if cfg.Assistant.Eval.CaptureFallbackMin != 1.0 {
+		t.Errorf("Eval.CaptureFallbackMin: want 1.0, got %v", cfg.Assistant.Eval.CaptureFallbackMin)
 	}
 }
 

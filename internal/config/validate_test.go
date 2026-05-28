@@ -904,6 +904,12 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_MODE", "long_poll")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF", "")
 	t.Setenv("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH", "/v1/telegram/webhook")
+	// Spec 061 SCOPE-10 design §13 item 6 — offline evaluation
+	// acceptance thresholds. Defaults mirror smackerel.yaml so existing
+	// connector / hospitable / telegram tests don't trip the assistant
+	// SST validator while exercising unrelated config surfaces.
+	t.Setenv("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN", "0.85")
+	t.Setenv("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN", "1.0")
 	// Spec 061 SCOPE-01 design §7.2 rule #2 — agent routing floor is
 	// referenced by validateAssistantConfig for the borderline check.
 	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
