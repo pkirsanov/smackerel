@@ -99,6 +99,14 @@ async def process_content(
     try:
         model_name = f"{provider}/{model}" if provider not in ("openai", "") else model
 
+        # For Ollama (and any local provider exposed via OLLAMA_URL in SST),
+        # pass api_base explicitly. litellm only reads OLLAMA_API_BASE /
+        # OLLAMA_BASE_URL env vars and otherwise defaults to localhost:11434,
+        # which doesn't exist inside the smackerel-ml container — Ollama runs
+        # in its own service. Reading OLLAMA_URL (the canonical SST key written
+        # to *.env by scripts/commands/config.sh) keeps a single source of truth.
+        api_base = os.environ.get("OLLAMA_URL") if provider == "ollama" else None
+
         # Retry with exponential backoff for transient LLM errors
         max_attempts = 3
         backoff_delays = [1, 2, 4]  # seconds
@@ -111,6 +119,7 @@ async def process_content(
                     model=model_name,
                     messages=[{"role": "user", "content": prompt}],
                     api_key=api_key,
+                    api_base=api_base,
                     temperature=0.1,
                     max_tokens=2000,
                     response_format={"type": "json_object"},

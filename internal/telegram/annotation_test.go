@@ -130,7 +130,7 @@ func TestSplitRateArgs(t *testing.T) {
 func TestHandleReplyAnnotation_UnknownMessage(t *testing.T) {
 	// Mock server: resolve returns 404 (unknown message)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/telegram-message-artifact" && r.Method == http.MethodGet {
+		if r.URL.Path == "/api/internal/telegram-message-artifact" && r.Method == http.MethodGet {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -177,7 +177,7 @@ func TestHandleReplyAnnotation_UnknownMessage(t *testing.T) {
 func TestHandleReplyAnnotation_KnownMessage(t *testing.T) {
 	// Mock server: resolve returns artifact ID, annotation endpoint accepts
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/internal/telegram-message-artifact" && r.Method == http.MethodGet {
+		if r.URL.Path == "/api/internal/telegram-message-artifact" && r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"artifact_id": "art-abc"})
 			return
