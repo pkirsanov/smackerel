@@ -1,0 +1,209 @@
+{
+  "version": 3,
+  "featureDir": "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing",
+  "featureName": "BUG-015-003: Spec 015 declares SyncMode=api|hybrid but ships archive-only — no forward pointer to spec 056",
+  "status": "specs_hardened",
+  "certifiedAt": "2026-05-28T02:40:00Z",
+  "certifiedBy": "bubbles.iterate",
+  "workflowMode": "spec-scope-hardening",
+  "planningOnly": true,
+  "planningOnlyJustification": "Artifact-only extension-pointer fix: the API/hybrid implementation already exists under specs/056-twitter-api-connector/ (certified specs_hardened 2026-05-27) with code in internal/connector/twitter/api.go + api_test.go; this packet only back-propagates the forward pointer into spec 015's governance artifacts (state.json + spec.md + design.md). There is no separate implementation spec to link because the implementation already lives under spec 056. Per Gate G087 planning-only justification: no runtime code paths require a downstream implementation spec.",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "currentScope": null,
+    "runStartedAt": "2026-05-28T00:00:00Z",
+    "completedPhaseClaims": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": [
+          "discovery",
+          "documentation"
+        ],
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T00:00:00Z",
+        "runEndedAt": "2026-05-28T00:00:00Z",
+        "summary": "Spec-review surfaced P1-3: specs/015-twitter-connector declares SyncMode=archive|api|hybrid and devotes an entire 'API Access Strategy' section to the hybrid strategy, but ships archive-only code (zero HTTP client, zero api.twitter.com/2/* calls). Spec 056-twitter-api-connector (certified specs_hardened on 2026-05-27) is the actual implementation of SyncModeAPI + SyncModeHybrid and explicitly names spec 015 as its predecessor — but spec 015 carries no reverse forward-pointer to spec 056 (state.json has no extendedBy/extensions[]/supersessions[] entry; spec.md and design.md carry no inline note). Code reality already matches the partition (archive in internal/connector/twitter/twitter.go; API in internal/connector/twitter/api.go) — this is artifact-only drift. Created 7-artifact bug folder (bug.md, spec.md, design.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, state.json) at Phase 0.5."
+      },
+      {
+        "agent": "bubbles.bug",
+        "phasesExecuted": ["discovery", "documentation"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand discovery and documentation phases because nested runtime lacks runSubagent capability for bubbles.discovery / bubbles.documentation specialist dispatch; bubbles.bug already covered these phases at packet creation time and the parent-expand entry records that provenance explicitly per Gate G022",
+        "expansionEvidenceRef": "bug.md",
+        "statusBefore": "missing",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T00:00:00Z",
+        "runEndedAt": "2026-05-28T00:00:00Z",
+        "summary": "Parent-expanded provenance for discovery + documentation phases: bubbles.bug already surfaced the extension-pointer drift, authored bug.md, and stood up the 7-artifact packet. This entry records that the same phases satisfy Gate G022 specialist-phase provenance under parent-expanded execution model."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand design phase because nested runtime lacks runSubagent capability for bubbles.design dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet (mirrors BUG-020-007 recipe at commit e99ac3f4)",
+        "expansionEvidenceRef": "design.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:30:00Z",
+        "runEndedAt": "2026-05-28T02:32:00Z",
+        "summary": "Parent-expanded design pass: design.md (authored at packet creation) covers Current Truth (spec 056 owns SyncModeAPI/SyncModeHybrid implementation with code in internal/connector/twitter/api.go + api_test.go), Root Cause (no back-propagation of forward pointer into spec 015 artifacts), and Fix Design covering additive extensions[] entry + inline notes in spec.md (top-of-document banner + API Access Strategy section note) and design.md (top-of-document banner)."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand plan phase because nested runtime lacks runSubagent capability for bubbles.plan dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet (mirrors BUG-020-007 recipe)",
+        "expansionEvidenceRef": "scopes.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:32:00Z",
+        "runEndedAt": "2026-05-28T02:34:00Z",
+        "summary": "Parent-expanded plan pass: scopes.md (authored at packet creation) defines Scope 1 with 5 Gherkin scenarios (state.json/spec.md/design.md forward-pointer greps + API Access Strategy ±5-line proximity guard + change-boundary check), implementation plan, test plan, and 17-item DoD. scenario-manifest.json mirrors the 5 scenarios with linkedTests + evidenceRefs."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:34:00Z",
+        "runEndedAt": "2026-05-28T02:36:00Z",
+        "summary": "Edited specs/015-twitter-connector/state.json (additive top-level extensions[] entry naming 056-twitter-api-connector scoped to SyncModeAPI+SyncModeHybrid), spec.md (top-of-document Extension Pointer banner + inline Implementation home note immediately under the API Access Strategy heading), design.md (top-of-document Extension Pointer note). git diff --name-only confirms 3 spec-015 files changed; JSON validity confirmed via python3 json.load."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand test phase because nested runtime lacks runSubagent capability for bubbles.test dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet (tdd.exempt: artifact-only)",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:36:00Z",
+        "runEndedAt": "2026-05-28T02:37:00Z",
+        "summary": "Parent-expanded test pass: executed the 5 artifact-shape regression checks. 3 forward-pointer greps exit 0 post-fix (were exit 1 pre-fix); spec.md grep returns 2 matches meeting ≥2 requirement. API Access Strategy ±5-line proximity guard returns match L76 (heading L74). Change-boundary check confirms only specs/015-twitter-connector/ paths touched. Per tdd.exempt no runtime test suite applies."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand validate phase because nested runtime lacks runSubagent capability for bubbles.validate dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:37:00Z",
+        "runEndedAt": "2026-05-28T02:39:00Z",
+        "summary": "Parent-expanded validate pass: artifact-lint PASSED on parent spec 015 and on this bug folder. state-transition-guard.sh reviewed iteratively until 🟢 TRANSITION PERMITTED at workflowMode=spec-scope-hardening / statusCeiling=specs_hardened."
+      },
+      {
+        "agent": "bubbles.audit",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand audit phase because nested runtime lacks runSubagent capability for bubbles.audit dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:39:00Z",
+        "runEndedAt": "2026-05-28T02:39:30Z",
+        "summary": "Parent-expanded audit pass: cross-checked DoD items vs Gherkin scenarios — all 5 scenarios mapped 1:1 to faithful DoD items per Gate G068. Zero unchecked DoD items. Zero deferral language (grep -ciE 'deferred|defer to|future scope|...' = 0). Scope status canonical (Done). Consumer Impact Sweep section documents zero stale first-party references (spec 056 already names spec 015 as predecessor; no runtime consumers)."
+      },
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.iterate",
+        "expansionReason": "parent-expand docs phase because nested runtime lacks runSubagent capability for bubbles.docs dispatch during spec-scope-hardening convergence on artifact-only extension-pointer packet",
+        "expansionEvidenceRef": "report.md",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-28T02:39:30Z",
+        "runEndedAt": "2026-05-28T02:40:00Z",
+        "summary": "Parent-expanded docs pass: confirmed no external docs (docs/*.md, README) cite spec 015's API/hybrid strategy as a current implementation target. Reverse-pointer from spec 056 to spec 015 already exists (specs/056-twitter-api-connector/spec.md L11–13). The forward-pointer notes inside spec 015 ARE the docs update; no managed-doc sync required."
+      }
+    ]
+  },
+  "executionHistory": [],
+  "certification": {
+    "status": "specs_hardened",
+    "completedScopes": [
+      "scope-1"
+    ],
+    "certifiedCompletedPhases": [
+      "discovery",
+      "documentation",
+      "design",
+      "plan",
+      "implement",
+      "test",
+      "validate",
+      "audit",
+      "docs"
+    ],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Record spec-056 extension pointer in spec 015 artifacts",
+        "status": "Done",
+        "dependsOn": [],
+        "scopeDir": null,
+        "evidenceFile": "report.md",
+        "certifiedAt": "2026-05-28T02:40:00Z"
+      }
+    ],
+    "certifiedAt": "2026-05-28T02:40:00Z",
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "exempt",
+      "source": "user-request",
+      "rationale": "Artifact-only documentation drift; zero runtime code changed."
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "workflowMode": {
+      "mode": "spec-scope-hardening",
+      "source": "user-request"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    }
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
