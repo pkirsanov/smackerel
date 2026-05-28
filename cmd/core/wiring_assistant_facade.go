@@ -33,11 +33,16 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	"github.com/smackerel/smackerel/internal/assistant"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
+	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
@@ -125,6 +130,7 @@ func wireAssistantFacade(
 		DisambigMaxChoices:   assistantDisambigMaxChoices,
 		DisambigTimeout:      cfg.Assistant.DisambiguateTimeout,
 		Now:                  time.Now,
+		SourceAssemblers:     buildAssistantSourceAssemblers(svc, cfg.Assistant.SourcesMax),
 	}
 	audit := assistant.NewNoopAuditWriter() // SCOPE-08 swaps in PG/NATS-backed writer
 	facade, err := assistant.NewFacade(
@@ -219,3 +225,70 @@ func (r *assistantRegistry) Scenario(id string) (*agent.Scenario, bool) {
 	sc, ok := r.byID[id]
 	return sc, ok
 }
+
+// buildAssistantSourceAssemblers builds the v1 per-scenario
+// source-assembly registry the Facade consults between executor.Run
+// and provenance.Enforce (spec 061 SCOPE-04 facade source-assembly
+// hook).
+//
+// Wiring rationale:
+//
+//   - retrieval_qa is the only scenario whose Final shape is
+//     {answer, cited_artifact_ids} (config/prompt_contracts/
+//     retrieval-qa-v1.yaml) and therefore the only scenario that
+//     needs an explicit assembler today.
+//
+//   - Future scenarios with their own source-bearing output (e.g.
+//     digest_recap citing recent artifacts, recommendation_explain
+//     citing decision packets) will register their own assemblers
+//     here. The hook itself in facade.go is generic.
+//
+//   - The artifact lookup is backed by *db.Postgres.GetArtifact so
+//     the (title, capturedAt) tuple comes from the same authoritative
+//     row the rest of the system reads. Test environments override
+//     this with a fake lookup directly in the facade tests.
+//
+// The function returns nil when the postgres pool is not configured;
+// the Facade interprets a nil map as "no assemblers wired" and
+// produces empty Sources for every scenario, which is the correct
+// behavior for that misconfigured state (provenance gate refuses
+// every requires_provenance scenario, fail-loud).
+func buildAssistantSourceAssemblers(svc *coreServices, sourcesMax int) map[string]contracts.SourceAssembler {
+	if svc == nil || svc.pg == nil {
+		return nil
+	}
+	if sourcesMax <= 0 {
+		return nil
+	}
+	lookup := newPostgresArtifactLookup(svc)
+	return map[string]contracts.SourceAssembler{
+		"retrieval_qa": retrieval.NewFacadeAssembler(lookup, sourcesMax),
+	}
+}
+
+// newPostgresArtifactLookup returns an ArtifactLookupFn backed by
+// *db.Postgres.GetArtifact. The lookup distinguishes "not found"
+// (pgx.ErrNoRows wrapped by GetArtifact's %w error chain) from
+// transient errors so the assembler can attribute drops correctly
+// (missing_artifact vs lookup_error counters per design §5.1).
+func newPostgresArtifactLookup(svc *coreServices) retrieval.ArtifactLookupFn {
+	pg := svc.pg
+	return func(ctx context.Context, artifactID string) (string, time.Time, bool, error) {
+		a, err := pg.GetArtifact(ctx, artifactID)
+		if err != nil {
+			// GetArtifact wraps with %w so errors.Is sees the
+			// underlying pgx.ErrNoRows. The wrapped message also
+			// contains the pgx sentinel text "no rows in result
+			// set" as a defense-in-depth fallback for older callers.
+			if errors.Is(err, pgx.ErrNoRows) || strings.Contains(err.Error(), "no rows in result set") {
+				return "", time.Time{}, false, nil
+			}
+			return "", time.Time{}, false, err
+		}
+		if a == nil {
+			return "", time.Time{}, false, nil
+		}
+		return a.Title, a.CreatedAt, true, nil
+	}
+}
+
