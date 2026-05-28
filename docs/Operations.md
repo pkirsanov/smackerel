@@ -1886,6 +1886,124 @@ is no recovery path for a lost token — operators MUST capture the value from
 stdout into the user's secret store at mint time. The `auth_tokens` row only
 stores the HMAC-SHA-256 hash of the wire token under `hashed_token`.
 
+### Scoped Token Enrollment (Spec 060)
+
+Spec 060 amends spec 044 with a PASETO `scope` claim and an
+`auth.RequireScope(...)` middleware. The token's wire and DB shapes are
+unchanged for legacy spec-044 tokens (no `scope` claim); only operators who
+opt in to scoped tokens via `--scope` produce the new wire shape.
+
+The `./smackerel.sh auth ...` wrapper is a thin passthrough to
+`smackerel auth ...` inside the running `smackerel-core` container. Args
+flow through `"$@"` verbatim — the embedded `,` in
+`extension:bookmarks,history` is NEVER split (it belongs to one scope value's
+capability list).
+
+When to use `--scope`:
+
+- A surface MUST be wired with `auth.RequireScope(...)` for the scope claim
+  to be enforced. Spec 060 ships the primitives only; the wiring lives in the
+  consumer spec (e.g. spec 058 Chrome extension bridge wires the
+  `extension:bookmarks,history` requirement on its ingest route).
+- For routes WITHOUT a `RequireScope` wrap, scoped tokens behave exactly like
+  legacy spec-044 tokens — the `scope` claim is parsed into `Session.Scopes`
+  but ignored by the handler.
+
+Mint a scoped token (initial enrollment):
+
+```bash
+./smackerel.sh auth enroll --notes 'chrome extension on workstation' \
+  --scope extension:bookmarks,history <user-id>
+```
+
+Repeat `--scope` to accumulate multiple entries; the embedded `,` is part of
+the capability list, not a separator between scopes:
+
+```bash
+./smackerel.sh auth enroll --scope extension:bookmarks,history \
+  --scope extension:other <user-id>
+```
+
+Surfaces not yet in the `RegisteredScopeSurfaces` allowlist
+(`internal/auth/scopes.go`) require the explicit `--allow-unknown-surface`
+escape hatch. The mint emits a structured WARN log naming the unknown
+surface; operators MUST land the surface in the allowlist in the same change
+set as the spec that introduces it.
+
+Rotation has three modes — pick exactly one:
+
+```bash
+# Preserve: parse the prior wire token and re-mint with the SAME scope claim.
+./smackerel.sh auth rotate --prior-token-id <old-id> \
+  --prior-token <old-wire-token> <user-id>
+
+# Replace: mint with a new explicit scope list. The prior token's scope is
+# ignored.
+./smackerel.sh auth rotate --prior-token-id <old-id> \
+  --scope extension:bookmarks,history <user-id>
+
+# Demote: explicitly mint a legacy spec-044-shape token with no scope claim.
+# The single `--scope ""` sentinel is the only way to demote at rotation
+# time. Mixing `--scope ""` with non-empty `--scope` values is refused
+# (exit 2) so a typo cannot silently lose scope or silently lose the demote
+# intent.
+./smackerel.sh auth rotate --prior-token-id <old-id> --scope "" <user-id>
+```
+
+Rotation refuses to run when neither `--scope` nor `--prior-token` is
+supplied (exit 2 with `rotation requires --prior-token <wire> to preserve
+scopes, or --scope to set them explicitly`). Per design §7.2, this is an
+at-source refusal — the CLI does NOT silently preserve scopes from the
+prior-token-id alone, because the on-disk hashed token cannot be parsed back
+into a `scope` claim.
+
+Inspect a wire token's parsed claims (`issuer`, `subject`, `jti`, `kid`,
+`iat`, `exp`, `scopes`) as JSON. Pure verification path — no DB connect, no
+NATS publish:
+
+```bash
+./smackerel.sh auth inspect '<wire-token>'
+```
+
+Migration notes:
+
+- Existing spec-044 enrolled users do NOT need to re-enroll. Their tokens
+  remain valid and continue to validate as `Session.Scopes == nil`. They
+  reach scoped endpoints only after a rotation that explicitly mints a
+  scoped token (e.g. spec 058's extension ingest route requires
+  `extension:bookmarks,history`; a legacy user must rotate into a scoped
+  token before their extension can ingest).
+- The `auth_scope_rejected_total{required_scope,user_id}` Prometheus counter
+  ticks once per 403 `scope_required` response. A non-zero rate on a route
+  wired with `RequireScope(...)` after a deploy indicates one or more users
+  are still on legacy tokens for that surface.
+- The `auth_scope_check_bypassed_total{source}` counter ticks for
+  `SessionSourceSharedToken` and `SessionSourceBootstrap` sessions — those
+  bypass the scope check by design. In production-class deployments where
+  `auth.production_shared_token_fallback_enabled=false`, the
+  `source="shared_token"` label should stay at zero.
+
+Scope Registry Maintenance:
+
+- `internal/auth/scopes.go` is the single source of truth for
+  `RegisteredScopeSurfaces`, `ScopeNameRegex`, `ValidateScopeName`, and
+  `ExtractScopeSurface`. Do not maintain parallel lists.
+- Initial spec 060 entry: `["extension"]` (consumed by spec 058
+  OQ-DSN-1).
+- Adding a new surface is a single-line append reviewed alongside the spec
+  that introduces it. Until the entry lands, mints against that surface
+  require `--allow-unknown-surface` and emit the WARN log above.
+
+RequireScope endpoint wiring matrix (initial):
+
+| Route | Required Scope | Wired By |
+|---|---|---|
+| `POST /v1/connectors/extension/ingest` | `extension:bookmarks,history` | spec 058 implementation |
+
+Spec 060 ships ZERO endpoint wiring of `RequireScope(...)` on pre-existing
+routes — consumer specs wire their own scope requirements as part of the
+same change set that introduces the route.
+
 ### Admin HTTP Endpoints
 
 `internal/api/auth_handlers.go` ships parallel admin HTTP endpoints to the CLI.
@@ -2043,6 +2161,31 @@ The hot-path bearer middleware (`(*Dependencies).bearerAuthMiddleware` in
 `Authorization: Bearer` header is present. Existing API clients that send the
 header continue to work unchanged; only browser callers that previously had no
 session path benefit from the cookie fallback.
+
+#### Browser-Friendly Login Entry Point (`GET /login`, spec 057)
+
+Spec 044 shipped the cookie-derived session API but no HTML entry point — a
+browser visit to `https://<host>/` with no cookie returned plain `401
+Unauthorized` text. Spec 057 closes that gap with two operator-visible
+additions on top of the existing wire contract:
+
+1. **`GET /login`** serves a minimal HTML form (single token field +
+   submit) that POSTs to the existing `POST /v1/web/login` and then
+   redirects to the original `next` path (default `/`). Conforms to the
+   existing CSP; works for both production per-user PASETO tokens and the
+   dev shared `runtime.auth_token` value.
+2. **401 → 303 redirect for browser GETs** — when
+   `bearerAuthMiddleware` sees an unauthenticated request with method
+   `GET` or `HEAD` AND `Accept: text/html`, it now returns `303 See
+   Other` with `Location: /login?next=<requested-path>` instead of
+   `401`. API/JSON callers (no `text/html` in `Accept`) keep receiving
+   `401` unchanged — spec 044's wire contract is preserved with zero
+   regression.
+
+The root `/` UI and the `/login` page both expose `POST /v1/web/logout`
+so a browser user can clear their cookie and return to the form. No new
+credentials, auth modes, or Caddy-layer changes are introduced; the token
+remains the credential and the form is purely a paste target.
 
 #### Browser Extension Per-User PASETO
 
