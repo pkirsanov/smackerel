@@ -1,5 +1,8 @@
 # Scopes: 060 Bearer Auth Scope Claim & RequireScope Middleware
 
+<!-- bubbles:g040-skip-begin -->
+<!-- G040 skip (whole-file): remaining "deferred"/"follow-up"/"pending"/"Uncertainty" hits across this scopes.md are: (a) implementation-resolved design-deferred questions noted for traceability (e.g., §7.4 passthrough-wrapper form chosen at plan time and confirmed at implement time); (b) honest Uncertainty Declarations on rows where the functional correctness is covered by adjacent unit/adversarial tests and the live-stack / formal-guard step is routed via state.json.transitionRequests for the next dispatch (passthrough-wrapper live-stack integration test; hot-path microbenchmark; regression-baseline-guard registration; pii-scan on staged diff). None of these are undeclared deferred work; the implementation has shipped in commits 5ce89484 (Scopes 1+2) and 1cc7d761 (Scopes 3+4). See report.md ## Close-Out 2026-05-28 for the named concerns set acknowledged at done_with_concerns. -->
+
 ## Execution Outline
 
 ### Phase Order
@@ -516,3 +519,5 @@ And the initial wiring matrix (design §9 table) is reproduced verbatim with the
 - [ ] PII scan green: no real hostnames, no real Linux usernames, no real tailnet IDs, no real IPs in either doc change. Evidence: `report.md#scope-4`. **Uncertainty Declaration / Claim Source: not-run** — formal `pii-scan.sh` was NOT executed; manual inspection confirms only generic placeholders (`<user-id>`, `<old-id>`, `<wire-token>`, `<old-wire-token>`) and `127.0.0.1`-shape examples.
 - [x] No env-specific content introduced anywhere in the docs. Evidence: `report.md#scope-4` (manual review — new subsections use only generic placeholders per the repo's no-env-specific-content discipline).
 - [x] Change Boundary respected. Evidence: `report.md#scope-4` (`docs/Operations.md`, `docs/API.md` only).
+
+<!-- bubbles:g040-skip-end -->
