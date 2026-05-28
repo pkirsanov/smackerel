@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "spec": "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Regression scenarios encode the SST NO-DEFAULTS contract for 2 new HTTP-client timeout config keys; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "required",
+    "rationale": "This IS a code change (2 Config field additions + 2 call-site migrations + 2 yaml additions + 6 new unit tests); NOT artifact-only. Red→Green evidence is mandatory.",
+    "redGreenEvidence": "Red: 6 new unit tests authored against main MUST FAIL (the 2 Config fields do not exist; literals remain at the call-sites). Green: after migration to fail-loud Config-driven timeouts wired through both call-sites, the 6 tests pass."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-020-009-001",
+      "scope": 1,
+      "title": "Missing single HTTP timeout env key produces a Validate() error naming the key",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020009_MissingHTTPTimeoutKey_FailsLoud"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-pre-fix-regression-test-fails",
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Table-driven over the 2 new keys; for each key, os.Unsetenv that key (other valid), call Config.Load()/Validate(), assert returned error contains the missing key name.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-002",
+      "scope": 1,
+      "title": "Both HTTP timeout env keys missing produce a single consolidated error",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020009_MissingBothHTTPTimeoutKeys_ConsolidatedError"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Unset both simultaneously, call Load()/Validate(), assert the SINGLE returned error contains BOTH key names.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-003",
+      "scope": 1,
+      "title": "Unparseable HTTP timeout value produces a Validate() error naming key and value",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020009_UnparseableHTTPTimeoutKey_FailsLoud"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Table-driven over the 2 new keys; set each to \"abc\", call Load()/Validate(), assert error names both key and offending value.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-004",
+      "scope": 1,
+      "title": "Zero or negative HTTP timeout is rejected with a range error",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/config/mustparseintenv_test.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/config/mustparseintenv_test.go",
+          "function": "TestBUG020009_ZeroOrNegativeHTTPTimeout_FailsLoud"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Table-driven over the 2 new keys; set each to \"0\" then \"-1\", call Validate(), assert range error naming the key.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-005",
+      "scope": 1,
+      "title": "Financial-markets connector applies the config-derived timeout (adversarial non-default value)",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/connector/markets/markets.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/markets/markets_test.go",
+          "function": "TestBUG020009_FinancialMarketsHTTPTimeoutFromConfig"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Construct the connector with cfg.FinancialMarketsHTTPTimeoutSeconds = 7 (NOT the default 10). Assert connector.httpClient.Timeout == 7 * time.Second. Using a non-default value proves the value flows from config rather than being a coincidence with the pre-fix literal.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-006",
+      "scope": 1,
+      "title": "OAuth tokenRequest applies the config-derived timeout (adversarial non-default value)",
+      "requiredTestType": ["unit"],
+      "testFiles": [
+        "internal/auth/oauth.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/auth/oauth_test.go",
+          "function": "TestBUG020009_OAuthHTTPTimeoutFromConfig"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-post-fix-regression-test-passes"
+      ],
+      "liveTestExpectation": "Construct GenericOAuth2 with cfg.AuthOAuthHTTPTimeoutSeconds = 9 (NOT the default 15). Exercise tokenRequest against httptest.NewServer; assert the constructed http.Client.Timeout == 9 * time.Second. Using a non-default value proves the value flows from config rather than being a coincidence with the pre-fix literal.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-007",
+      "scope": 1,
+      "title": "Hardcoded HTTP-timeout literal pattern is eradicated from the two affected files",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "internal/connector/markets/markets.go",
+        "internal/auth/oauth.go"
+      ],
+      "linkedTests": [
+        {
+          "file": "internal/connector/markets/markets.go",
+          "function": "manual:grep-http-timeout-literal-eradicated"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-helper-eradication-grep"
+      ],
+      "liveTestExpectation": "`grep -nE 'Timeout: *[0-9]+ *\\* *time\\.(Second|Millisecond|Minute)' internal/connector/markets/markets.go internal/auth/oauth.go` exits 1 (no matches).",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-020-009-008",
+      "scope": 1,
+      "title": "Build and unit test suite pass after the fix",
+      "requiredTestType": ["build", "unit"],
+      "testFiles": [
+        "internal/config/config.go",
+        "internal/connector/markets/markets.go",
+        "internal/auth/oauth.go",
+        "config/smackerel.yaml"
+      ],
+      "linkedTests": [
+        {
+          "file": "smackerel.sh",
+          "function": "manual:./smackerel.sh build && ./smackerel.sh test unit"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/020-security-hardening/bugs/BUG-020-009-hardcoded-http-timeouts/scopes.md#dod-build-passes-after-fix"
+      ],
+      "liveTestExpectation": "`./smackerel.sh build` exit 0; `./smackerel.sh test unit` exit 0 with the 6 new test functions in the output.",
+      "regressionProtected": true,
+      "status": "pending",
+      "changeType": "added"
+    }
+  ]
+}

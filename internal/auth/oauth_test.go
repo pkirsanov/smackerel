@@ -1247,3 +1247,70 @@ func TestOAuthHandler_CallbackSuccessPage_NoInlineScript(t *testing.T) {
 	// If the save panicked (status 500 or 0), the success page wasn't rendered —
 	// that's OK for this test because the page template changes are the focus.
 }
+
+// TestBUG020009_OAuthHTTPTimeoutFromConfig asserts the tokenRequest path
+// applies the config-derived HTTP timeout (NOT the pre-fix literal of
+// 15 seconds). Adversarial: server sleeps 3 seconds; with the
+// config-derived timeout (1s) the client MUST abort the request with a
+// Client.Timeout error. Pre-fix the hardcoded 15s literal would allow
+// the request to complete after the 3s sleep, so this test would PASS
+// erroneously — the assertion checks for BOTH the timeout error AND that
+// the elapsed wall-time is well under 3 seconds.
+func TestBUG020009_OAuthHTTPTimeoutFromConfig(t *testing.T) {
+	const wantSecs = 1
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(3 * time.Second)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"access_token":"at","expires_in":1,"token_type":"Bearer"}`)
+	}))
+	defer srv.Close()
+
+	provider := NewGenericOAuth2("bug020009", OAuth2Config{
+		ClientID:           "cid",
+		ClientSecret:       "secret",
+		RedirectURL:        "http://localhost/cb",
+		TokenEndpoint:      srv.URL,
+		HTTPTimeoutSeconds: wantSecs,
+	})
+	start := time.Now()
+	_, err := provider.ExchangeCode(context.Background(), "code")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatalf("expected Client.Timeout error after %ds, got nil (pre-fix 15s literal would mask the bug)", wantSecs)
+	}
+	if elapsed >= 3*time.Second {
+		t.Errorf("elapsed %v >= server sleep 3s — timeout was not enforced; pre-fix literal 15s is likely still in effect", elapsed)
+	}
+	if !strings.Contains(err.Error(), "Client.Timeout") && !strings.Contains(err.Error(), "context deadline") && !strings.Contains(err.Error(), "deadline exceeded") {
+		t.Errorf("expected Client.Timeout / deadline error, got: %v", err)
+	}
+}
+
+// TestBUG020009_OAuthHTTPTimeoutFromConfig_NonDefaultBoundary is a
+// belt-and-braces adversarial wiring check: with HTTPTimeoutSeconds=9
+// (NOT 15, the pre-fix literal) and a server that responds immediately,
+// the call succeeds — proving the config-derived value flows through
+// without disabling functionality. Combined with the timeout-enforcement
+// test above this pins both ends of the contract.
+func TestBUG020009_OAuthHTTPTimeoutFromConfig_NonDefaultBoundary(t *testing.T) {
+	const wantSecs = 9
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"access_token":"at","refresh_token":"rt","expires_in":3600,"token_type":"Bearer"}`)
+	}))
+	defer srv.Close()
+	provider := NewGenericOAuth2("bug020009-adv", OAuth2Config{
+		ClientID:           "cid",
+		ClientSecret:       "secret",
+		RedirectURL:        "http://localhost/cb",
+		TokenEndpoint:      srv.URL,
+		HTTPTimeoutSeconds: wantSecs,
+	})
+	tok, err := provider.ExchangeCode(context.Background(), "code")
+	if err != nil {
+		t.Fatalf("ExchangeCode with HTTPTimeoutSeconds=%d should succeed against fast server, got: %v", wantSecs, err)
+	}
+	if tok.AccessToken != "at" {
+		t.Errorf("expected access_token=at, got %q", tok.AccessToken)
+	}
+}

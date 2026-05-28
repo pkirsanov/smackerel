@@ -808,6 +808,11 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("AUTH_TELEMETRY_ENABLED", "true")
 	t.Setenv("AUTH_TELEMETRY_METRIC_PREFIX", "smackerel_auth")
 	t.Setenv("AUTH_BOOTSTRAP_TOKEN", "")
+	// BUG-020-009 — HTTP timeouts required and > 0. Test defaults match
+	// the pre-fix literals so unrelated tests stay numerically stable;
+	// dedicated TestBUG020009_* cases override with adversarial values.
+	t.Setenv("FINANCIAL_MARKETS_HTTP_TIMEOUT_SECONDS", "10")
+	t.Setenv("AUTH_OAUTH_HTTP_TIMEOUT_SECONDS", "15")
 
 	// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and
 	// ML model memory profile. Defaults mirror smackerel.yaml so test
@@ -881,6 +886,17 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("QF_DECISIONS_PAGE_SIZE", "25")
 	t.Setenv("HOSPITABLE_INITIAL_LOOKBACK_DAYS", "90")
 	t.Setenv("HOSPITABLE_PAGE_SIZE", "100")
+
+	// Spec 058 Scope 1 — Chrome Extension Bridge ingest SST. Defaults
+	// mirror config/smackerel.yaml so test Load() succeeds; dedicated
+	// TestExtensionIngestConfig_Validate_* cases exercise the fail-loud
+	// paths against each missing field.
+	t.Setenv("EXTENSION_INGEST_ENABLED", "true")
+	t.Setenv("EXTENSION_INGEST_MAX_BATCH_ITEMS", "256")
+	t.Setenv("EXTENSION_INGEST_MAX_BODY_BYTES", "1048576")
+	t.Setenv("EXTENSION_INGEST_DEFAULT_DEDUP_WINDOW_SECONDS", "1800")
+	t.Setenv("EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES", `["bookmark","browser_history_visit"]`)
+	t.Setenv("EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE", "extension:bookmarks,history")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {

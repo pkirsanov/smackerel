@@ -244,6 +244,16 @@ type Config struct {
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string
 
+	// BUG-020-009 — per-call HTTP client timeouts (seconds). SST
+	// zero-defaults: each MUST be > 0; fail-loud at Load() (via
+	// mustParseIntEnv → intLoadErrs) and at Validate() (range check).
+	// FinancialMarketsHTTPTimeoutSeconds replaces the literal at
+	// internal/connector/markets/markets.go (was `Timeout: 10 * time.Second`).
+	// AuthOAuthHTTPTimeoutSeconds replaces the literal at
+	// internal/auth/oauth.go (was `Timeout: 15 * time.Second`).
+	FinancialMarketsHTTPTimeoutSeconds int
+	AuthOAuthHTTPTimeoutSeconds        int
+
 	// Runtime trusted reverse-proxy CIDR allowlist (BUG-020-005,
 	// F-SEC-R30-001). When the connecting TCP peer is in one of these
 	// CIDRs, the API trusts X-Forwarded-For / X-Real-IP / True-Client-IP
@@ -260,6 +270,11 @@ type Config struct {
 	Recommendations RecommendationsConfig
 	Notification    NotificationConfig
 	NtfySourcesJSON string
+
+	// Spec 058 Scope 1 — Chrome Extension Bridge ingest config.
+	// Sourced from `extension.ingest.*` in config/smackerel.yaml via
+	// EXTENSION_INGEST_* env vars; fail-loud SST per smackerel-no-defaults.
+	Extension ExtensionConfig
 
 	// BUG-020-008 — fail-loud int env parsing. Populated by Load() after
 	// the cfg literal initializes; each entry is the error string produced
@@ -665,6 +680,9 @@ func Load() (*Config, error) {
 		{"QF_DECISIONS_PAGE_SIZE", &cfg.QFDecisionsPageSize},
 		{"HOSPITABLE_INITIAL_LOOKBACK_DAYS", &cfg.HospitableInitialLookbackDays},
 		{"HOSPITABLE_PAGE_SIZE", &cfg.HospitablePageSize},
+		// BUG-020-009 — per-call HTTP client timeouts. Required, no default.
+		{"FINANCIAL_MARKETS_HTTP_TIMEOUT_SECONDS", &cfg.FinancialMarketsHTTPTimeoutSeconds},
+		{"AUTH_OAUTH_HTTP_TIMEOUT_SECONDS", &cfg.AuthOAuthHTTPTimeoutSeconds},
 	}
 	for _, f := range intFields {
 		v, err := mustParseIntEnv(f.key)
@@ -894,6 +912,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Photos = photosCfg
+
+	extensionCfg, err := loadExtensionConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Extension = extensionCfg
 
 	recommendationsCfg, err := loadRecommendationsConfig()
 	if err != nil {
@@ -1587,6 +1611,16 @@ func (c *Config) Validate() error {
 	missing = append(missing, c.intLoadErrs...)
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required configuration: %s", strings.Join(missing, ", "))
+	}
+
+	// BUG-020-009 — fail-loud range guards for the two new HTTP timeout
+	// SST keys. Zero or negative values are meaningless / Go runtime
+	// traps; reject explicitly with a message naming the offending key.
+	if c.FinancialMarketsHTTPTimeoutSeconds <= 0 {
+		return fmt.Errorf("FINANCIAL_MARKETS_HTTP_TIMEOUT_SECONDS must be > 0; got %d", c.FinancialMarketsHTTPTimeoutSeconds)
+	}
+	if c.AuthOAuthHTTPTimeoutSeconds <= 0 {
+		return fmt.Errorf("AUTH_OAUTH_HTTP_TIMEOUT_SECONDS must be > 0; got %d", c.AuthOAuthHTTPTimeoutSeconds)
 	}
 
 	// MIT-040-S-004 — enforce SMACKEREL_ENV allowlist (development | test |
