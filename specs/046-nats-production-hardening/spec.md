@@ -1,5 +1,7 @@
 # Feature: NATS Production Hardening
 
+**Status:** Done (certified per state.json)
+
 ## Status
 
 In Progress - planning packet created

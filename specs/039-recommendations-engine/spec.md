@@ -1,5 +1,7 @@
 # Feature: 039 Recommendations Engine
 
+**Status:** Done (certified per state.json)
+
 > **Mode of analysis:** greenfield. No prior `spec.md` for recommendations
 > existed. This feature introduces an entirely new capability surface that
 > sits *outside* Smackerel's existing knowledge graph: instead of recalling

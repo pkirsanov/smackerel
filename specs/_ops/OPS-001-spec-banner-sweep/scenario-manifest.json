@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "spec": "specs/_ops/OPS-001-spec-banner-sweep",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Artifact-shape regression scenarios are the contractual proof of the spec.md banner sweep across 54 certified specs; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "exempt",
+    "rationale": "Artifact-only portfolio-wide documentation drift; zero runtime code changed. Per policySnapshot.tdd.mode = exempt with user-request provenance.",
+    "redGreenEvidence": "Red state: enumeration script reports 'Total drifted: 54' against main pre-sweep (bug.md Reproduction Steps). Green state: enumeration script reports 'Total drifted: 0' post-sweep; per-spec canonical banner grep returns the canonical Done line for all 54 affected specs; change boundary confined to specs/NNN-*/spec.md (54 paths) + specs/_ops/OPS-001-spec-banner-sweep/ (8 paths)."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-OPS-001-001",
+      "scope": 1,
+      "title": "Category A — Draft banner replaced with canonical Done banner (23 specs)",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/001-smackerel-mvp/spec.md",
+        "specs/002-phase1-foundation/spec.md",
+        "specs/003-phase2-ingestion/spec.md",
+        "specs/004-phase3-intelligence/spec.md",
+        "specs/005-phase4-expansion/spec.md",
+        "specs/006-phase5-advanced/spec.md",
+        "specs/007-google-keep-connector/spec.md",
+        "specs/008-telegram-share-capture/spec.md",
+        "specs/009-bookmarks-connector/spec.md",
+        "specs/010-browser-history-connector/spec.md",
+        "specs/011-maps-connector/spec.md",
+        "specs/012-hospitable-connector/spec.md",
+        "specs/013-guesthost-connector/spec.md",
+        "specs/014-discord-connector/spec.md",
+        "specs/015-twitter-connector/spec.md",
+        "specs/016-weather-connector/spec.md",
+        "specs/017-gov-alerts-connector/spec.md",
+        "specs/019-connector-wiring/spec.md",
+        "specs/025-knowledge-synthesis-layer/spec.md",
+        "specs/026-domain-extraction/spec.md",
+        "specs/027-user-annotations/spec.md",
+        "specs/028-actionable-lists/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-001-spec-banner-sweep/scopes.md",
+          "function": "manual:per-spec-canonical-banner-grep-category-A"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-fix-implemented"
+      ],
+      "liveTestExpectation": "For each Category A spec, `grep -E '^\\*\\*Status:\\*\\*' spec.md` returns exactly `**Status:** Done (certified per state.json)`",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-002",
+      "scope": 1,
+      "title": "Category B — canonical banner inserted under H1 (27 specs)",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/021-intelligence-delivery/spec.md",
+        "specs/022-operational-resilience/spec.md",
+        "specs/023-engineering-quality/spec.md",
+        "specs/024-design-doc-reconciliation/spec.md",
+        "specs/029-devops-pipeline/spec.md",
+        "specs/030-observability/spec.md",
+        "specs/031-live-stack-testing/spec.md",
+        "specs/032-documentation-freshness/spec.md",
+        "specs/033-mobile-capture/spec.md",
+        "specs/034/spec.md",
+        "specs/035/spec.md",
+        "specs/036/spec.md",
+        "specs/037/spec.md",
+        "specs/039/spec.md",
+        "specs/042-tailnet-edge-bind-pattern/spec.md",
+        "specs/043/spec.md",
+        "specs/044/spec.md",
+        "specs/045/spec.md",
+        "specs/046/spec.md",
+        "specs/047/spec.md",
+        "specs/048/spec.md",
+        "specs/049/spec.md",
+        "specs/050/spec.md",
+        "specs/051/spec.md",
+        "specs/052/spec.md",
+        "specs/053/spec.md",
+        "specs/054/spec.md",
+        "specs/055/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-001-spec-banner-sweep/scopes.md",
+          "function": "manual:per-spec-canonical-banner-grep-category-B"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-fix-implemented"
+      ],
+      "liveTestExpectation": "For each Category B spec, the canonical banner line sits on the second non-blank logical line of spec.md (right after the H1) with one blank line on each side and no duplicate blanks. The implementing agent MUST resolve the exact 034-039 / 043-055 directory names at execution time (this manifest enumerates by NNN prefix).",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-003",
+      "scope": 1,
+      "title": "Category C — multi-word stale banner replaced (3 specs: 038, 040, 041)",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/038/spec.md",
+        "specs/040/spec.md",
+        "specs/041/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-001-spec-banner-sweep/scopes.md",
+          "function": "manual:per-spec-canonical-banner-grep-category-C"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-fix-implemented"
+      ],
+      "liveTestExpectation": "For each Category C spec, `grep 'Draft (analyst-owned requirements sections' spec.md` returns zero matches AND `grep -E '^\\*\\*Status:\\*\\*' spec.md` returns exactly `**Status:** Done (certified per state.json)`. The implementing agent MUST resolve exact directory names at execution time.",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-004",
+      "scope": 1,
+      "title": "Category D — spec 056 planning-packet banner reconciled",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/056/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-001-spec-banner-sweep/scopes.md",
+          "function": "manual:spec-056-banner-grep"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-fix-implemented"
+      ],
+      "liveTestExpectation": "Spec 056 `grep -E '^\\*\\*Status:\\*\\*' spec.md` returns exactly `**Status:** Done (was planning packet — promoted on certification)`. The implementing agent MUST resolve the exact spec-056 directory name at execution time.",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-005",
+      "scope": 1,
+      "title": "Portfolio drift count returns to zero post-sweep",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-001-spec-banner-sweep/bug.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/_ops/OPS-001-spec-banner-sweep/scopes.md",
+          "function": "manual:enumeration-script-total-drifted-zero"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-post-fix-regression"
+      ],
+      "liveTestExpectation": "Re-running the enumeration script (per bug.md Reproduction Steps) post-sweep reports 'Total drifted: 0'",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-006",
+      "scope": 1,
+      "title": "Idempotence — re-running the sweep produces zero diff",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md"
+      ],
+      "linkedTests": [
+        {
+          "file": ".git",
+          "function": "manual:idempotence-second-pass-diff"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-idempotence"
+      ],
+      "liveTestExpectation": "After applying the sweep once and committing, re-applying the sweep logic against the same tree yields `git diff --name-only` with no paths",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-007",
+      "scope": 1,
+      "title": "Change boundary respected",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md"
+      ],
+      "linkedTests": [
+        {
+          "file": ".git",
+          "function": "manual:git-diff-name-only-change-boundary"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-change-boundary"
+      ],
+      "liveTestExpectation": "`git diff --name-only` returns only paths matching `^specs/(0[0-9]{2}|056)-[^/]+/spec\\.md$` or `^specs/_ops/OPS-001-spec-banner-sweep/`; zero state.json/design.md/scopes.md/report.md/uservalidation.md/scenario-manifest.json of the 54 target specs; zero code/compose/.github paths",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-008",
+      "scope": 1,
+      "title": "No over-reach — 2 already-correct certified specs untouched",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md"
+      ],
+      "linkedTests": [
+        {
+          "file": ".git",
+          "function": "manual:no-overreach-already-correct-specs"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-no-overreach"
+      ],
+      "liveTestExpectation": "Neither of the 2 certified specs whose spec.md already carries `**Status:** Done (...)` appears in `git diff --name-only`. The implementing agent MUST identify the 2 specs at execution time by inverting the enumeration script.",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-OPS-001-009",
+      "scope": 1,
+      "title": "Packet artifact-lint + state-transition-guard pass at specs_hardened ceiling",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/_ops/OPS-001-spec-banner-sweep/state.json",
+        "specs/_ops/OPS-001-spec-banner-sweep/scenario-manifest.json"
+      ],
+      "linkedTests": [
+        {
+          "file": ".github/bubbles/scripts/artifact-lint.sh",
+          "function": "manual:artifact-lint-packet"
+        },
+        {
+          "file": ".github/bubbles/scripts/state-transition-guard.sh",
+          "function": "manual:state-transition-guard-packet"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-artifact-lint",
+        "specs/_ops/OPS-001-spec-banner-sweep/scopes.md#dod-state-transition-guard"
+      ],
+      "liveTestExpectation": "`bash .github/bubbles/scripts/artifact-lint.sh specs/_ops/OPS-001-spec-banner-sweep` exits 0; `bash .github/bubbles/scripts/state-transition-guard.sh specs/_ops/OPS-001-spec-banner-sweep` returns 🟢 TRANSITION PERMITTED at workflowMode=spec-scope-hardening / statusCeiling=specs_hardened",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    }
+  ]
+}

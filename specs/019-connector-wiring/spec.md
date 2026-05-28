@@ -1,7 +1,7 @@
 # Spec: Connector Wiring — Register 5 Unwired Connectors
 
 **Feature:** 019-connector-wiring
-**Status:** Draft
+**Status:** Done
 **Created:** 2026-04-10
 
 ---

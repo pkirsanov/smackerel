@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst
 > **Date:** April 9, 2026
-> **Status:** Draft
+> **Status:** Done
 > **Design Doc:** [design.md](design.md)
 > **Related:** [012-hospitable-connector](../012-hospitable-connector/spec.md), GuestHost spec 098-hospitable-data-bridge
 

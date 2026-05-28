@@ -4,7 +4,7 @@
 > **Existing Bot:** [internal/telegram/bot.go](../../internal/telegram/bot.go)
 > **Author:** bubbles.analyst
 > **Date:** April 6, 2026
-> **Status:** Draft
+> **Status:** Done
 
 ---
 
