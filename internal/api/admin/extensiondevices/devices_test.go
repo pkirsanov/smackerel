@@ -1,5 +1,4 @@
 package extensiondevices
-package extensiondevices
 
 import (
 	"context"
