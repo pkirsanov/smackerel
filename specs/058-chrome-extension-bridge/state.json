@@ -1,0 +1,23 @@
+{
+  "version": 3,
+  "featureDir": "specs/058-chrome-extension-bridge",
+  "featureName": "Chrome Extension Bridge (Live Bookmarks + Browser History)",
+  "status": "draft",
+  "workflowMode": "spec-scope-hardening",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": true,
+  "planningOnlyJustification": "Initial intent scaffold only — needs bubbles.clarify pass to resolve NC-1..NC-5 before bubbles.design / bubbles.plan can decompose into scopes.",
+  "specDependsOn": [
+    "specs/044-per-user-bearer-auth-foundation"
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "draft",
+    "currentScope": null,
+    "runStartedAt": null,
+    "lastUpdatedAt": "2026-05-28T00:00:00Z",
+    "completedPhaseClaims": [],
+    "completedScopes": []
+  }
+}

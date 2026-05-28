@@ -1,0 +1,24 @@
+{
+  "version": 3,
+  "featureDir": "specs/059-google-keep-live-mode",
+  "featureName": "Google Keep Live Sync (gkeepapi production hardening)",
+  "status": "draft",
+  "workflowMode": "spec-scope-hardening",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": true,
+  "planningOnlyJustification": "Initial intent scaffold only — needs bubbles.clarify pass to resolve NC-1 (build vs delete decision), NC-2 (python sidecar vs subprocess vs Go reimpl), and the remaining NCs before bubbles.design / bubbles.plan can decompose into scopes.",
+  "specDependsOn": [
+    "specs/051-deployment-secret-auth-contract",
+    "specs/052-bundle-secret-injection-contract"
+  ],
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "draft",
+    "currentScope": null,
+    "runStartedAt": null,
+    "lastUpdatedAt": "2026-05-28T00:00:00Z",
+    "completedPhaseClaims": [],
+    "completedScopes": []
+  }
+}
