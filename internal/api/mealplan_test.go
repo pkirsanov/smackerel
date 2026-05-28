@@ -10,10 +10,21 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// mountMealPlanAPI wraps the handler under r.Route("/api", ...) to mirror the
+// production router composition (see internal/api/router.go). The handler's
+// RegisterRoutes uses a relative "/meal-plans" prefix; the outer /api mount
+// produces the externally documented "/api/meal-plans/*" paths. Bare-router
+// mounts (without the /api wrapper) would have masked BUG-034-003.
+func mountMealPlanAPI(r chi.Router, handler *MealPlanHandler) {
+	r.Route("/api", func(sub chi.Router) {
+		handler.RegisterRoutes(sub)
+	})
+}
+
 func TestMealPlanHandler_CreatePlan_MissingTitle(t *testing.T) {
 	handler := &MealPlanHandler{}
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	body := `{"title":"","start_date":"2026-04-20","end_date":"2026-04-26"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/meal-plans", bytes.NewBufferString(body))
@@ -38,7 +49,7 @@ func TestMealPlanHandler_CreatePlan_MissingTitle(t *testing.T) {
 func TestMealPlanHandler_CreatePlan_InvalidDateFormat(t *testing.T) {
 	handler := &MealPlanHandler{}
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	body := `{"title":"Test Plan","start_date":"not-a-date","end_date":"2026-04-26"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/meal-plans", bytes.NewBufferString(body))
@@ -55,7 +66,7 @@ func TestMealPlanHandler_CreatePlan_InvalidDateFormat(t *testing.T) {
 func TestMealPlanHandler_AddSlot_MissingFields(t *testing.T) {
 	handler := &MealPlanHandler{}
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	// Missing meal_type
 	body := `{"slot_date":"2026-04-20","meal_type":"","recipe_artifact_id":"abc","servings":4}`
@@ -73,7 +84,7 @@ func TestMealPlanHandler_AddSlot_MissingFields(t *testing.T) {
 func TestMealPlanHandler_QueryByDate_MissingDate(t *testing.T) {
 	handler := &MealPlanHandler{}
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/meal-plans/query", nil)
 	rr := httptest.NewRecorder()
@@ -88,7 +99,7 @@ func TestMealPlanHandler_QueryByDate_MissingDate(t *testing.T) {
 func TestMealPlanHandler_CalendarSync_NotConfigured(t *testing.T) {
 	handler := &MealPlanHandler{} // nil Calendar and CalendarSync=false by default
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/meal-plans/plan-1/calendar-sync", nil)
 	rr := httptest.NewRecorder()
@@ -111,7 +122,7 @@ func TestMealPlanHandler_CalendarSync_NotConfigured(t *testing.T) {
 func TestMealPlanHandler_CopyPlan_MissingStartDate(t *testing.T) {
 	handler := &MealPlanHandler{}
 	r := chi.NewRouter()
-	handler.RegisterRoutes(r)
+	mountMealPlanAPI(r, handler)
 
 	body := `{"new_title":"Copy"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/meal-plans/plan-1/copy", bytes.NewBufferString(body))
