@@ -106,6 +106,7 @@ func TestSecretKeysMirror(t *testing.T) {
 		"AUTH_AT_REST_HASHING_KEY",
 		"AUTH_BOOTSTRAP_TOKEN",
 		"TELEGRAM_BOT_TOKEN",
+		"KEEP_GOOGLE_APP_PASSWORD",
 	}
 	got := SecretKeys()
 	if !reflect.DeepEqual(got, want) {
@@ -243,4 +244,111 @@ func TestPlaceholderDeterminism(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestSecretKeys_KeepAppPasswordRegistered (spec 059 Scope 1, SCN-059-001) —
+// pin KEEP_GOOGLE_APP_PASSWORD as a declared Bucket-2 secret. The mirror
+// parity test (TestSecretKeys_MirrorsYAMLManifest) covers cross-mirror drift;
+// this regression test fails loud if a future edit removes the Keep entry
+// from the in-memory Go list without also touching the yaml/shell mirrors.
+func TestSecretKeys_KeepAppPasswordRegistered(t *testing.T) {
+	keys := SecretKeys()
+	found := false
+	for _, k := range keys {
+		if k == "KEEP_GOOGLE_APP_PASSWORD" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("KEEP_GOOGLE_APP_PASSWORD missing from SecretKeys() = %v\nfix: spec 059 Scope 1 requires this Bucket-2 secret in all three mirrors", keys)
+	}
+}
+
+// TestKeepAppPasswordReadOnlyFromSidecarNotCore (spec 059 Scope 1, SCN-059-002) —
+// the App Password is delivered into the core container's environment via the
+// shared app.env env_file (matching the TELEGRAM_BOT_TOKEN precedent), so the
+// sidecar boundary cannot be enforced at the compose env-injection layer. It
+// is instead enforced at the APPLICATION LAYER: zero Go source files under
+// internal/ or cmd/ may read the KEEP_GOOGLE_APP_PASSWORD environment variable.
+// Only ml/app/keep_bridge.py is permitted to read it.
+//
+// This test greps the Go source tree under internal/ and cmd/ for literal
+// references to "KEEP_GOOGLE_APP_PASSWORD". Test files and this test file
+// itself are excluded; any non-test Go source containing the literal counts
+// as a sidecar-boundary violation.
+func TestKeepAppPasswordReadOnlyFromSidecarNotCore(t *testing.T) {
+	root := secretKeysRepoRoot(t)
+	const literal = "KEEP_GOOGLE_APP_PASSWORD"
+	roots := []string{
+		filepath.Join(root, "internal"),
+		filepath.Join(root, "cmd"),
+	}
+	var offenders []string
+	for _, base := range roots {
+		err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			// Only .go files; exclude _test.go files (which may legitimately
+			// reference the literal for documentation / negative assertions).
+			name := info.Name()
+			if filepath.Ext(name) != ".go" {
+				return nil
+			}
+			if len(name) > len("_test.go") && name[len(name)-len("_test.go"):] == "_test.go" {
+				return nil
+			}
+			// Exclude the canonical manifest file: it lists every Bucket-2
+			// secret key as a string literal in the secretKeys slice. That's
+			// a declaration, not a consumer read.
+			if path == filepath.Join(root, "internal", "config", "secret_keys.go") {
+				return nil
+			}
+			body, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+			if bytesContainsString(body, literal) {
+				offenders = append(offenders, path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", base, err)
+		}
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("sidecar-boundary violation: %d Go source file(s) reference %q (only ml/app/keep_bridge.py may read this env var):\n  %v",
+			len(offenders), literal, offenders)
+	}
+}
+
+// bytesContainsString reports whether haystack contains needle as a literal
+// byte substring. Inlined here to avoid importing bytes/strings package
+// solely for one call in this file.
+func bytesContainsString(haystack []byte, needle string) bool {
+	n := len(needle)
+	if n == 0 {
+		return true
+	}
+	if len(haystack) < n {
+		return false
+	}
+	for i := 0; i+n <= len(haystack); i++ {
+		match := true
+		for j := 0; j < n; j++ {
+			if haystack[i+j] != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

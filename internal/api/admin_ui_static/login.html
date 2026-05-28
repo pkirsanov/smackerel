@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Smackerel</title>
+<link rel="stylesheet" href="/admin_ui_static/login.css">
+</head>
+<body>
+<main>
+  <h1>Sign in</h1>
+  {{if not .AuthEnabled}}
+  <p class="banner banner-disabled">
+    Authentication is not configured on this deployment.
+    Sign-in is unavailable. The system runs in open dev-bypass mode.
+  </p>
+  <form>
+    <label>
+      Token
+      <input type="password" name="token" autocomplete="off" disabled>
+    </label>
+    <button type="submit" disabled>Sign in (disabled)</button>
+  </form>
+  {{else}}
+  {{if .Error}}<p class="banner banner-error">{{.Error}}</p>{{end}}
+  <form method="POST" action="/v1/web/login" enctype="application/x-www-form-urlencoded">
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label>
+      Token
+      <input id="token-field" type="password" name="token" autocomplete="off" required>
+    </label>
+    <button type="submit">Sign in</button>
+  </form>
+  <form method="POST" action="/v1/web/logout" class="logout">
+    <button type="submit">Sign out</button>
+  </form>
+  {{end}}
+</main>
+<script src="/admin_ui_static/login.js"></script>
+</body>
+</html>

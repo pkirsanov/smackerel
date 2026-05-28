@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"aidanwoods.dev/go-paseto"
@@ -48,6 +49,12 @@ type ParsedToken struct {
 	KeyID     string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+
+	// Scopes is the parsed PASETO `scope` claim (spec 060). Nil when
+	// the claim is absent (legacy spec-044 token) OR when the claim
+	// failed parse-time validation (defense-in-depth — see
+	// `getScopeClaim`). NEVER set to a wildcard sentinel.
+	Scopes []string
 }
 
 // ErrUnknownKeyID is returned when the footer kid does not match either
@@ -68,6 +75,67 @@ var ErrTokenNotYetValid = errors.New("auth: token not yet valid")
 // ErrIssuerMismatch is returned when the iss claim does not equal
 // VerifyOptions.Issuer.
 var ErrIssuerMismatch = errors.New("auth: token issuer does not match expected value")
+
+// ErrScopeClaimMalformed is returned by getScopeClaim when any
+// element of the PASETO `scope` claim fails ScopeNameRegex. Callers
+// MUST treat this as the "legacy / no scopes" outcome — NEVER fall
+// back to a wildcard. Spec 060 BS-002 adversarial regression.
+var ErrScopeClaimMalformed = errors.New("auth: scope claim contains malformed element")
+
+// getScopeClaim reads the PASETO `scope` claim as a []string.
+// Behavior:
+//
+//   - claim absent          → (nil, nil)
+//   - claim wrong shape     → (nil, ErrScopeClaimMalformed)
+//   - any element bad regex → (nil, ErrScopeClaimMalformed)
+//   - all elements valid    → ([]string{...}, nil)
+//
+// Spec 060 SCN-060-003 — parse-time defense-in-depth.
+func getScopeClaim(token *paseto.Token) ([]string, error) {
+	var scopes []string
+	if err := token.Get("scope", &scopes); err != nil {
+		// Distinguish absent claim from malformed shape via the
+		// underlying error string. The go-paseto Get returns
+		// "value for key `scope' not present in claims" when the
+		// claim is missing — that is the legacy-token case.
+		if msg := err.Error(); msg != "" && (containsLower(msg, "not present")) {
+			return nil, nil
+		}
+		return nil, ErrScopeClaimMalformed
+	}
+	for _, s := range scopes {
+		if ValidateScopeName(s) != nil {
+			return nil, ErrScopeClaimMalformed
+		}
+	}
+	return scopes, nil
+}
+
+// containsLower is a small case-insensitive substring helper kept
+// local to avoid pulling `strings` into the hot path import set
+// (verify.go already lives in the per-request hot path).
+func containsLower(haystack, needle string) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		match := true
+		for j := 0; j < len(needle); j++ {
+			a, b := haystack[i+j], needle[j]
+			if a >= 'A' && a <= 'Z' {
+				a += 'a' - 'A'
+			}
+			if a != b {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
 
 // VerifyAndParse validates a PASETO v4.public wire token and returns
 // the parsed claims. Validation steps:
@@ -192,11 +260,23 @@ func VerifyAndParse(wireToken string, opts VerifyOptions) (ParsedToken, error) {
 		return ParsedToken{}, ErrTokenNotYetValid
 	}
 
+	// Spec 060 — read optional `scope` claim. Malformed claims are
+	// treated as legacy (Scopes: nil) so a forged token can NEVER
+	// upgrade itself into a scoped session.
+	scopes, scopeErr := getScopeClaim(token)
+	if scopeErr != nil {
+		slog.Warn("auth: scope claim malformed; treating as legacy token",
+			"token_id", jti,
+			"key_id", footer.KID)
+		scopes = nil
+	}
+
 	return ParsedToken{
 		UserID:    subject,
 		TokenID:   jti,
 		KeyID:     footer.KID,
 		IssuedAt:  iat,
 		ExpiresAt: exp,
+		Scopes:    scopes,
 	}, nil
 }

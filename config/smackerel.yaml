@@ -220,6 +220,22 @@ connectors:
     gkeep_enabled: false
     gkeep_poll_interval: 60m
     gkeep_warning_acknowledged: false
+    # Spec 059 Scope 2 — drift-acknowledgement token (opaque string).
+    # Bump this value (e.g., to today's ISO date) and restart the connector
+    # to reset the drift circuit breaker after operator review of any
+    # gkeepapi deprecation/drift warning. Empty placeholder is acceptable
+    # for dev/test; production-class deploys MUST populate this value.
+    drift_ack_token: ""
+    # Spec 059 Scope 1 — non-secret Google account email used by the ML
+    # sidecar's gkeepapi.Keep().login(email, app_password) call. Surfaced
+    # to both core and ml containers via the standard env contract; the
+    # paired secret KEEP_GOOGLE_APP_PASSWORD is in infrastructure.secret_keys
+    # and is read ONLY by ml/app/keep_bridge.py.
+    email: ""
+    # Spec 059 Scope 1 — App Password placeholder for dev/test. Production-class
+    # targets receive the deterministic placeholder via the spec-052 SST loader
+    # and the deploy adapter substitutes the real value from sops at apply time.
+    app_password: ""
 
   bookmarks:
     enabled: false
@@ -1017,6 +1033,11 @@ infrastructure:
   - AUTH_AT_REST_HASHING_KEY
   - AUTH_BOOTSTRAP_TOKEN
   - TELEGRAM_BOT_TOKEN
+  # Spec 059 Scope 1 — Google Keep live-sync App Password. Bucket-2
+  # secret read ONLY by ml/app/keep_bridge.py; the Go core never reads it
+  # (sidecar boundary enforced at the application layer, see
+  # internal/config/secret_keys_test.go::TestKeepAppPasswordReadOnlyFromSidecarNotCore).
+  - KEEP_GOOGLE_APP_PASSWORD
   # Spec 052 FR-052-002 — explicit opt-in for placeholder emission.
   # When TARGET_ENV ∈ this list, the SST loader emits placeholders for
   # every key in secret_keys above. dev/test environments are NEVER in

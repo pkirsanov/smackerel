@@ -55,6 +55,14 @@ type Session struct {
 
 	// Source identifies which authentication path produced this session.
 	Source SessionSource
+
+	// Scopes is the PASETO `scope` claim parsed by VerifyAndParse, or
+	// nil for legacy spec-044 tokens (no `scope` claim), shared-token
+	// sessions, and bootstrap sessions. Spec 060 — `auth.RequireScope`
+	// reads this slice to gate per-scope endpoints; nil is the
+	// "legacy / non-scoped session" sentinel and MUST NEVER be treated
+	// as wildcard.
+	Scopes []string
 }
 
 // IsAdmin reports whether the session is allowed to call the auth admin

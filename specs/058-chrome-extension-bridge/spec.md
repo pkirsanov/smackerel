@@ -2,7 +2,7 @@
 
 > **Author:** bubbles.analyst (draft scaffold)
 > **Date:** May 28, 2026
-> **Status:** Draft (intent only — `bubbles.specify` / `bubbles.clarify` should harden before `bubbles.plan`)
+> **Status:** Clarified (NC-1..NC-5 resolved May 28, 2026 — ready for `bubbles.design`)
 > **Workflow Mode:** TBD (likely `full-delivery` once accepted)
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 6.2 Capture Input Types; [Connector_Development.md](../../docs/Connector_Development.md)
 
@@ -47,7 +47,7 @@ Neither matches the "Knowledge Breathes" product principle (continuous ingestion
 - **Authenticated POST only** — the extension MUST send `Authorization: Bearer <operator-token>` on every request; tokens issued by smackerel admin endpoint, scoped to `extension:bookmarks,history`, individually revocable, audit-logged
 - **No bearer token in extension source** — token is pasted by operator into extension options page; stored in `chrome.storage.local` (sandboxed per-extension, not synced to other devices)
 - **No telemetry or third-party calls** from the extension; only POSTs to the operator-configured smackerel base URL (also pasted into options page on first install)
-- **Protobuf body** consistent with smackerel's protobuf-only contract for business data (per [docs/smackerel.md](../../docs/smackerel.md)); the extension imports the generated Web Extension protobuf-ts bindings
+- **JSON request body** matching the existing `connector.RawArtifact` Go struct (see [`internal/connector/connector.go`](../../internal/connector/connector.go) — JSON tags, not protobuf). The extension serializes the same shape the import-dir connectors already publish, so the server can hand the payload directly to the existing normalizers without a parallel wire schema. (Earlier draft said "protobuf"; corrected during clarify — smackerel's connector ingestion path is JSON over HTTP, protobuf is reserved for NATS-internal contracts.)
 - **Offline-tolerant** — IndexedDB write-ahead queue, exponential backoff retry, dead-letter to extension badge after 24 h of failed retries with operator notification
 - **Schema parity with existing connectors** — emitted artifacts use the SAME `RawArtifact` proto and the SAME normalizer (`internal/connector/bookmarks/normalizer.go`, `internal/connector/browser/...`) that the import-dir path uses; extension is a NEW source of the same artifacts, not a parallel data model
 - **Privacy filter at the extension** — per options-page allow/deny list, the extension MUST drop bookmarks and history entries whose URL matches operator-configured patterns BEFORE leaving the browser (e.g. domain blocklist for banking sites)
@@ -68,13 +68,142 @@ Neither matches the "Knowledge Breathes" product principle (continuous ingestion
 
 ---
 
+## Clarifications (Resolved by `bubbles.clarify`, May 28, 2026)
+
+The following NCs were left open by the analyst draft and are now resolved.
+Resolutions are binding inputs to `bubbles.design` and `bubbles.plan`.
+
+### NC-1 — Operator-token issuance path → **Resolved: reuse spec 044**
+
+The extension MUST authenticate using a per-user bearer token minted through
+the spec 044 (Per-User Bearer Auth Foundation, status: Done) enrollment flow,
+NOT a new per-extension token endpoint. Rationale:
+
+- Spec 044 already provides claim-binding, rotation with grace window,
+  immediate revocation, and stateless hot-path validation — exactly the
+  controls the extension needs.
+- Introducing a parallel per-extension token type would split the trust
+  boundary and re-open MIT-040-S-008 / MIT-038-S-003 closure assumptions
+  ("authenticated identity is the only identity source").
+- Multi-device coverage (one human, multiple browsers) is modeled as a single
+  user holding multiple tokens issued from the same enrollment, each scoped
+  with an extension-only capability (see NC-4 for the device-id segment).
+
+**Design obligation:** add an extension-scoped token capability (e.g. claim
+value `scope: "extension:bookmarks,history"`) to spec 044's claim contract so
+the API can reject a leaked extension token from being used against other
+endpoints. If spec 044's current claim shape cannot express scope without a
+schema change, file a follow-up against spec 044 (owner: `bubbles.analyst`)
+rather than minting a parallel token type here.
+
+### NC-2 — Repo location → **Resolved: in-repo at `extensions/chrome-bridge/`**
+
+The extension source lives at `extensions/chrome-bridge/` (TypeScript + MV3
+`manifest.json` + esbuild bundle output). Rationale:
+
+- Atomic spec/code evolution — the extension wire format and the server
+  ingestion endpoint must move in lockstep; a split repo guarantees drift.
+- `./smackerel.sh` already owns the build surface; the extension build (a new
+  `./smackerel.sh build --extension chrome-bridge` subcommand, to be defined
+  by `bubbles.design`) extends that surface rather than spawning a parallel
+  toolchain repo.
+- Release artifact (signed `.zip` for sideload + optional private-store
+  upload) is produced by CI from the same git SHA as the corresponding
+  server-side ingestion endpoint, keeping Build-Once Deploy-Many semantics.
+
+**Out-of-scope here:** publishing to the public Chrome Web Store. Initial
+distribution is sideload-zip from a GitHub Release plus operator-private
+store listing (Hard Constraint section, unchanged).
+
+### NC-3 — Schema for `browser_history_visit` → **Resolved: extend existing connector path**
+
+The extension wire payload uses the SAME `connector.RawArtifact` shape that
+`internal/connector/browser` already produces. Specifically:
+
+- The HTTP endpoint accepts a JSON array of `RawArtifact` items (matching the
+  Go struct's JSON tags) whose `SourceID` is `"browser-extension"` and whose
+  `ContentType` distinguishes `"bookmark"` vs `"browser_history_visit"`.
+- The server-side handler passes the deserialized `RawArtifact` directly to
+  the existing normalizer pipeline used by the import-dir path. No parallel
+  proto, no separate normalizer. This is what makes the extension "a new
+  source of the same artifacts" (Hard Constraints section).
+- Extension-specific fields (source_device_id, dwell_estimate_seconds,
+  bookmark_folder_path, privacy_filter_version) ride inside `Metadata` as
+  documented map keys — same mechanism the existing browser connector already
+  uses for `visit_count`, `dwell_ms`, etc.
+- The internal `HistoryEntry` type in `internal/connector/browser/connector.go`
+  is an implementation detail of the SQLite-reading code path and is NOT
+  exposed on the wire — the wire shape is `RawArtifact`.
+
+**Design obligation:** enumerate the required `Metadata` keys (names, types,
+semantics, whether required vs optional) in `design.md` so the extension and
+server agree without re-deriving them per scope.
+
+### NC-4 — Source-device-id semantics → **Resolved: operator-set, with UUID fallback**
+
+`source_device_id` is operator-set free-form short string entered in the
+extension options page on first install (e.g. `"laptop"`, `"work-desktop"`,
+`"phone-chrome"`). Constraints:
+
+- Required, 1–32 chars, `[a-z0-9-]` only (lowercase, ASCII, dashes), validated
+  in the options-page UI.
+- Stored in `chrome.storage.local` (per-extension, not synced) alongside the
+  bearer token and base URL.
+- If the operator skips the field, the options page MUST generate and persist
+  a UUIDv4 with prefix `auto-` (e.g. `auto-9f3c…`) so the wire field is never
+  empty — but the UI MUST prompt for a human-friendly override on first save.
+- The dedup key for history visits is
+  `(url, kind, source_device_id, day_bucket)` (see NC-5 for the day bucket).
+  This guarantees Chrome Sync sharing the same URL across two devices does
+  not double-count.
+
+**Design obligation:** document the device-id format and dedup-key tuple in
+`design.md`; surface a "Devices" admin view (server-side list of distinct
+`source_device_id` values observed per user) so the operator can audit which
+extension installs are active. The admin view itself is in scope for v1
+(read-only list); device-level revocation is achieved by revoking the
+corresponding bearer token (spec 044 surface).
+
+### NC-5 — Dedup window for history visits → **Resolved: collapse within 30 min default, configurable**
+
+Repeat visits to the same URL within a configurable dedup window collapse to
+one artifact with incremented `visit_count` and updated `last_visited`, rather
+than producing N artifacts. Defaults and bounds:
+
+- Default window: **30 minutes**.
+- Operator-configurable in the extension options page; bounds 1 min ≤ W ≤
+  24 h (24 h being the "one artifact per day per URL per device" ceiling).
+- Server-side enforcement is authoritative: the server keys dedup on
+  `(url, kind, source_device_id, floor(visit_ts / window))` and the
+  extension's local dedup is a best-effort bandwidth optimization, not the
+  source of truth. This prevents a misconfigured extension from blowing up
+  artifact counts.
+- Bookmarks are NOT subject to the dedup window (each add/remove is its own
+  event, soft-delete handles removal — matches existing bookmarks connector
+  semantics).
+- The dwell-threshold gate (`> 2 min on page` in the Outcome Contract) is a
+  separate filter applied at the extension BEFORE the dedup window: short
+  visits never produce a wire event; qualifying visits then go through the
+  dedup window.
+
+**Design obligation:** `design.md` MUST state the precise dedup-key tuple and
+the interaction order (privacy filter → dwell threshold → local dedup →
+POST → server dedup), and `scopes.md` MUST include scenarios covering: (a)
+two visits within window collapse, (b) two visits across window produce two
+artifacts, (c) same URL on two different `source_device_id` values produce
+two artifacts (Chrome Sync case), (d) extension-side dedup disabled but
+server-side dedup still collapses.
+
+---
+
 ## Open Questions for `bubbles.clarify`
 
-- **NC-1:** Operator-token issuance path — reuse the spec 044 Per-User Bearer Auth Foundation (`AUTH_BOOTSTRAP_TOKEN` + admin-minted derived tokens), or mint per-extension tokens via a new endpoint?
-- **NC-2:** Where does the extension live in the smackerel repo — `extensions/chrome-bridge/` (TypeScript + manifest + esbuild), separate repo, or a new top-level workspace? Recommend in-repo for atomic spec evolution.
-- **NC-3:** Schema for "browser_history_visit" — does it extend `internal/connector/browser`'s existing `Visit` model byte-for-byte, or is the extension wire format a new proto that the server converts? Recommend extending the existing proto to avoid divergence.
-- **NC-4:** Source-device-id semantics — random UUID per extension install? Operator-set string ("laptop", "work-desktop")? Recommend operator-set.
-- **NC-5:** Dedup window for history visits — visits to the same URL within N minutes collapse to one artifact with incremented visit_count, or every visit is a separate artifact? Recommend: collapse within 30 min default, configurable in options page.
+> All NCs resolved May 28, 2026 — see "Clarifications" section above. This
+> placeholder is retained so downstream agents can see at a glance that the
+> clarify pass ran; new questions raised during `bubbles.design` or
+> `bubbles.plan` should be appended here and routed back to `bubbles.clarify`.
+
+- (none open)
 
 ---
 
