@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -116,30 +115,17 @@ func LoadCallbackKeystoreFromJSON(raw string) (*CallbackKeystore, error) {
 	return &CallbackKeystore{keys: cleaned}, nil
 }
 
-// LoadCallbackKeystoreFromEnv reads the SST-managed environment
-// variable QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON and constructs a
-// CallbackKeystore. Returns (nil, nil) when the environment variable
-// is empty or unset — the connector treats this as "callback signing
-// not configured" rather than a fatal error so the QF connector can
-// run with engagement, evidence, and read-only flows wired even when
-// the pre-MVP callback transport is intentionally not exercised in a
-// particular environment. Returns (nil, error) when the variable is
-// set but malformed or invalid — startup MUST fail loud in that case
-// because the operator declared an intent to enable signing but the
-// configuration is broken.
-//
-// The fail-loud-when-all-keys-future invariant is enforced lazily by
-// SelectActiveKey at the first signing call site (see callback.go
-// CallbackSigner.Sign). Connect-time validation can optionally probe
-// SelectActiveKey(now) once to surface the failure during startup;
-// see internal/connector/qfdecisions/connector.go Connect. SCN-SM-041-028.
-func LoadCallbackKeystoreFromEnv() (*CallbackKeystore, error) {
-	raw := strings.TrimSpace(os.Getenv(CallbackSigningKeysEnvVar))
-	if raw == "" {
-		return nil, nil
-	}
-	return LoadCallbackKeystoreFromJSON(raw)
-}
+// LoadCallbackKeystoreFromEnv was REMOVED by BUG-020-010 /
+// SCN-SM-020-bug-010. The qfdecisions package no longer reads
+// QF_DECISIONS_CALLBACK_SIGNING_KEYS_JSON via os.Getenv directly —
+// the value is now ingested by internal/config.Load() into the
+// Config.QFDecisionsCallbackSigningKeysJSON field, validated by
+// internal/config.validateQFDecisionsConfig() at boot, plumbed
+// through connector.ConnectorConfig.SourceConfig["callback_signing_keys_json"]
+// by cmd/core/connectors.go, and consumed at Connect() time via
+// LoadCallbackKeystoreFromJSON(parsed.CallbackSigningKeysJSON). The
+// permanent grep guard in bug020010_config_ingestion_test.go enforces
+// that no os.Getenv read may be re-introduced in this file.
 
 // SelectActiveKey returns the newest key whose NotBefore <= now (in
 // UTC). Returns ErrNoActiveCallbackKey when every key's NotBefore is
