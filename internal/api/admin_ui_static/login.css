@@ -1,0 +1,10 @@
+/* Spec 057 Scope 1 — minimal CSP-compliant styles. */
+body { font-family: system-ui, sans-serif; max-width: 28rem; margin: 4rem auto; padding: 0 1rem; }
+h1 { font-size: 1.5rem; }
+label { display: block; margin: 1rem 0 .25rem; }
+input { width: 100%; padding: .5rem; box-sizing: border-box; }
+button { margin-top: 1rem; padding: .5rem 1rem; cursor: pointer; }
+.banner { padding: .75rem; border-radius: .25rem; margin-bottom: 1rem; }
+.banner-disabled { background: #fff3cd; border: 1px solid #ffe69c; }
+.banner-error { background: #f8d7da; border: 1px solid #f1aeb5; }
+.logout { margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; }

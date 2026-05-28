@@ -238,6 +238,13 @@ func NewRouter(deps *Dependencies) http.Handler {
 		r.Post("/v1/web/logout", deps.HandleWebLogout)
 	})
 
+	// Spec 057 — browser-friendly /login page + static assets. Both
+	// are PUBLIC (no bearerAuthMiddleware) because the login page is
+	// the entry point that unauthenticated browser navigations land
+	// on via the content-negotiated 303 in bearerAuthMiddleware.
+	r.Get("/login", deps.HandleLoginPage)
+	r.Handle("/admin_ui_static/*", http.StripPrefix("/", http.FileServer(loginStaticFS())))
+
 	// Web UI routes (HTMX) - registered externally via RegisterWebRoutes
 	if deps.WebHandler != nil {
 		// Web UI group — auth required when AuthToken is configured.
@@ -630,6 +637,10 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 					"remote_addr", r.RemoteAddr,
 					"reason", "auth not configured in production")
 				metrics.AuthFailure.WithLabelValues("auth_not_configured").Inc()
+				if isBrowserNavigation(r) {
+					redirectToLogin(w, r)
+					return
+				}
 				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "auth not configured in production")
 				return
 			}
@@ -655,6 +666,10 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 				"remote_addr", r.RemoteAddr,
 				"reason", reason)
 			metrics.AuthFailure.WithLabelValues(reason).Inc()
+			if isBrowserNavigation(r) {
+				redirectToLogin(w, r)
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
@@ -677,6 +692,10 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 						"reason", "revoked")
 					metrics.AuthValidationOutcome.WithLabelValues("rejected_revoked", source).Inc()
 					metrics.AuthFailure.WithLabelValues("revoked").Inc()
+					if isBrowserNavigation(r) {
+						redirectToLogin(w, r)
+						return
+					}
 					writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 					return
 				}
@@ -687,6 +706,7 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 					IssuedAt:  parsed.IssuedAt,
 					ExpiresAt: parsed.ExpiresAt,
 					Source:    auth.SessionSourcePerUserToken,
+					Scopes:    parsed.Scopes,
 				}
 				metrics.AuthValidationOutcome.WithLabelValues("accepted", source).Inc()
 				next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
@@ -716,6 +736,10 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 				"reason", "paseto verify failed")
 			metrics.AuthValidationOutcome.WithLabelValues(outcome, source).Inc()
 			metrics.AuthFailure.WithLabelValues("paseto_verify_failed").Inc()
+			if isBrowserNavigation(r) {
+				redirectToLogin(w, r)
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 			return
 		}
@@ -733,6 +757,10 @@ func (d *Dependencies) bearerAuthMiddleware(next http.Handler) http.Handler {
 			"remote_addr", r.RemoteAddr,
 			"reason", "invalid token")
 		metrics.AuthFailure.WithLabelValues("shared_token_mismatch").Inc()
+		if isBrowserNavigation(r) {
+			redirectToLogin(w, r)
+			return
+		}
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Valid authentication required")
 	})
 }

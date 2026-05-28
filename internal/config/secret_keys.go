@@ -32,6 +32,11 @@ var secretKeys = []string{
 	"AUTH_AT_REST_HASHING_KEY",
 	"AUTH_BOOTSTRAP_TOKEN",
 	"TELEGRAM_BOT_TOKEN",
+	// Spec 059 Scope 1 — Google Keep live-sync App Password. Bucket-2
+	// secret read ONLY by ml/app/keep_bridge.py; no Go-source consumer.
+	// The application-layer sidecar boundary is asserted by
+	// internal/config/secret_keys_test.go::TestKeepAppPasswordReadOnlyFromSidecarNotCore.
+	"KEEP_GOOGLE_APP_PASSWORD",
 }
 
 // placeholderPrefix and placeholderSuffix bracket the deterministic,

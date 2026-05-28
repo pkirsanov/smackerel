@@ -785,3 +785,61 @@ func TestComposeContract_AdversarialPrometheusLiteralBindAndFallbackForms(t *tes
 		})
 	}
 }
+
+// TestComposeEnvFileSharedAcrossCoreAndMlServices — spec 059 Scope 1, SCN-059-002.
+//
+// The Google Keep live-sync App Password (KEEP_GOOGLE_APP_PASSWORD) is
+// injected into the ML sidecar via the standard env_file mechanism. Because
+// smackerel-core and smackerel-ml share the SAME resolved env_file
+// (${SMACKEREL_ENV_FILE}), the App Password is materially present in BOTH
+// containers' process environments. This matches the existing
+// TELEGRAM_BOT_TOKEN precedent and is the deliberately accepted shape
+// (planning blocker B1 option c). The sidecar boundary is therefore
+// enforced at the APPLICATION layer (no Go source under internal/ or cmd/
+// reads KEEP_GOOGLE_APP_PASSWORD — asserted by
+// internal/config/secret_keys_test.go::TestKeepAppPasswordReadOnlyFromSidecarNotCore),
+// not at the compose env-injection layer.
+//
+// This test pins the env_file shape: both smackerel-core and smackerel-ml
+// MUST declare env_file: ${SMACKEREL_ENV_FILE:?...} and neither service may
+// introduce a per-service override that masks the shared env file (e.g. a
+// distinct env_file pointing elsewhere). A regression that splits the env
+// files into per-service shapes would silently break the documented
+// sidecar-boundary mental model that operators rely on.
+func TestComposeEnvFileSharedAcrossCoreAndMlServices(t *testing.T) {
+	composePath := filepath.Join(repoRoot(t), "docker-compose.yml")
+	raw, err := os.ReadFile(composePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", composePath, err)
+	}
+
+	// envFileShape captures only the env_file: field (a list of strings),
+	// matching the live compose file's short-form usage.
+	type envFileShape struct {
+		Services map[string]struct {
+			EnvFile []string `yaml:"env_file"`
+		} `yaml:"services"`
+	}
+	var doc envFileShape
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+
+	wantPrefix := "${SMACKEREL_ENV_FILE:?"
+
+	for _, svc := range []string{"smackerel-core", "smackerel-ml"} {
+		entry, ok := doc.Services[svc]
+		if !ok {
+			t.Fatalf("docker-compose.yml missing service %q", svc)
+		}
+		if len(entry.EnvFile) != 1 {
+			t.Fatalf("service %s: env_file must be a single-entry list (shared SMACKEREL_ENV_FILE), got %d entries: %v",
+				svc, len(entry.EnvFile), entry.EnvFile)
+		}
+		got := entry.EnvFile[0]
+		if !strings.HasPrefix(got, wantPrefix) {
+			t.Fatalf("service %s: env_file[0] = %q, want prefix %q (Gate G028 fail-loud SST; spec 059 Scope 1 SCN-059-002 sidecar-boundary contract)",
+				svc, got, wantPrefix)
+		}
+	}
+}

@@ -2,22 +2,89 @@
   "version": 3,
   "featureDir": "specs/058-chrome-extension-bridge",
   "featureName": "Chrome Extension Bridge (Live Bookmarks + Browser History)",
-  "status": "draft",
-  "workflowMode": "spec-scope-hardening",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
-  "planningOnly": true,
-  "planningOnlyJustification": "Initial intent scaffold only — needs bubbles.clarify pass to resolve NC-1..NC-5 before bubbles.design / bubbles.plan can decompose into scopes.",
+  "planningOnly": false,
+  "planningOnlyJustification": "Planning complete (5 scopes, 21 scenarios, design ready). Spec 060 dependency Scopes 1+2 SHIPPED. Flipped to full-delivery 2026-05-28 to unblock bubbles.implement for Scopes 1+2.",
   "specDependsOn": [
-    "specs/044-per-user-bearer-auth-foundation"
+    "specs/044-per-user-bearer-auth",
+    "specs/060-bearer-auth-scope-claim"
   ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
   "execution": {
     "activeAgent": null,
-    "currentPhase": "draft",
+    "currentPhase": "bootstrap",
     "currentScope": null,
-    "runStartedAt": null,
+    "runStartedAt": "2026-05-28T00:00:00Z",
     "lastUpdatedAt": "2026-05-28T00:00:00Z",
     "completedPhaseClaims": [],
-    "completedScopes": []
-  }
+    "completedScopes": [],
+    "pendingTransitionRequests": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "runStartedAt": "2026-05-28T00:00:00Z",
+        "runCompletedAt": "2026-05-28T00:00:00Z",
+        "statusBefore": "draft",
+        "statusAfter": "draft",
+        "summary": "Authored design.md covering architecture (MV3 extension at extensions/chrome-bridge/, server endpoint POST /v1/connectors/extension/ingest), wire schema bound to connector.RawArtifact with enumerated Metadata keys, server-authoritative dedup table, spec 044 bearer auth reuse. Flagged OQ-DSN-1 (spec 044 scope claim amendment) as blocking dependency; routing packet captured in §12.1."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "plan"],
+        "runStartedAt": "2026-05-28T00:00:00Z",
+        "runCompletedAt": "2026-05-28T00:00:00Z",
+        "statusBefore": "draft",
+        "statusAfter": "in_progress",
+        "summary": "Authored scopes.md with 5 sequential vertical-slice scopes (server endpoint + SST, server dedup, MV3 extension skeleton, build/release wiring, operator docs + devices view). Authored scenario-manifest.json with 21 stable SCN-058-NNN contracts mapped to live tests. Initialized report.md and uservalidation.md templates. Consumed shipped spec 060 RequireScope primitive (Scopes 1+2 SHIPPED — OQ-DSN-1 resolved upstream); wire scope tuple is auth.RequireScope(\"extension:bookmarks\", \"extension:history\") with AND-semantics per design §1.1 and §5.1. SST-zero-defaults preserved; Build-Once Deploy-Many honored (signed-zip via cosign keyless, build-manifest entry). Adversarial regression rows planned for each high-risk scope (AND-semantics exact-match, Chrome-Sync device-id, boundary-collision separator hygiene, corrupted-IndexedDB-row drainer resilience)."
+      }
+    ]
+  },
+  "certification": {
+    "status": "not_started",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {"scope": 1, "name": "Server Ingest Endpoint + SST Config + Scope-Gated Mount", "status": "not_started", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null},
+      {"scope": 2, "name": "Server Dedup Table + Keyer + Upsert Path", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null},
+      {"scope": 3, "name": "Chrome MV3 Extension Skeleton + Background WAL + Options Page", "status": "not_started", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null},
+      {"scope": 4, "name": "Build/Release Wiring", "status": "not_started", "dependsOn": [3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null},
+      {"scope": 5, "name": "Operator Docs + Devices Admin View", "status": "not_started", "dependsOn": [1, 2, 4], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": null}
+    ],
+    "lockdownState": {"active": false, "lockedScenarioIds": []}
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Planning complete (bubbles.plan, 2026-05-28). 5 scopes, 21 SCN contracts. Spec 060 Scopes 1+2 dependency SHIPPED — OQ-DSN-1 resolved."
 }

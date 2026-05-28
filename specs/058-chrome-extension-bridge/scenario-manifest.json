@@ -1,0 +1,482 @@
+{
+  "version": 1,
+  "featureDir": "specs/058-chrome-extension-bridge",
+  "generatedAt": "2026-05-28T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-058-001",
+      "scope": "01-server-ingest-endpoint",
+      "title": "Valid scoped batch is accepted and published",
+      "gherkin": {
+        "given": "a PASETO token with scopes [extension:bookmarks, extension:history] and a body of 3 RawArtifact items under 1 MiB",
+        "when": "the operator POSTs /v1/connectors/extension/ingest",
+        "then": "HTTP 200 with 3 accepted outcomes; PublishRawArtifact called 3 times"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/api/connectors/extension/ingest_test.go", "testId": "TestIngest_AcceptsValidBatch_AllAccepted"},
+        {"file": "tests/e2e/extension_ingest_e2e_test.go", "testId": "TestE2E_ExtensionIngest_BookmarkRoundtrip"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-001"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-002",
+      "scope": "01-server-ingest-endpoint",
+      "title": "Token missing required scope is rejected with 403 scope_required",
+      "gherkin": {
+        "given": "a legacy spec-044 PASETO token with Scopes=nil",
+        "when": "the operator POSTs /v1/connectors/extension/ingest",
+        "then": "HTTP 403 with scope_required body shape; PublishRawArtifact never called"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/api/connectors/extension/ingest_integration_test.go", "testId": "TestIngest_LegacyToken_Rejected403ScopeRequired"},
+        {"file": "internal/api/connectors/extension/ingest_integration_test.go", "testId": "TestIngest_PartialScopeMatch_Rejected"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-002"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-003",
+      "scope": "01-server-ingest-endpoint",
+      "title": "Body over 1 MiB is rejected with 413 body_too_large",
+      "gherkin": {
+        "given": "a PASETO token with required scopes and a body exceeding 1 MiB",
+        "when": "the operator POSTs /v1/connectors/extension/ingest",
+        "then": "HTTP 413 with code body_too_large; no items decoded or published"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/api/connectors/extension/ingest_test.go", "testId": "TestIngest_RejectsBodyOver1MiB"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-003"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-004",
+      "scope": "01-server-ingest-endpoint",
+      "title": "Batch over 256 items is rejected with 422 batch_too_large",
+      "gherkin": {
+        "given": "a PASETO token with required scopes and 257 items",
+        "when": "the operator POSTs /v1/connectors/extension/ingest",
+        "then": "HTTP 422 with code batch_too_large; no items published"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/api/connectors/extension/ingest_test.go", "testId": "TestIngest_RejectsBatchOver256"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-004"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-005",
+      "scope": "01-server-ingest-endpoint",
+      "title": "SST loader fails loud on missing or zero ExtensionIngestConfig values",
+      "gherkin": {
+        "given": "config/smackerel.yaml omits any one extension.ingest field",
+        "when": "ExtensionIngestConfig.Validate() runs at startup",
+        "then": "Validate returns non-nil error naming the missing field; core exits non-zero"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/config/extension_test.go", "testId": "TestExtensionIngestConfig_Validate_RejectsEachMissingField"},
+        {"file": "internal/config/extension_test.go", "testId": "TestExtensionIngestConfig_Validate_AcceptsFullyPopulated"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-005"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-006",
+      "scope": "02-server-dedup",
+      "title": "Two history visits within the dedup window collapse to one artifact",
+      "gherkin": {
+        "given": "two browser_history_visit items with identical url/content_type/device in the same bucket",
+        "when": "the operator POSTs both",
+        "then": "PublishRawArtifact called once; raw_ingest_dedup visit_count=2; second outcome=deduped with same artifact_id"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_integration_test.go", "testId": "TestUpsertDedup_CollisionIncrementsVisitCount"},
+        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-006"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-007",
+      "scope": "02-server-dedup",
+      "title": "Two history visits across the dedup window produce two artifacts",
+      "gherkin": {
+        "given": "two browser_history_visit items with identical url/content_type/device in different buckets",
+        "when": "the operator POSTs them",
+        "then": "PublishRawArtifact called twice; two distinct dedup rows with distinct artifact_ids"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByBucket"},
+        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-007"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-008",
+      "scope": "02-server-dedup",
+      "title": "Chrome Sync — same URL across two source_device_id produces two artifacts",
+      "gherkin": {
+        "given": "two browser_history_visit items same url/content_type/captured_at, devices laptop and work-desktop",
+        "when": "the operator POSTs them",
+        "then": "two distinct dedup_key rows; PublishRawArtifact called twice"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_test.go", "testId": "TestComputeDedupKey_VariesByDevice"},
+        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_WindowAndDeviceMatrix"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-008"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-009",
+      "scope": "02-server-dedup",
+      "title": "Bookmark dedup key uses bucket=0 regardless of timestamp",
+      "gherkin": {
+        "given": "two bookmark items with identical url/content_type/device and captured_at 24h apart",
+        "when": "the operator POSTs them",
+        "then": "same dedup_key; PublishRawArtifact called once; second outcome=deduped"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/connector/ingest/dedup_integration_test.go", "testId": "TestUpsertDedup_BookmarkBucketAlwaysZero"},
+        {"file": "tests/e2e/extension_dedup_e2e_test.go", "testId": "TestE2E_ExtensionDedup_Regression_BookmarkBypassesWindow"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-009"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-010",
+      "scope": "03-extension-skeleton",
+      "title": "Privacy filter drops denied URL before enqueue",
+      "gherkin": {
+        "given": "operator has configured deny_pattern matching the URL",
+        "when": "the user visits the URL",
+        "then": "no IndexedDB row written; no network request leaves the browser"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/privacy_filter.spec.ts", "testId": "dropsDeniedURLBeforeEnqueue"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-010"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-011",
+      "scope": "03-extension-skeleton",
+      "title": "Dwell threshold filters out short visits",
+      "gherkin": {
+        "given": "operator dwell_threshold_seconds=120 and a visit of 30s",
+        "when": "chrome.history.onVisited fires",
+        "then": "no item is enqueued"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/dwell_gate.spec.ts", "testId": "dropsVisitBelowThreshold"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-011"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-012",
+      "scope": "03-extension-skeleton",
+      "title": "IndexedDB WAL persists across service-worker eviction",
+      "gherkin": {
+        "given": "the queue contains 5 unsent items and the service worker is evicted",
+        "when": "the operator reconnects and chrome.alarms re-wakes the worker",
+        "then": "drain() reads all 5 items and POSTs them; accepted/deduped rows removed"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/queue.spec.ts", "testId": "persistsAcrossSWEviction"},
+        {"file": "extensions/chrome-bridge/test/e2e/bookmark_roundtrip.spec.ts", "testId": "Regression_OfflineQueueFlushOnReconnect"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-012"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-013",
+      "scope": "03-extension-skeleton",
+      "title": "Exponential backoff curve respects design 4.2",
+      "gherkin": {
+        "given": "the server returns HTTP 503 repeatedly",
+        "when": "the drain loop encounters 7 consecutive failures",
+        "then": "retry intervals match design curve; 8th failure caps at 24h and surfaces dead-letter badge"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/backoff.spec.ts", "testId": "followsDesignedCurve"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-013"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-014",
+      "scope": "03-extension-skeleton",
+      "title": "Transport error mapping per design 3.1 table",
+      "gherkin": {
+        "given": "the server returns one of {401, 403, 413, 422, 400}",
+        "when": "the drain loop processes the response",
+        "then": "401/403 terminal-for-all + badge; 4xx item-terminal; 5xx/network retryable"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/transport.spec.ts", "testId": "mapsHTTPStatusToOutcome"},
+        {"file": "extensions/chrome-bridge/test/e2e/auth_failure.spec.ts", "testId": "revokedTokenSetsBadgeAUTH"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-014"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-015",
+      "scope": "03-extension-skeleton",
+      "title": "Corrupted IndexedDB row is skipped without losing neighbors",
+      "gherkin": {
+        "given": "the WAL contains items A, B (corrupted), C, D",
+        "when": "drain() iterates the queue",
+        "then": "A, C, D POSTed; B logged once + removed; no exception propagates"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "regression",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "extensions/chrome-bridge/test/unit/queue.spec.ts", "testId": "skipsCorruptedRow"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-015"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-016",
+      "scope": "04-build-release",
+      "title": "smackerel.sh build --extension chrome-bridge produces a versioned signed zip",
+      "gherkin": {
+        "given": "a clean working tree at git SHA with manifest version 0.1.0",
+        "when": "operator runs ./smackerel.sh build --extension chrome-bridge",
+        "then": "dist/extension/smackerel-chrome-bridge-0.1.0-<sha>.zip and .sha256 exist; exit 0"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "scripts/commands/build-chrome-bridge_test.sh", "testId": "script_produces_versioned_zip_and_sha256"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-016"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-017",
+      "scope": "04-build-release",
+      "title": "Two CI runs on the same SHA produce byte-identical zips",
+      "gherkin": {
+        "given": "two independent CI runs on the same git SHA",
+        "when": "./smackerel.sh build --extension chrome-bridge runs in each",
+        "then": "both zips have identical SHA-256 digests; both recorded in build-manifest"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/workflows/build.yml", "testId": "build_chrome_bridge_reproducibility"},
+        {"file": ".github/workflows/build.yml", "testId": "Regression_BuildManifestRecordsZipSHA256"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-017"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-018",
+      "scope": "04-build-release",
+      "title": "CI signs the zip with cosign keyless and publishes to GitHub Release",
+      "gherkin": {
+        "given": "the build-chrome-bridge CI job has produced the zip",
+        "when": "the cosign sign-blob step runs",
+        "then": ".sig artifact uploaded; zip+sha256+sig attached to Release; zip SHA-256 in build-manifest"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": ".github/workflows/build.yml", "testId": "build_chrome_bridge_signs_and_publishes"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-018"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-019",
+      "scope": "05-operator-docs",
+      "title": "Operator can sideload the extension following Operations.md",
+      "gherkin": {
+        "given": "an operator with a fresh Chromium browser and prerequisites",
+        "when": "they follow Operations.md Chrome Extension Bridge Sideload Workflow",
+        "then": "extension loads; cosign verify-blob succeeds; options page accepts PASETO from ./smackerel.sh auth enroll"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": "e2e-ui",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/docs/api_md_extension_section_test.sh", "testId": "api_md_has_extension_section_with_403_scope_required"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-019"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-020",
+      "scope": "05-operator-docs",
+      "title": "GET /v1/admin/extension/devices aggregates seeded devices",
+      "gherkin": {
+        "given": "raw_ingest_dedup has rows for laptop and work-desktop and an admin-scope token",
+        "when": "GET /v1/admin/extension/devices is called",
+        "then": "response contains 2 device entries with first_seen_at, last_seen_at, visit_count_30d"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "internal/api/admin/devices_integration_test.go", "testId": "TestDevicesHandler_AggregatesSeededDevices"},
+        {"file": "internal/api/admin/devices_integration_test.go", "testId": "TestDevicesHandler_NonAdminSeesOnlyOwnDevices"},
+        {"file": "tests/e2e/admin_devices_e2e_test.go", "testId": "Regression_AdminDevicesViewReturnsSeededDevices"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-020"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    },
+    {
+      "scenarioId": "SCN-058-021",
+      "scope": "05-operator-docs",
+      "title": "API.md documents the endpoint and authorization matrix",
+      "gherkin": {
+        "given": "docs/API.md contains a Chrome Extension Bridge Ingestion section",
+        "when": "a reviewer reads the section",
+        "then": "request/response/errors match design 3.1; auth matrix matches design 5.2; 403 body matches spec 060"
+      },
+      "gherkinHash": "sha256:pending-implementation",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {"file": "tests/docs/api_md_extension_section_test.sh", "testId": "api_md_has_extension_section_with_403_scope_required"},
+        {"file": "tests/docs/no_legacy_extension_path_test.sh", "testId": "no_v1_extensions_path_references"}
+      ],
+      "evidenceRefs": ["report.md#scn-058-021"],
+      "replacedBy": null,
+      "invalidatedBy": null
+    }
+  ]
+}
