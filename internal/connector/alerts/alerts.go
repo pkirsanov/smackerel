@@ -66,6 +66,11 @@ type Connector struct {
 	known           map[string]time.Time   // alert_id → first-seen time for dedup
 	Notifier        AlertNotifier          // optional: publishes extreme/severe alerts
 	TravelProvider  TravelLocationProvider // optional: provides travel destination locations
+
+	// retryOpts controls 429/Retry-After handling for outbound HTTP calls.
+	// BUG-022-003: every fetchXxx routes through connector.DoWithRetry so
+	// brownouts no longer escalate into hard bans (USGS/NWS/AirNow/GDACS).
+	retryOpts connector.RetryOptions
 }
 
 // AlertsConfig holds parsed alerts-specific configuration.
@@ -125,6 +130,8 @@ func drainBody(body io.ReadCloser) {
 
 // New creates a new Government Alerts connector.
 func New(id string) *Connector {
+	retryOpts := connector.DefaultRetryOptions()
+	retryOpts.Label = "gov-alerts"
 	return &Connector{
 		id:              id,
 		health:          connector.HealthDisconnected,
@@ -137,6 +144,7 @@ func New(id string) *Connector {
 		airnowBaseURL:   "https://www.airnowapi.org",
 		gdacsBaseURL:    "https://www.gdacs.org",
 		known:           make(map[string]time.Time),
+		retryOpts:       retryOpts,
 	}
 }
 
@@ -463,7 +471,7 @@ func (c *Connector) fetchUSGSEarthquakes(ctx context.Context, minMag float64) ([
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("USGS request failed: %w", err)
 	}
@@ -834,7 +842,7 @@ func (c *Connector) fetchNWSAlerts(ctx context.Context, lat, lon float64) ([]NWS
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "application/geo+json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("NWS request failed: %w", err)
 	}
@@ -1042,7 +1050,7 @@ func (c *Connector) fetchTsunamiAlerts(ctx context.Context) ([]TsunamiAlert, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("tsunami request failed: %w", err)
 	}
@@ -1165,7 +1173,7 @@ func (c *Connector) fetchVolcanoAlerts(ctx context.Context) ([]VolcanoAlert, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("volcano request failed: %w", err)
 	}
@@ -1307,7 +1315,7 @@ func (c *Connector) fetchWildfireAlerts(ctx context.Context) ([]WildfireAlert, e
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("wildfire request failed: %w", err)
 	}
@@ -1420,7 +1428,7 @@ func (c *Connector) fetchAirNowAQI(ctx context.Context, lat, lon float64, apiKey
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		// Redact API key from error context to prevent credential leak (CWE-532, H-017-003).
 		errMsg := err.Error()
@@ -1572,7 +1580,7 @@ func (c *Connector) fetchGDACSAlerts(ctx context.Context) ([]GDACSAlert, error) 
 	}
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("GDACS request failed: %w", err)
 	}

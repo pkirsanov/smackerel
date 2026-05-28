@@ -80,6 +80,12 @@ type Connector struct {
 	lastSummaryDate string
 	// nowFunc overrides time.Now for testing time-dependent behavior.
 	nowFunc func() time.Time
+
+	// retryOpts controls 429/Retry-After handling for outbound HTTP calls.
+	// BUG-022-003: every provider fetch routes through connector.DoWithRetry
+	// so the previous opaque "HTTP 429" error path is replaced with the
+	// canonical bounded-retry pattern shared with discord/guesthost/hospitable.
+	retryOpts connector.RetryOptions
 }
 
 // MarketsConfig holds parsed markets-specific configuration.
@@ -144,6 +150,8 @@ type FREDObservation struct {
 
 // New creates a new Financial Markets connector.
 func New(id string) *Connector {
+	retryOpts := connector.DefaultRetryOptions()
+	retryOpts.Label = "financial-markets"
 	return &Connector{
 		id:               id,
 		health:           connector.HealthDisconnected,
@@ -152,6 +160,7 @@ func New(id string) *Connector {
 		finnhubBaseURL:   "https://finnhub.io",
 		coingeckoBaseURL: "https://api.coingecko.com",
 		fredBaseURL:      "https://api.stlouisfed.org",
+		retryOpts:        retryOpts,
 	}
 }
 
@@ -561,8 +570,25 @@ func redactHTTPError(err error, label string) error {
 			searchFrom = valueStart + len("REDACTED") // advance past replacement
 		}
 	}
-	return fmt.Errorf("%s request failed: %s", label, msg)
+	// BUG-022-003: preserve the underlying error chain so callers can
+	// errors.Is(err, connector.ErrRateLimitExhausted) without losing the
+	// label-prefixed display string.
+	return &redactedHTTPError{label: label, msg: msg, err: err}
 }
+
+// redactedHTTPError preserves the unwrap chain while presenting a
+// label-prefixed redacted display string. See redactHTTPError.
+type redactedHTTPError struct {
+	label string
+	msg   string
+	err   error
+}
+
+func (r *redactedHTTPError) Error() string {
+	return r.label + " request failed: " + r.msg
+}
+
+func (r *redactedHTTPError) Unwrap() error { return r.err }
 
 // isSafeURL validates that a URL uses http or https scheme.
 // Returns false for javascript:, data:, or other potentially dangerous schemes (CWE-20).
@@ -619,7 +645,7 @@ func (c *Connector) doFinnhubQuote(ctx context.Context, finnhubSymbol, displaySy
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, redactHTTPError(err, label)
 	}
@@ -676,7 +702,7 @@ func (c *Connector) fetchCoinGeckoPrices(ctx context.Context, coinIDs []string) 
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, redactHTTPError(err, "coingecko")
 	}
@@ -738,7 +764,7 @@ func (c *Connector) fetchFinnhubCompanyNews(ctx context.Context, symbol, fromDat
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, redactHTTPError(err, "finnhub news")
 	}
@@ -779,7 +805,7 @@ func (c *Connector) fetchFREDLatest(ctx context.Context, seriesID string) (*FRED
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := connector.DoWithRetry(ctx, c.httpClient, req, c.retryOpts)
 	if err != nil {
 		return nil, redactHTTPError(err, "FRED")
 	}

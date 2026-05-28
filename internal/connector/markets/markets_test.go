@@ -29,6 +29,11 @@ func newTestConnector(id string) *Connector {
 	c.nowFunc = func() time.Time { return stableTestTime }
 	c.configGen = 1                    // mark as configured for tests that set c.config directly
 	c.health = connector.HealthHealthy // allow Sync without Connect for unit tests
+	// BUG-022-003: shrink retry budget so 429-error tests stay fast and
+	// retry-success tests can finish quickly.
+	c.retryOpts.MaxAttempts = 2
+	c.retryOpts.BaseDelay = 5 * time.Millisecond
+	c.retryOpts.MaxDelay = 50 * time.Millisecond
 	return c
 }
 
@@ -542,7 +547,9 @@ func TestSyncConfigSnapshotSafety(t *testing.T) {
 }
 
 func TestHTTPErrorResponseDrain(t *testing.T) {
-	// Verify non-OK responses are handled without leaking connections.
+	// BUG-022-003: 429 responses now route through connector.DoWithRetry which
+	// returns ErrRateLimitExhausted after the bounded budget; the previous
+	// opaque "HTTP 429" snippet pattern was replaced.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		w.Write([]byte(`{"error":"rate limited"}`))
@@ -556,13 +563,13 @@ func TestHTTPErrorResponseDrain(t *testing.T) {
 
 	_, err := c.fetchFinnhubQuote(context.Background(), "AAPL")
 	if err == nil {
-		t.Fatal("expected error for 429 response")
+		t.Fatal("expected error after 429 retry exhaustion")
 	}
-	if !strings.Contains(err.Error(), "429") {
-		t.Errorf("error should mention status 429, got: %v", err)
+	if !strings.Contains(err.Error(), "rate limited") || !strings.Contains(err.Error(), "max retries exceeded") {
+		t.Errorf("error should surface bounded-retry exhaustion, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "rate limited") {
-		t.Errorf("error should include response body snippet, got: %v", err)
+	if !errors.Is(err, connector.ErrRateLimitExhausted) {
+		t.Errorf("error should wrap connector.ErrRateLimitExhausted, got: %v", err)
 	}
 }
 
@@ -1078,10 +1085,12 @@ func TestFetchCoinGeckoPrices_HTTPError(t *testing.T) {
 
 	_, err := c.fetchCoinGeckoPrices(context.Background(), []string{"bitcoin"})
 	if err == nil {
-		t.Fatal("expected error for 429 response")
+		t.Fatal("expected error after 429 retry exhaustion")
 	}
-	if !strings.Contains(err.Error(), "429") {
-		t.Errorf("error should mention status 429, got: %v", err)
+	// BUG-022-003: 429 now exhausts the shared retry budget rather than
+	// surfacing the opaque "HTTP 429" snippet.
+	if !errors.Is(err, connector.ErrRateLimitExhausted) {
+		t.Errorf("error should wrap connector.ErrRateLimitExhausted, got: %v", err)
 	}
 }
 
@@ -3902,7 +3911,8 @@ func TestFetchFinnhubForex_MalformedBaseURL(t *testing.T) {
 }
 
 func TestFetchFinnhubForex_HTTPError(t *testing.T) {
-	// TQS-018-002: fetchFinnhubForex must handle non-200 HTTP responses with body snippet.
+	// BUG-022-003: 429 from Finnhub forex now exhausts the shared retry
+	// budget instead of returning the opaque "HTTP 429" string.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		w.Write([]byte(`{"error":"rate limited"}`))
@@ -3916,13 +3926,10 @@ func TestFetchFinnhubForex_HTTPError(t *testing.T) {
 
 	_, err := c.fetchFinnhubForex(context.Background(), "USD/JPY")
 	if err == nil {
-		t.Fatal("expected error for 429 forex response")
+		t.Fatal("expected error after 429 retry exhaustion")
 	}
-	if !strings.Contains(err.Error(), "429") {
-		t.Errorf("error should mention status 429, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "rate limited") {
-		t.Errorf("error should include body snippet, got: %v", err)
+	if !errors.Is(err, connector.ErrRateLimitExhausted) {
+		t.Errorf("error should wrap connector.ErrRateLimitExhausted, got: %v", err)
 	}
 }
 
