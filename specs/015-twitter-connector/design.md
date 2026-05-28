@@ -5,6 +5,8 @@
 > **Status:** Draft
 > **Spec:** [spec.md](spec.md)
 
+> **⚠️ Extension Pointer (2026-05-28):** This design covers the **archive-import path only** (SyncModeArchive). The SyncModeAPI and SyncModeHybrid design — API client, rate-limit handling, OAuth flow — is documented under [`specs/056-twitter-api-connector`](../056-twitter-api-connector/design.md) (certified `specs_hardened` 2026-05-27). API/hybrid code lives in `internal/connector/twitter/api.go` and `internal/connector/twitter/api_test.go`.
+
 ---
 
 ## Design Brief

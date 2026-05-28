@@ -5,6 +5,8 @@
 > **Status:** Draft
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Section 6.2 Capture Input Types (URL — Twitter/X post)
 
+> **⚠️ Extension Pointer (2026-05-28):** Spec 015 ships the **archive-import path only** (SyncModeArchive). The SyncModeAPI and SyncModeHybrid paths discussed below — including Options B, C, and E in the API Access Strategy section — are implemented under [`specs/056-twitter-api-connector`](../056-twitter-api-connector/spec.md) (certified `specs_hardened` 2026-05-27). Code for the API/hybrid path lives in `internal/connector/twitter/api.go` and `internal/connector/twitter/api_test.go`. Treat spec 056 as the authoritative home for API/hybrid behavior.
+
 ---
 
 ## Problem Statement
@@ -70,6 +72,8 @@ Twitter/X is explicitly referenced in the design doc's capture input types (sect
 ---
 
 ## ⚠️ API Access Strategy — Critical Design Decision
+
+> **⚠️ Implementation home (2026-05-28):** The SyncModeAPI and SyncModeHybrid implementation of this strategy (Options B, C, and E below) lives in [`specs/056-twitter-api-connector`](../056-twitter-api-connector/spec.md). Spec 015 retains the archive-import path (Option A). See the extension-pointer banner at the top of this document.
 
 ### The Problem
 

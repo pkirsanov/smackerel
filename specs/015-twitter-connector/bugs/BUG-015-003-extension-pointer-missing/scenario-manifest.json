@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "spec": "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing",
+  "lockingPolicy": {
+    "lockOnPhases": ["test", "validate", "audit"],
+    "lockReason": "Artifact-shape regression scenarios are the contractual proof of the extension-pointer fix; any future change to the scenario set requires explicit invalidation evidence per Gate G058/G059."
+  },
+  "tdd": {
+    "mode": "exempt",
+    "rationale": "Artifact-only documentation drift; zero runtime code changed. Per policySnapshot.tdd.mode = exempt with user-request provenance.",
+    "redGreenEvidence": "Red state: three greps for '056-twitter-api-connector' against state.json/spec.md/design.md exit 1 pre-fix. Green state: same three greps exit 0 post-fix; spec.md grep returns >= 2 matches; API Access Strategy heading has a 056-twitter-api-connector reference within +/- 5 lines; change-boundary confined to specs/015-twitter-connector/."
+  },
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG-015-003-001",
+      "scope": 1,
+      "title": "state.json carries a forward pointer to spec 056",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/015-twitter-connector/state.json"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/015-twitter-connector/state.json",
+          "function": "manual:grep-extendedBy-056-twitter-api-connector"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing/scopes.md#dod-state-json-extendedby"
+      ],
+      "liveTestExpectation": "grep -q '056-twitter-api-connector' specs/015-twitter-connector/state.json exits 0",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-003-002",
+      "scope": 1,
+      "title": "spec.md carries top-of-document banner + API Access Strategy section note",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/015-twitter-connector/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/015-twitter-connector/spec.md",
+          "function": "manual:grep-056-twitter-api-connector-in-spec"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing/scopes.md#dod-spec-md-inline-note"
+      ],
+      "liveTestExpectation": "grep -c '056-twitter-api-connector' specs/015-twitter-connector/spec.md returns a count >= 2 (top-of-document banner + API Access Strategy section note)",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-003-003",
+      "scope": 1,
+      "title": "design.md carries an inline forward-pointer note",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/015-twitter-connector/design.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/015-twitter-connector/design.md",
+          "function": "manual:grep-056-twitter-api-connector-in-design"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing/scopes.md#dod-design-md-inline-note"
+      ],
+      "liveTestExpectation": "grep -q '056-twitter-api-connector' specs/015-twitter-connector/design.md exits 0 at the top of the document",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-003-004",
+      "scope": 1,
+      "title": "API Access Strategy section is no longer misleading",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/015-twitter-connector/spec.md"
+      ],
+      "linkedTests": [
+        {
+          "file": "specs/015-twitter-connector/spec.md",
+          "function": "manual:api-access-strategy-proximity-guard"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing/scopes.md#dod-api-access-strategy-proximity"
+      ],
+      "liveTestExpectation": "The 'API Access Strategy' heading in spec.md MUST have a '056-twitter-api-connector' reference within +/- 5 lines",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    },
+    {
+      "scenarioId": "SCN-BUG-015-003-005",
+      "scope": 1,
+      "title": "Fix is artifact-only",
+      "requiredTestType": ["guard-verification"],
+      "testFiles": [
+        "specs/015-twitter-connector/state.json",
+        "specs/015-twitter-connector/spec.md",
+        "specs/015-twitter-connector/design.md"
+      ],
+      "linkedTests": [
+        {
+          "file": ".git",
+          "function": "manual:git-diff-name-only-change-boundary"
+        }
+      ],
+      "evidenceRefs": [
+        "specs/015-twitter-connector/bugs/BUG-015-003-extension-pointer-missing/scopes.md#dod-artifact-only"
+      ],
+      "liveTestExpectation": "git diff --name-only returns only paths under specs/015-twitter-connector/",
+      "regressionProtected": true,
+      "status": "planned",
+      "changeType": "added"
+    }
+  ]
+}
