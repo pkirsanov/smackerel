@@ -1751,3 +1751,226 @@ ratification required at user-validation time.
 - spec 060 — PASETO scope claim catalog (three new scopes via
   packet — §14).
 - spec 150 — Infisical-only secrets policy.
+
+---
+
+## 17. Telegram Webhook Mode (Option A — Transport Entry-Point Capability Foundation)
+
+**Status:** Net-new design extension (2026-05-28, operator decision Option A).
+**Motivation:** SCOPE-05 DoD #8/#9 and SCOPE-06 DoD #4b/#5b/#6 are blocked by `SCOPE-05-E2E-INJECTION-MECHANISM` — the bot uses `tgbotapi.GetUpdatesChan` long-poll (`internal/telegram/bot.go:306`), which is not shell-driveable from an e2e fixture. Adding a Telegram **webhook** entry-point alongside the existing long-poll path unblocks shell-driveable injection by accepting a Telegram-shaped `Update` JSON via authenticated HTTP POST. Webhook is also the production-correct mode (lower latency, no long-poll thundering herd), though a public HTTPS URL for real Telegram delivery is out of scope of this design (current production retains long-poll until a deployment story exists).
+
+**Substrate posture:** The existing `internal/telegram/assistant_adapter/` adapter and `bot.handleMessage` / `bot.safeHandleCallback` / `bot.safeHandleMessage` dispatch chain are reused **byte-for-byte**. The webhook handler is a thin transport entry-point that unmarshals JSON into the SAME `tgbotapi.Update` value the long-poll loop produces and dispatches it through the SAME methods. Zero changes to the adapter, the facade, or the spec 037 substrate.
+
+### 17.1 Capability Foundation Declaration (DE4 / bubbles-capability-foundation-design)
+
+The webhook handler is the **second** instance of a "Telegram transport entry-point" (the first being the long-poll `GetUpdatesChan` goroutine in `Bot.Start`). Per `.github/skills/bubbles-capability-foundation-design/SKILL.md` proportionality triggers (second variant of a delivery channel), this promotes "Telegram transport entry-point" to a recognized capability foundation with two concrete implementations.
+
+| Capability Foundation | Telegram Update Ingress |
+|-----------------------|--------------------------|
+| **Contract** | Produce a `*tgbotapi.Update` and invoke `Bot.safeHandleMessage(ctx, u.Message)` for messages, `Bot.safeHandleCallback(ctx, u.CallbackQuery)` for callbacks. |
+| **Foundation-owned policies** | Panic-safe dispatch (`safeHandle*`), per-update logging fields, identity resolution (chat_id → user_id via spec 044), command-vs-text branching inside `handleMessage`. |
+| **Extension points** | The ingress source (long-poll channel reader; HTTP POST handler; future: queue consumer, replay tool). |
+| **Variation axes** | (1) Pull vs push (long-poll vs webhook); (2) Authentication surface (Telegram BotAPI token at egress vs `X-Telegram-Bot-Api-Secret-Token` header at ingress). |
+
+| Concrete Implementation | Path | Mode toggle value |
+|--------------------------|------|--------------------|
+| Long-poll ingress | `internal/telegram/bot.go::Bot.Start` (existing) | `assistant.telegram.mode = long_poll` |
+| Webhook ingress (NEW) | `internal/telegram/webhook_handler.go` (proposed) | `assistant.telegram.mode = webhook` |
+| Future: NATS replay ingress | (out of scope) | n/a |
+| Future: Slack/WhatsApp/web-chat | own packages under `internal/{slack,whatsapp,webchat}/` | own mode keys |
+
+This declaration also documents the pattern for future non-Telegram transports: every transport SHOULD have its own ingress mode SST toggle and webhook variant follows the same auth-via-shared-secret-header shape.
+
+### 17.2 Mode Toggle (SST — NO defaults, fail-loud)
+
+Two new SST keys in the existing `assistant.transports.telegram` block (§7.1):
+
+```yaml
+assistant:
+  transports:
+    telegram:
+      enabled:              ${ASSISTANT_TRANSPORT_TELEGRAM_ENABLED:?required, bool}
+      markdown_mode:        ${ASSISTANT_TRANSPORT_TELEGRAM_MARKDOWN_MODE:?required, enum "plain"|"markdown_v2"}
+      max_message_chars:    ${ASSISTANT_TRANSPORT_TELEGRAM_MAX_MESSAGE_CHARS:?required, int recommend 3500}
+      # NEW (§17):
+      mode:                 ${ASSISTANT_TRANSPORT_TELEGRAM_MODE:?required, enum "long_poll"|"webhook"}
+      webhook_secret_ref:   ${ASSISTANT_TRANSPORT_TELEGRAM_WEBHOOK_SECRET_REF:?required when mode=webhook, Infisical secret name}
+      webhook_path:         ${ASSISTANT_TRANSPORT_TELEGRAM_WEBHOOK_PATH:?required when mode=webhook, string starting with "/"}
+```
+
+Validation rules (added to §7.2):
+
+7. `assistant.transports.telegram.mode` ∈ `{long_poll, webhook}` exactly. Any other value aborts startup.
+8. When `mode=webhook`:
+   - `webhook_secret_ref` MUST resolve in Infisical to a non-empty string; empty → abort with `FATAL assistant config invalid: assistant.transports.telegram.webhook_secret_ref: empty resolved secret`.
+   - `webhook_path` MUST start with `/` and MUST NOT collide with any path already registered in `internal/api/router.go` (startup check via reverse lookup against the chi route tree).
+9. `mode=long_poll` does NOT require `webhook_secret_ref` or `webhook_path` to resolve — they may be absent. (Implementation note: SST validator must permit absent values when mode is long_poll. This is the ONE permitted absence in §7.1 and MUST be documented inline in the YAML comments.)
+10. Switching `mode` requires a process restart. There is no runtime mode swap.
+
+**No `${VAR:-default}` fallbacks anywhere.** The mode key is REQUIRED; operators MUST choose explicitly. Per `.github/instructions/smackerel-no-defaults.instructions.md`.
+
+**Recommended path:** `/v1/telegram/webhook`. Operators MAY override via `webhook_path` if their reverse proxy demands it; rationale for keeping it configurable is the production deployment story (some Tailscale/Caddy fronts mount apps under sub-paths). For local dev and test the recommended value is `/v1/telegram/webhook`.
+
+### 17.3 Webhook Endpoint Shape
+
+**Path:** value of `assistant.transports.telegram.webhook_path` (recommended `/v1/telegram/webhook`).
+
+**Method:** `POST` only. Any other method returns `405 Method Not Allowed`.
+
+**Auth model:** The endpoint is registered **OUTSIDE** the chi `bearerAuthMiddleware` group in `internal/api/router.go` (precedent: the ntfy webhook at line 200 is auth-via-path-secret; OAuth callbacks at lines 221+ are unauth-rate-limited). It is **NOT** a public unauth endpoint — authentication is by a shared-secret header that Telegram itself sends:
+
+| Header | Source | Verification |
+|--------|--------|--------------|
+| `X-Telegram-Bot-Api-Secret-Token` | Telegram BotAPI (when `setWebhook` was called with `secret_token`) | Constant-time `subtle.ConstantTimeCompare` against the resolved value of `assistant.transports.telegram.webhook_secret_ref`. |
+
+Behavior matrix:
+
+| Condition | Response | Body | Side effects |
+|-----------|----------|------|---------------|
+| Missing `X-Telegram-Bot-Api-Secret-Token` header | `401 Unauthorized` | `{"error":"missing_secret_token"}` | metric `assistant_telegram_webhook_auth_failures_total{reason="missing"}++`; structured log WARN with `remote_ip` |
+| Header present but mismatch (constant-time) | `401 Unauthorized` | `{"error":"invalid_secret_token"}` | metric `assistant_telegram_webhook_auth_failures_total{reason="mismatch"}++`; structured log WARN with `remote_ip` |
+| Header valid; body is not parseable JSON | `400 Bad Request` | `{"error":"invalid_update_json"}` | metric `assistant_telegram_webhook_parse_failures_total++`; INFO log with parse error |
+| Header valid; valid `tgbotapi.Update`; `Message` nil and `CallbackQuery` nil | `200 OK` | empty | INFO log "telegram webhook: empty update" |
+| Header valid; valid update with `CallbackQuery` | `200 OK` | empty | `Bot.safeHandleCallback(ctx, u.CallbackQuery)` invoked synchronously |
+| Header valid; valid update with `Message` | `200 OK` | empty | `Bot.safeHandleMessage(ctx, u.Message)` invoked synchronously |
+
+Returning `200` quickly is a Telegram contract (delivery is retried by Telegram on non-2xx, with backoff that can stall the bot under load). Dispatch is synchronous within the request lifecycle because `safeHandleMessage` already has a panic guard and is bounded by the same per-handler timeout that the existing long-poll loop uses; no goroutine fan-out is needed for v1.
+
+**Request body size cap:** `max_request_body_bytes = 1 MiB` (hardcoded constant, NOT SST — Telegram updates are bounded by Telegram protocol; this is a defensive guard against arbitrarily large bodies from a leaked-secret attacker. Reject `413 Payload Too Large` if exceeded.).
+
+**Structured logging (Principle 8 — Trust Through Transparency):** Every successful webhook hit logs a single INFO line with fields `{kind:"telegram_webhook", update_id, chat_id, message_kind:"text|callback|other", body_len, latency_ms}`. Failed auth attempts log WARN with `{kind:"telegram_webhook_auth_fail", reason, remote_ip}`. PII discipline: NO body content in logs, NO chat title, NO username — chat_id only.
+
+### 17.4 Lifecycle & Long-Poll/Webhook Coexistence
+
+At startup, the wiring in `cmd/core/wiring.go::startTelegramBotIfConfigured` reads `assistant.transports.telegram.mode` and selects exactly ONE branch:
+
+```text
+mode == long_poll:
+  - Bot.Start(ctx) goroutine started (existing behavior).
+  - Webhook handler NOT registered with the router.
+  - Both long-poll loop and webhook endpoint coexisting is forbidden
+    (would cause double-dispatch of any update Telegram delivers via
+    both paths; impossible per Telegram contract but defensive).
+
+mode == webhook:
+  - Bot.Start(ctx) goroutine NOT started.
+  - Webhook handler registered with the existing API server on the
+    configured path (no separate HTTP server — handler attaches to the
+    same chi router already returned by NewRouter).
+  - The Bot value (api client, command registry, assistant adapter
+    binding) is still constructed normally so Bot.safeHandleMessage
+    and Bot.safeHandleCallback work from inside the webhook handler.
+  - Optionally (NOT shipped in this scope): the operator runs
+    `tgbotapi.NewSetWebhook(url).SecretToken = secret` once at startup
+    to register the webhook URL with Telegram. For test/dev, the
+    webhook is exercised directly by curl/`http.Post` — no Telegram
+    contact required.
+```
+
+**No separate HTTP server.** The webhook handler is registered on the existing chi router via a new `RegisterTelegramWebhookRoute(r chi.Router, deps Dependencies, bot *telegram.Bot, secret string, path string)` function called from `internal/api/router.go` only when mode is webhook. Mode is plumbed through `Dependencies.AssistantTelegramMode` (or equivalent already-present config struct), making the registration conditional at server boot.
+
+### 17.5 E2E Test Affordance (resolves `SCOPE-05-E2E-INJECTION-MECHANISM`)
+
+Webhook mode makes shell e2e injection straightforward. Test stack runs with:
+
+```text
+ASSISTANT_TRANSPORT_TELEGRAM_MODE=webhook
+ASSISTANT_TRANSPORT_TELEGRAM_WEBHOOK_SECRET_REF=<test secret ref>
+ASSISTANT_TRANSPORT_TELEGRAM_WEBHOOK_PATH=/v1/telegram/webhook
+```
+
+The test secret value is provisioned by the test bootstrap into the resolved env file alongside other test secrets.
+
+**Shell e2e pattern (BS-001 / BS-010):**
+
+```bash
+# tests/e2e/telegram_assistant_bs001_test.sh (rewritten for webhook mode)
+update_json=$(cat <<JSON
+{
+  "update_id": 100001,
+  "message": {
+    "message_id": 1,
+    "date": $(date +%s),
+    "chat": {"id": <test-chat-id>, "type": "private"},
+    "from": {"id": <test-chat-id>, "is_bot": false, "first_name": "TestUser"},
+    "text": "random thought to capture"
+  }
+}
+JSON
+)
+
+curl --fail-with-body \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-Telegram-Bot-Api-Secret-Token: ${ASSISTANT_TELEGRAM_WEBHOOK_SECRET}" \
+  -d "$update_json" \
+  "http://${CORE_HOST}:${CORE_PORT}/v1/telegram/webhook"
+# Expect: 200 empty body
+# Then poll PostgreSQL for the resulting `idea` artifact with content_raw=="random thought to capture".
+```
+
+**Go e2e pattern:** `http.NewRequest("POST", url, bytes.NewReader(updateJSON))` with the same secret header. Same assertions.
+
+**The webhook IS the injection surface.** Per the operator decision, there is NO separate dev-only debug-injection endpoint. The production-correct mechanism and the test injection mechanism are one and the same. This explicitly rejects the "Option C debug endpoint" path.
+
+### 17.6 Production Rationale (informative)
+
+Webhook mode is also the production-correct mode for two reasons that matter even before a public HTTPS deployment exists:
+
+1. **Latency.** Long-poll has 0-30s latency depending on update arrival timing within the 30s `Timeout` window. Webhook delivers within Telegram's egress latency (~tens of ms).
+2. **Resource cost.** Long-poll holds an HTTPS connection open with the Telegram API constantly per bot; webhook is request-driven and idle when no traffic.
+
+The production blocker is providing Telegram a public HTTPS URL — out of scope of spec 061. Until that lands, production deployments keep `mode=long_poll`. Test stacks adopt `mode=webhook` immediately to unblock SCOPE-05 / SCOPE-06 e2e coverage.
+
+### 17.7 Forbidden / Out of Scope
+
+- **No dev-only debug-injection endpoint** as a separate concept. The webhook IS the injection surface.
+- **No `tgbotapi.NewSetWebhook` call from this scope's implementation.** Operator-managed setup; out of scope for v1. (May land in a future deployment scope.)
+- **No long-poll + webhook coexistence.** Mode is exclusive. Documented in §17.4.
+- **No mutation of `internal/agent/*.go` substrate** (spec 037 frozen).
+- **No mutation of `internal/telegram/assistant_adapter/*`** (reused unchanged).
+- **No new SST key without `${VAR:?...}` fail-loud guard.** Per smackerel-no-defaults.
+- **No public unauth surface.** Auth is mandatory via constant-time secret header compare.
+- **No request body content in logs.** Principle 8 discipline.
+
+### 17.8 Scope Allocation Decision: Extend SCOPE-05 (Option b)
+
+The webhook work is bounded:
+
+| Component | Approx LOC |
+|-----------|-----------|
+| `internal/telegram/webhook_handler.go` (handler + secret verify + dispatch) | ~120 |
+| `internal/telegram/webhook_handler_test.go` (5 unit tests covering the §17.3 behavior matrix) | ~180 |
+| `internal/api/router.go` conditional `RegisterTelegramWebhookRoute` call | ~20 |
+| `cmd/core/wiring.go` mode branch | ~25 |
+| `internal/config/assistant.go` SST validation rules 7–10 | ~40 |
+| `config/smackerel.yaml` three new keys + dev-comment block | ~15 |
+| `tests/e2e/telegram_assistant_bs001_test.sh` rewrite to use webhook injection | ~30 (in place of the current placeholder) |
+| Test stack env additions | ~5 |
+| **Total** | **~435 LOC** |
+
+This is at the boundary of "small enough to absorb into SCOPE-05" vs "warrants its own scope". The work is **tightly coupled to SCOPE-05**: it directly unblocks SCOPE-05 DoD #8/#9 and is the precondition for SCOPE-06 DoD #4b/#5b/#6. Splitting it into a separate scope (SCOPE-11) would create a circular-looking dependency (SCOPE-05 already In Progress; SCOPE-11 would block its promotion). **Decision: extend SCOPE-05** with three new DoD rows + matching Test Plan rows + matching Implementation Plan rows. The Implementation Plan section in SCOPE-05 will gain three steps (11–13) covering: handler + auth verify, router wiring + mode branch in `cmd/core/wiring.go`, SST validation extension. The e2e BS-001 shell test (currently scope-honest placeholder) becomes a real driveable shell test against the webhook endpoint.
+
+### 17.9 Cross-Spec Posture
+
+| Spec | Posture | Reason |
+|------|---------|--------|
+| 037 (agent substrate) | NO CHANGE | Webhook is a transport entry-point; substrate is unaffected. |
+| 044 (per-user bearer auth) | NO CHANGE — read-only awareness | Webhook auth uses a SEPARATE, Telegram-issued shared secret (`X-Telegram-Bot-Api-Secret-Token`). It does NOT consume per-user bearer tokens — Telegram does not send them. The chat_id → user_id resolution that SCOPE-05 already wires (`identity.go`, spec 044 mapping) runs INSIDE `safeHandleMessage` exactly as it does for long-poll updates. The webhook endpoint sits OUTSIDE bearer-auth middleware in the chi tree, alongside the existing OAuth and ntfy-webhook precedents. |
+| 054 (notification scheduler) | NO CHANGE | Out of webhook scope. |
+| 060 (PASETO scope claims) | NO CHANGE — read-only awareness | Webhook auth is shared-secret-header, NOT PASETO. The unaccepted-into-catalog assistant skill scopes (`assistant.skill.*`) from SCOPE-05's cross-spec packet are orthogonal to webhook auth. SCOPE-08 still owns the notification write scope migration when it lands. |
+| 150 (Infisical-only secrets) | CONSUMED | `webhook_secret_ref` resolves via Infisical exactly like other secret refs in spec 061. |
+
+### 17.10 Product Principle Alignment (extension to §15)
+
+- **Principle 8 (Trust Through Transparency).** Webhook auth is verified before any dispatch; every accepted update logs an attributable single-line INFO record with `update_id`, `chat_id`, `message_kind`, `latency_ms`. Auth failures log WARN with `remote_ip` + `reason`. No request body content in logs. This matches the spec 061 existing logging conventions and satisfies Principle 8's verification-before-action and attribution requirements.
+- **Principle 6 (Invisible By Default).** Webhook adds zero new user-visible surfaces or notifications. It is a transport-layer change only.
+- **No deviation justification needed for any other principle** — webhook mode is a pure transport substitution.
+
+### 17.11 Open Items (for bubbles.plan / bubbles.implement)
+
+- Concrete Infisical secret name for `webhook_secret_ref` (recommend `ASSISTANT_TELEGRAM_WEBHOOK_SECRET`). Operator decision; not blocking.
+- Whether the implementation registers the webhook with Telegram via `setWebhook` automatically at startup (when `mode=webhook` AND a public URL config is present) OR leaves that to an out-of-band operator action. **Recommendation:** out of band for v1 — automatic `setWebhook` requires a public URL SST key which is a deployment-story concern outside this design.
+- Whether test stack runs ONLY `mode=webhook` (cleanest) or both modes against parallel bot instances (unnecessary complexity). **Recommendation:** test stack uses `mode=webhook` exclusively; long-poll path retains existing Go unit coverage.
+
+---

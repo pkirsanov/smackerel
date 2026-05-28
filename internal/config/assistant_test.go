@@ -20,31 +20,34 @@ func envSet(t *testing.T, kv map[string]string) {
 // set and mutate specific keys to drive a failure case.
 func minimalAssistantEnv() map[string]string {
 	return map[string]string{
-		"ASSISTANT_ENABLED":                               "true",
-		"ASSISTANT_BORDERLINE_FLOOR":                      "0.75",
-		"ASSISTANT_CONTEXT_WINDOW_TURNS":                  "8",
-		"ASSISTANT_CONTEXT_IDLE_TIMEOUT":                  "30m",
-		"ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL":           "5m",
-		"ASSISTANT_CONTEXT_STATE_KEY":                     "transport_user",
-		"ASSISTANT_SOURCES_MAX":                           "5",
-		"ASSISTANT_BODY_MAX_CHARS":                        "4000",
-		"ASSISTANT_STATUS_MAX_DURATION":                   "60s",
-		"ASSISTANT_DISAMBIGUATE_TIMEOUT":                  "2m",
-		"ASSISTANT_ERROR_CAPTURE_TIMEOUT":                 "10s",
-		"ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM":              "30",
-		"ASSISTANT_RATE_LIMIT_WEATHER_RPM":                "20",
-		"ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM":          "10",
-		"ASSISTANT_SKILLS_RETRIEVAL_ENABLED":              "true",
-		"ASSISTANT_SKILLS_RETRIEVAL_TOP_K":                "8",
-		"ASSISTANT_SKILLS_WEATHER_ENABLED":                "false",
-		"ASSISTANT_SKILLS_WEATHER_PROVIDER":               "open-meteo",
-		"ASSISTANT_SKILLS_WEATHER_API_KEY_REF":            "",
-		"ASSISTANT_SKILLS_WEATHER_CACHE_TTL":              "10m",
-		"ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED":          "false",
-		"ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT":  "5m",
-		"ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED":           "true",
-		"ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE":     "MarkdownV2",
-		"ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS": "4096",
+		"ASSISTANT_ENABLED":                                "true",
+		"ASSISTANT_BORDERLINE_FLOOR":                       "0.75",
+		"ASSISTANT_CONTEXT_WINDOW_TURNS":                   "8",
+		"ASSISTANT_CONTEXT_IDLE_TIMEOUT":                   "30m",
+		"ASSISTANT_CONTEXT_IDLE_SWEEP_INTERVAL":            "5m",
+		"ASSISTANT_CONTEXT_STATE_KEY":                      "transport_user",
+		"ASSISTANT_SOURCES_MAX":                            "5",
+		"ASSISTANT_BODY_MAX_CHARS":                         "4000",
+		"ASSISTANT_STATUS_MAX_DURATION":                    "60s",
+		"ASSISTANT_DISAMBIGUATE_TIMEOUT":                   "2m",
+		"ASSISTANT_ERROR_CAPTURE_TIMEOUT":                  "10s",
+		"ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM":               "30",
+		"ASSISTANT_RATE_LIMIT_WEATHER_RPM":                 "20",
+		"ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM":           "10",
+		"ASSISTANT_SKILLS_RETRIEVAL_ENABLED":               "true",
+		"ASSISTANT_SKILLS_RETRIEVAL_TOP_K":                 "8",
+		"ASSISTANT_SKILLS_WEATHER_ENABLED":                 "false",
+		"ASSISTANT_SKILLS_WEATHER_PROVIDER":                "open-meteo",
+		"ASSISTANT_SKILLS_WEATHER_API_KEY_REF":             "",
+		"ASSISTANT_SKILLS_WEATHER_CACHE_TTL":               "10m",
+		"ASSISTANT_SKILLS_NOTIFICATIONS_ENABLED":           "false",
+		"ASSISTANT_SKILLS_NOTIFICATIONS_CONFIRM_TIMEOUT":   "5m",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_ENABLED":            "true",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_MARKDOWN_MODE":      "MarkdownV2",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_MAX_MESSAGE_CHARS":  "4096",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_MODE":               "long_poll",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF": "",
+		"ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH":       "/v1/telegram/webhook",
 	}
 }
 
@@ -98,6 +101,13 @@ func TestLoadAssistantConfig_MissingKey_BS009(t *testing.T) {
 			// TestLoadAssistantConfig_WeatherAPIKeyRef_PermissiveButRequired
 			// test below, which proves the key MUST be set (to ""
 			// or non-empty) but accepts empty value.
+			continue
+		}
+		if key == "ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF" {
+			// Spec 061 SCOPE-05 design §17 — permissively-empty key.
+			// May be empty when mode=long_poll; validation rule #8
+			// enforces non-empty resolution when mode=webhook
+			// (covered by TestValidateAssistantConfig_Rule8_*).
 			continue
 		}
 		t.Run(key, func(t *testing.T) {
@@ -177,10 +187,12 @@ func TestValidateAssistantConfig_Rule2_BorderlineMustExceedAgentFloor(t *testing
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", tc.agentFloor)
 			cfg := &Config{Assistant: AssistantConfig{
-				Enabled:         true,
-				BorderlineFloor: tc.borderline,
-				TelegramEnabled: true,
-				ContextStateKey: "transport_user",
+				Enabled:             true,
+				BorderlineFloor:     tc.borderline,
+				TelegramEnabled:     true,
+				ContextStateKey:     "transport_user",
+				TelegramMode:        "long_poll",
+				TelegramWebhookPath: "/v1/telegram/webhook",
 			}}
 			err := cfg.validateAssistantConfig()
 			if tc.wantReject {
@@ -224,9 +236,11 @@ func TestValidateAssistantConfig_Rule3_EnabledRequiresATransport(t *testing.T) {
 func TestValidateAssistantConfig_Rule4_StateKeyAdvisory(t *testing.T) {
 	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
 	base := AssistantConfig{
-		Enabled:         true,
-		BorderlineFloor: 0.75,
-		TelegramEnabled: true,
+		Enabled:             true,
+		BorderlineFloor:     0.75,
+		TelegramEnabled:     true,
+		TelegramMode:        "long_poll",
+		TelegramWebhookPath: "/v1/telegram/webhook",
 	}
 	t.Run("transport_user recommended", func(t *testing.T) {
 		c := &Config{Assistant: base}
@@ -284,6 +298,116 @@ func mustUnset(t *testing.T, key string) {
 			_ = os.Setenv(key, prior)
 		} else {
 			_ = os.Unsetenv(key)
+		}
+	})
+}
+
+// baseWebhookCfg returns a Config wired for assistant.enabled=true with
+// passing rules #2/#3/#4 so the webhook-specific tests below isolate
+// rules #7/#8/#9 cleanly.
+func baseWebhookCfg(mode, ref, path string) *Config {
+	return &Config{Assistant: AssistantConfig{
+		Enabled:                  true,
+		BorderlineFloor:          0.75,
+		ContextStateKey:          "transport_user",
+		TelegramEnabled:          true,
+		TelegramMode:             mode,
+		TelegramWebhookSecretRef: ref,
+		TelegramWebhookPath:      path,
+	}}
+}
+
+// TestValidateAssistantConfig_Rule7_ModeEnum proves the mode-enum rule
+// rejects any value other than "long_poll" | "webhook". Adversarial:
+// "Webhook" (capitalized) and "" both fail.
+func TestValidateAssistantConfig_Rule7_ModeEnum(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+	for _, mode := range []string{"", "Webhook", "longpoll", "polling", "http"} {
+		c := baseWebhookCfg(mode, "", "/v1/telegram/webhook")
+		err := c.validateAssistantConfig()
+		if err == nil {
+			t.Errorf("mode=%q: want error, got nil", mode)
+			continue
+		}
+		if !strings.Contains(err.Error(), "rule #7") {
+			t.Errorf("mode=%q: error should cite rule #7, got: %v", mode, err)
+		}
+	}
+}
+
+// TestValidateAssistantConfig_Rule8_WebhookSecretMustResolve proves
+// mode=webhook fails fast when webhook_secret_ref is empty OR when the
+// named env var resolves to empty. Adversarial: a future regression
+// that accepted an empty secret would silently authorize every POST.
+func TestValidateAssistantConfig_Rule8_WebhookSecretMustResolve(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+
+	t.Run("empty_ref", func(t *testing.T) {
+		c := baseWebhookCfg("webhook", "", "/v1/telegram/webhook")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "rule #8") {
+			t.Fatalf("empty ref: want rule #8 error, got: %v", err)
+		}
+	})
+
+	t.Run("ref_resolves_empty", func(t *testing.T) {
+		mustUnset(t, "BS001_WEBHOOK_SECRET_UNSET")
+		c := baseWebhookCfg("webhook", "BS001_WEBHOOK_SECRET_UNSET", "/v1/telegram/webhook")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "empty resolved secret") {
+			t.Fatalf("unset env: want empty-resolved-secret error, got: %v", err)
+		}
+	})
+
+	t.Run("ref_resolves_non_empty", func(t *testing.T) {
+		t.Setenv("BS001_WEBHOOK_SECRET_OK", "real-secret-value")
+		c := baseWebhookCfg("webhook", "BS001_WEBHOOK_SECRET_OK", "/v1/telegram/webhook")
+		if err := c.validateAssistantConfig(); err != nil {
+			t.Fatalf("resolved non-empty: want nil error, got: %v", err)
+		}
+		if c.Assistant.TelegramWebhookSecret != "real-secret-value" {
+			t.Errorf("resolved secret not stored on cfg: got %q", c.Assistant.TelegramWebhookSecret)
+		}
+	})
+}
+
+// TestValidateAssistantConfig_Rule9_WebhookPath proves the path must
+// start with "/" and must not collide with reserved API prefixes.
+func TestValidateAssistantConfig_Rule9_WebhookPath(t *testing.T) {
+	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
+	t.Setenv("BS001_WEBHOOK_SECRET_PATHTEST", "real-secret-value")
+
+	t.Run("missing_leading_slash", func(t *testing.T) {
+		c := baseWebhookCfg("webhook", "BS001_WEBHOOK_SECRET_PATHTEST", "v1/telegram/webhook")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "rule #9") {
+			t.Fatalf("missing slash: want rule #9 error, got: %v", err)
+		}
+	})
+
+	t.Run("collides_with_api", func(t *testing.T) {
+		c := baseWebhookCfg("webhook", "BS001_WEBHOOK_SECRET_PATHTEST", "/api")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "collides") {
+			t.Fatalf("collision: want collision error, got: %v", err)
+		}
+	})
+
+	t.Run("collides_with_metrics", func(t *testing.T) {
+		c := baseWebhookCfg("webhook", "BS001_WEBHOOK_SECRET_PATHTEST", "/metrics")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "collides") {
+			t.Fatalf("metrics collision: want collision error, got: %v", err)
+		}
+	})
+
+	t.Run("long_poll_mode_still_validates_path_prefix", func(t *testing.T) {
+		// long_poll skips the secret check but the path leading-slash
+		// constraint is still enforced (literal yaml requires the key).
+		c := baseWebhookCfg("long_poll", "", "no-leading-slash")
+		err := c.validateAssistantConfig()
+		if err == nil || !strings.Contains(err.Error(), "rule #9") {
+			t.Fatalf("long_poll bad path: want rule #9 error, got: %v", err)
 		}
 	})
 }

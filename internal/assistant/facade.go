@@ -364,6 +364,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (co
 			Invocation: result,
 			Routing:    &decision,
 			Status:     translateOutcomeToStatus(result.Outcome, scenarioID),
+			ErrorCause: translateOutcomeToErrorCause(result.Outcome),
 			Body:       truncateBody(body, f.cfg.BodyMaxChars),
 			EmittedAt:  emittedAt,
 		}
@@ -571,6 +572,27 @@ func translateOutcomeToStatus(outcome agent.Outcome, scenarioID string) contract
 		return contracts.StatusUnavailable
 	default:
 		return contracts.StatusUnavailable
+	}
+}
+
+// translateOutcomeToErrorCause maps an agent.Outcome to the closed-vocab
+// ErrorCause the user sees alongside the StatusToken. Spec 061 BS-006
+// requires `errorCause=provider_unavailable` when an external provider
+// fails (5xx / timeout / DNS); without explicit propagation here the
+// downstream provenance gate would still rewrite Status+Body but the
+// transport adapter would lose the cause needed to render the
+// `weather: unavailable`-style error line.
+//
+// OutcomeOK and all other outcomes leave ErrorCause unset (ErrNone);
+// the BandHigh dispatch path uses ErrInternalError + ErrMissingScope +
+// ErrSlotMissing explicitly for its own short-circuits and does not
+// depend on this helper.
+func translateOutcomeToErrorCause(outcome agent.Outcome) contracts.ErrorCause {
+	switch outcome {
+	case agent.OutcomeProviderError, agent.OutcomeTimeout:
+		return contracts.ErrProviderUnavailable
+	default:
+		return contracts.ErrNone
 	}
 }
 

@@ -15,6 +15,9 @@ import (
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
+	"github.com/smackerel/smackerel/internal/telegram"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // version, commitHash, and buildTime are set by -ldflags at build time.
@@ -113,6 +116,34 @@ func run() error {
 	tgBot := startTelegramBotIfConfigured(ctx, cfg, deps)
 	attachDriveSaveBridgeToTelegram(svc, tgBot)
 	attachDriveRetrieveBridgeToTelegram(svc, tgBot)
+
+	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
+	// run in webhook mode, register the POST handler on the existing
+	// chi router OUTSIDE bearer-auth (Telegram does not send our
+	// bearer; the X-Telegram-Bot-Api-Secret-Token header authenticates
+	// each delivery). The handler is registered ONLY when mode=webhook
+	// AND the bot was successfully constructed; long_poll mode leaves
+	// the route unregistered.
+	if tgBot != nil && cfg.Assistant.TelegramMode == "webhook" {
+		mux, ok := router.(*chi.Mux)
+		if !ok {
+			return fmt.Errorf("assistant telegram webhook: api.NewRouter must return *chi.Mux for webhook route registration; got %T", router)
+		}
+		webhookHandler := telegram.NewWebhookHandler(telegram.WebhookHandlerOptions{
+			Bot:    tgBot,
+			Secret: cfg.Assistant.TelegramWebhookSecret,
+		})
+		mux.Method(http.MethodPost, cfg.Assistant.TelegramWebhookPath, webhookHandler)
+		// Also register a 405-emitting catchall for the same path so
+		// non-POST requests return 405 even before the handler runs
+		// (chi's default 405 path requires explicit method registration).
+		mux.MethodFunc(http.MethodGet, cfg.Assistant.TelegramWebhookPath, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Allow", http.MethodPost)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		})
+		slog.Info("telegram webhook route registered",
+			"path", cfg.Assistant.TelegramWebhookPath)
+	}
 
 	// Spec 061 SCOPE-05 — construct the capability-layer facade +
 	// Telegram reference adapter and bind it to the bot AFTER the

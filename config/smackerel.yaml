@@ -688,6 +688,21 @@ assistant:
       enabled: true # REQUIRED: at least one transport MUST be enabled when assistant.enabled=true
       markdown_mode: "MarkdownV2" # REQUIRED: "MarkdownV2" | "plain" | "HTML"
       max_message_chars: 4096 # REQUIRED: Telegram per-message hard cap
+      # Spec 061 SCOPE-05 design §17 — Telegram transport ingress mode.
+      # REQUIRED. "long_poll" preserves the original tgbotapi.GetUpdatesChan
+      # goroutine (production until a public HTTPS URL deployment story
+      # exists); "webhook" registers an HTTP POST endpoint on the existing
+      # chi router OUTSIDE bearer-auth and authenticates each delivery via
+      # constant-time X-Telegram-Bot-Api-Secret-Token compare against the
+      # resolved value of webhook_secret_ref. Modes are exclusive at startup.
+      mode: "long_poll" # REQUIRED: "long_poll" | "webhook"
+      # When mode=long_poll these two values are still REQUIRED to resolve
+      # (smackerel SST convention: every key in the literal yaml is read by
+      # the generator). The Go validator only enforces non-empty resolution
+      # of webhook_secret_ref when mode=webhook; webhook_path MUST always
+      # start with "/" and MUST NOT collide with an existing API route.
+      webhook_secret_ref: "" # REQUIRED ("" permitted when mode=long_poll); when mode=webhook MUST resolve to a non-empty secret
+      webhook_path: "/v1/telegram/webhook" # REQUIRED: path starting with "/"; recommended /v1/telegram/webhook
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key

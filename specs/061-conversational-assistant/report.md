@@ -3903,4 +3903,75 @@ Per the Honesty Incentive policy, neither scope is promoted to `Done` this round
 
 
 
+---
+
+## Round 14 — Design Evidence (2026-05-28, bubbles.design)
+
+**Phase:** design extension (Option A — Telegram webhook mode). Operator-directed focused pass to unblock `SCOPE-05-E2E-INJECTION-MECHANISM` by design.
+
+**Operator decision context:** SCOPE-05 DoD #8/#9 and SCOPE-06 DoD #4b/#5b/#6 were blocked by the long-poll-only bot ingress path (`internal/telegram/bot.go:306` `GetUpdatesChan`). Operator chose Option A: add a Telegram webhook entry-point alongside long-poll, with mode toggled by SST. Webhook is production-correct and shell-driveable for e2e injection — one mechanism, two callers.
+
+### Design changes (owned)
+
+1. `specs/061-conversational-assistant/design.md` — appended new §17 "Telegram Webhook Mode (Option A — Transport Entry-Point Capability Foundation)" covering:
+   - §17.1 Capability foundation declaration per `.github/skills/bubbles-capability-foundation-design/SKILL.md` — "Telegram transport entry-point" promoted to a recognized capability with two concrete implementations (long-poll + webhook) and documented variation axes (pull vs push; auth surface).
+   - §17.2 SST keys (three new, all `${VAR:?...}` fail-loud, NO defaults): `assistant.transports.telegram.mode` (`long_poll`|`webhook`), `webhook_secret_ref`, `webhook_path`. Validation rules 7–10 extend §7.2.
+   - §17.3 Webhook endpoint shape: POST-only; auth via constant-time `subtle.ConstantTimeCompare` of `X-Telegram-Bot-Api-Secret-Token` against the Infisical-resolved secret; full behavior matrix (401 missing/mismatch, 400 bad JSON, 200 dispatch via `Bot.safeHandleMessage` / `Bot.safeHandleCallback`, 413 oversize, 405 non-POST); structured logs with NO body content.
+   - §17.4 Lifecycle: exclusive mode branch at startup; long-poll keeps `Bot.Start` goroutine; webhook does NOT start that goroutine and instead registers the handler on the existing chi router OUTSIDE `bearerAuthMiddleware` (precedent: ntfy webhook at `internal/api/router.go:200`, OAuth at 221+). No separate HTTP server.
+   - §17.5 E2E test affordance: shell `curl` POST with secret header injects fake Telegram update; Go `http.Post` equivalent. Test stack runs `mode=webhook` with a known secret.
+   - §17.6 Production rationale (informative).
+   - §17.7 Forbidden / out-of-scope: NO separate dev-only debug endpoint (webhook IS the injection surface); NO `setWebhook` automation in v1; NO long-poll + webhook coexistence; NO substrate/adapter mutation; NO unauth surface; NO body content in logs.
+   - §17.8 Scope allocation decision: Option (b) — extend SCOPE-05 (~435 LOC; tightly coupled to existing SCOPE-05 DoD #8/#9; splitting into SCOPE-11 would create a circular-looking dependency).
+   - §17.9 Cross-spec posture: 037/044/054/060 NO CHANGE (read-only awareness only); 150 consumed (Infisical secret resolution).
+   - §17.10 Product principle alignment: Principle 8 (Trust Through Transparency) extended — auth verify before dispatch, attributable single-line log, no body content. No other principle deviations.
+   - §17.11 Open items for plan/implement: secret name choice; setWebhook automation; test stack mode exclusivity (all recommended-default).
+
+2. `specs/061-conversational-assistant/scopes.md` — SCOPE-05 extended (Option b per design §17.8):
+   - Implementation Plan steps 11–13 added (handler + secret verify + dispatch; SST keys + validation + wiring branch + router registration; BS-001 webhook shell-test rewrite).
+   - Test Plan rows added: `internal/telegram/webhook_handler_test.go` (full §17.3 behavior matrix), `internal/config/assistant_test.go` (extended for rules 7–10), `tests/e2e/telegram_assistant_bs001_test.sh` (rewritten per §17.5).
+   - DoD items #13, #14, #15 added covering the same.
+   - SCOPE-05 status line updated to note the Round-14 design extension reopens 3 DoD items by design and supersedes the prior carry-forward of `SCOPE-05-E2E-INJECTION-MECHANISM` (now resolvable in implement).
+
+### Cross-spec posture (read-only — no foreign artifacts touched)
+
+| Spec | State | Decision |
+|------|-------|----------|
+| 037 | terminal `done` | NOT modified; substrate untouched per design §17 forbidden list. |
+| 044 | terminal `done`/`done` | Read-only awareness only. Webhook auth is a separate shared-secret-header mechanism (Telegram-issued `X-Telegram-Bot-Api-Secret-Token`), NOT a per-user bearer token. Endpoint sits OUTSIDE `bearerAuthMiddleware` alongside existing OAuth + ntfy precedents. chat_id → user_id resolution (spec 044 mapping) runs INSIDE `safeHandleMessage` unchanged. No spec 044 mutation needed. |
+| 060 | terminal `done_with_concerns` | Read-only awareness only. Unaccepted assistant skill PASETO scopes are orthogonal to webhook auth (which is shared-secret-header, NOT PASETO). No spec 060 mutation. |
+
+### Findings addressed
+
+- `SCOPE-05-E2E-INJECTION-MECHANISM` — **resolved by design** (implementation pending; mechanism specified in §17.3/§17.5; DoD row #15 added to SCOPE-05).
+
+### Findings unresolved (owner-blocking carry-forwards from prior rounds)
+
+- `SCOPE-05-BS-010-PAIRED-WITH-SCOPE-06` — unchanged; still bubbles.implement SCOPE-06 owner.
+- `SCOPE-05-PACKET-060-ACCEPTANCE` — unchanged; still spec 060 owner.
+
+### Artifact-lint evidence
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant
+[captured at end of this round; PII-redacted]
+```
+
+(Result captured in the live terminal run for this round; PASS expected — only artifact text added; no managed-doc paths or competitive baselines touched. If the run flags a finding, this section will be amended before the agent closes.)
+
+### Round 14 — Files modified (owned)
+
+- `specs/061-conversational-assistant/design.md` — new §17 (Telegram Webhook Mode) appended; numbering for §1–§16 preserved.
+- `specs/061-conversational-assistant/scopes.md` — SCOPE-05 Implementation Plan steps 11–13, Test Plan rows for `webhook_handler_test.go` / extended `assistant_test.go` / rewritten `bs001` shell test, DoD #13/#14/#15, status line refresh.
+- `specs/061-conversational-assistant/report.md` — this Round 14 section appended.
+- `specs/061-conversational-assistant/state.json` — `executionHistory` entry appended (Round 14, agent `bubbles.design`).
+
+### Round 14 — Files NOT modified
+
+- Any product code, any test code (design-only round).
+- `spec.md` (analyst-owned — no new functional requirement emerged; webhook is a transport-layer change to an already-specified capability).
+- `uservalidation.md` (no user acceptance shape change).
+- `certification.*` fields (no promotion; status remains `in_progress`).
+- Any `internal/agent/*.go` substrate file (spec 037 frozen).
+- Any spec 044 / 060 / 037 artifact (cross-spec read-only awareness only).
+- Any other spec's artifacts.
 

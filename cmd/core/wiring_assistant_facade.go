@@ -40,6 +40,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
+	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
@@ -233,20 +234,26 @@ func (r *assistantRegistry) Scenario(id string) (*agent.Scenario, bool) {
 //
 // Wiring rationale:
 //
-//   - retrieval_qa is the only scenario whose Final shape is
-//     {answer, cited_artifact_ids} (config/prompt_contracts/
-//     retrieval-qa-v1.yaml) and therefore the only scenario that
-//     needs an explicit assembler today.
+//   - retrieval_qa emits {answer, cited_artifact_ids} (config/
+//     prompt_contracts/retrieval-qa-v1.yaml) — assembled via a
+//     PostgreSQL-backed artifact lookup.
 //
-//   - Future scenarios with their own source-bearing output (e.g.
-//     digest_recap citing recent artifacts, recommendation_explain
-//     citing decision packets) will register their own assemblers
-//     here. The hook itself in facade.go is generic.
+//   - weather_query emits {forecast_line, provider_name,
+//     retrieved_at} (config/prompt_contracts/weather-query-v1.yaml)
+//     — assembled into exactly one Source{Kind:
+//     SourceExternalProvider, Ref: ExternalProviderRef{...}}
+//     (design §5.2). No artifact lookup is needed; the assembler is
+//     pure parse + map.
 //
-//   - The artifact lookup is backed by *db.Postgres.GetArtifact so
-//     the (title, capturedAt) tuple comes from the same authoritative
-//     row the rest of the system reads. Test environments override
-//     this with a fake lookup directly in the facade tests.
+//   - notification_schedule (SCOPE-08) is requires_provenance:false
+//     because the scheduler record IS the provenance (design §5.3
+//     YAML header). The Facade therefore wires NO assembler for it
+//     — the gate skips notification responses entirely and the
+//     facade renders proposed_action directly.
+//
+//   - Future scenarios with their own source-bearing output will
+//     register their own assemblers here. The hook itself in
+//     facade.go is generic.
 //
 // The function returns nil when the postgres pool is not configured;
 // the Facade interprets a nil map as "no assemblers wired" and
@@ -262,7 +269,8 @@ func buildAssistantSourceAssemblers(svc *coreServices, sourcesMax int) map[strin
 	}
 	lookup := newPostgresArtifactLookup(svc)
 	return map[string]contracts.SourceAssembler{
-		"retrieval_qa": retrieval.NewFacadeAssembler(lookup, sourcesMax),
+		"retrieval_qa":  retrieval.NewFacadeAssembler(lookup, sourcesMax),
+		"weather_query": weather.NewFacadeAssembler(sourcesMax),
 	}
 }
 
