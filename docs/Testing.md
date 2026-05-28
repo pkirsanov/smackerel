@@ -562,4 +562,136 @@ When a spec transitions to done under full-delivery workflow mode, its report mu
 - Audit evidence section: include executed command output and the phase marker for bubbles.audit.
 - Chaos evidence section: include executed command output and the phase marker for bubbles.chaos.
 
+## Assistant Evaluation Harness
+
+The spec 061 conversational assistant ships with an offline evaluation
+harness that gives the §17 acceptance contract teeth in CI without
+requiring a live LLM endpoint. The harness scores routing accuracy and
+capture-fallback coverage against a fixed labelled corpus so silent
+classifier or corpus drift becomes a loud test failure.
+
+### Corpus
+
+[`tests/eval/assistant/corpus.yaml`](../tests/eval/assistant/corpus.yaml)
+holds 150 rows distributed 30 per intent label across the closed
+vocabulary defined in
+[`tests/eval/assistant/harness.go`](../tests/eval/assistant/harness.go):
+
+| Label | Meaning |
+|-------|---------|
+| `retrieval` | Question stems that should route to the retrieval skill. |
+| `weather` | Weather lexemes or weather-adjective + place / temporal context. |
+| `notifications` | Imperative reminder phrasing with a concrete subject. |
+| `capture` | Declarative messages with a capture marker (the always-on capture path). |
+| `ambiguous-borderline` | Under-specified messages that MUST default to capture (design §3.2 "default-to-capture"). |
+
+Structural invariants (≥150 rows, ≥30 per label, no duplicate IDs,
+closed-vocabulary intents) are enforced by
+[`tests/eval/assistant/corpus_validation_test.go`](../tests/eval/assistant/corpus_validation_test.go)
+on every `go test` pass — a corpus mutation that drops below quota fails
+fast.
+
+### Acceptance Gate
+
+SST-resolved thresholds (literals in
+[`config/smackerel.yaml`](../config/smackerel.yaml) under
+`assistant.eval:`):
+
+| Key | Floor | Last shipped run |
+|-----|-------|------------------|
+| `routing_accuracy_min` | `0.85` | `1.0000` (150 / 150 rows) |
+| `capture_fallback_min` | `1.0` | `1.0000` (60 / 60 capture-expected rows) |
+
+The acceptance test
+[`tests/eval/assistant/acceptance_test.go`](../tests/eval/assistant/acceptance_test.go)
+(build tag `integration`, function
+`TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`) reads both
+floors via `os.Getenv` from `ASSISTANT_EVAL_ROUTING_ACCURACY_MIN` and
+`ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN`. Both vars are REQUIRED:
+`mustFloatEnv` calls `t.Fatalf` with the literal message `"SST contract
+violation: <KEY> is empty"` if either is missing — fail-loud per
+[`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md).
+
+### How To Run
+
+The env vars are emitted into `config/generated/<env>.env` by
+[`scripts/commands/config.sh`](../scripts/commands/config.sh) from the
+`assistant.eval:` block in `config/smackerel.yaml`. The standard
+invocation is:
+
+```bash
+./smackerel.sh test integration --go-run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback
+```
+
+Direct invocation (when the env file is already sourced into the shell)
+is:
+
+```bash
+go test -count=1 -tags integration -run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ./tests/eval/assistant/...
+```
+
+The acceptance test logs the full per-row report on pass (useful as
+SCOPE-10 evidence) and on failure includes the full report in the
+failure message so an operator can see which rows drifted.
+
+### How To Add A Scenario
+
+1. Append a row to `tests/eval/assistant/corpus.yaml` with `id`, `text`,
+   `ground_truth_intent` (one of the five labels above), and
+   `ground_truth_capture_expected` (and `ground_truth_slots` when
+   relevant).
+2. Use a unique `id` — duplicates fail
+   `TestCorpus_NoDuplicateIDs`.
+3. Keep ≥30 rows per label — the per-label floor is enforced by
+   `TestCorpus_PerLabelFloor`.
+4. Run the harness:
+   `go test -count=1 -tags integration -run TestAcceptanceGate_RoutingAccuracyAndCaptureFallback ./tests/eval/assistant/...`.
+5. If the gate now fails, either tune the corpus row or adjust the
+   classifier in `harness.go` to match the rules the production agent
+   router is expected to follow.
+
+### Determinism And Anti-Tautology Guards
+
+The harness classifier is a deterministic keyword function (no RNG, no
+external calls), so two consecutive runs against the same corpus
+produce identical results — asserted by `TestRun_Deterministic`.
+
+The harness also ships an explicit anti-tautology guard:
+`TestRun_AdversarialFailureSurfaces` runs the harness with ground truth
+deliberately mismatched against every classifier output and asserts
+`IntentCorrect == 0`, `RoutingAccuracy == 0.0`, and a populated
+`Failures` slice. This proves the harness CAN fail when classifier and
+corpus disagree — a regression that silently passes every row would be
+caught by this guard.
+
+### Per-Behavioral-Scenario Regression Files
+
+Spec 061 BS-001..BS-010 each get a dedicated regression slot under
+[`tests/e2e/assistant_regression/`](../tests/e2e/assistant_regression/):
+
+| Slot | File | State |
+|------|------|-------|
+| BS-001 | `bs_001_capture_fallback.sh` | Delegates to `tests/e2e/test_telegram_assistant_bs001.sh`. |
+| BS-002 | `bs_002_retrieval_qa.sh` | `skip-77` pending substrate blocker (graph seeding). |
+| BS-003 | `bs_003_weather_happy_path.sh` | Delegates to `tests/e2e/assistant_bs003_test.sh`. |
+| BS-004 | `bs_004_notification_confirm.sh` | `skip-77` pending substrate blocker (notification proposal fixture). |
+| BS-005 | `bs_005_ambiguous_disambig.sh` | `skip-77` pending substrate blocker (borderline seeding). |
+| BS-006 | `bs_006_weather_outage.sh` | Delegates to `tests/e2e/assistant_bs006_test.sh`. |
+| BS-007 | `bs_007_provenance_violation.sh` | `skip-77` pending substrate blocker (LLM no-source stub). |
+| BS-008 | `bs_008_disabled_skill.sh` | `skip-77` pending substrate blocker (manifest hot-flip harness). |
+| BS-009 | `bs_009_sst_missing_boot_failure.sh` | `skip-77` pending substrate blocker (boot-failure harness). |
+| BS-010 | `bs_010_telegram_e2e.sh` | Delegates to `tests/e2e/test_telegram_assistant_bs001.sh` as the always-available Telegram adapter probe. |
+
+The skip-77 fixtures use the convention from
+`tests/e2e/assistant_regression/lib/regression_helpers.sh`
+(`reg_skip_with_blocker`) and each documents the full executed
+assertion body in an inline `:<<'EXECUTED_PATTERN'` heredoc, so the
+round that unblocks the named substrate flips a single line from
+`reg_skip_with_blocker` to the in-tree assertion. Live-stack
+verification across the full BS-001..BS-010 set remains pending and is
+tracked by the open SCOPE-10 findings
+`SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` and
+`SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING` in
+[`specs/061-conversational-assistant/state.json`](../specs/061-conversational-assistant/state.json).
+
 This requirement is enforced by the artifact lint and state transition guards, and prevents done-level promotions that only contain planning artifacts without delivery-phase evidence provenance.

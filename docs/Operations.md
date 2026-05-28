@@ -3831,4 +3831,133 @@ integration-tested against the live disposable test stack
 through the connector lifecycle against the live core API
 (`tests/e2e/qf_watch_proposal_test.go`).
 
+## Assistant Capability (Spec 061)
+
+The Conversational Assistant capability is a transport-agnostic layer
+that turns free-text user messages into either an answered turn
+(retrieval / weather / notifications) or a capture-as-fallback. It is
+built on the spec 037 LLM Scenario Agent substrate and presents a
+single `internal/assistant/facade.go` boundary to every transport. The
+capability layer never imports transport packages; transport adapters
+(currently Telegram, see [`docs/Connector_Development.md`](Connector_Development.md))
+own message I/O and call the facade.
+
+### Observability And Alerts
+
+Ten Prometheus metric series cover the capability. Eight live in
+[`internal/assistant/metrics/metrics.go`](../internal/assistant/metrics/metrics.go);
+the two gate-style counters live with the gates that emit them
+(`internal/assistant/metrics/source_assembly.go` and
+`internal/assistant/provenance/gate.go`). Every label vocabulary is
+closed; `internal/assistant/metrics/labels_test.go` proves no emission
+site uses a value outside the published set.
+
+| Metric | Type | Labels | Increment / observation |
+|--------|------|--------|--------------------------|
+| `smackerel_assistant_facade_turns_total` | CounterVec | `transport`, `outcome` ∈ {`answered`,`captured`,`proposed`,`confirmed`,`discarded`,`error`} | One facade turn observed per transport-outcome pair. |
+| `smackerel_assistant_facade_latency_seconds` | HistogramVec | `transport`, `outcome` | Facade enter → response emit latency. Buckets: 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30 s. |
+| `smackerel_assistant_router_band_total` | CounterVec | `band` ∈ {`high`,`borderline`,`low`}, `transport` | Three-band post-processor decision per turn. |
+| `smackerel_assistant_skill_invocations_total` | CounterVec | `scenario_id`, `outcome` (8 values mirroring spec 037 `InvocationResult.Outcome`), `transport` | One per scenario executor return. `scenario_id` is bounded by the manifest (~10 entries in v1). |
+| `smackerel_assistant_capture_fallback_total` | CounterVec | `cause` ∈ {`low_confidence`,`borderline_timeout`,`confirm_discarded`,`confirm_timeout`,`error_offered_capture`,`unresolvable_reference`}, `transport` | One per capture-as-fallback event, by trigger cause. |
+| `smackerel_assistant_confirm_card_outcomes_total` | CounterVec | `scenario_id`, `outcome` ∈ {`confirmed`,`discarded_user`,`discarded_timeout`}, `transport` | One per terminal confirm-card outcome. |
+| `smackerel_assistant_disambiguation_outcomes_total` | CounterVec | `outcome` ∈ {`resolved_user`,`resolved_timeout_capture`,`resolved_non_matching_reply_capture`}, `transport` | One per resolved disambiguation prompt. |
+| `smackerel_assistant_active_threads` | GaugeVec | `transport` | Current count of active `assistant_conversations` rows per transport. Refreshed by the periodic context-store ticker. |
+| `smackerel_assistant_source_assembly_drops_total` | CounterVec | `scenario_id`, `cause` ∈ {`missing_artifact`,`lookup_error`} | One per cited artifact ID dropped by the source-assembly invariant (graph drift). |
+| `smackerel_assistant_provenance_violations_total` | CounterVec | `scenario_id`, `cause` ∈ {`missing_artifact`,`lookup_error`,`fabricated_source`,`dropped_for_quota`} | One per response rewritten to the canonical refusal because a `requires_provenance` scenario returned a body with empty `Sources`. Expected steady-state = 0. |
+
+Operator dashboard: [`deploy/observability/grafana/dashboards/assistant.json`](../deploy/observability/grafana/dashboards/assistant.json)
+ships seven panels — Per-transport turn volume + band mix, Per-scenario
+success vs failure, Capture-as-fallback rate (by cause), Provenance
+violations (alert at >0), Active conversation threads per transport,
+Confirm-card outcome distribution, and Source-assembly drops (graph
+drift). The dashboard is validated by
+`tests/observability/assistant_dashboard_test.go`.
+
+### Service Budgets
+
+The capability layer carries two hard latency budgets (design §8.1)
+and two correctness budgets:
+
+| Surface | Budget | Measurement | Last shipped evidence |
+|---------|--------|-------------|-----------------------|
+| Facade overhead (router + post-processor + context I/O minus skill call) | p95 < 5 ms | `tests/stress/assistant_facade_p95_test.go` (1500 turns × 32 workers; build tag `stress`) | p95 = 327.908 µs (≪ 5 ms); see `specs/061-conversational-assistant/report.md` Round-6 §SCOPE-04 stress evidence. |
+| Retrieval skill end-to-end | p95 < 5 s | `tests/stress/assistant_retrieval_p95_test.go` (800 turns × 32 workers, 1–40 ms synthetic upstream tail; build tag `stress`) | p95 = 40.04 ms (≪ 5 s); see Round-17 §SCOPE-06 retrieval-stress evidence. |
+| `smackerel_assistant_source_assembly_drops_total` | < 5% of cited IDs per scenario | Sampled from `/metrics` | Steady-state ≈ 0 unless the graph is being repaired or migrated. |
+| `smackerel_assistant_provenance_violations_total` | 0 in steady state | Sampled from `/metrics` | Any non-zero rate means the LLM is producing bodies that drop every cited source. |
+
+### Configuration SST
+
+All assistant configuration originates from
+[`config/smackerel.yaml`](../config/smackerel.yaml) under the top-level
+`assistant:` block (around lines 640–724). It is validated by
+[`internal/config/assistant.go`](../internal/config/assistant.go)
+(`loadAssistantConfig` + `validateAssistantConfig`) at startup and
+emitted into `config/generated/<env>.env` by
+[`scripts/commands/config.sh`](../scripts/commands/config.sh). Every key
+is REQUIRED; no defaults — startup fails loudly per
+[`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md).
+The four validation rules are:
+
+1. Every key resolves to a non-empty value.
+2. `assistant.borderline_floor` MUST be strictly greater than
+   `agent.routing.confidence_floor` (preserves the borderline band).
+3. `assistant.enabled: true` requires at least one
+   `assistant.transports.<name>.enabled: true`.
+4. `assistant.context.state_key: "user"` (non-recommended) emits a
+   startup WARN log; `"transport_user"` is the recommended primary-key
+   shape.
+
+The full key inventory is enumerated in
+[`specs/061-conversational-assistant/scopes.md`](../specs/061-conversational-assistant/scopes.md)
+SCOPE-01.
+
+### Confirm-Card Lifecycle
+
+The tool-side notification confirm path is keyed by a ULID
+`confirm_ref` and persisted in PostgreSQL so a process restart does not
+strand pending confirms:
+
+- Storage: [`internal/db/migrations/043_assistant_confirm_pending.sql`](../internal/db/migrations/043_assistant_confirm_pending.sql)
+  defines `assistant_confirm_pending(confirm_ref TEXT PK, payload TEXT,
+  expires_at TIMESTAMPTZ)` with an index on `expires_at`.
+- Reader / writer: [`internal/agent/tools/notification/pg_confirm_store.go`](../internal/agent/tools/notification/pg_confirm_store.go)
+  enforces TTL on every SELECT (`AND expires_at > NOW()`); `Put` requires
+  a positive TTL and writes `expires_at = NOW() + ttl`.
+- TTL value (SST):
+  `assistant.skills.notifications.confirm_timeout` (default
+  literal in `config/smackerel.yaml` is `"5m"`). The disambiguation
+  prompt TTL is `assistant.disambiguate_timeout` (literal `"2m"`); the
+  offer-to-capture-on-error TTL is `assistant.error.capture_timeout`
+  (literal `"10s"`). All three are fail-loud REQUIRED values.
+- Operator action: confirm via the Telegram inline button → tool
+  executes; on TTL expiry the row is filtered out at SELECT time and a
+  future sweep job MAY DELETE expired rows.
+
+### Common Failure Modes
+
+| Symptom (metric query) | Likely cause | First-line diagnostic |
+|------------------------|--------------|-----------------------|
+| `rate(smackerel_assistant_provenance_violations_total{cause="fabricated_source"}[5m]) > 0` | LLM contract drift — the model returned a non-empty body without any cited sources. | Check the prompt contract under `config/prompt_contracts/` for the affected scenario, and verify the `requires_provenance` flag in `config/assistant/skills_manifest.yaml`. |
+| `rate(smackerel_assistant_source_assembly_drops_total{cause="missing_artifact"}[5m]) > 0` | Graph store consistency — the LLM cited an artifact that no longer exists (deletion, prune, re-ingest). | Inspect `internal/db/migrations/` for recent artifact-lifecycle migrations; verify the affected artifact rows are still present. |
+| `rate(smackerel_assistant_capture_fallback_total{cause="low_confidence"}[10m])` trending up | Router classification degradation — borderline / low confidence band rate rising. | Run the eval harness (see [`docs/Testing.md`](Testing.md) → "Assistant Evaluation Harness") against the current corpus; investigate intent corpus drift. |
+| `smackerel_assistant_active_threads{transport=*} > 0` and not decaying | Orphaned thread state — the periodic idle sweeper is not pruning. | Verify `assistant.context.idle_sweep_interval` and `assistant.context.idle_timeout` resolved values; check core logs for sweep-ticker errors. |
+| `rate(smackerel_assistant_confirm_card_outcomes_total{outcome="discarded_timeout"}[1h])` > `confirmed` | User-experience drift — confirm TTL too short, or confirm UX hidden behind notifications. | Re-check `assistant.skills.notifications.confirm_timeout` SST value and Telegram delivery health. |
+
+### Recovery Actions
+
+- **Disable the capability** without code change: set
+  `assistant.enabled: false` in `config/smackerel.yaml`, regenerate
+  config (`./smackerel.sh config generate`), and restart. Telegram
+  preserves its pre-spec-061 capture path (BS-001 regression-safe
+  fallback).
+- **Disable a single skill**: set `assistant.skills.<name>.enabled:
+  false` (retrieval / weather / notifications) and regenerate. The
+  router will route those intents to capture-as-fallback.
+- **Rotate a misbehaving prompt contract**: edit the affected file
+  under `config/prompt_contracts/`, `SIGHUP` the core to hot-reload
+  (`agent.hot_reload: true`).
+- **Recover stalled confirms**: a process restart is safe — pending
+  confirms live in `assistant_confirm_pending`; the TTL filter at
+  SELECT time excludes expired rows automatically.
+
 
