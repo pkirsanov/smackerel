@@ -9,10 +9,7 @@ timestamps.created. Fallback values and non-raising behavior must be preserved.
 import logging
 from unittest.mock import MagicMock, PropertyMock
 
-import pytest
-
 from app.keep_bridge import serialize_note
-
 
 LOGGER_NAME = "smackerel-ml.keep-bridge"
 
@@ -84,6 +81,7 @@ class TestSerializeNoteSurfacesFailures:
             @property
             def updated(self):
                 raise AttributeError("upd broken")
+
             created = None
 
         gnote.timestamps = BadTS()
