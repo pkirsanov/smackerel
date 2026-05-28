@@ -73,6 +73,15 @@ func (m *memStore) DeleteByKey(_ context.Context, u, t string) error {
 	return nil
 }
 func (m *memStore) SweepIdle(_ context.Context, _ time.Duration) (int64, error) { return 0, nil }
+func (m *memStore) CountActiveByTransport(_ context.Context) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	counts := map[string]int{}
+	for _, c := range m.rows {
+		counts[c.Transport]++
+	}
+	return counts, nil
+}
 
 // stubRouter rotates through three RoutingDecisions to exercise all
 // three bands roughly evenly.

@@ -115,6 +115,18 @@ func (m *InMemoryContextStore) SweepIdle(_ context.Context, _ time.Duration) (in
 	return 0, nil
 }
 
+// CountActiveByTransport implements assistantctx.Store. Iterates the
+// in-memory rows and groups by transport.
+func (m *InMemoryContextStore) CountActiveByTransport(_ context.Context) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	counts := map[string]int{}
+	for _, conv := range m.rows {
+		counts[conv.Transport]++
+	}
+	return counts, nil
+}
+
 // StubExecutor is a ScenarioExecutor whose behaviour can be driven by
 // a per-test Run closure. FOR TESTS ONLY.
 type StubExecutor struct {

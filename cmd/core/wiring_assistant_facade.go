@@ -44,6 +44,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
@@ -120,6 +121,26 @@ func wireAssistantFacade(
 		return fmt.Errorf("idle-sweep ticker: %w", err)
 	}
 	go ticker.Run(ctx)
+
+	// 4b. Active-threads gauge refresher (spec 061 SCOPE-09). Samples
+	//     CountActiveByTransport on the same cadence as the idle-sweep
+	//     ticker and pushes per-transport counts into
+	//     assistantmetrics.ActiveThreadsGauge. Zero-fills the closed
+	//     transport vocabulary so dashboards reflect empty transports
+	//     as 0 rather than freezing at a stale Set().
+	refresher, err := assistantctx.NewActiveThreadsRefresher(
+		contextStore,
+		assistantmetrics.AllTransports,
+		cfg.Assistant.ContextIdleSweepInterval,
+		func(transport string, count float64) {
+			assistantmetrics.ActiveThreadsGauge.WithLabelValues(transport).Set(count)
+		},
+		slog.Default(),
+	)
+	if err != nil {
+		return fmt.Errorf("active-threads refresher: %w", err)
+	}
+	go refresher.Run(ctx)
 
 	// 5. FacadeConfig from the assistant SST envelope (SCOPE-01).
 	facadeCfg := assistant.FacadeConfig{
