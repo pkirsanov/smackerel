@@ -123,7 +123,7 @@ async def process_content(
                     temperature=0.1,
                     max_tokens=2000,
                     response_format={"type": "json_object"},
-                    timeout=30,
+                    timeout=180,
                 )
                 break
             except (RateLimitError, ServiceUnavailableError, InternalServerError) as exc:
