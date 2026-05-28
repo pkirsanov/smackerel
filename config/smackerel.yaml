@@ -703,6 +703,14 @@ assistant:
       # start with "/" and MUST NOT collide with an existing API route.
       webhook_secret_ref: "" # REQUIRED ("" permitted when mode=long_poll); when mode=webhook MUST resolve to a non-empty secret
       webhook_path: "/v1/telegram/webhook" # REQUIRED: path starting with "/"; recommended /v1/telegram/webhook
+  # Spec 061 SCOPE-10 — acceptance-gate thresholds for the offline
+  # evaluation harness (tests/eval/assistant). The harness reads these
+  # via ASSISTANT_EVAL_* environment variables (resolved by
+  # internal/config/assistant.go). Lowering either value below the
+  # spec 061 §17 contract is a NON-NEGOTIABLE acceptance regression.
+  eval:
+    routing_accuracy_min: 0.85 # REQUIRED: min fraction of corpus rows whose ground_truth_intent matches the facade's selected scenario
+    capture_fallback_min: 1.0 # REQUIRED: min fraction of capture-expected rows that took a capture path (1.0 = MUST capture every time)
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key

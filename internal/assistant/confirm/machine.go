@@ -15,6 +15,7 @@ import (
 	"time"
 
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
+	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 )
 
 // Outcome enumerates the three terminal outcomes of a confirm-card
@@ -181,6 +182,12 @@ func (m *Machine) Confirm(ctx context.Context, in ConfirmInput, now time.Time) (
 	if err := m.writer.WriteProposalArtifact(ctx, audit); err != nil {
 		return ConfirmResult{}, fmt.Errorf("confirm.Confirm: write audit: %w", err)
 	}
+	// Spec 061 SCOPE-09 — confirm-card outcome metric.
+	assistantmetrics.ConfirmCardOutcomesTotal.WithLabelValues(
+		pending.ScenarioID,
+		assistantmetrics.ConfirmOutcomeConfirmed,
+		normalizeTransport(in.Transport),
+	).Inc()
 	return ConfirmResult{
 		Payload:        append([]byte(nil), pending.Payload...),
 		ScenarioID:     pending.ScenarioID,
@@ -228,6 +235,18 @@ func (m *Machine) Discard(ctx context.Context, in DiscardInput, now time.Time) e
 	if err := m.writer.WriteProposalArtifact(ctx, audit); err != nil {
 		return fmt.Errorf("confirm.Discard: write audit: %w", err)
 	}
+	// Spec 061 SCOPE-09 — confirm-card outcome metric +
+	// capture-fallback book-keeping (the facade follow-up turn
+	// will offer capture; here we record the terminal outcome).
+	assistantmetrics.ConfirmCardOutcomesTotal.WithLabelValues(
+		pending.ScenarioID,
+		assistantmetrics.ConfirmOutcomeDiscardedUser,
+		normalizeTransport(in.Transport),
+	).Inc()
+	assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+		assistantmetrics.CauseConfirmDiscarded,
+		normalizeTransport(in.Transport),
+	).Inc()
 	return nil
 }
 
@@ -275,6 +294,17 @@ func (m *Machine) SweepTimeouts(ctx context.Context, expired []ExpiredPending, n
 		if err := m.writer.WriteProposalArtifact(ctx, audit); err != nil {
 			return res, fmt.Errorf("confirm.SweepTimeouts: write audit %s/%s: %w", e.UserID, e.Transport, err)
 		}
+		// Spec 061 SCOPE-09 — terminal sweep outcome + capture-fallback
+		// book-keeping (the facade's next turn offers capture).
+		assistantmetrics.ConfirmCardOutcomesTotal.WithLabelValues(
+			pending.ScenarioID,
+			assistantmetrics.ConfirmOutcomeDiscardedTimeout,
+			normalizeTransport(e.Transport),
+		).Inc()
+		assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+			assistantmetrics.CauseConfirmTimeout,
+			normalizeTransport(e.Transport),
+		).Inc()
 		res.Expired++
 	}
 	return res, nil
@@ -288,6 +318,20 @@ type ExpiredPending struct {
 	UserID     string
 	Transport  string
 	ConfirmRef string
+}
+
+// normalizeTransport collapses an arbitrary transport string into
+// the closed vocabulary used by the spec 061 SCOPE-09 metrics
+// (telegram | fake). Unknown values map to fake so cardinality
+// stays bounded and a new transport wire-up is loud but not
+// crashing.
+func normalizeTransport(t string) string {
+	switch t {
+	case assistantmetrics.TransportTelegram:
+		return assistantmetrics.TransportTelegram
+	default:
+		return assistantmetrics.TransportFake
+	}
 }
 
 func validateProposal(in ProposalInput) error {

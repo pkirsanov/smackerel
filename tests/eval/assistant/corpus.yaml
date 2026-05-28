@@ -1,0 +1,794 @@
+# Spec 061 SCOPE-10 — offline evaluation corpus.
+#
+# Source-of-truth contract per design.md §13 item 6:
+#   - ≥30 messages per intent label
+#   - 5 labels: retrieval, weather, notifications, capture,
+#               ambiguous-borderline
+#   - ≥150 rows total
+#   - Each row carries ground_truth_intent + ground_truth_capture_expected
+#   - ground_truth_slots is the per-label slot ground truth (may be empty)
+#
+# This file is consumed by:
+#   - tests/eval/assistant/corpus_validation_test.go (structural)
+#   - tests/eval/assistant/harness.go (acceptance run, behind
+#     //go:build integration)
+#
+# Quarterly refresh per design §13. Seeded RNG keeps the harness
+# deterministic across runs.
+#
+# Label rules:
+#   - retrieval: questions that should hit the retrieval skill
+#                ("What did I save about X?", "Show me my notes on Y")
+#   - weather: weather-explicit questions
+#   - notifications: notification scheduling / management
+#   - capture: messages with no question shape that SHOULD be captured
+#              verbatim ("Idea: …", random-noise capture)
+#   - ambiguous-borderline: messages whose ground_truth_intent is
+#                           explicitly the borderline disambiguation
+#                           path; the facade SHOULD ask one clarifying
+#                           question OR fall back to capture
+#
+# ground_truth_capture_expected:
+#   - true  → harness MUST observe a capture-fallback path
+#   - false → harness MUST observe an answered/proposed path
+
+corpus:
+# ===== RETRIEVAL (30 rows) =====
+- id: ret-001
+  text: "What did I save about Tailscale?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Tailscale" }
+- id: ret-002
+  text: "Show me my notes on Postgres pgvector."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Postgres pgvector" }
+- id: ret-003
+  text: "Find that article I saved about the home-lab Caddy setup."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "home-lab Caddy" }
+- id: ret-004
+  text: "What was the recipe link I saved last week?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "recipe link", timeframe: "last week" }
+- id: ret-005
+  text: "Did I save anything about the NATS JetStream retention policy?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "NATS JetStream retention" }
+- id: ret-006
+  text: "Pull up the bookmarks tagged rust."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { tag: "rust" }
+- id: ret-007
+  text: "What did I write about the dashboard panels yesterday?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "dashboard panels", timeframe: "yesterday" }
+- id: ret-008
+  text: "Show me everything I have on the Tailscale ACL design."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Tailscale ACL design" }
+- id: ret-009
+  text: "Where did I bookmark the Caddy tailnet-edge guide?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Caddy tailnet-edge guide" }
+- id: ret-010
+  text: "Find my notes on observability dashboards from this month."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "observability dashboards", timeframe: "this month" }
+- id: ret-011
+  text: "What did the article say about Go's slog package?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Go slog package" }
+- id: ret-012
+  text: "Search my captures for anything about embeddings."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "embeddings" }
+- id: ret-013
+  text: "Did I bookmark that Hacker News thread on Docker Compose?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Hacker News Docker Compose" }
+- id: ret-014
+  text: "What's in my saved articles about Telegram bot APIs?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Telegram bot APIs" }
+- id: ret-015
+  text: "Show me my chat history with Telegram on the connector design."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Telegram connector design" }
+- id: ret-016
+  text: "What did I capture about the spec 037 routing changes?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "spec 037 routing" }
+- id: ret-017
+  text: "Pull up notes about the prometheus alert rules."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "prometheus alert rules" }
+- id: ret-018
+  text: "What did I save about the recipe extraction pipeline?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "recipe extraction pipeline" }
+- id: ret-019
+  text: "Find the Hospitable webhook docs I bookmarked."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Hospitable webhook docs" }
+- id: ret-020
+  text: "Show me my GuestHost connector notes."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "GuestHost connector" }
+- id: ret-021
+  text: "What did I write about the recipe app last sprint?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "recipe app", timeframe: "last sprint" }
+- id: ret-022
+  text: "Where did I save the article on tailnet identity?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "tailnet identity" }
+- id: ret-023
+  text: "Search my notes for bubbles framework documentation."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "bubbles framework documentation" }
+- id: ret-024
+  text: "What did I capture about the SST zero-defaults policy?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "SST zero-defaults policy" }
+- id: ret-025
+  text: "Show me anything about Postgres jsonb indexing."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Postgres jsonb indexing" }
+- id: ret-026
+  text: "Find my saved links on cosign image signing."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "cosign image signing" }
+- id: ret-027
+  text: "What did I save about the home-lab deployment plan?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "home-lab deployment plan" }
+- id: ret-028
+  text: "Pull up my Twitter archive notes."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "Twitter archive" }
+- id: ret-029
+  text: "Did I bookmark the OWASP top 10 page recently?"
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "OWASP top 10" }
+- id: ret-030
+  text: "Show me my notes on the digest assembly contract."
+  ground_truth_intent: retrieval
+  ground_truth_capture_expected: false
+  ground_truth_slots: { topic: "digest assembly contract" }
+
+# ===== WEATHER (30 rows) =====
+- id: wx-001
+  text: "What's the weather like in San Francisco today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "San Francisco", timeframe: "today" }
+- id: wx-002
+  text: "Will it rain in Seattle tomorrow?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Seattle", timeframe: "tomorrow" }
+- id: wx-003
+  text: "Forecast for Berlin this weekend?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Berlin", timeframe: "this weekend" }
+- id: wx-004
+  text: "How hot will it be in Phoenix on Friday?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Phoenix", timeframe: "Friday" }
+- id: wx-005
+  text: "Is it going to snow in Stockholm next week?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Stockholm", timeframe: "next week" }
+- id: wx-006
+  text: "Temperature in Tokyo right now?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Tokyo", timeframe: "now" }
+- id: wx-007
+  text: "Will I need an umbrella in London this afternoon?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "London", timeframe: "this afternoon" }
+- id: wx-008
+  text: "Weather forecast for Reykjavik next Monday?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Reykjavik", timeframe: "next Monday" }
+- id: wx-009
+  text: "How windy is it in Cape Town today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Cape Town", timeframe: "today" }
+- id: wx-010
+  text: "Chance of rain in Mumbai tomorrow?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Mumbai", timeframe: "tomorrow" }
+- id: wx-011
+  text: "What's the humidity like in Singapore today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Singapore", timeframe: "today" }
+- id: wx-012
+  text: "Will it freeze in Helsinki tonight?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Helsinki", timeframe: "tonight" }
+- id: wx-013
+  text: "Sunny in Lisbon this Saturday?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Lisbon", timeframe: "Saturday" }
+- id: wx-014
+  text: "Weather in Auckland this week?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Auckland", timeframe: "this week" }
+- id: wx-015
+  text: "How cold will it get in Oslo on Wednesday?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Oslo", timeframe: "Wednesday" }
+- id: wx-016
+  text: "Will there be storms in Houston tomorrow?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Houston", timeframe: "tomorrow" }
+- id: wx-017
+  text: "Sunset time in Vancouver tomorrow?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Vancouver", timeframe: "tomorrow" }
+- id: wx-018
+  text: "Snow forecast for Aspen this weekend?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Aspen", timeframe: "this weekend" }
+- id: wx-019
+  text: "Is it raining in Dublin right now?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Dublin", timeframe: "now" }
+- id: wx-020
+  text: "Weather conditions in Mexico City today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Mexico City", timeframe: "today" }
+- id: wx-021
+  text: "Forecast in Buenos Aires next weekend?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Buenos Aires", timeframe: "next weekend" }
+- id: wx-022
+  text: "Will it be hot in Athens on Sunday?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Athens", timeframe: "Sunday" }
+- id: wx-023
+  text: "Heatwave forecast in Madrid this week?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Madrid", timeframe: "this week" }
+- id: wx-024
+  text: "Temperature in Reykjavik tonight?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Reykjavik", timeframe: "tonight" }
+- id: wx-025
+  text: "What's the dew point in Miami today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Miami", timeframe: "today" }
+- id: wx-026
+  text: "Chance of thunderstorms in Bangkok tomorrow?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Bangkok", timeframe: "tomorrow" }
+- id: wx-027
+  text: "Forecast for Anchorage this weekend?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Anchorage", timeframe: "this weekend" }
+- id: wx-028
+  text: "Cloud cover in Edinburgh tomorrow morning?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Edinburgh", timeframe: "tomorrow morning" }
+- id: wx-029
+  text: "Will it be muggy in New Orleans this afternoon?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "New Orleans", timeframe: "this afternoon" }
+- id: wx-030
+  text: "Air quality in Beijing today?"
+  ground_truth_intent: weather
+  ground_truth_capture_expected: false
+  ground_truth_slots: { location: "Beijing", timeframe: "today" }
+
+# ===== NOTIFICATIONS (30 rows) =====
+- id: nt-001
+  text: "Remind me to email Sarah in an hour."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "email Sarah", when: "in an hour" }
+- id: nt-002
+  text: "Set a reminder for tomorrow at 9am to call the plumber."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "call the plumber", when: "tomorrow at 9am" }
+- id: nt-003
+  text: "Notify me when the kombucha is ready, in 5 days."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "kombucha ready", when: "in 5 days" }
+- id: nt-004
+  text: "Remind me to take out the trash tonight at 9pm."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "take out the trash", when: "tonight at 9pm" }
+- id: nt-005
+  text: "Set a reminder for the standup on Monday morning."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "standup", when: "Monday morning" }
+- id: nt-006
+  text: "Remind me to pick up groceries at 5pm."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "pick up groceries", when: "5pm" }
+- id: nt-007
+  text: "Notify me in 2 hours to check the dough."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "check the dough", when: "in 2 hours" }
+- id: nt-008
+  text: "Remind me to renew the domain on the 15th."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "renew the domain", when: "the 15th" }
+- id: nt-009
+  text: "Set a reminder for our anniversary next Friday."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "anniversary", when: "next Friday" }
+- id: nt-010
+  text: "Ping me in 30 minutes to switch the laundry."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "switch the laundry", when: "in 30 minutes" }
+- id: nt-011
+  text: "Remind me to back up the laptop on Saturday."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "back up the laptop", when: "Saturday" }
+- id: nt-012
+  text: "Notify me when it's time to feed the sourdough."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "feed the sourdough" }
+- id: nt-013
+  text: "Set a reminder for the dentist appointment on the 20th at 2pm."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "dentist appointment", when: "the 20th at 2pm" }
+- id: nt-014
+  text: "Remind me to send the invoice on Friday afternoon."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "send the invoice", when: "Friday afternoon" }
+- id: nt-015
+  text: "Notify me on Wednesday to renew the prescription."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "renew the prescription", when: "Wednesday" }
+- id: nt-016
+  text: "Set a reminder for the rent payment on the 1st."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "rent payment", when: "the 1st" }
+- id: nt-017
+  text: "Remind me to schedule the eye exam this month."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "schedule the eye exam", when: "this month" }
+- id: nt-018
+  text: "Ping me at 7am to take vitamins."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "take vitamins", when: "7am" }
+- id: nt-019
+  text: "Notify me in an hour to refill the water filter."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "refill the water filter", when: "in an hour" }
+- id: nt-020
+  text: "Remind me to update the home-lab certificates next month."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "update home-lab certificates", when: "next month" }
+- id: nt-021
+  text: "Set a reminder for the package pickup on Tuesday at noon."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "package pickup", when: "Tuesday at noon" }
+- id: nt-022
+  text: "Remind me at 6pm to start dinner."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "start dinner", when: "6pm" }
+- id: nt-023
+  text: "Notify me on Thursday to confirm the reservation."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "confirm the reservation", when: "Thursday" }
+- id: nt-024
+  text: "Set a reminder to swap snow tires in November."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "swap snow tires", when: "November" }
+- id: nt-025
+  text: "Remind me to water the plants Sunday morning."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "water the plants", when: "Sunday morning" }
+- id: nt-026
+  text: "Notify me in 15 minutes to check the oven."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "check the oven", when: "in 15 minutes" }
+- id: nt-027
+  text: "Set a reminder for the car inspection in 3 weeks."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "car inspection", when: "in 3 weeks" }
+- id: nt-028
+  text: "Remind me to email the landlord on the 10th."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "email the landlord", when: "the 10th" }
+- id: nt-029
+  text: "Notify me in 4 hours to take the bread out."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "take the bread out", when: "in 4 hours" }
+- id: nt-030
+  text: "Set a reminder for the kids' parent-teacher conference next Wednesday."
+  ground_truth_intent: notifications
+  ground_truth_capture_expected: false
+  ground_truth_slots: { action: "parent-teacher conference", when: "next Wednesday" }
+
+# ===== CAPTURE (30 rows — declarative / non-question shapes) =====
+- id: cap-001
+  text: "Idea: borderline-band post-processor as a capability concern, not an agent concern."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-002
+  text: "The library on Elm Street has the best afternoon light for reading."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-003
+  text: "Mental model: SST as a fail-loud boundary between operator intent and runtime."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-004
+  text: "Note: the cosign keyless flow needs an OIDC token from the GitHub workflow context."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-005
+  text: "Random thought — what if every connector emitted a structured stream of facts instead of artifacts?"
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-006
+  text: "Tried the new espresso blend at Blue Bottle, way too acidic for me."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-007
+  text: "Reminder to self: the home-lab firewall blocks all egress except the tailnet by default."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-008
+  text: "Read an interesting post about Postgres replication lag and how it surfaces in dashboards."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-009
+  text: "Concept: a Bubbles-style state machine for any long-running pipeline, not just specs."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-010
+  text: "I keep forgetting that the Caddy admin API listens on 2019 by default."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-011
+  text: "Hypothesis: the borderline floor needs to be configurable per skill, not global."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-012
+  text: "Just finished reading 'A Pattern Language' — fascinating overlap with software architecture."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-013
+  text: "The bakery on 18th opens at 6am on weekdays but 7am on weekends."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-014
+  text: "Maybe: spec-061 should have shipped the metrics module BEFORE the borderline-band code."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-015
+  text: "Curious: how would the spec 037 router behave if we passed the prior turn as context?"
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-016
+  text: "I was thinking — most observability dashboards lack a real operator runbook anchor."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-017
+  text: "The view from the kitchen window in late October is the best part of the year."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-018
+  text: "Note: when migrating to webhook mode the Telegram getUpdates goroutine must be cancelled cleanly."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-019
+  text: "Quote heard at the conference — 'A test that can't fail isn't a test.'"
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-020
+  text: "Trying the new flour from the co-op next time — it's stone-milled and locally grown."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-021
+  text: "Possible improvement: rate limit the LLM gateway per scenario, not per user."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-022
+  text: "Walked past a great little hardware store on Valencia I want to remember."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-023
+  text: "Architecture note: keep the deploy adapter shape stable across targets — only host-config differs."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-024
+  text: "Thinking out loud about how Bubbles handles ceiling-bound terminal status across workflow modes."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-025
+  text: "Today learned: pgvector's HNSW index supports inner-product distance not just cosine."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-026
+  text: "The dim sum place behind the Y had the best siu mai I've ever had."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-027
+  text: "Pondering: could we ship a 'practice mode' that runs scenarios against the corpus locally?"
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-028
+  text: "Photographing dishes I cook so I can reconstruct the recipe later if it's good."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-029
+  text: "Mental note: the Caddy hot-reload semantics for the admin API are documented but easy to miss."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: cap-030
+  text: "Idea — extend the digest to surface 'things I almost forgot' from week-old captures."
+  ground_truth_intent: capture
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+
+# ===== AMBIGUOUS-BORDERLINE (30 rows — under floor; either disambig or capture) =====
+- id: amb-001
+  text: "The thing about the deployment we discussed?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-002
+  text: "Did I have a note about that?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-003
+  text: "Tomorrow."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-004
+  text: "What was that about?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-005
+  text: "Pull it up."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-006
+  text: "Yes."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-007
+  text: "Maybe the one from yesterday."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-008
+  text: "Remind me about that."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-009
+  text: "Show that to me."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-010
+  text: "Save this."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-011
+  text: "Notify me later."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-012
+  text: "Where did I see that?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-013
+  text: "How about now?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-014
+  text: "Try that again."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-015
+  text: "Continue."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-016
+  text: "What about the other one?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-017
+  text: "Open that thing again."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-018
+  text: "I think it was last week sometime."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-019
+  text: "Not sure."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-020
+  text: "Same as before."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-021
+  text: "Closer to Friday I guess."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-022
+  text: "Did you find it?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-023
+  text: "Looking for the doc again."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-024
+  text: "Could you check that?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-025
+  text: "I forget where I put it."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-026
+  text: "What's the status?"
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-027
+  text: "Send it again."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-028
+  text: "Push it back a bit."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-029
+  text: "Run that thing."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
+- id: amb-030
+  text: "Show the thing."
+  ground_truth_intent: ambiguous-borderline
+  ground_truth_capture_expected: true
+  ground_truth_slots: {}
