@@ -67,6 +67,29 @@
     "executionHistory": [
       {
         "agent": "bubbles.workflow",
+        "phasesExecuted": ["test"],
+        "runStartedAt": "2026-05-30T03:30:00Z",
+        "runCompletedAt": "2026-05-30T03:55:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 59 (full-delivery; G082 convergence iteration 10 of 10 in current orchestrator session — CAP REACHED; further iterations in this session would trip G082 mechanical guard). Owner: bubbles.workflow parent-expanded bubbles.test (runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23/48-58; executionModel=parent-expanded-child-mode). Trigger: Round 58 outcome envelope route_required → bubbles.test for live-stack verify of Option 2 (test-tier SST model override). EXECUTED (Claim Source: executed in this session): VERIFY-PHASE leg first — confirmed Round 58 commit f2094b2e is clean (gitleaks PASS, pii-scan PASS), config regen artifacts correct (test.env AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct AND dev.env AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b verified), go build EXIT=0, go vet EXIT=0, format-check EXIT=0, test unit EXIT=0, compose contract test EXIT=0 in 21.7s, integration-test TestAgentProviderDefaultModelTestOverride EXIT=0 in 0.030s. TEST-PHASE leg: (1) ./smackerel.sh --env test down → up → 7 containers healthy; verified env propagation via docker exec smackerel-test-smackerel-{core,ml}-1 env | grep AGENT_PROVIDER_DEFAULT_MODEL → both = qwen2.5:0.5b-instruct (SST plumbing IS working); (2) docker exec ollama-1 ollama pull qwen2.5:0.5b-instruct → 397 MB pulled successfully (pre-existing test stack lifecycle did not auto-pull it); (3) E2E_STACK_MANAGED=1 timeout 240 bash tests/e2e/assistant_bs002_test.sh → BS002_EXIT=1 (RED). Verbatim assistant_turn slog: {\"time\":\"2026-05-29T20:35:20.785672192Z\",\"level\":\"INFO\",\"msg\":\"assistant_turn\",\"user_id\":\"test-user-061-bs002\",\"transport\":\"telegram\",\"correlation_id\":\"178008691217315\",\"assistant_turn_id\":\"asst-1780086915777088809\",\"scenario_id\":\"retrieval_qa\",\"top_score\":0,\"band\":\"high\",\"status\":\"saved_as_idea\",\"error_cause\":\"provider_unavailable\",\"latency_ms\":5009.945377,\"agent_trace_id\":\"trace-asst-1780086915777088809\",\"body_redacted\":true}. agent_traces DB row: outcome=timeout, provider='', model='', latency_ms=5000. (4) E2E_STACK_MANAGED=1 timeout 240 bash tests/e2e/assistant_bs007_test.sh → BS007_EXIT=1 (RED), same pattern: error_cause=provider_unavailable, latency_ms=5013.687806, status=saved_as_idea. (5) bash tests/e2e/assistant_bs001_test.sh → EXIT=127 (file does not exist; user dispatch instruction for BS-001 was incorrect — only assistant_bs00{2,3,6,7}_test.sh + acceptance_smoke + regression_e2e exist in tests/e2e/). (6) Diagnostic: docker logs --tail 40 on ml sidecar revealed verbatim litellm.exceptions.APIConnectionError: OllamaException - {\"error\":\"model 'gemma3:4b' not found\"} from synthesis-extraction and domain-extraction call paths; ollama gin access log shows POST /api/generate returning HTTP 404 (model-not-found) for 4 consecutive 20:35:20-25 calls (these are LLM_MODEL=gemma3:4b consumers, separate from the AGENT_PROVIDER_DEFAULT_MODEL=qwen path); one POST /api/generate at 20:35:25 returned HTTP 200 in 9.41s (this is the retrieval_qa qwen call, but it returned AFTER the 5s scenario timeout had already fired at 20:35:20.785). (7) Root-cause inspection: grep -rn 'os.environ.*LLM_MODEL\\|gemma3:4b' ml/app/ found ml/app/nats_client.py:265 → llm_model = os.environ.get('LLM_MODEL') — synthesis/extraction NATS handler reads from LLM_MODEL, NOT from AGENT_PROVIDER_DEFAULT_MODEL. grep -E '^(LLM_|OLLAMA_|AGENT_PROVIDER_)' config/generated/test.env confirms the gap: AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct (Option 2 redirected ✓) but LLM_MODEL=gemma3:4b (NOT redirected ✗), OLLAMA_MODEL=gemma3:4b (NOT redirected ✗), AGENT_PROVIDER_VISION_MODEL=gemma3:4b (NOT redirected ✗), OLLAMA_VISION_MODEL=gemma3:4b (NOT redirected ✗). CONCLUSION: Option 2 was incomplete — only 1 of 5 model env consumers was redirected to the test-tier model. Per STEP 6 user instruction ('On any RED ... File a new specific finding ... Route to bubbles.plan ... Do NOT silently patch'), NO production source files modified this round. Authored Round 59 evidence section in report.md at anchor #round-59-bs002-bs007-red-option2-incomplete + filed new finding BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK (parent of BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE). Workflow emits BLOCKED outcome with G082 cap finding (iteration 10/10 reached) + nextRequiredOwner=bubbles.plan for the multi-path-leak finding triage in a NEW orchestrator session. No DoD flips this round (live-stack RED). No certification.* edits this round. No foreign-spec edits this round.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE",
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK",
+          "G082-CONVERGENCE-CAP-REACHED",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
+      {
+        "agent": "bubbles.workflow",
         "phasesExecuted": ["implement"],
         "runStartedAt": "2026-05-30T03:10:00Z",
         "runCompletedAt": "2026-05-30T03:30:00Z",
