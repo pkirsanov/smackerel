@@ -7741,3 +7741,93 @@ All 9 translate_inbound tests pass (including the new SlashShortcuts test with i
 - Files modified this round (5 total): `internal/telegram/bot.go`, `internal/telegram/assistant_adapter/translate_inbound.go`, `internal/telegram/assistant_adapter/translate_inbound_test.go`, `specs/061-conversational-assistant/report.md` (this Round 49 + update section), `specs/061-conversational-assistant/state.json` (Round 48 + Round 49 history entries + lastUpdatedAt bump). Plus 2 inherited Round 48 fixtures: `tests/e2e/assistant_bs002_test.sh`, `tests/e2e/assistant_bs007_test.sh`.
 - Spec 061 status remains `in_progress`; SCOPE-06 status remains `In Progress` (DoD #4a/#5a `[x]` capability layer; DoD #4b/#5b/#6 `[ ]` pending live-stack); SCOPE-10 status remains `In Progress`; BQG checkbox `[ ]` remains honestly unflipped.
 
+### Round 49b — live-stack verification attempt (BS-002 fixture)
+
+**Goal:** Per dispatched task, attempt live-stack verification of BS-002 + BS-007 fixtures against the Option A code path already committed in HEAD `e2540aeb`, and close SCOPE-06 DoD #4b/#5b/#6 on green.
+
+**Outcome:** `route_required` — live verification BLOCKED by a pre-existing fixture-infrastructure auth gap that surfaces BEFORE the slash-shortcut code path is exercised. DoD #4b/#5b/#6 remain honestly `[ ]`.
+
+**Pre-flight (working-tree check):** `git status` reports `nothing to commit, working tree clean` — the Option A patch (3 telegram files) was already committed in HEAD `e2540aeb`. Re-application of the patch via IDE edit tools produced byte-identical content (idempotent). Nothing new for me to commit on the code side.
+
+**Code-level re-verification (Claim Source: executed in this session):**
+
+```text
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.1837047 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 8, rejected: 0
+scenario-lint: OK
+
+$ ./smackerel.sh build
+[+] Building 146.5s (42/42) FINISHED                             docker:default
+ => => writing image sha256:ab08e58f08cd80ceda3eb667ae542d65840ced15817ad …  (ml)
+ => => writing image sha256:ba2bffbc369a1b35a63031c9b278cc2020eab94d82e30 …  (core)
+ ✔ smackerel-core  Built
+ ✔ smackerel-ml    Built
+
+$ go test -v -run TestTranslateInbound_SlashShortcuts ./internal/telegram/assistant_adapter/
+=== RUN   TestTranslateInbound_SlashShortcuts
+=== PAUSE TestTranslateInbound_SlashShortcuts
+=== CONT  TestTranslateInbound_SlashShortcuts
+--- PASS: TestTranslateInbound_SlashShortcuts (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter     0.022s
+
+$ ./smackerel.sh test unit  (full Go suite; grep '^FAIL' on captured output)
+0 FAIL lines; assistant_adapter package: ok      …/internal/telegram/assistant_adapter     0.0s
+
+$ ./smackerel.sh lint && ./smackerel.sh format --check
+… All checks passed!
+… 53 files already formatted
+```
+
+Code-level wiring is intact: the adapter test `TestTranslateInbound_SlashShortcuts` exercises `/ask <tail>`, `/weather <tail>`, `/remind <tail>`, plus bare `/ask`, `/weather`, `/remind`, and asserts (a) `Kind == KindText`, (b) text round-trips with slash preserved, (c) adversarial `/notarealcommand` still returns `ErrNotAssistantMessage`. The `bot.go` switch (lines 532–547) routes the same three commands to `assistantAdapter.HandleUpdate` mirroring the `/reset` case shape.
+
+**Live-stack run (Claim Source: executed in this session — `timeout 900 ./smackerel.sh test e2e --shell-run assistant_bs002_test.sh`):**
+
+```text
+=== Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
+--- seed: POST /api/capture with marker=bs002seed… ---
+  seed_resp={"error":{"code":"UNAUTHORIZED","message":"Valid authentication required"}}
+FAIL: BS-002: capture did not return artifact_id; response={"error":{"code":"UNAUTHORIZED","message":"Valid authentication required"}}
+
+=========================================
+  Shell E2E Test Results
+=========================================
+  FAIL: assistant_bs002_test.sh (exit=1)
+
+  Total:  1
+  Passed: 0
+  Failed: 1
+=========================================
+
+Running project-scoped test stack teardown (exit cleanup, timeout 180s)...
+… (clean teardown — all containers removed, all test volumes removed)
+```
+
+Failure occurred at the SEED step — `POST /api/capture` returned HTTP 401 `UNAUTHORIZED` BEFORE any Telegram webhook is posted, BEFORE any `/ask` text is routed through the new Option A code path. The slash-shortcut behavior could not be observed.
+
+**Root-cause classification (NOT a Fix-2 bug):** The fixture sources `AUTH_TOKEN` from `config/generated/test.env::SMACKEREL_AUTH_TOKEN` (`c7c2e6c1924233b8be8aecb2d10e00b26c0af62f68e9c22e`) and sends `Authorization: Bearer $AUTH_TOKEN` on every API call. Test env has `AUTH_ENABLED=false`. The router's `bearerAuthMiddleware` (Branch 3, `internal/api/router.go:783`) is supposed to accept a constant-time match against `d.AuthToken` for non-production environments — but the running test container is rejecting the token. None of the task brief's listed likely failure modes (fixture assertion shape mismatch / slash-arg parsing / first-call LLM cold-start) match this signature; this is a fixture-infrastructure / env-wiring gap that exists independent of Fix 2 and would block ANY BS-002 run regardless of whether `/ask` is wired or not.
+
+**Per task brief ("ONE repair attempt; if second attempt needed, surface as blocker"):** No repair attempted because the failure mode is NOT a Fix-2 issue; touching the auth path would (a) exceed the ≤3 production-file bound, (b) expand scope into a separate auth-fixture spec. Surfacing as blocker.
+
+**BS-007 fixture NOT attempted this session** — would consume another ~5min stack bring-up cycle to almost certainly hit the same infra blocker (BS-007 fixture also uses `Authorization: Bearer $AUTH_TOKEN` on health-check before any test-specific work). The cost/value tradeoff favors surfacing the blocker now over re-confirming the same root cause.
+
+**Honest DoD status (no flips):**
+
+- SCOPE-06 DoD #4b (BS-002 adapter-composition leg): remains `[ ]` — live-stack proof not obtained.
+- SCOPE-06 DoD #5b (BS-007 adapter-composition leg): remains `[ ]` — fixture not run this session.
+- SCOPE-06 DoD #6 (Telegram trailing `sources:` rendering): remains `[ ]` — paired with #4b.
+- SCOPE-06 status: remains `In Progress`.
+- SCOPE-05 status note: unchanged from Round 49 (Option A landed in code).
+- SCOPE-10 acceptance-set tally: unchanged (no additional v1 BS scenarios closed live-green this session).
+- `scopeProgress.done`: NOT incremented.
+
+**Routed packet (single, replaces Round 49 Packet 1):**
+
+| To | What | Why | Acceptance |
+|---|---|---|---|
+| `bubbles.test` (or `bubbles.harden`) | Diagnose + fix the `/api/capture` 401 in the test stack so BS-002 + BS-007 fixtures can run end-to-end. Likely cause: SMACKEREL_AUTH_TOKEN not reaching the `smackerel-test-smackerel-core-1` container env, OR the shared-token branch is being bypassed because of an environment-detection regression. Verify by `docker exec smackerel-test-smackerel-core-1 env | grep SMACKEREL_AUTH_TOKEN` on a live stack, then trace through `bearerAuthMiddleware`. | Pre-existing infra gap unrelated to Fix 2 / Spec 061. Blocks BS-002, BS-007, BS-010 live-stack proof regardless of conversational-assistant routing. | BS-002 fixture seed step returns `{"artifact_id":"…"}` with HTTP 200 against the live test stack. |
+
