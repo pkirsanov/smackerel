@@ -887,6 +887,76 @@ start with a fresh borderline/lookup state machine.
   asks for capture. Proven by `TestHandleMessage_AssistantHandled_DoesNotCallCapture`
   in combination with the prior two tests.
 
+#### 3.8.5 Evaluation Harness — `tests/eval/assistant/`
+
+The conversational assistant ships with an offline evaluation harness
+that gives the §17 acceptance contract teeth in CI without requiring a
+live LLM endpoint. It scores routing accuracy and capture-fallback
+coverage against a fixed labelled corpus so silent classifier or corpus
+drift becomes a loud test failure.
+
+**Design contract (spec 061 §3 Success Signal):**
+
+| Metric | Floor | SST key |
+|--------|-------|---------|
+| Routing accuracy across the labelled corpus | ≥ `0.85` | `assistant.eval.routing_accuracy_min` |
+| Capture-fallback success on the capture-expected subset | `1.0` (100%) | `assistant.eval.capture_fallback_min` |
+
+Both keys are NO-DEFAULTS SST values; the acceptance test calls
+`mustFloatEnv` and `t.Fatalf`s with `"SST contract violation: <KEY> is
+empty"` if either env var is missing — fail-loud per
+[`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md).
+
+**Corpus shape:**
+
+- File: `tests/eval/assistant/corpus.yaml`
+- Size: ≥150 rows, ≥30 per intent label
+- Closed vocabulary: `retrieval`, `weather`, `notifications`, `capture`,
+  `ambiguous-borderline` (the last label defaults to capture per design
+  §3.2 "default-to-capture")
+- Each row: `{id, text, ground_truth_intent, ground_truth_slots,
+  ground_truth_capture_expected}`
+- Structural invariants (size, per-label floor, no duplicate IDs,
+  closed-vocabulary intents) enforced by `corpus_validation_test.go` on
+  every `go test` pass
+
+**Harness shape:**
+
+- Driver: `tests/eval/assistant/harness.go` (deterministic keyword
+  classifier — no RNG, no external calls; two consecutive runs against
+  the same corpus produce identical results, asserted by
+  `TestRun_Deterministic`)
+- Acceptance gate: `tests/eval/assistant/acceptance_test.go`
+  (`TestAcceptanceGate_RoutingAccuracyAndCaptureFallback`, build tag
+  `integration`); reads both floors via `os.Getenv` from
+  `ASSISTANT_EVAL_ROUTING_ACCURACY_MIN` and
+  `ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN`
+- Anti-tautology guard: `TestRun_AdversarialFailureSurfaces` runs the
+  harness with ground truth deliberately mismatched against every
+  classifier output and asserts `IntentCorrect == 0`,
+  `RoutingAccuracy == 0.0`, and a populated `Failures` slice — proves
+  the harness CAN fail when classifier and corpus disagree
+
+**Per-behavioral-scenario regression slots:**
+
+Spec 061 BS-001..BS-010 each get a dedicated regression slot under
+`tests/e2e/assistant_regression/bs_NNN_*.sh`. Slots whose substrate is
+not yet authored use the `reg_skip_with_blocker` convention from
+`tests/e2e/assistant_regression/lib/regression_helpers.sh` and inline
+the full executed assertion body in a `:<<'EXECUTED_PATTERN'` heredoc,
+so the round that unblocks the named substrate flips a single line from
+`reg_skip_with_blocker` to the in-tree assertion. Live-stack
+verification across the full BS-001..BS-010 set remains tracked by the
+open SCOPE-10 findings
+`SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` and
+`SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING` in
+[`specs/061-conversational-assistant/state.json`](../specs/061-conversational-assistant/state.json).
+
+**Operational detail** (how to run, how to extend the corpus, how the
+SST env vars resolve from `config/smackerel.yaml` through
+`scripts/commands/config.sh`) lives in
+[`docs/Testing.md` → Assistant Evaluation Harness](Testing.md#assistant-evaluation-harness).
+
 ---
 
 ## 4. OpenClaw Integration Strategy
