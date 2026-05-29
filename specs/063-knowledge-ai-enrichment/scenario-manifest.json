@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "featureDir": "specs/063-knowledge-ai-enrichment",
+  "generatedAt": "2026-05-29T03:00:00Z",
+  "scenarios": [
+    {
+      "id": "SCN-063-001",
+      "scopeId": "SCOPE-06",
+      "bsScenarioRef": "SCN-063-001",
+      "priority": "high",
+      "phase": "background",
+      "title": "Re-synthesis triggers on new artifact",
+      "linkedTests": [
+        "internal/knowledge/enrichment/resynthesis_integration_test.go",
+        "tests/e2e/enrichment_resynthesis_e2e_test.sh"
+      ]
+    },
+    {
+      "id": "SCN-063-002",
+      "scopeId": "SCOPE-06",
+      "bsScenarioRef": "SCN-063-002",
+      "priority": "high",
+      "phase": "background",
+      "title": "Re-synthesis refuses when output would thin existing content",
+      "linkedTests": [
+        "internal/knowledge/enrichment/resynthesis_test.go"
+      ]
+    },
+    {
+      "id": "SCN-063-003",
+      "scopeId": "SCOPE-06",
+      "bsScenarioRef": "SCN-063-003",
+      "priority": "high",
+      "phase": "background",
+      "title": "Backlog catch-up after offline period (zero notifications, oldest-first, bounded by per_tick_budget + backlog_cap)",
+      "linkedTests": [
+        "internal/knowledge/enrichment/resynthesis_integration_test.go"
+      ]
+    },
+    {
+      "id": "SCN-063-004",
+      "scopeId": "SCOPE-07",
+      "bsScenarioRef": "SCN-063-004",
+      "priority": "high",
+      "phase": "background",
+      "title": "LLM relationship inference persists INFERRED_COREFERENCE edge with provenance",
+      "linkedTests": [
+        "internal/knowledge/enrichment/relationship_inference_integration_test.go",
+        "tests/e2e/enrichment_relationship_inference_e2e_test.sh"
+      ]
+    },
+    {
+      "id": "SCN-063-005",
+      "scopeId": "SCOPE-07",
+      "bsScenarioRef": "SCN-063-005",
+      "priority": "high",
+      "phase": "background",
+      "title": "Relationship inference refuses below confidence floor",
+      "linkedTests": [
+        "internal/knowledge/enrichment/relationship_inference_test.go"
+      ]
+    },
+    {
+      "id": "SCN-063-006",
+      "scopeId": "SCOPE-08",
+      "bsScenarioRef": "SCN-063-006",
+      "priority": "high",
+      "phase": "background",
+      "title": "Why-augmenter attaches prose to intelligence alert (citations subset of parent sources)",
+      "linkedTests": [
+        "internal/knowledge/enrichment/why_augmenter_integration_test.go",
+        "tests/e2e/enrichment_why_augmenter_e2e_test.sh"
+      ]
+    },
+    {
+      "id": "SCN-063-007",
+      "scopeId": "SCOPE-08",
+      "bsScenarioRef": "SCN-063-007",
+      "priority": "high",
+      "phase": "background",
+      "title": "Why-augmenter refuses on empty parent evidence set",
+      "linkedTests": [
+        "internal/knowledge/enrichment/why_augmenter_test.go"
+      ]
+    },
+    {
+      "id": "SCN-063-008",
+      "scopeId": "SCOPE-09",
+      "bsScenarioRef": "SCN-063-008",
+      "priority": "medium",
+      "phase": "background",
+      "title": "Topic merge triggers consolidation analyzer; structured suggestion persisted (no notification fired)",
+      "linkedTests": [
+        "internal/knowledge/enrichment/consolidation_analyzer_integration_test.go",
+        "tests/e2e/enrichment_consolidation_e2e_test.sh"
+      ]
+    },
+    {
+      "id": "SCN-063-009",
+      "scopeId": "SCOPE-10",
+      "bsScenarioRef": "SCN-063-009",
+      "priority": "high",
+      "phase": "reactive",
+      "title": "Reactive knowledge_lookup answer cites concept pages and artifact IDs",
+      "linkedTests": [
+        "internal/agent/tools/enrichment/knowledgelookup/knowledgelookup_integration_test.go",
+        "tests/e2e/enrichment_knowledge_lookup_e2e_test.sh"
+      ]
+    },
+    {
+      "id": "SCN-063-010",
+      "scopeId": "SCOPE-10",
+      "bsScenarioRef": "SCN-063-010",
+      "priority": "high",
+      "phase": "reactive",
+      "title": "Reactive knowledge_lookup refuses on empty graph evidence (canonical refusal via spec 061 provenance gate)",
+      "linkedTests": [
+        "internal/agent/tools/enrichment/knowledgelookup/knowledgelookup_integration_test.go",
+        "tests/e2e/enrichment_knowledge_lookup_e2e_test.sh"
+      ]
+    }
+  ]
+}
