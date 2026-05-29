@@ -54,7 +54,7 @@
     "currentPhase": "implement",
     "currentScope": "SCOPE-10",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T11:00:00Z",
+    "lastUpdatedAt": "2026-05-29T18:55:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,28 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["implement", "test", "plan"],
+        "runStartedAt": "2026-05-29T18:30:00Z",
+        "runCompletedAt": "2026-05-29T18:55:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 50 (full-delivery; G082 convergence iteration 3 of 10 in current orchestrator session). Owner: bubbles.workflow parent-expanded bubbles.implement → bubbles.test → bubbles.plan inline (runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23 / 48 / 49; executionModel=parent-expanded-child-mode). PRE-FLIGHT: workflowMode=full-delivery, statusCeiling=done; HEAD e2540aeb (Round 49 commit); convergence iteration 3 within G082 cap. Trigger: Round 49 closed routing routed packet to bubbles.test (Auth 401 infra gap blocking BS-002/BS-007 seed step) which was resolved out-of-band; Round 50 entered to verify BS-002 + BS-007 live-stack per Packet 1. EXECUTED (Claim Source: executed in this session): (1) `docker inspect smackerel-test-smackerel-core-1` revealed stale image at 2026-05-29T00:44:48 (~18h pre-Round-49); (2) ran `./smackerel.sh --env test build` → new image sha256:6b9b9d2f227c at 2026-05-29T18:34:15; (3) `docker exec smackerel-test-ollama-1 ollama list` empty; pulled gemma3:4b (3.3 GB) + nomic-embed-text (274 MB); (4) `./smackerel.sh up` confirmed 6 service containers Up healthy; (5) verified Ollama host port for test stack = 47004 (per OLLAMA_HOST_PORT in config/generated/test.env, NOT 21002 which is dev port); (6) executed `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` → FAIL with diagnostic assistant_turn slog now emitted (Round 49 Option A IS in binary) but: correlation_id=\"0\" (expected 178007999822312), scenario_id=\"\" (expected \"retrieval_qa\"), status=\"saved_as_idea\" (expected \"thinking\"), top_score=0, band=\"low\"; (7) parallel grep_search/read_file traced two distinct root causes in the Round 49 Option A patch itself: DEFECT 1 BS-002-LIVE-STACK-CORRELATION-ID-LOST — internal/telegram/bot.go case \"ask\"/\"weather\"/\"remind\" arm constructs `&tgbotapi.Update{Message: msg}` without UpdateID; the polling path (bot.go:328) and webhook path (webhook_handler.go:91-92) both pass `*tgbotapi.Message` to safeHandleMessage/handleMessage, dropping the original UpdateID at the boundary; translate_inbound.go correctly stamps strconv.Itoa(update.UpdateID) but receives 0; facade.go's empty-string fallback to turnAssistantTurnID doesn't trigger for literal \"0\"; same defect affects /reset arm at bot.go:528 and plain-text fallthrough at bot.go:617; DEFECT 2 BS-002-LIVE-STACK-BORDERLINE-LOW-FOR-EXPLICIT-ID — internal/assistant/borderline.go::Borderline() has no special case for decision.Reason == agent.ReasonExplicitScenarioID; router's fast path (router.go:191-201) short-circuits with TopScore=0 (no embedding call per design §4.1 path 1); Borderline falls through to `if TopScore < agentConfidenceFloor → BandLow`; facade Step 6 case BandLow (facade.go:449) builds StatusSavedAsIdea response and never sets turnScenarioID, so slog emits scenario_id=\"\" + status=\"saved_as_idea\" even though router resolved decision.Chosen=\"retrieval_qa\". (8) per user directive 'On red: file the actual failure as a new finding, route to bubbles.plan for triage (do NOT silently patch)' — NO production code changes this round; both defects routed to bubbles.plan with concrete options (1A/1B/1C for Defect 1, 2A/2B for Defect 2). (9) BS-007 NOT attempted this session — would hit same defects (BS-007 also uses /ask shortcut). (10) Packet 2 substrate dependency analysis: BS-009 + BS-008 INDEPENDENT of these defects (can land in parallel in Round 51); BS-004 BLOCKED by Defect 1 (uses /remind shortcut, same code path). FILES MODIFIED THIS ROUND (2, narrative-only; ZERO production code): specs/061-conversational-assistant/report.md (Round 50 section with anchor #round-50-bs002-routing-defect-triage), specs/061-conversational-assistant/state.json (this entry + execution.lastUpdatedAt bump). NOT MODIFIED: scopes.md DoD checkboxes (no flips per honesty guard / Gate G021 / G041 — live-stack proof not achieved would be fabricated evidence), spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.* fields (preserved verbatim per task brief), completedScopes, scopeProgress, top-level status, statusCeiling, workflowMode, any cross-spec/, any spec other than 061, any production source under internal/, cmd/, ml/, web/, scripts/. SCOPE-06 final status this round: In Progress (DoD #4a/#5a [x] capability-layer; #4b/#5b/#6 [ ] routing path provably broken at two production-code points). SCOPE-10 final status this round: In Progress (BQG [ ] honestly unflipped; DoD #7 substrate authoring deferred to Round 51+). Spec 061 status: in_progress (unchanged). Convergence iteration: 3/10 of G082 cap. Outcome envelope: route_required → bubbles.plan for Defect 1 + Defect 2 triage. Round 51 entry condition: plan packet completion with chosen options, ready for bubbles.implement round to land the routing fixes and re-run BS-002 + BS-007 fixtures.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "BS-002-LIVE-STACK-CORRELATION-ID-LOST",
+          "BS-002-LIVE-STACK-BORDERLINE-LOW-FOR-EXPLICIT-ID",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan", "implement", "test"],
