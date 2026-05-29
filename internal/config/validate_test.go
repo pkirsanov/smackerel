@@ -913,6 +913,11 @@ func setRequiredEnv(t *testing.T) {
 	// SST validator while exercising unrelated config surfaces.
 	t.Setenv("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN", "0.85")
 	t.Setenv("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN", "1.0")
+	// Spec 061 SCOPE-09a — OTel SDK substrate SST. Defaults mirror
+	// smackerel.yaml so unrelated tests don't trip the new validator.
+	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_ENABLED", "false")
+	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT", "")
+	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME", "smackerel-core")
 	// Spec 061 SCOPE-01 design §7.2 rule #2 — agent routing floor is
 	// referenced by validateAssistantConfig for the borderline check.
 	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")

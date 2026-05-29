@@ -1797,10 +1797,16 @@ func (c *Config) Validate() error {
 	// Spec 061 SCOPE-01 — Conversational Assistant rule-based
 	// validation (design §7.2 rules #2–#4). Rule #1 (required values)
 	// is enforced inline by loadAssistantConfig at Load() time with
-	// the [F061-SST-MISSING] prefix.
-	if err := c.validateAssistantConfig(); err != nil {
-		return err
-	}
+	// the [F061-SST-MISSING] prefix. The rule validation itself is
+	// invoked explicitly from Load() AFTER loadAssistantConfig has
+	// populated the Assistant struct (and AFTER the webhook secret
+	// indirection has resolved); it is intentionally NOT re-invoked
+	// here because Validate() is also called EARLIER in Load() to
+	// validate base config, at which point Assistant.Observability
+	// would still be zero-valued and the OTel rules would false-fire.
+	// External callers that need full validation should call Load()
+	// — it runs validateAssistantConfig as part of its post-load
+	// sequence. See observability_test.go for direct rule coverage.
 
 	return nil
 }

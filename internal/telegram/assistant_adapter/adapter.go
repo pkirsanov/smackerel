@@ -10,6 +10,8 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // transportName is the closed-vocabulary token for this adapter.
@@ -90,6 +92,17 @@ type Options struct {
 	// `assistant.transports.telegram.max_message_chars` (4096 for
 	// Telegram per the protocol). REQUIRED — must be > 0.
 	MaxMessageChars int
+
+	// Tracer is the spec 061 SCOPE-09a OTel substrate seam. When
+	// non-nil, Translate emits the canonical root span
+	// `assistant.adapter.translate` (design §8.3.1.A item 1) carrying
+	// the 5 mandatory attrs from §8.3.1.B. Production wiring
+	// (cmd/core/wiring.go) always passes a real Tracer (the no-op
+	// path stays unconditional inside the tracing package itself).
+	// May be nil in tests that do not exercise the tracing seam; in
+	// that case a no-op tracer is substituted so emission stays
+	// unconditional.
+	Tracer *tracing.Tracer
 }
 
 // Adapter is the Telegram implementation of
@@ -100,6 +113,7 @@ type Adapter struct {
 	resolveUser     UserResolver
 	markdownMode    MarkdownMode
 	maxMessageChars int
+	tracer          *tracing.Tracer
 
 	mu        sync.RWMutex
 	assistant contracts.Assistant
@@ -124,12 +138,27 @@ func NewAdapter(opts Options) (*Adapter, error) {
 	if opts.MaxMessageChars <= 0 {
 		return nil, fmt.Errorf("assistant_adapter: MaxMessageChars must be > 0 (got %d)", opts.MaxMessageChars)
 	}
+	tr := opts.Tracer
+	if tr == nil {
+		// Tests may omit the tracer; substitute a no-op so emission
+		// sites stay unconditional. Production wiring always supplies
+		// the real tracer from cmd/core/services.go.
+		noopTr, _, err := tracing.NewTracer(context.Background(), tracing.Config{
+			Enabled:     false,
+			ServiceName: "smackerel-core",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("assistant_adapter: build noop tracer fallback: %w", err)
+		}
+		tr = noopTr
+	}
 	return &Adapter{
 		sender:          opts.Sender,
 		capture:         opts.Capture,
 		resolveUser:     opts.ResolveUser,
 		markdownMode:    opts.MarkdownMode,
 		maxMessageChars: opts.MaxMessageChars,
+		tracer:          tr,
 	}, nil
 }
 
@@ -150,12 +179,51 @@ func (a *Adapter) Name() string { return transportName }
 
 // Translate converts an *tgbotapi.Update into an AssistantMessage.
 // Implements contracts.TransportAdapter.
+//
+// Spec 061 SCOPE-09a (design §8.3.1.A item 1) — this is the canonical
+// root span site `assistant.adapter.translate`. The 5 mandatory
+// attributes from §8.3.1.B are stamped at start; the 2 outcome
+// attributes are stamped at end via tracing.EndSpan. scenario_id is
+// stamped empty because routing has not yet selected a scenario at
+// the adapter-translate stage (SCOPE-09b will stamp scenario_id on
+// child spans further down the chain).
 func (a *Adapter) Translate(ctx context.Context, payload contracts.TransportPayload) (contracts.AssistantMessage, error) {
 	update, ok := payload.(*tgbotapi.Update)
 	if !ok || update == nil {
-		return contracts.AssistantMessage{}, fmt.Errorf("assistant_adapter: Translate expects *tgbotapi.Update, got %T", payload)
+		// Span the failure path too so dashboards can count the
+		// transport-payload misuse class.
+		_, span := a.tracer.StartSpan(ctx, "assistant.adapter.translate",
+			transportName, "", "", "", "")
+		err := fmt.Errorf("assistant_adapter: Translate expects *tgbotapi.Update, got %T", payload)
+		tracing.EndSpan(span, "error", "invalid_payload")
+		return contracts.AssistantMessage{}, err
 	}
-	return translateInbound(update, a.resolveUser)
+	// Pre-resolve the correlation_id (telegram_update_id) so the
+	// span carries it even on early failures. update.UpdateID is
+	// always populated by Telegram for inbound updates.
+	correlationID := fmt.Sprintf("%d", update.UpdateID)
+	_, span := a.tracer.StartSpan(ctx, "assistant.adapter.translate",
+		transportName, "", "", "", correlationID)
+	msg, err := translateInbound(update, a.resolveUser)
+	if err != nil {
+		// Distinguish "not for the assistant" (noop, expected) from
+		// hard translation failures (error). Both end the span; only
+		// the latter promotes the OTel status to Error.
+		if errors.Is(err, ErrNotAssistantMessage) {
+			tracing.EndSpan(span, "noop", "not_assistant_message")
+			return msg, err
+		}
+		tracing.EndSpan(span, "error", "translate_failed")
+		return msg, err
+	}
+	// Re-stamp user_id_hashed now that we know it. Set as an
+	// attribute on the span before End — EndSpan does not overwrite
+	// canonical-attr keys.
+	span.SetAttributes(
+		canonicalAttr("user_id_hashed", tracing.HashUserID(msg.UserID)),
+	)
+	tracing.EndSpan(span, "ok", "")
+	return msg, nil
 }
 
 // Identity resolves the chat_id on the supplied Update via the spec
@@ -243,15 +311,40 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	if chatID == 0 {
 		return false, errors.New("assistant_adapter: update has no chat_id")
 	}
+	// Spec 061 SCOPE-09b — start the canonical root span
+	// `assistant.adapter.translate` here so the facade.handle child
+	// span (started inside assistant.Handle) and the
+	// `assistant.adapter.render` sibling child (started around
+	// RenderToChat below) both nest under the same root per design
+	// §8.3.1.A. correlation_id is the telegram_update_id, available
+	// before the resolver runs. user_id_hashed is re-stamped after
+	// translateInbound resolves the user id.
+	correlationID := fmt.Sprintf("%d", update.UpdateID)
+	ctx, rootSpan := a.tracer.StartSpan(ctx, "assistant.adapter.translate",
+		transportName, "", "", "", correlationID)
+	rootStatus := "ok"
+	rootCause := ""
+	defer func() {
+		tracing.EndSpan(rootSpan, rootStatus, rootCause)
+	}()
+
 	msg, err := translateInbound(update, a.resolveUser)
 	if err != nil {
 		if errors.Is(err, ErrNotAssistantMessage) {
+			rootStatus = "noop"
+			rootCause = "not_assistant_message"
 			return false, nil
 		}
+		rootStatus = "error"
+		rootCause = "translate_failed"
 		return true, fmt.Errorf("translate: %w", err)
 	}
+	rootSpan.SetAttributes(canonicalAttr("user_id_hashed", tracing.HashUserID(msg.UserID)))
+
 	resp, err := assistant.Handle(ctx, msg)
 	if err != nil {
+		rootStatus = "error"
+		rootCause = "handle_failed"
 		return true, fmt.Errorf("assistant.Handle: %w", err)
 	}
 	// CaptureRoute fires BEFORE the user-facing send so the artifact
@@ -262,10 +355,30 @@ func (a *Adapter) HandleUpdate(ctx context.Context, update *tgbotapi.Update) (bo
 	if resp.CaptureRoute && update.Message != nil {
 		a.capture(ctx, update.Message, msg.Text)
 	}
-	if err := a.RenderToChat(ctx, chatID, resp); err != nil {
-		return true, fmt.Errorf("render: %w", err)
+	// Spec 061 SCOPE-09b — `assistant.adapter.render` span (design
+	// §8.3.1.A item 10). Sibling of facade.handle under the same
+	// translate root.
+	scenarioForRender := ""
+	if resp.Routing != nil {
+		scenarioForRender = resp.Routing.Chosen
 	}
+	ctxRender, renderSpan := a.tracer.StartSpan(ctx, "assistant.adapter.render",
+		transportName, tracing.HashUserID(msg.UserID), "", scenarioForRender, correlationID)
+	if renderErr := a.RenderToChat(ctxRender, chatID, resp); renderErr != nil {
+		tracing.EndSpan(renderSpan, "error", "render_failed")
+		rootStatus = "error"
+		rootCause = "render_failed"
+		return true, fmt.Errorf("render: %w", renderErr)
+	}
+	tracing.EndSpan(renderSpan, "ok", "")
 	return true, nil
+}
+
+// canonicalAttr is a thin convenience for stamping a single
+// attribute.KeyValue with a string value. Used by Translate to
+// re-stamp user_id_hashed after the resolver supplies it.
+func canonicalAttr(key, value string) attribute.KeyValue {
+	return attribute.String(key, value)
 }
 
 // chatIDFromUpdate extracts the chat_id from either a message or a

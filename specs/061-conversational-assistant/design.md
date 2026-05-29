@@ -1385,6 +1385,158 @@ assistant.adapter.translate           (adapter: transport.translate)
 Spans attribute `transport`, `user_id`, `assistant_turn_id`, and the
 cross-referenced `agent_trace_id`.
 
+### 8.3.1 SCOPE-09 OTel implementation decisions (ratified)
+
+The §8.3 tree is the **target** shape. SCOPE-09 v1 implements the
+spec-061-owned subset and the SDK substrate; spec-037-owned spans
+(`agent.executor.run`, `agent.tool.<name>.invoke`) are out of scope
+for v1 because spec 037 has not wired OTel either (verified
+2026-05-29: `grep -rln go.opentelemetry.io/otel` returns 0 Go files;
+`go.mod` declares no otel/jaeger modules). A follow-up spec MUST
+add the spec-037 spans so the executor/tool nesting in §8.3
+materializes; until then, `assistant.router.classify` is the
+deepest child along that branch and the cross-ref attribute
+`agent_trace_id` remains empty (omitted, not faked).
+
+**A. Span count for v1 — 8 spans (the spec-061-owned subset).**
+Literal count, matching §8.3 minus the two spec-037 spans:
+
+1. `assistant.adapter.translate` (root)
+2. `assistant.facade.handle` (child of translate)
+3. `assistant.context.load`
+4. `assistant.router.classify`
+5. `assistant.router.band`
+6. `assistant.provenance.check`
+7. `assistant.confirm.persist` (only emitted when
+   `confirm_required` + propose phase fires; skipped otherwise — a
+   missing span here is correct behavior, not a defect)
+8. `assistant.context.persist`
+9. `assistant.audit.write`
+10. `assistant.adapter.render` (sibling of `facade.handle` under the
+    same translate root)
+
+That's the literal §8.3 set minus spans 4 and 4a (`agent.executor.run`,
+`agent.tool.<name>.invoke`). Total v1 spans emitted per turn: 9
+mandatory + 1 conditional (`confirm.persist`).
+
+**B. Span names + parent/child shape — verbatim from §8.3.** The
+tree above is normative. Mandatory attributes on every span:
+`transport`, `user_id` (hashed per privacy policy), `assistant_turn_id`,
+`scenario_id` (once known, set after `router.classify`),
+`correlation_id`. Outcome attributes set at span end: `status`
+(`ok`/`error`), `error_cause` (when `status=error`). Spans MUST NOT
+record message bodies — body redaction follows §8.2 log-field rules.
+
+**C. Span context propagation — `context.Context` per OTel Go
+convention.** Verified single-goroutine boundary: transport adapter
+→ facade.handle → all children happen synchronously within one
+goroutine per turn (no `go func()` between span start and end in
+`internal/assistant/facade.go`). The transport adapter MUST pass
+its `context.Context` into the facade entry; the facade MUST pass
+the same context to every internal helper. No baggage propagation
+is required for v1 (no cross-service hop yet).
+
+**D. SDK init location — `cmd/core/wiring.go`.** The OTel
+TracerProvider is initialized alongside the existing infra wiring
+(Postgres pool, NATS, Telegram client) and shut down by the
+existing `cmd/core/shutdown.go` chain. Driven by **3 new SST keys**
+(net-new block in §7.1; spec authors MUST add this block before
+SCOPE-09a lands):
+
+```yaml
+  observability:
+    otel_enabled:       ${ASSISTANT_OTEL_ENABLED:?ASSISTANT_OTEL_ENABLED required, bool}
+    otel_endpoint:      ${ASSISTANT_OTEL_ENDPOINT:?ASSISTANT_OTEL_ENDPOINT required, OTLP/gRPC endpoint host:port, e.g. "jaeger:4317"}
+    otel_service_name:  ${ASSISTANT_OTEL_SERVICE_NAME:?ASSISTANT_OTEL_SERVICE_NAME required, e.g. "smackerel-core"}
+```
+
+All three are fail-loud per `smackerel-no-defaults`. When
+`otel_enabled=false`, a no-op TracerProvider is wired so call sites
+remain unconditional (no `if tracer != nil` branches). When
+`otel_enabled=true` and the endpoint is unreachable at startup, the
+process aborts — consistent with §7.2 validation rule 4.
+
+**E. Sidecar choice for test/dev env — `jaegertracing/all-in-one`.**
+Justification: includes the Jaeger UI on port 16686 for operator
+inspection out of the box (matches DoD #3 wording "visible in
+Jaeger"); single image, no separate collector config; well-known
+local-dev pattern. Goes into `docker-compose.yml` under a new
+`profile: [test, dev-otel]` block so it does not run in default
+`up` (matches the §18.4 `smackerel-test-stub-providers` precedent).
+The `otel_endpoint` SST value points at the sidecar's OTLP/gRPC
+port `4317`. otel-collector-contrib is not chosen for v1 because
+its added value (multi-backend fanout, processors) is not needed
+yet; a future spec can swap the sidecar without touching
+instrumentation since the call sites only know OTLP/gRPC.
+
+**F. Test assertion mechanism — in-memory SDK exporter in a Go
+integration test.** Use `go.opentelemetry.io/otel/sdk/trace/tracetest.InMemoryExporter`
+wired into a test-only TracerProvider; drive a full facade turn
+through the live capability path (real router, real
+provenance.check, real audit.write against the ephemeral test DB);
+assert the recorded span set matches the §8.3.1.A list, parent/
+child relationships hold, and mandatory attributes are populated.
+This keeps the assertion deterministic and free of docker
+dependencies in CI. A separate, smaller e2e smoke test MAY hit the
+Jaeger sidecar's `GET /api/traces?service=smackerel-core` to prove
+the OTLP exporter path works end-to-end against a real collector;
+that smoke test is optional in CI and required in pre-release.
+
+### 8.3.2 SCOPE-09 split recommendation
+
+File-count estimate for the full DoD #3 work:
+
+| Area | Files |
+|------|------:|
+| §7 SST block + Go config struct + validator | 2 |
+| `go.mod`/`go.sum` (otel SDK + OTLP exporter modules) | 2 |
+| `cmd/core/wiring.go` SDK init + shutdown hook | 1 |
+| New `internal/assistant/tracing/` package (tracer accessor, attr helpers, no-op fallback) | 2 |
+| `internal/assistant/facade.go` — 7 child-span sites | 1 |
+| Transport adapter(s) — `translate` + `render` spans | 1–2 |
+| `docker-compose.yml` — jaeger sidecar under test/dev-otel profile | 1 |
+| `tests/integration/assistant/otel_span_tree_test.go` (in-memory exporter) | 1 |
+| `tests/e2e/assistant/otel_jaeger_smoke_test.go` (optional, sidecar-backed) | 1 |
+| `docs/Operations.md` operator-runbook update (Jaeger UI access) | 1 |
+
+Total: **12–14 files** across 7+ packages. Per the dispatch heuristic
+in the task prompt (>12 → Split-C; 7–12 → Split-A), this lands on
+the Split-A / Split-C boundary. **Recommended: Split-A**, because
+the work is cohesive (one telemetry concern, one acceptance test
+shape) and a third spec would over-fragment the artifact set.
+
+- **SCOPE-09a — OTel substrate (~7 files):** add the 3 SST keys
+  to §7 + `config/smackerel.yaml` + Go config struct + validator;
+  add otel SDK deps to `go.mod`/`go.sum`; wire SDK init in
+  `cmd/core/wiring.go` + shutdown hook; create
+  `internal/assistant/tracing/` package; add jaeger sidecar to
+  `docker-compose.yml` under a dedicated profile; emit ONE root
+  span (`assistant.adapter.translate` from a test entry point or
+  a single facade instrumentation site) to prove the pipeline
+  end-to-end; ship a minimal in-memory exporter test asserting
+  that one span is recorded with the mandatory attributes.
+  Unblocks SCOPE-09b. Leaves DoD #3 still `[ ]`.
+
+- **SCOPE-09b — assistant instrumentation (~6 files):** add the
+  remaining 8 child spans across facade + transport adapter;
+  expand the integration test to assert the full 9-mandatory +
+  1-conditional span tree, parent/child shape, and attributes;
+  add the optional jaeger-backed e2e smoke test; update
+  `docs/Operations.md`. Closes DoD #3.
+
+Split-B (single scope) is rejected because the file count exceeds
+the heuristic and because §7 SST + go.mod changes have very
+different review surfaces (config governance + dependency review)
+than instrumentation patching. Split-C (separate spec) is rejected
+because the work is wholly within SCOPE-09's stated intent
+("operator visibility into per-turn tracing") and a separate spec
+would duplicate the metrics/logs/dashboard context already
+co-located here.
+
+A future spec (call it spec 063 for now) MUST add OTel spans to
+spec 037's router/executor/tools so the §8.3 tree fully
+materializes. That spec is out of SCOPE-09's scope.
+
 ### 8.4 Operator dashboards
 
 SCOPE-09 ships a Grafana panel fragment under

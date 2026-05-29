@@ -16,6 +16,7 @@ import (
 
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
 // Outcome enumerates the three terminal outcomes of a confirm-card
@@ -78,6 +79,10 @@ type ProposalArtifact struct {
 type Machine struct {
 	store  assistantctx.Store
 	writer Writer
+	// tracer is the spec 061 SCOPE-09b OTel seam. Defaults to a
+	// no-op tracer installed by NewMachine; production wiring calls
+	// WithTracer to swap in the SDK-backed tracer.
+	tracer *tracing.Tracer
 }
 
 // NewMachine constructs a Machine over the supplied conversation
@@ -91,7 +96,25 @@ func NewMachine(store assistantctx.Store, writer Writer) *Machine {
 	if writer == nil {
 		panic("confirm: NewMachine requires non-nil Writer")
 	}
-	return &Machine{store: store, writer: writer}
+	noopTracer, _, err := tracing.NewTracer(context.Background(), tracing.Config{
+		Enabled:     false,
+		ServiceName: "smackerel-core",
+	})
+	if err != nil {
+		panic("confirm: NewMachine could not build noop tracer fallback: " + err.Error())
+	}
+	return &Machine{store: store, writer: writer, tracer: noopTracer}
+}
+
+// WithTracer attaches the spec 061 SCOPE-09b OTel tracer. Safe to
+// call once after NewMachine and before Propose is invoked
+// concurrently. nil-safe: a nil tracer leaves the no-op default in
+// place.
+func (m *Machine) WithTracer(tr *tracing.Tracer) *Machine {
+	if tr != nil {
+		m.tracer = tr
+	}
+	return m
 }
 
 // Propose persists a new pending confirm for (UserID, Transport).
@@ -119,9 +142,34 @@ func (m *Machine) Propose(ctx context.Context, in ProposalInput, now time.Time) 
 	if conv.SchemaVersion == 0 {
 		conv.SchemaVersion = 1
 	}
-	if err := m.store.Persist(ctx, conv); err != nil {
+	if err := m.persistProposalWithSpan(ctx, conv, in); err != nil {
 		return fmt.Errorf("confirm.Propose: persist conversation: %w", err)
 	}
+	return nil
+}
+
+// persistProposalWithSpan wraps the Propose-path Persist call in the
+// conditional `assistant.confirm.persist` span (design §8.3.1.A item
+// 7). This span only emits when the confirm-propose phase fires; on
+// every other turn the absence of the span is correct behavior per
+// the design preamble. The helper is intentionally a method on
+// Machine so the tracer (defaulted to no-op by NewMachine) is always
+// available.
+func (m *Machine) persistProposalWithSpan(
+	ctx context.Context, conv assistantctx.Conversation, in ProposalInput,
+) error {
+	ctxSpan, span := m.tracer.StartSpan(ctx, "assistant.confirm.persist",
+		normalizeTransport(in.Transport),
+		tracing.HashUserID(in.UserID),
+		"",
+		in.ScenarioID,
+		in.ConfirmRef)
+	err := m.store.Persist(ctxSpan, conv)
+	if err != nil {
+		tracing.EndSpan(span, "error", "persist_failed")
+		return err
+	}
+	tracing.EndSpan(span, "ok", "")
 	return nil
 }
 

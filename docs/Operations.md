@@ -3960,4 +3960,127 @@ strand pending confirms:
   confirms live in `assistant_confirm_pending`; the TTL filter at
   SELECT time excludes expired rows automatically.
 
+### OpenTelemetry Tracing (Spec 061 SCOPE-09a)
+
+The assistant capability ships with an OpenTelemetry SDK substrate that
+emits a single root span `assistant.adapter.translate` at every transport
+adapter entry. The substrate is gated by three SST keys in
+`config/smackerel.yaml` under `assistant.observability:`:
+
+| SST key | Required? | Behaviour |
+|---------|-----------|-----------|
+| `assistant.observability.otel_enabled` | Yes (bool) | When `false` (production default), the SDK uses a no-op `TracerProvider` — spans are constructed but emit nothing and the network is never touched. When `true`, the OTLP/gRPC exporter is configured against `otel_endpoint`. |
+| `assistant.observability.otel_endpoint` | Yes (string; may be empty when `otel_enabled=false`) | The OTLP/gRPC target (e.g. `smackerel-test-jaeger:4317`). MUST be non-empty when `otel_enabled=true`; the loader fails loud with `[F061-SST-MISSING]`-class error otherwise. |
+| `assistant.observability.otel_service_name` | Yes (string non-empty) | Recorded as the OTel resource `service.name` attribute on every span. Defaults to `smackerel-core` in the literal yaml. |
+
+When `otel_enabled=true`, `initAssistantTracing` runs a 5 s TCP probe
+against the endpoint BEFORE the SDK is constructed; an unreachable
+endpoint aborts startup rather than silently buffering spans against a
+dead exporter.
+
+To enable tracing in dev, bring up the in-tree `jaegertracing/all-in-one`
+sidecar declared in `docker-compose.yml` under the `dev-otel` profile and
+override the two non-default SST keys at generation time:
+
+```bash
+docker compose --profile dev-otel up -d jaeger    # starts smackerel-test-jaeger
+# Then point your env override at the sidecar before regenerating config:
+#   ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true
+#   ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT=smackerel-test-jaeger:4317
+./smackerel.sh up
+```
+
+The Jaeger UI is reachable at <http://127.0.0.1:16686> and shows one
+`assistant.adapter.translate` span per inbound Telegram update once the
+adapter sees traffic. The remaining child spans (8 mandatory + 1
+conditional per design §8.3.1.A) land in SCOPE-09b. The test compose
+profile also runs the sidecar so SCOPE-09b's tree-shape assertion test
+can exercise the live OTLP path; the default `./smackerel.sh up` (no
+profile) leaves jaeger stopped and the no-op tracer in effect.
+
+Canonical span attribute set (design §8.3.1.B): `transport`,
+`user_id_hashed` (SHA-256 prefix; raw user IDs never appear in span
+attributes), `assistant_turn_id`, `scenario_id` (empty at the
+pre-routing adapter site), `correlation_id` (Telegram `update_id` for
+the telegram transport). End attributes: `status` ∈ {`ok`,`error`,`noop`}
+and `error_cause` (empty for `ok`).
+
+#### Full Span Tree (Spec 061 SCOPE-09b)
+
+SCOPE-09b instruments the 8 mandatory + 1 conditional child spans on
+top of the SCOPE-09a substrate, completing the design §8.3.1.A facade
+subtree. Each inbound Telegram turn that flows through `HandleUpdate`
+emits this tree:
+
+```
+assistant.adapter.translate              (root; adapter.go::HandleUpdate)
+  ├── assistant.facade.handle            (facade.go::Handle)
+  │     ├── assistant.context.load       (facade.go::loadContextWithSpan)
+  │     ├── assistant.router.classify    (facade.go::routeWithSpan)
+  │     ├── assistant.router.band        (facade.go::borderlineWithSpan)
+  │     ├── assistant.provenance.check   (facade.go::enforceProvenanceWithSpan; high-band only)
+  │     ├── assistant.confirm.persist    (confirm/machine.go::persistProposalWithSpan; CONDITIONAL)
+  │     ├── assistant.context.persist    (facade.go::appendTurnAndPersist)
+  │     └── assistant.audit.write        (facade.go::writeAudit)
+  └── assistant.adapter.render           (adapter.go::HandleUpdate; sibling of facade.handle)
+```
+
+Two design §8.3 spans are deliberately deferred to a future spec
+because they belong to spec-037 (the agent runtime), not spec-061:
+`agent.executor.run` and `agent.tool.<name>.invoke`. Until that
+follow-up spec lands, `assistant.router.classify` is the deepest child
+along the executor branch and the `agent_trace_id` cross-reference
+attribute remains empty.
+
+**Conditional span — `assistant.confirm.persist`.** This span only
+emits when the confirm-card propose phase fires (i.e., a scenario with
+`confirm_required=true` reaches the propose state in
+`internal/assistant/confirm.Machine.Propose`). On every other turn its
+absence is correct behavior, not a defect. In v1 the facade does not
+yet dispatch through the confirm machine on its high-band path, so
+non-confirm turns will not carry this span; once the confirm wiring
+lands, the existing `persistProposalWithSpan` site emits without
+further code changes.
+
+**Operator commands for live trace inspection (dev/test):**
+
+```bash
+# Start the jaeger sidecar (test profile keeps it on by default;
+# default `up` leaves the no-op tracer in effect).
+docker compose --profile dev-otel up -d jaeger
+
+# Override the two non-default SST keys, then regenerate + restart:
+#   ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true
+#   ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT=smackerel-test-jaeger:4317
+./smackerel.sh config generate
+./smackerel.sh up
+
+# Send any inbound Telegram message, then:
+#   - Open <http://127.0.0.1:16686>
+#   - Pick service `smackerel-core` and operation `assistant.adapter.translate`
+#   - The tree above appears with parent/child links and per-span
+#     status/error_cause attributes.
+
+# Headless smoke (matches DoD #4 wording):
+curl --max-time 5 "http://127.0.0.1:16686/api/traces?service=smackerel-core&limit=1"
+```
+
+**Adding a new span for a future skill.** Use the spec 061 SCOPE-09a
+helpers verbatim — they enforce the canonical attribute set and the
+end-status closed vocabulary:
+
+```go
+ctxSpan, span := tracer.StartSpan(ctx, "assistant.<area>.<verb>",
+    transport, tracing.HashUserID(userID),
+    assistantTurnID, scenarioID, correlationID)
+defer tracing.EndSpan(span, "ok", "")
+// ... do work using ctxSpan so descendants attach as children ...
+```
+
+Cross-references: design §8.3 (span tree), §8.3.1 (ratified
+implementation decisions including the deferred spec-037 spans),
+§8.3.1.B (canonical attribute set), §8.3.1.C (context.Context
+propagation requirement), §8.3.2 (SCOPE-09 split rationale).
+
+
 

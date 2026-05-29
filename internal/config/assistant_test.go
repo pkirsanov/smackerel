@@ -53,6 +53,10 @@ func minimalAssistantEnv() map[string]string {
 		// Spec 061 SCOPE-10 — acceptance-gate thresholds.
 		"ASSISTANT_EVAL_ROUTING_ACCURACY_MIN": "0.85",
 		"ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN": "1.0",
+		// Spec 061 SCOPE-09a — OTel SDK substrate SST.
+		"ASSISTANT_OBSERVABILITY_OTEL_ENABLED":      "false",
+		"ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT":     "",
+		"ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME": "smackerel-core",
 	}
 }
 
@@ -120,6 +124,14 @@ func TestLoadAssistantConfig_MissingKey_BS009(t *testing.T) {
 			// May be empty when mode=long_poll; validation rule #8
 			// enforces non-empty resolution when mode=webhook
 			// (covered by TestValidateAssistantConfig_Rule8_*).
+			continue
+		}
+		if key == "ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT" {
+			// Spec 061 SCOPE-09a design §8.3.2 Step 1 — permissively-empty
+			// key. May be empty when otel_enabled=false; rule §7.2-OTel-A
+			// enforces non-empty when otel_enabled=true (covered by
+			// TestLoadAssistantConfig_OtelRuleA_EndpointRequiredWhenEnabled
+			// in observability_test.go).
 			continue
 		}
 		t.Run(key, func(t *testing.T) {

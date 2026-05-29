@@ -117,6 +117,33 @@ type AssistantConfig struct {
 	// tests/eval/assistant/harness.go to fail the acceptance suite when
 	// either threshold is missed.
 	Eval AssistantEvalConfig
+
+	// Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — OTel SDK
+	// substrate configuration. All three fields are REQUIRED at the
+	// SST boundary; loadAssistantConfig reads OtelEnabled / OtelEndpoint
+	// / OtelServiceName from ASSISTANT_OBSERVABILITY_OTEL_* env vars.
+	// validateAssistantConfig enforces non-empty OtelEndpoint when
+	// OtelEnabled=true (rule §7.2-OTel-A) and non-empty OtelServiceName
+	// unconditionally (rule §7.2-OTel-B). Consumed by
+	// internal/assistant/tracing.NewTracer in cmd/core/wiring.go.
+	Observability AssistantObservabilityConfig
+}
+
+// AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK
+// substrate SST values. design §8.3.1 + §8.3.2 Step 1.
+type AssistantObservabilityConfig struct {
+	// OtelEnabled gates whether NewTracer returns a real OTLP/gRPC
+	// TracerProvider (true) or the no-op TracerProvider (false).
+	OtelEnabled bool
+	// OtelEndpoint is the OTLP/gRPC exporter target (e.g.
+	// "smackerel-test-jaeger:4317"). MUST be non-empty when
+	// OtelEnabled=true; permissively-empty when OtelEnabled=false.
+	OtelEndpoint string
+	// OtelServiceName is the OTel resource service.name attribute
+	// stamped on every span. REQUIRED non-empty regardless of
+	// OtelEnabled state — the no-op tracer still carries the
+	// resource for consistency between configurations.
+	OtelServiceName string
 }
 
 // AssistantEvalConfig holds the spec 061 SCOPE-10 offline evaluation
@@ -262,8 +289,26 @@ func loadAssistantConfig(cfg *Config) error {
 	mustFloat("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN", &cfg.Assistant.Eval.RoutingAccuracyMin)
 	mustFloat("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN", &cfg.Assistant.Eval.CaptureFallbackMin)
 
+	// Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — OTel SDK
+	// substrate SST. otel_endpoint is permissively-empty here because
+	// empty resolution is legal when otel_enabled=false; the
+	// validator enforces non-empty when otel_enabled=true.
+	mustBool("ASSISTANT_OBSERVABILITY_OTEL_ENABLED", &cfg.Assistant.Observability.OtelEnabled)
+	permissiveString("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT", &cfg.Assistant.Observability.OtelEndpoint)
+	mustString("ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME", &cfg.Assistant.Observability.OtelServiceName)
+
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
+	}
+
+	// Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — OTel SDK
+	// substrate cross-field validation. Rule §7.2-OTel-B (service_name
+	// non-empty) is already enforced above by mustString. Rule
+	// §7.2-OTel-A — otel_endpoint MUST be non-empty when otel_enabled=true
+	// (otherwise the OTLP/gRPC exporter has no target) — is enforced
+	// here so an enabled-without-endpoint config aborts startup.
+	if cfg.Assistant.Observability.OtelEnabled && cfg.Assistant.Observability.OtelEndpoint == "" {
+		return fmt.Errorf("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT must be non-empty when ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true (spec 061 SCOPE-09a design §8.3.2 Step 1)")
 	}
 	return nil
 }
@@ -290,6 +335,10 @@ func (c *Config) validateAssistantConfig() error {
 			}
 		}
 	}
+	// Spec 061 SCOPE-09a OTel substrate validation (rules §7.2-OTel-A
+	// and -B) lives in loadAssistantConfig — running it here too
+	// would false-fire when validateAssistantConfig is invoked on a
+	// pre-load Config (e.g. by the early cfg.Validate() in Load).
 	if !c.Assistant.Enabled {
 		// When the capability is disabled there is no surface to
 		// constrain. Skill-enable flags and transport flags remain
