@@ -501,16 +501,56 @@ smackerel_run_up() {
     up_status=$?
     set -e
     if [[ "$up_status" -eq 0 ]]; then
-      return 0
+      set +e
+      smackerel_prewarm_test_model "$env_file"
+      local prewarm_status=$?
+      set -e
+      if [[ "$prewarm_status" -ne 0 ]]; then
+        echo "Test stack prewarm failed (exit ${prewarm_status}); aborting up (spec 061 SCOPE-06a fail-loud SST contract)." >&2
+      fi
+      return "$prewarm_status"
     fi
 
     echo "Test stack start failed once (exit ${up_status}); retrying after project-scoped teardown..." >&2
     smackerel_compose "$target_env" down --timeout 60 --remove-orphans
     smackerel_assert_host_ports_free "$env_file"
     smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
-    return $?
+    up_status=$?
+    if [[ "$up_status" -ne 0 ]]; then
+      return "$up_status"
+    fi
+    set +e
+    smackerel_prewarm_test_model "$env_file"
+    local prewarm_status=$?
+    set -e
+    if [[ "$prewarm_status" -ne 0 ]]; then
+      echo "Test stack prewarm failed (exit ${prewarm_status}) after retry; aborting up (spec 061 SCOPE-06a fail-loud SST contract)." >&2
+    fi
+    return "$prewarm_status"
   fi
   smackerel_compose "$target_env" up -d --wait --wait-timeout "$compose_wait_timeout_s"
+}
+
+# Spec 061 SCOPE-06a — post-up pre-warm hook for the test stack.
+# Sources the generated test env file so AGENT_PROVIDER_DEFAULT_MODEL
+# and OLLAMA_URL are available, then runs scripts/runtime/stack.sh
+# which performs one num_predict=1 /api/generate call to load the
+# SST-resolved model into Ollama memory before the BS-002 / BS-007
+# fixtures fire. Skips silently when ollama_enabled is false.
+smackerel_prewarm_test_model() {
+  local env_file="$1"
+  local ollama_enabled
+  ollama_enabled="$(smackerel_env_value "$env_file" "OLLAMA_ENABLED")"
+  if [[ "$ollama_enabled" != "true" && "$ollama_enabled" != "1" ]]; then
+    return 0
+  fi
+  (
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+    bash "$SCRIPT_DIR/scripts/runtime/stack.sh"
+  )
 }
 
 smackerel_run_down() {
