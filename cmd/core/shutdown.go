@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/connector"
 	"github.com/smackerel/smackerel/internal/db"
 	smacknats "github.com/smackerel/smackerel/internal/nats"
@@ -33,6 +34,7 @@ func shutdownAll(
 	supervisor *connector.Supervisor,
 	nc *smacknats.Client,
 	pg *db.Postgres,
+	assistantTracerShutdown assistanttracing.ShutdownFunc,
 ) {
 	shutdownStart := time.Now()
 	totalTimeout := time.Duration(timeoutS) * time.Second
@@ -132,6 +134,21 @@ func shutdownAll(
 	runWithTimeout("database pool", 1*time.Second, deadline, func() {
 		if pg != nil {
 			pg.Close()
+		}
+	})
+
+	// Step 9: Flush + shut down the assistant OTel TracerProvider so
+	// any buffered spans reach the exporter before the process exits.
+	// Safe to call on the no-op path (returns nil immediately).
+	// Spec 061 SCOPE-09a design §8.3.2 Step 1.
+	runWithTimeout("assistant tracer", 2*time.Second, deadline, func() {
+		if assistantTracerShutdown == nil {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := assistantTracerShutdown(shutdownCtx); err != nil {
+			slog.Warn("shutdown: assistant tracer shutdown error", "error", err)
 		}
 	})
 }

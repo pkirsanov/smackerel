@@ -28,6 +28,8 @@ import (
 	recstore "github.com/smackerel/smackerel/internal/recommendation/store"
 	"github.com/smackerel/smackerel/internal/topics"
 	"github.com/smackerel/smackerel/internal/web"
+
+	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
 // coreServices holds all runtime dependencies built during startup.
@@ -66,6 +68,14 @@ type coreServices struct {
 	// periodic refresh and revoke calls still update the canonical
 	// auth_revocations table.
 	authRevocationBroadcaster *revocation.Broadcaster
+
+	// Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — OTel SDK
+	// substrate. tracer is non-nil after buildCoreServices runs (the
+	// no-op TracerProvider path is the production-default). assistantTracerShutdown
+	// is wired into the shutdownAll graceful-shutdown sequence so any
+	// buffered spans are flushed on exit.
+	assistantTracer         *assistanttracing.Tracer
+	assistantTracerShutdown assistanttracing.ShutdownFunc
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.
@@ -85,6 +95,29 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 		return nil, fmt.Errorf("database migration: %w", err)
 	}
 	slog.Info("database migrations complete")
+
+	// Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — initialize
+	// the OTel SDK substrate via the testable helper in wiring.go.
+	// The production default ships with otel_enabled=false, so the
+	// no-op TracerProvider path is taken and the SDK pipeline is
+	// proven without exporting any spans or touching the network;
+	// dev/test stacks flip otel_enabled=true and point otel_endpoint
+	// at the jaegertracing/all-in-one sidecar under the dev-otel or
+	// test compose profile. When enabled, initAssistantTracing runs
+	// a fail-loud TCP probe BEFORE constructing the SDK so an
+	// unreachable endpoint aborts startup per design §7.2-OTel
+	// validation rule rather than silently buffering spans.
+	tracer, tracerShutdown, err := initAssistantTracing(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("assistant tracing init: %w", err)
+	}
+	svc.assistantTracer = tracer
+	svc.assistantTracerShutdown = tracerShutdown
+	slog.Info("assistant tracing initialized",
+		"otel_enabled", cfg.Assistant.Observability.OtelEnabled,
+		"otel_endpoint", cfg.Assistant.Observability.OtelEndpoint,
+		"otel_service_name", cfg.Assistant.Observability.OtelServiceName,
+	)
 
 	// Connect to NATS
 	svc.nc, err = smacknats.Connect(ctx, cfg.NATSURL, cfg.AuthToken)

@@ -719,6 +719,22 @@ assistant:
   eval:
     routing_accuracy_min: 0.85 # REQUIRED: min fraction of corpus rows whose ground_truth_intent matches the facade's selected scenario
     capture_fallback_min: 1.0 # REQUIRED: min fraction of capture-expected rows that took a capture path (1.0 = MUST capture every time)
+  # Spec 061 SCOPE-09a (design §8.3.1 + §8.3.2 Step 1) — OTel SDK
+  # substrate SST keys. All three are REQUIRED at the generator
+  # boundary per smackerel-no-defaults; the Go validator enforces:
+  #   * otel_enabled is a strict bool ("true"|"false")
+  #   * otel_endpoint MUST be non-empty when otel_enabled=true,
+  #     MAY be empty when otel_enabled=false (no-op TracerProvider)
+  #   * otel_service_name MUST always be non-empty (recorded as the
+  #     OTel resource service.name attribute on every span)
+  # Production stack ships with otel_enabled=false (no-op fallback).
+  # The dev-otel + test compose profiles flip the value via env
+  # override and the in-tree jaegertracing/all-in-one sidecar accepts
+  # OTLP/gRPC on :4317.
+  observability:
+    otel_enabled: false # REQUIRED: enable OTLP/gRPC exporter
+    otel_endpoint: "" # REQUIRED ("" permitted when otel_enabled=false)
+    otel_service_name: "smackerel-core" # REQUIRED: OTel resource service.name
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key

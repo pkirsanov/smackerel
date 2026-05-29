@@ -167,6 +167,13 @@ func wireAssistantFacade(
 	if err != nil {
 		return fmt.Errorf("build assistant facade: %w", err)
 	}
+	// Spec 061 SCOPE-09b — thread the OTel tracer (initialized in
+	// services.go::wireAssistantTracing) into the facade so it can
+	// emit `assistant.facade.handle` and its 6 mandatory child spans
+	// per design §8.3.1.A. The no-op default installed by NewFacade
+	// stays in place if svc.assistantTracer is nil (defensive — every
+	// production wiring path sets it).
+	facade.WithTracer(svc.assistantTracer)
 	slog.Info("assistant facade wired",
 		"scenarios", len(scenarios),
 		"borderline_floor", facadeCfg.BorderlineFloor,
@@ -194,6 +201,11 @@ func wireAssistantFacade(
 		ResolveUser:     telegram.NewBotChatResolver(tgBot),
 		MarkdownMode:    mode,
 		MaxMessageChars: cfg.Assistant.TelegramMaxMessageChars,
+		// Spec 061 SCOPE-09b — thread the OTel tracer into the
+		// adapter so HandleUpdate emits the canonical root
+		// `assistant.adapter.translate` span and the sibling
+		// `assistant.adapter.render` child span per design §8.3.1.A.
+		Tracer: svc.assistantTracer,
 	})
 	if err != nil {
 		return fmt.Errorf("build telegram assistant adapter: %w", err)
