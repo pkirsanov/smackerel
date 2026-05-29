@@ -79,8 +79,11 @@ SINCE_TS="$(date --utc +%Y-%m-%dT%H:%M:%S)"
 # embedding is written inline before the response returns; /api/search
 # can retrieve it immediately on the next request.
 echo "--- seed: POST /api/capture with marker=$SEED_MARKER ---"
+# Spec 061 §5 BS-002 Gherkin: "at least one artifact about 'Tailscale' exists".
+# Use distinctive, unambiguous Tailscale content with the marker embedded as a
+# unique tag so the small model has an unmistakable citation target.
 SEED_PAYLOAD=$(cat <<JSON
-{"text": "The smackerel knowledge base project status update for ${SEED_MARKER}: v1 launch is on track. Conversational assistant scope is closing this week, retrieval skill end-to-end proven."}
+{"text": "Tailscale mesh VPN setup notes (${SEED_MARKER}): I installed Tailscale on the home-lab evo-x2 host last month for SSH access from anywhere. Tag: tailscale-setup-${SEED_MARKER}. Key settings: MagicDNS enabled, ACL allows SSH from my devices only. This is the only Tailscale artifact in my graph."}
 JSON
 )
 SEED_RESP=$(curl -s --max-time 120 \
@@ -101,11 +104,19 @@ echo "  seeded artifact_id=$ARTIFACT_ID"
 sleep 3
 
 # --- LLM warmup so the first /ask invocation does not blow the budget --
-echo "--- LLM warmup: priming gemma3:4b inference ---"
+# Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK) —
+# warmup MUST read the SST-resolved test-tier default model from the
+# generated env file (no literal `gemma3:4b`; no silent fallback).
+# Missing/empty value aborts the test with a named error.
+AGENT_PROVIDER_DEFAULT_MODEL="$(smackerel_env_value "$ENV_FILE" "AGENT_PROVIDER_DEFAULT_MODEL")"
+if [ -z "$AGENT_PROVIDER_DEFAULT_MODEL" ]; then
+  e2e_fail "BS-002: AGENT_PROVIDER_DEFAULT_MODEL missing/empty in $ENV_FILE (spec 061 SCOPE-06a; regenerate via './smackerel.sh --env test config generate')"
+fi
+echo "--- LLM warmup: priming $AGENT_PROVIDER_DEFAULT_MODEL inference ---"
 curl -s -o /dev/null --max-time 60 \
   -X POST \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemma3:4b","prompt":"hi","stream":false,"options":{"num_predict":4}}' \
+  -d "{\"model\":\"$AGENT_PROVIDER_DEFAULT_MODEL\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":4}}" \
   "http://127.0.0.1:47004/api/generate" || true
 
 # --- Drive /ask via the synthetic Telegram webhook. --------------------
@@ -117,7 +128,7 @@ PAYLOAD=$(cat <<JSON
     "date": $(date +%s),
     "chat": {"id": $CHAT_ID, "type": "private"},
     "from": {"id": $CHAT_ID, "is_bot": false, "first_name": "BS002"},
-    "text": "/ask what is the smackerel project status ${SEED_MARKER}"
+    "text": "/ask what did I save about Tailscale last month?"
   }
 }
 JSON

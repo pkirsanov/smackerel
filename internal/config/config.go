@@ -1779,6 +1779,16 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK)
+	// — under SMACKEREL_ENV=test, every model env var MUST be
+	// SST-overridden away from the production literal (gemma3:4b).
+	// Runs BEFORE validateModelEnvelopes because the leak is a more
+	// specific SST contract violation; the envelope check would
+	// otherwise mask it with a "missing memory profile" error.
+	if err := c.validateTestEnvModelOverrides(); err != nil {
+		return err
+	}
+
 	// Spec 045 FR-045-002 — Per-service model envelope check (BUG-045-001).
 	// validateModelEnvelopes routes each configured model env var into
 	// either the ollama bucket (checked against c.OllamaMemoryLimitMiB)
