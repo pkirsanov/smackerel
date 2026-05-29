@@ -162,7 +162,7 @@ func TestHandleMessage_AssistantHandled_DoesNotCallCapture(t *testing.T) {
 		Text:      "what's the weather?",
 		MessageID: 1,
 	}
-	bot.handleMessage(context.Background(), msg)
+	bot.handleMessage(context.Background(), msg, 0)
 
 	if len(asst.calls) != 1 {
 		t.Fatalf("expected assistant to be invoked exactly once; got %d", len(asst.calls))
@@ -187,7 +187,7 @@ func TestHandleMessage_AssistantCaptureRoute_FallsThroughToCapture(t *testing.T)
 		Text:      "random thought to save",
 		MessageID: 2,
 	}
-	bot.handleMessage(context.Background(), msg)
+	bot.handleMessage(context.Background(), msg, 0)
 
 	if len(asst.calls) != 1 {
 		t.Fatalf("expected assistant to be invoked once; got %d", len(asst.calls))
@@ -221,7 +221,7 @@ func TestHandleMessage_AdapterUnbound_LegacyCapturePreserved(t *testing.T) {
 		Text:      "legacy plain text",
 		MessageID: 3,
 	}
-	bot.handleMessage(context.Background(), msg)
+	bot.handleMessage(context.Background(), msg, 0)
 
 	got := cap.snapshot()
 	if len(got) != 1 || got[0] != "legacy plain text" {
@@ -275,5 +275,62 @@ func TestHandleMessage_SlashCommandsNotInterceptedByAssistant(t *testing.T) {
 	// Final sanity: the literal "/find" never matches /reset.
 	if strings.HasPrefix("/find anchovies", "/reset") {
 		t.Fatal("test fixture invariant broken")
+	}
+}
+
+// TestHandleMessage_PropagatesUpdateIDIntoTransportMetadata is the
+// Spec 061 Round 52 ADVERSARIAL regression test for Defect 1
+// (BS-002-LIVE-STACK-CORRELATION-ID-LOST).
+//
+// Bug shape (Round 50 evidence): handleMessage synthesized
+// `&tgbotapi.Update{Message: msg}` WITHOUT propagating the inbound
+// Update.UpdateID, so assistant_adapter.translate_inbound stamped
+// TransportMetadata["telegram_update_id"]="0" for every assistant
+// dispatch. The facade then emitted assistant_turn slog lines with
+// correlation_id="0" instead of the actual Telegram update_id,
+// breaking the design §18.6 correlation contract and the BS-002
+// fixture's slog scrape (`grep correlation_id=$UPDATE_ID`).
+//
+// Fix (Round 52): handleMessage now takes an explicit updateID
+// parameter and threads it through every synthetic Update
+// construction. This test calls handleMessage(ctx, msg, 178007999822312)
+// and asserts the assistant adapter received the value verbatim in
+// TransportMetadata.
+//
+// Adversarial guarantee: a regression that drops the updateID
+// propagation (e.g. reverts to `&tgbotapi.Update{Message: msg}`) or
+// passes a stub value would FAIL because the recorded
+// AssistantMessage.TransportMetadata would not contain the exact
+// stringified UpdateID.
+func TestHandleMessage_PropagatesUpdateIDIntoTransportMetadata(t *testing.T) {
+	bot, _, asst := newAssistantInterceptBot(t, contracts.AssistantResponse{
+		Status: contracts.StatusThinking,
+		Body:   "answered",
+		// CaptureRoute deliberately false — we want the assistant
+		// branch, not the capture fallthrough.
+	})
+	msg := &tgbotapi.Message{
+		Chat:      &tgbotapi.Chat{ID: 99},
+		Text:      "what's the weather in oslo?",
+		MessageID: 42,
+	}
+	// 178007999822312 is the canonical Round 50 evidence value the
+	// BS-002 e2e fixture uses; choosing it here makes the test
+	// failure message immediately recognizable to anyone tracing
+	// the regression back to the spec.
+	const wantUpdateID = 178007999822312
+	bot.handleMessage(context.Background(), msg, wantUpdateID)
+
+	if len(asst.calls) != 1 {
+		t.Fatalf("BS-002 REGRESSION (Defect 1): expected assistant to be invoked exactly once; got %d", len(asst.calls))
+	}
+	got := asst.calls[0].TransportMetadata["telegram_update_id"]
+	want := "178007999822312"
+	if got != want {
+		t.Fatalf("BS-002 REGRESSION (Defect 1): TransportMetadata[\"telegram_update_id\"] = %q; want %q. "+
+			"This means handleMessage dropped the inbound Update.UpdateID when synthesizing the *tgbotapi.Update "+
+			"for the assistant adapter. The fix MUST thread the updateID parameter through every synthetic "+
+			"Update construction in handleMessage and safeHandleCallback. See specs/061-conversational-assistant/report.md "+
+			"#round-52-bs002-routing-defect-implementation for the design rationale.", got, want)
 	}
 }

@@ -319,13 +319,13 @@ func (b *Bot) Start(ctx context.Context) {
 					return // channel closed
 				}
 				if update.CallbackQuery != nil {
-					b.safeHandleCallback(ctx, update.CallbackQuery)
+					b.safeHandleCallback(ctx, update.CallbackQuery, update.UpdateID)
 					continue
 				}
 				if update.Message == nil {
 					continue
 				}
-				b.safeHandleMessage(ctx, update.Message)
+				b.safeHandleMessage(ctx, update.Message, update.UpdateID)
 			}
 		}
 	}()
@@ -333,17 +333,24 @@ func (b *Bot) Start(ctx context.Context) {
 
 // safeHandleMessage wraps handleMessage with panic recovery to prevent a single
 // malformed message from crashing the update processing goroutine.
-func (b *Bot) safeHandleMessage(ctx context.Context, msg *tgbotapi.Message) {
+//
+// updateID is the Telegram Update.UpdateID for the inbound payload; it MUST
+// flow through every synthetic *tgbotapi.Update construction so the assistant
+// adapter can stamp it as TransportMetadata["telegram_update_id"] and the
+// facade can emit it as correlation_id on the assistant_turn slog line
+// (design §18.6).
+func (b *Bot) safeHandleMessage(ctx context.Context, msg *tgbotapi.Message, updateID int) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("telegram message handler panic recovered", "panic", r)
 		}
 	}()
-	b.handleMessage(ctx, msg)
+	b.handleMessage(ctx, msg, updateID)
 }
 
-// safeHandleCallback wraps handleListCallback with panic recovery.
-func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
+// safeHandleCallback wraps handleListCallback with panic recovery. updateID is
+// the originating Telegram Update.UpdateID (see safeHandleMessage doc).
+func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery, updateID int) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("telegram callback handler panic recovered", "panic", r)
@@ -364,7 +371,7 @@ func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	// callback_data prefix matches. Non-assistant callbacks fall
 	// through to the existing list/cook/expense handler unchanged.
 	if cb != nil && b.assistantAdapter != nil && b.assistantAdapter.IsBound() && assistant_adapter.IsAssistantCallback(cb.Data) {
-		update := &tgbotapi.Update{CallbackQuery: cb}
+		update := &tgbotapi.Update{UpdateID: updateID, CallbackQuery: cb}
 		if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
 			slog.Error("assistant adapter callback failed", "error", err)
 		}
@@ -378,7 +385,10 @@ func (b *Bot) safeHandleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 }
 
 // handleMessage routes incoming messages to the appropriate handler.
-func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
+//
+// updateID is the Telegram Update.UpdateID; see safeHandleMessage doc for the
+// design §18.6 correlation_id propagation contract.
+func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID int) {
 	if msg.Chat == nil {
 		slog.Warn("received message with nil Chat, skipping")
 		return
@@ -523,7 +533,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			// is not wired (legacy install), reply with a clear notice
 			// so the user knows the command was understood but unavailable.
 			if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
-				update := &tgbotapi.Update{Message: msg}
+				update := &tgbotapi.Update{UpdateID: updateID, Message: msg}
 				if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
 					slog.Error("assistant adapter /reset failed", "error", err)
 					b.reply(msg.Chat.ID, "reset failed; try again")
@@ -538,7 +548,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			// ScenarioID on the envelope and the agent.Router takes
 			// the explicit-id fast path (no embedding similarity).
 			if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
-				update := &tgbotapi.Update{Message: msg}
+				update := &tgbotapi.Update{UpdateID: updateID, Message: msg}
 				if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
 					slog.Error("assistant adapter slash shortcut failed", "command", msg.Command(), "error", err)
 					b.reply(msg.Chat.ID, "assistant call failed; try again")
@@ -613,7 +623,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		// legacy handleTextCapture path runs unchanged — this is the
 		// BS-001 regression-safe fallthrough.
 		if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
-			update := &tgbotapi.Update{Message: msg}
+			update := &tgbotapi.Update{UpdateID: updateID, Message: msg}
 			handled, herr := b.assistantAdapter.HandleUpdate(ctx, update)
 			if herr != nil {
 				slog.Error("assistant adapter handle failed", "error", herr)

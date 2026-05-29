@@ -576,7 +576,7 @@ func TestStabilize_SafeHandleMessage_PanicRecovery(t *testing.T) {
 				recovered = false
 			}
 		}()
-		bot.safeHandleMessage(context.Background(), nil)
+		bot.safeHandleMessage(context.Background(), nil, 0)
 	}()
 	if !recovered {
 		t.Error("safeHandleMessage must recover panics, but panic propagated")

@@ -105,12 +105,29 @@ func TestBorderlineGoldenTable(t *testing.T) {
 			want:            BandHigh,
 		},
 		{
-			name:            "high band — explicit_scenario_id with TopScore zero is high (explicit-id path bypasses scoring)",
+			// Spec 061 Round 52 — adversarial test for Defect 2 (BS-002
+			// borderline-low for explicit-id). Uses PRODUCTION floors so
+			// TopScore=0 would otherwise fall below agentFloor and return
+			// BandLow. The ReasonExplicitScenarioID special case in
+			// borderline.go MUST short-circuit that path.
+			name:            "high band — explicit_scenario_id with TopScore zero at production floors (router fast path bypasses scoring)",
 			decision:        agent.RoutingDecision{Reason: agent.ReasonExplicitScenarioID, TopScore: 0.0},
 			ok:              true,
-			borderlineFloor: 0.0,
-			agentFloor:      0.0,
+			borderlineFloor: borderlineFloor,
+			agentFloor:      agentFloor,
 			want:            BandHigh,
+		},
+		{
+			// Spec 061 Round 52 — defensive ordering test: !ok MUST still
+			// override ReasonExplicitScenarioID. A future refactor that
+			// places the explicit-id branch BEFORE the !ok guard would
+			// fail this case.
+			name:            "low band — explicit_scenario_id with !ok still demotes (!ok precedence)",
+			decision:        agent.RoutingDecision{Reason: agent.ReasonExplicitScenarioID, TopScore: 0.0},
+			ok:              false,
+			borderlineFloor: borderlineFloor,
+			agentFloor:      agentFloor,
+			want:            BandLow,
 		},
 	}
 

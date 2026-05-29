@@ -81,20 +81,25 @@ type WebhookHandlerOptions struct {
 // WebhookDispatcher is the narrow interface the webhook handler uses
 // to dispatch a parsed update. *Bot satisfies it via safeHandleMessage
 // / safeHandleCallback; the test suite injects a recording fake.
+//
+// updateID is the Telegram Update.UpdateID; it MUST be propagated so the
+// downstream synthetic *tgbotapi.Update construction in bot.go carries it
+// into the assistant adapter and the facade emits it as correlation_id on
+// the assistant_turn slog line (design §18.6).
 type WebhookDispatcher interface {
-	DispatchMessage(ctx context.Context, msg *tgbotapi.Message)
-	DispatchCallback(ctx context.Context, cb *tgbotapi.CallbackQuery)
+	DispatchMessage(ctx context.Context, msg *tgbotapi.Message, updateID int)
+	DispatchCallback(ctx context.Context, cb *tgbotapi.CallbackQuery, updateID int)
 }
 
 // DispatchMessage satisfies WebhookDispatcher by delegating to the
 // same panic-guarded handler the long-poll loop uses.
-func (b *Bot) DispatchMessage(ctx context.Context, msg *tgbotapi.Message) {
-	b.safeHandleMessage(ctx, msg)
+func (b *Bot) DispatchMessage(ctx context.Context, msg *tgbotapi.Message, updateID int) {
+	b.safeHandleMessage(ctx, msg, updateID)
 }
 
 // DispatchCallback satisfies WebhookDispatcher.
-func (b *Bot) DispatchCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
-	b.safeHandleCallback(ctx, cb)
+func (b *Bot) DispatchCallback(ctx context.Context, cb *tgbotapi.CallbackQuery, updateID int) {
+	b.safeHandleCallback(ctx, cb, updateID)
 }
 
 // NewWebhookHandler returns an http.Handler that implements the
@@ -235,13 +240,13 @@ func (h *webhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if update.CallbackQuery.Message != nil && update.CallbackQuery.Message.Chat != nil {
 			chatID = update.CallbackQuery.Message.Chat.ID
 		}
-		h.dispatcher.DispatchCallback(ctx, update.CallbackQuery)
+		h.dispatcher.DispatchCallback(ctx, update.CallbackQuery, update.UpdateID)
 	case update.Message != nil:
 		kind = "message"
 		if update.Message.Chat != nil {
 			chatID = update.Message.Chat.ID
 		}
-		h.dispatcher.DispatchMessage(ctx, update.Message)
+		h.dispatcher.DispatchMessage(ctx, update.Message, update.UpdateID)
 	default:
 		kind = "empty"
 		// Nothing to dispatch; still return 200 so Telegram does not
