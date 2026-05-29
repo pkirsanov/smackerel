@@ -54,7 +54,7 @@
     "currentPhase": "implement",
     "currentScope": "SCOPE-10",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T09:30:00Z",
+    "lastUpdatedAt": "2026-05-30T11:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,48 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan", "implement", "test"],
+        "runStartedAt": "2026-05-30T10:45:00Z",
+        "runCompletedAt": "2026-05-30T11:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 49 (full-delivery; G082 convergence iteration 2 of orchestrator session; spec-lifetime round 49). Owner: bubbles.plan → bubbles.implement (Option A landed) → bubbles.test (verification), all parent-expanded inline by bubbles.workflow per repo precedent Rounds 20-23. Purpose: PLAN TRIAGE of the 6 reg_skip_with_blocker substrate slots in tests/e2e/assistant_regression/bs_NNN_*.sh (SCOPE-10 DoD #7 per-BS regression slot family). DISCOVERY after triage authored: parallel-session work had already landed Option A (transport patch) on disk uncommitted. HONEST CORRECTION captured in report.md anchor #round-49-update-option-a-landed. EXECUTED (Claim Source: executed): (1) read all 6 reg_skip_with_blocker stubs + lib/regression_helpers.sh + canonical reference fixtures assistant_bs003_test.sh + assistant_bs006_test.sh; (2) read internal/assistant/{borderline.go, shortcuts.go, skills_manifest.go} + internal/telegram/{bot.go, assistant_adapter/translate_inbound.go} + cmd/core/wiring_assistant_facade.go to verify routing-gap scope; (3) read internal/assistant/provenance/gate.go + config/assistant/scenarios.yaml + scripts/commands/config.sh to verify SST overrides; (4) authored Round 49 plan-triage section in report.md routing 3-of-6 BS substrate to bubbles.plan (Options A/B/C) + 3-of-6 to bubbles.implement (BS-009→BS-008→BS-004 cheapest-first); (5) discovered uncommitted Option A production patch on disk (3 files, ~34 LOC); (6) ran `go build ./internal/telegram/...` BUILD_EXIT=0 (clean); (7) ran `go test ./internal/telegram/assistant_adapter/... -run TestTranslateInbound -v` ADAPTER_TEST_EXIT=0 (all 9 tests pass including new TestTranslateInbound_SlashShortcuts with adversarial /notarealcommand assertion); (8) ran `go test ./internal/telegram/...` TG_PKG_EXIT=0 (all 3 telegram packages green: telegram 28.161s, assistant_adapter 0.073s, render 0.075s); (9) authored Round 49 update section in report.md honestly correcting the 'no production code touched' claim and recording the partial closure of routing-gap finding at code level. OPTION A IMPLEMENTATION (3 production files committed this round): internal/telegram/bot.go (+15 LOC adding `case \"ask\", \"weather\", \"remind\":` to handleMessage switch routing to assistantAdapter.HandleUpdate), internal/telegram/assistant_adapter/translate_inbound.go (+11 LOC adding assistant.LookupShortcut(text) pre-check in slash-message branch so v1 shortcuts flow through as KindText with slash preserved), internal/telegram/assistant_adapter/translate_inbound_test.go (+38 LOC TestTranslateInbound_SlashShortcuts covering 6 happy-path inputs + 1 adversarial unknown-slash assertion). What Option A achieves at the code level: /ask, /weather, /remind now reach the facade's LookupShortcut pre-check which stamps explicit ScenarioID for agent.Router fast-path, bypassing the NoopEmbedder-blocked similarity path. Option B (deterministic test-embedder) is no longer needed for v1 surface (BS-002/005/007). What Option A does NOT yet prove: tests/e2e/assistant_bs002_test.sh and assistant_bs007_test.sh have NOT yet executed against the live test stack; unit-test green is necessary but not sufficient for SCOPE-06 DoD #4b/#5b/#6 closure. FILES MODIFIED THIS ROUND (5): internal/telegram/bot.go, internal/telegram/assistant_adapter/translate_inbound.go, internal/telegram/assistant_adapter/translate_inbound_test.go, specs/061-conversational-assistant/report.md (Round 49 + update sections), specs/061-conversational-assistant/state.json (Round 48 + Round 49 history entries + lastUpdatedAt bump); plus 2 inherited Round 48 fixture files committed alongside (tests/e2e/assistant_bs002_test.sh, tests/e2e/assistant_bs007_test.sh). NOT MODIFIED: scopes.md DoD checkboxes (no flips per honesty guard — closure needs live-stack proof), spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.*, completedScopes, scopeProgress, top-level status, statusCeiling, workflowMode, cross-spec/, any spec other than 061, internal/assistant/, cmd/core/, internal/agent/, ml/, web/, scripts/. REVISED ROUTED PACKETS: Packet 1 narrowed to bubbles.test (live-stack verification of BS-002+BS-007 fixtures end-to-end — code-level routing now proven, need behavior proof); Packet 2 unchanged for bubbles.implement (BS-009→BS-008→BS-004 cheapest-first substrate, ≤290 LOC test-only). SCOPE-06 final status this round: In Progress (DoD #4a/#5a [x] capability-layer; DoD #4b/#5b/#6 [ ] code-level path now exists but live-stack proof pending). SCOPE-10 final status this round: In Progress (BQG [ ] honestly unflipped). Spec 061 status: in_progress (unchanged). Convergence iteration: 2/10 of G082 cap.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "SCOPE-06-ROUTING-GAP-CODE-CLOSED-LIVE-STACK-PENDING",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T10:00:00Z",
+        "runCompletedAt": "2026-05-30T10:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 48 (full-delivery; parallel-session SCOPE-06 BS-002/BS-007 fixture authoring + routing-gap discovery). Owner: bubbles.implement (parent-expanded inline by bubbles.workflow; runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23). Trigger: LLM blocker resolved out-of-band (gemma3:4b + nomic-embed-text pulled into smackerel-test-ollama-1 volume; test stack core/ml/ollama/jaeger/postgres/nats all Up healthy). Dispatched SCOPE-06 close-out for DoD #4b (BS-002 adapter composition), #5b (BS-007 adapter composition), #6 (Telegram trailing sources rendering). EXECUTED (Claim Source: executed): (1) authored tests/e2e/assistant_bs002_test.sh (187 LOC) and tests/e2e/assistant_bs007_test.sh (140 LOC) following canonical §18.5 slog-scrape + §18.6 correlation_id pattern modeled on assistant_bs003_test.sh + assistant_bs006_test.sh; (2) attempted execution against live test stack and discovered closing-assertion path blocked by routing gap; (3) traced the gap to two production-code locations and verified: (a) internal/telegram/bot.go::handleMessage switch (lines 489-545) enumerates 16 case labels including /reset → assistantAdapter.HandleUpdate but `/ask`, `/weather`, `/remind` are absent — default arm replies 'Unknown command' and returns (line 545), bypassing the plain-text branch at line 600 where assistantAdapter.HandleUpdate is invoked; (b) internal/telegram/assistant_adapter/translate_inbound.go::translateInbound (lines 85-94) returns ErrNotAssistantMessage for any non-/reset slash; (c) cmd/core/wiring_assistant_facade.go:104 uses agent.NoopEmbedder which makes embedding-based scenario routing always fall to no-match → capture-fallback band, so plain-text bypass is also closed. Both routing paths to retrieval_qa are dead-end in current implementation. HONESTY GUARD: did NOT mark DoD #4b/#5b/#6 [x] because fixtures FAIL with current wiring; marking complete would be fabricated evidence per Gate G021. ROUTED FINDING: SCOPE-06-DOD-4B-5B-6-BLOCKED-ON-SCOPE-05-TELEGRAM-SLASH-ROUTING-GAP — needs plan packet to decide between Option A (add ask/weather/remind arms in bot.go + relax translate_inbound.go), Option B (deterministic keyword/hash test-embedder in cmd/core wiring), Option C (direct dispatch endpoint). FILES MODIFIED THIS ROUND (3): tests/e2e/assistant_bs002_test.sh (new, 187 LOC, §18.5/§18.6-conformant, blocked at execution), tests/e2e/assistant_bs007_test.sh (new, 140 LOC, same shape, same blocker), specs/061-conversational-assistant/report.md (Round 48 section appended with #round-48-scope-06-fixture-blocker anchor). NOT MODIFIED: scopes.md DoD checkboxes (no flips per honesty guard), spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.*, cross-spec/, any spec other than 061, any production source under internal/telegram/, cmd/core/, or internal/agent/. SCOPE-06 final status this round: In Progress (DoD #4a + #5a remain [x] capability-layer proven; DoD #4b/#5b/#6 remain [ ] honestly blocked on routed finding above). Spec 061 status: in_progress (unchanged). Outcome: route_required.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "SCOPE-06-DOD-4B-5B-6-BLOCKED-ON-SCOPE-05-TELEGRAM-SLASH-ROUTING-GAP",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
       {
         "agent": "bubbles.docs",
         "phasesExecuted": ["docs"],

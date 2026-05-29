@@ -531,6 +531,21 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 			} else {
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
+		case "ask", "weather", "remind":
+			// Spec 061 SCOPE-06 Round 49 — v1 slash shortcuts (BS-002,
+			// BS-007, BS-010). Route to the assistant adapter so the
+			// facade's LookupShortcut pre-check stamps the explicit
+			// ScenarioID on the envelope and the agent.Router takes
+			// the explicit-id fast path (no embedding similarity).
+			if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
+				update := &tgbotapi.Update{Message: msg}
+				if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
+					slog.Error("assistant adapter slash shortcut failed", "command", msg.Command(), "error", err)
+					b.reply(msg.Chat.ID, "assistant call failed; try again")
+				}
+			} else {
+				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
+			}
 		default:
 			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, or /recent")
 		}
