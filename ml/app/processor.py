@@ -171,11 +171,30 @@ async def process_content(
 
         result = json.loads(result_text)
 
-        # Validate required fields
-        required_fields = ["artifact_type", "title"]
-        for field in required_fields:
-            if field not in result:
-                raise ValueError(f"Missing required field: {field}")
+        # BUG-061-002: short / low-signal inputs (single tokens, emoji,
+        # URL-only captures) and the prompt's own "light" / "metadata"
+        # tier rules legitimately produce LLM payloads that omit
+        # `artifact_type` and/or `title`. Previously this raised a
+        # ValueError that the outer except-clause swallowed into an
+        # opaque "LLM processing failed" — silently dropping the
+        # capture. Degrade gracefully instead, mirroring the existing
+        # unavailable-LLM fallback shape, and log which fields were
+        # defaulted so the silent-drop is no longer silent.
+        defaulted_fields: list[str] = []
+        if "title" not in result or not str(result.get("title") or "").strip():
+            result["title"] = content[:100].strip() or "Untitled"
+            defaulted_fields.append("title")
+        if "artifact_type" not in result or not str(result.get("artifact_type") or "").strip():
+            result["artifact_type"] = content_type if content_type and content_type != "generic" else "note"
+            defaulted_fields.append("artifact_type")
+        if defaulted_fields:
+            logger.warning(
+                "LLM result missing required fields %s for source_id=%s tier=%s; "
+                "derived defaults from content/content_type (BUG-061-002)",
+                defaulted_fields,
+                source_id,
+                processing_tier,
+            )
 
         # Set defaults for optional fields
         result.setdefault("summary", "")

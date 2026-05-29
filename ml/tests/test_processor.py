@@ -278,8 +278,14 @@ class TestContentTruncation:
 class TestProcessContentErrors:
     """process_content error paths."""
 
-    def test_missing_required_field_returns_error(self):
-        """LLM response missing 'artifact_type' produces ValueError."""
+    def test_missing_artifact_type_degrades_to_default(self):
+        """BUG-061-002: LLM omitting 'artifact_type' no longer hard-fails.
+
+        Short / low-signal inputs and the prompt's "light" tier legitimately
+        cause the model to omit artifact_type. The processor MUST derive a
+        default from content_type (or 'note' for generic) instead of raising
+        ValueError and silently dropping the capture.
+        """
         llm_result = {"title": "Missing artifact_type"}
         mock_response = _make_llm_response(llm_result)
 
@@ -299,11 +305,12 @@ class TestProcessContentErrors:
                 )
             )
 
-        assert result["success"] is False
-        assert "error" in result
+        assert result["success"] is True
+        assert result["result"]["artifact_type"] == "article"
+        assert result["result"]["title"] == "Missing artifact_type"
 
-    def test_missing_title_returns_error(self):
-        """LLM response missing 'title' produces ValueError."""
+    def test_missing_title_degrades_to_default(self):
+        """BUG-061-002: LLM omitting 'title' no longer hard-fails."""
         llm_result = {"artifact_type": "article"}
         mock_response = _make_llm_response(llm_result)
 
@@ -312,7 +319,7 @@ class TestProcessContentErrors:
 
             result = asyncio.run(
                 process_content(
-                    content="x",
+                    content="A meaningful capture about supper plans.",
                     content_type="article",
                     source_id="s",
                     processing_tier="standard",
@@ -323,7 +330,84 @@ class TestProcessContentErrors:
                 )
             )
 
-        assert result["success"] is False
+        assert result["success"] is True
+        assert result["result"]["artifact_type"] == "article"
+        # title derived from first 100 chars of content
+        assert result["result"]["title"] == "A meaningful capture about supper plans."
+
+    def test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop(self):
+        """ADVERSARIAL REGRESSION (BUG-061-002): short text + partial LLM
+        payload (no artifact_type, no title) must NOT return
+        success=False. Pre-fix this returned the opaque
+        {'success': False, 'error': 'LLM processing failed'} with a
+        ValueError at processor.py:178 swallowed by the outer except.
+
+        Adversarial property: the asserted shape (success=True, derived
+        title from input, derived artifact_type from generic→note) is the
+        EXACT shape that the broken code path could NEVER produce — the
+        broken path always returned success=False with no 'result' key.
+        """
+        llm_partial = {
+            "summary": "A brief greeting.",
+            "topics": ["greeting"],
+            "sentiment": "neutral",
+        }
+        mock_response = _make_llm_response(llm_partial)
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="hi",
+                    content_type="generic",
+                    source_id="s1",
+                    processing_tier="light",
+                    user_context="",
+                    model="gemma3:4b",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        # Pre-fix: success was False and 'result' key was absent.
+        assert result["success"] is True, (
+            f"Pre-fix regression: short text caused silent drop. Got: {result!r}"
+        )
+        assert "result" in result, "Pre-fix regression: no 'result' key"
+        # Title derived from short content
+        assert result["result"]["title"] == "hi"
+        # artifact_type derived: generic content_type → 'note'
+        assert result["result"]["artifact_type"] == "note"
+        # Other LLM-supplied fields preserved
+        assert result["result"]["summary"] == "A brief greeting."
+        assert result["result"]["topics"] == ["greeting"]
+
+    def test_bug_061_002_empty_content_derives_untitled(self):
+        """ADVERSARIAL REGRESSION (BUG-061-002): truly empty content with
+        partial LLM payload derives 'Untitled' rather than raising."""
+        llm_partial = {"summary": "Empty input."}
+        mock_response = _make_llm_response(llm_partial)
+
+        with patch("app.processor.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            result = asyncio.run(
+                process_content(
+                    content="",
+                    content_type="generic",
+                    source_id="s2",
+                    processing_tier="light",
+                    user_context="",
+                    model="m",
+                    api_key="k",
+                    provider="ollama",
+                )
+            )
+
+        assert result["success"] is True
+        assert result["result"]["title"] == "Untitled"
+        assert result["result"]["artifact_type"] == "note"
 
     def test_invalid_json_returns_error(self):
         """LLM returning non-JSON text produces an error result."""

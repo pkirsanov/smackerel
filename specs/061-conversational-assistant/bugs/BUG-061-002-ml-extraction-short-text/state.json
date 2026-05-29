@@ -1,0 +1,49 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-002",
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "createdAt": "2026-05-29T00:00:00Z",
+  "lastUpdatedAt": "2026-05-29T00:00:00Z",
+  "execution": {
+    "activeAgent": "bubbles.bug",
+    "currentPhase": "validation",
+    "currentScope": "BUG-061-002-SCOPE-01",
+    "completedScopes": [],
+    "lastUpdatedAt": "2026-05-29T00:00:00Z",
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-05-29T00:00:00Z",
+        "runCompletedAt": "2026-05-29T00:00:00Z",
+        "phasesExecuted": ["discovery", "analysis", "implementation", "verification"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-002 (ml/app/processor.py:178 ValueError on partial LLM payloads — short text + light/metadata tier). Reproduced in-process with patched litellm.acompletion (verbatim stack trace captured, PII-redacted). Replaced hard required_fields loop with setdefault/derive block mirroring existing unavailable-LLM fallback rules + WARN log. Added 2 new adversarial regression tests (test_bug_061_002_short_text_*, test_bug_061_002_empty_content_*) and rewrote the 2 pre-existing test_missing_*_returns_error tests to assert the new contract. Verified all 4 FAIL pre-fix via git-stash isolation. Verified all 4 PASS post-fix. Full ml/ unit suite: 464 passed. Full Go unit suite: all packages OK (no Go code touched). Self-verified pending bubbles.validate certification."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 1,
+      "notStarted": 0
+    },
+    "lockdownState": "active"
+  },
+  "policySnapshot": {
+    "grillEnabled": false,
+    "tddEnforced": true,
+    "autoCommit": false,
+    "lockdownPolicy": "fastlane",
+    "regressionPolicy": "adversarial-required",
+    "validationProvenance": "bubbles.bug-self-verified-pending-validate"
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
