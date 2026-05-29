@@ -116,6 +116,45 @@ func TestTranslateInbound_OtherSlash(t *testing.T) {
 	}
 }
 
+// TestTranslateInbound_SlashShortcuts asserts that v1 slash shortcuts
+// (/ask, /weather, /remind — Spec 061 SCOPE-06 Round 49) are forwarded
+// to the facade as KindText with the slash preserved so the facade's
+// LookupShortcut pre-check can stamp the explicit ScenarioID. An
+// unknown slash command (adversarial) MUST still return
+// ErrNotAssistantMessage.
+func TestTranslateInbound_SlashShortcuts(t *testing.T) {
+	t.Parallel()
+	shortcuts := []string{
+		"/ask what's in my notes about Foo?",
+		"/weather in Paris tomorrow",
+		"/remind me to call Mom at 6pm",
+		"/ask",
+		"/weather",
+		"/remind",
+	}
+	for _, in := range shortcuts {
+		update := updateWithText(123, 13, in)
+		msg, err := translateInbound(update, fixedResolver("user-abc"))
+		if err != nil {
+			t.Errorf("translate(%q) err = %v; want nil", in, err)
+			continue
+		}
+		if msg.Kind != contracts.KindText {
+			t.Errorf("translate(%q).Kind = %v; want KindText (facade owns shortcut routing)", in, msg.Kind)
+		}
+		if msg.Text != in {
+			t.Errorf("translate(%q).Text = %q; want round-trip with slash preserved", in, msg.Text)
+		}
+	}
+
+	// Adversarial: an unknown slash command MUST NOT be claimed by the
+	// adapter (would steal it from the bot's legacy handlers).
+	update := updateWithText(123, 14, "/notarealcommand foo")
+	if _, err := translateInbound(update, fixedResolver("user-abc")); err != ErrNotAssistantMessage {
+		t.Errorf("translate(/notarealcommand) err = %v; want ErrNotAssistantMessage", err)
+	}
+}
+
 // TestTranslateInbound_EmptyText returns the fallthrough sentinel
 // so the bot's other media-type handlers (voice, photo, etc.) run.
 func TestTranslateInbound_EmptyText(t *testing.T) {
