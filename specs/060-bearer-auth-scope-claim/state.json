@@ -4,7 +4,7 @@
   "featureNumber": "060",
   "featureName": "Bearer Auth Scope Claim & RequireScope Middleware (Spec 044 Amendment)",
   "status": "done",
-  "certifiedAt": "2026-05-29T01:32:08Z",
+  "certifiedAt": "2026-05-29T18:10:54Z",
   "workflowMode": "full-delivery",
   "convergenceHealth": {
     "recapCount": 0,
@@ -28,8 +28,8 @@
   },
   "certification": {
     "status": "done",
-    "certifiedAt": "2026-05-29T01:32:08Z",
-    "lastEvaluatedAt": "2026-05-29T01:32:08Z",
+    "certifiedAt": "2026-05-29T18:10:54Z",
+    "lastEvaluatedAt": "2026-05-29T18:10:54Z",
     "evidenceRefs": [
       "specs/060-bearer-auth-scope-claim/report.md"
     ],
@@ -54,10 +54,10 @@
       "chaos"
     ],
     "scopeProgress": [
-      {"scope": 1, "name": "PASETO scope Claim + Session/ParsedToken Wiring + Surface Registry", "status": "done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T01:32:08Z"},
-      {"scope": 2, "name": "auth.RequireScope Middleware + Metrics", "status": "done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T01:32:08Z"},
-      {"scope": 3, "name": "CLI --scope Flags + Rotation Preserve/Demote + auth inspect + ./smackerel.sh auth Wrapper", "status": "done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T01:32:08Z"},
-      {"scope": 4, "name": "Operator Docs (docs/Operations.md + docs/API.md)", "status": "done", "dependsOn": [3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T01:32:08Z"}
+      {"scope": 1, "name": "PASETO scope Claim + Session/ParsedToken Wiring + Surface Registry", "status": "done", "dependsOn": [], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T18:10:54Z"},
+      {"scope": 2, "name": "auth.RequireScope Middleware + Metrics", "status": "done", "dependsOn": [1], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T18:10:54Z"},
+      {"scope": 3, "name": "CLI --scope Flags + Rotation Preserve/Demote + auth inspect + ./smackerel.sh auth Wrapper", "status": "done", "dependsOn": [2], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T18:10:54Z"},
+      {"scope": 4, "name": "Operator Docs (docs/Operations.md + docs/API.md)", "status": "done", "dependsOn": [3], "scopeDir": null, "evidenceFile": "report.md", "certifiedAt": "2026-05-29T18:10:54Z"}
     ],
     "lockdownState": {
       "active": false,
@@ -286,6 +286,16 @@
         "statusBefore": "done_with_concerns",
         "statusAfter": "done_with_concerns",
         "summary": "Discharged DI-060-01 + DI-060-02 (post-cert quick-win sweep). DI-060-01: added BenchmarkRequireScope_PerUserPasetoSuccess + BenchmarkRequireScope_AndSemanticsThreeScopes to internal/auth/scope_middleware_test.go. Measured 574-595 ns/op / 208 B/op / 4 allocs/op on Intel Xeon Platinum 8370C @ 2.80GHz — ~17x under the <10µs Scope 2 design budget. DI-060-02: added tests/integration/cli_auth_passthrough_test.go (//go:build integration) validating that ./smackerel.sh auth wrapper propagates exit codes and forwards args verbatim through docker compose exec to the in-container binary. Discovered + fixed real bug in passthrough wrapper during test authoring: in-container binary is `smackerel-core` (per Dockerfile ENTRYPOINT), not `smackerel` — smackerel.sh line 593 corrected. addressedFindings: DI-060-01, DI-060-02. Status stays done_with_concerns (DI-060-03 baseline-guard + DI-060-04 pii-scan for Scope 4 docs remain routed to bubbles.docs)."
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["cross-spec-acceptance"],
+        "runStartedAt": "2026-05-29T18:10:00Z",
+        "runCompletedAt": "2026-05-29T18:10:54Z",
+        "statusBefore": "done",
+        "statusAfter": "done",
+        "recertificationCertifiedAt": "2026-05-29T18:10:54Z",
+        "summary": "Formally accepted two inbound cross-spec packets from spec 061 (Conversational Assistant): packet-060-read-scopes.md (assistant.skill.retrieval + assistant.skill.weather, routed 2026-05-30 by bubbles.implement during spec 061 SCOPE-05 full-delivery convergence round 4) and packet-060-write-scope.md (assistant.skill.notifications.write owner-only, routed 2026-05-28 by bubbles.implement during spec 061 SCOPE-08 substrate landing). Verdict: artifact-only acceptance with contract translation. Translated dotted packet names to spec 060's <surface>:<capability> wire form: assistant:retrieval, assistant:weather, assistant:notifications-write. NO spec 060 source code, tests, or migrations modified — spec 060 has no grant DB; per-token scope issuance is operator-controlled via auth enroll --scope; default-deny is enforced architecturally by auth.RequireScope's missing-scope=mismatch invariant (BS-002 adversarial regression). Surface registration (adding 'assistant' to RegisteredScopeSurfaces in internal/auth/scopes.go) deferred to spec 061's commits per spec 060's documented 'surface registration lands with introducing spec' pattern. Adversarial regression coverage for the write-scope default-deny path is owned by spec 061's notification_execute route tests (inherits BS-002 base contract free). Updated both packet headers to status=accepted. Appended 'Accepted Cross-Spec Packets (Spec 061)' section to report.md with full contract translation, deferred-work list, verification commands. Bumped certifiedAt mirrors from 2026-05-29T01:32:08Z to 2026-05-29T18:10:54Z to clear G088 post-cert-spec-edit-guard. Unblocks: spec 061 SCOPE-05 DoD #11 (read packet acceptance), SCOPE-06/07 e2e wiring (read scopes), SCOPE-08 BS-004 e2e (write scope) — spec 061 owner now owns the surface-registration + RequireScope wiring commits."
       }
     ]
   }

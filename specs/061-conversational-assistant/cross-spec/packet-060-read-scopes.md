@@ -4,7 +4,7 @@
 **Routed at:** 2026-05-30 (artifact authoring time)
 **Target owner:** `specs/060-bearer-auth-scope-claim` (PASETO bearer-auth scope catalog + default-grant migration)
 **Source owner:** `specs/061-conversational-assistant` (SCOPE-05 wires the first transport for the assistant skills)
-**Packet status:** `routed` (DRAFT — requires spec 060 owner acceptance)
+**Packet status:** `accepted` (artifact-only — accepted 2026-05-29 by spec 060 owner; see spec 060 report.md → "Accepted Cross-Spec Packets (Spec 061)")
 
 ---
 
@@ -151,3 +151,4 @@ pre-packet state.
 | Date | Actor | Action | Notes |
 |------|-------|--------|-------|
 | 2026-05-30 | `bubbles.implement` (spec 061, SCOPE-05) | Authored + routed packet | Status: `routed`. Awaiting spec 060 owner pickup. |
+| 2026-05-29 | spec 060 owner (`bubbles.workflow` bugfix-fastlane) | Accepted artifact-only with contract translation | Status: `accepted`. Wire form translated to spec 060's `<surface>:<capability>` regex: `assistant:retrieval`, `assistant:weather`. Code-side surface registration (`"assistant"` added to `internal/auth/scopes.go::RegisteredScopeSurfaces`) deferred to spec 061's commits per spec 060's documented pattern ("additions to RegisteredScopeSurfaces MUST land in the same change set as the spec that introduces the new surface"). Default-grant semantics: spec 060 has NO grant DB; default-grant is operationalized via operator `auth enroll --scope assistant:retrieval --scope assistant:weather` when minting bot-shared tokens (spec 061 owner ships docs/runbook). "Missing scope = mismatch" invariant (spec 060 design.md §4) provides the default-deny base. See spec 060 `report.md` → "Accepted Cross-Spec Packets (Spec 061)" for full acceptance record. |

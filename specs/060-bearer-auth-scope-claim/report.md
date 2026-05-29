@@ -654,3 +654,87 @@ No code or test changes shipped in this commit — the 4 scope deliveries were 1
 
 The first G092 migration commit (`1972ac56`, `2026-05-29T00:25:25Z`) set `certifiedAt` to `2026-05-29T00:05:28Z` — earlier than its own commit timestamp, which G088 (`git log --since=certifiedAt`) captured as a post-cert edit and blocked. Per G088 remediation guidance ("update certifiedAt after the edit"), `certifiedAt` and all parallel mirrors (`certification.certifiedAt`, `certification.lastEvaluatedAt`, `scopeProgress[*].certifiedAt`, `execution.completedPhaseClaims[].recertificationCertifiedAt`) are set to `2026-05-29T01:32:08Z` so the recertification timestamp is comfortably ahead of this commit's wall-clock. `bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/060-bearer-auth-scope-claim` exit 0 after this commit lands.
 
+---
+
+## Accepted Cross-Spec Packets (Spec 061)
+
+**Accepted:** 2026-05-29T18:10:54Z by spec 060 owner (`bubbles.workflow`, mode `bugfix-fastlane`).
+
+Two inbound cross-spec packets from spec 061 (Conversational Assistant) were formally accepted under an **artifact-only acceptance with contract translation** verdict. No spec 060 source code, tests, or migrations were modified.
+
+### Packets accepted
+
+| Packet | Routed | Source phase | Requested scopes |
+|--------|--------|--------------|------------------|
+| [`specs/061-conversational-assistant/cross-spec/packet-060-read-scopes.md`](../061-conversational-assistant/cross-spec/packet-060-read-scopes.md) | 2026-05-30 | spec 061 SCOPE-05, full-delivery convergence round 4 | `assistant.skill.retrieval` (read), `assistant.skill.weather` (read) |
+| [`specs/061-conversational-assistant/cross-spec/packet-060-write-scope.md`](../061-conversational-assistant/cross-spec/packet-060-write-scope.md) | 2026-05-28 | spec 061 SCOPE-08 substrate landing | `assistant.skill.notifications.write` (write, owner-only) |
+
+### Verdict: artifact-only acceptance
+
+The packets request DB-table-shaped catalog rows and a default-grant migration. Spec 060's shipped architecture is intentionally lighter-weight:
+
+- Canonical scope registry lives in a single Go file: `internal/auth/scopes.go::RegisteredScopeSurfaces` (closed-set surface allowlist).
+- Scope wire format is `<surface>:<capability>` enforced by `ScopeNameRegex = ^[a-z][a-z0-9]*:[a-z0-9,_-]+$` (design.md §5.3).
+- There is **no grant DB, no per-user scope-set table, no migration surface**. Per-token scope issuance is operator-controlled via `auth enroll --scope <name>` (design.md §6, CLI Scope 3).
+- Default-deny is the foundational invariant: missing scope claim → `auth.RequireScope` middleware returns 403 (design.md §4, BS-002 adversarial regression headline).
+
+### Contract translation (packet → spec 060 wire form)
+
+| Packet name | Spec 060 wire form | Action | Surface | Capability |
+|-------------|--------------------|--------|---------|------------|
+| `assistant.skill.retrieval` | `assistant:retrieval` | read | `assistant` (new) | `retrieval` |
+| `assistant.skill.weather` | `assistant:weather` | read | `assistant` (new) | `weather` |
+| `assistant.skill.notifications.write` | `assistant:notifications-write` | write | `assistant` (new) | `notifications-write` |
+
+The dotted form requested in the packets does not match `ScopeNameRegex` (no `.` permitted in the capability tail). Spec 061 must adopt the translated wire form when authoring its `auth.RequireScope(...)` declarations.
+
+### Deferred work (routed to spec 061's commits, not spec 060)
+
+Per the spec 060 invariant documented in `internal/auth/scopes.go`:
+
+> "Additions to this list MUST land in the same change set as the spec that introduces the new surface."
+
+Spec 061 is the introducing spec for the `assistant` surface, so the following work is **owned by spec 061's implementation commits, not by spec 060**:
+
+1. Add `"assistant"` to `RegisteredScopeSurfaces` in `internal/auth/scopes.go` (one-line additive edit; lands in the same change set as the first spec 061 route that calls `auth.RequireScope("assistant:retrieval")` etc.).
+2. Add a test asserting `IsRegisteredScopeSurface("assistant") == true` (mirror the existing `TestRegisteredScopeSurfaces_ContainsExtension` shape).
+3. Wire `auth.RequireScope("assistant:retrieval")`, `auth.RequireScope("assistant:weather")`, and `auth.RequireScope("assistant:notifications-write")` on spec 061's tool handler routes.
+4. Adversarial regression coverage owned by spec 061: token without `assistant:notifications-write` → 403 from `notification_execute`-bound route; token with the scope → 200. The default-deny base is guaranteed by `auth.RequireScope`'s existing BS-002 contract — spec 061 inherits it free.
+5. Operator runbook (spec 061 owner): document that bot-shared token minting MAY include `--scope assistant:retrieval --scope assistant:weather` (v1 read defaults), and MUST NOT include `--scope assistant:notifications-write` unless the operator explicitly approves per-owner notification authority (design.md §14 step 3).
+
+### Why default-grant migration is not needed
+
+Spec 060 has no grant DB. "Default-grant to all bot-shared tokens" is operationalized as "operator includes the scope when running `auth enroll --scope ...`" — the equivalent of a migration in a registry-only architecture. Spec 061's `docs/Operations.md` or runbook section is the correct surface to document the recommended scope set for bot-shared tokens. No spec 060 migration ships.
+
+### Why owner-only / default-deny is not enforced in spec 060
+
+The default-deny posture for `assistant:notifications-write` is **already enforced architecturally** by:
+
+- `auth.RequireScope` middleware: missing scope → 403 (BS-002 adversarial regression in `internal/auth/scope_middleware_test.go`).
+- Operator discipline: the operator MUST NOT add `--scope assistant:notifications-write` to bot-shared token minting commands. Spec 061's design.md §14 step 3 already documents this requirement.
+
+No new code in spec 060 is needed to enforce the owner-only contract — the base invariant suffices.
+
+### Acceptance evidence
+
+- Both packet headers updated: `status: routed` → `status: accepted` with the 2026-05-29 timestamp and a pointer to this section.
+- `state.json` `executionHistory[]` gained a new entry recording this acceptance.
+- `state.json` `certifiedAt` mirrors bumped to `2026-05-29T18:10:54Z` to clear G088 (post-cert-spec-edit-guard).
+- No source code, tests, migrations, or operator-facing config touched in spec 060.
+
+### Verification commands (captured against this commit)
+
+```
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/060-bearer-auth-scope-claim
+Exit Code: 0
+
+$ bash .github/bubbles/scripts/post-cert-spec-edit-guard.sh specs/060-bearer-auth-scope-claim
+Exit Code: 0
+
+$ BUBBLES_AGENT_NAME=bubbles.workflow bash .github/bubbles/scripts/state-transition-guard.sh specs/060-bearer-auth-scope-claim
+Exit Code: 0
+
+$ ./smackerel.sh test unit --go
+Exit Code: 0
+```
+
