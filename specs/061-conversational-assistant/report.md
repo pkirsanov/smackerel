@@ -9565,4 +9565,275 @@ There is NO `${VAR:-default}` syntax, NO silent fallback, NO `os.getenv("KEY", "
 
 ---
 
+## Round 59 — BS-002 + BS-007 RED: Option 2 SST override was incomplete (4 of 5 model env consumers still leak gemma3:4b into test) {#round-59-bs002-bs007-red-option2-incomplete}
+
+**Owner:** `bubbles.workflow` parent-expanded `bubbles.test` (runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23/48-58; executionModel=parent-expanded-child-mode)
+**Trigger:** Round 58 outcome envelope `route_required → bubbles.test` for live-stack verify of Option 2 (test-tier SST model override for `AGENT_PROVIDER_DEFAULT_MODEL`)
+**Dispatched by user:** "Round 58 — verify + commit + push + live-stack" instruction with STEP 6 fallback "On any RED — Capture the actual failure verbatim, File a new specific finding, Route to bubbles.plan via RESULT-ENVELOPE nextRequiredOwner. Do NOT silently patch."
+**G082 convergence iteration:** **10 of 10** — CAP REACHED. Further iterations in this orchestrator session would trip the `convergence-cap-guard.sh` mechanical guard. The next dispatch MUST be a new orchestrator session.
+
+### 1 — Verify-phase leg (Round 58 commit f2094b2e — all clean)
+
+`git status --short` clean. HEAD `f2094b2e` ("spec(061): Round 58 — Option 2 SST test-tier model override"). 1 commit ahead of `origin/main`.
+
+Static gates:
+
+```text
+go build ./...                                                          → EXIT=0
+go vet ./...                                                            → EXIT=0
+./smackerel.sh format --check                                           → EXIT=0 (53 files already formatted)
+./smackerel.sh test unit                                                → EXIT=0 (462 Python tests pass + Go unit clean)
+go test ./internal/deploy/...                                           → EXIT=0 (compose contract test, 21.7s)
+go test -tags=integration -run TestAgentProviderDefaultModelTestOverride
+  ./tests/integration/...                                               → EXIT=0 (0.030s, PASS)
+```
+
+SST→env-file boundary (`grep -E '^AGENT_PROVIDER_DEFAULT_MODEL=' config/generated/{test,dev}.env`):
+
+```text
+config/generated/test.env:AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+config/generated/dev.env:AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+```
+
+PII scan (`bash .github/bubbles/scripts/pii-scan.sh` against staged + uncommitted diff): no `/home/<user>/` paths leaked. Gitleaks PASS at commit-time.
+
+### 2 — Test-phase leg: stack cycle + ollama auto-pull gap
+
+```text
+./smackerel.sh --env test down                                          → EXIT=0
+./smackerel.sh --env test up                                            → EXIT=0 (7 containers healthy: postgres, nats, ollama, ml, core, jaeger, stub-providers)
+docker exec smackerel-test-smackerel-core-1 env | grep AGENT_PROVIDER   → AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct ✓
+docker exec smackerel-test-smackerel-ml-1   env | grep AGENT_PROVIDER   → AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct ✓
+docker exec smackerel-test-ollama-1 ollama list                         → (empty — auto-pull skipped this run)
+docker exec smackerel-test-ollama-1 ollama pull qwen2.5:0.5b-instruct   → EXIT=0 (397 MB, success: 994f5c477f15a83f96f9f4b6cdf9bba6 manifest)
+```
+
+Pre-existing ollama auto-pull behavior is environmental: the test-stack lifecycle does NOT auto-pull on every `up` (likely cached at host level by prior runs); manual pull was required this round. **This is NOT a Round 59 finding** — flagging here only because it was a pre-test prerequisite.
+
+### 3 — BS-002 live-stack: RED (verbatim slog)
+
+```text
+E2E_STACK_MANAGED=1 timeout 240 bash tests/e2e/assistant_bs002_test.sh
+→ BS002_EXIT=1
+```
+
+Verbatim `assistant_turn` slog captured by the fixture's tail-scrape:
+
+```json
+{"time":"2026-05-29T20:35:20.785672192Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs002","transport":"telegram","correlation_id":"178008691217315","assistant_turn_id":"asst-1780086915777088809","scenario_id":"retrieval_qa","top_score":0,"band":"high","status":"saved_as_idea","error_cause":"provider_unavailable","latency_ms":5009.945377,"agent_trace_id":"trace-asst-1780086915777088809","body_redacted":true}
+```
+
+Verbatim `agent_traces` row for this turn:
+
+```text
+trace_id                          | scenario_id  | outcome | provider | model | latency_ms
+----------------------------------+--------------+---------+----------+-------+-----------
+trace_20260529T203515.777146209_1 | retrieval_qa | timeout |          |       |       5000
+```
+
+Key diagnostic flags:
+
+- `error_cause = "provider_unavailable"` (Round 56's `provider_timeout` is now `provider_unavailable` — different failure code from the previous root cause)
+- `latency_ms = 5009.945377` (~5s scenario timeout firing; Round 56's 71s warm gemma3:4b latency is no longer present)
+- `outcome = "timeout"` in agent_traces row (matches the slog timestamp; the LLM call exceeded the scenario `timeout_ms: 5000`)
+- `provider = ""`, `model = ""` in agent_traces row (both empty — the trace was recorded before any provider response landed)
+- `band = "high"` and `scenario_id = "retrieval_qa"` (Round 53/58 fixes for correlation_id + scenario_id + band remain intact — those defects stay fixed)
+
+Fixture failure message:
+
+```text
+BS-002: error_cause='provider_unavailable' on happy path; ollama returned model-not-found before retrieval_qa could finish
+```
+
+### 4 — BS-007 live-stack: RED (same pattern)
+
+```text
+E2E_STACK_MANAGED=1 timeout 240 bash tests/e2e/assistant_bs007_test.sh
+→ BS007_EXIT=1
+```
+
+Verbatim slog:
+
+```json
+{"time":"2026-05-29T20:36:32.875908596Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs007","transport":"telegram","correlation_id":"178008698730908","assistant_turn_id":"asst-1780086987863545185","scenario_id":"retrieval_qa","top_score":0,"band":"high","status":"saved_as_idea","error_cause":"provider_unavailable","latency_ms":5013.687806,"agent_trace_id":"trace-asst-1780086987863545185","body_redacted":true}
+```
+
+Fixture failure message:
+
+```text
+FAIL: BS-007: error_cause='provider_unavailable' (want empty; gate intentionally leaves ErrorCause unset — soft refusal, not unavailability)
+```
+
+Same root cause as BS-002. The provenance.Enforce gate that BS-007 exercises never even runs because the retrieval LLM call returned an error before the gate could inspect citations.
+
+### 5 — BS-001 dispatch mismatch (NOT a real regression)
+
+```text
+bash tests/e2e/assistant_bs001_test.sh
+→ EXIT=127 (No such file or directory)
+```
+
+`ls tests/e2e/assistant_*.sh`:
+
+```text
+tests/e2e/assistant_acceptance_telegram_smoke.sh
+tests/e2e/assistant_bs002_test.sh
+tests/e2e/assistant_bs003_test.sh
+tests/e2e/assistant_bs006_test.sh
+tests/e2e/assistant_bs007_test.sh
+tests/e2e/assistant_regression_e2e_test.sh
+```
+
+`assistant_bs001_test.sh` does NOT exist in this repo. The user's STEP 5 dispatch instruction ("run BS-002+BS-007+BS-001 in that order") is mistaken on the third script name. The closest equivalents are `assistant_regression_e2e_test.sh` (broader regression suite) and `assistant_acceptance_telegram_smoke.sh` (smoke test). Round 59 did NOT run either of those because BS-002 + BS-007 already established RED outcome and per STEP 6 the orchestrator must route to plan rather than continue to additional tests. Flagging as a dispatch correction request only — NOT a new finding.
+
+### 6 — Root cause diagnosis (NEW finding, NOT silently patched)
+
+#### 6a — Ollama gin access log shows model-not-found pattern
+
+`docker logs --tail 40 smackerel-test-ollama-1` (relevant excerpt):
+
+```text
+[GIN] 2026/05/29 - 20:35:20 | 404 |     449.899µs |      172.20.0.8 | POST     "/api/generate"
+[GIN] 2026/05/29 - 20:35:21 | 404 |     327.399µs |      172.20.0.8 | POST     "/api/generate"
+[GIN] 2026/05/29 - 20:35:22 | 404 |     513.098µs |      172.20.0.8 | POST     "/api/generate"
+[GIN] 2026/05/29 - 20:35:25 | 404 |     405.198µs |      172.20.0.8 | POST     "/api/generate"
+[GIN] 2026/05/29 - 20:35:25 | 200 |   9.41147118s |      172.20.0.8 | POST     "/api/generate"
+[GIN] 2026/05/29 - 20:35:27 | 404 |     846.996µs |      172.20.0.8 | POST     "/api/generate"
+```
+
+Four consecutive HTTP 404 responses (model-not-found) on `/api/generate` interleaved with one HTTP 200 that took 9.41s. The 200 is the `retrieval_qa` qwen call (qwen IS in ollama list); the 404s are different model requests.
+
+#### 6b — ML sidecar exception traceback (verbatim)
+
+`docker logs --tail 40 smackerel-test-smackerel-ml-1` (relevant tail):
+
+```text
+litellm.exceptions.APIConnectionError: litellm.APIConnectionError: OllamaException - {"error":"model 'gemma3:4b' not found"}
+LLM service unavailable - providing SST-gated degraded fallback result
+Unexpected error on attempt 1: litellm.APIConnectionError: OllamaException - {"error":"model 'gemma3:4b' not found"}
+...
+LLM call failed for synthesis: APIConnectionError
+Unexpected error on attempt 1: litellm.APIConnectionError: OllamaException - {"error":"model 'gemma3:4b' not found"}
+```
+
+The literal `"model 'gemma3:4b' not found"` proves these are NOT the `retrieval_qa` agent path (which is now bound to qwen). The string `"LLM call failed for synthesis"` proves this is the synthesis/extraction NATS handler.
+
+#### 6c — Go core log: synthesis + domain extraction both fail
+
+`docker logs --since 5m smackerel-test-smackerel-core-1` (filtered for the failures):
+
+```text
+{"time":"2026-05-29T20:35:20.602522216Z","level":"WARN","msg":"synthesis extraction failed","artifact_id":"01KSTQ5DPWXSY11GFTE6J562ED","error":"LLM call failed: APIConnectionError: litellm.APIConnectionError: OllamaException - {\"error\":\"model 'gemma3:4b' not found\"}"}
+{"time":"2026-05-29T20:35:22.506361047Z","level":"WARN","msg":"domain extraction failed","artifact_id":"01KSTQ5DPWXSY11GFTE6J562ED","error":"Unexpected error on attempt 1: litellm.APIConnectionError: OllamaException - {\"error\":\"model 'gemma3:4b' not found\"}"}
+{"time":"2026-05-29T20:35:25.646524663Z","level":"WARN","msg":"synthesis extraction failed","artifact_id":"01KSTQ5NJMKNBBMCRT1Z76JHDM","error":"LLM call failed: APIConnectionError: litellm.APIConnectionError: OllamaException - {\"error\":\"model 'gemma3:4b' not found\"}"}
+{"time":"2026-05-29T20:35:27.572489036Z","level":"WARN","msg":"domain extraction failed","artifact_id":"01KSTQ5NJMKNBBMCRT1Z76JHDM","error":"Unexpected error on attempt 1: litellm.APIConnectionError: OllamaException - {\"error\":\"model 'gemma3:4b' not found\"}"}
+```
+
+The Go-side log source: `internal/pipeline/synthesis_subscriber.go:189` and `internal/pipeline/domain_subscriber.go:187` (both just propagate the ml-side error string).
+
+#### 6d — Code-path inspection: ml/app/nats_client.py reads LLM_MODEL (not AGENT_PROVIDER_DEFAULT_MODEL)
+
+`grep -nE 'LLM_MODEL|model.*=.*os\.environ' ml/app/`:
+
+```text
+ml/app/nats_client.py:265 → llm_model = os.environ.get("LLM_MODEL")
+ml/app/nats_client.py:264 → llm_provider = os.environ.get("LLM_PROVIDER")
+ml/app/synthesis.py:182   → llm_model = model     ← (model passed in from caller above)
+ml/app/synthesis.py:309   → llm_model = model     ← (cross-source variant of above)
+```
+
+The `synthesis.py` paths receive `model` as a parameter from `nats_client.py`, which sources it from `LLM_MODEL` env var — NOT from `AGENT_PROVIDER_DEFAULT_MODEL`. Option 2's SST override only redirected the agent endpoint, leaving the synthesis/extraction NATS handler still pointed at the production `gemma3:4b`.
+
+#### 6e — Empirical SST gap: 4 of 5 model env consumers still leak gemma3:4b
+
+`grep -E '^(LLM_|OLLAMA_|AGENT_PROVIDER_)' config/generated/test.env`:
+
+```text
+AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct       ← Round 58 Option 2 redirected ✓
+AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct          ← redirected by an earlier round
+AGENT_PROVIDER_OCR_MODEL=deepseek-ocr:3b                  ← redirected by an earlier round
+AGENT_PROVIDER_REASONING_MODEL=deepseek-r1:7b             ← redirected by an earlier round
+AGENT_PROVIDER_VISION_MODEL=gemma3:4b                     ← NOT redirected ✗
+LLM_MODEL=gemma3:4b                                       ← NOT redirected ✗  (synthesis/extraction NATS handler reads this)
+OLLAMA_MODEL=gemma3:4b                                    ← NOT redirected ✗
+OLLAMA_VISION_MODEL=gemma3:4b                             ← NOT redirected ✗
+OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct                   ← test-tier model literal (correct)
+```
+
+5 distinct model-env consumers in this repo (`AGENT_PROVIDER_DEFAULT_MODEL`, `AGENT_PROVIDER_FAST_MODEL`, `AGENT_PROVIDER_VISION_MODEL`, `LLM_MODEL`, `OLLAMA_MODEL`, plus their `*_PROVIDER` companions). Round 58 Option 2 redirected exactly ONE (`AGENT_PROVIDER_DEFAULT_MODEL`). The other four still point at gemma3:4b.
+
+#### 6f — Secondary observation: cold-load latency on qwen
+
+Even the qwen call (the one HTTP 200 at 20:35:25) took 9.41s — that exceeds the retrieval-qa-v1 scenario `timeout_ms: 5000`. Inspection of the ollama log:
+
+```text
+time=2026-05-29T20:35:18.085Z level=INFO source=server.go:1432 msg="llama runner started in 1.08 seconds"
+```
+
+This was qwen2.5:0.5b-instruct's cold load (1.08s for runner start, then ~8.3s for first inference). The test fixture's warmup stanza primes `gemma3:4b` (literally):
+
+```bash
+tests/e2e/assistant_bs002_test.sh:104:echo "--- LLM warmup: priming gemma3:4b inference ---"
+tests/e2e/assistant_bs002_test.sh:108:  -d '{"model":"gemma3:4b","prompt":"hi","stream":false,"options":{"num_predict":4}}' \
+tests/e2e/assistant_bs007_test.sh:60: echo "--- LLM warmup: priming gemma3:4b inference ---"
+tests/e2e/assistant_bs007_test.sh:64:  -d '{"model":"gemma3:4b","prompt":"hi","stream":false,"options":{"num_predict":4}}' \
+```
+
+So the fixture warms the WRONG model — qwen is cold when `/ask` fires. Even if all 5 env consumers were redirected to qwen, the cold-load cost (1.08s runner + ~8s first-inference on this hardware) would still blow the 5s budget unless the warmup also primes qwen.
+
+This is a **secondary observation**, NOT the primary failure mode. The primary RED cause is the model-not-found 404 from the synthesis/extraction path — that fires SYNCHRONOUSLY during the retrieval_qa turn because the assistant pipeline calls into the ml sidecar synthesis service during query processing.
+
+### 7 — New finding filed: `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK`
+
+| Field | Value |
+| --- | --- |
+| **Parent finding** | `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE` (Round 56) |
+| **Affected scope** | SCOPE-06 (BS-002 + BS-007 live-stack DoD items #4b/#5b/#6) |
+| **Severity** | High (blocks SCOPE-06 closure; live-stack RED two rounds in a row) |
+| **Root cause** | Option 2 (Round 58) redirected `AGENT_PROVIDER_DEFAULT_MODEL` only. 4 other model env consumers (`LLM_MODEL`, `OLLAMA_MODEL`, `AGENT_PROVIDER_VISION_MODEL`, `OLLAMA_VISION_MODEL`) still point at `gemma3:4b`, and `ml/app/nats_client.py:265` reads `LLM_MODEL` synchronously during `retrieval_qa` synthesis extraction → triggers `OllamaException model 'gemma3:4b' not found` → `error_cause=provider_unavailable` → 5s scenario timeout fires → `status=saved_as_idea`. |
+| **Secondary cause** | Test fixture warmup primes `gemma3:4b` literally (line 104 of bs002, line 60 of bs007), so qwen is cold when `/ask` fires. Even with all env consumers redirected, qwen cold-load (~9.4s observed) still exceeds the 5s scenario budget. |
+| **Spec invariants preserved** | retrieval-qa-v1.yaml `timeout_ms: 5000` is the PRODUCTION budget — must NOT be raised for test-tier override (would mask real production regressions). |
+| **Files to inspect** | `scripts/commands/config.sh` (`LLM_MODEL`, `OLLAMA_MODEL` lines), `config/smackerel.yaml` (`environments.test.*_model` overrides), `ml/app/nats_client.py:264-265`, `tests/e2e/assistant_bs002_test.sh:104-108`, `tests/e2e/assistant_bs007_test.sh:60-64`, `scripts/commands/ollama-test-pull.sh` (warmup placement) |
+| **Routing** | `bubbles.plan` for Option-set triage |
+
+### 8 — Triage options for plan (NOT prescriptive — plan owns the decision)
+
+1. **Option 3A — Complete SST override coverage:** Add `environments.test.llm_model`, `environments.test.ollama_model`, `environments.test.agent_provider_vision_model`, `environments.test.ollama_vision_model` overrides to `config/smackerel.yaml`, and wrap the corresponding lines in `scripts/commands/config.sh` with `env_override_value`. Cost: ~8 LOC. Side-effect: vision-tier code paths in test would now also run qwen (which may not support vision — risk: vision-tier scenarios may break).
+2. **Option 3B — Decouple synthesis from LLM_MODEL:** Refactor `ml/app/nats_client.py:265` to read from `AGENT_PROVIDER_FAST_MODEL` (or a new `AGENT_PROVIDER_SYNTHESIS_MODEL`), making the synthesis path traverse the same overrideable SST path as the agent endpoint. Cost: ~10 LOC + new test. Side-effect: ML sidecar architecture change — requires design.md update.
+3. **Option 3C — Fix fixture warmup:** Update `tests/e2e/assistant_bs002_test.sh:104-108` and `tests/e2e/assistant_bs007_test.sh:60-64` to read the model from `$AGENT_PROVIDER_DEFAULT_MODEL` env var (already exported into the test stack) instead of literal `gemma3:4b`. Cost: ~4 LOC. Side-effect: must combine with Option 3A or 3B — fixing warmup alone does NOT fix the synthesis-path 404.
+4. **Option 3D — Test-tier pre-warm in stack lifecycle:** Add a post-`up` warmup step to `scripts/runtime/stack.sh` (or equivalent) that does a tiny `/api/generate` call against `$OLLAMA_TEST_MODEL` so qwen is hot before any test fires. Combined with Option 3A this would address both the multi-path leak and the cold-load latency.
+5. **Option 3E — Pull gemma3:4b into test ollama AS WELL AS qwen:** Cheapest disk-wise (3.3 GB) but means the test stack is not really exercising the override path — Option 2's premise (separate the test model from the production model) gets weakened.
+
+Recommended ordering (plan to confirm): **3A + 3C + 3D** — the combination addresses every observation captured in this round and preserves the production 5s timeout invariant. **3B is the more architecturally correct fix but is OUT-OF-SCOPE for SCOPE-06** (would amend ml sidecar contract and require a fresh design pass). **3E is rejected** as it defeats the original Round 57 plan-triage rationale.
+
+### 9 — Convergence accounting (G082 cap reached)
+
+- G082 cap: 10 / spec / session. This is iteration **10 of 10** — **CAP REACHED**.
+- Round 60 in this same orchestrator session would trip `bubbles/scripts/convergence-cap-guard.sh` and emit a `blocked` envelope with finding `G082`.
+- This RESULT-ENVELOPE accordingly emits `outcome: blocked` (G082-mandated) with `nextRequiredOwner: bubbles.plan` so the next orchestrator session (separate dispatch by user) can pick up the multi-path-leak finding.
+- G083 mid-loop compaction: this round added ~270 lines to report.md but the orchestrator's envelope log stays under the per-spec 8 KB compaction budget (envelopes from this round will be compacted by the next session's compactor on entry).
+- G086 auto-continue: workflow MUST stop here (G082 cap). G086 explicit override applies: "max iterations reached" is one of G086's permitted stop reasons.
+
+### 10 — Files modified this round
+
+- `specs/061-conversational-assistant/state.json` — prepended Round 59 executionHistory entry (this round).
+- `specs/061-conversational-assistant/report.md` — appended this `#round-59-bs002-bs007-red-option2-incomplete` section (this round).
+
+### 11 — Files explicitly NOT modified this round
+
+- `config/smackerel.yaml` — preserved (NO silent patch per STEP 6).
+- `scripts/commands/config.sh` — preserved (NO silent patch per STEP 6).
+- `ml/app/nats_client.py` — preserved (NO silent patch per STEP 6).
+- `tests/e2e/assistant_bs002_test.sh`, `tests/e2e/assistant_bs007_test.sh` — preserved (NO silent patch per STEP 6).
+- All foreign specs (037, 044, 054, 058, 060) — verbatim preserved.
+- `scopes.md` DoD checkboxes — preserved (live-stack RED prohibits DoD flip per STEP 5).
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json` — preserved.
+- `certification.*` fields — preserved verbatim.
+
+### 12 — Outcome envelope (this round)
+
+`blocked` (G082 cap reached + BS-002/BS-007 live-stack RED with NEW root-cause finding) → `nextRequiredOwner: bubbles.plan` for `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK` triage in a fresh orchestrator session. Per STEP 6 instruction, NO silent patches authored this round. Two commits land: `f2094b2e` (Round 58 implement, already on HEAD) + new commit for this Round 59 verify-+-route artifact set. Both pushed via `git push origin main` (NO `--no-verify`).
+
+---
+
 
