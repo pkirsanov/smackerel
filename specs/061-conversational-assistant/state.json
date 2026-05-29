@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "currentScope": "SCOPE-06",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-29T22:50:00Z",
+    "lastUpdatedAt": "2026-05-30T03:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,48 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T03:10:00Z",
+        "runCompletedAt": "2026-05-30T03:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 58 (full-delivery; G082 convergence iteration 9 of 10 in current orchestrator session — 1 iteration remains, dispatched as Round 59). Owner: bubbles.workflow parent-expanded bubbles.implement (runSubagent unavailable in current VSCode IDE runtime; executionModel=parent-expanded-child-mode). Trigger: Round 57 outcome envelope route_required → bubbles.implement with Option 2 (test-tier SST model override) pre-authorized by user. EXECUTED (Claim Source: executed in this session): (1) Edited config/smackerel.yaml to add agent_provider_default_model: 'qwen2.5:0.5b-instruct' under environments.test (5 lines incl 4-line rationale comment, placed adjacent to existing agent_provider_fast_model). (2) Edited scripts/commands/config.sh line 1123 — swapped AGENT_PROVIDER_DEFAULT_MODEL='$(required_value agent.provider_routing.default.model)' to AGENT_PROVIDER_DEFAULT_MODEL='$(env_override_value agent_provider_default_model agent.provider_routing.default.model)' with 7-line rationale comment. (3) Authored NEW tests/integration/agent_provider_default_test_override_test.go (~130 LOC incl banner doc + repo-root climber + diagnostic helper; ~25 LOC assertion body). Adversarial-by-construction: asserts test.env contains AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct AND dev.env contains AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b — would FAIL if override silently dropped (test.env shows gemma3:4b) OR if production binding silently weakened (dev.env shows qwen). No bailout-style early returns. (4) Ran ./smackerel.sh config generate --env test → exit 0, test.env regenerated. Verified via grep -E '^AGENT_PROVIDER_DEFAULT_MODEL=' config/generated/{test,dev}.env: test.env=qwen2.5:0.5b-instruct (override applied), dev.env=gemma3:4b (production binding preserved). (5) Ran new test go test -tags=integration -count=1 -v -run TestAgentProviderDefaultModelTestOverride ./tests/integration/... → exit 0, PASS, t.Logf banner 'test.env pins AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct; dev.env keeps AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b (per-env override working)'. (6) Ran precedent SST test go test -tags=integration -count=1 -run TestOllamaConfigGenerateAndRuntimeValidationStayInSync → exit 0. (7) Ran go test -count=1 ./internal/deploy/... → exit 0 (22.925s; L3-invariant tailnet-edge bind contract test in compose_contract_test.go intact). (8) Ran go test -count=1 ./internal/config/... ./internal/agent/... ./internal/assistant/... → exit 0 across all 14 packages (config 21.504s, agent 0.183s, render 0.046s, tools/notification 0.027s, tools/retrieval 0.082s, tools/weather 0.049s, userreply 0.019s, assistant 0.164s, confirm 0.017s, context 0.012s, contracts 0.073s, metrics 0.037s, provenance 0.043s, tracing 0.014s). NO foreign-spec edits, NO scenario YAML edits, NO scopes.md DoD flips, NO certification.* changes. NO-DEFAULTS SST compliance: env_override_value uses fail-loud required_value semantics on miss; zero ${VAR:-default} syntax introduced. Authored Round 58 evidence section in report.md at anchor #round-58-bs002-llm-provider-timeout-implement. NEXT: Round 59 (bubbles.test) cycles the test stack and runs the BS-001/BS-002/BS-007 live trio; on green flips SCOPE-06 DoD #4b/#5b/#6 with #round-59-* evidence anchors and closes BS-002-LLM-PROVIDER-TIMEOUT.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["plan"],
+        "runStartedAt": "2026-05-30T03:00:00Z",
+        "runCompletedAt": "2026-05-30T03:10:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 57 (full-delivery; G082 convergence iteration 8 of 10 in current orchestrator session — 2 iterations remain after this round, dispatched as Rounds 58/59). Owner: bubbles.workflow parent-expanded bubbles.plan (runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23/48-56; executionModel=parent-expanded-child-mode). Trigger: Round 56 outcome envelope route_required → bubbles.plan for triage of BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE; user pre-authorized Option 2 (test-tier SST model override) in dispatch. EXECUTED (Claim Source: executed in this session): PLAN-ONLY round, ZERO production source files modified. (1) Read-only verification of Round 56 evidence anchor #round-56-defect3-verify confirmed verbatim 71s warm gemma3:4b latency measurement (real 1m10.971s for 2-token response, load_duration_ms=458, eval_count=2) — structurally incompatible with retrieval-qa-v1.yaml timeout_ms=5000. (2) Read-only inspection of config/prompt_contracts/retrieval-qa-v1.yaml confirmed model_preference: 'default' binding routes through AGENT_PROVIDER_DEFAULT_MODEL env var. (3) Empirical SST gap proof captured via grep against generated env files at HEAD: test.env shows AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b (LEAK — production model in test) and AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct (fast tier already correctly overridden); dev.env shows AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b (correct production binding). The asymmetry between fast-tier and default-tier overrides is the root cause. (4) Confirmed env_override_value() substrate already exists at scripts/commands/config.sh line 178; existing consumer at line 1132 (AGENT_PROVIDER_FAST_MODEL='$(env_override_value agent_provider_fast_model agent.provider_routing.fast.model)') is the exact precedent Option 2 mirrors. (5) Confirmed qwen2.5:0.5b-instruct is registered in model_memory_profiles (config/smackerel.yaml:1024 @ 1024 MiB), in infrastructure.ollama.test.model (line 1262, pulled by ollama-test-pull.sh at stack-up), and already used as the fast-tier test override (line 1321). (6) Confirmed Python ml sidecar reads same AGENT_PROVIDER_DEFAULT_MODEL env var via ml/app/agent.py _PROVIDER_ENV_KEYS['default'] mapping at line 47 — env-var override path reaches actual litellm Ollama inference call. (7) Authored Round 57 plan-triage section in report.md at anchor #round-57-bs002-llm-provider-timeout-plan documenting: evidence inventory (6 anchored facts), option-evaluation matrix (Option 2 chosen with rejection rationale for (a)/(c)/(d)/(e) from Round 56's enumerated candidates), authorized fix design with exact LOC budget (~2 LOC config + ~30 LOC adversarial test), file list explicitly modified vs explicitly NOT modified, adversarial regression guarantee per .github/copilot-instructions.md, and route_required envelope for Round 58 implement. NEXT: Round 58 (bubbles.implement) lands the 2-LOC config patch (config/smackerel.yaml adds agent_provider_default_model under environments.test; scripts/commands/config.sh line 1123 swaps required_value→env_override_value) plus a new tests/integration/agent_provider_default_test_override_test.go adversarial integration test; then Round 59 (bubbles.test) runs the live-stack BS-002/BS-007/BS-001 trio and on green flips SCOPE-06 DoD #4b/#5b/#6 with #round-59-* evidence anchors.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
       {
         "agent": "bubbles.workflow",
         "phasesExecuted": ["test"],
