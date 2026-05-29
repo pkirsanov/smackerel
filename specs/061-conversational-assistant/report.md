@@ -8524,4 +8524,698 @@ smackerel-test-stub-providers-1         nginx:alpine                     Up (unh
 
 `route_required` → `bubbles.plan` for Round 54. Entry condition: triage `BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER`. Read `internal/assistant/facade.go`, `internal/assistant/scenarios/retrieval_qa/`, `internal/assistant/provenance/gate.go`, `internal/agent/tools/retrieval/`, `config/generated/test.env` (embedder config). Produce options A/B/C/D/E (or a refined subset) with LOC budget, adversarial test plan, and route to `bubbles.implement` for Round 55. Honor the user's verbatim contingency: *"file a new finding back to bubbles.plan and re-route honestly"* — this is the honest re-route.
 
+---
+
+## Round 54 — Defect 3 plan triage (full-delivery iteration 5, convergence loop)
+<a id="round-54-defect3-triage"></a>
+
+**Agent:** `bubbles.plan` (parent-expanded child mode — runtime lacks `runSubagent`)
+**Workflow:** `full-delivery` convergence loop, iteration **5 of 10** under G082 cap
+**Phase:** `plan` (triage of `BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER`)
+**Scope of changes:** report.md (this section), state.json (executionHistory + finding refinement)
+**Production source files modified:** **none** — Round 54 is plan-only
+
+### Forensic evidence (live test stack, verbatim)
+
+#### Evidence 1 — `agent_traces` rows for the two live BS-002 turns
+
+```text
+$ docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel \
+    -c "SELECT trace_id, scenario_id, outcome, started_at FROM agent_traces ORDER BY started_at DESC LIMIT 20;"
+             trace_id              | scenario_id  |        outcome         |          started_at
+-----------------------------------+--------------+------------------------+-------------------------------
+ trace_20260529T191703.454842182_2 | retrieval_qa | input-schema-violation | 2026-05-29 19:17:03.45485+00
+ trace_20260529T191500.429121462_1 | retrieval_qa | input-schema-violation | 2026-05-29 19:15:00.429805+00
+(2 rows)
+```
+
+#### Evidence 2 — `outcome_detail` and `input_envelope` for trace_20260529T191500.429121462_1 (BS-002 happy-path turn)
+
+```text
+$ docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel \
+    -c "SELECT outcome_detail::text, input_envelope::text FROM agent_traces WHERE trace_id = 'trace_20260529T191500.429121462_1';"
+outcome_detail:
+  {"error": "input_schema_violation",
+   "detail": "jsonschema validation failed with 'file:///schema.json#'\n- at '': got null, want object"}
+
+input_envelope:
+  {"source": "telegram",
+   "raw_input": "/ask what is the smackerel project status bs002seed178008203717401",
+   "scenario_id": "retrieval_qa",
+   "confidence_floor": 0}
+```
+
+**Verbatim observation:** the input envelope passed to `executor.Run` contains `source`, `raw_input`, `scenario_id`, `confidence_floor` — **but NO `structured_context` field**. The retrieval_qa scenario's `input_schema` requires an object with `query` and `user_id`; validation receives `null` and fires `OutcomeInputSchemaViolation`.
+
+#### Evidence 3 — retrieval_qa `input_schema` (config/prompt_contracts/retrieval-qa-v1.yaml)
+
+```yaml
+input_schema:
+  type: object
+  required: [ query, user_id ]
+  properties:
+    query: { type: string, minLength: 1 }
+    user_id: { type: string, minLength: 1 }
+```
+
+#### Evidence 4 — capability-layer envelope construction (internal/assistant/facade.go:436)
+
+```go
+// --- Step 4: build envelope + route ---
+env := agent.IntentEnvelope{
+    Source:     msg.Transport,
+    RawInput:   msg.Text,
+    ScenarioID: shortcutScenarioID,
+}
+// ... routing + borderline + BandHigh dispatch ...
+case BandHigh:
+    // ... manifest enable-gate + scenario lookup ...
+    env.Routing = decision
+    result := f.executor.Run(ctx, sc, env)   // ← env.StructuredContext is STILL nil here
+```
+
+`env.StructuredContext` is **never populated** anywhere between the envelope construction (line 436) and the executor dispatch (line 549). It stays nil/empty for every BandHigh-dispatched scenario.
+
+#### Evidence 5 — executor input-schema check (internal/agent/executor.go:333-349)
+
+```go
+// Step (1) — input schema validation (BS-009 A4 mirror at runtime).
+if sc.inputSchema != nil {
+    var inputAny any
+    if len(env.StructuredContext) > 0 {
+        if err := json.Unmarshal(env.StructuredContext, &inputAny); err != nil {
+            // ...
+        }
+    }
+    if err := sc.inputSchema.Validate(inputAny); err != nil {
+        result.Outcome = OutcomeInputSchemaViolation
+        result.OutcomeDetail = map[string]any{
+            "error":  "input_schema_violation",
+            "detail": err.Error(),
+        }
+        return e.finalize(result)
+    }
+}
+```
+
+When `len(env.StructuredContext) == 0`, `inputAny` stays at its zero value (`nil`). The schema declares `type: object` and `required: [query, user_id]` → validation fails with `at '': got null, want object`. The LLM driver is **never called**; latency is 23ms (the time to allocate the result + run JSON-schema validation). The earlier "23.675004 ms latency" recorded in the Round 53 `assistant_turn` slog (BS-002 happy-path turn) is now fully explained.
+
+#### Evidence 6 — assistant_turn slog (Round 53 BS-002 happy-path turn, re-quoted for cross-reference)
+
+```text
+{"time":"2026-05-29T19:15:00.450581475Z","level":"INFO","msg":"assistant_turn",
+ "user_id":"test-user-061-bs002","transport":"telegram",
+ "correlation_id":"1780082037177401",
+ "assistant_turn_id":"asst-1780082100429066762","scenario_id":"retrieval_qa",
+ "top_score":0,"band":"high","status":"saved_as_idea","error_cause":"",
+ "latency_ms":23.675004,
+ "agent_trace_id":"trace-asst-1780082100429066762","body_redacted":true}
+```
+
+Trace from slog (`agent_trace_id`) and trace in `agent_traces` (`trace_20260529T191500.429121462_1`) differ in shape because the slog records the **assistant-side correlation id** while the executor mints its **own monotonic trace_id** at the start of `Run`. Both timestamps (slog `2026-05-29T19:15:00.450581475Z`, table `2026-05-29 19:15:00.429805+00`) align within the same 21ms window — this is the same logical turn observed from both surfaces.
+
+`status:"saved_as_idea"` with `error_cause:""` is consistent with the post-Round-53 routing model: `OutcomeInputSchemaViolation` → `translateOutcomeToErrorCause` returns `ErrNone` (default arm) → `translateFinalToBody` returns `"internal validation failure."` (non-empty) → `translateOutcomeToStatus` returns `StatusUnavailable` → assembler runs but returns empty Sources (Outcome != OK) → provenance gate sees `requires_provenance=true && len(Sources)==0 && Body!=""` → rewrites Body to `CanonicalRefusalBody` + Status to `StatusSavedAsIdea` + clears ErrorCause (the gate's documented behavior). The chain is end-to-end consistent.
+
+### Hypothesis adjudication (Round 53 hypotheses A–E + NEW Hypothesis F)
+
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| A. Explicit-ID dispatch bypasses retrieval-search invocation entirely | **Moot** | Hypothesis assumed retrieval search ran. Reality: executor's Step (1) input-schema check fires BEFORE the agent loop's first turn — the retrieval-search tool is never called regardless of routing path. |
+| B. NoopEmbedder in test config → vector search returns nothing | **Falsified** | Embedder config is correct: `EMBEDDING_MODEL=nomic-embed-text`, `LLM_MODEL=gemma3:4b`, both models loaded in Ollama (Evidence 9 below). Moot for the same reason as A. |
+| C. Seeded artifact via `/api/capture` is not indexed | **Confirmed-but-orthogonal** | True (seeded artifact has `processing_status='failed'`, `embedding IS NULL` per Evidence 8 below), but moot for Defect 3 because retrieval-search is never invoked. Re-filed below as **separate finding `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT`** (cross-cutting substrate concern). |
+| D. LLM does not cite the artifact in the expected format | **Moot** | LLM is never called. |
+| E. Provenance gate `cited_artifact_ids` lookup mismatch | **Moot** | Gate's lookup path is never reached with non-empty citations. |
+| **F. Capability-layer dispatch does not populate `IntentEnvelope.StructuredContext`** | **CONFIRMED root cause** | Evidence 1–5: `agent_traces.outcome = input-schema-violation`; input_envelope row shows no `structured_context` key; facade.go line 436–549 never assigns `env.StructuredContext`; executor Step (1) validates `nil` against the `type: object` schema and fires `OutcomeInputSchemaViolation`. |
+
+### Verdict
+
+**Defect 3 root cause = capability-layer dispatch in `internal/assistant/facade.go` BandHigh path does not populate `agent.IntentEnvelope.StructuredContext` before calling `executor.Run`.** Every scenario whose `input_schema` declares `type: object` with one or more required fields fails immediately at executor Step (1) before any LLM call, tool invocation, or assembler/gate logic runs.
+
+Affected scenarios (all enabled retrieval-band scenarios share this defect):
+
+| Scenario | input_schema required fields | Affected? |
+|---|---|---|
+| `retrieval_qa` | `query`, `user_id` | **Yes** (proven by Evidence 1) |
+| `weather_query` | `raw_query`, `user_id` | **Yes** by code-path identity — same `f.executor.Run(ctx, sc, env)` dispatch. The BS-007 fixture green in earlier rounds is consistent with `agent_traces` containing **zero `weather_query` rows ever** (Evidence 7) — the green leg never actually invoked the executor; it asserted only adapter-composition surface fields, not end-to-end LLM execution. |
+| `notification_schedule` | `user_id`, `raw_query` | **Yes** by code-path identity. |
+
+#### Evidence 7 — agent_traces histogram (proves weather/notification never reach executor either)
+
+```text
+$ docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel \
+    -c "SELECT scenario_id, outcome, count(*) FROM agent_traces GROUP BY scenario_id, outcome;"
+ scenario_id  |        outcome         | count
+--------------+------------------------+-------
+ retrieval_qa | input-schema-violation |     2
+(1 row)
+```
+
+Zero `weather_query` rows. Zero `notification_schedule` rows. The full agent loop has never executed against the live test stack — the only traces ever produced are the two failing BS-002 turns from Round 53. This is consistent with the assertion that all three retrieval-band scenarios share the same dispatch defect, and the earlier "green" weather leg measured only adapter/composition behavior, not full LLM execution. (DoD reconciliation for the weather BS-007 leg's exact assertion shape stays out-of-scope for Defect 3 and is governed by SCOPE-06 DoD #5b's listed-but-unflipped state.)
+
+### Cross-cutting finding (filed separately for future bubbles.bug routing)
+
+#### Evidence 8 — BS-002 seed artifact PG state
+
+```text
+$ docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel \
+    -c "SELECT id, title, embedding IS NOT NULL AS has_emb, processing_status, created_at FROM artifacts ORDER BY created_at DESC LIMIT 15;"
+[... full output captured Round 54; key rows ...]
+ 01KSTJBXZWK8ENDE1ZD5NKDZRM | Weather: home — Partly cloudy ...                | f | failed    | 2026-05-29 19:11:23
+ 01KSTGJDZMFYVS9BCE9C4T9T2P | The smackerel knowledge base project status ... | f | failed    | 2026-05-29 18:39:58
+ 01KSTGJJ2VR9K4ZWSPN0SPKER1 | Inquiry about SmakeR Project Status              | t | processed | 2026-05-29 18:40:03
+ 01KSTGBTAB7DHA4DRH1TQGNC1R | Clear sky — Temperature: 25.3°C ...              | t | processed | 2026-05-29 18:36:22
+```
+
+#### Evidence 9 — Ollama models loaded
+
+```text
+$ docker exec smackerel-test-ollama-1 ollama list
+NAME                       ID              SIZE      MODIFIED
+nomic-embed-text:latest    0a109f422b47    274 MB    47 minutes ago
+gemma3:4b                  a2af6cc3eb7f    3.3 GB    47 minutes ago
+```
+
+#### Evidence 10 — ML sidecar log entry verbatim
+
+```text
+$ docker logs smackerel-test-smackerel-ml-1 2>&1 | grep "Missing required field"
+[... captured Round 54; representative entry ...]
+LLM processing failed ... ValueError: Missing required field: artifact_type
+  File "/app/processor.py", line 178, in extract_structured_content
+```
+
+**Cross-cutting finding (NEW, separate from Defect 3):**
+
+- **ID:** `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT`
+- **Severity:** medium (degrades retrieval quality but not the assistant happy-path — Defect 3 fix unblocks BS-002 even with seeded artifacts having `embedding IS NULL`, because `internal/api/search.go` has a `textSearch` fallback that matches on `content_raw ILIKE` and `to_tsvector` — see `internal/api/search.go:398-413` for the empty-vector → text fallback path)
+- **Root cause:** `ml/app/processor.py:178` raises `ValueError("Missing required field: artifact_type")` when `gemma3:4b` returns structured output without an `artifact_type` field. The degraded-fallback path at `ml/app/processor.py` (LLM unavailable branch) does not catch schema-mismatch ValueErrors; only network/timeout errors trigger fallback.
+- **Owner:** ML sidecar code (`ml/app/processor.py`). Spec 003 (phase2-ingestion) likely owns this surface; would need `bubbles.bug` triage to confirm spec assignment.
+- **Routing:** **Defer** to a separate `bubbles.bug` invocation AFTER spec 061 Defect 3 fix lands and is verified. Filing as a separate finding here per the user's verbatim contingency *"file a new finding back to bubbles.plan and re-route honestly"*.
+- **Why not in-scope for Round 55:** (a) belongs to spec 003 / ML sidecar, not spec 061; (b) Defect 3 fix is sufficient to unblock BS-002 via textSearch fallback; (c) violating artifact-ownership boundaries (Gate G019 / G041) by mutating ml/app/processor.py inside spec 061's convergence loop would be a worse policy violation than filing the finding for separate disposition.
+
+### Round 55 fix design (capability-layer-owned, in scope for spec 061)
+
+**Strategy:** populate `IntentEnvelope.StructuredContext` in `facade.go` BandHigh dispatch immediately before `executor.Run`, with a minimal generic object that satisfies the input_schemas of all three currently-enabled scenarios (retrieval_qa, weather_query, notification_schedule) without per-scenario branching.
+
+**Why a generic object works:** all three input_schemas omit `additionalProperties: false`, so extra fields are permitted. A `{query, raw_query, user_id}` payload satisfies the union of required-field sets without scenario-specific dispatch logic.
+
+**Slash-prefix stripping:** the raw input "/ask what is the smackerel project status bs002seed..." includes the slash command. The structured query field should pass the **post-prefix** text to the LLM so the system prompt sees a clean question. Reuse `LookupShortcut` (already imported in facade.go) to detect the prefix length, then strip it.
+
+**Pseudocode (Round 55 will produce real diff):**
+
+```go
+// Inside BandHigh dispatch, after manifest enable-gate + scenario resolution,
+// BEFORE env.Routing = decision and executor.Run:
+
+if env.StructuredContext == nil {
+    query := strings.TrimSpace(stripShortcutPrefix(msg.Text))
+    ctx := map[string]string{
+        "query":     query,
+        "raw_query": query,
+        "user_id":   msg.UserID,
+    }
+    b, err := json.Marshal(ctx)
+    if err == nil {
+        env.StructuredContext = b
+    }
+}
+env.Routing = decision
+result := f.executor.Run(ctx, sc, env)
+```
+
+**Where to add `stripShortcutPrefix`:** export a small helper from `internal/assistant/shortcuts.go` (which already owns slash-command parsing for `LookupShortcut`). Function signature: `func StripShortcutPrefix(text string) string`. Strips the longest matching `/<word> ` prefix; returns trimmed remainder, or original text if no shortcut matches. Add unit tests for retrieval/weather/notification slash prefixes plus the no-shortcut case.
+
+**Test plan (Round 55 adversarial coverage):**
+
+1. **Unit test `TestFacade_StructuredContextPopulated_RetrievalQA`** (new, in `internal/assistant/facade_test.go`): stub executor records the `env.StructuredContext` it receives; assert it is non-nil JSON with `query`, `raw_query`, `user_id` populated correctly; assert slash prefix `/ask ` is stripped.
+2. **Unit test `TestFacade_StructuredContextPopulated_WeatherQuery`** (new): same shape for `/weather`.
+3. **Unit test `TestFacade_StructuredContextPopulated_NoSlashCommand`** (new): when there is no slash command (free-text routed to a scenario), `query`/`raw_query` equal the trimmed raw input.
+4. **Unit test `TestShortcuts_StripShortcutPrefix`** (new, in `internal/assistant/shortcuts_test.go`): table-driven for `/ask`, `/weather`, `/remind`, no-prefix, prefix-with-extra-whitespace.
+5. **Live BS-002 e2e re-run (Round 56)**: `bash tests/e2e/assistant_bs002_test.sh` end-to-end; assert `status == "thinking"`; verbatim slog and exit code captured in report.md#round-56-* anchor; flip SCOPE-06 DoD #4b only on green.
+
+**Adversarial assertion (Round 55 unit tests will fail if regression reintroduces the bug):**
+
+- Specifically assert `len(env.StructuredContext) > 0` AND `json.Unmarshal(env.StructuredContext, &m)` yields `m["query"]` non-empty. If the helper is removed or the assignment is reverted, these tests fail loudly.
+- Adversarial table-row: stripShortcutPrefix on `/foobar hello` (unrecognized prefix) MUST return the original text verbatim; on `/ask` alone (no body) MUST return `""`; on `/ask   query   trailing` MUST return `query   trailing` (only the prefix is stripped, the body is **not** further normalized except for the leading/trailing trim used in the facade helper).
+
+**Estimated LOC:**
+
+- `internal/assistant/shortcuts.go`: +15 LOC (one helper function with docstring)
+- `internal/assistant/shortcuts_test.go`: +30 LOC (one table-driven test)
+- `internal/assistant/facade.go`: +10 LOC (populate block before executor.Run)
+- `internal/assistant/facade_test.go`: +60 LOC (three new test functions reusing existing `stubExecutor`)
+- **Total: ~115 LOC** (all owned by spec 061; no foreign-spec touch)
+
+**Files NOT touched by Round 55:**
+
+- `internal/agent/executor.go` (foreign-spec — spec 037; the executor's input-schema check is correct, the dispatcher's contract was broken)
+- `internal/assistant/provenance/gate.go` (gate behavior is correct given empty Sources)
+- `internal/agent/tools/retrieval/*` (assembler is correct)
+- `ml/app/processor.py` (filed as separate cross-cutting finding `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT`)
+- `tests/e2e/assistant_bs002_test.sh` (fixture is already adversarial and assertion-correct; it will flip from FAIL to PASS once the dispatch bug is fixed)
+- Any scenario YAML in `config/prompt_contracts/` (the schemas are correct; the dispatcher must satisfy them)
+- Any foreign spec.
+
+### Honest no-flip status
+
+| DoD item | Status | Reason |
+|---|---|---|
+| SCOPE-06 DoD #4b (BS-002 adapter-composition leg) | `[ ]` **unchanged** | Defect 3 still blocks `status == "thinking"`; flipping pre-Round-56 evidence would be Gate G021 fabrication and Gate G041 manipulation. |
+| SCOPE-06 DoD #5b (BS-007 adapter-composition leg) | `[ ]` **unchanged** | Same end-to-end execution gap noted Round 53. |
+| SCOPE-06 DoD #6 (Telegram trailing `sources:` rendering) | `[ ]` **unchanged** | Cannot be verified until BS-002 happy-path produces real citations. |
+| `state.json.completedScopes` | unchanged | No new scopes completed. |
+| `state.json.certification.*` | unchanged (preserved verbatim) | No certification-bearing changes. |
+| `state.json.scopeProgress` | unchanged | No DoD flips. |
+| `state.json.status` | `in_progress` (unchanged) | Spec is mid-convergence (iteration 5 of 10). |
+| `state.json.statusCeiling` | `done` (unchanged) | Full-delivery mode. |
+| `state.json.executionHistory` | **+1 entry** (Round 54 plan triage) | Append-only; this entry documents the root-cause adjudication. |
+| `state.json.execution.unresolvedFindings` | refine `BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER` with precise root cause; add `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` as separate cross-cutting finding routed to `bubbles.bug` (deferred) | Total: +1 net entry. |
+
+### Files modified this round
+
+- `specs/061-conversational-assistant/report.md` (this Round 54 section + anchor `#round-54-defect3-triage`).
+- `specs/061-conversational-assistant/state.json` (Round 54 executionHistory entry; refine Defect 3 finding with confirmed root cause; add `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` as separate finding).
+
+### Files NOT modified this round
+
+- ANY production source file (`internal/`, `cmd/`, `ml/`, `web/`). Round 54 is plan-only.
+- `scopes.md` (no DoD flips).
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`.
+- `certification.*` fields.
+- `completedScopes`, `scopeProgress`, top-level `status`, `statusCeiling`, `workflowMode`.
+- Any foreign spec (037, 044, 054, 058, 060).
+- `internal/deploy/compose_contract_test.go` (no deploy/Compose contract touch).
+- `config/smackerel.yaml` (no SST change; NO-DEFAULTS policy preserved).
+
+### Convergence iteration accounting
+
+- G082 cap: 10 / spec / session. This is iteration **5 of 10** (Round 54 plan triage refines Round 53's Defect-3 finding with the confirmed root cause; it is the planning leg of the same iteration that will deliver via Round 55 implement + Round 56 verify). **5 iterations remain after this round** (i.e., Rounds 55/56 will be iterations 6/7).
+- Spec 061 status: `in_progress` (unchanged).
+- `executionModel`: `parent-expanded-child-mode`.
+
+### Outcome envelope
+
+`route_required` → `bubbles.implement` for Round 55. Entry condition: implement the Round-54-designed `StructuredContext` population in `internal/assistant/facade.go` + `internal/assistant/shortcuts.go`, ship the four unit tests, then route to live BS-002 e2e re-run in Round 56. **Do NOT touch foreign specs (037, 044, 054, 058, 060), `ml/app/processor.py`, scenario YAMLs, or test fixtures.** The cross-cutting finding `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` is deferred to a future `bubbles.bug` invocation AFTER spec 061's Defect 3 verification lands.
+
+## Round 55 — Defect 3 implementation (`bubbles.implement` parent-expanded, full-delivery iteration 6, 2026-05-29) {#round-55-defect3-fix}
+
+**Workflow:** `bubbles.workflow mode: full-delivery` (continuation of Rounds 50–54 convergence loop). Runtime lacks `runSubagent`; this orchestrator parent-expanded `bubbles.implement` for the capability-layer dispatch fix and accompanying unit-test ledger. **G082 cap: iteration 6 of 10 (4 remain).** **G086 auto-continue** persisted from Round 54 `route_required` → Round 55 implement without operator hand-off.
+
+### Round-54 fix design → executed delta
+
+| Round-54 budget | Round-55 actual | Delta |
+|---|---|---|
+| `internal/assistant/shortcuts.go` +15 LOC | +41 LOC (incl. 27-line docstring + behavioral examples) | +26 (docstring depth, no extra logic) |
+| `internal/assistant/facade.go` +10 LOC | +28 LOC (incl. 18-line docstring justifying union-of-required-fields payload) | +18 (docstring depth, no extra branches) |
+| `internal/assistant/shortcuts_test.go` +30 LOC | +63 LOC (23 sub-cases: bodies, bare shortcuts, whitespace normalization, unrecognized prefixes, case-sensitive non-matches, empty inputs) | +33 (adversarial coverage as specified) |
+| `internal/assistant/facade_test.go` +60 LOC | +210 LOC (3 functions × ~70 LOC each, each independently asserts `len(StructuredContext) > 0` AND verifies query/raw_query/user_id post-`json.Unmarshal`) | +150 (independent setup per scenario for isolation + drift resistance) |
+| **TOTAL ~115 LOC** | **+342 LOC across 4 files** | **+227 (documentation depth + adversarial test coverage). Logic surface unchanged from Round-54 design.** |
+
+The logic surface delta is exactly what Round 54 specified: one new exported helper (`StripShortcutPrefix`) + one new conditional population block before `env.Routing = decision`. The LOC overhead is entirely docstring/test-coverage depth, not behavioral expansion.
+
+### Files changed (Round 55)
+
+```text
+git diff --stat internal/assistant/shortcuts.go internal/assistant/facade.go internal/assistant/shortcuts_test.go internal/assistant/facade_test.go
+ internal/assistant/facade.go         |  28 +++++
+ internal/assistant/facade_test.go    | 210 +++++++++++++++++++++++++++++++++++
+ internal/assistant/shortcuts.go      |  41 +++++++
+ internal/assistant/shortcuts_test.go |  63 +++++++++++
+ 4 files changed, 342 insertions(+)
+```
+
+Zero deletions. No foreign spec mutated. No scenario YAML touched. No `ml/app/processor.py` touched. No test fixture touched. No `internal/agent/executor.go` touched (spec 037 boundary respected).
+
+### Code diff evidence — `internal/assistant/facade.go` (insertion before BandHigh dispatch)
+
+```text
+diff --git a/internal/assistant/facade.go b/internal/assistant/facade.go
+--- a/internal/assistant/facade.go
++++ b/internal/assistant/facade.go
+@@ -545,2 +545,30 @@
+                        sc = lookup
+                }
+
++               // Spec 061 Round-55 Defect-3 fix: every executor scenario's
++               // input_schema declares type=object with one or more required
++               // fields; internal/agent/executor.go Step (1) validates nil
++               // StructuredContext as "got null, want object" and fires
++               // OutcomeInputSchemaViolation BEFORE any LLM call, tool
++               // invocation, or assembler/gate logic runs. The capability-
++               // layer dispatch MUST populate a structured_context whose
++               // fields satisfy the union of all v1 scenarios' required-field
++               // sets. All three v1 schemas (retrieval-qa-v1, weather-query-v1,
++               // notification-schedule-v1) omit additionalProperties:false, so
++               // a single {query, raw_query, user_id} payload is generically
++               // compatible without per-scenario branching. The body is the
++               // post-shortcut natural-language tail so the LLM receives clean
++               // text. Only populated when nil so explicit StructuredContext
++               // callers (e.g. structured forms, tests, future programmatic
++               // adapters) are not overridden.
++               if env.StructuredContext == nil {
++                       body := StripShortcutPrefix(msg.Text)
++                       payload := map[string]string{
++                               "query":     body,
++                               "raw_query": body,
++                               "user_id":   msg.UserID,
++                       }
++                       if b, err := json.Marshal(payload); err == nil {
++                               env.StructuredContext = b
++                       }
++               }
++
+                env.Routing = decision
+                result := f.executor.Run(ctx, sc, env)
+```
+
+`encoding/json` was already imported (line 36) before Round 55, so no import edit was required.
+
+### Code diff evidence — `internal/assistant/shortcuts.go` (new exported helper)
+
+```go
+// StripShortcutPrefix returns the natural-language tail after a v1
+// slash-command shortcut, or the trimmed input verbatim if no v1
+// shortcut is present.
+//
+// Spec 061 Round-55 Defect-3 fix: the capability-layer dispatch must
+// hand the executor a clean query string for the structured_context
+// payload that satisfies each scenario's input_schema. The raw
+// msg.Text still carries the slash prefix; this helper strips it.
+//
+// Examples:
+//   - "/ask what is the weather" → "what is the weather"
+//   - "/weather"                 → ""           (bare shortcut, no body)
+//   - "  /remind   tomorrow   "  → "tomorrow"   (whitespace normalized)
+//   - "hello there"              → "hello there"
+//   - "/help anything"           → "/help anything" (not in v1 set)
+//   - ""                         → ""
+//
+// The function is pure and follows the same case-sensitive, first-token
+// matching contract as LookupShortcut. Both the input and the returned
+// body are TrimSpace-normalized so downstream consumers (LLM prompts,
+// schema-validated structured_context) see clean text. Safe for
+// concurrent use.
+func StripShortcutPrefix(text string) string {
+    trimmed := strings.TrimSpace(text)
+    if trimmed == "" {
+        return ""
+    }
+    first := trimmed
+    i := indexAnyWhitespace(trimmed)
+    if i >= 0 {
+        first = trimmed[:i]
+    }
+    if _, ok := SlashShortcuts[first]; !ok {
+        return trimmed
+    }
+    if i < 0 {
+        return ""
+    }
+    return strings.TrimSpace(trimmed[i:])
+}
+```
+
+The helper is intentionally pure (no I/O, no allocation beyond the return string) and re-uses the existing package-private `indexAnyWhitespace` and `SlashShortcuts` invariants so it inherits the v1-frozen vocabulary guarantees asserted by `TestSlashShortcutsClosedVocabulary`.
+
+### Adversarial test surface — `shortcuts_test.go` (23 sub-cases)
+
+`TestStripShortcutPrefix` exercises the helper across four behavioral dimensions:
+
+1. **Body extraction (4 cases)** — each v1 prefix (`/ask`, `/weather`, `/remind`, `/reset`) returns its trailing natural-language body verbatim.
+2. **Bare-shortcut empty body (4 cases)** — each bare prefix returns `""` so the executor receives an empty-string query (still satisfies `type: string` even when `minLength: 1` rejects it; this is the correct schema-violation path for empty `/ask`).
+3. **Whitespace normalization (5 cases)** — leading/trailing spaces stripped; internal whitespace preserved; tab/newline accepted as prefix separators.
+4. **Adversarial non-matches (10 cases)** — unrecognized prefixes (`/foobar`, `/help`, `/asking`, `/askx`), case-sensitive misses (`/Ask`, `/ASK`), plain text (no slash), empty/whitespace-only input — all return the input verbatim (after trim) without stripping anything.
+
+Removing the `StripShortcutPrefix` body and returning the raw input verbatim would make 4 of the 23 sub-cases fail (`/ask with body`, `/weather with body`, `/remind with body`, `/reset with body`), which is the adversarial guarantee required by repo policy. Removing the bare-shortcut clause would flip 4 more sub-cases. The test is not tautological.
+
+### Adversarial test surface — `facade_test.go` (3 new functions)
+
+Three independent test functions, each with its own scenario stub, manifest, router, and captured `IntentEnvelope`:
+
+1. `TestFacade_BandHigh_StructuredContextPopulated_RetrievalQA` — `/ask what is the smackerel project status` → asserts `len(StructuredContext) > 0`, `json.Unmarshal` succeeds, `query == "what is the smackerel project status"`, `raw_query` equals query, `user_id == "u-rqa-1"`.
+2. `TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery` — `/weather barcelona tomorrow` on `transport=web` → asserts `len(StructuredContext) > 0`, `raw_query == "barcelona tomorrow"`, `user_id == "u-wq-1"`.
+3. `TestFacade_BandHigh_StructuredContextPopulated_NoSlashCommand` — plain text `weather in madrid this afternoon` (no slash prefix) → asserts the helper does NOT strip anything from non-shortcut input; `query` preserves the full natural-language string verbatim.
+
+Each test would fail with `StructuredContext is empty; executor.go Step (1) would reject nil as 'got null, want object'` if the Round-55 facade insertion were reverted. This is the precise adversarial check Gate G041 requires.
+
+### Verification gates — executed evidence
+
+#### Gate 1 — `./smackerel.sh format`
+
+```text
+$ ./smackerel.sh format
+[... gofmt sweep across 53 Go files + Python ruff ...]
+53 files left unchanged
+EXIT=0
+```
+
+All four modified files (`shortcuts.go`, `facade.go`, `shortcuts_test.go`, `facade_test.go`) were idempotent under `gofmt -s -w` (tab indentation preserved, no trailing whitespace, no import reordering required).
+
+#### Gate 2 — `./smackerel.sh check` (go vet + scenario-lint + SST drift)
+
+```text
+$ ./smackerel.sh check
+[... go vet across all packages ...]
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2916476 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 8, rejected: 0
+scenario-lint: OK
+EXIT=0
+```
+
+No go vet warnings introduced. SST drift clean (no `config/smackerel.yaml` touch). Scenario-lint clean (no YAML touch). NO-DEFAULTS SST policy preserved.
+
+#### Gate 3 — `./smackerel.sh test unit --go` (full suite)
+
+```text
+$ ./smackerel.sh test unit --go
+[... 100+ packages, all OK or cached ...]
+ok      github.com/smackerel/smackerel/internal/assistant       0.045s
+[... continues ...]
++ echo '[go-unit] go test ./... finished OK'
+[go-unit] go test ./... finished OK
+EXIT=0
+```
+
+Full Go unit gate green. No regression in any existing test (including `TestFacadeBS005NoTransportBranching`, `TestFacadeResetClearsContextStore`, `TestLookupShortcut`, `TestSlashShortcutsClosedVocabulary` — all PASS).
+
+#### Gate 4 — Targeted Round-55 test verbose output (verbatim PASS lines)
+
+```text
+$ go test -count=1 -run 'TestStripShortcutPrefix|TestFacade_BandHigh_StructuredContextPopulated' -v ./internal/assistant/
+=== RUN   TestFacade_BandHigh_StructuredContextPopulated_RetrievalQA
+=== RUN   TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery
+=== RUN   TestFacade_BandHigh_StructuredContextPopulated_NoSlashCommand
+=== RUN   TestStripShortcutPrefix
+[... 23 sub-cases scheduled ...]
+--- PASS: TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery (0.00s)
+--- PASS: TestFacade_BandHigh_StructuredContextPopulated_NoSlashCommand (0.00s)
+--- PASS: TestFacade_BandHigh_StructuredContextPopulated_RetrievalQA (0.00s)
+--- PASS: TestStripShortcutPrefix (0.00s)
+    --- PASS: TestStripShortcutPrefix//ask_with_body (0.00s)
+    --- PASS: TestStripShortcutPrefix/whitespace_only (0.00s)
+    --- PASS: TestStripShortcutPrefix/empty_string (0.00s)
+    --- PASS: TestStripShortcutPrefix/mixed_inner_whitespace (0.00s)
+    --- PASS: TestStripShortcutPrefix/trailing_whitespace (0.00s)
+    --- PASS: TestStripShortcutPrefix/tab_between_prefix_and_body (0.00s)
+    --- PASS: TestStripShortcutPrefix//weather_with_body (0.00s)
+    --- PASS: TestStripShortcutPrefix/leading_whitespace (0.00s)
+    --- PASS: TestStripShortcutPrefix/plain_text_with_surrounding_ws (0.00s)
+    --- PASS: TestStripShortcutPrefix/plain_text (0.00s)
+    --- PASS: TestStripShortcutPrefix//ASK_all_caps (0.00s)
+    --- PASS: TestStripShortcutPrefix//Ask_uppercase_A (0.00s)
+    --- PASS: TestStripShortcutPrefix//help_unrecognized (0.00s)
+    --- PASS: TestStripShortcutPrefix//asking_longer_command (0.00s)
+    --- PASS: TestStripShortcutPrefix//foobar_unrecognized (0.00s)
+    --- PASS: TestStripShortcutPrefix/newline_between_prefix_and_body (0.00s)
+    --- PASS: TestStripShortcutPrefix//reset_bare (0.00s)
+    --- PASS: TestStripShortcutPrefix//remind_bare (0.00s)
+    --- PASS: TestStripShortcutPrefix//weather_bare (0.00s)
+    --- PASS: TestStripShortcutPrefix//ask_bare (0.00s)
+    --- PASS: TestStripShortcutPrefix//reset_with_body (0.00s)
+    --- PASS: TestStripShortcutPrefix//remind_with_body (0.00s)
+    --- PASS: TestStripShortcutPrefix//askx_no_whitespace (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant       0.045s
+EXIT=0
+```
+
+**Test count for the four new test functions: 4 functions / 26 PASS cases (3 facade scenarios + 23 sub-cases of `TestStripShortcutPrefix`). Zero failures. Zero skips.**
+
+### What the unit gate proves vs. what Round 56 must prove
+
+| Claim | Proven in Round 55 (unit) | Requires Round 56 (live stack) |
+|---|---|---|
+| `StripShortcutPrefix` returns correct body for all v1 prefixes | ✅ 23 sub-cases | — |
+| `StripShortcutPrefix` does NOT strip non-shortcut input | ✅ 10 adversarial sub-cases | — |
+| `facade.go` BandHigh dispatch populates `env.StructuredContext` with a non-nil JSON object | ✅ 3 scenario tests | — |
+| The JSON object contains `{query, raw_query, user_id}` with the right values | ✅ 3 `json.Unmarshal` assertions | — |
+| The populated payload satisfies `retrieval-qa-v1` `input_schema` at executor Step (1) | — | ✅ Real `internal/agent/executor.go` call against live `pgvector` + Ollama |
+| The populated payload satisfies `weather-query-v1` `input_schema` at executor Step (1) | — | ✅ Real BS-007 e2e against live stack |
+| BS-002 retrieval returns non-empty `Sources` from `internal/api/search.go:398-413` textSearch fallback when vector returns empty | — | ✅ Live BS-002 e2e re-run (Round 56) |
+| The cross-cutting `ml/app/processor.py:178` `ValueError("Missing required field: artifact_type")` does NOT block BS-002 (because textSearch fallback finds the seeded artifact via ILIKE even without an embedding) | — | ✅ Live BS-002 e2e + `agent_traces` + `artifacts` table inspection (Round 56) |
+
+The unit gate proves the dispatch defect is mechanically fixed. The live-stack gate must prove the fix is sufficient given the real schema validator, real `pgvector` search, and the deferred ML extraction issue.
+
+### Affected scopes and explicit non-flip status
+
+| Scope | DoD item | Round-55 status | Why no flip |
+|---|---|---|---|
+| SCOPE-06 | DoD #4b (BS-002 live-stack returns sources) | **NOT FLIPPED** | Requires Round-56 live e2e green; Round 55 only proves dispatch-layer correctness. |
+| SCOPE-06 | DoD #5b (BS-007 live-stack returns weather result) | **NOT FLIPPED** | Same — requires live e2e green. |
+| SCOPE-06 | DoD #6 (trailing sources block present in BS-002 response body) | **NOT FLIPPED** | Same — requires live e2e green. |
+| SCOPE-04 | All shortcut-related DoD items | **NOT FLIPPED** | Round 55 ADDED an exported helper to an existing v1-frozen-vocabulary file; behavioral surface of `LookupShortcut` and `SlashShortcuts` map is unchanged. No existing DoD claim depends on the helper. |
+
+Round 55 strictly adheres to the user's pre-authorized rule: **"NO DoD flips without live evidence anchors"**. The next opportunity to flip BS-002 DoD #4b is Round 56 after BS-002 e2e returns green against the live test stack.
+
+### Cross-cutting finding status (preserved verbatim from Round 54)
+
+`BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` remains DEFERRED. Round 55 did NOT touch `ml/app/processor.py`. The finding will be filed via a future `bubbles.bug` invocation AFTER Round 56 confirms the dispatch fix is sufficient for BS-002 to pass (most likely outcome: textSearch fallback in `internal/api/search.go:398-413` finds the seeded artifact via ILIKE/to_tsvector even when the ML pipeline fails to embed it, so BS-002 passes; the ML extraction issue then becomes a separate quality-of-search finding to file as a bug against the appropriate ML spec).
+
+### Files explicitly NOT touched (preserved verbatim from Round 54)
+
+- `internal/agent/executor.go` (foreign spec 037).
+- `internal/agent/router.go` (spec 037).
+- `internal/agent/scenario.go` (spec 037).
+- Any file under `internal/assistant/provenance/` (correct already per Rounds 50-52).
+- `ml/app/processor.py` (deferred cross-cutting finding).
+- Any scenario YAML in `config/prompt_contracts/` (schemas are correct — the dispatch was wrong, not the schemas).
+- `tests/e2e/assistant_bs002_test.sh` (adversarial fixture is correct; Round 56 will re-run it unchanged).
+- Any foreign spec folder (037, 044, 054, 058, 060).
+- `internal/deploy/compose_contract_test.go` (deploy/Compose contract untouched; G028 NO-DEFAULTS preserved).
+- `config/smackerel.yaml` (no SST change; NO-DEFAULTS policy preserved).
+- `scopes.md` (no DoD flips — see table above).
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json` (Round 55 is implementation-only).
+- `certification.*` fields in `state.json` (preserved verbatim).
+
+### Convergence iteration accounting
+
+- G082 cap: 10 / spec / session. This is iteration **6 of 10** (Round 55 implements the Round-54-designed fix). **4 iterations remain after this round** (i.e., Rounds 56/57/58/59 are iterations 7/8/9/10 in the budget).
+- Spec 061 status: `in_progress` (unchanged).
+- `executionModel`: `parent-expanded-child-mode` (runtime lacks `runSubagent`).
+
+### Outcome envelope
+
+`route_required` → `bubbles.workflow mode: full-delivery` continuation for Round 56. Entry condition: rebuild the test stack with the Round-55 binary, re-run BS-002 (and BS-007 as regression) against the live stack, query `agent_traces` for new rows confirming `outcome=OK` (or `scenario_no_results` with valid `Sources`), and on green flip SCOPE-06 DoD #4b/#5b/#6 with `#round-56-*` evidence anchors. **Do NOT touch foreign specs, scenario YAMLs, `ml/app/processor.py`, or test fixtures.** If BS-002 still fails despite a clean Round-55 unit gate, the next finding routes to `bubbles.plan` for triage (NOT a silent patch). If the ML extraction issue surfaces as the new failure mode, file `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` as a separate bug AFTER Round 56 lands.
+
+---
+
+## Round 56 — live BS-002 verify against Round-55 binary {#round-56-defect3-verify}
+
+**Agent:** `bubbles.workflow` (parent-expanded child mode — runtime lacks `runSubagent`)
+**Phase:** `test` (live-stack verify leg of finding-owned closure for `BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER` / Defect 3)
+**Convergence iteration:** 7 of 10 (3 remain after this round)
+**Outcome:** `route_required` → `bubbles.plan` for NEW finding `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE` (Defect 3 dispatch fix verified working; deeper layered bug surfaced per user's verbatim contingency).
+
+### Honesty contingency invoked (verbatim user rule)
+
+> "If Defect 3 fix reveals a deeper bug, file a new finding back to `bubbles.plan` and re-route honestly. **Do NOT silently patch outside the authorized fix scope.**"
+
+Round 56 verification triggered this contingency: the dispatch fix WORKED (proven mechanically below) but a deeper, layered failure mode (LLM provider cannot meet the 5s scenario budget on the available hardware) is now the binding blocker. Per the rule, this round does NOT mutate the scenario YAML, the test fixture, or any production source — it ONLY documents evidence and routes the new finding to `bubbles.plan` (Round 57).
+
+### Verification protocol (executed)
+
+| Step | Command | Outcome |
+|------|---------|---------|
+| 1. Rebuild test image with Round-55 binary | `./smackerel.sh --env test build` | EXIT=0; new image `sha256:fb121ae8563cce44757e54ff29e10e8996387593ddcbd72eab9abda49d256cda` produced; build cache hits except COPY+build steps. |
+| 2. Bring up test stack | `./smackerel.sh --env test up` | All 7 containers up healthy after ~80s (core, ml, postgres, nats, ollama, jaeger; stub-providers transient-unhealthy as before, not on BS-002 path). |
+| 3. Pull required Ollama models (volume wiped by prior teardown) | `docker exec smackerel-test-ollama-1 ollama pull nomic-embed-text && ollama pull gemma3:4b` | Both pulled successfully; verified via `ollama list`. |
+| 4. Drive BS-002 e2e | `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` | Exit=1 (assertion failure). Test harness unchanged; fixture is the same adversarial seed pattern Round 53 used. |
+| 5. Query `agent_traces` for outcome detail | `docker exec smackerel-test-postgres-1 psql -U smackerel -d smackerel -c "SELECT scenario_id, outcome, outcome_detail, latency_ms FROM agent_traces ORDER BY started_at DESC LIMIT 5;"` | Single row returned; see verbatim output below. |
+| 6. Measure cold-then-warm gemma3:4b inference latency | `time curl -sS --max-time 120 -X POST .../api/generate` with `prompt="What is 2+2? Answer in one word."` and `num_predict=16` | **71 seconds wall-clock for a 2-token warm response.** See verbatim output below. |
+| 7. Teardown test stack | `./smackerel.sh --env test clean smart` | EXIT=0; named volumes preserved per smart-clean contract. |
+
+### Verbatim live-stack evidence
+
+**Slog scrape (assistant_turn line — captured during BS-002 run):**
+
+```json
+{"time":"2026-05-29T19:52:16.783817435Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs002","transport":"telegram","correlation_id":"178008432111964","assistant_turn_id":"asst-1780084331769427451","scenario_id":"retrieval_qa","top_score":0,"band":"high","status":"saved_as_idea","error_cause":"provider_unavailable","latency_ms":5047.810859,"agent_trace_id":"trace-asst-1780084331769427451","body_redacted":true}
+```
+
+**`agent_traces` table row (verbatim):**
+
+```text
+ scenario_id  | outcome |                             outcome_detail                              | latency_ms
+--------------+---------+-------------------------------------------------------------------------+------------
+ retrieval_qa | timeout | {"reason": "provider_did_not_respond_before_deadline", "deadline_s": 5} |       5000
+(1 row)
+```
+
+**Direct Ollama latency measurement (warm; gemma3:4b already in RAM from prior warmup attempt):**
+
+```text
+response: Four
+total_duration_ms: 70935.87596
+load_duration_ms: 457.847627
+prompt_eval_count: 21 tok
+eval_count: 2 tok
+
+real    1m10.971s
+```
+
+### Side-by-side: Round 53 (pre-fix) vs Round 56 (post-fix)
+
+| Dimension | Round 53 (before Round-55 dispatch fix) | Round 56 (after Round-55 dispatch fix) | Interpretation |
+|-----------|-----------------------------------------|----------------------------------------|----------------|
+| `outcome` in agent_traces | `input-schema-violation` | `timeout` | Step (1) input-schema check NOW PASSES. The dispatch defect is GONE. |
+| `outcome_detail` | `{"error":"input_schema_violation","detail":"...got null, want object"}` | `{"reason":"provider_did_not_respond_before_deadline","deadline_s":5}` | Schema now sees a valid object payload (proves Round-55 `StructuredContext` population is wired correctly end-to-end). |
+| `latency_ms` | 23.675ms (impossibly fast for any LLM call) | 5000.000ms (deadline-bounded; LLM call was attempted and exceeded the budget) | Real provider invocation now occurs. |
+| `status` (slog) | `saved_as_idea` (provenance gate refused empty Sources) | `saved_as_idea` (provenance gate refused empty Sources) | Same fall-through symptom but DIFFERENT root cause. |
+| `error_cause` (slog) | `input_schema_violation` (rendered) | `provider_unavailable` (rendered from `timeout`) | Failure layer moved from dispatch → provider. |
+
+### Defect 3 fix verdict: ✅ MECHANICALLY VERIFIED
+
+The Round-55 dispatch fix is end-to-end working in the live stack. `executor.go` Step (1) input-schema validation no longer fires on `retrieval_qa` (it would have produced `input-schema-violation@23ms`, identical to the Round-53 baseline, if the `StructuredContext` JSON were nil or empty). The 5047ms slog latency + 5000ms `agent_traces` deadline both prove the request now reaches the real provider invocation path; the failure is downstream of dispatch.
+
+### NEW finding (filed back to bubbles.plan per user's contingency)
+
+**Name:** `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE`
+**Severity:** Blocking BS-002 / SCOPE-06 DoD #4b/#5b/#6 happy-path on this hardware class.
+**Owner:** spec 061 (planning + scenario contract). Not a foreign-spec issue.
+**Mechanical root cause:** `config/prompt_contracts/retrieval-qa-v1.yaml` declares `timeout_ms: 5000`, but warm gemma3:4b inference on the current dev/test hardware takes ~71 seconds for a trivial 2-token response (load_duration 458ms — model IS resident in RAM, so this is steady-state inference time, NOT cold-start load). The 5s budget is structurally unreachable; the deadline always fires before any synthesis can complete, leaving `resp.Sources` empty, which then propagates to provenance-gate refusal and `status=saved_as_idea`.
+**Cross-scenario impact:** All three v1 retrieval-band scenarios share short timeouts (`retrieval-qa-v1.yaml: timeout_ms=5000`, `per_tool_timeout_ms=2500`). `weather-query-v1` and `notification-schedule-v1` would exhibit identical timeout-on-real-LLM behavior the moment they are exercised end-to-end (BS-007 already routes through the synthesis path per Round 13-15 history, so this same finding likely retroactively explains historical BS-007 fragility).
+**Evidence anchors:** `#round-56-defect3-verify` (this section). The 71-second warm-LLM measurement is the single most decisive data point — it cannot be argued away as cold-start or coincidence.
+**NOT in scope for silent fix:** Per user's verbatim rule, this round does NOT modify the scenario YAML, the test fixture, the LLM model selection, the warmup logic, or any provider wiring. Routing to `bubbles.plan` (Round 57) for honest design triage of the fix path.
+
+### Files modified this round (this section only — narrative-only; ZERO production-code change)
+
+- `specs/061-conversational-assistant/report.md` (this `#round-56-defect3-verify` section; ~180 narrative lines + ~30 lines of evidence blocks)
+- `specs/061-conversational-assistant/state.json` (Round 56 history entry + `execution.activeAgent`/`currentPhase`/`lastUpdatedAt` bump)
+
+### Files explicitly NOT modified this round
+
+- `config/prompt_contracts/retrieval-qa-v1.yaml` (the natural target — but routing through `bubbles.plan` first per user rule)
+- `tests/e2e/assistant_bs002_test.sh` (fixture is correct; the harness reveals the bug honestly)
+- `internal/assistant/*.go` (Round-55 fix is verified — no further capability-layer change needed for Defect 3)
+- `internal/agent/*.go` (foreign spec 037)
+- `ml/app/processor.py` (cross-cutting finding `BS-002-ML-LLM-EXTRACTION-FAILS-SHORT-TEXT` still deferred)
+- `cmd/core/main.go` / `cmd/core/wiring*.go` (no warmup-strategy change without plan approval)
+- `scopes.md` DoD checkboxes (NO flips — DoD #4b/#5b/#6 remain unchecked because BS-002 still fails on the live stack; flipping them on a still-failing test would be Gate G021 fabrication / Gate G041 manipulation)
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`, `certification.*` (preserved verbatim)
+- Any foreign spec folder (037, 044, 054, 058, 060)
+
+### SCOPE-06 status this round
+
+In Progress. SCOPE-06 DoD line items remain:
+
+- #1, #2, #3, #4a: green from earlier rounds (unchanged)
+- #4b (BS-002 live happy-path): STILL BLOCKED — Defect 3 dispatch defect is fixed, but the LLM provider timeout finding now blocks the happy-path on this hardware
+- #5b (BS-007 live happy-path): unverified this round (BS-007 not re-run since BS-002 surfaced the binding blocker first; same scenario timeout class likely applies)
+- #6 (trailing-sources gate on happy-path): blocked transitively on #4b/#5b
+
+### Convergence accounting
+
+- G082 cap: 10 / spec / session. This is iteration **7 of 10**. **3 iterations remain after this round** (Rounds 57/58/59 = iterations 8/9/10).
+- Spec 061 status: `in_progress` (unchanged).
+- `executionModel`: `parent-expanded-child-mode` (runtime lacks `runSubagent`).
+
+### Outcome envelope
+
+`route_required` → `bubbles.plan` for triage of `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE`. Entry condition for Round 57: read this section + the verbatim 71s gemma3:4b measurement, design a fix that does NOT silently patch the scenario YAML (because that would mask either a model-selection mismatch or a hardware-tier mismatch with the design intent of "fast retrieval Q&A under 5s"), and present the design tradeoff to the user for authorization before any implementation. **Implementation candidates the plan triage must evaluate (NOT decide unilaterally):** (a) raise `retrieval-qa-v1.yaml` `timeout_ms` to a value that matches the actual model latency on the test-tier hardware (e.g., 90000ms) while keeping the 5s production target as a separate constraint; (b) swap to a faster model in the test profile (e.g., `gemma2:2b` or `llama3.2:1b`) via SST `assistant.skills.retrieval.llm_model`; (c) add a synchronous model-warmup gate in the test stack's `up` lifecycle so the BS-002 harness doesn't time out on a not-yet-resident model; (d) split scenario contract so test environments use a "test-tier" timeout while prod retains 5s; (e) document hardware requirements explicitly in `docs/Operations.md` and mark the BS-002 test as `//go:build !slow_hw` or similar — least preferred because it hides the issue. The plan triage owner picks 1 or 2 candidates and routes back to `bubbles.workflow` for Round 58 implementation.
+
+---
+
 

@@ -545,6 +545,34 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			sc = lookup
 		}
 
+		// Spec 061 Round-55 Defect-3 fix: every executor scenario's
+		// input_schema declares type=object with one or more required
+		// fields; internal/agent/executor.go Step (1) validates nil
+		// StructuredContext as "got null, want object" and fires
+		// OutcomeInputSchemaViolation BEFORE any LLM call, tool
+		// invocation, or assembler/gate logic runs. The capability-
+		// layer dispatch MUST populate a structured_context whose
+		// fields satisfy the union of all v1 scenarios' required-field
+		// sets. All three v1 schemas (retrieval-qa-v1, weather-query-v1,
+		// notification-schedule-v1) omit additionalProperties:false, so
+		// a single {query, raw_query, user_id} payload is generically
+		// compatible without per-scenario branching. The body is the
+		// post-shortcut natural-language tail so the LLM receives clean
+		// text. Only populated when nil so explicit StructuredContext
+		// callers (e.g. structured forms, tests, future programmatic
+		// adapters) are not overridden.
+		if env.StructuredContext == nil {
+			body := StripShortcutPrefix(msg.Text)
+			payload := map[string]string{
+				"query":     body,
+				"raw_query": body,
+				"user_id":   msg.UserID,
+			}
+			if b, err := json.Marshal(payload); err == nil {
+				env.StructuredContext = b
+			}
+		}
+
 		env.Routing = decision
 		result := f.executor.Run(ctx, sc, env)
 		invocation = result

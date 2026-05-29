@@ -26,10 +26,10 @@ const testWebhookSecret = "test-webhook-secret-deadbeef-cafebabe-12345"
 // recordingDispatcher captures every dispatch call so tests can assert
 // the §17.3 dispatch matrix without spinning up a real Bot.
 type recordingDispatcher struct {
-	mu               sync.Mutex
-	messages         []*tgbotapi.Message
-	messageUpdateIDs []int
-	callbacks        []*tgbotapi.CallbackQuery
+	mu                sync.Mutex
+	messages          []*tgbotapi.Message
+	messageUpdateIDs  []int
+	callbacks         []*tgbotapi.CallbackQuery
 	callbackUpdateIDs []int
 }
 
