@@ -478,3 +478,60 @@ state.json status MUST NOT be set to 'done'.
 
 ### Completion Statement (workflow certification phase)
 Certification BLOCKED. 8 true-blocker classes routed (4 to `bubbles.plan`, 2 to `bubbles.workflow` fixup turn, 2 to `operator`). 3 cross-spec packets (PKT-063-A/B/C) remain carry-forward (planning-ceiling-compatible). No state-transition performed. Foreign-spec substrate untouched. 14 operator working-tree files untouched. Spec 063 NOT added to git index. Next required action: operator to triage routing decisions for B1 (clean tree) and B6 (deps), then `bubbles.plan` to fix B2/B3/B5, then `bubbles.workflow` to fix B4/B7/B8 and re-run certification.
+
+---
+
+## Phase: plan (fixup 2026-05-29)
+
+### Summary
+
+Focused planning fixup turn dispatched by operator (anti-fab-strict envelope) to address state-transition-guard true-blocker classes B2, B3, B5 in spec 063. Working tree was clean (46 operator WIP files stashed as `stash@{0}: operator-WIP-20260529`), satisfying Gate G073 source-edit lockout. No certification, status, or `certifiedAt` mutation performed. Phases executed this turn: `["plan-fixup"]` only.
+
+### Findings Addressed
+
+- **B2 (G041 — scope status casing).** Fixed all 13 scope `**Status:** [ ] Not started` → `**Status:** [ ] Not Started` in `scopes.md`. Verification: `grep -c "Not started" → 0`, `grep -c "Not Started" → 13`.
+- **B3 (Check 8A — missing regression E2E DoD + Test Plan rows).** For runtime-behavior scopes SCOPE-01..11 (11 scopes), added per scope: (a) 1 new Test Plan table row starting with `| Regression E2E |` citing the scope-specific persistent regression e2e test path, (b) 2 new DoD checkbox items — `- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in <path> and pass against the live stack` and `- [ ] Broader E2E regression suite passes (./smackerel.sh test e2e) after this scope ships`. For SCOPE-12 (CI wiring) and SCOPE-13 (docs) added `**Scope-Kind:** ci-config` and `**Scope-Kind:** docs-only` respectively — both are the canonical opt-out classes recognised by `state-transition-guard.sh` Check 8A v4.1.0 (lines 2210-2216). Rationale for opt-out vs added rows: SCOPE-12 is CI-config-evidence-only (no runtime behavior produced) and SCOPE-13 is docs-only — fabricating an `e2e-api` test path for either would be a fabrication-adjacent move; the opt-out is the honest path. Verification: `grep -cE '^- \[(x| )\] Scenario-specific E2E regression tests? for (EVERY|every) new/changed/fixed behavior' → 11`; `grep -cE '^- \[(x| )\] Broader E2E regression suite passes' → 11`; `grep -c '^| Regression E2E' → 11`; `grep -c '^\*\*Scope-Kind:\*\*' → 2`. Total guard-satisfying rows added: 33 DoD items + 11 Test Plan rows + 2 Scope-Kind headers across 13 scopes.
+- **B5 (G060 — policySnapshot.tdd).** Changed `state.json.policySnapshot.tdd` from `{"mode": "scenario-first", "source": "repo-default"}` to `{"mode": "off", "source": "planning-only-no-test-work"}` to match `planningOnly: true` semantics (planning-only spec has no test work; tdd mode must be `off`).
+
+### Artifact Lint Evidence
+
+```
+~/smackerel $ timeout 60 bash .github/bubbles/scripts/artifact-lint.sh specs/063-knowledge-ai-enrichment
+...
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+EXIT=0
+```
+
+### Artifacts Modified This Turn
+
+- `specs/063-knowledge-ai-enrichment/scopes.md` — 13 status-casing edits (B2) + 11 Test Plan rows + 22 DoD checkbox items + 2 Scope-Kind opt-out headers (B3).
+- `specs/063-knowledge-ai-enrichment/state.json` — `policySnapshot.tdd` mode + source field (B5); executionHistory append (this entry).
+- `specs/063-knowledge-ai-enrichment/report.md` — this section append.
+
+### Unresolved Findings (Carry-Forward — Not Plan-Agent's Surface)
+
+- **B1 (Gate G073 — dirty working tree at promotion time).** Operator-owned. Working tree IS clean this turn (stash applied pre-dispatch) but G073 will re-evaluate at the workflow re-attempt; if operator restores WIP before workflow rerun, this re-triggers.
+- **B4 (workflow-owned).** Re-classified by dispatch as workflow's domain.
+- **B6 (cross-spec dep readiness).** Operator-owned routing decision (specs 021/025 publisher packets PKT-063-A/B/C).
+- **B7 (workflow-owned).**
+- **B8 (workflow-owned).**
+
+### Honesty Declarations
+
+- Did NOT modify: `status`, `certifiedAt`, `certification.status`, `certification.completedAt`, `certification.evidenceRef`, `certification.certifiedCompletedPhases`. Workflow-agent surfaces remain untouched.
+- Did NOT future-date any timestamp. executionHistory `runStartedAt`/`runEndedAt` use `2026-05-29T09:00:00Z` (operator clock).
+- Did NOT modify: `spec.md`, `design.md`, `scenario-manifest.json`, `uservalidation.md`. Foreign-spec substrate (021/025/026/037/054/060/061/076) untouched. Source code, tests, migrations, configs untouched. Stashed operator WIP untouched.
+- The 2 Scope-Kind opt-outs for SCOPE-12/13 are explicit guard-recognised exemption classes, not fabrication. Adding fake `e2e-api` test paths for a docs-only or ci-config scope would itself be a fabrication; the opt-out is the canonical honest path.
+- artifact-lint PASS captured above. State-transition-guard NOT re-run this turn (B1/B4/B6/B7/B8 expected to still fail per dispatch — those are not this turn's surface). If artifact-lint had failed, this turn would have stopped without making the change "pass" by mutating something unrelated.
+
+### Completion Statement (plan-fixup phase)
+
+Plan-fixup turn complete for B2 + B3 + B5 in spec 063. Artifact lint PASSES. Next required owner: `bubbles.workflow` (fixup-only, anti-fab-strict) to address B4/B7/B8 and re-run state-transition-guard for re-attempt at `specs_hardened` promotion (operator must independently clear B1 + B6 first).
