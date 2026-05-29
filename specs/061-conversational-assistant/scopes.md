@@ -166,6 +166,8 @@ graph TD
   S05 --> S06
   S05 --> S07
   S05 --> S08
+  S06 --> S06a[SCOPE-06a Multi-path SST model-leak remediation]
+  S06a --> S09
   S06 --> S09
   S07 --> S09
   S08 --> S09
@@ -215,6 +217,7 @@ All open items from spec §13 + design §13 are resolved at planning time:
 | SCOPE-04 | **(REWORKED)** Capability facade + borderline post-processor + context store + capture-as-fallback | Done | SCOPE-01, SCOPE-02, SCOPE-03 | **Yes** (facade p95 envelope; Gate G026) | BS-005 |
 | SCOPE-05 | Telegram reference adapter (v1) | In Progress | SCOPE-02, SCOPE-04 | No | BS-001, BS-010 |
 | SCOPE-06 | Retrieval Q&A scenario + tool handler activated end-to-end (v1 #1) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 5s; Gate G026) | BS-002, BS-007 (end-to-end) |
+| SCOPE-06a | **(NEW 2026-05-30)** BS-002/BS-007 multi-path SST model-leak remediation + test-tier warmup (Options 3A+3C+3D per report.md §8) | Not Started | SCOPE-01, SCOPE-06 (DoD #1–3, #4a, #5a, #7) | No | Unblocks BS-002, BS-007 (DoD #4b/#5b/#6 under SCOPE-06) |
 | SCOPE-07 | Weather scenario + tool handler activated end-to-end (v1 #2) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 3s; Gate G026) | BS-003, BS-006 |
 | SCOPE-08 | Notifications scenario + tool handlers + confirm-card state machine activated end-to-end (v1 #3) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packets to spec 054 + spec 060 (write scope) | **Yes** (scenario p95 + confirm-timeout under load; Gate G026) | BS-004 |
 | SCOPE-09a | **(SPLIT)** Telemetry substrate: metrics + logs + Grafana fragment + runbook + OTel SDK init (3 SST keys, `go.mod` deps, `cmd/core/wiring.go`, `internal/assistant/tracing/`, jaeger sidecar, root span + in-memory exporter test) | Done | SCOPE-06, SCOPE-07, SCOPE-08 | No | — |
@@ -608,6 +611,105 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 ---
 
+## SCOPE-06a — BS-002/BS-007 multi-path SST model-leak remediation + test-tier warmup
+
+**Summary:** Remediate finding `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK` (report.md §round-59 / §8). Round 58 Option 2 only redirected one of five model env consumers (`AGENT_PROVIDER_DEFAULT_MODEL`); the synthesis path in `ml/app/nats_client.py:265` still reads `LLM_MODEL` → resolves to production `gemma3:4b` → `OllamaException model not found` → `error_cause=provider_unavailable` → SCOPE-06 DoD #4b/#5b/#6 RED on every live-stack run. This scope lands the plan-triage decision adopted from report.md §8: **Options 3A + 3C + 3D combined** (complete SST override coverage for ALL test-tier model env vars + fixture warmup reads `$AGENT_PROVIDER_DEFAULT_MODEL` + stack-lifecycle post-`up` pre-warm of the test model). 3B (synthesis-path refactor) is REJECTED as out-of-scope (would amend `ml/` sidecar contract + require a design.md pass — not in spec 061). 3E (pull `gemma3:4b` into test ollama) is REJECTED as it defeats the Round 57 separation-of-models premise.
+
+**Adopted options + rationale:**
+
+- **3A — Complete SST override coverage** (cost ~8 LOC): Adds the missing four test-tier overrides to `config/smackerel.yaml` (`environments.test.llm_model`, `.ollama_model`, `.agent_provider_vision_model`, `.ollama_vision_model`) and wraps `AGENT_PROVIDER_VISION_MODEL` in `scripts/commands/config.sh:1142` with `env_override_value` (currently `required_value` — does not honor env overrides). `LLM_MODEL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL` already use `env_override_value` (lines 582/585/586) so only the YAML values are missing. Side-effect: vision-tier code paths in test will run the test model (which may not support vision); mitigation — no v1 spec 061 scenario uses vision, so risk is bounded to future vision-tier scopes which must validate their test model selection.
+- **3C — Fixture warmup reads SST** (cost ~4 LOC): `tests/e2e/assistant_bs002_test.sh:104-108` and `tests/e2e/assistant_bs007_test.sh:60-64` currently `docker exec … ollama pull gemma3:4b` literally. Patch to read `$AGENT_PROVIDER_DEFAULT_MODEL` (or `$OLLAMA_TEST_MODEL` if defined) from the resolved test env so warmup tracks SST.
+- **3D — Test-tier pre-warm in stack lifecycle** (cost ~8 LOC): Add a post-`up` warmup hook to `scripts/runtime/stack.sh` (or the closest equivalent in `scripts/commands/up.sh`) that calls `/api/generate` with `num_predict: 1` against the resolved `$AGENT_PROVIDER_DEFAULT_MODEL` once Ollama is healthy. Eliminates the ~9.4s cold-load that was exceeding the 5s scenario budget even after Option 2 routed env vars correctly.
+
+**Out-of-scope (explicitly rejected per report.md §8):**
+
+- **3B** — Refactoring `ml/app/nats_client.py:265` to read `AGENT_PROVIDER_FAST_MODEL` (or a new `AGENT_PROVIDER_SYNTHESIS_MODEL`). Out-of-scope: amends `ml/` sidecar contract; requires design.md update; spec 061 is in implement/test phase, not design.
+- **3E** — Pulling `gemma3:4b` into the test ollama alongside the test model. Rejected: defeats the Round 57 plan-triage premise (test-tier must exercise the override path to catch production-tier regressions).
+
+**Status:** Not Started
+**Depends On:** SCOPE-01 (SST pipeline), SCOPE-06 (capability layer DoD #1–#3, #4a, #5a, #7 already Done — only #4b/#5b/#6 are blocked by the multi-path leak this scope unblocks). NO new cross-spec packets required (Round 58's `AGENT_PROVIDER_DEFAULT_MODEL` override was already mechanically additive; this scope continues the same pattern).
+**Unblocks:** SCOPE-06 DoD #4b (BS-002 adapter-composition leg), #5b (BS-007 adapter-composition leg), #6 (Telegram trailing-sources rendering). Those three remain owned by SCOPE-06 and are re-verified by SCOPE-06 owner after this scope's DoD #6 (live-stack PASS) lands.
+**Foundation flag:** `foundation: false` (concrete remediation; no new capability surface).
+
+### Gherkin Scenarios (owned)
+
+- **MULTI-PATH-MODEL-SST-COVERAGE — Test env redirects every model consumer**
+
+  Given the `test` environment has overrides for `llm_model`, `ollama_model`, `agent_provider_default_model`, `agent_provider_fast_model`, `agent_provider_vision_model`, `ollama_model`, and `ollama_vision_model` in `config/smackerel.yaml`
+  When `./smackerel.sh --env test config generate` runs
+  Then the resolved `config/generated/test.env` contains the test-tier model in EVERY model env var
+  And no occurrence of the production model literal (`gemma3:4b`) appears in `config/generated/test.env`
+  And startup of `smackerel-test-core` + `smackerel-test-ml` reads the test model via SST without any code edit.
+
+- **WARMUP-TRACKS-SST — Fixture warmup pulls the SST-resolved model**
+
+  Given `tests/e2e/assistant_bs002_test.sh` and `tests/e2e/assistant_bs007_test.sh` have been patched to read `$AGENT_PROVIDER_DEFAULT_MODEL` from the test environment
+  When the test runs under `E2E_STACK_MANAGED=1`
+  Then the `ollama pull` warmup step pulls the SST-resolved test model (not a literal `gemma3:4b`)
+  And the test fails loud if `$AGENT_PROVIDER_DEFAULT_MODEL` is unset or empty.
+
+- **POST-UP-PREWARM — Test stack warms the default model before tests fire**
+
+  Given the test stack has just been brought up via `./smackerel.sh --env test up`
+  When the post-`up` hook in `scripts/runtime/stack.sh` runs after Ollama health is green
+  Then a single `/api/generate` call with `num_predict: 1` against `$AGENT_PROVIDER_DEFAULT_MODEL` completes
+  And subsequent BS-002 / BS-007 `/ask` requests observe `load_duration_ms < 50` on the second-and-later calls (model resident, not cold-loaded).
+
+### Implementation Plan
+
+1. **3A — `config/smackerel.yaml`:** Under `environments.test:` add the four missing model overrides (`llm_model`, `ollama_model`, `agent_provider_vision_model`, `ollama_vision_model`) pointing at the same test model already used by `agent_provider_default_model` per Round 58. Honor the smackerel-no-defaults policy: literal values (no `${VAR:-...}` form), fail loud if any missing under `--env test`.
+2. **3A — `scripts/commands/config.sh:1142`:** Replace `AGENT_PROVIDER_VISION_MODEL="$(required_value agent.provider_routing.vision.model)"` with `AGENT_PROVIDER_VISION_MODEL="$(env_override_value agent_provider_vision_model agent.provider_routing.vision.model)"` so the test-tier override propagates.
+3. **3A — `internal/config/`:** Extend the test-env validator (`internal/config/validate.go` or equivalent) so missing-key behaviour FAILS LOUD when the `test` environment selects but any of the five model overrides is absent. Add a unit test that asserts each missing key produces a named, non-empty error.
+4. **3C — `tests/e2e/assistant_bs002_test.sh:104-108` + `tests/e2e/assistant_bs007_test.sh:60-64`:** Replace literal `gemma3:4b` warmup with `: "${AGENT_PROVIDER_DEFAULT_MODEL:?AGENT_PROVIDER_DEFAULT_MODEL must be exported into the test fixture env}"; docker exec smackerel-test-ollama-1 ollama pull "$AGENT_PROVIDER_DEFAULT_MODEL"`. No fallback; missing env aborts the test with a named message.
+5. **3D — `scripts/runtime/stack.sh` (or `scripts/commands/up.sh` if that's the actual post-up hook surface):** After Ollama health-check passes for the `--env test` run, invoke once: `curl --max-time 30 -sS -X POST -d '{"model":"'"$AGENT_PROVIDER_DEFAULT_MODEL"'","prompt":"warm","stream":false,"options":{"num_predict":1}}' "$OLLAMA_TEST_URL/api/generate"`. Treat non-2xx as a hard failure (fail-loud). Skip the hook entirely for `--env dev` (production-like local dev does not pre-warm).
+6. **Regenerate generated envs + verify:** `./smackerel.sh --env test config generate`; `grep -E 'gemma3:4b' config/generated/test.env` MUST return zero lines.
+7. **Re-run live-stack BS-002 + BS-007** under `E2E_STACK_MANAGED=1` — both MUST PASS within the 5s scenario budget without raising `retrieval-qa-v1.yaml.timeout_ms` (which would mask the production invariant per report.md §round-59 finding row 6).
+8. **Reverify SCOPE-06 DoD #4b/#5b/#6:** SCOPE-06 owner re-validates the three previously-blocked DoD items and flips checkboxes there. SCOPE-06a does NOT mutate SCOPE-06's checkboxes — it provides the precondition.
+
+### Test Plan
+
+| Test type | Category | File / location | Description | Command | Live system | Maps to DoD |
+|-----------|----------|-----------------|-------------|---------|-------------|-------------|
+| Unit (Go) | `unit` | `internal/config/validate_test.go::TestValidate_TestEnv_MissingModelOverride_FailsLoud_*` (one sub-test per of the five model keys) | Adversarial: load `test` env with each of the 5 model keys individually removed; validator MUST return a named non-empty error referencing the missing key. | `./smackerel.sh test unit` | No | DoD #1, #3 |
+| Unit (Go) | `unit` | `internal/config/validate_test.go::TestValidate_TestEnv_NoProductionModelLeak` | Adversarial: load resolved test env; assert `gemma3:4b` literal does not appear in ANY model-typed config field. Would fail today before 3A lands. | `./smackerel.sh test unit` | No | DoD #2 |
+| Functional (Bash) | `functional` | `scripts/lib/test/config_test.sh::test_test_env_model_overrides_complete` (or new file under `scripts/lib/test/`) | Run `./smackerel.sh --env test config generate`; `grep` for `gemma3:4b` in `config/generated/test.env` returns empty; `grep -E '^(LLM_MODEL\|OLLAMA_MODEL\|OLLAMA_VISION_MODEL\|AGENT_PROVIDER_DEFAULT_MODEL\|AGENT_PROVIDER_FAST_MODEL\|AGENT_PROVIDER_VISION_MODEL)=' config/generated/test.env` returns exactly 6 non-empty lines all valued at the test model. | `./smackerel.sh test unit` | No | DoD #2, #4 |
+| Functional (Bash) | `functional` | `scripts/lib/test/stack_warmup_test.sh::test_post_up_prewarm_invoked` | Adversarial: with `AGENT_PROVIDER_DEFAULT_MODEL` unset, the post-up hook MUST abort with a named error; with it set, the hook MUST emit one `/api/generate` line in stack.sh log and exit 0. | `./smackerel.sh test unit` | No | DoD #5 |
+| Integration (ml/) | `integration` | `ml/tests/test_nats_client_model_resolution.py::test_synthesis_handler_uses_test_model_under_test_env` | `nats_client.py` synthesis handler invoked with `LLM_MODEL` set from resolved test.env; assert `ollama.generate` was called with the test model, NOT `gemma3:4b`. Proves the synthesis path now traverses the SST-overridden env. | `./smackerel.sh test integration` | Yes (test PG + test ollama) | DoD #4 |
+| Regression E2E (BS-002) | `e2e-api` | `tests/e2e/assistant_bs002_test.sh` (re-run with 3C warmup patch applied) | Live-stack `/ask` returns `status=retrieval_ok`, `error_cause=null`, `len(.sources) > 0` within the 5s `retrieval-qa-v1` budget. Persistent regression for BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK. | `./smackerel.sh test e2e` | Yes (full test stack) | DoD #6 |
+| Regression E2E (BS-007) | `e2e-api` | `tests/e2e/assistant_bs007_test.sh` (re-run with 3C warmup patch applied) | Live-stack `/ask` forced graph-drift returns `status=saved_as_idea`, `error_cause=missing_provenance`, `CaptureRoute=true` within the 5s budget. Persistent regression for the same finding. | `./smackerel.sh test e2e` | Yes (full test stack) | DoD #6 |
+| Consumer-trace (grep) | `functional` | inline command in DoD item #7 | After 3A lands, `grep -RnE '"gemma3:4b"\|gemma3:4b' tests/e2e/ scripts/runtime/ scripts/commands/ config/smackerel.yaml config/generated/test.env` returns zero matches (other than allowlisted documentation in `docs/` or `report.md` evidence quoting). | inline | No | DoD #7 |
+
+### Definition of Done
+
+**Core items:**
+
+- [x] **3A.1 (yaml)** — `config/smackerel.yaml::environments.test` declares non-empty literal values for `llm_model`, `ollama_model`, `agent_provider_default_model`, `agent_provider_fast_model`, `agent_provider_vision_model`, `ollama_model`, `ollama_vision_model` — all five model overrides honoring smackerel-no-defaults (no `${VAR:-...}` fallback form anywhere). → Evidence: [report.md#scope-06a-yaml-overrides]
+- [x] **3A.2 (config.sh)** — `scripts/commands/config.sh:1142` `AGENT_PROVIDER_VISION_MODEL` switched from `required_value` to `env_override_value`; the other four model env vars confirmed already on `env_override_value`. Diff captured in evidence. → Evidence: [report.md#scope-06a-config-sh]
+- [x] **3A.3 (validator)** — Go validator FAILS LOUD on each missing model key under `--env test`; unit test `TestValidate_TestEnv_MissingModelOverride_FailsLoud_*` passes for each of the five keys (adversarial coverage). → Evidence: [report.md#scope-06a-validator]
+- [x] **3A.4 (no-leak proof)** — After `./smackerel.sh --env test config generate`, `grep 'gemma3:4b' config/generated/test.env` returns zero lines; functional test `test_test_env_model_overrides_complete` passes. → Evidence: [report.md#scope-06a-no-leak-grep]
+- [x] **3C (warmup tracks SST)** — `tests/e2e/assistant_bs002_test.sh` and `assistant_bs007_test.sh` read `$AGENT_PROVIDER_DEFAULT_MODEL` for the `ollama pull` warmup; missing/empty env aborts the test with a named error (no silent default). → Evidence: [report.md#scope-06a-warmup-fixtures]
+- [x] **3D (post-up pre-warm)** — `scripts/runtime/stack.sh` (or actual post-up hook) invokes one `/api/generate` (num_predict=1) against `$AGENT_PROVIDER_DEFAULT_MODEL` after Ollama health, for `--env test` only; functional test `test_post_up_prewarm_invoked` passes (both the unset-env adversarial and the happy-path branches). → Evidence: [report.md#scope-06a-prewarm-hook]
+- [ ] **Live-stack RE-RUN PASS** — `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` AND `… assistant_bs007_test.sh` both exit 0 within the 5s `retrieval-qa-v1.yaml.timeout_ms` budget on the test stack (no budget increase). Production-budget invariant preserved (timeout_ms unchanged in `config/prompt_contracts/retrieval-qa-v1.yaml`). → Evidence: [report.md#scope-06a-live-stack-pass] *(deferred to `bubbles.test`; see report.md “Items deferred to `bubbles.test`” under the SCOPE-06a evidence section)*
+- [ ] **Consumer-trace clean** — `grep -RnE 'gemma3:4b' tests/e2e/ scripts/runtime/ scripts/commands/ config/smackerel.yaml config/generated/test.env` returns zero non-doc matches; any remaining matches must be in `docs/` or `specs/` evidence quoting only. → Evidence: [report.md#scope-06a-consumer-trace] *(deferred to `bubbles.test`)*
+- [ ] **Synthesis-path SST proof** — `ml/tests/test_nats_client_model_resolution.py::test_synthesis_handler_uses_test_model_under_test_env` integration test PASSES — proves `ml/app/nats_client.py:265` resolves the synthesis model from the SST-overridden `LLM_MODEL` (and not the production literal). This is the contract proof for the Round 59 root-cause. → Evidence: [report.md#scope-06a-synthesis-path-proof] *(deferred to `bubbles.test`)*
+- [ ] **SCOPE-06 unblock note** — `report.md#scope-06a-unblock-note` records that SCOPE-06 DoD #4b/#5b/#6 are now executable, names SCOPE-06 owner as next agent, and attaches the live-stack PASS evidence. SCOPE-06 owner re-verifies and flips SCOPE-06 DoD #4b/#5b/#6 in a SEPARATE bubbles.implement round (SCOPE-06a does NOT mutate SCOPE-06 checkboxes). → Evidence: [report.md#scope-06a-unblock-note] *(deferred to `bubbles.test`)*
+
+**Build Quality Gate (grouped):**
+
+- [x] Zero warnings; lint + format clean (`./smackerel.sh lint`, `./smackerel.sh format --check`); artifact lint clean (`.github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant`); no new TODO/FIXME; docs updated (`docs/Testing.md` test-tier model section + `docs/Development.md` `--env test` config note) where required. → Evidence: [report.md#scope-06a-build-quality]
+
+### DoD Ordering (sequential — each gates the next)
+
+1. 3A.1 → 3A.2 → 3A.3 → 3A.4 (SST coverage must be complete + validated BEFORE anything reads it)
+2. 3C (fixture warmup) AND 3D (post-up pre-warm) — independent of each other; both depend on 3A.4
+3. Synthesis-path SST proof (depends on 3A.4 — proves the synthesis path traverses the override)
+4. Live-stack RE-RUN PASS (depends on 3A.4 + 3C + 3D + synthesis-path proof)
+5. Consumer-trace clean (depends on 3A + 3C — proves nothing was missed)
+6. SCOPE-06 unblock note (depends on Live-stack RE-RUN PASS)
+7. Build Quality Gate (final)
+
+---
+
 ## SCOPE-07 — Weather skill (v1 #2)
 
 **Summary:** Implement `internal/assistant/skills/weather/` per design §5.2 — `Provider` abstraction with one v1 concrete provider (open-meteo or compatible), LRU cache keyed on `(provider, location, forecast_window)` with TTL from SST, failure mode → `ErrProviderUnavailable` + offer-to-capture confirm card, slot extraction for location with disambiguation prompt on missing slot. PASETO scope `assistant.skill.weather` from SCOPE-05 catalog packet. Weather provider API key managed via Infisical per spec 150.
@@ -902,14 +1004,15 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 ## Planning-Phase Counts (anti-fabrication anchor)
 
-- **Scopes:** 10
-- **DoD items total (Core + Build Quality Gate):** 84
+- **Scopes:** 11 (10 original + SCOPE-06a added 2026-05-30 for BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK triage)
+- **DoD items total (Core + Build Quality Gate):** 95 (84 original + 10 core + 1 BQG for SCOPE-06a)
   - SCOPE-01: 6 core + 1 BQG = 7
   - SCOPE-02: 6 core + 1 BQG = 7
   - SCOPE-03: 6 core + 1 BQG = 7
   - SCOPE-04: 12 core + 1 BQG = 13 (REWORKED 2026-05-28)
   - SCOPE-05: 11 core + 1 BQG = 12
   - SCOPE-06: 7 core + 1 BQG = 8 *(legacy paths — see Downstream-Path Supersession Note in prelude; design.md §10 authoritative)*
+  - SCOPE-06a: 10 core + 1 BQG = 11 *(new 2026-05-30 — BS-002/BS-007 multi-path model-leak remediation; report.md §round-59 + §8)*
   - SCOPE-07: 9 core + 1 BQG = 10 *(legacy paths — same supersession note; Round 18 added DoD #9 production-safety guard per design §18.3)*
   - SCOPE-08: 8 core + 1 BQG = 9 *(legacy paths — same supersession note; confirm-card state machine now scoped here per design §5.4)*
   - SCOPE-09: 5 core + 1 BQG = 6

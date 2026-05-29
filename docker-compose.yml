@@ -228,6 +228,11 @@ services:
       - no-new-privileges:true
     ports:
       - "127.0.0.1:${OLLAMA_HOST_PORT}:${OLLAMA_CONTAINER_PORT}"
+    environment:
+      # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix). Source: SST
+      # infrastructure.ollama.keep_alive (with infrastructure.ollama.test.keep_alive
+      # override for the test env). Fail-loud per smackerel-no-defaults.
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:?OLLAMA_KEEP_ALIVE must be set by config generate (infrastructure.ollama.keep_alive)}
     volumes:
       - ollama-data:/root/.ollama
     profiles:

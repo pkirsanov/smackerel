@@ -564,6 +564,10 @@ if [[ "$TARGET_ENV" == "test" ]]; then
   OLLAMA_TEST_REQUEST_TOP_K="$(required_value infrastructure.ollama.test.request_top_k)"
   OLLAMA_TEST_REQUEST_SEED="$(required_value infrastructure.ollama.test.request_seed)"
   OLLAMA_TEST_REQUEST_NUM_PREDICT="$(required_value infrastructure.ollama.test.request_num_predict)"
+  # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix).
+  OLLAMA_KEEP_ALIVE="$(required_value infrastructure.ollama.test.keep_alive)"
+  OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT="$(required_value infrastructure.ollama.test.prewarm_warmup_num_predict)"
+  OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS="$(required_value infrastructure.ollama.test.prewarm_warmup_second_call_max_ms)"
 else
   OLLAMA_IMAGE="$(required_value infrastructure.ollama.image)"
   OLLAMA_TEST_MODEL=""
@@ -573,6 +577,12 @@ else
   OLLAMA_TEST_REQUEST_TOP_K=""
   OLLAMA_TEST_REQUEST_SEED=""
   OLLAMA_TEST_REQUEST_NUM_PREDICT=""
+  # Spec 061 SCOPE-06a Round 65 — non-test envs use the upstream default
+  # keep_alive ("5m"). Warmup-budget knobs are emitted empty (the prewarm
+  # hook never runs outside the test env per smackerel.sh).
+  OLLAMA_KEEP_ALIVE="$(required_value infrastructure.ollama.keep_alive)"
+  OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT=""
+  OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=""
 fi
 LLM_PROVIDER="$(required_value llm.provider)"
 # Spec 045 BUG-045-001 — LLM model selections are per-environment overridable.
@@ -1139,7 +1149,12 @@ AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provi
 # environments.<env>.agent_provider_fast_model in config/smackerel.yaml.
 AGENT_PROVIDER_FAST_MODEL="$(env_override_value agent_provider_fast_model agent.provider_routing.fast.model)"
 AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.provider)"
-AGENT_PROVIDER_VISION_MODEL="$(required_value agent.provider_routing.vision.model)"
+# Spec 061 SCOPE-06a — vision model now uses env_override_value so the
+# test env can pin away from the production literal (`gemma3:4b`) and
+# eliminate the multi-path model-leak surfaced by
+# BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK. Dev / home-lab /
+# prod fall back to the base agent.provider_routing.vision.model.
+AGENT_PROVIDER_VISION_MODEL="$(env_override_value agent_provider_vision_model agent.provider_routing.vision.model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 AGENT_PROVIDER_OCR_MODEL="$(required_value agent.provider_routing.ocr.model)"
 
@@ -1331,6 +1346,9 @@ OLLAMA_TEST_REQUEST_TOP_P=${OLLAMA_TEST_REQUEST_TOP_P}
 OLLAMA_TEST_REQUEST_TOP_K=${OLLAMA_TEST_REQUEST_TOP_K}
 OLLAMA_TEST_REQUEST_SEED=${OLLAMA_TEST_REQUEST_SEED}
 OLLAMA_TEST_REQUEST_NUM_PREDICT=${OLLAMA_TEST_REQUEST_NUM_PREDICT}
+OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}
+OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT=${OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT}
+OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=${OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS}
 ENABLE_OLLAMA=${OLLAMA_ENABLED}
 DATABASE_URL=${DATABASE_URL}
 NATS_URL=${NATS_URL}

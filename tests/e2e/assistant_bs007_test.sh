@@ -57,11 +57,18 @@ QUERY_NONCE="qzqz${NONCE}xyzunmatchable"
 SINCE_TS="$(date --utc +%Y-%m-%dT%H:%M:%S)"
 
 # --- LLM warmup so the first /ask invocation does not blow the budget --
-echo "--- LLM warmup: priming gemma3:4b inference ---"
+# Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK) —
+# warmup MUST read the SST-resolved test-tier default model from the
+# generated env file; missing/empty value aborts the test with a named error.
+AGENT_PROVIDER_DEFAULT_MODEL="$(smackerel_env_value "$ENV_FILE" "AGENT_PROVIDER_DEFAULT_MODEL")"
+if [ -z "$AGENT_PROVIDER_DEFAULT_MODEL" ]; then
+  e2e_fail "BS-007: AGENT_PROVIDER_DEFAULT_MODEL missing/empty in $ENV_FILE (spec 061 SCOPE-06a; regenerate via './smackerel.sh --env test config generate')"
+fi
+echo "--- LLM warmup: priming $AGENT_PROVIDER_DEFAULT_MODEL inference ---"
 curl -s -o /dev/null --max-time 60 \
   -X POST \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemma3:4b","prompt":"hi","stream":false,"options":{"num_predict":4}}' \
+  -d "{\"model\":\"$AGENT_PROVIDER_DEFAULT_MODEL\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":4}}" \
   "http://127.0.0.1:47004/api/generate" || true
 
 PAYLOAD=$(cat <<JSON

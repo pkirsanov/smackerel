@@ -1257,6 +1257,13 @@ infrastructure:
     # Hub tags API on every integration run so a future yanked tag fails
     # loudly before the test stack tries to start.
     image: ollama/ollama:0.23.2
+    # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix) — Ollama OLLAMA_KEEP_ALIVE
+    # controls how long the daemon retains a loaded model in memory after a
+    # request completes. Upstream default is "5m"; "-1" means "never unload".
+    # Dev/home-lab/prod use the upstream default ("5m"); the test env overrides
+    # to "-1" via infrastructure.ollama.test.keep_alive so the prewarmed model
+    # stays resident for the full BS-002/BS-007 retrieval-qa-v1 budget window.
+    keep_alive: "5m"
     test:
       image: ollama/ollama:0.23.2
       model: qwen2.5:0.5b-instruct
@@ -1268,6 +1275,20 @@ infrastructure:
       request_top_k: 1
       request_seed: 42
       request_num_predict: 256
+      # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix) — pin the loaded model in
+      # Ollama memory for the entire test run so the cold-context cost paid
+      # by the first /api/generate call is never re-paid by the live
+      # retrieval-qa-v1 call (which has timeout_ms=5000).
+      keep_alive: "-1"
+      # Sustained warmup config (Option (a) of the D4 hybrid). The prewarm hook
+      # in scripts/runtime/stack.sh issues TWO consecutive /api/generate calls
+      # with num_predict=prewarm_warmup_num_predict so the second call exercises
+      # real inference past the cold-context phase. The hook fails loud if the
+      # second call's latency exceeds prewarm_warmup_second_call_max_ms — that
+      # would mean warmup did not achieve sustained warmth and BS-002 against
+      # the 5000ms retrieval-qa-v1 budget would inevitably regress.
+      prewarm_warmup_num_predict: 64
+      prewarm_warmup_second_call_max_ms: 3000
 
 environments:
   dev:
@@ -1324,6 +1345,18 @@ environments:
     # "default") fits within timeout_ms=5000 on test hardware. Dev / home-lab
     # / prod keep gemma3:4b via the base agent.provider_routing.default.model.
     agent_provider_default_model: "qwen2.5:0.5b-instruct"
+    # Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK) —
+    # the test env MUST override every model env var so no consumer (Go
+    # core, ml sidecar synthesis path, fixture warmup, prewarm hook)
+    # silently falls back to the production literal `gemma3:4b`. All four
+    # values pin to the same small qwen test model that
+    # agent_provider_default_model / agent_provider_fast_model already
+    # use. Vision is bounded to the same model (no v1 spec 061 scenario
+    # exercises vision; future vision-tier scopes must reselect).
+    llm_model: "qwen2.5:0.5b-instruct"
+    ollama_model: "qwen2.5:0.5b-instruct"
+    agent_provider_vision_model: "qwen2.5:0.5b-instruct"
+    ollama_vision_model: "qwen2.5:0.5b-instruct"
     ml_processing_degraded_fallback_enabled: true
     qf_decisions_enabled: true
     qf_decisions_base_url: "http://qf-e2e-runner:45003"
