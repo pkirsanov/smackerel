@@ -100,7 +100,7 @@ Packets are documented here for spec 063's lifecycle; the orchestrator (bubbles.
 
 ## Scope 01: SST Keys + Config Validation
 
-**Status:** [ ] Not started | **Foundation:** true | **Depends On:** None
+**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** None
 
 ### Use Cases (Gherkin)
 
@@ -146,6 +146,7 @@ Use case: SCN-063-CFG-02 — All keys present resolves cleanly
 | unit | `internal/config/enrichment_test.go` | Each required key absent → `[F063-SST-MISSING]` error citing field name | design §10 |
 | unit adversarial | same | `daily_token_budget: 0` rejected; `confidence_floor: 1.5` rejected; `cap_reset_timezone: "invalid/tz"` rejected | smackerel-no-defaults |
 | unit | same | All keys present → validator returns nil; struct populated with expected typed values | SCN-063-CFG-02 |
+| Regression E2E | `tests/e2e/enrichment_config_regression_e2e_test.sh` | Regression: persistent scenario-specific E2E coverage for SCN-063-CFG-01/02 — startup aborts on missing `enrichment.*` keys; all-keys-present resolves cleanly against the live stack config-validation path | SCN-063-CFG-01/02 |
 
 ### Definition of Done
 
@@ -154,13 +155,15 @@ Use case: SCN-063-CFG-02 — All keys present resolves cleanly
 - [ ] Zero `os.Getenv(..., "fallback")`, zero `${VAR:-default}`, zero `if cfg.X == 0 { cfg.X = N }` in `internal/config/enrichment.go`
 - [ ] `enrichment:` block in `config/smackerel.yaml` matches design §10 key set 1:1 (lint check)
 - [ ] Build Quality (build/lint/format/unit) green; evidence captured per [bubbles-evidence-capture](../../.github/skills/bubbles-evidence-capture/SKILL.md) (PII-redacted)
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_config_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping recorded in `scenario-manifest.json` (SCN-063-CFG-01/02)
 
 ---
 
 ## Scope 02: Migration 045 — Enrichment Tables + INFERRED Edges Index
 
-**Status:** [ ] Not started | **Foundation:** true | **Depends On:** SCOPE-01
+**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-01
 
 ### Use Cases (Gherkin)
 
@@ -196,6 +199,7 @@ Use case: SCN-063-MIG-02 — CHECK constraints reject invalid values
 | integration | `internal/db/migrations/migration_045_test.go` | Migration applies; tables exist with expected columns | SCN-063-MIG-01 |
 | integration adversarial | same | INSERTs violating each CHECK constraint rejected (parent_kind, decision, confidence range) | SCN-063-MIG-02 |
 | integration | same | After migration, `SELECT COUNT(*) FROM edges` unchanged; existing concept_pages/alerts rows untouched (heuristic-untouched guarantee) | design §7 |
+| Regression E2E | `tests/e2e/enrichment_migration_regression_e2e_test.sh` | Regression: persistent scenario-specific E2E coverage for SCN-063-MIG-01/02 — live stack migration apply, table presence assertions, CHECK-constraint adversarial inserts, edges row-count snapshot | SCN-063-MIG-01/02 |
 
 ### Definition of Done
 
@@ -204,13 +208,15 @@ Use case: SCN-063-MIG-02 — CHECK constraints reject invalid values
 - [ ] Partial index `idx_edges_type_inferred` exists and covers `INFERRED_%` filter
 - [ ] Zero mutations to existing tables (verified by row-count snapshot before/after)
 - [ ] Build Quality green; integration evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_migration_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json` (SCN-063-MIG-01/02)
 
 ---
 
 ## Scope 03: `EnrichmentProducer` Foundation + 7 Architecture Tests
 
-**Status:** [ ] Not started | **Foundation:** true | **Depends On:** SCOPE-02
+**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-02
 
 ### Use Cases (Gherkin)
 
@@ -252,6 +258,7 @@ Use case: SCN-063-ARCH-01..07 — Architecture invariants from design §13
 | unit | same | TestNoNotificationCall — import-graph asserts `internal/knowledge/enrichment/` does NOT import `internal/notification/` | design §13 |
 | unit | same | TestRefusalCopyConstants — golden-file comparison of `refusal.go` constants against UX §14.F canonical strings | design §13 |
 | unit adversarial | each arch test | `t.Run("would_catch_regression", ...)` sub-test constructs the forbidden pattern in tempdir/in-memory fixture and asserts gate trips | design §13 |
+| Regression E2E | `tests/e2e/enrichment_foundation_regression_e2e_test.sh` | Regression: persistent scenario-specific E2E coverage for SCN-063-FOUND-01 + SCN-063-ARCH-01..07 — live stack boot proves the EnrichmentProducer registry wires the scheduler and all 7 architecture invariants remain green in the running binary | SCN-063-FOUND-01, SCN-063-ARCH-01..07 |
 
 ### Definition of Done
 
@@ -261,13 +268,15 @@ Use case: SCN-063-ARCH-01..07 — Architecture invariants from design §13
 - [ ] `ProvenanceRecord` ULID minting verified deterministic
 - [ ] SST zero-defaults: no inline producer names or subject strings outside `nats_subjects.go` constants
 - [ ] Build Quality green; evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_foundation_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json` (SCN-063-FOUND-01, SCN-063-ARCH-01..07)
 
 ---
 
 ## Scope 04: Token-Budget Ledger Gate (UX §14.E)
 
-**Status:** [ ] Not started | **Foundation:** true | **Depends On:** SCOPE-03
+**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-03
 
 ### Use Cases (Gherkin)
 
@@ -311,6 +320,7 @@ Use case: SCN-063-BUDGET-04 — Calendar-day reset
 | unit adversarial | same | Cache invalidation: a stale 30s cache MUST NOT permit a job that would push the live ledger past hard cap (test mutates ledger out-of-band and asserts next Admit reads fresh value after invalidation) | design §11 |
 | integration | `token_budget_integration_test.go` | Calendar-day rollover in injected TZ → next-day ledger empty → PROCEED | SCN-063-BUDGET-04 |
 | integration adversarial | same | Concurrent Admit calls under hard-cap pressure never over-admit (Postgres row-count assertion after 100 parallel Admit attempts) | NFR-2 |
+| Regression E2E | `tests/e2e/enrichment_budget_regression_e2e_test.sh` | Regression: persistent scenario-specific E2E coverage for SCN-063-BUDGET-01..04 — live stack budget Gate.Admit PROCEED/DOWNGRADE/REFUSE transitions + calendar-day rollover behavior | SCN-063-BUDGET-01..04 |
 
 ### Definition of Done
 
@@ -320,13 +330,15 @@ Use case: SCN-063-BUDGET-04 — Calendar-day reset
 - [ ] Prometheus counters `enrichment_token_consumed_total`, `enrichment_budget_decision_total{outcome}` registered
 - [ ] SST zero-defaults: `daily_token_budget` and `cap_reset_timezone` read from SST; 80%/100% thresholds are design-§11 documented constants
 - [ ] Build Quality green; evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_budget_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 05: Refusal Contract + Min-Sources Gate + Counters (UX §14.F)
 
-**Status:** [ ] Not started | **Foundation:** true | **Depends On:** SCOPE-04
+**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-04
 
 ### Use Cases (Gherkin)
 
@@ -361,6 +373,7 @@ Use case: SCN-063-REFUSE-02 — Closed-vocabulary refusal taxonomy
 | unit | same | `enrichment_refusal_total{producer,reason}` increments on Record() | NFR-3 |
 | unit | same | Refusal copy constants match UX §14.F canonical strings byte-for-byte (golden file) | design §13 |
 | integration | `min_sources_gate_test.go` | Sub-floor retrieval → LLM NOT invoked (assert via test-double LLM expecting zero calls); empty cited_*_ids returned | SCN-063-REFUSE-01 |
+| Regression E2E | `tests/e2e/enrichment_refusal_regression_e2e_test.sh` | Regression: persistent scenario-specific E2E coverage for SCN-063-REFUSE-01/02 — live stack min-sources gate skips LLM + closed-vocabulary refusal taxonomy + UX §14.F canonical copy parity | SCN-063-REFUSE-01/02 |
 
 ### Definition of Done
 
@@ -370,13 +383,15 @@ Use case: SCN-063-REFUSE-02 — Closed-vocabulary refusal taxonomy
 - [ ] Prometheus counter increments verified
 - [ ] SST zero-defaults: `min_sources_required` read from SST, no inline literal
 - [ ] Build Quality green; evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_refusal_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 06: `ResynthesisProducer` (R-1/2/3/11)
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-001, 002, 003
 
@@ -406,6 +421,7 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 | integration | same | Backlog of 500 triggers drained oldest-first, capped at per_tick_budget per tick, total ≤ backlog_cap | SCN-063-003 |
 | integration adversarial | same | 30-day offline simulation: zero `internal/notification/` calls observed during drain (proves R-13 + P6) | SCN-063-003 |
 | e2e-api | `tests/e2e/enrichment_resynthesis_e2e_test.sh` | Live stack: insert artifact via API; poll until knowledge_concepts.updated_at advances; assert provenance triple present in row metadata | SCN-063-001 |
+| Regression E2E | `tests/e2e/enrichment_resynthesis_e2e_test.sh` (extended with regression rows) + `tests/e2e/enrichment_resynthesis_regression_e2e_test.sh` (adversarial suite) | Regression: persistent scenario-specific E2E coverage for SCN-063-001/002/003 — re-ingest trigger, no-thinning guard refuses thinner output, backlog-drain bounded with zero notifications | SCN-063-001/002/003 |
 
 ### Definition of Done
 
@@ -416,13 +432,15 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 - [ ] SST zero-defaults: all behavior reads from SCOPE-01 config; no inline literals
 - [ ] Architecture tests from SCOPE-03 (NoHeuristicEdgeMutation, NoHeuristicSynthesisCall) remain green
 - [ ] Build Quality green; integration + e2e evidence captured (PII-redacted)
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_resynthesis_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 07: `RelationshipInferenceProducer` (R-4/5)
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-004, 005
 
@@ -467,6 +485,7 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 | integration | `relationship_inference_integration_test.go` | LLM=0.82 → edges row persisted with edge_type=INFERRED_COREFERENCE, metadata contains provenance triple | SCN-063-004 |
 | integration adversarial | same | Heuristic-untouched: existing BELONGS_TO edges between candidate artifacts NEVER mutated (row-snapshot before/after) | design §7 |
 | e2e-api | `tests/e2e/enrichment_relationship_inference_e2e_test.sh` | Live stack: seed two artifacts sharing entity, run producer tick, assert new INFERRED_COREFERENCE edge in graph | SCN-063-004 |
+| Regression E2E | `tests/e2e/enrichment_relationship_inference_e2e_test.sh` (extended) + `tests/e2e/enrichment_relationship_inference_regression_e2e_test.sh` (adversarial suite) | Regression: persistent scenario-specific E2E coverage for SCN-063-004/005 — INFERRED edge persisted with provenance, below-floor refusal, BELONGS_TO heuristic-untouched | SCN-063-004/005 |
 
 ### Definition of Done
 
@@ -477,13 +496,15 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 - [ ] `enrichment-relationship-inference-v1.yaml` validated by `cmd/scenario-lint`
 - [ ] SST zero-defaults: confidence floor + candidate selector limit read from SCOPE-01 config
 - [ ] Build Quality green; e2e evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_relationship_inference_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 08: `WhyAugmenterProducer` (R-6/7)
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-006, 007
 
@@ -506,6 +527,7 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 | integration | `why_augmenter_integration_test.go` | After tick, parent alert row UNCHANGED; new enrichment_why row joined via LEFT JOIN visible | SCN-063-006 |
 | integration adversarial | same | Parent alert row untouched (column-snapshot before/after) — proves spec 021 substrate read-only | spec.md §13 |
 | e2e-api | `tests/e2e/enrichment_why_augmenter_e2e_test.sh` | Live stack: seed alert with sources, run tick, assert enrichment_why prose attached + citations ⊆ parent sources | SCN-063-006 |
+| Regression E2E | `tests/e2e/enrichment_why_augmenter_e2e_test.sh` (extended) + `tests/e2e/enrichment_why_augmenter_regression_e2e_test.sh` (adversarial suite) | Regression: persistent scenario-specific E2E coverage for SCN-063-006/007 — citations ⊆ parent sources, empty-evidence refusal, parent alert row untouched (spec 021 read-only boundary) | SCN-063-006/007 |
 
 ### Definition of Done
 
@@ -516,13 +538,15 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 - [ ] SST zero-defaults: per-tick budget + confidence floor read from SCOPE-01 config
 - [ ] Cron-only fallback documented; PKT-063-B/C tracked as follow-up
 - [ ] Build Quality green; e2e evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_why_augmenter_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 09: `ConsolidationAnalyzerProducer` (R-8) + 90-Day TTL
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-008
 
@@ -560,6 +584,7 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 | integration | `retention_cleanup_test.go` | Row at 100d age + NULL last_surfaced_at → soft-deleted | SCN-063-CONS-01 |
 | integration adversarial | same | Row at 100d age + last_surfaced_at 30d ago → preserved (proves retention honors UX §14.D inertness) | SCN-063-CONS-02 |
 | e2e-api | `tests/e2e/enrichment_consolidation_e2e_test.sh` | Live stack: merge two topics, run tick, assert row visible in `consolidation_candidates` with valid provenance | SCN-063-008 |
+| Regression E2E | `tests/e2e/enrichment_consolidation_e2e_test.sh` (extended) + `tests/e2e/enrichment_consolidation_regression_e2e_test.sh` (adversarial suite) | Regression: persistent scenario-specific E2E coverage for SCN-063-008 + SCN-063-CONS-01/02 — row persisted with provenance, retention TTL soft-deletes inert rows, last_surfaced_at preservation, zero-notification assertion | SCN-063-008, SCN-063-CONS-01/02 |
 
 ### Definition of Done
 
@@ -570,13 +595,15 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 - [ ] SST zero-defaults: confidence floor + retention_days read from SCOPE-01 config
 - [ ] Cron-only fallback documented; PKT-063-A tracked as follow-up
 - [ ] Build Quality green; e2e evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_consolidation_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 10: Reactive `knowledge_lookup` Scenario + Facade Integration (R-9)
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-04, SCOPE-05
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-04, SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-009, 010
 
@@ -605,6 +632,7 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 | integration | same | Query "what do I know about Y" with zero matches → canonical refusal body returned via spec 061 provenance gate | SCN-063-010 |
 | e2e-api | `tests/e2e/enrichment_knowledge_lookup_e2e_test.sh` | Live stack: facade reactive query end-to-end; reply.sources non-empty; cited IDs resolvable in DB | SCN-063-009 |
 | e2e-api | same | Empty-evidence query returns canonical refusal; capture-as-fallback offered | SCN-063-010 |
+| Regression E2E | `tests/e2e/enrichment_knowledge_lookup_e2e_test.sh` (extended) + `tests/e2e/enrichment_knowledge_lookup_regression_e2e_test.sh` (adversarial suite) | Regression: persistent scenario-specific E2E coverage for SCN-063-009/010 — reactive answer cites CP + artifacts, phantom-citation drop, empty-evidence refusal via spec 061 provenance gate, UX §14.B AND-gate disclosure footer | SCN-063-009/010 |
 
 ### Definition of Done
 
@@ -617,13 +645,15 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 - [ ] SST zero-defaults: latency budget + model selection + min-sources read from SCOPE-01 config
 - [ ] Reactive p95 < 5s budget verified by integration test wall-clock assertion (UX §14.G)
 - [ ] Build Quality green; e2e evidence captured (PII-redacted)
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_knowledge_lookup_regression_e2e_test.sh` and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 11: Per-Tick Budget Calibration (Load Test)
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-10
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-10
 
 ### Use Cases (Gherkin)
 
@@ -648,6 +678,7 @@ Use case: SCN-063-LOAD-01 — Per-tick budgets drain representative graph withou
 |------|------|-----------|-----|
 | stress/load | `tests/load/enrichment_load_test.go` | Hour-long run completes within budget assertions above | SCN-063-LOAD-01 |
 | unit | same (table-driven) | Each producer's per_tick_budget * (3600 / cadence_seconds) ≤ daily_token_budget / 4 (rough fair-share guard) | NFR-2 |
+| Regression E2E | `tests/load/enrichment_load_test.go` + `tests/e2e/enrichment_budget_regression_e2e_test.sh` (shared with SCOPE-04) | Regression: persistent scenario-specific E2E coverage for SCN-063-LOAD-01 — hour-long load run against representative graph stays under daily token budget and never triggers PROCEED→REFUSE budget transitions | SCN-063-LOAD-01 |
 
 ### Definition of Done
 
@@ -655,13 +686,16 @@ Use case: SCN-063-LOAD-01 — Per-tick budgets drain representative graph withou
 - [ ] If SCOPE-01 values revised, evidence block in report.md cites before/after token counts
 - [ ] Prometheus dashboard query for `enrichment_token_consumed_total` validated against load run
 - [ ] Build Quality green; load evidence captured
+- [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/load/enrichment_load_test.go` (load suite) + `tests/e2e/enrichment_budget_regression_e2e_test.sh` (shared with SCOPE-04) and pass against the live stack
+- [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
 - [ ] Scenario→test mapping in `scenario-manifest.json`
 
 ---
 
 ## Scope 12: Architecture-Test CI Wiring
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-03
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-03
+**Scope-Kind:** ci-config
 
 ### Use Cases (Gherkin)
 
@@ -698,7 +732,8 @@ Use case: SCN-063-CI-01 — Architecture tests run on every PR
 
 ## Scope 13: Documentation
 
-**Status:** [ ] Not started | **Foundation:** false | **Depends On:** SCOPE-10
+**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-10
+**Scope-Kind:** docs-only
 
 ### Use Cases (Gherkin)
 
