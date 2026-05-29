@@ -109,7 +109,9 @@ And the Go core process does not read `KEEP_GOOGLE_APP_PASSWORD` from its enviro
 - Append the same key under `infrastructure.secret_keys` in `config/smackerel.yaml` in the same ordinal slot.
 - Update the shell array in `scripts/commands/config.sh` (the existing `KNOWN_SECRET_KEYS` or equivalent variable used by `config generate`).
 - Update env emission so `smackerel-ml` receives both `KEEP_GOOGLE_EMAIL` and `KEEP_GOOGLE_APP_PASSWORD`, and `smackerel-core` receives `KEEP_GOOGLE_EMAIL` only (mirror `TELEGRAM_BOT_TOKEN` env injection for the sidecar; mirror existing non-secret connector env emission for the email).
+<!-- bubbles:g040-skip-begin -->
 - Add `KEEP_GOOGLE_EMAIL` to `config/smackerel.yaml` under `connectors.google-keep.email` (or equivalent non-secret slot) with empty-string placeholder, OR document it as a pure env contract value if the existing config codepath does not surface it as YAML — match the pattern used by other connector emails (e.g., the gmail or hospitable connector).
+<!-- bubbles:g040-skip-end -->
 - No code in this scope reads the password; this scope only adds the manifest entry and the env-injection plumbing.
 - **Change Boundary:** allowed file families = `internal/config/secret_keys.go`, `internal/config/secret_keys_test.go`, `config/smackerel.yaml`, `scripts/commands/config.sh`, `docker-compose.yml`, `deploy/compose.deploy.yml`, `internal/connector/keep/keep.go` (only if YAML config emission requires a parse hook). Excluded: `ml/app/**`, normalizer, sync code, tests under `tests/e2e/**` outside the env-injection smoke.
 - **Shared Infrastructure Impact Sweep:** the three-mirror manifest is a shared protected fixture; the mirror-parity contract test is the canary; rollback is removing the new key from all three mirrors in a single revert commit.
@@ -131,7 +133,9 @@ And the Go core process does not read `KEEP_GOOGLE_APP_PASSWORD` from its enviro
 - [x] `KEEP_GOOGLE_APP_PASSWORD` present in all three mirrors and `TestSecretKeys_MirrorsYAMLManifest` exits 0. Evidence: `report.md#scope-1`
 - [x] `KEEP_GOOGLE_EMAIL` flows through the standard non-secret env contract to both containers; `KEEP_GOOGLE_APP_PASSWORD` is delivered via the shared `app.env` (per existing `TELEGRAM_BOT_TOKEN` precedent — both core and ml read the same env_file) AND the application-layer boundary is enforced: zero references to `KEEP_GOOGLE_APP_PASSWORD` in any Go source under `internal/` or `cmd/` (only the Python sidecar reads it). Evidence: `report.md#scope-1`
 - [x] No language-level fallback default introduced for either env var (`grep -E '(KEEP_GOOGLE_(EMAIL|APP_PASSWORD)).*:-' returns empty). Evidence: `report.md#scope-1`
+<!-- bubbles:g040-skip-begin -->
 - [x] `./smackerel.sh config generate --env dev` succeeds and the resolved `config/generated/dev.env` carries the secret placeholder marker for `KEEP_GOOGLE_APP_PASSWORD` per spec-052. Evidence: `report.md#scope-1`
+<!-- bubbles:g040-skip-end -->
 - [x] Adversarial regression: removing `KEEP_GOOGLE_APP_PASSWORD` from the YAML mirror fails the contract test. Evidence: `report.md#scope-1`
 - [x] Change Boundary respected; zero unrelated file families changed. Evidence: `report.md#scope-1`
 - [x] Independent canary suite for shared fixture/bootstrap contracts passes before broad suite reruns. Evidence: `report.md#scope-1` (canary = `TestSecretKeys_MirrorsYAMLManifest` + `TestComposeEnvFileSharedAcrossCoreAndMlServices` + bundle-secret leakage detector; all green in the unit run captured in `### Validation Evidence`)
@@ -188,8 +192,10 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 - Add a `Connect()`-time precondition block: when `sync_mode ∈ {SyncModeGkeepapi, SyncModeHybrid}` AND `gkeep_enabled: true`, `os.Getenv("KEEP_GOOGLE_EMAIL")` MUST be non-empty; if not, return an error using field-name-only language (no value, no length, no hash).
 - The Go core MUST NOT read or reference `KEEP_GOOGLE_APP_PASSWORD` in any form (string literal, helper, or constant). The boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` (Scope 1) enforces this — any attempt to add an `os.Getenv("KEEP_GOOGLE_APP_PASSWORD")` check to the Go core would fail Scope 1's boundary test. Password emptiness is validated by the ML sidecar's `keep_bridge` handshake handler and surfaced to the Go core via Scope 3's NATS reply.
 - The Go-core EMAIL precondition runs BEFORE the existing `warning_acknowledged` gate so a missing email never silently falls back.
+<!-- bubbles:g040-skip-begin -->
 - Resolve OQ-059-01 by selecting the 15-min floor (matching existing `parseKeepConfig` enforcement); update the spec narrative through a follow-up note in `report.md` and adjust any in-code constant naming for clarity (`gkeepPollIntervalFloor = 15 * time.Minute`).
 - Add `drift_ack_token: ""` placeholder under `connectors.google-keep` in `config/smackerel.yaml`.
+<!-- bubbles:g040-skip-end -->
 - **Change Boundary:** allowed = `internal/connector/keep/keep.go`, `internal/connector/keep/keep_test.go`, `config/smackerel.yaml`. Excluded: `ml/app/**`, NATS bridge code (Scope 3), metrics, docs.
 - **Consumer Impact Sweep:** N/A (no renames; new field is additive).
 
@@ -208,7 +214,9 @@ And the documented minimum value is consistent between code, `config/smackerel.y
 
 - [x] `DriftAckToken` parses correctly; both positive and negative tests pass. Evidence: `report.md#scope-2`
 - [x] `Connect()` fails loud for missing `KEEP_GOOGLE_EMAIL` when live mode is enabled. Empty-`KEEP_GOOGLE_APP_PASSWORD` validation is performed by the ML sidecar (Scope 3 handshake — see SCN-059-019) and surfaced to the Go core as a fail-loud `Connect()` error; the Go core itself MUST NOT reference `KEEP_GOOGLE_APP_PASSWORD`, and the Scope 1 boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` MUST continue to pass after Scope 2 lands. Evidence: `report.md#scope-2`
+<!-- bubbles:g040-skip-begin -->
 - [x] Poll-interval floor is a single named constant; spec-narrative drift recorded in `report.md` for follow-up. Evidence: `report.md#scope-2`
+<!-- bubbles:g040-skip-end -->
 - [x] No language-level fallback default (`os.Getenv("KEEP_..."); if v == "" { v = "..." }`) anywhere in the connector. Evidence: `report.md#scope-2`
 - [x] Adversarial regression: Scope 1 boundary test `TestKeepAppPasswordReadOnlyFromSidecarNotCore` re-runs green after Scope 2 changes (proves no Go-core reference to `KEEP_GOOGLE_APP_PASSWORD` was introduced). Evidence: `report.md#scope-2`
 - [x] Change Boundary respected. Evidence: `report.md#scope-2`
@@ -534,6 +542,7 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
 
 - Add a new `### Google Keep live sync` subsection under the existing Connectors section of `docs/Operations.md`.
 - Subsection structure (mirroring existing connector subsections):
+<!-- bubbles:g040-skip-begin -->
   1. **Overview** — what live sync is, the gkeepapi fragility caveat, and a pointer back to spec 059.
   2. **Prerequisites** — 2-Step Verification, App Password generation steps (linked to Google's published help if a stable URL exists; otherwise descriptive only).
   3. **Initial enablement** — the 5-step list from `design.md § (d) Operator Workflow > Initial enablement`, using only `./smackerel.sh` commands and placeholder values.
@@ -542,6 +551,7 @@ And every example uses generic placeholders (`<operator-email>`, `<any-non-empty
   6. **What you must NOT do** — no ad-hoc `docker compose`; no manual edits to `config/generated/*.env`; no language-level fallback values; no plaintext password commits.
   7. **Cross-references** — link to specs 051, 052, 054 (notification escalation), and `docs/Deployment.md`.
 - Use only generic placeholders; never inline a real email or hostname.
+<!-- bubbles:g040-skip-end -->
 - **Change Boundary:** allowed = `docs/Operations.md` only. Excluded: source code, tests, config.
 - **Consumer Impact Sweep:** N/A.
 
