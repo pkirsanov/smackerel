@@ -54,7 +54,7 @@
     "currentPhase": "implement",
     "currentScope": "SCOPE-10",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-29T18:25:00Z",
+    "lastUpdatedAt": "2026-05-30T09:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,26 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.docs",
+        "phasesExecuted": ["docs"],
+        "runStartedAt": "2026-05-30T09:00:00Z",
+        "runCompletedAt": "2026-05-30T09:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 47 (full-delivery; SCOPE-10 BQG docs-alignment partial close — 1 finding addressed, 1 new finding raised, BQG checkbox honestly NOT flipped). Owner: bubbles.docs (parent-expanded inline by bubbles.workflow; runSubagent unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23). PRE-FLIGHT: workflowMode=full-delivery, statusCeiling=done; HEAD 2886d516; working tree clean before round. EXECUTED (Claim Source: executed): (1) `./smackerel.sh test unit` UNIT_EXIT=0 (462 Python pytest + Go go test ./... both pass); (2) `./smackerel.sh lint` LINT_EXIT=0 (Go vet clean, Python ruff clean, web manifest+JS validation clean); (3) `./smackerel.sh format --check` FORMAT_EXIT=0 (53 files already formatted); (4) `bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant` ARTIFACT_LINT_EXIT=0 (anti-fabrication evidence checks all pass; pre-existing scopeProgress deprecation warning carry-forward); (5) docs/smackerel.md edit — added #### 3.8.5 Evaluation Harness subsection (78 lines) immediately before ## 4. OpenClaw Integration Strategy, covering §3 Success Signal acceptance contract (SST keys assistant.eval.routing_accuracy_min ≥ 0.85 and assistant.eval.capture_fallback_min = 1.0), corpus shape (≥150 rows, ≥30 per intent label, closed vocabulary), harness shape (driver, acceptance gate test, determinism + anti-tautology guards), per-BS regression slot convention with substrate-blocked stubs documented, and explicit cross-link to docs/Testing.md for operational detail; verified by post-edit grep showing 3.8.1–3.8.5 anchors all present. FINDING CLOSURE: addressed SCOPE-10-DOCS-PENDING (docs/smackerel.md §3.8.5 satisfies SCOPE-10 Implementation Plan step 7 + BQG `docs aligned` sub-item). HONEST NON-FLIP: SCOPE-10 BQG checkbox `[ ]` NOT flipped despite all 4 mechanical sub-items (lint/format/artifact-lint/docs-aligned) passing — the `zero deferrals` sub-clause is honestly violated by 6 active reg_skip_with_blocker stubs in tests/e2e/assistant_regression/bs_NNN_*.sh (BS-002 graph seeding, BS-004 scheduler stub, BS-005 borderline seeding, BS-007 LLM-no-source stub, BS-008 manifest-hot-flip harness, BS-009 SST-failure-injection harness) owned by SCOPE-10 DoD #7. NEW FINDING raised: SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING clarifies the BQG blocker (multi-round substrate authoring needed before BQG can flip). FILES MODIFIED THIS ROUND (3, all narrative; zero production code): docs/smackerel.md (added §3.8.5), specs/061-conversational-assistant/report.md (Round 47 section appended with #round-47-docs-alignment anchor), specs/061-conversational-assistant/state.json (this entry + execution.lastUpdatedAt). NOT MODIFIED: scopes.md DoD checkboxes (BQG honestly NOT flipped per zero-deferrals analysis), spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.*, completedScopes, scopeProgress, top-level status, statusCeiling, workflowMode, any cross-spec/, any spec other than 061, any production source under cmd/internal/ml/web/tests/scripts. SCOPE-10 final status this round: In Progress (4/9 DoD [x]; BQG mechanical sub-items all pass but checkbox still [ ] due to deferrals). Spec 061 status: in_progress (unchanged). Outcome envelope: completed_owned for docs-alignment slice. The full-delivery convergence loop for spec 061 is BLOCKED for further agent-driven progress this run: (a) foreign-owned cross-spec packets cannot be agent-closed (SCOPE-05 #11 packet 060, SCOPE-08 #7 packets 054+060), (b) SCOPE-10 DoD #6 uservalidation ratification is owner-only, (c) 6 BS scenarios need substrate authoring (multi-round), (d) live e2e for 4 delegate fixtures needs disposable test stack bring-up not attempted this run. Next required dispatch: bubbles.implement against disposable test stack for DoD #5 + delegate slice of DoD #7, plus spec 060 + spec 054 owners + spec 061 owner.",
+        "addressedFindings": ["SCOPE-10-DOCS-PENDING"],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
       {
         "agent": "bubbles.implement",
         "phasesExecuted": ["implement"],
