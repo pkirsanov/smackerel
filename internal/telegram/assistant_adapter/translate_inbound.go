@@ -8,6 +8,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"github.com/smackerel/smackerel/internal/assistant"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 )
 
@@ -82,11 +83,19 @@ func translateInbound(update *tgbotapi.Update, resolve UserResolver) (contracts.
 			TransportMetadata:  metadata,
 		}, nil
 	case strings.HasPrefix(text, "/"):
-		// Any other slash command is NOT for the assistant; the bot
-		// will fall through to its existing /find, /rate, /list, ...
-		// handlers. Returning a sentinel error keeps the HandleUpdate
-		// API honest: handled=true only when the assistant actually
-		// claimed the message.
+		// Spec 061 SCOPE-06 Round 49 — v1 slash shortcuts (/ask,
+		// /weather, /remind) MUST reach the facade so its
+		// `LookupShortcut` pre-check (internal/assistant/facade.go)
+		// can stamp an explicit ScenarioID on the envelope and take
+		// the agent.Router explicit-id fast path (BS-002 / BS-007 /
+		// BS-010). Forward them as KindText with the slash preserved;
+		// the facade is the single source of truth for the shortcut
+		// set. Any non-shortcut slash command (e.g. /find, /list)
+		// returns ErrNotAssistantMessage so the bot's existing
+		// handlers run unchanged.
+		if _, _, ok := assistant.LookupShortcut(text); ok {
+			break
+		}
 		return contracts.AssistantMessage{}, ErrNotAssistantMessage
 	case text == "":
 		return contracts.AssistantMessage{}, ErrNotAssistantMessage
