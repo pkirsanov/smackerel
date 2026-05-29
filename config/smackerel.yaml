@@ -1319,6 +1319,11 @@ environments:
     # no-GPU lane within pull_timeout_seconds. Dev / home-lab keep the
     # default agent.provider_routing.fast.model (gpt-oss:20b).
     agent_provider_fast_model: "qwen2.5:0.5b-instruct"
+    # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
+    # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
+    # "default") fits within timeout_ms=5000 on test hardware. Dev / home-lab
+    # / prod keep gemma3:4b via the base agent.provider_routing.default.model.
+    agent_provider_default_model: "qwen2.5:0.5b-instruct"
     ml_processing_degraded_fallback_enabled: true
     qf_decisions_enabled: true
     qf_decisions_base_url: "http://qf-e2e-runner:45003"

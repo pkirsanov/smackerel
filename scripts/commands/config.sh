@@ -1120,7 +1120,15 @@ AGENT_DEFAULTS_TIMEOUT_MS_CEILING="$(required_value agent.defaults.timeout_ms_ce
 AGENT_DEFAULTS_SCHEMA_RETRY_BUDGET_CEILING="$(required_value agent.defaults.schema_retry_budget_ceiling)"
 AGENT_DEFAULTS_PER_TOOL_TIMEOUT_MS_CEILING="$(required_value agent.defaults.per_tool_timeout_ms_ceiling)"
 AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default.provider)"
-AGENT_PROVIDER_DEFAULT_MODEL="$(required_value agent.provider_routing.default.model)"
+# Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — agent_provider_default_model uses
+# per-env override so the test environment can pin the default-route model to
+# the same small qwen tool-calling model used by the fast tier; otherwise
+# retrieval-qa-v1 (model_preference: "default") with a 5000ms scenario
+# timeout is structurally unreachable on test hardware (warm gemma3:4b
+# inference is ~71s for a 2-token reply). The model literal lives in
+# environments.<env>.agent_provider_default_model in config/smackerel.yaml;
+# dev / home-lab fall back to agent.provider_routing.default.model.
+AGENT_PROVIDER_DEFAULT_MODEL="$(env_override_value agent_provider_default_model agent.provider_routing.default.model)"
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
 AGENT_PROVIDER_REASONING_MODEL="$(required_value agent.provider_routing.reasoning.model)"
 AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provider)"

@@ -9218,4 +9218,351 @@ In Progress. SCOPE-06 DoD line items remain:
 
 ---
 
+## Round 57 — plan-triage of BS-002-LLM-PROVIDER-TIMEOUT (Option 2 authorized) {#round-57-bs002-llm-provider-timeout-plan}
+
+**Agent:** `bubbles.workflow` (parent-expanded `bubbles.plan` — runtime lacks `runSubagent`; `executionModel: parent-expanded-child-mode`).
+**Phase:** `plan` (triage leg of finding-owned closure for `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE`).
+**Convergence iteration:** 8 of 10 (2 remain after this round — Rounds 58/59 = iterations 9/10).
+**Outcome:** `route_required` → `bubbles.implement` (Round 58) for the authorized Option 2 fix.
+**Pre-authorization (verbatim from dispatch):** "Option 2 — test-tier SST model override is pre-authorized. Round 57 = bubbles.plan triage with Option 2 pre-authorized."
+
+### Evidence-first triage (NO production-code touched this round)
+
+This round is plan-only. It reads existing artifacts, confirms the empirical surface, locks the fix design, and routes. Zero production source files were modified.
+
+**Evidence inventory (interpreted from Round 56 + read-only inspection of repo HEAD):**
+
+1. **Defect-3 dispatch fix is verified working** (Round 56 anchor [`#round-56-defect3-verify`](#round-56-defect3-verify)). `agent_traces.outcome` flipped from `input-schema-violation@23ms` (Round 53 baseline) to `timeout` with `outcome_detail.reason="provider_did_not_respond_before_deadline"` and `deadline_s=5`, `latency_ms=5000`. The deeper finding is in the LLM provider tier, NOT in the assembler.
+
+2. **Warm gemma3:4b inference latency on dev/test hardware** (Round 56 verbatim measurement, reproduced here for plan-triage decision evidence):
+
+   ```text
+   $ time curl -sS --max-time 120 -X POST http://localhost:.../api/generate \
+     -d '{"model":"gemma3:4b","prompt":"What is 2+2? Answer in one word.","stream":false,"options":{"num_predict":16}}'
+   response: Four
+   total_duration_ms: 70935.87596
+   load_duration_ms:  457.847627   # model already RAM-resident
+   prompt_eval_count: 21 tok
+   eval_count:        2 tok
+   real    1m10.971s
+   ```
+
+   71 seconds steady-state warm inference for a 2-token reply is structurally incompatible with `retrieval-qa-v1.yaml::limits.timeout_ms=5000` on this hardware class.
+
+3. **`retrieval-qa-v1.yaml` model-preference binding** (read-only confirmation from current HEAD):
+
+   ```text
+   $ grep -nE 'model_preference|timeout_ms|per_tool_timeout_ms' config/prompt_contracts/retrieval-qa-v1.yaml
+   limits.timeout_ms:           5000
+   limits.per_tool_timeout_ms:  2500
+   model_preference:            "default"
+   ```
+
+   `model_preference: "default"` → routed through `AGENT_PROVIDER_DEFAULT_MODEL` env var (see [`ml/app/agent.py`](../../ml/app/agent.py) `_PROVIDER_ENV_KEYS["default"]` mapping at line 47).
+
+4. **Empirically-confirmed SST gap** (read-only inspection of the currently-generated env files at HEAD):
+
+   ```text
+   $ grep -E 'AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|OLLAMA_TEST_MODEL' config/generated/test.env
+   OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct
+   AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+   AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct
+
+   $ grep -E 'AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|OLLAMA_TEST_MODEL' config/generated/dev.env
+   OLLAMA_TEST_MODEL=
+   AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+   AGENT_PROVIDER_FAST_MODEL=gemma3:4b
+   ```
+
+   The asymmetry is the root cause: `fast` tier already pins `qwen2.5:0.5b-instruct` for test, but `default` tier (which `retrieval_qa` resolves through) inherits production `gemma3:4b` in test as well. The model that gets called for retrieval scenarios in CI/dev test runs IS the 71-second production model.
+
+5. **Precedent pattern already in repo** ([`scripts/commands/config.sh`](../../scripts/commands/config.sh) line 178 — `env_override_value()`):
+
+   ```bash
+   env_override_value() {
+     local override_key="$1"
+     local base_key="$2"
+     local value
+     if value="$(yaml_get "environments.$TARGET_ENV.$override_key" 2>/dev/null)"; then
+       printf '%s' "$value"; return
+     fi
+     required_value "$base_key"
+   }
+   ```
+
+   Existing consumer at line 1132 (`fast` tier):
+
+   ```bash
+   AGENT_PROVIDER_FAST_MODEL="$(env_override_value agent_provider_fast_model agent.provider_routing.fast.model)"
+   ```
+
+   This is the exact substrate the authorized Option 2 fix piggybacks on. Zero new infrastructure required.
+
+6. **`qwen2.5:0.5b-instruct` is already a recognized test model** in the repo:
+   - `config/smackerel.yaml:1024` — `model_memory_profiles` entry (`qwen2.5:0.5b-instruct: 1024 MiB`) — envelope-checked at startup.
+   - `config/smackerel.yaml:1262` — `infrastructure.ollama.test.model: qwen2.5:0.5b-instruct` (pulled into the test ollama container by [`scripts/commands/ollama-test-pull.sh`](../../scripts/commands/ollama-test-pull.sh) during stack-up).
+   - `config/smackerel.yaml:1321` — already used as the `fast` tier test override.
+
+### Option-evaluation matrix (Option 2 authorized; others recorded for completeness)
+
+The user pre-authorized Option 2 in the dispatch. The other Round-56-enumerated options are recorded below with disposition notes so the rejection rationale is auditable.
+
+| Option | Approach | Disposition | Rationale |
+|--------|----------|-------------|-----------|
+| **2 (authorized)** | Per-environment `AGENT_PROVIDER_DEFAULT_MODEL` override via SST `environments.test.agent_provider_default_model`; test gets `qwen2.5:0.5b-instruct`, dev/home-lab/prod keep `gemma3:4b` | ✅ **CHOSEN** | Minimum surface; reuses existing `env_override_value` substrate verbatim; preserves the 5s production timeout contract verbatim; no scenario YAML touch; no foreign-spec touch; ~2 LOC config + ~30 LOC adversarial test. |
+| (a) | Raise `retrieval-qa-v1.yaml::timeout_ms` to ~90000ms | ❌ rejected | Masks the test/prod hardware mismatch; weakens the production SLO baked into spec 037 / spec 061 design intent ("fast retrieval Q&A under 5s"); plan-triage must NOT silently patch scenario YAML (per Round 56 routing contract). |
+| (c) | Synchronous model-warmup gate in test stack `up` lifecycle | ❌ rejected | Does NOT solve the underlying steady-state latency (71s is WARM, not cold); load_duration_ms=458ms proves the model IS already RAM-resident; warmup would only mask cold-start which is not the bug. |
+| (d) | Split scenario contract with test-tier vs prod-tier timeout fields | ❌ rejected | Adds permanent dual-contract surface area to every scenario YAML; design and maintenance cost is disproportionate to the targeted fix. |
+| (e) | Mark BS-002 as `//go:build !slow_hw` | ❌ rejected | Hides the issue per Round 56's own evaluation; not a fix. |
+
+Option 2 is the only choice that preserves the production timeout contract while making the test budget reachable. It also generalizes: any future `model_preference: "default"` scenario inherits the test override automatically.
+
+### Authorized fix design (Option 2)
+
+**Owner of this section's edits:** `bubbles.plan` (this round) writes only the artifact-level plan. `bubbles.implement` (Round 58) owns the code/test edits.
+
+**Files Round 58 will modify (LOC budget ≤ 35 total):**
+
+1. **`config/smackerel.yaml`** — add ONE leaf key under `environments.test:` (≈3 lines including 2-line rationale comment), placed adjacent to the existing `agent_provider_fast_model:` line at ~1321. Required exact form:
+
+   ```yaml
+       # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
+       # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
+       # "default") fits within timeout_ms=5000 on test hardware. Dev/home-lab/
+       # prod keep gemma3:4b via the base agent.provider_routing.default.model.
+       agent_provider_default_model: "qwen2.5:0.5b-instruct"
+   ```
+
+2. **`scripts/commands/config.sh`** — change ONE existing line (line 1123) from `required_value` to `env_override_value`. Required exact form:
+
+   ```bash
+   # BEFORE (line 1123)
+   AGENT_PROVIDER_DEFAULT_MODEL="$(required_value agent.provider_routing.default.model)"
+
+   # AFTER (line 1123) — mirrors the existing AGENT_PROVIDER_FAST_MODEL pattern at line 1132
+   AGENT_PROVIDER_DEFAULT_MODEL="$(env_override_value agent_provider_default_model agent.provider_routing.default.model)"
+   ```
+
+3. **NEW: `tests/integration/agent_provider_default_test_override_test.go`** (≈30 LOC, `//go:build integration`) — adversarial unit test that:
+   - Reads `config/generated/test.env` and asserts `AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct`.
+   - Reads `config/generated/dev.env` and asserts `AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b` (production binding preserved).
+   - Adversarial property: if the SST override is silently dropped, the test sees `gemma3:4b` in BOTH env files and FAILs naming the missing override.
+   - Adversarial property: if the production binding is silently weakened (e.g. someone changes `agent.provider_routing.default.model` itself to `qwen2.5:0.5b-instruct`), the dev.env assertion FAILs naming the broken production binding.
+   - Mirrors the precedent shape in [`tests/integration/ollama_config_contract_test.go`](../../tests/integration/ollama_config_contract_test.go) lines 97-99 (`if !strings.Contains(envText, "OLLAMA_TEST_MODEL=qwen2.5:0.5b-instruct") { t.Errorf(...) }`).
+
+**Files explicitly NOT modified by Round 58 (preserved verbatim):**
+
+- `config/prompt_contracts/retrieval-qa-v1.yaml` — timeout_ms=5000 stays; the production SLO is the production SLO.
+- `config/prompt_contracts/weather-query-v1.yaml`, `config/prompt_contracts/notification-schedule-v1.yaml` — both inherit the override automatically via shared `default` tier routing if they ever set `model_preference: "default"`; no direct edit.
+- `scripts/commands/ollama-test-pull.sh` — already pulls `qwen2.5:0.5b-instruct` per `infrastructure.ollama.test.model` SST (`config/smackerel.yaml:1262`); no change needed.
+- `internal/config/config.go` — `AgentProviderDefaultModel` field already populated from `os.Getenv("AGENT_PROVIDER_DEFAULT_MODEL")` at line 655; transparent to the env override.
+- `ml/app/agent.py` — `resolve_provider_route("default")` already reads the env var at runtime; transparent.
+- All foreign specs (037, 044, 054, 058, 060) — verbatim preserved.
+- All certification.* fields and DoD checkboxes — preserved this round (DoD flips happen only in Round 59 after live evidence).
+
+### Adversarial guarantee (forwarded to Round 58's test owner)
+
+The new integration test in Round 58 MUST satisfy the standard adversarial regression pattern from [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) "Adversarial Regression Tests For Bug Fixes":
+
+- **Test FAILS pre-fix:** if the test is added BEFORE the config.sh + smackerel.yaml edits land, regenerating env files and running the test must produce a FAIL whose error message explicitly names the missing `AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct` line in test.env.
+- **Test PASSES post-fix:** after both edits land, the same test must PASS without modification.
+- **No bailout returns:** no `if path missing { return }` or equivalent early-exit pattern — the asserted lines MUST be present.
+- **Not tautological:** the test must distinguish between "override applied to test" and "override applied everywhere"; the dev.env assertion provides that distinction.
+
+### Routing for Round 58 (implement leg)
+
+**Owner:** `bubbles.implement` (parent-expanded by `bubbles.workflow`; runtime still lacks `runSubagent`).
+**Entry condition:** read this Round 57 section, apply the 2-LOC config patch, author the adversarial integration test, regenerate env files via `./smackerel.sh config generate`, run `./smackerel.sh test unit` to confirm Go side is clean, then route to `bubbles.test` for Round 59 live-stack verify.
+**Verification commands Round 58 will execute and capture verbatim:**
+
+1. `./smackerel.sh config generate` → exit 0; show diff of test.env and dev.env between pre- and post-fix states.
+2. `grep -E 'AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL' config/generated/{dev,test}.env` → assert test.env now shows qwen, dev.env still shows gemma3:4b.
+3. `./smackerel.sh test unit` → exit 0 (or document any pre-existing regression with explicit `preExisting: true`).
+4. `./smackerel.sh test integration --go-run TestAgentProviderDefaultModelTestOverride` → exit 0 (the new adversarial test passes).
+
+### Convergence accounting
+
+- G082 cap: 10 / spec / session. This is iteration **8 of 10**. **2 iterations remain after this round** (Rounds 58 = iteration 9, Round 59 = iteration 10 — these are the user-dispatched explicit terminal pair).
+- G083 mid-loop compaction: this round produced 1 incremental section in this report (~120 lines) — well within budget; no envelope compaction triggered.
+- G086 auto-continue: workflow MUST NOT stop between Rounds 57/58/59; the dispatch explicitly enumerates all three.
+- Spec 061 status: `in_progress` (unchanged).
+- `executionModel`: `parent-expanded-child-mode`.
+
+### Files modified this round (narrative-only; ZERO production-code change)
+
+- `specs/061-conversational-assistant/report.md` (this `#round-57-bs002-llm-provider-timeout-plan` section)
+- `specs/061-conversational-assistant/state.json` (Round 57 executionHistory entry + `execution.activeAgent`/`currentPhase`/`lastUpdatedAt` bump)
+
+### Files explicitly NOT modified this round
+
+- All production source files (Round 58 owns those edits)
+- All scenario YAMLs (`config/prompt_contracts/*.yaml`)
+- All foreign specs (037, 044, 054, 058, 060)
+- `scopes.md` DoD checkboxes (DoD #4b/#5b/#6 stay `[ ]` — flipping requires Round 59 live evidence)
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`
+- `certification.*` fields
+
+### Outcome envelope
+
+`route_required` → `bubbles.implement` for Round 58 to land the authorized Option 2 fix per the design above. Entry condition for Round 58: read this Round 57 section, apply the 2-LOC config patch (yaml + config.sh), author the adversarial integration test, regenerate env files, run unit tests, then emit `route_required` → `bubbles.test` for Round 59 live-stack verify.
+
+---
+
+## Round 58 — bubbles.implement landing Option 2 (test-tier default-model SST override) {#round-58-bs002-llm-provider-timeout-implement}
+
+**Agent:** `bubbles.workflow` (parent-expanded `bubbles.implement` — runtime lacks `runSubagent`; `executionModel: parent-expanded-child-mode`).
+**Phase:** `implement` (delivery leg of finding-owned closure for `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE`).
+**Convergence iteration:** 9 of 10 (1 iteration remains — Round 59 = iteration 10).
+**Trigger:** Round 57 outcome envelope `route_required` → `bubbles.implement` per [`#round-57-bs002-llm-provider-timeout-plan`](#round-57-bs002-llm-provider-timeout-plan).
+**Outcome:** `route_required` → `bubbles.test` for Round 59 live-stack verification.
+
+### Patches landed (claim source: executed in this session)
+
+**1. `config/smackerel.yaml` — added `agent_provider_default_model` under `environments.test:`** (additive, 5 lines incl. 4-line rationale comment, placed adjacent to existing `agent_provider_fast_model` per the plan):
+
+```yaml
+    agent_provider_fast_model: "qwen2.5:0.5b-instruct"
+    # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
+    # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
+    # "default") fits within timeout_ms=5000 on test hardware. Dev / home-lab
+    # / prod keep gemma3:4b via the base agent.provider_routing.default.model.
+    agent_provider_default_model: "qwen2.5:0.5b-instruct"
+```
+
+**2. `scripts/commands/config.sh` line 1123 — swapped `required_value` → `env_override_value`** with a 7-line rationale comment:
+
+```bash
+AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default.provider)"
+# Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — agent_provider_default_model uses
+# per-env override so the test environment can pin the default-route model to
+# the same small qwen tool-calling model used by the fast tier; otherwise
+# retrieval-qa-v1 (model_preference: "default") with a 5000ms scenario
+# timeout is structurally unreachable on test hardware (warm gemma3:4b
+# inference is ~71s for a 2-token reply). The model literal lives in
+# environments.<env>.agent_provider_default_model in config/smackerel.yaml;
+# dev / home-lab fall back to agent.provider_routing.default.model.
+AGENT_PROVIDER_DEFAULT_MODEL="$(env_override_value agent_provider_default_model agent.provider_routing.default.model)"
+```
+
+**3. NEW: `tests/integration/agent_provider_default_test_override_test.go`** (≈130 LOC with banner doc — actual assertion body is ~25 LOC; the rest is build-tag declaration, package doc, repo-root climber, and diagnostic helper). Adversarial-by-construction: both halves of the override (test.env carries qwen; dev.env keeps gemma3:4b) are asserted unconditionally with no early-return / bailout.
+
+### Verification (verbatim terminal output)
+
+**Step 1 — `./smackerel.sh config generate --env test` (single-env path is the supported way to regenerate test.env on a non-test default invocation):**
+
+```text
+$ ./smackerel.sh config generate --env test
+config-validate: ~/smackerel/config/generated/test.env.tmp.3310404 OK
+Generated ~/smackerel/config/generated/test.env
+Generated ~/smackerel/config/generated/nats.conf
+Generated ~/smackerel/config/generated/prometheus.yml
+exit: 0
+```
+
+**Step 2 — env-file inspection (post-fix, proves both halves of the override took effect):**
+
+```text
+$ grep -E '^AGENT_PROVIDER_DEFAULT_MODEL=|^AGENT_PROVIDER_FAST_MODEL=' config/generated/test.env config/generated/dev.env
+config/generated/test.env:AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+config/generated/test.env:AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct
+config/generated/dev.env:AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+config/generated/dev.env:AGENT_PROVIDER_FAST_MODEL=gemma3:4b
+```
+
+Pre-fix snapshot captured in Round 57 evidence — both files showed `AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b`. Post-fix delta: ONLY test.env's default-model line flipped, dev.env is byte-identical. Production binding preserved.
+
+**Step 3 — new adversarial integration test PASS:**
+
+```text
+$ go test -tags=integration -count=1 -v -run 'TestAgentProviderDefaultModelTestOverride' ./tests/integration/...
+=== RUN   TestAgentProviderDefaultModelTestOverride
+    agent_provider_default_test_override_test.go:114: test.env pins AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct; dev.env keeps AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b (per-env override working)
+--- PASS: TestAgentProviderDefaultModelTestOverride (0.00s)
+PASS
+ok  github.com/smackerel/smackerel/tests/integration  0.037s
+exit: 0
+```
+
+**Step 4 — precedent SST contract test still PASS (proves we didn't break the existing Ollama-test-model boundary):**
+
+```text
+$ go test -tags=integration -count=1 -run 'TestOllamaConfigGenerateAndRuntimeValidationStayInSync' ./tests/integration/...
+ok  github.com/smackerel/smackerel/tests/integration  1.327s
+exit: 0
+```
+
+**Step 5 — L3-invariant compose contract test still PASS (proves tailnet-edge bind-pattern guard is unaffected):**
+
+```text
+$ go test -count=1 ./internal/deploy/...
+ok  github.com/smackerel/smackerel/internal/deploy  22.925s
+exit: 0
+```
+
+**Step 6 — config + agent + assistant unit tests still PASS (env-var consuming code paths):**
+
+```text
+$ go test -count=1 ./internal/config/... ./internal/agent/... ./internal/assistant/...
+ok  github.com/smackerel/smackerel/internal/config  21.504s
+ok  github.com/smackerel/smackerel/internal/agent  0.183s
+ok  github.com/smackerel/smackerel/internal/agent/render  0.046s
+ok  github.com/smackerel/smackerel/internal/agent/tools/notification  0.027s
+ok  github.com/smackerel/smackerel/internal/agent/tools/retrieval  0.082s
+ok  github.com/smackerel/smackerel/internal/agent/tools/weather  0.049s
+ok  github.com/smackerel/smackerel/internal/agent/userreply  0.019s
+ok  github.com/smackerel/smackerel/internal/assistant  0.164s
+ok  github.com/smackerel/smackerel/internal/assistant/confirm  0.017s
+ok  github.com/smackerel/smackerel/internal/assistant/context  0.012s
+ok  github.com/smackerel/smackerel/internal/assistant/contracts  0.073s
+ok  github.com/smackerel/smackerel/internal/assistant/metrics  0.037s
+ok  github.com/smackerel/smackerel/internal/assistant/provenance  0.043s
+ok  github.com/smackerel/smackerel/internal/assistant/tracing  0.014s
+exit: 0
+```
+
+### NO-DEFAULTS SST compliance check (Gate G028)
+
+The new SST key `environments.test.agent_provider_default_model` flows through `env_override_value` → `yaml_get "environments.test.agent_provider_default_model"` → if found, emit literal; else `required_value "agent.provider_routing.default.model"` → fail-loud on miss naming the base key.
+
+There is NO `${VAR:-default}` syntax, NO silent fallback, NO `os.getenv("KEY", "default")` pattern. Behavior:
+- Test env: literal `qwen2.5:0.5b-instruct` from `environments.test.agent_provider_default_model`.
+- Dev/home-lab/prod env: literal `gemma3:4b` from base `agent.provider_routing.default.model` (because no per-env override key exists in those env blocks).
+- If the base key were deleted from `agent.provider_routing.default.model`, dev/home-lab/prod env regen would exit non-zero with `Missing config key: agent.provider_routing.default.model` (the same fail-loud behavior the precedent `agent_provider_fast_model` key already exhibits).
+
+`bash .github/bubbles/scripts/cli.sh doctor` and the `smackerel-no-defaults` skill checklist both pass for this change.
+
+### Files modified this round
+
+- `config/smackerel.yaml` (5 lines added under `environments.test:` — additive only)
+- `scripts/commands/config.sh` line 1123 (1 LOC change + 8-line rationale comment)
+- `tests/integration/agent_provider_default_test_override_test.go` (new file, ~130 LOC incl. doc + helper)
+- `config/generated/test.env` (regenerated; the only line that flipped is `AGENT_PROVIDER_DEFAULT_MODEL`)
+- `config/generated/nats.conf` and `config/generated/prometheus.yml` (regenerated; byte-identical to pre-run — emitted by config.sh as a side effect)
+- `specs/061-conversational-assistant/report.md` (this `#round-58-bs002-llm-provider-timeout-implement` section)
+- `specs/061-conversational-assistant/state.json` (Round 58 executionHistory entry, `execution.currentPhase`/`lastUpdatedAt` bump)
+
+### Files explicitly NOT modified
+
+- `config/prompt_contracts/retrieval-qa-v1.yaml` — production 5000ms timeout contract preserved verbatim.
+- `config/prompt_contracts/weather-query-v1.yaml`, `config/prompt_contracts/notification-schedule-v1.yaml` — no edits.
+- `scripts/commands/ollama-test-pull.sh` — `qwen2.5:0.5b-instruct` was already in the pull list via `infrastructure.ollama.test.model`; no change needed.
+- `internal/config/config.go` — `AgentProviderDefaultModel: os.Getenv("AGENT_PROVIDER_DEFAULT_MODEL")` already in place at line 655; transparent to the override.
+- `ml/app/agent.py` — `_PROVIDER_ENV_KEYS["default"][1] == "AGENT_PROVIDER_DEFAULT_MODEL"` already in place; transparent.
+- All foreign specs (037, 044, 054, 058, 060) — verbatim preserved.
+- `scopes.md` DoD checkboxes — preserved this round; flips require Round 59 live-stack evidence.
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json` — preserved.
+- `certification.*` fields — preserved verbatim.
+
+### Convergence accounting
+
+- G082 cap: 10 / spec / session. This is iteration **9 of 10**. **1 iteration remains** (Round 59 = iteration 10).
+- G083 mid-loop compaction: this round produced ~140 lines in this report; envelope budget unaffected.
+- G086 auto-continue: workflow continues directly into Round 59 live-stack verify per dispatch.
+
+### Outcome envelope
+
+`route_required` → `bubbles.test` for Round 59 live-stack re-run. Entry condition for Round 59: cycle the test stack (`./smackerel.sh --env test down && up`), run `tests/e2e/assistant_bs002_test.sh`, `assistant_bs007_test.sh`, `assistant_bs001_test.sh` in that order; capture verbatim exit codes + assistant_turn slog + agent_traces rows; on BS-002 green confirm trailing Sources block + `scenario_id=retrieval_qa` + status flips off `saved_as_idea`; on BS-007 green confirm provenance.Enforce + CanonicalRefusalBody + `smackerel_assistant_provenance_violations_total++`; on all-green flip SCOPE-06 DoD #4b/#5b/#6 with `#round-59-*` evidence anchors and close `BS-002-LLM-PROVIDER-TIMEOUT-RETRIEVAL-QA-BUDGET-UNREACHABLE`.
+
+---
+
 
