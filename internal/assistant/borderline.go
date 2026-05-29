@@ -61,16 +61,25 @@ var AllBands = []Band{BandHigh, BandBorderline, BandLow}
 // the considered list).
 //
 // Edge cases (design §3.2):
-//   - TopScore == borderlineFloor       → BandHigh        (boundary inclusive at top)
-//   - TopScore == agentConfidenceFloor  → BandBorderline  (boundary inclusive at bottom of borderline)
-//   - decision.Reason == ReasonUnknownIntent → BandLow    (regardless of TopScore)
-//   - !ok                                → BandLow        (regardless of TopScore)
+//   - TopScore == borderlineFloor             → BandHigh        (boundary inclusive at top)
+//   - TopScore == agentConfidenceFloor        → BandBorderline  (boundary inclusive at bottom of borderline)
+//   - decision.Reason == ReasonUnknownIntent  → BandLow         (regardless of TopScore)
+//   - decision.Reason == ReasonExplicitScenarioID → BandHigh    (regardless of TopScore — router fast path
+//     bypasses scoring; the byID exact-match IS the 100% confidence signal; see spec 037 router design §4.1 Path 1)
+//   - !ok                                     → BandLow         (regardless of TopScore — overrides all other reasons)
 func Borderline(decision agent.RoutingDecision, ok bool, borderlineFloor, agentConfidenceFloor float64) Band {
 	if !ok {
 		return BandLow
 	}
 	if decision.Reason == agent.ReasonUnknownIntent {
 		return BandLow
+	}
+	// Spec 061 Round 52 — explicit scenario-id routing (spec 037 router fast
+	// path) does NOT compute embedding similarity; TopScore is zero by design.
+	// Treat as BandHigh so the facade proceeds to the executor instead of
+	// dispatching to capture-fallback on a spuriously-low score.
+	if decision.Reason == agent.ReasonExplicitScenarioID {
+		return BandHigh
 	}
 	if decision.TopScore < agentConfidenceFloor {
 		return BandLow

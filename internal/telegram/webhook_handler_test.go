@@ -26,21 +26,25 @@ const testWebhookSecret = "test-webhook-secret-deadbeef-cafebabe-12345"
 // recordingDispatcher captures every dispatch call so tests can assert
 // the §17.3 dispatch matrix without spinning up a real Bot.
 type recordingDispatcher struct {
-	mu        sync.Mutex
-	messages  []*tgbotapi.Message
-	callbacks []*tgbotapi.CallbackQuery
+	mu               sync.Mutex
+	messages         []*tgbotapi.Message
+	messageUpdateIDs []int
+	callbacks        []*tgbotapi.CallbackQuery
+	callbackUpdateIDs []int
 }
 
-func (r *recordingDispatcher) DispatchMessage(_ context.Context, msg *tgbotapi.Message) {
+func (r *recordingDispatcher) DispatchMessage(_ context.Context, msg *tgbotapi.Message, updateID int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.messages = append(r.messages, msg)
+	r.messageUpdateIDs = append(r.messageUpdateIDs, updateID)
 }
 
-func (r *recordingDispatcher) DispatchCallback(_ context.Context, cb *tgbotapi.CallbackQuery) {
+func (r *recordingDispatcher) DispatchCallback(_ context.Context, cb *tgbotapi.CallbackQuery, updateID int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.callbacks = append(r.callbacks, cb)
+	r.callbackUpdateIDs = append(r.callbackUpdateIDs, updateID)
 }
 
 func (r *recordingDispatcher) messageCount() int {
