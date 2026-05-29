@@ -7831,3 +7831,223 @@ Failure occurred at the SEED step — `POST /api/capture` returned HTTP 401 `UNA
 |---|---|---|---|
 | `bubbles.test` (or `bubbles.harden`) | Diagnose + fix the `/api/capture` 401 in the test stack so BS-002 + BS-007 fixtures can run end-to-end. Likely cause: SMACKEREL_AUTH_TOKEN not reaching the `smackerel-test-smackerel-core-1` container env, OR the shared-token branch is being bypassed because of an environment-detection regression. Verify by `docker exec smackerel-test-smackerel-core-1 env | grep SMACKEREL_AUTH_TOKEN` on a live stack, then trace through `bearerAuthMiddleware`. | Pre-existing infra gap unrelated to Fix 2 / Spec 061. Blocks BS-002, BS-007, BS-010 live-stack proof regardless of conversational-assistant routing. | BS-002 fixture seed step returns `{"artifact_id":"…"}` with HTTP 200 against the live test stack. |
 
+---
+
+<a id="round-50-bs002-routing-defect-triage"></a>
+
+## Round 50 — BS-002 routing-defect triage (full-delivery; G082 convergence iteration 3 of 10 in current orchestrator session)
+
+**Owner**: `bubbles.workflow` (parent-expanded `bubbles.implement` → `bubbles.test` → `bubbles.plan` triage inline; `runSubagent` unavailable in current VSCode IDE runtime per repo precedent Rounds 20-23 / 48 / 49).
+
+**Pre-flight**: workflowMode=`full-delivery`, statusCeiling=`done`; HEAD `e2540aeb` (Round 49 commit); convergence iteration 3 of 10 (within G082 cap).
+
+**Trigger**: Round 49 closed with one routed packet to `bubbles.test` (Auth 401 infra gap blocking BS-002/BS-007 seed step). Round 50 entered with the auth path apparently green (separate parallel-session work resolved it; verified in this session — POST `/api/capture` returns artifact_id with HTTP 200), the test stack rebuilt against current HEAD, and Ollama models pulled. Per task brief: "Continue full-delivery convergence on specs/061-conversational-assistant. This is convergence iteration 3 of 10. … PACKET 1: bubbles.test live-stack verification of BS-002 + BS-007."
+
+### Environmental fixes (Claim Source: executed in this session)
+
+1. **Stale core image** — detected via `docker inspect smackerel-test-smackerel-core-1 | jq -r '.[].Image, .[].Created'`. Image created 2026-05-29T00:44:48 (~18h before Round 49 commit at 2026-05-29T18:23:40). Rebuilt:
+
+   ```text
+   $ ./smackerel.sh --env test build
+     ...
+     [+] Built smackerel-core: sha256:6b9b9d2f227c  at 2026-05-29T18:34:15
+   ```
+
+2. **Empty Ollama volume** — detected via `docker exec smackerel-test-ollama-1 ollama list` returning empty. Pulled the two models the assistant pipeline needs (note: must pull AFTER `./smackerel.sh up` because `./smackerel.sh build` tears the stack down via `smackerel_compose test down --timeout 60 --remove-orphans` at `smackerel.sh:401`):
+
+   ```text
+   $ docker exec smackerel-test-ollama-1 ollama pull gemma3:4b
+     pulling … success (3.3 GB)
+   $ docker exec smackerel-test-ollama-1 ollama pull nomic-embed-text
+     pulling … success (274 MB)
+   ```
+
+3. **Stack restart** — `./smackerel.sh up` confirmed all 6 service containers Up healthy (smackerel-core, smackerel-ml, postgres, nats, ollama, jaeger; stub-providers irrelevant). Ollama host port for test stack confirmed as **47004** per `OLLAMA_HOST_PORT` in `config/generated/test.env` (NOT 21002 — that's the dev port).
+
+### BS-002 live-stack run (Claim Source: executed in this session)
+
+```text
+$ E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh
+=== Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
+--- seed: POST /api/capture with marker=bs002seed178007999822312 ---
+  seed_resp={"artifact_id":"art-…","status":"captured"}
+  seeded artifact_id=art-…
+--- LLM warmup: priming gemma3:4b inference ---
+--- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---
+  http_status=200 body=ok
+--- §18.5 slog scrape for assistant_turn with correlation_id=178007999822312 ---
+Last assistant_turn lines for diagnosis:
+{"time":"2026-05-29T18:40:03.157271471Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs002","transport":"telegram","correlation_id":"0","assistant_turn_id":"asst-1780080003150027900","scenario_id":"","top_score":0,"band":"low","status":"saved_as_idea","error_cause":"","latency_ms":8.611265,"agent_trace_id":"trace-asst-1780080003150027900","body_redacted":true}
+FAIL: BS-002: no assistant_turn slog line with correlation_id=178007999822312 within 120s
+```
+
+Diagnostic line confirms:
+
+- Round 49 Option A patch IS in the running binary (assistant_turn slog NOW emits where it never did before — the `case "ask", "weather", "remind":` arm in `bot.go` is being hit and the message reaches the facade).
+- BUT `correlation_id="0"` (expected `178007999822312`), `scenario_id=""` (expected `"retrieval_qa"`), `top_score=0`, `band="low"`, `status="saved_as_idea"` (expected `"thinking"`).
+
+### Root-cause forensics
+
+Both root causes are in the Round 49 Option A patch itself (test-only unit tests did not catch them because they exercise `translateInbound` in isolation, not the bot → adapter → facade integration).
+
+#### Defect 1 — `BS-002-LIVE-STACK-CORRELATION-ID-LOST`
+
+`internal/telegram/bot.go` (Round 49 patch, lines ~534-545):
+
+```go
+case "ask", "weather", "remind":
+    if b.assistantAdapter != nil && b.assistantAdapter.IsBound() {
+        update := &tgbotapi.Update{Message: msg}   // <-- UpdateID NOT set
+        if _, err := b.assistantAdapter.HandleUpdate(ctx, update); err != nil {
+            ...
+        }
+    }
+```
+
+`UpdateID` is unavailable here because `Bot.safeHandleMessage(ctx context.Context, msg *tgbotapi.Message)` and `Bot.handleMessage(ctx context.Context, msg *tgbotapi.Message)` both take `*tgbotapi.Message`, not `*tgbotapi.Update`. The original Update.UpdateID is dropped at TWO boundaries:
+
+- **Polling path** (`internal/telegram/bot.go:328`): `b.safeHandleMessage(ctx, update.Message)` — UpdateID lost.
+- **Webhook path** (`internal/telegram/webhook_handler.go:91-92`): `DispatchMessage(ctx context.Context, msg *tgbotapi.Message) { b.safeHandleMessage(ctx, msg) }` — UpdateID lost.
+
+`internal/telegram/assistant_adapter/translate_inbound.go` lines 70-72 correctly stamps:
+
+```go
+metadata := map[string]string{
+    "telegram_update_id": strconv.Itoa(update.UpdateID),
+}
+```
+
+But receives `update.UpdateID = 0` (Go zero-value), so the value is the literal string `"0"`.
+
+`internal/assistant/facade.go` lines 263-267:
+
+```go
+correlationID := ""
+if msg.TransportMetadata != nil {
+    correlationID = msg.TransportMetadata["telegram_update_id"]
+}
+```
+
+Then lines 320-322:
+
+```go
+effectiveCorrelationID := correlationID
+if effectiveCorrelationID == "" {
+    effectiveCorrelationID = turnAssistantTurnID
+}
+```
+
+The fallback only triggers on EMPTY string; `"0"` is non-empty, so the literal `"0"` is stamped on the slog (line 333).
+
+**Same defect affects** the existing `/reset` arm at line 528 and the plain-text fallthrough at line 617 — every assistant-adapter dispatch from `handleMessage` synthesizes an Update without UpdateID. The `safeHandleCallback` callback path at line 367-368 (`update := &tgbotapi.Update{CallbackQuery: cb}`) has the same shape but uses CallbackQuery instead of Message; CallbackQuery.ID could serve as a separate correlation key but is also not threaded through.
+
+#### Defect 2 — `BS-002-LIVE-STACK-BORDERLINE-LOW-FOR-EXPLICIT-ID`
+
+`internal/agent/router.go` lines 191-201 — the explicit-id fast path short-circuits without computing similarity:
+
+```go
+if env.ScenarioID != "" {
+    if sc, ok := r.byID[env.ScenarioID]; ok {
+        return sc, RoutingDecision{
+            Reason:    ReasonExplicitScenarioID,
+            Chosen:    sc.ID,
+            Threshold: threshold,
+            // TopScore is the Go zero value (0.0) — NO embedding call was made.
+        }, true
+    }
+    ...
+}
+```
+
+`internal/assistant/borderline.go` lines 68-82:
+
+```go
+func Borderline(decision agent.RoutingDecision, ok bool, borderlineFloor, agentConfidenceFloor float64) Band {
+    if !ok {
+        return BandLow
+    }
+    if decision.Reason == agent.ReasonUnknownIntent {
+        return BandLow
+    }
+    if decision.TopScore < agentConfidenceFloor {   // <-- 0 < 0.55 → TRUE → BandLow
+        return BandLow
+    }
+    if decision.TopScore < borderlineFloor {
+        return BandBorderline
+    }
+    return BandHigh
+}
+```
+
+`Borderline()` has NO special case for `ReasonExplicitScenarioID`. The fast path's `TopScore=0` is treated as low confidence, returns `BandLow`. `facade.go` Step 6 `case BandLow:` (line 449) builds a `StatusSavedAsIdea` response and never sets `turnScenarioID`, so the slog emits `scenario_id=""` and `status="saved_as_idea"` even though the router correctly resolved `decision.Chosen="retrieval_qa"`.
+
+**Net effect**: Round 49 Option A routes `/ask` correctly through `LookupShortcut` and the router's explicit-id fast path, but Borderline doesn't honor the explicit-id reason and the band-switch dispatches to capture-fallback. Both defects must be fixed for BS-002 / BS-007 / any slash-shortcut live-stack proof.
+
+### Per-defect plan options (input for `bubbles.plan` triage)
+
+**Defect 1 options:**
+
+| Option | Shape | Blast radius | Tradeoff |
+|---|---|---|---|
+| 1A | Refactor `Bot.safeHandleMessage` and `Bot.handleMessage` to take `*tgbotapi.Update` (extract msg internally). | ~30+ call sites in bot.go (all handleX methods get the Update or extract msg from it). | Cleanest fix; aligns with the existing `HandleUpdate` adapter signature. |
+| 1B | Add explicit `updateID int` parameter to `safeHandleMessage` and thread it through `handleMessage`. | Smaller — only one new param; case arms read it directly. | Less invasive but couples the bot's message dispatch to a single correlation concern. |
+| 1C | Stamp `msg.MessageID` as the correlation fallback in the bot's synthetic Update construction. | Smallest — one-line change at each `&tgbotapi.Update{Message: msg}` site. | Conflates two distinct Telegram IDs (UpdateID is the gateway's update ordinal; MessageID is the in-chat message ordinal). Would diverge from the fixture's expected correlation_id and require fixture changes. |
+
+**Defect 2 options:**
+
+| Option | Shape | Blast radius | Tradeoff |
+|---|---|---|---|
+| 2A | `Borderline()` special-case `ReasonExplicitScenarioID` → return `BandHigh` (and `ReasonFallbackClarify` semantics also reviewed). | One file, ~3 lines. | Minimal; preserves existing dispatch semantics; one new unit test covers it. |
+| 2B | Facade Step 6 honors `shortcutScenarioID != ""` directly, bypassing the band switch and dispatching to the scenario invocation. | One file, ~10 lines; reshapes the band-driven dispatch. | Cleaner conceptually (shortcut means "skip borderline") but bigger refactor. |
+
+### Packet 2 substrate status (dependency analysis)
+
+- **BS-009** (docker-run boot-harness, ~90 LOC test-only): INDEPENDENT of these defects. Tests SST failure at boot — does not use slash shortcuts.
+- **BS-008** (manifest env-flip via BS-006 pattern, ~120 LOC test-only): INDEPENDENT of these defects. Tests skill disabled flag using a probe text — uses a different probe scenario_id and manifest-disabled detection, not slash shortcuts.
+- **BS-004** (notification proposal SQL seed, ~80 LOC test-only): **BLOCKED by Defect 1** — uses `/remind` slash shortcut, same `bot.go` synthetic-Update code path with the same UpdateID=0 correlation loss.
+
+### Honest DoD status (no flips this round)
+
+- SCOPE-06 DoD #4b (BS-002 adapter-composition leg): remains `[ ]` — live-stack proof NOT obtained; routing path now provably broken at two production-code points.
+- SCOPE-06 DoD #5b (BS-007 adapter-composition leg): remains `[ ]` — fixture NOT run this session (would hit same defects).
+- SCOPE-06 DoD #6 (Telegram trailing `sources:` rendering): remains `[ ]` — paired with #4b.
+- SCOPE-06 status: remains `In Progress`.
+- SCOPE-10 DoD #7 (per-BS regression slots): unchanged — Packet 2 substrate authoring deferred to Round 51+ pending plan triage of Defect 1.
+- SCOPE-10 BQG: remains `[ ]` honestly unflipped.
+- `certification.scopeProgress`: unchanged ({total:11, done:6, inProgress:2, notStarted:3, blocked:0}) — preserved verbatim per task brief.
+- `certification.*` fields: preserved verbatim per task brief.
+
+### Routed packet (replaces `SCOPE-06-ROUTING-GAP-CODE-CLOSED-LIVE-STACK-PENDING` from Round 49 with two more specific findings)
+
+| To | What | Why | Acceptance |
+|---|---|---|---|
+| `bubbles.plan` | Triage Defect 1 — choose between Options 1A / 1B / 1C above and produce a 1-page design fragment showing the chosen approach, call sites affected, and a unit test plan that exercises the bot→adapter→facade UpdateID propagation. Then route to `bubbles.implement` with concrete file diffs. | `internal/telegram/bot.go` synthesized `Update`s drop `UpdateID`; correlation_id is `"0"` for every assistant-adapter dispatch from `handleMessage`. Blocks BS-002 + BS-007 + BS-004 + all future correlation-id-dependent fixtures. | Design fragment names one option, implementation lands, BS-002 fixture's `assistant_turn` slog shows `correlation_id` matching the fixture's `UPDATE_ID` (e.g. `178007999822312`). |
+| `bubbles.plan` | Triage Defect 2 — choose between Options 2A / 2B above and produce a 1-page design fragment + unit test plan covering `Borderline(ReasonExplicitScenarioID, …)` → `BandHigh` behavior. | `internal/assistant/borderline.go::Borderline()` returns `BandLow` for explicit-id routing because `TopScore=0` falls below `agentConfidenceFloor`. Facade dispatches to capture-fallback even though the router correctly resolved `decision.Chosen="retrieval_qa"`. Blocks the same fixtures as Defect 1. | Design fragment names one option, implementation lands, BS-002 fixture's `assistant_turn` slog shows `scenario_id="retrieval_qa"` and `status="thinking"` (assuming the synthesis path produces non-empty Sources). |
+| `bubbles.implement` (deferred to Round 51+ after plan triage; tracked separately) | Author BS-009 docker-run boot-harness fixture (~90 LOC test-only) and BS-008 manifest env-flip fixture (~120 LOC test-only) — both INDEPENDENT of the two defects above and can land in parallel with the routing fix. BS-004 is deferred until Defect 1 is fixed (depends on `/remind` shortcut). | SCOPE-10 DoD #7 substrate, unblocks 2 of 3 Packet 2 rows. | BS-009 + BS-008 fixtures run green against the disposable test stack; SCOPE-10 DoD #7 rows for BS-009 + BS-008 flip `[x]`. |
+
+### Files modified this round (4, all narrative; zero production code)
+
+- `specs/061-conversational-assistant/report.md` — this Round 50 section + anchor `#round-50-bs002-routing-defect-triage`.
+- `specs/061-conversational-assistant/state.json` — Round 50 executionHistory entry, `unresolvedFindings` rewrite (replace one vague finding with two specific ones), `execution.lastUpdatedAt` bump.
+- (no `scopes.md` changes — no DoD flips per honesty guard / Gate G021)
+- (no production code changes — per "do NOT silently patch" directive)
+
+### NOT modified
+
+- `scopes.md` DoD checkboxes (no flips — live-stack proof not achieved; would be fabricated evidence per Gate G021 / G041).
+- `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`.
+- `certification.*` fields (preserved verbatim per task brief).
+- `completedScopes`, `scopeProgress`, top-level `status`, `statusCeiling`, `workflowMode`.
+- Any cross-spec/, any spec other than 061.
+- Any production source under `internal/`, `cmd/`, `ml/`, `web/`, `scripts/`.
+
+### Convergence iteration accounting
+
+- G082 cap: 10 / spec / session. This is iteration 3. Within cap.
+- Spec 061 status: `in_progress` (unchanged).
+- `executionModel`: `parent-expanded-child-mode` — runSubagent unavailable in current VSCode IDE runtime; phase owners (`bubbles.implement`, `bubbles.test`, `bubbles.plan`) invoked inline by `bubbles.workflow` per repo precedent Rounds 20-23 / 48 / 49.
+
+### Outcome envelope
+
+`route_required` → `bubbles.plan` for Defect 1 + Defect 2 triage. Round 51 entry condition: plan packet completion with chosen options, ready for `bubbles.implement` round to land the routing fixes and re-run BS-002 + BS-007 fixtures.
+
