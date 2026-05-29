@@ -1204,3 +1204,15 @@ ok      github.com/smackerel/smackerel/tests/stress/readiness   0.227s
 <host>:~/smackerel$ echo $?
 0
 ```
+
+## Accepted Cross-Spec Packets
+
+| Date Accepted | Packet | Source Spec | Acceptance Verdict | Code Status |
+|---|---|---|---|---|
+| 2026-05-29 | [packet-054-scheduler.md](../061-conversational-assistant/cross-spec/packet-054-scheduler.md) | spec 061 SCOPE-08 (Conversational Assistant — Notifications skill) | **Accepted, artifact-level.** The additive `Job.Source` (string) and `Job.Originator{Transport, ConfirmRef}` fields, the proposed nullable `scheduler_jobs.source` / `scheduler_jobs.originator` columns, and the backward-compat guarantees (zero-valued → NULL, no dispatch-loop behavior change) are accepted as the contract spec 054 will honor. | **Deferred to a follow-up spec 054 scope.** The current `internal/scheduler/` implementation is function-registration-based and has no public `Job` struct yet; introducing one plus the migration plus round-trip + dispatch tests is design-grade work that must go through `bubbles.plan` → `bubbles.implement` on a dedicated spec 054 scope, not a fastlane edit. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing the wiring; the existing `notificationSchedulerStub` in `cmd/core/wiring_assistant_skills.go` stays in place until then. |
+
+Acceptance answers to the packet's §9 open questions:
+1. Field names `Source` and `Originator` are accepted as proposed.
+2. `Originator` will be a struct (preferred for type safety), persisted as JSONB.
+3. The `source` column is sufficient for downstream observability at landing time; a parallel metric label can be added later without contract change.
+

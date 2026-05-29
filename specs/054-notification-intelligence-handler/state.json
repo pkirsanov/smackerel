@@ -406,12 +406,23 @@
       "startedAt": "2026-05-22T12:00:00Z",
       "endedAt": "2026-05-22T12:00:00Z",
       "summary": "Repaired planning artifacts without certifying unchecked DoD items: normalized scope statuses, added certification scopeProgress, enriched scenario-manifest test mappings, replaced stale report anchors, and added Code Diff Evidence."
+    },
+    {
+      "agent": "bubbles.workflow",
+      "phasesExecuted": [
+        "cross-spec-packet-acceptance"
+      ],
+      "statusBefore": "done",
+      "statusAfter": "done",
+      "startedAt": "2026-05-29T00:00:00Z",
+      "endedAt": "2026-05-29T00:00:00Z",
+      "summary": "Formally accepted inbound cross-spec packet from spec 061 SCOPE-08 (specs/061-conversational-assistant/cross-spec/packet-054-scheduler.md). Verdict: artifact-level acceptance. Contract for additive Job.Source (string) and Job.Originator{Transport, ConfirmRef} fields plus nullable scheduler_jobs.source / scheduler_jobs.originator columns is ratified with zero-valued backward-compat guarantee. Code wiring deferred to a dedicated follow-up spec 054 scope (bubbles.plan -> bubbles.implement) because internal/scheduler/ has no public Job struct today and the additive type + migration + round-trip + dispatch tests are design-grade work unsuitable for fastlane. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing; notificationSchedulerStub in cmd/core/wiring_assistant_skills.go stays in place until then. Packet header updated routed -> accepted. Report.md updated with Accepted Cross-Spec Packets section. No code changes in this run; spec 054 status remains done."
     }
   ],
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-05-24T23:39:28Z",
+  "lastUpdatedAt": "2026-05-29T00:00:00Z",
   "completedAt": "2026-05-24T23:39:28Z",
   "artifacts": {
     "spec": "spec.md",

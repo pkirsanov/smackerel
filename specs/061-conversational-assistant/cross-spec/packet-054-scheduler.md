@@ -115,4 +115,6 @@ Both NULL for legacy rows. Index neither column unless lineage queries justify i
 
 ---
 
-**Routing status:** packet authored 2026-05-28 by `bubbles.implement` during spec 061 SCOPE-08 substrate landing. spec 054 owner ownership transfer pending. No spec 054 artifacts modified by this packet — it is a routed request, not an applied change.
+**Routing status:** packet authored 2026-05-28 by `bubbles.implement` during spec 061 SCOPE-08 substrate landing.
+
+**Acceptance status:** **accepted (artifact-level) 2026-05-29** by spec 054 owner via `bubbles.workflow mode: bugfix-fastlane`. Contract (field names `Source`/`Originator`, struct shape, JSONB persistence, zero-valued backward compat) ratified and recorded in `specs/054-notification-intelligence-handler/report.md` → "Accepted Cross-Spec Packets". Code wiring (`Job` struct introduction, migration, round-trip + dispatch tests) is deferred to a dedicated follow-up spec 054 scope so it can go through `bubbles.plan` → `bubbles.implement` with adversarial regression coverage. Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up scope landing.
