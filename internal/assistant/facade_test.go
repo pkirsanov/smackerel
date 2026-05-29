@@ -13,6 +13,7 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -166,5 +167,214 @@ func TestFacadeResetClearsContextStore(t *testing.T) {
 	}
 	if _, ok, _ := store.Load(ctx, "u-reset", "telegram"); ok {
 		t.Errorf("KindReset MUST DeleteByKey the conversation row; row still present")
+	}
+}
+
+// Spec 061 Round-55 Defect-3 regression: the BandHigh dispatch path
+// MUST populate IntentEnvelope.StructuredContext with a JSON object
+// whose fields satisfy each v1 scenario's input_schema (query,
+// raw_query, user_id). Before the fix, internal/agent/executor.go
+// Step (1) saw nil StructuredContext, decoded it as JSON null, and
+// fired OutcomeInputSchemaViolation at ~23ms with no LLM call,
+// causing BS-002 to report "saved as idea" with empty Sources.
+//
+// These tests are adversarial in the sense required by repo policy:
+// stripping the population block would make every assertion fail.
+
+func TestFacade_BandHigh_StructuredContextPopulated_RetrievalQA(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := defaultFacadeConfig(now)
+	scenario := &agent.Scenario{ID: "retrieval_qa"}
+	registry := mapRegistry{scenarios: map[string]*agent.Scenario{
+		"retrieval_qa": scenario,
+	}}
+	manifest := newTestManifest(map[string]manifestEntry{
+		"retrieval_qa": {
+			UserFacingLabel: "answer questions", SlashShortcut: "/ask",
+			EnableSSTKey: "assistant.skill.retrieval_qa.enabled", Enabled: true,
+		},
+	})
+	store := newMemContextStore()
+	audit := &recordingAudit{}
+
+	var captured agent.IntentEnvelope
+	executor := &stubExecutor{
+		run: func(_ context.Context, sc *agent.Scenario, env agent.IntentEnvelope) *agent.InvocationResult {
+			captured = env
+			return &agent.InvocationResult{
+				TraceID: "trace-rqa", ScenarioID: sc.ID, Outcome: agent.OutcomeOK,
+				Final: []byte(`"ok"`), StartedAt: now, EndedAt: now,
+			}
+		},
+	}
+	router := &stubRouter{
+		chosen: scenario,
+		decision: agent.RoutingDecision{
+			Reason: agent.ReasonSimilarityMatch, Chosen: "retrieval_qa", TopScore: 0.92,
+			Considered: []agent.CandidateScore{{ScenarioID: "retrieval_qa", Score: 0.92}},
+		},
+		ok: true,
+	}
+	facade := mustFacade(cfg, router, executor, registry, manifest, store, audit)
+
+	if _, err := facade.Handle(context.Background(), contracts.AssistantMessage{
+		UserID:    "u-rqa-1",
+		Transport: "telegram",
+		Text:      "/ask what is the smackerel project status",
+		Kind:      contracts.KindText,
+	}); err != nil {
+		t.Fatalf("Handle err: %v", err)
+	}
+
+	if len(captured.StructuredContext) == 0 {
+		t.Fatalf("StructuredContext is empty; executor.go Step (1) would reject nil as 'got null, want object'")
+	}
+	var got map[string]string
+	if err := json.Unmarshal(captured.StructuredContext, &got); err != nil {
+		t.Fatalf("StructuredContext is not a valid JSON object: %v; payload=%s", err, string(captured.StructuredContext))
+	}
+	wantQuery := "what is the smackerel project status"
+	if got["query"] != wantQuery {
+		t.Errorf("structured_context.query = %q; want %q (slash prefix must be stripped)", got["query"], wantQuery)
+	}
+	if got["raw_query"] != wantQuery {
+		t.Errorf("structured_context.raw_query = %q; want %q", got["raw_query"], wantQuery)
+	}
+	if got["user_id"] != "u-rqa-1" {
+		t.Errorf("structured_context.user_id = %q; want %q", got["user_id"], "u-rqa-1")
+	}
+}
+
+func TestFacade_BandHigh_StructuredContextPopulated_WeatherQuery(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := defaultFacadeConfig(now)
+	scenario := &agent.Scenario{ID: "weather_query"}
+	registry := mapRegistry{scenarios: map[string]*agent.Scenario{
+		"weather_query": scenario,
+	}}
+	manifest := newTestManifest(map[string]manifestEntry{
+		"weather_query": {
+			UserFacingLabel: "check the weather", SlashShortcut: "/weather",
+			EnableSSTKey: "assistant.skill.weather_query.enabled", Enabled: true,
+		},
+	})
+	store := newMemContextStore()
+	audit := &recordingAudit{}
+
+	var captured agent.IntentEnvelope
+	executor := &stubExecutor{
+		run: func(_ context.Context, sc *agent.Scenario, env agent.IntentEnvelope) *agent.InvocationResult {
+			captured = env
+			return &agent.InvocationResult{
+				TraceID: "trace-wq", ScenarioID: sc.ID, Outcome: agent.OutcomeOK,
+				Final: []byte(`"sunny"`), StartedAt: now, EndedAt: now,
+			}
+		},
+	}
+	router := &stubRouter{
+		chosen: scenario,
+		decision: agent.RoutingDecision{
+			Reason: agent.ReasonSimilarityMatch, Chosen: "weather_query", TopScore: 0.95,
+			Considered: []agent.CandidateScore{{ScenarioID: "weather_query", Score: 0.95}},
+		},
+		ok: true,
+	}
+	facade := mustFacade(cfg, router, executor, registry, manifest, store, audit)
+
+	if _, err := facade.Handle(context.Background(), contracts.AssistantMessage{
+		UserID:    "u-wq-1",
+		Transport: "web",
+		Text:      "/weather barcelona tomorrow",
+		Kind:      contracts.KindText,
+	}); err != nil {
+		t.Fatalf("Handle err: %v", err)
+	}
+
+	if len(captured.StructuredContext) == 0 {
+		t.Fatalf("StructuredContext is empty for weather_query dispatch")
+	}
+	var got map[string]string
+	if err := json.Unmarshal(captured.StructuredContext, &got); err != nil {
+		t.Fatalf("StructuredContext invalid JSON object: %v", err)
+	}
+	wantQuery := "barcelona tomorrow"
+	if got["raw_query"] != wantQuery {
+		t.Errorf("structured_context.raw_query = %q; want %q", got["raw_query"], wantQuery)
+	}
+	if got["user_id"] != "u-wq-1" {
+		t.Errorf("structured_context.user_id = %q; want %q", got["user_id"], "u-wq-1")
+	}
+}
+
+func TestFacade_BandHigh_StructuredContextPopulated_NoSlashCommand(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := defaultFacadeConfig(now)
+	scenario := &agent.Scenario{ID: "weather_query"}
+	registry := mapRegistry{scenarios: map[string]*agent.Scenario{
+		"weather_query": scenario,
+	}}
+	manifest := newTestManifest(map[string]manifestEntry{
+		"weather_query": {
+			UserFacingLabel: "check the weather", SlashShortcut: "/weather",
+			EnableSSTKey: "assistant.skill.weather_query.enabled", Enabled: true,
+		},
+	})
+	store := newMemContextStore()
+	audit := &recordingAudit{}
+
+	var captured agent.IntentEnvelope
+	executor := &stubExecutor{
+		run: func(_ context.Context, sc *agent.Scenario, env agent.IntentEnvelope) *agent.InvocationResult {
+			captured = env
+			return &agent.InvocationResult{
+				TraceID: "trace-plain", ScenarioID: sc.ID, Outcome: agent.OutcomeOK,
+				Final: []byte(`"ok"`), StartedAt: now, EndedAt: now,
+			}
+		},
+	}
+	router := &stubRouter{
+		chosen: scenario,
+		decision: agent.RoutingDecision{
+			Reason: agent.ReasonSimilarityMatch, Chosen: "weather_query", TopScore: 0.88,
+			Considered: []agent.CandidateScore{{ScenarioID: "weather_query", Score: 0.88}},
+		},
+		ok: true,
+	}
+	facade := mustFacade(cfg, router, executor, registry, manifest, store, audit)
+
+	// Plain natural-language input (no slash prefix) — body must be
+	// preserved verbatim (after trim) so the LLM sees the user's
+	// actual query.
+	if _, err := facade.Handle(context.Background(), contracts.AssistantMessage{
+		UserID:    "u-plain",
+		Transport: "telegram",
+		Text:      "weather in madrid this afternoon",
+		Kind:      contracts.KindText,
+	}); err != nil {
+		t.Fatalf("Handle err: %v", err)
+	}
+
+	if len(captured.StructuredContext) == 0 {
+		t.Fatalf("StructuredContext is empty for non-slash natural-language dispatch")
+	}
+	var got map[string]string
+	if err := json.Unmarshal(captured.StructuredContext, &got); err != nil {
+		t.Fatalf("StructuredContext invalid JSON object: %v", err)
+	}
+	wantQuery := "weather in madrid this afternoon"
+	if got["query"] != wantQuery {
+		t.Errorf("structured_context.query = %q; want %q (no slash prefix to strip)", got["query"], wantQuery)
+	}
+	if got["raw_query"] != wantQuery {
+		t.Errorf("structured_context.raw_query = %q; want %q", got["raw_query"], wantQuery)
+	}
+	if got["user_id"] != "u-plain" {
+		t.Errorf("structured_context.user_id = %q; want %q", got["user_id"], "u-plain")
 	}
 }
