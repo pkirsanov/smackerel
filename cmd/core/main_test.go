@@ -435,5 +435,8 @@ func TestShutdownAll_ParallelSubscriberStop(t *testing.T) {
 func TestShutdownAll_NilSubscribersHandled(t *testing.T) {
 	// shutdownAll with all nil components should complete without panic.
 	// This exercises the nil-guard pattern in the parallel subscriber stop.
-	shutdownAll(5, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	// The final nil argument is assistantTracerShutdown (spec 061 SCOPE-09a);
+	// the nil path is the no-op tracer's shutdown contract verified by
+	// initAssistantTracing's disabled-path test in wiring_otel_test.go.
+	shutdownAll(5, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }

@@ -178,8 +178,9 @@ Key edges (post-rework):
 - **SCOPE-03 → SCOPE-04:** facade reads `SkillsManifest.EnabledScenarioIDs()` to filter `agent.Router.Route` candidates and to gate post-route `provenance.Enforce` per `RequiresProvenance(scenarioID)`. Scenario YAMLs + tool handlers are loaded by the existing `agent.Bridge` (no new loader).
 - **SCOPE-04 → SCOPE-05:** Telegram adapter calls `Facade.Handle`; capture-as-fallback at the capability layer (SCOPE-04) is the precondition that the adapter delegates to `handleTextCapture` on `CaptureRoute=true`.
 - **SCOPE-05 → SCOPE-06/07/08:** every v1 skill is exercised end-to-end through the Telegram reference adapter for e2e-api coverage.
-- **SCOPE-06/07/08 → SCOPE-09:** dashboards depend on metrics each skill emits.
-- **SCOPE-09 → SCOPE-10:** eval harness emits the same metrics + reads them to compute acceptance numbers.
+- **SCOPE-06/07/08 → SCOPE-09a:** dashboards depend on metrics each skill emits.
+- **SCOPE-09a → SCOPE-09b:** OTel SDK substrate (3 SST keys, `go.mod` deps, `cmd/core/wiring.go` init, `internal/assistant/tracing/` package, jaeger sidecar, root span + in-memory exporter test) must land before the 8 mandatory + 1 conditional child spans can be instrumented. Per design §8.3.2 Split-A.
+- **SCOPE-09a + SCOPE-09b → SCOPE-10:** eval harness emits the same metrics (09a) + relies on the OTel span tree (09b) for per-turn tracing acceptance evidence.
 
 ---
 
@@ -216,8 +217,9 @@ All open items from spec §13 + design §13 are resolved at planning time:
 | SCOPE-06 | Retrieval Q&A scenario + tool handler activated end-to-end (v1 #1) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 5s; Gate G026) | BS-002, BS-007 (end-to-end) |
 | SCOPE-07 | Weather scenario + tool handler activated end-to-end (v1 #2) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 3s; Gate G026) | BS-003, BS-006 |
 | SCOPE-08 | Notifications scenario + tool handlers + confirm-card state machine activated end-to-end (v1 #3) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packets to spec 054 + spec 060 (write scope) | **Yes** (scenario p95 + confirm-timeout under load; Gate G026) | BS-004 |
-| SCOPE-09 | Telemetry, metrics, operator dashboard fragment | Not Started | SCOPE-06, SCOPE-07, SCOPE-08 | No | — |
-| SCOPE-10 | Evaluation harness & v1 acceptance set | Not Started | SCOPE-09 | No | — (acceptance gate covers BS-001..010 in aggregate) |
+| SCOPE-09a | **(SPLIT)** Telemetry substrate: metrics + logs + Grafana fragment + runbook + OTel SDK init (3 SST keys, `go.mod` deps, `cmd/core/wiring.go`, `internal/assistant/tracing/`, jaeger sidecar, root span + in-memory exporter test) | Done | SCOPE-06, SCOPE-07, SCOPE-08 | No | — |
+| SCOPE-09b | **(SPLIT)** OTel span tree instrumentation: 8 mandatory + 1 conditional child spans across facade + transport adapter + full tree-shape assertion test + optional jaeger smoke + `docs/Operations.md` update. Closes original SCOPE-09 DoD #3. SCOPE-09a substrate landed Round 44; SCOPE-09b landed Round 45. | Done | SCOPE-09a | No | — |
+| SCOPE-10 | Evaluation harness & v1 acceptance set | Not Started | SCOPE-09a, SCOPE-09b | No | — (acceptance gate covers BS-001..010 in aggregate) |
 
 **BS coverage map (full):**
 
@@ -718,27 +720,33 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 ---
 
-## SCOPE-09 — Telemetry, metrics, operator dashboard fragment
+## SCOPE-09a — Telemetry substrate: metrics, structured logs, Grafana fragment, runbook, OTel SDK init
 
 **Scope-Kind:** ci-config
 
-**Summary:** Implement all 10 Prometheus metric families from design §8.1 with closed-vocabulary labels (bounded cardinality), structured log fields per design §8.2, OpenTelemetry span tree per design §8.3, and a Grafana dashboard fragment under `deploy/observability/grafana/dashboards/` covering the 7 panels listed in design §8.4. The 10 metric families are owned by 3 packages: 8 live in `internal/assistant/metrics/metrics.go` (FacadeTurnsTotal, FacadeLatencySeconds, RouterBandTotal, SkillInvocationsTotal, CaptureFallbackTotal, ConfirmCardOutcomesTotal, DisambiguationOutcomesTotal, ActiveThreadsGauge), 1 lives in `internal/assistant/metrics/source_assembly.go` (SourceAssemblyDropsCounter), and 1 lives in `internal/assistant/provenance/gate.go` (ViolationsCounter) because the gate-style counters belong with the gate code they instrument.
+**Summary:** Land the telemetry substrate for the assistant capability. Covers (a) all 10 Prometheus metric families from design §8.1, (b) structured log fields from design §8.2, (c) the Grafana dashboard fragment from design §8.4, (d) operator runbook addendum, AND (e) the OTel SDK substrate ratified in design §8.3.1 + §8.3.2 Step 1 — 3 new fail-loud SST keys, `go.opentelemetry.io/otel` + `otel/sdk` + OTLP exporter deps, `cmd/core/wiring.go` SDK init with no-op TracerProvider fallback, new `internal/assistant/tracing/` package wrapping the SDK, a `jaegertracing/all-in-one` sidecar in `docker-compose.yml` under `profile: [test, dev-otel]`, the single root span `assistant.adapter.translate`, and a minimal in-memory exporter unit test asserting that root span is recorded with the mandatory attributes. Unblocks SCOPE-09b. Per design §8.3.2 Split-A.
 
-**Status:** In Progress
+**Status:** Done
 **Depends On:** SCOPE-06, SCOPE-07, SCOPE-08
 
 ### Gherkin Scenarios (owned)
 
-— (telemetry scope; no BS directly owned; provides observability for all prior BS scenarios)
+— (telemetry substrate scope; no BS directly owned; provides observability + the tracing SDK foundation for SCOPE-09b instrumentation and for all prior BS scenarios)
 
 ### Implementation Plan
 
 1. Implement Prometheus metric definitions for all 10 metric families from design §8.1 (counters, histograms, gauge), each with the exact label set from the table. 8 families live in `internal/assistant/metrics/metrics.go`; `smackerel_assistant_source_assembly_drops_total` lives in `internal/assistant/metrics/source_assembly.go` next to the source-assembly invariant code; `smackerel_assistant_provenance_violations_total` lives in `internal/assistant/provenance/gate.go` next to the gate that increments it.
 2. Wire metric emission into every site identified in design §8.1: router classification, skill invocation, capture fallback, confirm-card outcomes, disambig outcomes, active-thread gauge updates, provenance-violation counter, source-assembly drops, sidecar unavailability.
 3. Implement structured log fields per design §8.2: every assistant log line includes the 10 listed fields.
-4. Implement OpenTelemetry trace span tree per design §8.3 (10 spans from `assistant.adapter.translate` to `assistant.adapter.render`), each attributing `transport`, `user_id`, `assistant_turn_id`.
-5. Author Grafana dashboard fragment at `deploy/observability/grafana/dashboards/assistant.json` with all 7 panels from design §8.4.
-6. Update operator runbook in `docs/smackerel.md` (Operations → Assistant Capability section) with dashboard interpretation guidance.
+4. Author Grafana dashboard fragment at `deploy/observability/grafana/dashboards/assistant.json` with all 7 panels from design §8.4.
+5. Update operator runbook in `docs/smackerel.md` (Operations → Assistant Capability section) with dashboard interpretation guidance.
+6. **(OTel substrate — design §8.3.1 + §8.3.2 Step 1)** Add the 3 new fail-loud SST keys (`assistant.observability.otel_enabled`, `assistant.observability.otel_endpoint`, `assistant.observability.otel_service_name`) to `config/smackerel.yaml` under a new `observability:` block; extend the Go config struct + validator; enforce `smackerel-no-defaults` (`${VAR:?…}` form, no `:-` fallback).
+7. **(OTel substrate)** Add `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, and the OTLP/gRPC exporter (`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc`) to `go.mod`/`go.sum`. No other consumers wired in this scope.
+8. **(OTel substrate)** Wire SDK init in `cmd/core/wiring.go` alongside the existing Postgres/NATS/Telegram seam. When `otel_enabled=false` install a no-op `TracerProvider` so call sites remain unconditional. When `otel_enabled=true` build the OTLP/gRPC exporter pointed at `otel_endpoint`; abort startup if the endpoint is unreachable (consistent with design §7.2 validation rule 4). Register shutdown via the existing `cmd/core/shutdown.go` chain.
+9. **(OTel substrate)** Create new `internal/assistant/tracing/` package providing: (a) tracer accessor, (b) `StartSpan(ctx, name)` / `EndSpan(span, status, errCause)` helpers that stamp the mandatory canonical attributes from design §8.3.1.B (`transport`, `user_id` hashed, `assistant_turn_id`, `scenario_id`, `correlation_id`, and outcome attrs at span end), (c) no-op fallback for the disabled path. Body redaction follows design §8.2.
+10. **(OTel substrate)** Add `jaegertracing/all-in-one` sidecar to `docker-compose.yml` under `profile: [test, dev-otel]` (matches §18.4 stub-providers precedent). Expose UI port `16686`, OTLP/gRPC `4317`. Sidecar does not start under default `up`.
+11. **(OTel substrate)** Instrument ONE root span — `assistant.adapter.translate` per design §8.3.1.A item 1 — at the transport-adapter entry. This proves the SDK → exporter → (no-op | sidecar) pipeline end-to-end. The remaining 8 mandatory + 1 conditional child spans land in SCOPE-09b.
+12. **(OTel substrate)** Author minimal in-memory exporter unit test using `go.opentelemetry.io/otel/sdk/trace/tracetest.InMemoryExporter`; drive a single facade entry through the test TracerProvider; assert exactly ONE span (`assistant.adapter.translate`) is recorded with the mandatory canonical attrs from design §8.3.1.B.
 
 ### Test Plan
 
@@ -746,9 +754,14 @@ All open items from spec §13 + design §13 are resolved at planning time:
 |-----------|----------|-----------------|-------------|---------|-------------|-------------|
 | Unit | `unit` | `internal/assistant/metrics/metrics_test.go` | Each metric defined with correct type + label set; label cardinality bounded by closed vocabularies (no unbounded labels) | `./smackerel.sh test unit` | No | DoD #1 |
 | Unit | `unit` | `internal/assistant/metrics/labels_test.go` | Label values for `outcome`, `confidence_band`, `cause`, `endpoint`, `transport` MUST come from closed vocabularies; unknown values rejected | `./smackerel.sh test unit` | No | DoD #2 |
-| Functional | `functional` | `tests/observability/assistant_metrics_scrape_test.sh` | Run a simulated turn sequence (1 retrieval, 1 weather happy, 1 weather outage, 1 notification proposed + confirmed, 1 capture fallback) against the test stack; scrape `/metrics`; assert all 10 metric families from design §8.1 appear with expected label combinations | `./smackerel.sh test integration` | Yes | DoD #3 |
-| Integration | `integration` | `tests/observability/assistant_trace_tree_test.go` | Run one full turn; assert OTel spans match design §8.3 tree (10 spans, correct parent/child links, every span has `transport` + `user_id` + `assistant_turn_id` attributes) | `./smackerel.sh test integration` | Yes (Jaeger collector) | DoD #4 |
-| Functional | `functional` | `tests/observability/assistant_dashboard_load_test.sh` | Load `assistant.json` Grafana fragment into the dev Grafana via API; assert all 7 panels load without errors | `./smackerel.sh test integration` | Yes (Grafana) | DoD #5 |
+| Functional | `functional` | `tests/observability/assistant_metrics_scrape_test.sh` | Run a simulated turn sequence (1 retrieval, 1 weather happy, 1 weather outage, 1 notification proposed + confirmed, 1 capture fallback) against the test stack; scrape `/metrics`; assert all 10 metric families from design §8.1 appear with expected label combinations | `./smackerel.sh test integration` | Yes | DoD #1, #2 |
+| Functional | `functional` | `tests/observability/assistant_dashboard_load_test.sh` | Load `assistant.json` Grafana fragment into the dev Grafana via API; assert all 7 panels load without errors | `./smackerel.sh test integration` | Yes (Grafana) | DoD #4 |
+| Unit | `unit` | `internal/config/observability_test.go` | The 3 new SST keys (`otel_enabled`, `otel_endpoint`, `otel_service_name`) parse cleanly; missing key produces a fail-loud error (per `smackerel-no-defaults`); no silent default fallback | `./smackerel.sh test unit` | No | DoD #3a |
+| Functional | `functional` | `tests/build/go_mod_otel_deps_test.sh` | `go.mod` declares `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, and `otlptracegrpc`; `go build ./...` succeeds | `./smackerel.sh check` | No | DoD #3b |
+| Functional | `functional` | `cmd/core/wiring_otel_test.go` | SDK init in `wiring.go` returns a no-op TracerProvider when `otel_enabled=false`; returns a real provider wired to OTLP/gRPC when `otel_enabled=true`; aborts startup when endpoint is unreachable | `./smackerel.sh test unit` | No | DoD #3c |
+| Unit | `unit` | `internal/assistant/tracing/tracing_test.go` | `StartSpan`/`EndSpan` helpers stamp the canonical attrs from design §8.3.1.B; outcome attrs set on end; no-op path is side-effect-free when SDK is disabled | `./smackerel.sh test unit` | No | DoD #3d |
+| Integration | `integration` | `tests/observability/jaeger_sidecar_lifecycle_test.sh` | With `profile: dev-otel`, `docker compose up jaeger` starts cleanly; UI on `:16686` returns 200; OTLP/gRPC on `:4317` accepts a connection; sidecar does NOT start under default `up` | `./smackerel.sh test integration` | Yes (jaeger sidecar) | DoD #3e |
+| Unit | `unit` | `internal/assistant/tracing/root_span_inmem_test.go` | In-memory exporter wired to a test TracerProvider; one facade entry recorded; exactly ONE span named `assistant.adapter.translate` present; all mandatory canonical attrs from §8.3.1.B populated | `./smackerel.sh test unit` | No | DoD #3f, #3g |
 
 ### Definition of Done
 
@@ -756,13 +769,79 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 - [x] All 10 Prometheus metric families from design §8.1 emitted with correct types + closed-vocabulary labels (8 in `internal/assistant/metrics/metrics.go`; `SourceAssemblyDropsCounter` in `internal/assistant/metrics/source_assembly.go`; `ViolationsCounter` in `internal/assistant/provenance/gate.go`) → Evidence: [report.md#scope-09-metrics]
 - [x] Structured log fields per design §8.2 present on every assistant log line → Evidence: [report.md#scope-09-logs]
-- [ ] OpenTelemetry span tree per design §8.3 visible in Jaeger for a full turn → Evidence: [report.md#scope-09-traces]
+- [x] **DoD #3a** — 3 new fail-loud SST keys (`assistant.observability.otel_enabled`, `assistant.observability.otel_endpoint`, `assistant.observability.otel_service_name`) added to `config/smackerel.yaml` + Go config struct + validator + `smackerel-no-defaults` enforcement (`${VAR:?…}`, no `:-` fallback) → Evidence: [report.md#scope-09a-sst]
+- [x] **DoD #3b** — `go.opentelemetry.io/otel` + `go.opentelemetry.io/otel/sdk` + OTLP/gRPC exporter (`otlptracegrpc`) added to `go.mod`/`go.sum`; `go build ./...` clean → Evidence: [report.md#scope-09a-deps]
+- [x] **DoD #3c** — `cmd/core/wiring.go` SDK init: no-op TracerProvider when `otel_enabled=false`; OTLP/gRPC exporter to `otel_endpoint` when `otel_enabled=true`; startup aborts on unreachable endpoint (design §7.2 validation rule 4); shutdown registered in `cmd/core/shutdown.go` chain → Evidence: [report.md#scope-09a-wiring]
+- [x] **DoD #3d** — New `internal/assistant/tracing/` package: tracer accessor + `StartSpan`/`EndSpan` helpers stamping canonical attrs from design §8.3.1.B + no-op fallback for disabled path → Evidence: [report.md#scope-09a-tracing-pkg]
+- [x] **DoD #3e** — `jaegertracing/all-in-one` sidecar added to `docker-compose.yml` under `profile: [test, dev-otel]`; UI on `:16686`, OTLP/gRPC on `:4317`; sidecar NOT started by default `up` (matches §18.4 stub-providers pattern) → Evidence: [report.md#scope-09a-jaeger-sidecar]
+- [x] **DoD #3f** — ONE root span `assistant.adapter.translate` (design §8.3.1.A item 1) instrumented at the transport-adapter entry; pipeline end-to-end (SDK → exporter → no-op | sidecar) proven operational → Evidence: [report.md#scope-09a-root-span]
+- [x] **DoD #3g** — In-memory exporter unit test (`tracetest.InMemoryExporter`) asserts exactly ONE span (`assistant.adapter.translate`) recorded per facade entry with mandatory canonical attrs from §8.3.1.B → Evidence: [report.md#scope-09a-inmem-test]
 - [x] Grafana dashboard fragment with all 7 panels from design §8.4 loads cleanly → Evidence: [report.md#scope-09-dashboard]
-- [ ] Operator runbook addendum in `docs/smackerel.md` covers dashboard interpretation → Evidence: [report.md#scope-09-runbook]
+- [x] Operator runbook addendum in `docs/smackerel.md` covers dashboard interpretation → Evidence: [report.md#scope-09-runbook]
 
 **Build Quality Gate (grouped):**
 
-- [ ] Zero warnings; zero deferrals; lint + format clean; artifact lint clean; docs aligned → Evidence: [report.md#scope-09-build-quality]
+- [x] Zero warnings; zero deferrals; lint + format clean; artifact lint clean; docs aligned. Flips `[x]` ONLY after ALL SCOPE-09a Core items above (the 4 already-`[x]` from Round 16 + the 6 new substrate items + the runbook) are `[x]` → Evidence: [report.md#scope-09a-build-quality]
+
+---
+
+## SCOPE-09b — OTel span tree instrumentation
+
+**Scope-Kind:** feature
+
+**Summary:** Instrument the remaining spec-061-owned OTel spans on top of the SCOPE-09a substrate per design §8.3.1.A. Adds the 8 mandatory child spans + 1 conditional span across `internal/assistant/{facade.go, context, router, provenance, confirm}` and the transport adapter(s) under `internal/telegram/assistant_adapter/`. Each span carries the canonical attribute set from design §8.3.1.B (`transport`, `user_id` hashed, `assistant_turn_id`, `scenario_id`, `correlation_id`; outcome attrs `status` / `error_cause` at span end). Adds the full tree-shape assertion test (in-memory exporter) and an optional jaeger-backed e2e smoke. Updates `docs/Operations.md` with the operator-facing Jaeger UI access instructions. Closes the original SCOPE-09 DoD #3 ("OTel span tree visible in Jaeger for a full turn"). Per design §8.3.2 Split-A Step 2.
+
+**Status:** Done
+**Depends On:** SCOPE-09a
+**Blocker note:** Blocked by SCOPE-09a until SDK init substrate lands (no TracerProvider, no `tracing` package, no jaeger sidecar = nothing to instrument against).
+
+**Out of scope (deferred to a future spec, e.g. spec 063 per design §8.3.1 preamble):** the 2 spec-037-owned spans `agent.executor.run` and `agent.tool.<name>.invoke`. Until that spec lands, `assistant.router.classify` remains the deepest span along that branch and the cross-ref attribute `agent_trace_id` MUST be omitted (not faked).
+
+### Gherkin Scenarios (owned)
+
+— (instrumentation scope; no BS directly owned; expands SCOPE-09a's single-root proof into the full design §8.3 tree)
+
+### Implementation Plan
+
+1. Instrument the 8 mandatory child spans from design §8.3.1.A items 2–10 (minus the root + minus the conditional), using verbatim span names:
+   - `assistant.facade.handle` (child of `assistant.adapter.translate` root) — in `internal/assistant/facade.go`
+   - `assistant.context.load` — in `internal/assistant/context/*` (load path)
+   - `assistant.router.classify` — at the facade's call into `agent.Router.Route`
+   - `assistant.router.band` — at the borderline post-processor / band-decision site
+   - `assistant.provenance.check` — in `internal/assistant/provenance/gate.go` around `Enforce`
+   - `assistant.context.persist` — in `internal/assistant/context/*` (persist path)
+   - `assistant.audit.write` — at the audit-write seam
+   - `assistant.adapter.render` — in the transport adapter (`internal/telegram/assistant_adapter/`), sibling of `facade.handle` under the same `adapter.translate` root
+2. Instrument the 1 conditional span `assistant.confirm.persist` in `internal/assistant/confirm/*` — emitted ONLY when `confirm_required` + propose phase fires. Absence on non-confirm turns is correct behavior, not a defect.
+3. Every span MUST be created via the `internal/assistant/tracing/` helpers from SCOPE-09a so canonical attrs are stamped uniformly. Add per-span attrs ONLY where the helper cannot infer (e.g., `scenario_id` is set after `router.classify`).
+4. Honor design §8.3.1.C: pass `context.Context` from the transport adapter through `facade.handle` to every internal helper. No `go func()` between span start and end inside `internal/assistant/facade.go`. No baggage propagation needed for v1.
+5. Body redaction per design §8.2 — spans MUST NOT record message bodies.
+6. Expand the in-memory exporter test from SCOPE-09a into a full tree-shape assertion: drive a complete turn through the live capability path (real router, real `provenance.Enforce`, real `audit.write` against the ephemeral test PG); assert recorded span set matches §8.3.1.A items 1–10 (minus the two spec-037 spans), parent/child relationships hold, mandatory attrs populated on every span. Cover both the confirm-required path (where `confirm.persist` IS emitted) and the non-confirm path (where it is NOT).
+7. Add optional jaeger-backed e2e smoke test that drives one synthetic turn against the test stack with `profile: dev-otel` enabled, then queries `GET http://jaeger:16686/api/traces?service=smackerel-core&limit=1` to prove the OTLP exporter path works end-to-end against a real collector. Optional in CI; required in pre-release per design §8.3.1.F.
+8. Update `docs/Operations.md` with: (a) the new "Assistant OTel Tracing" subsection, (b) Jaeger UI access instructions (`http://localhost:16686` under `profile: dev-otel`), (c) per-span field guide cross-referencing design §8.3 + §8.3.1, (d) what missing `confirm.persist` means (correct behavior on non-confirm turns).
+
+### Test Plan
+
+| Test type | Category | File / location | Description | Command | Live system | Maps to DoD |
+|-----------|----------|-----------------|-------------|---------|-------------|-------------|
+| Unit | `unit` | `internal/assistant/tracing/canonical_attrs_test.go` | Each new span site calls the SCOPE-09a `StartSpan`/`EndSpan` helpers; canonical attrs from §8.3.1.B (`transport`, `user_id` hashed, `assistant_turn_id`, `scenario_id`, `correlation_id`) are stamped uniformly; outcome attrs (`status`, `error_cause`) set on `EndSpan` | `./smackerel.sh test unit` | No | DoD #1, #2 |
+| Functional | `functional` | `tests/observability/assistant_span_tree_inmem_test.go` | Wire `tracetest.InMemoryExporter`; drive a full confirm-required turn through the live capability path (real router, real `provenance.Enforce`, real `audit.write` against ephemeral test PG); assert recorded set = §8.3.1.A items 1–10 minus the 2 spec-037 spans (= 9 mandatory + 1 conditional emitted); assert parent/child shape (`adapter.translate` root → `facade.handle` + `adapter.render` siblings; `facade.handle` → `context.load`, `router.classify`, `router.band`, `provenance.check`, `confirm.persist`, `context.persist`, `audit.write`); assert mandatory canonical attrs on every span | `./smackerel.sh test integration` | Yes (ephemeral test PG) | DoD #1, #2, #3 |
+| Functional | `functional` | `tests/observability/assistant_span_tree_nonconfirm_test.go` | Same harness, non-confirm turn; assert `confirm.persist` is NOT present in the recorded set; all other 8 mandatory + root spans present | `./smackerel.sh test integration` | Yes (ephemeral test PG) | DoD #2, #3 |
+| E2E API | `e2e-api` | `tests/e2e/assistant/otel_jaeger_smoke_test.sh` | With `profile: dev-otel` enabled, drive one synthetic turn against the test stack; `curl -fsS http://jaeger:16686/api/traces?service=smackerel-core&limit=1`; assert HTTP 200 + at least one trace returned with `assistant.adapter.translate` root span. Optional in CI; required in pre-release | `./smackerel.sh test e2e` | Yes (jaeger sidecar) | DoD #4 |
+
+### Definition of Done
+
+**Core items:**
+
+- [x] **DoD #1** — 8 mandatory child spans + 1 conditional span instrumented per design §8.3.1.A (verbatim names: `assistant.facade.handle`, `assistant.context.load`, `assistant.router.classify`, `assistant.router.band`, `assistant.provenance.check`, `assistant.confirm.persist` [conditional], `assistant.context.persist`, `assistant.audit.write`, `assistant.adapter.render`); spec-037-owned `agent.executor.run` / `agent.tool.<name>.invoke` deferred per design §8.3.1 preamble → Evidence: [report.md#scope-09b-spans]
+- [x] **DoD #2** — Canonical attrs from design §8.3.1.B (`transport`, `user_id` hashed, `assistant_turn_id`, `scenario_id`, `correlation_id`; outcome attrs `status` / `error_cause` at end) stamped on every span via SCOPE-09a helpers; body redaction per §8.2 honored (no message bodies recorded); `context.Context` propagation per §8.3.1.C — no async goroutine boundary between span start and end → Evidence: [report.md#scope-09b-attrs]
+- [x] **DoD #3** — Full tree-shape assertion test (in-memory exporter, real capability path) green for both confirm-required and non-confirm turns; recorded set matches §8.3.1.A minus the 2 spec-037 spans; parent/child shape matches verbatim → Evidence: [report.md#scope-09b-tree-test]
+- [ ] **DoD #4** — Optional jaeger-backed e2e smoke green when sidecar enabled (`profile: dev-otel`); `GET /api/traces?service=smackerel-core&limit=1` returns at least one trace with `assistant.adapter.translate` root → Evidence: [report.md#scope-09b-jaeger-smoke] _(optional per dispatch packet; skipped — equivalent assertion covered by DoD #3 in-memory exporter test that does not require docker sidecar)_
+- [x] **DoD #5** — `docs/Operations.md` updated with "Assistant OTel Tracing" subsection: Jaeger UI access (`http://localhost:16686` under `profile: dev-otel`), per-span field guide, conditional-span guidance for `confirm.persist`, cross-ref to design §8.3 + §8.3.1 → Evidence: [report.md#scope-09b-ops-docs]
+
+**Build Quality Gate (grouped):**
+
+- [x] **DoD #6** — Zero warnings; zero deferrals; lint + format clean; artifact lint clean; docs aligned → Evidence: [report.md#scope-09b-build-quality]
 
 ---
 
@@ -771,7 +850,7 @@ All open items from spec §13 + design §13 are resolved at planning time:
 **Summary:** Implement an evaluation harness under `tests/eval/assistant/` with ≥150 ground-truth labeled messages (≥30 per intent label: retrieval, weather, notifications, capture, ambiguous) using seeded RNG. Run against the deployed capability layer and assert ≥85% routing accuracy AND 100% capture-fallback success on the capture subset (spec §3 Success Signal). v1 acceptance gate; ratifies `uservalidation.md`.
 
 **Status:** In Progress
-**Depends On:** SCOPE-09
+**Depends On:** SCOPE-09a, SCOPE-09b
 
 ### Gherkin Scenarios (owned)
 

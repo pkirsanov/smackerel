@@ -46,6 +46,8 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
+	"github.com/smackerel/smackerel/internal/assistant/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // ScenarioExecutor is the small interface the facade depends on so
@@ -160,6 +162,13 @@ type Facade struct {
 	contextStore     assistantctx.Store
 	audit            AuditWriter
 	sourceAssemblers map[string]contracts.SourceAssembler
+
+	// tracer is the spec 061 SCOPE-09b OTel seam. NewFacade installs
+	// a no-op tracer by default so emission sites stay unconditional
+	// in tests; production wiring (cmd/core/wiring_assistant_facade.go)
+	// calls WithTracer to swap in the real one threaded from
+	// coreServices.assistantTracer.
+	tracer *tracing.Tracer
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -194,6 +203,16 @@ func NewFacade(
 	if audit == nil {
 		return nil, errors.New("assistant: NewFacade requires a non-nil audit writer")
 	}
+	// Spec 061 SCOPE-09b — install a no-op tracer by default. Real
+	// production wiring calls WithTracer to swap in the SDK-backed
+	// tracer threaded from coreServices.assistantTracer.
+	noopTracer, _, err := tracing.NewTracer(context.Background(), tracing.Config{
+		Enabled:     false,
+		ServiceName: "smackerel-core",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("assistant: build noop tracer fallback: %w", err)
+	}
 	return &Facade{
 		cfg:              cfg,
 		router:           router,
@@ -203,7 +222,19 @@ func NewFacade(
 		contextStore:     contextStore,
 		audit:            audit,
 		sourceAssemblers: cfg.SourceAssemblers,
+		tracer:           noopTracer,
 	}, nil
+}
+
+// WithTracer attaches the spec 061 SCOPE-09b OTel tracer to the
+// facade. Safe to call exactly once after NewFacade and BEFORE Handle
+// is invoked concurrently. nil-safe: a nil tracer leaves the no-op
+// default in place so emission sites never panic.
+func (f *Facade) WithTracer(tr *tracing.Tracer) *Facade {
+	if tr != nil {
+		f.tracer = tr
+	}
+	return f
 }
 
 // Handle implements contracts.Assistant.
@@ -240,6 +271,43 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		turnTopScore        float64
 		turnAssistantTurnID string
 	)
+
+	// Spec 061 SCOPE-09b — `assistant.facade.handle` span (design
+	// §8.3.1.A item 2). Child of whatever span the caller already
+	// has in ctx (typically `assistant.adapter.translate` started by
+	// the transport adapter); becomes a root span when Handle is
+	// called directly in tests. The ctx is rebound so every
+	// downstream emission (context.load, router.classify, etc.)
+	// attaches as a child automatically per design §8.3.1.C.
+	hashedUserID := tracing.HashUserID(msg.UserID)
+	ctx, facadeSpan := f.tracer.StartSpan(ctx, "assistant.facade.handle",
+		transportLabel, hashedUserID, "", "", correlationID)
+	defer func() {
+		// scenario_id is empty at span start (pre-routing) and gets
+		// re-stamped here if routing selected one. design §8.3.1.B
+		// allows late attribute stamping for scenario_id.
+		if turnScenarioID != "" {
+			facadeSpan.SetAttributes(attribute.String("scenario_id", turnScenarioID))
+		}
+		if turnAssistantTurnID != "" {
+			facadeSpan.SetAttributes(attribute.String("assistant_turn_id", turnAssistantTurnID))
+		}
+		spanStatus := "ok"
+		spanErrCause := ""
+		switch {
+		case err != nil:
+			spanStatus = "error"
+			spanErrCause = "handle_failed"
+		case resp.ErrorCause != "":
+			spanStatus = "error"
+			spanErrCause = string(resp.ErrorCause)
+		case resp.CaptureRoute:
+			spanStatus = "noop"
+			spanErrCause = "capture_route"
+		}
+		tracing.EndSpan(facadeSpan, spanStatus, spanErrCause)
+	}()
+
 	defer func() {
 		latency := f.cfg.Now().Sub(turnStart).Seconds()
 		var outcome string
@@ -275,7 +343,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		)
 	}()
 
-	conv, _, loadErr := f.contextStore.Load(ctx, msg.UserID, msg.Transport)
+	conv, _, loadErr := f.loadContextWithSpan(ctx, msg.UserID, msg.Transport, transportLabel, hashedUserID, correlationID)
 	if loadErr != nil {
 		return contracts.AssistantResponse{}, fmt.Errorf("assistant: load context: %w", loadErr)
 	}
@@ -370,10 +438,10 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		RawInput:   msg.Text,
 		ScenarioID: shortcutScenarioID,
 	}
-	chosen, decision, ok := f.router.Route(ctx, env)
+	chosen, decision, ok := f.routeWithSpan(ctx, env, transportLabel, hashedUserID, correlationID)
 
 	// --- Step 5: borderline post-processor ---
-	band := Borderline(decision, ok, f.cfg.BorderlineFloor, f.cfg.AgentConfidenceFloor)
+	band := f.borderlineWithSpan(ctx, decision, ok, transportLabel, hashedUserID, correlationID)
 	turnBand = band
 	turnTopScore = decision.TopScore
 	assistantmetrics.RouterBandTotal.WithLabelValues(string(band), transportLabel).Inc()
@@ -523,7 +591,10 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 
 		// Provenance gate (requires_provenance scenarios only).
-		resp = provenance.Enforce(f.manifest.RequiresProvenance(scenarioID), scenarioID, provenanceCause, resp)
+		resp = f.enforceProvenanceWithSpan(ctx,
+			f.manifest.RequiresProvenance(scenarioID),
+			scenarioID, provenanceCause, resp,
+			transportLabel, hashedUserID, correlationID)
 
 	default:
 		// Unreachable — Band vocabulary is closed.
@@ -623,7 +694,29 @@ func (f *Facade) appendTurnAndPersist(
 	if conv.SchemaVersion == 0 {
 		conv.SchemaVersion = 1
 	}
-	_ = f.contextStore.Persist(ctx, conv)
+	// Spec 061 SCOPE-09b — `assistant.context.persist` span (design
+	// §8.3.1.A item 8). transport/hashed-user/correlation come from
+	// the msg+resp envelope; scenario_id is stamped from the
+	// response when routing selected one.
+	scenarioForSpan := ""
+	if resp.Routing != nil {
+		scenarioForSpan = resp.Routing.Chosen
+	}
+	ctxPersist, persistSpan := f.tracer.StartSpan(ctx, "assistant.context.persist",
+		normalizeTransportLabel(msg.Transport),
+		tracing.HashUserID(msg.UserID),
+		facadeTurnIDFromTime(emittedAt),
+		scenarioForSpan,
+		facadeCorrelationFromMsg(msg, emittedAt))
+	persistErr := f.contextStore.Persist(ctxPersist, conv)
+	persistStatus := "ok"
+	persistCause := ""
+	if persistErr != nil {
+		persistStatus = "error"
+		persistCause = "persist_failed"
+	}
+	tracing.EndSpan(persistSpan, persistStatus, persistCause)
+	_ = persistErr // existing contract: persist errors are swallowed
 	return conv
 }
 
@@ -650,7 +743,30 @@ func (f *Facade) writeAudit(
 		Response:           resp,
 		EmittedAt:          resp.EmittedAt,
 	}
-	_ = f.audit.Write(ctx, turn)
+	// Spec 061 SCOPE-09b — `assistant.audit.write` span (design
+	// §8.3.1.A item 9). Errors from the writer are intentionally
+	// swallowed (existing contract); the span captures the failure
+	// for observability so dashboards can alert on a flatlined
+	// audit-write rate.
+	scenarioForSpan := ""
+	if decision != nil {
+		scenarioForSpan = decision.Chosen
+	}
+	ctxAudit, auditSpan := f.tracer.StartSpan(ctx, "assistant.audit.write",
+		normalizeTransportLabel(msg.Transport),
+		tracing.HashUserID(msg.UserID),
+		facadeTurnIDFromTime(resp.EmittedAt),
+		scenarioForSpan,
+		facadeCorrelationFromMsg(msg, resp.EmittedAt))
+	writeErr := f.audit.Write(ctxAudit, turn)
+	writeStatus := "ok"
+	writeCause := ""
+	if writeErr != nil {
+		writeStatus = "error"
+		writeCause = "audit_write_failed"
+	}
+	tracing.EndSpan(auditSpan, writeStatus, writeCause)
+	_ = writeErr // existing contract: audit errors are swallowed
 }
 
 // translateFinalToBody renders the InvocationResult.Final JSON to a
@@ -842,6 +958,107 @@ func agentTraceID(assistantTurnID string) string {
 		return ""
 	}
 	return "trace-" + assistantTurnID
+}
+
+// facadeCorrelationFromMsg derives the correlation_id stamped on the
+// late persist/audit spans from the transport metadata. Falls back to
+// the deterministic assistant turn id when the transport supplied no
+// correlation token (matches the existing slog fallback in Handle's
+// deferred log closure so all three signals — span, log, audit row —
+// share the same identifier).
+func facadeCorrelationFromMsg(msg contracts.AssistantMessage, emittedAt time.Time) string {
+	if msg.TransportMetadata != nil {
+		if v, ok := msg.TransportMetadata["telegram_update_id"]; ok && v != "" {
+			return v
+		}
+	}
+	return facadeTurnIDFromTime(emittedAt)
+}
+
+// loadContextWithSpan wraps contextStore.Load in the
+// `assistant.context.load` span (design §8.3.1.A item 3). status/
+// error_cause are derived from the loader's error return.
+func (f *Facade) loadContextWithSpan(
+	ctx context.Context,
+	userID, transport, transportLabel, hashedUserID, correlationID string,
+) (assistantctx.Conversation, bool, error) {
+	ctxSpan, span := f.tracer.StartSpan(ctx, "assistant.context.load",
+		transportLabel, hashedUserID, "", "", correlationID)
+	conv, existed, err := f.contextStore.Load(ctxSpan, userID, transport)
+	if err != nil {
+		tracing.EndSpan(span, "error", "load_failed")
+		return conv, existed, err
+	}
+	tracing.EndSpan(span, "ok", "")
+	return conv, existed, nil
+}
+
+// routeWithSpan wraps router.Route in the `assistant.router.classify`
+// span (design §8.3.1.A item 4). When routing selects a scenario the
+// chosen id is re-stamped on the span so dashboards can group by it.
+func (f *Facade) routeWithSpan(
+	ctx context.Context,
+	env agent.IntentEnvelope,
+	transportLabel, hashedUserID, correlationID string,
+) (*agent.Scenario, agent.RoutingDecision, bool) {
+	ctxSpan, span := f.tracer.StartSpan(ctx, "assistant.router.classify",
+		transportLabel, hashedUserID, "", "", correlationID)
+	chosen, decision, ok := f.router.Route(ctxSpan, env)
+	if decision.Chosen != "" {
+		span.SetAttributes(attribute.String("scenario_id", decision.Chosen))
+	}
+	if ok {
+		tracing.EndSpan(span, "ok", "")
+	} else {
+		// Router could not classify confidently — that is a noop
+		// from the routing perspective (no error), and the band
+		// post-processor downstream decides borderline vs low.
+		tracing.EndSpan(span, "noop", "no_high_confidence_match")
+	}
+	return chosen, decision, ok
+}
+
+// borderlineWithSpan wraps the pure Borderline() post-processor in
+// the `assistant.router.band` span (design §8.3.1.A item 5). The span
+// is intentionally thin — Borderline does no I/O — but its presence
+// keeps the canonical tree shape verifiable per §8.3.1.
+func (f *Facade) borderlineWithSpan(
+	ctx context.Context,
+	decision agent.RoutingDecision, ok bool,
+	transportLabel, hashedUserID, correlationID string,
+) Band {
+	_, span := f.tracer.StartSpan(ctx, "assistant.router.band",
+		transportLabel, hashedUserID, decision.Chosen, "", correlationID)
+	band := Borderline(decision, ok, f.cfg.BorderlineFloor, f.cfg.AgentConfidenceFloor)
+	// Stamp the resolved band as a closed-vocab attribute so
+	// dashboards can filter by it.
+	span.SetAttributes(attribute.String("band", string(band)))
+	tracing.EndSpan(span, "ok", "")
+	return band
+}
+
+// enforceProvenanceWithSpan wraps provenance.Enforce in the
+// `assistant.provenance.check` span (design §8.3.1.A item 6). When
+// the gate refuses, the refusal cause is captured as error_cause so
+// dashboards can attribute provenance refusals correctly.
+func (f *Facade) enforceProvenanceWithSpan(
+	ctx context.Context,
+	requiresProvenance bool, scenarioID string,
+	cause contracts.ProvenanceCause, resp contracts.AssistantResponse,
+	transportLabel, hashedUserID, correlationID string,
+) contracts.AssistantResponse {
+	_, span := f.tracer.StartSpan(ctx, "assistant.provenance.check",
+		transportLabel, hashedUserID, scenarioID, "", correlationID)
+	out := provenance.Enforce(requiresProvenance, scenarioID, cause, resp)
+	spanStatus := "ok"
+	spanCause := ""
+	if out.ErrorCause != resp.ErrorCause && out.ErrorCause != "" {
+		// Gate flipped the response into a refusal.
+		spanStatus = "error"
+		spanCause = string(out.ErrorCause)
+	}
+	tracing.EndSpan(span, spanStatus, spanCause)
+	return out
 }
 
 // resolvePendingDisambig implements the Step-1.5 disambiguation

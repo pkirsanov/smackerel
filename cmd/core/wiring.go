@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/smackerel/smackerel/internal/api"
 	extensiondevices "github.com/smackerel/smackerel/internal/api/admin/extensiondevices"
 	extensioningest "github.com/smackerel/smackerel/internal/api/connectors/extension"
+	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/config"
@@ -102,6 +104,52 @@ func resolveBroadcasterInstanceID() (string, error) {
 		return "", fmt.Errorf("HOSTNAME env var is empty — refusing to construct revocation broadcaster (HL-RESCAN-008 / Gate G028 / spec 044: silent fallback to a literal instance name would defeat per-replica deduplication)")
 	}
 	return hostname, nil
+}
+
+// assistantTracingProbeTimeout bounds the fail-loud TCP probe that
+// initAssistantTracing runs against ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT
+// when otel_enabled=true. 5 s is generous enough for a slow-starting
+// jaegertracing/all-in-one sidecar coming up alongside core under the
+// dev-otel or test compose profile, and short enough that a genuinely
+// unreachable endpoint produces a startup error well within the
+// SMACKEREL_STARTUP_GRACE window.
+const assistantTracingProbeTimeout = 5 * time.Second
+
+// initAssistantTracing constructs the spec 061 SCOPE-09a OTel SDK
+// substrate (design §8.3.1 + §8.3.2 Step 1).
+//
+// When cfg.Assistant.Observability.OtelEnabled=false, the call
+// short-circuits to assistanttracing.NewTracer's no-op TracerProvider
+// path — NO network operation is performed, the returned *Tracer
+// emits no-op spans, and ShutdownFunc returns nil immediately.
+//
+// When cfg.Assistant.Observability.OtelEnabled=true, the call FIRST
+// runs a fail-loud TCP connect probe against
+// cfg.Assistant.Observability.OtelEndpoint with assistantTracingProbeTimeout.
+// The probe is required because otlptracegrpc dials its gRPC channel
+// lazily by default: without this probe, an unreachable endpoint would
+// silently buffer spans until the BatchSpanProcessor queue overflows.
+// Per design §7.2-OTel validation rule we abort startup instead. The
+// error message names the SST key so operators correct the bundle.
+// On probe success, the SDK is constructed and the returned
+// ShutdownFunc MUST be wired into shutdownAll's final flush step.
+func initAssistantTracing(ctx context.Context, cfg *config.Config) (*assistanttracing.Tracer, assistanttracing.ShutdownFunc, error) {
+	obs := cfg.Assistant.Observability
+	if obs.OtelEnabled {
+		probeCtx, cancel := context.WithTimeout(ctx, assistantTracingProbeTimeout)
+		defer cancel()
+		var d net.Dialer
+		conn, err := d.DialContext(probeCtx, "tcp", obs.OtelEndpoint)
+		if err != nil {
+			return nil, nil, fmt.Errorf("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT %q unreachable (TCP probe failed): %w (spec 061 SCOPE-09a design §7.2-OTel validation rule; aborting startup rather than silently buffering spans against an unreachable exporter)", obs.OtelEndpoint, err)
+		}
+		_ = conn.Close()
+	}
+	return assistanttracing.NewTracer(ctx, assistanttracing.Config{
+		Enabled:     obs.OtelEnabled,
+		Endpoint:    obs.OtelEndpoint,
+		ServiceName: obs.OtelServiceName,
+	})
 }
 
 // buildAPIDeps assembles the api.Dependencies struct including annotation and

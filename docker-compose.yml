@@ -348,6 +348,44 @@ services:
       com.smackerel.component: test-stub
       com.smackerel.lifecycle: ephemeral
 
+  # Spec 061 SCOPE-09a design §8.3.2 Step 1 — Jaeger all-in-one sidecar
+  # for OTel span emission. Lifecycle: ENABLED ONLY when the `test` or
+  # `dev-otel` compose profile is selected (matches §18.4 stub-providers
+  # pattern). Production and home-lab stacks NEVER see this container.
+  # When started, the test/dev core flips ASSISTANT_OBSERVABILITY_OTEL_ENABLED=true
+  # via env override and points ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT at
+  # smackerel-test-jaeger:4317 so OTLP/gRPC spans land in the in-memory
+  # Jaeger UI at :16686 for the per-turn span-tree assertion test in
+  # SCOPE-09b. Zero persistent volume — fully recreated per test run
+  # per bubbles-test-environment-isolation.
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: smackerel-test-jaeger
+    profiles:
+      - test
+      - dev-otel
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      # Jaeger UI (browser-accessible during dev-otel sessions).
+      - "127.0.0.1:16686:16686"
+      # OTLP/gRPC receiver — what cmd/core's exporter dials.
+      - "127.0.0.1:4317:4317"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:14269/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      com.smackerel.component: jaeger-sidecar
+      com.smackerel.lifecycle: ephemeral
+
 volumes:
   postgres-data:
     name: ${POSTGRES_VOLUME_NAME}

@@ -1184,6 +1184,14 @@ ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH="$(required_value assistant.transport
 # capture-fallback coverage thresholds.
 ASSISTANT_EVAL_ROUTING_ACCURACY_MIN="$(required_value assistant.eval.routing_accuracy_min)"
 ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN="$(required_value assistant.eval.capture_fallback_min)"
+# Spec 061 SCOPE-09a design §8.3.1 + §8.3.2 Step 1 — OTel SDK substrate
+# SST keys. All three are REQUIRED at the generator boundary per
+# smackerel-no-defaults. otel_endpoint is permissively-empty here
+# because empty resolution is legal when otel_enabled=false; the Go
+# validator enforces non-empty when otel_enabled=true.
+ASSISTANT_OBSERVABILITY_OTEL_ENABLED="$(required_value assistant.observability.otel_enabled)"
+ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT="$(yaml_get assistant.observability.otel_endpoint)"
+ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME="$(required_value assistant.observability.otel_service_name)"
 # Per-target override for the test e2e suite: force webhook mode and
 # inject a stable, known test secret so the BS-001 webhook e2e shell
 # test can POST authenticated requests against the live test stack.
@@ -1695,6 +1703,9 @@ ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH=${ASSISTANT_TRANSPORTS_TELEGRAM_WEBHO
 ASSISTANT_TELEGRAM_WEBHOOK_SECRET=${ASSISTANT_TELEGRAM_WEBHOOK_SECRET}
 ASSISTANT_EVAL_ROUTING_ACCURACY_MIN=${ASSISTANT_EVAL_ROUTING_ACCURACY_MIN}
 ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=${ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN}
+ASSISTANT_OBSERVABILITY_OTEL_ENABLED=${ASSISTANT_OBSERVABILITY_OTEL_ENABLED}
+ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT=${ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT}
+ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME=${ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME}
 POSTGRES_CPU_LIMIT=${POSTGRES_CPU_LIMIT}
 POSTGRES_MEMORY_LIMIT=${POSTGRES_MEMORY_LIMIT}
 NATS_CPU_LIMIT=${NATS_CPU_LIMIT}
