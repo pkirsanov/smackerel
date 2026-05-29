@@ -92,3 +92,44 @@ func indexAnyWhitespace(s string) int {
 	}
 	return -1
 }
+
+// StripShortcutPrefix returns the natural-language tail after a v1
+// slash-command shortcut, or the trimmed input verbatim if no v1
+// shortcut is present.
+//
+// Spec 061 Round-55 Defect-3 fix: the capability-layer dispatch must
+// hand the executor a clean query string for the structured_context
+// payload that satisfies each scenario's input_schema. The raw
+// msg.Text still carries the slash prefix; this helper strips it.
+//
+// Examples:
+//   - "/ask what is the weather" → "what is the weather"
+//   - "/weather"                 → ""           (bare shortcut, no body)
+//   - "  /remind   tomorrow   "  → "tomorrow"   (whitespace normalized)
+//   - "hello there"              → "hello there"
+//   - "/help anything"           → "/help anything" (not in v1 set)
+//   - ""                         → ""
+//
+// The function is pure and follows the same case-sensitive, first-token
+// matching contract as LookupShortcut. Both the input and the returned
+// body are TrimSpace-normalized so downstream consumers (LLM prompts,
+// schema-validated structured_context) see clean text. Safe for
+// concurrent use.
+func StripShortcutPrefix(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+	first := trimmed
+	i := indexAnyWhitespace(trimmed)
+	if i >= 0 {
+		first = trimmed[:i]
+	}
+	if _, ok := SlashShortcuts[first]; !ok {
+		return trimmed
+	}
+	if i < 0 {
+		return ""
+	}
+	return strings.TrimSpace(trimmed[i:])
+}

@@ -83,3 +83,66 @@ func TestSlashShortcutsClosedVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestStripShortcutPrefix covers the Spec 061 Round-55 Defect-3 helper
+// used by the capability-layer dispatch to extract the natural-language
+// body from a slash-command input. Adversarial cases (unrecognized
+// prefix, bare shortcut without body, mixed whitespace, case-sensitive
+// non-matches) guard against regressions that would re-introduce the
+// pre-fix behavior where the executor saw nil StructuredContext.
+func TestStripShortcutPrefix(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		// --- v1 slash commands with natural-language bodies ---
+		{name: "/ask with body", text: "/ask what is the weather", want: "what is the weather"},
+		{name: "/weather with body", text: "/weather barcelona tomorrow", want: "barcelona tomorrow"},
+		{name: "/remind with body", text: "/remind 9am submit report", want: "9am submit report"},
+		{name: "/reset with body", text: "/reset now please", want: "now please"},
+
+		// --- bare shortcuts return empty body (LLM gets empty query) ---
+		{name: "/ask bare", text: "/ask", want: ""},
+		{name: "/weather bare", text: "/weather", want: ""},
+		{name: "/remind bare", text: "/remind", want: ""},
+		{name: "/reset bare", text: "/reset", want: ""},
+
+		// --- whitespace normalization ---
+		{name: "leading whitespace", text: "   /ask hello", want: "hello"},
+		{name: "trailing whitespace", text: "/ask hello   ", want: "hello"},
+		{name: "mixed inner whitespace", text: "/ask   what    is    X", want: "what    is    X"},
+		{name: "tab between prefix and body", text: "/remind\tin 5 minutes", want: "in 5 minutes"},
+		{name: "newline between prefix and body", text: "/weather\nbarcelona", want: "barcelona"},
+
+		// --- adversarial: unrecognized prefix must be returned verbatim ---
+		{name: "/foobar unrecognized", text: "/foobar baz", want: "/foobar baz"},
+		{name: "/help unrecognized", text: "/help anything", want: "/help anything"},
+		{name: "/asking longer command", text: "/asking question", want: "/asking question"},
+		{name: "/askx no whitespace", text: "/askx", want: "/askx"},
+
+		// --- adversarial: case-sensitive non-match ---
+		{name: "/Ask uppercase A", text: "/Ask hello", want: "/Ask hello"},
+		{name: "/ASK all caps", text: "/ASK hello", want: "/ASK hello"},
+
+		// --- plain text without slash returns trimmed verbatim ---
+		{name: "plain text", text: "what time is it", want: "what time is it"},
+		{name: "plain text with surrounding ws", text: "  hello world  ", want: "hello world"},
+
+		// --- empty inputs ---
+		{name: "empty string", text: "", want: ""},
+		{name: "whitespace only", text: "   \n\t ", want: ""},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := StripShortcutPrefix(tc.text); got != tc.want {
+				t.Errorf("StripShortcutPrefix(%q) = %q; want %q", tc.text, got, tc.want)
+			}
+		})
+	}
+}
