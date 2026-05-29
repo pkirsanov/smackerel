@@ -7375,3 +7375,145 @@ Two parallel-safe options:
 
 The owner-only DoD #6 (uservalidation ratification) is not dispatchable to an agent.
 
+---
+
+## Round 47 — SCOPE-10 BQG docs-alignment partial close (`bubbles.docs` parent-expanded, 2026-05-30) {#round-47-docs-alignment}
+
+**Scope:** Spec 061 SCOPE-10 Build Quality Gate `docs aligned (harness documented in docs/smackerel.md)` sub-item and SCOPE-10 Implementation Plan step 7.
+
+**Tool-availability:** `runSubagent` unavailable in current VSCode IDE runtime; per repo precedent (Rounds 20-23) this round is parent-expanded inline `bubbles.docs` execution by `bubbles.workflow`. Recorded in invocation ledger.
+
+**Context:** Round 46 honestly recorded `SCOPE-10-DOCS-PENDING` — the harness substrate existed in `docs/Testing.md` lines 565+ but `docs/smackerel.md` had no Assistant Evaluation Harness reference, and SCOPE-10 Implementation Plan step 7 plus the BQG sub-item explicitly require documentation in `docs/smackerel.md`. Round 47 closes the docs-alignment finding while honestly leaving the BQG checkbox `[ ]` because the `zero deferrals` sub-clause is still blocked by 6 `skip-77` regression fixtures owned by SCOPE-10 DoD #7.
+
+### Quality gate re-verification (Claim Source: executed)
+
+All four mechanical build-quality gates ran clean against HEAD `2886d516` + the working-tree docs/smackerel.md edit:
+
+```text
+$ ./smackerel.sh test unit
+... [Go unit + Python pytest both run; output truncated in capture] ...
+462 passed in 7.83s   # Python pytest
+UNIT_EXIT=0
+
+$ ./smackerel.sh lint
+All checks passed!
+=== Validating web manifests ===
+  OK: web/pwa/manifest.json
+  OK: PWA manifest has required fields
+  OK: web/extension/manifest.json
+  OK: Chrome extension manifest has required fields (MV3)
+  OK: web/extension/manifest.firefox.json
+  OK: Firefox extension manifest has required fields (MV2 + gecko)
+=== Validating JS syntax ===
+  OK: web/pwa/app.js
+  OK: web/pwa/sw.js
+  OK: web/pwa/lib/queue.js
+  OK: web/extension/background.js
+  OK: web/extension/popup/popup.js
+  OK: web/extension/lib/queue.js
+  OK: web/extension/lib/browser-polyfill.js
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+LINT_EXIT=0
+
+$ ./smackerel.sh format --check
+53 files already formatted
+FORMAT_EXIT=0
+
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant
+✅ state.json v3 has recommended field: executionHistory
+✅ Top-level status matches certification.status
+⚠️  state.json uses deprecated field 'scopeProgress' — see scope-workflow.md state.json canonical schema v2
+ℹ️  Workflow mode 'full-delivery' allows status 'done'; current status is 'in_progress'
+✅ report.md contains section matching: ###[[:space:]]+Summary|^##[[:space:]]+Summary
+✅ report.md contains section matching: ###[[:space:]]+Completion Statement|^##[[:space:]]+Completion Statement
+✅ report.md contains section matching: ###[[:space:]]+Test Evidence|^##[[:space:]]+Test Evidence
+✅ Mode-specific report gates skipped (status not in promotion set)
+✅ Value-first selection rationale lint skipped (not a value-first report)
+✅ Scenario path-placeholder lint skipped (no matching scenario sections found)
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+ARTIFACT_LINT_EXIT=0
+```
+
+The artifact-lint `scopeProgress` deprecation is a pre-existing informational warning (legacy schema field carried forward across multiple rounds), not a SCOPE-10-owned regression.
+
+### Docs-alignment edit (Claim Source: executed)
+
+Added `#### 3.8.5 Evaluation Harness — tests/eval/assistant/` to `docs/smackerel.md` immediately before `## 4. OpenClaw Integration Strategy`. The new subsection covers:
+
+- The §3 Success Signal acceptance contract as a table mapping the two SST keys (`assistant.eval.routing_accuracy_min` ≥ 0.85, `assistant.eval.capture_fallback_min` = 1.0) with explicit NO-DEFAULTS / fail-loud SST citation
+- Corpus shape (≥150 rows, ≥30 per intent label, closed vocabulary, structural invariants enforced by `corpus_validation_test.go`)
+- Harness shape (driver, acceptance-gate test name + build tag, determinism guard, anti-tautology guard)
+- Per-behavioral-scenario regression slot convention (BS-001..BS-010 with substrate-blocked stubs documented as carry-forward findings)
+- Explicit cross-link to `docs/Testing.md → Assistant Evaluation Harness` for operational detail
+
+Verified by post-edit grep that `docs/smackerel.md` line 890 anchor `#### 3.8.5 Evaluation Harness — tests/eval/assistant/` now exists alongside the pre-existing 3.8.1–3.8.4 subsections.
+
+### DoD status this round
+
+NO DoD checkboxes flipped. The SCOPE-10 BQG (`[ ]` at scopes.md SCOPE-10 line "Zero warnings; zero deferrals; lint + format clean; artifact lint clean; docs aligned …") still cannot be flipped because the `zero deferrals` sub-clause is honestly violated by 6 active `reg_skip_with_blocker` stubs in `tests/e2e/assistant_regression/bs_NNN_*.sh` owned by SCOPE-10 DoD #7 (per-BS regression):
+
+| BS slot | Fixture state | Deferral cause |
+|---------|---------------|----------------|
+| BS-002 `bs_002_retrieval_qa.sh` | `skip-77` | graph seeding substrate not yet authored |
+| BS-004 `bs_004_notification_confirm.sh` | `skip-77` | scheduler stub substrate not yet authored |
+| BS-005 `bs_005_ambiguous_disambig.sh` | `skip-77` | borderline-router seeding substrate not yet authored |
+| BS-007 `bs_007_provenance_violation.sh` | `skip-77` | LLM-no-source stub substrate not yet authored |
+| BS-008 `bs_008_disabled_skill.sh` | `skip-77` | manifest-hot-flip harness substrate not yet authored |
+| BS-009 `bs_009_sst_missing_boot_failure.sh` | `skip-77` | SST-failure-injection substrate not yet authored |
+
+Mechanical BQG sub-items (lint clean, format clean, artifact-lint clean, docs aligned in `docs/smackerel.md`) all PASS — only "zero deferrals" remains blocked. The honest position is to record this partial progress here rather than flip the BQG checkbox while skip-77 stubs persist.
+
+### Finding-closure summary
+
+**Addressed this round (1):**
+- `SCOPE-10-DOCS-PENDING` — `docs/smackerel.md` §3.8.5 Evaluation Harness subsection authored with full design-level contract + cross-link to `docs/Testing.md` for operational detail. Implementation Plan step 7 satisfied. BQG `docs aligned` sub-item satisfied.
+
+**Carry-forward (4, unchanged):**
+- `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` — depends on disposable test stack bring-up + SCOPE-05-E2E-INJECTION-MECHANISM
+- `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING` — 4 delegate fixtures executable now; 6 substrate-blocked stubs need substrate authoring (graph seeding, scheduler stub, borderline seeding, LLM-no-source stub, manifest-hot-flip harness, SST-failure-injection harness)
+- `SCOPE-10-BROADER-E2E-GREEN-PENDING` — full `./smackerel.sh test e2e` against deployed stack
+- `SCOPE-10-USERVALIDATION-RATIFICATION-PENDING` — spec 061 owner-only; not agent-flippable
+
+**NEW findings raised this round (1):**
+- `SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING` — 6 of 10 BS regression fixtures hold `reg_skip_with_blocker` deferrals owned by SCOPE-10 DoD #7. Cannot flip BQG until each substrate dependency closes and each affected fixture flips from `reg_skip_with_blocker` to the in-tree `EXECUTED_PATTERN` heredoc assertion body. Owner: bubbles.implement (multi-round substrate authoring).
+
+### Cross-spec carry-forward (foreign-owned; no progress this round)
+
+- `SCOPE-05-PACKET-060-ACCEPTANCE` — spec 060 owner acceptance pending
+- `SCOPE-08-PACKET-054-BLOCKED` — spec 054 packet acceptance pending
+- `SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054` — Gate G026 stress test for SCOPE-08 deferred until packet 054 resolves
+
+### Files modified this round (2; spec artifacts plus one docs file — zero production code)
+
+- `docs/smackerel.md` — added §3.8.5 Evaluation Harness subsection (78 new lines; cross-links to `docs/Testing.md`)
+- `specs/061-conversational-assistant/report.md` — Round 47 section appended with anchor `{#round-47-docs-alignment}`
+- `specs/061-conversational-assistant/state.json` — Round 47 entry prepended to `execution.executionHistory[0]` (updated separately)
+
+NOT MODIFIED: `scopes.md` DoD checkboxes (BQG honestly NOT flipped per `zero deferrals` analysis above), `spec.md`, `design.md`, `uservalidation.md`, `scenario-manifest.json`, `certification.*`, `completedScopes`, `scopeProgress`, top-level status, `statusCeiling`, `workflowMode`, any `cross-spec/`, any spec other than 061, any production source under `cmd/`, `internal/`, `ml/`, `web/`, `tests/`, `scripts/`.
+
+### Round 47 outcome
+
+- `completed_owned` for the docs-alignment slice. Resolved 1 finding (`SCOPE-10-DOCS-PENDING`). Raised 1 new finding (`SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING`) that clarifies the BQG blocker for future rounds.
+- SCOPE-10 status remains **In Progress** (4 of 4 mechanical BQG sub-items pass; BQG checkbox `[ ]` blocked by deferrals sub-clause; 4 of 9 core+BQG DoD items `[x]`).
+- Spec 061 status remains `in_progress`; `certification.scopeProgress` unchanged (6 done, 11 total).
+- Mode `full-delivery` convergence loop: this round closed the one cleanly-closable inline finding without test-stack bring-up. Remaining work for SCOPE-10 terminal `done` requires (a) test-stack bring-up + live runs for 4 delegate regression fixtures + Telegram smoke (~30 min budget), (b) substrate authoring for 6 BS scenarios (multi-round), (c) spec 061 owner ratification of `uservalidation.md`, plus the foreign-owned blockers on SCOPE-05 and SCOPE-08.
+
+### Recommended next dispatch (Round 48)
+
+The full-delivery convergence loop for spec 061 is BLOCKED on the convergence cap (G082) sense because: (a) foreign-owned cross-spec packets (SCOPE-05 #11 packet 060 acceptance, SCOPE-08 #7 packets 054+060) cannot be agent-closed, (b) SCOPE-10 DoD #6 uservalidation ratification is owner-only and not agent-flippable, (c) substrate authoring for 6 BS scenarios is itself many specialist rounds (graph seeding, scheduler stubs, SST failure-injection, etc.), and (d) live-stack e2e runs for the 4 currently-executable delegate fixtures require disposable test stack bring-up that this run did not attempt. Honest position: this run should EMIT a `blocked` envelope with the finding ledger and next-required-owner chain, rather than fabricating further progress.
+
+If continuation is desired, the natural next dispatches are (in order of independence):
+
+1. `bubbles.implement` against SCOPE-10 DoD #5 + DoD #7 (delegate slice) — bring up disposable test stack, run BS-001/003/006 + Telegram smoke fixtures, capture live exit codes; this closes ~half of SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING and ~all of SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING for the executable subset.
+2. `bubbles.plan` + `bubbles.design` against the 6 substrate-blocked BS scenarios — produce a multi-round substrate authoring plan.
+3. Spec 060 + spec 054 owners — accept the routed packets so SCOPE-05 #11 and SCOPE-08 #7 can close.
+4. Spec 061 owner — ratify `uservalidation.md` items.
+
