@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.test",
-    "currentPhase": "test",
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
     "currentScope": "SCOPE-06",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-29T19:10:00Z",
+    "lastUpdatedAt": "2026-05-29T19:25:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,30 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.workflow",
+        "phasesExecuted": ["test"],
+        "runStartedAt": "2026-05-29T19:11:00Z",
+        "runCompletedAt": "2026-05-29T19:25:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 53 (full-delivery; G082 convergence iteration 5 of 10 in current orchestrator session — distinct iteration from Round 51+52 because verification produced a NEW finding that re-triggers planning). Owner: bubbles.workflow parent-expanded bubbles.test (runSubagent unavailable in current VSCode IDE runtime; executionModel=parent-expanded-child-mode). Trigger: Round 52 outcome envelope route_required → bubbles.test. EXECUTED (Claim Source: executed in this session): (1) git pull (no remote drift; HEAD 08fcb350); (2) static re-verification: go vet ./... EXIT=0, go build ./... EXIT=0; (3) rebuilt smackerel-core test image via ./smackerel.sh build (new image digest sha256:d74493acf89b...); (4) cycled test stack: ./smackerel.sh down → up; final state docker compose -p smackerel-test ps shows 7 containers Up with 6 healthy (core/ml/postgres/nats/ollama/redis) + 1 pre-existing-unhealthy stub-providers (port-mismatch unrelated to spec 061); (5) ran tests/e2e/assistant_bs002_test.sh — captured verbatim assistant_turn slog: {\"correlation_id\":\"178008203717401\",\"scenario_id\":\"retrieval_qa\",\"top_score\":0,\"band\":\"high\",\"status\":\"saved_as_idea\",\"error_cause\":\"\",\"body_redacted\":true}. Defect 1 PROVEN FIXED (correlation_id is real Telegram update_id, no longer '0'). Defect 2 PROVEN FIXED (scenario_id='retrieval_qa' and band='high' with top_score=0 — unique fingerprint of explicit-ID fast path through new BandHigh branch). Fixture FAIL message: 'BS-002: status=saved_as_idea on happy path; provenance gate refused (empty Sources?); /ask was routed but assembler produced no citations'; (6) ran tests/e2e/assistant_bs007_test.sh — EXIT=0 (PASS); slog: {\"correlation_id\":\"178008216323755\",\"scenario_id\":\"retrieval_qa\",\"band\":\"high\",\"status\":\"saved_as_idea\",\"error_cause\":\"\",\"body_redacted\":true}. BS-007's adversarial guard (scenario_id==retrieval_qa AND status==saved_as_idea uniquely identifies the gate-rewrite path; capture-fallback would have scenario_id='') independently confirms Round 52 fixes on a second /ask path; (7) ran tests/e2e/test_telegram_assistant_bs001.sh as regression — EXIT=0 (all 3 rows PASS: happy-path 200, wrong-secret 401, missing-header 401). Round 52 signature changes did NOT regress SCOPE-05-E2E-INJECTION-MECHANISM. NEW FINDING raised (per user verbatim contingency 'If Defect 1 or 2 fix reveals a DEEPER bug ... file a new finding back to bubbles.plan and re-route honestly'): BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER — after router correctly routes /ask to retrieval_qa with band=high, the assembler/retrieval layer produces zero citations for the seeded artifact (artifact_id=01KSTJGMKPW7M21GBVFQ7SWAZD), so the provenance gate refuses with status=saved_as_idea. Hypothesized root-cause candidates for bubbles.plan to evaluate (LOC budgets are estimates): (A) explicit-ID fast path bypasses retrieval, assembler runs with empty Sources ~30 LOC; (B) embedder is NoopEmbedder in test config so vector search returns nothing ~10 LOC; (C) seeded /api/capture artifact not indexed into retrieval store ~50 LOC; (D) LLM does not cite artifact in expected format ~5 LOC; (E) provenance gate cited_artifact_ids lookup mismatch ~20 LOC. NOTE on BS-007 DoD #5b: fixture passes but DoD #5b additionally requires Prometheus counter assertion + PG idea artifact-row check + reconciliation of error_cause discrepancy (DoD text says 'missing_provenance', gate code intentionally emits empty per its own L89 comment) — partial green is not full green; bubbles.plan must reconcile. FILES MODIFIED THIS ROUND (2, narrative-only; ZERO production code): specs/061-conversational-assistant/report.md (Round 53 section with anchor #round-53-bs002-routing-defect-live-stack-verification), specs/061-conversational-assistant/state.json (this entry + execution.activeAgent/currentPhase/lastUpdatedAt bump). NOT MODIFIED: scopes.md DoD checkboxes (no flips — Defect 3 still blocks SCOPE-06 DoD #4b/#5b/#6; flipping would be Gate G021 fabrication / Gate G041 manipulation), spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.* fields (preserved verbatim), completedScopes, scopeProgress, top-level status, statusCeiling, workflowMode, any cross-spec/, any spec other than 061, any production source under internal/, cmd/, ml/. SCOPE-06 final status this round: In Progress (DoD #4b/#5b/#6 still [ ] blocked by Defect 3, not by Defects 1/2). Spec 061 status: in_progress (unchanged). Outcome envelope: route_required → bubbles.plan for Round 54 triage of BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER. Entry condition: read internal/assistant/facade.go, internal/assistant/scenarios/retrieval_qa/, internal/assistant/provenance/gate.go, internal/agent/tools/retrieval/, config/generated/test.env; produce options A/B/C/D/E with LOC budget, adversarial test plan; route to bubbles.implement for Round 55.",
+        "addressedFindings": [
+          "BS-002-LIVE-STACK-CORRELATION-ID-LOST",
+          "BS-002-LIVE-STACK-BORDERLINE-LOW-FOR-EXPLICIT-ID"
+        ],
+        "unresolvedFindings": [
+          "SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING",
+          "SCOPE-10-BROADER-E2E-GREEN-PENDING",
+          "SCOPE-10-USERVALIDATION-RATIFICATION-PENDING",
+          "SCOPE-10-BQG-DEFERRAL-SUBSTRATE-PENDING",
+          "BS-002-LIVE-STACK-NO-CITATIONS-FROM-ASSEMBLER",
+          "SCOPE-05-PACKET-060-ACCEPTANCE",
+          "SCOPE-08-PACKET-054-BLOCKED",
+          "SCOPE-08-STRESS-G026-DEFERRED-UNTIL-054"
+        ]
+      },
       {
         "agent": "bubbles.workflow",
         "phasesExecuted": ["implement", "test"],
