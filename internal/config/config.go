@@ -1779,15 +1779,14 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK)
-	// — under SMACKEREL_ENV=test, every model env var MUST be
-	// SST-overridden away from the production literal (gemma3:4b).
-	// Runs BEFORE validateModelEnvelopes because the leak is a more
-	// specific SST contract violation; the envelope check would
-	// otherwise mask it with a "missing memory profile" error.
-	if err := c.validateTestEnvModelOverrides(); err != nil {
-		return err
-	}
+	// Spec 061 Round 66 (2026-05-30) — operator quality directive reversed
+	// the Round 64 SCOPE-06a test-env model override requirement. Test env
+	// now inherits the base `gemma3:4b` defaults (background latency
+	// acceptable; retrieval-qa-v1 timeout raised to 60s). The
+	// `validateTestEnvModelOverrides` validator and its test file have been
+	// deleted as obsolete. No replacement validator is required: base SST
+	// keys are still required (no fallbacks); test env simply does not
+	// override them.
 
 	// Spec 045 FR-045-002 — Per-service model envelope check (BUG-045-001).
 	// validateModelEnvelopes routes each configured model env var into
