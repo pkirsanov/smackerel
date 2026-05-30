@@ -604,25 +604,47 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// returns nil Sources because all citations were dropped,
 		// gate refuses).
 		var provenanceCause contracts.ProvenanceCause
+		var assemblerOverride *contracts.ResponseOverride
 		if assembler, registered := f.sourceAssemblers[scenarioID]; registered && assembler != nil && result != nil {
 			assembly := assembler(ctx, result)
-			if assembly.Body != "" {
-				resp.Body = truncateBody(assembly.Body, f.cfg.BodyMaxChars)
+			if assembly.Override != nil {
+				// BUG-061-003 D5 — deterministic-state override
+				// (e.g. recipe_search empty-graph → StatusUnavailable
+				// with actionable body, CaptureRoute=false). Skip the
+				// provenance gate entirely; the assembler asserts this
+				// is a known non-error state and therefore not a gate
+				// failure.
+				assemblerOverride = assembly.Override
+				resp.Status = assembly.Override.Status
+				resp.ErrorCause = assembly.Override.ErrorCause
+				resp.CaptureRoute = assembly.Override.CaptureRoute
+				resp.Body = truncateBody(assembly.Override.Body, f.cfg.BodyMaxChars)
+				resp.Sources = nil
+				resp.SourcesOverflowCount = 0
+			} else {
+				if assembly.Body != "" {
+					resp.Body = truncateBody(assembly.Body, f.cfg.BodyMaxChars)
+				}
+				resp.Sources = assembly.Sources
+				resp.SourcesOverflowCount = assembly.OverflowCount
+				// Forward the assembler's attribution hint to the
+				// provenance gate. Empty Cause means the assembler did
+				// not classify (or there were no citations to drop),
+				// and the gate falls back to fabricated_source.
+				provenanceCause = assembly.Cause
 			}
-			resp.Sources = assembly.Sources
-			resp.SourcesOverflowCount = assembly.OverflowCount
-			// Forward the assembler's attribution hint to the
-			// provenance gate. Empty Cause means the assembler did
-			// not classify (or there were no citations to drop),
-			// and the gate falls back to fabricated_source.
-			provenanceCause = assembly.Cause
 		}
 
 		// Provenance gate (requires_provenance scenarios only).
-		resp = f.enforceProvenanceWithSpan(ctx,
-			f.manifest.RequiresProvenance(scenarioID),
-			scenarioID, provenanceCause, resp,
-			transportLabel, hashedUserID, correlationID)
+		// BUG-061-003 — skip the gate when the assembler emitted a
+		// deterministic Override (the override path is for known
+		// non-error states; there is nothing to refuse).
+		if assemblerOverride == nil {
+			resp = f.enforceProvenanceWithSpan(ctx,
+				f.manifest.RequiresProvenance(scenarioID),
+				scenarioID, provenanceCause, resp,
+				transportLabel, hashedUserID, correlationID)
+		}
 
 	default:
 		// Unreachable — Band vocabulary is closed.

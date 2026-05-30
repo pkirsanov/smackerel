@@ -615,6 +615,9 @@ fi
 TIER_INTERACTIVE_MODEL="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.model")"
 TIER_INTERACTIVE_RETRIEVAL_QA_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.retrieval_qa_timeout_ms")"
 TIER_INTERACTIVE_RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.retrieval_qa_per_tool_timeout_ms")"
+# BUG-061-003 — recipe_search per-tier budgets (mirror retrieval_qa).
+TIER_INTERACTIVE_RECIPE_SEARCH_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.recipe_search_timeout_ms")"
+TIER_INTERACTIVE_RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.recipe_search_per_tool_timeout_ms")"
 
 # Per-env override OR tier matrix interactive model (tier-orthogonal layer).
 tier_interactive_model_or_override() {
@@ -636,6 +639,9 @@ OLLAMA_VISION_MODEL="$(tier_interactive_model_or_override ollama_vision_model)"
 # Spec 061 SCOPE-06c — retrieval-qa-v1 budget resolves from tier matrix.
 RETRIEVAL_QA_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_TIMEOUT_MS"
 RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS"
+# BUG-061-003 — recipe-search-v1 budget resolves from tier matrix.
+RECIPE_SEARCH_TIMEOUT_MS="$TIER_INTERACTIVE_RECIPE_SEARCH_TIMEOUT_MS"
+RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS="$TIER_INTERACTIVE_RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS"
 # Spec 061 SCOPE-06c — prewarm second-call threshold tracks the tier's
 # interactive retrieval-qa budget (minus 1000 ms safety margin) instead of
 # the stale YAML literal (which is preserved for legacy non-test callers but
@@ -1215,8 +1221,12 @@ ASSISTANT_ERROR_CAPTURE_TIMEOUT="$(required_value assistant.error.capture_timeou
 ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM="$(required_value assistant.rate_limit.retrieval.requests_per_minute)"
 ASSISTANT_RATE_LIMIT_WEATHER_RPM="$(required_value assistant.rate_limit.weather.requests_per_minute)"
 ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM="$(required_value assistant.rate_limit.notifications.requests_per_minute)"
+# BUG-061-003 — recipe_search rate limit + skill SST.
+ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM="$(required_value assistant.rate_limit.recipe_search.requests_per_minute)"
 ASSISTANT_SKILLS_RETRIEVAL_ENABLED="$(required_value assistant.skills.retrieval.enabled)"
 ASSISTANT_SKILLS_RETRIEVAL_TOP_K="$(required_value assistant.skills.retrieval.top_k)"
+ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED="$(required_value assistant.skills.recipe_search.enabled)"
+ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K="$(required_value assistant.skills.recipe_search.top_k)"
 ASSISTANT_SKILLS_WEATHER_ENABLED="$(required_value assistant.skills.weather.enabled)"
 ASSISTANT_SKILLS_WEATHER_PROVIDER="$(required_value assistant.skills.weather.provider)"
 # weather.api_key_ref is permissively-empty (provider may not require a key);
@@ -1738,6 +1748,8 @@ AGENT_PROVIDER_OCR_MODEL=${AGENT_PROVIDER_OCR_MODEL}
 SMACKEREL_HARDWARE_TIER=${SMACKEREL_HARDWARE_TIER}
 RETRIEVAL_QA_TIMEOUT_MS=${RETRIEVAL_QA_TIMEOUT_MS}
 RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS=${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}
+RECIPE_SEARCH_TIMEOUT_MS=${RECIPE_SEARCH_TIMEOUT_MS}
+RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS=${RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS}
 ASSISTANT_ENABLED=${ASSISTANT_ENABLED}
 ASSISTANT_BORDERLINE_FLOOR=${ASSISTANT_BORDERLINE_FLOOR}
 ASSISTANT_CONTEXT_WINDOW_TURNS=${ASSISTANT_CONTEXT_WINDOW_TURNS}
@@ -1754,6 +1766,9 @@ ASSISTANT_RATE_LIMIT_WEATHER_RPM=${ASSISTANT_RATE_LIMIT_WEATHER_RPM}
 ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM=${ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM}
 ASSISTANT_SKILLS_RETRIEVAL_ENABLED=${ASSISTANT_SKILLS_RETRIEVAL_ENABLED}
 ASSISTANT_SKILLS_RETRIEVAL_TOP_K=${ASSISTANT_SKILLS_RETRIEVAL_TOP_K}
+ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM=${ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM}
+ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED=${ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED}
+ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K=${ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K}
 ASSISTANT_SKILLS_WEATHER_ENABLED=${ASSISTANT_SKILLS_WEATHER_ENABLED}
 ASSISTANT_SKILLS_WEATHER_PROVIDER=${ASSISTANT_SKILLS_WEATHER_PROVIDER}
 ASSISTANT_SKILLS_WEATHER_API_KEY_REF=${ASSISTANT_SKILLS_WEATHER_API_KEY_REF}

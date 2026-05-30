@@ -68,10 +68,16 @@ type AssistantConfig struct {
 	RateLimitRetrievalRPM     int
 	RateLimitWeatherRPM       int
 	RateLimitNotificationsRPM int
+	// BUG-061-003 — recipe_search rate limit.
+	RateLimitRecipeSearchRPM int
 
 	// Skills.
 	RetrievalEnabled bool
 	RetrievalTopK    int
+
+	// BUG-061-003 — recipe_search skill SST.
+	RecipeSearchEnabled bool
+	RecipeSearchTopK    int
 
 	WeatherEnabled  bool
 	WeatherProvider string
@@ -262,8 +268,11 @@ func loadAssistantConfig(cfg *Config) error {
 	mustInt("ASSISTANT_RATE_LIMIT_RETRIEVAL_RPM", &cfg.Assistant.RateLimitRetrievalRPM, 1)
 	mustInt("ASSISTANT_RATE_LIMIT_WEATHER_RPM", &cfg.Assistant.RateLimitWeatherRPM, 1)
 	mustInt("ASSISTANT_RATE_LIMIT_NOTIFICATIONS_RPM", &cfg.Assistant.RateLimitNotificationsRPM, 1)
+	mustInt("ASSISTANT_RATE_LIMIT_RECIPE_SEARCH_RPM", &cfg.Assistant.RateLimitRecipeSearchRPM, 1)
 	mustBool("ASSISTANT_SKILLS_RETRIEVAL_ENABLED", &cfg.Assistant.RetrievalEnabled)
 	mustInt("ASSISTANT_SKILLS_RETRIEVAL_TOP_K", &cfg.Assistant.RetrievalTopK, 1)
+	mustBool("ASSISTANT_SKILLS_RECIPE_SEARCH_ENABLED", &cfg.Assistant.RecipeSearchEnabled)
+	mustInt("ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K", &cfg.Assistant.RecipeSearchTopK, 1)
 	mustBool("ASSISTANT_SKILLS_WEATHER_ENABLED", &cfg.Assistant.WeatherEnabled)
 	mustString("ASSISTANT_SKILLS_WEATHER_PROVIDER", &cfg.Assistant.WeatherProvider)
 	permissiveString("ASSISTANT_SKILLS_WEATHER_API_KEY_REF", &cfg.Assistant.WeatherAPIKeyRef)

@@ -209,7 +209,9 @@ func (r *router) Route(ctx context.Context, env IntentEnvelope) (*Scenario, Rout
 		return r.fallbackOrUnknown(threshold, nil, 0)
 	}
 
-	vec, err := r.embedder.Embed(ctx, env.RawInput)
+	// BUG-061-003 D2 — closed-alias normalization for routing only;
+	// envelope.RawInput is preserved for downstream skills and audit.
+	vec, err := r.embedder.Embed(ctx, NormalizeForRouting(env.RawInput))
 	if err != nil {
 		// Embedder failure is treated as unknown-intent at the router
 		// boundary; the executor surfaces the structured outcome and

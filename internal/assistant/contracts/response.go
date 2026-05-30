@@ -129,6 +129,11 @@ const (
 	// ErrInternalError indicates an unexpected capability-layer
 	// error not better described by another cause.
 	ErrInternalError ErrorCause = "internal_error"
+	// ErrNoMatch indicates a successful skill call found zero
+	// matches in the user's owned knowledge graph. Used by skills
+	// like recipe_search (BUG-061-003) to distinguish "the owned
+	// graph is empty for this query" from provider/auth/slot errors.
+	ErrNoMatch ErrorCause = "no_match"
 )
 
 // AllErrorCauses is the exhaustive non-zero closed-vocabulary list
@@ -138,6 +143,7 @@ var AllErrorCauses = []ErrorCause{
 	ErrMissingScope,
 	ErrSlotMissing,
 	ErrInternalError,
+	ErrNoMatch,
 }
 
 // ConfirmCard is the propose-phase response that requires user

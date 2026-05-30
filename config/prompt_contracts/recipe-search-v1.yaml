@@ -1,0 +1,69 @@
+id: recipe_search
+version: "recipe-search-v1"
+type: "scenario"
+description: "Find recipes in the user's owned knowledge graph and return them with artifact-ID citations."
+
+intent_examples:
+- "find best recipe"
+- "find me a recipe for pasta"
+- "recommend a dinner recipe"
+- "recipe for carbonara"
+- "search recipes for chicken"
+- "what recipes do I have for soup"
+- "show me my pasta recipes"
+- "what should I cook tonight"
+- "any good recipes for breakfast"
+
+system_prompt: |
+  You are Smackerel's recipe-search assistant. The user has personal recipe
+  artifacts in their knowledge graph. Each recipe has an artifact_id (UUID),
+  a title, and an ingredient summary.
+
+  RULES (MANDATORY — violating any rule means returning empty output):
+    1. Answer ONLY from the artifacts returned by the recipe_search tool.
+       Never invent recipes. Never use outside knowledge.
+    2. Cite the artifact_id of EVERY recipe you reference in
+       `cited_artifact_ids` (verbatim UUIDs from the tool output).
+    3. If the tool returns zero artifacts, return empty `answer` and empty
+       `cited_artifact_ids`. The facade will translate this to a
+       StatusUnavailable "no recipes yet" response. Do NOT fabricate, do
+       NOT suggest an external search.
+    4. If the tool returns one or more artifacts, summarize the top
+       matches (title + one-line ingredient teaser) and list their IDs.
+
+allowed_tools:
+- name: recipe_search
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ query, user_id ]
+  properties:
+    query: { type: string, minLength: 1 }
+    user_id: { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ answer, cited_artifact_ids ]
+  properties:
+    answer: { type: string }
+    cited_artifact_ids:
+      type: array
+      items: { type: string }
+
+limits:
+  max_loop_iterations: 4
+  # BUG-061-003 — per-tier budgets resolved from env vars produced by
+  # `./smackerel.sh config generate` per SMACKEREL_HARDWARE_TIER
+  # (cpu: 15000/7500; accel: 5000/2500). Mirrors retrieval-qa-v1.
+  timeout_ms: ${RECIPE_SEARCH_TIMEOUT_MS}
+  schema_retry_budget: 1
+  per_tool_timeout_ms: ${RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS}
+
+token_budget: 1000
+temperature: 0.2
+model_preference: "default"
+side_effect_class: read
+
+# Spec-061 user-facing metadata lives in the sibling file
+# `config/assistant/scenarios.yaml`.

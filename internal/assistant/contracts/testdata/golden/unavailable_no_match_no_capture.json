@@ -1,0 +1,8 @@
+{
+  "body": "no recipes saved yet — capture one with /capture or import via a connector.",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "no_match",
+  "sources_overflow_count": 0,
+  "status": "unavailable"
+}

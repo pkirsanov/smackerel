@@ -192,6 +192,7 @@ func TestFacadeSourceAssemblyIntegration_BS002_HighConfidenceWithRealArtifacts(t
 	// same closure shape cmd/core installs in production.
 	cfg.SourceAssemblers = map[string]contracts.SourceAssembler{
 		"retrieval_qa": retrieval.NewFacadeAssembler(
+			"retrieval_qa",
 			newPostgresArtifactLookupForTest(pg),
 			cfg.SourcesMax,
 		),
@@ -315,6 +316,7 @@ func TestFacadeSourceAssemblyIntegration_BS007_GraphDriftTriggersRefusal(t *test
 	cfg := defaultFacadeConfig(now)
 	cfg.SourceAssemblers = map[string]contracts.SourceAssembler{
 		"retrieval_qa": retrieval.NewFacadeAssembler(
+			"retrieval_qa",
 			newPostgresArtifactLookupForTest(pg),
 			cfg.SourcesMax,
 		),

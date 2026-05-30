@@ -22,6 +22,7 @@ func TestLoadSkillsManifest_HappyPath(t *testing.T) {
 		"assistant.skills.retrieval.enabled":     true,
 		"assistant.skills.weather.enabled":       false,
 		"assistant.skills.notifications.enabled": false,
+		"assistant.skills.recipe_search.enabled": true,
 	})
 
 	m, err := LoadSkillsManifest(path, resolve)
@@ -55,6 +56,22 @@ func TestLoadSkillsManifest_HappyPath(t *testing.T) {
 	if m.ConfirmRequired("retrieval_qa") || m.ConfirmRequired("weather_query") {
 		t.Fatalf("retrieval/weather MUST NOT require confirm")
 	}
+
+	// BUG-061-003 D7 — recipe_search entry MUST exist with empty
+	// slash_shortcut (v1 shortcut set frozen). A future change that
+	// adds /recipe is caught here.
+	if label, ok := m.UserFacingLabel("recipe_search"); !ok || label != "find recipes" {
+		t.Fatalf("recipe_search UserFacingLabel = (%q,%v); want (\"find recipes\", true)", label, ok)
+	}
+	if sc, ok := m.SlashShortcut("recipe_search"); !ok || sc != "" {
+		t.Fatalf("recipe_search SlashShortcut = (%q,%v); want (\"\", true) per BUG-061-003 D3 — v1 shortcut set frozen at /ask, /weather, /remind, /reset", sc, ok)
+	}
+	if !m.RequiresProvenance("recipe_search") {
+		t.Fatalf("recipe_search MUST require provenance (Principle 8)")
+	}
+	if m.ConfirmRequired("recipe_search") {
+		t.Fatalf("recipe_search MUST NOT require confirm")
+	}
 }
 
 // TestSkillsManifest_DisabledScenarioFiltered is the BS-008 unit proof.
@@ -70,6 +87,7 @@ func TestSkillsManifest_DisabledScenarioFiltered(t *testing.T) {
 		"assistant.skills.retrieval.enabled":     false,
 		"assistant.skills.weather.enabled":       true,
 		"assistant.skills.notifications.enabled": true,
+		"assistant.skills.recipe_search.enabled": true,
 	})
 
 	m, err := LoadSkillsManifest(path, resolve)
@@ -90,8 +108,8 @@ func TestSkillsManifest_DisabledScenarioFiltered(t *testing.T) {
 			t.Fatalf("EnabledScenarioIDs MUST NOT include retrieval_qa: got %v", enabled)
 		}
 	}
-	if len(enabled) != 2 {
-		t.Fatalf("EnabledScenarioIDs len = %d; want 2 (weather + notification): %v", len(enabled), enabled)
+	if len(enabled) != 3 {
+		t.Fatalf("EnabledScenarioIDs len = %d; want 3 (weather + notification + recipe_search): %v", len(enabled), enabled)
 	}
 
 	// Adversarial assertion: a downstream candidate-filter that drops
@@ -116,6 +134,7 @@ func TestSkillsManifest_MissingSSTKey(t *testing.T) {
 	resolve := fakeResolve(map[string]bool{
 		"assistant.skills.weather.enabled":       true,
 		"assistant.skills.notifications.enabled": true,
+		"assistant.skills.recipe_search.enabled": true,
 	})
 
 	_, err := LoadSkillsManifest(path, resolve)

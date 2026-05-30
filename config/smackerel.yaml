@@ -658,19 +658,29 @@ models:
         model: qwen2.5:0.5b-instruct
         retrieval_qa_timeout_ms: 15000
         retrieval_qa_per_tool_timeout_ms: 7500
+        # BUG-061-003 — recipe_search shares the retrieval substrate so
+        # its budgets mirror retrieval_qa per tier. REQUIRED literals.
+        recipe_search_timeout_ms: 15000
+        recipe_search_per_tool_timeout_ms: 7500
       background:
         model: gemma3:4b
         retrieval_qa_timeout_ms: 300000
         retrieval_qa_per_tool_timeout_ms: 150000
+        recipe_search_timeout_ms: 300000
+        recipe_search_per_tool_timeout_ms: 150000
     accel:
       interactive:
         model: gemma3:4b
         retrieval_qa_timeout_ms: 5000
         retrieval_qa_per_tool_timeout_ms: 2500
+        recipe_search_timeout_ms: 5000
+        recipe_search_per_tool_timeout_ms: 2500
       background:
         model: deepseek-r1:7b
         retrieval_qa_timeout_ms: 300000
         retrieval_qa_per_tool_timeout_ms: 150000
+        recipe_search_timeout_ms: 300000
+        recipe_search_per_tool_timeout_ms: 150000
 
 assistant:
   # Spec 061 — Conversational Assistant (Transport-Agnostic). SST zero-defaults:
@@ -706,12 +716,20 @@ assistant:
       requests_per_minute: 20 # REQUIRED
     notifications:
       requests_per_minute: 10 # REQUIRED
+    # BUG-061-003 — recipe_search rate limit. REQUIRED literal.
+    recipe_search:
+      requests_per_minute: 20 # REQUIRED
   skills:
     retrieval:
       enabled: true # REQUIRED
       top_k: 8 # REQUIRED: cap on retrieval_search tool result count
+    # BUG-061-003 — recipe_search skill. Ships ON; the bug is a
+    # regression of an expected v1 capability. REQUIRED literals.
+    recipe_search:
+      enabled: true # REQUIRED
+      top_k: 8 # REQUIRED: cap on recipe_search tool result count
     weather:
-      enabled: true # REQUIRED (open-meteo needs no key; enabled to serve /weather)
+      enabled: true # REQUIRED (open-meteo needs no key; flipped on to serve /weather)
       provider: "open-meteo" # REQUIRED: provider identifier
       api_key_ref: "" # REQUIRED ("" = no API key required for chosen provider)
       cache_ttl: "10m" # REQUIRED: weather LRU TTL

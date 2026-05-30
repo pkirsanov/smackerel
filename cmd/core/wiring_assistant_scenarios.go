@@ -83,6 +83,8 @@ func assistantEnableResolver(cfg *config.Config) assistant.EnableResolver {
 			return cfg.Assistant.WeatherEnabled, true
 		case "assistant.skills.notifications.enabled":
 			return cfg.Assistant.NotificationsEnabled, true
+		case "assistant.skills.recipe_search.enabled":
+			return cfg.Assistant.RecipeSearchEnabled, true
 		default:
 			return false, false
 		}

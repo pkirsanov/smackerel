@@ -22,6 +22,7 @@ import (
 	// loader runs. Without these, the loader rejects each new scenario
 	// with "allowed_tool not registered" and the assertion below fails.
 	_ "github.com/smackerel/smackerel/internal/agent/tools/notification"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
 )
