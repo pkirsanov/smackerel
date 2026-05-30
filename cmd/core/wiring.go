@@ -684,16 +684,22 @@ func wireExpenseTracking(ctx context.Context, cfg *config.Config, svc *coreServi
 	)
 }
 
-// wireMealPlanning wires meal-planning services (spec 036): the API handler,
-// scheduler auto-complete job, and the Telegram meal-plan command handler.
-func wireMealPlanning(
+// wireMealPlanningHandler constructs the meal-plan service, shopping bridge,
+// and API handler. MUST be called BEFORE api.NewRouter(deps) so the
+// /api/meal-plans routes register at router-init time (BUG-034-004
+// follow-up: pre-fix NewRouter ran before this and skipped the route
+// mount because deps.MealPlanHandler was still nil — symmetric to the
+// BUG-034-003 follow-up fix for expenses).
+//
+// Stashes mealPlanService + shoppingBridge on svc for the late-wiring
+// step (scheduler + telegram bot) which can only run after sched and
+// tgBot are constructed.
+func wireMealPlanningHandler(
 	cfg *config.Config,
 	svc *coreServices,
 	deps *api.Dependencies,
-	sched *scheduler.Scheduler,
 	listResolver list.ArtifactResolver,
 	listStore *list.Store,
-	tgBot *telegram.Bot,
 ) {
 	if !cfg.MealPlanEnabled {
 		return
@@ -727,6 +733,34 @@ func wireMealPlanning(
 		slog.Info("meal plan drive write-back wired")
 	}
 
+	// Stash for late wiring (scheduler + telegram bot, which need
+	// sched and tgBot that are constructed after api.NewRouter).
+	svc.mealPlanServiceForLateWiring = mealPlanService
+	svc.mealPlanShoppingBridge = shoppingBridge
+
+	slog.Info("meal planning handler wired (early — before NewRouter)",
+		"meal_types", cfg.MealPlanMealTypes,
+		"default_servings", cfg.MealPlanDefaultServings,
+		"calendar_sync", cfg.MealPlanCalendarSync,
+	)
+}
+
+// wireMealPlanningSchedulerAndBot completes meal-planning wiring after
+// sched and tgBot are constructed. Consumes the mealPlanService +
+// shoppingBridge stashed by wireMealPlanningHandler. No-op when
+// meal-planning is disabled or the early handler wiring did not run.
+func wireMealPlanningSchedulerAndBot(
+	cfg *config.Config,
+	svc *coreServices,
+	sched *scheduler.Scheduler,
+	tgBot *telegram.Bot,
+) {
+	if !cfg.MealPlanEnabled || svc.mealPlanServiceForLateWiring == nil {
+		return
+	}
+	mealPlanService := svc.mealPlanServiceForLateWiring
+	shoppingBridge := svc.mealPlanShoppingBridge
+
 	// Wire auto-complete scheduler
 	if cfg.MealPlanAutoComplete && cfg.MealPlanAutoCompleteCron != "" {
 		sched.SetMealPlanAutoComplete(mealPlanService, cfg.MealPlanAutoCompleteCron)
@@ -749,12 +783,6 @@ func wireMealPlanning(
 		tgBot.SetMealPlanHandler(tgMealPlan)
 		slog.Info("telegram meal plan handler configured")
 	}
-
-	slog.Info("meal planning enabled",
-		"meal_types", cfg.MealPlanMealTypes,
-		"default_servings", cfg.MealPlanDefaultServings,
-		"calendar_sync", cfg.MealPlanCalendarSync,
-	)
 }
 
 // personalContextLowCeilingProvider is the Scope 7 per-user privacy
