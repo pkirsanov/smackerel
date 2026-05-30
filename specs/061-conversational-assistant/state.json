@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.design",
-    "currentPhase": "design",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "SCOPE-06c",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T06:00:00Z",
+    "lastUpdatedAt": "2026-05-30T07:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,24 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T07:00:00Z",
+        "runCompletedAt": "2026-05-30T07:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 75 (bubbles.implement; SCOPE-06c PACKET 4 — tier-gated SKIP gate for cpu-tier live-stack BS-002/BS-007 + docs/Testing.md subsection). Claim Source: executed. Outcome: completed_owned. Upstream: Round 74 plan-triage `010a45d4` + Round 74b design amendment `cfb00f3b`. Edits this round: (1) tests/e2e/lib/helpers.sh — added shared skip_unless_accel_tier <name> helper; reads SMACKEREL_HARDWARE_TIER fail-loud via ${VAR:?}; cpu → emits 'SKIP: <name> — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS.' + exit 0; accel → return 0; other → stderr error + exit 2. (2) tests/e2e/assistant_bs002_test.sh — replaced inline gate with source helpers + skip_unless_accel_tier 'BS-002'. (3) tests/e2e/assistant_bs007_test.sh — same shape with 'BS-007'. (4) docs/Testing.md — added '## Tier-gated live-stack tests' subsection (before Assistant Evaluation Harness) documenting convention, exit/output behavior table, parseable SKIP: prefix rationale, BS-002+BS-007 gated list, helper reference, default-suite-inclusion rule, cross-refs to design.md §5.1 + SCOPE-06c DoD #5/#6 + plan-triage 010a45d4 + Round 71e evidence. (5) scopes.md SCOPE-06c DoD #5 → [x] (cpu-tier-skip half; accel-tier PASS still operator-deferred per DoD #6, annotation preserved); DoD #7 → [x] (unblock note recorded). DoD #6 stays [ ] (operator-deferred — NOT flipped). (6) report.md — appended Round 75 section with PII-redacted gate sweep (check/lint/format/unit-go all EXIT 0) + 4-scenario skip-gate verification (cpu→SKIP+exit0 BS-002+BS-007, foo→stderr+exit2, unset→fail-loud non-zero) + SCOPE-06 unblock note anchor {#scope-06c-unblock-note}. (7) this state.json executionHistory prepend + execution.activeAgent design→implement + currentPhase design→implement + lastUpdatedAt 06:00→07:30. NOT MODIFIED: spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.* fields (status/completedAt/evidenceRef/scopeProgress/completedScopes/notes preserved verbatim), status (in_progress), statusCeiling (done), workflowMode (full-delivery), SCOPE-06/06a/06b DoD checkboxes (no flips — SCOPE-06 owner does that separately per unblock note), SCOPE-06c DoD #6 (operator-deferred), any other source/test/config under cmd/, internal/, ml/, config/, scripts/, deploy/, docker-compose.yml. No --no-verify. No SKIP_PII_SCAN=1. No shell-write idioms. PII redacted (home paths → `~`) in all evidence captures before staging.",
+        "addressedFindings": [
+          "SCOPE-06C-CPU-INTERACTIVE-15S-INFEASIBLE",
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK",
+          "SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET"
+        ],
+        "unresolvedFindings": [],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-06",
+        "nextRequiredAction": "SCOPE-06 owner re-verifies SCOPE-06 DoD #4b (BS-002 adapter-composition leg), #5b (BS-007 adapter-composition leg), and #6 (Telegram trailing sources rendering) against the tier-gated SKIP gate landed this round + the existing capability-layer proof at SCOPE-06 DoD #4a/#5a (live-PG integration test, green from Round 8), and flips them per the closure shape recorded at report.md#scope-06c-unblock-note (cpu tier = SKIP gate satisfied; accel tier = operator-deferred under SCOPE-06c DoD #6). This is a SEPARATE bubbles.implement round; this round did NOT touch SCOPE-06/06a/06b DoD checkboxes."
+      },
       {
         "agent": "bubbles.design",
         "phasesExecuted": ["design"],
