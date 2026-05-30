@@ -1355,4 +1355,156 @@ validate, audit, finalize ]` the phase after `gaps` is `harden`.
 Routed observations (Finding 3 → `bubbles.bug`; Finding 5 item 3 →
 `bubbles.harden`) are non-blocking and may be addressed asynchronously.
 
+---
+
+## Phase: harden (bubbles.harden, 2026-05-30)
+
+### Scope and Carry-Forward Findings
+
+End-to-end hardening at HEAD `6bfd3ff5` against the two carry-forward
+findings surfaced by `bubbles.gaps`:
+
+1. **Finding 3 (low)** — Bug folder lacked the canonical template
+   artifacts on disk (`bug.md`, `spec.md`, `design.md`, `scopes.md`,
+   `scenario-manifest.json`, `uservalidation.md`); content was inline
+   in `report.md` + `state.json`. Routed to `bubbles.bug` ownership;
+   resolved in-phase here per harden's "zero exceptions" mandate.
+2. **Finding 5 item 3 (low)** — Assembler JSON-unmarshal-fail branch
+   in `internal/assistant/skills/recipesearch/assembler.go` had no
+   dedicated unit test. Owned by harden.
+
+### Hardening Actions Taken
+
+#### Action 1 — Backfilled 6 missing bug template artifacts
+
+Per `bubbles-bug-template` skill, extracted authoritative content from
+inline `report.md` + `state.json` (no invented facts):
+
+- `bug.md` — summary, reproduction transcript, severity, status, root
+  cause (sourced from the original bubbles.bug filing in this
+  report.md and the original verbatim Telegram transcript).
+- `spec.md` — problem statement, outcome contract, R1–R8 requirements,
+  AC1–AC5, 5 Gherkin scenarios (extracted from the inline scope
+  decision audit + design D5/D8 + uservalidation user expectation).
+- `design.md` — root cause analysis, fix design D1–D10 (lifted from
+  inline gaps-round Finding 2 design coherence table + implement-round
+  Files Changed enumeration), alternative approaches considered (from
+  gaps Finding 1 options a/b/c), affected files, regression test
+  design.
+- `scopes.md` — single scope SCOPE-01, 5 Gherkin scenarios, 11-row
+  Test Plan mapping each test to its concrete on-disk file/function
+  and back to SCN-BUG061003-S01..S05, 3-part DoD with inline Evidence
+  pointers to existing report.md sections.
+- `scenario-manifest.json` — 5 scenarios, each with
+  `testMapping.{file,test}` pointing at the concrete on-disk test
+  function verified PASS by `bubbles.test` on `d0266558`.
+- `uservalidation.md` — 9-entry `## Checklist` with checked-by-default
+  semantics covering the user-visible behaviors (no regression to
+  idea-capture, misspelling tolerance, empty-graph actionable refusal,
+  Principle 6/8 preservation, scenario-lint green, S05 live-stack
+  PASS).
+
+#### Action 2 — Added missing adversarial unmarshal-fail unit test
+
+`internal/assistant/skills/recipesearch/assembler_test.go::TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial`
+covers four malformed-payload sub-cases (`not_json`, `truncated`,
+`wrong_types`, `binary_garbage`). Adversarial contract: malformed
+JSON Final on `Outcome=OK` MUST return zero-value `SourceAssembly`
+(routes through the existing provenance-gate refusal) and MUST NOT
+silently emit a `ResponseOverride` (which would skip the gate and
+re-introduce the BUG-061-003 trust breach in a different shape).
+
+#### Action 3 — Verification gates re-run
+
+All commands executed in this session on HEAD `6bfd3ff5`:
+
+```text
+$ go test ./internal/assistant/skills/recipesearch/ \
+    -run TestRecipeAssembler_OKOutcome_MalformedJSON -v
+=== RUN   TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial
+    --- PASS: ..._Adversarial/not_json (0.00s)
+    --- PASS: ..._Adversarial/binary_garbage (0.00s)
+    --- PASS: ..._Adversarial/wrong_types (0.00s)
+    --- PASS: ..._Adversarial/truncated (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant/skills/recipesearch  0.235s
+```
+
+```text
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2777207 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 9, rejected: 0
+scenario-lint: OK
+```
+
+```text
+$ ./smackerel.sh test unit --go
+...
+[go-unit] go test ./... finished OK
+```
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh \
+    specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete
+...
+=== End Anti-Fabrication Checks ===
+Artifact lint PASSED.
+EXIT=0  (0 ❌)
+```
+
+**Claim Source:** executed.
+
+### Policy Cross-Checks
+
+| Policy | Result |
+|--------|--------|
+| SST zero-defaults (smackerel-no-defaults) | ✅ no fallback syntax in any backfilled artifact; no source-code change touches config/Compose |
+| No env-specific content | ✅ no real hostnames/IPs/tailnet IDs/usernames in backfilled artifacts; evidence blocks use `~/smackerel` not absolute home |
+| PII redaction in evidence | ✅ all `Evidence` paths use `~/smackerel/...` or relative paths |
+| Terminal-discipline | ✅ all artifact writes via IDE tools (`create_file`, `replace_string_in_file`, `multi_replace_string_in_file`); zero shell redirection / heredoc-to-file |
+| Anti-fabrication | ✅ every claim block carries `Claim Source: executed`; DoD `[x]` items have Evidence pointers |
+| Bug template (bubbles-bug-template) | ✅ 8/8 artifacts present and lint-clean |
+| Adversarial regression contract | ✅ new test covers 4 sub-cases including binary garbage — would fail if Override path silently swallowed malformed payloads |
+
+### Final Verification Checklist
+
+- [x] FULL TEST SUITE: `./smackerel.sh test unit --go` exit 0
+- [x] SKIP MARKER SCAN: no `t.Skip` / `.skip` / `xit` introduced
+- [x] WARNING SCAN: `./smackerel.sh check` clean (env_file drift OK, scenario-lint 9/0)
+- [x] TODO/FIXME SCAN: no TODO/FIXME/HACK/STUB in backfilled artifacts or new test
+- [x] EVIDENCE INTEGRITY: every DoD `[x]` in `scopes.md` carries an Evidence pointer
+- [x] ROUND-TRIP VERIFICATION: not applicable (no save/load surface introduced this round)
+- [x] E2E SUBSTANCE: S05 verifies live-stack `/api/search` substrate (per prior test round)
+- [x] BASELINE COMPARISON: post-hardening test counts ≥ pre-hardening (1 new adversarial test added, 0 removed, 0 skipped)
+- [x] USER SCENARIO TRACE: 5 Gherkin scenarios in `spec.md` / `scopes.md` each map to an on-disk test in `scenario-manifest.json`
+- [x] SCOPE ARTIFACT COHERENCE: scopes.md Test Plan (11 rows), DoD (Part A/B/C), and 5 Gherkin scenarios are coherent; state.json updated this round
+- [x] FINDINGS ARTIFACT UPDATE (G031): both carry-forward findings closed in-phase; new findings: none
+
+### Hardening Verdict
+
+```text
+SCOPE: BUG-061-003-SCOPE-01 (carry-forward findings + harden mandate)
+STATUS: 🔒 HARDENED
+CARRY-FORWARD FINDINGS: 2 / 2 closed (Finding 3 + Finding 5 item 3)
+NEW FINDINGS: 0
+GATES: ./smackerel.sh check ✅  ./smackerel.sh test unit --go ✅  artifact-lint ✅ (8/8)
+POLICIES: SST zero-defaults ✅  PII ✅  terminal-discipline ✅  anti-fabrication ✅
+```
+
+### Next Required Owner
+
+`nextRequiredOwner: bubbles.validate` — per
+`bugfix-fastlane.phaseOrder` the phase after `harden` is `stabilize,
+devops, security, validate, audit, finalize`. With no
+state-touching / deployment / security delta in this harden round
+(documentation backfill + one adversarial unit test only), the
+fastlane may advance directly to `validate` for terminal-status
+certification of SCOPE-01 and bug close-out. `stabilize`, `devops`,
+and `security` phases have no actionable surface (no flaky tests,
+no deployment change, no security-relevant code change in this
+round); validate may attest skip-with-rationale per fastlane policy.
+
 

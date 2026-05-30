@@ -98,6 +98,42 @@ func TestRecipeAssembler_S03_EmptyGraph_OverrideUnavailable_Adversarial(t *testi
 	}
 }
 
+// Adversarial: malformed JSON Final (Outcome=OK but body cannot be
+// parsed into recipeFinalPayload) MUST route through the provenance
+// gate refusal path (zero-value SourceAssembly), NOT silently emit a
+// recipe override. If the assembler ever started returning an
+// Override for unparseable payloads, the facade would skip the
+// provenance gate AND the empty-graph guard, producing an unsourced
+// recipe response — re-introducing the BUG-061-003 trust breach in a
+// different shape.
+func TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial(t *testing.T) {
+	t.Parallel()
+	asm := NewFacadeAssembler(fixedLookup(time.Now()), 5)
+
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"not_json", `this is not json`},
+		{"truncated", `{"answer":"x","cited_artifact_ids":[`},
+		{"wrong_types", `{"answer":42,"cited_artifact_ids":"rid-1"}`},
+		{"binary_garbage", "\x00\x01\x02not-json"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out := asm(context.Background(), okResult(tc.raw))
+			if out.Override != nil {
+				t.Fatalf("malformed Final MUST NOT emit Override (would skip provenance gate); got %+v", out.Override)
+			}
+			if out.Body != "" || len(out.Sources) != 0 || out.OverflowCount != 0 || out.Cause != "" {
+				t.Fatalf("malformed Final MUST return zero-value SourceAssembly; got %+v", out)
+			}
+		})
+	}
+}
+
 // Non-OK outcomes (timeout / schema fail) MUST NOT emit Override —
 // the facade's default body rendering and provenance gate stay in
 // charge so requires_provenance failures continue to refuse.

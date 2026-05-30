@@ -5,13 +5,13 @@
   "workflowMode": "bugfix-fastlane",
   "status": "in_progress",
   "createdAt": "2026-05-30T00:00:00Z",
-  "lastUpdatedAt": "2026-05-30T15:30:00Z",
+  "lastUpdatedAt": "2026-05-30T16:30:00Z",
   "execution": {
-    "activeAgent": "bubbles.gaps",
-    "currentPhase": "gaps",
+    "activeAgent": "bubbles.harden",
+    "currentPhase": "harden",
     "currentScope": "BUG-061-003-SCOPE-01",
     "completedScopes": [],
-    "lastUpdatedAt": "2026-05-30T15:30:00Z",
+    "lastUpdatedAt": "2026-05-30T16:30:00Z",
     "completedPhaseClaims": [
       {
         "phase": "implement",
@@ -19,6 +19,13 @@
         "claimedAt": "2026-05-30T08:55:00Z",
         "evidence": "specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/report.md#phase-implement-bubblesimplement-2026-05-30",
         "summary": "recipe_search skill end-to-end (config SST, prompt-contract, tool, skill+assembler with deterministic empty-graph Override, router normalize pre-pass, wiring), tests S01/S02/S03/S04 PASS via ./smackerel.sh test unit --go, S05 file in place (e2e build tag) pending live-stack run by bubbles.test."
+      },
+      {
+        "phase": "harden",
+        "agent": "bubbles.harden",
+        "claimedAt": "2026-05-30T16:30:00Z",
+        "evidence": "specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/report.md#phase-harden-bubblesharden-2026-05-30",
+        "summary": "Closed 2 carry-forward gaps Findings in-phase: (1) backfilled 6 missing bug-template artifacts (bug.md, spec.md, design.md, scopes.md, scenario-manifest.json, uservalidation.md) by extracting authoritative content from inline report.md + state.json per bubbles-bug-template skill; (2) added adversarial assembler unmarshal-fail unit test TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial (4 sub-cases: not_json, truncated, wrong_types, binary_garbage) PASS. Verification gates: ./smackerel.sh check exit 0 (9/0 scenarios), ./smackerel.sh test unit --go exit 0, artifact-lint.sh 8/8 PASS (0 ❌). Policies: SST zero-defaults, no env-specific content, PII-redacted evidence, terminal-discipline (all writes via IDE tools), anti-fabrication (every claim Claim Source: executed). Verdict: 🔒 HARDENED. Routing nextRequiredOwner=bubbles.validate per fastlane.phaseOrder (stabilize/devops/security skip-with-rationale: no surface touched)."
       }
     ],
     "executionHistory": [
@@ -102,6 +109,15 @@
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "summary": "Resolved the single carry-forward gap surfaced by bubbles.simplify (recipe-search-score-field-unpopulated, low) via option (b) — dropped `score` from `recipeSearchHit` struct and from outputSchema required/properties in internal/agent/tools/recipesearch/tool.go, with a comment documenting the upstream api.SearchResult constraint (no numeric score surfaced; only qualitative Relevance string) and the reversibility path. Option (a) (thread score through SearchEngine) was rejected as disproportionately invasive (would touch SQL layer + api.SearchResult + every existing consumer including drive/qf/web/retrieval_qa + OpenAPI surface) for a field with zero downstream consumers (verified `grep -r 'recipeSearchHit|recipesearch.*\\.Score' internal/` → no matches). Option (c) (placeholder) rejected as Principle 8 violation. Verification (executed on this round): `go build ./...` exit 0; `go test ./internal/agent/... ./internal/assistant/... ./internal/telegram/...` all PASS (internal/telegram 28.148s; assistant_adapter, skills/recipesearch, agent all OK); `./smackerel.sh check` → scenario-lint 9/0, env_file drift OK, SST in sync. Cross-checks performed against shipped tree at d0266558 + this patch: (1) Design D1–D10 — all 10 decisions honored (SST key placement D1, closed alias map D2 4 entries, no /recipe shortcut D3, prompt-contract location D4, empty-graph Override D5, graph-query via existing SearchEngine D6, manifest entry shape D7, regression contract D8 5/5 PASS, Principle 6 D9 no new notifications, Principle 8 D10 strengthened by removing the unpopulated score claim); (2) User expectation (verbatim 'find recepies, extract ingridients, make shopping list, remind, etc.') — sub-issues 1+2 covered in this bug (S01/S02/S04 PASS), sub-issues 3+4 covered by pre-existing mealplan code (S05 E2E PASS), sub-issue 5 correctly routed to spec 036; (3) Edge cases — stale graph results inherit lifecycle policy from spec 025 (no new gap), auth-token absence handled by Telegram adapter user-mapping gate + `recipe_search_missing_user_id` handler guard, ML sidecar down propagates as `recipe_search_engine_error` → Override does not fire → existing provenance-gate refusal (same as any skill on sidecar failure). Observations recorded (non-blocking): Finding 3 — bug folder lacks spec.md/design.md/scopes.md/scenario-manifest.json/uservalidation.md on disk (pre-existing Bug Artifacts Gate gap from bubbles.bug phase; content preserved inline in report.md + state.json executionHistory; routed to bubbles.bug per gaps-agent diagnostic-only artifact ownership policy). Finding 5 item 3 — assembler JSON-unmarshal-fail branch has no dedicated test (deterministically routes through existing provenance gate, same as missing assembler; re-attribution of regression Step 5 observation; routed to bubbles.harden). Verdict ✅ GAP_FREE for production code. Routing nextRequiredOwner=bubbles.harden per bugfix-fastlane.phaseOrder (phase after `gaps` is `harden`). Bug-folder report.md appended with full per-finding evidence under `## Phase: gaps (bubbles.gaps, 2026-05-30)`."
+      },
+      {
+        "agent": "bubbles.harden",
+        "runStartedAt": "2026-05-30T16:00:00Z",
+        "runCompletedAt": "2026-05-30T16:30:00Z",
+        "phasesExecuted": ["harden"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "End-to-end hardening at HEAD 6bfd3ff5. Closed both carry-forward gaps findings in-phase: (1) backfilled 6 missing bug-template artifacts (bug.md, spec.md, design.md, scopes.md, scenario-manifest.json, uservalidation.md) by extracting authoritative content from inline report.md + state.json per bubbles-bug-template skill (no invented facts; every Gherkin scenario / DoD item / Test Plan row traces to existing inline content); (2) added adversarial assembler unmarshal-fail unit test TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial (4 sub-cases: not_json, truncated, wrong_types, binary_garbage) — contract: malformed JSON on Outcome=OK MUST return zero-value SourceAssembly (routes through provenance gate refusal), MUST NOT silently emit ResponseOverride (which would re-introduce BUG-061-003 trust breach). Verification gates re-run (Claim Source: executed): go test ./internal/assistant/skills/recipesearch/ -run TestRecipeAssembler_OKOutcome_MalformedJSON -v → 4/4 PASS; ./smackerel.sh check → scenarios registered: 9 rejected: 0 + env_file drift OK + Config in sync with SST; ./smackerel.sh test unit --go → [go-unit] go test ./... finished OK (full suite green); artifact-lint.sh on the bug folder → EXIT=0, 0 ❌ failures, 8/8 artifacts PASS. Policy cross-checks all green: SST zero-defaults, no env-specific content, PII-redacted evidence (all paths ~/smackerel/...), terminal-discipline (all writes via IDE tools — zero shell redirection/heredoc-to-file), anti-fabrication (Claim Source: executed on every block, DoD [x] items carry Evidence pointers). Verdict: 🔒 HARDENED. Routing nextRequiredOwner=bubbles.validate per bugfix-fastlane.phaseOrder; stabilize/devops/security have no actionable surface this round (documentation backfill + one adversarial unit test only, no state-touching/deployment/security delta) and may attest skip-with-rationale."
       }
     ]
   },
