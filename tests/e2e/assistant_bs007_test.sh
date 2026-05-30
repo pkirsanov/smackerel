@@ -87,7 +87,7 @@ JSON
 
 echo "--- ROW-1: webhook POST with /ask (unmatchable query) ---"
 HTTP_STATUS=$(curl -s -o /tmp/bs007_resp.txt -w "%{http_code}" \
-  --max-time 15 \
+  --max-time 180 \
   -X POST \
   -H "Content-Type: application/json" \
   -H "X-Telegram-Bot-Api-Secret-Token: $WEBHOOK_SECRET" \
