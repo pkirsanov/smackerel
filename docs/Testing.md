@@ -562,6 +562,49 @@ When a spec transitions to done under full-delivery workflow mode, its report mu
 - Audit evidence section: include executed command output and the phase marker for bubbles.audit.
 - Chaos evidence section: include executed command output and the phase marker for bubbles.chaos.
 
+## Tier-gated live-stack tests
+
+Some live-stack e2e tests require accelerator hardware (GPU/NPU) to meet
+their latency contracts and would deterministically fail on cpu-only
+dev hosts even though the production retrieval path passes on accel
+hardware. These tests are gated at the test-script level via the
+`SMACKEREL_HARDWARE_TIER` environment variable (required; fail-loud per
+SST policy — no default).
+
+Behavior:
+
+| `SMACKEREL_HARDWARE_TIER` | Test behavior | Exit |
+|---------------------------|---------------|------|
+| `cpu` | Emits `SKIP: <name> — ...` line and exits 0 | 0 |
+| `accel` | Runs the test normally | test result |
+| unset | Fails loud via `${VAR:?}` substitution | non-zero |
+| any other value | Emits `[<name>] unknown SMACKEREL_HARDWARE_TIER=...` to stderr | 2 |
+
+The `SKIP:` prefix is intentional and parseable: CI/dev/regression review
+can grep for `^SKIP:` to distinguish deliberate tier-gated skips from
+PASS/FAIL outcomes. A skip is **not** a pass — it is a recorded
+deferral to accel-tier validation.
+
+Currently tier-gated tests:
+
+- BS-002 — [`tests/e2e/assistant_bs002_test.sh`](../tests/e2e/assistant_bs002_test.sh) (retrieval Q&A happy-path)
+- BS-007 — [`tests/e2e/assistant_bs007_test.sh`](../tests/e2e/assistant_bs007_test.sh) (retrieval refusal)
+
+Shared helper: `skip_unless_accel_tier <test-name>` in
+[`tests/e2e/lib/helpers.sh`](../tests/e2e/lib/helpers.sh). New tier-gated
+tests MUST reuse this helper rather than open-coding the gate.
+
+Tier-gated tests REMAIN in the default e2e suite — do **not** exclude
+them via runner flags. The gate runs at test-script level so the test
+runner sees exit 0 on cpu hosts and the actual test outcome on accel
+hosts.
+
+Rationale and evidence:
+
+- [`specs/061-conversational-assistant/design.md`](../specs/061-conversational-assistant/design.md) §5.1 — PACKET 3 operator-defer block
+- [`specs/061-conversational-assistant/scopes.md`](../specs/061-conversational-assistant/scopes.md) SCOPE-06c DoD #5/#6
+- [`specs/061-conversational-assistant/report.md`](../specs/061-conversational-assistant/report.md) Round 74 plan-triage `010a45d4`; Round 71e latency evidence
+
 ## Assistant Evaluation Harness
 
 The spec 061 conversational assistant ships with an offline evaluation
@@ -680,9 +723,7 @@ Spec 061 BS-001..BS-010 each get a dedicated regression slot under
 | BS-007 | `bs_007_provenance_violation.sh` | `skip-77` pending substrate blocker (LLM no-source stub). |
 | BS-008 | `bs_008_disabled_skill.sh` | `skip-77` pending substrate blocker (manifest hot-flip harness). |
 | BS-009 | `bs_009_sst_missing_boot_failure.sh` | `skip-77` pending substrate blocker (boot-failure harness). |
-| BS-010 | `bs_010_telegram_e2e.sh` | Delegates to `tests/e2e/test_telegram_assistant_bs001.sh` as the always-available Telegram adapter probe. |
-
-The skip-77 fixtures use the convention from
+| BS-010 | `bs_010_telegram_e2e.sh` | Delegates to `tests/e2e/test_telegram_assistant_bs001.sh` as the always-available Telegram adapter probe. |The skip-77 fixtures use the convention from
 `tests/e2e/assistant_regression/lib/regression_helpers.sh`
 (`reg_skip_with_blocker`) and each documents the full executed
 assertion body in an inline `:<<'EXECUTED_PATTERN'` heredoc, so the
@@ -693,5 +734,51 @@ tracked by the open SCOPE-10 findings
 `SCOPE-10-TELEGRAM-SMOKE-LIVE-STACK-VERIFICATION-PENDING` and
 `SCOPE-10-PER-BS-REGRESSION-LIVE-STACK-VERIFICATION-PENDING` in
 [`specs/061-conversational-assistant/state.json`](../specs/061-conversational-assistant/state.json).
+
+### Tier-gated live-stack tests (BS-002 / BS-007)
+
+Per spec 061 SCOPE-06c PACKET 3 (ratified in
+[`design.md`](../specs/061-conversational-assistant/design.md) §5.1
+under "Live-stack verification policy (operator-defer per SCOPE-06c
+Round 74)"), the retrieval-Q&A live-stack fixtures
+[`tests/e2e/assistant_bs002_test.sh`](../tests/e2e/assistant_bs002_test.sh)
+and
+[`tests/e2e/assistant_bs007_test.sh`](../tests/e2e/assistant_bs007_test.sh)
+are **tier-gated** by the `SMACKEREL_HARDWARE_TIER` SST switch:
+
+| Tier  | BS-002 / BS-007 fixture behavior | Notes |
+|-------|----------------------------------|-------|
+| `cpu`   | **SKIP** with exit code **77** and structured `RESULT: SKIPPED` / `SKIP_REASON=cpu-tier-operator-defer-per-SCOPE-06c-PACKET-3` record | Correct behavior. CPU-only inference cannot satisfy the 15 s interactive budget for a full retrieval-qa cited-JSON turn; production retrieval runs on accel hardware only. |
+| `accel` | Fixture proceeds past the skip block and runs the full live-stack assertion (webhook POST → slog scrape → adversarial `jq` assertions) | Acceptance verification path. |
+| unset / other | Fixture exits non-zero with `[F061-HARDWARE-TIER-MISSING]`-style fail-loud error (per [`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md)) | No implicit default. |
+
+**Exit 77 SKIP convention.** Exit code 77 is the e2e-harness-wide
+convention for "intentional skip with documented reason" (see also the
+`skip-77` regression slots in the table above and
+[`tests/e2e/assistant_regression/lib/regression_helpers.sh`](../tests/e2e/assistant_regression/lib/regression_helpers.sh)).
+A 77 exit MUST be treated as PASS by any aggregating runner; the
+structured `SKIP_REASON=…` record is the audit trail.
+
+**Operator workflow.**
+
+- *Local dev loop* — `.smackerel.local.env` (gitignored) sets
+  `SMACKEREL_HARDWARE_TIER=cpu`; running
+  `bash tests/e2e/assistant_bs002_test.sh` (and `…bs007…`) emits the
+  structured SKIP record and exits 77. The remaining live-stack
+  fixtures (BS-001 / BS-003 / BS-006 / BS-010) run as usual.
+- *Acceptance verification on accel hardware* — operator exports
+  `SMACKEREL_HARDWARE_TIER=accel` in the deploy-overlay overlay env
+  (or runs on a tier-accel host where `.smackerel.local.env` is set to
+  `accel`) and re-runs BS-002 / BS-007. Both then proceed past the
+  skip block and execute the full live-stack assertion. Operator
+  records PASS evidence under
+  `specs/061-conversational-assistant/report.md#scope-06c-accel-live-stack-operator-pass`
+  per SCOPE-06c DoD #6.
+
+A SKIP on the cpu tier is **not** a failure of BS-002 / BS-007 coverage
+— the capability-layer legs (SCOPE-06 DoD #4a / #5a) already verify
+the underlying retrieval skill end-to-end on real PostgreSQL via Go
+integration tests, and the adapter-composition leg is verified on
+accel hardware per the matrix above.
 
 This requirement is enforced by the artifact lint and state transition guards, and prevents done-level promotions that only contain planning artifacts without delivery-phase evidence provenance.

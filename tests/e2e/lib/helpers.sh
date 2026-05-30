@@ -157,6 +157,33 @@ e2e_psql() {
     psql -h 127.0.0.1 -p "$POSTGRES_CONTAINER_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c "$1" | tr -d '[:space:]'
 }
 
+# skip_unless_accel_tier <test-name>
+#
+# Tier-gated SKIP for live-stack tests that require accelerator hardware.
+# Reads SMACKEREL_HARDWARE_TIER (required; fail-loud per SST policy):
+#   - cpu   → emit a structured "SKIP: <name> — ..." line and exit 0.
+#   - accel → return so the caller proceeds normally.
+#   - other → emit error and exit 2.
+# See docs/Testing.md → "Tier-gated live-stack tests" and
+# specs/061-conversational-assistant/design.md §5.1.
+skip_unless_accel_tier() {
+  local test_name="${1:?skip_unless_accel_tier requires a test name}"
+  : "${SMACKEREL_HARDWARE_TIER:?SMACKEREL_HARDWARE_TIER must be set (cpu|accel) — see .smackerel.local.env.example}"
+  case "$SMACKEREL_HARDWARE_TIER" in
+    cpu)
+      echo "SKIP: ${test_name} — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS."
+      exit 0
+      ;;
+    accel)
+      return 0
+      ;;
+    *)
+      echo "[${test_name}] unknown SMACKEREL_HARDWARE_TIER=${SMACKEREL_HARDWARE_TIER} (expected cpu|accel)" >&2
+      exit 2
+      ;;
+  esac
+}
+
 e2e_pass() {
   echo "PASS: $1"
 }

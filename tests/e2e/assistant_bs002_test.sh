@@ -36,6 +36,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 
+# SCOPE-06c PACKET 4 — tier-gated SKIP for cpu-tier dev loop
+# (design.md §5.1; plan-triage 010a45d4; docs/Testing.md → Tier-gated live-stack tests).
+skip_unless_accel_tier "BS-002"
+
 ARTIFACT_ID=""
 
 bs002_cleanup() {
