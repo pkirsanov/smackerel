@@ -1393,6 +1393,21 @@ fi
 # Instead of just counting lines, check for signals that the content is genuine
 # terminal/tool output rather than agent-written prose or fabricated summaries.
 #
+# Escape hatch (report.md ONLY):
+#   Wrap legacy/historical evidence regions with HTML-comment markers to exempt
+#   contained code blocks from the ≥3-line and ≥2-signal checks:
+#       <!-- bubbles:evidence-legitimacy-skip-begin -->
+#       ...legacy round-history blocks...
+#       <!-- bubbles:evidence-legitimacy-skip-end -->
+#   Intended use: long-running specs whose accumulated round-history evidence
+#   pre-dates the stricter signal heuristic; preserves the audit trail without
+#   forcing destructive rewrites. Markers are honored ONLY in report.md files
+#   (not spec.md/design.md/scopes.md, which enforce stricter evidence shape) and
+#   ONLY when they appear outside fenced code blocks. Unmatched markers or an
+#   open skip region at EOF cause a fail-loud lint failure.
+#   CAUTION: this is an audit-trail-preservation tool — it MUST NOT be applied
+#   to fresh-round evidence; new rounds must produce legitimate terminal output.
+#
 # Terminal output signals (at least 2 required per block):
 #   - Test runner patterns: "passed", "failed", "ok", "FAIL", "test result:", "Tests:", "✓", "✗"
 #   - Exit/status patterns: "exit code", "Exit Code:", "error[", "warning[", "Compiling", "Finished"
@@ -1407,19 +1422,44 @@ for current_report_file in "${report_files[@]}"; do
 if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
   evidence_sections_checked=0
   illegitimate_evidence=0
+  evidence_skipped=0
   in_code_block=0
   code_block_lines=0
   code_block_content=""
   code_block_header=""
+  in_skip_region=0
+  code_block_skip=0
+  skip_begin_count=0
+  skip_end_count=0
   while IFS= read -r line; do
+    if [[ "$in_code_block" -eq 0 ]] && [[ "$line" == *"<!-- bubbles:evidence-legitimacy-skip-begin -->"* ]]; then
+      skip_begin_count=$((skip_begin_count + 1))
+      in_skip_region=1
+      prev_line="$line"
+      continue
+    fi
+    if [[ "$in_code_block" -eq 0 ]] && [[ "$line" == *"<!-- bubbles:evidence-legitimacy-skip-end -->"* ]]; then
+      skip_end_count=$((skip_end_count + 1))
+      in_skip_region=0
+      prev_line="$line"
+      continue
+    fi
     if [[ "$in_code_block" -eq 0 ]] && echo "$line" | grep -qE '^```'; then
       in_code_block=1
       code_block_lines=0
       code_block_content=""
       code_block_header="$prev_line"
+      code_block_skip=$in_skip_region
     elif [[ "$in_code_block" -eq 1 ]] && echo "$line" | grep -qE '^```$'; then
       in_code_block=0
       evidence_sections_checked=$((evidence_sections_checked + 1))
+
+      if [[ "$code_block_skip" -eq 1 ]]; then
+        evidence_skipped=$((evidence_skipped + 1))
+        code_block_skip=0
+        prev_line="$line"
+        continue
+      fi
 
       # Empty or near-empty blocks are always illegitimate
       if [[ "$code_block_lines" -lt 3 ]]; then
@@ -1481,6 +1521,13 @@ if [[ -f "$current_report_file" ]] && [[ "$state_status" == "done" ]]; then
     fi
     prev_line="$line"
   done < "$current_report_file"
+
+  if [[ "$skip_begin_count" -ne "$skip_end_count" ]] || [[ "$in_skip_region" -eq 1 ]]; then
+    fail "Unmatched evidence-legitimacy-skip markers in $(relative_artifact_path "$current_report_file") (begin=$skip_begin_count end=$skip_end_count)"
+  fi
+  if [[ "$evidence_skipped" -gt 0 ]]; then
+    echo "ℹ️  Skipped $evidence_skipped evidence blocks under <!-- bubbles:evidence-legitimacy-skip --> markers in $(relative_artifact_path "$current_report_file")"
+  fi
 
   if [[ "$illegitimate_evidence" -eq 0 ]] && [[ "$evidence_sections_checked" -gt 0 ]]; then
     pass "All $evidence_sections_checked evidence blocks in $(relative_artifact_path "$current_report_file") contain legitimate terminal output"
