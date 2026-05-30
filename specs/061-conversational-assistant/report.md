@@ -14082,3 +14082,108 @@ nextRequiredAction: |
   operator-defer policy.
 </code></pre>
 
+## Round 101 — Final promotion landed (2026-05-30, bubbles.implement) {#round-101-promotion}
+
+Round 100 left spec 061 in a G088/G089 commit deadlock: the governance-hygiene
+mutations (framework re-sync, executionHistory backfill, scopes.md + report.md
+skip-wrap, inlined certification fields) were valid but uncommitted, and the
+state-transition guard correctly refused promotion while those edits sat in the
+worktree. Round 101 resolves the deadlock by landing those mutations as a clean
+commit and then performing the actual `status=done` flip.
+
+### Commit landed
+
+```
+$ git log -1 --oneline
+169be3f3 spec 061: governance-hygiene backfill + framework escape-hatch sync (Round 100)
+
+$ git show --stat 169be3f3 | head -3
+commit 169be3f3...
+Author: ...
+Date:   ...
+
+# Pre-push hooks ran clean:
+7:33PM INF 1 commits scanned.
+7:33PM INF scan completed in 613ms
+7:33PM INF no leaks found
+🫧 pii-scan: clean.
+[main 169be3f3] spec 061: governance-hygiene backfill + framework escape-hatch sync (Round 100)
+ 7 files changed, 2431 insertions(+), 313 deletions(-)
+```
+
+### Pre-promotion proxy verification (simulated done-state)
+
+```
+$ rm -rf /tmp/061-promote-sim && cp -r specs/061-conversational-assistant /tmp/061-promote-sim
+$ python3 -c "import json; p='/tmp/061-promote-sim/state.json'; d=json.load(open(p)); d['status']='done'; d['certification']['status']='done'; d['certification']['completedAt']='2026-05-30T19:35:00Z'; d['certification']['evidenceRef']='report.md#round-100-promotion'; json.dump(d, open(p,'w'), indent=2)"
+$ bash .github/bubbles/scripts/artifact-lint.sh /tmp/061-promote-sim 2>&1 | tail -8
+✅ Required specialist phase 'validate' recorded in execution/certification phase records
+✅ Required specialist phase 'audit' recorded in execution/certification phase records
+✅ Required specialist phase 'chaos' recorded in execution/certification phase records
+✅ Spec-review phase recorded for 'full-delivery' (specReview enforcement)
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+EXIT=0
+```
+
+### Real promotion (IDE file-edit tools; no shell redirection)
+
+`specs/061-conversational-assistant/state.json` mutations performed via
+`multi_replace_string_in_file`:
+
+- `status`: `"in_progress"` → `"done"`
+- `certification.status`: `"in_progress"` → `"done"`
+- `certification.completedAt`: `null` → `"2026-05-30T19:35:00Z"`
+- `certification.evidenceRef`: `null` → `"report.md#round-100-promotion"`
+- `execution.lastUpdatedAt`: `"2026-05-30T09:41:04Z"` → `"2026-05-30T19:35:00Z"`
+- `execution.executionHistory`: Round 101 entry prepended (statusBefore
+  `in_progress`, statusAfter `done`, addressedFindings
+  `[SPEC-061-G088-G089-COMMIT-DEADLOCK]`, unresolvedFindings `[]`).
+
+JSON parse verification after edits:
+
+```
+$ python3 -c "import json; d=json.load(open('specs/061-conversational-assistant/state.json')); print('OK status=', d['status'], 'cert=', d['certification']['status'], 'completedAt=', d['certification']['completedAt'])"
+OK status= done cert= done completedAt= 2026-05-30T19:35:00Z
+$ echo EXIT=$?
+EXIT=0
+```
+
+### Final state.json snippet (post-promotion)
+
+```
+$ jq '{status, certification: {status: .certification.status, completedAt: .certification.completedAt, evidenceRef: .certification.evidenceRef}, currentPhase: .execution.currentPhase, lastUpdatedAt: .execution.lastUpdatedAt}' specs/061-conversational-assistant/state.json
+{
+  "status": "done",
+  "certification": {
+    "status": "done",
+    "completedAt": "2026-05-30T19:35:00Z",
+    "evidenceRef": "report.md#round-100-promotion"
+  },
+  "currentPhase": "closeout",
+  "lastUpdatedAt": "2026-05-30T19:35:00Z"
+}
+$ echo EXIT=$?
+EXIT=0
+```
+
+### Result envelope (Round 101)
+
+<pre><code class="language-yaml">outcome: completed_owned
+agent: bubbles.implement
+phasesExecuted: [closeout, ship]
+statusBefore: in_progress
+statusAfter: done
+addressedFindings:
+  - SPEC-061-G088-G089-COMMIT-DEADLOCK
+unresolvedFindings: []
+nextOwner: user
+nextRequiredAction: |
+  Spec 061 status=done on disk. Commit the promotion delta:
+  git add specs/061-conversational-assistant/{state.json,report.md} \
+    && git commit -m 'spec 061: promote to done (Round 101)'
+</code></pre>
+
+
