@@ -40,15 +40,14 @@ output_schema:
 
 limits:
   max_loop_iterations: 3
-  # Bumped from 3000/2000 (BUG-061-004) — original budgets assumed a
-  # permanently-warm Ollama. Home-lab single-user usage is sporadic; with
-  # OLLAMA_KEEP_ALIVE wired to infrastructure.ollama.keep_alive (24h on
-  # home-lab/prod), the first call after eviction still needs headroom for
-  # one route LLM call + one external geocode/forecast tool call + one
-  # final-reply LLM call. Matches retrieval_qa interactive-tier budget.
-  timeout_ms: 15000
+  # Sized for the home-lab path: one route LLM call + external geocode +
+  # external forecast + final-reply LLM call, all running against a 26B
+  # GPU-accelerated model with 24h keep_alive. 120s caps at the loader
+  # ceiling (agent.defaults.timeout_ms_ceiling) and gives ample margin
+  # for the cold-load case on first call after a restart.
+  timeout_ms: 120000
   schema_retry_budget: 1
-  per_tool_timeout_ms: 7500
+  per_tool_timeout_ms: 60000
 
 token_budget: 600
 temperature: 0.1

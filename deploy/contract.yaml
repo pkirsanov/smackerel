@@ -31,7 +31,7 @@ externalImages:
 - name: nats
   image: nats:2.10-alpine
 - name: ollama
-  image: ollama/ollama:0.23.2
+  image: ollama/ollama:rocm
 # Spec 049 — only required when operator enables `--profile monitoring`.
 # SST pin: config/smackerel.yaml::monitoring.prometheus.image
 - name: prometheus
