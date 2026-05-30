@@ -73,3 +73,56 @@ Scenario: SCN-BUG061003-S05 Live-stack meal-plan -> shopping loop unaffected
 - **AC3** — All 5 scenarios (S01–S05) have PASS evidence with `Claim Source: executed`.
 - **AC4** — Idea-capture for non-recipe BandLow input remains intact (adversarial regression).
 - **AC5** — No hardcoded defaults / fallbacks in any committed file for the new SST keys.
+
+## Capability Foundation
+
+### Single-Capability Justification
+
+This bug introduces exactly ONE assistant capability: `recipe_search`.
+It is a single skill registered in the existing assistant scenario
+framework (alongside `retrieval_qa`, `weather_query`,
+`notification_schedule`). There are no provider variants, no
+adapter/strategy plurality, no UI primitives, and no shared cross-skill
+surface introduced by this bug — the recipe_search skill consumes the
+existing `api.SearchEngine` substrate with a domain filter, reuses the
+existing `retrieval.AssembleSources` helper for the populated path, and
+reuses the existing `assembler.Override` contract introduced in this
+same bug for the deterministic empty-graph path.
+
+No `## Domain Capability Model` section is required because there is
+no capability decomposition to surface: one bug → one skill → one
+scenario contract → one regression suite (S01–S05). The proportionality
+triggers detected by `capability-foundation-guard.sh` (`adapter`,
+`provider`, `strategy`, `channel`, `driver`, etc.) all originate from
+cross-references to the EXISTING framework primitives that recipe_search
+plugs into, not from new abstractions introduced by this bug.
+
+If a second recipe-related skill is ever added (e.g. `recipe_create`,
+`recipe_substitute`), spec.md MUST be re-evaluated against Gate G094
+and promoted to a full `## Domain Capability Model` at that time.
+
+### Single-Screen Justification
+
+This bug introduces zero new UI screens and zero reusable UI primitives.
+The only user-facing surface touched is the existing Telegram chat
+transcript (the "screen" that surfaced the bug), and the change is
+entirely server-side: the assistant now returns a sourced recipe
+response instead of the BandLow idea-capture string for recipe
+utterances. No new keyboards, no new inline buttons, no new menus,
+no new web pages, no new mobile views, no new admin panels, no new
+dashboards. The single bot-side adapter regression in
+`internal/telegram/assistant_adapter/bot_recipe_search_test.go` verifies
+that the existing single Telegram-render path stops emitting the
+pre-fix `. Saved: "..." (idea)` string for recipe responses — a
+behavior change on the existing screen, not a new screen.
+
+The proportionality-trigger hits detected by
+`capability-foundation-guard.sh` (e.g. "screen", "adapter", "channel")
+are cross-references to the existing Telegram-adapter primitive
+(owned by the conversational assistant foundation in spec 061), not
+new UI surfaces introduced by this bug.
+
+If a second user-facing surface for recipe interaction is ever added
+(e.g. a web meal-plan screen, a mobile recipe card), spec.md MUST be
+re-evaluated against Gate G094 and promoted to a full
+`### UI Primitives` section at that time.

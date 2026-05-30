@@ -86,3 +86,30 @@ Every recipe hit carries `artifact_id`; the assembler propagates `Sources` throu
 - **Pre-fix proof** — S02 router-level adversarial: without `NormalizeForRouting`, the embedder receives "find best recepie" (unknown to the test fixture), every scenario scores 0, the test fails.
 - **Post-fix proof** — S01–S05 PASS with executed evidence (per-scope DoD re-verification round on `d0266558`).
 - **Adversarial** — S03 pins the BandLow capture string ("saved as an idea") as a FORBIDDEN substring in the empty-graph body; S04 keeps the byte-for-byte pre-fix regex as a forbidden match for recipe responses; assembler malformed-JSON test (Phase: harden) confirms unparseable payloads do NOT emit Override.
+
+### Single-Implementation Justification
+
+This bug introduces exactly ONE implementation per capability surface:
+
+- ONE tool: `internal/agent/tools/recipesearch/tool.go` (no alternate transports, no second provider, no swap-in stubs).
+- ONE assembler: `internal/assistant/skills/recipesearch/assembler.go` (no foundation-vs-overlay split required; the empty-graph Override path is a deterministic branch of the same assembler, not a separate strategy).
+- ONE scenario contract: `config/prompt_contracts/recipe-search-v1.yaml` (no v2/v3 variants).
+- ONE router normalization pre-pass: `internal/agent/normalize.go::NormalizeForRouting` with a closed 4-entry alias map (no per-locale variants, no pluggable strategy).
+- ONE Telegram-adapter regression: `bot_recipe_search_test.go` (no per-channel adapter variants for the same skill).
+
+No `## Capability Foundation` / `## Concrete Implementations` /
+`### Variation Axes` split is required because there is no foundation
+being shared across multiple concrete implementations: the recipe_search
+skill itself IS the single concrete implementation, and the shared
+primitives it leverages (`api.SearchEngine`, `retrieval.AssembleSources`,
+`assembler.Override`) are pre-existing framework surfaces owned
+elsewhere (spec 037 retrieval foundation, this bug for `Override`
+contract). The proportionality triggers (`adapter`, `provider`,
+`strategy`, `channel`, `driver`) detected by
+`capability-foundation-guard.sh` are all cross-references to those
+foundations, not new abstractions introduced here.
+
+If a second concrete recipe-finder implementation is ever added
+(e.g. a federated external recipe-API tool alongside the local-graph
+tool), design.md MUST be re-evaluated against Gate G094 and split into
+foundation + concrete-implementation sections at that time.
