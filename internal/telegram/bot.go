@@ -563,10 +563,19 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
 		case "meal-plan", "meal_plan", "mealplan", "meal":
-			// Meal planning (spec 036) is natural-language only — the
-			// slash shortcut shows the supported phrases. TryHandle
-			// dispatches actual meal-plan messages from the non-command
-			// message path above.
+			// Meal planning (spec 036) is natural-language only — when the
+			// user passes arguments after the slash, dispatch them through
+			// TryHandle so '/meal_plan plan this week' actually creates a
+			// plan. When called bare, show the supported phrases.
+			args := strings.TrimSpace(msg.CommandArguments())
+			if args != "" && b.mealPlanHandler != nil {
+				reply := func(chatID int64, text string) { _ = b.reply(chatID, text) }
+				if b.mealPlanHandler.TryHandle(ctx, msg.Chat.ID, args, reply) {
+					return
+				}
+				b.reply(msg.Chat.ID, "? meal-plan: didn't understand \""+args+"\". Type /meal_plan with no args to see supported phrases.")
+				return
+			}
 			b.reply(msg.Chat.ID, "= Meal planning uses natural language. Try:\n"+
 				"- plan this week\n"+
 				"- plan next week\n"+
@@ -578,7 +587,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 				"- cook tonight's dinner\n"+
 				"- monday dinner: <recipe name>\n"+
 				"- repeat last week's plan\n"+
-				"- activate plan / archive plan / delete plan")
+				"- activate plan / archive plan / delete plan\n\n"+
+				"You can also use /meal_plan <phrase> as a one-liner.")
 		default:
 			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal_plan, /ask, /weather, /remind, /reset, or /help")
 		}
