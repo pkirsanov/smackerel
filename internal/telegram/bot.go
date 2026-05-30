@@ -290,10 +290,16 @@ func (b *Bot) Start(ctx context.Context) {
 		tgbotapi.BotCommand{Command: "lint", Description: "Knowledge quality report"},
 		tgbotapi.BotCommand{Command: "list", Description: "Manage actionable lists"},
 		tgbotapi.BotCommand{Command: "expense", Description: "View and manage expenses"},
+		tgbotapi.BotCommand{Command: "watch", Description: "Recommendation watchlist"},
 		tgbotapi.BotCommand{Command: "digest", Description: "Get today's digest"},
 		tgbotapi.BotCommand{Command: "done", Description: "Finalize conversation assembly"},
 		tgbotapi.BotCommand{Command: "status", Description: "System status"},
 		tgbotapi.BotCommand{Command: "recent", Description: "Recent captured items"},
+		tgbotapi.BotCommand{Command: "meal_plan", Description: "Show meal-planning phrases"},
+		tgbotapi.BotCommand{Command: "ask", Description: "Ask the assistant (retrieval Q&A)"},
+		tgbotapi.BotCommand{Command: "weather", Description: "Weather lookup"},
+		tgbotapi.BotCommand{Command: "remind", Description: "Schedule a reminder"},
+		tgbotapi.BotCommand{Command: "reset", Description: "Reset assistant conversation"},
 		tgbotapi.BotCommand{Command: "help", Description: "Show available commands"},
 	)
 	if _, err := b.api.Request(commands); err != nil {
@@ -556,7 +562,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 			} else {
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
-		case "meal-plan", "mealplan", "meal":
+		case "meal-plan", "meal_plan", "mealplan", "meal":
 			// Meal planning (spec 036) is natural-language only — the
 			// slash shortcut shows the supported phrases. TryHandle
 			// dispatches actual meal-plan messages from the non-command
@@ -574,7 +580,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 				"- repeat last week's plan\n"+
 				"- activate plan / archive plan / delete plan")
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal-plan, /ask, /weather, /remind, /reset, or /help")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal_plan, /ask, /weather, /remind, /reset, or /help")
 		}
 		return
 	}
@@ -966,7 +972,7 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - /done - Finalize conversation assembly
 - /status - System status
 - /recent - Recent items
-- /meal-plan - Show meal-planning phrases
+- /meal_plan - Show meal-planning phrases
 - /ask <question> - Ask the assistant (retrieval Q&A)
 - /weather [city] - Weather lookup
 - /remind <when> <what> - Schedule a reminder
