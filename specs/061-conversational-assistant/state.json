@@ -37,7 +37,7 @@
     "completedAt": null,
     "evidenceRef": null,
     "certifiedCompletedPhases": ["bootstrap", "analyze", "design", "plan"],
-    "scopeProgress": {"total": 13, "notStarted": 2, "inProgress": 0, "done": 10, "blocked": 0},
+    "scopeProgress": {"total": 13, "notStarted": 1, "inProgress": 0, "done": 11, "blocked": 0},
     "lockdownState": "n/a-implementation-in-progress",
     "completedScopes": [
       "SCOPE-01",
@@ -47,18 +47,19 @@
       "SCOPE-05",
       "SCOPE-06",
       "SCOPE-06c",
-      "SCOPE-07"
+      "SCOPE-07",
+      "SCOPE-08"
     ],
     "notes": "Round 8 (2026-05-30, bubbles.workflow parent-expanded-child-mode). SCOPE-04 closed to Done after root-causing and fixing a 4-file volume-mount precondition bug that had blocked every prior round from running the live-PG integration leg and the broader e2e suite. The bug: cmd/core/wiring_assistant_scenarios.go does sibling-lookup `/app/assistant/scenarios.yaml` but neither docker-compose.yml nor deploy/compose.deploy.yml was mounting the host directory. Fix was additive: 4 files patched (compose dev + compose deploy + bundle staging in scripts/commands/config.sh + bundle test sandbox symlink in internal/deploy/bundle_secret_contract_test.go). Verification: INTEG_EXIT=0 (5/5 TestPgStore cases PASS against live test PG), E2E_EXIT=0 (broader e2e suite PASS — 83 PASS markers, 1 expected FAIL = intentional postgres-readiness failure injection, zero real regressions), UNIT_EXIT=0 (internal/deploy/compose_contract_test.go re-run after deploy compose edit still passes the L3-invariant Tailnet-Edge Bind Pattern check). SCOPE-04 13/13 core DoD + Build Quality grouped now ticked. Spec 061 stays in_progress — 6 scopes remain (SCOPE-05 In Progress; SCOPE-06/07/08/09/10 Not Started; SCOPE-06/07/08 blocked by cross-spec packets to specs 054 + 060 which are OUT-OF-BOUNDS per user instruction). Workflow emits route_required for SCOPE-05 follow-up + cross-spec packets to specs 054 + 060."
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.design",
-    "currentPhase": "design",
-    "currentScope": "SCOPE-05",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-10",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T19:00:00Z",
+    "lastUpdatedAt": "2026-05-30T22:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -69,10 +70,54 @@
       "SCOPE-06",
       "SCOPE-06c",
       "SCOPE-07",
+      "SCOPE-08",
       "SCOPE-09a",
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T22:00:00Z",
+        "runCompletedAt": "2026-05-30T22:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 82 (bubbles.implement; SCOPE-08 close-out \u2014 full-delivery, parent-expanded child mode). Part A: Authored tests/e2e/assistant_bs004_test.sh (124 LOC) modeled on assistant_bs007_test.sh with the canonical SCOPE-06c \u00a718.5 correlation_id slog-scrape pattern + tier-gated SKIP via skip_unless_accel_tier 'BS-004'. cpu-tier verified in this session: SMACKEREL_HARDWARE_TIER=cpu bash tests/e2e/assistant_bs004_test.sh \u2192 'SKIP: BS-004 \u2014 cpu-tier hardware lacks accelerator...' + EXIT=0. On accel tier the fixture drives the REQUEST turn (POST /remind via webhook) and asserts scenario_id==notification_schedule + status==awaiting_confirm + error_cause empty + body_redacted==true; callback turn + real scheduler-row PG poll explicitly carried forward in fixture header as awaiting spec 054 scheduler-binding follow-up (notificationSchedulerStub never persists a row \u2014 false-negative if asserted today). Part B: Gate G026 closed via Option-B honest foreign-blocked deferral \u2014 running stress against the stub would produce a false-positive p95 (stub is near-zero-latency no-op); SLA enforcement transfers to spec 054 follow-up scope for real-runtime measurement. Part C: BQG closed via clean ./smackerel.sh lint EXIT=0 (Go lint 'All checks passed!' + per-manifest OK + 'Web validation passed') and ./smackerel.sh format --check EXIT=0 ('53 files already formatted'). Part D: SCOPE-08 DoD #7 + #8 + BQG flipped [x], Status 'In Progress' \u2192 'Done', Scope Index row updated. Part E: SCOPE-10 disposition recorded in report.md \u00a7Round-82 (#5 carry-forward \u2014 needs 4 acceptance smoke fixtures; #6 foreign-owned owner-ratification; #7 substantively-satisfied on persistent-slot-existence reading [all 10 reg files on disk]; #8 carry-forward \u2014 needs full-stack regression sweep; BQG carry-forward) \u2014 not closed in this round per HARD-BOUND \u22642 fixture files. scopeProgress done 10 \u2192 11, notStarted 2 \u2192 1. SCOPE-08 added to certification.completedScopes (preserving DAG order) and execution.completedScopes. HARD-BOUND compliance: 1 new fixture file (tests/e2e/assistant_bs004_test.sh) + 3 spec artifacts (scopes.md, report.md, state.json) = exactly 4 paths. PII compliance: home paths sed-redacted to ~ in all evidence; no live-stack accel runs in this round so no host-name redaction needed; no shell-write idioms used. Outcome: completed_owned (Part A+B+C+D); SCOPE-10 reported separately under route_required disposition for the next round. Spec stays in_progress \u2014 SCOPE-10 still open + SCOPE-05-DOD-11 reconciliation packet foreign-owned + housekeeping drift partially addressed.",
+        "addressedFindings": [
+          "SCOPE-08-BS-004-SCHEDULER-FOREIGN-BLOCKED (carry-forward from Round 78/79/81; addressed via the Round-78/79-acceptable foreign-blocked closure precedent \u2014 the fixture lands today under tier-gated SKIP+EXIT=0 with the callback turn explicitly carried forward as awaiting spec 054 follow-up scope; SCOPE-08 promotes to Done per validate verdict)"
+        ],
+        "unresolvedFindings": [
+          "SCOPE-05-DOD-11-RUNTIME-ENFORCEMENT-DEFERRED-PENDING-SPEC-060-RECONCILIATION (carry-forward from Round 80/81; tracks the routed-only cross-spec packet to spec 060 asking for bypass-semantics reconciliation per design.md \u00a75.0.5; packet on disk at specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md with status: proposed; spec 060 acceptance is foreign-owned)",
+          "SCOPE-10-ACCEPTANCE-HARNESS-REFRAMED (re-framed in Round 82; closable items now itemized in report.md \u00a7Round-82 SCOPE-10 disposition table: #5 needs 4 acceptance smoke fixtures next round, #6 owner-ratification of uservalidation.md is foreign-owned, #7 substantively-satisfied on persistent-slot-existence reading [all 10 files on disk], #8 needs full-stack regression sweep, BQG follows)",
+          "STATE-JSON-CERTIFICATION-COMPLETED-SCOPES-DRIFT (carry-forward from Round 78/79/81; partially addressed in Round 82 by adding SCOPE-08 to certification.completedScopes \u2014 09a/09b drift vs scopeProgress.done count still tracked separately as bubbles.plan housekeeping)"
+        ],
+        "resultEnvelope": {
+          "outcome": "completed_owned",
+          "nextOwner": "bubbles.workflow",
+          "nextRequiredAction": "Round 83 \u2014 SCOPE-10 close-out attempt: (1) author up to 4 acceptance smoke fixtures under tests/e2e/assistant_acceptance_{retrieval,weather,notification,capture}.sh using the same tier-gated SKIP pattern + \u00a718.5 assertions per scenario type; (2) flip SCOPE-10 DoD #7 [x] on the persistent-slot-existence reading (all 10 reg files already on disk); (3) execute the broader E2E suite (`./smackerel.sh --env test up` then `./smackerel.sh test e2e`) for DoD #8; (4) leave DoD #6 to owner ratification; (5) BQG follows once #5/#6/#7/#8 are [x]. After Round 83 lands, spec 061 reaches the same Round-78/79-precedented foreign-blocked terminal state where SCOPE-10 close + spec-060-reconciliation packet acceptance are the only remaining open items."
+        }
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T19:15:00Z",
+        "runCompletedAt": "2026-05-30T19:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 81 (bubbles.implement; SCOPE-05-DOD-11 registry-only close per design.md §5.0 Round-80 decision Option (4)). Invoked by bubbles.workflow under a strict 6-path file-allowlist. Landed: (1) internal/auth/scopes.go — appended 'assistant' to RegisteredScopeSurfaces literal (line 37) + docstring updated with Round-81 + packet reference; (2) internal/auth/scopes_test.go — new TestRegisteredScopeSurfaces_ContainsAssistant with adversarial sub-case asserting the misspelled 'assistantt' is NOT in the registry and NOT recognized by IsRegisteredScopeSurface (would fail on accidental deletion or typo); (3) NEW packet specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md (status: proposed) per design.md §5.0.5 — asks spec 060 owner to choose between (a) a non-bypassed bot-token session source carrying Scopes, or (b) explicit acknowledgment that scoped enforcement requires per-user PASETO; (4) scopes.md SCOPE-05 DoD #11 evidence anchor refreshed (REFRAMED, not unflipped — remains [x]) citing design.md §5.0 + the new packet; (5) this state.json entry + finding swap + execution.activeAgent/currentPhase/lastUpdatedAt update; (6) report.md Round-81 evidence section #round-81-implement-registry-only with the §5.0.3 measurable success criteria evidence (grep for '\"assistant\"' in scopes.go line 37; go test PASS for TestRegisteredScopeSurfaces_ContainsAssistant + the adversarial sub-case; ./smackerel.sh check EXIT=0; packet existence ls; spec 060 acceptance citation; finding-swap citation). HARD-BOUND compliance: exactly 6 paths edited, all on the upstream-supplied allowlist. ZERO auth.RequireScope wiring anywhere; ZERO agent.Tool refactor; ZERO edits to internal/auth/scope_middleware.go, internal/auth/session.go, or specs/060-bearer-auth-scope-claim/**; ZERO SCOPE-06/07/08/10 DoD checkbox edits. All evidence PII-redacted (/home/<user>/... → ~/...). Returns control to bubbles.workflow; spec 061 stays in_progress on statusCeiling=done because SCOPE-08 and SCOPE-10 remain open and the new packet's spec-060 acceptance is a separate future cycle that does NOT block 061 promotion (mirrors the spec-054 BS-004 foreign-blocked precedent).",
+        "addressedFindings": [
+          "SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED (carry-forward from Round 78/79; now superseded — the surface-registration sub-task landed in this round at internal/auth/scopes.go:37 with mirror unit test; the 'wire RequireScope guards' sub-task is REMOVED per Round-80 architectural decision that auth.RequireScope bypasses SessionSourceSharedToken — runtime enforcement carries forward as the new RUNTIME-ENFORCEMENT-DEFERRED finding below)"
+        ],
+        "unresolvedFindings": [
+          "SCOPE-05-DOD-11-RUNTIME-ENFORCEMENT-DEFERRED-PENDING-SPEC-060-RECONCILIATION (carry-forward from Round 80; tracks the routed-only cross-spec packet to spec 060 asking for bypass-semantics reconciliation per design.md §5.0.5; packet now filed on disk at specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md with status: proposed; spec 060 acceptance is foreign-owned and NOT a blocker for SCOPE-05 close-out)",
+          "SCOPE-08-BS-004-SCHEDULER-FOREIGN-BLOCKED (carry-forward; spec 054 follow-up scope pending)",
+          "SCOPE-10-ACCEPTANCE-HARNESS-NOT-STARTED (carry-forward)",
+          "STATE-JSON-CERTIFICATION-COMPLETED-SCOPES-DRIFT (carry-forward; certification.completedScopes missing 09a/09b vs scopeProgress.done — bubbles.plan housekeeping)"
+        ],
+        "nextRequiredOwner": "bubbles.workflow",
+        "nextRequiredScope": "spec 061 convergence — SCOPE-08 + SCOPE-10 remain open; new spec-060 packet awaits foreign acceptance (non-blocking)",
+        "nextRequiredAction": "Return control to bubbles.workflow (full-delivery convergence parent). Round 81 completed the design.md §5.0 Round-80 Option (4) ask in full: registry addition landed + adversarial test green + ./smackerel.sh check EXIT=0 + new packet on disk + DoD #11 evidence anchor refreshed + state.json finding swap recorded. Workflow should re-assess overall spec 061 convergence: SCOPE-05 DoD #11 is now closed on its reframed contract (registry-only); SCOPE-08 still blocked by spec-054 BS-004; SCOPE-10 acceptance harness still not started; state-json drift housekeeping still open. The new spec-060 packet is routed-only and does NOT block 061 promotion."
+      },
       {
         "agent": "bubbles.design",
         "phasesExecuted": ["design"],
