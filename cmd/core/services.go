@@ -62,6 +62,16 @@ type coreServices struct {
 	driveSaveService       *save.Service
 	driveRetrieveService   *retrieve.Service // spec 038 Scope 7 — drive retrieval
 	mealPlanSaveBack       *mealplan.DriveSaveBack
+
+	// BUG-034-004 follow-up — meal-plan handler must be constructed
+	// BEFORE api.NewRouter so /api/meal-plans routes register. The
+	// scheduler + telegram wiring depends on `sched` and `tgBot` which
+	// are constructed AFTER NewRouter, so wireMealPlanning is split:
+	// wireMealPlanningHandler runs early (builds these stashed
+	// services) and wireMealPlanningSchedulerAndBot runs late
+	// (consumes them).
+	mealPlanServiceForLateWiring *mealplan.Service
+	mealPlanShoppingBridge       *mealplan.ShoppingBridge
 	// Spec 044 Scope 02 — auth revocation NATS broadcaster. May be nil
 	// when auth is disabled or NATS is unavailable; in that case the
 	// revocation cache still hydrates from the database via the

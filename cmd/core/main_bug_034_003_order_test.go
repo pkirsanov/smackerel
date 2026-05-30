@@ -49,3 +49,46 @@ func TestBug034003_WireExpenseTrackingPrecedesNewRouter(t *testing.T) {
 		t.Fatal("wireExpenseTracking should be called exactly once; multiple calls suggest an incomplete fix")
 	}
 }
+
+// TestBug034004_WireMealPlanningHandlerPrecedesNewRouter pins the
+// equivalent ordering for meal-plans (BUG-034-004 follow-up). Same
+// class of bug as BUG-034-003: wireMealPlanning used to run AFTER
+// api.NewRouter, so deps.MealPlanHandler was nil at router-init time
+// and /api/meal-plans returned 404. The fix splits wireMealPlanning
+// into wireMealPlanningHandler (early — no scheduler/tgBot dep) and
+// wireMealPlanningSchedulerAndBot (late — needs sched + tgBot).
+func TestBug034004_WireMealPlanningHandlerPrecedesNewRouter(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	body := string(src)
+
+	handlerIdx := strings.Index(body, "wireMealPlanningHandler(cfg, svc, deps, listResolver, listStore)")
+	if handlerIdx < 0 {
+		t.Fatal("wireMealPlanningHandler call not found in main.go — regression-test target moved; update the test")
+	}
+	routerIdx := strings.Index(body, "router := api.NewRouter(deps)")
+	if routerIdx < 0 {
+		t.Fatal("`router := api.NewRouter(deps)` call not found in main.go — regression-test target moved; update the test")
+	}
+
+	if handlerIdx >= routerIdx {
+		t.Fatalf("BUG-034-004 follow-up regression: wireMealPlanningHandler (offset %d) MUST precede api.NewRouter (offset %d). When NewRouter runs first, deps.MealPlanHandler is still nil and /api/meal-plans returns 404 in production.", handlerIdx, routerIdx)
+	}
+
+	// Adversarial: the unified wireMealPlanning(...) must NOT come back.
+	if strings.Contains(body, "wireMealPlanning(cfg, svc, deps, sched, listResolver, listStore, tgBot)") {
+		t.Fatal("BUG-034-004 regression: the old unified wireMealPlanning(...) signature is back; the fix has been reverted. The function MUST stay split into wireMealPlanningHandler (early) and wireMealPlanningSchedulerAndBot (late).")
+	}
+
+	// Adversarial: the late wiring must come AFTER NewRouter (it needs
+	// sched + tgBot which are constructed later).
+	lateIdx := strings.Index(body, "wireMealPlanningSchedulerAndBot(cfg, svc, sched, tgBot)")
+	if lateIdx < 0 {
+		t.Fatal("wireMealPlanningSchedulerAndBot call not found in main.go — the late-wiring half of the BUG-034-004 fix is missing")
+	}
+	if lateIdx <= routerIdx {
+		t.Fatalf("wireMealPlanningSchedulerAndBot (offset %d) MUST come after api.NewRouter (offset %d) — it depends on sched + tgBot which are constructed later", lateIdx, routerIdx)
+	}
+}

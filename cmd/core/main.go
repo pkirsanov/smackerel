@@ -120,6 +120,12 @@ func run() error {
 	// wiring (none today for expenses) below.
 	wireExpenseTracking(ctx, cfg, svc, deps)
 
+	// BUG-034-004 follow-up: same construction-order rule applies to
+	// meal-plan handler. Split into wireMealPlanningHandler (early —
+	// no scheduler/tgBot dependency) and wireMealPlanningSchedulerAndBot
+	// (late — needs sched + tgBot constructed after NewRouter).
+	wireMealPlanningHandler(cfg, svc, deps, listResolver, listStore)
+
 	router := api.NewRouter(deps)
 
 	// Start Telegram bot if configured
@@ -183,10 +189,12 @@ func run() error {
 	}
 
 	// Wire optional feature services (knowledge, meal planning, recommendations).
-	// NOTE: wireExpenseTracking has already run BEFORE api.NewRouter above
-	// (see BUG-034-003 follow-up comment) so its routes are registered.
+	// NOTE: wireExpenseTracking + wireMealPlanningHandler have already
+	// run BEFORE api.NewRouter above (see BUG-034-003 + BUG-034-004
+	// follow-up comments) so their routes are registered. The late
+	// scheduler/bot wiring for meal-planning runs here.
 	wireKnowledgeLinter(sched, cfg, svc)
-	wireMealPlanning(cfg, svc, deps, sched, listResolver, listStore, tgBot)
+	wireMealPlanningSchedulerAndBot(cfg, svc, sched, tgBot)
 	wireRecommendationWatchPoller(sched, agentBridge, svc, cfg, tgBot, deps.RecommendationWatchHandlers)
 
 	if err := sched.Start(ctx, cfg.DigestCron); err != nil {
