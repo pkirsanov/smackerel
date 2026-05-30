@@ -13,6 +13,7 @@ import (
 	// reject the 3 v1 scenarios and the happy-path test would fail
 	// with the wrong error.
 	_ "github.com/smackerel/smackerel/internal/agent/tools/notification"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
 )

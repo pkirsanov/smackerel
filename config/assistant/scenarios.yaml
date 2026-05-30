@@ -48,3 +48,14 @@ scenarios:
     requires_provenance: false
     confirm_required: true
     enable_sst_key: "assistant.skills.notifications.enabled"
+
+  # BUG-061-003 — recipe_search skill (find recipes in the user's owned
+  # knowledge graph). slash_shortcut is empty per design.md D3 — v1
+  # shortcut set stays frozen at /ask, /weather, /remind, /reset.
+  recipe_search:
+    user_facing: true
+    user_facing_label: "find recipes"
+    slash_shortcut: ""
+    requires_provenance: true
+    confirm_required: false
+    enable_sst_key: "assistant.skills.recipe_search.enabled"

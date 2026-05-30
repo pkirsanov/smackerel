@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent/tools/notification"
+	"github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/config"
@@ -62,6 +63,9 @@ func wireAssistantSkillServices(cfg *config.Config, svc *coreServices) error {
 	}
 	if err := wireNotificationSkillServices(cfg, svc); err != nil {
 		return fmt.Errorf("notification skill services: %w", err)
+	}
+	if err := wireRecipeSearchSkillServices(cfg, svc); err != nil {
+		return fmt.Errorf("recipe_search skill services: %w", err)
 	}
 	return nil
 }
@@ -212,4 +216,27 @@ var errNotificationSchedulerUnbound = errors.New("notification.Scheduler: stub b
 
 func (notificationSchedulerStub) Schedule(_ context.Context, _ time.Time, _ string, _ string, _ string) (string, error) {
 	return "", errNotificationSchedulerUnbound
+}
+
+// wireRecipeSearchSkillServices wires *api.SearchEngine into the
+// recipe_search tool handler. BUG-061-003 — fail-loud per SST.
+func wireRecipeSearchSkillServices(cfg *config.Config, svc *coreServices) error {
+	if !cfg.Assistant.RecipeSearchEnabled {
+		slog.Info("assistant.skills.recipe_search.enabled=false; recipe_search tool handler will return recipe_search_tools_not_configured at call time")
+		return nil
+	}
+	if svc.searchEngine == nil {
+		return errors.New("assistant.skills.recipe_search.enabled=true but coreServices.searchEngine is nil — buildCoreServices must run before skill wiring")
+	}
+	if cfg.Assistant.RecipeSearchTopK < 1 {
+		return fmt.Errorf("ASSISTANT_SKILLS_RECIPE_SEARCH_TOP_K must be >= 1, got %d", cfg.Assistant.RecipeSearchTopK)
+	}
+	recipesearch.SetServices(&recipesearch.Services{
+		Engine:  svc.searchEngine,
+		MaxTopK: cfg.Assistant.RecipeSearchTopK,
+	})
+	slog.Info("recipe_search skill services wired",
+		"max_top_k", cfg.Assistant.RecipeSearchTopK,
+	)
+	return nil
 }

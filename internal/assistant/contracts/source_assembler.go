@@ -120,6 +120,30 @@ type SourceAssembly struct {
 	// ProvenanceCauseFabricatedSource because a non-empty body with
 	// no Sources is — by definition — a fabricated answer.
 	Cause ProvenanceCause
+
+	// Override, when non-nil, instructs the Facade to fully replace
+	// the response Status / ErrorCause / CaptureRoute / Body with
+	// the override values AND skip the provenance gate. Used by
+	// scenarios like recipe_search (BUG-061-003) that need to emit
+	// a deterministic StatusUnavailable response when the owned
+	// graph contains zero matches, without falling through to the
+	// "saved as idea" capture branch and without tripping the
+	// provenance gate (the gate would otherwise refuse a body
+	// without Sources).
+	Override *ResponseOverride
+}
+
+// ResponseOverride is the optional assembler-driven response shape
+// override. All four fields are applied verbatim; the Facade does
+// NOT merge with translateFinalToBody output. When Override is set,
+// Sources/OverflowCount/Cause are ignored — the response carries no
+// sources and the provenance gate is skipped (the override path is
+// for known, non-error states like an empty owned-graph result).
+type ResponseOverride struct {
+	Status       StatusToken
+	ErrorCause   ErrorCause
+	CaptureRoute bool
+	Body         string
 }
 
 // ProvenanceCause is the closed-vocabulary set of attribution causes

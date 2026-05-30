@@ -151,6 +151,18 @@ func (m *SkillsManifest) ConfirmRequired(scenarioID string) bool {
 	return m.entries[scenarioID].ConfirmRequired
 }
 
+// SlashShortcut returns the configured slash shortcut for the
+// scenario. The second return is false iff the id is not present in
+// the manifest. An empty string with ok=true means "explicitly opted
+// out of a shortcut" (BUG-061-003 D3 — recipe_search).
+func (m *SkillsManifest) SlashShortcut(scenarioID string) (string, bool) {
+	e, ok := m.entries[scenarioID]
+	if !ok {
+		return "", false
+	}
+	return e.SlashShortcut, true
+}
+
 // Enabled reports the runtime-resolved enable bit (BS-008 gate).
 // An unknown id reports false so the facade filters it out of the
 // candidate set.
