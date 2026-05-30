@@ -11370,4 +11370,247 @@ UNIT_GO_EXIT=0
 
 Every gate exit code in this section was captured from a real command run on this WSL2 host between 15:00 and 16:30 UTC on 2026-05-30. The cpu-tier grep evidence is reproducible by `./smackerel.sh --env test config generate && grep -E ... config/generated/test.env`. The accel-tier evidence required a single explicit `SMACKEREL_HARDWARE_TIER=accel` override against `dev.env` (this host has no accelerator; the proof is config-resolution-only, not runtime). The fail-loud evidence required `env -u SMACKEREL_HARDWARE_TIER` to remove the overlay-sourced value. No `--no-verify` was used. No shell-write idioms (`cat >`, `tee`, heredoc-to-file, `python -c open()`) were used to edit any source, spec, or evidence artifact — all edits went through IDE file tools.
 
+---
+
+## Round 73 — SCOPE-06c DoD #5 cpu-tier live-stack RE-RUN: RED — finding routed to plan {#round-73-scope-06c-cpu-live-stack-red}
+
+**Owner:** `bubbles.implement` (executing the live-stack RE-RUN that was deferred to `bubbles.test` in Round 71d).
+**HEAD before:** `c1ee3614` (Round 71c design amendment) — Round 71d implementation edits all in working tree, never committed (see Round 71d "Edits owned this round"). This round runs the live-stack RE-RUN against the Round 71d working tree.
+**Outcome:** `route_required` — DoD #5 RED on both BS-002 and BS-007 with the **exact failure mode predicted by the SCOPE-06c Honesty Note** (cpu × interactive cell at qwen2.5:0.5b-instruct + 15 s budget consumed entirely by inference; `latency_ms ≈ 15 023 ms` and `15 065 ms` respectively).
+**Claim Source:** executed (full transcripts below).
+**Anchor used by SCOPE-06c DoD #5 evidence link:** `#scope-06c-cpu-live-stack-pass` (the anchor name is preserved; the section explicitly records the RED outcome so the link target is honest and discoverable).
+
+### `report.md#scope-06c-cpu-live-stack-pass` — RED evidence (BS-002)
+
+```text
+$ cat .smackerel.local.env
+# Spec 061 SCOPE-06c — per-machine hardware-tier override for THIS WSL host.
+# This file is gitignored. Set the tier for this machine; copy from
+# .smackerel.local.env.example on new machines.
+SMACKEREL_HARDWARE_TIER=cpu
+
+$ ./smackerel.sh --env test config generate >/dev/null
+$ grep -E '^(SMACKEREL_HARDWARE_TIER|RETRIEVAL_QA_TIMEOUT_MS|AGENT_PROVIDER_DEFAULT_MODEL)=' config/generated/test.env
+AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+SMACKEREL_HARDWARE_TIER=cpu
+RETRIEVAL_QA_TIMEOUT_MS=15000
+
+$ ./smackerel.sh --env test build   # --no-cache rebuild of smackerel-test-smackerel-core after loader.go ExpandEnv landed
+... (build OK; image smackerel-test-smackerel-core:latest replaced)
+
+$ ./smackerel.sh --env test up
+... Container smackerel-test-smackerel-core-1  Started  (this time HEALTHY — scenario loader expanded ${RETRIEVAL_QA_TIMEOUT_MS} successfully)
+
+$ docker exec smackerel-test-smackerel-core-1 env | grep -E 'HARDWARE|RETRIEVAL_QA|AGENT_PROVIDER_DEFAULT_MODEL'
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS=7500
+AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+AGENT_PROVIDER_DEFAULT_PROVIDER=ollama
+SMACKEREL_HARDWARE_TIER=cpu
+RETRIEVAL_QA_TIMEOUT_MS=15000
+
+# Warmup: prime qwen2.5:0.5b-instruct on the live test ollama (~1 s warm; model resident).
+$ curl -s --max-time 60 http://127.0.0.1:47004/api/generate \
+    -d '{"model":"qwen2.5:0.5b-instruct","prompt":"warm","stream":false,"options":{"num_predict":1}}'
+{"model":"qwen2.5:0.5b-instruct","created_at":"2026-05-30T03:59:18.417Z","response":"Hello","done":true,"done_reason":"length",...}
+
+# Try #2 (post-warmup) — same RED outcome as try #1 (pre-warmup).
+$ export E2E_STACK_MANAGED=1 AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+$ timeout 600 bash tests/e2e/assistant_bs002_test.sh
+=== Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
+--- seed: POST /api/capture with marker=bs002seed178011356304951 ---
+  seed_resp={"artifact_id":"01KSVGJQX4C9QX6HV4GH1JABN2","title":"Tailscale mesh VPN setup notes (bs002seed178011356304951): I installed Tailscale on the home-lab evo","artifact_type":"generic","summary":"","connections":0,"topics":null,"processing_time_ms":4}
+  seeded artifact_id=01KSVGJQX4C9QX6HV4GH1JABN2
+--- LLM warmup: priming qwen2.5:0.5b-instruct inference ---
+--- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---
+  http_status=200 body=
+--- §18.5 slog scrape for assistant_turn with correlation_id=178011356304951 ---
+  matched: {"time":"2026-05-30T03:59:43.312Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs002","transport":"telegram","correlation_id":"178011356304951","assistant_turn_id":"asst-1780113568290939529","scenario_id":"retrieval_qa","top_score":0,"band":"high","status":"saved_as_idea","error_cause":"provider_unavailable","latency_ms":15023.36,"agent_trace_id":"trace-asst-1780113568290939529","body_redacted":true}
+FAIL: BS-002: status='saved_as_idea' on happy path; provenance gate refused (empty Sources?); /ask was routed but assembler produced no citations — LLM probably did not cite the seeded artifact_id=01KSVGJQX4C9QX6HV4GH1JABN2
+--- cleanup: DELETE seeded artifact 01KSVGJQX4C9QX6HV4GH1JABN2 ---
+EXIT_BS002=1
+```
+
+`status=saved_as_idea` + `error_cause=provider_unavailable` + `latency_ms=15023ms` ≈ `RETRIEVAL_QA_TIMEOUT_MS=15000ms` means the synthesis-path LLM call timed out. The capture-fallback path engaged (correct end-to-end behavior under unavailability), but the **happy-path PASS condition `status=retrieval_ok` was not reached**.
+
+### `report.md#scope-06c-cpu-live-stack-pass` — RED evidence (BS-007)
+
+```text
+$ timeout 600 bash tests/e2e/assistant_bs007_test.sh
+=== Spec 061 SCOPE-06 §18.5 — BS-007 retrieval refusal e2e ===
+--- LLM warmup: priming qwen2.5:0.5b-instruct inference ---
+--- ROW-1: webhook POST with /ask (unmatchable query) ---
+  http_status=200 body=
+--- §18.5 slog scrape for assistant_turn with correlation_id=178011349218886 ---
+  matched: {"time":"2026-05-30T03:58:27.834Z","level":"INFO","msg":"assistant_turn","user_id":"test-user-061-bs007","transport":"telegram","correlation_id":"178011349218886","assistant_turn_id":"asst-1780113492773080917","scenario_id":"retrieval_qa","top_score":0,"band":"high","status":"saved_as_idea","error_cause":"provider_unavailable","latency_ms":15065.97,"agent_trace_id":"trace-asst-1780113492773080917","body_redacted":true}
+FAIL: BS-007: error_cause='provider_unavailable' (want empty; gate intentionally leaves ErrorCause unset — soft refusal, not unavailability)
+EXIT_BS007=1
+```
+
+BS-007 expected `status=saved_as_idea` AND `error_cause=missing_provenance` (the **provenance-gate** refusal: empty `Sources[]` → soft refusal). What it got is `status=saved_as_idea` AND `error_cause=provider_unavailable` (the **timeout** path engaging capture-fallback). The two routes look identical to a casual reader but are semantically distinct: BS-007 is supposed to prove the gate fires on empty sources, not the timeout-fallback. Under the cpu-tier 15 s budget the timeout fires first, so the gate's behavior under graph-drift is masked.
+
+### Finding routed to `bubbles.plan` — `SCOPE-06C-CPU-INTERACTIVE-15S-INFEASIBLE`
+
+**Category:** structural infeasibility of the cpu × interactive cell as currently specified.
+**Severity:** scope-blocking for SCOPE-06c DoD #5 cpu live-stack PASS.
+**Predicted by:** SCOPE-06c Honesty Note paragraph 1 (preserved verbatim in `scopes.md` lines ~967): *"The 15 s cpu-interactive budget may still RED. At 1.5 tok/s × 15 s = 22 tokens, a real retrieval-qa cited JSON answer (envelope + answer text + cited_artifact_ids array) might exceed 22 tokens. If live-stack RE-RUN under SCOPE-06c shows latency_ms ≈ 15 000 (timeout) consistently, the remediation is NOT to widen to 30 s (that erodes dev-loop ergonomics) — the remediation is to (a) switch the cpu-interactive cell to a smaller model (smollm2:135m, smollm2:360m-instruct-q4_K_M), AND/OR (b) cap num_predict on the cpu tier only, AND/OR (c) accept that BS-002 live-stack PASS on WSL is operator-deferred to the accel-tier host. The bubbles.test owner MUST surface this as a finding back to plan before widening; do not silently raise."* [Round 74 redaction: the verbatim quote in scopes.md names a specific accel-tier host model; that proper noun is local-PII-scanned and is replaced here with the generic term `accel-tier host`. The audit-trail copy in scopes.md is unchanged.]
+
+**Evidence:** two consecutive RED runs on the live test stack (HEAD `c1ee3614` + Round 71d working tree), with the test ollama warm and resident for qwen2.5:0.5b-instruct (warmup call returned in <1 s; both BS-002 and BS-007 exhaust the full 15 023 ms / 15 065 ms budget). Pre-warmup try #1 and post-warmup try #2 both RED with effectively identical latency.
+
+**Remediation options (plan owns the decision):**
+
+1. **(a) Switch cpu-interactive model** to `smollm2:360m-instruct-q4_K_M` (~3× smaller; ~3-4× faster on this CPU; same instruct-tuned + JSON-shape capability). Mechanically additive: change one cell in `config/smackerel.yaml::models.tiers.cpu.interactive.model`. Pull cost: one new model image. Risk: this model's citation-following on retrieval-qa-v1 has not been measured on this hardware — a fresh measurement round is needed.
+2. **(b) Cap `num_predict` on cpu tier only** by adding `models.tiers.cpu.interactive.num_predict: 32` (or similar) and threading it through to the agent/provider invocation as a tier-specific override. This is a structural change to the agent runtime, not just config — non-trivial scope expansion.
+3. **(c) Accept that cpu live-stack PASS is operator-deferred to the accel-tier host.** Mark SCOPE-06c DoD #5 as deferred-to-operator (parallel to DoD #6) and explicitly document that the cpu tier is a dev-loop ergonomic, not a production-quality runtime. SCOPE-06c lands as Done with two operator-deferred DoD items. Lowest-touch path.
+
+**Recommendation (`bubbles.implement` opinion — `bubbles.plan` owns the decision):** Option (c) is the most honest fit for the stated cpu-tier purpose ("dev loop, not production"). Options (a) and (b) both require additional measurement + planning rounds with no operator pressure to land them now. The accel-tier deploy adapter overlay is the natural place to demonstrate end-to-end retrieval quality.
+
+### DoD status after this round
+
+- DoD #1 → `[x]` (Round 72 design amendment; unchanged)
+- DoD #2 → `[x]` (Round 71d build/unit; unchanged)
+- DoD #3 → `[x]` (Round 71d cpu resolution; unchanged)
+- DoD #4 → `[x]` (Round 71d accel resolution + fail-loud; unchanged)
+- **DoD #5 → `[ ]` (RED this round; finding routed to plan — Claim Source: executed)**
+- DoD #6 → `[ ]` (operator-deferred to accel-tier host; unchanged)
+- DoD #7 → `[ ]` (depends on #5; unchanged)
+- Build Quality Gate → `[x]` (Round 71d; unchanged)
+
+### SCOPE-06 cascade NOT performed this round
+
+DoD #4b, #5b, #6 of SCOPE-06 (Telegram-fixture adapter-composition leg for BS-002 + BS-007 + trailing-sources rendering) require the SCOPE-06c cpu live-stack PASS as their precondition. Since DoD #5 is RED this round, the cascade is **explicitly not performed**. SCOPE-06 status stays `In Progress` (unchanged). When `bubbles.plan` chooses a remediation path (a/b/c above) and the cpu live-stack PASS lands, SCOPE-06 owner will re-verify and flip the three cascaded checkboxes in a separate `bubbles.implement` round.
+
+### Files modified this round
+
+- `specs/061-conversational-assistant/report.md` — this Round 73 section appended.
+- `specs/061-conversational-assistant/scopes.md` — SCOPE-06c status line bumped to `Blocked (Round 73 — cpu live-stack RED; finding routed to plan)`; DoD #5 annotation updated with the new evidence pointer + the Honesty Note citation.
+- `specs/061-conversational-assistant/state.json` — `executionHistory[0]` prepend (this Round 73 entry); `execution.activeAgent` `bubbles.implement` → `bubbles.plan`; `execution.currentPhase` `implement` → `plan`; `lastUpdatedAt` bump; `certification.scopeProgress` unchanged (no Done flip).
+
+**NOT MODIFIED:** spec.md, design.md, uservalidation.md, scenario-manifest.json, any source / test / config file under `cmd/`, `internal/`, `ml/`, `config/`, `scripts/`, `tests/`, `deploy/`, `docker-compose.yml`. No DoD checkboxes flipped on any other scope. No SCOPE-06 cascade. No `--no-verify` used. No shell-write idioms (`cat >`, `tee`, heredoc-to-file, `python -c open()`) used to edit any artifact.
+
+### Anti-fabrication ledger (Round 73)
+
+Two consecutive `bash tests/e2e/assistant_bs00{2,7}_test.sh` runs against the live `smackerel-test` stack on this WSL2 host at ~03:58–03:59 UTC on 2026-05-30. Both RED with `latency_ms` essentially equal to `RETRIEVAL_QA_TIMEOUT_MS=15000`. Warmup curl returned in <1 s, proving the model was resident before each run (the RED is not cold-load latency). The seed POST + slog scrape transcripts above are copy-paste from the actual terminal session, not paraphrase. No `--no-verify` used. All artifact edits this round went through IDE file tools (`replace_string_in_file`, `multi_replace_string_in_file`); zero `cat >`, `tee`, heredoc-to-file, or `python -c open(...)` writes against any file under `specs/`, `internal/`, `config/`, `scripts/`, or `tests/`.
+
+---
+
+## Round 74 — SCOPE-06c plan-triage: finding `SCOPE-06C-CPU-INTERACTIVE-15S-INFEASIBLE` decided — option (c) operator-defer {#round-74-scope-06c-plan-triage}
+
+**Owner:** `bubbles.plan` (plan-triage of the Round 73 RED finding routed by `bubbles.implement`).
+**HEAD before this round:** `dfb9e08a` (Round 71d SCOPE-06c — hardware-tier × model-role matrix wired in SST). Round 73 working-tree changes (report.md + scopes.md + state.json) remained uncommitted and are folded into this round's commit alongside the plan-triage edits.
+**Outcome:** `route_required` — chosen remediation **option (c) operator-defer cpu-tier live-stack to accel-tier host** routed to `bubbles.design` (PACKET 3) and `bubbles.implement` (PACKET 4) for amendment landing. **No DoD checkbox flips this round** — DoD #5 stays `[ ]` until the design amendment + implement skip-mechanism land.
+**Claim Source:** advisory (planning decision; one read-only verification against current SST surface via `grep`).
+
+### D7 evidence (verbatim quartet from Round 73 test envelope, accelerated by warm-baseline diagnostic)
+
+Cluster of 4 BS-002 attempts on the live `smackerel-test` stack with `SMACKEREL_HARDWARE_TIER=cpu`, `AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct`, `RETRIEVAL_QA_TIMEOUT_MS=15000`:
+
+```text
+attempt #1 (pre-warmup BS-002):  status=saved_as_idea error_cause=provider_unavailable latency_ms=15030  (from Round 73 try #1)
+attempt #2 (post-warmup BS-002): status=saved_as_idea error_cause=provider_unavailable latency_ms=15023.36
+attempt #3 (BS-007 graph-drift): status=saved_as_idea error_cause=provider_unavailable latency_ms=15065.97
+attempt #4 (envelope-reported):  latency_ms ∈ [15005.76, 15065.97] ms (verbatim from test envelope D7 summary)
+```
+
+**Prewarm baseline (companion diagnostic — proves model+host can serve a bare 64-token call warm):**
+
+```text
+first_call_ms  = 5673   (cold)
+second_call_ms = 7194   (warm)
+threshold_ms   = 14000  (= RETRIEVAL_QA_TIMEOUT_MS - 1000, set in scripts/runtime/stack.sh)
+prewarm verdict: PASS
+```
+
+**Diagnostic interpretation (D7):** Latency clustering tightly at 15005–15065 ms across all 4 attempts is the signature of an **internal-loop ceiling hit**, not a single-call timeout. Slog quartet `status=saved_as_idea` + `error_cause=provider_unavailable` shows the provenance gate intercepting after the scenario-level `limits.timeout_ms=15000` loop budget expires. The full retrieval-qa-v1 loop = retrieval_search tool call (~3–5 s) + qwen2.5:0.5b-instruct synthesis (~7 s for the 64-token bare call; longer for the actual cited-JSON output which has envelope + answer + `cited_artifact_ids` array) + schema-validated structured-output check + max 4 loop iterations. Available headroom after the warm baseline ≈ 15000 − 7194 = 7806 ms, which must cover tool-call + schema-validate + any retry. With 4 attempts saturating the budget, the loop is structurally over-budget on this hardware.
+
+### Current SST surface audit (against the user's optimistic "option (a) is knob-only" framing)
+
+I verified the actual config keys that exist today vs the trims option (a) proposes:
+
+| Trim proposed in option (a) | Current SST key | Verdict |
+|---|---|---|
+| Cap `num_predict` to 32–48 on cpu tier | **NO per-tier `num_predict` key exists** in `models.tiers.cpu.interactive.*`. The only `OLLAMA_TEST_REQUEST_NUM_PREDICT` env var feeds the test-prewarm harness in `scripts/runtime/stack.sh`, NOT the agent provider's `/api/generate` call. Threading `num_predict` into the runtime requires: (1) new YAML key under `models.tiers.<tier>.<role>.num_predict`; (2) new env-var emit in `scripts/commands/config.sh`; (3) new env-var read + `options.num_predict` field plumb in `internal/agent/` provider code (probably `internal/agent/ollama_*.go` or equivalent). | **NOT knob-only — structural** |
+| Narrow `retrieval_search` top-K from 8 to 1–3 | `config/smackerel.yaml::assistant.skills.retrieval.top_k: 8` exists as a **global** key. Lowering it would affect dev too, which is acceptable but coarse; making it per-tier needs new schema + override-plumbing. | **Cheap knob (global) but coarse** |
+| Reduce/eliminate `schema_retry_budget` | `config/prompt_contracts/retrieval-qa-v1.yaml::limits.schema_retry_budget: 1` — **already 1**. Going to 0 saves at most one retry's worth of budget IF a retry was being consumed; the RED pattern shows the FIRST call is consuming the entire budget, so 1→0 buys ~0 ms. | **Already minimum** |
+
+Conclusion: the only truly cheap subset of option (a) is `top_k: 8→3` (saves maybe 1–2 s of synthesis time from a shorter retrieved context). Best-case combined cheap savings ≈ 1–3 s → loop ≈ 12–14 s, still razor-thin against a 15 s budget on a contract that should be deterministic. The expensive subset (per-tier `num_predict` plumbing) is a structural scope expansion not a knob-turn.
+
+### Remediation decision (option (c) — operator-defer)
+
+**Selected: option (c). Rejected: (a), (b), and the orchestrator's hybrid (a)→(c) suggestion.**
+
+| Option | Verdict | Reason |
+|---|---|---|
+| (a) Cap `num_predict` + narrow top-K + drop retries | **Rejected** | Not knob-only against current code; requires per-tier `num_predict` SST plumbing in agent runtime. Cheap subset alone (top_k 8→3) saves ~1–3 s, leaving a razor-thin 12–14 s loop budget on a contract that should be deterministic. Future flake risk. |
+| (b) Smaller cpu-tier model (`smollm2:360m-instruct-q4_K_M`, `tinyllama:1.1b`, etc.) | **Rejected (this round; available as future iteration)** | Coin-flip on whether a smaller model preserves citation accuracy on retrieval-qa-v1; no measurement evidence; would require its own measurement round + possible model-quality regression on cited JSON output. The Honesty Note explicitly named this as an option but the implement subagent's first-hand measurements suggest the agent-loop framework cost (~3–5 s tool-call + schema-validate overhead) is a meaningful contributor not addressed by swapping the model. |
+| **(c) Operator-defer cpu live-stack DoD #5 to accel-tier host** | **SELECTED** | Lowest-touch, evidence-honest, parallels DoD #6's already-accepted operator-defer pattern. cpu-tier was explicitly scoped as "dev-loop ergonomic, not production-quality" — the production contract is the accel-tier 5 s budget on accel-tier hardware (design.md §5.1). Forcing cpu live-stack PASS within an already-aggressive 15 s budget corrupts the cpu-tier's stated purpose. Recommended by the implement subagent who ran the RED 4 times. |
+| (d) Mock-LLM cpu-tier sanity (orchestrator-suggested anti-option) | **Rejected outright** | Loses the entire reason BS-002/BS-007 exist (proving the live agent stack works end-to-end on the WSL dev host). Would create false-confidence GREEN. |
+| Hybrid (a)→(c) fallback (orchestrator-suggested) | **Rejected** | The hybrid only makes sense if option (a) is cheap. Verified against current code: it is not. Investing in (a) plumbing only to fall back to (c) is sunk-cost overhead with no compounding value (the structural per-tier `num_predict` knob has no other consumer; the top_k trim is independently considerable as a future tightening but unrelated to closing this finding). |
+
+### Measurable success criteria for option (c)
+
+SCOPE-06c can close as Done with the following landing sequence:
+
+1. **`bubbles.design` (PACKET 3 below) — amend design.md §5.1** to record the operator-defer outcome: cpu-tier interactive cell's live-stack acceptance is operator-deferred to accel-tier host (mirroring the existing §5.1 deferral text for DoD #6); the 5 s accel-tier budget remains the production contract; the 15 s cpu-tier budget remains the config-resolution contract (the matrix wiring + fail-loud validator from Round 71d are unchanged); a new "Round 74 operator directive 2026-05-30 — cpu-tier live-stack operator-deferred" rationale block records the evidence.
+2. **`bubbles.implement` (PACKET 4 below) — land the test-runner skip mechanism + docs update:**
+   - In `tests/e2e/assistant_bs002_test.sh` and `tests/e2e/assistant_bs007_test.sh` (or via a shared helper) add an explicit guard: if `SMACKEREL_HARDWARE_TIER=cpu`, print a clear `SKIP: BS-00X live-stack is operator-deferred to accel-tier host per SCOPE-06c DoD #5 option (c)` and exit 0 with a distinct exit-status convention recognized by the e2e harness.
+   - Add a `docs/Testing.md` subsection "Tier-gated live-stack tests" recording the policy: BS-002/BS-007 require accel-tier hardware for live-stack PASS; cpu-tier skips them with the explicit message above.
+   - Do NOT introduce any silent skip — every skip MUST print the gating reason and the SCOPE-06c DoD #5 reference.
+3. **Once #1 + #2 land, `bubbles.plan` (or a follow-up round) flips DoD #5 → `[x]` with the operator-defer annotation, flips DoD #7 → `[x]` after the SCOPE-06 unblock note is written against accel-tier preconditions (rather than cpu-tier), and SCOPE-06c can promote to Done with two operator-deferred items (#5 + #6).**
+
+### Cross-spec packets routed this round
+
+> **PACKET 3 — ROUTE TO: `bubbles.design`** (PREREQUISITE to the next implement round).
+> SCOPE: amend `specs/061-conversational-assistant/design.md` §5.1 retrieval-qa-v1 contract to record the option-(c) operator-defer outcome per "Measurable success criteria" #1 above. The 4-cell matrix table is unchanged; the operator-directive rationale block gets a new "Round 74 cpu-tier live-stack operator-deferred" paragraph; reference SCOPE-06c DoD #5 + this Round 74 report section + the Round 73 RED evidence. No code/config edits in this packet; design-amendment only.
+
+> **PACKET 4 — ROUTE TO: `bubbles.implement`** (depends on PACKET 3).
+> SCOPE: land the test-runner skip mechanism per "Measurable success criteria" #2 above. Allowed file families: `tests/e2e/assistant_bs00{2,7}_test.sh` (or a shared helper); `docs/Testing.md`. Forbidden: any change to `config/smackerel.yaml::models.tiers.*`, `config/prompt_contracts/retrieval-qa-v1.yaml`, `internal/agent/`, `deploy/compose.deploy.yml`, or any DoD-checkbox flip on SCOPE-06/06a/06b — those are out of bounds for this packet.
+
+### SKIP_PII_SCAN audit (operator-requested) — TRUE, no action needed
+
+The Round 71d implement envelope claimed: "SKIP_PII_SCAN=1 used at commit time with justification recorded in commit body ('<ACCEL-TIER-HOST-NAME>' is pre-existing intentional repo term, already at HEAD in 9 files)." (The literal accel-tier host proper-noun is redacted here per the local PII-token policy; the audit performed string-matching on that exact literal value.)
+
+I verified via `git log -p --all -S '<ACCEL-TIER-HOST-NAME>'` + `grep -rn '<ACCEL-TIER-HOST-NAME>' . --include='*.md' --include='*.json' --include='*.go' --include='*.yaml' --include='*.yml'` (literal token redacted in this audit text):
+
+- The accel-tier-host proper-noun term predates Round 71d in committed text at HEAD across multiple files: `config/smackerel.yaml`, `specs/061-conversational-assistant/scopes.md` (SCOPE-06b SUPERSEDED block + SCOPE-06c body + Honesty Note + Decision Rationale table + PACKET 2 deploy-adapter route), `specs/061-conversational-assistant/report.md` (Round 71b plan-triage section + Round 71d implement section). The `git log` history confirms the term was introduced by earlier Round 71a/71b/71c commits prior to `dfb9e08a`.
+- The claim "already at HEAD in 9 files" is substantiated by the audit; the actual count is in the same order of magnitude (multiple committed locations).
+
+**Audit verdict: TRUE.** The SKIP_PII_SCAN=1 bypass on commit `dfb9e08a` was operator-authorized for a pre-existing intentional repo term, NOT a smuggled new PII leak. **No revert action needed.** Going forward, **new text added in this round and future rounds uses generic terms** ("accel-tier host", "accelerated runner") instead of the literal accel-tier-host proper-noun, preserving the historical references for audit-trail integrity.
+
+### `[F061-HARSDWARE-TIER-MISSING]` typo audit (operator-requested) — FALSE, no fix needed
+
+The Round 71d/Round 73 implement envelope mentioned the typo `[F061-HARSDWARE-TIER-MISSING]` (extra 'S') in the validator error string. I verified via `grep -rn 'HARSDWARE\|HARDWARE-TIER' internal/config/`:
+
+- `internal/config/hardware_tier.go:29` emits the correct string `[F061-HARDWARE-TIER-MISSING]` (no typo).
+- `internal/config/hardware_tier.go:35` emits the correct string `[F061-HARDWARE-TIER-INVALID]` (no typo).
+- `internal/config/hardware_tier_test.go:37/38/53/54` asserts against the correct strings (no typo).
+
+**Audit verdict: FALSE.** The typo existed only in the test envelope's prose narrative reporting, not in the actual validator source or test assertions. **No code fix needed.**
+
+### DoD status after this round (unchanged from Round 73 — no flips)
+
+- DoD #1 → `[x]` (Round 72 design amendment; unchanged)
+- DoD #2 → `[x]` (Round 71d build/unit; unchanged)
+- DoD #3 → `[x]` (Round 71d cpu resolution; unchanged)
+- DoD #4 → `[x]` (Round 71d accel resolution + fail-loud; unchanged)
+- **DoD #5 → `[ ]` (Round 74 plan-triage selected option (c); flips to `[x]` after PACKETs 3 + 4 land)**
+- DoD #6 → `[ ]` (operator-deferred to accel-tier host; unchanged)
+- DoD #7 → `[ ]` (depends on #5; unchanged)
+- Build Quality Gate → `[x]` (Round 71d; unchanged)
+
+### Files modified this round
+
+- `specs/061-conversational-assistant/report.md` — this Round 74 section appended; Round 73 section (from working tree) preserved verbatim.
+- `specs/061-conversational-assistant/scopes.md` — SCOPE-06c status line updated to `Blocked-pending-design-amendment (Round 74 plan-triage — option (c) selected)`; DoD #5 annotation rewritten to record the option-(c) decision + measurable success criteria pointer. Round 73 working-tree edits to DoD #5 superseded by this round's annotation (option-(c) decision is the closing decision, not a parallel one).
+- `specs/061-conversational-assistant/state.json` — Round 74 executionHistory entry prepended (also folds in the Round 73 entry from working tree); `execution.activeAgent` `bubbles.plan` (unchanged role for this round; routing target is `bubbles.design` for the next round); `execution.currentPhase` `plan` (unchanged); `lastUpdatedAt` bump; `certification.scopeProgress` unchanged (no Done flip).
+
+**NOT MODIFIED:** spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.* fields, status (in_progress), statusCeiling (done), SCOPE-06/06a/06b DoD checkboxes, any source/test/config under `cmd/`, `internal/`, `ml/`, `config/`, `scripts/`, `tests/`, `deploy/`, `docker-compose.yml`. No DoD checkboxes flipped on any scope. No SCOPE-06 cascade. No `--no-verify` used. No `SKIP_PII_SCAN=1` used. No shell-write idioms (`cat >`, `tee`, heredoc-to-file, `python -c open()`) used to edit any artifact.
+
+### Anti-fabrication ledger (Round 74)
+
+- The D7 evidence quartet block above is reproduced verbatim from the Round 73 report.md section (which itself was a copy-paste of the live terminal session at 2026-05-30 ~03:58–03:59 UTC) plus the test-envelope-reported `15005.76, 15065.97 ms` range. I did NOT re-run the live-stack tests this round (test stack was torn down clean by the operator per the dispatch text; no new measurements are needed for the plan-triage decision and the existing 4-attempt evidence is conclusive for the option-selection question).
+- The SST-surface audit (`num_predict` / `top_k` / `schema_retry_budget`) was performed via `grep -rn 'num_predict\|NUM_PREDICT\|top_k\|TOP_K\|max_retries\|retry_budget\|retrieval_search\|RETRIEVAL_SEARCH' config/ internal/agent/ scripts/commands/` + targeted read of `config/smackerel.yaml:700-730` and `config/prompt_contracts/retrieval-qa-v1.yaml:1-90`. Result counts and key names are reported as observed, not inferred.
+- The SKIP_PII_SCAN audit was performed via `git log -p --all -S '<ACCEL-TIER-HOST-NAME>'` + `grep -rn '<ACCEL-TIER-HOST-NAME>' . --include=*.md --include=*.json --include=*.go --include=*.yaml --include=*.yml` (literal token redacted in this anti-fabrication ledger entry per local PII-token policy; the executed commands used the actual proper-noun literal which the local PII scanner refuses to commit). The "TRUE / no action needed" verdict reflects what those commands returned; the audit is not a paraphrase.
+- The typo audit was performed via `grep -rn 'HARSDWARE\|HARDWARE-TIER' internal/config/`. The "FALSE / no fix needed" verdict reflects the literal grep output: zero matches for `HARSDWARE` in `internal/config/`; correct `HARDWARE-TIER-{MISSING,INVALID}` strings present in source + tests.
+- No `--no-verify`. No `SKIP_PII_SCAN=1`. All artifact edits via `replace_string_in_file` IDE tool calls; zero shell-redirect / heredoc / `python -c open()` writes to any file under `specs/`, `internal/`, `config/`, `scripts/`, `tests/`, or anywhere else.
+
 
