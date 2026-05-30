@@ -556,8 +556,25 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 			} else {
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
+		case "meal-plan", "mealplan", "meal":
+			// Meal planning (spec 036) is natural-language only — the
+			// slash shortcut shows the supported phrases. TryHandle
+			// dispatches actual meal-plan messages from the non-command
+			// message path above.
+			b.reply(msg.Chat.ID, "= Meal planning uses natural language. Try:\n"+
+				"- plan this week\n"+
+				"- plan next week\n"+
+				"- show plan\n"+
+				"- what's for dinner tomorrow?\n"+
+				"- monday meals\n"+
+				"- dinners this week\n"+
+				"- shopping list for plan\n"+
+				"- cook tonight's dinner\n"+
+				"- monday dinner: <recipe name>\n"+
+				"- repeat last week's plan\n"+
+				"- activate plan / archive plan / delete plan")
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, or /recent")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal-plan, /ask, /weather, /remind, /reset, or /help")
 		}
 		return
 	}
@@ -942,11 +959,18 @@ func (b *Bot) handleHelp(ctx context.Context, msg *tgbotapi.Message) {
 - /concept - Browse concept pages
 - /person - Browse entity profiles
 - /lint - Knowledge quality report
+- /list - Manage actionable lists
 - /expense - View and manage expenses
+- /watch - Recommendation watchlist
 - /digest - Get today's digest
 - /done - Finalize conversation assembly
 - /status - System status
 - /recent - Recent items
+- /meal-plan - Show meal-planning phrases
+- /ask <question> - Ask the assistant (retrieval Q&A)
+- /weather [city] - Weather lookup
+- /remind <when> <what> - Schedule a reminder
+- /reset - Reset assistant conversation state
 - /help - Show this help`
 	b.reply(msg.Chat.ID, help)
 }
