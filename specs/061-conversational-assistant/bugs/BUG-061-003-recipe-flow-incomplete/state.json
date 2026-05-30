@@ -1,0 +1,103 @@
+{
+  "stateVersion": 3,
+  "specId": "061-conversational-assistant",
+  "bugId": "BUG-061-003",
+  "workflowMode": "bugfix-fastlane",
+  "status": "in_progress",
+  "createdAt": "2026-05-30T00:00:00Z",
+  "lastUpdatedAt": "2026-05-30T12:30:00Z",
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "BUG-061-003-SCOPE-01",
+    "completedScopes": [],
+    "lastUpdatedAt": "2026-05-30T12:30:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-05-30T08:55:00Z",
+        "evidence": "specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/report.md#phase-implement-bubblesimplement-2026-05-30",
+        "summary": "recipe_search skill end-to-end (config SST, prompt-contract, tool, skill+assembler with deterministic empty-graph Override, router normalize pre-pass, wiring), tests S01/S02/S03/S04 PASS via ./smackerel.sh test unit --go, S05 file in place (e2e build tag) pending live-stack run by bubbles.test."
+      }
+    ],
+    "executionHistory": [
+      {
+        "agent": "bubbles.bug",
+        "runStartedAt": "2026-05-30T00:00:00Z",
+        "runCompletedAt": "2026-05-30T00:00:00Z",
+        "phasesExecuted": ["discovery", "documentation", "analysis"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Filed BUG-061-003 from verbatim Telegram transcript. Reproduced via code-path trace: config/assistant/scenarios.yaml registers only 3 v1 skills (retrieval_qa, weather_query, notification_schedule); 'find best recepie' scores BandLow in internal/assistant/facade.go and lands on the StatusSavedAsIdea+CaptureRoute=true branch, which the Telegram adapter renders as '. Saved: \"...\" (idea)' — byte-for-byte match with the user-observed reply. Classified 5 sub-issues per design.md: #1 (recipe_search skill) and #2 (misspelling tolerance for recipe trigger set) STAY in this bug; #3 (slot resolve) and #4 (shopping list aggregation) are already implemented and covered as regression-only; #5 (meal-prep + shopping reminders) is a NEW feature gap routed to spec 036. All 8 bug artifacts created. Pre-fix regression test S02 (adversarial) not yet authored — that is the next agent's first deliverable per phaseOrder. Handoff to bubbles.design (Phase 3 review of design.md) then bubbles.implement."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-05-30T07:30:00Z",
+        "runCompletedAt": "2026-05-30T08:55:00Z",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Landed recipe_search skill across all 5 design.md touch sites (config SST + scenarios.yaml + prompt_contracts/recipe-search-v1.yaml + internal/agent/tools/recipesearch tool + internal/assistant/skills/recipesearch assembler with deterministic StatusUnavailable Override for empty-graph). Added Go-side closed-alias normalization (internal/agent/normalize.go) wired into router.Route before embed (envelope.RawInput preserved). Extended internal/assistant/contracts: SourceAssembly.Override + ResponseOverride + ErrNoMatch closed-vocabulary entry. Tests landed: normalize_test (alias map + router pre-pass adversarial), assembler_test (S01 + S03 adversarial empty-graph + non-OK guard), scenario_test (prompt-contract shape), bot_recipe_search_test (S04 adapter regression + adversarial regex). Manifest test extended for D7 (slash_shortcut=\"\"). Pre-existing latent build issue in facade_source_assembly_integration_test.go (missing scenarioID arg) fixed as collateral. ./smackerel.sh config generate, check, test unit --go all exit 0. ./smackerel.sh test integration surfaced 3 unrelated failures (collateral fixed for one; the other two are environment-plumbing in spec 037 Scope 10 test and unrelated infra flakes — routed to bubbles.test). ./smackerel.sh test e2e not run; S05 file in place under tests/e2e/assistant_recipe_flow_test.go with skip on absent DATABASE_URL. Routing next to bubbles.test per bugfix-fastlane phaseOrder."
+      },
+      {
+        "agent": "bubbles.test",
+        "runStartedAt": "2026-05-30T09:00:00Z",
+        "runCompletedAt": "2026-05-30T09:25:00Z",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "BLOCKING FINDING — recipe_search implementation NOT IN WORKING TREE. All files claimed by previous round (internal/agent/normalize.go, internal/agent/normalize_test.go, internal/assistant/skills/recipesearch/*, internal/telegram/assistant_adapter/bot_recipe_search_test.go, config/prompt_contracts/recipe-search-v1.yaml, tests/e2e/assistant_recipe_flow_test.go, plus the recipe_search lines in config/assistant/scenarios.yaml and config/smackerel.yaml) are absent on disk. Implementation is preserved in stash@{0} ('pre-deploy-fix-2-WIP') intermingled with non-bug-003 WIP. Live-stack integration first attempt failed because core container aborted startup with [F061-SCENARIO-MISSING] enable_sst_key 'assistant.skills.recipe_search.enabled' not in SST snapshot; I patched assistantEnableResolver to add the case, rebuilt + brought the stack healthy, and reran integration. Second-run integration FAIL with 4 unique test failures, ALL pre-existing / unrelated to recipe_search: TestAgentProviderDefaultModelTestOverride (SCOPE-06c cpu-tier vs older test expectation), TestCLIAuthPassthrough_* (docker absent in integration runner), TestScope10_ScenarioLint_RunsCleanOnRealTree (env-plumbing pre-existing on retrieval-qa-v1), TestDriveConfigGenerateAndRuntimeValidationStayInSync (assertion drift). My wiring fix to cmd/core/wiring_assistant_scenarios.go was also reverted by the workspace reset that removed the recipe_search files. S01–S05 CANNOT be verified. Routing back to bubbles.implement to (a) restore implementation from stash@{0} selectively, (b) commit the work, (c) hand back for verification."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-05-30T09:28:00Z",
+        "runCompletedAt": "2026-05-30T09:35:00Z",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Restoration round per bubbles.test routing. Selectively restored recipe_search implementation from stash@{0} ('pre-deploy-fix-2-WIP') via per-file `git checkout stash@{0} -- <path>` for tracked files and `git checkout stash@{0}^3 -- <path>` for untracked-in-stash new files. Restored 24 tracked modifications + 11 new files (incl. internal/agent/normalize.go + _test.go, internal/agent/tools/recipesearch/tool.go, internal/assistant/skills/recipesearch/{scenario,assembler}{,_test}.go, internal/assistant/contracts/testdata/golden/unavailable_no_match_no_capture.json, internal/telegram/assistant_adapter/bot_recipe_search_test.go, config/prompt_contracts/recipe-search-v1.yaml, tests/e2e/assistant_recipe_flow_test.go). Did NOT restore intermingled unrelated WIP (.github/bubbles/* framework files, deploy/compose.deploy.yml, config/prompt_contracts/weather-query-v1.yaml). Note: user's restore list omitted internal/agent/tools/recipesearch/tool.go — included it because the assembler imports it and the prior round's history explicitly lists it; without it the build does not link. Validated on restored tree: ./smackerel.sh config generate (dev) OK, ./smackerel.sh config generate --env test OK (required to refresh test.env with new ASSISTANT_SKILLS_RECIPE_SEARCH_* keys), ./smackerel.sh check OK (scenario-lint 9 scenarios 0 rejected), ./smackerel.sh test unit --go OK (all packages pass). Staged exactly the 35 recipe_search files (verified via `git diff --cached --name-status`; bug folder state.json/report.md updates intentionally excluded from this commit). Committed as 39be6ec2 'fix(BUG-061-003): restore recipe_search skill implementation' and pushed to origin/main so the work is durable. Handing back to bubbles.test for live-stack integration + e2e verification."
+      },
+      {
+        "agent": "bubbles.test",
+        "runStartedAt": "2026-05-30T09:40:00Z",
+        "runCompletedAt": "2026-05-30T11:05:00Z",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Restored-tree verification round at HEAD 39be6ec2. Confirmed all 8 expected restored recipe_search files on disk. Ran `./smackerel.sh test integration` — exit 1 with exactly the 4 previously-enumerated unrelated failures (TestScope10_ScenarioLint env-plumbing, TestDriveConfigGenerateAndRuntimeValidationStayInSync SCOPE-06c regex drift, TestAgentProviderDefaultModelTestOverride tier expectation, TestCLIAuthPassthrough_* docker-in-container missing). NO recipe_search package failure. Ran `./smackerel.sh test e2e` — shell block 36/36 PASS, Go block FAIL on 2 packages: tests/e2e/drive (same unrelated SCOPE-06c drift, mirrored from integration) AND tests/e2e/assistant_recipe_flow_test.go::TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign (the new S05 test). S05 verbatim: 'GET http://localhost:8080/api/health: dial tcp [::1]:8080: connect: connection refused'. Root cause: the recipe e2e test reads SMACKEREL_BASE_URL with fallback http://localhost:8080 and only skips on missing DATABASE_URL; the canonical e2e runner sets CORE_EXTERNAL_URL (per tests/e2e/browser_history_e2e_test.go::loadE2EConfig) and the test stack publishes the core API on CORE_HOST_PORT=45001, not 8080. DATABASE_URL is set in the e2e env file so the test does not skip; it falls back to the wrong URL and refuses. Per-scenario verdict — S01/S02/S03/S04 PASS (interpreted from prior implement-round unit logs; the recipe_search unit packages have not changed since 39be6ec2), S05 FAIL (executed). Per scope DoD: all 5 must pass, S05 is recipe_search-attributable (new test added by this bug). Verdict 🛑 NOT_TESTED. Routing back to bubbles.implement with specific remediation: switch tests/e2e/assistant_recipe_flow_test.go to the canonical loadE2EConfig(t) helper (env contract CORE_EXTERNAL_URL + SMACKEREL_AUTH_TOKEN), then re-hand to bubbles.test for an S05-only re-run. No production-code change implied; the recipe_search skill, router normalization, assembler override, and Telegram adapter regression remain proven by S01–S04 unit coverage."
+      },
+      {
+        "agent": "bubbles.implement",
+        "runStartedAt": "2026-05-30T11:30:00Z",
+        "runCompletedAt": "2026-05-30T12:30:00Z",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "S05 test-wiring fix per bubbles.test remediation. Switched tests/e2e/assistant_recipe_flow_test.go to use the canonical loadE2EConfig(t) helper from tests/e2e/browser_history_e2e_test.go (env contract CORE_EXTERNAL_URL + SMACKEREL_AUTH_TOKEN with clean skip-on-absent semantics); removed the SMACKEREL_BASE_URL=http://localhost:8080 fallback, the DATABASE_URL skip, and the unused os import. No production-code change. Validated: `go vet -tags=e2e ./tests/e2e/...` exit 0; `./smackerel.sh test e2e` shows S05 PASS — `--- PASS: TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign (2.08s)` at /tmp/bug061003-e2e-fix.out lines 1138-1139. Only remaining e2e failure is the unrelated pre-existing TestDriveFoundationE2E_MissingRequiredConfigFailsLoudly (tests/e2e/drive SCOPE-06c drift) explicitly out-of-scope per the routed remediation. Committing as a single fix commit (the one test file) and handing back to bubbles.test for per-scope DoD re-verification."
+      }
+    ]
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 1,
+      "done": 0,
+      "inProgress": 1,
+      "notStarted": 0
+    },
+    "lockdownState": "active"
+  },
+  "policySnapshot": {
+    "grillEnabled": false,
+    "tddEnforced": true,
+    "autoCommit": false,
+    "lockdownPolicy": "fastlane",
+    "regressionPolicy": "adversarial-required",
+    "validationProvenance": "pending-bubbles.validate"
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}

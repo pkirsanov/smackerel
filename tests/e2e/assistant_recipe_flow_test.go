@@ -28,25 +28,19 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign(t *testing.T) {
-	if os.Getenv("DATABASE_URL") == "" {
-		t.Skip("BUG-061-003 S05: DATABASE_URL not set — live stack not available; the meal-plan loop regression is also covered by the in-process tests in internal/telegram/mealplan_commands_test.go and internal/telegram/recipe_commands_test.go.")
-	}
-	base := os.Getenv("SMACKEREL_BASE_URL")
-	if base == "" {
-		base = "http://localhost:8080"
-	}
+	cfg := loadE2EConfig(t)
+	base := strings.TrimRight(cfg.CoreURL, "/")
 
 	// Stack-health precondition. Fails (not skips) on a misconfigured
 	// stack — a degraded stack must be investigated, not silently
 	// passed over.
-	healthURL := strings.TrimRight(base, "/") + "/api/health"
+	healthURL := base + "/api/health"
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(healthURL)
 	if err != nil {
@@ -68,12 +62,10 @@ func TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign(t *testing.T) {
 		"limit":   5,
 		"filters": map[string]any{"domain": "recipe"},
 	})
-	searchURL := strings.TrimRight(base, "/") + "/api/search"
+	searchURL := base + "/api/search"
 	req, _ := http.NewRequest(http.MethodPost, searchURL, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	if tok := os.Getenv("SMACKEREL_AUTH_TOKEN"); tok != "" {
-		req.Header.Set("Authorization", "Bearer "+tok)
-	}
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
 	resp2, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("POST %s: %v", searchURL, err)
