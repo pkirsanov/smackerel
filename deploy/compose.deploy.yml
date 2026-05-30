@@ -232,6 +232,13 @@ services:
   ollama:
     image: ollama/ollama:0.23.2
     restart: unless-stopped
+    environment:
+      # Daemon-side model keep-alive default; SST-derived per
+      # infrastructure.ollama.keep_alive (config/smackerel.yaml). Without this
+      # the daemon evicts loaded models after its 5-minute internal default,
+      # causing every sporadic /weather or /ask call to incur a multi-second
+      # cold reload.
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:?OLLAMA_KEEP_ALIVE must be set by deploy adapter (infrastructure.ollama.keep_alive)}
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # Persistent model store stays on the named volume `ollama-data`
     # mounted at /root/.ollama so model downloads survive restarts.
