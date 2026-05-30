@@ -37,13 +37,14 @@
     "completedAt": null,
     "evidenceRef": null,
     "certifiedCompletedPhases": ["bootstrap", "analyze", "design", "plan"],
-    "scopeProgress": {"total": 13, "notStarted": 3, "inProgress": 0, "done": 9, "blocked": 0},
+    "scopeProgress": {"total": 13, "notStarted": 2, "inProgress": 0, "done": 10, "blocked": 0},
     "lockdownState": "n/a-implementation-in-progress",
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
       "SCOPE-03",
       "SCOPE-04",
+      "SCOPE-05",
       "SCOPE-06",
       "SCOPE-06c",
       "SCOPE-07"
@@ -53,17 +54,18 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "SCOPE-07",
+    "activeAgent": "bubbles.design",
+    "currentPhase": "design",
+    "currentScope": "SCOPE-05",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T16:30:00Z",
+    "lastUpdatedAt": "2026-05-30T19:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
       "SCOPE-02",
       "SCOPE-03",
       "SCOPE-04",
+      "SCOPE-05",
       "SCOPE-06",
       "SCOPE-06c",
       "SCOPE-07",
@@ -71,6 +73,68 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-30T18:30:00Z",
+        "runCompletedAt": "2026-05-30T19:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 80 (bubbles.design; SCOPE-05-DOD-11 follow-up architectural decision). Invoked by bubbles.workflow (full-delivery convergence) after Round 79 bubbles.implement routed back with a wiring-architecture mismatch: the spec-060-accepted packets translate to per-skill auth.RequireScope guards at the assistant tool entry point, but (a) agent.Tool handlers are in-process `(ctx, json.RawMessage) -> (json.RawMessage, error)` with no Session in ctx, and (b) auth.RequireScope at internal/auth/scope_middleware.go:71-79 explicitly BYPASSES SessionSourceSharedToken (the only auth source the Telegram bot has) with an auth_scope_check_bypassed_total counter increment. Decision: selected Option (4) — defer + reframe DoD #11. Land the additive RegisteredScopeSurfaces += 'assistant' half + mirror unit-test in a follow-up bubbles.implement round; reframe DoD #11 around the registry-only half; route a new cross-spec packet to spec 060 (packet-060-skill-enforcement-bypass-reconciliation.md) asking for either (a) a non-bypassed bot-token session source, or (b) explicit acknowledgment that scoped enforcement requires per-user PASETO. Options (1)/(2)/(3) rejected: (1) refactoring agent.Tool to carry Session touches foreign spec-037 substrate AND still hits the SharedToken bypass — high cost, zero enforcement; (2) minting synthetic per-user Session at webhook would falsify auth_tokens audit columns — audit fraud; (3) moving the scope check to the webhook HTTP boundary hits the same bypass and re-locates the check away from the packet-accepted skill entry point. Only Option (4) is honest about the shipped contract, requires zero foreign-spec source code touches, and produces a measurable DoD #11 close. Artifacts modified this round: design.md (new §5.0 sub-section directly under §5 — authoritative architectural record with selected option, rejected options + rationale, measurable success criteria, downstream SCOPE-06/07/08 impact, §5.0.5 packet ask, §5.0.6 finding replacement); report.md (new Round-80 section with read-evidence citations to internal/auth/scope_middleware.go:71-79, internal/auth/session.go:21-29,57-64, internal/telegram/webhook_handler.go:147-170, internal/agent/tools/retrieval/tool.go, internal/agent/tools/weather/tool.go, spec 060 packet acceptance trail); state.json (this entry + execution.activeAgent/currentPhase/lastUpdatedAt updated). Zero source/test/CI changes; zero edits to scopes.md DoD checkboxes; zero edits to spec-060 artifacts (cross-spec packet filing is a separate routed step owned by the next bubbles.implement round).",
+        "addressedFindings": [
+          "SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED (carry-forward from Round 78/79; superseded by the new Option-(4) finding below — the 'wire RequireScope guards' sub-task is REMOVED based on the Round-80 architectural finding that auth.RequireScope bypasses SessionSourceSharedToken; only the surface-registration sub-task survives and is now scoped to the follow-up bubbles.implement round)"
+        ],
+        "unresolvedFindings": [
+          "SCOPE-05-DOD-11-RUNTIME-ENFORCEMENT-DEFERRED-PENDING-SPEC-060-RECONCILIATION (NEW; supersedes Round-78/79 SURFACE-REGISTRATION-WIRING-UNBLOCKED; tracks both (a) the registry-only Round-81 implement step + (b) the routed-only cross-spec packet to spec 060 asking for bypass-semantics reconciliation per design.md §5.0.5)",
+          "SCOPE-08-BS-004-SCHEDULER-FOREIGN-BLOCKED (carry-forward; spec 054 follow-up scope pending)",
+          "SCOPE-10-ACCEPTANCE-HARNESS-NOT-STARTED (carry-forward)",
+          "STATE-JSON-CERTIFICATION-COMPLETED-SCOPES-DRIFT (carry-forward; certification.completedScopes missing 09a/09b vs scopeProgress.done — bubbles.plan housekeeping)"
+        ],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-05-DOD-11-REGISTRY-ONLY-CLOSE + packet routing",
+        "nextRequiredAction": "Execute design.md §5.0.3 measurable success criteria as a single bubbles.implement round under a strict file-allowlist. ALLOWED edits: (1) internal/auth/scopes.go — append \"assistant\" to RegisteredScopeSurfaces literal (one-line additive); (2) the existing internal/auth/ unit test file covering RegisteredScopeSurfaces / IsRegisteredScopeSurface — add additive case for the assistant surface; (3) specs/061-conversational-assistant/scopes.md — refresh SCOPE-05 DoD #11 evidence anchor with the Round-81 closure note citing design.md §5.0 + the §5.0.5 packet; (4) specs/061-conversational-assistant/report.md — Round-81 evidence section with go-test output + smackerel.sh check exit code + grep evidence; (5) specs/061-conversational-assistant/state.json — Round-81 executionHistory entry + finding swap; (6) NEW file specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md per design.md §5.0.5 ask. FORBIDDEN edits: any auth.RequireScope wiring in internal/agent/tools/**, internal/assistant/**, internal/telegram/**, internal/api/**; any refactor of agent.Tool signature; any change to internal/auth/scope_middleware.go or internal/auth/session.go; any edit to specs/060-bearer-auth-scope-claim/**. After Round 81 lands, spec 061 stays in_progress on its statusCeiling=done — SCOPE-08 + SCOPE-10 still open, and the new packet's spec-060 acceptance is a separate future cycle that does NOT block 061 promotion (mirrors the spec-054 BS-004 foreign-blocked precedent)."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T17:45:00Z",
+        "runCompletedAt": "2026-05-30T18:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 79 (bubbles.implement; SCOPE-05 close-out — full-delivery, parent-expanded child mode). Part A: Authored tests/e2e/assistant_bs010_test.sh (152 LOC) modeled on assistant_bs002_test.sh with the canonical design §18.5 correlation_id slog-scrape pattern + BS-010's distinguishing per-transport assertions on top: (a) transport=='telegram' on assistant_turn slog (verifies internal/assistant/facade.go:332 transport label emission), (b) /metrics scrape confirms assistant_telegram_webhook_auth_failures_total metric family is exposed (verifies internal/telegram/webhook_handler.go:50 metric registration). Tier-gated via skip_unless_accel_tier 'BS-010' per SCOPE-06c PACKET 4 (same gate that closed BS-002/003/006/007). cpu-tier verified in this session: SMACKEREL_HARDWARE_TIER=cpu bash tests/e2e/assistant_bs010_test.sh → 'SKIP: BS-010 — cpu-tier hardware lacks accelerator...' + EXIT=0. Live accel-tier inherits the SCOPE-06 Round-76 paired-scope tier-gated SKIP closure precedent. Part B: DoD #11 packet-060 disposition revised in light of Round-78 validate evidence — spec 060 has formally accepted both 061 packets (per spec 060 state.json + report.md 'Accepted Cross-Spec Packets (Spec 061)' section). Original DoD text 'routed and accepted' is now satisfied. The accepted-packet contract transfers surface-registration wiring (RegisteredScopeSurfaces += 'assistant' + RequireScope guards) back to spec 061 as a separate downstream item — that is the SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED finding from Round 78, NOT part of this DoD text. Runtime check (executed): grep returns zero F060-MISSING-SCOPE references; capability path gated by assistant.skill.retrieval_qa.enabled SST key, unblocked today. Part C: SCOPE-05 DoD #9 + #11 flipped [x], SCOPE-05 status 'In Progress' → 'Done', Scope Index row updated. scopeProgress done 9→10, notStarted 3→2. SCOPE-05 added to certification.completedScopes and execution.completedScopes. HARD-BOUND compliance: 1 new fixture file + 3 spec artifacts (scopes.md, report.md, state.json). PII compliance: home paths sed-redacted to ~ in all evidence; no shell-write idioms used. Outcome: completed_owned. Spec stays in_progress — 3 scopes still open (SCOPE-08, SCOPE-10, and the surface-registration follow-up implied by Round 78 validate's SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED finding).",
+        "addressedFindings": [
+          "SCOPE-05-BS-010-FIXTURE-MISSING (BS-010 e2e fixture authored at tests/e2e/assistant_bs010_test.sh; cpu-tier SKIP verified in session)",
+          "SCOPE-05-DOD-11-PACKET-ACCEPTANCE-CARRY-FORWARD (spec 060 formal acceptance confirmed per Round 78 validate; original DoD text 'routed and accepted' satisfied; surface-registration wiring carries forward as a separate finding, see unresolvedFindings)"
+        ],
+        "unresolvedFindings": [
+          "SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED (carry-forward from Round 78; separate downstream item — RegisteredScopeSurfaces += 'assistant' + RequireScope wiring in spec 061's own commits per spec 060 accepted-packet contract; outside SCOPE-05 DoD text; belongs to a subsequent implement round)",
+          "SCOPE-08-BS-004-SCHEDULER-FOREIGN-BLOCKED (carry-forward from Round 78; spec 054 follow-up scope pending)",
+          "SCOPE-10-ACCEPTANCE-HARNESS-NOT-STARTED (carry-forward from Round 78)",
+          "STATE-JSON-CERTIFICATION-COMPLETED-SCOPES-DRIFT (carry-forward from Round 78; certification.completedScopes still missing 09a/09b vs scopeProgress.done count — bubbles.plan housekeeping)"
+        ],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-05-DOD-11-SURFACE-REGISTRATION-FOLLOW-UP",
+        "nextRequiredAction": "Land the spec-060 surface-registration + RequireScope wiring in spec 061's own commits per spec 060's accepted-packet contract (separate from SCOPE-05's already-closed DoD #11): (a) add 'assistant' to internal/auth/scopes.go RegisteredScopeSurfaces; (b) wire auth.RequireScope('assistant:retrieval'|'assistant:weather') guards into retrieval + weather skill entry points; (c) author the adversarial missing-scope=mismatch regression; (d) re-verify BS-001 Telegram e2e still green after the auth guard lands."
+      },
+      {
+        "agent": "bubbles.validate",
+        "phasesExecuted": ["validate"],
+        "runStartedAt": "2026-05-30T17:00:00Z",
+        "runCompletedAt": "2026-05-30T17:20:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 78 (bubbles.validate; certification audit of 9/13 Done scopes + foreign-blocked-claim re-verification against current upstream state of specs 054 + 060). Claim Source: executed. Outcome: route_required. Mechanical checks: (a) `bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant` EXIT=0 (PASSED; advisory warnings only — uservalidation.md legacy checklist layout + state.json deprecated `scopeProgress` field; neither blocks). (b) `state-transition-guard.sh` invoked but exceeded the 60s timeout cap; treated as informational only since spec is in_progress (no terminal promotion attempted). (c) Scope-index audit: Done={01,02,03,04,06,06c,07,09a,09b} (9); Superseded={06a,06b}; In Progress per body status lines={05,08,10}. state.json certification.completedScopes is missing 09a/09b (drift vs scopeProgress.done=9 and execution.completedScopes which lists all 9) — flagged as a state.json hygiene finding, NOT a DoD-coverage gap. (d) Cross-spec foreign-blocked claim re-verified against current upstream state: specs/054 status=done AND specs/060 status=done. Spec 060 state.json shows formal acceptance of both 061 packets (packet-060-read-scopes.md + packet-060-write-scope.md) with explicit transfer-of-ownership clause: 'Surface registration (adding assistant to RegisteredScopeSurfaces) deferred to spec 061 commits per documented surface-registration-lands-with-introducing-spec pattern. Unblocks: spec 061 SCOPE-05 DoD #11 (read packet acceptance), SCOPE-06/07 e2e wiring (read scopes), SCOPE-08 BS-004 e2e (write scope) — spec 061 owner now owns the surface-registration + RequireScope wiring commits.' Spec 054 state.json shows formal acceptance of packet-054-scheduler.md as 'artifact-level acceptance' with code wiring 'deferred to a dedicated follow-up spec 054 scope' — Spec 061 SCOPE-08 BS-004 e2e remains gated on that follow-up spec 054 scope landing (notificationSchedulerStub stays in place until then). Disposition: foreign-blocked framing is PARTIALLY OBSOLETE. SCOPE-05 DoD #11 + SCOPE-06/07 read-scope e2e wiring + SCOPE-08 write-scope side are now 061-owned implementation work (no longer foreign-blocked). SCOPE-08 BS-004 e2e remains genuinely foreign-blocked on the spec 054 follow-up scope. SCOPE-10 (acceptance harness) remains downstream of 05/06/07/08 closure. Cannot certify spec 061 done — 4 scopes still open. Route_required emitted to bubbles.implement for the now-unblocked 060-side wiring; SCOPE-08 BS-004 + SCOPE-10 carried as genuinely blocked sub-findings. Edits this round: state.json executionHistory prepend (this entry) + report.md Round 78 section append. NOT MODIFIED: source code, tests, scope DoD checkboxes, certification.status, statusCeiling, workflowMode, status (in_progress preserved per workflow policy). Suggested housekeeping (NOT executed this round): bubbles.plan should reconcile certification.completedScopes (add 09a/09b) and the deprecated scopeProgress field in a later round.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED (NEW; spec 060 done + accepted 061 read-scope packet — 061 owner must now land RegisteredScopeSurfaces += 'assistant' + RequireScope wiring in 061's own commits per packet acceptance contract)",
+          "SCOPE-08-BS-004-SCHEDULER-FOREIGN-BLOCKED (carry-forward; spec 054 accepted packet at artifact-level only; Job.Source + Job.Originator + scheduler_jobs.source/originator code wiring deferred to a dedicated follow-up spec 054 scope; spec 061 SCOPE-08 BS-004 e2e cannot close until that follow-up lands; notificationSchedulerStub remains in cmd/core/wiring_assistant_skills.go)",
+          "SCOPE-10-ACCEPTANCE-HARNESS-NOT-STARTED (carry-forward; depends on SCOPE-09a/09b which are Done, but the BS-001..010 v1 acceptance set in aggregate requires SCOPE-05/06/07/08 closure first)",
+          "STATE-JSON-CERTIFICATION-COMPLETED-SCOPES-DRIFT (NEW; certification.completedScopes lists 7 scopes but scopeProgress.done=9 and execution.completedScopes lists 9 — bubbles.plan housekeeping)"
+        ],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-05",
+        "nextRequiredAction": "Execute SCOPE-05 DoD #11 closure: land the spec-060 read-scope surface-registration + RequireScope wiring in spec 061's own commits per spec 060's accepted-packet contract (specs/060-bearer-auth-scope-claim/report.md 'Accepted Cross-Spec Packets (Spec 061)' section). Concretely: (a) add 'assistant' to internal/auth/scopes.go RegisteredScopeSurfaces; (b) wire auth.RequireScope('assistant:retrieval'|'assistant:weather') guards into the retrieval + weather skill entry points (already accepted at spec 060 as assistant:retrieval / assistant:weather wire-form names); (c) author the adversarial regression that exercises the missing-scope=mismatch invariant; (d) re-verify BS-001 Telegram e2e still green after the auth guard lands; (e) update SCOPE-05 DoD #11 evidence anchor with the spec-060 packet-acceptance citation. After SCOPE-05 closes, the same wiring loop covers SCOPE-06/07 read-scope coverage (small follow-up) and SCOPE-08's write-scope side (assistant:notifications-write). SCOPE-08 BS-004 e2e closure remains foreign-blocked on the dedicated spec 054 follow-up scope and is OUT-OF-SCOPE for this 061 round. SCOPE-10 acceptance harness is a separate downstream scope. Spec 061 stays in_progress (statusCeiling done; cannot promote — 4 scopes still open)."
+      },
       {
         "agent": "bubbles.implement",
         "phasesExecuted": ["implement"],
