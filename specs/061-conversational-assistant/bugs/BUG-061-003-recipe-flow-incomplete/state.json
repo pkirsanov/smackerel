@@ -4,7 +4,9 @@
   "bugId": "BUG-061-003",
   "workflowMode": "bugfix-fastlane",
   "executionRuntime": "direct-implement",
-  "status": "in_progress",
+  "certifiedAt": "2026-05-30T18:35:00Z",
+  "certifiedBy": "bubbles.validate",
+  "status": "done",
   "createdAt": "2026-05-30T00:00:00Z",
   "lastUpdatedAt": "2026-05-30T18:30:00Z",
   "execution": {
@@ -178,7 +180,7 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
+    "status": "done",
     "completedScopes": ["01-recipe-search-skill"],
     "certifiedCompletedPhases": [
       "implement",
@@ -198,7 +200,9 @@
       "inProgress": 0,
       "notStarted": 0
     },
-    "lockdownState": "released"
+    "lockdownState": "released",
+    "certifiedAt": "2026-05-30T18:35:00Z",
+    "certifiedBy": "bubbles.validate"
   },
   "policySnapshot": {
     "workflowMode": "bugfix-fastlane",
