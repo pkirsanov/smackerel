@@ -11267,3 +11267,107 @@ The 15 s number is therefore evidence-tied, not magic. The Honesty Note in SCOPE
 
 This plan-triage round authored the SCOPE-06c skeleton (3 Gherkin scenarios, 10-step Implementation Plan, 8-row Test Plan, 7 core DoD items + Build Quality Gate, DoD Ordering, 2 cross-spec packets, Decision Rationale, Honesty Notes), marked SCOPE-06b superseded in both body sections and in the scope-index matrix, appended this report.md section, and prepared the state.json executionHistory entry. No tests were run this round (planning-only). `nextRequiredOwner: bubbles.design` for PACKET 1 (design.md §5.1 amendment) per SCOPE-06c DoD #1 ordering.
 
+---
+
+## Round 71d — SCOPE-06c implement (hardware-tier × model-role matrix wired in SST) {#round-71d-scope-06c-implement}
+
+**Owner:** `bubbles.implement`. **HEAD before:** `c1ee3614` (Round 71c design amendment). **Outcome:** `completed_owned`. **Claim Source:** executed (every gate exit code captured from a real command run on this WSL2 host).
+
+### Edits owned this round
+
+- `config/smackerel.yaml` — new top-level `models.tiers.{cpu,accel}.{interactive,background}.{model, retrieval_qa_timeout_ms, retrieval_qa_per_tool_timeout_ms}` block per design.md §5.1 matrix table. Literal SST values only; no fallback form.
+- `scripts/commands/config.sh` — fail-loud `SMACKEREL_HARDWARE_TIER` resolution at line ~605 with named errors `[F061-HARDWARE-TIER-MISSING]` / `[F061-HARDWARE-TIER-INVALID]`; new helper `tier_interactive_model_or_override()` preserves per-env override as tier-orthogonal layer; the 6 model env-var assignments and the 2 retrieval-qa timeout assignments resolve from the tier × interactive cell; `OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS` derived from `RETRIEVAL_QA_TIMEOUT_MS-1000`; `flatten_yaml` awk extended to indent level 8 to support the 5-deep matrix subtree; 3 new env-var rows added to the heredoc emit block.
+- `config/prompt_contracts/retrieval-qa-v1.yaml` — replaced literals `timeout_ms: 60000` + `per_tool_timeout_ms: 30000` with `${RETRIEVAL_QA_TIMEOUT_MS}` + `${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}` placeholders + operator-directive comment block citing SCOPE-06c.
+- `internal/agent/loader.go` — `os.ExpandEnv` on scenario YAML bytes before `yaml.Unmarshal` (design.md §5.1 Path A).
+- `scripts/runtime/scenario-lint.sh` — extracts `RETRIEVAL_QA_TIMEOUT_MS` + `RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS` from the generated env file before running `cmd/scenario-lint` so the static lint sees integer values.
+- `internal/config/hardware_tier.go` + `internal/config/hardware_tier_test.go` — `ValidateHardwareTier()` + `LoadHardwareTier()` with 4 adversarial unit tests (accepts cpu/accel; rejects empty with `[F061-HARDWARE-TIER-MISSING]`; rejects invalid values with `[F061-HARDWARE-TIER-INVALID]`).
+- `smackerel.sh` — sources `.smackerel.local.env` at top before any subcommand runs.
+- `.gitignore` — added `.smackerel.local.env` entry.
+- `.smackerel.local.env.example` — committed template documenting both valid tier values + the per-machine setup protocol.
+- `.smackerel.local.env` — created on this WSL host (gitignored; `SMACKEREL_HARDWARE_TIER=cpu`).
+- `internal/deploy/bundle_secret_contract_test.go` + `internal/config/sst_loader_test.go` — pass `SMACKEREL_HARDWARE_TIER=cpu` into the subprocess env when invoking `config.sh` so the secret-rejection tests still pass under the new fail-loud guard.
+- `cmd/scenario-lint/testmain_test.go` + `internal/assistant/testmain_test.go` — `TestMain` pins `RETRIEVAL_QA_*` env vars so prompt_contracts loader unit tests see integer values.
+- `ml/tests/test_processor.py` — pre-existing format drift swept into the build-quality fix (4-line whitespace canonicalization auto-applied by `ruff format`).
+- `specs/061-conversational-assistant/scopes.md` — SCOPE-06c status set to `In Progress (Round 71d)`; DoD #1, #2, #3, #4 + Build Quality Gate flipped `[x]` with evidence pointers to this report section. #5, #6, #7 deferred.
+- `specs/061-conversational-assistant/state.json` — executionHistory prepend + execution metadata bump.
+
+### Gate evidence (cpu tier)
+
+```text
+$ ./smackerel.sh --env dev config generate >/dev/null && ./smackerel.sh --env test config generate >/dev/null
+config-validate: ~/smackerel/config/generated/dev.env.tmp.* OK
+config-validate: ~/smackerel/config/generated/test.env.tmp.* OK
+
+$ grep -E '^(SMACKEREL_HARDWARE_TIER|LLM_MODEL|OLLAMA_MODEL|OLLAMA_VISION_MODEL|AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|AGENT_PROVIDER_VISION_MODEL|RETRIEVAL_QA_TIMEOUT_MS|RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS|OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS)=' config/generated/test.env
+OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=14000
+LLM_MODEL=qwen2.5:0.5b-instruct
+OLLAMA_MODEL=qwen2.5:0.5b-instruct
+OLLAMA_VISION_MODEL=qwen2.5:0.5b-instruct
+AGENT_PROVIDER_DEFAULT_MODEL=qwen2.5:0.5b-instruct
+AGENT_PROVIDER_FAST_MODEL=qwen2.5:0.5b-instruct
+AGENT_PROVIDER_VISION_MODEL=qwen2.5:0.5b-instruct
+SMACKEREL_HARDWARE_TIER=cpu
+RETRIEVAL_QA_TIMEOUT_MS=15000
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS=7500
+```
+
+### Gate evidence (accel-tier sub-proof — ran with explicit tier override on the same WSL host)
+
+```text
+$ SMACKEREL_HARDWARE_TIER=accel bash scripts/commands/config.sh --env dev >/dev/null
+$ grep -E '^(SMACKEREL_HARDWARE_TIER|LLM_MODEL|OLLAMA_MODEL|OLLAMA_VISION_MODEL|AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|AGENT_PROVIDER_VISION_MODEL|RETRIEVAL_QA_TIMEOUT_MS|RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS)=' config/generated/dev.env
+LLM_MODEL=gemma3:4b
+OLLAMA_MODEL=gemma3:4b
+OLLAMA_VISION_MODEL=gemma3:4b
+AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+AGENT_PROVIDER_FAST_MODEL=gemma3:4b
+AGENT_PROVIDER_VISION_MODEL=gemma3:4b
+SMACKEREL_HARDWARE_TIER=accel
+RETRIEVAL_QA_TIMEOUT_MS=5000
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS=2500
+```
+
+(After this sub-proof, dev.env was regenerated back to cpu tier so the working tree reflects the WSL host's actual hardware-tier value.)
+
+### Gate evidence (missing-tier fail-loud + no-fallback)
+
+```text
+$ env -u SMACKEREL_HARDWARE_TIER bash scripts/commands/config.sh --env test
+[F061-HARDWARE-TIER-MISSING] SMACKEREL_HARDWARE_TIER is required (set in .smackerel.local.env at repo root to cpu or accel; copy .smackerel.local.env.example to start). See specs/061-conversational-assistant/scopes.md SCOPE-06c.
+EXIT=1
+
+$ grep -nE '\$\{SMACKEREL_HARDWARE_TIER:-' scripts/commands/config.sh smackerel.sh && echo FAIL_FOUND || echo ZERO_LINES_OK
+ZERO_LINES_OK
+```
+
+### Gate evidence (build / check / lint / format / unit tests)
+
+```text
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.* OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 8, rejected: 0
+scenario-lint: OK
+CHECK_EXIT=0
+
+$ ./smackerel.sh lint        # EXIT=0 (full Go vet + ruff + web-asset validators all green)
+$ ./smackerel.sh format --check   # EXIT=0 (after ruff-auto-format swept pre-existing ml/tests drift)
+$ ./smackerel.sh test unit --go
+... (full module suite) ...
+[go-unit] go test ./... finished OK
+UNIT_GO_EXIT=0
+```
+
+### Deferred items (NOT flipped this round)
+
+- **SCOPE-06c DoD #5 — cpu-tier live-stack RE-RUN PASS.** Owned by `bubbles.test` next round. Steps: `./smackerel.sh --env test up` then `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` + `… assistant_bs007_test.sh`; both must exit 0 with `assistant_turn` slog `latency_ms < 15000`. On RED, surface a finding to `bubbles.plan` per the Honesty Note — do NOT widen the 15 s budget silently.
+- **SCOPE-06c DoD #6 — accel-tier live-stack PASS on Evo-X2.** Deferred to operator validation on Evo-X2 hardware. No agent in this session has Evo-X2 access. PACKET 2 (deploy adapter ROCm/NPU passthrough) is operator-private and out of scope for this repo.
+- **SCOPE-06c DoD #7 — SCOPE-06 unblock note.** Deferred until #5 passes (the note must attach the cpu-tier live-stack PASS evidence pointer).
+
+### Anti-fabrication ledger
+
+Every gate exit code in this section was captured from a real command run on this WSL2 host between 15:00 and 16:30 UTC on 2026-05-30. The cpu-tier grep evidence is reproducible by `./smackerel.sh --env test config generate && grep -E ... config/generated/test.env`. The accel-tier evidence required a single explicit `SMACKEREL_HARDWARE_TIER=accel` override against `dev.env` (this host has no accelerator; the proof is config-resolution-only, not runtime). The fail-loud evidence required `env -u SMACKEREL_HARDWARE_TIER` to remove the overlay-sourced value. No `--no-verify` was used. No shell-write idioms (`cat >`, `tee`, heredoc-to-file, `python -c open()`) were used to edit any source, spec, or evidence artifact — all edits went through IDE file tools.
+
+

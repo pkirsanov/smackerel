@@ -208,6 +208,9 @@ func runConfigGenerate(t *testing.T, repoRoot, env, outputDir string, extraEnv .
 	// e.g. the A4 opt-out test) can run without needing cmd/ + go.mod + internal/
 	// in the sandbox repo root.
 	binEnv := []string{"SMACKEREL_CONFIG_VALIDATE_BIN=" + bundleSecretConfigValidateBin(t)}
+	// Spec 061 SCOPE-06c — config.sh requires SMACKEREL_HARDWARE_TIER (fail-loud
+	// per smackerel-no-defaults). Pin to cpu for deterministic bundle generation.
+	binEnv = append(binEnv, "SMACKEREL_HARDWARE_TIER=cpu")
 	cmd.Env = append(append(os.Environ(), binEnv...), extraEnv...)
 	out, err := cmd.CombinedOutput()
 	exitCode := 0

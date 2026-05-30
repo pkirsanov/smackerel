@@ -4,6 +4,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/lib/runtime.sh"
 
+# Spec 061 SCOPE-06c (Round 71d) — source per-machine hardware-tier overlay
+# (gitignored). Operator copies .smackerel.local.env.example → .smackerel.local.env
+# and writes SMACKEREL_HARDWARE_TIER={cpu,accel}. Subcommands (notably
+# `config generate`) fail-loud if the var is unset, so we just source the file
+# when present and let the fail-loud guard fire downstream when it's not.
+if [[ -f "$SCRIPT_DIR/.smackerel.local.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.smackerel.local.env"
+  set +a
+fi
+
 TARGET_ENV="dev"
 NO_CACHE=false
 FORMAT_CHECK=false

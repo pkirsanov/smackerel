@@ -147,6 +147,15 @@ func (l *defaultLoader) Load(dir, glob string) ([]*Scenario, []LoadError, error)
 			continue
 		}
 
+		// Spec 061 SCOPE-06c (Round 71d) — Path A env-substitution for
+		// per-tier scenario contract values (e.g. retrieval-qa-v1.yaml's
+		// `timeout_ms: ${RETRIEVAL_QA_TIMEOUT_MS}`). `${VAR}` and `$VAR`
+		// tokens are expanded from the process environment at scenario-load
+		// time; the env vars themselves are produced by
+		// `./smackerel.sh config generate` per SMACKEREL_HARDWARE_TIER.
+		// See design.md §5.1.
+		data = []byte(os.ExpandEnv(string(data)))
+
 		// Parse YAML into a generic map so we can detect non-scenario
 		// files (e.g. existing prompt contracts with type != "scenario")
 		// and skip them silently — those are not the loader's concern.

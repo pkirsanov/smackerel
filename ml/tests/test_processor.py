@@ -371,9 +371,7 @@ class TestProcessContentErrors:
             )
 
         # Pre-fix: success was False and 'result' key was absent.
-        assert result["success"] is True, (
-            f"Pre-fix regression: short text caused silent drop. Got: {result!r}"
-        )
+        assert result["success"] is True, f"Pre-fix regression: short text caused silent drop. Got: {result!r}"
         assert "result" in result, "Pre-fix regression: no 'result' key"
         # Title derived from short content
         assert result["result"]["title"] == "hi"
