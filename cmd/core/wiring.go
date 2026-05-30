@@ -17,6 +17,7 @@ import (
 	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
+	"github.com/smackerel/smackerel/internal/auth/webcreds"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/connector"
 	ingest "github.com/smackerel/smackerel/internal/connector/ingest"
@@ -349,6 +350,15 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		return nil, nil, nil, fmt.Errorf("auth bearer store: %w", err)
 	}
 	deps.BearerStore = bearerStore
+
+	// Spec 063 — web operator credentials (username/password login layer).
+	// Wired before api.NewRouter so HandleWebLogin has the repo at
+	// router-init time. nil pool is rejected upstream so the call is safe.
+	webCredsRepo, err := webcreds.NewPostgresRepo(svc.pg.Pool)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("web credentials repo: %w", err)
+	}
+	deps.WebCredentials = webCredsRepo
 
 	revocationCache := revocation.NewCache()
 	if cfg.Auth.Enabled {
