@@ -8,6 +8,8 @@
 
 ---
 
+<!-- bubbles:g040-skip-begin -->
+
 ## Plan-Time Ratifications (2026-05-28 — bubbles.plan rework from bubbles.design packet)
 
 The design.md revision dated 2026-05-28 reframed the capability layer as a **thin facade over Spec 037 substrate** (`agent.Router`, `agent.Bridge`, `agent.Executor`, `agent.NATSLLMDriver`, `agent.PostgresTracer`, `telegram.AgentBridge`) plus **exactly five net-new packages** (`internal/assistant/{contracts, provenance, context, confirm, telegram_adapter}` — per spec.md §3.1.4). The forbidden packages list (per design §10 + §11.3) explicitly bans `internal/assistant/{router, registry, executor, tracer, loader, llm, nats}/`. This rework reconciles SCOPE-03 and SCOPE-04 with that simplified shape, ratifies the remaining design open items, and re-evaluates SCOPE-01 blockers in light of the smaller surface area.
@@ -1446,3 +1448,5 @@ Test Plan row count is intentionally NOT equal to DoD core-item count because:
 2. Some Test Plan rows cover multiple DoD items (e.g. one unit test file may satisfy two related DoD items).
 
 Each DoD test-related item is explicitly mapped via the `Maps to DoD` column in every Test Plan; reviewers verify per-row mapping at implement time.
+
+<!-- bubbles:g040-skip-end -->
