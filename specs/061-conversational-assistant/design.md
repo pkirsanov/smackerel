@@ -849,15 +849,26 @@ output_schema:
 
 limits:
   max_loop_iterations: 4
-  timeout_ms: 5000
+  timeout_ms: 60000
   schema_retry_budget: 1
-  per_tool_timeout_ms: 2500
+  per_tool_timeout_ms: 30000
 
 token_budget: 1200
 temperature: 0.2
 model_preference: "default"
 side_effect_class: read
 ```
+
+> **Operator quality directive 2026-05-30: quality > speed for v1.**
+> Background latency acceptable; reverses the Round 58 5 s budget. The 5 s
+> production-budget invariant in `report.md` §round-59 finding row 6 is
+> explicitly overridden by this directive — D5 evidence (`qwen2.5:0.5b-instruct`
+> CPU per-token latency ~1.5 tok/s) proved a 5 s budget structurally infeasible
+> on the current test hardware, and operator selected raising the budget over
+> swapping test-tier models. SCOPE-06a (which preserved 5 s via test-tier swap)
+> is superseded by SCOPE-06b (raises budget to 60 s top-level / 30 s per-tool
+> and retains the production `gemma3:4b` model across all tiers). See
+> plan-triage commit `7de678fa` for full rationale.
 
 **Tool handler — `retrieval_search`** (package
 `internal/agent/tools/retrieval/`): wraps existing `/api/search`
