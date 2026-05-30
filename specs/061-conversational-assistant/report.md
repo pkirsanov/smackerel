@@ -11613,4 +11613,100 @@ The Round 71d/Round 73 implement envelope mentioned the typo `[F061-HARSDWARE-TI
 - The typo audit was performed via `grep -rn 'HARSDWARE\|HARDWARE-TIER' internal/config/`. The "FALSE / no fix needed" verdict reflects the literal grep output: zero matches for `HARSDWARE` in `internal/config/`; correct `HARDWARE-TIER-{MISSING,INVALID}` strings present in source + tests.
 - No `--no-verify`. No `SKIP_PII_SCAN=1`. All artifact edits via `replace_string_in_file` IDE tool calls; zero shell-redirect / heredoc / `python -c open()` writes to any file under `specs/`, `internal/`, `config/`, `scripts/`, `tests/`, or anywhere else.
 
+## Round 75 — SCOPE-06c PACKET 4 implement (tier-gated SKIP gate for cpu-tier live-stack BS-002/BS-007 + docs/Testing.md subsection) {#round-75-scope-06c-packet-4}
+
+**Agent:** `bubbles.implement`. **Phase:** implement. **Claim Source:** executed.
+
+**Upstream:** Round 74 plan-triage commit `010a45d4` selected option (c) operator-defer; Round 74b design amendment commit `cfb00f3b` ratified the rationale in `design.md` §5.1.
+
+**Edits owned this round:**
+
+1. `tests/e2e/lib/helpers.sh` — added shared `skip_unless_accel_tier <test-name>` helper. Reads `SMACKEREL_HARDWARE_TIER` (required; fail-loud via `${VAR:?}`). cpu → emits `SKIP: <name> — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS.` and `exit 0`. accel → returns 0 so caller proceeds. Any other value → stderr error + `exit 2`.
+2. `tests/e2e/assistant_bs002_test.sh` — replaced the inline tier gate (which used non-conforming `RESULT: SKIPPED` / `exit 77` format) with `source helpers.sh; skip_unless_accel_tier "BS-002"` placed at the top of the script body (immediately after `set -euo pipefail`).
+3. `tests/e2e/assistant_bs007_test.sh` — same shape, `skip_unless_accel_tier "BS-007"`.
+4. `docs/Testing.md` — added `## Tier-gated live-stack tests` subsection (placed before the existing `## Assistant Evaluation Harness` section). Documents the `SMACKEREL_HARDWARE_TIER` convention, the exit/output behavior table, the parseable `SKIP:` prefix rationale, the currently-gated test list (BS-002 + BS-007), the shared helper reference, the "remain in default e2e suite" rule, and cross-references to design.md §5.1, scopes.md SCOPE-06c DoD #5/#6, plan-triage `010a45d4`, and Round 71e evidence.
+
+**Gate sweep (executed this round):**
+
+```text
+$ ./smackerel.sh check
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 8, rejected: 0
+scenario-lint: OK
+[exit 0]
+
+$ ./smackerel.sh lint
+=== Checking extension version consistency ===
+  OK: Extension versions match (1.0.0)
+Web validation passed
+[exit 0]
+
+$ ./smackerel.sh format --check
+53 files already formatted
+[exit 0]
+
+$ ./smackerel.sh test unit --go
+ok  github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+ok  github.com/smackerel/smackerel/tests/integration        (cached) [no tests to run]
+ok  github.com/smackerel/smackerel/tests/observability      (cached)
+ok  github.com/smackerel/smackerel/tests/stress/readiness   0.055s
+[go-unit] go test ./... finished OK
+[exit 0]
+```
+
+**Skip-gate behavioral verification — 4 scenarios (home-path PII redacted to `~` per local PII-token policy):**
+
+```text
+$ SMACKEREL_HARDWARE_TIER=cpu bash tests/e2e/assistant_bs002_test.sh; echo exit=$?
+SKIP: BS-002 — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS.
+exit=0
+
+$ SMACKEREL_HARDWARE_TIER=cpu bash tests/e2e/assistant_bs007_test.sh; echo exit=$?
+SKIP: BS-007 — cpu-tier hardware lacks accelerator; live-stack retrieval-qa loop overshoots 15s ceiling per SCOPE-06c Round 71e evidence. Run on accel-tier host for live-stack PASS.
+exit=0
+
+$ SMACKEREL_HARDWARE_TIER=foo bash tests/e2e/assistant_bs002_test.sh; echo exit=$?
+[BS-002] unknown SMACKEREL_HARDWARE_TIER=foo (expected cpu|accel)
+exit=2
+
+$ env -u SMACKEREL_HARDWARE_TIER bash tests/e2e/assistant_bs002_test.sh; echo exit=$?
+~/smackerel/tests/e2e/lib/helpers.sh: line 171: SMACKEREL_HARDWARE_TIER: SMACKEREL_HARDWARE_TIER must be set (cpu|accel) — see .smackerel.local.env.example
+exit=1
+```
+
+The accel-tier path was NOT executed this session — the dispatch explicitly forbade it on this WSL host (no accelerator; would deterministically RED on the 5s budget). Accel-tier PASS is operator-deferred to accelerated-runner hardware per SCOPE-06c DoD #6.
+
+**DoD flips this round (scope-06c only):**
+
+- SCOPE-06c DoD #5 → `[x]` (cpu-tier-skip half landed; accel-tier PASS still operator-deferred per DoD #6 — annotation preserved on the flipped item).
+- SCOPE-06c DoD #7 → `[x]` (SCOPE-06 unblock note recorded; see anchor below).
+- DoD #6 stays `[ ]` (operator-deferred — NOT flipped this round).
+
+### SCOPE-06 unblock note {#scope-06c-unblock-note}
+
+SCOPE-06 DoD #4b (BS-002 adapter-composition leg), #5b (BS-007 adapter-composition leg), and #6 (Telegram trailing `sources:` rendering) are now executable on cpu-tier dev hosts via the tier-gated SKIP gate landed this round. The capability-layer proof at SCOPE-06 DoD #4a/#5a (live-PG integration test `internal/assistant/facade_source_assembly_integration_test.go`, green from Round 8) combined with the tier-gated SKIP contract per design.md §5.1 is the cpu-tier closure shape. Accel-tier live-stack PASS for SCOPE-06 #4b/#5b/#6 remains operator-deferred to accelerated-runner hardware under SCOPE-06c DoD #6.
+
+**Next required owner:** `bubbles.implement` (SCOPE-06 owner) — separate round to re-verify SCOPE-06 DoD #4b/#5b/#6 against the SKIP-gated shell fixtures + capability-layer proof and flip them per the closure shape above. NO scope status changes were made to SCOPE-06 this round.
+
+**Files modified this round (full set):**
+
+- `tests/e2e/lib/helpers.sh` (added `skip_unless_accel_tier` helper)
+- `tests/e2e/assistant_bs002_test.sh` (replaced inline gate with helper call)
+- `tests/e2e/assistant_bs007_test.sh` (replaced inline gate with helper call)
+- `docs/Testing.md` (added `Tier-gated live-stack tests` subsection)
+- `specs/061-conversational-assistant/scopes.md` (SCOPE-06c DoD #5 + #7 flipped to `[x]` with closure notes; no other DoD checkboxes touched; no scope-status text changes)
+- `specs/061-conversational-assistant/report.md` (this Round 75 section appended; SCOPE-06 unblock note anchor recorded inside)
+- `specs/061-conversational-assistant/state.json` (Round 75 executionHistory entry prepended; activeAgent/currentPhase/lastUpdatedAt bumped; certification.* untouched; status stays `in_progress`)
+
+**NOT MODIFIED:** spec.md, design.md, uservalidation.md, scenario-manifest.json, certification.* fields, status (in_progress), statusCeiling (done), workflowMode (full-delivery), SCOPE-06/06a/06b DoD checkboxes (none flipped — SCOPE-06 owner does that separately), SCOPE-06c DoD #6 (operator-deferred), any other source/test/config under `cmd/`, `internal/`, `ml/`, `config/`, `scripts/`, `deploy/`, `docker-compose.yml`. No `--no-verify` used. No `SKIP_PII_SCAN=1` used. No shell-write idioms (`cat >`, `tee`, heredoc-to-file, `python -c open()`) used to edit any artifact.
+
+### Anti-fabrication ledger (Round 75)
+
+- All gate outputs above have absolute home paths redacted to `~` per local PII-token policy; the redacted segments are verbatim transcriptions of terminal output executed this round; no commands were paraphrased.
+- The 4-scenario skip-gate verification was executed against the live (modified) test scripts after the helper landed; outputs reflect actual exit codes captured via `echo exit=$?` immediately after each invocation.
+- The accel-tier path was deliberately NOT executed; no fabricated PASS evidence is presented for it. The DoD #6 checkbox correctly remains `[ ]`.
+- No claim is made that the underlying BS-002/BS-007 fixtures pass on accel hardware in this round; that proof is owed by the operator on the accelerated runner under DoD #6.
+
 
