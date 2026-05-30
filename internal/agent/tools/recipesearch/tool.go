@@ -81,6 +81,11 @@ var inputSchema = json.RawMessage(`{
   }
 }`)
 
+// BUG-061-003 gap remediation: the upstream api.SearchResult exposes
+// only the qualitative Relevance string; no numeric similarity score is
+// surfaced from the SearchEngine. Threading a score through would be an
+// invasive cross-package change for a field no consumer reads. Drop it
+// from the schema so the contract is honest (no permanently-zero field).
 var outputSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
@@ -91,12 +96,11 @@ var outputSchema = json.RawMessage(`{
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["artifact_id", "title", "ingredient_summary", "score"],
+        "required": ["artifact_id", "title", "ingredient_summary"],
         "properties": {
           "artifact_id":        {"type": "string"},
           "title":              {"type": "string"},
-          "ingredient_summary": {"type": "string"},
-          "score":              {"type": "number"}
+          "ingredient_summary": {"type": "string"}
         }
       }
     }
@@ -123,10 +127,9 @@ type recipeSearchInput struct {
 }
 
 type recipeSearchHit struct {
-	ArtifactID        string  `json:"artifact_id"`
-	Title             string  `json:"title"`
-	IngredientSummary string  `json:"ingredient_summary"`
-	Score             float64 `json:"score"`
+	ArtifactID        string `json:"artifact_id"`
+	Title             string `json:"title"`
+	IngredientSummary string `json:"ingredient_summary"`
 }
 
 type recipeSearchOutput struct {
