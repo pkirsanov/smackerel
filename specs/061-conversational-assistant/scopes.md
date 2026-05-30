@@ -217,7 +217,8 @@ All open items from spec §13 + design §13 are resolved at planning time:
 | SCOPE-04 | **(REWORKED)** Capability facade + borderline post-processor + context store + capture-as-fallback | Done | SCOPE-01, SCOPE-02, SCOPE-03 | **Yes** (facade p95 envelope; Gate G026) | BS-005 |
 | SCOPE-05 | Telegram reference adapter (v1) | In Progress | SCOPE-02, SCOPE-04 | No | BS-001, BS-010 |
 | SCOPE-06 | Retrieval Q&A scenario + tool handler activated end-to-end (v1 #1) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 5s; Gate G026) | BS-002, BS-007 (end-to-end) |
-| SCOPE-06a | **(NEW 2026-05-30)** BS-002/BS-007 multi-path SST model-leak remediation + test-tier warmup (Options 3A+3C+3D per report.md §8) | Not Started | SCOPE-01, SCOPE-06 (DoD #1–3, #4a, #5a, #7) | No | Unblocks BS-002, BS-007 (DoD #4b/#5b/#6 under SCOPE-06) |
+| SCOPE-06a | **(SUPERSEDED 2026-05-30 by SCOPE-06b — operator quality directive reverses 5s budget invariant; see SCOPE-06b body)** BS-002/BS-007 multi-path SST model-leak remediation + test-tier warmup (Options 3A+3C+3D per report.md §8) | Superseded | SCOPE-01, SCOPE-06 (DoD #1–3, #4a, #5a, #7) | No | Superseded — was intended to unblock BS-002/BS-007 by preserving 5s budget via test-tier model swap; that strategy reversed by Round 66 |
+| SCOPE-06b | **(NEW 2026-05-30 — Round 66 plan-triage)** Adopt operator quality directive: revert test-tier model overrides + raise `retrieval-qa-v1.timeout_ms` from 5000→60000 (per_tool 2500→30000) so default `gemma3:4b` runs everywhere; amend `design.md` retrieval-qa budget contract; land config reversal; reverify BS-002/BS-007 live-stack under new 60 s budget | Not Started | SCOPE-06a (substrate plumbing — keep_alive, prewarm hook, fixture SST warmup, env_override_value for vision — all retained as still-useful infrastructure); SCOPE-01 (SST pipeline) | No | Closes D4 + D5; unblocks SCOPE-06 DoD #4b/#5b/#6 |
 | SCOPE-07 | Weather scenario + tool handler activated end-to-end (v1 #2) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packet to spec 060 (read scope) | **Yes** (scenario p95 < 3s; Gate G026) | BS-003, BS-006 |
 | SCOPE-08 | Notifications scenario + tool handlers + confirm-card state machine activated end-to-end (v1 #3) | In Progress | SCOPE-03, SCOPE-04, SCOPE-05 + cross-spec packets to spec 054 + spec 060 (write scope) | **Yes** (scenario p95 + confirm-timeout under load; Gate G026) | BS-004 |
 | SCOPE-09a | **(SPLIT)** Telemetry substrate: metrics + logs + Grafana fragment + runbook + OTel SDK init (3 SST keys, `go.mod` deps, `cmd/core/wiring.go`, `internal/assistant/tracing/`, jaeger sidecar, root span + in-memory exporter test) | Done | SCOPE-06, SCOPE-07, SCOPE-08 | No | — |
@@ -613,6 +614,8 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 ## SCOPE-06a — BS-002/BS-007 multi-path SST model-leak remediation + test-tier warmup
 
+> **STATUS: SUPERSEDED 2026-05-30 by SCOPE-06b** — operator quality directive ("quality > speed for v1") reverses the production-budget invariant this scope was built to preserve. Round 63 (D1/D2/D3 prewarm fixes), Round 64 (live-stack RE-RUN RED via D4 single-prewarm insufficiency), and Round 65 (D4 hybrid attempt — sustained warmup + `OLLAMA_KEEP_ALIVE=-1`; surfaced D5 hardware-bound per-token latency) collectively proved that the 5 s `retrieval-qa-v1.timeout_ms` budget is structurally infeasible on the test stack's CPU-only inference of `qwen2.5:0.5b-instruct` (~1.5 tok/s; 64-token warmup ~43 s; budget allows ~7 generated tokens vs scenario need of many tens to hundreds). Operator chose to reverse the budget (raise to 60 s) and run the higher-quality `gemma3:4b` everywhere instead of reselecting a smaller test-tier model. See SCOPE-06b for the adopted remediation. The substrate plumbing landed by SCOPE-06a Rounds 60–65 (post-up prewarm hook, fixture warmup-reads-SST, `env_override_value` on `AGENT_PROVIDER_VISION_MODEL`, `OLLAMA_KEEP_ALIVE` SST keys, sustained-warmth latency gate in `scripts/runtime/stack.sh`) IS RETAINED — it remains useful infrastructure under SCOPE-06b. The Rounds 60–61 SCOPE-06a-specific YAML model overrides + the Go validator (`internal/config/validate_test_env_models.go`) are reverted under SCOPE-06b's Round 66 commit. Historical DoD `[x]` marks below remain truthful for what Round 60 actually shipped; the 4 deferred items (Live-stack RE-RUN PASS, Consumer-trace clean, Synthesis-path SST proof, SCOPE-06 unblock note) are subsumed by SCOPE-06b's DoD under the new 60 s budget. **Reconciliation with report.md §round-59 finding row 6 ("do not mask by raising budget"):** that finding was a planner recommendation contingent on the production-budget invariant being inviolable; the operator 2026-05-30 quality directive explicitly overrides it. The invariant change MUST be reflected in `design.md` retrieval-qa budget section (routed to bubbles.design) before the config Round 66 commit lands.
+
 **Summary:** Remediate finding `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK` (report.md §round-59 / §8). Round 58 Option 2 only redirected one of five model env consumers (`AGENT_PROVIDER_DEFAULT_MODEL`); the synthesis path in `ml/app/nats_client.py:265` still reads `LLM_MODEL` → resolves to production `gemma3:4b` → `OllamaException model not found` → `error_cause=provider_unavailable` → SCOPE-06 DoD #4b/#5b/#6 RED on every live-stack run. This scope lands the plan-triage decision adopted from report.md §8: **Options 3A + 3C + 3D combined** (complete SST override coverage for ALL test-tier model env vars + fixture warmup reads `$AGENT_PROVIDER_DEFAULT_MODEL` + stack-lifecycle post-`up` pre-warm of the test model). 3B (synthesis-path refactor) is REJECTED as out-of-scope (would amend `ml/` sidecar contract + require a design.md pass — not in spec 061). 3E (pull `gemma3:4b` into test ollama) is REJECTED as it defeats the Round 57 separation-of-models premise.
 
 **Adopted options + rationale:**
@@ -707,6 +710,222 @@ All open items from spec §13 + design §13 are resolved at planning time:
 5. Consumer-trace clean (depends on 3A + 3C — proves nothing was missed)
 6. SCOPE-06 unblock note (depends on Live-stack RE-RUN PASS)
 7. Build Quality Gate (final)
+
+---
+
+## SCOPE-06b — Round 66 operator quality directive: raise retrieval-qa-v1 budget, restore `gemma3:4b` everywhere
+
+**Summary:** Adopt the operator 2026-05-30 quality-over-speed directive. Reverses both the Round 58 Option 2 test-tier model swap and the SCOPE-06a (Rounds 60–65) multi-path test-tier override + warmup-budget-fit strategy. New strategy: keep `gemma3:4b` as the default agent / `llm` / `ollama` model in every environment (test included); raise `config/prompt_contracts/retrieval-qa-v1.yaml.timeout_ms` from 5000→60000 ms and `per_tool_timeout_ms` from 2500→30000 ms; amend `design.md` retrieval-qa contract to record the new budget + operator rationale. The substrate plumbing retained from SCOPE-06a (post-up prewarm hook with sustained-warmth gate, `OLLAMA_KEEP_ALIVE=-1` for test env, fixture warmup reads `$AGENT_PROVIDER_DEFAULT_MODEL`, `env_override_value` wiring for `AGENT_PROVIDER_VISION_MODEL`) all remain GREEN under the new strategy — they were the right shape; only the test-tier model-override layer is reversed.
+
+**Decision rationale:**
+
+- **D4 (sustained warmth) is structurally closed** by `OLLAMA_KEEP_ALIVE=-1` (Round 65 evidence proved the model stays resident — second_call_ms = 42 614 ms vs first_call_ms = 67 333 ms, ~25 s saved is exactly the cold-load avoidance).
+- **D5 (CPU-inference per-token latency) cannot be closed by warmup** — `qwen2.5:0.5b-instruct` runs at ~1.5 tok/s on this hardware; even fully warm the 5 s budget allows ~7 tokens vs needed many tens to hundreds.
+- **Three remediation paths were laid out** in report.md Round 65: (1) reselect test-tier model, (2) per-env timeout override, (3) cap retrieval-qa `num_predict`. Operator selected a hybrid: revert the test-tier swap AND raise the contract budget globally (not per-env) AND keep the higher-quality `gemma3:4b`. This is the operator-override path; the rationale "quality > speed for v1" is recorded inline in `config/prompt_contracts/retrieval-qa-v1.yaml` and in `state.json` Round 66 entry.
+- **Reconciliation with report.md §round-59 row 6 ("do not mask by raising budget")** — that finding was contingent on the production-budget invariant being inviolable. The 2026-05-30 operator directive explicitly overrides the invariant; `design.md` retrieval-qa contract section MUST be amended in lockstep so spec/design and config do not drift.
+
+**Status:** Not Started
+**Depends On:**
+- SCOPE-06a substrate (retained): `scripts/runtime/stack.sh` post-up prewarm + sustained-warmth gate, `OLLAMA_KEEP_ALIVE` SST keys, fixture SST warmup, `AGENT_PROVIDER_VISION_MODEL=env_override_value`. All landed in HEAD `e1156715` and earlier rounds.
+- **`bubbles.design` retrieval-qa contract amendment** (PREREQUISITE — see "Cross-spec handoff" below). The config commit MUST NOT land before design.md ratifies the new budget contract, otherwise spec/design ↔ config drift G028-style violation.
+- SCOPE-01 (SST pipeline).
+
+**Unblocks:** SCOPE-06 DoD #4b (BS-002 adapter-composition leg), #5b (BS-007 adapter-composition leg), #6 (Telegram trailing-sources rendering). Those three remain owned by SCOPE-06 and are re-verified by SCOPE-06 owner after this scope's live-stack RE-RUN PASS lands.
+**Foundation flag:** `foundation: false` (operator-directed reversal of a concrete remediation; no new capability surface).
+
+**Cross-spec handoff (REQUIRED before implement):**
+
+> ROUTE TO: `bubbles.design`
+> SCOPE: amend `specs/061-conversational-assistant/design.md` retrieval-qa-v1 contract section (lines ~850–855 currently show `timeout_ms: 5000` / `per_tool_timeout_ms: 2500`) to `timeout_ms: 60000` / `per_tool_timeout_ms: 30000`, with explicit "operator quality directive 2026-05-30: quality > speed for v1; background latency acceptable; reverses Round 58 5 s budget" rationale block. Optionally extend Operations.md if a retrieval-qa SLO section is added there in future (currently `docs/Operations.md` does NOT reference the 5 s budget per grep at plan time, so no Operations.md change is required this round).
+
+### Gherkin Scenarios (owned)
+
+- **TIMEOUT-BUDGET-REVERSAL — Raised retrieval-qa-v1 budget is honored end-to-end**
+
+  Given `config/prompt_contracts/retrieval-qa-v1.yaml.timeout_ms` is 60000 and `per_tool_timeout_ms` is 30000
+  And `design.md` retrieval-qa-v1 contract section records the same numbers + operator-directive rationale
+  And `config/smackerel.yaml::environments.test` no longer declares any of `llm_model`, `ollama_model`, `agent_provider_default_model`, `agent_provider_fast_model`, `agent_provider_vision_model`, `ollama_vision_model`
+  When `./smackerel.sh --env test config generate` runs
+  Then `config/generated/test.env` contains `gemma3:4b` (inherited from base) in every model env var
+  And `internal/config/config.go` does NOT call `validateTestEnvModelOverrides` (validator file is deleted)
+  And `go build ./...` exits 0 with no references to the deleted validator symbol.
+
+- **LIVE-STACK-RE-RUN-PASS — BS-002 + BS-007 PASS under the new 60 s budget**
+
+  Given the test stack is up with `gemma3:4b` pulled and warm (`OLLAMA_KEEP_ALIVE=-1` + post-up prewarm both still in place)
+  And the new 60 s `retrieval-qa-v1.timeout_ms` budget is active
+  When `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` runs
+  Then it exits 0; the `assistant_turn` slog reports `status=retrieval_ok`, `error_cause=null`, `len(.sources) > 0`, and `latency_ms < 60000`
+  And likewise for `assistant_bs007_test.sh` (`status=saved_as_idea`, `error_cause=missing_provenance`, `CaptureRoute=true`, `latency_ms < 60000`).
+
+- **NO-RESIDUAL-OVERRIDE — Test env inherits base model literals cleanly**
+
+  Given the SCOPE-06a YAML overrides are removed
+  When `grep -nE '^\s*(llm_model|ollama_model|agent_provider_(default|fast|vision)_model|ollama_vision_model):' config/smackerel.yaml` runs inside the `environments.test:` block
+  Then it returns zero matches
+  And SST policy (no `${VAR:-...}` fallback) is preserved — base keys remain `required_value` in `scripts/commands/config.sh`.
+
+### Implementation Plan
+
+1. **Cross-spec PREREQUISITE — `bubbles.design`:** Amend `specs/061-conversational-assistant/design.md` lines ~850–855 retrieval-qa-v1 contract: `timeout_ms: 5000 → 60000`, `per_tool_timeout_ms: 2500 → 30000`. Add inline operator-directive rationale block. NO scope/spec changes outside this section. NO `docs/Operations.md` change required (grep at plan time shows zero references to 5 s budget). Hand back to `bubbles.implement` with packet referencing this scope.
+2. **`bubbles.implement` — `config/prompt_contracts/retrieval-qa-v1.yaml`:** Set `timeout_ms: 60000` and `per_tool_timeout_ms: 30000` with the operator-directive comment block (already pre-staged in working tree at dispatch time — landing is mechanical).
+3. **`bubbles.implement` — `config/smackerel.yaml::environments.test`:** Remove the 5 model-override lines (`llm_model`, `ollama_model`, `agent_provider_default_model`, `agent_provider_fast_model`, `agent_provider_vision_model`, `ollama_vision_model`). Replace with the operator-directive comment block (pre-staged in working tree).
+4. **`bubbles.implement` — `internal/config/config.go`:** Remove the `validateTestEnvModelOverrides` call (pre-staged) and DELETE both `internal/config/validate_test_env_models.go` + `validate_test_env_models_test.go`. SST policy is preserved because base keys remain `required_value` in `scripts/commands/config.sh` (no fallback created by this delete).
+5. **`bubbles.implement` — Regenerate + verify SST cleanly inherits:** `./smackerel.sh --env test config generate`; `grep -E '^(LLM_MODEL|OLLAMA_MODEL|OLLAMA_VISION_MODEL|AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|AGENT_PROVIDER_VISION_MODEL)=' config/generated/test.env` MUST show every line valued `gemma3:4b`.
+6. **`bubbles.implement` / `bubbles.test` — Live-stack RE-RUN:** Bring up `./smackerel.sh --env test up`; run `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` AND `… assistant_bs007_test.sh`; both MUST exit 0 within the new 60 s budget. Capture `latency_ms` from `assistant_turn` slog as evidence.
+7. **`bubbles.implement` — SCOPE-06 unblock note:** Same shape as the SCOPE-06a-deferred unblock note — record that SCOPE-06 DoD #4b/#5b/#6 are now executable; hand to SCOPE-06 owner for separate checkbox flip round.
+
+### Test Plan
+
+| Test type | Category | File / location | Description | Command | Live system | Maps to DoD |
+|-----------|----------|-----------------|-------------|---------|-------------|-------------|
+| Unit (Go) | `unit` | `internal/config/...` (existing config validator suite) | `go build ./...` + `./smackerel.sh test unit` MUST pass after the `validateTestEnvModelOverrides` deletion (no dangling symbol references); base SST validators remain intact. | `./smackerel.sh test unit` | No | DoD #1 |
+| Functional (Bash) | `functional` | inline grep | After `./smackerel.sh --env test config generate`: `grep -nE '^(LLM_MODEL\|OLLAMA_MODEL\|OLLAMA_VISION_MODEL\|AGENT_PROVIDER_DEFAULT_MODEL\|AGENT_PROVIDER_FAST_MODEL\|AGENT_PROVIDER_VISION_MODEL)=gemma3:4b$' config/generated/test.env` returns 6 lines. | inline | No | DoD #2 |
+| Functional (Bash) | `functional` | inline grep | `grep -nE '^\s*(llm_model\|ollama_model\|agent_provider_(default\|fast\|vision)_model\|ollama_vision_model):' config/smackerel.yaml` returns matches only OUTSIDE the `environments.test:` block (i.e. only in the base config / dev block). | inline | No | DoD #3 |
+| Regression E2E (BS-002) | `e2e-api` | `tests/e2e/assistant_bs002_test.sh` (unchanged from SCOPE-06a) | Live-stack `/ask` returns `status=retrieval_ok`, `error_cause=null`, `len(.sources) > 0`, `latency_ms < 60000`. Persistent regression for `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK` under the new budget. | `./smackerel.sh test e2e` (or `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh`) | Yes (full test stack) | DoD #5 |
+| Regression E2E (BS-007) | `e2e-api` | `tests/e2e/assistant_bs007_test.sh` (unchanged from SCOPE-06a) | Live-stack `/ask` graph-drift returns `status=saved_as_idea`, `error_cause=missing_provenance`, `CaptureRoute=true`, `latency_ms < 60000`. Persistent regression under the new budget. | `./smackerel.sh test e2e` | Yes (full test stack) | DoD #5 |
+| Design-contract drift | `artifact` | inline | `grep -nE 'timeout_ms:\s*(5000\|60000)' specs/061-conversational-assistant/design.md` matches only `60000` in the retrieval-qa-v1 section; no `5000` survives in that section. | inline | No | DoD #4 |
+
+### Definition of Done
+
+**Core items:**
+
+- [ ] **1 — Build clean after validator delete** — `go build ./...` exits 0 after `internal/config/validate_test_env_models.go` + `validate_test_env_models_test.go` are removed AND `internal/config/config.go` no longer calls `validateTestEnvModelOverrides`. `./smackerel.sh test unit` PASSES. → Evidence: `report.md#scope-06b-build-clean`
+- [ ] **2 — Test env inherits `gemma3:4b` for all 6 model keys** — `grep -E '^(LLM_MODEL|OLLAMA_MODEL|OLLAMA_VISION_MODEL|AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|AGENT_PROVIDER_VISION_MODEL)=gemma3:4b$' config/generated/test.env` returns 6 lines after `./smackerel.sh --env test config generate`. → Evidence: `report.md#scope-06b-inherit-grep`
+- [ ] **3 — `environments.test:` block carries zero model overrides** — `grep -nE '^\s*(llm_model|ollama_model|agent_provider_(default|fast|vision)_model|ollama_vision_model):' config/smackerel.yaml` returns zero matches within the `environments.test:` block; SST `required_value` wiring in `scripts/commands/config.sh` unchanged (no `${VAR:-...}` fallback introduced). → Evidence: `report.md#scope-06b-test-block-clean`
+- [ ] **4 — `design.md` retrieval-qa contract amended in lockstep with config** — `specs/061-conversational-assistant/design.md` retrieval-qa-v1 section records `timeout_ms: 60000` and `per_tool_timeout_ms: 30000` and the operator-directive rationale; no `timeout_ms: 5000` survives in that section. (Owned by `bubbles.design` cross-spec handoff; this scope MUST NOT commit config changes before this DoD item is GREEN.) → Evidence: `report.md#scope-06b-design-amend`
+- [ ] **5 — Live-stack RE-RUN PASS** — `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` AND `… assistant_bs007_test.sh` both exit 0; `assistant_turn` slog `latency_ms` < 60000 for each. Closes D4 + D5. → Evidence: `report.md#scope-06b-live-stack-pass`
+- [ ] **6 — SCOPE-06 unblock note** — `report.md#scope-06b-unblock-note` records that SCOPE-06 DoD #4b/#5b/#6 are now executable, names SCOPE-06 owner as next agent, attaches live-stack PASS evidence. SCOPE-06 owner re-verifies and flips SCOPE-06 DoD #4b/#5b/#6 in a SEPARATE `bubbles.implement` round. → Evidence: `report.md#scope-06b-unblock-note`
+
+**Build Quality Gate (grouped):**
+
+- [ ] Zero warnings; lint + format clean (`./smackerel.sh lint`, `./smackerel.sh format --check`); artifact lint clean (`.github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant`); pre-push gitleaks PII scan clean; no `--no-verify` used on any push; no new TODO/FIXME. → Evidence: `report.md#scope-06b-build-quality`
+
+### DoD Ordering (sequential — each gates the next)
+
+1. DoD #4 (design.md amendment by `bubbles.design`) — PREREQUISITE; nothing else may land before this
+2. DoD #1 → #2 → #3 (config + Go reversal commit by `bubbles.implement`)
+3. DoD #5 (live-stack RE-RUN PASS by `bubbles.test`) — depends on #1–#4
+4. DoD #6 (SCOPE-06 unblock note) — depends on #5
+5. Build Quality Gate (final)
+
+---
+
+## SCOPE-06b — D5 CPU-inference-latency triage (Round 66 verify; Path A contingency)
+
+**Summary:** Triage finding `SCOPE-06A-D5-CPU-INFERENCE-LATENCY-EXCEEDS-RETRIEVAL-QA-BUDGET` surfaced by Round 65 (report.md §round-65). Round 65 proved the D4 hybrid (sustained warmup + `OLLAMA_KEEP_ALIVE=-1`) is plumbed correctly and the model genuinely stays resident, but per-token CPU inference of `qwen2.5:0.5b-instruct` on the test-stack hardware is ~1.5 tok/s, so a 64-token second warmup call took 42,614 ms — meaning the original `retrieval-qa-v1.yaml.timeout_ms: 5000` budget could fit at most ~7 generated tokens regardless of warmth.
+
+**Status-of-the-world note (Round 66 — operator quality directive, already applied to config but NOT yet recorded in `report.md`/`state.json` execution history):**
+
+- `config/prompt_contracts/retrieval-qa-v1.yaml::limits.timeout_ms` was raised `5000 → 60000` (`per_tool_timeout_ms` `… → 30000`) with an inline comment citing "Round 66" + "quality > speed for v1".
+- `config/smackerel.yaml::environments.test` dropped the four model overrides previously landed by Round 58/SCOPE-06a Option 3A; test env now inherits the base `gemma3:4b` for all five model env vars.
+- These two edits implement what the original D5 triage menu called **Path B (per-env timeout override)** in spirit — but rather than per-env, the operator raised the production budget itself for v1.
+- Round 66 is not yet `report.md`-recorded; this scope's first DoD item is to **ratify Round 66 in the report + state** so the audit trail catches up before any new verification is run on top of it.
+
+**Decision (this plan round, 2026-05-30, `bubbles.plan` — non-interactive):** Adopt a **verify-first** strategy rather than silently undoing Round 66 by landing Path A on top of it.
+
+- **Primary:** Ratify Round 66, then re-run BS-002 + BS-007 against the current config (`gemma3:4b` + 60 s budget). At 1.5 tok/s the 60 s budget supports ~90 generated tokens, which is plausibly sufficient for a cited retrieval-qa answer. If both pass, D5 is closed by Round 66; SCOPE-06a's 4 deferred DoD items become executable; Path A is unnecessary.
+- **Contingency (Path A — only if primary verification fails):** Re-introduce a test-env model override picking a smaller/faster instruct-tuned model. Recommended fallback: **`smollm2:360m-instruct-q4_K_M`** (HuggingFaceTB SmolLM2 360M parameter instruct, q4_K_M quantization). Rationale: ~250 MB pull (well under 500 MB cap); typically ~8–12 tok/s CPU on commodity hardware (≥5× the qwen2.5:0.5b CPU throughput observed in Round 65); explicit instruct-tuning so cited-synthesis prompts still elicit JSON-shaped output; freely pullable from `ollama.com/library/smollm2`. Alternatives considered: `smollm2:135m` (too small for citation/synthesis fidelity); `tinyllama:1.1b-chat-q4_K_S` (older base; weaker instruct following); `qwen2.5:0.5b at q2_K` (already proven too slow on this hardware in Round 65).
+- **Why not undo Round 66 unconditionally?** Round 66 is an explicit operator quality directive captured in committed config; reversing it without verification would (a) discard operator intent and (b) conflict with the BS-002 semantic-correctness premise that the design intends `gemma3:4b`-class synthesis quality on the v1 retrieval skill. The verify-first approach honors both the operator directive AND the original D5 triage menu — Path A remains on deck if the primary verification falsifies the 60 s assumption on this hardware.
+- **Production-budget invariant:** This scope MUST NOT raise `retrieval-qa-v1.yaml.timeout_ms` further. Round 66 already set it to 60 000 ms; that is the current invariant for v1 per the operator quality directive. Contingency Path A also MUST NOT touch `timeout_ms` — it changes only `environments.test.*model*` SST keys.
+
+**Adopted paths from the original menu:**
+
+- **Path B (per-env timeout override) — already landed by Round 66** as a production-budget raise. This scope ratifies it; it does NOT re-litigate.
+- **Path A (smaller test-tier model) — contingency only**, gated on primary-verification failure.
+- **Path C (cap retrieval-qa num_predict) — REJECTED.** Reasoning: caps response shape; would mask production budget regressions on full-length cited answers; conflicts with operator quality directive's spirit.
+
+**Status:** Not Started
+**Depends On:** SCOPE-06a (Options 3A/3C/3D plumbing already verified GREEN in Round 65; this scope rides on top of that plumbing).
+**Unblocks:** SCOPE-06a 4 deferred DoD items (Live-stack RE-RUN PASS, Consumer-trace clean, Synthesis-path SST proof, SCOPE-06 unblock note). SCOPE-06 DoD #4b/#5b/#6 remain owned by SCOPE-06; this scope provides the precondition.
+**Foundation flag:** `foundation: false`.
+
+### Gherkin Scenarios (owned)
+
+- **ROUND-66-RATIFICATION — Audit trail catches up before verification**
+
+  Given Round 66 edits to `config/prompt_contracts/retrieval-qa-v1.yaml` and `config/smackerel.yaml::environments.test` were applied without a corresponding `report.md` / `state.json` execution-history entry
+  When this scope's owner runs the ratification step
+  Then `specs/061-conversational-assistant/report.md` gains a `### Round 66 …` section recording the two config edits + operator rationale (quoted from the YAML inline comments) + before/after `git diff` evidence
+  And `specs/061-conversational-assistant/state.json::execution.executionHistory` gains a `bubbles.plan` round-66 entry referencing the new report section.
+
+- **VERIFY-PRIMARY-PATH — Round 66 closes D5 on this hardware**
+
+  Given Round 66 is ratified and the test stack has been brought up via `./smackerel.sh --env test up` (which triggers the SCOPE-06a 3D post-up pre-warm against `gemma3:4b`)
+  When `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` runs end-to-end against the live test stack
+  Then it exits 0 within the 60 000 ms `retrieval-qa-v1.yaml.timeout_ms` budget
+  And `assistant_turn` slog line shows `status=retrieval_ok`, `error_cause=null`, `len(.sources) > 0`
+  And `BS-007` adversarial scenario (`assistant_bs007_test.sh`) also exits 0 within the same budget with `status=saved_as_idea`, `error_cause=missing_provenance`.
+
+- **CONTINGENCY-PATH-A — Smaller test-tier model unblocks BS-002 when primary fails**
+
+  Given the primary VERIFY-PRIMARY-PATH scenario FAILS (BS-002 or BS-007 exceeds the 60 000 ms budget or otherwise REDs on this hardware)
+  And the owner has ratified the Path A fallback in `uservalidation.md` (operator-Round-66-reversal acknowledgement)
+  When `config/smackerel.yaml::environments.test` is amended to override `agent_provider_default_model`, `agent_provider_fast_model`, `agent_provider_vision_model`, `llm_model`, `ollama_model`, and `ollama_vision_model` to `smollm2:360m-instruct-q4_K_M`
+  And `./smackerel.sh --env test config generate` regenerates `config/generated/test.env` (no `gemma3:4b` remains in any model field)
+  And the test stack is brought up and BS-002 + BS-007 are re-run
+  Then both tests exit 0 within the 60 000 ms budget (well under, given ≥5× CPU throughput)
+  And `docker exec smackerel-test-ollama-1 ollama list` shows `smollm2:360m-instruct-q4_K_M` resident
+  And `grep -RnE 'gemma3:4b' config/generated/test.env tests/e2e/ scripts/runtime/ scripts/commands/` returns zero matches in non-doc paths.
+
+### Implementation Plan
+
+1. **Ratify Round 66** — append a `### Round 66 — Operator quality directive (retrieval-qa-v1 budget raise + test-env model-override removal)` section to `report.md` evidence with: (a) verbatim YAML inline-comment quotes, (b) `git log --follow` excerpt or `git blame` snippets pinpointing the edits, (c) `git diff` snippets for the two config files, (d) explicit statement that no execution-history entry existed for Round 66 prior to this scope.
+2. **Update SCOPE-06a evidence-section header note** — single inline note pointing at SCOPE-06b for the deferred DoD items (no checkbox flips).
+3. **Run live-stack primary verification** under `E2E_STACK_MANAGED=1`:
+   - `./smackerel.sh --env test up`
+   - `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh`
+   - `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs007_test.sh`
+   - Capture full slog lines (status, error_cause, latency_ms) for both tests.
+4. **Branch decision:**
+   - **If both PASS:** D5 closed by Round 66. Tick the 4 deferred SCOPE-06a DoD items (under SCOPE-06a; SCOPE-06b does NOT mutate them — SCOPE-06b's owner notifies SCOPE-06a owner via routed packet). Tick SCOPE-06b DoD items 1, 3, 4-PASS. Path A contingency NOT executed; SCOPE-06b DoD item 5 (CONTINGENCY-PATH-A) marked `[N/A — primary passed]` with explicit evidence reference.
+   - **If either FAILS:** Open `uservalidation.md` Path A fallback gate. Owner ratifies the Round 66 reversal scope-bound to the test env only. Then implementer lands Path A per scenario CONTINGENCY-PATH-A (model override + config regen + live-stack re-run + consumer-trace grep). Tick SCOPE-06b DoD items 1, 3, 4-FAIL, 5.
+5. **Cleanup:** `./smackerel.sh --env test down` after verification; capture exit codes.
+6. **Notify SCOPE-06a owner via in-spec routing packet** (recorded in `report.md` evidence — no separate file) once primary or contingency has produced live-stack PASS evidence; SCOPE-06a owner then performs the 4 deferred DoD ticks in a separate `bubbles.implement` round.
+
+### Test Plan
+
+| Test type | Category | File / location | Description | Command | Live system | Maps to DoD |
+|-----------|----------|-----------------|-------------|---------|-------------|-------------|
+| Documentation gate | `functional` | `specs/061-conversational-assistant/report.md` new `### Round 66 …` section | Round 66 ratification: section exists, quotes YAML comments, attaches `git diff` for the two config edits. | manual review during artifact-lint | No | DoD #1 |
+| Live-stack primary | `e2e-api` | `tests/e2e/assistant_bs002_test.sh` (no fixture change vs SCOPE-06a) | BS-002 against current config (`gemma3:4b` + 60 s budget). Persistent regression for SCOPE-06A-D5. | `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` | Yes | DoD #3, #4 |
+| Live-stack primary | `e2e-api` | `tests/e2e/assistant_bs007_test.sh` | BS-007 adversarial under same config. | `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs007_test.sh` | Yes | DoD #3, #4 |
+| Warmup-latency sanity | `functional` | inline command in DoD #2 | `( set -a; source config/generated/test.env; set +a; bash scripts/runtime/stack.sh )` — capture `warmup summary first_call_ms=… second_call_ms=… threshold_ms=…` line; assert `second_call_ms < retrieval_qa_timeout_ms_minus_safety_margin` (currently 60 000 − 5 000 = 55 000 ms). Adversarial: if `second_call_ms >= 55 000`, primary verification is predicted to FAIL even before running BS-002 — operator must adjust `OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS` SST key OR fall back to Path A. | inline | Yes (Ollama only) | DoD #2 |
+| Contingency (only if primary fails) | `e2e-api` | `tests/e2e/assistant_bs002_test.sh` + `assistant_bs007_test.sh` after Path A model override | Re-run after `smollm2:360m-instruct-q4_K_M` override + config regen + stack restart; both MUST exit 0 within 60 000 ms. | `E2E_STACK_MANAGED=1 bash tests/e2e/assistant_bs002_test.sh` / `…bs007_test.sh` | Yes | DoD #5 |
+| Consumer-trace (contingency only) | `functional` | inline command in DoD #5 | After Path A lands: `grep -RnE 'gemma3:4b' config/generated/test.env tests/e2e/ scripts/runtime/ scripts/commands/` returns zero matches in non-doc paths. | inline | No | DoD #5 |
+
+### Definition of Done
+
+**Core items:**
+
+- [ ] **#1 Round 66 ratification** — `report.md` gains a `### Round 66 — Operator quality directive` section quoting the two YAML inline comments, attaching `git diff` snippets, and explicitly noting no prior execution-history entry existed. → Evidence: `report.md#round-66-ratification`
+- [ ] **#2 Warmup-latency sanity** — `scripts/runtime/stack.sh` post-up prewarm `warmup summary` line shows `second_call_ms < 55 000` against `gemma3:4b` under `OLLAMA_KEEP_ALIVE=-1`. If this fails, the failure is captured + the owner is notified before BS-002/BS-007 are attempted (adversarial early-abort). → Evidence: `report.md#scope-06b-warmup-sanity`
+- [ ] **#3 Live-stack primary BS-002 + BS-007** — both `E2E_STACK_MANAGED=1` runs exit 0 against current config (`gemma3:4b` + 60 000 ms budget) with `status=retrieval_ok` / `saved_as_idea`, `error_cause=null` / `missing_provenance`, `len(.sources) > 0` (BS-002), latency_ms < 60 000. Full slog lines captured. → Evidence: `report.md#scope-06b-live-stack-primary`
+- [ ] **#4 Primary-or-contingency decision recorded** — explicit one-paragraph decision row in `report.md` stating whether primary PASSED (D5 closed by Round 66) or whether Path A contingency was triggered + ratified in `uservalidation.md`. → Evidence: `report.md#scope-06b-decision`
+- [ ] **#5 Path A contingency (conditional)** — IF triggered by #4: `config/smackerel.yaml::environments.test` declares the six model overrides at `smollm2:360m-instruct-q4_K_M`; `config/generated/test.env` regenerated and consumer-trace grep returns zero `gemma3:4b` in non-doc paths; live-stack BS-002 + BS-007 re-run both exit 0. IF NOT triggered: marked `[N/A — primary passed]` with reference to #4. → Evidence: `report.md#scope-06b-path-a-evidence`
+- [ ] **#6 SCOPE-06a unblock notification** — `report.md#scope-06b-unblock-note` records that SCOPE-06a's 4 deferred DoD items (Live-stack RE-RUN PASS, Consumer-trace clean, Synthesis-path SST proof, SCOPE-06 unblock note) are now executable. Attaches live-stack PASS evidence pointer. SCOPE-06b does NOT mutate SCOPE-06a checkboxes. → Evidence: `report.md#scope-06b-unblock-note`
+- [ ] **#7 Production-budget invariant preserved** — `git diff` of this scope's work shows zero edits to `config/prompt_contracts/retrieval-qa-v1.yaml::limits.timeout_ms` (or `per_tool_timeout_ms`). Round 66's 60 000 ms value remains. → Evidence: `report.md#scope-06b-budget-invariant`
+
+**Build Quality Gate (grouped):**
+
+- [ ] Zero warnings; lint + format clean (`./smackerel.sh lint`, `./smackerel.sh format --check`); artifact lint clean (`.github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant`); no new TODO/FIXME; docs aligned (`docs/Testing.md` test-tier model note reflects either inherited `gemma3:4b` OR Path A `smollm2:360m` per decision in #4). → Evidence: `report.md#scope-06b-build-quality`
+
+### DoD Ordering (sequential)
+
+1. #1 (ratification) — audit trail caught up before any verification.
+2. #2 (warmup sanity) — fast early-abort if hardware can't even sustain warmup under the new budget.
+3. #3 (live-stack primary) — only attempted if #2 passes.
+4. #4 (decision) — gates whether #5 is executed or marked N/A.
+5. #5 (contingency, conditional) — only if #4 says primary failed.
+6. #6 (unblock note) — after #3 PASS or #5 PASS produces the live-stack PASS evidence.
+7. #7 (budget invariant) — final assertion; should be passively true throughout.
+8. Build Quality Gate (final).
+
+### Honesty notes for the next implementer
+
+- Round 66 may or may not actually close D5 on this hardware. The 60 s budget at the Round 65 measured 1.5 tok/s gives ~90 tokens. A real retrieval-qa cited answer (JSON envelope + answer text + citation array) may exceed that. If it does, you will see `latency_ms ≈ 60 000` (timeout) — that's the signal to trigger Path A, not a SST bug.
+- Path A's model choice (`smollm2:360m-instruct-q4_K_M`) is plan-time evidence-light: throughput claim of ~8–12 tok/s is based on published model card + community CPU benchmarks, not measured on THIS hardware. The implementer SHOULD do a one-line `ollama run smollm2:360m-instruct-q4_K_M "warm"` timing check after pull + before re-running BS-002, and document actual tok/s in `report.md#scope-06b-path-a-evidence`.
+- If Path A's actual tok/s on this hardware is < 2 tok/s (unexpectedly slow), neither smollm2:135m nor tinyllama is likely to be better and the next escalation is a hardware change or design.md amendment — that becomes a `bubbles.design` route, NOT a `bubbles.plan` route.
 
 ---
 
@@ -1004,8 +1223,8 @@ All open items from spec §13 + design §13 are resolved at planning time:
 
 ## Planning-Phase Counts (anti-fabrication anchor)
 
-- **Scopes:** 11 (10 original + SCOPE-06a added 2026-05-30 for BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK triage)
-- **DoD items total (Core + Build Quality Gate):** 95 (84 original + 10 core + 1 BQG for SCOPE-06a)
+- **Scopes:** 12 (10 original + SCOPE-06a added 2026-05-30 + SCOPE-06b added 2026-05-30 for SCOPE-06A-D5-CPU-INFERENCE-LATENCY triage)
+- **DoD items total (Core + Build Quality Gate):** 103 (84 original + 10 core + 1 BQG for SCOPE-06a + 7 core + 1 BQG for SCOPE-06b)
   - SCOPE-01: 6 core + 1 BQG = 7
   - SCOPE-02: 6 core + 1 BQG = 7
   - SCOPE-03: 6 core + 1 BQG = 7
@@ -1013,6 +1232,7 @@ All open items from spec §13 + design §13 are resolved at planning time:
   - SCOPE-05: 11 core + 1 BQG = 12
   - SCOPE-06: 7 core + 1 BQG = 8 *(legacy paths — see Downstream-Path Supersession Note in prelude; design.md §10 authoritative)*
   - SCOPE-06a: 10 core + 1 BQG = 11 *(new 2026-05-30 — BS-002/BS-007 multi-path model-leak remediation; report.md §round-59 + §8)*
+  - SCOPE-06b: 7 core + 1 BQG = 8 *(new 2026-05-30 — D5 CPU-inference-latency triage; verify-first on Round 66 operator quality directive with Path A `smollm2:360m-instruct-q4_K_M` contingency)*
   - SCOPE-07: 9 core + 1 BQG = 10 *(legacy paths — same supersession note; Round 18 added DoD #9 production-safety guard per design §18.3)*
   - SCOPE-08: 8 core + 1 BQG = 9 *(legacy paths — same supersession note; confirm-card state machine now scoped here per design §5.4)*
   - SCOPE-09: 5 core + 1 BQG = 6
