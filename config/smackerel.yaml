@@ -711,7 +711,7 @@ assistant:
       enabled: true # REQUIRED
       top_k: 8 # REQUIRED: cap on retrieval_search tool result count
     weather:
-      enabled: false # REQUIRED (off by default until SCOPE-07 ships the provider key)
+      enabled: true # REQUIRED (open-meteo needs no key; enabled to serve /weather)
       provider: "open-meteo" # REQUIRED: provider identifier
       api_key_ref: "" # REQUIRED ("" = no API key required for chosen provider)
       cache_ttl: "10m" # REQUIRED: weather LRU TTL
