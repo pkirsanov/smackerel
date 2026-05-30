@@ -11004,4 +11004,266 @@ $ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assista
 ```
 
 
+## Round 66 — Operator Quality Directive Reversal of SCOPE-06a (2026-05-30, bubbles.implement) {#round-66}
+
+**Claim Source:** executed.
+
+**Operator directive (2026-05-30, dispatched into this session):** *"want highest quality AI processing, and performance for background is not critical"*. This reverses the Round 58 / Round 64 SCOPE-06a strategy of pinning the test tier to `qwen2.5:0.5b-instruct` (chosen to fit the 5000 ms `retrieval-qa-v1` budget). The new direction: **restore `gemma3:4b` (the production-tier default) for test env and raise the retrieval-qa-v1 budget to accommodate cold-call inference on dev hardware.** Background latency is explicitly acceptable per operator.
+
+### Files modified this round (owned by bubbles.implement)
+
+| File | Change |
+|------|--------|
+| `config/prompt_contracts/retrieval-qa-v1.yaml` | `limits.timeout_ms` raised 5000 → 60000 → 120000 (after first run proved 60s insufficient); `limits.per_tool_timeout_ms` raised 2500 → 30000 → 60000. Comment block records operator quality directive. |
+| `config/smackerel.yaml` | `environments.test` model-override block (6 keys: `agent_provider_default_model`, `agent_provider_fast_model`, `llm_model`, `ollama_model`, `agent_provider_vision_model`, `ollama_vision_model`) DELETED so test env inherits the base `gemma3:4b` defaults. Comment block records the Round 66 reversal of Round 58 + Round 64 SST tier overrides. |
+| `internal/config/validate_test_env_models.go` | DELETED (SCOPE-06a guard that rejected `gemma3:4b` under `SMACKEREL_ENV=test` — obsolete per operator directive). |
+| `internal/config/validate_test_env_models_test.go` | DELETED (companion test file). |
+| `internal/config/config.go` | `validateTestEnvModelOverrides()` call site removed; comment block records the Round 66 reversal. |
+| `tests/e2e/assistant_bs002_test.sh` | Warmup `num_predict` 4 → 64 and `--max-time` 60 → 180; ROW-1 webhook POST `--max-time` 15 → 180 (was insufficient given new 120s scenario budget). |
+| `tests/e2e/assistant_bs007_test.sh` | ROW-1 webhook POST `--max-time` 15 → 180 (symmetric with BS-002). |
+
+### Step 1 — Config validation (PASS)
+
+```text
+$ ./smackerel.sh check
+config-validate: ~/smackerel/config/generated/dev.env.tmp.2037202 OK
+Config is in sync with SST
+env_file drift guard: OK
+scenario-lint: scanning config/prompt_contracts (glob: *.yaml)
+scenarios registered: 8, rejected: 0
+scenario-lint: OK
+```
+
+### Step 2 — Generated test.env model env vars all `gemma3:4b` (no qwen leak)
+
+```text
+$ ./smackerel.sh --env test config generate
+config-validate: ~/smackerel/config/generated/test.env.tmp.2069675 OK
+Generated ~/smackerel/config/generated/test.env
+Generated ~/smackerel/config/generated/nats.conf
+Generated ~/smackerel/config/generated/prometheus.yml
+
+$ grep -E '^(LLM_MODEL|OLLAMA_MODEL|OLLAMA_VISION_MODEL|AGENT_PROVIDER_DEFAULT_MODEL|AGENT_PROVIDER_FAST_MODEL|AGENT_PROVIDER_VISION_MODEL)=' config/generated/test.env
+LLM_MODEL=gemma3:4b
+OLLAMA_MODEL=gemma3:4b
+OLLAMA_VISION_MODEL=gemma3:4b
+AGENT_PROVIDER_DEFAULT_MODEL=gemma3:4b
+AGENT_PROVIDER_FAST_MODEL=gemma3:4b
+AGENT_PROVIDER_VISION_MODEL=gemma3:4b
+```
+
+### Step 3 — Unit test suite GREEN after validator removal
+
+```text
+$ ./smackerel.sh test unit
+ok      github.com/smackerel/smackerel/internal/intelligence    (cached)
+ok      github.com/smackerel/smackerel/internal/knowledge       (cached)
+...
+ok      github.com/smackerel/smackerel/internal/telegram        (cached)
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter     (cached)
+ok      github.com/smackerel/smackerel/internal/telegram/render (cached)
+ok      github.com/smackerel/smackerel/internal/topics  (cached)
+ok      github.com/smackerel/smackerel/internal/web     (cached)
+ok      github.com/smackerel/smackerel/internal/web/icons       (cached)
+ok      github.com/smackerel/smackerel/tests/e2e/agent  (cached)
+ok      github.com/smackerel/smackerel/tests/eval/assistant     (cached)
+[go-unit] go test ./... finished OK
+[py-unit] starting pip install -e ./ml[dev]
+[py-unit] pip install OK; starting pytest ml/tests
+[py-unit] pytest ml/tests finished OK
+EXIT=0
+```
+
+### Step 4 — Live BS-002 RUN-1 (60s budget; HTTP 200 with provider_unavailable)
+
+The first attempt after restoring `gemma3:4b` and bumping `timeout_ms` to 60000 produced HTTP 200, but the retrieval skill burned the full 60s budget without producing a citation:
+
+```text
+=== Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
+--- seed: POST /api/capture with marker=bs002seed178010878824709 ---
+  seed_resp={"artifact_id":"01KSVC10YNSA2YEPKX0HQAT54Z",...}
+  seeded artifact_id=01KSVC10YNSA2YEPKX0HQAT54Z
+--- LLM warmup: priming gemma3:4b inference ---
+--- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---
+  http_status=200 body=
+--- §18.5 slog scrape for assistant_turn with correlation_id=178010878824709 ---
+
+# slog from smackerel-test-smackerel-core-1:
+{"time":"2026-05-30T02:41:14.161134822Z","level":"INFO","msg":"assistant_turn",
+ "user_id":"test-user-061-bs002","transport":"telegram",
+ "correlation_id":"178010878824709",
+ "assistant_turn_id":"asst-1780108814128497895","scenario_id":"retrieval_qa",
+ "top_score":0,"band":"high","status":"saved_as_idea",
+ "error_cause":"provider_unavailable",
+ "latency_ms":60033.942523,
+ "agent_trace_id":"trace-asst-1780108814128497895","body_redacted":true}
+
+FAIL: BS-002: status='saved_as_idea' on happy path
+EXIT=0
+```
+
+→ `latency_ms` exactly matches the new 60000ms budget = upstream provider (Ollama gemma3:4b) did not return inside 60s.
+
+### Step 5 — Raised retrieval-qa-v1 budget to 120s; RUN-2 still RED
+
+```text
+$ docker exec smackerel-test-smackerel-core-1 cat /app/prompt_contracts/retrieval-qa-v1.yaml | grep -A1 timeout
+  timeout_ms: 120000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 60000
+
+$ E2E_STACK_MANAGED=1 timeout 600 bash tests/e2e/assistant_bs002_test.sh
+=== Spec 061 SCOPE-06 §18.5 — BS-002 retrieval Q&A happy-path e2e ===
+--- seed: POST /api/capture with marker=bs002seed178010910705347 ---
+  seeded artifact_id=01KSVCARG127N7HZZNNBXFY6R0
+--- LLM warmup: priming gemma3:4b inference ---
+--- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---
+  http_status=000 body=
+FAIL: BS-002: webhook returned 000 (want 200)
+EXIT=0
+
+# slog after the fixture's curl already disconnected (server still completed):
+{"time":"2026-05-30T02:50:10.915931471Z","level":"INFO","msg":"assistant_turn",
+ "correlation_id":"178010910705347","scenario_id":"retrieval_qa",
+ "status":"saved_as_idea","error_cause":"provider_unavailable",
+ "latency_ms":120042.045658,...}
+{"...":"request","method":"POST","path":"/v1/telegram/webhook","status":200,"duration_ms":120078}
+```
+
+→ `latency_ms` exactly matches the new 120000ms budget; webhook duration 120078ms. **gemma3:4b on this CPU-only test hardware cannot complete a retrieval-qa synthesis turn within 120 seconds.** The 180s curl client-side `--max-time` did receive the eventual 200 (server log shows successful response delivery), but the test fixture's bs002 fixture had already declared FAIL before the log line was captured because `http_status=000` indicates a TCP-layer disconnect — separate symptom, same root cause (Ollama latency far exceeds any reasonable budget).
+
+### Step 6 — Hardware blocker confirmation (raw Ollama probe)
+
+To isolate the variable, an isolated probe against the host-side Ollama API was run with the model already resident in CPU RAM (gemma3:4b, 4.3GB, 100% CPU per `ollama ps`, UNTIL=Forever):
+
+```text
+$ docker exec smackerel-test-ollama-1 ollama ps
+NAME         ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+gemma3:4b    a2af6cc3eb7f    4.3 GB    100% CPU     4096       Forever
+
+$ time curl -sS --max-time 120 -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"model":"gemma3:4b","prompt":"hi","stream":false,"options":{"num_predict":8}}' \
+    http://127.0.0.1:47004/api/generate
+curl: (28) Operation timed out after 120005 milliseconds with 0 bytes received
+
+real    2m0.041s
+user    0m0.012s
+sys     0m0.019s
+
+# Ollama gin log of the warmup attempt earlier in the same session:
+[GIN] 2026/05/30 - 02:48:10 | 500 |          3m0s |      172.20.0.1 | POST     "/api/generate"
+```
+
+**Conclusion:** A `num_predict=8` (eight-token) generation against an ALREADY-RESIDENT gemma3:4b model takes >120 seconds on this CPU-only test bench. A 64-token warmup returned HTTP 500 after the full 180-second timeout. gemma3:4b inference on this hardware is fundamentally too slow to satisfy ANY reasonable retrieval-qa-v1 timeout. This is **not** a citation/prompt-engineering issue (the retrieval skill never even completed inference) — it is a **hardware/model-selection blocker** that requires operator decision.
+
+### Outcome envelope — blocked
+
+| Outcome | blocked |
+|---------|---------|
+| Findings closed this round | NONE |
+| New findings emitted | `BS-002-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-ANY-FEASIBLE-BUDGET` — gemma3:4b 8-token generation takes >120s on resident CPU; no retrieval-qa-v1 budget value is feasible without GPU or a smaller model. |
+| Carry-forward unresolved | `BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK` (reversed per operator directive; new blocker supersedes); `BS-002-D4-PREWARM-DOES-NOT-SUSTAIN-WARMTH` (subsumed by the hardware blocker — even resident, model is too slow); `SCOPE-06a-D5-CPU-INFERENCE-LATENCY-EXCEEDS-RETRIEVAL-QA-BUDGET` (same root cause); `SCOPE-06b-PREWARM-SECOND-CALL-EXCEEDS-55000MS-THRESHOLD` (subsumed). |
+| SCOPE-06 status | unchanged (In Progress); DoD #4b/#5b/#6 still `[ ]`. |
+| SCOPE-06a status | unchanged (Not Started); the SST-tier override remediation is **superseded** by this operator directive but cannot be marked Closed-with-evidence because the underlying BS-002/BS-007 live-stack tests remain RED on different grounds. |
+| Next required owner | operator (model-selection decision) OR `bubbles.plan` (re-triage: GPU provisioning vs alternate small tool-calling model vs accept-as-blocked-on-this-bench). |
+
+### Operator decision required
+
+The Round 58 → Round 64 → Round 66 sequence has now exhausted in-scope budget knobs:
+
+1. **Round 58**: small fast model `qwen2.5:0.5b-instruct` + 5s budget → fast but model too dumb to cite reliably.
+2. **Round 64**: same small model + 5s budget + multi-path SST coverage + prewarm → prewarm doesn't sustain, second call > 5s.
+3. **Round 66**: high-quality `gemma3:4b` + 120s budget → model too slow on CPU to complete even an 8-token call within 2 minutes.
+
+The next iteration needs an *external* input (GPU access, alternate small-but-tool-calling model selection, or accept-as-blocked-on-this-bench with deferred live verification). Autonomous timeout tightening cannot close this scope; surfacing per dispatch protocol.
+
+### Files NOT modified this round
+
+`spec.md`, `design.md`, `scopes.md` SCOPE-06 / SCOPE-06a DoD checkboxes, `uservalidation.md`, `scenario-manifest.json`, `state.json.certification.*`, status, statusCeiling. State.json executionHistory prepended (this round's entry only).
+
+### Artifact lint
+
+```text
+$ bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant
+=== Anti-Fabrication Evidence Checks ===
+✅ All checked DoD items in scopes.md have evidence blocks
+✅ No unfilled evidence template placeholders in scopes.md
+✅ No unfilled evidence template placeholders in report.md
+✅ No repo-CLI bypass detected in report.md command evidence
+
+=== End Anti-Fabrication Checks ===
+
+Artifact lint PASSED.
+```
+
+## Round 71 — SCOPE-06c plan-triage (Hardware-tier × model-role matrix) {#round-71-scope-06c-plan-triage}
+
+**Owner:** bubbles.plan
+**Mode:** full-delivery, statusCeiling=done
+**HEAD at dispatch:** `a0f4842a` (Round 70 bubbles.test — SCOPE-06b D6 BLOCKED)
+**Upstream finding:** `SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET` (Round 70 evidence: warm second-call `gemma3:4b` /api/generate latency 90 296 ms on WSL2 CPU vs 60 000 ms `retrieval-qa-v1.timeout_ms` budget; 0.71 tok/s structural ceiling).
+**Outcome:** completed_owned — SCOPE-06c authored inline in `scopes.md`; SCOPE-06b SUPERSEDED in scope index + both body sections; `state.json::execution.executionHistory[0]` updated; report.md plan-triage section appended (this section). NO DoD checkboxes flipped on SCOPE-06 / SCOPE-06a / SCOPE-06b / SCOPE-06c. NO config/source/test-fixture edits this round. NO `certification.*` mutations beyond `scopeProgress` totals. **NextRequiredOwner:** `bubbles.design` (PACKET 1 — amend design.md §5.1 retrieval-qa-v1 contract to record the matrix).
+
+### `report.md#scope-06c-plan-rationale` — Decision rationale (operator directive codification)
+
+**Claim Source:** advisory (planning decisions; no terminal commands executed this round beyond reads of existing artifacts and a one-line WSL2 hardware sanity check `ls /dev/dri /dev/nvidia* /dev/accel*` returning all "No such file or directory" — confirms CPU-only dev runtime per operator directive #2).
+
+The Round 70 D6 finding closes the strategy space the Round 66 / Round 68 operator quality directive opened. Three observations forced the matrix design:
+
+1. **D6 is structural, not configurable.** `gemma3:4b` warm second-call /api/generate latency on this WSL2 host is 90 296 ms for 64-token gen (Round 70 prewarm summary `first_call_ms=21684 second_call_ms=90296 threshold_ms=55000`, PREWARM_EXIT=3). At 0.71 tok/s any retrieval-qa cited JSON answer (≥ ~50 tokens) exceeds 60 000 ms. No warmup, keep-alive, or budget raise short of ~120 s closes this on this hardware.
+2. **Operator directive 2026-05-30 explicitly separates production runtime from dev runtime.** Production targets Evo-X2 (Ryzen AI 9 HX 365+, Radeon 890M iGPU via ROCm, XDNA2 NPU) which has real inference capacity; dev runtime is WSL2 Cloud PC (Intel Xeon CPU-only). The CPU bottleneck on dev is NOT a production problem. Solving it at the production-contract layer (by raising the global budget) corrupts production behavior to fit a dev limitation.
+3. **Operator directive also separates interactive role from background role.** Interactive (retrieval-QA, chat) blocks on user attention → 5 s budget on production. Background (synthesis, digests, ML pipeline) does not → generous timeout. Collapsing both into one budget number was the Round 66 mistake.
+
+Therefore SCOPE-06c introduces a **2×2 matrix** (hardware tier × model role) resolved at config-generate time via a fail-loud SST switch.
+
+### `report.md#scope-06c-matrix-decision` — The matrix (concrete cells + budgets)
+
+| Tier × role | Model | `retrieval-qa-v1.timeout_ms` | Source / justification |
+|---|---|---|---|
+| `cpu` × `interactive` | `qwen2.5:0.5b-instruct` | **15 000 ms** | Round 65 evidence: ~1.5 tok/s CPU. 15 s × 1.5 tok/s ≈ 22 tokens — smallest defensible cited JSON answer on this WSL hardware. **Honest math; subject to live-stack falsification.** |
+| `cpu` × `background` | `gemma3:4b` | **300 000 ms** | Round 70 evidence: 0.71 tok/s warm. 5 min covers cold-load (21 s) + multi-call synthesis. User not waiting. |
+| `accel` × `interactive` | `<operator-pick>` (recommended `gemma3:4b` on Radeon 890M ROCm) | **5 000 ms** | Restores design.md §5.1 production contract. Recommendation is operator-overridable in Evo-X2 deploy-adapter overlay. |
+| `accel` × `background` | `<operator-pick>` (recommended `gemma3:12b` or `deepseek-r1:7b`-class) | **300 000 ms** | Highest-quality model the Evo-X2 RAM envelope supports. Operator picks at deploy. |
+
+**Switch mechanism (codified):** `SMACKEREL_HARDWARE_TIER={cpu,accel}` — REQUIRED SST key; resolved at `./smackerel.sh config generate` time. Fail-loud if unset/empty (no `${VAR:-default}` permitted per `smackerel-no-defaults`). Sourced from a gitignored per-machine overlay file `.smackerel.local.env` at repo root. Auto-detection (probing `/dev/dri`, `/dev/accel*`, ROCm SMI) REJECTED — brittle on WSL and silently flips production behavior on dev.
+
+### `report.md#scope-06c-budget-honesty` — Why the cpu-interactive budget is 15 s, not 5 s
+
+Operator dispatch explicitly permitted: "If WSL CPU+tiny-model still can't do 5s, document that and recommend a slightly larger budget for cpu-tier interactive (e.g. 15s) — but ONLY for the cpu tier; accel keeps 5s."
+
+Math from committed measurements:
+
+- Round 70: `gemma3:4b` warm 64-token gen = 90 296 ms → 0.71 tok/s (committed in `report.md#scope-06b-live-stack-d6-finding`).
+- Round 65: `qwen2.5:0.5b-instruct` warm 64-token gen = 42 614 ms → ~1.5 tok/s (committed in `report.md#scope-06a-implement-round65`).
+- 5 s × 1.5 tok/s = ~7 tokens — insufficient for any cited JSON answer envelope.
+- 15 s × 1.5 tok/s = ~22 tokens — barely sufficient for a terse cited JSON answer; smallest defensible dev-loop budget.
+
+The 15 s number is therefore evidence-tied, not magic. The Honesty Note in SCOPE-06c (scopes.md) instructs bubbles.test to surface a finding back to plan if the live-stack RE-RUN falsifies 15 s, rather than silently widening.
+
+### `report.md#scope-06c-out-of-scope` — What this scope explicitly does NOT touch
+
+- `deploy/compose.deploy.yml` — ROCm/NPU device passthrough for Evo-X2 is deploy-adapter territory (per `bubbles-deployment-target-adapter` skill + repo policy "No env-specific content in this repo"). Routed to deploy-overlay maintainer via SCOPE-06c PACKET 2 (recorded inline in scopes.md; not a separate file route).
+- `docker-compose.yml` device blocks — same reasoning; out of scope.
+- SCOPE-06 / SCOPE-06a / SCOPE-06b DoD checkboxes — artifact-ownership boundary; previous-owners' history is preserved verbatim. SCOPE-06b is marked SUPERSEDED at the top of both body sections + in the scope-index matrix row.
+- `certification.status` / `certification.completedAt` / `certification.evidenceRef` / `certification.completedScopes` in state.json — bubbles.plan never writes these. `certification.scopeProgress` totals are updated (12→13 total; notStarted 4→5) because they are a planning artifact.
+
+### `report.md#scope-06c-commit-sequence` — Planned commit sequence (after this plan-triage commit)
+
+1. **THIS COMMIT (round 71, bubbles.plan):** scopes.md (SCOPE-06b SUPERSEDED + SCOPE-06c body authored) + state.json (executionHistory prepend + execution metadata bump + scopeProgress totals) + report.md (this section). Marks SCOPE-06b as superseded and frozen.
+2. **NEXT (bubbles.design, PACKET 1):** Amend design.md §5.1 retrieval-qa-v1 contract per SCOPE-06c PACKET 1. Replace Round 68b 60 000 ms / 30 000 ms literals with `${RETRIEVAL_QA_TIMEOUT_MS}` placeholder (or per-env regenerate path); replace the Round 68b "quality > speed for v1" rationale block with the new "Hardware-tier × model-role matrix" rationale block.
+3. **NEXT (bubbles.implement, SCOPE-06c DoD #2 → #4):** Add `models.tiers.{cpu,accel}.{interactive,background}` block to config/smackerel.yaml; wire `scripts/commands/config.sh` to resolve 9 env vars (6 model + 2 retrieval-qa timeout + 1 hardware tier) per tier+role; revert retrieval-qa-v1.yaml budget literal to env-var placeholder; add `.smackerel.local.env` to .gitignore + commit `.smackerel.local.env.example`; update `scripts/runtime/stack.sh` prewarm threshold to be derived from `RETRIEVAL_QA_TIMEOUT_MS`.
+4. **NEXT (bubbles.test, SCOPE-06c DoD #5):** RE-RUN BS-002 + BS-007 on WSL cpu tier (`SMACKEREL_HARDWARE_TIER=cpu`, `qwen2.5:0.5b-instruct`, 15 s budget). DoD #6 (accel tier) DEFERRED to operator on Evo-X2 — no agent in this session has Evo-X2 access.
+
+### `report.md#scope-06c-files-modified` — Files modified this round (owned by bubbles.plan)
+
+- `specs/061-conversational-assistant/scopes.md` — Scope-index matrix row for SCOPE-06b rewritten as SUPERSEDED; new matrix row for SCOPE-06c added; SUPERSEDED status block added at top of BOTH SCOPE-06b body sections; full SCOPE-06c body section inserted between the second SCOPE-06b body and SCOPE-07.
+- `specs/061-conversational-assistant/report.md` — this Round 71 section appended (anchors `#round-71-scope-06c-plan-triage`, `#scope-06c-plan-rationale`, `#scope-06c-matrix-decision`, `#scope-06c-budget-honesty`, `#scope-06c-out-of-scope`, `#scope-06c-commit-sequence`, `#scope-06c-files-modified`, `#scope-06c-evidence-completeness`).
+- `specs/061-conversational-assistant/state.json` — executionHistory[0] prepend (bubbles.plan Round 71 entry) + `execution.activeAgent` `bubbles.test`→`bubbles.plan` + `currentPhase` `test`→`plan` + `currentScope` `SCOPE-06b`→`SCOPE-06c` + `lastUpdatedAt` bump + `certification.scopeProgress.total` 12→13 + `certification.scopeProgress.notStarted` 4→5.
+
+**NOT MODIFIED:** spec.md, design.md (amendment is the next round's owned change), uservalidation.md, scenario-manifest.json, `certification.status` / `certification.completedAt` / `certification.evidenceRef` / `certification.completedScopes`, any source/test/config file under `cmd/`, `internal/`, `ml/`, `config/`, `scripts/`, `tests/`, `deploy/`, `docker-compose.yml`. No DoD checkboxes flipped on any SCOPE. No `--no-verify` used.
+
+### `report.md#scope-06c-evidence-completeness` — Completion statement
+
+This plan-triage round authored the SCOPE-06c skeleton (3 Gherkin scenarios, 10-step Implementation Plan, 8-row Test Plan, 7 core DoD items + Build Quality Gate, DoD Ordering, 2 cross-spec packets, Decision Rationale, Honesty Notes), marked SCOPE-06b superseded in both body sections and in the scope-index matrix, appended this report.md section, and prepared the state.json executionHistory entry. No tests were run this round (planning-only). `nextRequiredOwner: bubbles.design` for PACKET 1 (design.md §5.1 amendment) per SCOPE-06c DoD #1 ordering.
 
