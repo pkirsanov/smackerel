@@ -24,6 +24,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 
+# SCOPE-07 tier-gated SKIP for cpu-tier dev loop
+# (design.md §5.1; reuses SCOPE-06c PACKET 4 pattern; weather skill also routes
+# through LLM synthesis path and hits the same CPU latency wall as retrieval).
+skip_unless_accel_tier "BS-003"
+
 trap e2e_cleanup EXIT
 
 echo "=== Spec 061 SCOPE-07 §18.5 — BS-003 weather happy-path e2e ==="

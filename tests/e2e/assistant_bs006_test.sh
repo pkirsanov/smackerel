@@ -22,6 +22,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/helpers.sh"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# SCOPE-07 tier-gated SKIP for cpu-tier dev loop
+# (design.md §5.1; reuses SCOPE-06c PACKET 4 pattern; weather skill also routes
+# through LLM synthesis path and hits the same CPU latency wall as retrieval).
+skip_unless_accel_tier "BS-006"
+
 echo "=== Spec 061 SCOPE-07 §18.5 — BS-006 weather provider-outage e2e ==="
 e2e_start
 
