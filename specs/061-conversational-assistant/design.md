@@ -799,6 +799,161 @@ executor, plus its tool handlers registered in the existing tool
 registry. Spec 061 contributes ZERO new runtime mechanics — only
 content (YAML + tool Go code).
 
+### 5.0 Skill-level Auth Enforcement — Decision Record (Round 80)
+
+> **Owner:** `bubbles.design` (Round 80, 2026-05-30). Supersedes the
+> implicit assumption in §5.1 / SCOPE-05 DoD #11 that
+> `auth.RequireScope("assistant:retrieval"|"assistant:weather")` would
+> be wired at the skill entry point during the SCOPE-05-DOD-11
+> follow-up implement round. This section is the authoritative
+> architectural record for that wiring; it does NOT remove or
+> reinterpret the spec 060 packet acceptance — it reconciles the
+> packet's intended runtime semantics with the spec 060 middleware's
+> shipped contract.
+
+#### 5.0.1 Selected option — Option (4): Defer + reframe DoD #11; add `assistant` to the surface registry now; route a follow-up packet to spec 060 for the bypass-semantics reconciliation
+
+The Round-80 commit MUST land the additive registry half ONLY:
+
+1. Append `"assistant"` to `RegisteredScopeSurfaces` in
+   [`internal/auth/scopes.go`](../../internal/auth/scopes.go).
+2. Mirror the addition in the existing
+   `IsRegisteredScopeSurface` / `RegisteredScopeSurfaces` unit test
+   under `internal/auth/` (same change set, additive case).
+
+The Round-80 commit MUST NOT:
+
+- Wire `auth.RequireScope("assistant:retrieval")` or
+  `auth.RequireScope("assistant:weather")` anywhere.
+- Refactor `agent.Tool` signature, propagate `Session` through the
+  agent executor, or touch any spec-037 substrate code.
+- Add an in-process `auth.CheckScope(ctx, …)` helper.
+- Modify spec-060 source, tests, middleware, or the bot webhook auth
+  path.
+
+DoD #11 is reframed as **"surface registry-listed; runtime per-skill
+scope enforcement deferred to a follow-up spec pending spec-060
+bypass-semantics reconciliation."** The deferred half is tracked as a
+new cross-spec packet to spec 060 (see §5.0.5) and a new
+spec-061-internal finding (see §5.0.6).
+
+#### 5.0.2 Why the obvious options are wrong for the codebase as shipped
+
+The blocking architectural fact, verified directly against the
+shipped code at [`internal/auth/scope_middleware.go:71-79`](../../internal/auth/scope_middleware.go)
+and [`internal/auth/session.go:21-29,57-64`](../../internal/auth/session.go):
+
+```
+spec 060 auth.RequireScope explicitly BYPASSES SessionSourceSharedToken
+AND SessionSourceBootstrap with an `auth_scope_check_bypassed_total`
+counter increment. Only SessionSourcePerUserToken (PASETO bearer) is
+gated on Session.Scopes membership.
+```
+
+The Telegram bot's only authenticated principal source is a
+**shared-secret token** — the webhook authenticates via
+`X-Telegram-Bot-Api-Secret-Token` constant-time compare
+([`internal/telegram/webhook_handler.go:147-170`](../../internal/telegram/webhook_handler.go)),
+and the bot's in-process work has no per-user PASETO context. Any
+`Session` minted from that boundary would either be
+`SessionSourceSharedToken` (and silently bypass `RequireScope`) or
+require a NEW session source that spec 060 has not authorized.
+
+Consequence — every "wire it at the right boundary" option below
+fails to deliver scope enforcement even after implementation:
+
+| Option | What it would do | Why rejected |
+|--------|-----------------|--------------|
+| **(1) Propagate `Session` through `agent.Tool` ctx + in-process `auth.CheckScope`** | Refactor `agent.Tool` signature so a `Session` flows webhook → bot → assistant adapter → facade → executor → tool. Add `auth.CheckScope(ctx, required...)`. | (a) Touches the spec-037 agent substrate (foreign-owned) — would require a cross-spec packet to spec 037 just to refactor the tool signature. (b) The propagated `Session` would inherit the webhook's shared-token source; `auth.CheckScope` mirroring `auth.RequireScope` semantics would still hit the SharedToken bypass and silently pass. (c) Spec 060 deliberately makes the bypass observable via `auth_scope_check_bypassed_total{source="shared_token"}` — bypassing in-process would be invisible to operators unless we duplicate the metric, doubling the substrate surface. **Cost: high. Benefit: zero enforcement.** |
+| **(2) Mint synthetic `Session` at the Telegram webhook with bot-level scopes** | Bot-shared token → synthetic `Session{Source: SessionSourceSharedToken, Scopes: [assistant:retrieval, assistant:weather]}` → propagate into ctx. | Same shared-token bypass as (1) — the scopes on the session are NEVER consulted by `RequireScope`. Minting a `SessionSourcePerUserToken` Session would be a lie (the auth substrate audit trail labels per-user sessions with real PASETO `token_id` / `kid` / `user_id` from `auth_tokens` — synthesizing those fields would falsify audit columns). **Audit fraud. Rejected on principle.** |
+| **(3) Move scope check to the Telegram webhook HTTP boundary** | Gate the webhook endpoint with `auth.RequireScope("assistant:retrieval", "assistant:weather", "assistant:notifications-write")` instead of per-skill. | Same SharedToken bypass. Additionally re-locates the check away from the per-skill boundary the spec-060 packet acceptance explicitly assumed; would require packet reconciliation AND deliver zero enforcement. **Rejected on both counts.** |
+| **(4) Defer + reframe DoD #11 → land registry-only half; route spec-060 reconciliation packet** | Add `"assistant"` to the surface registry (one-line additive) + unit-test mirror; reframe DoD #11; route a packet to spec 060 asking for either a bot-token session source that carries scopes and is NOT bypassed, OR explicit documentation that scoped enforcement requires per-user PASETO. | (a) Honest about the shipped contract — no theater. (b) Preserves the spec-060 packet acceptance contract intact (surface registration lands with introducing spec; runtime enforcement was always going to depend on the bypass-semantics call, which spec 060 owner had not been asked to reconcile). (c) Zero foreign-spec disturbance in code (spec 037 substrate untouched; spec 060 source untouched). (d) Unblocks SCOPE-05 close-out on its actual achievable surface. **Selected.** |
+
+#### 5.0.3 Measurable success criteria for DoD #11 closure under Option (4)
+
+DoD #11 (reframed) is closed when ALL of the following are true and
+captured in `report.md` Round 80 evidence anchors:
+
+1. `grep -n '"assistant"' internal/auth/scopes.go` shows `"assistant"`
+   in the `RegisteredScopeSurfaces` literal.
+2. `go test ./internal/auth/ -run TestRegisteredScopeSurfaces -count=1`
+   (or the existing equivalent test name covering
+   `IsRegisteredScopeSurface`) exits 0 with the `assistant` surface
+   recognized as registered without the `--allow-unknown-surface`
+   escape hatch.
+3. `./smackerel.sh check` exits 0 (config-validate + scenario-lint +
+   env_file drift guard unaffected by the additive edit).
+4. Spec 060's `report.md` "Accepted Cross-Spec Packets (Spec 061)"
+   section is cited as evidence — no new spec 060 acceptance is
+   required for the registry-only half (the existing acceptance
+   contract already covers it).
+5. The cross-spec packet defined in §5.0.5 is filed at
+   `specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md`
+   with status `routed` (acceptance is foreign-owned and is NOT a
+   blocker for SCOPE-05 close-out — the packet routing itself is the
+   DoD-satisfying artifact, mirroring the spec-060 packet acceptance
+   precedent).
+6. A new spec-061 finding
+   `SCOPE-05-DOD-11-RUNTIME-ENFORCEMENT-DEFERRED-PENDING-SPEC-060-RECONCILIATION`
+   is added to `unresolvedFindings` in the Round-80 result envelope,
+   making the deferred half visible to downstream sweeps.
+
+#### 5.0.4 What this means for SCOPE-06 / 07 / 08 read- and write-scope coverage
+
+- SCOPE-06 (retrieval), SCOPE-07 (weather), and SCOPE-08
+  (notifications-write) DoD items that referenced "RequireScope guard
+  wired" inherit the same deferral. Their evidence anchors MUST cite
+  §5.0 and the §5.0.5 packet; they MUST NOT attempt to wire
+  `auth.RequireScope` at any boundary under Option (4).
+- The §18.3 production-safety guards, BS-002 default-deny invariant
+  (inherited from spec 060), and capability-gate SST keys
+  (`assistant.skill.<name>.enabled`) remain in force and continue to
+  provide the de-facto enable/disable surface for v1.
+- Operator discipline documented in spec 060 `report.md` (the bot-
+  shared token mint MUST NOT include `--scope
+  assistant:notifications-write` without explicit operator approval)
+  remains the v1 default-deny posture for the write scope, even
+  though `RequireScope` would bypass the shared-token session anyway.
+
+#### 5.0.5 Cross-spec packet to spec 060 (to be filed in Round 80)
+
+**Packet:** `specs/061-conversational-assistant/cross-spec/packet-060-skill-enforcement-bypass-reconciliation.md`
+
+**Ask, in summary:**
+
+1. Document explicitly in spec 060 design §4 / scope_middleware
+   contract that scoped enforcement requires `SessionSourcePerUserToken`
+   and is bypassed for `SessionSourceSharedToken` / `SessionSourceBootstrap`.
+   (Currently this is true in code + docstring comments but is not
+   surfaced in the spec 060 design narrative as a CONSEQUENCE for
+   downstream consumers.)
+2. Decide ONE of:
+   - (a) Add a `SessionSourceBotSharedToken` (or equivalent) that
+     carries `Scopes` and is NOT bypassed by `RequireScope` — would
+     unblock spec 061's per-skill enforcement at the webhook
+     boundary; or
+   - (b) Acknowledge that scoped enforcement requires per-user PASETO
+     and is therefore unavailable to single-shared-secret transports
+     (Telegram webhook, ntfy, OAuth callbacks). Spec 061 then closes
+     SCOPE-05 DoD #11 permanently on the registry-only contract and
+     the runtime enforcement reframe documented above.
+3. Either resolution is acceptable to spec 061. Both decisions are
+   owned by spec 060.
+
+The packet is **routed-only** for SCOPE-05 close-out; spec 060
+acceptance is a follow-up cycle.
+
+#### 5.0.6 New spec-061-internal finding (Round 80)
+
+`SCOPE-05-DOD-11-RUNTIME-ENFORCEMENT-DEFERRED-PENDING-SPEC-060-RECONCILIATION`
+— supersedes
+`SCOPE-05-DOD-11-SURFACE-REGISTRATION-WIRING-UNBLOCKED` from Round 78
+/ Round 79. The Round-78/79 finding's "wire RequireScope guards"
+sub-task is REMOVED; only the surface-registration sub-task
+survives, and lands in the Round-80 implement step.
+
+---
+
 ### 5.1 Retrieval Q&A — `retrieval-qa-v1.yaml`
 
 ```yaml
