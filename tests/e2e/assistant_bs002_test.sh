@@ -113,10 +113,13 @@ if [ -z "$AGENT_PROVIDER_DEFAULT_MODEL" ]; then
   e2e_fail "BS-002: AGENT_PROVIDER_DEFAULT_MODEL missing/empty in $ENV_FILE (spec 061 SCOPE-06a; regenerate via './smackerel.sh --env test config generate')"
 fi
 echo "--- LLM warmup: priming $AGENT_PROVIDER_DEFAULT_MODEL inference ---"
-curl -s -o /dev/null --max-time 60 \
+# Round 66: gemma3:4b is the test default per operator quality directive.
+# Use num_predict=64 + max-time 180 so the model is genuinely warm (not just
+# loaded in memory) before the live /ask call, which has a 120s budget.
+curl -s -o /dev/null --max-time 180 \
   -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"model\":\"$AGENT_PROVIDER_DEFAULT_MODEL\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":4}}" \
+  -d "{\"model\":\"$AGENT_PROVIDER_DEFAULT_MODEL\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":64}}" \
   "http://127.0.0.1:47004/api/generate" || true
 
 # --- Drive /ask via the synthetic Telegram webhook. --------------------
@@ -136,7 +139,7 @@ JSON
 
 echo "--- ROW-1: webhook POST with /ask text (routes to retrieval_qa via shortcut) ---"
 HTTP_STATUS=$(curl -s -o /tmp/bs002_resp.txt -w "%{http_code}" \
-  --max-time 15 \
+  --max-time 180 \
   -X POST \
   -H "Content-Type: application/json" \
   -H "X-Telegram-Bot-Api-Secret-Token: $WEBHOOK_SECRET" \
