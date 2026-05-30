@@ -33,6 +33,7 @@ package api
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -94,10 +95,19 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		token   string
-		nextRaw string
+		token              string
+		nextRaw            string
+		userID             string
+		expiresAt          string
+		credentialVerified bool
 	)
 
+	// Spec 063 — credential-path short-circuit. When the form posts
+	// username + password (regardless of whether `token` is also
+	// present), verify credentials against web_user_credentials and
+	// on success set the cookie to the existing shared AuthToken.
+	// When username/password are both empty, fall through to the
+	// existing token-form path so machine clients are unchanged.
 	if isForm {
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 		defer r.Body.Close()
@@ -105,11 +115,39 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 			d.renderLoginError(w, r, "/", "Could not read login form.")
 			return
 		}
-		token = strings.TrimSpace(r.PostForm.Get("token"))
 		nextRaw = r.PostForm.Get("next")
-		if token == "" {
-			d.renderLoginError(w, r, sanitizeNext(nextRaw), "Token is required.")
-			return
+		username := strings.TrimSpace(r.PostForm.Get("username"))
+		password := r.PostForm.Get("password")
+		if username != "" || password != "" {
+			if d.WebCredentials == nil {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Username/password login is not enabled on this deployment.")
+				return
+			}
+			if username == "" || password == "" {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Username and password are required.")
+				return
+			}
+			if err := d.WebCredentials.VerifyAndTouch(r.Context(), username, password); err != nil {
+				slog.Info("web credential login rejected",
+					"kind", "web_login_credential_fail",
+					"remote_addr", r.RemoteAddr,
+					"username_len", len(username),
+				)
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Invalid username or password.")
+				return
+			}
+			// Credentials verified. Reuse the existing shared
+			// AuthToken as the cookie value — same trust band as the
+			// token-form path. Skip the token verify branch below.
+			token = d.AuthToken
+			userID = username
+			credentialVerified = true
+		} else {
+			token = strings.TrimSpace(r.PostForm.Get("token"))
+			if token == "" {
+				d.renderLoginError(w, r, sanitizeNext(nextRaw), "Token is required.")
+				return
+			}
 		}
 	} else {
 		// Limit body size — the request payload is a single short token.
@@ -133,12 +171,11 @@ func (d *Dependencies) HandleWebLogin(w http.ResponseWriter, r *http.Request) {
 		token = req.Token
 	}
 
-	var (
-		userID    string
-		expiresAt string
-	)
-
-	if d.AuthConfig.Enabled {
+	if credentialVerified {
+		// Skip token verify — credentials already passed. Cookie
+		// value is the shared AuthToken; expiresAt stays empty
+		// (the cookie itself has no Max-Age per existing semantics).
+	} else if d.AuthConfig.Enabled {
 		// Production / per-user PASETO path.
 		parsed, err := auth.VerifyAndParse(token, d.AuthVerifyOptions)
 		if err != nil {

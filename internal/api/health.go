@@ -10,6 +10,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
+	"github.com/smackerel/smackerel/internal/auth/webcreds"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/db"
 	"github.com/smackerel/smackerel/internal/digest"
@@ -161,6 +162,13 @@ type Dependencies struct {
 	BearerStore       *auth.BearerStore
 	RevocationCache   *revocation.Cache
 	AuthAdminHandlers *AuthAdminHandlers
+
+	// Spec 063 — web operator credential layer (username/password login).
+	// nil when the deployment has no Postgres pool (config-validate mode,
+	// some tests). HandleWebLogin falls back to the existing token-form
+	// path when this is nil OR when the form does not include username +
+	// password fields.
+	WebCredentials webcreds.Repo
 
 	// Spec 037 Scope 8 — admin web routes for the operator UI
 	// (optional — nil when the agent runtime is not enabled).

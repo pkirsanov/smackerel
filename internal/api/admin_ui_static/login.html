@@ -26,11 +26,26 @@
   <form method="POST" action="/v1/web/login" enctype="application/x-www-form-urlencoded">
     <input type="hidden" name="next" value="{{.Next}}">
     <label>
-      Token
-      <input id="token-field" type="password" name="token" autocomplete="off" required>
+      Username
+      <input type="text" name="username" autocomplete="username" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" autocomplete="current-password" required>
     </label>
     <button type="submit">Sign in</button>
   </form>
+  <details class="machine-login">
+    <summary>Machine client login (token)</summary>
+    <form method="POST" action="/v1/web/login" enctype="application/x-www-form-urlencoded">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <label>
+        Token
+        <input id="token-field" type="password" name="token" autocomplete="off">
+      </label>
+      <button type="submit">Submit token</button>
+    </form>
+  </details>
   <form method="POST" action="/v1/web/logout" class="logout">
     <button type="submit">Sign out</button>
   </form>

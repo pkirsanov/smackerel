@@ -43,6 +43,13 @@ func main() {
 		defer cancel()
 		os.Exit(runAuthCommand(ctx, os.Args[2:]))
 	}
+	// Spec 063 — `smackerel-core users <subcommand>` operator surface
+	// (add | set-password | list).
+	if len(os.Args) > 1 && os.Args[1] == "users" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runUsersCommand(ctx, os.Args[2:]))
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
 		os.Exit(1)

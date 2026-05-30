@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "featureDir": "specs/063-web-username-password-login",
+  "featureNumber": "063",
+  "featureName": "Web Username/Password Login",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "specDependsOn": [
+    "specs/044-per-user-bearer-auth",
+    "specs/057-form-encoded-web-login",
+    "specs/060-bearer-auth-scope-claim"
+  ],
+  "amends": [],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "n/a",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "off", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "certifiedCompletedPhases": ["bootstrap", "analyze", "design", "plan"],
+    "scopeProgress": {"total": 4, "notStarted": 4, "inProgress": 0, "done": 0, "blocked": 0},
+    "lockdownState": "n/a-implementation-in-progress",
+    "completedScopes": [],
+    "notes": "Spec 063 scaffolded 2026-05-30. Driven by user request after operator hit token-only login on home-lab and asked for username+password + single login. MVP scope: credential table + argon2id hasher + repo + handler extension + CLI + form HTML. Reuses existing shared AuthToken as cookie value (no new token type, no per-user PASETO). Trust band is identical to today's token-form login; user table is a UX layer not a privilege layer."
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "plan",
+    "currentScope": "SCOPE-1",
+    "runStartedAt": "2026-05-30T07:50:00Z",
+    "lastUpdatedAt": "2026-05-30T07:50:00Z",
+    "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
+    "completedScopes": [],
+    "executionHistory": []
+  }
+}
