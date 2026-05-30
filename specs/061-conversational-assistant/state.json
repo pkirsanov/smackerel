@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.design",
+    "currentPhase": "design",
     "currentScope": "SCOPE-06c",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T05:30:00Z",
+    "lastUpdatedAt": "2026-05-30T06:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,24 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-30T05:45:00Z",
+        "runCompletedAt": "2026-05-30T06:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 74b (bubbles.design; SCOPE-06c PACKET 3 — design.md §5.1 append-only amendment recording Round 74 plan-triage option-(c) operator-defer outcome for cpu-tier live-stack BS-002/007). Claim Source: executed. Outcome: completed_owned. Upstream: Round 74 plan-triage commit `010a45d4` selected option (c) operator-defer for finding SCOPE-06C-CPU-INTERACTIVE-15S-INFEASIBLE. Edits owned by bubbles.design this round: (1) specs/061-conversational-assistant/design.md §5.1 — appended a single new blockquote rationale paragraph immediately AFTER the existing Round 71b/c hardware-tier × model-role matrix rationale block (which ends with the env-var contract paragraph 'derived from SMACKEREL_HARDWARE_TIER at ./smackerel.sh config generate time...committed template.') and BEFORE the 'Tool handler — retrieval_search' paragraph. The new block has three short paragraphs: (a) Round 71e bubbles.test evidence (BS-002 4 attempts, latency 15005-15066 ms clustered at 15000 ms ceiling — full retrieval_qa loop overshoots even though qwen2.5:0.5b-instruct model alone fits at warm second_call_ms=7194); (b) decision per plan-triage `010a45d4` option (c) — cpu-tier dev runtime still uses qwen2.5:0.5b-instruct + 15 s for the interactive role (matrix unchanged), but live-stack BS-002/BS-007 deferred to accel-tier host; test runner gates tests/e2e/assistant_bs00{2,7}_test.sh on SMACKEREL_HARDWARE_TIER=cpu and emits structured SKIP; (c) production invariant preserved — accel-tier interactive contract still 5000 ms; BS-002/007 PASS evidence comes from accel-tier (DoD #6); cpu-tier DoD #5 reframed as 'live-stack tests skip with named reason on cpu tier; PASS on accel tier'. (2) specs/061-conversational-assistant/state.json — this executionHistory prepend + execution.activeAgent bubbles.plan->bubbles.design + currentPhase plan->design + lastUpdatedAt 05:30->06:00. Append-only nature verified: new block sits between the existing item-5 'Capability matrix coherence' bullet (text intact) and the 'Tool handler — retrieval_search' paragraph; prior matrix table cells (cpu × interactive = qwen2.5:0.5b-instruct @ 15000 ms) unchanged. NOT MODIFIED: spec.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, certification.* (status/completedAt/evidenceRef/scopeProgress/completedScopes/notes preserved verbatim), status (in_progress), statusCeiling (done), workflowMode (full-delivery), SCOPE-06/06a/06b/06c DoD checkboxes (no flips), any source/test/config under cmd/ internal/ ml/ config/ scripts/ tests/ deploy/ docs/ docker-compose.yml. No --no-verify on push; no shell-writes to source files (IDE replace_string_in_file only); accelerated hardware referenced generically as 'accel-tier host' / 'accelerated hardware' per Round 74 no-proper-noun constraint.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-06C-CPU-INTERACTIVE-15S-INFEASIBLE (carry-forward; Round 75 landed PACKET 3 design amendment; closes after PACKET 4 bubbles.implement test-runner skip mechanism + docs/Testing.md update land and DoD #5 flips to [x] with operator-defer annotation)",
+          "SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET (carry-forward; closes via the same option-(c) operator-defer landing)",
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK (carry-forward; closes when SCOPE-06c DoD #5 [x] flip via option (c) replaces the superseded SCOPE-06b DoD #5)"
+        ],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-06c",
+        "nextRequiredAction": "Execute SCOPE-06c PACKET 4: land the test-runner skip mechanism in tests/e2e/assistant_bs002_test.sh + tests/e2e/assistant_bs007_test.sh (or a shared helper) keyed on SMACKEREL_HARDWARE_TIER per the design.md §5.1 'Live-stack verification policy' sub-section just landed. Fixtures MUST: read SMACKEREL_HARDWARE_TIER fail-loud (unset/empty -> abort non-zero per smackerel-no-defaults); when value=cpu, emit the e2e harness 'RESULT: SKIPPED' record with SKIP_REASON=cpu-tier-operator-defer (cite SCOPE-06c DoD #5 option (c)) and exit 77; when value=accel, run the full live-stack assertion path. Also add a docs/Testing.md 'tier-gated live-stack tests' subsection documenting the operator workflow (cpu skip / accel run). Allowed file families: tests/e2e/assistant_bs002_test.sh, tests/e2e/assistant_bs007_test.sh, tests/e2e/_assistant_tier_helper.sh (optional shared helper), docs/Testing.md. Forbidden: config/smackerel.yaml::models.tiers.*, config/prompt_contracts/retrieval-qa-v1.yaml, internal/agent/, deploy/compose.deploy.yml, DoD-checkbox flips on SCOPE-06/06a/06b/06c (DoD flips are a later round once PACKET 4 evidence lands)."
+      },
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan"],
