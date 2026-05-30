@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "featureDir": "specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete",
+  "generatedAt": "2026-05-30T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG061003-S01",
+      "scope": "01-recipe-search-skill",
+      "title": "Clean recipe utterance routes to recipe_search and returns sourced response",
+      "gherkin": {
+        "given": "the recipe_search skill is enabled and the graph contains recipe artifacts",
+        "when": "a user sends \"find best recipe\"",
+        "then": "the assistant returns a sourced recipe response with Sources[] non-empty and reply is NOT the BandLow idea-capture string"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Assembler S01 populates Sources",
+        "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+        "test": "TestRecipeAssembler_S01_PopulatesSources"
+      },
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BUG061003-S02",
+      "scope": "01-recipe-search-skill",
+      "title": "Misspelled recipe utterance routes via router-boundary normalization (adversarial)",
+      "gherkin": {
+        "given": "the recipe_search skill is enabled",
+        "when": "a user sends \"find best recepie\"",
+        "then": "the router normalizes embed input to \"find best recipe\", envelope.RawInput is preserved, and routing reaches recipe_search at BandHigh"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Router pre-pass adversarial",
+        "file": "internal/agent/normalize_test.go",
+        "test": "TestRouter_NormalizesBeforeEmbed_BUG061003"
+      },
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BUG061003-S03",
+      "scope": "01-recipe-search-skill",
+      "title": "Empty-graph zero-hit returns StatusUnavailable Override (adversarial)",
+      "gherkin": {
+        "given": "the recipe_search skill is enabled and the graph has no recipe artifacts",
+        "when": "a user sends \"find best recipe\"",
+        "then": "Status=StatusUnavailable, ErrorCause=ErrNoMatch, CaptureRoute=false, body names a next concrete action, and body does NOT contain \"saved as an idea\""
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Assembler S03 empty-graph adversarial",
+        "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+        "test": "TestRecipeAssembler_S03_EmptyGraph_OverrideUnavailable_Adversarial"
+      },
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BUG061003-S04",
+      "scope": "01-recipe-search-skill",
+      "title": "Telegram adapter does not render idea-capture for recipe_search responses",
+      "gherkin": {
+        "given": "a recipe_search happy-path response (CaptureRoute=false)",
+        "when": "the Telegram adapter renders the reply",
+        "then": "the sent message does NOT match /^\\. Saved: \".*\" \\(idea\\)$/"
+      },
+      "testMapping": {
+        "type": "unit",
+        "label": "Telegram adapter regression",
+        "file": "internal/telegram/assistant_adapter/bot_recipe_search_test.go",
+        "test": "TestHandleUpdate_RecipeSearch_NotSavedAsIdea_BUG061003_S04"
+      },
+      "status": "passed"
+    },
+    {
+      "scenarioId": "SCN-BUG061003-S05",
+      "scope": "01-recipe-search-skill",
+      "title": "Live-stack meal-plan -> recipe -> shopping loop unaffected",
+      "gherkin": {
+        "given": "the live test stack is up",
+        "when": "the /api/search endpoint is queried with filters.domain=\"recipe\"",
+        "then": "the response is well-formed and does not contain the pre-fix idea-capture artifact title"
+      },
+      "testMapping": {
+        "type": "e2e",
+        "label": "Live-stack meal-plan -> shopping loop",
+        "file": "tests/e2e/assistant_recipe_flow_test.go",
+        "test": "TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign"
+      },
+      "status": "passed"
+    }
+  ]
+}
