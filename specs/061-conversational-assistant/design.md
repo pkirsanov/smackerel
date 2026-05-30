@@ -910,6 +910,12 @@ side_effect_class: read
 > time. The tier value is sourced from the gitignored `.smackerel.local.env`
 > overlay; `.smackerel.local.env.example` ships as the committed template.
 
+> **SCOPE-06c PACKET 3 (Round 74 plan-triage `010a45d4`) — cpu-tier live-stack BS-002/007 operator-deferred to accel-tier host.** Round 71e bubbles.test verification showed BS-002 fails at the 15000 ms cpu-tier scenario ceiling on WSL/Cloud-PC CPU hardware (4 attempts, latency 15005-15066 ms). The diagnostic signature (latency clustered at the ceiling ± noise across consecutive attempts) confirms the full retrieval_qa agent loop — qwen2.5:0.5b-instruct synthesis + tool call + retrieval_search + structured-output validation + retry budget — overshoots the 15 s ceiling on this hardware tier. The model alone fits (warm `second_call_ms=7194`); the loop overhead does not. See [report.md#round-74-scope-06c-plan-triage](../../specs/061-conversational-assistant/report.md#round-74-scope-06c-plan-triage) for full evidence.
+>
+> **Decision (plan-triage `010a45d4`, option c):** cpu-tier dev runtime still uses qwen2.5:0.5b-instruct + 15 s for the interactive role (the matrix is unchanged), but live-stack BS-002 and BS-007 are deferred to the accel-tier host. The test runner gates `tests/e2e/assistant_bs00{2,7}_test.sh` on `SMACKEREL_HARDWARE_TIER=cpu` and emits a structured `SKIP` (not a PASS, not a silent skip) so the cpu-tier dev loop stays green without masking. Accel-tier runs the tests for real and is the contract owner.
+>
+> **Production invariant preserved:** the accel-tier interactive contract is still 5 000 ms (design.md §5.1 cell `accel × interactive`); BS-002/007 PASS evidence will come from accel-tier (DoD #6) when the operator runs on accelerated hardware. cpu-tier acceptance is reframed as "matrix wires correctly, dev loop builds + units pass, missing-tier fails loud" — i.e. SCOPE-06c DoD #1-4 (already `[x]`). DoD #5 becomes "live-stack tests skip with a named reason on cpu tier; PASS on accel tier" — the skip half closes under bubbles.implement Round 75, the PASS half closes under operator validation on accel tier.
+
 **Tool handler — `retrieval_search`** (package
 `internal/agent/tools/retrieval/`): wraps existing `/api/search`
 backed by pgvector. Input `{query, user_id, top_k}`; output
