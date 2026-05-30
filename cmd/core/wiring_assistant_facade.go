@@ -45,6 +45,7 @@ import (
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
@@ -304,6 +305,7 @@ func buildAssistantSourceAssemblers(svc *coreServices, sourcesMax int) map[strin
 	return map[string]contracts.SourceAssembler{
 		"retrieval_qa":  retrieval.NewFacadeAssembler("retrieval_qa", lookup, sourcesMax),
 		"weather_query": weather.NewFacadeAssembler(sourcesMax),
+		"recipe_search": recipesearch.NewFacadeAssembler(lookup, sourcesMax),
 	}
 }
 

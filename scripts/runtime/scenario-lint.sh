@@ -56,4 +56,7 @@ extract_env() {
 }
 export RETRIEVAL_QA_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_TIMEOUT_MS)"
 export RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS)"
+# BUG-061-003 — recipe-search-v1 references RECIPE_SEARCH_* env vars.
+export RECIPE_SEARCH_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_TIMEOUT_MS)"
+export RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS="$(extract_env RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS)"
 go run ./cmd/scenario-lint -glob "$scenario_glob" "$scenario_dir"

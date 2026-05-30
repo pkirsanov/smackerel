@@ -45,6 +45,7 @@ func TestAllErrorCauses_Exhaustive(t *testing.T) {
 		ErrMissingScope,
 		ErrSlotMissing,
 		ErrInternalError,
+		ErrNoMatch,
 	}
 	if len(AllErrorCauses) != len(declared) {
 		t.Fatalf("AllErrorCauses length %d != declared %d", len(AllErrorCauses), len(declared))
@@ -271,6 +272,17 @@ func goldenCases() []goldenCase {
 				Body:         "something went wrong; saved as a note.",
 				ErrorCause:   ErrInternalError,
 				CaptureRoute: true,
+				EmittedAt:    t0,
+			},
+		},
+		{
+			// BUG-061-003 — recipe_search empty-graph deterministic state.
+			name: "unavailable_no_match_no_capture",
+			resp: AssistantResponse{
+				Status:       StatusUnavailable,
+				Body:         "no recipes saved yet — capture one with /capture or import via a connector.",
+				ErrorCause:   ErrNoMatch,
+				CaptureRoute: false,
 				EmittedAt:    t0,
 			},
 		},

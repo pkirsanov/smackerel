@@ -22,6 +22,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/agent"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/notification"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant"
