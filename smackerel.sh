@@ -594,6 +594,29 @@ case "$COMMAND" in
     esac
     ;;
   build)
+    # Spec 017 scope 03 — `./smackerel.sh build --target home-lab` runs
+    # the local-build deploy pipeline (operator-key signing, SBOM,
+    # Trivy gate, local-build-manifest emission). Replaces the
+    # external-CI build path for accel-tier deployments. See
+    # knb/specs/017-local-build-deploy-pipeline/ for the full design
+    # and knb/docs/new-product-onboarding.md for the operator workflow.
+    if [[ "${1:-}" == "--target" ]]; then
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "ERROR: --target requires a target name (e.g. home-lab)" >&2
+        exit 1
+      fi
+      case "$2" in
+        home-lab)
+          shift 2
+          bash "$SCRIPT_DIR/scripts/commands/build-home-lab.sh" "$@"
+          exit 0
+          ;;
+        *)
+          echo "ERROR: unknown --target value: $2 (supported: home-lab)" >&2
+          exit 1
+          ;;
+      esac
+    fi
     # Spec 058 Scope 4 — `./smackerel.sh build --extension chrome-bridge`
     # dispatches to the Chrome Bridge extension build pipeline instead of
     # the default core/ml image build. Any other `--extension <name>` is

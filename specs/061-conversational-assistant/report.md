@@ -11656,7 +11656,7 @@ ok  github.com/smackerel/smackerel/tests/stress/readiness   0.055s
 [exit 0]
 ```
 
-**Skip-gate behavioral verification — 4 scenarios (home-path PII redacted to `~` per local PII-token policy):**
+**Skip-gate behavioral verification — 4 scenarios (home-path PII redacted to `~` per local PII-token policyocal PII-token policyocal PII-token policy):**
 
 ```text
 $ SMACKEREL_HARDWARE_TIER=cpu bash tests/e2e/assistant_bs002_test.sh; echo exit=$?
@@ -11704,7 +11704,7 @@ SCOPE-06 DoD #4b (BS-002 adapter-composition leg), #5b (BS-007 adapter-compositi
 
 ### Anti-fabrication ledger (Round 75)
 
-- All gate outputs above have absolute home paths redacted to `~` per local PII-token policy; the redacted segments are verbatim transcriptions of terminal output executed this round; no commands were paraphrased.
+- All gate outputs above have absolute home paths redacted to `~` per local PII-token policy; the redacted segments are per local PII-token policy; the redacted segments are verbatim transcriptions of terminal output executed this round; no commands were paraphrased.
 - The 4-scenario skip-gate verification was executed against the live (modified) test scripts after the helper landed; outputs reflect actual exit codes captured via `echo exit=$?` immediately after each invocation.
 - The accel-tier path was deliberately NOT executed; no fabricated PASS evidence is presented for it. The DoD #6 checkbox correctly remains `[ ]`.
 - No claim is made that the underlying BS-002/BS-007 fixtures pass on accel hardware in this round; that proof is owed by the operator on the accelerated runner under DoD #6.
