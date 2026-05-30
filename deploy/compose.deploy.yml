@@ -230,8 +230,19 @@ services:
         max-file: "5"
 
   ollama:
-    image: ollama/ollama:0.23.2
+    image: ollama/ollama:rocm
     restart: unless-stopped
+    devices:
+      # AMD ROCm — required for GPU inference on home-lab (Radeon 8060S iGPU,
+      # gfx1151 / Strix Halo). Without these the daemon falls back to 100% CPU
+      # and the 26B model can't fit within scenario budgets. /dev/kfd is the
+      # kernel fusion driver IPC node; /dev/dri exposes the render node.
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      # render + video host GIDs needed to access /dev/dri/renderD128.
+      - "44"
+      - "993"
     environment:
       # Daemon-side model keep-alive default; SST-derived per
       # infrastructure.ollama.keep_alive (config/smackerel.yaml). Without this
@@ -239,6 +250,12 @@ services:
       # causing every sporadic /weather or /ask call to incur a multi-second
       # cold reload.
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:?OLLAMA_KEEP_ALIVE must be set by deploy adapter (infrastructure.ollama.keep_alive)}
+      # AMD ROCm gfx1151 (Strix Halo Radeon 8060S) is not in the stock ROCm
+      # target list; the override pins HSA to the closest supported family so
+      # the daemon picks the iGPU instead of CPU. HCC target keeps the same
+      # value for any kernel that compiles at runtime.
+      HSA_OVERRIDE_GFX_VERSION: "11.5.1"
+      HCC_AMDGPU_TARGET: "gfx1151"
     # Spec 045 FR-045-003 — read-only root with explicit tmpfs allowlist.
     # Persistent model store stays on the named volume `ollama-data`
     # mounted at /root/.ollama so model downloads survive restarts.
