@@ -292,11 +292,20 @@ jobs:
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
     - name: Generate config bundle for ${{ matrix.env }}
+      env:
+        # Spec 061 SCOPE-06c — hardware-tier selector. CI uses 'cpu' for dev/test
+        # (commodity GHA runners) and 'accel' for home-lab (the operator's
+        # accel-tier deploy target). The runtime tier on the actual deploy host
+        # is independent; this only selects which tier's interactive-model
+        # parameters get baked into the per-env bundle.
+        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'home-lab' && 'accel' || 'cpu' }}
       run: |
         ./smackerel.sh config generate --env ${{ matrix.env }} --bundle --output-dir dist/config-bundles/
 
     - name: Verify bundle determinism
       id: bundle-sha
+      env:
+        SMACKEREL_HARDWARE_TIER: ${{ matrix.env == 'home-lab' && 'accel' || 'cpu' }}
       run: |
         first_sha=$(sha256sum "dist/config-bundles/config-bundle-${{ matrix.env }}-${{ needs.build-images.outputs.sourceSha }}.tar.gz" | awk '{print $1}')
         rm -rf dist/config-bundles/
