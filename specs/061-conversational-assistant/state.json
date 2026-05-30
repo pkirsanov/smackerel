@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.design",
+    "currentPhase": "design",
     "currentScope": "SCOPE-06b",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T10:30:00Z",
+    "lastUpdatedAt": "2026-05-30T11:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,19 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-30T10:45:00Z",
+        "runCompletedAt": "2026-05-30T11:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 68b (bubbles.design; SCOPE-06b DoD #4 prerequisite — design.md retrieval-qa-v1 contract amendment). Claim Source: executed. Outcome: completed_owned. Scope: design.md §5.1 retrieval-qa-v1.yaml contract block ONLY + this state.json executionHistory prepend + execution metadata update (activeAgent bubbles.plan->bubbles.design, currentPhase plan->design, lastUpdatedAt 10:30->11:00). EDITS: specs/061-conversational-assistant/design.md §5.1 limits.timeout_ms 5000->60000 ms (line 852) and limits.per_tool_timeout_ms 2500->30000 ms (line 854) with inline operator-directive rationale block appended immediately after the YAML fence. Rationale block records: (a) operator quality directive 2026-05-30 'quality > speed for v1; background latency acceptable'; (b) explicit override of the 5 s production-budget invariant from report.md §round-59 finding row 6; (c) D5 root cause evidence (qwen2.5:0.5b-instruct CPU per-token latency ~1.5 tok/s makes 5 s budget structurally infeasible on current test hardware); (d) operator chose budget raise over test-tier model swap; (e) SCOPE-06a (preserved 5 s via test-tier swap) is superseded by SCOPE-06b (raises budget + retains production gemma3:4b model across all tiers); (f) cross-reference to plan-triage commit 7de678fa. NOT MODIFIED: spec.md, scopes.md, report.md, uservalidation.md, scenario-manifest.json, certification.* fields, status, statusCeiling, completedScopes, scopeProgress, any DoD checkbox, any source code, any config file, any test file. design.md sections OTHER than §5.1 not touched (the 925/1012-line timeout_ms entries are foreign scenarios — confirm-write-v1 etc — not retrieval-qa-v1 and remain at their original 3000/2000 ms values). docs/Operations.md verified at plan time as having zero references to the 5 s retrieval-qa-v1 budget so no Operations.md update is required at this layer. Working-tree held payload (6 files: config/prompt_contracts/retrieval-qa-v1.yaml, config/smackerel.yaml, internal/config/config.go, internal/config/validate_test_env_models.go [D], internal/config/validate_test_env_models_test.go [D], scripts/runtime/stack.sh) intentionally NOT staged this round — those land in Round 69 under bubbles.implement per the plan's commit-sequencing decision (design FIRST to avoid spec/design<->config drift, config SECOND). Cross-link: see Round 68 bubbles.plan executionHistory entry above and report.md round-66-plan-triage section for full chain rationale.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK D5 (CPU-inference-latency-exceeds-retrieval-qa-budget; SCOPE-06b DoD #4 design-amendment prerequisite NOW SATISFIED; routed to bubbles.implement for Round 69 config/Go reversal commit landing the 6 held-uncommitted working-tree files)"
+        ]
+      },
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan"],
