@@ -34,7 +34,7 @@ func TestSSTLoader_RejectsDevPostgresPassword_HomeLab(t *testing.T) {
 	scriptPath := filepath.Join(repoRoot, "scripts", "commands", "config_secret_rejection_test.sh")
 
 	cmd := exec.Command("bash", scriptPath)
-	cmd.Env = append(cmd.Environ(), "REPO_ROOT="+repoRoot)
+	cmd.Env = append(cmd.Environ(), "REPO_ROOT="+repoRoot, "SMACKEREL_HARDWARE_TIER=cpu")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("SST loader shell test failed: %v\n--- output ---\n%s\n--- end ---", err, string(out))

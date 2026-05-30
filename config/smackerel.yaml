@@ -637,6 +637,41 @@ auth:
   # default so local workflows do not require a bootstrap token.
   bootstrap_token: ""
 
+# Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix.
+# Switch key: SMACKEREL_HARDWARE_TIER={cpu,accel}. REQUIRED at
+# `./smackerel.sh config generate` time, fail-loud per smackerel-no-defaults
+# (no `${VAR:-default}` form anywhere). Sourced from the gitignored
+# `.smackerel.local.env` overlay at repo root; operator copies
+# `.smackerel.local.env.example` and sets the tier per machine
+# (cpu = WSL Cloud PC; accel = Evo-X2 ROCm/NPU host). The 6 model env vars
+# (LLM_MODEL, OLLAMA_MODEL, OLLAMA_VISION_MODEL, AGENT_PROVIDER_DEFAULT_MODEL,
+# AGENT_PROVIDER_FAST_MODEL, AGENT_PROVIDER_VISION_MODEL) resolve to the
+# `<tier>.interactive.model` value at config-generate time. The 2 timeout env
+# vars (RETRIEVAL_QA_TIMEOUT_MS, RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS) resolve to
+# the `<tier>.interactive.retrieval_qa_*` values. Background-role values are
+# slot-only today (no env var consumes them yet); the slots are kept honest
+# for the synthesis pipeline. See design.md §5.1 operator-directive table.
+models:
+  tiers:
+    cpu:
+      interactive:
+        model: qwen2.5:0.5b-instruct
+        retrieval_qa_timeout_ms: 15000
+        retrieval_qa_per_tool_timeout_ms: 7500
+      background:
+        model: gemma3:4b
+        retrieval_qa_timeout_ms: 300000
+        retrieval_qa_per_tool_timeout_ms: 150000
+    accel:
+      interactive:
+        model: gemma3:4b
+        retrieval_qa_timeout_ms: 5000
+        retrieval_qa_per_tool_timeout_ms: 2500
+      background:
+        model: deepseek-r1:7b
+        retrieval_qa_timeout_ms: 300000
+        retrieval_qa_per_tool_timeout_ms: 150000
+
 assistant:
   # Spec 061 — Conversational Assistant (Transport-Agnostic). SST zero-defaults:
   # every key is REQUIRED. The Go core refuses to start if any value is missing

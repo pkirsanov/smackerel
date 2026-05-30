@@ -16,6 +16,10 @@ venv/
 # Generated config (contains resolved secrets)
 config/generated/
 
+# Spec 061 SCOPE-06c — per-machine hardware-tier override (operator-private,
+# never committed). Template lives at .smackerel.local.env.example.
+.smackerel.local.env
+
 # Runtime data directories (user import data)
 # BUG-029-005: track .gitkeep anchors at the 4 connector-fixture mount
 # paths so fresh-clone bootstrap satisfies fail-loud Compose substitution
