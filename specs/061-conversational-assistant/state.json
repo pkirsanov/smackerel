@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "plan",
+    "activeAgent": "bubbles.design",
+    "currentPhase": "design",
     "currentScope": "SCOPE-06c",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T13:30:00Z",
+    "lastUpdatedAt": "2026-05-30T14:00:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,23 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["design"],
+        "runStartedAt": "2026-05-30T13:45:00Z",
+        "runCompletedAt": "2026-05-30T14:00:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 72 (bubbles.design; SCOPE-06c PACKET 1 - design.md S5.1 retrieval-qa-v1 contract amendment for Hardware-tier x model-role matrix). Claim Source: executed. Outcome: completed_owned. Scope: design.md S5.1 ONLY + this state.json executionHistory prepend + execution metadata bump (activeAgent bubbles.plan->bubbles.design, currentPhase plan->design, lastUpdatedAt 13:30->14:00). EDITS: (1) design.md S5.1 retrieval-qa-v1.yaml `limits` block - replaced literal `timeout_ms: 60000` and `per_tool_timeout_ms: 30000` with `${RETRIEVAL_QA_TIMEOUT_MS}` and `${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}` env-var placeholders (Path A ratified: scenario YAML keeps placeholders, runtime resolves at load time from env vars produced by `./smackerel.sh config generate` per hardware tier; Path B per-env generated YAML rejected as added file-surface for no runtime benefit). (2) Replaced the Round 68b 'Operator quality directive 2026-05-30: quality > speed for v1' rationale block with a new 'Operator quality directive 2026-05-30 - Hardware-tier x model-role matrix' block recording: Path A ratification + 4-cell matrix table (cpu/interactive=qwen2.5:0.5b-instruct @ 15000ms / 7500ms per-tool; cpu/background=gemma3:4b @ 300000ms / 150000ms; accel/interactive=gemma3:4b @ 5000ms / 2500ms; accel/background=deepseek-r1:7b @ 300000ms / 150000ms) + per-cell rationale (accel/interactive restores Round 58 5s production contract; cpu/interactive 15s honest-math from Round 65 1.5 tok/s qwen2.5:0.5b CPU evidence sized for ~20-token answer; background 300000ms because not user-facing; model-role pairing per SCOPE-06c Decision Rationale table) + explicit Round 68b supersession citing SCOPE-06c. (3) Appended env-var contract paragraph documenting SMACKEREL_HARDWARE_TIER={cpu,accel} as fail-loud SST switch (no default per smackerel-no-defaults) + 6 model env vars (LLM_MODEL, OLLAMA_MODEL, AGENT_PROVIDER_DEFAULT_MODEL, AGENT_PROVIDER_FAST_MODEL, AGENT_PROVIDER_VISION_MODEL, OLLAMA_VISION_MODEL) + 2 timeout env vars (RETRIEVAL_QA_TIMEOUT_MS, RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS) all derived from SMACKEREL_HARDWARE_TIER at config-generate time + tier sourced from gitignored .smackerel.local.env with .smackerel.local.env.example committed template. NOT MODIFIED: spec.md, scopes.md (SCOPE-06c DoD ownership belongs to plan/implement), uservalidation.md, scenario-manifest.json, S5.2/S5.3 weather/notifications contracts, certification.* fields, status, statusCeiling, any source/test/config under cmd/ internal/ ml/ config/ scripts/ tests/ deploy/. Affected design.md region: S5.1 retrieval-qa-v1 (YAML `limits` block + rationale block immediately after the YAML fence). Verification: design.md read on-disk before edit confirmed Round 68b literal `timeout_ms: 60000` line 852 and `per_tool_timeout_ms: 30000` line 854; multi_replace_string_in_file applied both edits in one tool call. No blockers.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET (carry-forward; closes when SCOPE-06c DoD #5 cpu-tier live-stack PASS lands)",
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK (carry-forward; closes when SCOPE-06c DoD #5 PASS replaces the superseded SCOPE-06b DoD #5)"
+        ],
+        "nextRequiredOwner": "bubbles.implement",
+        "nextRequiredScope": "SCOPE-06c",
+        "nextRequiredAction": "Resume SCOPE-06c implementation starting at DoD #2. Design contract is now ratified: scenario YAML uses ${RETRIEVAL_QA_TIMEOUT_MS} / ${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS} placeholders (Path A); config generate must derive both timeouts plus the 6 model env vars from SMACKEREL_HARDWARE_TIER fail-loud SST switch; .smackerel.local.env.example template + .smackerel.local.env gitignored overlay per machine. Per-tier values per the matrix table in design.md S5.1."
+      },
       {
         "agent": "bubbles.plan",
         "phasesExecuted": ["plan"],

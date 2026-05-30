@@ -849,9 +849,9 @@ output_schema:
 
 limits:
   max_loop_iterations: 4
-  timeout_ms: 60000
+  timeout_ms: ${RETRIEVAL_QA_TIMEOUT_MS}
   schema_retry_budget: 1
-  per_tool_timeout_ms: 30000
+  per_tool_timeout_ms: ${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}
 
 token_budget: 1200
 temperature: 0.2
@@ -859,16 +859,56 @@ model_preference: "default"
 side_effect_class: read
 ```
 
-> **Operator quality directive 2026-05-30: quality > speed for v1.**
-> Background latency acceptable; reverses the Round 58 5 s budget. The 5 s
-> production-budget invariant in `report.md` §round-59 finding row 6 is
-> explicitly overridden by this directive — D5 evidence (`qwen2.5:0.5b-instruct`
-> CPU per-token latency ~1.5 tok/s) proved a 5 s budget structurally infeasible
-> on the current test hardware, and operator selected raising the budget over
-> swapping test-tier models. SCOPE-06a (which preserved 5 s via test-tier swap)
-> is superseded by SCOPE-06b (raises budget to 60 s top-level / 30 s per-tool
-> and retains the production `gemma3:4b` model across all tiers). See
-> plan-triage commit `7de678fa` for full rationale.
+> **Operator quality directive 2026-05-30 — Hardware-tier × model-role matrix.**
+>
+> Resolution path: **Path A** — `retrieval-qa-v1.yaml` keeps `${VAR}` placeholders;
+> runtime resolves at scenario-load time from env vars produced by `./smackerel.sh
+> config generate` per hardware tier. Path A keeps a single source of truth for
+> the scenario contract and avoids maintaining per-env generated YAMLs (Path B
+> was considered and rejected as added file-surface for no runtime benefit).
+>
+> Per-tier × per-role budgets:
+>
+> | Tier (`SMACKEREL_HARDWARE_TIER`) | Role           | `timeout_ms` | `per_tool_timeout_ms` | Model                  |
+> |----------------------------------|----------------|--------------|------------------------|-------------------------|
+> | `cpu`                            | interactive    | 15000        | 7500                   | `qwen2.5:0.5b-instruct` |
+> | `cpu`                            | background     | 300000       | 150000                 | `gemma3:4b`             |
+> | `accel`                          | interactive    | 5000         | 2500                   | `gemma3:4b`             |
+> | `accel`                          | background     | 300000       | 150000                 | `deepseek-r1:7b`        |
+>
+> Rationale per cell:
+> 1. **accel × interactive = 5000 ms** — restores the original Round 58
+>    production contract. Operator's home-lab accelerator host has the GPU/RAM to serve
+>    `gemma3:4b` in budget; the 5 s invariant is the right user-facing target
+>    when hardware can meet it.
+> 2. **cpu × interactive = 15000 ms** — measured-honest: `qwen2.5:0.5b-instruct`
+>    sustains ~1.5 tok/s on the CPU-only WSL2 dev host; 15 s gives the small
+>    model time to complete a ~20-token answer. Replaces the Round 68b 60 s
+>    blanket budget on CPU.
+> 3. **background-role = 300000 ms** on both tiers — background processing is
+>    not user-facing; latency is irrelevant, so the budget is sized to let
+>    larger/quality models (`gemma3:4b` on cpu, `deepseek-r1:7b` on accel)
+>    complete without per-tool truncation.
+> 4. **Model-role pairing** — cpu/interactive runs the smallest viable model;
+>    cpu/background can afford `gemma3:4b` because no user is waiting;
+>    accel/interactive pins `gemma3:4b` per the operator quality directive;
+>    accel/background runs `deepseek-r1:7b` (reasoning model fits the 7 GB
+>    accel budget).
+>
+> **Supersession:** This block explicitly overrides the Round 68b rationale
+> (60 s top-level / 30 s per-tool blanket on all tiers, `gemma3:4b` across
+> all tiers). SCOPE-06c is the supersession source; see `scopes.md` SCOPE-06c
+> Decision Rationale table for the upstream operator directive.
+>
+> **Env-var contract.** `SMACKEREL_HARDWARE_TIER={cpu,accel}` is the canonical
+> tier switch — fail-loud, no default, per `smackerel-no-defaults`. The 6 model
+> env vars (`LLM_MODEL`, `OLLAMA_MODEL`, `AGENT_PROVIDER_DEFAULT_MODEL`,
+> `AGENT_PROVIDER_FAST_MODEL`, `AGENT_PROVIDER_VISION_MODEL`,
+> `OLLAMA_VISION_MODEL`) and the 2 timeout env vars
+> (`RETRIEVAL_QA_TIMEOUT_MS`, `RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS`) are all
+> derived from `SMACKEREL_HARDWARE_TIER` at `./smackerel.sh config generate`
+> time. The tier value is sourced from the gitignored `.smackerel.local.env`
+> overlay; `.smackerel.local.env.example` ships as the committed template.
 
 **Tool handler — `retrieval_search`** (package
 `internal/agent/tools/retrieval/`): wraps existing `/api/search`
