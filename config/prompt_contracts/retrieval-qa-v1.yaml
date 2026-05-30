@@ -60,13 +60,15 @@ output_schema:
 
 limits:
   max_loop_iterations: 4
-  # Operator quality directive 2026-05-30: quality > speed for v1. Background
-  # latency is acceptable to give gemma3:4b time to produce a cited synthesis
-  # on dev/test hardware. Reverses Round 58 5000ms budget (which had pinned
-  # test env to qwen2.5:0.5b-instruct to fit). See report.md Round 66.
-  timeout_ms: 60000
+  # Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix.
+  # Budgets are resolved at scenario-load time from env vars produced by
+  # `./smackerel.sh config generate` per tier (cpu: 15000/7500;
+  # accel: 5000/2500). See design.md §5.1 operator-directive table. No
+  # hardcoded budget survives in this contract; smackerel-no-defaults
+  # demands the env vars be set fail-loud upstream.
+  timeout_ms: ${RETRIEVAL_QA_TIMEOUT_MS}
   schema_retry_budget: 1
-  per_tool_timeout_ms: 30000
+  per_tool_timeout_ms: ${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}
 
 token_budget: 1200
 temperature: 0.2

@@ -45,4 +45,15 @@ if [[ ! -d "$scenario_dir" ]]; then
 fi
 
 echo "scenario-lint: scanning $scenario_dir (glob: $scenario_glob)"
+# Spec 061 SCOPE-06c (Round 71d) — scenarios may reference env vars via
+# `${VAR}` (e.g. retrieval-qa-v1.yaml's `timeout_ms: ${RETRIEVAL_QA_TIMEOUT_MS}`)
+# which the loader expands at parse time. Pluck the specific vars needed for
+# scenario interpolation from the generated env file and export them. We do
+# NOT `source` the full file because docker .env format permits unquoted
+# values with spaces/globs that bash mis-parses (e.g. `DIGEST_CRON=0 7 * * *`).
+extract_env() {
+  grep -E "^$1=" "$env_file_arg" | tail -n 1 | cut -d= -f2-
+}
+export RETRIEVAL_QA_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_TIMEOUT_MS)"
+export RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(extract_env RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS)"
 go run ./cmd/scenario-lint -glob "$scenario_glob" "$scenario_dir"

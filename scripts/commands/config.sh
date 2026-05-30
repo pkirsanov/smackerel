@@ -105,19 +105,26 @@ flatten_yaml() {
         level2 = ""
         level3 = ""
         level4 = ""
+        level5 = ""
         path = level1
       } else if (indent == 2) {
         level2 = key
         level3 = ""
         level4 = ""
+        level5 = ""
         path = level1 "." level2
       } else if (indent == 4) {
         level3 = key
         level4 = ""
+        level5 = ""
         path = level1 "." level2 "." level3
       } else if (indent == 6) {
         level4 = key
+        level5 = ""
         path = level1 "." level2 "." level3 "." level4
+      } else if (indent == 8) {
+        level5 = key
+        path = level1 "." level2 "." level3 "." level4 "." level5
       } else {
         next
       }
@@ -567,6 +574,10 @@ if [[ "$TARGET_ENV" == "test" ]]; then
   # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix).
   OLLAMA_KEEP_ALIVE="$(required_value infrastructure.ollama.test.keep_alive)"
   OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT="$(required_value infrastructure.ollama.test.prewarm_warmup_num_predict)"
+  # Spec 061 SCOPE-06c (Round 71d) — prewarm threshold derived from tier-resolved
+  # RETRIEVAL_QA_TIMEOUT_MS minus 1000 ms safety margin (tracks the tier instead
+  # of the stale 55000 ms hardcoded value). RETRIEVAL_QA_TIMEOUT_MS is resolved
+  # below; this assignment is overridden after the tier resolution block.
   OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS="$(required_value infrastructure.ollama.test.prewarm_warmup_second_call_max_ms)"
 else
   OLLAMA_IMAGE="$(required_value infrastructure.ollama.image)"
@@ -585,15 +596,53 @@ else
   OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=""
 fi
 LLM_PROVIDER="$(required_value llm.provider)"
-# Spec 045 BUG-045-001 — LLM model selections are per-environment overridable.
-# Operator raises envelope (environments.<env>.ollama_memory_limit) FIRST, then
-# swaps the model fields under the same environments.<env>.* block. The base
-# llm.* values remain the safe commodity-host defaults (gemma3:4b family).
-LLM_MODEL="$(env_override_value llm_model llm.model)"
+# Spec 061 SCOPE-06c (Round 71d) — Hardware-tier × model-role matrix. The
+# SMACKEREL_HARDWARE_TIER switch (sourced from .smackerel.local.env by
+# smackerel.sh before any subcommand runs) selects the interactive-role model
+# for all 6 model env vars below and the interactive-role retrieval-qa
+# timeouts. Fail-loud per smackerel-no-defaults: missing/empty/invalid tier
+# aborts here with [F061-HARDWARE-TIER-*]. Per-env overrides (e.g. home-lab
+# opt-up to gemma4:26b) remain a tier-orthogonal layer: if
+# environments.<env>.<key> is set, it wins; otherwise the tier matrix value.
+if [[ -z "${SMACKEREL_HARDWARE_TIER-}" ]]; then
+  echo "[F061-HARDWARE-TIER-MISSING] SMACKEREL_HARDWARE_TIER is required (set in .smackerel.local.env at repo root to cpu or accel; copy .smackerel.local.env.example to start). See specs/061-conversational-assistant/scopes.md SCOPE-06c." >&2
+  exit 1
+fi
+if [[ "$SMACKEREL_HARDWARE_TIER" != "cpu" && "$SMACKEREL_HARDWARE_TIER" != "accel" ]]; then
+  echo "[F061-HARDWARE-TIER-INVALID] SMACKEREL_HARDWARE_TIER must be 'cpu' or 'accel', got: '$SMACKEREL_HARDWARE_TIER'" >&2
+  exit 1
+fi
+TIER_INTERACTIVE_MODEL="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.model")"
+TIER_INTERACTIVE_RETRIEVAL_QA_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.retrieval_qa_timeout_ms")"
+TIER_INTERACTIVE_RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$(required_value "models.tiers.${SMACKEREL_HARDWARE_TIER}.interactive.retrieval_qa_per_tool_timeout_ms")"
+
+# Per-env override OR tier matrix interactive model (tier-orthogonal layer).
+tier_interactive_model_or_override() {
+  local override_key="$1"
+  local value
+  if value="$(yaml_get "environments.$TARGET_ENV.$override_key" 2>/dev/null)"; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$TIER_INTERACTIVE_MODEL"
+  fi
+}
+
+# Spec 045 BUG-045-001 — per-env overrides preserved as tier-orthogonal layer.
+LLM_MODEL="$(tier_interactive_model_or_override llm_model)"
 LLM_API_KEY="$(required_value llm.api_key)"
 OLLAMA_URL="$(required_value llm.ollama_url)"
-OLLAMA_MODEL="$(env_override_value ollama_model llm.ollama_model)"
-OLLAMA_VISION_MODEL="$(env_override_value ollama_vision_model llm.ollama_vision_model)"
+OLLAMA_MODEL="$(tier_interactive_model_or_override ollama_model)"
+OLLAMA_VISION_MODEL="$(tier_interactive_model_or_override ollama_vision_model)"
+# Spec 061 SCOPE-06c — retrieval-qa-v1 budget resolves from tier matrix.
+RETRIEVAL_QA_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_TIMEOUT_MS"
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS="$TIER_INTERACTIVE_RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS"
+# Spec 061 SCOPE-06c — prewarm second-call threshold tracks the tier's
+# interactive retrieval-qa budget (minus 1000 ms safety margin) instead of
+# the stale YAML literal (which is preserved for legacy non-test callers but
+# unused on the test path).
+if [[ "$TARGET_ENV" == "test" ]]; then
+  OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS="$((RETRIEVAL_QA_TIMEOUT_MS - 1000))"
+fi
 SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 # Auto-generate a disposable test token when the SST value is empty and TARGET_ENV=test.
 # Dev/prod environments still require manual configuration (fail-loud at service startup).
@@ -1130,31 +1179,21 @@ AGENT_DEFAULTS_TIMEOUT_MS_CEILING="$(required_value agent.defaults.timeout_ms_ce
 AGENT_DEFAULTS_SCHEMA_RETRY_BUDGET_CEILING="$(required_value agent.defaults.schema_retry_budget_ceiling)"
 AGENT_DEFAULTS_PER_TOOL_TIMEOUT_MS_CEILING="$(required_value agent.defaults.per_tool_timeout_ms_ceiling)"
 AGENT_PROVIDER_DEFAULT_PROVIDER="$(required_value agent.provider_routing.default.provider)"
-# Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — agent_provider_default_model uses
-# per-env override so the test environment can pin the default-route model to
-# the same small qwen tool-calling model used by the fast tier; otherwise
-# retrieval-qa-v1 (model_preference: "default") with a 5000ms scenario
-# timeout is structurally unreachable on test hardware (warm gemma3:4b
-# inference is ~71s for a 2-token reply). The model literal lives in
-# environments.<env>.agent_provider_default_model in config/smackerel.yaml;
-# dev / home-lab fall back to agent.provider_routing.default.model.
-AGENT_PROVIDER_DEFAULT_MODEL="$(env_override_value agent_provider_default_model agent.provider_routing.default.model)"
+# Spec 061 SCOPE-06c (Round 71d) — AGENT_PROVIDER_DEFAULT_MODEL resolves
+# from the tier × interactive cell (per-env override wins if set). Replaces
+# the SCOPE-06a fallback to agent.provider_routing.default.model so the
+# retrieval-qa-v1 (model_preference: "default") scenario gets the
+# tier-correct interactive model on both tiers.
+AGENT_PROVIDER_DEFAULT_MODEL="$(tier_interactive_model_or_override agent_provider_default_model)"
 AGENT_PROVIDER_REASONING_PROVIDER="$(required_value agent.provider_routing.reasoning.provider)"
 AGENT_PROVIDER_REASONING_MODEL="$(required_value agent.provider_routing.reasoning.model)"
 AGENT_PROVIDER_FAST_PROVIDER="$(required_value agent.provider_routing.fast.provider)"
-# Spec 043 — agent_provider_fast_model uses per-env override so the test
-# environment can pin to a small tool-calling model (the smallest one that
-# runs on the CI / no-GPU lane) without forcing dev / home-lab off their
-# preferred routes. The model literal lives in
-# environments.<env>.agent_provider_fast_model in config/smackerel.yaml.
-AGENT_PROVIDER_FAST_MODEL="$(env_override_value agent_provider_fast_model agent.provider_routing.fast.model)"
+# Spec 061 SCOPE-06c — fast tier model also resolves from tier × interactive.
+AGENT_PROVIDER_FAST_MODEL="$(tier_interactive_model_or_override agent_provider_fast_model)"
 AGENT_PROVIDER_VISION_PROVIDER="$(required_value agent.provider_routing.vision.provider)"
-# Spec 061 SCOPE-06a — vision model now uses env_override_value so the
-# test env can pin away from the production literal (`gemma3:4b`) and
-# eliminate the multi-path model-leak surfaced by
-# BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK. Dev / home-lab /
-# prod fall back to the base agent.provider_routing.vision.model.
-AGENT_PROVIDER_VISION_MODEL="$(env_override_value agent_provider_vision_model agent.provider_routing.vision.model)"
+# Spec 061 SCOPE-06c — vision falls back to the interactive cell on cpu (no
+# separate vision model on 0.5b); accel can opt-up via environments.<env>.
+AGENT_PROVIDER_VISION_MODEL="$(tier_interactive_model_or_override agent_provider_vision_model)"
 AGENT_PROVIDER_OCR_PROVIDER="$(required_value agent.provider_routing.ocr.provider)"
 AGENT_PROVIDER_OCR_MODEL="$(required_value agent.provider_routing.ocr.model)"
 
@@ -1696,6 +1735,9 @@ AGENT_PROVIDER_VISION_PROVIDER=${AGENT_PROVIDER_VISION_PROVIDER}
 AGENT_PROVIDER_VISION_MODEL=${AGENT_PROVIDER_VISION_MODEL}
 AGENT_PROVIDER_OCR_PROVIDER=${AGENT_PROVIDER_OCR_PROVIDER}
 AGENT_PROVIDER_OCR_MODEL=${AGENT_PROVIDER_OCR_MODEL}
+SMACKEREL_HARDWARE_TIER=${SMACKEREL_HARDWARE_TIER}
+RETRIEVAL_QA_TIMEOUT_MS=${RETRIEVAL_QA_TIMEOUT_MS}
+RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS=${RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS}
 ASSISTANT_ENABLED=${ASSISTANT_ENABLED}
 ASSISTANT_BORDERLINE_FLOOR=${ASSISTANT_BORDERLINE_FLOOR}
 ASSISTANT_CONTEXT_WINDOW_TURNS=${ASSISTANT_CONTEXT_WINDOW_TURNS}
