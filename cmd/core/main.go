@@ -110,6 +110,16 @@ func run() error {
 		return fmt.Errorf("assistant skill services wiring: %w", err)
 	}
 
+	// BUG-034-003 follow-up: expense handler MUST be constructed BEFORE
+	// api.NewRouter(deps), because NewRouter does a single-pass route
+	// registration that skips deps.ExpenseHandler when it is nil. The
+	// later wireExpenseTracking(...) call (after the router is built)
+	// would set deps.ExpenseHandler but no longer wire it into chi,
+	// leaving /api/expenses returning 404 forever. Construct first,
+	// register routes during NewRouter, then call any post-router
+	// wiring (none today for expenses) below.
+	wireExpenseTracking(ctx, cfg, svc, deps)
+
 	router := api.NewRouter(deps)
 
 	// Start Telegram bot if configured
@@ -172,9 +182,10 @@ func run() error {
 		}
 	}
 
-	// Wire optional feature services (knowledge, expenses, meal planning)
+	// Wire optional feature services (knowledge, meal planning, recommendations).
+	// NOTE: wireExpenseTracking has already run BEFORE api.NewRouter above
+	// (see BUG-034-003 follow-up comment) so its routes are registered.
 	wireKnowledgeLinter(sched, cfg, svc)
-	wireExpenseTracking(ctx, cfg, svc, deps)
 	wireMealPlanning(cfg, svc, deps, sched, listResolver, listStore, tgBot)
 	wireRecommendationWatchPoller(sched, agentBridge, svc, cfg, tgBot, deps.RecommendationWatchHandlers)
 
