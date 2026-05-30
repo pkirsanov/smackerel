@@ -60,9 +60,13 @@ output_schema:
 
 limits:
   max_loop_iterations: 4
-  timeout_ms: 5000
+  # Operator quality directive 2026-05-30: quality > speed for v1. Background
+  # latency is acceptable to give gemma3:4b time to produce a cited synthesis
+  # on dev/test hardware. Reverses Round 58 5000ms budget (which had pinned
+  # test env to qwen2.5:0.5b-instruct to fit). See report.md Round 66.
+  timeout_ms: 60000
   schema_retry_budget: 1
-  per_tool_timeout_ms: 2500
+  per_tool_timeout_ms: 30000
 
 token_budget: 1200
 temperature: 0.2
