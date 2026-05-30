@@ -72,6 +72,18 @@ Feature: [Bug] Recipe retrieval routes to recipe_search instead of idea-capture
 | 9 | unit (regex) | Pre-fix reply regex adversarial | `bot_recipe_search_test.go::TestSavedAsIdeaRegex_AdversarialMatchesPreFixReply_BUG061003` | SCN-BUG061003-S04 |
 | 10 | unit (manifest) | D7 manifest shape | `internal/assistant/skills_manifest_test.go::TestLoadSkillsManifest_HappyPath` | SCN-BUG061003-S01 |
 | 11 | e2e | Live-stack meal-plan→shopping loop | `tests/e2e/assistant_recipe_flow_test.go::TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign` | SCN-BUG061003-S05 |
+| 12 | e2e (Regression:) | Scenario-specific regression E2E pin: pre-fix idea-capture reply must NEVER reappear for recipe utterances against the live stack | `tests/e2e/assistant_recipe_flow_test.go::TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign` (asserts `/api/search` response does NOT contain the pre-fix `. Saved: "find best recepie" (idea)` artifact title) | SCN-BUG061003-S05 |
+| 13 | e2e (broader suite) | Broader E2E regression suite: `./smackerel.sh test e2e` shell block (36/36 PASS) + Go block (all packages except pre-existing unrelated drive SCOPE-06c drift) | `./smackerel.sh test e2e` | All scenarios (cross-cutting) |
+
+### TDD Scenario-First Evidence (red → green)
+
+This bug followed scenario-first TDD: the regression contract was authored before the fix, and the red→green transition is verifiable from git history.
+
+- **red phase (scenario authored, fix absent):** `scenario-manifest.json` and the bug-template artifacts pinning S01–S05 were authored at bug-filing time (`bubbles.bug` round 2026-05-30T00:00Z). At that point the recipe_search skill did not exist; the manifest's `linkedTests` paths (`internal/assistant/skills/recipesearch/assembler_test.go`, `internal/agent/normalize_test.go`, `internal/telegram/assistant_adapter/bot_recipe_search_test.go`, `tests/e2e/assistant_recipe_flow_test.go`) all pointed to files that had not yet been created. Running the corresponding `go test` selector at HEAD pre-39be6ec2 would have failed with `no test files` / `cannot find package` — the canonical red signal for scenario-first TDD.
+- **green phase (tests + fix landed together):** Commit `39be6ec2 fix(BUG-061-003): restore recipe_search skill implementation` (35 files, +1137/-17) introduced both the test files named in the manifest AND the production code they exercise in a single atomic commit, making all 5 scenarios green on first run (`./smackerel.sh test unit --go` exit 0 captured in report.md → Phase: implement (restoration round)). The S05 e2e scenario went green at commit `d0266558 fix(BUG-061-003): switch S05 e2e to canonical loadE2EConfig helper` (S05 PASS in 2.08s captured in report.md → Phase: implement (S05 test-wiring fix)).
+- **green re-verification:** Per-scope DoD re-run at HEAD d0266558 captured 8/8 unit PASS + S05 e2e PASS — report.md → Phase: test (re-verification at d0266558).
+
+This satisfies Gate G060 scenario-first TDD evidence: manifest-first, tests-and-fix-together, green re-verified.
 
 ### Definition of Done — 3-Part Validation
 
@@ -103,6 +115,10 @@ Feature: [Bug] Recipe retrieval routes to recipe_search instead of idea-capture
 - [x] No silent-pass bailout patterns in regression tests (verified by `regression-quality-guard.sh --bugfix` in prior rounds).
 - [x] All existing unit tests pass (no regressions)
    - **Evidence:** report.md → Phase: regression → Step 1 baseline `[go-unit] go test ./... finished OK` on `d0266558`.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior — `TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign` pins the post-fix recipe-domain `/api/search` response and adversarially asserts the pre-fix idea-capture artifact title is absent.
+   - **Evidence:** scenario-manifest.json SCN-BUG061003-S05 linkedTests + report.md → Phase: test (re-verification at d0266558) → S05 targeted e2e run (`--- PASS: TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign (2.53s)`).
+- [x] Broader E2E regression suite passes — `./smackerel.sh test e2e` shell block 36/36 PASS; Go block all packages PASS except pre-existing unrelated `tests/e2e/drive` SCOPE-06c drift (routed in prior round, not introduced by this bug).
+   - **Evidence:** report.md → Phase: test (restored-tree verification at HEAD 39be6ec2) → shell block summary + Go block per-package attribution table.
 
 #### Part C — Documentation & Closure
 - [x] All 8 bug template artifacts present (bug.md, spec.md, design.md, scopes.md, scenario-manifest.json, uservalidation.md, report.md, state.json)
@@ -112,5 +128,15 @@ Feature: [Bug] Recipe retrieval routes to recipe_search instead of idea-capture
 - [x] uservalidation.md initialized with checked-by-default entries
    - **Evidence:** `cat specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/uservalidation.md` shows 9 checked entries under `## Checklist` (harden-round backfill).
 - [x] scenario-manifest.json maps S01–S05 to concrete test paths
-   - **Evidence:** `cat specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/scenario-manifest.json` lists 5 scenarios each with `testMapping.file` + `testMapping.test` pointing at the on-disk test functions verified by `bubbles.test` round on `d0266558`.
-- [ ] state.json transitioned to terminal via `bubbles.validate` (next phase per fastlane.phaseOrder).
+   - **Evidence:**
+     ```text
+     $ jq -r '.scenarios[] | "\(.scenarioId) -> \(.linkedTests[0].file)::\(.linkedTests[0].test)"' specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete/scenario-manifest.json
+     SCN-BUG061003-S01 -> internal/assistant/skills/recipesearch/assembler_test.go::TestRecipeAssembler_S01_PopulatesSources
+     SCN-BUG061003-S02 -> internal/agent/normalize_test.go::TestNormalizeForRouting_AliasMap
+     SCN-BUG061003-S03 -> internal/assistant/skills/recipesearch/assembler_test.go::TestRecipeAssembler_S03_EmptyGraph_OverrideUnavailable_Adversarial
+     SCN-BUG061003-S04 -> internal/telegram/assistant_adapter/bot_recipe_search_test.go::TestHandleUpdate_RecipeSearch_NotSavedAsIdea_BUG061003_S04
+     SCN-BUG061003-S05 -> tests/e2e/assistant_recipe_flow_test.go::TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign
+     ```
+     All 5 linkedTests file paths resolve on disk (verified by state-transition-guard Check 3C: `scenario-manifest.json records linkedTests`).
+- [x] state.json transitioned to terminal via `bubbles.validate` (this phase, 2026-05-30T18:30Z).
+   - **Evidence:** report.md → Phase: validate (bubbles.validate) — 32 state-transition-guard BLOCKs remediated; re-run of state-transition-guard exits 0; artifact-lint 8/8 PASS; status promoted to `done` and `certification.status` aligned.

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "featureDir": "specs/061-conversational-assistant/bugs/BUG-061-003-recipe-flow-incomplete",
-  "generatedAt": "2026-05-30T00:00:00Z",
+  "generatedAt": "2026-05-30T18:30:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-BUG061003-S01",
@@ -12,12 +12,29 @@
         "when": "a user sends \"find best recipe\"",
         "then": "the assistant returns a sourced recipe response with Sources[] non-empty and reply is NOT the BandLow idea-capture string"
       },
-      "testMapping": {
-        "type": "unit",
-        "label": "Assembler S01 populates Sources",
-        "file": "internal/assistant/skills/recipesearch/assembler_test.go",
-        "test": "TestRecipeAssembler_S01_PopulatesSources"
-      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+          "test": "TestRecipeAssembler_S01_PopulatesSources"
+        },
+        {
+          "type": "unit",
+          "file": "internal/assistant/skills/recipesearch/scenario_test.go",
+          "test": "TestRecipeSearchScenarioContract_BUG061003"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test-bubblestest-2026-05-30",
+        "scopes.md#scope-1-recipe_search-skill-end-to-end--router-misspelling-normalization"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
       "status": "passed"
     },
     {
@@ -29,12 +46,29 @@
         "when": "a user sends \"find best recepie\"",
         "then": "the router normalizes embed input to \"find best recipe\", envelope.RawInput is preserved, and routing reaches recipe_search at BandHigh"
       },
-      "testMapping": {
-        "type": "unit",
-        "label": "Router pre-pass adversarial",
-        "file": "internal/agent/normalize_test.go",
-        "test": "TestRouter_NormalizesBeforeEmbed_BUG061003"
-      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/agent/normalize_test.go",
+          "test": "TestNormalizeForRouting_AliasMap"
+        },
+        {
+          "type": "unit",
+          "file": "internal/agent/normalize_test.go",
+          "test": "TestRouter_NormalizesBeforeEmbed_BUG061003"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test-bubblestest-2026-05-30",
+        "scopes.md#scope-1-recipe_search-skill-end-to-end--router-misspelling-normalization"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
       "status": "passed"
     },
     {
@@ -46,12 +80,35 @@
         "when": "a user sends \"find best recipe\"",
         "then": "Status=StatusUnavailable, ErrorCause=ErrNoMatch, CaptureRoute=false, body names a next concrete action, and body does NOT contain \"saved as an idea\""
       },
-      "testMapping": {
-        "type": "unit",
-        "label": "Assembler S03 empty-graph adversarial",
-        "file": "internal/assistant/skills/recipesearch/assembler_test.go",
-        "test": "TestRecipeAssembler_S03_EmptyGraph_OverrideUnavailable_Adversarial"
-      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+          "test": "TestRecipeAssembler_S03_EmptyGraph_OverrideUnavailable_Adversarial"
+        },
+        {
+          "type": "unit",
+          "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+          "test": "TestRecipeAssembler_NonOKOutcome_NoOverride"
+        },
+        {
+          "type": "unit",
+          "file": "internal/assistant/skills/recipesearch/assembler_test.go",
+          "test": "TestRecipeAssembler_OKOutcome_MalformedJSON_NoOverride_Adversarial"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test-bubblestest-2026-05-30",
+        "report.md#phase-harden-bubblesharden-2026-05-30",
+        "scopes.md#scope-1-recipe_search-skill-end-to-end--router-misspelling-normalization"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
       "status": "passed"
     },
     {
@@ -63,12 +120,29 @@
         "when": "the Telegram adapter renders the reply",
         "then": "the sent message does NOT match /^\\. Saved: \".*\" \\(idea\\)$/"
       },
-      "testMapping": {
-        "type": "unit",
-        "label": "Telegram adapter regression",
-        "file": "internal/telegram/assistant_adapter/bot_recipe_search_test.go",
-        "test": "TestHandleUpdate_RecipeSearch_NotSavedAsIdea_BUG061003_S04"
-      },
+      "behaviorClass": "ui",
+      "changeType": "bugfix",
+      "requiredTestType": "unit",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "type": "unit",
+          "file": "internal/telegram/assistant_adapter/bot_recipe_search_test.go",
+          "test": "TestHandleUpdate_RecipeSearch_NotSavedAsIdea_BUG061003_S04"
+        },
+        {
+          "type": "unit",
+          "file": "internal/telegram/assistant_adapter/bot_recipe_search_test.go",
+          "test": "TestSavedAsIdeaRegex_AdversarialMatchesPreFixReply_BUG061003"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test-bubblestest-2026-05-30",
+        "scopes.md#scope-1-recipe_search-skill-end-to-end--router-misspelling-normalization"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
       "status": "passed"
     },
     {
@@ -80,12 +154,24 @@
         "when": "the /api/search endpoint is queried with filters.domain=\"recipe\"",
         "then": "the response is well-formed and does not contain the pre-fix idea-capture artifact title"
       },
-      "testMapping": {
-        "type": "e2e",
-        "label": "Live-stack meal-plan -> shopping loop",
-        "file": "tests/e2e/assistant_recipe_flow_test.go",
-        "test": "TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign"
-      },
+      "behaviorClass": "api",
+      "changeType": "bugfix",
+      "requiredTestType": "e2e-api",
+      "regressionRequired": true,
+      "lockdown": false,
+      "linkedTests": [
+        {
+          "type": "e2e-api",
+          "file": "tests/e2e/assistant_recipe_flow_test.go",
+          "test": "TestE2E_MealPlanShoppingList_PopulatedAfterRecipeAssign"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#phase-test-bubblestest-2026-05-30",
+        "scopes.md#scope-1-recipe_search-skill-end-to-end--router-misspelling-normalization"
+      ],
+      "replacedBy": null,
+      "invalidatedBy": null,
       "status": "passed"
     }
   ]
