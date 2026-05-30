@@ -1295,10 +1295,14 @@ infrastructure:
     # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix) — Ollama OLLAMA_KEEP_ALIVE
     # controls how long the daemon retains a loaded model in memory after a
     # request completes. Upstream default is "5m"; "-1" means "never unload".
-    # Dev/home-lab/prod use the upstream default ("5m"); the test env overrides
-    # to "-1" via infrastructure.ollama.test.keep_alive so the prewarmed model
-    # stays resident for the full BS-002/BS-007 retrieval-qa-v1 budget window.
-    keep_alive: "5m"
+    # Home-lab/prod use "24h" (BUG-061-004): single-user sporadic /weather and
+    # /ask traffic was hitting 80s+ cold-load on every call with the upstream
+    # 5m default, blowing per-scenario budgets and rendering provider_unavailable.
+    # 24h keeps loaded models resident across a typical user-active day.
+    # The test env overrides to "-1" via infrastructure.ollama.test.keep_alive
+    # so the prewarmed model stays resident for the full BS-002/BS-007
+    # retrieval-qa-v1 budget window.
+    keep_alive: "24h"
     test:
       image: ollama/ollama:0.23.2
       model: qwen2.5:0.5b-instruct
