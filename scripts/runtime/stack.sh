@@ -166,15 +166,15 @@ fi
 # Spec 061 SCOPE-06a Round 65 (D4 hybrid fix): TWO consecutive warmup calls.
 # Call 1 pays the cold-context load cost. Call 2 must execute on the warm
 # resident model — its latency is the sustained-warmth proof gate. Fail loud
-# if call 2 exceeds infrastructure.ollama.test.prewarm_warmup_second_call_max_ms,
-# because BS-002 against the retrieval-qa-v1 timeout_ms=5000 budget would
-# inevitably regress.
+# if call 2 exceeds infrastructure.ollama.test.prewarm_warmup_second_call_max_ms.
+# Spec 061 SCOPE-06b Round 68: budget raised to 55000 ms to match the Round 66
+# retrieval-qa-v1 timeout_ms=60000 (safety margin 5000).
 first_latency_ms="$(prewarm_warm_chat_model "$chat_model" "$warmup_num_predict" "first")"
 second_latency_ms="$(prewarm_warm_chat_model "$chat_model" "$warmup_num_predict" "second")"
 
 echo "stack.sh prewarm: warmup summary first_call_ms=$first_latency_ms second_call_ms=$second_latency_ms threshold_ms=$warmup_second_call_max_ms"
 
 if (( second_latency_ms > warmup_second_call_max_ms )); then
-  echo "stack.sh prewarm: SECOND warmup call latency_ms=$second_latency_ms exceeds threshold_ms=$warmup_second_call_max_ms — model is not sustainably warm; BS-002 against retrieval-qa-v1 timeout_ms=5000 will regress (spec 061 SCOPE-06a Round 65 D4 hybrid contract)" >&2
+  echo "stack.sh prewarm: SECOND warmup call latency_ms=$second_latency_ms exceeds threshold_ms=$warmup_second_call_max_ms — model is not sustainably warm; BS-002 against retrieval-qa-v1 timeout_ms=60000 will regress (spec 061 SCOPE-06b Round 68; threshold = budget − safety_margin)" >&2
   exit 3
 fi

@@ -1286,9 +1286,17 @@ infrastructure:
       # real inference past the cold-context phase. The hook fails loud if the
       # second call's latency exceeds prewarm_warmup_second_call_max_ms — that
       # would mean warmup did not achieve sustained warmth and BS-002 against
-      # the 5000ms retrieval-qa-v1 budget would inevitably regress.
+      # the retrieval-qa-v1 budget would inevitably regress.
+      #
+      # Spec 061 SCOPE-06b Round 68 (2026-05-30) — threshold raised
+      # 3000 → 55000 ms to match the Round 66 retrieval-qa-v1 budget raise
+      # (timeout_ms: 60000, safety_margin 5000). gemma3:4b second-call CPU
+      # inference on test hardware is ~20-30s; Path A smollm2:360m would
+      # be ~5-10s. Either way fits well under 55000 ms. The gate still
+      # catches truly broken warmth (e.g. model evicted, OLLAMA_KEEP_ALIVE
+      # ignored, model unable to sustain inference under the budget).
       prewarm_warmup_num_predict: 64
-      prewarm_warmup_second_call_max_ms: 3000
+      prewarm_warmup_second_call_max_ms: 55000
 
 environments:
   dev:
@@ -1335,28 +1343,18 @@ environments:
     # Spec 044 — per-user bearer auth disabled in test (test stack uses
     # the disposable shared SMACKEREL_AUTH_TOKEN; SCN-AUTH-005/011).
     auth_enabled: false
-    # Spec 043 — pin the fast-route model to the smallest tool-calling
-    # Ollama model so the agent E2E happy-path test runs on the CI /
-    # no-GPU lane within pull_timeout_seconds. Dev / home-lab keep the
-    # default agent.provider_routing.fast.model (gpt-oss:20b).
-    agent_provider_fast_model: "qwen2.5:0.5b-instruct"
-    # Spec 061 BS-002-LLM-PROVIDER-TIMEOUT — pin the default-route model to
-    # the same test-tier qwen model so retrieval-qa-v1 (model_preference:
-    # "default") fits within timeout_ms=5000 on test hardware. Dev / home-lab
-    # / prod keep gemma3:4b via the base agent.provider_routing.default.model.
-    agent_provider_default_model: "qwen2.5:0.5b-instruct"
-    # Spec 061 SCOPE-06a (BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK) —
-    # the test env MUST override every model env var so no consumer (Go
-    # core, ml sidecar synthesis path, fixture warmup, prewarm hook)
-    # silently falls back to the production literal `gemma3:4b`. All four
-    # values pin to the same small qwen test model that
-    # agent_provider_default_model / agent_provider_fast_model already
-    # use. Vision is bounded to the same model (no v1 spec 061 scenario
-    # exercises vision; future vision-tier scopes must reselect).
-    llm_model: "qwen2.5:0.5b-instruct"
-    ollama_model: "qwen2.5:0.5b-instruct"
-    agent_provider_vision_model: "qwen2.5:0.5b-instruct"
-    ollama_vision_model: "qwen2.5:0.5b-instruct"
+    # Spec 061 Round 66 (2026-05-30) — operator quality directive: quality >
+    # speed. Reverses Round 58 Option 2 (which pinned every test-tier model
+    # env to qwen2.5:0.5b-instruct to fit the original 5000ms retrieval-qa
+    # budget) and Round 64 SCOPE-06a multi-path override. retrieval-qa-v1
+    # timeout was raised to 60000ms (per_tool 30000ms) so test env can run
+    # the higher-quality default `gemma3:4b` (inherited from base
+    # `agent.provider_routing.{default,fast,vision}.model` / `llm.model` /
+    # `ollama.{model,vision_model}`). Background latency is acceptable per
+    # operator. The four agent_provider_* / llm_model / ollama_model
+    # overrides previously declared here are intentionally absent — base
+    # defaults flow through. SST policy preserved: base keys are still
+    # required (no fallbacks), test env simply does not override them.
     ml_processing_degraded_fallback_enabled: true
     qf_decisions_enabled: true
     qf_decisions_base_url: "http://qf-e2e-runner:45003"

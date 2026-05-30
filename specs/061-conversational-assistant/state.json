@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.design",
-    "currentPhase": "design",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": "SCOPE-06b",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T11:00:00Z",
+    "lastUpdatedAt": "2026-05-30T11:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,19 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "runStartedAt": "2026-05-30T11:05:00Z",
+        "runCompletedAt": "2026-05-30T11:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 69 (bubbles.implement; SCOPE-06b config/Go reversal commit landing the 6 held-uncommitted working-tree files per plan-triage 7de678fa and design amendment 62e120fd). Claim Source: executed. Outcome: completed_owned (config landed; live-stack BS-002/BS-007 verification owned by bubbles.test for Round 70 per SCOPE-06b DoD #5). Committed files (6): (1) config/prompt_contracts/retrieval-qa-v1.yaml — limits.timeout_ms 5000->60000 ms + limits.per_tool_timeout_ms 2500->30000 ms + inline operator-directive rationale comment (matches design.md §5.1 amendment from commit 62e120fd); (2) config/smackerel.yaml — environments.test removed 5 SCOPE-06a/Round 58 test-tier model overrides (llm_model, ollama_model, agent_provider_default_model, agent_provider_fast_model, agent_provider_vision_model) so test env now inherits production gemma3:4b from base agent.provider_routing.{default,fast,vision}.model / llm.model / ollama.model; also raised infrastructure.ollama.test.prewarm_warmup_second_call_max_ms 3000->55000 ms to match the new 60 s retrieval-qa budget (threshold = budget - 5 s safety margin); (3) internal/config/config.go — removed call to validateTestEnvModelOverrides + replaced with operator-directive rationale comment explaining why the validator is obsolete (test env now inherits gemma3:4b; SST base keys still required no-fallback so no replacement validator needed); (4-5) DELETED internal/config/validate_test_env_models.go + validate_test_env_models_test.go (the SCOPE-06a fail-loud validator + its tests — obsolete since the overrides they enforced have been reverted); (6) scripts/runtime/stack.sh — error-message text updated to reference the new 55000 ms threshold + 60000 ms budget + SCOPE-06b Round 68 rationale (no behavioral change beyond the threshold value which is wired via OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS env var from the YAML change in file 2). The production-budget invariant from report.md round-59 finding row 6 is INTENTIONALLY overridden per operator quality directive 2026-05-30 ('quality > speed for v1; background latency acceptable'); this override is recorded in (a) design.md §5.1 amendment (commit 62e120fd, owned by bubbles.design), (b) the inline rationale comments in retrieval-qa-v1.yaml + config.go + smackerel.yaml + stack.sh, (c) scopes.md SCOPE-06a SUPERSEDED note (already landed by Round 67/68 plan), and (d) this state.json entry. Gate evidence (PII-redacted, all exit=0): config generate --env dev OK; config generate --env test OK; ./smackerel.sh check OK (config in sync with SST + env_file drift guard OK + scenario-lint 8 registered 0 rejected); ./smackerel.sh lint OK (Go + web validation passed); ./smackerel.sh format --check OK; ./smackerel.sh test unit --go OK (deleted validator tests correctly no longer run; no other Go unit test regression). NOT MODIFIED in this round: spec.md, design.md (already amended in commit 62e120fd), scopes.md (SCOPE-06b section already authored by plan-triage commit 7de678fa; no DoD checkboxes flipped — DoD #5 live-stack verification owned by bubbles.test in Round 70), uservalidation.md, scenario-manifest.json, certification.* fields, status, statusCeiling, completedScopes, scopeProgress, SCOPE-06 or SCOPE-06a content (06a is superseded; touching now would be artifact-ownership violation), any non-listed source/test/config file. NextRequiredOwner: bubbles.test for Round 70 live-stack BS-002 + BS-007 RE-RUN under the new 60 s budget against gemma3:4b (SCOPE-06b DoD #5 'Live-stack RE-RUN PASS'). Upstream context: plan-triage commit 7de678fa (SCOPE-06a SUPERSEDED -> SCOPE-06b authoring); design amendment commit 62e120fd (design.md §5.1 retrieval-qa-v1 timeout_ms 5000->60000 + per_tool 2500->30000 with operator-directive rationale).",
+        "addressedFindings": [
+          "SCOPE-06a-D5-CPU-INFERENCE-LATENCY-EXCEEDS-RETRIEVAL-QA-BUDGET (partial — config reversal landed; live-stack verification belongs to bubbles.test Round 70)"
+        ],
+        "unresolvedFindings": []
+      },
       {
         "agent": "bubbles.design",
         "phasesExecuted": ["design"],
