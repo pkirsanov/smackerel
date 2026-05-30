@@ -50,11 +50,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
+    "activeAgent": "bubbles.test",
+    "currentPhase": "test",
     "currentScope": "SCOPE-06b",
     "runStartedAt": "2026-05-29T05:15:00Z",
-    "lastUpdatedAt": "2026-05-30T11:30:00Z",
+    "lastUpdatedAt": "2026-05-30T12:30:00Z",
     "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
     "completedScopes": [
       "SCOPE-01",
@@ -65,6 +65,23 @@
       "SCOPE-09b"
     ],
     "executionHistory": [
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "runStartedAt": "2026-05-30T12:00:00Z",
+        "runCompletedAt": "2026-05-30T12:30:00Z",
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "summary": "Round 70 (bubbles.test; SCOPE-06b DoD #5 Live-stack RE-RUN BLOCKED on NEW finding D6). Claim Source: executed. Outcome: blocked. SCOPE-06b DoD #5 NOT flipped. SCOPE-06b DoD #6 (SCOPE-06 unblock note) NOT deliverable this round (predicate 'attach live-stack PASS evidence' unsatisfied). Owned edits: specs/061-conversational-assistant/report.md (appended Round 70 section with anchors #round-70-scope-06b-live-stack-blocked + #scope-06b-live-stack-d6-finding + #scope-06b-unblock-note), specs/061-conversational-assistant/state.json (this entry + execution metadata bump activeAgent bubbles.implement->bubbles.test + currentPhase implement->test + lastUpdatedAt 11:30->12:30), and 3 in-progress SCOPE-06b infra files included in the commit boundary because they are prerequisite to running the live-stack RE-RUN at all (docker-compose.yml stub-providers healthcheck IPv4 fix — busybox wget resolves `localhost` to ::1 but nginx listens on IPv4 0.0.0.0:8080 so `localhost`-based probes always fail; tests/e2e/assistant_bs002_test.sh + tests/e2e/assistant_bs007_test.sh raised curl --max-time 15->120 so the new 60 s budget can actually complete end-to-end). NOT MODIFIED: spec.md, design.md, scopes.md (no DoD checkboxes flipped — SCOPE-06 + SCOPE-06a + SCOPE-06b all preserved verbatim), uservalidation.md, scenario-manifest.json, certification.* fields, any other source code. EVIDENCE PROTOCOL: Step 1 verified HEAD 73610b29 + regenerated test config — 5/5 model env vars resolve to gemma3:4b (no test-tier override leaks); Step 2 brought up disposable test stack (./smackerel.sh --env test up UP_EXIT=0, 7 containers Healthy after ~50s) and pulled gemma3:4b + nomic-embed-text into test ollama (volume was empty after prior --volumes teardown); Step 3 ran sustained-warmth prewarm via scripts/runtime/stack.sh under sourced test.env — verbatim prewarm summary 'first_call_ms=21684 second_call_ms=90296 threshold_ms=55000', PREWARM_EXIT=3, named error 'SECOND warmup call latency_ms=90296 exceeds threshold_ms=55000 — model is not sustainably warm; BS-002 against retrieval-qa-v1 timeout_ms=60000 will regress'; Step 4 BS-002 against live stack returned http_status=000 (curl --max-time 120 exhausted; end-to-end therefore >120s; BS002_EXIT=1); Step 5 attempted BS-007 returned 'core health endpoint unreachable' (smackerel-test-smackerel-core-1 was killed mid BS-002 — secondary symptom of same root cause; BS007 inconclusive this round; BS-002 alone disqualifies the 60s budget); Step 6 consumer-trace inverted-intent verified clean — gemma3:4b matches in config/smackerel.yaml + config/generated/test.env are EXPECTED under SCOPE-06b strategy reversal; zero qwen2.5 references survive in test consumers; SCOPE-06a 'synthesis-path SST proof' superseded because the override it would prove no longer exists. NEW DEFECT D6 SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET: gemma3:4b per-token CPU inference throughput on this hardware ~0.71 tok/s warm; 64-token warm generation = 90296 ms; structurally incompatible with 60000 ms retrieval-qa-v1 budget by ~30 s. This is the same family as D5 (per-token CPU latency × token count > budget) but a NEW finding because the budget was raised AND the model was held fixed under operator 2026-05-30 directive — D5's specific numbers (qwen2.5:0.5b-instruct @ 5 s) no longer apply. PER DISPATCH INSTRUCTIONS: did NOT raise the 60 s budget further; did NOT mask the failure; did NOT route to bubbles.implement (no implementation fix can close a hardware throughput gap). Strategy space for bubbles.plan to triage (advisory, operator ratification required because any option inverts a prior operator directive): (a) accept the limitation and ship v1 without BS-002 live-stack PASS, (b) move test-tier off CPU inference (GPU runner / hosted endpoint), (c) reselect a model in the 1-2B range meeting >=~7 tok/s warm AND retaining acceptable quality, (d) reintroduce a test-tier-only model override (reversing the SCOPE-06b reversal in test only). Final gate sweep before commit: ./smackerel.sh check exit 0, bash .github/bubbles/scripts/artifact-lint.sh specs/061-conversational-assistant exit 0, PII-scan via git diff --cached against the home-directory username token returned zero matches.",
+        "addressedFindings": [],
+        "unresolvedFindings": [
+          "SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET (NEW; gemma3:4b per-token CPU latency makes 60s retrieval-qa-v1 budget structurally infeasible on this hardware; PREWARM_EXIT=3 second_call_ms=90296 vs threshold 55000; BS-002 http_status=000 timeout after 120s; routed to bubbles.plan for strategy-space triage with operator ratification required; SCOPE-06b DoD #5 BLOCKED until plan decision lands)",
+          "BS-002-OPTION2-INCOMPLETE-MULTI-PATH-MODEL-LEAK (carry-forward; SCOPE-06b config/Go reversal landed in Round 69 but live-stack verification BLOCKED on D6; cannot close finding until SCOPE-06b DoD #5 PASS)"
+        ],
+        "nextRequiredOwner": "bubbles.plan",
+        "nextRequiredScope": "SCOPE-06b",
+        "nextRequiredAction": "Triage NEW finding SCOPE-06B-D6-GEMMA3-4B-CPU-INFERENCE-EXCEEDS-60S-BUDGET. The 60s retrieval-qa-v1 budget chosen by operator directive 2026-05-30 is structurally infeasible against gemma3:4b on this CPU hardware (90296 ms warm second-call latency vs 55000 ms threshold). Per dispatch this round did NOT raise the budget. Any remediation option inverts a prior operator directive (Round 58 model swap OR Round 66 budget raise OR holding production-quality gemma3:4b in test) and therefore requires operator ratification in uservalidation.md before plan can adopt it."
+      },
       {
         "agent": "bubbles.implement",
         "phasesExecuted": ["implement"],
