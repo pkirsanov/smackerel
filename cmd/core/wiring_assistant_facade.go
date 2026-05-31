@@ -39,6 +39,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/agent/embedder/sidecar"
 	"github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	"github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant"
@@ -102,7 +103,11 @@ func wireAssistantFacade(
 	//    will wire reload propagation when scenario hot-add becomes
 	//    a user-visible requirement.
 	scenarios := agentRT.Bridge.Scenarios()
-	router, err := agent.NewRouter(ctx, agentRT.Config.Routing, scenarios, agent.NoopEmbedder{})
+	embedder, err := buildAssistantEmbedder(cfg)
+	if err != nil {
+		return fmt.Errorf("build assistant embedder: %w", err)
+	}
+	router, err := agent.NewRouter(ctx, agentRT.Config.Routing, scenarios, embedder)
 	if err != nil {
 		return fmt.Errorf("build assistant router: %w", err)
 	}
@@ -306,6 +311,36 @@ func buildAssistantSourceAssemblers(svc *coreServices, sourcesMax int) map[strin
 		"retrieval_qa":  retrieval.NewFacadeAssembler("retrieval_qa", lookup, sourcesMax),
 		"weather_query": weather.NewFacadeAssembler(sourcesMax),
 		"recipe_search": recipesearch.NewFacadeAssembler(lookup, sourcesMax),
+	}
+}
+
+// buildAssistantEmbedder selects the agent.Embedder implementation
+// from the assistant.routing.embedder_mode SST key.
+//
+// BUG-061-004 — production wiring; replaces the unconditional
+// agent.NoopEmbedder{} that hid an alphabetical-tie-break bug for
+// months. "sidecar" mode requires cfg.MLSidecarURL + cfg.AuthToken;
+// "noop" mode is rejected in non-dev/test environments to prevent a
+// silent prod regression.
+func buildAssistantEmbedder(cfg *config.Config) (agent.Embedder, error) {
+	switch cfg.Assistant.EmbedderMode {
+	case "sidecar":
+		if strings.TrimSpace(cfg.MLSidecarURL) == "" {
+			return nil, errors.New("buildAssistantEmbedder: ML_SIDECAR_URL required when embedder_mode=sidecar")
+		}
+		if strings.TrimSpace(cfg.AuthToken) == "" {
+			return nil, errors.New("buildAssistantEmbedder: SMACKEREL_AUTH_TOKEN required when embedder_mode=sidecar")
+		}
+		return sidecar.New(cfg.MLSidecarURL, cfg.AuthToken, cfg.Assistant.EmbedTimeout)
+	case "noop":
+		env := strings.ToLower(strings.TrimSpace(cfg.Environment))
+		if env != "" && env != "development" && env != "dev" && env != "test" {
+			return nil, fmt.Errorf("buildAssistantEmbedder: embedder_mode=noop forbidden in environment %q (BUG-061-004 D8)", cfg.Environment)
+		}
+		slog.Warn("assistant routing using NoopEmbedder — test/dev only; NL routing collapses to alphabetical tie-break")
+		return agent.NoopEmbedder{}, nil
+	default:
+		return nil, fmt.Errorf("buildAssistantEmbedder: unknown embedder_mode %q (validator rejects this earlier)", cfg.Assistant.EmbedderMode)
 	}
 }
 

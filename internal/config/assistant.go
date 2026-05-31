@@ -133,6 +133,15 @@ type AssistantConfig struct {
 	// unconditionally (rule §7.2-OTel-B). Consumed by
 	// internal/assistant/tracing.NewTracer in cmd/core/wiring.go.
 	Observability AssistantObservabilityConfig
+
+	// BUG-061-004 — routing embedder substrate. EmbedderMode selects
+	// between "sidecar" (production: HTTP /embed on ML sidecar) and
+	// "noop" (test/dev only: fixed unit vector — alphabetical tie-break
+	// guaranteed). EmbedTimeout is the per-call timeout for the
+	// sidecar HTTP request. Loaded from ASSISTANT_ROUTING_EMBEDDER_MODE
+	// and ASSISTANT_ROUTING_EMBED_TIMEOUT_MS env vars.
+	EmbedderMode  string
+	EmbedTimeout  time.Duration
 }
 
 // AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK
@@ -306,6 +315,12 @@ func loadAssistantConfig(cfg *Config) error {
 	permissiveString("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT", &cfg.Assistant.Observability.OtelEndpoint)
 	mustString("ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME", &cfg.Assistant.Observability.OtelServiceName)
 
+	// BUG-061-004 — routing embedder SST.
+	mustString("ASSISTANT_ROUTING_EMBEDDER_MODE", &cfg.Assistant.EmbedderMode)
+	var embedTimeoutMs int
+	mustInt("ASSISTANT_ROUTING_EMBED_TIMEOUT_MS", &embedTimeoutMs, 1)
+	cfg.Assistant.EmbedTimeout = time.Duration(embedTimeoutMs) * time.Millisecond
+
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
 	}
@@ -443,6 +458,22 @@ func (c *Config) validateAssistantConfig() error {
 	}
 	if c.Assistant.Eval.CaptureFallbackMin < 0 || c.Assistant.Eval.CaptureFallbackMin > 1 {
 		return fmt.Errorf("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN (%.4f) must be in [0.0, 1.0] (spec 061 SCOPE-10)", c.Assistant.Eval.CaptureFallbackMin)
+	}
+
+	// BUG-061-004 — embedder_mode whitelist + timeout sanity.
+	// Skipped when both fields are zero-value (loader didn't run, e.g.
+	// targeted unit tests that construct Config{} directly to exercise
+	// other rules). Any real config-load flow populates both fields
+	// unconditionally; production cannot satisfy this skip clause.
+	if c.Assistant.EmbedderMode != "" || c.Assistant.EmbedTimeout != 0 {
+		switch c.Assistant.EmbedderMode {
+		case "sidecar", "noop":
+		default:
+			return fmt.Errorf("ASSISTANT_ROUTING_EMBEDDER_MODE must be one of \"sidecar\" | \"noop\"; got %q (BUG-061-004 D8)", c.Assistant.EmbedderMode)
+		}
+		if c.Assistant.EmbedTimeout <= 0 {
+			return fmt.Errorf("ASSISTANT_ROUTING_EMBED_TIMEOUT_MS must be > 0; got %s (BUG-061-004 D3)", c.Assistant.EmbedTimeout)
+		}
 	}
 	return nil
 }

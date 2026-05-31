@@ -802,6 +802,12 @@ agent:
     consider_top_n: 5 # REQUIRED: number of candidates retained for trace
     fallback_scenario_id: "" # REQUIRED ("" = no fallback; below-floor → unknown-intent)
     embedding_model: "" # REQUIRED ("" = inherit runtime.embedding_model)
+    # BUG-061-004 — assistant NL routing embedder. "sidecar" uses HTTP
+    # POST /embed on the ML sidecar (production); "noop" returns a fixed
+    # unit vector for every input (test/dev only — guarantees alphabetical
+    # tie-break and is rejected by the validator outside dev/test envs).
+    embedder_mode: "sidecar" # REQUIRED: "sidecar" | "noop"
+    embed_timeout_ms: 500 # REQUIRED: per-call timeout for the sidecar /embed roundtrip
   trace:
     retention_days: 30 # REQUIRED: days to retain agent_traces rows
     record_llm_messages: false # REQUIRED: capture full LLM transcript (true in dev/test only)

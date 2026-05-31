@@ -921,6 +921,9 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_ENABLED", "false")
 	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT", "")
 	t.Setenv("ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME", "smackerel-core")
+	// BUG-061-004 — routing embedder SST defaults for shared fixture.
+	t.Setenv("ASSISTANT_ROUTING_EMBEDDER_MODE", "sidecar")
+	t.Setenv("ASSISTANT_ROUTING_EMBED_TIMEOUT_MS", "500")
 	// Spec 061 SCOPE-01 design §7.2 rule #2 — agent routing floor is
 	// referenced by validateAssistantConfig for the borderline check.
 	t.Setenv("AGENT_ROUTING_CONFIDENCE_FLOOR", "0.65")
