@@ -788,6 +788,25 @@ assistant:
     otel_enabled: false # REQUIRED: enable OTLP/gRPC exporter
     otel_endpoint: "" # REQUIRED ("" permitted when otel_enabled=false)
     otel_service_name: "smackerel-core" # REQUIRED: OTel resource service.name
+  # Spec 064 SCOPE-03 — open-ended knowledge agent SST. Ships disabled
+  # by default so empty api_key and empty allowlist resolve without
+  # tripping the fail-loud Validate() chain; operator opts in by
+  # flipping `enabled: true` and populating provider/budgets/allowlist.
+  # NO defaults (Gate G028, smackerel-no-defaults): every key is
+  # REQUIRED at the generator boundary even when disabled.
+  open_knowledge:
+    enabled: false # REQUIRED: strict bool ("true"|"false"); reject "1"/"0"
+    provider: "searxng" # REQUIRED: "searxng" | "brave" | "tavily"
+    provider_endpoint: "" # REQUIRED ("" permitted when enabled=false)
+    provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
+    llm_model_id: "" # REQUIRED ("" permitted when enabled=false)
+    max_iterations: 8 # REQUIRED: > 0 when enabled
+    per_query_token_budget: 8000 # REQUIRED: > 0 when enabled
+    per_query_usd_budget: 0.05 # REQUIRED: > 0 when enabled
+    monthly_budget_usd: 0 # REQUIRED: >= 0 (must be explicit)
+    per_user_monthly_budget_usd: 0 # REQUIRED: >= 0
+    tool_allowlist: [] # REQUIRED: non-empty when enabled (deny-by-default per SCOPE-02)
+    web_snippet_cache_enabled: false # REQUIRED: strict bool
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key
@@ -1473,13 +1492,12 @@ environments:
     # follow-up cascade (qwen2.5:0.5b-instruct) handles assistant turns,
     # which fails schema validation on the weather scenario.
     #
-    # BUG-061-004 follow-up — gemma4:26b is unreliable at structured-JSON
-    # output on this host (Cross-source LLM call failed: JSONDecodeError
-    # spam visible in ml/ logs; assistant_turn returns
-    # error_cause=provider_unavailable for recipe_search even when routing
-    # selected the correct scenario). Revert assistant scenarios to
-    # gemma3:4b which is JSON-stable; keep llm_model / ollama_model on
-    # gemma4:26b for narrative/cross-source work that tolerates retries.
-    agent_provider_default_model: "gemma3:4b"
-    agent_provider_fast_model: "gemma3:4b"
-    agent_provider_vision_model: "gemma3:4b"
+    # BUG-061-004 follow-up — gemma4:26b is the highest-quality model
+    # available on this host. Direct probe confirms it emits clean
+    # structured JSON in <1s when format=json is requested. The earlier
+    # "JSON decode errors" symptom was caused by ml/app/agent.py omitting
+    # response_format={"type":"json_object"} on the completion call, NOT
+    # by model quality. Fixed in same change-set.
+    agent_provider_default_model: "gemma4:26b"
+    agent_provider_fast_model: "gemma4:26b"
+    agent_provider_vision_model: "gemma4:26b"

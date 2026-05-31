@@ -298,6 +298,15 @@ async def handle_invoke(
             temperature=effective_temperature,
             max_tokens=token_budget,
             api_key=api_key,
+            # BUG-061-004 follow-up — every Spec 037 scenario declares an
+            # output_schema, so the agent loop's final answer MUST be a JSON
+            # object. Without response_format, models like gemma4:26b emit
+            # ```json fences + chain-of-thought preamble that the executor's
+            # JSON parser rejects ("LLM returned invalid JSON" spam in ml/
+            # logs; assistant_turn → error_cause=provider_unavailable even
+            # when routing correctly selected the scenario). litellm maps
+            # this to Ollama's native format=json mode.
+            response_format={"type": "json_object"},
             **extra_kwargs,
         )
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar
