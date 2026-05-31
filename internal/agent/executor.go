@@ -654,6 +654,29 @@ func (e *Executor) Run(parent context.Context, sc *Scenario, env IntentEnvelope)
 			result.ToolCalls = append(result.ToolCalls, rec)
 			e.tracer.RecordToolCall(traceID, rec)
 			turnMessages = appendToolResultMessage(turnMessages, call, toolResult)
+
+			// Direct-output-from-tool short-circuit (scenario opt-in).
+			// When the scenario names this tool as the direct output
+			// source AND the tool result validates against the
+			// scenario output_schema, emit it verbatim as Final and
+			// skip the post-tool LLM turn. This is the pass-through
+			// path for scenarios like weather_query where the LLM
+			// would only re-shape the tool result and a second LLM
+			// call is pure latency.
+			if sc.DirectOutputFromTool != "" && call.Name == sc.DirectOutputFromTool {
+				var finalAny any
+				if jerr := json.Unmarshal(toolResult, &finalAny); jerr == nil {
+					if verr := sc.outputSchema.Validate(finalAny); verr == nil {
+						result.Outcome = OutcomeOK
+						result.Final = append(json.RawMessage(nil), toolResult...)
+						return e.finalize(result)
+					}
+				}
+				// Tool result did not satisfy output_schema. Fall
+				// through to the normal loop so the LLM can attempt
+				// to re-shape; if it can't, the usual loop-limit /
+				// schema-failure / timeout outcomes apply.
+			}
 		}
 		// Loop continues — next LLM turn sees the appended results.
 	}

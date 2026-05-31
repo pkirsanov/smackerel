@@ -63,6 +63,16 @@ type Scenario struct {
 	ContentHash     string // sha256 hex of canonical JSON projection
 	SourcePath      string
 
+	// DirectOutputFromTool, when non-empty, names a single tool whose
+	// output the executor short-circuits as the scenario's Final answer.
+	// After that tool succeeds with a result that validates against the
+	// scenario output_schema, the executor skips the post-tool LLM turn
+	// and emits the tool result verbatim. Used by tool-pass-through
+	// scenarios (e.g. weather_query) where the LLM has nothing to add
+	// after the tool returns and a second LLM call is pure latency.
+	// MUST appear in allowed_tools; the loader rejects mismatches.
+	DirectOutputFromTool string
+
 	inputSchema  *CompiledSchema
 	outputSchema *CompiledSchema
 }
@@ -393,6 +403,14 @@ func parseScenario(path string, raw []byte, top map[string]any) (*Scenario, *Loa
 	}
 	sum := sha256.Sum256(canonical)
 
+	// --- direct_output_from_tool (optional pass-through seam) ------------
+	directOutputFromTool, _ := top["direct_output_from_tool"].(string)
+	if directOutputFromTool != "" {
+		if _, ok := seenToolNames[directOutputFromTool]; !ok {
+			return reject(fmt.Sprintf("direct_output_from_tool %q must appear in allowed_tools", directOutputFromTool))
+		}
+	}
+
 	scn := &Scenario{
 		ID:              id,
 		Version:         version,
@@ -409,6 +427,7 @@ func parseScenario(path string, raw []byte, top map[string]any) (*Scenario, *Loa
 		SideEffectClass: scenarioClass,
 		ContentHash:     hex.EncodeToString(sum[:]),
 		SourcePath:      path,
+		DirectOutputFromTool: directOutputFromTool,
 		inputSchema:     inputSchema,
 		outputSchema:    outputSchema,
 	}
