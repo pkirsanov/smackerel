@@ -105,6 +105,63 @@ type geocodeResp struct {
 }
 
 func (p *OpenMeteoProvider) geocode(ctx context.Context, loc string) (float64, float64, string, error) {
+	// First try the location as supplied.
+	lat, lon, label, err := p.geocodeOnce(ctx, loc)
+	if err == nil {
+		return lat, lon, label, nil
+	}
+
+	// Fallback: Open-Meteo's geocoder does not understand trailing
+	// 2-letter US state abbreviations (e.g. "palm springs ca" returns
+	// 0 hits, but "palm springs" returns the California city). If the
+	// query ends with a short alpha token, retry without it. We only
+	// retry once and only when the original query has at least two
+	// space-separated tokens, so single-word queries ("Reykjavik") are
+	// unaffected.
+	if isNoResultErr(err) {
+		if stripped, ok := stripTrailingShortToken(loc); ok {
+			if lat2, lon2, label2, err2 := p.geocodeOnce(ctx, stripped); err2 == nil {
+				return lat2, lon2, label2, nil
+			}
+		}
+	}
+	return 0, 0, "", err
+}
+
+// isNoResultErr returns true when err is the sentinel "no geocode result"
+// from geocodeOnce. We match on the message rather than wrapping a typed
+// sentinel because the rest of the package consumes the error string.
+func isNoResultErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no geocode result for")
+}
+
+// stripTrailingShortToken returns s without its final whitespace-separated
+// token when that token is 2-3 letters (i.e. a US state abbreviation like
+// "ca", "ny", "wa"). The token's case is ignored. Returns (stripped, true)
+// only when the strip would leave a non-empty prefix; otherwise (s, false).
+func stripTrailingShortToken(s string) (string, bool) {
+	trimmed := strings.TrimSpace(s)
+	idx := strings.LastIndex(trimmed, " ")
+	if idx <= 0 {
+		return s, false
+	}
+	tail := trimmed[idx+1:]
+	if n := len(tail); n < 2 || n > 3 {
+		return s, false
+	}
+	for _, r := range tail {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+			return s, false
+		}
+	}
+	head := strings.TrimSpace(trimmed[:idx])
+	if head == "" {
+		return s, false
+	}
+	return head, true
+}
+
+func (p *OpenMeteoProvider) geocodeOnce(ctx context.Context, loc string) (float64, float64, string, error) {
 	q := url.Values{}
 	q.Set("name", loc)
 	q.Set("count", "1")
