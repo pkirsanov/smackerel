@@ -20,6 +20,15 @@ allowed_tools:
 - name: weather_lookup
   side_effect_class: external
 
+# Spec 061 SCOPE-07 — pass-through optimization: the weather_lookup
+# tool already returns a JSON object that satisfies output_schema
+# verbatim ({forecast_line, provider_name, retrieved_at}). With
+# direct_output_from_tool wired, the executor emits the tool result
+# as Final and skips the post-tool LLM turn, eliminating ~half the
+# end-to-end latency and removing one source of schema-failure
+# (model paraphrasing the tool result into invalid JSON).
+direct_output_from_tool: weather_lookup
+
 input_schema:
   type: object
   required: [ raw_query, user_id ]
