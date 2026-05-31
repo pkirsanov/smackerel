@@ -60,6 +60,9 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_OBSERVABILITY_OTEL_ENABLED":      "false",
 		"ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT":     "",
 		"ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME": "smackerel-core",
+		// BUG-061-004 — routing embedder SST.
+		"ASSISTANT_ROUTING_EMBEDDER_MODE":   "sidecar",
+		"ASSISTANT_ROUTING_EMBED_TIMEOUT_MS": "500",
 	}
 }
 

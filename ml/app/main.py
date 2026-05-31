@@ -5,12 +5,13 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel, Field
 
 from .auth import _AUTH_TOKEN, verify_auth
-from .embedder import _model
+from .embedder import _model, generate_embedding
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
 
@@ -220,4 +221,31 @@ async def metrics_endpoint():
 # Authenticated router — all non-health HTTP endpoints go here.
 # This ensures any future HTTP endpoint is protected by default.
 authed_router = APIRouter(dependencies=[Depends(verify_auth)])
+
+
+# BUG-061-004 — assistant NL routing embedder endpoint. The Go core's
+# assistant router calls POST /embed with a single text string and
+# expects a {vector, dim, model} response. Delegates to the shared
+# sentence-transformer pool via generate_embedding().
+class EmbedRequest(BaseModel):
+    text: str = Field(min_length=1)
+
+
+class EmbedResponse(BaseModel):
+    vector: list[float]
+    dim: int
+    model: str
+
+
+@authed_router.post("/embed", response_model=EmbedResponse)
+async def embed(req: EmbedRequest) -> EmbedResponse:
+    try:
+        vec = await generate_embedding(req.text)
+    except Exception as exc:  # noqa: BLE001 — surface upstream failures
+        raise HTTPException(status_code=503, detail=f"embedder unavailable: {exc}") from exc
+    if not vec:
+        raise HTTPException(status_code=503, detail="embedder returned empty vector")
+    return EmbedResponse(vector=vec, dim=len(vec), model=os.getenv("EMBEDDING_MODEL", ""))
+
+
 app.include_router(authed_router)
