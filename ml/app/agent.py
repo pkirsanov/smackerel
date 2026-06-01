@@ -403,4 +403,13 @@ async def handle_invoke(
         "trace_id": trace_id,
         "processing_time_ms": int((time.time() - start) * 1000),
     }
+    # Diagnostic: log what the LLM actually returned so we can see why
+    # the executor's schema validator rejects the substrate scenarios.
+    logger.info(
+        "agent.invoke.envelope trace_id=%s tool_calls_count=%d final_preview=%r final_type=%s",
+        trace_id,
+        len(tool_calls),
+        (str(final)[:300] if final else None),
+        type(final).__name__,
+    )
     return envelope
