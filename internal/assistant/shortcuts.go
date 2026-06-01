@@ -39,7 +39,12 @@ const ResetActionID = "__capability_reset__"
 // The map is exported so tests and adapters can enumerate it (e.g.
 // the Telegram adapter renders /reset in its slash menu).
 var SlashShortcuts = map[string]string{
-	"/ask":     "retrieval_qa",
+	// Spec 064 SCOPE-17 — /ask reroutes to open_knowledge so users get
+	// the open-ended agent (web search + internal retrieval + tools)
+	// instead of the spec-061 retrieval-only scenario. internal_retrieval
+	// is registered as a tool inside the open_knowledge agent so graph
+	// queries still hit the user's own corpus first (planner bias).
+	"/ask":     "open_knowledge",
 	"/weather": "weather_query",
 	"/remind":  "notification_schedule",
 	"/reset":   ResetActionID,

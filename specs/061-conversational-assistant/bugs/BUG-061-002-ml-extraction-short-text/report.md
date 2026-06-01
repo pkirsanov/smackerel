@@ -130,8 +130,15 @@ GO_EXIT=0
 ```
 $ grep -nE 'if .*: *return' ml/tests/test_processor.py | grep -i 'bug_061_002\|degrade' ; echo EXIT=$?
 EXIT=1
+$ grep -nE 'pytest\.skip|skipif|xfail|pytest\.mark\.skip' ml/tests/test_processor.py | head ; echo EXIT=$?
+EXIT=1
+$ grep -nE 'assert True\b|assert 1 == 1' ml/tests/test_processor.py | head ; echo EXIT=$?
+EXIT=1
 ```
-Zero hits — no conditional-return early-exits in any new test; assertions are direct.
+Zero hits — no conditional-return early-exits, no test skips/xfails,
+no trivial-truth assertions in the regression test set. Each test
+asserts the concrete post-fix contract (`success=True`,
+`result.title == <derived>`, `result.artifact_type == <derived>`).
 
 ### Code Diff Evidence
 
@@ -196,3 +203,87 @@ cases listed in "Tests Added" above.
 - Post-fix processor.py test pass: **executed** (`pytest -v` against post-fix tree; output verbatim, PII-redacted)
 - Full Python + Go unit suites: **executed** (`./smackerel.sh test unit --{python,go}`; output verbatim, PII-redacted)
 - All evidence captured this session; no interpretation or paraphrasing.
+
+### Validation Evidence
+
+`bubbles.validate` was parent-expanded by `bubbles.workflow` (nested
+runtime lacks `runSubagent` for the validate specialist). The validate
+phase re-asserted each Gherkin scenario against live test results and
+verified the `uservalidation.md` acceptance checklist.
+
+```
+$ cd ml && python3 -m pytest tests/test_processor.py -v 2>&1 | tail -10
+tests/test_processor.py::TestProcessContentErrors::test_missing_artifact_type_degrades_to_default PASSED [ 40%]
+tests/test_processor.py::TestProcessContentErrors::test_missing_title_degrades_to_default PASSED [ 45%]
+tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop PASSED [ 50%]
+tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_empty_content_derives_untitled PASSED [ 54%]
+tests/test_processor.py::TestProcessContentErrors::test_invalid_json_returns_error PASSED [ 59%]
+tests/test_processor.py::TestProcessContentErrors::test_total_llm_failure_returns_error PASSED [ 63%]
+tests/test_processor.py::TestProcessContentErrors::test_connection_failure_uses_sst_gated_degraded_fallback PASSED [ 68%]
+============================== 22 passed in 0.40s ==============================
+$ echo EXIT=$?
+EXIT=0
+```
+
+Gherkin-to-test mapping (one-to-one):
+
+| Gherkin scenario | Test | Result |
+|------------------|------|--------|
+| Short text with partial payload no longer silently drops | `test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop` | PASSED |
+| Empty content with partial payload derives "Untitled" | `test_bug_061_002_empty_content_derives_untitled` | PASSED |
+| Missing artifact_type only — derive from content_type | `test_missing_artifact_type_degrades_to_default` | PASSED |
+| Missing title only — derive from content | `test_missing_title_degrades_to_default` | PASSED |
+
+`uservalidation.md` checklist: all steps re-executed; expected results
+matched verbatim (exit 0; `22 passed`; `464 passed`; `go test ./...
+finished OK`). See `uservalidation.md` for the verbatim checklist
+content.
+
+### Audit Evidence
+
+`bubbles.audit` was parent-expanded by `bubbles.workflow` (nested
+runtime lacks `runSubagent` for the audit specialist). The audit
+phase re-ran the state-transition guard, artifact-lint, and repo
+PII/no-defaults policy checks against the bug artifacts.
+
+```
+$ BUBBLES_AGENT_NAME=bubbles.workflow bash .github/bubbles/scripts/state-transition-guard.sh specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text 2>&1 | tail -8
+============================================================
+  TRANSITION GUARD VERDICT
+============================================================
+
+🟡 TRANSITION PERMITTED with 3 warning(s)
+
+state.json status may be set to 'done'.
+$ echo EXIT=$?
+EXIT=0
+```
+
+PII / NO-DEFAULTS SST audit:
+
+```
+$ grep -rE '/home/[a-z]+/smackerel' specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/*.md
+$ echo "Exit Code: $?"
+Exit Code: 1
+$ grep -rE '\$\{[A-Z_]+:-' specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/*.md
+$ echo "Exit Code: $?"
+Exit Code: 1
+$ grep -rE '/home/[a-z]+/smackerel' specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/bug.md
+$ echo "Exit Code: $?"
+Exit Code: 1
+```
+
+Zero hits for absolute-home paths in evidence blocks (all redacted
+to `~/`). Zero hits for `${VAR:-default}` fail-loud SST violations
+in bug artifacts (no config changes in scope).
+
+Artifact-provenance audit:
+
+- scope-status uses canonical `Done` (not `[x] Done`)
+- DoD-Gherkin behavioral fidelity present (4 scenarios → 4 fidelity items)
+- scenario-manifest carries `requiredTestType` / `linkedTests` / `evidenceRefs` for all 4 scenarios
+- policySnapshot records `grill` / `tdd` / `autoCommit` / `lockdown` / `regression` / `validation` with `source` provenance
+- executionHistory carries per-phase agent provenance (specialist for `bubbles.bug`; parent-expanded with `expandedBy` / `expansionReason` ≥ 20 chars / resolvable `expansionEvidenceRef` for the remaining 7 phases)
+
+Audit verdict: no rework required.
+
