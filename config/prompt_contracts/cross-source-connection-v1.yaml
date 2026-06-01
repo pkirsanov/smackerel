@@ -1,4 +1,6 @@
 version: "cross-source-connection-v1"
+principleAlignment:
+  - "Principle 2"
 type: "cross-source-connection"
 description: "Assess whether artifacts from different source types sharing a concept have a genuine cross-domain connection"
 

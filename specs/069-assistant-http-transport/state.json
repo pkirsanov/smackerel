@@ -59,11 +59,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "currentScope": "SCOPE-1d",
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "plan",
+    "currentScope": "SCOPE-1c-bis",
     "runStartedAt": "2026-05-31T00:00:00Z",
-    "lastUpdatedAt": "2026-06-01T22:30:00Z",
+    "lastUpdatedAt": "2026-06-01T23:55:00Z",
     "completedPhaseClaims": [
       {
         "scope": "SCOPE-5",
@@ -138,6 +138,15 @@
         "runStartedAt": "2026-06-01T23:30:00Z",
         "runEndedAt": "2026-06-01T23:30:00Z",
         "summary": "Rework planning: added SCOPE-1d 'HTTPAdapter Construction and LateBound Binding' for finding F-069-ADAPTER-NOT-BOUND. Root cause: cmd/core/wiring_assistant_facade.go::wireAssistantFacade only constructs the Telegram assistant_adapter and never calls httpadapter.NewHTTPAdapter or svc.assistantHTTPHandler.SetAdapter/SetMiddleware, so every live POST /api/assistant/turn returns HTTP 503. This blocks every live-stack e2e/integration row in Scopes 1\u20135 (surfaced as spec 074 F074-04B-ASSISTANT-HTTP-LATE-BIND test-infra finding). Planning artifacts updated: scopes.md (new Scope 1d detail, scope inventory row, validation checkpoint, Scope 2 dependency bumped to include 1d), scenario-manifest.json (SCN-069-A12 traceability + scenarios entry with findingRefs to F-069-ADAPTER-NOT-BOUND and F074-04B-ASSISTANT-HTTP-LATE-BIND auto-resolution), test-plan.json (SCOPE-1d test rows incl. canary + regression re-assertion), uservalidation.md baseline extended, currentScope set to SCOPE-1d. No source, tests, or docs touched. Returning route_required to dispatch bubbles.implement for SCOPE-1d execution."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T23:55:00Z",
+        "runEndedAt": "2026-06-01T23:55:00Z",
+        "summary": "Dependency resolution for SCOPE-1d: promoted the AssistantConfig HTTP SST contract (HTTPEnabled, HTTPSchemaVersion, HTTPBodySizeMaxBytes, HTTPRateLimitPerUserPerMinute, HTTPConversationTTL, HTTPRequiredScope, HTTPCORSAllowedOrigins, HTTPTransportHintAllowlist) out of SCOPE-2 into a new foundation scope SCOPE-1c-bis 'HTTP Transport SST Contract' landing between SCOPE-1 and SCOPE-1d. SCOPE-1d depends-on now includes SCOPE-1c-bis (resolves the original cycle where 1d needed cfg.Assistant.HTTP* but 2 owned it). SCOPE-2 narrowed to consume the typed config rather than own it; the `TestAssistantHTTPTransportConfigRequiresEverySSTKey` unit row moved from SCOPE-2 to SCOPE-1c-bis. New scenario SCN-069-A13 added (config behaviorClass, scopeId SCOPE-1c-bis). Updated artifacts: scopes.md (new Scope 1c-bis detail block, scope inventory row, validation checkpoint, Scope 1d Depends On + wiring rationale, Scope 2 Depends On/Surfaces/Implementation Plan/Test Plan/DoD), scenario-manifest.json (traceability list + scenarios array), test-plan.json (new SCOPE-1c-bis block), state.json (this entry; currentScope set to SCOPE-1c-bis). No source, tests, or docs touched. Returning route_required to dispatch bubbles.implement for SCOPE-1c-bis execution."
       }
     ]
   }

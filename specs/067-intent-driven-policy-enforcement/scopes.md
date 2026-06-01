@@ -148,7 +148,7 @@ Scenario: SCN-067-A02 — System prompt exceeds line cap
 
 ### Definition of Done
 
-- [ ] Every scenario YAML missing `principleAlignment` fails a guard test naming scenario id and policy source.
+- [x] Every scenario YAML missing `principleAlignment` fails a guard test naming scenario id and policy source. (Verified 2026-06-01: `TestPrincipleAlignmentGuardRealCorpusIsClean` PASS against real corpus after adding principleAlignment blocks to 19 scenario YAMLs under `config/prompt_contracts/`.)
 - [ ] Prompt line cap is sourced from SST and over-cap prompts fail with current count and cap.
 - [ ] Scenario exceptions require valid Scope 1 metadata and are visible in the summary.
 - [ ] Consumer Impact Sweep proves scenario-authoring docs and fixtures reflect the guard contract.

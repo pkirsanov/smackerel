@@ -1,5 +1,7 @@
 id: e2e_ollama_smoke
 version: "e2e-ollama-smoke-v1"
+principleAlignment:
+  - "Principle 8"
 type: "scenario"
 description: |
   Spec 043 — agent E2E smoke test against real Ollama (deterministic).

@@ -1,5 +1,8 @@
 id: recommendation_feedback
 version: "recommendation-feedback-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "scenario"
 description: "Record recommendation feedback, suppression state, and preference corrections"
 

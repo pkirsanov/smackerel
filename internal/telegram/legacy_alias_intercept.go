@@ -43,6 +43,38 @@ type LegacyAliasInterceptor struct {
 	clock  func() time.Time
 }
 
+// assistantFacadeUpstreamCtxKey is the context key set by callers
+// that route a Telegram message through the assistant facade
+// upstream (e.g. integration tests / future production wiring once
+// the facade Policy is the source of truth). When present and set
+// to true, the Telegram retired-alias interceptor short-circuits
+// without rewriting or re-dispatching, preventing double-dispatch
+// against the facade's own SCOPE-6.1 Policy.Handle path.
+//
+// Spec 075 SCOPE-6.4 (TP-075-23).
+type assistantFacadeUpstreamKey struct{}
+
+// AssistantFacadeUpstreamKey is the exported context key callers
+// use to mark a turn as already-dispatched-by-facade. Value must
+// be `true` to take effect.
+var AssistantFacadeUpstreamKey = assistantFacadeUpstreamKey{}
+
+// WithAssistantFacadeUpstream returns a derived context with the
+// upstream flag set to true.
+func WithAssistantFacadeUpstream(ctx context.Context) context.Context {
+	return context.WithValue(ctx, AssistantFacadeUpstreamKey, true)
+}
+
+// IsAssistantFacadeUpstream reports whether ctx carries the
+// upstream marker set by WithAssistantFacadeUpstream.
+func IsAssistantFacadeUpstream(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(AssistantFacadeUpstreamKey).(bool)
+	return v
+}
+
 // NewLegacyAliasInterceptor returns an interceptor bound to a
 // non-nil Policy. clock is optional; nil falls back to time.Now.
 func NewLegacyAliasInterceptor(policy legacyretirement.Policy, clock func() time.Time) (*LegacyAliasInterceptor, error) {
@@ -87,6 +119,14 @@ func legacyAliasPromptFor(cmd, args string) (string, bool) {
 // policy did not match.
 func (b *Bot) interceptLegacyAlias(ctx context.Context, msg *tgbotapi.Message, updateID int) (bool, error) {
 	if b == nil || b.legacyAliasInterceptor == nil || msg == nil || msg.Chat == nil || !msg.IsCommand() {
+		return false, nil
+	}
+	// Spec 075 SCOPE-6.4 (TP-075-23) — when the upstream facade is
+	// already the Policy authority for this turn, the legacy alias
+	// interceptor MUST short-circuit. It returns (false, nil) so
+	// the bot's normal dispatch path proceeds and the assistant
+	// facade's SCOPE-6.1 Policy.Handle path owns the decision.
+	if IsAssistantFacadeUpstream(ctx) {
 		return false, nil
 	}
 	cmd := msg.Command()

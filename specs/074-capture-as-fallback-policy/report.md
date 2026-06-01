@@ -338,3 +338,47 @@ This is **not** a SCOPE-074-04B implementation regression — it is foreign-owne
 - The four SCOPE-074-04B DoD items remain `[ ]` in scopes.md pending the test-infra blocker.
 
 **Phase:** implement. **Claim Source:** executed.
+
+---
+
+## SCOPE-074-04B/04C Live Attempt (bubbles.implement, 2026-06-01d)
+
+This pass re-attempted SCOPE-074-04B's TP-074-14 e2e and surveyed SCOPE-074-04C. Discovered a new, broader blocker that gates the entire test stack: the bash config generator no longer emits the spec 065 `ASSISTANT_TOOLS_*` env vars required by `internal/config.Validate()`, so `./smackerel.sh config generate` aborts before any disposable test stack can come up.
+
+### Evidence — generator failure
+
+`./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround$'` (queued behind the test-suite lock, ran 2026-06-01 ~23:09 UTC) failed at config-generate, BEFORE the test binary was invoked:
+
+```
+ERROR: [F061-SST-MISSING] missing or invalid required assistant configuration:
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_ENABLED, ASSISTANT_TOOLS_LOCATION_NORMALIZE_PROVIDER,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_TIMEOUT_MS, ASSISTANT_TOOLS_LOCATION_NORMALIZE_CACHE_TTL_SECONDS,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_CACHE_MAX_ENTRIES, ASSISTANT_TOOLS_UNIT_CONVERT_ENABLED,
+  ASSISTANT_TOOLS_UNIT_CONVERT_CATALOG_VERSION, ASSISTANT_TOOLS_CALCULATOR_ENABLED,
+  ASSISTANT_TOOLS_CALCULATOR_MAX_EXPRESSION_CHARS, ASSISTANT_TOOLS_ENTITY_RESOLVE_ENABLED,
+  ASSISTANT_TOOLS_ENTITY_RESOLVE_CONFIDENCE_FLOOR, ASSISTANT_TOOLS_ENTITY_RESOLVE_TIMEOUT_MS
+exit status 1
+ERROR: config-generate-time validation failed for env=test (see above)
+EXIT=1
+```
+
+Direct invocation `./smackerel.sh config generate` (2026-06-01 23:10 UTC) produced the identical failure for `env=dev`. `grep -c 'ASSISTANT_TOOLS' scripts/commands/config.sh` returns `0` — the bash generator has no emit lines for these spec 065 keys, while `internal/config/assistant_tools.go` lists them all as REQUIRED. **Claim Source:** executed.
+
+### Implication for SCOPE-074-04B and SCOPE-074-04C
+
+- TP-074-14 (live e2e) cannot be run on any host until the generator is fixed. The test code itself is intact (compiles under `-tags e2e`); the underlying SCOPE-04B implementation seam in `facade.go` line ~1005 was wired earlier and is exercised by the integration tests that SCOPE-04A already passed live.
+- TP-074-13 (live integration) for SCOPE-074-04C has the same hard dependency on `./smackerel.sh config generate` succeeding.
+- SCOPE-074-04C also lacks a planning/design decision on **where** the pre-clarification ORIGINAL prompt is persisted between the clarify-emit turn and the abandonment-sweep turn. `internal/assistant/context/store.go` defines `PendingDisambig` (spec 037 disambiguation) but NO `PendingClarify` field exists for spec 068 compiler clarifications; the original prompt is only present in `WorkingContext.Turns[len-1].UserText`. `design.md` lines 125–158 prescribe the `abandoned_clarification` flag and the cause vocabulary, but do not specify the persistence vehicle or the sweep owner (`assistantctx.IdleSweepTicker` vs a new `capturefallback` ticker). Without that decision an implement pass would be inventing planning content.
+
+### Routed findings
+
+- **[F074-04B-CONFIG-GENERATOR-MISSING-ASSISTANT-TOOLS]** `scripts/commands/config.sh` does not emit any of the twelve `ASSISTANT_TOOLS_*` env vars that `internal/config/assistant_tools.go` requires. Owner: spec 065 SCOPE-1 implementer (bash-generator wiring) plus bubbles.config / smackerel-no-defaults skill. Required action: add `required_value assistant.tools.location_normalize.*`, `…unit_convert.*`, `…calculator.*`, `…entity_resolve.*` lookups in `scripts/commands/config.sh` (modelled after the existing `CAPTURE_AS_FALLBACK_*` block at lines 1365–1369 / 1974–1978) and matching `=${VAR}` lines in the heredoc that writes the env file. This is a complete-stack blocker — every live integration/e2e run on this host fails at generate-time today.
+- **[F074-04C-PENDING-CLARIFY-PERSISTENCE-UNSPECIFIED]** `design.md` does not specify how the spec 068 compiler's pre-clarification ORIGINAL prompt is persisted across the clarify-abandon window (no `PendingClarify` shape on `assistantctx.Conversation`; no sweep owner named; no migration described). Owner: bubbles.design (spec 074, in coordination with spec 068 compiler design). Required action: amend `design.md` SCOPE-4 with an explicit persistence + sweep design — at minimum (a) what struct/field holds the original prompt and its emit time, (b) which package owns the sweep loop (re-use `assistantctx.IdleSweepTicker`? new `capturefallback` ticker?), (c) the migration/JSONB-column path on `assistant_conversations`, (d) the integration-test shape that proves `abandoned_clarification=true` against live Postgres. Until this lands an implement pass for SCOPE-04C would be fabricating planning content.
+
+### Uncertainty Declaration (SCOPE-074-04B / 04C, 2026-06-01d)
+
+- No new SCOPE-074-04B or SCOPE-074-04C DoD items are marked `[x]` in this pass.
+- No source-tree edits were made in this pass beyond appending this evidence block to `report.md`.
+- `runCaptureFallback`/`openKnowledgeNoGround`/`captureFallbackEligible` wiring for the open-knowledge no-ground path remains in place from earlier passes; no regression was introduced because no code was changed.
+
+**Phase:** implement. **Claim Source:** executed.

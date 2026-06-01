@@ -9,7 +9,7 @@
   "linkedImplementationSpec": null,
   "linkedPlanningPacket": null,
   "planningOnly": false,
-  "planMaturityOnly": true,
+  "planMaturityOnly": false,
   "specDependsOn": [
     "specs/037-llm-agent-tools",
     "specs/061-conversational-assistant",
@@ -62,13 +62,30 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "planning",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
     "currentScope": null,
-    "runStartedAt": "2026-05-31T00:00:00Z",
-    "lastUpdatedAt": "2026-05-31T00:00:00Z",
-    "completedPhaseClaims": [],
-    "completedScopes": [],
+    "runStartedAt": "2026-06-01T23:00:00Z",
+    "lastUpdatedAt": "2026-06-01T23:30:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "SCOPE-1",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-01T23:30:00Z",
+        "evidenceRef": "report.md#scope-1",
+        "summary": "SCOPE-1 retired command policy foundation: classifier, BotCommands selector, /help body, /status bypass proof. Unit tests pass (RC=0)."
+      },
+      {
+        "phase": "implement",
+        "scope": "SCOPE-2",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-01T23:30:00Z",
+        "evidenceRef": "report.md#scope-2",
+        "summary": "SCOPE-2 alias-window interceptor wired into bot.handleMessage before legacy command switch; integration tests pass (RC=0) covering open-window rewrite+notice+ledger, dedup, closed-window rejection, window-key isolation. E2E live-stack rows skip pending shared send-message capture harness (Uncertainty Declaration)."
+      }
+    ],
+    "completedScopes": ["SCOPE-1", "SCOPE-2"],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
@@ -105,6 +122,15 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T23:00:00Z",
+        "runEndedAt": "2026-06-01T23:30:00Z",
+        "summary": "Flipped planMaturityOnly=false to reflect full-delivery intent. Implemented SCOPE-1 (verified existing scaffolding for classifier, BotCommands selector, /help body, /status bypass) and SCOPE-2 (added missing call to interceptLegacyAlias in internal/telegram/bot.go handleMessage before the legacy command switch so retired slash commands never reach legacy handlers; production wiring already existed in cmd/core/wiring_legacy_alias.go). Unit tests RC=0 for SCN-066-A01/A06/A09 and all interceptor unit cases; integration tests RC=0 covering SCN-066-A04 (rewrite+notice+ledger), notice idempotency, SCN-066-A05 (closed-window rejection), operational passthrough, window-key isolation; touched-package regression ./internal/telegram/... RC=0. E2E live-stack rows skip pending shared send-message capture harness \u2014 Uncertainty Declaration recorded in report.md and scopes.md DoD. No state.json certification claims made; certification routing remains with bubbles.validate."
       }
     ]
   }

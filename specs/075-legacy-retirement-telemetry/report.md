@@ -130,7 +130,40 @@ Containment: no renderer code (PWA, WhatsApp, Mobile, Telegram), no `schema_vers
 
 Outstanding: `design.md` v1-compatibility decision record for SCOPE-075-06.2b is owned by `bubbles.design` — not edited by this agent. Routed via the result envelope.
 
-Sub-scopes 6.3–6.5 remain Not Started.
+### SCOPE-075-06.3 (PWA Notice Renderer + Live Go E2E) — implement phase
+
+**Phase:** implement
+**Claim Source:** executed (renderer change + e2e compile) / not-run (live e2e requires running stack)
+
+PWA renderer change — `web/pwa/lib/render_descriptor_v1.js` now projects the optional `notice.replacement_example` as a `kind: "text"` node appended AFTER the primary body (one-line addendum, non-blocking, never replaces the body). The branch is dormant when `notice` is absent; the cross-language renderer canary (TP-073-03) keeps the JS and Dart projections identical because no existing fixture under `tests/fixtures/assistant_response_v1/` carries a `notice` field:
+
+```text
+$ cd ~/smackerel && go test -count=1 -timeout 180s -run TestRenderDescriptorV1_CrossLanguageCanary ./tests/unit/clients/
+ok      github.com/smackerel/smackerel/tests/unit/clients       6.273s
+```
+
+Go e2e at `tests/e2e/assistant/legacy_retirement_notice_test.go` (re-targeted TP-075-09, patterned after `tests/e2e/photos_capability_test.go`) covers two cases against the live HTTP turn route:
+
+- `TestLegacyRetirementNoticeE2E_OpenWindowRendersAddendumWithoutBlockingBody` — happy path: posts the retired command `/weather` during the open window, asserts `response.notice.{command,replacement_example,copy_key,window_id}` populated, asserts `body` non-empty (notice MUST NOT replace the assistant response), then pipes the live wire body through the PWA JS renderer (`web/pwa/lib/render_descriptor_v1_cli.js`) and asserts the descriptor contains the primary body as the FIRST text node and the `replacement_example` as a LATER text node — proving the renderer surfaces the notice as an addendum.
+- `TestLegacyRetirementNoticeE2E_NonRetiredTurnOmitsNotice` — adversarial: a benign `"hello"` turn MUST yield a wire body with no `notice` key (omitempty back-compat guarantee) AND the PWA renderer descriptor MUST be byte-stable against a re-run with the `notice` key explicitly stripped (catches a renderer that leaks a phantom notice node).
+
+Compile-check on the new e2e file (live stack not running in this session — the live execution row stays NOT recorded):
+
+```text
+$ cd ~/smackerel && go vet -tags=e2e ./tests/e2e/assistant/
+(no output — vet clean)
+```
+
+Files changed:
+
+- `web/pwa/lib/render_descriptor_v1.js` — appended optional `notice.replacement_example` projection as a `kind: "text"` node after `error_cause`; branch is dormant when `notice` is absent.
+- `tests/e2e/assistant/legacy_retirement_notice_test.go` (new) — TP-075-09 re-targeted to Go: 2 live-stack tests + JS renderer subprocess assertion.
+
+Outstanding: `./smackerel.sh test e2e` against a running live stack (with `CORE_EXTERNAL_URL`, `SMACKEREL_AUTH_TOKEN`, `LEGACY_RETIREMENT_WINDOW_STATE=open`, `LEGACY_RETIREMENT_WINDOW_ID` exported by the e2e harness) is required to record live-stack PASS evidence for TP-075-09. The live execution row is owned by SCOPE-075-06.5 (Live-Stack Execution) and is sequenced after SCOPE-075-06.4. The renderer + test artifacts shipped here are the prerequisites that 6.5 will exercise.
+
+**Uncertainty Declaration:** This pass produced the renderer change + the e2e test file + ran the cross-language renderer canary as a regression check. It did NOT execute the new e2e test against a running live stack — the SCOPE-075-06.3 DoD checkbox stays `[ ]` until live-stack PASS evidence is appended (owner: SCOPE-075-06.5 live-stack execution, sequenced after 6.4). The renderer + test artifacts shipped here are the prerequisites that 6.5 will exercise.
+
+Sub-scopes 6.4–6.5 remain Not Started.
 
 ## Completion Statement
 

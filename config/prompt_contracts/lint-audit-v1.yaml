@@ -1,4 +1,6 @@
 version: "lint-audit-v1"
+principleAlignment:
+  - "Principle 2"
 type: "lint-audit"
 description: "Audit knowledge layer quality — detect contradictions, stale concepts, orphan entities"
 

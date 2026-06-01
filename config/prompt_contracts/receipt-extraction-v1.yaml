@@ -1,4 +1,6 @@
 version: "receipt-extraction-v1"
+principleAlignment:
+  - "Principle 1"
 type: "domain-extraction"
 description: "Extract structured expense/receipt data from receipt text, invoice text, or OCR output"
 

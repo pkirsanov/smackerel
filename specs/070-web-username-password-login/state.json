@@ -32,23 +32,28 @@
   "certification": {
     "status": "in_progress",
     "completedAt": null,
-    "evidenceRef": null,
+    "evidenceRef": "specs/070-web-username-password-login/report.md#test-evidence",
     "certifiedCompletedPhases": ["bootstrap", "analyze", "design", "plan"],
-    "scopeProgress": {"total": 4, "notStarted": 4, "inProgress": 0, "done": 0, "blocked": 0},
+    "scopeProgress": {"total": 4, "notStarted": 0, "inProgress": 0, "done": 3, "blocked": 0, "deferred": 1},
     "lockdownState": "n/a-implementation-in-progress",
-    "completedScopes": [],
-    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. Driven by user request after operator hit token-only login on home-lab and asked for username+password + single login. MVP scope: credential table + argon2id hasher + repo + handler extension + CLI + form HTML. Reuses existing shared AuthToken as cookie value (no new token type, no per-user PASETO). Trust band is identical to today's token-form login; user table is a UX layer not a privilege layer."
+    "completedScopes": ["SCOPE-1", "SCOPE-2", "SCOPE-3"],
+    "notes": "Spec 070 (originally scaffolded as 063, renumbered 2026-05-31 to resolve duplicate 063 collision with knowledge-ai-enrichment) scaffolded 2026-05-30. SCOPE-1/2/3 implemented and verified with executed unit + integration evidence on 2026-06-01 (see report.md). SCOPE-4 is deferred operator-action (live home-lab deploy + browser smoke); its DoD items are recorded as explicit acceptance criteria. Spec status remains in_progress until operator confirms SCOPE-4 acceptance."
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
     "activeAgent": "bubbles.implement",
-    "currentPhase": "plan",
-    "currentScope": "SCOPE-1",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-4",
     "runStartedAt": "2026-05-30T07:50:00Z",
-    "lastUpdatedAt": "2026-05-30T07:50:00Z",
-    "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan"],
-    "completedScopes": [],
-    "executionHistory": []
+    "lastUpdatedAt": "2026-06-01T23:15:00Z",
+    "completedPhaseClaims": ["bootstrap", "analyze", "design", "plan", "implement"],
+    "completedScopes": ["SCOPE-1", "SCOPE-2", "SCOPE-3"],
+    "executionHistory": [
+      {"phase": "implement", "scope": "SCOPE-1", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-1-unit-evidence"},
+      {"phase": "implement", "scope": "SCOPE-2", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-2-evidence"},
+      {"phase": "implement", "scope": "SCOPE-3", "agent": "bubbles.implement", "completedAt": "2026-06-01T23:15:00Z", "evidenceRef": "report.md#scope-3-evidence"},
+      {"phase": "implement", "scope": "SCOPE-4", "agent": "bubbles.implement", "completedAt": null, "evidenceRef": "report.md#scope-4-evidence", "note": "deferred operator-action — live deploy + browser smoke"}
+    ]
   }
 }

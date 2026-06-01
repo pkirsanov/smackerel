@@ -1,4 +1,6 @@
 version: "product-extraction-v1"
+principleAlignment:
+  - "Principle 1"
 type: "domain-extraction"
 description: "Extract structured product data from product pages and reviews"
 

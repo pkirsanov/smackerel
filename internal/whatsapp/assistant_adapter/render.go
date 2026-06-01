@@ -203,26 +203,73 @@ func Render(resp contracts.AssistantResponse, maxTextChars int) (OutboundMessage
 		return OutboundMessage{}, errors.New("whatsapp_adapter: response has both ConfirmCard and DisambiguationPrompt")
 	}
 
+	var (
+		out OutboundMessage
+		err error
+	)
 	switch {
 	case resp.Status == contracts.StatusUnavailable:
 		body := strings.TrimSpace(resp.Body)
 		if body == "" {
 			body = "Something went wrong and I couldn't complete that."
 		}
-		return textOutbound(body, resp.Sources, resp.SourcesOverflowCount, maxTextChars), nil
+		out = textOutbound(body, resp.Sources, resp.SourcesOverflowCount, maxTextChars)
 
 	case resp.DisambiguationPrompt != nil:
-		return renderDisambiguation(resp, maxTextChars)
+		out, err = renderDisambiguation(resp, maxTextChars)
 
 	case resp.ConfirmCard != nil:
-		return renderConfirm(resp, maxTextChars)
+		out, err = renderConfirm(resp, maxTextChars)
 
 	default:
 		body := strings.TrimSpace(resp.Body)
 		if body == "" {
 			return OutboundMessage{}, ErrNothingToRender
 		}
-		return textOutbound(body, resp.Sources, resp.SourcesOverflowCount, maxTextChars), nil
+		out = textOutbound(body, resp.Sources, resp.SourcesOverflowCount, maxTextChars)
+	}
+	if err != nil {
+		return OutboundMessage{}, err
+	}
+	// Spec 075 SCOPE-6.4 (TP-075-21) — WhatsApp legacy-retirement
+	// notice addendum. Appended as a one-line short-message tail
+	// to the rendered body (text or interactive). Non-blocking:
+	// the primary response surface is preserved.
+	if resp.LegacyRetirementNotice != nil {
+		appendLegacyRetirementNoticeAddendum(&out, resp.LegacyRetirementNotice, maxTextChars)
+	}
+	return out, nil
+}
+
+// LegacyRetirementNoticeAddendum returns the canonical short-message
+// addendum derived from a NoticePayload. Exported so tests can pin
+// the rendered shape across transports.
+func LegacyRetirementNoticeAddendum(np *contracts.NoticePayload) string {
+	if np == nil {
+		return ""
+	}
+	cmd := strings.TrimSpace(np.Command)
+	ex := strings.TrimSpace(np.ReplacementExample)
+	if cmd == "" || ex == "" {
+		return ""
+	}
+	return fmt.Sprintf("Heads up: %s is retiring — try \"%s\" instead.", cmd, ex)
+}
+
+func appendLegacyRetirementNoticeAddendum(out *OutboundMessage, np *contracts.NoticePayload, maxTextChars int) {
+	addendum := LegacyRetirementNoticeAddendum(np)
+	if addendum == "" {
+		return
+	}
+	switch out.Kind {
+	case OutboundText:
+		if out.Text != nil {
+			out.Text.Body = truncateBody(out.Text.Body+"\n\n"+addendum, maxTextChars)
+		}
+	case OutboundInteractiveButtons, OutboundInteractiveList:
+		if out.Interactive != nil {
+			out.Interactive.Body = truncateBody(out.Interactive.Body+"\n\n"+addendum, maxTextChars)
+		}
 	}
 }
 

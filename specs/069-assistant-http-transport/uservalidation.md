@@ -10,6 +10,7 @@ Links: [scopes.md](scopes.md) | [report.md](report.md)
 - [x] Scope 1 owns the cross-spec HTTP-route e2e proof for spec 068 scenarios SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09 (scenario IDs preserved verbatim); spec 069's `specDependsOn` already correctly includes spec 068, and no inverse dependency was added.
 - [x] No owner-reported regression is recorded in this planning pass.
 - [x] Rework scope SCOPE-1d added for finding F-069-ADAPTER-NOT-BOUND (wireAssistantFacade never binds *HTTPAdapter; live /api/assistant/turn returns 503); planned bind block + integration coverage resolves F074-04B-ASSISTANT-HTTP-LATE-BIND.
+- [x] Foundation scope SCOPE-1c-bis added to own the HTTP transport SST contract (HTTPEnabled, HTTPSchemaVersion, HTTPBodySizeMaxBytes, HTTPRateLimitPerUserPerMinute, HTTPConversationTTL, HTTPRequiredScope, HTTPCORSAllowedOrigins, HTTPTransportHintAllowlist); SCOPE-1d depends on it; SCOPE-2 narrowed to consume the typed config rather than own its fail-loud validation.
 
 ## Owner Sign-Off
 

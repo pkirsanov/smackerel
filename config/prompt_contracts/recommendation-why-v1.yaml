@@ -1,5 +1,8 @@
 id: recommendation_why
 version: "recommendation-why-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "scenario"
 description: "Explain an existing recommendation from persisted trace and refs only"
 

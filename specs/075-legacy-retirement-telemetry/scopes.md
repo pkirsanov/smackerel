@@ -778,8 +778,103 @@ No project impact map is configured. This scope touches the assistant facade (sh
   **Containment proof:** no transport renderer code (PWA, WhatsApp, Mobile, Telegram), no `schema_version` change, no modification to any other top-level `TurnResponse` field, and no facade dispatch logic was touched in this sub-scope. The renderer work owned by 6.3 / 6.4 will consume the new typed optional `notice` field surfaced here.
 
   **Design-record handoff (still required, not owned by this agent):** the v1-compatibility decision record under `design.md` for SCOPE-075-06.2b must be authored by `bubbles.design`. This implementation agent did not edit `design.md`. Route packet emitted in the result envelope below.
-- [ ] 6.4 WhatsApp + Mobile renderers + Telegram short-circuit: TP-075-21, TP-075-22, TP-075-23 all pass; existing `legacy_alias_intercept` tests still green for the non-upstream path.
+- [x] 6.4 WhatsApp + Mobile renderers + Telegram short-circuit: TP-075-21, TP-075-22, TP-075-23 all pass; existing `legacy_alias_intercept` tests still green for the non-upstream path.
+
+  **Phase:** implement
+  **Claim Source:** executed
+  **Evidence:**
+
+  Implementation:
+  - `internal/whatsapp/assistant_adapter/render.go` — `Render()` now appends a `LegacyRetirementNoticeAddendum` ("Heads up: `<command>` is retiring — try \"`<replacement_example>`\" instead.") to the rendered text/interactive body when `resp.LegacyRetirementNotice != nil`. Non-blocking: primary body is preserved verbatim. Pure function — zero I/O.
+  - `internal/telegram/legacy_alias_intercept.go` — added `assistantFacadeUpstreamKey` context key with `WithAssistantFacadeUpstream(ctx) / IsAssistantFacadeUpstream(ctx)` helpers; `interceptLegacyAlias` short-circuits via `return false, nil` when the upstream marker is set, without invoking `Policy.Handle` or emitting any user-facing reply. Non-upstream path is unchanged.
+  - `internal/telegram/legacy_alias_intercept_export_for_integration.go` — `//go:build integration` shim that exposes the unexported method to the planned cross-package test path.
+
+  TP-075-21 / TP-075-22 / TP-075-23 (new integration tests):
+
+  ```text
+  $ cd ~/smackerel && go test -tags=integration -count=1 -timeout 60s -v -run 'TP_075_2[123]|Renderer_TP_075_21|Mobile_TP_075_22|Interceptor_TP_075_23' ./tests/integration/assistant/
+  === RUN   TestMobileTransport_TP_075_22_NoticeInlineNotModal
+  --- PASS: TestMobileTransport_TP_075_22_NoticeInlineNotModal (0.00s)
+  === RUN   TestWhatsAppRenderer_TP_075_21_NoticeAppendedAsAddendum
+  --- PASS: TestWhatsAppRenderer_TP_075_21_NoticeAppendedAsAddendum (0.00s)
+  === RUN   TestWhatsAppRenderer_TP_075_21_NoNotice_NoAddendum
+  --- PASS: TestWhatsAppRenderer_TP_075_21_NoNotice_NoAddendum (0.00s)
+  === RUN   TestTelegramLegacyAliasInterceptor_TP_075_23_ShortCircuitsWhenFacadeUpstream
+  --- PASS: TestTelegramLegacyAliasInterceptor_TP_075_23_ShortCircuitsWhenFacadeUpstream (0.00s)
+  === RUN   TestTelegramLegacyAliasInterceptor_TP_075_23_NonUpstreamStillInvokesPolicy
+  --- PASS: TestTelegramLegacyAliasInterceptor_TP_075_23_NonUpstreamStillInvokesPolicy (0.00s)
+  ok      github.com/smackerel/smackerel/tests/integration/assistant      0.140s
+  ```
+
+  Non-upstream regression — pre-existing `internal/telegram` unit tests (legacy_alias_intercept_test.go: closed-window, open-no-adapter, already-notified, paused) plus full whatsapp + telegram package suites all green:
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 120s ./internal/whatsapp/... ./internal/telegram/...
+  ok      github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter     0.063s
+  ok      github.com/smackerel/smackerel/internal/telegram                       28.233s
+  ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter     0.065s
+  ok      github.com/smackerel/smackerel/internal/telegram/render                0.088s
+  ```
+
+  TP-075-23 adversarial coverage: the second test asserts `policy.Handle` IS invoked exactly once when the upstream marker is absent, proving the short-circuit guard is the only thing controlling the new path.
+
+  **Containment proof:** only `internal/whatsapp/assistant_adapter/render.go`, `internal/telegram/legacy_alias_intercept.go`, and the integration shim were modified. Facade, schema, codegen, mobile-client code untouched. The `NoticePayload` contract is unchanged; renderers consume the existing `Command`/`ReplacementExample` fields produced by 6.1.
 - [ ] 6.5 Live-stack execution: TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17 re-executed against the live stack; raw outputs (redacted) captured in `report.md` per `bubbles-evidence-capture`.
+
+  **Phase:** implement
+  **Claim Source:** executed
+  **Status:** partial — 7 of 9 TPs PASS on the live stack; TP-075-16 FAILS due to e2e env-propagation gap; TP-075-15 has no test artifact.
+
+  Live-stack integration TPs (TP-075-05, TP-075-06, TP-075-07, TP-075-13, TP-075-14, TP-075-17) — all PASS against `smackerel-test` Postgres:
+
+  ```text
+  $ cd ~/smackerel && ./smackerel.sh test integration --go-run '^(TestSQLNoticeLedger_TP_075_0[567]|TestSQLPauseStateStore_TP_075_1[34]|TestSQLObservationReport_TP_075_17)'
+  === RUN   TestSQLObservationReport_TP_075_17_ZeroInvocationsGateEligible
+  --- PASS: TestSQLObservationReport_TP_075_17_ZeroInvocationsGateEligible (0.01s)
+  === RUN   TestSQLObservationReport_TP_075_17_NonzeroBlocksGate
+  --- PASS: TestSQLObservationReport_TP_075_17_NonzeroBlocksGate (0.02s)
+  === RUN   TestSQLNoticeLedger_TP_075_05_MarkAndDedup
+  --- PASS: TestSQLNoticeLedger_TP_075_05_MarkAndDedup (0.02s)
+  === RUN   TestSQLNoticeLedger_TP_075_06_RepeatMarkBumpsCountKeepsFirstTime
+  --- PASS: TestSQLNoticeLedger_TP_075_06_RepeatMarkBumpsCountKeepsFirstTime (0.02s)
+  === RUN   TestSQLNoticeLedger_TP_075_07_PerCommandIndependence
+  --- PASS: TestSQLNoticeLedger_TP_075_07_PerCommandIndependence (0.02s)
+  === RUN   TestSQLPauseStateStore_TP_075_13_PauseWritesAndResolverReads
+  --- PASS: TestSQLPauseStateStore_TP_075_13_PauseWritesAndResolverReads (0.01s)
+  === RUN   TestSQLPauseStateStore_TP_075_14_ResumeResetsAndPreservesTelemetry
+  --- PASS: TestSQLPauseStateStore_TP_075_14_ResumeResetsAndPreservesTelemetry (0.02s)
+  ok      github.com/smackerel/smackerel/tests/integration/assistant      0.281s
+  EXIT=0
+  ```
+
+  Live-stack e2e TPs — TP-075-08 PASS; TP-075-16 FAIL (env propagation):
+
+  ```text
+  $ cd ~/smackerel && ./smackerel.sh test e2e --go-run '^(TestSQLNoticeLedger_TP_075_08|TestLegacyRetirementClosedResponse_TP_075_16)'
+  === RUN   TestLegacyRetirementClosedResponse_TP_075_16
+      legacy_closed_response_test.go:72: LEGACY_RETIREMENT_WINDOW_ID not set in test env (config generate --env test)
+  --- FAIL: TestLegacyRetirementClosedResponse_TP_075_16 (0.00s)
+  === RUN   TestSQLNoticeLedger_TP_075_08_CrossTransportDedup
+  --- PASS: TestSQLNoticeLedger_TP_075_08_CrossTransportDedup (0.03s)
+  FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      0.064s
+  EXIT=1
+  ```
+
+  Verified that the SST values ARE present in the generated test env:
+
+  ```text
+  $ grep -E '^LEGACY_RETIREMENT_(WINDOW_ID|USER_BUCKET_HMAC_KEY)' config/generated/test.env
+  LEGACY_RETIREMENT_WINDOW_ID=2026-05-retirement
+  LEGACY_RETIREMENT_USER_BUCKET_HMAC_KEY=smackerel-legacy-retirement-dev-hmac-not-for-prod
+  ```
+
+  The e2e Go test runner in `./smackerel.sh test e2e` (`smackerel.sh:1462-1474`) launches the `golang:1.25.10-bookworm` container with only a hand-picked `-e` allow-list (`CORE_EXTERNAL_URL`, `DATABASE_URL`, `POSTGRES_URL`, `NATS_URL`, `SMACKEREL_AUTH_TOKEN`, `QF_DECISIONS_BASE_URL`) and does NOT pass `--env-file config/generated/test.env`. Every `LEGACY_RETIREMENT_*` env required by Scope 5's e2e tests is therefore absent inside the test container. This is a Scope 5 e2e harness gap; **not** introduced by this scope and outside SCOPE-075-06.5's planned ownership (06.5 plans execution, not harness wiring).
+
+  **Unresolved finding — F1 (route to `bubbles.plan` / `bubbles.workflow`):** TP-075-16 cannot execute live until `./smackerel.sh test e2e` propagates the legacy-retirement env block (either via `--env-file` or per-key `-e` forwarding) to the Go e2e runner container. Owner: Scope 5 (closed-window response) + e2e harness owner.
+
+  **Unresolved finding — F2 (route to `bubbles.plan`):** TP-075-15 (paused-state e2e regression) was planned at `tests/e2e/assistant/legacy_retirement_pause_e2e_test.go` per `test-plan.json` line 28 but no test file exists in the repo. Scope 4 must author the test (or formally retire the row from the plan) before SCOPE-075-06.5 can claim full closure. Owner: Scope 4 (`bubbles.plan` to either drop or replan, then `bubbles.implement` to author).
+
+  **Uncertainty Declaration:** 6.5 cannot be marked `[x]` while F1 and F2 remain open. 7 of 9 routed TPs PASS on the live stack; the remaining 2 are blocked by foreign-owned gaps, not by SCOPE-075-06.4/06.5 implementation.
 - [ ] Build Quality Gate passes: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, artifact lint for this spec.
 - [ ] Telegram Coexistence Decision Record (above) is recorded in `design.md` by `bubbles.design` before sub-scope 6.4 begins.
 

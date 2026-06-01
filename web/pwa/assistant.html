@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e94560">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>Smackerel Assistant</title>
+  <link rel="manifest" href="/pwa/manifest.json">
+  <link rel="icon" href="/pwa/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/pwa/style.css">
+</head>
+<body>
+  <header>
+    <h1>Smackerel Assistant</h1>
+    <p class="subtitle">Ask anything. Capture-as-fallback always works.</p>
+  </header>
+
+  <main id="assistant-main">
+    <!--
+      Spec 073 SCOPE-073-02 — Web Chat Vertical Slice.
+
+      SCN-073-A01: composer + same-origin POST /api/assistant/turn render.
+      SCN-073-A03: retry reuses the original transport_message_id.
+      SCN-073-A09: ARIA live region announces responses; keyboard order
+        traverses composer → send → disambig choices → confirm → retry.
+
+      Auth carrier: same-origin HttpOnly session cookie (spec 070 web login).
+      The web client NEVER reads or writes bearer/session material in
+      JS-visible storage; see web/pwa/tests/assistant_storage_guard_test.go
+      (TP-073-06/TP-073-12).
+    -->
+
+    <section id="assistant-transcript-section"
+             aria-labelledby="assistant-transcript-heading">
+      <h2 id="assistant-transcript-heading" class="visually-hidden">Conversation transcript</h2>
+      <ol id="assistant-transcript" class="assistant-transcript"
+          aria-live="polite" aria-relevant="additions" role="status"
+          aria-atomic="false"></ol>
+    </section>
+
+    <section id="assistant-response-section"
+             aria-labelledby="assistant-response-heading">
+      <h2 id="assistant-response-heading" class="visually-hidden">Latest response</h2>
+      <div id="assistant-response"
+           class="assistant-response"
+           role="status"
+           aria-live="polite"
+           aria-atomic="true"
+           tabindex="-1"></div>
+      <div id="assistant-sources" class="assistant-sources" aria-label="Sources for the latest response"></div>
+      <div id="assistant-controls" class="assistant-controls" aria-label="Response controls"></div>
+      <div id="assistant-error" class="assistant-error hidden" role="alert" aria-live="assertive"></div>
+    </section>
+
+    <form id="assistant-composer-form" class="assistant-composer" autocomplete="off" novalidate>
+      <label for="assistant-composer-input" class="field-label">Your message</label>
+      <textarea id="assistant-composer-input"
+                name="message"
+                rows="3"
+                tabindex="1"
+                aria-describedby="assistant-composer-hint"
+                placeholder="Ask the assistant..."
+                required></textarea>
+      <p id="assistant-composer-hint" class="composer-hint">
+        Enter to send. Capture-as-fallback runs server-side if the assistant cannot answer.
+      </p>
+      <div class="assistant-composer-actions">
+        <button id="assistant-send-btn"
+                type="submit"
+                tabindex="2"
+                class="btn btn-primary">Send</button>
+        <button id="assistant-retry-btn"
+                type="button"
+                tabindex="5"
+                class="btn btn-secondary hidden">Retry last turn</button>
+      </div>
+    </form>
+  </main>
+
+  <script type="module" src="/pwa/assistant.js"></script>
+</body>
+</html>

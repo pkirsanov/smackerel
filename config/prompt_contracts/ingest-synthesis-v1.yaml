@@ -1,4 +1,6 @@
 version: "ingest-synthesis-v1"
+principleAlignment:
+  - "Principle 2"
 type: "ingest-synthesis"
 description: "Extract concepts, entities, claims, and relationships from an artifact"
 
