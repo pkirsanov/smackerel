@@ -164,7 +164,11 @@ async def _dispatch_live(req: ChatRequest) -> ChatResponse:
     tools = _translate_tools(req.tools)
 
     kwargs: dict[str, Any] = {
-        "model": f"ollama/{req.model}",
+        # Spec 064 — use ollama_chat/ prefix (litellm /api/chat path) so
+        # OpenAI-shaped tool calls round-trip natively. The legacy
+        # ollama/ prefix uses /api/generate which serializes messages
+        # into a single prompt and loses tool_call structure.
+        "model": f"ollama_chat/{req.model}",
         "api_base": ollama_url,
         "messages": messages,
         "timeout": _LIVE_DISPATCH_TIMEOUT_SECONDS,
