@@ -286,6 +286,31 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 		case llm.StopEndTurn:
 			finalText, citations, parseErr := parseCitations(result.FinalText)
 			if parseErr != nil {
+				// Forced-final-turn salvage: when the model wrote a
+				// text answer on the last iteration but forgot the
+				// <CITATIONS> block, treat the recorded tool-trace
+				// sources as the citation set. The text is grounded
+				// (the forced-turn prompt is "answer based ONLY on
+				// tool results above"), so refusing as
+				// fabricated_source would punish a well-formed answer
+				// for a formatting omission. Only applies on the last
+				// iteration AND only when sources exist in trace.
+				isForcedFinalTurn := iter == a.cfg.MaxIterations-1
+				if isForcedFinalTurn && len(trace) > 0 {
+					autoSources := collectTraceSources(trace)
+					if len(autoSources) > 0 && strings.TrimSpace(result.FinalText) != "" {
+						return finalize(TurnResult{
+							Status:             StatusSuccess,
+							FinalText:          strings.TrimSpace(result.FinalText),
+							Sources:            autoSources,
+							ToolTrace:          trace,
+							TerminationReason:  TerminationFinal,
+							TokensUsed:         budget.TokensUsed(),
+							USDSpent:           budget.USDSpent(),
+							CompactionSignaled: a.compactionSignaled(budget),
+						}), nil
+					}
+				}
 				return refuse(TerminationFabricatedSource, parseErr.Error()), nil
 			}
 			verdict := a.verify(citations, toolTraceForVerifier(trace))
@@ -435,6 +460,43 @@ func toolTraceForVerifier(trace []ToolTraceEntry) citeback.ToolTrace {
 			ToolName:        e.ToolName,
 			RecordedSources: e.Result.Sources,
 		})
+	}
+	return out
+}
+
+// collectTraceSources flattens all ok.Source entries recorded by tool
+// invocations into a deduplicated slice (by Kind + locator). Used by
+// the forced-final-turn salvage path when the model produced a text
+// answer without an explicit <CITATIONS> block.
+func collectTraceSources(trace []ToolTraceEntry) []ok.Source {
+	seen := make(map[string]struct{})
+	out := make([]ok.Source, 0)
+	for _, e := range trace {
+		if e.Result == nil {
+			continue
+		}
+		for _, s := range e.Result.Sources {
+			key := ""
+			switch s.Kind {
+			case ok.SourceWeb:
+				if s.Web == nil {
+					continue
+				}
+				key = "web|" + s.Web.URL + "|" + s.Web.ContentHash
+			case ok.SourceArtifact:
+				if s.Artifact == nil {
+					continue
+				}
+				key = "artifact|" + s.Artifact.ID
+			default:
+				continue
+			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, s)
+		}
 	}
 	return out
 }
