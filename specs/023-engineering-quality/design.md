@@ -1,5 +1,14 @@
 # Design: 023 Engineering Quality
 
+> **Design Successor Note (2026-05-31).** This spec stays `done`. The nine
+> engineering-quality findings, fixes, and guard expectations documented here
+> remain authoritative. The quality-guard catalog is now augmented (not
+> replaced) by the intent-driven CI guards in
+> [spec 067](../067-intent-driven-policy-enforcement/design.md), which add
+> assistant-stack policy checks (scenario manifest validity, intent contract
+> coverage, retired-keyword regressions). This spec still owns the core Go
+> runtime quality fixes; spec 067 owns assistant-architecture enforcement.
+
 ## Design Brief
 
 **Current State:** The Go core runtime is functional but has nine identified quality issues: a data race in `mlClient()` (health.go:136), three SST-violating `os.Getenv()` calls for connector paths (main.go:149,167,185), five `interface{}` fields on the Dependencies struct requiring runtime type assertions (health.go:23-27, router.go:56-95), a dead `checkAuth` method (capture.go:126-143), four intelligence handlers bypassing `writeJSON` (intelligence.go), two hardcoded health statuses for Ollama/Telegram (health.go:109,112), a request logger that logs every health probe (router.go:121-133), and a hardcoded 5-minute sync wait in the connector supervisor (supervisor.go last `time.After`).

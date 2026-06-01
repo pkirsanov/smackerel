@@ -133,6 +133,63 @@ EXIT=1
 ```
 Zero hits — no conditional-return early-exits in any new test; assertions are direct.
 
+### Code Diff Evidence
+
+Verbatim `git show` of the fix commit (PII-redacted; trimmed to the
+processor.py hunk and the test-module summary):
+
+```
+$ git log --oneline -3 ml/app/processor.py
+e7ca6c5b fix(ml): BUG-061-002 — graceful-degrade processor for partial LLM payloads
+d1491aa1 chore(ml): clear pre-existing lint/format/test debt
+e0b8ae89 fix(ml): bump LLM timeout 180→600 for gemma4:26b 4K-token digest gen
+
+$ git show e7ca6c5b --stat | head
+commit e7ca6c5bb79ae76e397382a06479af9e6679a34d
+    fix(ml): BUG-061-002 — graceful-degrade processor for partial LLM payloads
+ ml/app/processor.py        | 31 ++++++++++++++++++++++++++-----
+ ml/tests/test_processor.py | ...
+ 2 files changed, ...
+
+$ git show e7ca6c5b -- ml/app/processor.py
+diff --git a/ml/app/processor.py b/ml/app/processor.py
+@@ -171,7 +171,26 @@
+-        # Validate required fields
+-        required_fields = ["artifact_type", "title"]
+-        for field in required_fields:
+-            if field not in result:
+-                raise ValueError(f"Missing required field: {field}")
++        # BUG-061-002: short / low-signal inputs (single tokens, emoji,
++        # URL-only captures) and the prompt's own "light" / "metadata"
++        # tier rules legitimately produce LLM payloads that omit
++        # `artifact_type` and/or `title`. Previously this raised a
++        # ValueError that the outer except-clause swallowed into an
++        # opaque "LLM processing failed" — silently dropping the
++        # capture. Degrade gracefully instead, mirroring the existing
++        # unavailable-LLM fallback shape, and log which fields were
++        # defaulted so the silent-drop is no longer silent.
++        defaulted_fields: list[str] = []
++        if "title" not in result or not str(result.get("title") or "").strip():
++            result["title"] = content[:100].strip() or "Untitled"
++            defaulted_fields.append("title")
++        if "artifact_type" not in result or not str(result.get("artifact_type") or "").strip():
++            result["artifact_type"] = content_type if content_type and content_type != "generic" else "note"
++            defaulted_fields.append("artifact_type")
++        if defaulted_fields:
++            logger.warning(
++                "LLM result missing required fields %s for source_id=%s tier=%s; "
++                "derived defaults from content/content_type (BUG-061-002)",
++                defaulted_fields,
++                source_id,
++                processing_tier,
++            )
+```
+
+The fix is contained entirely within `ml/app/processor.py` (function
+`process_content`, +26/-5 lines). The companion test changes in
+`ml/tests/test_processor.py` add the four BUG-061-002 regression
+cases listed in "Tests Added" above.
+
 ## Claim Source
 - Pre-fix repro stack trace: **executed** (in-process Python repro, PII-redacted)
 - Pre-fix four-test failure: **executed** (`git stash` isolated processor.py; pytest re-ran the four targeted tests; output above is verbatim from terminal, PII-redacted)

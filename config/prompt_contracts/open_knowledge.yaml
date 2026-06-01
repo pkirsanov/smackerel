@@ -1,0 +1,164 @@
+id: open_knowledge
+version: "open-knowledge-v1"
+type: "scenario"
+description: |
+  Spec 064 catch-all open-ended knowledge scenario. Selected by the
+  spec 037 router (BUG-064-XX) as AGENT_ROUTING_FALLBACK_SCENARIO_ID
+  when no domain scenario clears the confidence floor. The substrate
+  delegates the whole turn to the open-knowledge agent loop via a
+  single tool call to open_knowledge_invoke; the loop owns its own
+  iteration cap, budget enforcement, and cite-back verification.
+
+# The intent_examples are deliberately broad so the similarity router
+# CAN pick this scenario for open-ended questions when its score
+# crosses the confidence floor, but the production routing intent
+# remains "be the fallback when nothing else fits" — operators wire
+# AGENT_ROUTING_FALLBACK_SCENARIO_ID="open_knowledge" in
+# config/smackerel.yaml so a below-floor decision still lands here
+# instead of capture-as-fallback.
+intent_examples:
+- "what is 10F in Celsius"
+- "explain transformer attention briefly"
+- "current population of Tokyo"
+- "convert 5 miles to kilometers"
+- "is python or rust faster for sorting"
+- "who wrote the C programming language book"
+- "what does the acronym SST stand for in this codebase"
+- "summarise the latest paper on retrieval-augmented generation"
+
+# Substrate-side prompt only. The authoritative open-knowledge agent
+# prompt (the <CITATIONS> contract, the tool-use protocol, the cite-
+# back rules) lives in the agent loop (loaded into okagent.Config.
+# SystemPrompt by cmd/core wiring from this same YAML's `system_prompt`
+# block via the wiring layer). The system_prompt here is what the
+# substrate executor's pre-tool LLM call sees; with
+# direct_output_from_tool wired below the executor short-circuits and
+# the substrate LLM is bypassed for the post-tool turn. This prompt
+# only needs to instruct the substrate planner to call the bridge once.
+system_prompt: |
+  You are routing an open-ended knowledge question to the open-knowledge
+  agent. Call the open_knowledge_invoke tool exactly once with the
+  user's raw question as the "prompt" argument. Do not paraphrase,
+  augment, or split the question. After the tool returns, the platform
+  emits the result directly — stop generating.
+
+allowed_tools:
+- name: open_knowledge_invoke
+  side_effect_class: external
+
+# direct_output_from_tool: the open_knowledge_invoke handler returns a
+# JSON envelope ({status, body, refusal_cause, sources, ...}) that
+# validates verbatim against output_schema. The executor emits this
+# envelope as the scenario Final and skips the post-tool LLM turn —
+# eliminating extra latency and removing one source of schema drift.
+direct_output_from_tool: open_knowledge_invoke
+
+input_schema:
+  type: object
+  required: [ raw_query, user_id ]
+  properties:
+    raw_query: { type: string, minLength: 1 }
+    user_id: { type: string, minLength: 1 }
+
+output_schema:
+  type: object
+  required: [ status, body, refusal_cause, sources ]
+  additionalProperties: false
+  properties:
+    status: { type: string, enum: [ "success", "refused" ] }
+    body: { type: string }
+    refusal_cause: { type: string }
+    termination: { type: string }
+    sources: { type: array, items: { type: object } }
+
+limits:
+  # max_loop_iterations is 1 at the SUBSTRATE level — one tool call,
+  # one final. The open-knowledge agent's own iteration cap lives in
+  # okagent.Config.MaxIterations (SST key
+  # assistant.open_knowledge.max_iterations) and runs INSIDE the
+  # bridge handler.
+  max_loop_iterations: 1
+  # Substrate-level timeout = loader ceiling (120s). The bridge call
+  # delegates to the open-knowledge agent loop which has its own
+  # internal iteration cap + LLM timeout. Note: on slow CPU dev
+  # boxes, gemma3:4b cold + multi-iteration may exceed 120s — the
+  # dev config swaps in qwen2.5:0.5b-instruct (assistant.open_knowledge.llm_model_id)
+  # to keep round-trips fast enough.
+  timeout_ms: 120000
+  schema_retry_budget: 0
+  per_tool_timeout_ms: 30000
+
+token_budget: 200
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: external
+
+# Spec 064 SCOPE-12 — Open-knowledge AGENT system prompt. This is a
+# NON-SCENARIO field consumed by cmd/core/wiring_assistant_openknowledge.go
+# to populate okagent.Config.SystemPrompt for the open-knowledge agent
+# loop running INSIDE the open_knowledge_invoke substrate handler. The
+# substrate scenario loader ignores top-level keys it does not recognise
+# (internal/agent/loader.go::parseScenario validates required fields only),
+# so this field coexists with the substrate planner's system_prompt above.
+#
+# This prompt drives the multi-step LLM ↔ tools loop in
+# internal/assistant/openknowledge/agent/agent.go::Run. The trailing
+# <CITATIONS>[...]</CITATIONS> block is REQUIRED — agent.go::parseCitations
+# rejects any final answer that omits it, and citeback.Verify rejects any
+# citation that does not match a recorded tool trace entry. There is NO
+# silent default for this prompt (G028): the agent New() rejects an empty
+# SystemPrompt, and the wiring fails loud if this field is missing.
+agent_system_prompt: |
+  You are Smackerel's open-knowledge assistant. Answer the user's question
+  using ONLY information you have retrieved through tool calls during this
+  turn. You MUST NOT rely on prior training knowledge for facts.
+
+  Available tools:
+    - internal_retrieval(query, k): search the user's own knowledge graph
+      for grounding artifacts. Use FIRST for questions about the user's
+      own data, notes, captures, recipes, etc.
+    - web_search(query, max_results): search the public web via the
+      operator's configured provider. Use when the question is about
+      public knowledge the user has not captured.
+    - unit_convert(value, from_unit, to_unit): deterministic unit
+      conversion (length, mass, temperature, etc.).
+    - calculator(expression): deterministic arithmetic.
+
+  Tool-use protocol:
+    1. Plan the smallest sequence of tool calls needed to answer.
+    2. Issue tool calls. The platform returns each result as a
+       tool_result message containing snippets and structured sources.
+    3. When you have enough grounded evidence, emit a final answer
+       followed by a single trailing <CITATIONS>[...]</CITATIONS> block.
+    4. If grounding is insufficient, refuse: emit a brief explanation
+       followed by <CITATIONS>[]</CITATIONS>. The platform will route
+       to the canonical refusal body.
+
+  Citation contract (MANDATORY, machine-enforced):
+    The trailing <CITATIONS>[...]</CITATIONS> block MUST be a JSON
+    array. Each entry MUST match EXACTLY one recorded tool result and
+    MUST use one of the three shapes below. Fabricated citations
+    (entries that do not match a tool trace entry by locator + hash)
+    are rejected by the cite-back verifier and the answer is replaced
+    with the canonical refusal.
+
+    Artifact (from internal_retrieval):
+      {"kind": "artifact", "artifact_id": "<id-from-tool-result>"}
+
+    Web (from web_search):
+      {"kind": "web",
+       "url": "<url-from-tool-result>",
+       "content_hash": "<content_hash-from-tool-result>"}
+
+    Tool computation (from calculator / unit_convert):
+      {"kind": "tool_computation",
+       "tool": "<calculator|unit_convert>",
+       "input":  <json-input-verbatim-from-tool-call>,
+       "output": <json-output-verbatim-from-tool-result>}
+
+  Style:
+    - Keep the answer short, factual, and grounded in the cited evidence.
+    - Do not invent URLs, artifact IDs, or numeric values.
+    - Do not include the <CITATIONS> block anywhere except at the very
+      end of the message.
+    - Do not output multiple <CITATIONS> blocks.

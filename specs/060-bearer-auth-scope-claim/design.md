@@ -9,6 +9,14 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** [Spec 069](../069-assistant-http-transport/design.md)
+> adds `POST /api/assistant/turn` as a new consumer of this middleware.
+> The assistant route must require a dedicated assistant-turn scope and
+> reject missing/insufficient per-user bearer tokens before invoking the
+> facade. Scope-string spelling must be reconciled during planning because
+> spec 069's product label `assistant.turn` and this design's colon-based
+> scope grammar need one final implementation value.
+
 ## Design Brief
 
 **Current State.** Spec 044 is shipped and `Done`. `internal/auth.IssueToken` mints a PASETO v4.public token with `iss`/`sub`/`jti`/`iat`/`nbf`/`exp` claims and a JSON footer `{"kid":"<KeyID>"}`. `internal/auth.VerifyAndParse` returns a `ParsedToken{UserID, TokenID, KeyID, IssuedAt, ExpiresAt}`. `internal/api.bearerAuthMiddleware` (router.go:626) verifies the token, performs revocation lookup, and pushes an `auth.Session{Source, UserID, TokenID, KeyID, IssuedAt, ExpiresAt}` onto the request context. There is no per-token capability claim and no `auth.RequireScope` middleware. Spec 058 cannot wire its `/v1/connectors/extension/ingest` endpoint without this seam.

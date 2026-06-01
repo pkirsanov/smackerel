@@ -1,5 +1,17 @@
 # Design: 034 Expense Tracking
 
+> **Design Successor Note (2026-05-31).** This spec stays `done`. Expense
+> extraction, vendor normalization, classification suggestions, corrections,
+> exports, digest section, and REST endpoints in this design remain active.
+> The `/expense` Telegram bot command surface described here is superseded as
+> a primary user entry path by
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md) (retirement of
+> legacy keyword commands) and
+> [spec 068](../068-structured-intent-compiler/design.md) (structured intent
+> compiler) routed through [spec 061](../061-conversational-assistant/design.md).
+> This spec still owns the expense domain model, extraction, and API; the
+> assistant stack owns the conversational entry path.
+
 ## 1. Overview
 
 Expense tracking layers structured financial extraction, classification, and export onto the existing Smackerel ingestion pipeline. No new services, containers, or message queues are introduced. Receipts and invoices arriving through any ingestion channel (Gmail, Telegram photo, web capture, PDF, manual text) pass through a fast heuristic filter, then an LLM-powered receipt extraction prompt contract. Extracted expense metadata is stored in the existing `artifacts.metadata` JSONB field. Two new intelligence tables (`vendor_aliases` and `expense_suggestions`) support vendor normalization and business classification suggestions. A new expense section producer feeds the daily digest. Seven REST API endpoints expose query, export, correction, classification, and suggestion management. The Telegram bot extends its existing command handling for expense interactions.

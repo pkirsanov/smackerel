@@ -97,6 +97,48 @@ func buildTelegramRendering(
 		return "", nil, errors.New("assistant_adapter: response has both ConfirmCard and DisambiguationPrompt (capability contract violation)")
 	}
 
+	// Spec 064 SCOPE-13 — open_knowledge dispatch. Routed strictly by
+	// AssistantResponse content composition so the AssistantResponse
+	// shape (spec 061) is not extended:
+	//
+	//   - ErrorCause string matching a non-default spec 064
+	//     RefusalCause → RenderRefusalWithCapture.
+	//   - Otherwise, when Sources contains at least one
+	//     non-SourceArtifact kind → RenderSourcedAnswer (all
+	//     non-artifact) or RenderHybridAnswer (mixed with artifact).
+	//
+	// All-artifact source sets and existing spec 061 ErrorCause
+	// values fall through to the unchanged default rendering below
+	// (backward compatibility).
+	if cause, ok := openKnowledgeRefusalCauseFromError(resp.ErrorCause); ok {
+		body := RenderRefusalWithCapture(cause)
+		rendered := budgetTruncate(escapeForMode(body, mode), maxMessageChars, mode)
+		return rendered, nil, nil
+	}
+	if resp.Status != contracts.StatusUnavailable &&
+		resp.ConfirmCard == nil && resp.DisambiguationPrompt == nil &&
+		hasNonArtifactSources(resp.Sources) {
+		var (
+			okOut string
+			err   error
+		)
+		if hasArtifactSource(resp.Sources) {
+			okOut, err = RenderHybridAnswer(resp.Body, resp.Sources)
+		} else {
+			okOut, err = RenderSourcedAnswer(resp.Body, resp.Sources)
+		}
+		if err != nil {
+			return "", nil, err
+		}
+		var headParts []string
+		if prefix := statusPrefix(resp); prefix != "" {
+			headParts = append(headParts, prefix)
+		}
+		headParts = append(headParts, escapeForMode(okOut, mode))
+		rendered := joinAndBudget(headParts, "", maxMessageChars, mode)
+		return rendered, nil, nil
+	}
+
 	var parts []string
 	if prefix := statusPrefix(resp); prefix != "" {
 		parts = append(parts, prefix)
@@ -291,4 +333,53 @@ func filterEmpty(parts []string) []string {
 		}
 	}
 	return out
+}
+
+// hasNonArtifactSources reports whether sources contains at least one
+// Source whose Kind is not SourceArtifact. Used by the open_knowledge
+// dispatch (SCOPE-13) — spec 061 scenarios only ever produce
+// SourceArtifact, so any non-artifact kind unambiguously signals an
+// open_knowledge response.
+func hasNonArtifactSources(sources []contracts.Source) bool {
+	for _, s := range sources {
+		if s.Kind != contracts.SourceArtifact {
+			return true
+		}
+	}
+	return false
+}
+
+// hasArtifactSource reports whether sources contains at least one
+// SourceArtifact. Combined with hasNonArtifactSources it lets the
+// dispatch pick RenderHybridAnswer (mixed) vs RenderSourcedAnswer
+// (all non-artifact).
+func hasArtifactSource(sources []contracts.Source) bool {
+	for _, s := range sources {
+		if s.Kind == contracts.SourceArtifact {
+			return true
+		}
+	}
+	return false
+}
+
+// openKnowledgeRefusalCauseFromError reports whether the ErrorCause
+// string matches a spec 064 RefusalCause value (excluding
+// RefusalDefault, which has the same body as the legacy spec 061
+// canonical refusal and does not warrant the captured-refusal UX).
+// Returns the matching RefusalCause and true on hit; zero-value and
+// false otherwise.
+func openKnowledgeRefusalCauseFromError(ec contracts.ErrorCause) (contracts.RefusalCause, bool) {
+	s := string(ec)
+	if s == "" {
+		return "", false
+	}
+	for _, c := range contracts.AllRefusalCauses {
+		if c == contracts.RefusalDefault {
+			continue
+		}
+		if string(c) == s {
+			return c, true
+		}
+	}
+	return "", false
 }

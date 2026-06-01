@@ -6,6 +6,19 @@
 > **Date:** April 6, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The `/find` command and other scenario-specific slash entry points
+> referenced throughout this spec are targeted for retirement by
+> [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md).
+> Telegram entry for retrieval-style queries (find a conversation by
+> participant, by source chat, by topic) compiles through
+> [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> into the `retrieval_qa` scenario via the
+> [spec 061 conversational assistant facade](../061-conversational-assistant/spec.md).
+> The capture, threading, and conversation-artifact semantics described
+> here remain owned by this spec. Only the retrieval entry path changes
+> from `/find` to compiled NL.
+
 ---
 
 ## Problem Statement

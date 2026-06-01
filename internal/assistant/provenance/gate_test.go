@@ -244,3 +244,200 @@ func TestEnforce_EmptyCauseDefaultsToFabricatedSource(t *testing.T) {
 		t.Fatalf("empty-cause default did not route to fabricated_source: delta=%v", after-before)
 	}
 }
+
+// --- PKT-061-A — extended Source taxonomy + refusal taxonomy ---
+
+// TestEnforce_PassthroughWithWebSource proves the gate accepts a
+// SourceWeb citation, unblocking spec 064 SCOPE-13 (Telegram surface).
+func TestEnforce_PassthroughWithWebSource(t *testing.T) {
+	const scenario = "open_knowledge_test_web_passthrough"
+	before := counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)
+
+	resp := contracts.AssistantResponse{
+		Body: "Paris is the capital of France.",
+		Sources: []contracts.Source{
+			{ID: "w-1", Title: "Wikipedia — Paris", Kind: contracts.SourceWeb, Ref: contracts.WebSourceRef{URL: "https://en.wikipedia.org/wiki/Paris", Provider: "searxng", ContentHash: "sha256:abc"}},
+		},
+		Status: contracts.StatusThinking,
+	}
+	got := Enforce(true, scenario, contracts.ProvenanceCauseFabricatedSource, resp)
+	if got.Body != "Paris is the capital of France." {
+		t.Fatalf("Body mutated for SourceWeb: %q", got.Body)
+	}
+	if len(got.Sources) != 1 {
+		t.Fatalf("Sources mutated for SourceWeb: len=%d", len(got.Sources))
+	}
+	if got.CaptureRoute {
+		t.Fatalf("CaptureRoute set on SourceWeb passthrough")
+	}
+	if counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)-before != 0 {
+		t.Fatalf("counter incremented on SourceWeb passthrough")
+	}
+}
+
+// TestEnforce_PassthroughWithToolComputationSource proves the gate
+// accepts a SourceToolComputation citation.
+func TestEnforce_PassthroughWithToolComputationSource(t *testing.T) {
+	const scenario = "open_knowledge_test_tool_computation_passthrough"
+	before := counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)
+
+	resp := contracts.AssistantResponse{
+		Body: "2 + 2 = 4",
+		Sources: []contracts.Source{
+			{ID: "c-1", Title: "calculator", Kind: contracts.SourceToolComputation, Ref: contracts.ComputationSourceRef{Tool: "calculator", InputHash: "sha256:in", OutputHash: "sha256:out"}},
+		},
+		Status: contracts.StatusThinking,
+	}
+	got := Enforce(true, scenario, contracts.ProvenanceCauseFabricatedSource, resp)
+	if got.Body != "2 + 2 = 4" {
+		t.Fatalf("Body mutated for SourceToolComputation: %q", got.Body)
+	}
+	if len(got.Sources) != 1 {
+		t.Fatalf("Sources mutated for SourceToolComputation: len=%d", len(got.Sources))
+	}
+	if counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)-before != 0 {
+		t.Fatalf("counter incremented on SourceToolComputation passthrough")
+	}
+}
+
+// TestEnforce_PassthroughWithMixedKinds proves the gate accepts a
+// mixed citation list combining artifact, web, and tool-computation
+// sources in any order.
+func TestEnforce_PassthroughWithMixedKinds(t *testing.T) {
+	const scenario = "open_knowledge_test_mixed_kinds_passthrough"
+	before := counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)
+
+	resp := contracts.AssistantResponse{
+		Body: "mixed citation body",
+		Sources: []contracts.Source{
+			{ID: "a-1", Kind: contracts.SourceArtifact, Ref: contracts.ArtifactRef{ArtifactID: "art-1"}},
+			{ID: "w-1", Kind: contracts.SourceWeb, Ref: contracts.WebSourceRef{URL: "https://example.com", Provider: "searxng", ContentHash: "x"}},
+			{ID: "c-1", Kind: contracts.SourceToolComputation, Ref: contracts.ComputationSourceRef{Tool: "unit_convert", InputHash: "i", OutputHash: "o"}},
+		},
+		Status: contracts.StatusThinking,
+	}
+	got := Enforce(true, scenario, contracts.ProvenanceCauseFabricatedSource, resp)
+	if got.Body != "mixed citation body" {
+		t.Fatalf("Body mutated for mixed-kind passthrough: %q", got.Body)
+	}
+	if len(got.Sources) != 3 {
+		t.Fatalf("mixed-kind passthrough lost sources: len=%d", len(got.Sources))
+	}
+	if counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)-before != 0 {
+		t.Fatalf("counter incremented on mixed-kind passthrough")
+	}
+}
+
+// TestEnforce_RejectsUnknownSourceKind is the adversarial proof for
+// the PKT-061-A extension: a Source whose Kind is NOT in
+// contracts.AllSourceKinds MUST be rejected and the body rewritten
+// to the canonical refusal. If a future refactor reverted the Kind
+// validation to "len(Sources) > 0 alone", this test would fail
+// because the unknown-kind source would silently pass through.
+func TestEnforce_RejectsUnknownSourceKind(t *testing.T) {
+	const scenario = "open_knowledge_test_unknown_kind_rejected"
+	before := counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)
+
+	resp := contracts.AssistantResponse{
+		Body: "answer with a fabricated source kind",
+		Sources: []contracts.Source{
+			{ID: "x-1", Title: "made up", Kind: contracts.SourceKind("not_a_real_kind")},
+		},
+		Status: contracts.StatusThinking,
+	}
+	got := Enforce(true, scenario, contracts.ProvenanceCauseFabricatedSource, resp)
+	if got.Body != CanonicalRefusalBody {
+		t.Fatalf("BYPASS DETECTED: unknown SourceKind passed through. Body=%q", got.Body)
+	}
+	if got.Status != contracts.StatusSavedAsIdea {
+		t.Fatalf("Status not rewritten: %q", got.Status)
+	}
+	if !got.CaptureRoute {
+		t.Fatalf("CaptureRoute not set on unknown-kind rejection")
+	}
+	if len(got.Sources) != 0 {
+		t.Fatalf("Sources not cleared on unknown-kind rejection: len=%d", len(got.Sources))
+	}
+	if counterValue(t, scenario, contracts.ProvenanceCauseFabricatedSource)-before != 1 {
+		t.Fatalf("counter not incremented on unknown-kind rejection")
+	}
+}
+
+// TestEnforceRefusal_EachCauseHasExactBody proves every RefusalCause
+// in contracts.AllRefusalCauses maps to its packet §3.B exact body
+// string. Adversarial: if any cause is silently aliased to the
+// default body in a refactor, that case fails.
+func TestEnforceRefusal_EachCauseHasExactBody(t *testing.T) {
+	wantBodies := map[contracts.RefusalCause]string{
+		contracts.RefusalBudgetExhausted:         "I couldn't complete that within the answer budget — saved as an idea.",
+		contracts.RefusalToolUnavailable:         "A tool I needed isn't available right now — saved as an idea.",
+		contracts.RefusalFabricatedSourceBlocked: "I couldn't verify the sources I would have cited — saved as an idea.",
+		contracts.RefusalInternalOnlyRestricted:  "That requires looking outside your knowledge graph, which is disabled — saved as an idea.",
+		contracts.RefusalAmbiguousNotClarified:   "I couldn't decide what to look up — saved as an idea.",
+		contracts.RefusalDefault:                 CanonicalRefusalBody,
+	}
+	for cause, want := range wantBodies {
+		t.Run(string(cause), func(t *testing.T) {
+			resp := contracts.AssistantResponse{
+				Body:   "original body that should be replaced",
+				Status: contracts.StatusThinking,
+			}
+			got := EnforceRefusal("open_knowledge_test_"+string(cause), cause, resp)
+			if got.Body != want {
+				t.Fatalf("body for cause %q = %q; want %q", cause, got.Body, want)
+			}
+			if got.Status != contracts.StatusSavedAsIdea {
+				t.Fatalf("Status not rewritten by EnforceRefusal: %q", got.Status)
+			}
+			if !got.CaptureRoute {
+				t.Fatalf("CaptureRoute not set by EnforceRefusal for cause %q", cause)
+			}
+			if len(got.Sources) != 0 {
+				t.Fatalf("Sources not cleared by EnforceRefusal for cause %q", cause)
+			}
+		})
+	}
+}
+
+// TestEnforceRefusal_AdversarialDefault — adversarial regression: if
+// CanonicalRefusalBodyFor were ever changed to return "" for an
+// unknown cause, the gate would emit a blank refusal body. This test
+// proves the contract is total.
+func TestEnforceRefusal_AdversarialDefault(t *testing.T) {
+	resp := contracts.AssistantResponse{Body: "x", Status: contracts.StatusThinking}
+	got := EnforceRefusal("scenario", contracts.RefusalCause("definitely_not_a_real_cause"), resp)
+	if got.Body == "" {
+		t.Fatal("CanonicalRefusalBodyFor returned empty for unknown cause — contract is not total")
+	}
+	if got.Body != CanonicalRefusalBody {
+		t.Fatalf("unknown cause did not fall back to default body: got %q", got.Body)
+	}
+}
+
+// TestEnforce_PreExistingArtifactBehaviourUnchanged is the explicit
+// backward-compatibility proof required by PKT-061-A §3 acceptance
+// criterion #3: existing SourceArtifact behaviour is unchanged.
+// (The full pre-existing test set above also runs unchanged; this
+// case adds a single concentrated assertion for auditability.)
+func TestEnforce_PreExistingArtifactBehaviourUnchanged(t *testing.T) {
+	const scenario = "retrieval_qa_test_backcompat_artifact"
+	before := counterValue(t, scenario, contracts.ProvenanceCauseMissingArtifact)
+
+	resp := contracts.AssistantResponse{
+		Body: "answer grounded in an artifact",
+		Sources: []contracts.Source{
+			{ID: "a-1", Title: "Note A", Kind: contracts.SourceArtifact, Ref: contracts.ArtifactRef{ArtifactID: "art-1"}},
+		},
+		Status: contracts.StatusThinking,
+	}
+	got := Enforce(true, scenario, contracts.ProvenanceCauseMissingArtifact, resp)
+	if got.Body != "answer grounded in an artifact" {
+		t.Fatalf("backcompat: artifact-grounded body was mutated: %q", got.Body)
+	}
+	if len(got.Sources) != 1 || got.Sources[0].Kind != contracts.SourceArtifact {
+		t.Fatalf("backcompat: artifact source dropped/mutated")
+	}
+	if counterValue(t, scenario, contracts.ProvenanceCauseMissingArtifact)-before != 0 {
+		t.Fatalf("backcompat: counter incremented on artifact passthrough")
+	}
+}

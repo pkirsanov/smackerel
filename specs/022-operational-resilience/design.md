@@ -1,5 +1,15 @@
 # Design: 022 Operational Resilience
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for backup, DB/NATS failure visibility, scheduler concurrency,
+> search resilience, and shutdown ordering. The intent-driven assistant
+> architecture adds new resilience consumers: spec 068 compiler failures
+> must fail visibly into clarify/refuse/capture rather than raw-text
+> routing, spec 069 pre-facade HTTP rejections must not invoke the facade,
+> and spec 067 guards must fail CI loudly when policy bootstrap config is
+> missing. Those successor specs extend assistant failure surfaces without
+> changing this spec's runtime-resilience primitives.
+
 ## Design Brief
 
 **Current State:** Smackerel stores the user's entire knowledge base in a single PostgreSQL volume with no backup mechanism. The runtime has multiple resilience gaps: capture proceeds without DB health verification, 9 scheduler cron jobs run without concurrency guards on a hardcoded 10-connection pool, NATS consumers discard messages after 5 delivery attempts with no dead-letter routing, shutdown uses defer-based ordering that races NATS drain against DB pool close with a 10s timeout insufficient for Telegram's 30s long-poll, and search blocks indefinitely on NATS when the ML sidecar is unresponsive.

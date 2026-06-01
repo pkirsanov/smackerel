@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "specId": "072",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scopes": [
+    {"scopeId":"SCOPE-072-01","scopeName":"Webhook, Identity, And Fail-Loud Config Foundation","tests":[
+      {"id":"TP-072-01","scenarioId":"SCN-072-A01","type":"integration","category":"integration","file":"tests/integration/assistant/whatsapp_webhook_test.go","plannedTitle":"Planned: signed text webhook becomes canonical WhatsApp AssistantMessage","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-02","scenarioId":"SCN-072-A02","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/verify_test.go","plannedTitle":"Planned: invalid Meta signatures reject before facade invocation","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-072-03","scenarioId":"SCN-072-A01","type":"integration","category":"integration","file":"tests/integration/assistant/transport_identity_test.go","plannedTitle":"Planned: WhatsApp phone subject hash resolves canonical user without raw phone persistence","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-04","scenarioId":"SCN-072-A06","type":"unit","category":"unit","file":"internal/config/assistant_whatsapp_test.go","plannedTitle":"Planned: enabled WhatsApp with missing access token fails loud","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-072-05","scenarioId":"SCN-072-A02","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/whatsapp_signature_e2e_test.go","plannedTitle":"Planned regression: unsigned live webhook never reaches facade","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-072-02","scopeName":"Response Renderer And Capture Acknowledgement","tests":[
+      {"id":"TP-072-06","scenarioId":"SCN-072-A03","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/render_golden_test.go","plannedTitle":"Planned: three-choice disambiguation renders as WhatsApp buttons","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-072-07","scenarioId":"SCN-072-A04","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/render_golden_test.go","plannedTitle":"Planned: unknown response shape renders text or explicit observable error, never drop","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-072-08","scenarioId":"SCN-072-A05","type":"integration","category":"integration","file":"tests/integration/assistant/whatsapp_capture_test.go","plannedTitle":"Planned: CaptureRoute invokes capture exactly once and sends canonical acknowledgement","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-09","scenarioId":"SCN-072-A09","type":"unit","category":"unit","file":"internal/whatsapp/assistant_adapter/template_policy_test.go","plannedTitle":"Planned: normal in-window replies do not use WhatsApp templates","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-072-10","scenarioId":"SCN-072-A03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/whatsapp_render_e2e_test.go","plannedTitle":"Planned regression: live disambiguation response sends expected WhatsApp interactive type","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-072-03","scopeName":"Round-Trip Controls And Idempotent Retries","tests":[
+      {"id":"TP-072-11","scenarioId":"SCN-072-A08","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/whatsapp_roundtrip_test.go","plannedTitle":"Planned regression: confirm/disambiguation/reset round-trip through shared facade","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-12","scenarioId":"SCN-072-A10","type":"integration","category":"integration","file":"tests/integration/assistant/whatsapp_idempotency_test.go","plannedTitle":"Planned: duplicate Meta delivery invokes facade once","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-13","scenarioId":"SCN-072-A10","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/whatsapp_retry_dedup_e2e_test.go","plannedTitle":"Planned regression: duplicate webhook does not duplicate scenario or capture","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-072-04","scopeName":"Independent Disable And Operator Status","tests":[
+      {"id":"TP-072-14","scenarioId":"SCN-072-A07","type":"integration","category":"integration","file":"tests/integration/assistant/transport_disable_test.go","plannedTitle":"Planned: disabling WhatsApp leaves Telegram and HTTP healthy","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-15","scenarioId":"SCN-072-A07","type":"integration","category":"integration","file":"tests/integration/monitoring/whatsapp_transport_status_test.go","plannedTitle":"Planned: status metrics distinguish disabled, credential-ready, and rejection counts","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-072-16","scenarioId":"SCN-072-A07","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/transport_disable_e2e_test.go","plannedTitle":"Planned regression: live Telegram/HTTP turns still work when WhatsApp ingress is absent","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]}
+  ]
+}

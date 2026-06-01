@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "specId": "074",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scopes": [
+    {"scopeId":"SCOPE-074-01","scopeName":"Policy Foundation, Config, And Inviolability","tests":[
+      {"id":"TP-074-01","scenarioId":"SCN-074-A08","type":"unit","category":"unit","file":"internal/config/capture_fallback_test.go","plannedTitle":"Planned: missing capture_as_fallback.dedup_window fails loud","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-074-02","scenarioId":"SCN-074-A09","type":"unit/guard","category":"integration","file":"tests/integration/policy/capture_fallback_inviolable_test.go","plannedTitle":"Planned: no config key or branch can suppress eligible fallback capture","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-03","scenarioId":"SCN-074-A10","type":"unit","category":"unit","file":"internal/assistant/capturefallback/payload_test.go","plannedTitle":"Planned: fallback payload contains normalized text and provenance only","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-074-04","scenarioId":"SCN-074-A09","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_fallback_inviolable_e2e_test.go","plannedTitle":"Planned regression: eligible live turn always produces fallback Idea","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-02","scopeName":"Provenance And Explicit/Fallback Separation","tests":[
+      {"id":"TP-074-05","scenarioId":"SCN-074-A02","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: explicit capture writes capture-explicit provenance","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-06","scenarioId":"SCN-074-A02","type":"integration","category":"integration","file":"tests/integration/assistant/capture_provenance_query_test.go","plannedTitle":"Planned: explicit and fallback captures are distinguishable by provenance query","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-07","scenarioId":"SCN-074-A02","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_provenance_e2e_test.go","plannedTitle":"Planned regression: explicit and fallback same text create separate Ideas","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-03","scopeName":"Per-User Dedup Semantics","tests":[
+      {"id":"TP-074-08","scenarioId":"SCN-074-A03","type":"unit","category":"unit","file":"internal/assistant/capturefallback/dedup_test.go","plannedTitle":"Planned: same user same normalized text within window returns dedup hit","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-074-09","scenarioId":"SCN-074-A04","type":"unit","category":"unit","file":"internal/assistant/capturefallback/dedup_test.go","plannedTitle":"Planned: same user same normalized text outside window creates a new bucket","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-074-10","scenarioId":"SCN-074-A05","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: cross-user same normalized text creates separate Ideas","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-11","scenarioId":"SCN-074-A03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_fallback_dedup_e2e_test.go","plannedTitle":"Planned regression: live second same-window fallback returns already-captured acknowledgement","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-04","scopeName":"Trigger Execution And Abandoned Clarification","tests":[
+      {"id":"TP-074-12","scenarioId":"SCN-074-A01","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: unrouted/no-ground turn creates exactly one fallback Idea","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-13","scenarioId":"SCN-074-A06","type":"integration","category":"integration","file":"tests/integration/assistant/clarify_abandon_capture_test.go","plannedTitle":"Planned: abandoned clarification captures original prompt with flag and cause","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-14","scenarioId":"SCN-074-A01","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_fallback_trigger_e2e_test.go","plannedTitle":"Planned regression: live fallback-eligible turn returns saved-as-idea acknowledgement and one artifact","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-05","scopeName":"Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement","tests":[
+      {"id":"TP-074-15","scenarioId":"SCN-074-A07","type":"integration","category":"integration","file":"tests/integration/assistant/capture_trace_join_test.go","plannedTitle":"Planned: fallback counter increments and IntentTrace links produced Idea artifact id","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-16","scenarioId":"SCN-074-A07","type":"integration","category":"integration","file":"tests/integration/monitoring/capture_fallback_dashboard_test.go","plannedTitle":"Planned: telemetry query exposes cause breakdown without raw text","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-074-17","scenarioId":"SCN-074-A11","type":"e2e-ui/e2e-api","category":"e2e-ui","file":"tests/e2e/assistant/capture_ack_cross_transport_test.go","plannedTitle":"Planned regression: Telegram, HTTP, WhatsApp, web, and Android render same saved-as-idea shape","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]}
+  ]
+}

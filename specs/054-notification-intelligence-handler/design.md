@@ -1,5 +1,16 @@
 # Design: Notification Intelligence Handler Service
 
+> **Design Successor Note (2026-05-31).** This spec stays `done`. Source-neutral
+> notification ingestion, normalization, classification, correlation,
+> decisioning, suppression, approvals, and dashboard dispatch in this design
+> remain authoritative. Notification→user delivery now intersects the assistant
+> routing layer in [spec 061](../061-conversational-assistant/design.md) and the
+> `TransportAdapter` contract in [spec 069](../069-assistant-http-transport/design.md);
+> user-initiated queries about notifications should flow through the assistant
+> facade rather than per-channel handlers. This spec still owns the
+> notification intelligence core; the assistant stack owns user-facing
+> conversational delivery.
+
 ## Design Brief
 
 ### Current State

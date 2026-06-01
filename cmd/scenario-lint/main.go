@@ -26,6 +26,11 @@ import (
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
 	"github.com/smackerel/smackerel/internal/assistant"
+
+	// Spec 064 SCOPE-12 — substrate-bridge tool open_knowledge_invoke
+	// registers itself at package-init time so config/prompt_contracts/
+	// open_knowledge.yaml passes loader allow_tools validation here.
+	_ "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 	_ "github.com/smackerel/smackerel/internal/recommendation/tools"
 )
 

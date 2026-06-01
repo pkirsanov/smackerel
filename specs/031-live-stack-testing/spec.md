@@ -2,6 +2,16 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+> becomes the canonical live-stack assistant E2E surface. Assistant
+> journeys (weather, retrieval, open-knowledge, compiled intent,
+> disambiguation, confirm, reset, capture-as-fallback) should be
+> driven through `POST /api/assistant/turn`, not through a real
+> Telegram account. Telegram may keep adapter-specific tests, but it
+> is no longer the only end-to-end path. The disposable test-stack,
+> isolation, and cleanup rules in this spec remain authoritative.
+
 ## Problem Statement
 
 All 38 Go packages and 173 Python tests pass at the unit level using mocks, but zero tests have been executed against the real running Docker stack. The pipeline flow (artifact capture → NATS publish → ML sidecar processing → NATS response → DB write → graph linking → knowledge synthesis) has never been tested end-to-end against real PostgreSQL, real NATS JetStream, and the real ML sidecar. This scored 3/10 in the system review and is the most critical production readiness gap.

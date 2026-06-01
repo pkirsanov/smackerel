@@ -23,6 +23,9 @@ func TestLoadSkillsManifest_HappyPath(t *testing.T) {
 		"assistant.skills.weather.enabled":       false,
 		"assistant.skills.notifications.enabled": false,
 		"assistant.skills.recipe_search.enabled": true,
+		// Spec 064 SCOPE-12 — manifest entry for open_knowledge
+		// scenario; fixture leaves it disabled.
+		"assistant.open_knowledge.enabled": false,
 	})
 
 	m, err := LoadSkillsManifest(path, resolve)
@@ -88,6 +91,7 @@ func TestSkillsManifest_DisabledScenarioFiltered(t *testing.T) {
 		"assistant.skills.weather.enabled":       true,
 		"assistant.skills.notifications.enabled": true,
 		"assistant.skills.recipe_search.enabled": true,
+		"assistant.open_knowledge.enabled":       true,
 	})
 
 	m, err := LoadSkillsManifest(path, resolve)
@@ -108,8 +112,8 @@ func TestSkillsManifest_DisabledScenarioFiltered(t *testing.T) {
 			t.Fatalf("EnabledScenarioIDs MUST NOT include retrieval_qa: got %v", enabled)
 		}
 	}
-	if len(enabled) != 3 {
-		t.Fatalf("EnabledScenarioIDs len = %d; want 3 (weather + notification + recipe_search): %v", len(enabled), enabled)
+	if len(enabled) != 4 {
+		t.Fatalf("EnabledScenarioIDs len = %d; want 4 (weather + notification + recipe_search + open_knowledge): %v", len(enabled), enabled)
 	}
 
 	// Adversarial assertion: a downstream candidate-filter that drops
@@ -135,6 +139,7 @@ func TestSkillsManifest_MissingSSTKey(t *testing.T) {
 		"assistant.skills.weather.enabled":       true,
 		"assistant.skills.notifications.enabled": true,
 		"assistant.skills.recipe_search.enabled": true,
+		"assistant.open_knowledge.enabled":       false,
 	})
 
 	_, err := LoadSkillsManifest(path, resolve)

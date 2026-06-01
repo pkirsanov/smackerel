@@ -1,5 +1,16 @@
 # Design: 055 Notification Source ntfy Adapter
 
+> **Design Successor Note (2026-05-31).** This spec stays `done`. The ntfy
+> source adapter, stream/webhook handling, topic health, dead-letter, replay,
+> and operator APIs in this design remain authoritative. The outbound
+> channel-adapter pattern used here overlaps the `TransportAdapter` contract
+> introduced by [spec 061](../061-conversational-assistant/design.md) and
+> formalized in [spec 069](../069-assistant-http-transport/design.md); future
+> outbound notification channels should align with that contract rather than
+> re-deriving an adapter shape. This spec still owns ntfy-specific source
+> ingestion; the assistant stack owns the canonical transport adapter
+> abstraction.
+
 ## Design Brief
 
 ### Current State

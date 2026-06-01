@@ -1,5 +1,16 @@
 # Design: 021 Intelligence Delivery
 
+> **Design Successor Note (2026-05-31).** This spec stays `done`. Intelligence
+> generation, alert sweep, scheduler wiring, search-log capture, and health
+> reporting in this design remain active. The "no new Telegram bot commands"
+> boundary is superseded: user-facing delivery and interaction now flow through
+> the assistant facade in [spec 061](../061-conversational-assistant/design.md),
+> the structured intent compiler in [spec 068](../068-structured-intent-compiler/design.md),
+> and the transport adapter in [spec 069](../069-assistant-http-transport/design.md).
+> [Spec 066](../066-legacy-keyword-surface-retirement/design.md) owns retirement
+> of legacy keyword commands. This spec still owns the producer side (what gets
+> delivered and when); the assistant stack owns the user-input channel.
+
 ## Design Brief
 
 **Current State:** The intelligence engine (`internal/intelligence/`) has complete data-model and generation capabilities: synthesis, alerting, people intelligence, subscription detection, frequent-lookup analysis, and reporting. The scheduler (`internal/scheduler/scheduler.go`) already wires daily synthesis (2 AM), resurfacing (8 AM), pre-meeting briefs (every 5 min), weekly synthesis (Sunday 4 PM), monthly report (1st at 3 AM), subscription detection (Monday 3 AM), and frequent lookup detection (4 AM daily). However, four critical delivery paths are broken or missing.

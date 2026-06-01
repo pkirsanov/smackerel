@@ -19,6 +19,20 @@ re-implemented machinery already shipped by spec 037; spec.md §3.1
 and Hard Constraint 6 made that approach a blocking failure. This
 revision collapses the capability layer onto the spec 037 substrate.
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for the assistant facade, transport adapter contract,
+> conversation state, source/provenance response fields, confirmation,
+> disambiguation, and capture-as-fallback. Specs
+> [065](../065-generic-micro-tools/design.md),
+> [066](../066-legacy-keyword-surface-retirement/design.md),
+> [067](../067-intent-driven-policy-enforcement/design.md),
+> [068](../068-structured-intent-compiler/design.md), and
+> [069](../069-assistant-http-transport/design.md) amend its entry path:
+> user-facing natural language compiles into `CompiledIntent` before
+> routing, generic micro-tools normalize slots, legacy slash/keyword
+> surfaces retire, policy guards enforce the mandate, and HTTP becomes a
+> second concrete adapter without changing `TransportAdapter`.
+
 ---
 
 ## 0. Design Brief (REQUIRED alignment checkpoint)

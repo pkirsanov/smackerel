@@ -2,6 +2,19 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The monitoring stack contract (Prometheus scrape targets, dashboards,
+> alert routing, retention) is unchanged. New assistant-side metrics
+> introduced by
+> [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md)
+> (refusal causes, cite-back verification counters, per-turn budgets)
+> are exported through the existing pipeline declared here. Future
+> intent-compiler metrics from
+> [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> (compiler error totals, action-class distribution, clarification
+> rate) will follow the same contract. This spec stays `done`; the
+> additions amend metric names only, not the monitoring contract.
+
 ## Status
 
 In Progress — implementation

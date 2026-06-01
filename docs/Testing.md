@@ -486,6 +486,12 @@ for env in dev test home-lab; do ./smackerel.sh --env "$env" config generate; do
 - `TestOllamaUnreachable_FailsLoudly` MUST fail (not skip) when the test-stack Ollama container is unreachable; this is the BS-014 fail-loud contract.
 - `ollama-test-pull.sh` MUST exit non-zero on every failure path (missing env var, HTTP error, timeout, or post-pull `/api/tags` mismatch); silent success would mask a corrupt model cache.
 
+### SearxNG Test Container (Spec 064 SCOPE-07)
+
+The open-ended knowledge agent web search provider is backed by a self-hosted SearxNG container behind the `searxng` Compose profile. The `test` env auto-enables the profile (`environments.test.searxng_enabled: true`) so `./smackerel.sh test integration` brings up `searxng/searxng:2026.5.30-bd863f16b` alongside the rest of the test stack and injects `OPEN_KNOWLEDGE_SEARXNG_URL=http://searxng:8080` into the Go test runner. `dev` and `home-lab` ship with the profile disabled; developers can opt in for ad-hoc work by setting `environments.dev.searxng_enabled: true` and regenerating config, then running `docker compose --profile searxng up -d searxng`. `deploy/compose.deploy.yml` intentionally does NOT include SearxNG — operators who want a self-hosted instance overlay it via the deploy adapter. The image tag is pinned via `assistant.open_knowledge.searxng.image` (SST); bump it deliberately and never use `:latest`. SearxNG settings (including required JSON output format) live in [`config/searxng/settings.yml`](../config/searxng/settings.yml) and are mounted read-only.
+
+**Fabricated-cite fixture mode (pending).** The spec 064 SCOPE-17 adversarial regression for the cite-back verifier requires the ML sidecar `/llm/chat` route to support a `fixture-fabricated-cite` test mode that returns a planner response whose citations are deliberately absent from the per-turn `ToolResultStore`. That fixture knob is routed as finding #3 under [`specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md`](../specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md). When the fixture lands, `TestOpenKnowledgeE2E_A06_FabricatedSourceRejected` activates without modification and asserts `open_knowledge_refusal_total{cause="fabricated-source-blocked"}` increments exactly once.
+
 ## Environment Isolation Rules
 
 ### Development State Is Sacred

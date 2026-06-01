@@ -43,7 +43,7 @@ func main() {
 		defer cancel()
 		os.Exit(runAuthCommand(ctx, os.Args[2:]))
 	}
-	// Spec 063 — `smackerel-core users <subcommand>` operator surface
+	// Spec 070 — `smackerel-core users <subcommand>` operator surface
 	// (add | set-password | list).
 	if len(os.Args) > 1 && os.Args[1] == "users" {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -115,6 +115,14 @@ func run() error {
 	// skill is missing its production dependency.
 	if err := wireAssistantSkillServices(cfg, svc); err != nil {
 		return fmt.Errorf("assistant skill services wiring: %w", err)
+	}
+
+	// Spec 064 SCOPE-12 — install the live open-knowledge agent
+	// behind the substrate `open_knowledge_invoke` tool. No-op when
+	// assistant.open_knowledge.enabled=false. Fail-loud per SST when
+	// enabled but a required dep is missing.
+	if err := wireOpenKnowledge(cfg, svc, scenarioDir); err != nil {
+		return fmt.Errorf("open-knowledge subsystem wiring: %w", err)
 	}
 
 	// BUG-034-003 follow-up: expense handler MUST be constructed BEFORE
@@ -230,8 +238,13 @@ func run() error {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Spec 064 SCOPE-17 — WriteTimeout sized for the longest legitimate
+		// substrate scenario: the open_knowledge agent loop may run up to
+		// max_iterations × per_llm_timeout (e.g. 3 × 600s = 30 min) before
+		// flushing the final response on CPU-only dev with gemma3:4b.
+		// GPU / smaller models complete in seconds.
+		WriteTimeout: 1800 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Graceful shutdown

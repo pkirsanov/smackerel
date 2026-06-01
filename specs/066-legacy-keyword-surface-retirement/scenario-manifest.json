@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "featureDir": "specs/066-legacy-keyword-surface-retirement",
+  "featureName": "Legacy Keyword Surface Retirement",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-066-A01" },
+    { "scenarioId": "SCN-066-A02" },
+    { "scenarioId": "SCN-066-A03" },
+    { "scenarioId": "SCN-066-A04" },
+    { "scenarioId": "SCN-066-A05" },
+    { "scenarioId": "SCN-066-A06" },
+    { "scenarioId": "SCN-066-A07" },
+    { "scenarioId": "SCN-066-A08" },
+    { "scenarioId": "SCN-066-A09" }
+  ],
+  "scenarios": [
+    { "scenarioId": "SCN-066-A01", "scopeId": "SCOPE-1", "title": "Telegram BotCommands lists only operational set after deploy", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["unit", "integration"], "regressionRequired": true, "linkedTests": [{ "file": "internal/telegram/legacy_aliases_test.go", "testId": "TestBotCommandsAfterRetirementContainsOnlyOperationalSet", "category": "unit" }, { "file": "tests/integration/telegram/legacy_alias_test.go", "testId": "TestRetainedShortcutsStillRouteThroughAssistantFacade", "category": "integration" }], "evidenceRefs": ["report.md#scope-1"] },
+    { "scenarioId": "SCN-066-A02", "scopeId": "SCOPE-3", "title": "NL replaces /find", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_NaturalLanguageFindCitesArtifacts", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-3"] },
+    { "scenarioId": "SCN-066-A03", "scopeId": "SCOPE-3", "title": "NL replaces /rate via disambiguation", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_NaturalLanguageRateDisambiguatesAndPersists", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-3"] },
+    { "scenarioId": "SCN-066-A04", "scopeId": "SCOPE-2", "title": "Legacy slash command inside deprecation window", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/telegram/legacy_alias_test.go", "testId": "TestLegacyAliasInsideWindowRewritesRecordsNoticeAndInvokesFacade", "category": "integration" }, { "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_AliasWindowRoutesPlainEnglishWithNotice", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-2"] },
+    { "scenarioId": "SCN-066-A05", "scopeId": "SCOPE-2", "title": "Legacy slash command after deprecation window", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/telegram/legacy_alias_test.go", "testId": "TestLegacyAliasAfterWindowRejectsWithoutFacadeInvocation", "category": "integration" }, { "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_ExpiredSlashCommandDoesNotInvokeScenario", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-2"] },
+    { "scenarioId": "SCN-066-A06", "scopeId": "SCOPE-1", "title": "/help text enumerates NL examples, not legacy commands", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["unit", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "internal/telegram/help_test.go", "testId": "TestHelpListsNaturalLanguageExamplesAndNoRetiredCommands", "category": "unit" }, { "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_HelpTeachesPlainEnglishOnly", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-1"] },
+    { "scenarioId": "SCN-066-A07", "scopeId": "SCOPE-4", "title": "domain_intent.go deletion is enforced", "behaviorClass": "api", "changeType": "removed", "requiredTestType": ["guard", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/legacy_absence_test.go", "testId": "TestLegacyKeywordSurface_DomainIntentFileAndSymbolAbsent", "category": "guard" }, { "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "testId": "TestLegacyRetirementE2E_FindReplacementWorksAfterDomainIntentDeletion", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-4"] },
+    { "scenarioId": "SCN-066-A08", "scopeId": "SCOPE-5", "title": "annotation classification uses LLM extraction", "behaviorClass": "api", "changeType": "replacement", "requiredTestType": ["unit", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "internal/annotation/parser_test.go", "testId": "TestAnnotationClassificationRequiresCompiledIntentConfidence", "category": "unit" }, { "file": "tests/e2e/assistant/annotation_intent_test.go", "testId": "TestAnnotationIntentE2E_CookedItClassifiesFromCompiledIntent", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-5"] },
+    { "scenarioId": "SCN-066-A09", "scopeId": "SCOPE-1", "title": "operational command unaffected", "behaviorClass": "api", "changeType": "unchanged", "requiredTestType": ["unit"], "regressionRequired": true, "linkedTests": [{ "file": "internal/telegram/operational_commands_test.go", "testId": "TestStatusCommandBypassesLLMAndFacade", "category": "unit" }], "evidenceRefs": ["report.md#scope-1"] }
+  ]
+}

@@ -37,12 +37,23 @@ const (
 	// provider response (weather forecast, gov-alerts feed, etc.)
 	// that is NOT promoted into the knowledge graph.
 	SourceExternalProvider SourceKind = "external_provider"
+	// SourceWeb is a Source backed by a web search snippet returned
+	// by the open-knowledge agent's web_search tool. Added via
+	// PKT-061-A from spec 064 to extend the provenance gate's
+	// accepted taxonomy to cover web-grounded citations.
+	SourceWeb SourceKind = "web"
+	// SourceToolComputation is a Source backed by a deterministic
+	// tool computation (calculator, unit_convert). Added via
+	// PKT-061-A from spec 064.
+	SourceToolComputation SourceKind = "tool_computation"
 )
 
 // AllSourceKinds is the exhaustive closed-vocabulary list.
 var AllSourceKinds = []SourceKind{
 	SourceArtifact,
 	SourceExternalProvider,
+	SourceWeb,
+	SourceToolComputation,
 }
 
 // SourceRef is the discriminated-union sealed interface for the
@@ -71,3 +82,31 @@ type ExternalProviderRef struct {
 }
 
 func (ExternalProviderRef) isSourceRef() {}
+
+// WebSourceRef is the SourceRef shape for Kind == SourceWeb. All
+// fields are mandatory; the source-assembler MUST populate every
+// field. ContentHash is the sha256 of the canonicalised Snippet text
+// and is the key the cite-back verifier (spec 064) uses to confirm
+// the planner did not fabricate the citation.
+type WebSourceRef struct {
+	URL         string
+	Provider    string
+	FetchedAt   time.Time
+	ContentHash string
+	Snippet     string
+}
+
+func (WebSourceRef) isSourceRef() {}
+
+// ComputationSourceRef is the SourceRef shape for
+// Kind == SourceToolComputation. Tool is the registry name of the
+// deterministic tool; InputHash and OutputHash are the sha256
+// digests of the canonicalised tool input/output payloads, suitable
+// for hash-based verification by the spec 064 cite-back verifier.
+type ComputationSourceRef struct {
+	Tool       string
+	InputHash  string
+	OutputHash string
+}
+
+func (ComputationSourceRef) isSourceRef() {}
