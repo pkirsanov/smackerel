@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "specId": "075",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scopes": [
+    {"scopeId":"SCOPE-075-01","scopeName":"Retirement Safety Foundation, Config, And Privacy","tests":[
+      {"id":"TP-075-01","scenarioId":"SCN-075-A10","type":"unit","category":"unit","file":"internal/config/legacy_retirement_test.go","plannedTitle":"Planned: missing rollback threshold key fails loud and blocks window open","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-075-02","scenarioId":"SCN-075-A10","type":"integration","category":"integration","file":"tests/integration/assistant/legacy_retirement_foundation_test.go","plannedTitle":"Planned: notice ledger column initializes without runtime fallback JSON","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-03","scenarioId":"SCN-075-A11","type":"unit","category":"unit","file":"internal/assistant/legacyretirement/privacy_test.go","plannedTitle":"Planned: user bucket is HMAC and telemetry labels reject raw ids/text","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+      {"id":"TP-075-04","scenarioId":"SCN-075-A11","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/legacy_privacy_e2e_test.go","plannedTitle":"Planned regression: live residual telemetry exposes buckets only","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-075-02","scopeName":"Open-Window Notice Dedup And Intent Serving","tests":[
+      {"id":"TP-075-05","scenarioId":"SCN-075-A01","type":"integration/e2e-api","category":"integration","file":"tests/integration/assistant/legacy_retirement_notice_test.go","plannedTitle":"Planned: first retired-command invocation shows notice and serves mapped NL intent","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-06","scenarioId":"SCN-075-A02","type":"integration","category":"integration","file":"tests/integration/assistant/legacy_retirement_notice_test.go","plannedTitle":"Planned: second same command suppresses notice and serves normal NL response","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-07","scenarioId":"SCN-075-A03","type":"integration","category":"integration","file":"tests/integration/assistant/legacy_retirement_notice_test.go","plannedTitle":"Planned: different retired command has independent one-time notice","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-08","scenarioId":"SCN-075-A09","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/legacy_cross_transport_dedup_e2e_test.go","plannedTitle":"Planned regression: notice shown on one transport is suppressed on another","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-09","scenarioId":"SCN-075-A01","type":"e2e-ui","category":"e2e-ui","file":"web/pwa/tests/legacy_retirement_notice.spec.ts","plannedTitle":"Planned regression: structured notice renders as one short addendum without blocking primary response","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-075-03","scopeName":"Residual Usage Telemetry And Dashboard","tests":[
+      {"id":"TP-075-10","scenarioId":"SCN-075-A04","type":"integration","category":"integration","file":"tests/integration/monitoring/legacy_retirement_metrics_test.go","plannedTitle":"Planned: residual counter and rolling 7-day query render per-command/day counts","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-11","scenarioId":"SCN-075-A04","type":"integration","category":"integration","file":"tests/integration/monitoring/legacy_privacy_test.go","plannedTitle":"Planned: dashboard/report contains user buckets and no raw ids or raw text","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-12","scenarioId":"SCN-075-A04","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/legacy_retirement_report_e2e_test.go","plannedTitle":"Planned regression: live rolling report returns residual counts and distinct bucket totals","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-075-04","scopeName":"Automatic Pause And Resume","tests":[
+      {"id":"TP-075-13","scenarioId":"SCN-075-A05","type":"integration","category":"integration","file":"tests/integration/assistant/legacy_retirement_threshold_test.go","plannedTitle":"Planned: threshold breach fires alert and moves window to paused state","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-14","scenarioId":"SCN-075-A06","type":"integration","category":"integration","file":"tests/integration/assistant/legacy_retirement_threshold_test.go","plannedTitle":"Planned: operator resume resets consecutive-day counter and keeps telemetry","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-15","scenarioId":"SCN-075-A05","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/legacy_retirement_pause_e2e_test.go","plannedTitle":"Planned regression: paused state suppresses new notices while preserving safe legacy serving mode","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-075-05","scopeName":"Closed-Window Response And Observation Gate","tests":[
+      {"id":"TP-075-16","scenarioId":"SCN-075-A07","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/legacy_closed_response_test.go","plannedTitle":"Planned regression: closed retired command returns unknown-command response and invokes no handler","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-17","scenarioId":"SCN-075-A08","type":"integration/CLI","category":"integration","file":"tests/integration/assistant/legacy_observation_report_test.go","plannedTitle":"Planned: observation report proves zero retired-handler invocations over configured period","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+      {"id":"TP-075-18","scenarioId":"SCN-075-A08","type":"functional","category":"integration","file":"tests/integration/assistant/legacy_retirement_consumer_trace_test.go","plannedTitle":"Planned: stale first-party references are found before final handler deletion proceeds","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"}
+    ]}
+  ]
+}

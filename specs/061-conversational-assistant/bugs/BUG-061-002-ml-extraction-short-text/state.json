@@ -3,46 +3,145 @@
   "specId": "061-conversational-assistant",
   "bugId": "BUG-061-002",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "createdAt": "2026-05-29T00:00:00Z",
-  "lastUpdatedAt": "2026-05-29T00:00:00Z",
+  "lastUpdatedAt": "2026-06-01T00:00:00Z",
   "execution": {
-    "activeAgent": "bubbles.bug",
+    "activeAgent": "bubbles.workflow",
     "currentPhase": "validation",
     "currentScope": "BUG-061-002-SCOPE-01",
-    "completedScopes": [],
-    "lastUpdatedAt": "2026-05-29T00:00:00Z",
+    "completedScopes": ["BUG-061-002-SCOPE-01"],
+    "completedPhaseClaims": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
+    "lastUpdatedAt": "2026-06-01T00:00:00Z",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
-        "runStartedAt": "2026-05-29T00:00:00Z",
-        "runCompletedAt": "2026-05-29T00:00:00Z",
-        "phasesExecuted": ["discovery", "analysis", "implementation", "verification"],
+        "runStartedAt": "2026-05-29T20:00:00Z",
+        "runCompletedAt": "2026-05-29T22:30:00Z",
+        "phasesExecuted": ["discovery", "analysis", "implement", "test", "verification"],
+        "provenanceMode": "specialist",
         "statusBefore": "in_progress",
         "statusAfter": "in_progress",
         "summary": "Filed BUG-061-002 (ml/app/processor.py:178 ValueError on partial LLM payloads — short text + light/metadata tier). Reproduced in-process with patched litellm.acompletion (verbatim stack trace captured, PII-redacted). Replaced hard required_fields loop with setdefault/derive block mirroring existing unavailable-LLM fallback rules + WARN log. Added 2 new adversarial regression tests (test_bug_061_002_short_text_*, test_bug_061_002_empty_content_*) and rewrote the 2 pre-existing test_missing_*_returns_error tests to assert the new contract. Verified all 4 FAIL pre-fix via git-stash isolation. Verified all 4 PASS post-fix. Full ml/ unit suite: 464 passed. Full Go unit suite: all packages OK (no Go code touched). Self-verified pending bubbles.validate certification."
+      },
+      {
+        "agent": "bubbles.regression",
+        "runStartedAt": "2026-06-01T03:40:00Z",
+        "runCompletedAt": "2026-06-01T03:42:00Z",
+        "phasesExecuted": ["regression"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.regression; bubbles.workflow parent-expanded the regression phase by re-running the four adversarial unit tests directly and recording terminal-output evidence in scopes.md and report.md.",
+        "expansionEvidenceRef": "report.md#post-fix-regression-test-success-proof",
+        "summary": "Re-executed the four BUG-061-002 regression tests (2 adversarial + 2 rewritten) — all PASSED. Pre-fix FAIL evidence preserved in scopes.md DoD item 'Pre-fix regression test FAILS' via git-stash isolation."
+      },
+      {
+        "agent": "bubbles.simplify",
+        "runStartedAt": "2026-06-01T03:42:00Z",
+        "runCompletedAt": "2026-06-01T03:45:00Z",
+        "phasesExecuted": ["simplify"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.simplify; bubbles.workflow parent-expanded the simplify phase by auditing the patch for new abstractions, dead code, and accidental complexity.",
+        "expansionEvidenceRef": "report.md#code-diff-evidence",
+        "summary": "Patch is +26/-5 in one function (process_content). It mirrors the existing _processing_degraded_fallback derivation rules — no new abstractions introduced, no new helpers, no new branching outside the two fields it derives. Simplify pass: no rework required."
+      },
+      {
+        "agent": "bubbles.stabilize",
+        "runStartedAt": "2026-06-01T03:45:00Z",
+        "runCompletedAt": "2026-06-01T03:50:00Z",
+        "phasesExecuted": ["stabilize"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.stabilize; bubbles.workflow parent-expanded the stabilize phase by running the full Python + Go unit suites and confirming zero regressions.",
+        "expansionEvidenceRef": "report.md#test-evidence--full-suites",
+        "summary": "Full smackerel-ml suite: 464 passed, 1 warning. Full Go suite: all packages OK (cached where unchanged). No flakes, no env-coupling. Stabilize pass: no rework required."
+      },
+      {
+        "agent": "bubbles.security",
+        "runStartedAt": "2026-06-01T03:50:00Z",
+        "runCompletedAt": "2026-06-01T03:53:00Z",
+        "phasesExecuted": ["security"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.security; bubbles.workflow parent-expanded the security phase by auditing the patch surface for auth, secrets, PII, injection, and untrusted-input handling.",
+        "expansionEvidenceRef": "report.md#code-diff-evidence",
+        "summary": "Patch touches only LLM-result post-processing inside process_content. No auth surface, no secret handling, no new external IO, no new logging of secrets. The new WARN log emits source_id + tier + defaulted-field-names only (no payload content). Security pass: no rework required."
+      },
+      {
+        "agent": "bubbles.validate",
+        "runStartedAt": "2026-06-01T03:53:00Z",
+        "runCompletedAt": "2026-06-01T03:56:00Z",
+        "phasesExecuted": ["validate"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.validate; bubbles.workflow parent-expanded the validate phase by re-asserting each Gherkin scenario against the live test results and verifying the user-validation steps.",
+        "expansionEvidenceRef": "uservalidation.md",
+        "summary": "All four Gherkin scenarios mapped one-to-one to PASSING unit tests. uservalidation.md acceptance checklist verified. Validate pass: bug fix certified done."
+      },
+      {
+        "agent": "bubbles.audit",
+        "runStartedAt": "2026-06-01T03:56:00Z",
+        "runCompletedAt": "2026-06-01T04:02:00Z",
+        "phasesExecuted": ["audit"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.audit; bubbles.workflow parent-expanded the audit phase by re-running the state-transition guard, artifact-lint, and repo PII/no-defaults policy checks against the bug artifacts.",
+        "expansionEvidenceRef": "report.md#claim-source",
+        "summary": "Artifact provenance audited: scope-status canonical, DoD-Gherkin parity present, scenario-manifest enriched with requiredTestType/linkedTests/evidenceRefs, policySnapshot enriched with control-plane provenance, executionHistory carries per-phase provenance. No PII in evidence blocks (~/ paths used). NO-DEFAULTS SST: not applicable (no config changes). Audit pass: no rework required."
+      },
+      {
+        "agent": "bubbles.docs",
+        "runStartedAt": "2026-06-01T04:02:00Z",
+        "runCompletedAt": "2026-06-01T04:05:00Z",
+        "phasesExecuted": ["docs"],
+        "provenanceMode": "parent-expanded",
+        "expandedBy": "bubbles.workflow",
+        "expansionReason": "Nested runtime lacks runSubagent for bubbles.docs; bubbles.workflow parent-expanded the docs phase by updating bug-local artifacts (no operator-facing docs/ change is in scope for a contract-only unit-test-isolated bug fix).",
+        "expansionEvidenceRef": "report.md",
+        "summary": "Bug artifacts updated for closure: scopes.md (Scope-Kind opt-out, Gherkin-mirror DoD items, red→green TDD provenance, Bug-Fixed evidence block), report.md (Code Diff Evidence section), scenario-manifest.json (requiredTestType/linkedTests/evidenceRefs). No operator-facing docs/*.md change required: this is an internal LLM-post-processing fix with no API/UX/connector surface change."
       }
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "done",
+    "completedScopes": ["BUG-061-002-SCOPE-01"],
+    "certifiedCompletedPhases": ["implement", "test", "regression", "simplify", "stabilize", "security", "validate", "audit", "docs"],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
-      "inProgress": 1,
+      "done": 1,
+      "inProgress": 0,
       "notStarted": 0
     },
-    "lockdownState": "active"
+    "lockdownState": "closed"
   },
   "policySnapshot": {
-    "grillEnabled": false,
-    "tddEnforced": true,
-    "autoCommit": false,
-    "lockdownPolicy": "fastlane",
-    "regressionPolicy": "adversarial-required",
-    "validationProvenance": "bubbles.bug-self-verified-pending-validate"
+    "workflowMode": "bugfix-fastlane",
+    "grill": {
+      "value": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "value": "scenario-first",
+      "source": "workflow-forced",
+      "exempt": false
+    },
+    "autoCommit": {
+      "value": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "value": "fastlane",
+      "source": "workflow-forced"
+    },
+    "regression": {
+      "value": "adversarial-required",
+      "source": "workflow-forced"
+    },
+    "validation": {
+      "value": "bubbles.bug-self-verified-then-workflow-certified",
+      "source": "spec-lockdown"
+    }
   },
   "transitionRequests": [],
   "reworkQueue": []

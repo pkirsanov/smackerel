@@ -1,5 +1,15 @@
 # Design: Monitoring Stack
 
+> **Design Successor Note (2026-05-31).** The monitoring stack, scrape
+> config, alert rules, and target-agnostic deployment contract remain
+> active. Specs [065](../065-generic-micro-tools/design.md),
+> [067](../067-intent-driven-policy-enforcement/design.md),
+> [068](../068-structured-intent-compiler/design.md), and
+> [069](../069-assistant-http-transport/design.md) add assistant-side
+> metric families for micro-tools, policy guards, compiler outcomes, and
+> HTTP transport rejections. Monitoring implementation should add alerts
+> only for metrics actually emitted by those successor specs.
+
 ## Current Truth
 
 Smackerel emits a rich Prometheus metric surface today (spec 030 + spec

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "specId": "074",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scenarios": [
+    {"scenarioId":"SCN-074-A01","title":"Unrouted turn produces exactly one fallback Idea","scopeId":"SCOPE-074-04","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-12","TP-074-14"],"liveSystemExpectation":"integration and e2e-api rows must observe exactly one artifact write","status":"planned"},
+    {"scenarioId":"SCN-074-A02","title":"Explicit capture is provenance-distinct","scopeId":"SCOPE-074-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-05","TP-074-06","TP-074-07"],"liveSystemExpectation":"explicit and fallback capture runtime paths must remain distinct","status":"planned"},
+    {"scenarioId":"SCN-074-A03","title":"Same-user same-text within dedup window dedupes","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-08","TP-074-11"],"liveSystemExpectation":"live e2e-api row must return already-captured acknowledgement","status":"planned"},
+    {"scenarioId":"SCN-074-A04","title":"Same-user same-text outside dedup window does not dedup","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-09"],"liveSystemExpectation":"unit/integration rows must prove outside-window new bucket behavior","status":"planned"},
+    {"scenarioId":"SCN-074-A05","title":"Cross-user dedup is forbidden","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-10"],"liveSystemExpectation":"integration row must use two isolated users and separate artifacts","status":"planned"},
+    {"scenarioId":"SCN-074-A06","title":"Abandoned clarification captures the original prompt","scopeId":"SCOPE-074-04","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-13"],"liveSystemExpectation":"integration row must prove original prompt is captured with abandoned flag","status":"planned"},
+    {"scenarioId":"SCN-074-A07","title":"Counter and IntentTrace carry the capture link","scopeId":"SCOPE-074-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-15","TP-074-16"],"liveSystemExpectation":"integration rows must inspect real metric/trace/artifact linkage","status":"planned"},
+    {"scenarioId":"SCN-074-A08","title":"Missing SST keys fail loud","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-01"],"liveSystemExpectation":"unit config validation proves fail-loud behavior","status":"planned"},
+    {"scenarioId":"SCN-074-A09","title":"Capture is inviolable","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-02","TP-074-04"],"liveSystemExpectation":"guard and e2e-api rows prove no suppression path exists","status":"planned"},
+    {"scenarioId":"SCN-074-A10","title":"No content interpretation at capture time","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-03"],"liveSystemExpectation":"unit payload row proves no inferred tags/topics/categories are attached","status":"planned"},
+    {"scenarioId":"SCN-074-A11","title":"Acknowledgement shape is identical across transports","scopeId":"SCOPE-074-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-17"],"liveSystemExpectation":"cross-transport e2e row must cover Telegram, HTTP, WhatsApp, web, and Android renderers","status":"planned"}
+  ]
+}

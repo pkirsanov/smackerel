@@ -71,3 +71,110 @@ rolloutStrategies:
   description: Stop old, start new — brief downtime acceptable
 - name: blue-green
   description: Run new alongside old, switch traffic when healthy
+
+# Per-spec SST key catalog (informational + adapter-side rendering contract).
+# Each entry names a key in `config/smackerel.yaml` whose resolved value flows
+# into the env file that the adapter mounts into the runtime. All keys are
+# REQUIRED — the generator and runtime both fail loud on missing or empty
+# values (Gate G028, smackerel-no-defaults). Adapters do NOT default these;
+# they consume the bundle as-is and inject secrets at apply time via the
+# spec 052 secret-injection path.
+#
+# Drift between this catalog and `config/smackerel.yaml` is operator-visible
+# but not currently lockstep-tested; treat the YAML as the SST authority.
+sstKeyCatalog:
+- spec: 064-open-ended-knowledge-agent
+  description: Open-knowledge assistant agent (bounded planner ↔ tool loop)
+  keys:
+  - path: assistant.open_knowledge.enabled
+    type: bool
+    secret: false
+  - path: assistant.open_knowledge.provider
+    type: enum
+    allowed: [ searxng, brave, tavily ]
+    secret: false
+  - path: assistant.open_knowledge.provider_endpoint
+    type: string
+    secret: false
+    notes: Empty string permitted when enabled=false
+  - path: assistant.open_knowledge.provider_api_key
+    type: string
+    secret: true
+    notes: Empty permitted for searxng; non-empty required for brave/tavily when enabled. Injected via spec 052 secret-injection path; never committed.
+  - path: assistant.open_knowledge.llm_model_id
+    type: string
+    secret: false
+  - path: assistant.open_knowledge.llm_timeout_ms
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.max_iterations
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.per_query_token_budget
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.per_query_usd_budget
+    type: float
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.monthly_budget_usd
+    type: float
+    secret: false
+    notes: ">=0 (explicit)"
+  - path: assistant.open_knowledge.per_user_monthly_budget_usd
+    type: float
+    secret: false
+    notes: ">=0 (explicit)"
+  - path: assistant.open_knowledge.tool_allowlist
+    type: string[]
+    secret: false
+    notes: Deny-by-default; non-empty when enabled. v1 set is internal_retrieval, web_search, unit_convert, calculator.
+  - path: assistant.open_knowledge.web_snippet_cache_enabled
+    type: bool
+    secret: false
+  - path: assistant.open_knowledge.allowed_egress_hosts
+    type: string[]
+    secret: false
+    notes: Application-layer egress allowlist. Provider host implicit. Bare hostnames only; no wildcards in v1.
+  - path: assistant.open_knowledge.circuit_breaker.failure_threshold
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.circuit_breaker.open_window_seconds
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.circuit_breaker.half_open_after_seconds
+    type: int
+    secret: false
+    notes: ">0 when enabled"
+  - path: assistant.open_knowledge.searxng.image
+    type: string
+    secret: false
+    notes: Pinned upstream tag; never :latest.
+  - path: assistant.open_knowledge.searxng.container_port
+    type: int
+    secret: false
+  - path: assistant.open_knowledge.searxng.secret_key
+    type: string
+    secret: true
+    notes: Non-empty; entrypoint substitutes into settings.yml. Operators MUST override the committed dev/test placeholder.
+  - path: assistant.open_knowledge.searxng.base_url
+    type: string
+    secret: false
+  perEnvKeys:
+  - path: environments.<env>.searxng_enabled
+    type: bool
+    secret: false
+    notes: Flips the searxng Compose profile for the env.
+  - path: environments.<env>.searxng_host_port
+    type: int
+    secret: false
+    notes: Host port for ad-hoc dev inspection (loopback bind only).
+  - path: environments.<env>.searxng_bind_address
+    type: string
+    secret: false
+    notes: Host bind address; loopback by convention for dev/test.

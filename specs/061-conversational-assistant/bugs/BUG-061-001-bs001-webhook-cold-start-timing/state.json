@@ -3,15 +3,15 @@
   "specId": "061-conversational-assistant",
   "bugId": "BUG-061-001",
   "workflowMode": "bugfix-fastlane",
-  "status": "in_progress",
+  "status": "done",
   "createdAt": "2026-05-28T22:30:00Z",
-  "lastUpdatedAt": "2026-05-28T22:30:00Z",
+  "lastUpdatedAt": "2026-06-01T00:00:00Z",
   "execution": {
-    "activeAgent": "bubbles.bug",
-    "currentPhase": "validation",
+    "activeAgent": "bubbles.workflow",
+    "currentPhase": "finalize",
     "currentScope": "BUG-061-001-SCOPE-01",
-    "completedScopes": [],
-    "lastUpdatedAt": "2026-05-28T22:30:00Z",
+    "completedScopes": ["BUG-061-001-SCOPE-01"],
+    "lastUpdatedAt": "2026-06-01T00:00:00Z",
     "executionHistory": [
       {
         "agent": "bubbles.bug",
@@ -25,16 +25,16 @@
     ]
   },
   "certification": {
-    "status": "in_progress",
-    "completedScopes": [],
-    "certifiedCompletedPhases": [],
+    "status": "certified",
+    "completedScopes": ["BUG-061-001-SCOPE-01"],
+    "certifiedCompletedPhases": ["discovery", "analysis", "implementation", "verification", "validation", "finalize"],
     "scopeProgress": {
       "total": 1,
-      "done": 0,
-      "inProgress": 1,
+      "done": 1,
+      "inProgress": 0,
       "notStarted": 0
     },
-    "lockdownState": "active"
+    "lockdownState": "completed"
   },
   "policySnapshot": {
     "grillEnabled": false,

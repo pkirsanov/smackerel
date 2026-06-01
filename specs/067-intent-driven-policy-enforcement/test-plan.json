@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "specId": "067",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "scopes": [
+    { "scopeId": "SCOPE-1", "scopeName": "Policy Guard Foundation and Exception Ratchet", "tests": [
+      { "type": "unit", "category": "unit", "file": "internal/config/policy_test.go", "scenarioId": "SCN-067-A08", "description": "Policy config requires scenario prompt cap and baseline keys", "command": "./smackerel.sh test unit", "liveSystem": false },
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/policy_exception_guard_test.go", "scenarioId": "SCN-067-A07", "description": "Exception baseline rejects unreviewed growth", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "scenarioId": "SCN-067-A07", "description": "Guard output remains accessible and actionable", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-2", "scopeName": "Scenario YAML Policy Guards", "tests": [
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/principle_alignment_guard_test.go", "scenarioId": "SCN-067-A01", "description": "Missing principleAlignment fails with policy source", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/scenario_prompt_cap_guard_test.go", "scenarioId": "SCN-067-A02", "description": "Over-cap scenario prompt fails with counts", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "scenarioId": "SCN-067-A01", "description": "Scenario YAML policy failures are visible in guard output", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-3", "scopeName": "Keyword Routing Guard Expansion", "tests": [
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/keyword_routing_guard_test.go", "scenarioId": "SCN-067-A03", "description": "API regex routing pattern is reported", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/keyword_map_guard_test.go", "scenarioId": "SCN-067-A04", "description": "Telegram and annotation free-text keyword maps are reported", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "scenarioId": "SCN-067-A03", "description": "Keyword guard failures name owner and action", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-4", "scopeName": "NO-DEFAULTS Source Guards", "tests": [
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/no_defaults_python_guard_test.go", "scenarioId": "SCN-067-A05", "description": "Python runtime fallback is reported with policy source", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "integration", "category": "integration", "file": "tests/integration/policy/no_defaults_go_guard_test.go", "scenarioId": "SCN-067-A06", "description": "Go runtime fallback is reported with SST key", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "scenarioId": "SCN-067-A05", "description": "No-defaults guard output names the SST key", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] }
+  ]
+}

@@ -5,6 +5,25 @@
 > **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The top-of-funnel UX vision described in this MVP spec — in particular
+> per-command Telegram entry points and ad-hoc free-text handling — is
+> amended by the intent-driven assistant architecture:
+> - [spec 061 — Conversational Assistant](../061-conversational-assistant/spec.md)
+>   (NL turn surface),
+> - [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md)
+>   (open knowledge Q&A),
+> - [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+>   (NL -> `CompiledIntent` -> scenario route), and
+> - [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+>   (transport contract for the assistant surface).
+>
+> Per-command Telegram UX is replaced by natural-language input + a
+> compiled intent that selects the scenario route. The MVP's product
+> intent, capture/retrieval/synthesis pillars, and phase plan remain
+> the historical baseline. This spec stays `done`; successor specs
+> amend the request-entry path only.
+
 ---
 
 ## Problem Statement

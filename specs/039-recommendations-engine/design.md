@@ -4,6 +4,17 @@
 > Status: Active design truth for [spec.md](spec.md).  
 > Mode: From-analysis contract-grade design depth. The current [spec.md](spec.md) contains analyst-owned actors/use cases/business scenarios plus UX-owned `## UI Wireframes` and `## User Flows`, so this document defines exact contracts for architecture, data, API, UI, authorization, validation, rollout, and traceability.
 
+> **Design Successor Note (2026-05-31).** Recommendation domain storage,
+> provider adapters, watches, ranking, policy, feedback, why explanations,
+> and web/API contracts in this design remain active. The `/watch` command
+> and keyword-shaped watch creation examples are superseded as primary
+> entry paths by [spec 066](../066-legacy-keyword-surface-retirement/design.md).
+> New assistant recommendation requests and watch mutations should compile
+> through [spec 068](../068-structured-intent-compiler/design.md), use
+> `entity_resolve` from [spec 065](../065-generic-micro-tools/design.md)
+> when resolving colloquial references, and keep write-class actions behind
+> confirmation.
+
 ---
 
 ## Design Brief

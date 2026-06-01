@@ -1,5 +1,14 @@
 # Design: 036 Meal Planning Calendar
 
+> **Design Successor Note (2026-05-31).** Meal plan storage, shopping-list
+> generation, calendar sync, and recipe/list composition in this design
+> remain active. The `/meal_plan` command and command-shaped Telegram
+> examples are superseded as primary entry paths by
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md). New
+> assistant meal-planning requests should compile through
+> [spec 068](../068-structured-intent-compiler/design.md) and execute write
+> actions only after the existing confirmation gate accepts them.
+
 ## 1. Overview
 
 Meal planning is a composition layer over existing infrastructure: recipe `domain_data` (spec 026), the actionable lists framework (spec 028), ingredient aggregation, serving scaling (spec 035), and CalDAV calendar integration (spec 003). Two new tables (`meal_plans` and `meal_plan_slots`) store plan state. Shopping list generation delegates to the existing `RecipeAggregator` and `Generator`. Calendar sync creates CalDAV events via the existing connector.

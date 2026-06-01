@@ -2,6 +2,16 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+> re-targets the real-LLM happy-path E2E surface introduced here from
+> Telegram-only test files to the assistant HTTP transport. Ollama
+> orchestration, deterministic model pull, isolated test volume, and
+> test-stack lifecycle stay owned by this spec. New assistant E2E
+> tests should use the HTTP route so they can run in CI without a
+> Telegram account while still exercising the real Go ↔ Python ↔
+> Ollama loop.
+
 ## Problem Statement
 
 Spec [037 LLM Scenario Agent & Tool Registry](../037-llm-agent-tools/spec.md)

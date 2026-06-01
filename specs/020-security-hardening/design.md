@@ -11,6 +11,15 @@
 > work in this document remain in force. Only the host-bind prescription is
 > superseded.
 
+> **Design Successor Note (2026-05-31).** [Spec 069](../069-assistant-http-transport/design.md)
+> adds one authenticated assistant route, `POST /api/assistant/turn`, for
+> E2E tests and later clients. That route must be mounted behind the
+> existing bearer-auth boundary, require the spec-060 assistant turn scope,
+> enforce body-size/rate-limit/CORS policy from SST, and reject before
+> facade invocation on auth, scope, schema, rate, or body-size failure.
+> This note adds the assistant HTTP consumer to the security surface; it
+> does not reopen the historical host-bind design.
+
 ## Design Brief
 
 **Current State:** Smackerel's Docker Compose stack binds postgres, nats, smackerel-ml, and ollama host ports to `0.0.0.0`, exposing them to the LAN. Only `smackerel-core` correctly uses `127.0.0.1`. The ML sidecar (`ml/app/main.py`) has zero HTTP auth middleware. The Web UI route group in `internal/api/router.go` has `webAuthMiddleware` implemented but intentionally not applied. OAuth start/callback endpoints have no rate limiting. `internal/auth/store.go` `decrypt()` silently falls back to plaintext on any failure. NATS auth token is passed as a `--auth` CLI arg visible in `docker ps`.

@@ -351,7 +351,7 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 	}
 	deps.BearerStore = bearerStore
 
-	// Spec 063 — web operator credentials (username/password login layer).
+	// Spec 070 — web operator credentials (username/password login layer).
 	// Wired before api.NewRouter so HandleWebLogin has the repo at
 	// router-init time. nil pool is rejected upstream so the call is safe.
 	webCredsRepo, err := webcreds.NewPostgresRepo(svc.pg.Pool)

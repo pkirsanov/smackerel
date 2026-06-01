@@ -4,6 +4,16 @@
 **Status:** Done
 **Created:** 2026-04-10
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+> adds one new authenticated conversational route (`POST
+> /api/assistant/turn`) for E2E testing and future frontends. It MUST
+> remain behind the per-user bearer-token boundary (spec 044) and the
+> scope-claim middleware (spec 060), MUST use fail-loud SST config for
+> rate limits / body caps / CORS, and MUST NOT expose the assistant or
+> ML sidecar directly. This spec stays `done`; 069 amends it only by
+> adding a new secured route class under the existing hardening model.
+
 ---
 
 ## Problem Statement

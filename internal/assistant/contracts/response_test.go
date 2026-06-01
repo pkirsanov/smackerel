@@ -66,7 +66,7 @@ func TestAllErrorCauses_Exhaustive(t *testing.T) {
 
 // TestAllSourceKinds_Exhaustive — every literal SourceKind constant.
 func TestAllSourceKinds_Exhaustive(t *testing.T) {
-	declared := []SourceKind{SourceArtifact, SourceExternalProvider}
+	declared := []SourceKind{SourceArtifact, SourceExternalProvider, SourceWeb, SourceToolComputation}
 	if len(AllSourceKinds) != len(declared) {
 		t.Fatalf("AllSourceKinds length %d != declared %d", len(AllSourceKinds), len(declared))
 	}
@@ -89,6 +89,18 @@ func TestSourceRef_DiscriminatedUnion_RoundTrip(t *testing.T) {
 			Kind:  SourceExternalProvider,
 			Ref:   ExternalProviderRef{ProviderName: "open-meteo", RetrievedAt: t0},
 		},
+		{
+			ID:    "w-1",
+			Title: "Wikipedia — Paris",
+			Kind:  SourceWeb,
+			Ref:   WebSourceRef{URL: "https://en.wikipedia.org/wiki/Paris", Provider: "searxng", FetchedAt: t0, ContentHash: "sha256:abc", Snippet: "Paris."},
+		},
+		{
+			ID:    "c-1",
+			Title: "calculator",
+			Kind:  SourceToolComputation,
+			Ref:   ComputationSourceRef{Tool: "calculator", InputHash: "sha256:in", OutputHash: "sha256:out"},
+		},
 	}
 	for _, c := range cases {
 		switch ref := c.Ref.(type) {
@@ -105,6 +117,20 @@ func TestSourceRef_DiscriminatedUnion_RoundTrip(t *testing.T) {
 			}
 			if ref.ProviderName == "" {
 				t.Errorf("ExternalProviderRef lost ProviderName")
+			}
+		case WebSourceRef:
+			if c.Kind != SourceWeb {
+				t.Errorf("WebSourceRef paired with Kind %q, want %q", c.Kind, SourceWeb)
+			}
+			if ref.URL == "" || ref.ContentHash == "" {
+				t.Errorf("WebSourceRef lost mandatory field")
+			}
+		case ComputationSourceRef:
+			if c.Kind != SourceToolComputation {
+				t.Errorf("ComputationSourceRef paired with Kind %q, want %q", c.Kind, SourceToolComputation)
+			}
+			if ref.Tool == "" || ref.InputHash == "" || ref.OutputHash == "" {
+				t.Errorf("ComputationSourceRef lost mandatory field")
 			}
 		default:
 			t.Errorf("unknown SourceRef impl: %T", c.Ref)
@@ -307,6 +333,30 @@ func goldenCases() []goldenCase {
 				EmittedAt:            t0,
 			},
 		},
+		{
+			// PKT-061-A — web source kind round-trip.
+			name: "thinking_web_source",
+			resp: AssistantResponse{
+				Status: StatusThinking,
+				Body:   "the capital of France is Paris.",
+				Sources: []Source{
+					{ID: "w-1", Title: "Wikipedia — Paris", Kind: SourceWeb, Ref: WebSourceRef{URL: "https://en.wikipedia.org/wiki/Paris", Provider: "searxng", FetchedAt: t0, ContentHash: "sha256:abc", Snippet: "Paris is the capital and most populous city of France."}},
+				},
+				EmittedAt: t0,
+			},
+		},
+		{
+			// PKT-061-A — tool-computation source kind round-trip.
+			name: "thinking_tool_computation_source",
+			resp: AssistantResponse{
+				Status: StatusThinking,
+				Body:   "2 + 2 = 4",
+				Sources: []Source{
+					{ID: "c-1", Title: "calculator", Kind: SourceToolComputation, Ref: ComputationSourceRef{Tool: "calculator", InputHash: "sha256:in", OutputHash: "sha256:out"}},
+				},
+				EmittedAt: t0,
+			},
+		},
 	}
 }
 
@@ -426,6 +476,22 @@ func snapshotForGolden(r AssistantResponse) map[string]any {
 					"kind":          "external_provider",
 					"provider_name": ref.ProviderName,
 					"retrieved_at":  ref.RetrievedAt.UTC().Format(time.RFC3339Nano),
+				}
+			case WebSourceRef:
+				entry["ref"] = map[string]any{
+					"kind":         "web",
+					"url":          ref.URL,
+					"provider":     ref.Provider,
+					"fetched_at":   ref.FetchedAt.UTC().Format(time.RFC3339Nano),
+					"content_hash": ref.ContentHash,
+					"snippet":      ref.Snippet,
+				}
+			case ComputationSourceRef:
+				entry["ref"] = map[string]any{
+					"kind":        "tool_computation",
+					"tool":        ref.Tool,
+					"input_hash":  ref.InputHash,
+					"output_hash": ref.OutputHash,
 				}
 			}
 			srcs = append(srcs, entry)

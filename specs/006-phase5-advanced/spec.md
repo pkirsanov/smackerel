@@ -8,6 +8,20 @@
 > **Date:** April 6, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The advanced-intelligence frontend trajectory (expertise,
+> learning, serendipity surfaces reaching the user) is amended by:
+> - [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+>   (transport contract for the assistant surface that fronts these
+>   capabilities).
+>
+> Advanced-intelligence semantics — expertise modeling, learning
+> trajectories, and serendipity signals — remain owned by this
+> spec. Only the way these surfaces reach the user is reshaped:
+> delivery flows through the assistant HTTP transport rather than
+> bespoke endpoints. This spec stays `done`; successor specs amend
+> the entry path only.
+
 ---
 
 ## Problem Statement

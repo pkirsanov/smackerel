@@ -6,6 +6,15 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** Knowledge synthesis, concept
+> pages, entity profiles, linting, provenance, and query-first behavior in
+> this design remain active. Telegram command examples such as `/concept`,
+> `/person`, and `/lint` are superseded as primary user entry paths by
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md). New
+> assistant entry should flow through [spec 068](../068-structured-intent-compiler/design.md)
+> and, when no deterministic scenario claims the turn, through the
+> open-knowledge scenario from [spec 064](../064-open-ended-knowledge-agent/design.md).
+
 ## Design Brief
 
 **Current State:** Smackerel's ingestion pipeline runs: connector → extract → publish to NATS `artifacts.process` → ML sidecar processes (embedding + NLP extraction) → `artifacts.processed` subscriber stores results and runs `graph.Linker.LinkArtifact()` which creates `RELATED_TO`, `MENTIONS`, `ABOUT`, `TEMPORAL_SEQUENCE`, and `FROM_SAME_SOURCE` edges. Every query runs vector similarity search at query time. There is no persistent synthesis — no concept pages, no accumulated entity profiles, no pre-built cross-source insights.

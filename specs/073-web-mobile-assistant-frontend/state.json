@@ -1,0 +1,118 @@
+{
+  "version": 3,
+  "featureDir": "specs/073-web-mobile-assistant-frontend",
+  "featureNumber": "073",
+  "featureName": "Web/Mobile Assistant Frontend Client",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/044-per-user-bearer-auth",
+    "specs/060-bearer-auth-scope-claim",
+    "specs/061-conversational-assistant",
+    "specs/069-assistant-http-transport"
+  ],
+  "amends": [
+    "specs/069-assistant-http-transport"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "completedScopes": []
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning-reconcile",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T21:32:34Z",
+    "lastUpdatedAt": "2026-05-31T21:32:34Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped the first concrete consumers of spec 069's HTTP assistant contract: a minimal web chat client and an Android in-app client sharing types generated from the spec 069 golden schema. 11 BDD scenarios (SCN-073-A01..A11) cover authenticated turn POST/render, codegen-breaking schema-change detection, idempotent retries, disambig/confirm round-trips, capture-as-fallback parity, prohibition of client-side scenario logic, closed-vocabulary transport_hint usage, web a11y, Android TalkBack a11y, and fail-loud SST for backend base URL."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:10:07Z",
+        "runEndedAt": "2026-05-31T20:10:07Z",
+        "summary": "Created design.md for the web and Android assistant clients, resolving shared generated schema consumption, renderer foundation, idempotent retry, auth storage constraints, fail-loud client config, accessibility, and scenario-to-test mapping for SCN-073-A01..A11."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:30:46Z",
+        "runEndedAt": "2026-05-31T20:30:46Z",
+        "summary": "Created planning artifacts for SCN-073-A01..A11: four sequential scopes, scenario-manifest.json, test-plan.json, uservalidation.md, and planning-only report.md. Status remains in_progress with planMaturityOnly=true."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T21:14:26Z",
+        "runEndedAt": "2026-05-31T21:14:26Z",
+        "summary": "Reframed spec 073 from Web/Android to Web/Mobile: iPhone/iOS and Android are both required mobile targets, and mobile delivery must use one shared codebase unless a future owner-approved design amendment documents infeasibility. Substantive design, UX, and plan-owned Android-only content remains routed to owning agents."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design", "reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T21:24:17Z",
+        "runEndedAt": "2026-05-31T21:24:17Z",
+        "summary": "Reconciled design.md from a web plus single-platform mobile design to Web/Mobile with one shared iPhone/iOS and Android mobile codebase, generated spec 069 schema models, one response-renderer foundation, adapter-only platform differences, idempotent retry parity, VoiceOver/TalkBack accessibility coverage, and plan-owner routing for stale planning artifacts."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning", "reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T21:32:34Z",
+        "runEndedAt": "2026-05-31T21:32:34Z",
+        "summary": "Reconciled plan-owned artifacts from the prior single-platform mobile plan to Web/Mobile: scopes.md, scenario-manifest.json, test-plan.json, uservalidation.md, and report.md now cover web plus one shared iPhone/iOS and Android mobile codebase, generated schema model/renderer canaries, VoiceOver and TalkBack, and idempotent retry parity. Status remains in_progress under product-to-planning/specs_hardened ceiling."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      }
+    ]
+  }
+}

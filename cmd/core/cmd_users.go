@@ -1,6 +1,6 @@
 package main
 
-// Spec 063 — `smackerel-core users <subcommand>` operator surface for
+// Spec 070 — `smackerel-core users <subcommand>` operator surface for
 // the web operator credential layer (username/password login).
 //
 // Subcommands:

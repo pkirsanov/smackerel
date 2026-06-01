@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "specId": "075",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scenarios": [
+    {"scenarioId":"SCN-075-A01","title":"First retired-command invocation shows one notice and serves the intent","scopeId":"SCOPE-075-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-05","TP-075-09"],"liveSystemExpectation":"integration/e2e rows must observe notice plus NL-served primary response","status":"planned"},
+    {"scenarioId":"SCN-075-A02","title":"Second invocation of the same retired command does not re-notify","scopeId":"SCOPE-075-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-06"],"liveSystemExpectation":"integration row must prove server ledger suppresses duplicate notice","status":"planned"},
+    {"scenarioId":"SCN-075-A03","title":"Different retired command produces its own one-time notice","scopeId":"SCOPE-075-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-07"],"liveSystemExpectation":"integration row must prove per-command notice independence","status":"planned"},
+    {"scenarioId":"SCN-075-A04","title":"Residual telemetry counts invocations per command per user bucket","scopeId":"SCOPE-075-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-10","TP-075-11","TP-075-12"],"liveSystemExpectation":"integration/e2e rows must query real residual metrics/report data","status":"planned"},
+    {"scenarioId":"SCN-075-A05","title":"Rollback threshold pauses the window automatically","scopeId":"SCOPE-075-04","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-13","TP-075-15"],"liveSystemExpectation":"integration/e2e rows must prove alert and paused state behavior","status":"planned"},
+    {"scenarioId":"SCN-075-A06","title":"Resuming the window resets the consecutive-day counter","scopeId":"SCOPE-075-04","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-14"],"liveSystemExpectation":"integration row must prove counter reset and telemetry continuity","status":"planned"},
+    {"scenarioId":"SCN-075-A07","title":"Window-closed response is the canonical unknown-command response","scopeId":"SCOPE-075-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-16"],"liveSystemExpectation":"e2e-api row must prove no legacy handler invocation","status":"planned"},
+    {"scenarioId":"SCN-075-A08","title":"Post-window observation confirms zero legacy handler invocations","scopeId":"SCOPE-075-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-17","TP-075-18"],"liveSystemExpectation":"integration/report rows must prove zero invocation before deletion eligibility","status":"planned"},
+    {"scenarioId":"SCN-075-A09","title":"Dedup ledger survives across sessions and devices","scopeId":"SCOPE-075-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-08"],"liveSystemExpectation":"e2e-api row must drive at least two transports for same user","status":"planned"},
+    {"scenarioId":"SCN-075-A10","title":"Missing SST keys fail loud","scopeId":"SCOPE-075-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-01","TP-075-02"],"liveSystemExpectation":"unit/integration rows prove missing config blocks window open","status":"planned"},
+    {"scenarioId":"SCN-075-A11","title":"Telemetry contains no raw user identifiers","scopeId":"SCOPE-075-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-075-03","TP-075-04"],"liveSystemExpectation":"unit/e2e rows prove HMAC bucket and no raw text/id labels","status":"planned"}
+  ]
+}

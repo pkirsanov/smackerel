@@ -1,7 +1,7 @@
 # Spec 061 — Conversational Assistant (Transport-Agnostic)
 
-**Status:** in_progress (analyst-owned authoring; ceiling = `specs_hardened`)
-**Workflow Mode:** `product-to-planning`
+**Status:** done (certified per state.json)
+**Workflow Mode:** `full-delivery` (historical; certified done)
 **Owner Directives:**
 - 2026-05-28 — extend Smackerel from capture-only into a conversational
   assistant while preserving capture-as-fallback.
@@ -17,6 +17,44 @@ existing `internal/telegram/bot.go` (v1 reference adapter integration
 site), existing `ml/` sidecar (LLM bridge).
 **Unblocks:** future per-transport adapter specs (WhatsApp, web chat,
 mobile in-app), future skill specs (email, etc.).
+
+**Architectural Position (added 2026-05-31, analyst).** This spec owns
+the **closed-set scenario router + transport adapter + capability
+facade**. It does NOT own:
+
+- The **open-domain agent loop** (any NL request that no deterministic
+  scenario claims) — owned by **spec 064 (Open-Ended Knowledge
+  Agent)**, registered as a terminal scenario immediately before
+  capture-as-fallback.
+- The **structured-intent compiler** (LLM transforms every user NL
+  turn into a schema-bound `CompiledIntent` before routing) — owned by
+  **spec 068 (Structured Intent Compiler)**. Spec 068 amends this
+  facade so the pipeline becomes: raw turn -> compiled intent -> route
+  -> tool/action -> synthesized response.
+- **Generic cross-scenario micro-tools** (`location_normalize`,
+  `unit_convert`, `entity_resolve`, `calculator`) — owned by **spec
+  065 (Generic Micro-Tools)**. Scenarios authored after 065 ships
+  MUST compose these tools rather than embed normalization quirks in
+  their `system_prompt`.
+- **Legacy slash command retirement** (`/find`, `/rate`, `/list`,
+  `/meal_plan`, etc. → NL-driven equivalents) — owned by **spec 066
+  (Legacy Keyword Surface Retirement)**. After 066 ships, the
+  Telegram BotCommands menu collapses to the operational set
+  (`/help /status /reset /digest /recent /done`) plus the spec 061
+  intent-aware shortcuts (`/ask /weather /remind`).
+- **CI guards for the intent-driven mandate** (scenario-prompt size
+  cap, `principleAlignment`-required, broadened NO-DEFAULTS sweep,
+  forbidden-keyword-routing extended beyond the agent path) — owned
+  by **spec 067 (Intent-Driven Policy Enforcement)**.
+- The **HTTP transport adapter** that exposes `Facade.Handle` for
+  end-to-end tests and non-Telegram frontends (web chat, Android,
+  WhatsApp bridge) — owned by **spec 069 (Assistant HTTP
+  Transport)**. The capability ⇄ transport contract this spec
+  defined (`contracts.TransportAdapter`) is unchanged; 069 simply
+  adds the second concrete adapter next to Telegram.
+
+Spec 061 status remains `done`: it shipped what it specified. The
+above successors *amend* its surface; they do not invalidate it.
 
 ---
 

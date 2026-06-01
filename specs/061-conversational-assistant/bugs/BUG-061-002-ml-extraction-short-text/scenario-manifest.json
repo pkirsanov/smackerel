@@ -1,15 +1,24 @@
 {
   "specId": "061-conversational-assistant",
   "bugId": "BUG-061-002",
-  "version": 1,
+  "version": 2,
   "scenarios": [
     {
       "scopeId": "BUG-061-002-SCOPE-01",
       "scenarioId": "BUG-061-002-S01-short-text-partial-payload-no-silent-drop",
       "label": "Short text with partial LLM payload returns success=True with derived title/artifact_type",
       "type": "adversarial-regression-unit",
+      "requiredTestType": "unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md",
       "test": "ml/tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop",
+      "linkedTests": [
+        "ml/tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop"
+      ],
+      "evidenceRefs": [
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#post-fix-regression-test-success-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#pre-fix-regression-test-failure-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md"
+      ],
       "adversarial": true
     },
     {
@@ -17,8 +26,17 @@
       "scenarioId": "BUG-061-002-S02-empty-content-derives-untitled",
       "label": "Empty content with partial LLM payload derives title=Untitled and artifact_type=note",
       "type": "adversarial-regression-unit",
+      "requiredTestType": "unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md",
       "test": "ml/tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_empty_content_derives_untitled",
+      "linkedTests": [
+        "ml/tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_empty_content_derives_untitled"
+      ],
+      "evidenceRefs": [
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#post-fix-regression-test-success-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#pre-fix-regression-test-failure-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md"
+      ],
       "adversarial": true
     },
     {
@@ -26,8 +44,16 @@
       "scenarioId": "BUG-061-002-S03-missing-artifact-type-derives-from-content-type",
       "label": "Missing artifact_type only — derived from caller content_type; LLM-supplied title preserved",
       "type": "regression-unit",
+      "requiredTestType": "unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md",
       "test": "ml/tests/test_processor.py::TestProcessContentErrors::test_missing_artifact_type_degrades_to_default",
+      "linkedTests": [
+        "ml/tests/test_processor.py::TestProcessContentErrors::test_missing_artifact_type_degrades_to_default"
+      ],
+      "evidenceRefs": [
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#post-fix-regression-test-success-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md"
+      ],
       "adversarial": false
     },
     {
@@ -35,8 +61,16 @@
       "scenarioId": "BUG-061-002-S04-missing-title-derives-from-content",
       "label": "Missing title only — derived from caller content; LLM-supplied artifact_type preserved",
       "type": "regression-unit",
+      "requiredTestType": "unit",
       "source": "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md",
       "test": "ml/tests/test_processor.py::TestProcessContentErrors::test_missing_title_degrades_to_default",
+      "linkedTests": [
+        "ml/tests/test_processor.py::TestProcessContentErrors::test_missing_title_degrades_to_default"
+      ],
+      "evidenceRefs": [
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/report.md#post-fix-regression-test-success-proof",
+        "specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/scopes.md"
+      ],
       "adversarial": false
     }
   ]
