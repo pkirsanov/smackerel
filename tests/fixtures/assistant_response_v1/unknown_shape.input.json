@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-unknown-shape-001",
+  "status": "rendered",
+  "body": "A future control variant arrived; renderer falls back to text-only.",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": null,
+  "error_cause": "",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-unknown-001", "agent_trace_id": "", "request_id": "req-unknown-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z",
+  "future_control_variant": {"name": "interactive_poll", "version": 7}
+}

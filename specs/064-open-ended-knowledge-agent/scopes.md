@@ -171,7 +171,7 @@ fixtures, real pgvector query).
 
 ## SCOPE-07 — Web search provider interface + SearxNG impl
 
-**Status:** Test Infrastructure Wired (provider impl + DoD verification pending)
+**Status:** Implemented Pending Validation
 
 **Goal:** `WebSearchProvider` interface + SearxNG implementation;
 Brave/Tavily stubs return `ErrProviderNotConfigured`.
@@ -198,11 +198,64 @@ flip belong to `bubbles.validate` once the rest of the scope's
 provider/egress/Brave-Tavily-stub DoD items are exercised end-to-end.
 
 **DoD:**
-- [ ] Provider returns `[]WebSnippet{URL, Title, Snippet, Hash,
+- [x] Provider returns `[]WebSnippet{URL, Title, Snippet, Hash,
   FetchedAt}`.
-- [ ] Egress restricted to configured `provider_endpoint`.
-- [ ] Brave/Tavily stubs return `ErrProviderNotConfigured`.
-- [ ] Gates: G021, G028.
+- [x] Egress restricted to configured `provider_endpoint`.
+- [x] Brave/Tavily stubs return `ErrProviderNotConfigured`.
+- [x] Gates: G021, G028.
+
+**Evidence (2026-06-01, bubbles.implement):**
+
+Phase: implement. Claim Source: executed.
+
+`WebSnippet` struct fields verified in
+`internal/assistant/openknowledge/web/provider.go` (URL, Title, Snippet,
+ContentHash, FetchedAt, Provider) and exercised by
+`TestSearxNG_Search_HappyPath`.
+
+Egress restriction enforced by `egress.go` (allowlist transport derived
+from configured `provider_endpoint`); 7 egress tests pass including
+`TestEgressAllowlistTransport_DenyByDefault_Adversarial`,
+`TestEgressAllowlistTransport_DisallowedHostDenied`,
+`TestEgressAllowlistTransport_RejectsNonHTTPScheme`,
+`TestEgressAllowlistTransport_UserinfoDoesNotBypass`.
+
+Brave/Tavily stubs: `brave.go` and `tavily.go` return
+`ErrProviderNotConfigured` unconditionally; `TestBrave_NeverDialsNetwork`
+and `TestTavily_NeverDialsNetwork` prove no network dial occurs (G021
+adversarial cases — would fail if the stubs forwarded to a real call).
+
+```bash
+$ SMACKEREL_HARDWARE_TIER=cpu go test -count=1 -timeout 120s \
+    ./internal/assistant/openknowledge/web/
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/web  0.160s
+
+$ SMACKEREL_HARDWARE_TIER=cpu go test -count=1 -timeout 60s -v \
+    -run 'TestBrave|TestTavily|TestEgress' \
+    ./internal/assistant/openknowledge/web/
+--- PASS: TestEgressAllowlistTransport_DenyByDefault_Adversarial (0.00s)
+--- PASS: TestEgressAllowlistTransport_AllowedHostPassthrough (0.06s)
+--- PASS: TestEgressAllowlistTransport_DisallowedHostDenied (0.00s)
+--- PASS: TestEgressAllowlistTransport_NormalizesMixedCaseHost (0.00s)
+--- PASS: TestEgressAllowlistTransport_UserinfoDoesNotBypass (0.00s)
+--- PASS: TestEgressAllowlistTransport_RejectsNonHTTPScheme (0.00s)
+--- PASS: TestEgressAllowlistTransport_AllowsHTTPForAllowedHost (0.02s)
+--- PASS: TestBrave_NeverDialsNetwork (0.00s)
+--- PASS: TestTavily_NeverDialsNetwork (0.00s)
+PASS
+ok  github.com/smackerel/smackerel/internal/assistant/openknowledge/web  0.090s
+```
+
+Live-stack integration (`TestSearxNGIntegration_Smoke` against the
+test-env SearxNG container at `127.0.0.1:47006`) was previously
+executed on 2026-05-31 (see Test Infrastructure Note above); not
+re-run in this session (`./smackerel.sh test integration` lock held
+by a separate run). G028 fail-loud config validation for SearxNG
+endpoint is covered by `TestSearxNG_NewSearxNG_ConfigValidation`
+sub-cases (`empty_endpoint`, `whitespace_endpoint`, `nil_client`,
+`bad_scheme`, `no_host`, `unparseable`).
+
+Final scope status flip and certification belong to `bubbles.validate`.
 
 ## SCOPE-08 — Cite-back verifier
 
@@ -350,9 +403,11 @@ NOT completed in current session — test stack did not reach healthy
 core within window; test binary builds + vets clean.
 
 **DoD:**
-- [ ] Routing order verified adversarially (a known-intent query MUST
+- [x] Routing order verified adversarially (a known-intent query MUST
   NOT reach open_knowledge). Integration test asserts this for
-  `weather in paris`; **awaiting live run** to flip box.
+  `weather in paris today` (top_score=1.000, reason=similarity_match)
+  and for the two open-knowledge sub-cases. Live evidence in
+  `report.md` §3.D (run on 2026-06-01).
 - [x] Gates: G021, G028. Unit assemblies green; no defaults
   introduced (every wiring path reads from cfg; new SST key
   `assistant.open_knowledge.llm_timeout_ms` added with fail-loud

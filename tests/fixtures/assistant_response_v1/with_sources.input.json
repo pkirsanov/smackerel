@@ -1,0 +1,51 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-with-sources-001",
+  "status": "rendered",
+  "body": "According to the National Weather Service, tomorrow will be sunny.",
+  "sources": [
+    {
+      "id": "src-nws-1",
+      "title": "NWS forecast — Palm Springs, CA",
+      "kind": "web",
+      "artifact_id": "",
+      "artifact_captured_at": "",
+      "provider_name": "",
+      "provider_retrieved_at": "",
+      "url": "https://forecast.weather.gov/MapClick.php?lat=33.83&lon=-116.55",
+      "web_provider": "nws",
+      "web_fetched_at": "2026-06-01T00:00:00Z",
+      "web_content_hash": "sha256:nws-001",
+      "web_snippet": "Sunny. High near 78.",
+      "computation_tool": "",
+      "computation_input_hash": "",
+      "computation_output_hash": ""
+    },
+    {
+      "id": "src-cap-2",
+      "title": "User capture: yesterday's forecast",
+      "kind": "captured",
+      "artifact_id": "art-2026-05-31-001",
+      "artifact_captured_at": "2026-05-31T18:00:00Z",
+      "provider_name": "telegram_capture",
+      "provider_retrieved_at": "2026-05-31T18:00:01Z",
+      "url": "",
+      "web_provider": "",
+      "web_fetched_at": "",
+      "web_content_hash": "",
+      "web_snippet": "",
+      "computation_tool": "",
+      "computation_input_hash": "",
+      "computation_output_hash": ""
+    }
+  ],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": null,
+  "error_cause": "",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-with-sources-001", "agent_trace_id": "trace-1", "request_id": "req-with-sources-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

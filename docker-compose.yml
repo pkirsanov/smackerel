@@ -143,7 +143,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      # 120s covers ML readiness gate (up to assistant.readiness_timeout_s=60s)
+      # in services.go::SetupServices before the HTTP listener binds, plus
+      # DB/NATS/connector wiring margin. Matches smackerel-ml's window.
+      start_period: 120s
     deploy:
       resources:
         limits:

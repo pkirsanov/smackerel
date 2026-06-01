@@ -9,9 +9,9 @@
       "title": "Web client sends an authenticated turn and renders the response",
       "scopeId": "SCOPE-073-02",
       "source": "spec.md#functional-requirements-bdd-scenarios",
-      "gherkin": "Given the web client has a valid bearer token with the assistant.turn scope\nWhen the user types a NL message and submits it\nThen the client POSTs to /api/assistant/turn with a fresh transport_message_id\nAnd the response body is rendered: text, citations, and any disambig/confirm/capture controls",
+      "gherkin": "Given the web client has a valid same-origin HttpOnly session cookie established by the spec 070 web login flow with the assistant.turn scope\nWhen the user types a NL message and submits it\nThen the client POSTs to /api/assistant/turn with credentials: \"same-origin\" and a fresh transport_message_id\nAnd the response body is rendered: text, citations, and any disambig/confirm/capture controls",
       "plannedTestRows": ["TP-073-09", "TP-073-12"],
-      "liveSystemExpectation": "web e2e-ui row must post to the live assistant HTTP endpoint and render the schema response",
+      "liveSystemExpectation": "web Go-driven e2e-api row (TP-073-09) drives the served PWA assistant route and the live assistant HTTP endpoint, asserting schema-rendered body/sources/controls; companion .spec.ts is a documentation stub (no browser-driver runner is wired into ./smackerel.sh test e2e)",
       "status": "planned"
     },
     {
@@ -21,7 +21,7 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the shared mobile client is built for iPhone/iOS and Android with types generated from the spec 069 golden schema\nWhen the wire schema is changed in a way that breaks compatibility\nThen the shared mobile build fails at codegen before either mobile platform ships\nAnd no incompatible iPhone/iOS or Android client ships to users",
       "plannedTestRows": ["TP-073-01", "TP-073-02", "TP-073-03", "TP-073-04", "TP-073-13"],
-      "liveSystemExpectation": "build/unit codegen and renderer canaries guard web plus shared mobile schema drift before runtime",
+      "liveSystemExpectation": "build/unit codegen and renderer canaries guard web plus shared mobile schema drift before runtime; TP-073-03 specifically asserts each surface emits a render-descriptor-v1 conforming descriptor deep-equal to the per-fixture golden under tests/fixtures/assistant_response_v1/ (cases: text_only, with_sources, disambiguation, confirm_accept_decline, capture_acknowledgement, error_retry, unknown_shape)",
       "status": "planned"
     },
     {
@@ -31,7 +31,7 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the client POSTs a turn and the request times out\nWhen the client retries\nThen the retry uses the SAME transport_message_id\nAnd the server returns the same response (deduped)",
       "plannedTestRows": ["TP-073-10", "TP-073-14"],
-      "liveSystemExpectation": "web, iPhone/iOS, and Android e2e-ui retry rows must observe stable transport_message_id reuse",
+      "liveSystemExpectation": "web Go-driven e2e-api retry row (TP-073-09 path) asserts the live server observes the same transport_message_id and returns the deduped response; shared-mobile retry parity rows (TP-073-14) cover iPhone/iOS and Android once the shared mobile runtime exists",
       "status": "planned"
     },
     {
@@ -91,7 +91,7 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given a screen reader is active on the web client\nWhen the user submits a turn and the response arrives\nThen the response area announces via an ARIA live region\nAnd keyboard navigation reaches the composer, send button, disambig choices, and confirm buttons in a sensible order",
       "plannedTestRows": ["TP-073-11"],
-      "liveSystemExpectation": "web e2e-ui accessibility row must drive keyboard/live-region behavior",
+      "liveSystemExpectation": "web Go-driven e2e-api row (TP-073-11) asserts the served PWA markup contains the aria-live response region, labelled composer, and deterministic tab/focus order across composer/send/disambig/confirm/retry controls; driver-based screen-reader announcement validation is deferred to a future browser-driver foundation spec",
       "status": "planned"
     },
     {

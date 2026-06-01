@@ -67,6 +67,15 @@ func NewRouter(deps *Dependencies) http.Handler {
 			r.Use(deps.bearerAuthMiddleware)
 			r.Post("/capture", deps.CaptureHandler)
 			r.Post("/search", deps.SearchHandler)
+
+			// Spec 069 SCOPE-1a — Assistant HTTP transport.
+			// POST /api/assistant/turn routes through the late-bound
+			// HTTPAdapter; the adapter enforces its own body cap and
+			// rate limits and produces a v1 envelope on success and
+			// on error.
+			if deps.AssistantTurnHandler != nil {
+				r.Method(http.MethodPost, "/assistant/turn", deps.AssistantTurnHandler)
+			}
 			r.Get("/digest", deps.DigestHandler)
 			r.Get("/recent", deps.RecentHandler)
 			r.Get("/artifact/{id}", deps.ArtifactDetailHandler)

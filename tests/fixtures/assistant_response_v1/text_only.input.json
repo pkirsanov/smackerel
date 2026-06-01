@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-text-only-001",
+  "status": "rendered",
+  "body": "The weather in Palm Springs tomorrow is sunny, 78F.",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": null,
+  "error_cause": "",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-text-only-001", "agent_trace_id": "", "request_id": "req-text-only-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

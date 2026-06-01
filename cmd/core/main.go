@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,11 +12,13 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
+	whatsappadapter "github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -49,6 +52,13 @@ func main() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		os.Exit(runUsersCommand(ctx, os.Args[2:]))
+	}
+	// Spec 071 SCOPE-03 — `smackerel-core assistant <subcommand>`
+	// operator surface (replay-intent).
+	if len(os.Args) > 1 && os.Args[1] == "assistant" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		os.Exit(runAssistantCommand(ctx, os.Args[2:]))
 	}
 	if err := run(); err != nil {
 		slog.Error("fatal startup error", "error", err)
@@ -147,6 +157,7 @@ func run() error {
 	tgBot := startTelegramBotIfConfigured(ctx, cfg, deps)
 	attachDriveSaveBridgeToTelegram(svc, tgBot)
 	attachDriveRetrieveBridgeToTelegram(svc, tgBot)
+	wireLegacyAliasInterceptor(cfg, svc, tgBot)
 
 	// Spec 061 SCOPE-05 design §17.4 — when Telegram is configured to
 	// run in webhook mode, register the POST handler on the existing
@@ -174,6 +185,56 @@ func run() error {
 		})
 		slog.Info("telegram webhook route registered",
 			"path", cfg.Assistant.TelegramWebhookPath)
+	}
+
+	// Spec 072 SCOPE-1/SCOPE-4 — WhatsApp Business Cloud API webhook ingress.
+	// Mounted ONLY when assistant.transports.whatsapp.enabled=true AND
+	// the full SST credential set has resolved (validateAssistantConfig
+	// has already failed loud otherwise). SCOPE-4 routes both the
+	// disabled and enabled paths through MountWebhookRoutes so the
+	// operator-status gauges (assistant_whatsapp_enabled,
+	// assistant_whatsapp_credentials_ready) always reflect boot state
+	// and disabling WhatsApp leaves Telegram + HTTP wiring untouched.
+	if cfg.Assistant.Enabled {
+		mux, ok := router.(*chi.Mux)
+		if !ok {
+			return fmt.Errorf("assistant whatsapp webhook: api.NewRouter must return *chi.Mux for webhook route registration; got %T", router)
+		}
+		var whatsappAdapter *whatsappadapter.Adapter
+		if cfg.Assistant.WhatsappEnabled {
+			if svc == nil || svc.pg == nil || svc.pg.Pool == nil {
+				return errors.New("assistant whatsapp webhook: postgres pool is required")
+			}
+			var err error
+			whatsappAdapter, err = whatsappadapter.NewAdapter(whatsappadapter.Options{
+				Verify: whatsappadapter.HMACVerifier{
+					AppSecret:   cfg.Assistant.WhatsappAppSecret,
+					VerifyToken: cfg.Assistant.WhatsappWebhookVerifyToken,
+				},
+				IdentityRegistry:          transportidentity.NewPgRegistry(svc.pg.Pool),
+				IdentityHashKey:           cfg.Assistant.WhatsappIdentityHashKey,
+				MaxTextChars:              cfg.Assistant.WhatsappMaxTextChars,
+				RateLimitPerUserPerMinute: cfg.Assistant.WhatsappRateLimitPerUserPerMinute,
+			})
+			if err != nil {
+				return fmt.Errorf("assistant whatsapp adapter: %w", err)
+			}
+		}
+		mounted, err := whatsappadapter.MountWebhookRoutes(mux, whatsappadapter.MountOptions{
+			Enabled: cfg.Assistant.WhatsappEnabled,
+			Adapter: whatsappAdapter,
+			Path:    cfg.Assistant.WhatsappWebhookPath,
+		})
+		if err != nil {
+			return fmt.Errorf("assistant whatsapp webhook mount: %w", err)
+		}
+		if mounted {
+			slog.Info("whatsapp webhook route registered",
+				"path", cfg.Assistant.WhatsappWebhookPath)
+		} else {
+			slog.Info("whatsapp webhook route skipped",
+				"reason", "assistant.transports.whatsapp.enabled=false")
+		}
 	}
 
 	// Spec 061 SCOPE-05 — construct the capability-layer facade +

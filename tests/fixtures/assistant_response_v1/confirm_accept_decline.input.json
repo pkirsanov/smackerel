@@ -1,0 +1,22 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-confirm-001",
+  "status": "awaiting_confirmation",
+  "body": "Schedule the meeting at 3pm tomorrow?",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": {
+    "proposed_action": "schedule_meeting",
+    "confirm_ref": "confirm-meet-001",
+    "positive_label": "Yes, schedule it",
+    "negative_label": "No, cancel",
+    "timeout_seconds": 30
+  },
+  "disambiguation_prompt": null,
+  "error_cause": "",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-confirm-001", "agent_trace_id": "", "request_id": "req-confirm-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

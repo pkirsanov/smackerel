@@ -59,12 +59,21 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "planning",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-1d",
     "runStartedAt": "2026-05-31T00:00:00Z",
-    "lastUpdatedAt": "2026-05-31T00:00:00Z",
-    "completedPhaseClaims": [],
+    "lastUpdatedAt": "2026-06-01T22:30:00Z",
+    "completedPhaseClaims": [
+      {
+        "scope": "SCOPE-5",
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-01T22:30:00Z",
+        "evidence": "report.md#scope-5--transport-parity-hint-neutrality-and-live-e2e-suite",
+        "notes": "Authored SCOPE-5 deliverables: transport-branch policy guard (internal/assistant/intent/policyguard/transport_branch.go + 5 unit tests PASS incl. real-repo cleanliness), transport_hint unit coverage (internal/assistant/httpadapter/transport_hint_test.go PASS, 4 sub-tests), transport parity integration test (tests/integration/assistant/transport_parity_test.go), policy guard integration mirror (tests/integration/policy/transport_branch_guard_test.go), live-stack e2e suite (tests/e2e/assistant/http_live_stack_test.go), hint-neutrality e2e (appended to tests/e2e/assistant/http_turn_test.go), and stress smoke (tests/stress/assistant/http_turn_stress_test.go PASS, p95=40µs under 50ms budget, per-user limiter partition + row-family invariants asserted). go vet -tags e2e and go vet -tags stress clean. Integration parity test + integration policy guard mirror blocked from execution by foreign untracked work in internal/config (assistant_frontend.go/assistant_intent_trace.go/assistant_tools.go — spec 071/072) and internal/assistant/facade_intent_trace.go (spec 071) — same blocker pattern documented under SCOPE-1b/1c/2/3/4 uncertainty declarations. Live e2e GREEN not-run because CORE_EXTERNAL_URL was not exported in this session. Scope status In Progress pending live integration + e2e GREEN once foreign blockers heal."
+      }
+    ],
     "completedScopes": [],
     "executionHistory": [
       {
@@ -111,6 +120,24 @@
         "runStartedAt": "2026-05-31T23:30:00Z",
         "runEndedAt": "2026-05-31T23:45:00Z",
         "summary": "Scope 2-4 split mirror of the Scope 1a precedent. Extended Scope 1 cross-spec ownership to cover every newly-deferred spec 068 scenario (SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A09) in addition to existing SCN-068-A06/A07. Added 8 cross-spec e2e Test Plan rows pointing at the same tests/e2e/assistant/intent_*_test.go files spec 068 deferred, extended the Cross-spec ownership note and Scope 1 DoD checkbox accordingly, updated Scope Inventory row and Execution Outline validation checkpoint, and added 6 cross-spec scenario entries (crossSpecOriginSpec=068-structured-intent-compiler) plus matching traceabilityGuardScenarioIds entries in scenario-manifest.json. test-plan.json Scope 1 gained 8 cross-spec rows. uservalidation.md baseline checklist extended. Scenario IDs preserved verbatim; no inverse dependency added. No source code, tests, configs, ML, docs, or unrelated specs touched. workflowMode/ceiling/status unchanged."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T20:00:00Z",
+        "runEndedAt": "2026-06-01T22:30:00Z",
+        "summary": "SCOPE-5 — Transport Parity, Hint Neutrality, and Live E2E Suite. Authored all 6 planned test files plus the transport-branch policy guard implementation. In-process tests GREEN: transport_hint_test (4 sub-tests), transport_branch unit + real-repo cleanliness (5 sub-tests), HTTP stress smoke (p95=40µs). go vet -tags e2e and -tags stress both clean. Integration parity + integration policy-guard mirror blocked by foreign untracked spec 071/072 work in internal/config and internal/assistant; live e2e GREEN not-run (no CORE_EXTERNAL_URL). DoD scope updated to reflect 5/8 items checked with executed/interpreted evidence; 3 items remain unchecked with explicit not-run Uncertainty Declarations pointing at the foreign-blocker section."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T23:30:00Z",
+        "runEndedAt": "2026-06-01T23:30:00Z",
+        "summary": "Rework planning: added SCOPE-1d 'HTTPAdapter Construction and LateBound Binding' for finding F-069-ADAPTER-NOT-BOUND. Root cause: cmd/core/wiring_assistant_facade.go::wireAssistantFacade only constructs the Telegram assistant_adapter and never calls httpadapter.NewHTTPAdapter or svc.assistantHTTPHandler.SetAdapter/SetMiddleware, so every live POST /api/assistant/turn returns HTTP 503. This blocks every live-stack e2e/integration row in Scopes 1\u20135 (surfaced as spec 074 F074-04B-ASSISTANT-HTTP-LATE-BIND test-infra finding). Planning artifacts updated: scopes.md (new Scope 1d detail, scope inventory row, validation checkpoint, Scope 2 dependency bumped to include 1d), scenario-manifest.json (SCN-069-A12 traceability + scenarios entry with findingRefs to F-069-ADAPTER-NOT-BOUND and F074-04B-ASSISTANT-HTTP-LATE-BIND auto-resolution), test-plan.json (SCOPE-1d test rows incl. canary + regression re-assertion), uservalidation.md baseline extended, currentScope set to SCOPE-1d. No source, tests, or docs touched. Returning route_required to dispatch bubbles.implement for SCOPE-1d execution."
       }
     ]
   }

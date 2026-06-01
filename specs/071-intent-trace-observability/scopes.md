@@ -31,10 +31,10 @@ This plan is sequential and gated. Scope 1 creates the reusable `IntentTraceObse
 
 | Scope | Name | Surfaces | Scenario IDs | Status |
 |-------|------|----------|--------------|--------|
-| SCOPE-071-01 | Trace Contract Foundation | backend, config, DB schema, contract tests | SCN-071-A01, SCN-071-A05, SCN-071-A10 | Not Started |
-| SCOPE-071-02 | Redaction, Sampling, Persistence, And Retention | backend, DB, metrics, retention job | SCN-071-A02, SCN-071-A03, SCN-071-A09 | Not Started |
-| SCOPE-071-03 | Replay And Policy-Guard Integration | CLI, assistant router, policy guard, trace store | SCN-071-A04, SCN-071-A08 | Not Started |
-| SCOPE-071-04 | Dashboard, Refusal Join, And Operator Panels | monitoring, metrics, dashboard inventory | SCN-071-A06, SCN-071-A07 | Not Started |
+| SCOPE-071-01 | Trace Contract Foundation | backend, config, DB schema, contract tests | SCN-071-A01, SCN-071-A05, SCN-071-A10 | In Progress (tests partial) |
+| SCOPE-071-02 | Redaction, Sampling, Persistence, And Retention | backend, DB, metrics, retention job | SCN-071-A02, SCN-071-A03, SCN-071-A09 | In Progress (tests partial) |
+| SCOPE-071-03 | Replay And Policy-Guard Integration | CLI, assistant router, policy guard, trace store | SCN-071-A04, SCN-071-A08 | In Progress (SCN-071-A08 incomplete) |
+| SCOPE-071-04 | Dashboard, Refusal Join, And Operator Panels | monitoring, metrics, dashboard inventory | SCN-071-A06, SCN-071-A07 | In Progress (tests partial) |
 
 ## Scope 1: Trace Contract Foundation
 
@@ -101,12 +101,12 @@ Excluded surfaces: transport adapters, assistant scenario definitions, ML sideca
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Contract, config, migration, and recorder wiring satisfy SCN-071-A01, SCN-071-A05, and SCN-071-A10.
-  Uncertainty Declaration: Planning did not execute runtime validation; completion requires current-session implementation evidence.
+- [x] Contract, config, migration, and recorder wiring satisfy SCN-071-A01, SCN-071-A05, and SCN-071-A10.
+  Evidence: report.md → Test Evidence (Unit: TestSchemaVersionV1IsPinned, TestGoldenV1PayloadHashPinned, TestClosedVocabulariesPinned, TestStoreRecorder_RecordsSampledRow, TestStoreRecorder_ValidationFailures; Unit-config: TestIntentTraceConfigRequiresEverySSTKey; Integration live-stack: TestIntentTracePersistsExactlyOneV1RowPerRecordCall, TestIntentTraceRecordsCompileValidateRouteToolResponseSequence). Claim Source: executed 2026-06-01T21:11Z–21:20Z.
 - [ ] Test rows listed above are implemented with the planned titles or an equivalent title that preserves the scenario ID, and all pass with current-session evidence.
-  Uncertainty Declaration: No tests were created or run during this planning pass.
+  Uncertainty Declaration: Integration + unit rows pass with current-session evidence (see report.md). Planned e2e row `tests/e2e/assistant/intent_trace_contract_e2e_test.go` is **not present on disk**; route to bubbles.implement to add it (or to bubbles.analyst to retire it) before this item can be marked.
 - [ ] Build Quality Gate passes: `./smackerel.sh format --check`, `./smackerel.sh lint`, `./smackerel.sh test unit --go`, applicable integration/e2e commands, and artifact lint for this spec.
-  Uncertainty Declaration: Gate commands are planned for execution owners after implementation.
+  Uncertainty Declaration: Not run in this session — only the filtered integration suite and the targeted unit packages were executed. Format/lint/e2e/artifact-lint remain owed.
 
 ## Scope 2: Redaction, Sampling, Persistence, And Retention
 
@@ -173,12 +173,12 @@ No project `testImpact` or `traceContracts` map is configured. The scope still r
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Sampling, redaction, persistence, export, and retention satisfy SCN-071-A02, SCN-071-A03, and SCN-071-A09.
-  Uncertainty Declaration: Planning did not inspect runtime behavior; execution evidence is required.
-- [ ] Canary rows for redaction, sampled-out accounting, and TTL sweep pass before broader suite execution.
-  Uncertainty Declaration: Canary tests are planned but not run in this pass.
+- [x] Sampling, redaction, persistence, export, and retention satisfy SCN-071-A02, SCN-071-A03, and SCN-071-A09.
+  Evidence: report.md → Test Evidence (Unit: TestRatioSampler_*, TestStoreRecorder_SampledOutEnvelope, TestDefaultRedactor_*; Integration live-stack: TestIntentTraceSampledOutPreservesTotalTurnAccounting, TestIntentTraceRedactionLeavesNoRawSlotValueInPayload, TestIntentTraceRetentionSweepRemovesExpiredAndKeepsFresh). Claim Source: executed 2026-06-01T21:11Z–21:20Z.
+- [x] Canary rows for redaction, sampled-out accounting, and TTL sweep pass before broader suite execution.
+  Evidence: The three integration canaries above ran first in the filtered live-stack run; all PASS.
 - [ ] Build Quality Gate passes with artifact lint for this spec and no NO-DEFAULTS fallback syntax in touched config/code/docs.
-  Uncertainty Declaration: Quality gates remain unexecuted until implementation.
+  Uncertainty Declaration: Format, lint, artifact-lint, and the planned e2e row `tests/e2e/assistant/intent_trace_privacy_e2e_test.go` (file not present on disk) were not executed/created in this session. NO-DEFAULTS audit on touched code is also pending.
 
 ## Scope 3: Replay And Policy-Guard Integration
 
@@ -229,21 +229,20 @@ Excluded surfaces: scenario definitions, transport renderers, DB schema beyond t
 |----------|----------|--------------|--------------------|---------|-------------|-------|
 | SCN-071-A04 | e2e-api | `tests/e2e/assistant/intent_replay_test.go` | `TBD: replay reproduces route and tool calls without side effects` | `./smackerel.sh test e2e` | Yes | Live replay regression. |
 | SCN-071-A04 | integration | `tests/integration/assistant/intent_replay_store_test.go` | `TBD: replay loads one stored redacted trace by trace id` | `./smackerel.sh test integration` | Yes | Store lookup and dry-run comparison. |
-| SCN-071-A08 | integration | `tests/integration/policy/intent_bypass_guard_test.go` | `TBD: bypass guard requires IntentTrace ancestor fields` | `./smackerel.sh test integration` | Yes | Spec 067 integration. |
-| SCN-071-A08 | e2e-api | `tests/e2e/assistant/intent_bypass_guard_e2e_test.go` | `TBD: synthetic raw-route bypass is rejected in live stack` | `./smackerel.sh test e2e` | Yes | Persistent bypass regression. |
+| SCN-071-A08 | integration | `tests/integration/policy/intent_bypass_guard_test.go` | `TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent` | `./smackerel.sh test integration` | Yes | Shared with spec 068 SCN-068-A08; guard behavior is identical and satisfies SCN-071-A08's spec 067 integration requirement. |
+| SCN-071-A08 | e2e-api | `tests/e2e/assistant/intent_bypass_guard_e2e_test.go` | `TestIntentBypassGuardE2E_SyntheticRawRouteBypassIsRejected` | `./smackerel.sh test e2e` | Yes | Persistent bypass regression. |
 
 ### Impact-Aware Validation
 
 No configured impact/trace map exists. Because this scope touches runtime command aliasing and policy guard behavior, the canary rows above must execute before broad suite validation.
 
-### Definition of Done — Tiered Validation
-
 - [ ] Replay and policy-guard behavior satisfy SCN-071-A04 and SCN-071-A08 without side effects.
-  Uncertainty Declaration: Runtime command behavior is not verified during planning.
+  Partial evidence: SCN-071-A04 covered by unit (TestStoreReplay_HappyPath_PayloadDryRunner, TestStoreReplay_SampledOutRejected, TestStoreReplay_SchemaInvalidRejected, TestStoreReplay_DryRunnerSideEffectIsBlocked, TestStoreReplay_MatchSummaryReportsDivergence) and integration (TestIntentReplayLoadsOneStoredRedactedTraceByTraceID, TestIntentReplayRefusesSampledOutEnvelope, TestIntentReplayReportsNotFoundForUnknownTraceID). SCN-071-A08 integration row `tests/integration/policy/intent_bypass_guard_test.go::TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent` is present on disk (shared with spec 068 SCN-068-A08) but was not executed in this session; e2e `tests/e2e/assistant/intent_bypass_guard_e2e_test.go::TestIntentBypassGuardE2E_SyntheticRawRouteBypassIsRejected` is also present on disk but was not executed in this session.
+  Uncertainty Declaration: Cannot mark complete until both SCN-071-A04 and SCN-071-A08 integration + e2e tests are executed via the sanctioned repo commands in a single evidenced run.
 - [ ] CLI and policy tests listed above pass with evidence from the sanctioned repo commands.
-  Uncertainty Declaration: Tests are planned only.
+  Uncertainty Declaration: e2e `tests/e2e/assistant/intent_replay_test.go` and `tests/e2e/assistant/intent_bypass_guard_e2e_test.go` exist on disk but were not executed in this session.
 - [ ] Change boundary is respected: no transport renderer, scenario, or dashboard files change in this scope.
-  Uncertainty Declaration: Boundary compliance requires implementation diff review.
+  Uncertainty Declaration: Diff review against the change boundary was not performed in this pass.
 
 ## Scope 4: Dashboard, Refusal Join, And Operator Panels
 
@@ -302,12 +301,12 @@ No `testImpact` or `traceContracts` config is present. Monitoring changes still 
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Dashboard panels and refusal joins satisfy SCN-071-A06 and SCN-071-A07.
-  Uncertainty Declaration: Dashboard behavior is not executed in this planning pass.
+- [x] Dashboard panels and refusal joins satisfy SCN-071-A06 and SCN-071-A07.
+  Evidence: report.md → Test Evidence (Integration live-stack: TestAssistantIntentsDashboardHasRequiredPanels, TestAssistantIntentsDashboardQueriesCanonicalMetrics, TestAssistantIntentsDashboardRefusalPanelJoinsBothSources, TestRefusalCauseVocabularyMatchesIntentTraceColumn, TestRefusalCounterAndIntentTraceJoinByCauseLabel). Claim Source: executed 2026-06-01T21:20Z.
 - [ ] Scenario-specific integration and E2E rows pass with current-session evidence.
-  Uncertainty Declaration: Planned tests have not been created or run.
+  Uncertainty Declaration: Integration rows PASS as above. E2E API row `tests/e2e/assistant/intent_refusal_join_e2e_test.go` exists on disk but was not executed in this session. The planned e2e-ui row `web/pwa/tests/assistant_intents_dashboard.spec.ts` is **not present on disk**.
 - [ ] Build Quality Gate passes and dashboard errors fail loud when export targets are unavailable.
-  Uncertainty Declaration: Gate execution belongs to implementation/test phases.
+  Uncertainty Declaration: Format/lint/e2e/artifact-lint not executed in this session; fail-loud audit of dashboard error paths not performed.
 
 ## Superseded Scopes (Do Not Execute)
 
