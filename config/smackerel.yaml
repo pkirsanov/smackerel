@@ -1755,8 +1755,18 @@ environments:
     # "JSON decode errors" symptom was caused by ml/app/agent.py omitting
     # response_format={"type":"json_object"} on the completion call, NOT
     # by model quality. Fixed in same change-set.
-    agent_provider_default_model: "gemma4:26b"
-    agent_provider_fast_model: "gemma4:26b"
+    # Spec 064 BUG-FOLLOWUP — substrate scenarios (weather_query,
+    # recipe_search, retrieval_qa) need a fast model: each scenario
+    # is one route LLM call + one tool call + one final LLM call,
+    # all inside a 120s scenario timeout ceiling. gemma4:26b on GPU
+    # takes 45-55s per tool-use round-trip (long "thinking" preamble),
+    # which blows the budget. gemma3:4b returns in 2-5s and is
+    # accurate enough for scenarios where the tool does the real work
+    # (geocode/forecast for weather, graph lookup for recipe).
+    # Open_knowledge uses its own SST key
+    # (assistant.open_knowledge.llm_model_id) so it stays on 26B.
+    agent_provider_default_model: "gemma3:4b"
+    agent_provider_fast_model: "gemma3:4b"
     agent_provider_vision_model: "gemma4:26b"
     # Spec 064 SCOPE-17 — open-knowledge agent uses gemma4:26b on
     # home-lab (evo-x2) for best-quality tool-use + JSON-schema
