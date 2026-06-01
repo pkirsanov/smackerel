@@ -15,6 +15,12 @@ from .embedder import _model, generate_embedding
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
 
+logging.basicConfig(
+    level=os.environ.get("ML_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
 logger = logging.getLogger("smackerel-ml")
 
 
