@@ -268,7 +268,13 @@ async def handle_invoke(
             env["processing_time_ms"] = int((time.time() - start) * 1000)
             return env
 
-    llm_model = model if provider != "ollama" else f"ollama/{model}"
+    # Spec 064 — use ollama_chat/ prefix for Ollama so litellm routes
+    # to /api/chat (OpenAI-shaped tool_calls round-trip natively).
+    # The legacy ollama/ prefix uses /api/generate which serializes
+    # messages into a single prompt and loses tool_call structure,
+    # making scenarios like weather_query / recipe_search silently
+    # fall back to LLM-paraphrased JSON → schema-failure.
+    llm_model = model if provider != "ollama" else f"ollama_chat/{model}"
 
     api_key = None
     if provider != "ollama":
