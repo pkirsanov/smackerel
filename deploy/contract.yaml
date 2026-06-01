@@ -37,6 +37,12 @@ externalImages:
 - name: prometheus
   image: prom/prometheus:v2.55.1
   profile: monitoring
+# Spec 064 SCOPE-17 — only required when operator enables `--profile searxng`
+# (driven by environments.<env>.searxng_enabled in config/smackerel.yaml).
+# SST pin: config/smackerel.yaml::assistant.open_knowledge.searxng.image
+- name: searxng
+  image: searxng/searxng:2026.5.30-bd863f16b
+  profile: searxng
 
 # Config bundle environments. CI emits one bundle per env, identified by <env>-<sourceSha>.
 # Per BUG-047-001 / DEVOPS-HL-002, the published build-manifest-<sourceSha>.yaml

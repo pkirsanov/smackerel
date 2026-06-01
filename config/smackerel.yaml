@@ -1555,11 +1555,12 @@ environments:
     # populate auth.signing.* and auth.at_rest_hashing_key (and
     # auth.bootstrap_token on a fresh deploy) before the runtime starts.
     auth_enabled: true
-    # Spec 064 SCOPE-07 — home-lab does NOT auto-start SearxNG. The
-    # deploy adapter overlay decides whether to expose a SearxNG instance
-    # (deploy/compose.deploy.yml is intentionally unmodified); host_port
-    # is reserved here so the SST contract resolves uniformly across envs.
-    searxng_enabled: false
+    # Spec 064 SCOPE-17 — home-lab auto-starts SearxNG so the
+    # open-knowledge agent has a working web_search backend.
+    # deploy/compose.deploy.yml ships the searxng service under the
+    # `searxng` profile; ENABLE_SEARXNG=true (from this flag) makes
+    # the deploy adapter include the profile when running compose up.
+    searxng_enabled: true
     searxng_host_port: 43006
     searxng_bind_address: "127.0.0.1"
     # Spec 045 BUG-045-001 (home-lab opt-up) — the home-lab host has
