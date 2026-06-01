@@ -2110,6 +2110,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   PROMPT_CONTRACTS_DIR="$REPO_ROOT/config/prompt_contracts"
   ASSISTANT_MANIFEST_DIR="$REPO_ROOT/config/assistant"
   PROMETHEUS_ALERTS_FILE="$REPO_ROOT/config/prometheus/alerts.yml"
+  SEARXNG_SETTINGS_FILE="$REPO_ROOT/config/searxng/settings.yml"
 
   [[ -f "$COMPOSE_TEMPLATE" ]] || { echo "ERROR: deploy compose template not found: $COMPOSE_TEMPLATE" >&2; exit 1; }
   [[ -f "$NATS_CONTRACT_FILE" ]] || { echo "ERROR: nats contract not found: $NATS_CONTRACT_FILE" >&2; exit 1; }
@@ -2118,6 +2119,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   [[ -f "$ASSISTANT_MANIFEST_DIR/scenarios.yaml" ]] || { echo "ERROR: assistant scenarios manifest not found: $ASSISTANT_MANIFEST_DIR/scenarios.yaml" >&2; exit 1; }
   [[ -f "$PROM_OUT_FILE" ]] || { echo "ERROR: rendered prometheus.yml not found: $PROM_OUT_FILE" >&2; exit 1; }
   [[ -f "$PROMETHEUS_ALERTS_FILE" ]] || { echo "ERROR: prometheus alerts file not found: $PROMETHEUS_ALERTS_FILE" >&2; exit 1; }
+  [[ -f "$SEARXNG_SETTINGS_FILE" ]] || { echo "ERROR: searxng settings file not found: $SEARXNG_SETTINGS_FILE" >&2; exit 1; }
 
   # Strip the volatile `Generated:` line so the bundle is reproducible.
   # Renamed to app.env so the deploy compose can reference it generically.
@@ -2131,9 +2133,16 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
   cp "$PROMPT_CONTRACTS_DIR"/*.yaml "$STAGE_DIR/prompt_contracts/"
   mkdir -p "$STAGE_DIR/assistant"
   cp "$ASSISTANT_MANIFEST_DIR"/*.yaml "$STAGE_DIR/assistant/"
+  # Spec 064 SCOPE-17 — searxng settings.yml mounted by deploy/compose.deploy.yml
+  # at ./config/searxng/settings.yml. Without this file in the bundle, the
+  # docker bind mount source is missing and Docker creates a DIRECTORY at the
+  # target path, breaking the searxng container's settings.yml load.
+  mkdir -p "$STAGE_DIR/config/searxng"
+  cp "$SEARXNG_SETTINGS_FILE" "$STAGE_DIR/config/searxng/settings.yml"
   chmod 0644 "$STAGE_DIR/app.env" "$STAGE_DIR/nats.conf" \
     "$STAGE_DIR/docker-compose.yml" "$STAGE_DIR/nats_contract.json" \
     "$STAGE_DIR/prometheus.yml" "$STAGE_DIR/alerts.yml" \
+    "$STAGE_DIR/config/searxng/settings.yml" \
     "$STAGE_DIR/prompt_contracts"/*.yaml \
     "$STAGE_DIR/assistant"/*.yaml
 
@@ -2169,6 +2178,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     echo "files:"
     echo "  - alerts.yml"
     echo "  - app.env"
+    echo "  - config/searxng/settings.yml"
     echo "  - nats.conf"
     echo "  - docker-compose.yml"
     echo "  - nats_contract.json"
@@ -2194,6 +2204,7 @@ if [[ "$EMIT_BUNDLE" == "true" ]]; then
     "app.env"
     "assistant"
     "bundle-manifest.yaml"
+    "config"
     "docker-compose.yml"
     "nats.conf"
     "nats_contract.json"
