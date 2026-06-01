@@ -296,12 +296,22 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				// for a formatting omission. Only applies on the last
 				// iteration AND only when sources exist in trace.
 				isForcedFinalTurn := iter == a.cfg.MaxIterations-1
+				autoSources := collectTraceSources(trace)
+				trimmedText := strings.TrimSpace(result.FinalText)
+				slog.Info("openknowledge.salvage_check",
+					"iter", iter,
+					"max_iter", a.cfg.MaxIterations,
+					"is_forced", isForcedFinalTurn,
+					"trace_len", len(trace),
+					"auto_sources", len(autoSources),
+					"text_len", len(trimmedText),
+					"final_text_preview", truncatePreview(result.FinalText, 200),
+				)
 				if isForcedFinalTurn && len(trace) > 0 {
-					autoSources := collectTraceSources(trace)
-					if len(autoSources) > 0 && strings.TrimSpace(result.FinalText) != "" {
+					if len(autoSources) > 0 && trimmedText != "" {
 						return finalize(TurnResult{
 							Status:             StatusSuccess,
-							FinalText:          strings.TrimSpace(result.FinalText),
+							FinalText:          trimmedText,
 							Sources:            autoSources,
 							ToolTrace:          trace,
 							TerminationReason:  TerminationFinal,
@@ -462,6 +472,19 @@ func toolTraceForVerifier(trace []ToolTraceEntry) citeback.ToolTrace {
 		})
 	}
 	return out
+}
+
+// collectTraceSources flattens all ok.Source entries recorded by tool
+// invocations into a deduplicated slice (by Kind + locator). Used by
+// the forced-final-turn salvage path when the model produced a text
+// answer without an explicit <CITATIONS> block.
+// truncatePreview returns the first n characters of s with an ellipsis
+// suffix when truncated. Used for log-only previews.
+func truncatePreview(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
 
 // collectTraceSources flattens all ok.Source entries recorded by tool
