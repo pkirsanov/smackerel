@@ -44,6 +44,7 @@ import (
 	"github.com/smackerel/smackerel/internal/agent"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/intent"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
 	"github.com/smackerel/smackerel/internal/assistant/tracing"
@@ -158,6 +159,7 @@ type Facade struct {
 	router           agent.Router
 	executor         ScenarioExecutor
 	registry         ScenarioRegistry
+	intentCompiler   intent.Compiler
 	manifest         *SkillsManifest
 	contextStore     assistantctx.Store
 	audit            AuditWriter
@@ -224,6 +226,22 @@ func NewFacade(
 		sourceAssemblers: cfg.SourceAssemblers,
 		tracer:           noopTracer,
 	}, nil
+}
+
+// WithIntentCompiler attaches the spec 068 structured-intent compiler
+// to the facade. nil-safe: a nil compiler leaves the facade in its
+// pre-spec-068 routing mode (raw text drives the router directly).
+// When set, every text turn that is NOT a slash shortcut and NOT an
+// operational-command bypass is compiled before Router.Route is
+// invoked; the compiled intent is marshalled into
+// IntentEnvelope.StructuredContext.compiled_intent so downstream
+// scenarios consume structured context rather than raw text alone
+// (spec 068 SCN-068-A01/A02).
+func (f *Facade) WithIntentCompiler(c intent.Compiler) *Facade {
+	if c != nil {
+		f.intentCompiler = c
+	}
+	return f
 }
 
 // WithTracer attaches the spec 061 SCOPE-09b OTel tracer to the
@@ -432,11 +450,131 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 	}
 
+	// --- Step 3.5: spec 068 SCOPE-2 — structured intent compilation ---
+	//
+	// When an intent compiler is wired, every free-text turn that is
+	// NOT a slash shortcut and NOT an operational-command bypass
+	// (carve-out per spec 068 SCN-068-A07) is compiled BEFORE the
+	// router runs. The compiled intent travels into
+	// IntentEnvelope.StructuredContext.compiled_intent so the router
+	// and downstream scenarios consume structured context rather than
+	// raw text alone (SCN-068-A01, SCN-068-A02). When the compiler
+	// returns a strong scenario hint we set IntentEnvelope.ScenarioID
+	// so the router takes the explicit-id fast path. On compiler
+	// failure we emit the canonical refusal-with-capture WITHOUT
+	// invoking the router (Hard Constraint 1: raw text alone never
+	// drives behavior).
+	var compiledIntentRaw []byte
+	var compiledScenarioHint string
+	var compiled intent.CompiledIntent
+	var compiledOK bool
+	if f.intentCompiler != nil && msg.Kind == contracts.KindText && shortcutScenarioID == "" {
+		if _, isOp := intent.IsOperationalCommand(msg.Text); !isOp {
+			rawTurn := intent.RawTurn{
+				UserID:             msg.UserID,
+				Transport:          msg.Transport,
+				TransportMessageID: msg.TransportMessageID,
+				Text:               msg.Text,
+				ReceivedAt:         emittedAt,
+			}
+			ci, _, cerr := f.intentCompiler.Compile(ctx, rawTurn)
+			if cerr != nil {
+				resp = contracts.AssistantResponse{
+					Status:       contracts.StatusUnavailable,
+					ErrorCause:   contracts.ErrInternalError,
+					CaptureRoute: true,
+					Body:         "could not interpret your request; saved as a note for review.",
+					EmittedAt:    emittedAt,
+				}
+				conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+				f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+				return resp, nil
+			}
+			compiled = ci
+			compiledOK = true
+			if b, mErr := json.Marshal(compiled); mErr == nil {
+				compiledIntentRaw = b
+			}
+			if compiled.ScenarioHint != nil && *compiled.ScenarioHint != "" {
+				switch compiled.ActionClass {
+				case intent.ActionAnswer, intent.ActionRetrieve,
+					intent.ActionExternalLookup, intent.ActionInternalAction,
+					intent.ActionStateMutation:
+					compiledScenarioHint = *compiled.ScenarioHint
+				}
+			}
+		}
+	}
+
+	// --- Step 3.55: spec 068 SCOPE-4 — clarification gate
+	// (SCN-068-A05).
+	//
+	// When the compiler classifies a turn as clarify (or returns
+	// missing_slots), the facade emits a clarification response and
+	// MUST NOT call the router. Hard Constraint 1: raw text alone
+	// (with ambiguous interpretation) never drives a scenario like
+	// weather_lookup to pick one city out of several Springfields.
+	// The clarification body comes from compiled.ClarificationPrompt
+	// when non-nil/non-empty; otherwise a deterministic fallback that
+	// names the missing slots.
+	if compiledOK && conv.PendingConfirm == nil && requiresClarification(compiled) {
+		body := buildClarificationBody(compiled)
+		resp = contracts.AssistantResponse{
+			Status:     contracts.StatusUnavailable,
+			ErrorCause: contracts.ErrSlotMissing,
+			Body:       body,
+			EmittedAt:  emittedAt,
+		}
+		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+		return resp, nil
+	}
+
+	// --- Step 3.6: spec 068 SCOPE-3 — side-effect confirmation gate
+	// (SCN-068-A03, SCN-068-A04, SCN-068-A09).
+	//
+	// When the compiler classifies a turn as write or external_write,
+	// the executor MUST NOT run until the user has confirmed. We
+	// short-circuit BEFORE the router so no scenario can mutate
+	// persistent or external state on the first turn. Existing
+	// confirm flows (conv.PendingConfirm != nil) are not re-gated:
+	// the spec 061 SCOPE-08 machine already owns the second-turn
+	// confirm-reply path.
+	if compiledOK && conv.PendingConfirm == nil && intent.RequiresConfirmation(compiled) {
+		intent.SideEffectBlockedTotal.WithLabelValues(string(compiled.SideEffectClass), "missing_confirmation").Inc()
+		resp = contracts.AssistantResponse{
+			Status:       contracts.StatusUnavailable,
+			ErrorCause:   contracts.ErrMissingScope,
+			CaptureRoute: true,
+			Body:         "this would write data; please confirm before I proceed.",
+			EmittedAt:    emittedAt,
+		}
+		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
+		return resp, nil
+	}
+
 	// --- Step 4: build envelope + route ---
+	scenarioOverride := shortcutScenarioID
+	if scenarioOverride == "" {
+		scenarioOverride = compiledScenarioHint
+	}
 	env := agent.IntentEnvelope{
 		Source:     msg.Transport,
 		RawInput:   msg.Text,
-		ScenarioID: shortcutScenarioID,
+		ScenarioID: scenarioOverride,
+	}
+	if compiledIntentRaw != nil {
+		body := StripShortcutPrefix(msg.Text)
+		payload := map[string]any{
+			"query":           body,
+			"raw_query":       body,
+			"user_id":         msg.UserID,
+			"compiled_intent": json.RawMessage(compiledIntentRaw),
+		}
+		if b, err := json.Marshal(payload); err == nil {
+			env.StructuredContext = b
+		}
 	}
 	chosen, decision, ok := f.routeWithSpan(ctx, env, transportLabel, hashedUserID, correlationID)
 

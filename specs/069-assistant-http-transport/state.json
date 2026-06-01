@@ -1,0 +1,117 @@
+{
+  "version": 3,
+  "featureDir": "specs/069-assistant-http-transport",
+  "featureNumber": "069",
+  "featureName": "Assistant HTTP Transport (Testable Conversational Surface)",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/037-llm-agent-tools",
+    "specs/043-ollama-test-infrastructure",
+    "specs/044-per-user-bearer-auth",
+    "specs/060-bearer-auth-scope-claim",
+    "specs/061-conversational-assistant",
+    "specs/068-structured-intent-compiler"
+  ],
+  "amends": [
+    "specs/061-conversational-assistant",
+    "specs/031-live-stack-testing",
+    "specs/043-ollama-test-infrastructure",
+    "specs/020-security-hardening",
+    "specs/067-intent-driven-policy-enforcement"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Product-to-planning pass creates planning maturity artifacts only; runtime implementation remains governed by the full-delivery chain after planning maturity.",
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 0,
+      "notStarted": 0,
+      "inProgress": 0,
+      "done": 0,
+      "blocked": 0
+    },
+    "completedScopes": [],
+    "lockdownState": "n/a-planning-in-progress",
+    "notes": "Planning artifacts are present. Status remains in_progress because transition guard blocked specs_hardened promotion; no implementation certification is claimed."
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T00:00:00Z",
+    "lastUpdatedAt": "2026-05-31T00:00:00Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped HTTP transport adapter spec to fill the E2E-testability + multi-frontend gap. Confirmed spec 061 already defines the TransportAdapter contract and the closed-vocabulary 'web' transport token; this spec adds the concrete HTTP adapter + bearer-authed POST /api/assistant/turn route plus E2E suite that drives the live stack without Telegram. 11 BDD scenarios (SCN-069-A01..A11) cover auth, disambig/confirm/reset round-trips, capture-as-fallback, golden wire-schema pinning, transport-hint vocabulary, rate limits, and the Telegram-free E2E suite."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T17:40:14Z",
+        "runEndedAt": "2026-05-31T17:40:14Z",
+        "summary": "Created design.md for the assistant HTTP transport, including POST /api/assistant/turn contract, request/response schemas, adapter foundation, auth/scope/rate/body/CORS behavior, observability, and scenario-to-test mapping. Routed implementation planning to bubbles.plan."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Created scopes.md, scenario-manifest.json, test-plan.json, report.md, and uservalidation.md for HTTP adapter contract, auth and limits, callback round trips, reset and capture rendering, and transport parity. Artifact lint passed; transition guard blocked specs_hardened promotion due current worktree source edits, unchecked implementation DoD, missing execution evidence, dependency and retro gates, and guard-required plan detail gaps."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T23:30:00Z",
+        "runEndedAt": "2026-05-31T23:45:00Z",
+        "summary": "Scope 2-4 split mirror of the Scope 1a precedent. Extended Scope 1 cross-spec ownership to cover every newly-deferred spec 068 scenario (SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A09) in addition to existing SCN-068-A06/A07. Added 8 cross-spec e2e Test Plan rows pointing at the same tests/e2e/assistant/intent_*_test.go files spec 068 deferred, extended the Cross-spec ownership note and Scope 1 DoD checkbox accordingly, updated Scope Inventory row and Execution Outline validation checkpoint, and added 6 cross-spec scenario entries (crossSpecOriginSpec=068-structured-intent-compiler) plus matching traceabilityGuardScenarioIds entries in scenario-manifest.json. test-plan.json Scope 1 gained 8 cross-spec rows. uservalidation.md baseline checklist extended. Scenario IDs preserved verbatim; no inverse dependency added. No source code, tests, configs, ML, docs, or unrelated specs touched. workflowMode/ceiling/status unchanged."
+      }
+    ]
+  }
+}

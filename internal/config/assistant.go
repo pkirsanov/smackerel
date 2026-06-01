@@ -140,8 +140,20 @@ type AssistantConfig struct {
 	// guaranteed). EmbedTimeout is the per-call timeout for the
 	// sidecar HTTP request. Loaded from ASSISTANT_ROUTING_EMBEDDER_MODE
 	// and ASSISTANT_ROUTING_EMBED_TIMEOUT_MS env vars.
-	EmbedderMode  string
-	EmbedTimeout  time.Duration
+	EmbedderMode string
+	EmbedTimeout time.Duration
+
+	// Spec 064 SCOPE-03 — open-ended knowledge agent SST.
+	// Populated by LoadOpenKnowledge() (internal/config/openknowledge.go)
+	// from ASSISTANT_OPEN_KNOWLEDGE_* env vars; wired in config.go Load().
+	OpenKnowledge OpenKnowledgeConfig
+
+	// Spec 068 SCOPE-1 — structured intent compiler SST.
+	// Populated by loadIntentCompilerConfig (internal/config/
+	// assistant_intent_compiler.go) at the tail of loadAssistantConfig.
+	// All keys are REQUIRED at the generator boundary (Gate G028 /
+	// smackerel-no-defaults); missing values fail loud at startup.
+	IntentCompiler IntentCompilerConfig
 }
 
 // AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK
@@ -320,6 +332,9 @@ func loadAssistantConfig(cfg *Config) error {
 	var embedTimeoutMs int
 	mustInt("ASSISTANT_ROUTING_EMBED_TIMEOUT_MS", &embedTimeoutMs, 1)
 	cfg.Assistant.EmbedTimeout = time.Duration(embedTimeoutMs) * time.Millisecond
+
+	// Spec 068 SCOPE-1 — structured intent compiler SST (fail-loud).
+	loadIntentCompilerConfig(cfg, &errs)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))

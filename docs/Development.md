@@ -608,7 +608,14 @@ one-line registered/rejected summary on stdout.
 #### Forbidden Patterns
 
 The following are explicitly out of scope for new code and are targets for
-removal from existing code:
+removal from existing code (see
+[spec 066 — Legacy Keyword Surface Retirement](../specs/066-legacy-keyword-surface-retirement/)
+for the active retirement plan, and
+[spec 067 — Intent-Driven Policy Enforcement](../specs/067-intent-driven-policy-enforcement/)
+for the CI guards that mechanically enforce these rules — scenario-prompt
+length cap, mandatory `principleAlignment` block per scenario YAML,
+broadened NO-DEFAULTS check, forbidden-keyword guard, and compiler-bypass
+detection):
 
 - Regex-based intent routers (e.g., long `switch`/`if` chains over message
   text in the Telegram bot or any other channel).
@@ -617,11 +624,28 @@ removal from existing code:
   vendor judgement, or fuzzy matching.
 - Keyword-map categorization (e.g., "if ingredient name contains
   'milk'/'cheese' → dairy") for decisions an LLM with the right tool can make.
+  Cross-scenario primitives such as `location_normalize`, `unit_convert`,
+  `entity_resolve`, and `calculator` are provided by
+  [spec 065 — Generic Micro-Tools](../specs/065-generic-micro-tools/) and
+  MUST be used instead of forking per-scenario normalization into prompts
+  or scenario-local Go.
 - Hardcoded vendor / alias / synonym seed lists in Go source — such data
   belongs behind a tool that consults the database (or asks the LLM with the
-  database as context), not as a literal in code.
+  database as context), not as a literal in code. The
+  `internal/api/domain_intent.go` regex parser and the annotation keyword
+  map are explicitly slated for retirement under spec 066; new code MUST
+  NOT reintroduce equivalents.
 - Adding a new Go branch to extend a scenario when the same outcome is
   achievable by editing a prompt contract.
+- Calling `Router.Route` (or any scenario routing entrypoint) from a
+  user-facing NL path without a validated `CompiledIntent` trace record
+  produced by the spec 068 structured intent compiler. Compiler-bypass is
+  caught by the spec 067 CI guard.
+- Branching on `AssistantMessage.Transport` outside transport-adapter or
+  audit code. Facade, scenarios, executor, and tool code MUST treat every
+  transport identically (Telegram, HTTP per
+  [spec 069](../specs/069-assistant-http-transport/), and any future
+  adapter). This is enforced by a spec 067 CI guard.
 
 #### Adding A New Scenario (BS-001 — zero Go changes)
 
@@ -643,6 +667,8 @@ Spec 037 Scope 10 wires the agent runtime so adding a new scenario is a
    router. In-flight invocations pin the version of the scenario they
    started with (BS-019).
 5. Invoke the new scenario by id via any surface (`POST /v1/agent/invoke`,
+   `POST /api/assistant/turn` (the spec 069 HTTP transport — the canonical
+   programmatic entrypoint for end-to-end tests of any assistant journey),
    the Telegram bridge, `scheduler.FireScenario`, or
    `pipeline.FireScenario`). No restart, no rebuild, no Go diff.
 
@@ -681,6 +707,52 @@ package and one `init()` registration. The procedure:
 Tool registration is decentralized (each package's `init()` registers
 its own tools); there is no central registration table to update. This
 is the design choice that makes "add a tool" a one-package change.
+
+### Spec 064 Open-Knowledge Agent
+
+The open-knowledge agent ([`specs/064-open-ended-knowledge-agent/design.md`](../specs/064-open-ended-knowledge-agent/design.md))
+is a bounded planner ↔ tool ↔ observation loop that lives under
+[`internal/assistant/openknowledge/`](../internal/assistant/openknowledge).
+It registers itself as the second-to-last entry in the spec 048
+scenario manifest (immediately before `capture_as_fallback`) and is
+gated by `assistant.open_knowledge.enabled` (see
+[`docs/Operations.md`](Operations.md#open-knowledge-assistant-agent-spec-064)
+for the operator surface).
+
+**Local dev config.** The committed `config/smackerel.yaml` block
+ships disabled. To exercise the subsystem locally:
+
+1. Set `assistant.open_knowledge.enabled: true` in
+   `config/smackerel.yaml`.
+2. Pick a provider. For local-first dev, leave `provider: "searxng"`
+   and flip `environments.dev.searxng_enabled: true` to bring the
+   self-hosted SearxNG container up under the `searxng` Compose
+   profile.
+3. Populate `assistant.open_knowledge.llm_model_id` with a model
+   served by the ML sidecar (`/llm/chat` route), and confirm the
+   budget keys are non-zero per spec.
+4. `./smackerel.sh config generate` to re-emit env files.
+5. `./smackerel.sh up` then `docker compose --profile searxng up -d searxng`
+   if the profile is not already active.
+
+**Integration tests that need SearxNG.** The integration leg
+auto-enables the profile via `environments.test.searxng_enabled: true`
+and runs `TestSearxNGIntegration_Smoke` against the live container:
+
+```bash
+ENABLE_SEARXNG=true ./smackerel.sh test integration
+```
+
+**E2E tests.** Spec 064 SCOPE-17 staged seven e2e tests under
+`tests/e2e/agent/openknowledge_e2e_test.go` (`//go:build e2e`). They
+currently `t.Skip(...)` with explicit messages naming the routed
+infrastructure findings under PKT-WORKFLOW-A (no `AGENT_INVOKE_URL`
+in the e2e runner, no real `/llm/chat` dispatch path, no
+`fixture-fabricated-cite` test mode, no per-test budget /
+allowlist override knobs). When those findings land, the tests
+activate without modification. Until then,
+`go test -tags e2e ./tests/e2e/agent/...` is expected to PASS with
+seven SKIP entries.
 
 ## NATS JetStream Streams
 

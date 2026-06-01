@@ -661,7 +661,24 @@ SMACKEREL_AUTH_TOKEN="$(required_value runtime.auth_token)"
 # Without reuse, the regen produces a fresh random token, the running stack is configured
 # with the new token, and the previously-captured token used by the Go test container
 # returns 401 UNAUTHORIZED on every API call.
+# Spec 064 SCOPE-17 — TARGET_ENV=dev also auto-generates a token when
+# runtime.auth_token is empty, mirroring the test behavior. Dev token is
+# persisted into config/generated/dev.env across regens (read-back path
+# below) so existing client tokens stay valid. The YAML stays "" to preserve
+# the spec 051 contract (TestBundleSecretContract_AdversarialA4_OptOutDetector).
 if [[ "$TARGET_ENV" == "test" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
+  EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
+  EXISTING_TOKEN=""
+  if [[ -f "$EXISTING_ENV_FILE" ]]; then
+    EXISTING_TOKEN="$(awk -F= '/^SMACKEREL_AUTH_TOKEN=/ { sub(/^SMACKEREL_AUTH_TOKEN=/, ""); print; exit }' "$EXISTING_ENV_FILE" 2>/dev/null || true)"
+  fi
+  if [[ -n "$EXISTING_TOKEN" ]]; then
+    SMACKEREL_AUTH_TOKEN="$EXISTING_TOKEN"
+  else
+    SMACKEREL_AUTH_TOKEN="$(openssl rand -hex 24 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(24))')"
+  fi
+fi
+if [[ "$TARGET_ENV" == "dev" && -z "$SMACKEREL_AUTH_TOKEN" ]]; then
   EXISTING_ENV_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
   EXISTING_TOKEN=""
   if [[ -f "$EXISTING_ENV_FILE" ]]; then
@@ -890,6 +907,17 @@ NATS_MONITOR_HOST_PORT="$(required_value environments.$TARGET_ENV.nats_monitor_h
 CORE_HOST_PORT="$(required_value environments.$TARGET_ENV.core_host_port)"
 ML_HOST_PORT="$(required_value environments.$TARGET_ENV.ml_host_port)"
 OLLAMA_HOST_PORT="$(required_value environments.$TARGET_ENV.ollama_host_port)"
+# Spec 064 SCOPE-07 — SearxNG per-env shape. The `searxng` Compose
+# profile is enabled iff SEARXNG_ENABLED=true in the generated env
+# file. The integration leg in smackerel.sh injects
+# OPEN_KNOWLEDGE_SEARXNG_URL=http://searxng:8080 into the Go runner.
+SEARXNG_ENABLED="$(required_value environments.$TARGET_ENV.searxng_enabled)"
+SEARXNG_HOST_PORT="$(required_value environments.$TARGET_ENV.searxng_host_port)"
+SEARXNG_BIND_ADDRESS="$(required_value environments.$TARGET_ENV.searxng_bind_address)"
+SEARXNG_IMAGE="$(required_value assistant.open_knowledge.searxng.image)"
+SEARXNG_CONTAINER_PORT="$(required_value assistant.open_knowledge.searxng.container_port)"
+SEARXNG_SECRET="$(required_value assistant.open_knowledge.searxng.secret_key)"
+SEARXNG_BASE_URL="$(required_value assistant.open_knowledge.searxng.base_url)"
 # Spec 049 — per-environment Prometheus host port. Used only when the
 # `monitoring` Compose profile is enabled; the service is off by
 # default. Fail-loud SST: every supported environment in
@@ -1267,6 +1295,57 @@ ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN="$(required_value assistant.eval.capture_fal
 ASSISTANT_OBSERVABILITY_OTEL_ENABLED="$(required_value assistant.observability.otel_enabled)"
 ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT="$(yaml_get assistant.observability.otel_endpoint)"
 ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME="$(required_value assistant.observability.otel_service_name)"
+# Spec 064 SCOPE-03 — open-ended knowledge agent SST. Every key is
+# REQUIRED at the generator boundary (Gate G028, smackerel-no-defaults).
+# When assistant.open_knowledge.enabled=false, several string values
+# are legally empty (provider_endpoint, provider_api_key, llm_model_id)
+# and tool_allowlist is legally []; the Go validator (Validate()) skips
+# deep validation when Enabled=false. provider_api_key uses yaml_get
+# because searxng allows empty.
+ASSISTANT_OPEN_KNOWLEDGE_ENABLED="$(required_value assistant.open_knowledge.enabled)"
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER="$(required_value assistant.open_knowledge.provider)"
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT="$(yaml_get assistant.open_knowledge.provider_endpoint)"
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY="$(yaml_get assistant.open_knowledge.provider_api_key)"
+ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_llm_model_id" 2>/dev/null)"
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get assistant.open_knowledge.llm_model_id)"
+fi
+ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS="$(required_value assistant.open_knowledge.max_iterations)"
+ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET="$(required_value assistant.open_knowledge.per_query_token_budget)"
+ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET="$(required_value assistant.open_knowledge.per_query_usd_budget)"
+ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD="$(required_value assistant.open_knowledge.monthly_budget_usd)"
+ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD="$(required_value assistant.open_knowledge.per_user_monthly_budget_usd)"
+ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST="$(yaml_get_json assistant.open_knowledge.tool_allowlist)"
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST="[]"
+fi
+ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED="$(required_value assistant.open_knowledge.web_snippet_cache_enabled)"
+ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS="$(required_value assistant.open_knowledge.llm_timeout_ms)"
+# SCOPE-15 — egress allowlist (extra hosts beyond provider_endpoint).
+# Empty list emitted as "[]" so the Go loader's JSON decoder accepts it.
+ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS="$(yaml_get_json assistant.open_knowledge.allowed_egress_hosts)"
+if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS" ]]; then
+  ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS="[]"
+fi
+# SCOPE-16 — circuit breaker bounds for the web-search provider.
+# All three keys REQUIRED at the generator boundary even when
+# enabled=false (the Go validator skips deep checks when disabled).
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD="$(required_value assistant.open_knowledge.circuit_breaker.failure_threshold)"
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_OPEN_WINDOW_SECONDS="$(required_value assistant.open_knowledge.circuit_breaker.open_window_seconds)"
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_HALF_OPEN_AFTER_SECONDS="$(required_value assistant.open_knowledge.circuit_breaker.half_open_after_seconds)"
+# Spec 068 SCOPE-1 — Structured Intent Compiler SST keys. All keys
+# REQUIRED at the generator boundary (Gate G028 / smackerel-no-defaults).
+# The Go loader (internal/config/assistant_intent_compiler.go) fails
+# loud at startup if any value is missing or unparsable.
+ASSISTANT_INTENT_COMPILER_ENABLED="$(required_value assistant.intent_compiler.enabled)"
+ASSISTANT_INTENT_COMPILER_MODEL_ROLE="$(required_value assistant.intent_compiler.model_role)"
+ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION="$(required_value assistant.intent_compiler.prompt_contract_version)"
+ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION="$(required_value assistant.intent_compiler.schema_version)"
+ASSISTANT_INTENT_COMPILER_TIMEOUT_MS="$(required_value assistant.intent_compiler.timeout_ms)"
+ASSISTANT_INTENT_COMPILER_CONFIDENCE_FLOOR="$(required_value assistant.intent_compiler.confidence_floor)"
+ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS="$(required_value assistant.intent_compiler.max_context_turns)"
+ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES="$(required_value assistant.intent_compiler.max_output_bytes)"
+ASSISTANT_INTENT_COMPILER_RETRY_BUDGET="$(required_value assistant.intent_compiler.retry_budget)"
 # Per-target override for the test e2e suite: force webhook mode and
 # inject a stable, known test secret so the BS-001 webhook e2e shell
 # test can POST authenticated requests against the live test stack.
@@ -1402,6 +1481,15 @@ OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE}
 OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT=${OLLAMA_TEST_PREWARM_WARMUP_NUM_PREDICT}
 OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS=${OLLAMA_TEST_PREWARM_SECOND_CALL_MAX_MS}
 ENABLE_OLLAMA=${OLLAMA_ENABLED}
+# Spec 064 SCOPE-07 — SearxNG SST emission. runtime.sh adds
+# --profile searxng to docker compose iff ENABLE_SEARXNG is truthy.
+ENABLE_SEARXNG=${SEARXNG_ENABLED}
+SEARXNG_HOST_PORT=${SEARXNG_HOST_PORT}
+SEARXNG_BIND_ADDRESS=${SEARXNG_BIND_ADDRESS}
+SEARXNG_IMAGE=${SEARXNG_IMAGE}
+SEARXNG_CONTAINER_PORT=${SEARXNG_CONTAINER_PORT}
+SEARXNG_SECRET=${SEARXNG_SECRET}
+SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
 DATABASE_URL=${DATABASE_URL}
 NATS_URL=${NATS_URL}
 LLM_PROVIDER=${LLM_PROVIDER}
@@ -1794,6 +1882,32 @@ ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN=${ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN}
 ASSISTANT_OBSERVABILITY_OTEL_ENABLED=${ASSISTANT_OBSERVABILITY_OTEL_ENABLED}
 ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT=${ASSISTANT_OBSERVABILITY_OTEL_ENDPOINT}
 ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME=${ASSISTANT_OBSERVABILITY_OTEL_SERVICE_NAME}
+ASSISTANT_OPEN_KNOWLEDGE_ENABLED=${ASSISTANT_OPEN_KNOWLEDGE_ENABLED}
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER}
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT}
+ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY=${ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY}
+ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID=${ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID}
+ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS=${ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS}
+ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET=${ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET}
+ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET=${ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET}
+ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD}
+ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD=${ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD}
+ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST=${ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST}
+ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED=${ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED}
+ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS=${ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS}
+ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS=${ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS}
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD=${ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD}
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_OPEN_WINDOW_SECONDS=${ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_OPEN_WINDOW_SECONDS}
+ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_HALF_OPEN_AFTER_SECONDS=${ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_HALF_OPEN_AFTER_SECONDS}
+ASSISTANT_INTENT_COMPILER_ENABLED=${ASSISTANT_INTENT_COMPILER_ENABLED}
+ASSISTANT_INTENT_COMPILER_MODEL_ROLE=${ASSISTANT_INTENT_COMPILER_MODEL_ROLE}
+ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION=${ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION}
+ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION=${ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION}
+ASSISTANT_INTENT_COMPILER_TIMEOUT_MS=${ASSISTANT_INTENT_COMPILER_TIMEOUT_MS}
+ASSISTANT_INTENT_COMPILER_CONFIDENCE_FLOOR=${ASSISTANT_INTENT_COMPILER_CONFIDENCE_FLOOR}
+ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS=${ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS}
+ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES=${ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES}
+ASSISTANT_INTENT_COMPILER_RETRY_BUDGET=${ASSISTANT_INTENT_COMPILER_RETRY_BUDGET}
 POSTGRES_CPU_LIMIT=${POSTGRES_CPU_LIMIT}
 POSTGRES_MEMORY_LIMIT=${POSTGRES_MEMORY_LIMIT}
 NATS_CPU_LIMIT=${NATS_CPU_LIMIT}

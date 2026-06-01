@@ -1,0 +1,363 @@
+# Scopes: 069 Assistant HTTP Transport
+
+Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [uservalidation.md](uservalidation.md) | [scenario-manifest.json](scenario-manifest.json) | [test-plan.json](test-plan.json)
+
+## Execution Outline
+
+### Phase Order
+
+1. **HTTP Adapter Contract and Wire Schema** — Implement the second concrete `TransportAdapter`, synchronous `POST /api/assistant/turn`, request/response schema validation, facade invocation, capture rendering hook, and golden schema pinning. `foundation:true`.
+2. **Auth, Scope, and Limit Rejections** — Mount the route behind bearer auth, required scope middleware, body-size cap, rate limit, and explicit CORS config before facade invocation.
+3. **Disambiguation and Confirmation Round Trips** — Prove callback-style turns over HTTP resolve pending disambiguation and confirmation state exactly like Telegram.
+4. **Reset and Capture Rendering** — Prove reset clears pending web state and capture-as-fallback is invoked exactly once with the same acknowledgement shape.
+5. **Transport Parity, Hint Neutrality, and Live E2E Suite** — Prove Telegram and HTTP share the same facade path, hints are telemetry-only, and the assistant E2E suite runs over HTTP without Telegram.
+
+### New Types and Signatures
+
+- `internal/assistant/httpadapter.HTTPAdapter` implementing the existing `contracts.TransportAdapter` contract.
+- `POST /api/assistant/turn` request schema v1 with `schema_version`, `transport_message_id`, `kind`, `transport_hint`, text, confirm, disambiguation, and client context fields.
+- Response schema v1 with transport echo, status, body, sources, confirm card, disambiguation prompt, error cause, capture route, trace, facade flag, and emitted timestamp.
+- Error response schema for auth, scope, schema, body-size, rate-limit, and facade errors.
+- Required SST keys under `assistant.transports.http.*`, including `required_scope` resolved against spec 060 scope grammar.
+
+### Validation Checkpoints
+
+- After Scope 1, unit and contract tests prove schema v1 is pinned and accepted turns invoke `Facade.Handle` exactly once. The HTTP-route e2e tests for spec 068 compiler scenarios SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09 also land in this scope because the assistant HTTP ingress they exercise first becomes real here.
+- After Scope 2, integration tests prove 401, 403, 413, and 429 reject before the facade and missing HTTP transport config fails loud.
+- After Scope 3, HTTP E2E tests prove disambiguation and confirmation round trips preserve pending state and user identity.
+- After Scope 4, HTTP E2E tests prove reset and capture rendering match the shared assistant response model.
+- After Scope 5, parity and live-stack E2E tests prove no scenario branches on transport and no Telegram account is required.
+
+## Scope Inventory
+
+| Scope | Name | Depends On | Surfaces | Primary Tests | DoD Summary | Status |
+|-------|------|------------|----------|---------------|-------------|--------|
+| 1 | HTTP Adapter Contract and Wire Schema | None | adapter package, route, schema, golden tests, spec 068 compiler HTTP e2e tests (A01-A07, A09) | unit, e2e-api, Regression E2E, cross-spec e2e | route calls facade once; schema v1 pinned; SCN-068-A01/A02/A03/A04/A05/A06/A07/A09 HTTP e2e land here | Not Started |
+| 2 | Auth, Scope, and Limit Rejections | 1, specs/060 | auth middleware, scope claim, rate/body/CORS config | integration, Regression E2E | 401/403/413/429 pre-facade rejection | Not Started |
+| 3 | Disambiguation and Confirmation Round Trips | 1, 2 | pending state, callback request kinds, confirmation gate | e2e-api, integration, Regression E2E | disambig/confirm parity with Telegram | Not Started |
+| 4 | Reset and Capture Rendering | 1, 2, 3 | reset kind, capture path, acknowledgement shape | e2e-api, integration, Regression E2E | reset clears state; capture invoked once | Not Started |
+| 5 | Transport Parity, Hint Neutrality, and Live E2E Suite | 1, 2, 3, 4, specs/068 | parity tests, hint validation, assistant E2E suite | unit, integration, e2e-api, stress | no transport branching; HTTP drives live assistant suite | Not Started |
+
+---
+
+## Scope 1: HTTP Adapter Contract and Wire Schema
+
+**Status:** Not Started  
+**Depends On:** None  
+**Tags:** foundation:true  
+**Surfaces:** `internal/assistant/httpadapter/`, API router mount, request/response schema validation, golden contract tests, assistant facade dependency injection.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A01 — HTTP turn returns the same response Telegram would
+  Given the HTTP transport adapter is enabled with a valid bearer token
+  When the user POSTs { transport_message_id, kind: "text", text: "/ask what is the weather in barcelona" } to /api/assistant/turn
+  Then the response is HTTP 200 with a JSON body matching the AssistantResponse schema
+  And the response body contains the same scenario invocation result a Telegram /ask would have produced for the same compiled intent
+  And the response sets Transport = "web" and TransportMessageID echoing the request
+
+Scenario: SCN-069-A07 — Schema is pinned by a golden contract test
+  Given the request and response wire schemas declared in this spec
+  When the contract test runs
+  Then any change to the JSON field names, types, or required fields fails the test unless schema_version is bumped
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A01 | Valid token and HTTP transport enabled | POST text turn | HTTP 200 response matches schema, echoes transport id, and calls shared facade once | e2e-api | `report.md#scope-1` |
+| SCN-069-A07 | Golden schema fixtures exist | Run contract test | Field name/type/required-field drift fails unless schema version changes | unit | `report.md#scope-1` |
+
+### Implementation Plan
+
+- Add `internal/assistant/httpadapter` that translates HTTP request JSON to `contracts.AssistantMessage{Transport:"web"}` and renders `contracts.AssistantResponse` as response schema v1.
+- Mount `POST /api/assistant/turn` under existing API routing without changing the capability-layer interface.
+- Validate schema version, transport message id, message kind, callback refs, and response serialization.
+- Ensure accepted turns invoke `Facade.Handle` exactly once.
+- Add golden fixtures for request and response schemas.
+- **Shared Infrastructure Impact Sweep:** API router, assistant facade, transport adapter registry, and response model are shared surfaces. Canary rows validate Telegram adapter behavior and existing facade tests before broad suite reruns.
+- **Change Boundary:** allowed file families are HTTP adapter package, API route mount, schema/golden tests, and assistant HTTP E2E tests. Excluded surfaces are Telegram adapter internals, scenario logic, compiler implementation, and streaming transports.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Adapter translation | unit | SCN-069-A01 | `internal/assistant/httpadapter/adapter_test.go` | `TestHTTPAdapterTranslatesTextTurnToAssistantMessage` | `./smackerel.sh test unit` | No |
+| Golden schema | unit | SCN-069-A07 | `internal/assistant/httpadapter/golden_contract_test.go` | `TestHTTPAssistantTurnGoldenContractV1` | `./smackerel.sh test unit` | No |
+| Canary: Telegram adapter + facade unaffected | integration | SCN-069-A01, SCN-069-A07 | `tests/integration/assistant/http_adapter_canary_test.go` | `TestHTTPAdapterCanary_TelegramAdapterAndFacadeUnchanged` | `./smackerel.sh test integration` | Yes |
+| Facade invocation | integration | SCN-069-A01 | `tests/integration/api/assistant_http_turn_test.go` | `TestAssistantHTTPTurnInvokesFacadeExactlyOnce` | `./smackerel.sh test integration` | Yes |
+| Regression E2E: text turn | e2e-api | SCN-069-A01 | `tests/e2e/assistant/http_turn_test.go` | `TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E: schema pin | e2e-api | SCN-069-A07 | `tests/e2e/assistant/http_turn_test.go` | `TestAssistantHTTPE2E_ResponseSchemaMatchesV1Contract` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: compiler malformed JSON over HTTP | e2e-api | SCN-068-A06 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 1) | `tests/e2e/assistant/intent_compiler_http_test.go` | `TestIntentCompilerE2E_MalformedJSONBlocksRoutingAndCaptures` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: operational bypass over live transport | e2e-api | SCN-068-A07 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 1) | `tests/e2e/assistant/intent_compiler_http_test.go` | `TestIntentCompilerE2E_OperationalCommandsBypassCompilerOverLiveTransport` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: weather compiles before route over HTTP | e2e-api | SCN-068-A01 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 2) | `tests/e2e/assistant/intent_compiler_http_test.go` | `TestIntentCompilerE2E_WeatherCompilesBeforeRouteAndNormalizesLocation` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: retrieval receives structured context over HTTP | e2e-api | SCN-068-A02 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 2) | `tests/e2e/assistant/intent_compiler_http_test.go` | `TestIntentCompilerE2E_RetrievalReceivesStructuredContext` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: read intents never route from raw text over HTTP | e2e-api | SCN-068-A01, SCN-068-A02 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 2) | `tests/e2e/assistant/intent_compiler_http_test.go` | `TestIntentCompilerE2E_ReadIntentsNeverRouteFromRawTextOnly` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: list write requires confirmation over HTTP | e2e-api | SCN-068-A03 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 3) | `tests/e2e/assistant/intent_side_effect_test.go` | `TestIntentCompilerE2E_ListWriteRequiresConfirmationBeforePersistence` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: annotation slots from compiled intent over HTTP | e2e-api | SCN-068-A04 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 3) | `tests/e2e/assistant/annotation_intent_test.go` | `TestAnnotationIntentE2E_SlotsComeFromCompiledIntent` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: write/state never bypass confirm gate over HTTP | e2e-api | SCN-068-A03, SCN-068-A04, SCN-068-A09 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 3) | `tests/e2e/assistant/intent_side_effect_test.go` | `TestIntentCompilerE2E_WriteAndStateMutationNeverBypassConfirmGate` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: Springfield clarification over HTTP | e2e-api | SCN-068-A05 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 4) | `tests/e2e/assistant/intent_clarify_test.go` | `TestIntentCompilerE2E_SpringfieldWeatherClarifiesLocation` | `./smackerel.sh test e2e` | Yes |
+| Cross-spec e2e: ambiguous never routes weather over HTTP | e2e-api | SCN-068-A05 (authored in [specs/068](../068-structured-intent-compiler/scopes.md) Scope 4) | `tests/e2e/assistant/intent_clarify_test.go` | `TestIntentCompilerE2E_AmbiguousLocationNeverRoutesWeatherLookup` | `./smackerel.sh test e2e` | Yes |
+
+**Cross-spec ownership note:** SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09 remain authored in [spec 068](../068-structured-intent-compiler/scopes.md) because they describe compiler behavior, not transport mechanics. Their HTTP-route e2e proof lives in this spec because the assistant HTTP ingress they exercise first exists here. Spec 068's manifest/test-plan record these as `deferredTests` pointing back to the same file paths and test IDs used above; the scenario IDs are preserved verbatim across both specs so traceability stays intact.
+
+### Definition of Done
+
+- [ ] `POST /api/assistant/turn` accepts schema v1 text turns and invokes the shared facade exactly once.
+- [ ] Request and response schema v1 are pinned by golden contract tests.
+- [ ] Response echoes `Transport="web"` and the client-supplied `transport_message_id`.
+- [ ] Shared Infrastructure Impact Sweep canary tests pass before broad suite reruns.
+- [ ] Change Boundary is respected and zero excluded file families are changed.
+- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A01 and SCN-069-A07.
+- [ ] Cross-spec HTTP-route e2e coverage exists in `tests/e2e/assistant/intent_compiler_http_test.go`, `tests/e2e/assistant/intent_side_effect_test.go`, `tests/e2e/assistant/annotation_intent_test.go`, and `tests/e2e/assistant/intent_clarify_test.go` for spec 068 scenarios SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09, with scenario IDs preserved verbatim from spec 068.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+
+---
+
+## Scope 2: Auth, Scope, and Limit Rejections
+
+**Status:** Not Started  
+**Depends On:** Scope 1, specs/060-bearer-auth-scope-claim  
+**Surfaces:** bearer auth group, `assistant.turn`/configured scope claim, body-size cap, rate limiter, CORS config validation, error response schema.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A02 — Auth is mandatory
+  Given no bearer token is provided
+  When the user POSTs to /api/assistant/turn
+  Then the response is HTTP 401
+  And the facade is never invoked
+
+Scenario: SCN-069-A10 — Rate limit and body-size cap from SST
+  Given assistant.transports.http.rate_limit_per_user_per_minute and body_size_max_bytes are set
+  When a user exceeds either limit
+  Then the request is rejected with the standard 429 / 413 status
+  And no facade invocation occurs
+  And missing config keys fail loud at startup (NO-DEFAULTS)
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A02 | Request lacks bearer token | POST turn | HTTP 401 with safe error body and `facade_invoked=false` | integration | `report.md#scope-2` |
+| SCN-069-A10 | Request exceeds configured limit | POST oversized or high-rate requests | HTTP 413/429 with safe error body and no facade invocation | integration | `report.md#scope-2` |
+
+### Implementation Plan
+
+- Mount the route behind existing bearer auth and spec 060 scope middleware using the implementation spelling selected in `assistant.transports.http.required_scope`.
+- Apply body-size cap and per-user rate limiter before JSON decode and facade invocation.
+- Validate explicit CORS origin config and conversation TTL config with fail-loud errors.
+- Return stable error bodies that never echo tokens or secret headers.
+- **Shared Infrastructure Impact Sweep:** auth middleware, scope middleware, API router order, and rate limiter are shared surfaces. Canary rows validate existing auth endpoints and scope middleware before broad suite reruns.
+- **Change Boundary:** allowed file families are route middleware wiring, HTTP transport config, rate/body limit tests, and error schema tests. Excluded surfaces are token minting logic and unrelated API routes.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Missing bearer | integration | SCN-069-A02 | `tests/integration/api/assistant_http_auth_test.go` | `TestAssistantHTTPAuth_MissingBearerReturns401BeforeFacade` | `./smackerel.sh test integration` | Yes |
+| Missing scope | integration | SCN-069-A02 | `tests/integration/api/assistant_http_auth_test.go` | `TestAssistantHTTPAuth_MissingTurnScopeReturns403BeforeFacade` | `./smackerel.sh test integration` | Yes |
+| Limit rejection | integration | SCN-069-A10 | `tests/integration/api/assistant_http_limits_test.go` | `TestAssistantHTTPLimitsRejectBeforeFacadeInvocation` | `./smackerel.sh test integration` | Yes |
+| Config fail-loud | unit | SCN-069-A10 | `internal/config/assistant_http_transport_test.go` | `TestAssistantHTTPTransportConfigRequiresEverySSTKey` | `./smackerel.sh test unit` | No |
+| Regression E2E: pre-facade errors | e2e-api | SCN-069-A02, SCN-069-A10 | `tests/e2e/assistant/http_error_test.go` | `TestAssistantHTTPE2E_PreFacadeErrorsDoNotInvokeFacade` | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done
+
+- [ ] Missing or invalid bearer token returns 401 before facade invocation.
+- [ ] Missing required assistant-turn scope returns 403 before facade invocation.
+- [ ] Body-size and rate-limit rejections return 413/429 before facade invocation.
+- [ ] Required HTTP transport config keys fail loud at startup with named errors.
+- [ ] Shared Infrastructure Impact Sweep canary tests pass before broad suite reruns.
+- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A02 and SCN-069-A10.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+
+---
+
+## Scope 3: Disambiguation and Confirmation Round Trips
+
+**Status:** Not Started  
+**Depends On:** Scope 1, Scope 2  
+**Surfaces:** HTTP request kinds `disambiguation` and `confirm`, pending assistant state, confirmation gate, response rendering.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A03 — Disambiguation prompt round-trips over HTTP
+  Given a prior turn produced an AssistantResponse with a DisambiguationPrompt
+  When the user POSTs { kind: "disambiguation", disambiguation_ref, disambiguation_choice: 2 }
+  Then the facade resolves the choice exactly as Telegram would
+  And the next response is the chosen scenario's invocation result
+
+Scenario: SCN-069-A04 — Confirm prompt round-trips over HTTP
+  Given a prior turn produced an AssistantResponse with a ConfirmCard
+  When the user POSTs { kind: "confirm", confirm_ref, confirm_choice: "accept" }
+  Then the side-effect-bearing action executes
+  And the response carries the same post-confirm result Telegram would produce
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A03 | Pending disambiguation exists for web transport | POST choice turn | Choice resolves for the same user/transport and final response matches selected candidate | e2e-api | `report.md#scope-3` |
+| SCN-069-A04 | Pending confirmation exists for web transport | POST accept turn | Gated action executes once and response carries post-confirm result | e2e-api | `report.md#scope-3` |
+
+### Implementation Plan
+
+- Validate callback request kinds and require matching refs/choices before facade invocation.
+- Preserve pending state isolation by `(user_id, transport="web")` and reject stale or cross-user refs.
+- Ensure confirmation acceptance executes side-effect-bearing actions only through the existing facade confirmation path.
+- **Shared Infrastructure Impact Sweep:** pending state, confirmation refs, and disambiguation refs are shared assistant state. Canary rows validate Telegram callback behavior and existing facade pending-state tests.
+- **Change Boundary:** allowed file families are HTTP adapter callback validation, assistant pending-state tests, and HTTP E2E fixtures. Excluded surfaces are domain action implementations and Telegram callback internals.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Disambiguation E2E | e2e-api | SCN-069-A03 | `tests/e2e/assistant/http_disambiguation_test.go` | `TestAssistantHTTPE2E_DisambiguationChoiceResolvesPendingTurn` | `./smackerel.sh test e2e` | Yes |
+| Confirm E2E | e2e-api | SCN-069-A04 | `tests/e2e/assistant/http_confirm_test.go` | `TestAssistantHTTPE2E_ConfirmAcceptExecutesGatedActionOnce` | `./smackerel.sh test e2e` | Yes |
+| Pending-state isolation | integration | SCN-069-A03, SCN-069-A04 | `tests/integration/assistant/http_pending_state_test.go` | `TestAssistantHTTPPendingStateIsScopedByUserAndTransport` | `./smackerel.sh test integration` | Yes |
+| Regression E2E: stale callback | e2e-api | SCN-069-A03, SCN-069-A04 | `tests/e2e/assistant/http_confirm_test.go` | `TestAssistantHTTPE2E_StaleCallbackRefDoesNotExecuteAction` | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done
+
+- [ ] HTTP disambiguation callback resolves pending choices exactly once for the same user and transport.
+- [ ] HTTP confirmation callback executes side-effect-bearing actions only through the existing confirm gate.
+- [ ] Stale and cross-user callback refs are rejected without action execution.
+- [ ] Shared Infrastructure Impact Sweep canary tests pass before broad suite reruns.
+- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A03 and SCN-069-A04.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+
+---
+
+## Scope 4: Reset and Capture Rendering
+
+**Status:** Not Started  
+**Depends On:** Scope 1, Scope 2, Scope 3  
+**Surfaces:** HTTP reset kind, assistant conversation state, capture route invocation, response acknowledgement rendering.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A05 — Reset clears pending state
+  When the user POSTs { kind: "reset" }
+  Then the facade drops any pending confirm/disambig state for (user, transport=web)
+  And the response is the canonical reset acknowledgement
+
+Scenario: SCN-069-A06 — Capture-as-fallback acknowledgement is identical to Telegram
+  Given the facade returns AssistantResponse with CaptureRoute = true
+  When the HTTP adapter renders the response
+  Then the local capture path is invoked exactly once
+  And the HTTP response body includes the same "saved-as-idea" acknowledgement shape Telegram emits
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A05 | Pending state exists for web transport | POST reset turn | Pending state clears and reset acknowledgement is returned | e2e-api | `report.md#scope-4` |
+| SCN-069-A06 | Facade returns capture route | POST unknown/open-ended turn | Capture path invokes once and acknowledgement matches shared response shape | e2e-api | `report.md#scope-4` |
+
+### Implementation Plan
+
+- Map HTTP `kind: reset` to the existing facade reset behavior for `transport="web"`.
+- Invoke capture path exactly once when `AssistantResponse.CaptureRoute` is true.
+- Render capture acknowledgement through shared response fields, not transport-specific scenario text.
+- **Shared Infrastructure Impact Sweep:** reset and capture are cross-transport assistant state surfaces. Canary rows validate Telegram reset/capture behavior and existing capture tests.
+- **Change Boundary:** allowed file families are HTTP adapter reset/capture handling and tests. Excluded surfaces are capture pipeline internals, Telegram rendering internals, and unrelated artifact persistence.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Reset E2E | e2e-api | SCN-069-A05 | `tests/e2e/assistant/http_reset_test.go` | `TestAssistantHTTPE2E_ResetClearsWebPendingState` | `./smackerel.sh test e2e` | Yes |
+| Capture E2E | e2e-api | SCN-069-A06 | `tests/e2e/assistant/http_capture_test.go` | `TestAssistantHTTPE2E_CaptureRouteInvokesCaptureOnceAndAcknowledges` | `./smackerel.sh test e2e` | Yes |
+| Reset integration | integration | SCN-069-A05 | `tests/integration/assistant/http_pending_state_test.go` | `TestAssistantHTTPResetClearsOnlyWebTransportState` | `./smackerel.sh test integration` | Yes |
+| Regression E2E: capture parity | e2e-api | SCN-069-A06 | `tests/e2e/assistant/http_capture_test.go` | `TestAssistantHTTPE2E_CaptureAcknowledgementMatchesTelegramShape` | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done
+
+- [ ] HTTP reset clears pending state for the authenticated user and web transport only.
+- [ ] Capture-as-fallback invokes the existing capture path exactly once.
+- [ ] HTTP response body renders the shared capture acknowledgement shape.
+- [ ] Shared Infrastructure Impact Sweep canary tests pass before broad suite reruns.
+- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A05 and SCN-069-A06.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+
+---
+
+## Scope 5: Transport Parity, Hint Neutrality, and Live E2E Suite
+
+**Status:** Not Started  
+**Depends On:** Scope 1, Scope 2, Scope 3, Scope 4, specs/068-structured-intent-compiler  
+**Surfaces:** adapter registry, transport hint validation, parity guard, assistant live E2E suite, no transport branching policy.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A08 — Telegram and HTTP share one facade instance
+  Given Telegram and HTTP adapters are both registered in the same process
+  When a turn arrives on each transport for the same user
+  Then both invocations hit the same Facade.Handle code path
+  And both record turns in the same assistant_conversations row family (keyed by (UserID, Transport))
+  And no scenario or routing decision branches on transport name
+
+Scenario: SCN-069-A09 — Transport hint reserved but generic
+  Given the request includes transport_hint = "mobile" or "bridge"
+  When the adapter translates the request
+  Then transport_hint is recorded for telemetry only and does NOT alter scenario selection, tool allowlist, or response shape
+  And an unknown transport_hint is rejected by the closed-vocabulary check
+
+Scenario: SCN-069-A11 — E2E suite drives the live stack without Telegram
+  Given the live test stack is up
+  When tests/e2e/assistant/* runs
+  Then weather, retrieval, recipe/list, open-knowledge, disambig, confirm, reset, capture-fallback, and intent-compiler clarify scenarios all pass against the HTTP route
+  And no test in the suite requires a real Telegram account or the Telegram bot to be running
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A08 | Telegram and HTTP adapters registered | Exercise one turn per transport | Same facade seam and row family are observed; scenario code does not inspect transport | integration | `report.md#scope-5` |
+| SCN-069-A09 | Valid and unknown transport hints | POST turn with `mobile`, `bridge`, then invalid hint | Valid hints affect telemetry only; invalid hint rejects before facade | unit + e2e-api | `report.md#scope-5` |
+| SCN-069-A11 | Live test stack is running | Run assistant E2E suite | Suite covers assistant flows over HTTP with no Telegram dependency | e2e-api | `report.md#scope-5` |
+
+### Implementation Plan
+
+- Register HTTP as a peer adapter and assert parity with Telegram at the facade boundary.
+- Validate `transport_hint` against the configured allowlist and record it only as telemetry metadata.
+- Add spec 067 guard coverage preventing scenario/facade/executor branches on `AssistantMessage.Transport`; adapter and audit layers are the only permitted inspectors.
+- Retarget canonical assistant E2E coverage to HTTP while keeping existing Telegram coverage intact.
+- **Consumer Impact Sweep:** consumers include spec 031 live-stack testing docs, spec 043 real-LLM E2E assumptions, spec 061 adapter contract, spec 067 guards, frontend contract consumers, and assistant E2E fixtures.
+- **Change Boundary:** allowed file families are HTTP adapter parity tests, assistant E2E suite, transport hint validation, and docs owned by the relevant docs phase. Excluded surfaces are new frontend UI implementation and capability-layer contract changes.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Transport parity | integration | SCN-069-A08 | `tests/integration/assistant/transport_parity_test.go` | `TestAssistantTransportParity_TelegramAndHTTPUseSameFacadePath` | `./smackerel.sh test integration` | Yes |
+| Hint validation | unit | SCN-069-A09 | `internal/assistant/httpadapter/transport_hint_test.go` | `TestTransportHintIsClosedVocabularyAndTelemetryOnly` | `./smackerel.sh test unit` | No |
+| Transport branch guard | guard | SCN-069-A08 | `tests/integration/policy/transport_branch_guard_test.go` | `TestTransportBranchGuardRejectsScenarioTransportBranching` | `./smackerel.sh test integration` | Yes |
+| Live assistant suite | e2e-api | SCN-069-A11 | `tests/e2e/assistant/http_live_stack_test.go` | `TestAssistantHTTPE2E_LiveStackWithoutTelegramCoversCanonicalFlows` | `./smackerel.sh test e2e` | Yes |
+| Regression E2E: hint neutrality | e2e-api | SCN-069-A09 | `tests/e2e/assistant/http_turn_test.go` | `TestAssistantHTTPE2E_TransportHintDoesNotChangeScenarioOrResponseShape` | `./smackerel.sh test e2e` | Yes |
+| Stress smoke | stress | SCN-069-A11 | `tests/stress/assistant/http_turn_stress_test.go` | `TestAssistantHTTPStress_PerUserRateLimitAndConversationTTLRemainStable` | `./smackerel.sh test stress` | Yes |
+
+### Definition of Done
+
+- [ ] Telegram and HTTP adapters invoke the same facade path and share the same conversation row family keyed by user and transport.
+- [ ] `transport_hint` is closed-vocabulary telemetry only and cannot alter routing, tools, response shape, or side-effect behavior.
+- [ ] Policy guard prevents scenario/facade/executor transport branching outside adapter and audit layers.
+- [ ] Canonical assistant E2E suite runs over HTTP against the live stack without Telegram account or bot dependency.
+- [ ] Consumer Impact Sweep proves specs 031, 043, 061, 067, assistant E2E fixtures, and frontend contract consumers are aligned.
+- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A08, SCN-069-A09, and SCN-069-A11.
+- [ ] Broader E2E regression suite passes.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, and artifact lint pass for this spec.
