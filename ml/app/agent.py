@@ -296,27 +296,31 @@ async def handle_invoke(
             effective_temperature = ollama_options.pop("temperature")
         extra_kwargs.update(ollama_options)
 
+    completion_kwargs: dict[str, Any] = {
+        "model": llm_model,
+        "messages": messages,
+        "tools": tools or None,
+        "temperature": effective_temperature,
+        "max_tokens": token_budget,
+        "api_key": api_key,
+    }
+    # Spec 037 BUG-061-004 follow-up — response_format={"type":"json_object"}
+    # forces native format=json on the final-answer turn so the executor's
+    # JSON parser accepts the output. It is INCOMPATIBLE with tool_use:
+    # ollama_chat /api/chat rejects the combination because format=json
+    # constrains the response to a JSON object and tool_calls require a
+    # specific OpenAI tool-call shape. Send response_format ONLY when no
+    # tools are declared (post-tool synthesis turn, or scenarios that
+    # don't call tools at all). For tool-use turns we trust the model to
+    # emit valid OpenAI tool_calls (which the executor then resolves).
+    if not (tools and len(tools) > 0):
+        completion_kwargs["response_format"] = {"type": "json_object"}
+    completion_kwargs.update(extra_kwargs)
+
     try:
-        response = await completion_fn(
-            model=llm_model,
-            messages=messages,
-            tools=tools or None,
-            temperature=effective_temperature,
-            max_tokens=token_budget,
-            api_key=api_key,
-            # BUG-061-004 follow-up — every Spec 037 scenario declares an
-            # output_schema, so the agent loop's final answer MUST be a JSON
-            # object. Without response_format, models like gemma4:26b emit
-            # ```json fences + chain-of-thought preamble that the executor's
-            # JSON parser rejects ("LLM returned invalid JSON" spam in ml/
-            # logs; assistant_turn → error_cause=provider_unavailable even
-            # when routing correctly selected the scenario). litellm maps
-            # this to Ollama's native format=json mode.
-            response_format={"type": "json_object"},
-            **extra_kwargs,
-        )
+        response = await completion_fn(**completion_kwargs)
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar
-        logger.warning(
+        logger.exception(
             "agent.invoke completion failed",
             extra={"trace_id": trace_id, "error": type(exc).__name__},
         )
