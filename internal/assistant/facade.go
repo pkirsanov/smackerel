@@ -46,6 +46,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/intent"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
+	okagenttool "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
 	"github.com/smackerel/smackerel/internal/assistant/tracing"
 	"go.opentelemetry.io/otel/attribute"
@@ -724,7 +725,21 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		}
 
 		env.Routing = decision
-		result := f.executor.Run(ctx, sc, env)
+		// Spec 064 SCOPE-17 fast-path — bypass the substrate executor
+		// for the open_knowledge scenario when the openknowledge agent
+		// is wired. Rationale: the substrate enforces a per-tool
+		// timeout (open_knowledge.yaml: per_tool_timeout_ms=120s) that
+		// is too tight for slow on-prem LLMs (e.g. gemma3:26b on
+		// home-lab GPU), even though the agent itself has its own
+		// iteration + LLM timeouts. The fast-path invokes the agent
+		// directly with the request context (HTTP WriteTimeout) so the
+		// agent's internal budgets are authoritative.
+		var result *agent.InvocationResult
+		if scenarioID == "open_knowledge" && okagenttool.CurrentAgent() != nil {
+			result = f.runOpenKnowledgeDirect(ctx, sc, env, emittedAt)
+		} else {
+			result = f.executor.Run(ctx, sc, env)
+		}
 		invocation = result
 		assistantmetrics.SkillInvocationsTotal.WithLabelValues(
 			scenarioID,
@@ -820,6 +835,47 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	turnAssistantTurnID = facadeTurnIDFromTime(emittedAt)
 
 	return resp, nil
+}
+
+// runOpenKnowledgeDirect bypasses the substrate executor for the
+// open_knowledge scenario and invokes the openknowledge agent directly.
+// The substrate's per_tool_timeout_ms (120s for open_knowledge_invoke)
+// is too tight for slow on-prem LLMs that need multiple iterations;
+// the openknowledge agent has its own LLM + iteration budgets. The
+// returned *agent.InvocationResult mirrors what the substrate would
+// have produced via direct_output_from_tool, so downstream assembler,
+// provenance gate, and body translation paths work unchanged.
+func (f *Facade) runOpenKnowledgeDirect(ctx context.Context, sc *agent.Scenario, env agent.IntentEnvelope, emittedAt time.Time) *agent.InvocationResult {
+	prompt := strings.TrimSpace(string(env.StructuredContext))
+	// Prefer the raw_query/query field if structured_context is JSON.
+	var sc_payload struct {
+		Query    string `json:"query"`
+		RawQuery string `json:"raw_query"`
+	}
+	if err := json.Unmarshal(env.StructuredContext, &sc_payload); err == nil {
+		if sc_payload.RawQuery != "" {
+			prompt = sc_payload.RawQuery
+		} else if sc_payload.Query != "" {
+			prompt = sc_payload.Query
+		}
+	}
+	turn, runErr := okagenttool.CurrentAgent().Run(ctx, prompt)
+	result := &agent.InvocationResult{
+		ScenarioID:      "open_knowledge",
+		ScenarioVersion: "fast-path",
+		StartedAt:       emittedAt,
+		EndedAt:         time.Now(),
+	}
+	if runErr != nil {
+		result.Outcome = agent.OutcomeProviderError
+		result.OutcomeDetail = map[string]any{"error": runErr.Error()}
+		return result
+	}
+	env_out := okagenttool.MapTurnResult(turn)
+	final, _ := json.Marshal(env_out)
+	result.Outcome = agent.OutcomeOK
+	result.Final = final
+	return result
 }
 
 // buildDisambiguationPrompt selects up to cfg.DisambigMaxChoices
