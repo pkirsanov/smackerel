@@ -105,6 +105,30 @@ type geocodeResp struct {
 }
 
 func (p *OpenMeteoProvider) geocode(ctx context.Context, loc string) (float64, float64, string, error) {
+	// Open-Meteo's geocoding endpoint is finicky about state codes and
+	// commas: "wa-town-A, WA" returns no results while "wa-town-A"
+	// resolves correctly. The LLM commonly emits city+state forms, so
+	// try the full string first, then progressively strip suffix
+	// components after a comma until either we get a hit or run out.
+	attempts := []string{loc}
+	if idx := strings.Index(loc, ","); idx > 0 {
+		head := strings.TrimSpace(loc[:idx])
+		if head != "" && head != loc {
+			attempts = append(attempts, head)
+		}
+	}
+	var lastErr error
+	for _, q := range attempts {
+		lat, lon, label, err := p.geocodeOnce(ctx, q)
+		if err == nil {
+			return lat, lon, label, nil
+		}
+		lastErr = err
+	}
+	return 0, 0, "", lastErr
+}
+
+func (p *OpenMeteoProvider) geocodeOnce(ctx context.Context, loc string) (float64, float64, string, error) {
 	q := url.Values{}
 	q.Set("name", loc)
 	q.Set("count", "1")
