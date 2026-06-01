@@ -522,6 +522,19 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 
 	// Handle commands
 	if msg.IsCommand() {
+		// Spec 066 SCOPE-2 — retired-alias interceptor runs BEFORE
+		// the legacy command dispatch so retired slash commands are
+		// rewritten/short-circuited and never reach the retired
+		// handlers below. Errors fail open (handled=false) so the
+		// legacy path still runs and the user is not stranded.
+		if handled, err := b.interceptLegacyAlias(ctx, msg, updateID); handled {
+			if err != nil {
+				slog.Error("legacy alias interceptor", "error", err)
+			}
+			return
+		} else if err != nil {
+			slog.Error("legacy alias interceptor (fail-open)", "error", err)
+		}
 		switch msg.Command() {
 		case "find":
 			b.handleFind(ctx, msg, msg.CommandArguments())

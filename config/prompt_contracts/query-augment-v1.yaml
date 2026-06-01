@@ -1,4 +1,6 @@
 version: "query-augment-v1"
+principleAlignment:
+  - "Principle 2"
 type: "query-augment"
 description: "Augment a knowledge query with context from concept pages and entity profiles"
 

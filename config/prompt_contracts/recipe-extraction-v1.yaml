@@ -1,4 +1,6 @@
 version: "recipe-extraction-v1"
+principleAlignment:
+  - "Principle 1"
 type: "domain-extraction"
 description: "Extract structured recipe data from recipe content"
 

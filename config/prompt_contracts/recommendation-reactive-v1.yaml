@@ -1,5 +1,8 @@
 id: recommendation_reactive
 version: "recommendation-reactive-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "scenario"
 description: "Reactive place recommendation with provider facts, graph signals, policy, quality, and persistence"
 

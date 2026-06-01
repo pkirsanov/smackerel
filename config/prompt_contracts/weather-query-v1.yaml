@@ -1,5 +1,7 @@
 id: weather_query
 version: "weather-query-v1"
+principleAlignment:
+  - "Principle 1"
 type: "scenario"
 description: "Answer a current/forecast weather question from an external provider with provider+timestamp attribution."
 
