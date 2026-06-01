@@ -1318,6 +1318,8 @@ services:
       memory_mib: 18432 # 18 GiB MoE 26B at q4 + 256K context buffer (operator opt-up; requires raising deploy_resources.ollama.memory first)
     - model: "gemma3:4b"
       memory_mib: 4096 # 4.0 GiB multimodal (text+vision) at q4_K_M; 3.3 GiB download + ~25% context buffer at 4K context. Source: https://ollama.com/library/gemma3 (4b tag). Spec 045 BUG-045-001 default; ceiling is conservative published value; live `ollama ps` verification deferred to operator-host run (dev sandbox has no ollama daemon).
+    - model: "llama3.1:8b"
+      memory_mib: 6144 # 6 GiB at q4_K_M; 4.7 GiB download + context buffer. Tool-capable per Ollama tools support list. Used as substrate fast/default on home-lab — fastest tool-calling Ollama model that emits real OpenAI tool_calls (gemma3:4b errors with "does not support tools"; qwen2.5:7b returns no tool_calls).
     - model: "deepseek-ocr:3b"
       memory_mib: 2560 # 2.5 GiB
     - model: "deepseek-r1:32b"
@@ -1756,17 +1758,22 @@ environments:
     # response_format={"type":"json_object"} on the completion call, NOT
     # by model quality. Fixed in same change-set.
     # Spec 064 BUG-FOLLOWUP — substrate scenarios (weather_query,
-    # recipe_search, retrieval_qa) need a fast model: each scenario
-    # is one route LLM call + one tool call + one final LLM call,
-    # all inside a 120s scenario timeout ceiling. gemma4:26b on GPU
-    # takes 45-55s per tool-use round-trip (long "thinking" preamble),
-    # which blows the budget. gemma3:4b returns in 2-5s and is
-    # accurate enough for scenarios where the tool does the real work
-    # (geocode/forecast for weather, graph lookup for recipe).
-    # Open_knowledge uses its own SST key
-    # (assistant.open_knowledge.llm_model_id) so it stays on 26B.
-    agent_provider_default_model: "gemma3:4b"
-    agent_provider_fast_model: "gemma3:4b"
+    # recipe_search, retrieval_qa) need a fast tool-capable model:
+    # each scenario is one route LLM call + one tool call + one
+    # final LLM call, all inside a 120s scenario timeout ceiling.
+    # gemma4:26b on GPU takes 45-55s per tool-use round-trip (long
+    # "thinking" preamble) — blows the budget.
+    # gemma3:4b is fast but Ollama rejects tools=[] for it
+    # ("does not support tools" 400 from /api/chat).
+    # qwen2.5:7b is fast but does not reliably emit tool_calls.
+    # llama3.1:8b emits tool_calls in ~7s on GPU and is the smallest
+    # known-good tool-capable Ollama model — fits the latency budget
+    # with margin for tool I/O.
+    # Open_knowledge keeps gemma4:26b via its own SST key
+    # (assistant.open_knowledge.llm_model_id) — quality matters there
+    # because the LLM IS the work (multi-turn synthesis).
+    agent_provider_default_model: "llama3.1:8b"
+    agent_provider_fast_model: "llama3.1:8b"
     agent_provider_vision_model: "gemma4:26b"
     # Spec 064 SCOPE-17 — open-knowledge agent uses gemma4:26b on
     # home-lab (evo-x2) for best-quality tool-use + JSON-schema
