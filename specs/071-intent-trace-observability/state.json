@@ -87,6 +87,15 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.test",
+        "phasesExecuted": ["test"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T21:10:00Z",
+        "runEndedAt": "2026-06-01T21:25:00Z",
+        "summary": "Ran unit + filtered integration tests against existing on-disk implementation surfaces for SCN-071-A01..A10. Unit packages internal/assistant/intenttrace (23 tests) and internal/config (TestIntentTraceConfigRequiresEverySSTKey + 8 sub-tests) all PASS. Live-stack integration filtered run via ./smackerel.sh test integration with --go-run '^(TestIntentTrace|TestIntentReplay|TestRefusalCause|TestRefusalCounter|TestAssistantIntents)' executed against smackerel-test compose (postgres+nats+ml+core+ollama+stub-providers+jaeger+searxng all healthy): 14 PASS, 0 FAIL in spec 071 packages (tests/integration/assistant, tests/integration/monitoring). Runner EXIT=1 due to pre-existing unrelated build failure in tests/integration/telegram/legacy_alias_test.go (undefined telegram.NewTestBotWithReplyRecorder and telegram.InterceptLegacyAliasForTest) outside this spec's change boundary. Marked first DoD item on Scopes 1, 2, and 4 as [x] with current-session evidence references; marked Canary DoD on Scope 2 as [x]; left Scope 3 first DoD unchecked because the planned integration row tests/integration/policy/intent_bypass_guard_test.go (SCN-071-A08) is not present on disk. Left all test-row and Build-Quality-Gate DoD items unchecked because (a) planned e2e files intent_trace_contract_e2e_test.go, intent_trace_privacy_e2e_test.go, and web/pwa/tests/assistant_intents_dashboard.spec.ts do not exist on disk, (b) the on-disk e2e files (intent_replay_test.go, intent_refusal_join_e2e_test.go, intent_bypass_guard_e2e_test.go) were not executed in this session, and (c) ./smackerel.sh format --check, ./smackerel.sh lint, and artifact-lint were not executed. report.md updated with Code Diff Evidence and Test Evidence sections including raw terminal output and Claim Source tags. certification.status remains in_progress; cannot certify until missing planned tests are added, on-disk e2e runs, and quality gates execute."
       }
     ]
   }

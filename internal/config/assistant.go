@@ -118,6 +118,30 @@ type AssistantConfig struct {
 	TelegramWebhookSecret    string
 	TelegramWebhookPath      string
 
+	// Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport SST.
+	// All fields originate in assistant.transports.whatsapp.* in
+	// smackerel.yaml. The *Ref fields name the env vars that hold
+	// the actual secrets (Infisical-style indirection); the non-Ref
+	// twin holds the resolved value populated by validateAssistantConfig
+	// when WhatsappEnabled=true. When WhatsappEnabled=false the *Ref
+	// fields may be empty and credential resolution is skipped.
+	WhatsappEnabled                   bool
+	WhatsappWebhookPath               string
+	WhatsappPhoneNumberID             string
+	WhatsappBusinessAccountID         string
+	WhatsappWebhookVerifyTokenRef     string
+	WhatsappWebhookVerifyToken        string
+	WhatsappAppSecretRef              string
+	WhatsappAppSecret                 string
+	WhatsappAccessTokenRef            string
+	WhatsappAccessToken               string
+	WhatsappIdentityHashKeyRef        string
+	WhatsappIdentityHashKey           string
+	WhatsappAPIBaseURL                string
+	WhatsappAPIVersion                string
+	WhatsappRateLimitPerUserPerMinute int
+	WhatsappMaxTextChars              int
+
 	// Spec 061 SCOPE-10 — offline evaluation harness acceptance gates.
 	// Read from ASSISTANT_EVAL_* env vars. Consumed by the harness in
 	// tests/eval/assistant/harness.go to fail the acceptance suite when
@@ -154,6 +178,12 @@ type AssistantConfig struct {
 	// All keys are REQUIRED at the generator boundary (Gate G028 /
 	// smackerel-no-defaults); missing values fail loud at startup.
 	IntentCompiler IntentCompilerConfig
+
+	// Spec 071 SCOPE-01 — IntentTrace observability SST.
+	IntentTrace IntentTraceConfig
+
+	// Spec 065 SCOPE-1 — generic micro-tools SST.
+	Tools AssistantToolsConfig
 }
 
 // AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK
@@ -315,6 +345,41 @@ func loadAssistantConfig(cfg *Config) error {
 	permissiveString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_SECRET_REF", &cfg.Assistant.TelegramWebhookSecretRef)
 	mustString("ASSISTANT_TRANSPORTS_TELEGRAM_WEBHOOK_PATH", &cfg.Assistant.TelegramWebhookPath)
 
+	// Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport SST.
+	// All WhatsApp keys are permissively-loaded here so that callers
+	// which build assistant config without the transport (disabled or
+	// unset) do not fail. Fail-loud enforcement of required values
+	// when ASSISTANT_TRANSPORTS_WHATSAPP_ENABLED=true happens in
+	// validateAssistantConfig (matches Telegram webhook_secret_ref
+	// pattern and SCN-072-A06 contract: "enabled with missing access
+	// token fails loud" — disabled state remains permissive).
+	if v, ok := os.LookupEnv("ASSISTANT_TRANSPORTS_WHATSAPP_ENABLED"); ok {
+		cfg.Assistant.WhatsappEnabled = v == "true"
+	}
+	cfg.Assistant.WhatsappWebhookPath = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_PATH")
+	cfg.Assistant.WhatsappPhoneNumberID = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_PHONE_NUMBER_ID")
+	cfg.Assistant.WhatsappBusinessAccountID = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_BUSINESS_ACCOUNT_ID")
+	cfg.Assistant.WhatsappWebhookVerifyTokenRef = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_VERIFY_TOKEN_REF")
+	cfg.Assistant.WhatsappAppSecretRef = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_APP_SECRET_REF")
+	cfg.Assistant.WhatsappAccessTokenRef = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_ACCESS_TOKEN_REF")
+	cfg.Assistant.WhatsappIdentityHashKeyRef = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_IDENTITY_HASH_KEY_REF")
+	cfg.Assistant.WhatsappAPIBaseURL = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_API_BASE_URL")
+	cfg.Assistant.WhatsappAPIVersion = os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_API_VERSION")
+	if v := os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Assistant.WhatsappRateLimitPerUserPerMinute = n
+		} else {
+			errs = append(errs, fmt.Sprintf("ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE (must be an integer, got %q)", v))
+		}
+	}
+	if v := os.Getenv("ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Assistant.WhatsappMaxTextChars = n
+		} else {
+			errs = append(errs, fmt.Sprintf("ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS (must be an integer, got %q)", v))
+		}
+	}
+
 	// Spec 061 SCOPE-10 — offline evaluation harness acceptance gates.
 	mustFloat("ASSISTANT_EVAL_ROUTING_ACCURACY_MIN", &cfg.Assistant.Eval.RoutingAccuracyMin)
 	mustFloat("ASSISTANT_EVAL_CAPTURE_FALLBACK_MIN", &cfg.Assistant.Eval.CaptureFallbackMin)
@@ -335,6 +400,12 @@ func loadAssistantConfig(cfg *Config) error {
 
 	// Spec 068 SCOPE-1 — structured intent compiler SST (fail-loud).
 	loadIntentCompilerConfig(cfg, &errs)
+
+	// Spec 065 SCOPE-1 — generic micro-tools SST (fail-loud). Every
+	// ASSISTANT_TOOLS_* key is REQUIRED; loadAssistantToolsConfig
+	// appends missing/invalid keys into the shared errs slice so the
+	// aggregate error names every offender at once.
+	loadAssistantToolsConfig(cfg, &errs)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
@@ -488,6 +559,58 @@ func (c *Config) validateAssistantConfig() error {
 		}
 		if c.Assistant.EmbedTimeout <= 0 {
 			return fmt.Errorf("ASSISTANT_ROUTING_EMBED_TIMEOUT_MS must be > 0; got %s (BUG-061-004 D3)", c.Assistant.EmbedTimeout)
+		}
+	}
+
+	// Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport.
+	if c.Assistant.WhatsappWebhookPath != "" && !strings.HasPrefix(c.Assistant.WhatsappWebhookPath, "/") {
+		return fmt.Errorf("ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_PATH must start with \"/\"; got %q (spec 072 SCOPE-1)", c.Assistant.WhatsappWebhookPath)
+	}
+	if c.Assistant.WhatsappEnabled {
+		requiredStrings := []struct {
+			envName string
+			val     string
+		}{
+			{"ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_PATH", c.Assistant.WhatsappWebhookPath},
+			{"ASSISTANT_TRANSPORTS_WHATSAPP_PHONE_NUMBER_ID", c.Assistant.WhatsappPhoneNumberID},
+			{"ASSISTANT_TRANSPORTS_WHATSAPP_BUSINESS_ACCOUNT_ID", c.Assistant.WhatsappBusinessAccountID},
+			{"ASSISTANT_TRANSPORTS_WHATSAPP_API_BASE_URL", c.Assistant.WhatsappAPIBaseURL},
+			{"ASSISTANT_TRANSPORTS_WHATSAPP_API_VERSION", c.Assistant.WhatsappAPIVersion},
+		}
+		for _, r := range requiredStrings {
+			if r.val == "" {
+				return fmt.Errorf("%s must be set when whatsapp.enabled=true (spec 072 SCOPE-1)", r.envName)
+			}
+		}
+		if c.Assistant.WhatsappRateLimitPerUserPerMinute < 1 {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE must be >= 1 when whatsapp.enabled=true; got %d (spec 072 SCOPE-1)", c.Assistant.WhatsappRateLimitPerUserPerMinute)
+		}
+		if c.Assistant.WhatsappMaxTextChars < 1 {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS must be >= 1 when whatsapp.enabled=true; got %d (spec 072 SCOPE-1)", c.Assistant.WhatsappMaxTextChars)
+		}
+		if !strings.HasPrefix(c.Assistant.WhatsappAPIBaseURL, "https://") {
+			return fmt.Errorf("ASSISTANT_TRANSPORTS_WHATSAPP_API_BASE_URL must be HTTPS when whatsapp.enabled=true; got %q (spec 072 SCOPE-1)", c.Assistant.WhatsappAPIBaseURL)
+		}
+		whatsappRefs := []struct {
+			sstKey  string
+			envName string
+			ref     string
+			dst     *string
+		}{
+			{"access_token_ref", "ASSISTANT_TRANSPORTS_WHATSAPP_ACCESS_TOKEN_REF", c.Assistant.WhatsappAccessTokenRef, &c.Assistant.WhatsappAccessToken},
+			{"app_secret_ref", "ASSISTANT_TRANSPORTS_WHATSAPP_APP_SECRET_REF", c.Assistant.WhatsappAppSecretRef, &c.Assistant.WhatsappAppSecret},
+			{"webhook_verify_token_ref", "ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_VERIFY_TOKEN_REF", c.Assistant.WhatsappWebhookVerifyTokenRef, &c.Assistant.WhatsappWebhookVerifyToken},
+			{"identity_hash_key_ref", "ASSISTANT_TRANSPORTS_WHATSAPP_IDENTITY_HASH_KEY_REF", c.Assistant.WhatsappIdentityHashKeyRef, &c.Assistant.WhatsappIdentityHashKey},
+		}
+		for _, r := range whatsappRefs {
+			if r.ref == "" {
+				return fmt.Errorf("%s must be set when whatsapp.enabled=true (spec 072 SCOPE-1)", r.envName)
+			}
+			resolved := os.Getenv(r.ref)
+			if resolved == "" {
+				return fmt.Errorf("FATAL assistant config invalid: assistant.transports.whatsapp.%s: empty resolved secret (env var %q is unset or empty; spec 072 SCOPE-1)", r.sstKey, r.ref)
+			}
+			*r.dst = resolved
 		}
 	}
 	return nil

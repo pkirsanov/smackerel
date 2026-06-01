@@ -1,0 +1,23 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-disambiguation-001",
+  "status": "awaiting_disambiguation",
+  "body": "Which Palm Springs did you mean?",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": {
+    "disambiguation_ref": "disambig-palm-springs-001",
+    "timeout_seconds": 60,
+    "choices": [
+      {"number": 1, "id": "ps-ca", "label": "Palm Springs, CA", "shortcut": ""},
+      {"number": 2, "id": "ps-fl", "label": "Palm Springs, FL", "shortcut": ""}
+    ]
+  },
+  "error_cause": "",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-disambig-001", "agent_trace_id": "", "request_id": "req-disambig-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

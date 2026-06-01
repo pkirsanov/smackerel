@@ -1,0 +1,130 @@
+{
+  "__comment_spec": "Spec 071 SCOPE-04 — Assistant Intents dashboard inventory per design.md §'Assistant Intents Dashboard'. Seven panels render the closed-vocabulary metrics declared in internal/assistant/intenttrace/export.go (smackerel_assistant_intent_traces_total{transport,sampled,action_class,final_response_status}) joined with the spec 064 refusal counter (openknowledge_refusal_total{cause}). Cardinality is bound on every series. Importable into an existing Grafana instance via the Grafana HTTP API (POST /api/dashboards/db) or via Grafana's filesystem provider. Not wired into deploy/compose.deploy.yml in this repo because Grafana is not a project-owned runtime; the deploy adapter overlay binds it. Spec 071 SCN-071-A06 and SCN-071-A07 validate this JSON via tests/integration/monitoring/assistant_intents_dashboard_test.go.",
+  "title": "Smackerel — Assistant Intents (spec 071)",
+  "uid": "smackerel-assistant-intents",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["smackerel", "assistant", "intent-trace", "spec-071"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "transport",
+        "label": "Transport",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "$datasource" },
+        "query": "label_values(smackerel_assistant_intent_traces_total, transport)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Total turns (full + sampled-out)",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Total turns'. Sum of persisted full traces and sampled-out envelopes — sampling MUST NOT under-count turns. A flat line at zero while the assistant is in use means the recorder fan-out is broken; the panel name calls out the recorder as the source rather than rendering zeroes as success.",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (sampled) (rate(smackerel_assistant_intent_traces_total{transport=~\"$transport\"}[5m]))",
+          "legendFormat": "sampled={{sampled}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Top action classes",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Top action classes'. Topk distribution of action_class across the selected window. Sudden drop in known classes hints at compiler regression; sudden new class hints at vocabulary drift.",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (action_class) (rate(smackerel_assistant_intent_traces_total{transport=~\"$transport\", sampled=\"true\"}[5m])))",
+          "legendFormat": "{{action_class}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Clarification rate",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Clarification rate'. Rate of full traces whose final_response_status = 'clarify'. Sustained climb indicates compiler ambiguity that the user keeps re-answering — a P2 (Vague In, Precise Out) regression signal.",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(smackerel_assistant_intent_traces_total{transport=~\"$transport\", sampled=\"true\", final_response_status=\"clarify\"}[5m]))",
+          "legendFormat": "clarify"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Refusal causes (join with openknowledge counter)",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Refusal causes'. SCN-071-A07 join: the IntentTrace refusal_cause vocabulary is the same closed set as openknowledge_refusal_total{cause}. Two series side by side surface a join mismatch immediately — drift between the two would split the line into mutually-exclusive non-zero subsets.",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "trace",
+          "expr": "sum by (final_response_status) (rate(smackerel_assistant_intent_traces_total{transport=~\"$transport\", sampled=\"true\", final_response_status=\"refused\"}[5m]))",
+          "legendFormat": "intent_trace:{{final_response_status}}"
+        },
+        {
+          "refId": "counter",
+          "expr": "sum by (cause) (rate(openknowledge_refusal_total[5m]))",
+          "legendFormat": "openknowledge:{{cause}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Compiler errors",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Compiler errors'. Rate of spec 068 compiler failure causes (cause label is a closed vocabulary). A new cause spike usually correlates with a clarify rate spike (panel 3).",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (cause) (rate(intent_compiler_errors_total[5m]))",
+          "legendFormat": "{{cause}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Capture-as-fallback rate",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Capture-as-fallback rate'. Rate of full traces whose final_response_status = 'capture_fallback'. Used by spec 074 to verify the inviolable Capture-as-Fallback policy is exercised on every refused/unavailable turn.",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(smackerel_assistant_intent_traces_total{transport=~\"$transport\", sampled=\"true\", final_response_status=\"capture_fallback\"}[5m]))",
+          "legendFormat": "capture_fallback"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Recent trace samples (retention sweep)",
+      "description": "spec 071 design §'Assistant Intents Dashboard' panel 'Recent trace samples'. Rate of rows deleted by the IntentTrace retention sweep. SCN-071-A09 invariant. A sudden zero while traces keep being emitted (panel 1) means the sweep is wedged and the retention TTL is not being enforced.",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(smackerel_assistant_intent_trace_retention_sweep_rows_total[1h]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    }
+  ]
+}

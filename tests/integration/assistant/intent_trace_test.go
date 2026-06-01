@@ -188,16 +188,16 @@ func TestIntentTraceRecordsCompileValidateRouteToolResponseSequence(t *testing.T
 // so the trace inspector (and the bypass-guard fixtures) can tell
 // them apart:
 //
-//   1. Compiled success with action_class=clarify  → OutcomeCompiled
-//      AND Compiled.ActionClass == ActionClarify.
-//   2. Compiler failure (provider error)           → OutcomeProviderError
-//      AND non-empty ErrorCause; no Compiled set.
-//   3. Operational-command bypass                  → OutcomeBypass
-//      AND Bypass.Label == BypassTraceLabel.
-//   4. (Implicit baseline) compiled actionable     → OutcomeCompiled
-//      AND ActionClass != ActionClarify; covered by the read-flow
-//      test above; we include a single positive assert here as the
-//      adversarial baseline so the four states cannot collapse.
+//  1. Compiled success with action_class=clarify  → OutcomeCompiled
+//     AND Compiled.ActionClass == ActionClarify.
+//  2. Compiler failure (provider error)           → OutcomeProviderError
+//     AND non-empty ErrorCause; no Compiled set.
+//  3. Operational-command bypass                  → OutcomeBypass
+//     AND Bypass.Label == BypassTraceLabel.
+//  4. (Implicit baseline) compiled actionable     → OutcomeCompiled
+//     AND ActionClass != ActionClarify; covered by the read-flow
+//     test above; we include a single positive assert here as the
+//     adversarial baseline so the four states cannot collapse.
 func TestIntentTraceDistinguishesClarifyFailureAndOperationalBypass(t *testing.T) {
 	// 1. Clarify.
 	clarifyTransport := &stubTransport{resolve: func(_ string) string { return springfieldClarifyIntentJSON(t) }}

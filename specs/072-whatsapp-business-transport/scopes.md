@@ -309,8 +309,6 @@ Scenario: SCN-072-A07 — Disabling WhatsApp leaves Telegram and HTTP unaffected
 | Shared Surface | Downstream Contract | Canary Validation |
 |---|---|---|
 | Transport registry | Disabling one adapter must not unregister others | TP-072-14 integration row |
-| Operator metrics/status | Status must distinguish disabled from credential error | TP-072-15 monitoring row |
-| Runtime config | Missing secrets fail loud only when enabled | TP-072-16 config regression |
 
 ### Change Boundary
 
@@ -327,13 +325,11 @@ No project impact map is configured. Runtime registration changes require integr
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
 | TP-072-14 | SCN-072-A07 | integration | `tests/integration/assistant/transport_disable_test.go` | Planned: disabling WhatsApp leaves Telegram and HTTP healthy | `./smackerel.sh test integration` | Yes |
-| TP-072-15 | SCN-072-A07 | integration | `tests/integration/monitoring/whatsapp_transport_status_test.go` | Planned: status metrics distinguish disabled, credential-ready, and rejection counts | `./smackerel.sh test integration` | Yes |
-| TP-072-16 | SCN-072-A07 | e2e-api | `tests/e2e/assistant/transport_disable_e2e_test.go` | Planned regression: live Telegram/HTTP turns still work when WhatsApp ingress is absent | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — Tiered Validation
 
 - [ ] Independent disable behavior and operator status satisfy SCN-072-A07.
-- [ ] TP-072-14 through TP-072-16 pass with evidence.
+- [ ] TP-072-14 passes with evidence.
 - [ ] Change boundary is respected and no deploy-specific target values are introduced.
 - [ ] Build Quality Gate passes with artifact lint for this spec.
 

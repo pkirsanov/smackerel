@@ -43,12 +43,29 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "planning",
-    "currentScope": null,
-    "runStartedAt": "2026-05-31T20:30:46Z",
-    "lastUpdatedAt": "2026-05-31T20:30:46Z",
-    "completedPhaseClaims": [],
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-075-06.2b",
+    "runStartedAt": "2026-06-01T00:00:00Z",
+    "lastUpdatedAt": "2026-06-01T23:55:00Z",
+    "completedPhaseClaims": [
+      {
+        "scopeId": "SCOPE-075-06.2",
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-01T21:15:00Z",
+        "evidenceRef": "specs/075-legacy-retirement-telemetry/scopes.md#scope-6-facade-policy-dispatch-rollout-and-telegram-coexistence",
+        "summary": "Construction wiring: cmd/core/wiring_assistant_facade.go now builds the spec 075 Policy via NewMultiResidualTelemetry(prom, sql) and threads it through FacadeConfig.Policy. TP-075-20 (8 sub-tests in cmd/core/wiring_assistant_facade_test.go) passes; cmd/core package regression green."
+      },
+      {
+        "scopeId": "SCOPE-075-06.2b",
+        "phase": "implement",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-01T23:55:00Z",
+        "evidenceRef": "specs/075-legacy-retirement-telemetry/scopes.md#definition-of-done--tiered-validation",
+        "summary": "Wire-schema notice propagation. Added optional `notice` property + `NoticePayload` sub-def to internal/assistant/schema/assistant_turn_v1.json (schema_version stays 'v1', additive v1-compatible); added TurnResponse.Notice *NoticePayload and the NoticePayload struct to internal/assistant/schema/types.go; relaxed schema golden helpers to allow properties \u2287 required with omitempty enforcement; added notice-present golden fixtures under internal/assistant/schema/testdata/ and internal/assistant/httpadapter/testdata/; extended webcodegen and the Dart codegen to iterate optional properties and emit optional TS/Dart bindings; wired RenderJSON to copy AssistantResponse.LegacyRetirementNotice -> TurnResponse.Notice nil-safely; regenerated web/pwa/generated/* and clients/mobile/assistant/lib/core/generated/assistant_turn_v1.dart. TP-075-25 (schema + httpadapter golden round-trip notice-present/absent), TP-075-26 (Go PWA drift test), TP-075-27 (flutter test codegen drift) all PASS. Assistant + PWA Go regression sweep green. design.md v1-compat decision record is owned by bubbles.design and is NOT updated by this agent."
+      }
+    ],
     "completedScopes": [],
     "executionHistory": [
       {
@@ -86,6 +103,42 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T00:00:00Z",
+        "runEndedAt": "2026-06-01T00:00:00Z",
+        "summary": "Decomposed the previously route_required 'SCOPE-075-06 facade rollout' work item into Scope 6 with five sequential sub-scopes (6.1 facade Policy dispatch contract + 5-branch unit test, 6.2 cmd/core/wiring_assistant_facade.go construction wiring, 6.3 PWA renderer + live Playwright TP-075-09, 6.4 WhatsApp+Mobile renderers + Telegram interceptor short-circuit, 6.5 live-stack execution of TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17). Added scenarios SCN-075-A12 (facade five-branch dispatch) and SCN-075-A13 (Telegram interceptor short-circuit). Added tests TP-075-19, TP-075-20, TP-075-21, TP-075-22, TP-075-23, TP-075-24 and re-targeted TP-075-09 execution to SCOPE-075-06.3. Recorded a Telegram Coexistence Decision Record recommending option 2 (interceptor short-circuits via assistantFacadeUpstream context key when facade is upstream); decision MUST be ratified by bubbles.design in design.md before Scope 6.4 implementation begins. Status remains in_progress; planMaturityOnly stays true; no implementation, test, or certification evidence produced."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T21:10:00Z",
+        "runEndedAt": "2026-06-01T21:15:00Z",
+        "summary": "SCOPE-075-06.2: facade construction wiring. cmd/core/wiring_assistant_facade.go now constructs the spec 075 legacy-retirement Policy via NewMultiResidualTelemetry(prom, sql) (catalog from SST notice/unknown copy, SQL notice ledger, SST window-state resolver with static not-paused reader, HMAC user bucket hasher, NewPrometheusResidualTelemetry + NewSQLResidualStore fanned out via NewMultiResidualTelemetry) and threads the Policy through FacadeConfig.Policy before NewFacade. Added cmd/core/wiring_assistant_facade_test.go with TP-075-20: 8 sub-tests covering the happy path and every fail-loud branch (nil config, nil pool, nil clock, empty WindowID, empty HMAC key, empty notice copy, invalid window state). go test ./cmd/core/ passes (0.761s). DoD 6.2 checked. No transport or facade code modified."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T23:30:00Z",
+        "runEndedAt": "2026-06-01T23:30:00Z",
+        "summary": "Rework planning: inserted SCOPE-075-06.2b 'Wire-Schema Notice Propagation' between 6.2 and 6.3. Covers internal/assistant/schema/assistant_turn_v1.json + NoticePayload sub-def, internal/assistant/schema/types.go TurnResponse.Notice, golden fixture internal/assistant/schema/testdata/response_v1.json (notice-present + notice-absent), internal/assistant/httpadapter/{schema.go,adapter.go RenderJSON,middleware.go (if needed)}, web/pwa/generated/* regen via cmd/web-assistant-codegen, and Flutter shared-core regen under clients/mobile/assistant/lib/shared_core/generated/*. Field is OPTIONAL/additive so v1-compatible \u2014 schema_version stays 'v1', no bump needed; decision documented in scopes.md and routed to bubbles.design to record under design.md. TP-075-09 re-targeted from Playwright web/pwa/tests/legacy_retirement_notice.spec.ts to a Go e2e at tests/e2e/assistant/legacy_retirement_notice_test.go (pattern: tests/e2e/photos_capability_test.go, the Go counterpart to web/pwa/tests/photos_capability_banner.spec.ts) executed via ./smackerel.sh test e2e. Added scenario SCN-075-A14 and tests TP-075-25 (golden round-trip), TP-075-26 (PWA codegen drift), TP-075-27 (Flutter codegen drift). Sub-scope inventory + test-plan + scenario-manifest + uservalidation + currentScope updated. No source/tests/docs touched. Returning route_required to dispatch bubbles.design (v1-compat decision record in design.md) and bubbles.implement (SCOPE-075-06.2b execution)."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T23:30:00Z",
+        "runEndedAt": "2026-06-01T23:55:00Z",
+        "summary": "SCOPE-075-06.2b implementation. Added optional top-level `notice` property + `NoticePayload` sub-def to internal/assistant/schema/assistant_turn_v1.json (additive, v1-compatible, schema_version unchanged). Added TurnResponse.Notice + NoticePayload to internal/assistant/schema/types.go (omitempty). Relaxed internal/assistant/schema/golden_contract_test.go helpers so `properties \u2287 required` is allowed with `,omitempty` enforced on Go optionals; added the NoticePayload pinning subtest and a notice-present round-trip subtest; adversarial drift checks preserved. Added new golden fixtures internal/assistant/schema/testdata/response_v1_notice.json and internal/assistant/httpadapter/testdata/response_v1_notice.json. Added TurnResponse.Notice *NoticeJSON (omitempty) + NoticeJSON to internal/assistant/httpadapter/schema.go. Wired internal/assistant/httpadapter/adapter.go::RenderJSON to copy AssistantResponse.LegacyRetirementNotice -> TurnResponse.Notice nil-safely. Extended internal/assistant/schema/webcodegen/generator.go (added NoticePayload to definitionOrder; optional-field iteration; JS validator wraps optional checks in hasOwnProperty && !== null; DTS emits `field?: Type`). Extended clients/mobile/assistant/lib/src/codegen.dart with the same optional-field iteration and a containsKey && != null wrapper. Regenerated web/pwa/generated/assistant_turn_v1.{js,d.ts} via `go run ./cmd/web-assistant-codegen` and clients/mobile/assistant/lib/core/generated/assistant_turn_v1.dart via `dart run tool/gen_dart_models.dart`. TP-075-25 (schema + httpadapter golden tests), TP-075-26 (web/pwa/tests drift test), TP-075-27 (flutter test codegen_drift_test.dart) all PASS. Regression sweep `go test ./internal/assistant/... ./web/pwa/tests/` clean. Containment preserved: no renderer code, no schema_version change, no other TurnResponse field touched. design.md v1-compat decision record is foreign-owned (bubbles.design) and is NOT updated by this agent. Routing bubbles.design follow-up for the design.md record."
       }
     ]
   }

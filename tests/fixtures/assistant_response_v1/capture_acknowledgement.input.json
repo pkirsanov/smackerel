@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-capture-ack-001",
+  "status": "captured",
+  "body": "Saved to your capture inbox for later processing.",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": null,
+  "error_cause": "",
+  "capture_route": true,
+  "trace": {"assistant_turn_id": "turn-capture-ack-001", "agent_trace_id": "", "request_id": "req-capture-ack-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

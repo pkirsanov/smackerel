@@ -15,10 +15,10 @@ import (
 
 // fixture mirrors the shared JSON used by the Python parity test.
 type fixture struct {
-	Request           ChatRequest     `json:"request"`
-	ResponseEndTurn   json.RawMessage `json:"response_end_turn"`
-	ResponseToolUse   json.RawMessage `json:"response_tool_use"`
-	Comment           string          `json:"_comment"`
+	Request         ChatRequest     `json:"request"`
+	ResponseEndTurn json.RawMessage `json:"response_end_turn"`
+	ResponseToolUse json.RawMessage `json:"response_tool_use"`
+	Comment         string          `json:"_comment"`
 }
 
 func loadFixture(t *testing.T) fixture {

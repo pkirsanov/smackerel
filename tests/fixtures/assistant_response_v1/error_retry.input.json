@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "transport": "web",
+  "transport_message_id": "fixture-error-retry-001",
+  "status": "error",
+  "body": "Something went wrong reaching the weather service. You can retry.",
+  "sources": [],
+  "sources_overflow_count": 0,
+  "confirm_card": null,
+  "disambiguation_prompt": null,
+  "error_cause": "upstream_timeout",
+  "capture_route": false,
+  "trace": {"assistant_turn_id": "turn-error-retry-001", "agent_trace_id": "", "request_id": "req-error-retry-001"},
+  "facade_invoked": true,
+  "emitted_at": "2026-06-01T00:00:00Z"
+}

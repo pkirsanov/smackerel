@@ -305,6 +305,14 @@ type Config struct {
 	// validateAssistantConfig() from Validate().
 	Assistant AssistantConfig
 
+	// Spec 074 SCOPE-1 — capture-as-fallback policy SST. Populated by
+	// LoadCaptureFallback() at the tail of Load().
+	CaptureFallback CaptureFallbackConfig
+
+	// Spec 075 — legacy retirement window SST. Populated by
+	// LoadLegacyRetirement() at the tail of Load().
+	LegacyRetirement LegacyRetirementConfig
+
 	// Spec 045 FR-045-001 / FR-045-002 — deploy resource envelope and ML
 	// model memory profile. SST-compliant; populated from
 	// {SERVICE}_CPU_LIMIT, {SERVICE}_MEMORY_LIMIT, and
@@ -946,6 +954,18 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Notification = notificationCfg
+
+	captureFallbackCfg, err := LoadCaptureFallback()
+	if err != nil {
+		return nil, err
+	}
+	cfg.CaptureFallback = captureFallbackCfg
+
+	legacyRetirementCfg, err := LoadLegacyRetirement()
+	if err != nil {
+		return nil, err
+	}
+	cfg.LegacyRetirement = legacyRetirementCfg
 
 	// Parse numeric config after string validation passes
 	dbMaxConnsStr := os.Getenv("DB_MAX_CONNS")
