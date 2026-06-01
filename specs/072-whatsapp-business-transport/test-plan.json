@@ -24,9 +24,7 @@
       {"id":"TP-072-13","scenarioId":"SCN-072-A10","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/whatsapp_retry_dedup_e2e_test.go","plannedTitle":"Planned regression: duplicate webhook does not duplicate scenario or capture","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
     ]},
     {"scopeId":"SCOPE-072-04","scopeName":"Independent Disable And Operator Status","tests":[
-      {"id":"TP-072-14","scenarioId":"SCN-072-A07","type":"integration","category":"integration","file":"tests/integration/assistant/transport_disable_test.go","plannedTitle":"Planned: disabling WhatsApp leaves Telegram and HTTP healthy","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
-      {"id":"TP-072-15","scenarioId":"SCN-072-A07","type":"integration","category":"integration","file":"tests/integration/monitoring/whatsapp_transport_status_test.go","plannedTitle":"Planned: status metrics distinguish disabled, credential-ready, and rejection counts","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
-      {"id":"TP-072-16","scenarioId":"SCN-072-A07","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/transport_disable_e2e_test.go","plannedTitle":"Planned regression: live Telegram/HTTP turns still work when WhatsApp ingress is absent","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+      {"id":"TP-072-14","scenarioId":"SCN-072-A07","type":"integration","category":"integration","file":"tests/integration/assistant/transport_disable_test.go","plannedTitle":"Planned: disabling WhatsApp leaves Telegram and HTTP healthy","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"}
     ]}
   ]
 }

@@ -994,6 +994,49 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS", "8")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES", "16384")
 	t.Setenv("ASSISTANT_INTENT_COMPILER_RETRY_BUDGET", "1")
+
+	// Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport SST.
+	// Defaults mirror config/smackerel.yaml (enabled=false). All keys
+	// are permissively loaded when disabled; dedicated WhatsApp tests
+	// override individual values to exercise fail-loud paths.
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_ENABLED", "false")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_PATH", "/v1/whatsapp/webhook")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_PHONE_NUMBER_ID", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_BUSINESS_ACCOUNT_ID", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_VERIFY_TOKEN_REF", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_APP_SECRET_REF", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_ACCESS_TOKEN_REF", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_IDENTITY_HASH_KEY_REF", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_API_BASE_URL", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_API_VERSION", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE", "30")
+	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS", "4096")
+
+	// Spec 074 SCOPE-1 — capture-as-fallback policy SST. Inviolable
+	// foundation: values must always be present (no enable flag).
+	// Defaults mirror config/smackerel.yaml.
+	t.Setenv("CAPTURE_AS_FALLBACK_DEDUP_WINDOW", "24h")
+	t.Setenv("CAPTURE_AS_FALLBACK_CLARIFY_ABANDON_TIMEOUT", "10m")
+	t.Setenv("CAPTURE_AS_FALLBACK_NORMALIZATION_POLICY", NormalizationPolicyV1)
+	t.Setenv("CAPTURE_AS_FALLBACK_DEDUP_HASH_KEY", "test-dedup-hash-key")
+	t.Setenv("CAPTURE_AS_FALLBACK_RETENTION_AUDIT_DAYS", "90")
+
+	// Spec 075 — legacy retirement telemetry SST. Defaults mirror
+	// config/smackerel.yaml so unrelated tests can Load() cleanly;
+	// dedicated TestLegacyRetirement_* cases exercise per-field
+	// fail-loud paths.
+	t.Setenv("LEGACY_RETIREMENT_WINDOW_ID", "test-window")
+	t.Setenv("LEGACY_RETIREMENT_WINDOW_STATE", "open")
+	t.Setenv("LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_PERCENT_ACTIVE_USERS", "5.0")
+	t.Setenv("LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAYS_CONSECUTIVE", "3")
+	t.Setenv("LEGACY_RETIREMENT_POST_WINDOW_OBSERVATION_DAYS", "30")
+	t.Setenv("LEGACY_RETIREMENT_ACTIVE_USER_WINDOW_DAYS", "7")
+	t.Setenv("LEGACY_RETIREMENT_USER_BUCKET_HMAC_KEY", "test-hmac-key")
+	t.Setenv("LEGACY_RETIREMENT_NOTICE_COPY_PER_COMMAND", `{"/weather":"plain English now","/remind":"plain English now"}`)
+	t.Setenv("LEGACY_RETIREMENT_POST_WINDOW_UNKNOWN_RESPONSE_COPY", `{"/weather":"plain English now","/remind":"plain English now"}`)
+
+	// Spec 065 — assistant micro-tools SST.
+	setAllAssistantToolsKeys(t)
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {

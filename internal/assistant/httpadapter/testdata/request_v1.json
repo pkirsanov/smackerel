@@ -1,0 +1,14 @@
+{
+  "schema_version": "v1",
+  "transport_message_id": "test-turn-001",
+  "kind": "text",
+  "transport_hint": "web",
+  "text": "weather in palm springs ca tomorrow",
+  "confirm_ref": "",
+  "confirm_choice": "",
+  "disambiguation_ref": "",
+  "disambiguation_choice": 0,
+  "client_context": {
+    "conversation_id": "client-thread-001"
+  }
+}

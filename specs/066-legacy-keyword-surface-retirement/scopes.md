@@ -170,7 +170,7 @@ Scenario: SCN-066-A05 — Legacy slash command after deprecation window
 
 ## Scope 3: Natural-Language Replacement Paths
 
-**Status:** Not Started  
+**Status:** In Progress — code edits landed (handleRate dispatch retired, integration contract test added, bounded Consumer Impact Sweep clean); live test execution blocked by foreign workspace WIP in `internal/assistant` + `internal/config` (see `report.md#scope-3` BLOCKED-WORKSPACE; routed to bubbles.workflow).  
 **Depends On:** Scope 1, Scope 2, specs/068-structured-intent-compiler, specs/069-assistant-http-transport  
 **Surfaces:** assistant facade route, compiled-intent slots, retrieval scenario, rating/disambiguation flow, HTTP E2E fixtures.
 
@@ -216,13 +216,13 @@ Scenario: SCN-066-A03 — NL replaces /rate via disambiguation
 
 ### Definition of Done
 
-- [ ] Plain-English find and rating requests route through compiled intents and facade behavior.
-- [ ] Rating without context produces a spec 061 disambiguation prompt and persists only after the user chooses.
-- [ ] E2E fixtures use agent-owned artifacts and prove persisted outcomes through live API behavior.
-- [ ] Consumer Impact Sweep proves `/find` and `/rate` examples are no longer taught as primary actions.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-066-A02 and SCN-066-A03.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+- [ ] Plain-English find and rating requests route through compiled intents and facade behavior. *(Uncertainty Declaration — SCOPE-3 code edits retired the `(*Bot).handleRate` slash dispatch and the integration-tier contract test in `tests/integration/assistant/legacy_replacement_test.go` asserts retrieval-scenario routing for plain-English find. Live execution is blocked by foreign uncommitted WIP in `internal/assistant` + `internal/config` that prevents compilation in this workspace. See `report.md#scope-3` → BLOCKED-WORKSPACE. Claim Source: not-run.)*
+- [ ] Rating without context produces a spec 061 disambiguation prompt and persists only after the user chooses. *(Uncertainty Declaration — Observable only via the SCN-066-A03 e2e-api row which uses the SCOPE-2 skip-pending-harness pattern; deferred per scope plan. Claim Source: not-run.)*
+- [ ] E2E fixtures use agent-owned artifacts and prove persisted outcomes through live API behavior. *(Uncertainty Declaration — E2E fixture file `tests/e2e/assistant/legacy_retirement_http_test.go` is not yet authored; per the scope Implementation Plan the SCN-066-A02/A03 e2e rows defer to the SCOPE-2-routed Telegram send-message capture harness. The SCN-066-A02 integration contract row exists as the spec-066 live proof but cannot execute in this workspace. Claim Source: not-run.)*
+- [x] Consumer Impact Sweep proves `/find` and `/rate` examples are no longer taught as primary actions. *(Evidence: `report.md#scope-3` Consumer Impact Sweep — Scope-3-bounded subset on `internal/telegram/`: `b.handleRate(` call-site count is 0; `case "rate":` dispatch case count is 0; residual `/find` / `/rate` strings in help-text, unknown-command copy, `bot_test.go`, and `help_test.go` are explicitly Scope 5 territory per the Change Boundary. Claim Source: executed.)*
+- [ ] Scenario-specific E2E regression coverage exists for SCN-066-A02 and SCN-066-A03. *(Uncertainty Declaration — Skip-pending-harness pattern carried from SCOPE-2; integration contract row at `tests/integration/assistant/legacy_replacement_test.go` provides the spec-066-owned live proof but cannot execute in this workspace. Claim Source: not-run.)*
+- [ ] Broader E2E regression suite passes. *(Uncertainty Declaration — Blocked by workspace WIP build failure outside SCOPE-3 change boundary. Claim Source: not-run.)*
+- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec. *(Uncertainty Declaration — Blocked by workspace WIP build failure in `internal/assistant` + `internal/config`; route to bubbles.workflow per `report.md#scope-3`. Claim Source: not-run.)*
 
 ---
 

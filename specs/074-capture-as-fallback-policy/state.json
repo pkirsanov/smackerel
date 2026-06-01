@@ -47,13 +47,13 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "planning",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-074-04B",
     "runStartedAt": "2026-05-31T20:30:46Z",
-    "lastUpdatedAt": "2026-05-31T20:30:46Z",
+    "lastUpdatedAt": "2026-06-01T22:07:00Z",
     "completedPhaseClaims": [],
-    "completedScopes": [],
+    "completedScopes": ["SCOPE-074-04A"],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
@@ -90,6 +90,24 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T20:30:00Z",
+        "runEndedAt": "2026-06-01T21:10:00Z",
+        "summary": "SCOPE-074-04A re-validation pass after user reported that scopes.md is now split into Scope 4A/4B/4C and the internal/config baseline blocker is cleared. VERIFIED: scopes.md decomposition is in place (F074-04A-PLAN-DECOMP closed); `./smackerel.sh check` returns 0 and `./smackerel.sh build --no-cache` returns 0 (F074-04A-BASELINE-CONFIG closed). LIVE PASS captured for the unit eligibility row: `go test -count=1 -run '^TestCaptureFallbackEligible$' ./internal/assistant/` returned `--- PASS` with all 4 sub-tests, RC=0 — proves the SCOPE-074-04A DoD item 'Eligibility gate excludes confirm-state and in-flight clarify-state turns (proved by a unit test)' which is now marked [x]. BLOCKED: live TP-074-12 + TP-074-18 integration runs still cannot complete because `smackerel-test-smackerel-core-1` fails its docker healthcheck on startup (HTTP listener on :8080 never binds within the ~30s healthcheck window because core blocks on the 60s ML-sidecar readiness wait). Reproduced on two consecutive freshly-built attempts. Routed as F074-04A-TEST-STACK-CORE-HEALTH (owner: deploy/test-infrastructure). Four SCOPE-074-04A DoD items remain unchecked with explicit reasons. See report.md `## SCOPE-074-04A Re-Validation Pass (bubbles.implement, 2026-06-01b)` for full evidence."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T21:25:00Z",
+        "runEndedAt": "2026-06-01T22:07:00Z",
+        "summary": "SCOPE-074-04A close-out pass plus SCOPE-074-04B scaffolding. Test-stack core healthcheck blocker (F074-04A-TEST-STACK-CORE-HEALTH) confirmed cleared on this host (live core comes up healthy in ~30s). RED→GREEN cycle for SCOPE-074-04A: initial live `./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_12|^TestCaptureFallbackInviolable'` failed (TP-074-12 FacadeHook FAIL, TP-074-18 FAIL — `Status=unavailable error_cause=internal_error`, `fallback count = 0`) because `runCaptureFallback` was passing an empty `msg.TransportMessageID` through to `capturefallback.Request.TransportMessageID`, which became `dec.SourceTurnID=\"\"`, which `validatePayload` rejects. Fix in `internal/assistant/facade.go`: synthesize `sourceTurnID` from `facadeTurnIDFromTime(emittedAt)` when `msg.TransportMessageID` is empty. Re-run live: all three sub-tests PASS — `TestCaptureFallbackPolicy_TP_074_12_FacadeHookCreatesOneFallbackIdea (0.03s)`, `TestCaptureFallbackPolicy_TP_074_12_EligibilityGateBlocksConfirmAndDisambigStates (0.01s)`, `TestCaptureFallbackInviolable_TP_074_18_FacadeHookCannotBeSuppressed (0.03s)`, wrapper EXIT=0. Assistant-package unit regression clean (`go test ./internal/assistant/...` all `ok`). All five SCOPE-074-04A DoD items flipped to `[x]` with live executed evidence; scope status flipped to `Done`. SCOPE-074-04B: created `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` (TP-074-14 live e2e half) — compiles under `-tags e2e`, vet clean. Live execution BLOCKED: 3 successive runs hit `503 assistant_http_not_ready, facade_invoked=false` for the entire test budget (60s and then 5min); the assistant HTTP late-binding in `cmd/core/wiring.go` `wireAssistantFacade` does not complete on a cold test stack within the test window. Routed as F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA. SCOPE-074-04B DoD items remain `[ ]` pending test-infra fix; SCOPE-074-04B implementation seam itself is already wired (same `runCaptureFallback` helper that TP-074-12 / TP-074-18 just proved live)."
       }
     ]
   }

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smackerel/spec-073/render-descriptor-v1.json",
+  "title": "AssistantRenderDescriptorV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "nodes"],
+  "properties": {
+    "schema_version": {"const": "render-descriptor.v1"},
+    "nodes": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "text"],
+            "properties": {
+              "kind": {"const": "text"},
+              "text": {"type": "string"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "text"],
+            "properties": {
+              "kind": {"const": "quote"},
+              "text": {"type": "string"},
+              "attribution": {"type": "string"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "action_kind", "ref", "label"],
+            "properties": {
+              "kind": {"const": "action"},
+              "action_kind": {"enum": ["disambiguation_choice", "confirm_accept", "confirm_decline", "reset", "retry", "open_source"]},
+              "ref": {"type": "string"},
+              "label": {"type": "string"},
+              "choice_index": {"type": "integer", "minimum": 0}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "source_id", "label"],
+            "properties": {
+              "kind": {"const": "citation"},
+              "source_id": {"type": "string"},
+              "label": {"type": "string"},
+              "url": {"type": "string"}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	"github.com/smackerel/smackerel/internal/stringutil"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 )
@@ -80,6 +81,16 @@ type Bot struct {
 	// contract). Safe for concurrent reads after the single startup
 	// SetAssistantAdapter call.
 	assistantAdapter *assistant_adapter.Adapter
+
+	// Spec 066 SCOPE-2 — retired-alias interceptor. nil until
+	// SetLegacyAliasInterceptor wires it.
+	legacyAliasInterceptor *LegacyAliasInterceptor
+
+	// Spec 066 SCOPE-1 — effective deprecation-window state resolver
+	// used by Start() to pick the SetMyCommands inventory. nil until
+	// SetLegacyRetirementResolver wires it; when nil the legacy
+	// closed-window inventory is used.
+	legacyRetirementResolver legacyretirement.WindowStateResolver
 }
 
 // Config holds Telegram bot configuration.
@@ -221,6 +232,13 @@ func (b *Bot) SetPerUserTokenMinter(m *PerUserTokenMinter) {
 // read-only after this call (no concurrent mutator).
 func (b *Bot) SetAssistantAdapter(a *assistant_adapter.Adapter) {
 	b.assistantAdapter = a
+}
+
+// SetLegacyRetirementResolver wires the spec 075 WindowStateResolver
+// used by Start() to choose the SetMyCommands inventory based on the
+// effective deprecation-window state. Safe to call once at startup.
+func (b *Bot) SetLegacyRetirementResolver(r legacyretirement.WindowStateResolver) {
+	b.legacyRetirementResolver = r
 }
 
 // bearerForChat returns the bearer token the Telegram bot should

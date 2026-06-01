@@ -42,9 +42,11 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
 	"github.com/smackerel/smackerel/internal/assistant/intent"
+	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	okagenttool "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 	"github.com/smackerel/smackerel/internal/assistant/provenance"
@@ -120,6 +122,13 @@ type FacadeConfig struct {
 	// For per-scenario assembler implementations see
 	// internal/agent/tools/<skill>/.
 	SourceAssemblers map[string]contracts.SourceAssembler
+
+	// Policy is the spec 075 legacy-retirement dispatcher invoked
+	// BEFORE the routing pipeline for every KindText turn. nil is
+	// the supported "no policy wired" state — Handle then skips the
+	// dispatch entirely and existing routing behavior is unchanged.
+	// Spec 075 SCOPE-6.1 (facade Policy dispatch contract).
+	Policy legacyretirement.Policy
 }
 
 // Validate enforces the required-field contract.
@@ -172,6 +181,19 @@ type Facade struct {
 	// calls WithTracer to swap in the real one threaded from
 	// coreServices.assistantTracer.
 	tracer *tracing.Tracer
+
+	// intentTrace is the spec 071 SCOPE-02 trace wiring. Zero value
+	// disables emission; facade_intent_trace.go installs it via
+	// WithIntentTrace.
+	intentTrace IntentTraceWiring
+
+	// captureFallbackPolicy is the spec 074 SCOPE-04A policy seam.
+	// nil leaves the facade in its pre-spec-074 behavior (BandLow
+	// emits StatusSavedAsIdea + CaptureRoute=true; adapters perform
+	// spec-008-style captures via the CaptureRoute hook). When set,
+	// eligible BandLow and open_knowledge no-ground turns invoke
+	// Policy.CaptureForUser so the facade itself writes the Idea.
+	captureFallbackPolicy capturefallback.Policy
 }
 
 // NewFacade constructs a Facade. All non-Now config fields and every
@@ -254,6 +276,83 @@ func (f *Facade) WithTracer(tr *tracing.Tracer) *Facade {
 		f.tracer = tr
 	}
 	return f
+}
+
+// WithCaptureFallbackPolicy attaches the spec 074 capture-as-fallback
+// policy to the facade. nil-safe: a nil policy leaves the facade in
+// its pre-spec-074 behavior (BandLow emits StatusSavedAsIdea +
+// CaptureRoute=true without the facade itself writing an Idea).
+func (f *Facade) WithCaptureFallbackPolicy(p capturefallback.Policy) *Facade {
+	if p != nil {
+		f.captureFallbackPolicy = p
+	}
+	return f
+}
+
+// captureFallbackEligible enforces the SCOPE-074-04A eligibility gate:
+// confirm-state and in-flight clarify-state turns MUST NOT be captured
+// as a fallback Idea (the user's reply belongs to the pending state
+// machine, not to the unrouted/no-ground capture path).
+func captureFallbackEligible(conv assistantctx.Conversation) bool {
+	return conv.PendingConfirm == nil && conv.PendingDisambig == nil
+}
+
+// runCaptureFallback invokes Policy.Decide + Policy.CaptureForUser
+// for the given cause. Returns the capture result and any policy
+// error. Caller is responsible for the eligibility check
+// (captureFallbackEligible) and for surfacing capture failures rather
+// than silently swallowing them (SCOPE-074-04A change-boundary rule:
+// capture failure MUST be observable).
+func (f *Facade) runCaptureFallback(
+	ctx context.Context,
+	msg contracts.AssistantMessage,
+	cause capturefallback.Cause,
+	emittedAt time.Time,
+) (capturefallback.CaptureResult, error) {
+	// SourceTurnID is mandatory in CapturePayload validation. When the
+	// transport adapter did not supply a TransportMessageID (common for
+	// HTTP/test paths and any transport that does not surface a stable
+	// inbound message id), synthesize the facade's own deterministic
+	// turn id so capturefallback.Record always has a non-empty source
+	// turn id to write into artifact_capture_policy.source_turn_id.
+	sourceTurnID := msg.TransportMessageID
+	if strings.TrimSpace(sourceTurnID) == "" {
+		sourceTurnID = facadeTurnIDFromTime(emittedAt)
+	}
+	req := capturefallback.Request{
+		UserID:             msg.UserID,
+		Transport:          msg.Transport,
+		TransportMessageID: sourceTurnID,
+		OriginalText:       msg.Text,
+		Cause:              cause,
+		OccurredAt:         emittedAt,
+	}
+	dec, err := f.captureFallbackPolicy.Decide(ctx, req)
+	if err != nil {
+		return capturefallback.CaptureResult{}, fmt.Errorf("capture-fallback decide: %w", err)
+	}
+	res, err := f.captureFallbackPolicy.CaptureForUser(ctx, msg.UserID, dec)
+	if err != nil {
+		return capturefallback.CaptureResult{}, fmt.Errorf("capture-fallback capture: %w", err)
+	}
+	return res, nil
+}
+
+// openKnowledgeNoGround returns true when an open_knowledge
+// InvocationResult indicates the agent could not ground its answer
+// (envelope status == "refused"). Used by the SCOPE-074-04A fallback
+// hook to map open_knowledge refusals onto CauseOpenKnowledgeNoGround.
+func openKnowledgeNoGround(result *agent.InvocationResult) bool {
+	if result == nil || len(result.Final) == 0 {
+		return false
+	}
+	var env struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(result.Final, &env); err != nil {
+		return false
+	}
+	return env.Status == "refused"
 }
 
 // Handle implements contracts.Assistant.
@@ -407,6 +506,62 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// original request (the original RawInput is not stored).
 	if resp, handled := f.resolvePendingDisambig(ctx, msg, conv, transportLabel, emittedAt); handled {
 		return resp, nil
+	}
+
+	// --- Step 1.6: spec 075 SCOPE-6.1 legacy-retirement dispatch ---
+	//
+	// Pre-routing Policy dispatch. nil-safe: when FacadeConfig.Policy
+	// is unset the facade falls through unchanged. Runs only for
+	// KindText turns since the retired-command catalog classifies on
+	// the leading "/cmd" token of the inbound text.
+	//
+	// Five branches (SCN-075-A12):
+	//   1. !Matched              → passthrough, no mutation
+	//   2. Matched open + notice → attach NoticePayload, continue routing
+	//   3. Matched open + dedup  → no notice, continue routing
+	//   4. Matched paused        → no notice, continue routing (legacy NL served)
+	//   5. Matched closed        → canonical unknown-command response, short-circuit
+	var pendingLegacyNotice *contracts.NoticePayload
+	if f.cfg.Policy != nil && msg.Kind == contracts.KindText {
+		decision, derr := f.cfg.Policy.Handle(ctx, legacyretirement.AssistantTurn{
+			UserID:     msg.UserID,
+			Transport:  msg.Transport,
+			RawText:    msg.Text,
+			ReceivedAt: emittedAt,
+		})
+		if derr != nil {
+			return contracts.AssistantResponse{}, fmt.Errorf("assistant: legacy retirement policy: %w", derr)
+		}
+		if decision.Matched {
+			if !decision.ServeNL {
+				closed, cerr := legacyretirement.ClosedResponseFor(decision)
+				if cerr != nil {
+					return contracts.AssistantResponse{}, fmt.Errorf("assistant: legacy retirement closed response: %w", cerr)
+				}
+				resp = contracts.AssistantResponse{
+					Status:     contracts.StatusUnavailable,
+					ErrorCause: contracts.ErrorCause(closed.ErrorCause),
+					Body:       closed.Body,
+					EmittedAt:  emittedAt,
+				}
+				conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
+				f.writeAudit(ctx, msg, "", nil, nil, resp)
+				return resp, nil
+			}
+			if decision.ShowNotice {
+				pendingLegacyNotice = &contracts.NoticePayload{
+					Command:            decision.Command.Command,
+					ReplacementExample: decision.Command.ReplacementExample,
+					CopyKey:            decision.Command.Spec066ID,
+					WindowID:           decision.WindowID,
+				}
+				defer func() {
+					if pendingLegacyNotice != nil {
+						resp.LegacyRetirementNotice = pendingLegacyNotice
+					}
+				}()
+			}
+		}
 	}
 
 	// --- Step 2: shortcut detection (text turns only) ---
@@ -610,6 +765,22 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			EmittedAt:    emittedAt,
 		}
 		assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
+		// Spec 074 SCOPE-04A — facade-owned capture-as-fallback hook.
+		// When the policy is wired and this turn is eligible
+		// (no PendingConfirm / PendingDisambig), persist exactly one
+		// fallback Idea with cause=unrouted. Capture failure is
+		// surfaced as StatusUnavailable rather than silently dropped.
+		if f.captureFallbackPolicy != nil && captureFallbackEligible(conv) {
+			if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseUnrouted, emittedAt); capErr != nil {
+				resp = contracts.AssistantResponse{
+					Routing:    &decision,
+					Status:     contracts.StatusUnavailable,
+					ErrorCause: contracts.ErrInternalError,
+					Body:       fmt.Sprintf("capture failed: %s", capErr.Error()),
+					EmittedAt:  emittedAt,
+				}
+			}
+		}
 
 	case BandBorderline:
 		prompt := f.buildDisambiguationPrompt(decision, emittedAt)
@@ -652,6 +823,20 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 				EmittedAt:    emittedAt,
 			}
 			assistantmetrics.CaptureFallbackTotal.WithLabelValues(assistantmetrics.CauseLowConfidence, transportLabel).Inc()
+			// Spec 074 SCOPE-04A — same facade-owned capture hook as
+			// the BandLow path (this branch is the defensive equivalent
+			// of an unrouted turn).
+			if f.captureFallbackPolicy != nil && captureFallbackEligible(conv) {
+				if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseUnrouted, emittedAt); capErr != nil {
+					resp = contracts.AssistantResponse{
+						Routing:    &decision,
+						Status:     contracts.StatusUnavailable,
+						ErrorCause: contracts.ErrInternalError,
+						Body:       fmt.Sprintf("capture failed: %s", capErr.Error()),
+						EmittedAt:  emittedAt,
+					}
+				}
+			}
 			break
 		}
 		turnScenarioID = scenarioID
@@ -809,6 +994,24 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 				f.manifest.RequiresProvenance(scenarioID),
 				scenarioID, provenanceCause, resp,
 				transportLabel, hashedUserID, correlationID)
+		}
+
+		// Spec 074 SCOPE-04A — open-knowledge no-ground capture hook.
+		// When the open_knowledge agent could not ground its answer
+		// (envelope status="refused"), persist exactly one fallback
+		// Idea with cause=open_knowledge_no_ground. The eligibility
+		// gate (PendingConfirm/PendingDisambig) still applies; capture
+		// failure is surfaced rather than silently dropped.
+		if f.captureFallbackPolicy != nil && scenarioID == "open_knowledge" && openKnowledgeNoGround(result) && captureFallbackEligible(conv) {
+			if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseOpenKnowledgeNoGround, emittedAt); capErr != nil {
+				resp = contracts.AssistantResponse{
+					Routing:    &decision,
+					Status:     contracts.StatusUnavailable,
+					ErrorCause: contracts.ErrInternalError,
+					Body:       fmt.Sprintf("capture failed: %s", capErr.Error()),
+					EmittedAt:  emittedAt,
+				}
+			}
 		}
 
 	default:

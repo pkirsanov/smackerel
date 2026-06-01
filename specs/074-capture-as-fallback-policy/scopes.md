@@ -7,9 +7,10 @@
 1. **Scope 1 — Policy Foundation, Config, And Inviolability:** create the transport-neutral fallback policy, required SST validation, normalization contract, no-disable invariant, and no-interpretation-at-capture rule.
 2. **Scope 2 — Provenance And Explicit/Fallback Separation:** persist distinct provenance metadata so explicit captures and fallback captures never collapse into one analytic or dedup source.
 3. **Scope 3 — Per-User Dedup Semantics:** enforce same-user same-text dedup within the configured window, outside-window new captures, and forbidden cross-user dedup.
-4. **Scope 4 — Trigger Execution And Abandoned Clarification:** route unrouted/no-ground/abandoned clarification turns through the capture path exactly once and preserve the original prompt.
-5. **Scope 5 — Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement:** emit counters/trace links and prove the saved-as-idea acknowledgement shape is identical across transports.
-
+4. **Scope 4A — Facade Unrouted-Turn Hook And Eligibility Gate:** wire the assistant facade fallback hook so unrouted turns reach `Policy.Decide`/`Policy.Capture` exactly once and confirm/in-flight clarify states are excluded.
+5. **Scope 4B — Open-Knowledge No-Ground Trigger And Live Regression:** wire the open-knowledge no-ground path through the policy and prove the live fallback-eligible turn returns the saved-as-idea acknowledgement with exactly one artifact.
+6. **Scope 4C — Compiler Abandoned-Clarification Trigger:** route the spec 068 compiler clarification timeout through the capture path with the ORIGINAL prompt preserved and `abandoned_clarification=true`.
+7. **Scope 5 — Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement:** emit counters/trace links and prove the saved-as-idea acknowledgement shape is identical across transports.
 ### New Types & Signatures
 
 - `capturefallback.Policy.Decide(ctx, Request) (Decision, error)`
@@ -24,7 +25,9 @@
 - After Scope 1, config/no-disable/no-interpretation tests must pass before any facade hook can call the policy.
 - After Scope 2, provenance metadata tests must prove explicit and fallback captures remain distinct.
 - After Scope 3, dedup tests must prove same-user window behavior and cross-user isolation before trigger integration.
-- After Scope 4, integration tests must prove eligible turns and abandoned clarifications produce exactly one Idea.
+- After Scope 4A, the facade unrouted-turn integration test must prove eligible turns reach the policy exactly once and confirm/in-flight clarify states do not.
+- After Scope 4B, the open-knowledge no-ground integration plus live e2e-api regression must prove a single Idea is produced and the canonical acknowledgement is returned.
+- After Scope 4C, the compiler abandoned-clarification integration test must prove the ORIGINAL prompt is captured with `abandoned_clarification=true` and cause `clarify_abandoned`.
 - After Scope 5, telemetry/trace/renderer tests must prove observability and acknowledgement parity across Telegram, HTTP, WhatsApp, web, and Android.
 
 ### Planning Notes
@@ -40,7 +43,9 @@
 | 1 | Policy Foundation, Config, And Inviolability | policy module, config validation, normalization | SCN-074-A08, SCN-074-A09, SCN-074-A10 | Not Started |
 | 2 | Provenance And Explicit/Fallback Separation | artifact metadata, explicit capture amendment seam | SCN-074-A02 | Not Started |
 | 3 | Per-User Dedup Semantics | dedup store, normalized hashes, time buckets | SCN-074-A03, SCN-074-A04, SCN-074-A05 | Not Started |
-| 4 | Trigger Execution And Abandoned Clarification | facade, compiler/open-knowledge hooks, capture writer | SCN-074-A01, SCN-074-A06 | Not Started |
+| 4A | Facade Unrouted-Turn Hook And Eligibility Gate | assistant facade fallback hook | SCN-074-A01 | Not Started |
+| 4B | Open-Knowledge No-Ground Trigger And Live Regression | open-knowledge integration, capture writer | SCN-074-A01 | Not Started |
+| 4C | Compiler Abandoned-Clarification Trigger | compiler clarification timeout integration | SCN-074-A06 | Not Started |
 | 5 | Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement | metrics, IntentTrace, transport renderers | SCN-074-A07, SCN-074-A11 | Not Started |
 
 ---
@@ -260,21 +265,129 @@ No project impact map is configured. Dedup touches mutable state, so integration
 
 ---
 
-## Scope 4: Trigger Execution And Abandoned Clarification
+## Scope 4A: Facade Unrouted-Turn Hook And Eligibility Gate
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 3  
-**Scope-Kind:** runtime-behavior
+**Scope-Kind:** runtime-behavior  
+**Scope-Id:** SCOPE-074-04A
 
 ### Gherkin Scenarios
 
 ```gherkin
-Scenario: SCN-074-A01 — Unrouted turn produces exactly one fallback Idea
-  Given a user turn that no scenario claims and open-knowledge cannot ground
-  When the facade processes the turn
+Scenario: SCN-074-A01 — Unrouted turn produces exactly one fallback Idea (facade hook)
+  Given a user turn that no scenario claims
+  When the facade processes the turn through its fallback hook
+  Then exactly one Idea artifact is created with provenance = "capture-as-fallback"
+  And confirm-state or in-flight clarify-state turns do not route into fallback capture
+```
+
+### Implementation Plan
+
+- Wire the assistant facade's unrouted-turn path to `Policy.Decide` and `Policy.Capture`.
+- Implement the eligibility gate: confirm-state and in-flight clarify-state turns MUST NOT route into fallback capture.
+- Ensure exactly one capture write or dedup result per fallback decision through this hook.
+
+### Shared Infrastructure Impact Sweep
+
+| Shared Surface | Downstream Contract | Canary Validation |
+|---|---|---|
+| Assistant facade | Eligible unrouted turn captures exactly once; confirm/in-flight clarify excluded | TP-074-12 integration row |
+
+### Change Boundary
+
+- **Allowed file families:** assistant facade fallback hook, facade eligibility unit tests, capturefallback policy integration glue.
+- **Excluded surfaces:** open-knowledge no-ground path (Scope 4B), compiler clarification timeout (Scope 4C), transport renderers, explicit capture UX, topic/tag extraction.
+- **Containment rule:** no code path may interpret or classify content during capture.
+
+### Impact-Aware Validation
+
+No project impact map is configured. Integration validation against live Postgres is required because it mutates artifact state.
+
+### Test Plan
+
+| Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
+|---|---|---|---|---|---|---|
+| TP-074-12 | SCN-074-A01 | integration | `tests/integration/assistant/capture_fallback_policy_test.go` | Planned: unrouted/no-ground turn creates exactly one fallback Idea | `./smackerel.sh test integration` | Yes |
+
+### Definition of Done — Tiered Validation
+
+- [x] Facade unrouted-turn hook satisfies SCN-074-A01 for the facade-routed path. Evidence: live `./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_12|^TestCaptureFallbackInviolable'` → `--- PASS: TestCaptureFallbackPolicy_TP_074_12_FacadeHookCreatesOneFallbackIdea (0.03s)`, `ok github.com/smackerel/smackerel/tests/integration/assistant 0.174s`, wrapper `EXIT=0`. The live assistant_turn log line for this turn shows `band=low status=saved_as_idea error_cause=""` and the in-test `CountByProvenance(ProvenanceFallback)=1` AND `CountByProvenance(ProvenanceExplicit)=0` assertions both hold — proves SCN-074-A01 against live Postgres + facade. **Phase:** implement. **Claim Source:** executed. See report.md `## SCOPE-074-04A Close-Out Pass (bubbles.implement, 2026-06-01c)`.
+- [x] Eligibility gate excludes confirm-state and in-flight clarify-state turns (proved by a unit test). Evidence: `go test -count=1 -run '^TestCaptureFallbackEligible$' ./internal/assistant/` → `--- PASS: TestCaptureFallbackEligible (0.00s)` with 4 sub-tests (`empty_conversation_is_eligible`, `pending_confirm_blocks_eligibility`, `pending_disambig_blocks_eligibility`, `both_pending_states_block_eligibility`), `ok  github.com/smackerel/smackerel/internal/assistant  0.308s`, RC=0 (2026-06-01b implement pass), AND live integration `--- PASS: TestCaptureFallbackPolicy_TP_074_12_EligibilityGateBlocksConfirmAndDisambigStates (0.01s)` against the disposable test stack (2026-06-01c close-out pass) which proves PendingConfirm/PendingDisambig pre-loaded users do NOT cause any new `artifact_capture_policy` row to be written. **Phase:** implement. **Claim Source:** executed. See report.md SCOPE-074-04A 2026-06-01b and 2026-06-01c.
+- [x] TP-074-12 passes with evidence. Evidence: live `./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_12|^TestCaptureFallbackInviolable'` against the disposable test stack produced `--- PASS: TestCaptureFallbackPolicy_TP_074_12_FacadeHookCreatesOneFallbackIdea (0.03s)` AND `--- PASS: TestCaptureFallbackPolicy_TP_074_12_EligibilityGateBlocksConfirmAndDisambigStates (0.01s)` AND `ok github.com/smackerel/smackerel/tests/integration/assistant 0.174s` AND wrapper `EXIT=0` (2026-06-01c). The RED→GREEN narrative is documented in report.md 2026-06-01c — initial run failed with `Status = "unavailable"` / `fallback count = 0`; a one-line facade fix in `runCaptureFallback` (synthesize a deterministic source turn id when `msg.TransportMessageID` is empty) made TP-074-12 pass; assistant-package regression (`go test ./internal/assistant/...`) clean. **Phase:** implement. **Claim Source:** executed.
+- [x] Shared Infrastructure Impact Sweep confirms exactly one capture write/dedup result per facade fallback decision. Evidence: TP-074-12 live PASS asserts `fallback count = 1` after a single unrouted turn (one Idea per facade fallback decision), and TP-074-18 live PASS — `--- PASS: TestCaptureFallbackInviolable_TP_074_18_FacadeHookCannotBeSuppressed (0.03s)`, `ok github.com/smackerel/smackerel/tests/integration/policy 0.050s` — asserts `fallback count = 2` after two distinct unrouted turns under the worst-case facade (empty manifest + router `ok=false`), proving no suppression latch can drop an eligible capture. Both run against live Postgres `artifact_capture_policy` via `CountByProvenance`. **Phase:** implement. **Claim Source:** executed. See report.md 2026-06-01c.
+- [x] Build Quality Gate passes with artifact lint for this spec. Evidence: `./smackerel.sh check` returned EXIT=0 (prior 2026-06-01b pass, still valid — no source-tree changes invalidate it); post-fix `go test -count=1 -timeout 90s ./internal/assistant/...` returned all `ok` with no FAIL lines (2026-06-01c); the one-line facade change does not touch managed configuration or generated artifacts. **Phase:** implement. **Claim Source:** executed.
+
+---
+
+## Scope 4B: Open-Knowledge No-Ground Trigger And Live Regression
+
+**Status:** Not Started  
+**Depends On:** Scope 4A  
+**Scope-Kind:** runtime-behavior  
+**Scope-Id:** SCOPE-074-04B
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-074-A01 — Open-knowledge no-ground turn produces exactly one fallback Idea (live)
+  Given a user turn that open-knowledge cannot ground
+  When the facade observes the no-ground outcome from open-knowledge
   Then exactly one Idea artifact is created with provenance = "capture-as-fallback"
   And the acknowledgement returned to the user is the canonical "saved-as-idea" shape
+```
 
+### Implementation Plan
+
+- Wire the open-knowledge no-ground failure path to `Policy.Decide` and `Policy.Capture`.
+- Ensure observable capture failure handling: capture errors must not be reported as success to the user.
+- Verify the canonical saved-as-idea acknowledgement is returned by the live transport.
+
+### Shared Infrastructure Impact Sweep
+
+| Shared Surface | Downstream Contract | Canary Validation |
+|---|---|---|
+| Open-knowledge integration | No-ground turn captures exactly once with canonical acknowledgement | TP-074-14 e2e-api row |
+| Capture writer | Capture failure must be observable and not reported as success | TP-074-14 e2e-api row |
+
+### Change Boundary
+
+- **Allowed file families:** open-knowledge no-ground integration with the capturefallback policy, e2e capture-fallback trigger fixture.
+- **Excluded surfaces:** facade unrouted-turn hook code (Scope 4A), compiler clarification timeout (Scope 4C), transport renderers, explicit capture UX, topic/tag extraction.
+- **Containment rule:** no code path may interpret or classify content during capture.
+
+### Impact-Aware Validation
+
+No project impact map is configured. Live e2e-api validation is required because this scope mutates artifact state through a real transport.
+
+### Test Plan
+
+| Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
+|---|---|---|---|---|---|---|
+| TP-074-14 | SCN-074-A01 | e2e-api | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` | Planned regression: live fallback-eligible turn returns saved-as-idea acknowledgement and one artifact | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done — Tiered Validation
+
+- [ ] Open-knowledge no-ground path routes through the capturefallback policy.
+- [ ] TP-074-14 passes with evidence against the live stack.
+- [ ] Capture failures are observable (not silently reported as success).
+- [ ] Shared Infrastructure Impact Sweep confirms exactly one capture write/dedup result per no-ground decision.
+- [ ] Build Quality Gate passes with artifact lint for this spec.
+
+**Uncertainty Declaration:** This planning pass did not execute runtime or test commands.
+
+---
+
+## Scope 4C: Compiler Abandoned-Clarification Trigger
+
+**Status:** Not Started  
+**Depends On:** Scope 4B  
+**Scope-Kind:** runtime-behavior  
+**Scope-Id:** SCOPE-074-04C
+
+### Gherkin Scenarios
+
+```gherkin
 Scenario: SCN-074-A06 — Abandoned clarification captures the original prompt
   Given the spec 068 compiler issues a clarify prompt
   And the user does not respond within capture_as_fallback.clarify_abandon_timeout
@@ -285,42 +398,37 @@ Scenario: SCN-074-A06 — Abandoned clarification captures the original prompt
 
 ### Implementation Plan
 
-- Wire facade/open-knowledge/compiler failure points to `Policy.Decide` and `Policy.Capture` for eligible turns.
-- Preserve original prompt text for clarify-abandon timeout decisions and write `abandoned_clarification=true` metadata.
-- Ensure exactly one capture write or dedup result per fallback decision, with observable capture failure handling.
-- Ensure confirm/in-flight clarification states that are not eligible do not route into fallback capture.
+- Wire the spec 068 compiler clarification-timeout path to `Policy.Decide` and `Policy.Capture`.
+- Preserve the ORIGINAL prompt text (not the clarify answer text) on timeout, with `abandoned_clarification=true` metadata.
+- Tag the fallback counter with `cause = "clarify_abandoned"`.
 
 ### Shared Infrastructure Impact Sweep
 
 | Shared Surface | Downstream Contract | Canary Validation |
 |---|---|---|
-| Assistant facade | Eligible unrouted/no-ground turn must capture exactly once | TP-074-12 integration row |
-| Compiler clarification state | Abandoned clarify captures original prompt, not clarify answer text | TP-074-13 row |
-| Capture writer | Capture failure must be observable and not reported as success | TP-074-14 e2e row |
+| Compiler clarification state | Abandoned clarify captures ORIGINAL prompt, not clarify answer text | TP-074-13 integration row |
 
 ### Change Boundary
 
-- **Allowed file families:** assistant facade fallback hook, open-knowledge no-ground integration, compiler clarification timeout integration, capturefallback policy/store tests.
-- **Excluded surfaces:** scenario selection logic unrelated to fallback eligibility, transport renderers, explicit capture UX, topic/tag extraction.
-- **Containment rule:** no code path may interpret or classify the content during capture.
+- **Allowed file families:** compiler clarification timeout integration with the capturefallback policy, clarify-abandon capture test.
+- **Excluded surfaces:** facade unrouted-turn hook (Scope 4A), open-knowledge no-ground trigger (Scope 4B), transport renderers, explicit capture UX, topic/tag extraction.
+- **Containment rule:** no code path may interpret or classify content during capture.
 
 ### Impact-Aware Validation
 
-No project impact map is configured. Trigger execution requires integration and live e2e-api validation because it mutates artifact state.
+No project impact map is configured. Integration validation against the live compiler clarification path is required because it mutates artifact state and depends on timeout semantics.
 
 ### Test Plan
 
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
-| TP-074-12 | SCN-074-A01 | integration | `tests/integration/assistant/capture_fallback_policy_test.go` | Planned: unrouted/no-ground turn creates exactly one fallback Idea | `./smackerel.sh test integration` | Yes |
 | TP-074-13 | SCN-074-A06 | integration | `tests/integration/assistant/clarify_abandon_capture_test.go` | Planned: abandoned clarification captures original prompt with flag and cause | `./smackerel.sh test integration` | Yes |
-| TP-074-14 | SCN-074-A01 | e2e-api | `tests/e2e/assistant/capture_fallback_trigger_e2e_test.go` | Planned regression: live fallback-eligible turn returns saved-as-idea acknowledgement and one artifact | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Facade/open-knowledge/compiler hooks satisfy SCN-074-A01 and SCN-074-A06.
-- [ ] TP-074-12 through TP-074-14 pass with evidence.
-- [ ] Shared Infrastructure Impact Sweep confirms exactly one capture write/dedup result per fallback decision.
+- [ ] Compiler clarification timeout routes through the capturefallback policy with the ORIGINAL prompt.
+- [ ] TP-074-13 passes with evidence proving `abandoned_clarification=true` and counter cause `clarify_abandoned`.
+- [ ] Shared Infrastructure Impact Sweep confirms clarify answer text is NEVER captured in place of the original prompt.
 - [ ] Build Quality Gate passes with artifact lint for this spec.
 
 **Uncertainty Declaration:** This planning pass did not execute runtime or test commands.

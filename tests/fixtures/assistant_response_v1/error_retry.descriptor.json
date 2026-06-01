@@ -1,0 +1,7 @@
+{
+  "schema_version": "render-descriptor.v1",
+  "nodes": [
+    {"kind": "text", "text": "Something went wrong reaching the weather service. You can retry."},
+    {"kind": "action", "action_kind": "retry", "ref": "upstream_timeout", "label": "Retry"}
+  ]
+}

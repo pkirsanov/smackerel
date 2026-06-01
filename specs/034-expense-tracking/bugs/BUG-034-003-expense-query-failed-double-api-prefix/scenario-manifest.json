@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "featureDir": "specs/034-expense-tracking/bugs/BUG-034-003-expense-query-failed-double-api-prefix",
+  "generatedAt": "2026-06-01T06:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-BUG034003-001",
+      "scope": "Scope 1",
+      "title": "Expense list route is mounted behind auth",
+      "gherkin": {
+        "given": "the full api.NewRouter(deps) is constructed with non-nil ExpenseHandler",
+        "when": "GET /api/expenses is requested with no Authorization header",
+        "then": "the response status is 401 (auth gate), not 404 (route missing)"
+      },
+      "requiredTestType": "integration",
+      "linkedTests": [
+        {
+          "type": "integration",
+          "file": "internal/api/router_mount_bug_034_003_test.go",
+          "name": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/expense_list_mounted_returns_401_without_bearer"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#bug-reproduction-after-fix-in-process-integration-regression",
+        "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
+        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      ],
+      "testMapping": {
+        "type": "integration",
+        "label": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/expense_list_mounted_returns_401_without_bearer",
+        "file": "internal/api/router_mount_bug_034_003_test.go"
+      },
+      "liveEvidence": {
+        "type": "e2e-api",
+        "label": "Home-lab HTTP probe: GET /api/expenses -> 401",
+        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034003-002",
+      "scope": "Scope 1",
+      "title": "Meal-plan list route is mounted behind auth",
+      "gherkin": {
+        "given": "the full api.NewRouter(deps) is constructed with non-nil MealPlanHandler",
+        "when": "GET /api/meal-plans is requested with no Authorization header",
+        "then": "the response status is 401, not 404"
+      },
+      "requiredTestType": "integration",
+      "linkedTests": [
+        {
+          "type": "integration",
+          "file": "internal/api/router_mount_bug_034_003_test.go",
+          "name": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/meal_plan_list_mounted_returns_401_without_bearer"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#bug-reproduction-after-fix-in-process-integration-regression",
+        "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
+        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      ],
+      "testMapping": {
+        "type": "integration",
+        "label": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/meal_plan_list_mounted_returns_401_without_bearer",
+        "file": "internal/api/router_mount_bug_034_003_test.go"
+      },
+      "liveEvidence": {
+        "type": "e2e-api",
+        "label": "Home-lab HTTP probe: GET /api/meal-plans -> 401",
+        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034003-003",
+      "scope": "Scope 1",
+      "title": "Adversarial — double-prefix path remains 404",
+      "gherkin": {
+        "given": "the full api.NewRouter(deps) is constructed",
+        "when": "GET /api/api/expenses is requested",
+        "then": "the response status is 404 (we did not regress to double-prefix)"
+      },
+      "requiredTestType": "integration",
+      "linkedTests": [
+        {
+          "type": "integration",
+          "file": "internal/api/router_mount_bug_034_003_test.go",
+          "name": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/adversarial_double_prefix_expense_stays_404"
+        },
+        {
+          "type": "integration",
+          "file": "internal/api/router_mount_bug_034_003_test.go",
+          "name": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/adversarial_double_prefix_meal_plan_stays_404"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#bug-reproduction-after-fix-in-process-integration-regression",
+        "report.md#g060-red--green-markers--testbug034003_expenseandmealplanroutesmountedbehindauth",
+        "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      ],
+      "testMapping": {
+        "type": "integration",
+        "label": "TestBug034003_ExpenseAndMealPlanRoutesMountedBehindAuth/adversarial_double_prefix_expense_stays_404 + .../adversarial_double_prefix_meal_plan_stays_404",
+        "file": "internal/api/router_mount_bug_034_003_test.go"
+      },
+      "liveEvidence": {
+        "type": "e2e-api",
+        "label": "Home-lab HTTP probe: GET /api/api/expenses -> 404, /api/api/meal-plans -> 404",
+        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      },
+      "status": "verified"
+    },
+    {
+      "scenarioId": "SCN-BUG034003-004",
+      "scope": "Scope 1",
+      "title": "Telegram /expense command succeeds against empty DB",
+      "gherkin": {
+        "given": "the bot has a valid bearer-mint path AND the expenses table is empty",
+        "when": "the user sends /expense to the bot",
+        "then": "the reply is an empty-state message (e.g. \"No expenses yet\"), not \"Failed to query expenses\""
+      },
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [
+        {
+          "type": "e2e-ui",
+          "file": "uservalidation.md",
+          "name": "Manual Telegram /expense send (owner-driven)"
+        }
+      ],
+      "evidenceRefs": [
+        "report.md#live-home-lab-validation--after-redeploy-2026-06-01",
+        "uservalidation.md"
+      ],
+      "testMapping": {
+        "type": "e2e-ui",
+        "label": "Manual Telegram /expense send (owner-driven)",
+        "file": "uservalidation.md"
+      },
+      "liveEvidence": {
+        "type": "proxy",
+        "label": "HTTP route now returns 401 (auth gate) instead of 404; bot bearer mint path proven via sibling routes /api/knowledge/concepts and /api/knowledge/entities",
+        "evidenceRef": "report.md#live-home-lab-validation--after-redeploy-2026-06-01"
+      },
+      "status": "pending-owner-confirmation"
+    }
+  ]
+}

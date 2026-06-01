@@ -1,0 +1,5 @@
+{
+  "schema_version": "v1",
+  "policy": "specs/067-intent-driven-policy-enforcement",
+  "exceptions": []
+}

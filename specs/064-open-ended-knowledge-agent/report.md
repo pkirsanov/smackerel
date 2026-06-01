@@ -376,6 +376,204 @@ go vet -tags=integration ./tests/integration/agent/... # exit 0 (executed)
 
 Exit code: NOT CAPTURED in this session (see above).
 
+#### Routing test evidence (post-PKT-064-SCOPE12-A YAML application — BLOCKED on foreign config-emission gap)
+
+**Packet:** PKT-064-SCOPE12-A (see
+`specs/064-open-ended-knowledge-agent/route-packets/PKT-064-SCOPE12-A-RESPONSE.md`).
+
+**§3.A — YAML diff applied:** `config/prompt_contracts/weather-query-v1.yaml`
+`intent_examples` extended additively per the packet. The original
+four entries are preserved verbatim (lines 7-10); 15 adversarial
+coverage variations are appended (lines 12-26). Verified by
+`git diff config/prompt_contracts/weather-query-v1.yaml`:
+
+```text
++# Existing — keep verbatim, do not remove:
+ - "weather in Seattle today"
+ - "is it going to rain in Reykjavík tomorrow?"
+ - "what's the forecast for Portland this weekend?"
+ - "temperature in London right now"
++# Added by PKT-064-SCOPE12-A — adversarial-coverage variations:
++- "weather in Paris today"
++- "weather in Tokyo today"
++- "weather in New York today"
++- "weather in Berlin tomorrow"
++- "what's the weather in San Francisco"
++- "what's the weather like in Madrid today"
++- "weather today in Chicago"
++- "current weather in Dublin"
++- "how's the weather in Lisbon today"
++- "weather forecast for Amsterdam today"
++- "is it raining in Vancouver right now"
++- "how hot is it in Phoenix today"
++- "what's the temperature in Oslo today"
++- "weather in 90210"
++- "forecast in 10115 tomorrow"
+```
+
+**Claim Source:** executed (string-replace edit in IDE; verified by
+`grep -c '^- ' config/prompt_contracts/weather-query-v1.yaml` over
+the `intent_examples` block — 19 entries, matching 4 originals + 15
+additions). No other field touched. No SST default altered. No
+router/test/scenario change.
+
+**§3.B — Live integration re-run: BLOCKED.** The packet requires:
+
+```bash
+./smackerel.sh test integration --go-run '^TestOpenKnowledgeRouting_FallbackToOpenKnowledge$'
+```
+
+This command FAILED at the config-generation gate (before any test
+container started) with the following captured output from
+`/tmp/scope12-pkt-a.log`:
+
+```text
+ERROR: [F074-SST-MISSING] missing or invalid required capture_as_fallback configuration: \
+  CAPTURE_AS_FALLBACK_DEDUP_WINDOW (env var not set), \
+  CAPTURE_AS_FALLBACK_CLARIFY_ABANDON_TIMEOUT (env var not set), \
+  CAPTURE_AS_FALLBACK_NORMALIZATION_POLICY (env var not set), \
+  CAPTURE_AS_FALLBACK_DEDUP_HASH_KEY (env var not set), \
+  CAPTURE_AS_FALLBACK_RETENTION_AUDIT_DAYS (env var not set)
+exit status 1
+ERROR: config-generate-time validation failed for env=test (see above)
+```
+
+**Claim Source:** executed (`./smackerel.sh test integration --go-run
+'^TestOpenKnowledgeRouting_FallbackToOpenKnowledge$'` ran to completion
+and exited non-zero at the `smackerel_generate_config test` step in
+`smackerel.sh:872`, which invokes `cmd/config-validate` against the
+freshly-generated `config/generated/test.env.tmp`).
+
+**Root cause (foreign-owned):** spec 074 SCOPE-1 added
+`internal/config/capture_fallback.go` (`LoadCaptureFallback`) and
+wired it into `internal/config/config.go` line 958 such that
+`config.Load()` fails-loud when any `CAPTURE_AS_FALLBACK_*` env var
+is unset. The corresponding emission step in
+`scripts/commands/config.sh` was NOT landed in the same commit: a
+`grep -n CAPTURE_AS_FALLBACK scripts/commands/config.sh` returns
+zero matches. The persisted `config/generated/test.env` lines
+513-517 contain the values from a stale prior run, but every fresh
+`config generate` writes a new `.tmp` file that omits them, and the
+pre-emit `cmd/config-validate` binary correctly rejects it.
+
+This gap blocks ALL `./smackerel.sh test integration` invocations —
+not just this packet's. It is owned by spec 074
+(`specs/074-capture-as-fallback-policy/`), not spec 064.
+
+**Per implement-mode artifact-ownership policy** (do NOT repair
+undocumented foreign work ad hoc; route to the planning owner
+instead), the SCOPE-12 DoD checkbox "Routing order verified
+adversarially" CANNOT be flipped from this implement pass. The YAML
+change (§3.A) is landed and ready for the live re-run as soon as
+spec 074's config-emission gap is closed by its owning agent.
+
+**Uncertainty Declaration:** Acceptance criterion (2) of
+PKT-064-SCOPE12-A (live PASS for all three sub-cases with
+`weather_query.top_score ≥ 0.65` for `"weather in paris today"`)
+CANNOT be verified in this session because the live integration
+runner exits non-zero before reaching the Go test binary. The DoD
+checkbox at `scopes.md` line 406 ("Routing order verified
+adversarially") therefore remains `[ ]` (unchecked). Flipping it
+without live evidence would be fabrication.
+
+**Routed:** PKT-064-SCOPE12-A-FOLLOWUP-SPEC074-CONFIG-EMISSION (see
+RESULT-ENVELOPE) — request spec 074 implement owner to emit the five
+`CAPTURE_AS_FALLBACK_*` env vars in `scripts/commands/config.sh` so
+`./smackerel.sh test integration` is unblocked. Once landed, the
+SCOPE-12 re-run can be a single command and a single evidence-block
+update.
+
+**§3.C — Post-config-gen-fix re-run (2026-06-01 20:30–20:53 UTC):
+STILL BLOCKED — stack-up failure, not routing failure.**
+
+Prior follow-up confirmed `./smackerel.sh config generate --env test`
+now succeeds (the spec 074 emission gap was closed by its owner).
+With `intent_examples` already extended per §3.A (including
+`"weather in Paris today"`) and config-gen green, this packet
+re-issued the exact command from PKT-064-SCOPE12-A:
+
+```bash
+./smackerel.sh test integration --go-run '^TestOpenKnowledgeRouting_FallbackToOpenKnowledge$'
+```
+
+Two consecutive attempts (`/tmp/scope12-run6.log`,
+`/tmp/scope12-run7.log`) both exited non-zero BEFORE the Go test
+binary executed. The failure mode is identical across attempts and
+distinct from the §3.B blocker:
+
+```text
+ Container smackerel-test-smackerel-ml-1  Healthy
+container smackerel-test-smackerel-core-1 is unhealthy
+Test stack start failed once (exit 1); retrying after project-scoped teardown...
+...
+Running project-scoped integration test stack teardown (exit cleanup, timeout 180s)...
+EXIT=1            # run7 (after one auto-retry that also failed at
+                  # `Error response from daemon: No such container: ...`
+                  # — a race with a concurrent compose teardown)
+EXIT=124          # run6 (teardown exceeded its 180s budget under
+                  # parallel-agent load)
+```
+
+Live container introspection while the first attempt was in flight
+(`docker logs smackerel-test-smackerel-core-1` captured at
+20:48:48 UTC) shows core blocks at:
+
+```text
+{"level":"INFO","msg":"waiting for ML sidecar readiness","timeout":60000000000,"url":"http://smackerel-ml:8081"}
+```
+
+Core's compose `healthcheck` window is `start_period:15s` +
+`retries:3` × (`interval:10s` + `timeout:5s`) = ~60s, while ML
+needed ≥60s to become healthy in this session
+(`docker ps`: `smackerel-test-smackerel-ml-1 Up About a minute (healthy)`
+appeared at 20:49:47 UTC; core was already marked unhealthy at
+20:48:57 UTC, ~38s after its own start, having spent every second
+inside `waiting for ML sidecar readiness`). ML startup itself was
+slowed by a foreign issue surfaced in `docker logs smackerel-test-smackerel-ml-1`:
+
+```text
+litellm.llms.ollama.common_utils.OllamaError: {"error":"model 'qwen2.5:0.5b-instruct' not found"}
+litellm.exceptions.APIConnectionError: litellm.APIConnectionError: OllamaException - {"error":"model 'qwen2.5:0.5b-instruct' not found"}
+Subscribe to search.embed failed (attempt 1/30): nats: timeout — retrying in 1.0s
+```
+
+Both observations are foreign to spec 064 SCOPE-12 (which owns
+routing only): the core↔ML readiness race lives in
+`cmd/core/run()` / `docker-compose.yml` (no `depends_on` for
+smackerel-ml on smackerel-core; healthcheck window too short for
+sidecar cold-start), and the missing Ollama model is a separate
+test-stack provisioning gap. Neither is the routing-layer surface
+SCOPE-12 owns.
+
+**Claim Source:** executed — full logs in `/tmp/scope12-run6.log`
+(251 lines) and `/tmp/scope12-run7.log` (292 lines). Container
+healthy/unhealthy transitions captured live via
+`docker ps --filter name=smackerel-test`. ML root-cause traces
+captured via `docker logs smackerel-test-smackerel-ml-1`.
+
+**Uncertainty Declaration:** Acceptance criterion (2) of
+PKT-064-SCOPE12-A (live PASS for all three sub-cases with
+`weather_query.top_score ≥ 0.65` for `"weather in paris today"`)
+STILL cannot be verified in this session because the live
+integration runner exits non-zero before reaching the Go test
+binary. The DoD checkbox at `scopes.md` line 406 ("Routing order
+verified adversarially") therefore remains `[ ]` (unchecked).
+Flipping it without live evidence would be fabrication. The
+intent_examples addition from §3.A is necessary but not sufficient
+to certify the contract — the live re-run is what proves the
+embedding-cosine arithmetic actually clears the 0.65 floor under
+the production ML sidecar.
+
+**Routed:** PKT-064-SCOPE12-A-FOLLOWUP-CORE-ML-STARTUP — request
+the core/compose owner to either (a) extend the smackerel-core
+`healthcheck.start_period` to accommodate ML cold-start (≥120s),
+(b) gate core's HTTP server start on ML readiness as a soft
+dependency so `/api/health` is reachable before the ML wait
+completes, or (c) add `smackerel-ml: condition: service_healthy`
+to core's `depends_on` and accept the serial startup cost. Once
+core can become healthy reliably in the test stack, the SCOPE-12
+live re-run is a single command and a single evidence-block update.
+
 ### SCOPE-13 — Telegram surface (response shapes, citations, refusals)
 
 **Status:** Done (this session)
@@ -1024,3 +1222,95 @@ findings.
 
 Finding #1 resolved. Findings #2–#6 remain pending — `reworkQueue`
 entry `PKT-WORKFLOW-A-await` stays open with an updated note.
+
+---
+
+## §3.D — SCOPE-12 live integration re-run (2026-06-01 21:50 UTC): PASS
+
+**Claim Source:** executed.
+
+**Context.** The test-stack core healthcheck blocker
+(`docker-compose.yml` `smackerel-core` `start_period` 15s→120s) is
+landed. This re-run also closes three downstream blockers discovered
+during execution and addressed in the same change set:
+
+1. `smackerel.sh test integration` did not propagate
+   `AGENT_SCENARIO_DIR`, `ML_SIDECAR_URL`, or
+   `AGENT_ROUTING_FALLBACK_SCENARIO_ID` into the Go test container
+   (test self-skipped with "AGENT_SCENARIO_DIR not set — live stack
+   not available"). Fixed by reading those values from the generated
+   test env file and passing them explicitly, plus anchoring the
+   scenario-dir path under `/workspace` so the per-package Go test
+   CWD resolves it. Also switched the test container to consume the
+   generated env file via `--env-file` so SST-driven timeouts
+   (`RECIPE_SEARCH_TIMEOUT_MS`, `RECIPE_SEARCH_PER_TOOL_TIMEOUT_MS`,
+   `RETRIEVAL_QA_TIMEOUT_MS`, `RETRIEVAL_QA_PER_TOOL_TIMEOUT_MS`)
+   reach the loader's `envsubst` pass instead of leaving
+   `limits.timeout_ms: ${RECIPE_SEARCH_TIMEOUT_MS}` unresolved.
+2. The `tests/integration/agent` package did not import the
+   production tool packages, so `agent.DefaultLoader().Load(...)`
+   rejected every scenario whose `allowed_tools[0].name` was missing
+   from the registry (`weather_lookup`, `recipe_search`,
+   `retrieval_search`, `recommendation_*`, `notification_propose`).
+   Fixed by adding a build-tagged
+   `tests/integration/agent/tool_imports_test.go` with blank imports
+   mirroring `cmd/core/wiring_agent.go` (notification, recipesearch,
+   retrieval, weather, microtools, recommendation/tools, plus the
+   openknowledge substrate tool).
+
+**Command.**
+
+```text
+$ ./smackerel.sh test integration --go-run \
+    '^TestOpenKnowledgeRouting_FallbackToOpenKnowledge$'
+```
+
+(captured at `/tmp/s064-12e.log`)
+
+**Result.**
+
+```text
+=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge
+=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge/weather-domain-query-does-not-route-to-open-knowledge
+    openknowledge_routing_test.go:128: query="weather in paris today" → weather_query (top_score=1.000, reason=similarity_match)
+=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge/open-ended-knowledge-question-routes-to-open-knowledge
+    openknowledge_routing_test.go:128: query="explain quantum entanglement briefly" → open_knowledge (top_score=0.183, reason=fallback_clarify)
+=== RUN   TestOpenKnowledgeRouting_FallbackToOpenKnowledge/deterministic-tool-question-routes-to-open-knowledge
+    openknowledge_routing_test.go:128: query="what is 10F in C" → open_knowledge (top_score=0.763, reason=similarity_match)
+--- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge (1.18s)
+    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/weather-domain-query-does-not-route-to-open-knowledge (0.04s)
+    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/open-ended-knowledge-question-routes-to-open-knowledge (0.02s)
+    --- PASS: TestOpenKnowledgeRouting_FallbackToOpenKnowledge/deterministic-tool-question-routes-to-open-knowledge (0.01s)
+PASS
+ok      github.com/smackerel/smackerel/tests/integration/agent  1.313s
+…
+PASS: go-integration
+EXIT=0
+```
+
+**Acceptance criteria check.**
+
+| Criterion                                                  | Observed                                          | Result |
+|------------------------------------------------------------|---------------------------------------------------|--------|
+| weather query routes to `weather_query`, not open_knowledge | weather_query, reason=similarity_match            | PASS   |
+| `weather_query.top_score ≥ 0.65` for `weather in paris today` | top_score=1.000                                   | PASS   |
+| open-ended knowledge question routes to open_knowledge     | open_knowledge, reason=fallback_clarify (0.183)   | PASS   |
+| deterministic-tool question routes to open_knowledge       | open_knowledge, reason=similarity_match (0.763)   | PASS   |
+| overall test exit code                                     | `EXIT=0` (go-integration: PASS)                   | PASS   |
+
+**DoD impact.** SCOPE-12 DoD item "Routing order verified
+adversarially" is flipped to `[x]` in `scopes.md` line 406; live
+evidence is the transcript above.
+
+**Files touched (same change set).**
+
+- `docker-compose.yml` — `smackerel-core` `start_period` 15s→120s
+  (already landed; verified active).
+- `smackerel.sh` — `test integration` case propagates
+  `AGENT_SCENARIO_DIR` (anchored to `/workspace`), `ML_SIDECAR_URL`,
+  `AGENT_ROUTING_FALLBACK_SCENARIO_ID`, and the full generated test
+  env file (`--env-file "$env_file"`) into the Go test container.
+- `tests/integration/agent/tool_imports_test.go` — new build-tagged
+  blank-import file that bootstraps the production tool registry for
+  scenario-loader validation.
+

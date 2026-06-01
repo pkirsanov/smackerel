@@ -259,3 +259,39 @@ After deploy, the post-fix live verification steps (live `/api/expenses` returns
 This triage session did not invoke any subagents. Discovery, log retrieval, code inspection, and bug-artifact creation were all performed directly by `bubbles.bug`. Routing to specialist agents is pending the parent workflow's next dispatch (see "Routing Recommendation" in the result envelope).
 
 This implementation session (2026-05-28T18:55-19:05Z) was performed directly by `bubbles.implement`. No subagents were invoked. Files modified: 2 source (`expenses.go`, `mealplan.go`) + 1 test edit (`mealplan_test.go`) + 1 new test (`router_mount_bug_034_003_test.go`) + 3 bug artifacts (`report.md`, `scopes.md`, `state.json`).
+
+## Audit 2026-06-01
+
+`bubbles.audit` re-ran both governance guards after `bubbles.plan` closed the prior 6 traceability + 2 artifact-lint findings.
+
+**artifact-lint** (`bash .github/bubbles/scripts/artifact-lint.sh specs/034-expense-tracking/bugs/BUG-034-003-expense-query-failed-double-api-prefix`):
+
+```
+✅ Required artifact exists: spec.md / design.md / uservalidation.md / state.json / scopes.md / report.md
+✅ No forbidden sidecar artifacts present
+✅ scopes.md DoD contains checkbox items; all use checkbox syntax
+✅ uservalidation checklist contains checkbox entries; has checked-by-default entries
+✅ state.json v3 required fields present (status / execution / certification / policySnapshot)
+✅ Top-level status matches certification.status
+⚠️  state.json v3 missing recommended field: executionHistory (non-blocking)
+⚠️  state.json completion phase block uses legacy object format — supported for compatibility
+EXIT=0
+```
+
+**traceability-guard** (`timeout 600 bash .github/bubbles/scripts/traceability-guard.sh specs/034-expense-tracking/bugs/BUG-034-003-expense-query-failed-double-api-prefix`):
+
+```
+--- Scenario Manifest Cross-Check (G057/G059) ---
+✅ scenario-manifest.json covers 4 scenario contract(s)
+✅ All linked tests from scenario-manifest.json exist
+   (7× internal/api/router_mount_bug_034_003_test.go, 2× uservalidation.md)
+✅ scenario-manifest.json records evidenceRefs
+✅ Scope 1 scenarios mapped to Test Plan rows and concrete test files:
+   - Expense list route is mounted behind auth → router_mount_bug_034_003_test.go
+   - Meal-plan list route is mounted behind auth → router_mount_bug_034_003_test.go
+   - Adversarial — double-prefix path remains 404 → router_mount_bug_034_003_test.go
+RESULT: PASSED (0 warnings)
+EXIT=0
+```
+
+**Verdict:** ⚠️ SHIP_WITH_NOTES — both governance gates clean (exit 0). The 3 live-host DoD items remain blocked on operator-run home-lab redeploy; routing to `bubbles.validate` for final certification.

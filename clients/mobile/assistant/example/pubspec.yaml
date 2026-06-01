@@ -1,0 +1,21 @@
+name: smackerel_assistant_example
+description: "Minimal example app that consumes the smackerel_assistant package so Linux CI can produce the Android parity build (flutter build apk) required by spec 073 Scope 1d."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  smackerel_assistant:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

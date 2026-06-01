@@ -1,0 +1,6 @@
+{
+  "schema_version": "render-descriptor.v1",
+  "nodes": [
+    {"kind": "text", "text": "The weather in Palm Springs tomorrow is sunny, 78F."}
+  ]
+}

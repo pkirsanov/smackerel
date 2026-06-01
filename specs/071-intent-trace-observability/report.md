@@ -18,11 +18,193 @@ Planning-only artifact creation is represented by `scopes.md`, `scenario-manifes
 
 ### Code Diff Evidence
 
-No source, test, config, ML, runtime, or docs files are intentionally changed by this planning scaffold.
+Implementation surfaces for SCN-071-A01..A10 already exist on disk as untracked files (verified via `git status --short`, 2026-06-01):
+
+```
+?? internal/assistant/intenttrace/
+   - types.go, recorder.go, recorder_test.go
+   - redaction.go, redaction_test.go
+   - sampling.go, sampling_test.go
+   - replay.go, replay_test.go
+   - retention.go
+   - export.go
+   - golden_contract_test.go
+?? internal/config/assistant_intent_trace.go
+?? internal/db/migrations/047_assistant_intent_traces.sql
+?? tests/integration/assistant/intent_trace_persistence_test.go
+?? tests/integration/assistant/intent_trace_retention_test.go
+?? tests/integration/assistant/intent_replay_store_test.go
+?? tests/integration/assistant/refusal_trace_join_test.go
+?? tests/integration/monitoring/  (assistant_intents_dashboard_test.go)
+?? tests/e2e/assistant/  (intent_replay_test.go, intent_refusal_join_e2e_test.go,
+                          intent_bypass_guard_e2e_test.go)
+ M tests/integration/assistant/intent_trace_test.go
+```
+
+The Test Plan also lists three additional planned rows that are **not yet present** on disk and remain outstanding for a future implementation pass:
+
+- `tests/e2e/assistant/intent_trace_contract_e2e_test.go` (SCN-071-A01 e2e)
+- `tests/e2e/assistant/intent_trace_privacy_e2e_test.go` (SCN-071-A03 e2e)
+- `tests/integration/policy/intent_bypass_guard_test.go` (SCN-071-A08 integration)
+- `web/pwa/tests/assistant_intents_dashboard.spec.ts` (SCN-071-A06 e2e-ui)
+
+**Claim Source:** executed (`git status --short` output, recorded 2026-06-01T21:13Z).
 
 ### Test Evidence (ALL TYPES REQUIRED)
 
-No runtime test evidence is recorded in this planning scaffold. Planned test rows are enumerated in `test-plan.json` and in each scope's Test Plan table.
+#### Unit — `go test ./internal/assistant/intenttrace/`
+
+Command: `go test -count=1 -timeout 180s -v ./internal/assistant/intenttrace/`  
+Exit: 0  
+Captured at: 2026-06-01T21:11Z (`/tmp/it-unit.log`)
+
+```
+=== RUN   TestSchemaVersionV1IsPinned
+--- PASS: TestSchemaVersionV1IsPinned (0.00s)
+=== RUN   TestGoldenV1PayloadRoundTrip
+--- PASS: TestGoldenV1PayloadRoundTrip (0.00s)
+=== RUN   TestGoldenV1PayloadHashPinned
+--- PASS: TestGoldenV1PayloadHashPinned (0.00s)
+=== RUN   TestClosedVocabulariesPinned
+--- PASS: TestClosedVocabulariesPinned (0.00s)
+=== RUN   TestStoreRecorder_RecordsSampledRow
+--- PASS: TestStoreRecorder_RecordsSampledRow (0.00s)
+=== RUN   TestStoreRecorder_SampledOutEnvelope
+--- PASS: TestStoreRecorder_SampledOutEnvelope (0.00s)
+=== RUN   TestStoreRecorder_ValidationFailures
+--- PASS: TestStoreRecorder_ValidationFailures (0.00s)
+    (6 sub-tests: missing_trace_id, missing_turn_id, unknown_transport,
+     missing_action_class, unknown_status, missing_redaction_summary_raw_text)
+=== RUN   TestNopRecorder_NoStoreWrite
+--- PASS: TestNopRecorder_NoStoreWrite (0.00s)
+=== RUN   TestDefaultRedactor_PersistRawTextFalseHidesRawText
+--- PASS: TestDefaultRedactor_PersistRawTextFalseHidesRawText (0.00s)
+=== RUN   TestDefaultRedactor_PersistRawTextTrueKeepsDispositionMarker
+--- PASS: TestDefaultRedactor_PersistRawTextTrueKeepsDispositionMarker (0.00s)
+=== RUN   TestDefaultRedactor_EmptyRawTextIsAbsent
+--- PASS: TestDefaultRedactor_EmptyRawTextIsAbsent (0.00s)
+=== RUN   TestStoreReplay_HappyPath_PayloadDryRunner
+--- PASS: TestStoreReplay_HappyPath_PayloadDryRunner (0.00s)
+=== RUN   TestStoreReplay_NotFound
+--- PASS: TestStoreReplay_NotFound (0.00s)
+=== RUN   TestStoreReplay_EmptyTraceID
+--- PASS: TestStoreReplay_EmptyTraceID (0.00s)
+=== RUN   TestStoreReplay_SampledOutRejected
+--- PASS: TestStoreReplay_SampledOutRejected (0.00s)
+=== RUN   TestStoreReplay_SchemaInvalidRejected
+--- PASS: TestStoreReplay_SchemaInvalidRejected (0.00s)
+=== RUN   TestStoreReplay_DryRunnerSideEffectIsBlocked
+--- PASS: TestStoreReplay_DryRunnerSideEffectIsBlocked (0.00s)
+=== RUN   TestStoreReplay_MatchSummaryReportsDivergence
+--- PASS: TestStoreReplay_MatchSummaryReportsDivergence (0.00s)
+=== RUN   TestRatioSampler_Validation
+--- PASS: TestRatioSampler_Validation (0.00s)
+=== RUN   TestRatioSampler_FullRatioAlwaysSamples
+--- PASS: TestRatioSampler_FullRatioAlwaysSamples (0.00s)
+=== RUN   TestRatioSampler_ZeroRatioNeverSamples
+--- PASS: TestRatioSampler_ZeroRatioNeverSamples (0.00s)
+=== RUN   TestRatioSampler_DeterministicForSameID
+--- PASS: TestRatioSampler_DeterministicForSameID (0.00s)
+=== RUN   TestRatioSampler_ApproximatesRatio
+--- PASS: TestRatioSampler_ApproximatesRatio (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/assistant/intenttrace   0.027s
+```
+
+Maps: SCN-071-A01 (recorder validation + one-row invariant), SCN-071-A02 (sampler determinism + sampled-out envelope), SCN-071-A03 (redaction), SCN-071-A04 (replay dry-run + side-effect block + divergence), SCN-071-A10 (golden schema pin + closed vocabularies).
+
+**Claim Source:** executed.
+
+#### Unit — `go test ./internal/config/` (SCN-071-A05)
+
+Command: `go test -count=1 -timeout 60s -v -run 'IntentTrace|SCN_071|AssistantIntentTrace' ./internal/config/`  
+Exit: 0  
+Captured at: 2026-06-01T21:11Z (`/tmp/it-cfg.log`)
+
+```
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/all_missing_names_every_key
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/fully_populated_no_errors
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_SAMPLING_RATIO
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_RETENTION_DAYS
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_EXPORT_TARGETS
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_REPLAY_ENABLED
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/each_key_independently_required/missing_ASSISTANT_INTENT_TRACE_RETENTION_SWEEP_INTERVAL
+=== RUN   TestIntentTraceConfigRequiresEverySSTKey/unknown_export_target_rejected
+--- PASS: TestIntentTraceConfigRequiresEverySSTKey (0.00s)
+PASS
+ok      github.com/smackerel/smackerel/internal/config  0.020s
+```
+
+Maps: SCN-071-A05 (fail-loud SST naming every key).
+
+**Claim Source:** executed.
+
+#### Integration — live test stack against Postgres + NATS + ML + core
+
+Command: `./smackerel.sh test integration --go-run '^(TestIntentTrace|TestIntentReplay|TestRefusalCause|TestRefusalCounter|TestAssistantIntents)'`  
+Exit: 1 (unrelated pre-existing build failure in `tests/integration/telegram/legacy_alias_test.go` — `undefined: telegram.NewTestBotWithReplyRecorder`, `undefined: telegram.InterceptLegacyAliasForTest`; not in this spec's change boundary)  
+Captured at: 2026-06-01T21:20Z (`/tmp/it-071.log`); live stack containers smackerel-test-{postgres,nats,ml,core,ollama,stub-providers,jaeger,searxng} all reported `healthy` before tests ran.
+
+All spec 071 integration packages PASS:
+
+```
+=== RUN   TestIntentReplayLoadsOneStoredRedactedTraceByTraceID
+--- PASS: TestIntentReplayLoadsOneStoredRedactedTraceByTraceID (0.03s)
+=== RUN   TestIntentReplayRefusesSampledOutEnvelope
+--- PASS: TestIntentReplayRefusesSampledOutEnvelope (0.02s)
+=== RUN   TestIntentReplayReportsNotFoundForUnknownTraceID
+--- PASS: TestIntentReplayReportsNotFoundForUnknownTraceID (0.01s)
+=== RUN   TestIntentTracePersistsExactlyOneV1RowPerRecordCall
+--- PASS: TestIntentTracePersistsExactlyOneV1RowPerRecordCall (0.02s)
+=== RUN   TestIntentTraceSampledOutPreservesTotalTurnAccounting
+--- PASS: TestIntentTraceSampledOutPreservesTotalTurnAccounting (0.02s)
+=== RUN   TestIntentTraceRedactionLeavesNoRawSlotValueInPayload
+--- PASS: TestIntentTraceRedactionLeavesNoRawSlotValueInPayload (0.01s)
+=== RUN   TestIntentTraceRetentionSweepRemovesExpiredAndKeepsFresh
+--- PASS: TestIntentTraceRetentionSweepRemovesExpiredAndKeepsFresh (0.02s)
+=== RUN   TestIntentTraceRecordsCompileValidateRouteToolResponseSequence
+--- PASS: TestIntentTraceRecordsCompileValidateRouteToolResponseSequence (0.00s)
+=== RUN   TestIntentTraceDistinguishesClarifyFailureAndOperationalBypass
+--- PASS: TestIntentTraceDistinguishesClarifyFailureAndOperationalBypass (0.00s)
+=== RUN   TestRefusalCauseVocabularyMatchesIntentTraceColumn
+--- PASS: TestRefusalCauseVocabularyMatchesIntentTraceColumn (0.03s)
+=== RUN   TestRefusalCounterAndIntentTraceJoinByCauseLabel
+--- PASS: TestRefusalCounterAndIntentTraceJoinByCauseLabel (0.02s)
+ok      github.com/smackerel/smackerel/tests/integration/assistant      0.332s
+=== RUN   TestAssistantIntentsDashboardHasRequiredPanels
+--- PASS: TestAssistantIntentsDashboardHasRequiredPanels (0.00s)
+=== RUN   TestAssistantIntentsDashboardQueriesCanonicalMetrics
+--- PASS: TestAssistantIntentsDashboardQueriesCanonicalMetrics (0.00s)
+=== RUN   TestAssistantIntentsDashboardRefusalPanelJoinsBothSources
+--- PASS: TestAssistantIntentsDashboardRefusalPanelJoinsBothSources (0.00s)
+ok      github.com/smackerel/smackerel/tests/integration/monitoring     0.019s
+```
+
+Scope mapping:
+- SCN-071-A01 → `TestIntentTracePersistsExactlyOneV1RowPerRecordCall`, `TestIntentTraceRecordsCompileValidateRouteToolResponseSequence`
+- SCN-071-A02 → `TestIntentTraceSampledOutPreservesTotalTurnAccounting`
+- SCN-071-A03 → `TestIntentTraceRedactionLeavesNoRawSlotValueInPayload`
+- SCN-071-A04 → `TestIntentReplayLoadsOneStoredRedactedTraceByTraceID`, `TestIntentReplayRefusesSampledOutEnvelope`, `TestIntentReplayReportsNotFoundForUnknownTraceID`
+- SCN-071-A06 → `TestAssistantIntentsDashboardHasRequiredPanels`, `TestAssistantIntentsDashboardQueriesCanonicalMetrics`, `TestAssistantIntentsDashboardRefusalPanelJoinsBothSources`
+- SCN-071-A07 → `TestRefusalCauseVocabularyMatchesIntentTraceColumn`, `TestRefusalCounterAndIntentTraceJoinByCauseLabel`, `TestAssistantIntentsDashboardRefusalPanelJoinsBothSources`
+- SCN-071-A09 → `TestIntentTraceRetentionSweepRemovesExpiredAndKeepsFresh`
+- SCN-071-A08 (integration row): **not executed** — `tests/integration/policy/intent_bypass_guard_test.go` is not present on disk yet.
+
+**Claim Source:** executed for listed PASS lines; the EXIT=1 is attributable to the unrelated `tests/integration/telegram` package and is **not** a regression introduced by this spec's surfaces.
+
+#### E2E — not executed in this pass
+
+The e2e files `tests/e2e/assistant/intent_replay_test.go`, `tests/e2e/assistant/intent_refusal_join_e2e_test.go`, and `tests/e2e/assistant/intent_bypass_guard_e2e_test.go` exist on disk but were **not** executed in this session due to terminal-session time budget. The planned e2e rows `intent_trace_contract_e2e_test.go`, `intent_trace_privacy_e2e_test.go`, `intent_bypass_guard_e2e_test.go` (file present), and the e2e-ui row `web/pwa/tests/assistant_intents_dashboard.spec.ts` (file absent) all remain outstanding for the e2e validation pass.
+
+**Claim Source:** not-run.
+
+#### Format/Lint/Artifact-Lint — not executed in this pass
+
+`./smackerel.sh format --check`, `./smackerel.sh lint`, and `bash .github/bubbles/scripts/artifact-lint.sh specs/071-intent-trace-observability` were not executed in this session.
+
+**Claim Source:** not-run.
 
 ### Uncertainty Declarations
 

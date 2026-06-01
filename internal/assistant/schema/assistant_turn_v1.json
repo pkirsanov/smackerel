@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smackerel.dev/schemas/assistant_turn_v1.json",
+  "title": "AssistantTurnV1",
+  "description": "Canonical wire-schema for POST /api/assistant/turn (spec 069). This artifact is the single source of truth consumed by the Go contract types in this package, by the web codegen pipeline (spec 073 Scope 1c), and by the Flutter shared-core codegen (spec 073 Scope 1d). Any removal, rename, or retype of an existing wire field MUST bump schema_version and update the canonical fixtures. Additive OPTIONAL properties (not listed in `required`) are v1-compatible and MUST NOT bump schema_version; see spec 075 SCOPE-075-06.2b and design.md for the v1-compat decision record.",
+  "type": "object",
+  "schema_version": "v1",
+  "transport_hint_allowlist": ["web", "mobile", "bridge"],
+  "kind_allowlist": ["text", "confirm", "disambiguation", "reset"],
+  "definitions": {
+    "TurnRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "transport_message_id",
+        "kind",
+        "transport_hint",
+        "text",
+        "confirm_ref",
+        "confirm_choice",
+        "disambiguation_ref",
+        "disambiguation_choice",
+        "client_context"
+      ],
+      "properties": {
+        "schema_version": { "const": "v1" },
+        "transport_message_id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["text", "confirm", "disambiguation", "reset"] },
+        "transport_hint": { "type": "string", "enum": ["web", "mobile", "bridge"] },
+        "text": { "type": "string" },
+        "confirm_ref": { "type": "string" },
+        "confirm_choice": { "type": "string" },
+        "disambiguation_ref": { "type": "string" },
+        "disambiguation_choice": { "type": "integer" },
+        "client_context": { "type": "object" }
+      }
+    },
+    "TurnResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "transport",
+        "transport_message_id",
+        "status",
+        "body",
+        "sources",
+        "sources_overflow_count",
+        "confirm_card",
+        "disambiguation_prompt",
+        "error_cause",
+        "capture_route",
+        "trace",
+        "facade_invoked",
+        "emitted_at"
+      ],
+      "properties": {
+        "schema_version": { "const": "v1" },
+        "transport": { "type": "string" },
+        "transport_message_id": { "type": "string" },
+        "status": { "type": "string" },
+        "body": { "type": "string" },
+        "sources": { "type": "array", "items": { "$ref": "#/definitions/Source" } },
+        "sources_overflow_count": { "type": "integer" },
+        "confirm_card": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/ConfirmCard" }] },
+        "disambiguation_prompt": { "oneOf": [{ "type": "null" }, { "$ref": "#/definitions/Disambiguation" }] },
+        "error_cause": { "type": "string" },
+        "capture_route": { "type": "boolean" },
+        "trace": { "$ref": "#/definitions/Trace" },
+        "facade_invoked": { "type": "boolean" },
+        "emitted_at": { "type": "string" },
+        "notice": { "$ref": "#/definitions/NoticePayload" }
+      }
+    },
+    "NoticePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "replacement_example", "copy_key", "window_id"],
+      "properties": {
+        "command": { "type": "string" },
+        "replacement_example": { "type": "string" },
+        "copy_key": { "type": "string" },
+        "window_id": { "type": "string" }
+      }
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "title", "kind",
+        "artifact_id", "artifact_captured_at",
+        "provider_name", "provider_retrieved_at",
+        "url", "web_provider", "web_fetched_at", "web_content_hash", "web_snippet",
+        "computation_tool", "computation_input_hash", "computation_output_hash"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "kind": { "type": "string" },
+        "artifact_id": { "type": "string" },
+        "artifact_captured_at": { "type": "string" },
+        "provider_name": { "type": "string" },
+        "provider_retrieved_at": { "type": "string" },
+        "url": { "type": "string" },
+        "web_provider": { "type": "string" },
+        "web_fetched_at": { "type": "string" },
+        "web_content_hash": { "type": "string" },
+        "web_snippet": { "type": "string" },
+        "computation_tool": { "type": "string" },
+        "computation_input_hash": { "type": "string" },
+        "computation_output_hash": { "type": "string" }
+      }
+    },
+    "ConfirmCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposed_action", "confirm_ref", "positive_label", "negative_label", "timeout_seconds"],
+      "properties": {
+        "proposed_action": { "type": "string" },
+        "confirm_ref": { "type": "string" },
+        "positive_label": { "type": "string" },
+        "negative_label": { "type": "string" },
+        "timeout_seconds": { "type": "integer" }
+      }
+    },
+    "Disambiguation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disambiguation_ref", "timeout_seconds", "choices"],
+      "properties": {
+        "disambiguation_ref": { "type": "string" },
+        "timeout_seconds": { "type": "integer" },
+        "choices": { "type": "array", "items": { "$ref": "#/definitions/DisambiguationChoice" } }
+      }
+    },
+    "DisambiguationChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "id", "label", "shortcut"],
+      "properties": {
+        "number": { "type": "integer" },
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "shortcut": { "type": "string" }
+      }
+    },
+    "Trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assistant_turn_id", "agent_trace_id", "request_id"],
+      "properties": {
+        "assistant_turn_id": { "type": "string" },
+        "agent_trace_id": { "type": "string" },
+        "request_id": { "type": "string" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/TurnRequest" },
+    { "$ref": "#/definitions/TurnResponse" }
+  ]
+}

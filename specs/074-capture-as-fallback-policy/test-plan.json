@@ -21,10 +21,14 @@
       {"id":"TP-074-10","scenarioId":"SCN-074-A05","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: cross-user same normalized text creates separate Ideas","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
       {"id":"TP-074-11","scenarioId":"SCN-074-A03","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_fallback_dedup_e2e_test.go","plannedTitle":"Planned regression: live second same-window fallback returns already-captured acknowledgement","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
     ]},
-    {"scopeId":"SCOPE-074-04","scopeName":"Trigger Execution And Abandoned Clarification","tests":[
-      {"id":"TP-074-12","scenarioId":"SCN-074-A01","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: unrouted/no-ground turn creates exactly one fallback Idea","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
-      {"id":"TP-074-13","scenarioId":"SCN-074-A06","type":"integration","category":"integration","file":"tests/integration/assistant/clarify_abandon_capture_test.go","plannedTitle":"Planned: abandoned clarification captures original prompt with flag and cause","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+    {"scopeId":"SCOPE-074-04A","scopeName":"Facade Unrouted-Turn Hook And Eligibility Gate","tests":[
+      {"id":"TP-074-12","scenarioId":"SCN-074-A01","type":"integration","category":"integration","file":"tests/integration/assistant/capture_fallback_policy_test.go","plannedTitle":"Planned: unrouted/no-ground turn creates exactly one fallback Idea","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-04B","scopeName":"Open-Knowledge No-Ground Trigger And Live Regression","tests":[
       {"id":"TP-074-14","scenarioId":"SCN-074-A01","type":"e2e-api","category":"e2e-api","file":"tests/e2e/assistant/capture_fallback_trigger_e2e_test.go","plannedTitle":"Planned regression: live fallback-eligible turn returns saved-as-idea acknowledgement and one artifact","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+    ]},
+    {"scopeId":"SCOPE-074-04C","scopeName":"Compiler Abandoned-Clarification Trigger","tests":[
+      {"id":"TP-074-13","scenarioId":"SCN-074-A06","type":"integration","category":"integration","file":"tests/integration/assistant/clarify_abandon_capture_test.go","plannedTitle":"Planned: abandoned clarification captures original prompt with flag and cause","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"}
     ]},
     {"scopeId":"SCOPE-074-05","scopeName":"Telemetry, IntentTrace Link, And Cross-Transport Acknowledgement","tests":[
       {"id":"TP-074-15","scenarioId":"SCN-074-A07","type":"integration","category":"integration","file":"tests/integration/assistant/capture_trace_join_test.go","plannedTitle":"Planned: fallback counter increments and IntentTrace links produced Idea artifact id","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},

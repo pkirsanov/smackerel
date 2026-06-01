@@ -29,6 +29,7 @@ import (
 	"github.com/smackerel/smackerel/internal/topics"
 	"github.com/smackerel/smackerel/internal/web"
 
+	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 )
 
@@ -86,6 +87,13 @@ type coreServices struct {
 	// buffered spans are flushed on exit.
 	assistantTracer         *assistanttracing.Tracer
 	assistantTracerShutdown assistanttracing.ShutdownFunc
+
+	// Spec 069 SCOPE-1a — late-bound HTTP transport adapter handler.
+	// Built in wiring.go before api.NewRouter so the route mount can
+	// see it; the adapter inside is installed by wireAssistantFacade
+	// after the capability-layer Facade is constructed. Until then,
+	// the handler returns 503 with "assistant_http_not_ready".
+	assistantHTTPHandler *httpadapter.LateBoundHandler
 }
 
 // buildCoreServices constructs all infrastructure and service dependencies.

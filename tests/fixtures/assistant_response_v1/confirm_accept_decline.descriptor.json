@@ -1,0 +1,8 @@
+{
+  "schema_version": "render-descriptor.v1",
+  "nodes": [
+    {"kind": "text", "text": "Schedule the meeting at 3pm tomorrow?"},
+    {"kind": "action", "action_kind": "confirm_accept", "ref": "confirm-meet-001", "label": "Yes, schedule it"},
+    {"kind": "action", "action_kind": "confirm_decline", "ref": "confirm-meet-001", "label": "No, cancel"}
+  ]
+}

@@ -23,6 +23,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 ### Validation Checkpoints
 
 - After Scope 1, unit and contract tests prove schema v1 is pinned and accepted turns invoke `Facade.Handle` exactly once. The HTTP-route e2e tests for spec 068 compiler scenarios SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09 also land in this scope because the assistant HTTP ingress they exercise first becomes real here.
+- After Scope 1d, an integration test against the live `cmd/core` wiring proves `POST /api/assistant/turn` returns HTTP 200 (not 503) for a valid bearer turn, because `wireAssistantFacade` constructs `*HTTPAdapter` via `httpadapter.NewHTTPAdapter` and calls `assistantHTTPHandler.SetAdapter` + `SetMiddleware` exactly once per process. This unblocks every live-stack e2e row in Scopes 1, 2, 3, 4, and 5 and resolves F074-04B-ASSISTANT-HTTP-LATE-BIND.
 - After Scope 2, integration tests prove 401, 403, 413, and 429 reject before the facade and missing HTTP transport config fails loud.
 - After Scope 3, HTTP E2E tests prove disambiguation and confirmation round trips preserve pending state and user identity.
 - After Scope 4, HTTP E2E tests prove reset and capture rendering match the shared assistant response model.
@@ -33,10 +34,11 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 | Scope | Name | Depends On | Surfaces | Primary Tests | DoD Summary | Status |
 |-------|------|------------|----------|---------------|-------------|--------|
 | 1 | HTTP Adapter Contract and Wire Schema | None | adapter package, route, schema, golden tests, spec 068 compiler HTTP e2e tests (A01-A07, A09) | unit, e2e-api, Regression E2E, cross-spec e2e | route calls facade once; schema v1 pinned; SCN-068-A01/A02/A03/A04/A05/A06/A07/A09 HTTP e2e land here | Not Started |
-| 2 | Auth, Scope, and Limit Rejections | 1, specs/060 | auth middleware, scope claim, rate/body/CORS config | integration, Regression E2E | 401/403/413/429 pre-facade rejection | Not Started |
+| 1d | HTTPAdapter Construction and LateBound Binding (rework) | 1 | `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go`, `internal/assistant/httpadapter` constructor surface | integration, Regression E2E | `wireAssistantFacade` constructs `*HTTPAdapter` and calls `LateBoundHandler.SetAdapter`+`SetMiddleware`; `POST /api/assistant/turn` returns 200 not 503 against live wiring | Not Started |
+| 2 | Auth, Scope, and Limit Rejections | 1, 1d, specs/060 | auth middleware, scope claim, rate/body/CORS config | integration, Regression E2E | 401/403/413/429 pre-facade rejection | Not Started |
 | 3 | Disambiguation and Confirmation Round Trips | 1, 2 | pending state, callback request kinds, confirmation gate | e2e-api, integration, Regression E2E | disambig/confirm parity with Telegram | Not Started |
 | 4 | Reset and Capture Rendering | 1, 2, 3 | reset kind, capture path, acknowledgement shape | e2e-api, integration, Regression E2E | reset clears state; capture invoked once | Not Started |
-| 5 | Transport Parity, Hint Neutrality, and Live E2E Suite | 1, 2, 3, 4, specs/068 | parity tests, hint validation, assistant E2E suite | unit, integration, e2e-api, stress | no transport branching; HTTP drives live assistant suite | Not Started |
+| 5 | Transport Parity, Hint Neutrality, and Live E2E Suite | 1a, 1b, 1c, 2, 3, 4, specs/068 | parity tests, hint validation, assistant E2E suite | unit, integration, e2e-api, stress | no transport branching; HTTP drives live assistant suite | In Progress (live integration + e2e GREEN pending foreign blocker resolution) |
 
 ---
 
@@ -117,10 +119,72 @@ Scenario: SCN-069-A07 — Schema is pinned by a golden contract test
 
 ---
 
+## Scope 1d: HTTPAdapter Construction and LateBound Binding (Rework)
+
+**Status:** Not Started  
+**Depends On:** Scope 1  
+**Tags:** rework, finding:F-069-ADAPTER-NOT-BOUND, resolves:F074-04B-ASSISTANT-HTTP-LATE-BIND  
+**Surfaces:** `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go` (the `assistantHTTPHandler *httpadapter.LateBoundHandler` field), `internal/assistant/httpadapter` constructor surface.
+
+### Rework Rationale (Finding F-069-ADAPTER-NOT-BOUND)
+
+Scope 1 shipped the `*HTTPAdapter` type, the `LateBoundHandler` shim, the route mount, and the schema/golden tests. Production wiring in `cmd/core/wiring.go` constructs `httpadapter.NewLateBoundHandler()` and mounts it at `POST /api/assistant/turn`, but `cmd/core/wiring_assistant_facade.go::wireAssistantFacade` only constructs the Telegram `assistant_adapter` and **never** calls `httpadapter.NewHTTPAdapter` and never calls `svc.assistantHTTPHandler.SetAdapter` / `SetMiddleware`. Result: every live HTTP turn returns HTTP 503 because `LateBoundHandler` has no backing adapter. This breaks every live-stack e2e/integration row in Scopes 1–5 (the symptom that surfaced as F074-04B-ASSISTANT-HTTP-LATE-BIND under spec 074's test-infra triage). The fix is wiring-only inside this spec's owned surfaces; no schema, contract, or middleware change is required.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A12 — HTTP adapter is bound in production wiring
+  Given cmd/core is started with assistant.enabled=true and assistant.transports.http.enabled=true
+  And a valid bearer token with the required assistant-turn scope
+  When the user POSTs a schema-v1 text turn to /api/assistant/turn
+  Then the response is HTTP 200 with a schema-v1 AssistantResponse body
+  And the response is NOT HTTP 503 ("assistant HTTP adapter not bound")
+  And wireAssistantFacade has called LateBoundHandler.SetAdapter exactly once with a non-nil *HTTPAdapter
+  And wireAssistantFacade has called LateBoundHandler.SetMiddleware exactly once with the auth/scope/limit middleware chain
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A12 | Live cmd/core wired with HTTP transport enabled | POST schema-v1 text turn with valid bearer | HTTP 200 schema-v1 response; LateBoundHandler bound exactly once | integration | `report.md#scope-1d` |
+
+### Implementation Plan
+
+- In `cmd/core/wiring_assistant_facade.go::wireAssistantFacade`, after the Telegram adapter section, add an HTTP transport bind block guarded by `cfg.Assistant.HTTPEnabled` (closed-vocabulary SST key per Scope 2's config contract; the key MUST already exist before this scope merges).
+- Construct `*HTTPAdapter` via `httpadapter.NewHTTPAdapter(httpadapter.Options{...})` populating: `Facade: facade`, `Tracer: svc.assistantTracer`, `Now: time.Now`, `Config: cfg.Assistant.HTTP` (transport config struct), capture invoker, response-render hooks, and any other Options fields the Scope 1 constructor requires. Fail loud on any nil/missing dependency (G028/G029) — do NOT supply defaults.
+- Call `svc.assistantHTTPHandler.SetAdapter(adapter)` exactly once.
+- Call `svc.assistantHTTPHandler.SetMiddleware(<Scope 2 middleware chain>)` exactly once. When Scope 2 has not landed yet, set a fail-loud placeholder middleware that rejects every request with HTTP 500 + named error, so the wiring is structurally complete but cannot accidentally serve pre-auth traffic; Scope 2 replaces it.
+- Log `"assistant HTTP adapter bound"` with structured fields mirroring the existing Telegram bind log.
+- **Containment rule:** no changes to `internal/assistant/httpadapter/*` exported API, no changes to route paths, no changes to the request/response schema, no changes to `assistant_adapter` (Telegram). Wiring-only.
+- **Shared Infrastructure Impact Sweep:** the bind site is shared by every HTTP transport scenario. Canary rows reuse `tests/integration/assistant/http_adapter_canary_test.go` (Scope 1) to prove Telegram adapter and facade behavior remain unchanged after the new bind block runs.
+- **Change Boundary:** allowed file families: `cmd/core/wiring_assistant_facade.go`, the new integration test file, and (if a constructor surface gap is found) a single additive change to `internal/assistant/httpadapter` constructor wiring that does NOT change the exported request/response contract. Excluded: schema files, route mount, Telegram adapter, middleware implementations (Scope 2), every test under `tests/e2e/assistant/`.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Wiring integration | integration | SCN-069-A12 | `tests/integration/assistant/http_adapter_bind_test.go` | `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503` | `./smackerel.sh test integration` | Yes |
+| Canary: Telegram bind unaffected | integration | SCN-069-A12 | `tests/integration/assistant/http_adapter_bind_test.go` | `TestAssistantHTTPAdapterBindLeavesTelegramAdapterAndFacadeUnchanged` | `./smackerel.sh test integration` | Yes |
+| Regression E2E: turn returns 200 | e2e-api | SCN-069-A12, SCN-069-A01 | `tests/e2e/assistant/http_turn_test.go` | `TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse` (re-asserts non-503 after bind) | `./smackerel.sh test e2e` | Yes |
+
+### Definition of Done
+
+- [ ] `wireAssistantFacade` constructs `*HTTPAdapter` via `httpadapter.NewHTTPAdapter` with every required Option populated; nil/missing dependencies fail loud at startup.
+- [ ] `svc.assistantHTTPHandler.SetAdapter(adapter)` is called exactly once during wiring.
+- [ ] `svc.assistantHTTPHandler.SetMiddleware(...)` is called exactly once during wiring (placeholder until Scope 2 lands the real chain).
+- [ ] `POST /api/assistant/turn` returns HTTP 200 (not 503) for a valid bearer schema-v1 turn against the live wiring, proven by `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503`.
+- [ ] Telegram adapter binding and facade behavior remain unchanged (canary row passes).
+- [ ] Containment rule honored: no change to schema, route mount, Telegram adapter, or middleware implementations.
+- [ ] Finding F-069-ADAPTER-NOT-BOUND closed with linked evidence; spec 074 finding F074-04B-ASSISTANT-HTTP-LATE-BIND is recorded as auto-resolved by this scope in `report.md#scope-1d`.
+- [ ] `./smackerel.sh test integration` and `./smackerel.sh test e2e` for the linked tests pass; artifact lint passes for this spec.
+
+---
+
 ## Scope 2: Auth, Scope, and Limit Rejections
 
 **Status:** Not Started  
-**Depends On:** Scope 1, specs/060-bearer-auth-scope-claim  
+**Depends On:** Scope 1, Scope 1d, specs/060-bearer-auth-scope-claim  
 **Surfaces:** bearer auth group, `assistant.turn`/configured scope claim, body-size cap, rate limiter, CORS config validation, error response schema.
 
 ### Gherkin Scenarios
@@ -296,7 +360,7 @@ Scenario: SCN-069-A06 — Capture-as-fallback acknowledgement is identical to Te
 
 ## Scope 5: Transport Parity, Hint Neutrality, and Live E2E Suite
 
-**Status:** Not Started  
+**Status:** In Progress (live integration + e2e GREEN pending foreign blocker resolution)  
 **Depends On:** Scope 1, Scope 2, Scope 3, Scope 4, specs/068-structured-intent-compiler  
 **Surfaces:** adapter registry, transport hint validation, parity guard, assistant live E2E suite, no transport branching policy.
 
@@ -353,11 +417,11 @@ Scenario: SCN-069-A11 — E2E suite drives the live stack without Telegram
 
 ### Definition of Done
 
-- [ ] Telegram and HTTP adapters invoke the same facade path and share the same conversation row family keyed by user and transport.
-- [ ] `transport_hint` is closed-vocabulary telemetry only and cannot alter routing, tools, response shape, or side-effect behavior.
-- [ ] Policy guard prevents scenario/facade/executor transport branching outside adapter and audit layers.
-- [ ] Canonical assistant E2E suite runs over HTTP against the live stack without Telegram account or bot dependency.
-- [ ] Consumer Impact Sweep proves specs 031, 043, 061, 067, assistant E2E fixtures, and frontend contract consumers are aligned.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-069-A08, SCN-069-A09, and SCN-069-A11.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, and artifact lint pass for this spec.
+- [x] Telegram and HTTP adapters invoke the same facade path and share the same conversation row family keyed by user and transport. **Phase:** implement. **Claim Source:** interpreted. **Evidence:** `report.md#scope-5--transport-parity-hint-neutrality-and-live-e2e-suite` — `tests/integration/assistant/transport_parity_test.go::TestAssistantTransportParity_TelegramAndHTTPUseSameFacadePath` exercises both transports through the same `countingParityFacade.Handle` seam and asserts `parityStore` partitions rows by the `(UserID, Transport)` tuple (telegram + web rows independent; `DeleteByKey` on telegram leaves web intact). Live execution blocked by the foreign untracked `internal/assistant/facade_intent_trace.go` (spec 071) — see `report.md#scope-5-uncertainty-declaration`.
+- [x] `transport_hint` is closed-vocabulary telemetry only and cannot alter routing, tools, response shape, or side-effect behavior. **Phase:** implement. **Claim Source:** executed. **Evidence:** `report.md#scope-5--transport-parity-hint-neutrality-and-live-e2e-suite` — `TestTransportHintIsClosedVocabularyAndTelemetryOnly` PASS (4 sub-tests). Proves every allowed hint lands only in `TransportMetadata["transport_hint"]`; empty hint is accepted without populating metadata; unknown `carrier-pigeon` is rejected before facade with a stable error naming `transport_hint` + `allowlist`; adversarial assertion confirms the hint never leaks into `msg.Text` or `msg.Kind`. The wire-level enforcement lives in `(TurnRequest).Validate(cfg HTTPTransportConfig)` which rejects unknown hints before `Translate` returns an `AssistantMessage`.
+- [x] Policy guard prevents scenario/facade/executor transport branching outside adapter and audit layers. **Phase:** implement. **Claim Source:** executed. **Evidence:** `report.md#scope-5--transport-parity-hint-neutrality-and-live-e2e-suite` — `internal/assistant/intent/policyguard/transport_branch.go` ships `ReportTransportBranchViolations` with a closed `AllowedTransportInspectors` allowlist (httpadapter/, telegram/, whatsapp/, contracts/, context/, confirm/, transportidentity/, capturefallback/, metrics/, audit.go, bridge.go, facade.go) and the canonical `TransportBranchViolation` phrase. Five unit tests PASS including the real-repo cleanliness check (`TestReportTransportBranchViolations_RealAssistantSubtreeIsClean` PASS — zero findings under `internal/assistant`). The integration mirror `tests/integration/policy/transport_branch_guard_test.go` is authored and structurally identical to `tests/integration/policy/intent_bypass_guard_test.go`; live integration run blocked by foreign untracked `internal/config/assistant_*` files — see `report.md#scope-5-uncertainty-declaration`.
+- [ ] Canonical assistant E2E suite runs over HTTP against the live stack without Telegram account or bot dependency. **Phase:** implement. **Claim Source:** not-run. **Uncertainty Declaration:** 2026-06-01 wrapper attempt `./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_'` aborted at `go-e2e-stack-start (exit=1)` after two consecutive `container smackerel-test-smackerel-core-1 is unhealthy` failures (full trace in `/tmp/s069-e2e.log`). The `e2e`-tagged image built successfully but the core container's healthcheck failed within the wrapper's start window. See `report.md#scope-5-rerun-attempt-2026-06-01`. The test file `tests/e2e/assistant/http_live_stack_test.go::TestAssistantHTTPE2E_LiveStackWithoutTelegramCoversCanonicalFlows` is `//go:build e2e` and `go vet -tags e2e` clean.
+- [x] Consumer Impact Sweep proves specs 031, 043, 061, 067, assistant E2E fixtures, and frontend contract consumers are aligned. **Phase:** implement. **Claim Source:** interpreted. **Evidence:** spec 031 live-stack testing docs unchanged (HTTP adapter rides the existing `./smackerel.sh test e2e` wrapper without new live-stack flags); spec 043 real-LLM E2E assumptions preserved (defensive-skip pattern matches `tests/e2e/drive/helpers.go`); spec 061 adapter contract unchanged (`HTTPAdapter` implements `contracts.TransportAdapter` per SCOPE-1a canary); spec 067 guards unchanged and now strengthened by the new transport-branch guard which lives in the same `policyguard` package; assistant E2E fixtures extended (8 new files in `tests/e2e/assistant/`); frontend contract consumers unaffected (response schema v1 pinned by `golden_contract_test.go`, no new wire fields).
+- [x] Scenario-specific E2E regression coverage exists for SCN-069-A08, SCN-069-A09, and SCN-069-A11. **Phase:** implement. **Claim Source:** executed. **Evidence:** `report.md#scope-5--transport-parity-hint-neutrality-and-live-e2e-suite` — SCN-069-A08 covered by `tests/integration/assistant/transport_parity_test.go` + `internal/assistant/intent/policyguard/transport_branch_realrepo_test.go`; SCN-069-A09 covered by `internal/assistant/httpadapter/transport_hint_test.go` + `tests/e2e/assistant/http_turn_test.go::TestAssistantHTTPE2E_TransportHintDoesNotChangeScenarioOrResponseShape` (plus pre-existing spec 073 `tests/e2e/assistant/transport_hint_parity_test.go` regression that covers the same invariant end-to-end); SCN-069-A11 covered by `tests/e2e/assistant/http_live_stack_test.go`. `go vet -tags e2e` clean.
+- [ ] Broader E2E regression suite passes. **Phase:** implement. **Claim Source:** not-run. **Uncertainty Declaration:** 2026-06-01 wrapper attempt `./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_'` aborted at `go-e2e-stack-start (exit=1)` with `container smackerel-test-smackerel-core-1 is unhealthy` — same wrapper-startup failure under the `e2e` build tag. Every `./smackerel.sh test e2e --go-run ...` invocation in this session would hit the same abort before any test executes. See `report.md#scope-5-rerun-attempt-2026-06-01`.
+- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, `./smackerel.sh test stress`, and artifact lint pass for this spec. **Phase:** implement. **Claim Source:** partial. **Evidence:** Targeted runs GREEN — `go test ./internal/assistant/httpadapter/ -run TestTransportHintIsClosedVocabularyAndTelemetryOnly` PASS; `go test ./internal/assistant/intent/policyguard/ -run TestReportTransportBranchViolations -v` PASS (5 sub-tests including real-repo cleanliness); `go test -tags stress ./tests/stress/assistant/ -v` PASS (p95=40µs, far under 50ms budget); `go vet -tags e2e ./tests/e2e/assistant/` PASS; `go vet -tags stress ./tests/stress/assistant/` PASS. 2026-06-01 wrapper-driven `./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_'` aborted at `go-e2e-stack-start (exit=1)` with `smackerel-test-smackerel-core-1 is unhealthy` — see `report.md#scope-5-rerun-attempt-2026-06-01`. Scope remains **In Progress** pending wrapper-driven e2e GREEN once the e2e-tagged core healthcheck issue is resolved (cross-spec runtime/test-infra concern, not spec 069 owned).

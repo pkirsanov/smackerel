@@ -2,6 +2,12 @@
 
 ## Checklist
 
+### [Bug Fix] BUG-034-003 In-process router-mount regression test coverage
+- [x] **What:** Adversarial regression test `internal/api/router_mount_bug_034_003_test.go` exists and passes against the post-fix code, proving `/api/expenses` and `/api/meal-plans` are mounted behind auth (401 not 404) and `/api/api/expenses` stays 404.
+  - **Verify:** `./smackerel.sh test integration` — sub-tests all PASS.
+  - **Evidence:** [report.md#bug-reproduction-after-fix-in-process-integration-regression]
+  - **Notes:** Default-checked baseline — in-process regression coverage is complete; live-host items below remain unchecked pending home-lab redeploy.
+
 ### [Bug Fix] BUG-034-003 `/expense` Telegram command returns "Failed to query expenses"
 - [ ] **What:** `/expense` Telegram command returns an empty-state reply (or the formatted list) against the live home-lab bot, never "Failed to query expenses".
   - **Steps:**

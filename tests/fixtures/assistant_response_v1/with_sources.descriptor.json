@@ -1,0 +1,8 @@
+{
+  "schema_version": "render-descriptor.v1",
+  "nodes": [
+    {"kind": "text", "text": "According to the National Weather Service, tomorrow will be sunny."},
+    {"kind": "citation", "source_id": "src-nws-1", "label": "NWS forecast — Palm Springs, CA", "url": "https://forecast.weather.gov/MapClick.php?lat=33.83&lon=-116.55"},
+    {"kind": "citation", "source_id": "src-cap-2", "label": "User capture: yesterday's forecast"}
+  ]
+}

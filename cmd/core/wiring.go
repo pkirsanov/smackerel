@@ -14,6 +14,9 @@ import (
 	"github.com/smackerel/smackerel/internal/api"
 	extensiondevices "github.com/smackerel/smackerel/internal/api/admin/extensiondevices"
 	extensioningest "github.com/smackerel/smackerel/internal/api/connectors/extension"
+	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
+	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
+	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistanttracing "github.com/smackerel/smackerel/internal/assistant/tracing"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
@@ -182,6 +185,11 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		return nil, nil, nil, fmt.Errorf("start ntfy notification sources: %w", err)
 	}
 	svc.ntfyRuntime = ntfyRuntime
+	// Spec 069 SCOPE-1a — late-bound HTTP transport adapter handler.
+	// Constructed here so the route mount in api.NewRouter can see
+	// it; wireAssistantFacade installs the backing *HTTPAdapter
+	// after the capability-layer Facade is constructed.
+	svc.assistantHTTPHandler = httpadapter.NewLateBoundHandler()
 	deps := &api.Dependencies{
 		DB:                              svc.pg,
 		NATS:                            svc.nc,
@@ -214,6 +222,9 @@ func buildAPIDeps(ctx context.Context, cfg *config.Config, svc *coreServices) (*
 		RecommendationHandlers:          api.NewRecommendationHandlers(svc.recommendationStore, svc.recommendationRegistry, cfg.Recommendations),
 		RecommendationWatchHandlers:     api.NewRecommendationWatchHandlers(svc.recommendationStore),
 		NotificationHandlers:            api.NewNotificationHandlersWithNtfyWebhookReceiverAndStore(svc.notificationStore, notificationService, ntfyRuntime.WebhookReceiver(), svc.ntfyStore),
+		AssistantTurnHandler:            svc.assistantHTTPHandler,
+		CapturePolicyRecorder:           capturefallback.NewPostgresStore(svc.pg.Pool),
+		CaptureFallbackHashKey:          cfg.CaptureFallback.DedupHashKey,
 	}
 
 	if cfg.QFDecisionsEnabled {
@@ -589,6 +600,27 @@ func startTelegramBotIfConfigured(ctx context.Context, cfg *config.Config, deps 
 			tgBot.SetPerUserTokenMinter(minter)
 			slog.Info("telegram per-user token minter wired (spec 044 Scope 04 F02 closure)")
 		}
+	}
+
+	// Spec 066 SCOPE-1 — wire the spec 075 WindowStateResolver so
+	// Start() registers the SetMyCommands inventory driven by the
+	// effective deprecation-window state. Closed → operational +
+	// retained shortcuts only; open/paused → include retired
+	// aliases. Spec 075 SCOPE-4 will replace the static pause
+	// reader with the durable runtime row reader; until then a
+	// not-paused reader keeps the resolver fail-loud on SST.
+	if resolver, err := legacyretirement.NewWindowStateResolver(
+		legacyretirement.SSTStateConfig{
+			WindowID:    cfg.LegacyRetirement.WindowID,
+			WindowState: cfg.LegacyRetirement.WindowState,
+		},
+		legacyretirement.NewStaticPauseStateReader(false),
+	); err != nil {
+		slog.Warn("legacy retirement window-state resolver construction failed; BotCommands will default to closed-window inventory",
+			"error", err)
+	} else {
+		tgBot.SetLegacyRetirementResolver(resolver)
+		slog.Info("telegram legacy retirement resolver wired (spec 066 SCOPE-1)")
 	}
 
 	// Spec 061 SCOPE-05 design §17.4 — exclusive transport ingress

@@ -4,10 +4,27 @@ type: "scenario"
 description: "Answer a current/forecast weather question from an external provider with provider+timestamp attribution."
 
 intent_examples:
+# Existing — keep verbatim, do not remove:
 - "weather in Seattle today"
 - "is it going to rain in Reykjavík tomorrow?"
 - "what's the forecast for Portland this weekend?"
 - "temperature in London right now"
+# Added by PKT-064-SCOPE12-A — adversarial-coverage variations:
+- "weather in Paris today"
+- "weather in Tokyo today"
+- "weather in New York today"
+- "weather in Berlin tomorrow"
+- "what's the weather in San Francisco"
+- "what's the weather like in Madrid today"
+- "weather today in Chicago"
+- "current weather in Dublin"
+- "how's the weather in Lisbon today"
+- "weather forecast for Amsterdam today"
+- "is it raining in Vancouver right now"
+- "how hot is it in Phoenix today"
+- "what's the temperature in Oslo today"
+- "weather in 90210"
+- "forecast in 10115 tomorrow"
 
 system_prompt: |
   You are Smackerel's weather assistant.

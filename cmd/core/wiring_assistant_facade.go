@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/embedder/sidecar"
@@ -45,6 +46,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
 	"github.com/smackerel/smackerel/internal/config"
@@ -149,6 +151,10 @@ func wireAssistantFacade(
 	go refresher.Run(ctx)
 
 	// 5. FacadeConfig from the assistant SST envelope (SCOPE-01).
+	legacyPolicy, err := buildLegacyRetirementPolicy(cfg, svc.pg.Pool, time.Now)
+	if err != nil {
+		return fmt.Errorf("build legacy retirement policy: %w", err)
+	}
 	facadeCfg := assistant.FacadeConfig{
 		BorderlineFloor:      cfg.Assistant.BorderlineFloor,
 		AgentConfidenceFloor: agentRT.Config.Routing.ConfidenceFloor,
@@ -159,6 +165,7 @@ func wireAssistantFacade(
 		DisambigTimeout:      cfg.Assistant.DisambiguateTimeout,
 		Now:                  time.Now,
 		SourceAssemblers:     buildAssistantSourceAssemblers(svc, cfg.Assistant.SourcesMax),
+		Policy:               legacyPolicy,
 	}
 	audit := assistant.NewNoopAuditWriter() // SCOPE-08 swaps in PG/NATS-backed writer
 	facade, err := assistant.NewFacade(
@@ -369,4 +376,71 @@ func newPostgresArtifactLookup(svc *coreServices) retrieval.ArtifactLookupFn {
 		}
 		return a.Title, a.CreatedAt, true, nil
 	}
+}
+
+// buildLegacyRetirementPolicy assembles the spec 075 SCOPE-6.2
+// legacy-retirement dispatcher from the LegacyRetirement SST block.
+// It wires the SST catalog, the Postgres-backed dedup ledger and
+// residual store, the SST window-state resolver (with a static
+// not-paused reader until Scope 4 wires the threshold-driven writer),
+// the HMAC user-bucket hasher, and a MultiResidualTelemetry that
+// fans Record() out to the Prometheus counters and the SQL residual
+// store. Fail-loud on every missing SST key / nil dependency
+// (G028/G029, no-defaults).
+func buildLegacyRetirementPolicy(cfg *config.Config, pool *pgxpool.Pool, now func() time.Time) (legacyretirement.Policy, error) {
+	if cfg == nil {
+		return nil, errors.New("buildLegacyRetirementPolicy: nil config")
+	}
+	if pool == nil {
+		return nil, errors.New("buildLegacyRetirementPolicy: postgres pool is required")
+	}
+	if now == nil {
+		return nil, errors.New("buildLegacyRetirementPolicy: clock is required")
+	}
+	lr := cfg.LegacyRetirement
+	catalog, err := legacyretirement.NewConfigCatalog(legacyretirement.CatalogConfig{
+		NoticeCopyPerCommand:          lr.NoticeCopyPerCommand,
+		PostWindowUnknownResponseCopy: lr.PostWindowUnknownResponseCopy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement catalog: %w", err)
+	}
+	ledger, err := legacyretirement.NewSQLNoticeLedger(pool)
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement ledger: %w", err)
+	}
+	resolver, err := legacyretirement.NewWindowStateResolver(
+		legacyretirement.SSTStateConfig{WindowID: lr.WindowID, WindowState: lr.WindowState},
+		legacyretirement.NewStaticPauseStateReader(false),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement state resolver: %w", err)
+	}
+	hasher, err := legacyretirement.NewUserBucketHasher(lr.UserBucketHMACKey)
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement bucket hasher: %w", err)
+	}
+	prom := legacyretirement.NewPrometheusResidualTelemetry()
+	sql, err := legacyretirement.NewSQLResidualStore(legacyretirement.SQLResidualStoreConfig{
+		Pool:     pool,
+		WindowID: lr.WindowID,
+		Clock:    now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement residual store: %w", err)
+	}
+	telemetry := legacyretirement.NewMultiResidualTelemetry(prom, sql)
+	policy, err := legacyretirement.NewPolicy(legacyretirement.PolicyConfig{
+		Catalog:       catalog,
+		Ledger:        ledger,
+		StateResolver: resolver,
+		Telemetry:     telemetry,
+		BucketHasher:  hasher,
+		WindowID:      lr.WindowID,
+		Clock:         now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("legacy retirement policy: %w", err)
+	}
+	return policy, nil
 }

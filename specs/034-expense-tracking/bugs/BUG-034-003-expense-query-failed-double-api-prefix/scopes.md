@@ -49,12 +49,16 @@ Feature: BUG-034-003 — Expense and meal-plan API routes are reachable behind b
 |-----------|----------|---------------|-------------|---------|-------------|
 | Unit | `unit` | `internal/api/expenses_test.go` | Existing handler tests still pass with new mount wrapper | `./smackerel.sh test unit` | No |
 | Unit | `unit` | `internal/api/mealplan_test.go` (if present) | Existing handler tests still pass | `./smackerel.sh test unit` | No |
-| Integration | `integration` | `internal/api/router_mount_test.go` (new) | `NewRouter(deps)` mounts `/api/expenses` + `/api/meal-plans`; adversarial `/api/api/expenses` stays 404 | `./smackerel.sh test integration` | Yes |
-| E2E API | `e2e-api` | Live home-lab probe captured post-deploy | `GET /api/expenses` → 401 without bearer, 200 with bearer; `/api/meal-plans` → 401 | `ssh <home-lab-host> docker exec ... wget` | Yes |
-| E2E UI | `e2e-ui` | Telegram `/expense` command live | Bot reply is empty-state, not "Failed to query expenses" | Manual Telegram send + log scrape | Yes |
+| Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Scenario "Expense list route is mounted behind auth": `NewRouter(deps)` returns 401 on `GET /api/expenses` without bearer (not 404) | `./smackerel.sh test integration` | Yes |
+| Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Scenario "Meal-plan list route is mounted behind auth": `NewRouter(deps)` returns 401 on `GET /api/meal-plans` without bearer (not 404) | `./smackerel.sh test integration` | Yes |
+| Integration | `integration` | `internal/api/router_mount_bug_034_003_test.go` | Adversarial: `GET /api/api/expenses` stays 404 (no double-prefix regression) | `./smackerel.sh test integration` | Yes |
+| E2E API | `e2e-api` | `internal/api/router_mount_bug_034_003_test.go` (live probe post-deploy via `tests/e2e/telegram/expense_empty_state_e2e_test.go`) | Scenario "Telegram /expense command succeeds against empty DB": live home-lab `GET /api/expenses` → 401 without bearer, 200 with bearer; `/api/meal-plans` → 401 | `./smackerel.sh test e2e` | Yes |
+| E2E UI | `e2e-ui` | `tests/e2e/telegram/expense_empty_state_e2e_test.go` | Telegram `/expense` reply is empty-state, not "Failed to query expenses" | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — 3-Part Validation
 
+- [x] Scenario "Expense list route is mounted behind auth" covered by `internal/api/router_mount_bug_034_003_test.go` (G068 trace) — Evidence: [report.md#bug-reproduction-after-fix-in-process-integration-regression]
+- [x] Scenario "Meal-plan list route is mounted behind auth" covered by `internal/api/router_mount_bug_034_003_test.go` (G068 trace) — Evidence: [report.md#bug-reproduction-after-fix-in-process-integration-regression]
 - [x] `internal/api/expenses.go` prefix fixed and the change compiles — Evidence: [report.md#files-modified-this-session], `go build ./internal/api/...` exit 0
 - [x] `internal/api/mealplan.go` prefix fixed and the change compiles — Evidence: [report.md#files-modified-this-session], `go build ./internal/api/...` exit 0
 - [x] Existing unit tests pass (with mount-wrapper update) — Evidence: [report.md#existing-api-package-unit-suite-no-collateral-regression] (`ok github.com/smackerel/smackerel/internal/api 9.482s`)

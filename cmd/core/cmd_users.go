@@ -36,6 +36,23 @@ import (
 	"golang.org/x/term"
 )
 
+// MinPasswordLength is the minimum operator-password length accepted
+// by `users add` / `users set-password` (design §4.2). argon2id itself
+// has no minimum, but the CLI refuses short passwords so a careless
+// operator cannot stand up a trivially guessable account.
+const MinPasswordLength = 12
+
+// errPasswordTooShort is returned by enforceMinPasswordLength when the
+// supplied password is shorter than MinPasswordLength bytes.
+var errPasswordTooShort = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+
+func enforceMinPasswordLength(pw string) error {
+	if len(pw) < MinPasswordLength {
+		return errPasswordTooShort
+	}
+	return nil
+}
+
 func runUsersCommand(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: smackerel-core users <add|set-password|list> [args...]")
@@ -118,6 +135,10 @@ func runUsersAdd(ctx context.Context, repo webcreds.Repo, args []string, prompt 
 		fmt.Fprintf(os.Stderr, "smackerel-core users add: %v\n", err)
 		return 1
 	}
+	if err := enforceMinPasswordLength(password); err != nil {
+		fmt.Fprintf(os.Stderr, "smackerel-core users add: %v\n", err)
+		return 1
+	}
 	if err := repo.UpsertPassword(ctx, username, password, true); err != nil {
 		if errors.Is(err, webcreds.ErrUserExists) {
 			fmt.Fprintf(os.Stderr, "smackerel-core users add: user %q already exists (use `set-password` to rotate)\n", username)
@@ -142,6 +163,10 @@ func runUsersSetPassword(ctx context.Context, repo webcreds.Repo, args []string,
 	}
 	password, err := prompt(os.Stderr)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "smackerel-core users set-password: %v\n", err)
+		return 1
+	}
+	if err := enforceMinPasswordLength(password); err != nil {
 		fmt.Fprintf(os.Stderr, "smackerel-core users set-password: %v\n", err)
 		return 1
 	}

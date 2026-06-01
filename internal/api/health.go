@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smackerel/smackerel/internal/assistant/capturefallback"
 	"github.com/smackerel/smackerel/internal/auth"
 	"github.com/smackerel/smackerel/internal/auth/revocation"
 	"github.com/smackerel/smackerel/internal/auth/webcreds"
@@ -253,6 +254,18 @@ type Dependencies struct {
 	// (GET /v1/admin/extension/devices). Mounted behind
 	// bearerAuthMiddleware; the handler itself enforces admin scoping.
 	ExtensionDevicesHandler http.Handler
+
+	// Spec 069 SCOPE-1a — Assistant HTTP transport handler. Routes
+	// POST /v1/assistant/turn through the late-bound HTTPAdapter
+	// (wireAssistantFacade installs the backing adapter post-boot).
+	AssistantTurnHandler http.Handler
+
+	// Spec 074 — capture-as-fallback / explicit-capture policy
+	// recorder and dedup HMAC key. CapturePolicyRecorder persists
+	// artifact_capture_policy rows; CaptureFallbackHashKey scopes
+	// the per-user normalized-text hash used for dedup lookups.
+	CapturePolicyRecorder  capturefallback.CapturePolicyStore
+	CaptureFallbackHashKey string
 
 	// CORS allowed origins (SST-compliant — from smackerel.yaml via config generate)
 	CORSAllowedOrigins []string

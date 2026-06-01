@@ -61,6 +61,14 @@ type AssistantResponse struct {
 	// — the spec 061 "default to capture" contract.
 	CaptureRoute bool
 
+	// LegacyRetirementNotice carries the structured deprecation
+	// notice payload the spec 075 facade Policy attaches when an
+	// open deprecation window's dedup ledger reports this is the
+	// first inbound turn for (user, retired_command, window). nil
+	// means "no notice" — the renderer MUST NOT emit any addendum.
+	// Spec 075 SCOPE-6.1 (facade Policy dispatch contract).
+	LegacyRetirementNotice *NoticePayload
+
 	// --- Convenience derivatives ---
 
 	// Body is the rendered text body, derived from Invocation.Final

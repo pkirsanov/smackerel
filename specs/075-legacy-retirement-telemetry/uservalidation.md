@@ -8,6 +8,7 @@
 - [ ] Operator can see window state, residual usage, threshold state, and alert state without raw user identifiers.
 - [ ] Closed-window response is clear, includes `/help`, and does not invoke retired handlers.
 - [ ] Observation report proves zero retired-handler invocations before final deletion work proceeds.
+- [x] Rework planning adds SCOPE-075-06.2b 'Wire-Schema Notice Propagation' before SCOPE-075-06.3 covering schema/types/golden + PWA + Flutter shared-core codegen for an OPTIONAL additive `notice` field (v1-compatible; no schema_version bump). TP-075-09 re-targeted from Playwright (.spec.ts) to a Go e2e at tests/e2e/assistant/legacy_retirement_notice_test.go (pattern: photos_capability_banner Go counterpart) executed via ./smackerel.sh test e2e.
 
 ## Planning Note
 
