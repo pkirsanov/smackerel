@@ -877,6 +877,15 @@ case "$COMMAND" in
         pg_user="$(smackerel_env_value "$env_file" "POSTGRES_USER")"
         pg_pass="$(smackerel_env_value "$env_file" "POSTGRES_PASSWORD")"
         pg_db="$(smackerel_env_value "$env_file" "POSTGRES_DB")"
+        ml_sidecar_url="$(smackerel_env_value "$env_file" "ML_SIDECAR_URL")"
+        agent_scenario_dir="$(smackerel_env_value "$env_file" "AGENT_SCENARIO_DIR")"
+        # The Go test runner sets CWD per-package, so a repo-relative scenario
+        # dir (`config/prompt_contracts`) won't resolve from the test package
+        # working directory. Anchor to /workspace inside the test container.
+        if [[ -n "$agent_scenario_dir" && "$agent_scenario_dir" != /* ]]; then
+          agent_scenario_dir="/workspace/${agent_scenario_dir}"
+        fi
+        agent_routing_fallback_scenario_id="$(smackerel_env_value "$env_file" "AGENT_ROUTING_FALLBACK_SCENARIO_ID")"
         compose_network="$(smackerel_compose_project test)_default"
 
         # Spec 037 Scope 10 — orchestrator owns the test-stack
@@ -928,11 +937,15 @@ case "$COMMAND" in
           -v smackerel-gomod-cache:/go/pkg/mod \
           -v smackerel-gobuild-cache:/root/.cache/go-build \
           -w /workspace \
+          --env-file "$env_file" \
           -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
           -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
           -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
           -e "OPEN_KNOWLEDGE_SEARXNG_URL=${searxng_url}" \
+          -e "ML_SIDECAR_URL=${ml_sidecar_url}" \
+          -e "AGENT_SCENARIO_DIR=${agent_scenario_dir}" \
+          -e "AGENT_ROUTING_FALLBACK_SCENARIO_ID=${agent_routing_fallback_scenario_id}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_args[@]}"
         go_integration_status=$?
         set -e

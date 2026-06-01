@@ -9,6 +9,7 @@
 3. **Scope 3 — Residual Usage Telemetry And Dashboard:** emit privacy-preserving residual usage metrics and build the rolling 7-day dashboard/report query.
 4. **Scope 4 — Automatic Pause And Resume:** evaluate SST-defined rollback thresholds, enter paused state automatically, suppress new notices, and reset the counter on resume.
 5. **Scope 5 — Closed-Window Response And Observation Gate:** return canonical unknown-command responses after close, block legacy handler invocation, and gate final deletion on zero-invocation observation.
+6. **Scope 6 — Facade Policy Dispatch Rollout And Telegram Coexistence:** wire `legacyretirement.Policy` into the assistant facade as a pre-routing dispatcher, attach structured notice metadata to `AssistantResponse`, roll out per-transport renderers (PWA/WhatsApp/Mobile), short-circuit the legacy Telegram alias interceptor when the facade Policy is upstream, and execute the live-stack TP rows that Scopes 2/4/5 produced.
 
 ### New Types & Signatures
 
@@ -20,6 +21,10 @@
 - `ResidualTelemetry.Record(command, userBucket, outcome)`
 - `ObservationReport.Generate(windowID) (retired_handler_invocations int, eligible_for_final_deletion bool, error)`
 - Tables/columns: `assistant_conversations.legacy_retirement_notices`, `assistant_legacy_retirement_state`, `assistant_legacy_retirement_observations`.
+- `assistant.FacadeConfig.Policy legacyretirement.Policy` — pre-routing dispatcher injected at facade construction.
+- `assistant.AssistantResponse.LegacyRetirementNotice *NoticePayload` — structured notice metadata (command, replacement_example, copy_key, window_id) rendered by each transport.
+- `type NoticePayload struct { Command, ReplacementExample, CopyKey, WindowID string }`
+- Telegram `legacy_alias_intercept` short-circuit guard: when the request arrives with `ctx.Value(assistantFacadeUpstream) == true`, the interceptor returns `next(...)` immediately without rewriting the command (option 2 below).
 
 ### Validation Checkpoints
 
@@ -28,6 +33,7 @@
 - After Scope 3, monitoring rows must prove residual usage and user buckets are queryable without raw ids/text.
 - After Scope 4, threshold rows must prove automatic pause and resume counter reset.
 - After Scope 5, closed-window rows must prove no legacy handler invocation and observation report gating before deletion.
+- After Scope 6, facade Policy dispatch unit test must cover all five branches (open-notice, dedup-suppress, paused, closed, no-match passthrough); wire-schema notice propagation (sub-scope 6.2b) must prove the optional `notice` field round-trips through the JSON wire contract, generated PWA TypeScript bindings, and Flutter shared-core bindings without bumping `schema_version` (additive, v1-compatible); transport renderer rows must prove parity across PWA/WhatsApp/Mobile; Telegram interceptor short-circuit row must prove no double-dispatch when facade Policy is upstream; live-stack TP rows from Scopes 2/4/5 must execute against the real stack with evidence captured.
 
 ### Planning Notes
 
@@ -44,6 +50,7 @@
 | 3 | Residual Usage Telemetry And Dashboard | metrics, dashboard query, rolling report | SCN-075-A04 | Not Started |
 | 4 | Automatic Pause And Resume | threshold evaluator, runtime pause state, alerts | SCN-075-A05, SCN-075-A06 | Not Started |
 | 5 | Closed-Window Response And Observation Gate | closed response, legacy handler guard, observation report | SCN-075-A07, SCN-075-A08 | Not Started |
+| 6 | Facade Policy Dispatch Rollout And Telegram Coexistence | assistant facade, FacadeConfig.Policy, transport renderers (PWA/WhatsApp/Mobile), Telegram interceptor short-circuit, live-stack execution | SCN-075-A12, SCN-075-A13 (plus re-runs of SCN-075-A01..A09 via TPs) | Not Started |
 
 ---
 
@@ -422,5 +429,360 @@ No project impact map is configured. Closed-state behavior and deletion gate are
 - [ ] TP-075-16 through TP-075-18 pass with evidence.
 - [ ] Consumer Impact Sweep confirms final deletion remains gated by observed zero invocations and stale-reference checks.
 - [ ] Build Quality Gate passes with artifact lint for this spec.
+
+---
+
+## Scope 6: Facade Policy Dispatch Rollout And Telegram Coexistence
+
+**Status:** Not Started
+**Depends On:** Scope 2 (foundation contracts + ledger from Scopes 1–2 must already exist; renderers also exercise Scope 4 paused / Scope 5 closed branches)
+**Scope-Kind:** runtime-behavior
+
+### Decomposition Rationale
+
+`bubbles.implement` returned `route_required` for the original monolithic
+"facade rollout + transport renderers + Telegram coexistence + live-stack execution"
+work item because it spanned ≥3 surfaces, mixed a design decision (Telegram
+coexistence) with implementation work, and bundled live-stack execution behind
+unvalidated facade plumbing. This scope decomposes that single work item into
+five tractable sub-scopes that are sequentially gated: the facade contract
+(6.1) must be unit-proven before construction wiring (6.2), construction
+wiring must be in before any transport renderer (6.3/6.4) can be exercised,
+and only after all renderers and the Telegram short-circuit land can the
+live-stack TP rows (6.5) execute meaningfully.
+
+### Telegram Coexistence Decision (resolved)
+
+**Question.** Facade-level `Policy` dispatch (Scope 6.1) executes BEFORE the
+existing `internal/telegram/legacy_alias_intercept.go` interceptor that
+already rewrites legacy aliases. Without coordination, both layers would
+attach notices and rewrite commands, producing double-dispatch and duplicate
+notices for the same `(user, command, window)`.
+
+**Options considered.**
+1. Remove `legacy_alias_intercept.go` entirely once facade Policy ships.
+2. Telegram interceptor short-circuits when the facade Policy is upstream
+   (request carries `assistantFacadeUpstream=true` in context).
+3. Move all Telegram-specific dispatch into the facade and delete the
+   interceptor package.
+
+**Chosen: option 2.** Lowest risk: preserves existing interceptor test
+coverage, keeps the Telegram-only alias rewriting code path available for any
+non-facade ingress (legacy webhook paths, future bot deployments without the
+facade), and the short-circuit is a one-line guard plus one integration test.
+Options 1 and 3 require deleting / migrating a tested integration surface
+before the facade Policy has burned in on the live stack.
+
+**Implementation contract.**
+- The assistant facade attaches `ctx = context.WithValue(ctx, assistantFacadeUpstreamKey{}, true)` before invoking the Telegram transport.
+- `legacy_alias_intercept.go` checks that key first and, when set, calls `next(...)` unchanged. The existing interceptor tests continue to exercise the non-upstream path.
+- A new integration test (TP-075-23) exercises both branches and asserts that the upstream-facade path produces exactly one notice and no double rewrite.
+
+### Sub-Scope Inventory
+
+| Sub-Scope | Name | Surfaces | Tests | Live System |
+|---|---|---|---|---|
+| 6.1 | Facade Policy Dispatch Contract (no transport changes) | `internal/assistant/facade.go`, `FacadeConfig.Policy`, `AssistantResponse.LegacyRetirementNotice` | TP-075-19 | No |
+| 6.2 | Facade Construction Wiring | `cmd/core/wiring_assistant_facade.go`, `NewMultiResidualTelemetry(prom, sql)` | TP-075-20 | No |
+| 6.2b | Wire-Schema Notice Propagation (PWA + Flutter shared-core codegen) | `internal/assistant/schema/assistant_turn_v1.json` (+ `NoticePayload` sub-def), `internal/assistant/schema/types.go` (`TurnResponse.Notice`), `internal/assistant/schema/testdata/response_v1.json` golden, `internal/assistant/httpadapter/{schema.go,adapter.go RenderJSON,middleware.go}`, `web/pwa/generated/*` (regen via `cmd/web-assistant-codegen`), `clients/mobile/assistant/lib/shared_core/generated/*` (Flutter regen) | TP-075-25, TP-075-26, TP-075-27 | No (codegen + contract); Yes (renderer rows in 6.3/6.4 execute the live propagation) |
+| 6.3 | PWA Notice Renderer + Live Go E2E | `web/pwa/src/assistant/*` (renderer), `tests/e2e/assistant/legacy_retirement_notice_test.go` (Go e2e, photos_capability_banner-equivalent pattern) | TP-075-09 (re-targeted to Go) | Yes |
+| 6.4 | WhatsApp + Mobile Renderers + Telegram Interceptor Short-Circuit | WhatsApp transport, mobile transport, `internal/telegram/legacy_alias_intercept.go` | TP-075-21, TP-075-22, TP-075-23 | Yes |
+| 6.5 | Live-Stack Execution Of Scope 2/4/5 TPs | live integration + e2e harness | Re-runs of TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17; aggregated as TP-075-24 | Yes |
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-075-A12 — Facade Policy dispatch covers all five branches before transport routing
+  Given the assistant facade is configured with a legacyretirement.Policy
+  When Facade.Handle receives a turn matching one of the five Policy branches:
+    | branch                | precondition                                            | expected outcome                                                  |
+    | open + notice         | window=open, no ledger entry                            | response carries NoticePayload, ledger.MarkShown called           |
+    | open + dedup-suppress | window=open, ledger entry exists                        | response has no NoticePayload, normal NL response                 |
+    | paused                | window=paused                                           | response has no NoticePayload, legacy serving mode preserved      |
+    | closed                | window=closed                                           | response is canonical unknown-command, no legacy handler invoked  |
+    | no-match passthrough  | turn does not match any retired command                 | facade routes to normal transport pipeline unchanged              |
+  Then the unit test asserts the expected outcome for each branch
+  And no transport (PWA/WhatsApp/Mobile/Telegram) is invoked from the unit test
+
+Scenario: SCN-075-A13 — Telegram interceptor short-circuits when facade Policy is upstream
+  Given the facade has dispatched a retired-command turn and attached assistantFacadeUpstream=true to the context
+  When the Telegram transport reaches legacy_alias_intercept
+  Then the interceptor returns next(ctx, turn) without rewriting the command
+  And only one NoticePayload is attached to the final AssistantResponse
+  And the notice ledger records exactly one entry for (user, retired_command, window_id)
+
+Scenario: SCN-075-A14 — Wire-schema notice propagates through HTTP + generated client bindings (v1-compatible additive field)
+  Given the facade attaches a NoticePayload{command, replacement_example, copy_key, window_id} to AssistantResponse
+  When the HTTP adapter renders the response via RenderJSON
+  Then the JSON body contains an optional top-level "notice" object matching the v1 sub-def in internal/assistant/schema/assistant_turn_v1.json
+  And schema_version remains "v1" (the notice field is additive and OPTIONAL; no bump required)
+  And the golden fixture internal/assistant/schema/testdata/response_v1.json round-trips notice presence and absence
+  And cmd/web-assistant-codegen regenerates web/pwa/generated/* with a typed optional Notice field consumed by the PWA renderer
+  And the Flutter shared-core regen produces a typed optional Notice field consumed by the mobile renderer
+  And a response WITHOUT a notice (no retired-command match) decodes cleanly on every client (back-compat guard)
+```
+
+### Implementation Plan (per sub-scope)
+
+**6.1 Facade Policy Dispatch Contract**
+- Extend `assistant.FacadeConfig` with `Policy legacyretirement.Policy` (nil-safe: nil Policy means no-op passthrough).
+- In `Facade.Handle`, call `cfg.Policy.Handle(ctx, turn)` BEFORE the existing routing pipeline. The decision determines: attach `LegacyRetirementNotice` payload, short-circuit to canonical closed response, or fall through to normal routing.
+- Add `LegacyRetirementNotice *NoticePayload` field to `AssistantResponse`.
+- Unit test exercises the five branches with a stub Policy.
+- NO transport changes in this sub-scope.
+
+**6.2 Facade Construction Wiring**
+- Update `cmd/core/wiring_assistant_facade.go` to construct `Policy` via `legacyretirement.NewMultiResidualTelemetry(prom, sql)` (and the Scope 1 ledger/state/resolver dependencies) and pass it through `FacadeConfig.Policy`.
+- Unit test asserts the construction site wires a non-nil Policy when SST config is present and fails loud when required keys are missing (covered via Scope 1 config validation).
+
+**6.2b Wire-Schema Notice Propagation (PWA + Flutter shared-core codegen)**
+
+Goal: surface the structured `LegacyRetirementNotice` payload on the live HTTP wire contract and through every generated client binding (PWA TypeScript + Flutter shared-core) so the transport renderers in 6.3/6.4 have a typed `notice` field to render. The field is OPTIONAL and ADDITIVE — `schema_version` stays at `"v1"`; a response without a notice (no retired-command match, paused window, etc.) MUST decode cleanly on every client. v1-compatibility is documented in `design.md` (added under sub-scope 6.2b's design follow-up; routed to bubbles.design).
+
+- Add `NoticePayload` sub-definition to `internal/assistant/schema/assistant_turn_v1.json` with required fields `command`, `replacement_example`, `copy_key`, `window_id` (all strings, non-empty when notice is present). Mark the top-level `notice` property optional (`additionalProperties: false` preserved; not added to `required`).
+- Add `Notice *NoticePayload \`json:"notice,omitempty"\`` to `internal/assistant/schema/types.go::TurnResponse` mirroring the existing `LegacyRetirementNotice` shape on `AssistantResponse` (Scope 6.1).
+- Add/extend golden fixture `internal/assistant/schema/testdata/response_v1.json` to include BOTH a notice-present case and the existing notice-absent case; the golden contract test (`internal/assistant/httpadapter/golden_contract_test.go::TestHTTPAssistantTurnGoldenContractV1`) asserts byte-exact equality for both.
+- Update `internal/assistant/httpadapter/schema.go` to validate the optional `notice` sub-object against the v1 schema (pre-marshal validation if any exists; otherwise validation rides the existing schema validator path).
+- Update `internal/assistant/httpadapter/adapter.go::RenderJSON` to copy `AssistantResponse.LegacyRetirementNotice` into `TurnResponse.Notice` (nil-safe: when nil, the field is omitted from the JSON body via `omitempty`).
+- Update `internal/assistant/httpadapter/middleware.go` ONLY if the middleware chain inspects or rewrites the response body in a way that must learn about the new field (otherwise no change — keep the change boundary minimal).
+- Regenerate PWA bindings via `go run ./cmd/web-assistant-codegen` so `web/pwa/generated/*` exposes a typed optional `Notice` field; check the regen output into the repo. The existing `web/pwa/tests/assistant_codegen_drift_test.go` must pass against the regenerated artifacts.
+- Regenerate Flutter shared-core bindings under `clients/mobile/assistant/lib/shared_core/generated/*` so the mobile renderer in 6.4 consumes a typed optional `Notice` field. The existing `clients/mobile/assistant/test/codegen_drift_test.dart` must pass against the regenerated artifacts.
+- v1-compatibility decision record: because the `notice` field is OPTIONAL and not in the schema's `required` list, every existing v1 client decodes a notice-bearing response by ignoring unknown-to-them keys (or by populating the new optional field when regenerated). No `schema_version` bump is needed. Document this decision in `design.md` (routed to bubbles.design under sub-scope 6.2b's design follow-up).
+- **Containment rule:** sub-scope 6.2b changes the schema, the Go response struct, the golden fixture, the adapter's `RenderJSON`, and the two generated-binding directories ONLY. It does NOT add renderer code (PWA renderer ships in 6.3; WhatsApp/Mobile renderers ship in 6.4). It does NOT modify `schema_version`. It does NOT change any other top-level response field. It does NOT touch Telegram rendering paths.
+- **Sequencing:** 6.2b runs AFTER 6.2 (Policy is wired into the facade so a real `LegacyRetirementNotice` can be produced) and BEFORE 6.3 (PWA renderer needs the regenerated TypeScript bindings before it can consume the typed notice). 6.4 also depends on 6.2b because the Flutter shared-core regen lands here.
+
+**6.3 PWA Notice Renderer + Live Go E2E**
+- Implement PWA-side renderer for `LegacyRetirementNotice` as a one-line addendum (non-blocking, dismissible).
+- Re-target existing `TP-075-09` from the prior Playwright `web/pwa/tests/legacy_retirement_notice.spec.ts` plan to a Go end-to-end test at `tests/e2e/assistant/legacy_retirement_notice_test.go`. Pattern after `tests/e2e/photos_capability_test.go` (the Go counterpart to `web/pwa/tests/photos_capability_banner.spec.ts`): drive the live HTTP transport with a real bearer turn, assert the `notice` field is present in the schema-v1 response body, and assert the rendered PWA payload surfaces the addendum text without blocking the primary response. Command stays `./smackerel.sh test e2e` (Go e2e harness). The Playwright path is removed from the planning artifacts to keep one execution surface.
+
+**6.4 WhatsApp + Mobile Renderers + Telegram Interceptor Short-Circuit**
+- Implement WhatsApp renderer that appends the notice as a short message addendum (TP-075-21).
+- Implement Mobile renderer that surfaces the notice in the chat thread without modal interruption (TP-075-22).
+- Add `assistantFacadeUpstreamKey` context key and short-circuit guard in `internal/telegram/legacy_alias_intercept.go`; preserve existing interceptor tests for the non-upstream path (TP-075-23).
+
+**6.5 Live-Stack Execution Of Scope 2/4/5 TPs**
+- Run TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17 against the live stack with `./smackerel.sh up` then `./smackerel.sh test integration` / `./smackerel.sh test e2e`.
+- Capture raw outputs in `report.md` evidence blocks (redact home paths to `~/`).
+- Aggregated as TP-075-24 in the test plan.
+
+### Shared Infrastructure Impact Sweep
+
+| Shared Surface | Downstream Contract | Canary Validation |
+|---|---|---|
+| Assistant facade `Handle` | Pre-routing Policy dispatch is nil-safe and never blocks normal turns | TP-075-19 unit |
+| `AssistantResponse` contract | New optional `LegacyRetirementNotice` field is backward-compatible (omitempty) | TP-075-19 unit |
+| Facade construction site (`cmd/core/wiring_assistant_facade.go`) | Real Policy with prom+sql telemetry wired in production | TP-075-20 unit |
+| Telegram `legacy_alias_intercept` | No double-dispatch when facade is upstream; legacy path preserved for non-upstream ingress | TP-075-23 integration |
+| Transport renderers (PWA/WhatsApp/Mobile) | Notice metadata renders consistently as a one-line addendum | TP-075-09, TP-075-21, TP-075-22 |
+
+### Change Boundary
+
+- **Allowed file families:** `internal/assistant/facade.go`, `internal/assistant/types.go` (or wherever `AssistantResponse` lives), `cmd/core/wiring_assistant_facade.go`, `internal/telegram/legacy_alias_intercept.go` (short-circuit guard only), per-transport renderer code (`web/pwa/**` for 6.3, WhatsApp transport for 6.4, mobile transport for 6.4), corresponding tests under `internal/assistant/`, `tests/integration/assistant/`, `tests/e2e/assistant/`, `web/pwa/tests/`.
+- **Excluded surfaces:** retired-command catalog (owned by spec 066), Scope 1 ledger/state/telemetry contracts (already shipped), other transports beyond PWA/WhatsApp/Mobile/Telegram, deletion of legacy handlers.
+- **Containment rule:** facade Policy dispatch MUST be nil-safe; the existing facade tests must keep passing when `FacadeConfig.Policy == nil`.
+
+### Consumer Impact Sweep
+
+| Consumer | Search Surface | Validation |
+|---|---|---|
+| All `FacadeConfig{...}` construction sites (test + production) | `grep -r 'FacadeConfig{' tests/ internal/ cmd/` | New `Policy` field is optional; nil-safe; no stale references | TP-075-19 unit + `./smackerel.sh test unit` regression |
+| All `AssistantResponse` consumers | `grep -r 'AssistantResponse' internal/ tests/ web/` | New optional field doesn't break existing renderers | TP-075-19, TP-075-09/21/22 |
+| Telegram interceptor callers | `grep -r 'legacy_alias_intercept' internal/ tests/` | Short-circuit path covered; non-upstream path unchanged | TP-075-23 |
+
+### Impact-Aware Validation
+
+No project impact map is configured. This scope touches the assistant facade (shared by every transport) and a tested Telegram interceptor, so canary unit + integration coverage MUST land before any live-stack execution.
+
+### Test Plan
+
+| Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
+|---|---|---|---|---|---|---|
+| TP-075-19 | SCN-075-A12 | unit | `internal/assistant/facade_legacy_retirement_dispatch_test.go` | Planned: Facade.Handle pre-routing Policy dispatch covers all five branches (open-notice, dedup-suppress, paused, closed, no-match) | `./smackerel.sh test unit` | No |
+| TP-075-20 | SCN-075-A12 | unit | `cmd/core/wiring_assistant_facade_test.go` | Planned: construction site wires NewMultiResidualTelemetry(prom, sql) into FacadeConfig.Policy with no nil dependencies | `./smackerel.sh test unit` | No |
+| TP-075-09 (re-targeted to Go e2e) | SCN-075-A01 | e2e-api | `tests/e2e/assistant/legacy_retirement_notice_test.go` | Planned regression: live HTTP turn returns schema-v1 response with optional `notice` field populated and the PWA renderer surfaces it as a one-line addendum without blocking the primary response (pattern: `tests/e2e/photos_capability_test.go`) | `./smackerel.sh test e2e` | Yes |
+| TP-075-25 | SCN-075-A14 | unit | `internal/assistant/httpadapter/golden_contract_test.go` (extend) | Planned: golden fixture `internal/assistant/schema/testdata/response_v1.json` round-trips both notice-present and notice-absent responses; schema_version stays `"v1"`; v1-compatibility holds (additive optional field) | `./smackerel.sh test unit` | No |
+| TP-075-26 | SCN-075-A14 | unit | `web/pwa/tests/assistant_codegen_drift_test.go` (regenerate then re-run) | Planned: regenerated PWA TypeScript bindings expose a typed optional `Notice` field; codegen-drift test passes against the regen | `./smackerel.sh test unit` | No |
+| TP-075-27 | SCN-075-A14 | unit | `clients/mobile/assistant/test/codegen_drift_test.dart` (regenerate then re-run) | Planned: regenerated Flutter shared-core bindings expose a typed optional `Notice` field; codegen-drift test passes against the regen | `flutter test clients/mobile/assistant/test/codegen_drift_test.dart` (Flutter harness) | No |
+| TP-075-21 | SCN-075-A01 | integration | `tests/integration/assistant/legacy_retirement_whatsapp_renderer_test.go` | Planned: WhatsApp transport appends notice payload as a short message addendum | `./smackerel.sh test integration` | Yes |
+| TP-075-22 | SCN-075-A01 | integration | `tests/integration/assistant/legacy_retirement_mobile_renderer_test.go` | Planned: Mobile transport surfaces notice payload in chat thread without modal interruption | `./smackerel.sh test integration` | Yes |
+| TP-075-23 | SCN-075-A13 | integration | `tests/integration/assistant/legacy_telegram_short_circuit_test.go` | Planned: Telegram legacy_alias_intercept short-circuits when assistantFacadeUpstream=true; exactly one notice attached | `./smackerel.sh test integration` | Yes |
+| TP-075-24 | re-runs of SCN-075-A01..A09 | integration/e2e-api/e2e | `./smackerel.sh test integration && ./smackerel.sh test e2e` (live stack) | Planned: live-stack execution of TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17 with raw outputs captured in report.md | `./smackerel.sh up && ./smackerel.sh test integration && ./smackerel.sh test e2e` | Yes |
+
+### Definition of Done — Tiered Validation
+
+- [x] 6.1 Facade Policy dispatch contract: `FacadeConfig.Policy` and `AssistantResponse.LegacyRetirementNotice` land; TP-075-19 passes covering all five branches; nil-Policy path leaves existing facade tests green.
+
+  **Phase:** implement
+  **Claim Source:** executed
+  **Evidence:**
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 90s -run TestFacadeLegacyRetirement ./internal/assistant/
+  ok      github.com/smackerel/smackerel/internal/assistant       0.494s
+  EXIT=0
+  ```
+
+  Regression sweep (assistant + telegram packages, both directly and transitively touching `FacadeConfig`, `AssistantResponse`, and the existing `legacyretirement.Policy` consumers):
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 180s ./internal/assistant/... ./internal/telegram/...
+  ok  github.com/smackerel/smackerel/internal/assistant                          0.866s
+  ok  github.com/smackerel/smackerel/internal/assistant/legacyretirement         0.122s
+  ok  github.com/smackerel/smackerel/internal/telegram                          28.370s
+  ok  github.com/smackerel/smackerel/internal/telegram/assistant_adapter         0.071s
+  ok  github.com/smackerel/smackerel/internal/telegram/render                    0.082s
+  (… 22 other assistant subpackages all `ok` …)
+  ```
+
+  Files changed in this sub-scope:
+  - `internal/assistant/contracts/legacy_retirement_notice.go` (new) — `NoticePayload{Command, ReplacementExample, CopyKey, WindowID}`.
+  - `internal/assistant/contracts/response.go` — `AssistantResponse.LegacyRetirementNotice *NoticePayload` field added.
+  - `internal/assistant/facade.go` — `FacadeConfig.Policy legacyretirement.Policy` (nil-safe) and pre-routing Step 1.6 dispatch covering all five SCN-075-A12 branches.
+  - `internal/assistant/legacyretirement/policy.go`, `policyimpl.go` — `RetirementDecision.WindowID` field exposed so the facade can populate `NoticePayload.WindowID` without depending on the concrete `policyImpl`.
+  - `internal/assistant/facade_legacy_retirement_dispatch_test.go` (new) — TP-075-19: 5 branch tests + nil-Policy containment test, all PASS.
+
+  No transport (PWA/WhatsApp/Mobile/Telegram) code was modified — confirms "no transport changes in 6.1" boundary.
+- [x] 6.2 Construction wiring: `cmd/core/wiring_assistant_facade.go` constructs Policy with `NewMultiResidualTelemetry(prom, sql)`; TP-075-20 passes; fail-loud on missing SST keys per Scope 1.
+
+  **Phase:** implement
+  **Claim Source:** executed
+  **Evidence:**
+
+  Helper `buildLegacyRetirementPolicy` added in `cmd/core/wiring_assistant_facade.go` and invoked from `wireAssistantFacade` to populate `FacadeConfig.Policy` before `NewFacade`. It composes:
+
+  - `legacyretirement.NewConfigCatalog` from `cfg.LegacyRetirement.NoticeCopyPerCommand` + `PostWindowUnknownResponseCopy`
+  - `legacyretirement.NewSQLNoticeLedger(svc.pg.Pool)`
+  - `legacyretirement.NewWindowStateResolver` over `SSTStateConfig{WindowID, WindowState}` + `NewStaticPauseStateReader(false)` (Scope 4 swaps in the threshold-driven writer)
+  - `legacyretirement.NewUserBucketHasher(cfg.LegacyRetirement.UserBucketHMACKey)`
+  - `legacyretirement.NewMultiResidualTelemetry(NewPrometheusResidualTelemetry(), NewSQLResidualStore(...))`
+  - `legacyretirement.NewPolicy(PolicyConfig{Catalog, Ledger, StateResolver, Telemetry, BucketHasher, WindowID, Clock: time.Now})`
+
+  Every dependency is fail-loud (G028/G029): nil config, nil pool, nil clock, empty WindowID, empty HMAC key, empty notice-copy map, or invalid window state each cause `buildLegacyRetirementPolicy` to return an error that bubbles up through `wireAssistantFacade`.
+
+  TP-075-20 unit coverage (8 sub-tests covering the happy path + each fail-loud branch):
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 90s -run '^TestBuildLegacyRetirementPolicy_' ./cmd/core/
+  ok      github.com/smackerel/smackerel/cmd/core 0.276s
+  EXIT=0
+  ```
+
+  cmd/core package regression (proves the new wiring call did not break neighbouring tests):
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 120s ./cmd/core/
+  ok      github.com/smackerel/smackerel/cmd/core 0.761s
+  EXIT=0
+  ```
+
+  Files changed in this sub-scope:
+  - `cmd/core/wiring_assistant_facade.go` — added `pgxpool` + `legacyretirement` imports, populated `facadeCfg.Policy` via `buildLegacyRetirementPolicy(cfg, svc.pg.Pool, time.Now)`, and added the helper itself.
+  - `cmd/core/wiring_assistant_facade_test.go` (new) — TP-075-20: 8 sub-tests (`Valid…NonNilPolicy`, `NilConfigErrors`, `NilPoolErrors`, `NilClockErrors`, `EmptyWindowIDErrors`, `EmptyHMACKeyErrors`, `EmptyNoticeCopyErrors`, `InvalidWindowStateErrors`), all PASS.
+
+  No other transport, facade, or telegram code was modified — confirms the "construction wiring only" boundary for sub-scope 6.2.
+- [ ] 6.3 PWA renderer: TP-075-09 (Go e2e at `tests/e2e/assistant/legacy_retirement_notice_test.go`) passes against the live stack.
+- [x] 6.2b Wire-schema notice propagation: TP-075-25 (golden contract round-trips notice present + absent at schema_version="v1"), TP-075-26 (regenerated PWA bindings + codegen-drift test), TP-075-27 (regenerated Flutter shared-core bindings + codegen-drift test) all pass; design.md records the v1-compatible additive-field decision (routed to bubbles.design).
+
+  **Phase:** implement
+  **Claim Source:** executed
+  **Evidence:**
+
+  Wire schema: `internal/assistant/schema/assistant_turn_v1.json` adds an OPTIONAL top-level `notice` property on `TurnResponse` plus a `NoticePayload` sub-definition with required `command`, `replacement_example`, `copy_key`, `window_id` strings. `additionalProperties: false` preserved. Top-level `required[]` for `TurnResponse` is unchanged so the field is additive — `schema_version` stays `"v1"`.
+
+  Go types: `internal/assistant/schema/types.go` adds `TurnResponse.Notice *NoticePayload` with `json:"notice,omitempty"`, plus the `NoticePayload` struct mirroring the schema. `internal/assistant/httpadapter/schema.go` adds `TurnResponse.Notice *NoticeJSON` (also `omitempty`) plus `NoticeJSON`. `internal/assistant/httpadapter/adapter.go::RenderJSON` copies `AssistantResponse.LegacyRetirementNotice` into `TurnResponse.Notice` nil-safely.
+
+  Golden contract helpers (`internal/assistant/schema/golden_contract_test.go`) relaxed: schema `properties` MAY be a superset of `required`; any schema property not in `required` MUST have `,omitempty` on the Go field, and fixture key sets must be a subset of `properties` and superset of `required`. The adversarial drift tests still flag (a) Go-vs-schema field-set drift and (b) unknown fixture keys.
+
+  Goldens: `internal/assistant/schema/testdata/response_v1.json` retained (notice-absent baseline); new `internal/assistant/schema/testdata/response_v1_notice.json` and `internal/assistant/httpadapter/testdata/response_v1_notice.json` exercise the notice-present path. The httpadapter golden contract also asserts that a notice-absent `RenderJSON` output omits the `notice` key entirely (proves `omitempty` on the wire).
+
+  TP-075-25 — schema + httpadapter golden contract round-trip both fixtures and pin `schema_version="v1"` on the notice-present path:
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 90s ./internal/assistant/schema/... ./internal/assistant/httpadapter/...
+  ok      github.com/smackerel/smackerel/internal/assistant/schema                0.008s
+  ?       github.com/smackerel/smackerel/internal/assistant/schema/webcodegen     [no test files]
+  ok      github.com/smackerel/smackerel/internal/assistant/httpadapter           0.041s
+  EXIT=0
+  ```
+
+  TP-075-26 — regenerated PWA bindings (`go run ./cmd/web-assistant-codegen`) drift-clean, regenerated bytes match the on-disk artifacts under `web/pwa/generated/`:
+
+  ```text
+  $ cd ~/smackerel && go run ./cmd/web-assistant-codegen
+  wrote web/pwa/generated/assistant_turn_v1.d.ts
+  wrote web/pwa/generated/assistant_turn_v1.js
+  $ cd ~/smackerel && go test -count=1 -timeout 60s ./web/pwa/tests/
+  ok      github.com/smackerel/smackerel/web/pwa/tests    0.013s
+  ```
+
+  Inspection of the regenerated TypeScript surface — `Notice` is exposed as a typed OPTIONAL field on `TurnResponse`, plus a `NoticePayload` interface and validator:
+
+  ```text
+  $ grep -nE 'Notice|notice' web/pwa/generated/assistant_turn_v1.d.ts
+  45:  notice?: NoticePayload;
+  50:export interface NoticePayload {
+  56:export function validateNoticePayload(obj: unknown): NoticePayload;
+  $ grep -nE 'Notice|notice' web/pwa/generated/assistant_turn_v1.js
+  109:  if (Object.prototype.hasOwnProperty.call(obj, "notice") && obj["notice"] !== null && obj["notice"] !== undefined) {
+  110:    validateNoticePayload(obj["notice"]);
+  115:export function validateNoticePayload(obj) {
+  116:  requireObject(obj, "NoticePayload");
+  117:  requireFields(obj, "NoticePayload", NOTICE_PAYLOAD_FIELDS);
+  118:  requireString(obj, "NoticePayload", "command");
+  119:  requireString(obj, "NoticePayload", "replacement_example");
+  120:  requireString(obj, "NoticePayload", "copy_key");
+  121:  requireString(obj, "NoticePayload", "window_id");
+  ```
+
+  TP-075-27 — regenerated Flutter shared-core bindings (`dart run tool/gen_dart_models.dart`) drift-clean against the Flutter codegen-drift test:
+
+  ```text
+  $ cd ~/smackerel/clients/mobile/assistant && dart run tool/gen_dart_models.dart
+  wrote ~/smackerel/clients/mobile/assistant/lib/core/generated/assistant_turn_v1.dart (12294 bytes)
+  $ cd ~/smackerel/clients/mobile/assistant && flutter test test/codegen_drift_test.dart
+  00:09 +1: TP-073-01 — Dart wire-schema codegen drift committed artifact matches regenerated bytes
+  00:09 +2: TP-073-01 — Dart wire-schema codegen drift regeneration is deterministic across runs
+  00:09 +3: TP-073-01 — Dart wire-schema codegen drift adversarial drift fails the comparison
+  00:09 +3: All tests passed!
+  EXIT=0
+  ```
+
+  Regression sweep — assistant + PWA packages clean (proves the relaxed golden helper, the codegen optional-field path, and the new `RenderJSON` copy did not break neighbouring tests):
+
+  ```text
+  $ cd ~/smackerel && go test -count=1 -timeout 180s ./internal/assistant/... ./web/pwa/tests/
+  ok  github.com/smackerel/smackerel/internal/assistant                          0.599s
+  ok  github.com/smackerel/smackerel/internal/assistant/contracts                0.137s
+  ok  github.com/smackerel/smackerel/internal/assistant/httpadapter              0.149s
+  ok  github.com/smackerel/smackerel/internal/assistant/legacyretirement         0.018s
+  ok  github.com/smackerel/smackerel/internal/assistant/schema                   0.017s
+  ok  github.com/smackerel/smackerel/web/pwa/tests                               0.012s
+  (… 19 other assistant subpackages all `ok` …)
+  EXIT=0
+  ```
+
+  Files changed in this sub-scope:
+  - `internal/assistant/schema/assistant_turn_v1.json` — added optional `notice` property + `NoticePayload` sub-definition; updated docstring to reflect that additive OPTIONAL properties are v1-compatible (do not bump schema_version).
+  - `internal/assistant/schema/types.go` — added `TurnResponse.Notice *NoticePayload` with `omitempty` and the `NoticePayload` struct.
+  - `internal/assistant/schema/golden_contract_test.go` — relaxed helpers to permit `properties ⊇ required` with `omitempty` enforcement on Go optionals; added `NoticePayload_pins_Go_type` subtest and a new `response_v1_notice_fixture_round_trip` subtest. Existing adversarial drift checks still fire.
+  - `internal/assistant/schema/testdata/response_v1_notice.json` (new) — notice-present golden fixture.
+  - `internal/assistant/schema/webcodegen/generator.go` — added `NoticePayload` to `definitionOrder`; iterate optional properties separately; JS validator wraps optional checks in `hasOwnProperty && !== null`; DTS emits `field?: Type` for optional fields.
+  - `internal/assistant/httpadapter/schema.go` — added `TurnResponse.Notice *NoticeJSON` with `omitempty` and `NoticeJSON` struct.
+  - `internal/assistant/httpadapter/adapter.go` — `RenderJSON` copies `AssistantResponse.LegacyRetirementNotice` into the new `Notice` field (nil-safe).
+  - `internal/assistant/httpadapter/golden_contract_test.go` — added the `response_v1_notice` subtest (TP-075-25) plus a notice-absent guard that the wire body omits the `notice` key entirely.
+  - `internal/assistant/httpadapter/testdata/response_v1_notice.json` (new) — notice-present httpadapter golden.
+  - `web/pwa/generated/assistant_turn_v1.d.ts`, `web/pwa/generated/assistant_turn_v1.js` — regenerated via `go run ./cmd/web-assistant-codegen`.
+  - `clients/mobile/assistant/lib/src/codegen.dart` — added `NoticePayload` to `definitionOrder` and the optional-field iteration; emits `containsKey && != null` wrapper around optional validators.
+  - `clients/mobile/assistant/lib/core/generated/assistant_turn_v1.dart` — regenerated via `dart run tool/gen_dart_models.dart`.
+
+  **Containment proof:** no transport renderer code (PWA, WhatsApp, Mobile, Telegram), no `schema_version` change, no modification to any other top-level `TurnResponse` field, and no facade dispatch logic was touched in this sub-scope. The renderer work owned by 6.3 / 6.4 will consume the new typed optional `notice` field surfaced here.
+
+  **Design-record handoff (still required, not owned by this agent):** the v1-compatibility decision record under `design.md` for SCOPE-075-06.2b must be authored by `bubbles.design`. This implementation agent did not edit `design.md`. Route packet emitted in the result envelope below.
+- [ ] 6.4 WhatsApp + Mobile renderers + Telegram short-circuit: TP-075-21, TP-075-22, TP-075-23 all pass; existing `legacy_alias_intercept` tests still green for the non-upstream path.
+- [ ] 6.5 Live-stack execution: TP-075-05/06/07/08, TP-075-13/14/15, TP-075-16/17 re-executed against the live stack; raw outputs (redacted) captured in `report.md` per `bubbles-evidence-capture`.
+- [ ] Build Quality Gate passes: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, artifact lint for this spec.
+- [ ] Telegram Coexistence Decision Record (above) is recorded in `design.md` by `bubbles.design` before sub-scope 6.4 begins.
+
+**Uncertainty Declaration:** This planning pass did not run implementation, build, lint, or test commands. The Telegram coexistence decision (option 2) is recommended; `bubbles.design` MUST ratify the decision in `design.md` before Scope 6.4 implementation starts. Each unchecked DoD item requires current-session execution evidence before completion.
 
 **Uncertainty Declaration:** This planning pass did not execute runtime, report, or test commands.

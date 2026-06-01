@@ -1,0 +1,8 @@
+{
+  "schema_version": "render-descriptor.v1",
+  "nodes": [
+    {"kind": "text", "text": "Which Palm Springs did you mean?"},
+    {"kind": "action", "action_kind": "disambiguation_choice", "ref": "disambig-palm-springs-001", "label": "Palm Springs, CA", "choice_index": 1},
+    {"kind": "action", "action_kind": "disambiguation_choice", "ref": "disambig-palm-springs-001", "label": "Palm Springs, FL", "choice_index": 2}
+  ]
+}

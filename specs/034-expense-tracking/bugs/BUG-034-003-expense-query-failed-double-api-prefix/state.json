@@ -8,28 +8,51 @@
   "status": "in_progress",
   "workflowMode": "bugfix-fastlane",
   "execution": {
-    "activeAgent": "bubbles.implement",
-    "currentPhase": "implement",
-    "completedPhases": ["discovery", "documentation", "analysis", "design", "plan", "implement"],
+    "activeAgent": "bubbles.audit",
+    "currentPhase": "audit",
+    "completedPhases": ["discovery", "documentation", "analysis", "design", "plan", "implement", "audit"],
     "completedPhaseClaims": [
       {
         "phase": "implement",
         "agent": "bubbles.implement",
         "completedAt": "2026-05-28T19:05:00Z",
         "evidence": "report.md#bug-reproduction-after-fix-in-process-integration-regression"
+      },
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "completedAt": "2026-06-01T21:15:00Z",
+        "evidence": "report.md#audit-2026-06-01 (artifact-lint EXIT=0; traceability-guard RESULT: PASSED, 0 warnings, EXIT=0)"
       }
     ]
   },
   "certification": {
     "status": "in_progress",
-    "completedScopes": []
+    "completedScopes": [],
+    "certifiedCompletedPhases": [
+      {
+        "phase": "audit",
+        "agent": "bubbles.audit",
+        "certifiedAt": "2026-06-01T21:15:00Z",
+        "evidence": "/tmp/al.log EXIT=0; /tmp/tg.log RESULT: PASSED (0 warnings) EXIT=0"
+      }
+    ]
+  },
+  "policySnapshot": {
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "workflowMode": { "mode": "bugfix-fastlane", "source": "bubbles.bug" },
+    "validation": { "mode": "certification-required", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" }
   },
   "transitionRequests": [],
   "reworkQueue": [],
   "routing": {
     "nextOwner": "bubbles.validate",
-    "reason": "In-process fix complete (2 source files + 1 new adversarial regression test, all PASS; existing api unit suite + full smackerel.sh test integration green). Live-host DoD items (3) blocked on operator-run home-lab redeploy: ./smackerel.sh build → bash <knb>/smackerel/home-lab/apply.sh → bash <knb>/smackerel/home-lab/verify.sh. After deploy, bubbles.validate must capture live /api/expenses=401, /api/meal-plans=401, and Telegram /expense empty-state evidence to flip remaining DoD items and uservalidation.md checkboxes."
+    "reason": "Audit re-run 2026-06-01: artifact-lint EXIT=0; traceability-guard RESULT: PASSED (0 warnings), EXIT=0. Both governance gates clean after bubbles.plan closed the 6 traceability + 2 artifact-lint findings. In-process fix + adversarial regression test green (internal/api/router_mount_bug_034_003_test.go). Live-host DoD items (3) still blocked on operator-run home-lab redeploy. bubbles.validate to capture live /api/expenses=401, /api/meal-plans=401, and Telegram /expense empty-state evidence and flip remaining DoD + uservalidation checkboxes to certify terminal status."
   },
   "createdAt": "2026-05-28T18:55:00Z",
-  "updatedAt": "2026-05-28T19:05:00Z"
+  "updatedAt": "2026-06-01T21:15:00Z"
 }

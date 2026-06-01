@@ -42,11 +42,11 @@
   "transitionRequests": [],
   "reworkQueue": [],
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "planning-reconcile",
-    "currentScope": null,
-    "runStartedAt": "2026-05-31T21:32:34Z",
-    "lastUpdatedAt": "2026-05-31T21:32:34Z",
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "SCOPE-073-01",
+    "runStartedAt": "2026-06-01T21:30:00Z",
+    "lastUpdatedAt": "2026-06-01T21:35:00Z",
     "completedPhaseClaims": [],
     "completedScopes": [],
     "executionHistory": [
@@ -112,6 +112,33 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design", "reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T00:00:00Z",
+        "runEndedAt": "2026-06-01T00:00:00Z",
+        "summary": "Resolved SCOPE-2 e2e runner blocker: repo CLI today wires only Go-based e2e (-tags e2e under tests/e2e/...) with no Playwright/browser-driver runner. Reclassified TP-073-09/10/11 from e2e-ui to Go-driven e2e-api driving the embedded PWA HTTP surface plus POST /api/assistant/turn, paired with web/pwa/tests/*.spec.ts documentation stubs following the photos_pwa_test.go pattern. Updated design.md (Brief, Testing Strategy table, Alternatives), scopes.md (SCN-A01/A03/A09 matrix rows, Impact Sweep, Impact-Aware Validation, TP-073-09/10/11), test-plan.json (same three rows reclassified e2e-api with planned Go file paths and rationale notes), and scenario-manifest.json (liveSystemExpectation for A01/A03/A09). Adding a browser-driver runner deferred to a separate foundation spec. SCOPE-3/4 mobile e2e-ui rows unchanged (out of SCOPE-2 boundary)."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning", "reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T00:30:00Z",
+        "runEndedAt": "2026-06-01T00:30:00Z",
+        "summary": "Resolved bubbles.implement blockers 073-IMPL-BLOCK-1 and 073-IMPL-BLOCK-2. (1) Ratified same-origin HttpOnly session cookie (spec 070 web login flow) as the web auth path for POST /api/assistant/turn; in-memory bearer fallback for web is forbidden. Updated design.md (Brief Open Questions + new Ratified Decisions, Web Client section, Risks/Open Questions table) and scopes.md (Scope 2 SCN-073-A01 Gherkin + implementation plan); scenario-manifest.json SCN-073-A01 gherkin updated to cookie language. (2) Defined the canonical render-descriptor-v1 JSON schema (flat ordered array of typed nodes; closed kind vocabulary text|quote|action|citation) and the shared fixture set at tests/fixtures/assistant_response_v1/ with seven required cases (text_only, with_sources, disambiguation, confirm_accept_decline, capture_acknowledgement, error_retry, unknown_shape) in design.md \u00a7 Shared Schema And Renderer Core; updated scopes.md TP-073-03 and test-plan.json TP-073-03 (added fixturePath, fixtureCases, rendererDescriptorSchema fields and resolution note); updated scenario-manifest.json SCN-073-A02 liveSystemExpectation to cite the fixture path and cases. No source/test/config/runtime files modified; status remains in_progress."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-01T21:30:00Z",
+        "runEndedAt": "2026-06-01T21:35:00Z",
+        "summary": "SCOPE-073-01 gap-fill: implemented TP-073-03 cross-language renderer canary and re-verified the existing TP-073-07 config fail-loud tests. Created tests/fixtures/assistant_response_v1/render-descriptor-v1.json plus seven input+golden fixture pairs (text_only, with_sources, disambiguation, confirm_accept_decline, capture_acknowledgement, error_retry, unknown_shape). Added the JS renderer at web/pwa/lib/render_descriptor_v1.js + CLI, the Dart shared-core projection at clients/mobile/assistant/lib/core/render_descriptor_v1.dart + tool/render_descriptor_v1_cli.dart (exported from smackerel_assistant). Added tests/unit/clients/render_descriptor_canary_test.go which spawns node and dart on every fixture, validates against the closed render-descriptor-v1 vocabulary, and asserts js==golden, dart==golden, js==dart for all seven scenarios. Evidence: `go test -run TestRenderDescriptorV1_CrossLanguageCanary ./tests/unit/clients/` ok 9.635s; `go test -run 'WebAssistant|MobileAssistant|AssistantFrontend' ./internal/config/` ok 0.022s. Status remains in_progress: SCOPE-073-01 DoD aggregates also cover TP-073-01/02/04/05/06/08 which are NOT addressed by this pass."
       }
     ]
   }

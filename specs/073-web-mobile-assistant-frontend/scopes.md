@@ -107,7 +107,7 @@ No project impact map is configured. Because this scope touches generated client
 |---|---|---|---|---|---|---|
 | TP-073-01 | SCN-073-A02 | unit/build | `TBD: clients/mobile/assistant shared schema generation test` | Planned: incompatible schema change fails shared mobile codegen for iPhone/iOS and Android | `./smackerel.sh test unit` | No |
 | TP-073-02 | SCN-073-A02 | unit/build | `TBD: web/pwa generated assistant schema test` | Planned: web generated validator rejects incompatible schema drift | `./smackerel.sh test unit` | No |
-| TP-073-03 | SCN-073-A02 | unit | `TBD: shared assistant renderer fixture canary` | Planned: one golden response fixture produces equivalent web, iPhone/iOS, and Android render descriptors | `./smackerel.sh test unit` | No |
+| TP-073-03 | SCN-073-A02 | unit | `TBD: shared assistant renderer fixture canary` (inputs + golden descriptors under `tests/fixtures/assistant_response_v1/`) | Planned: web, shared-mobile core, iOS adapter projection, and Android adapter projection each produce a render descriptor conforming to `render-descriptor-v1.json` (see design.md § Render-Descriptor JSON Schema) and deep-equal the per-fixture golden descriptor for `text_only`, `with_sources`, `disambiguation`, `confirm_accept_decline`, `capture_acknowledgement`, `error_retry`, and `unknown_shape` | `./smackerel.sh test unit` | No |
 | TP-073-04 | SCN-073-A02 | unit/build | `TBD: clients/mobile/assistant platform declaration test` | Planned: shared mobile build declares both ios and android targets from one codebase | `./smackerel.sh test unit` | No |
 | TP-073-05 | SCN-073-A08 | integration | `TBD: assistant HTTP transport hint integration test` | Planned: web and mobile transport hints are accepted and telemetry-only for web, iPhone/iOS, and Android clients | `./smackerel.sh test integration` | Yes |
 | TP-073-06 | SCN-073-A11 | unit | `TBD: web and shared mobile sensitive storage guard tests` | Planned: no web or shared mobile renderer/core path persists bearer/session material | `./smackerel.sh test unit` | No |
@@ -136,9 +136,9 @@ No project impact map is configured. Because this scope touches generated client
 
 ```gherkin
 Scenario: SCN-073-A01 — Web client sends an authenticated turn and renders the response
-  Given the web client has a valid bearer token with the assistant.turn scope
+  Given the web client has a valid same-origin HttpOnly session cookie established by the spec 070 web login flow with the assistant.turn scope
   When the user types a NL message and submits it
-  Then the client POSTs to /api/assistant/turn with a fresh transport_message_id
+  Then the client POSTs to /api/assistant/turn with credentials: "same-origin" and a fresh transport_message_id
   And the response body is rendered: text, citations, and any disambig/confirm/capture controls
 
 Scenario: SCN-073-A03 — Transient network failure retries with the same transport_message_id
@@ -158,14 +158,14 @@ Scenario: SCN-073-A09 — Web client meets accessibility floor
 
 | Scenario | Surface | Preconditions | User Action | Expected Assertion | Test Row |
 |---|---|---|---|---|---|
-| SCN-073-A01 | Web Assistant Chat | authenticated web session with assistant.turn scope | submit natural-language text | same-origin POST succeeds and transcript renders response body/sources/controls | TP-073-09 |
-| SCN-073-A03 | Web Assistant Chat | first POST times out | user chooses retry | retry reuses original `transport_message_id` and no duplicate turn appears | TP-073-10 |
-| SCN-073-A09 | Web Assistant Chat | keyboard/screen-reader workflow | submit turn and navigate controls | live region announces response; keyboard order reaches controls | TP-073-11 |
+| SCN-073-A01 | Web Assistant Chat | authenticated web session with assistant.turn scope | submit natural-language text | same-origin POST succeeds and the served PWA markup renders response body/sources/controls per the schema fixture | TP-073-09 |
+| SCN-073-A03 | Web Assistant Chat | first POST times out | user (Go test simulation) chooses retry | retry reuses original `transport_message_id`; server observes one deduped turn; no duplicate transcript row in rendered HTML | TP-073-10 |
+| SCN-073-A09 | Web Assistant Chat | served PWA assistant route | inspect rendered HTML/ARIA | `aria-live`/`role=status` response region, labelled composer, deterministic tab/focus order across composer/send/disambig/confirm/retry controls are present | TP-073-11 |
 
 ### Implementation Plan
 
 - Add the planned web assistant route under `web/pwa/assistant.html` and `web/pwa/assistant.js` using existing PWA style and static serving patterns.
-- Implement composer-first screen, transcript rows, same-origin `fetch('/api/assistant/turn', { credentials: 'same-origin' })` or auth-owner-approved memory-only handoff, and generated request/response validation.
+- Implement composer-first screen, transcript rows, same-origin `fetch('/api/assistant/turn', { credentials: 'same-origin' })` carrying the spec 070 HttpOnly session cookie (ratified 2026-06-01), and generated request/response validation. The web client never reads or stores bearer material; no JS-visible bearer fallback is permitted.
 - Generate stable `transport_message_id` per submitted web turn and preserve it across retry attempts until the user edits the turn.
 - Add ARIA live region, keyboard focus order, error card focus, and source/detail affordances.
 - Add no-storage guard for bearer/session material in browser storage APIs.
@@ -174,7 +174,7 @@ Scenario: SCN-073-A09 — Web client meets accessibility floor
 
 | Shared Surface | Downstream Contract | Canary Validation |
 |---|---|---|
-| Static PWA shell | Existing PWA pages and service worker must remain healthy | TP-073-09 web e2e canary |
+| Static PWA shell | Existing PWA pages and service worker must remain healthy | TP-073-09 Go-driven PWA e2e canary |
 | Auth/session middleware | Same-origin assistant calls must not expose bearer tokens to browser storage or logs | TP-073-12 storage/auth guard |
 | Retry/idempotency | Web retry must reuse transport id | TP-073-10 timeout retry row |
 | Renderer foundation | Web projection must consume shared schema-driven render descriptors | TP-073-03 remains prerequisite |
@@ -187,15 +187,15 @@ Scenario: SCN-073-A09 — Web client meets accessibility floor
 
 ### Impact-Aware Validation
 
-No project impact map is configured. UI work requires e2e-ui, keyboard/accessibility checks, retry regression, and storage guard coverage before scope completion.
+No project impact map is configured. UI work requires Go-driven PWA e2e against the live assistant HTTP endpoint, static-HTML keyboard/ARIA assertions, retry regression with adversarial id-reuse sub-test, and storage guard coverage before scope completion. Driver-based screen-reader announcement validation (Playwright/axe) is deferred to a separate foundation spec — see design.md Alternatives.
 
 ### Test Plan
 
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
-| TP-073-09 | SCN-073-A01 | e2e-ui | `TBD: web/pwa assistant chat e2e test` | Planned regression: web authenticated turn posts and renders response body, sources, and controls | `./smackerel.sh test e2e` | Yes |
-| TP-073-10 | SCN-073-A03 | e2e-ui | `TBD: web/pwa assistant retry e2e test` | Planned regression: web timeout retry reuses the same transport_message_id | `./smackerel.sh test e2e` | Yes |
-| TP-073-11 | SCN-073-A09 | e2e-ui | `TBD: web/pwa assistant accessibility e2e test` | Planned: ARIA live region and keyboard navigation reach composer and controls | `./smackerel.sh test e2e` | Yes |
+| TP-073-09 | SCN-073-A01 | e2e-api | `tests/e2e/assistant/web_pwa_chat_e2e_test.go` (planned) + `web/pwa/tests/assistant_chat.spec.ts` stub | Planned regression: Go e2e fetches the served PWA assistant route, asserts composer/transcript/source markup, posts an authenticated turn, and asserts response body/sources/controls render per the schema fixture | `./smackerel.sh test e2e` | Yes |
+| TP-073-10 | SCN-073-A03 | e2e-api | `tests/e2e/assistant/web_pwa_retry_e2e_test.go` (planned) + `web/pwa/tests/assistant_retry.spec.ts` stub | Planned regression: web timeout retry reuses the same `transport_message_id` (server observes one deduped turn); adversarial sub-test fails if the retry mints a fresh id | `./smackerel.sh test e2e` | Yes |
+| TP-073-11 | SCN-073-A09 | e2e-api | `tests/e2e/assistant/web_pwa_accessibility_e2e_test.go` (planned) + `web/pwa/tests/assistant_accessibility.spec.ts` stub | Planned: served PWA markup contains `aria-live`/`role=status` response region, labelled composer, and deterministic tab/focus order across composer, send, disambig choices, confirm, and retry controls (DOM + `tabindex` analysis). Driver-based announcement validation deferred to future browser-driver foundation spec | `./smackerel.sh test e2e` | Yes |
 | TP-073-12 | SCN-073-A01 | unit | `TBD: web assistant auth storage guard test` | Planned: assistant web client does not read/write bearer tokens in browser storage | `./smackerel.sh test unit` | No |
 
 ### Definition of Done — Tiered Validation
