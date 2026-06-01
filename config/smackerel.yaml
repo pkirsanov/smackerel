@@ -795,18 +795,77 @@ assistant:
   # NO defaults (Gate G028, smackerel-no-defaults): every key is
   # REQUIRED at the generator boundary even when disabled.
   open_knowledge:
-    enabled: false # REQUIRED: strict bool ("true"|"false"); reject "1"/"0"
+    enabled: true # REQUIRED: strict bool ("true"|"false"); reject "1"/"0"
     provider: "searxng" # REQUIRED: "searxng" | "brave" | "tavily"
-    provider_endpoint: "" # REQUIRED ("" permitted when enabled=false)
+    provider_endpoint: "http://searxng:8080" # REQUIRED ("" permitted when enabled=false)
     provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
-    llm_model_id: "" # REQUIRED ("" permitted when enabled=false)
-    max_iterations: 8 # REQUIRED: > 0 when enabled
+    llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 064 SCOPE-17 — quality-first dev default. ~4GB resident, sound JSON-schema following + tool-use behavior. First call cold-loads ~30-60s; subsequent calls are fast.
+    max_iterations: 3 # REQUIRED: > 0 when enabled. Spec 064 SCOPE-17 — 3 iterations × ~3min gemma3:4b CPU latency = ~10 min max wall clock; balance quality vs latency on CPU dev.
     per_query_token_budget: 8000 # REQUIRED: > 0 when enabled
     per_query_usd_budget: 0.05 # REQUIRED: > 0 when enabled
     monthly_budget_usd: 0 # REQUIRED: >= 0 (must be explicit)
     per_user_monthly_budget_usd: 0 # REQUIRED: >= 0
-    tool_allowlist: [] # REQUIRED: non-empty when enabled (deny-by-default per SCOPE-02)
+    tool_allowlist: [ "internal_retrieval", "web_search", "unit_convert", "calculator" ] # REQUIRED: non-empty when enabled (deny-by-default per SCOPE-02); v1 set per spec 064 policySnapshot
     web_snippet_cache_enabled: false # REQUIRED: strict bool
+    # Spec 064 SCOPE-12 — per-LLM-roundtrip timeout (ms) for the
+    # open-knowledge agent's calls to the ML sidecar /llm/chat
+    # endpoint. The agent makes up to max_iterations roundtrips; this
+    # caps each one independently. NO default (Gate G028): must be > 0
+    # when enabled.
+    llm_timeout_ms: 600000 # REQUIRED: > 0 when enabled. Spec 064 SCOPE-17 — gemma3:4b on CPU takes 2-4 min per turn; 10min cap accommodates worst-case cold load.
+    # Spec 064 SCOPE-15 — additional outbound hosts the open-knowledge
+    # subsystem may reach beyond `provider_endpoint` (which is always
+    # implicitly allowed). Each entry MUST be a bare host (no scheme,
+    # path, port, or userinfo). Empty list = provider endpoint only
+    # (deny-by-default per G028). Wildcards NOT supported in v1 —
+    # PKT-020-A asks spec 020 to layer wildcard support + a
+    # network-layer egress firewall on top of this application-layer
+    # gate.
+    allowed_egress_hosts: [] # REQUIRED: explicit empty list
+    # Spec 064 SCOPE-16 — web-provider circuit breaker. Wraps the
+    # configured WebSearchProvider; once `failure_threshold`
+    # consecutive countable provider failures (transport unreach or
+    # quota exceeded) occur, the breaker trips Open and
+    # short-circuits subsequent calls with ErrCircuitOpen until
+    # `half_open_after_seconds` elapses. Then ONE probe is allowed;
+    # success returns to Closed, failure rearms Open. NO defaults
+    # (Gate G028): all three keys REQUIRED at the generator
+    # boundary; > 0 when enabled. PKT-022-A requests spec 022 to
+    # review whether these thresholds match the operational
+    # resilience playbook.
+    circuit_breaker:
+      failure_threshold: 5 # REQUIRED: consecutive failures that trip breaker; > 0 when enabled
+      open_window_seconds: 60 # REQUIRED: documented Open window; > 0 when enabled
+      half_open_after_seconds: 30 # REQUIRED: elapsed time before HalfOpen probe; > 0 when enabled
+    # Spec 064 SCOPE-07 — self-hosted SearxNG container shape. Off by default;
+    # per-env `environments.<env>.searxng_enabled` flips the `searxng` compose
+    # profile. The test env auto-enables this so the integration leg runs
+    # `TestSearxNGIntegration_Smoke` against a real container. No defaults
+    # (Gate G028 / smackerel-no-defaults); the container_port/image/secret_key
+    # are REQUIRED even when no environment enables the profile.
+    searxng:
+      image: "searxng/searxng:2026.5.30-bd863f16b" # REQUIRED: pinned upstream tag (bump deliberately)
+      container_port: 8080 # REQUIRED: SearxNG default listen port inside the container
+      secret_key: "smackerel-searxng-dev-test-only-not-a-real-secret" # REQUIRED: non-empty; entrypoint substitutes into settings.yml. Dev/test only — operators MUST override before any real deployment
+      base_url: "http://localhost/" # REQUIRED: SearxNG base_url; placeholder fine for in-cluster JSON API use
+  # Spec 068 SCOPE-1 — Structured Intent Compiler. SST zero-defaults
+  # (Gate G028 / smackerel-no-defaults): EVERY key REQUIRED at the
+  # generator boundary; missing values fail loud at startup. Ships
+  # `enabled: false` in this scope because the facade does not yet
+  # invoke the compiler in the routing path — Scope 2 wires that.
+  # When enabled=true the compiler calls the ML sidecar
+  # POST /assistant/intent/compile and refuses to route raw text on
+  # schema failure (spec.md Hard Constraints 2, 4, 5).
+  intent_compiler:
+    enabled: false # REQUIRED: strict bool; Scope 2 flips this to true alongside facade insertion
+    model_role: "assistant_intent_compiler" # REQUIRED: ML bridge model role used for compilation
+    prompt_contract_version: "intent-compiler-v1" # REQUIRED: prompt contract version the sidecar must honor
+    schema_version: "v1" # REQUIRED: CompiledIntent schema version the Go side accepts
+    timeout_ms: 5000 # REQUIRED: per-compile request deadline (Go duration in ms)
+    confidence_floor: 0.6 # REQUIRED: scenario-hint confidence floor; below this, similarity ranking is allowed
+    max_context_turns: 8 # REQUIRED: bounded conversation window passed to the compiler
+    max_output_bytes: 16384 # REQUIRED: cap on sidecar response body (defense against runaway LLM output)
+    retry_budget: 1 # REQUIRED: schema-validation retries before declaring schema_invalid
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key
@@ -819,14 +878,19 @@ agent:
   routing:
     confidence_floor: 0.65 # REQUIRED: minimum cosine similarity to select a scenario
     consider_top_n: 5 # REQUIRED: number of candidates retained for trace
-    fallback_scenario_id: "" # REQUIRED ("" = no fallback; below-floor → unknown-intent)
+    # Spec 064 SCOPE-12 — flipped from "" to "open_knowledge" so below-
+    # floor decisions land on the open-ended knowledge agent (which owns
+    # its own iteration cap, budget enforcement, and cite-back
+    # verification) instead of capture-as-fallback. Setting back to ""
+    # disables the open-knowledge fallback (below-floor → unknown-intent).
+    fallback_scenario_id: "open_knowledge" # REQUIRED ("" = no fallback; below-floor → unknown-intent)
     embedding_model: "" # REQUIRED ("" = inherit runtime.embedding_model)
     # BUG-061-004 — assistant NL routing embedder. "sidecar" uses HTTP
     # POST /embed on the ML sidecar (production); "noop" returns a fixed
     # unit vector for every input (test/dev only — guarantees alphabetical
     # tie-break and is rejected by the validator outside dev/test envs).
     embedder_mode: "sidecar" # REQUIRED: "sidecar" | "noop"
-    embed_timeout_ms: 500 # REQUIRED: per-call timeout for the sidecar /embed roundtrip
+    embed_timeout_ms: 30000 # REQUIRED: per-call timeout for the sidecar /embed roundtrip. Spec 064 SCOPE-17 raised from 500ms to accommodate cold sentence-transformer load on first startup; subsequent calls return in <50ms.
   trace:
     retention_days: 30 # REQUIRED: days to retain agent_traces rows
     record_llm_messages: false # REQUIRED: capture full LLM transcript (true in dev/test only)
@@ -1397,12 +1461,25 @@ environments:
     nats_volume_name: smackerel-nats-data
     ollama_volume_name: smackerel-ollama-data
     prometheus_volume_name: smackerel-prometheus-data
-    # Spec 043 — per-env opt-in. Dev preserves manual --profile ollama
-    # ergonomic (FR-OLLAMA-007); operator flips to true to auto-start.
-    ollama_enabled: false
+    # Spec 043 — per-env opt-in. Spec 064 SCOPE-17 — dev defaults to true so
+    # the open-knowledge agent works end-to-end without a separate profile.
+    # Operator can flip to false to opt out.
+    ollama_enabled: true
     # Spec 044 — per-user bearer auth disabled in dev (preserves
     # SMACKEREL_AUTH_TOKEN dev/test ergonomic; SCN-AUTH-005/011).
     auth_enabled: false
+    # Spec 064 SCOPE-17 — SearxNG opt-in for dev. Spec 064 SCOPE-17 — flipped
+    # to true so the open-knowledge agent has a working web provider in dev.
+    searxng_enabled: true
+    searxng_host_port: 42006
+    searxng_bind_address: "127.0.0.1"
+    # Spec 064 SCOPE-17 — quality-first dev. gemma3:4b for all agent
+    # routing slots so tool-use + JSON-schema following is reliable.
+    # First call cold-loads ~30-60s; subsequent calls are fast.
+    agent_provider_default_model: "gemma3:4b"
+    agent_provider_fast_model: "gemma3:4b"
+    llm_model: "gemma3:4b"
+    ollama_model: "gemma3:4b"
   test:
     compose_project: smackerel-test
     postgres_host_port: 47001
@@ -1425,6 +1502,13 @@ environments:
     # Spec 044 — per-user bearer auth disabled in test (test stack uses
     # the disposable shared SMACKEREL_AUTH_TOKEN; SCN-AUTH-005/011).
     auth_enabled: false
+    # Spec 064 SCOPE-07 — test stack auto-starts SearxNG so the integration
+    # leg runs `TestSearxNGIntegration_Smoke` against a real container.
+    # smackerel.sh integration injects OPEN_KNOWLEDGE_SEARXNG_URL=http://searxng:8080
+    # into the Go runner container.
+    searxng_enabled: true
+    searxng_host_port: 47006
+    searxng_bind_address: "127.0.0.1"
     # Spec 061 Round 66 (2026-05-30) — operator quality directive: quality >
     # speed. Reverses Round 58 Option 2 (which pinned every test-tier model
     # env to qwen2.5:0.5b-instruct to fit the original 5000ms retrieval-qa
@@ -1471,6 +1555,13 @@ environments:
     # populate auth.signing.* and auth.at_rest_hashing_key (and
     # auth.bootstrap_token on a fresh deploy) before the runtime starts.
     auth_enabled: true
+    # Spec 064 SCOPE-07 — home-lab does NOT auto-start SearxNG. The
+    # deploy adapter overlay decides whether to expose a SearxNG instance
+    # (deploy/compose.deploy.yml is intentionally unmodified); host_port
+    # is reserved here so the SST contract resolves uniformly across envs.
+    searxng_enabled: false
+    searxng_host_port: 43006
+    searxng_bind_address: "127.0.0.1"
     # Spec 045 BUG-045-001 (home-lab opt-up) — the home-lab host has
     # ~109 GiB RAM available, so we opt UP from the commodity-host
     # gemma3:4b default to the larger
@@ -1501,3 +1592,9 @@ environments:
     agent_provider_default_model: "gemma4:26b"
     agent_provider_fast_model: "gemma4:26b"
     agent_provider_vision_model: "gemma4:26b"
+    # Spec 064 SCOPE-17 — open-knowledge agent uses gemma4:26b on
+    # home-lab (evo-x2) for best-quality tool-use + JSON-schema
+    # following. The base block's small dev model would silently apply
+    # without this explicit override since llm_model_id is not part of
+    # the tier matrix.
+    assistant_open_knowledge_llm_model_id: "gemma4:26b"
