@@ -8,6 +8,16 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for Telegram share/capture ingestion, forwarded-message
+> assembly, media grouping, and capture API use. Scenario-specific
+> Telegram commands mentioned here are historical entry examples only;
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md) retires
+> those command surfaces, and [spec 068](../068-structured-intent-compiler/design.md)
+> routes user-authored natural language through `CompiledIntent` before
+> assistant behavior. Capture-as-fallback remains owned by spec 061 and
+> is not weakened by the successor architecture.
+
 ## Design Brief
 
 ### Current State

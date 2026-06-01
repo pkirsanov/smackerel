@@ -10,6 +10,17 @@
 > them re-implements intent routing, tool dispatch, schema validation, or
 > trace recording.
 
+> **Design Successor Note (2026-05-31).** This spec remains the terminal
+> authority for the agent substrate: scenario loader, router, executor,
+> tool registry, schema validation, and trace store. Specs
+> [065](../065-generic-micro-tools/design.md),
+> [067](../067-intent-driven-policy-enforcement/design.md), and
+> [068](../068-structured-intent-compiler/design.md) amend how user-facing
+> assistant turns consume that substrate: generic micro-tools register via
+> this registry, policy guards extend the no-keyword rule outside
+> `internal/agent`, and `CompiledIntent` is embedded in
+> `IntentEnvelope.StructuredContext` before user-facing routing.
+
 ---
 
 ## Design Brief

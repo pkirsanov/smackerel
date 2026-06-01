@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "specId": "071",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "testStatus": "planned",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-071-01",
+      "scopeName": "Trace Contract Foundation",
+      "tests": [
+        {
+          "scenarioId": "SCN-071-A01",
+          "category": "integration",
+          "file": "tests/integration/assistant/intent_trace_test.go",
+          "title": "TBD: emits exactly one v1 IntentTrace per compiled turn",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A05",
+          "category": "unit",
+          "file": "internal/config/assistant_intent_trace_test.go",
+          "title": "TBD: missing assistant.intent_trace.sampling_ratio fails loud",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A10",
+          "category": "unit",
+          "file": "internal/assistant/intenttrace/golden_contract_test.go",
+          "title": "TBD: v1 schema drift fails without version bump",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A01",
+          "category": "e2e-api",
+          "file": "tests/e2e/assistant/intent_trace_contract_e2e_test.go",
+          "title": "TBD: live compiled turn exposes v1 trace contract",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-071-02",
+      "scopeName": "Redaction, Sampling, Persistence, And Retention",
+      "tests": [
+        {
+          "scenarioId": "SCN-071-A02",
+          "category": "unit",
+          "file": "internal/assistant/intenttrace/sampling_test.go",
+          "title": "TBD: sampled-out decision emits minimal envelope shape",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A02",
+          "category": "integration",
+          "file": "tests/integration/assistant/intent_trace_test.go",
+          "title": "TBD: sampled-out envelope preserves total-turn accounting",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A03",
+          "category": "unit",
+          "file": "internal/assistant/intenttrace/redaction_test.go",
+          "title": "TBD: source policy redacts raw text and sensitive slots",
+          "command": "./smackerel.sh test unit --go",
+          "liveSystem": false,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A09",
+          "category": "integration",
+          "file": "tests/integration/assistant/intent_trace_retention_test.go",
+          "title": "TBD: retention sweep removes expired traces and logs count",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A03",
+          "category": "e2e-api",
+          "file": "tests/e2e/assistant/intent_trace_privacy_e2e_test.go",
+          "title": "TBD: live exported trace contains redaction summary without raw slot values",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-071-03",
+      "scopeName": "Replay And Policy-Guard Integration",
+      "tests": [
+        {
+          "scenarioId": "SCN-071-A04",
+          "category": "e2e-api",
+          "file": "tests/e2e/assistant/intent_replay_test.go",
+          "title": "TBD: replay reproduces route and tool calls without side effects",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A04",
+          "category": "integration",
+          "file": "tests/integration/assistant/intent_replay_store_test.go",
+          "title": "TBD: replay loads one stored redacted trace by trace id",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A08",
+          "category": "integration",
+          "file": "tests/integration/policy/intent_bypass_guard_test.go",
+          "title": "TBD: bypass guard requires IntentTrace ancestor fields",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A08",
+          "category": "e2e-api",
+          "file": "tests/e2e/assistant/intent_bypass_guard_e2e_test.go",
+          "title": "TBD: synthetic raw-route bypass is rejected in live stack",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-071-04",
+      "scopeName": "Dashboard, Refusal Join, And Operator Panels",
+      "tests": [
+        {
+          "scenarioId": "SCN-071-A06",
+          "category": "integration",
+          "file": "tests/integration/monitoring/assistant_intents_dashboard_test.go",
+          "title": "TBD: Assistant Intents panels render from trace metrics",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A06",
+          "category": "e2e-ui",
+          "file": "web/pwa/tests/assistant_intents_dashboard.spec.ts",
+          "title": "TBD: operator dashboard shows action distribution and trace samples",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A07",
+          "category": "integration",
+          "file": "tests/integration/assistant/refusal_trace_join_test.go",
+          "title": "TBD: refusal counter cause equals IntentTrace refusal_cause",
+          "command": "./smackerel.sh test integration",
+          "liveSystem": true,
+          "status": "planned"
+        },
+        {
+          "scenarioId": "SCN-071-A07",
+          "category": "e2e-api",
+          "file": "tests/e2e/assistant/intent_refusal_join_e2e_test.go",
+          "title": "TBD: refusal event is queryable through trace and counter data",
+          "command": "./smackerel.sh test e2e",
+          "liveSystem": true,
+          "status": "planned"
+        }
+      ]
+    }
+  ]
+}

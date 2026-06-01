@@ -1409,6 +1409,16 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Spec 064 SCOPE-03 — open-ended knowledge agent SST. Loaded
+	// after the spec 061 assistant block since it logically sits on
+	// AssistantConfig.OpenKnowledge. Fail-loud on missing/invalid
+	// env vars; deep validation gated on Enabled per design §SST.
+	ok, err := LoadOpenKnowledge()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Assistant.OpenKnowledge = ok
+
 	return cfg, nil
 }
 

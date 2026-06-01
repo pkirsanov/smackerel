@@ -8,6 +8,16 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** Annotation storage, append-only
+> events, materialized summaries, API writes, and downstream consumers in
+> this design remain active. User-facing free-text classification through
+> `/rate` commands or keyword maps is superseded by
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md) and
+> [spec 068](../068-structured-intent-compiler/design.md). New assistant
+> annotation turns should consume compiled slots such as rating,
+> interaction type, target artifact, and note, with borderline cases routed
+> to the spec 061 disambiguation flow.
+
 ## Design Brief
 
 **Current State:** Smackerel captures and processes artifacts through connectors and the Telegram share flow. The only user preference signal is a binary `user_starred BOOLEAN` column on the `artifacts` table. The intelligence engine (`internal/intelligence/engine.go`) uses `relevance_score` for recommendations, the search engine (`internal/api/search.go`) supports type/date/person/topic filters, and the Telegram bot (`internal/telegram/bot.go`) routes commands and share captures but has no reply-to-artifact annotation flow. The existing `access_count` and `last_accessed` columns track API access, not real-world usage.

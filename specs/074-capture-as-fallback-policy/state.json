@@ -1,0 +1,96 @@
+{
+  "version": 3,
+  "featureDir": "specs/074-capture-as-fallback-policy",
+  "featureNumber": "074",
+  "featureName": "Capture-as-Fallback Cross-Cutting Policy",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/003-phase2-ingestion",
+    "specs/008-telegram-share-capture",
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent",
+    "specs/066-legacy-keyword-surface-retirement",
+    "specs/068-structured-intent-compiler"
+  ],
+  "amends": [
+    "specs/003-phase2-ingestion",
+    "specs/008-telegram-share-capture",
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "completedScopes": []
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T20:30:46Z",
+    "lastUpdatedAt": "2026-05-31T20:30:46Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped the authoritative cross-cutting capture-as-fallback policy referenced by specs 061/064/066/068/069 but owned by none. 11 BDD scenarios (SCN-074-A01..A11) cover the trigger contract, provenance distinction from spec 008 explicit captures, same-user dedup window (in and out), forbidden cross-user dedup, abandoned-clarification fallback, IntentTrace + counter wiring, fail-loud SST, inviolability of the policy, no-content-interpretation-at-capture-time, and identical acknowledgement shape across all transports."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:10:07Z",
+        "runEndedAt": "2026-05-31T20:10:07Z",
+        "summary": "Created design.md for capture-as-fallback policy, resolving the central policy module, provenance metadata table, strict per-user dedup, abandoned clarification handling, canonical acknowledgement, fail-loud SST, and scenario-to-test mapping for SCN-074-A01..A11."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:30:46Z",
+        "runEndedAt": "2026-05-31T20:30:46Z",
+        "summary": "Created planning artifacts for SCN-074-A01..A11: five sequential scopes, scenario-manifest.json, test-plan.json, uservalidation.md, and planning-only report.md. Status remains in_progress with planMaturityOnly=true."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      }
+    ]
+  }
+}

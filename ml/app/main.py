@@ -249,3 +249,10 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
 
 
 app.include_router(authed_router)
+
+# Spec 064 SCOPE-04 — open-ended knowledge agent LLM bridge. Mounted
+# through verify_auth so the new /llm/chat endpoint inherits the same
+# auth contract as the rest of the sidecar surface.
+from .routes.chat import router as openknowledge_chat_router  # noqa: E402
+
+app.include_router(openknowledge_chat_router, dependencies=[Depends(verify_auth)])

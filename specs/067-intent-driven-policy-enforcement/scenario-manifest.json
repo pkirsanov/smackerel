@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "featureDir": "specs/067-intent-driven-policy-enforcement",
+  "featureName": "Intent-Driven Policy Enforcement",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-067-A01" },
+    { "scenarioId": "SCN-067-A02" },
+    { "scenarioId": "SCN-067-A03" },
+    { "scenarioId": "SCN-067-A04" },
+    { "scenarioId": "SCN-067-A05" },
+    { "scenarioId": "SCN-067-A06" },
+    { "scenarioId": "SCN-067-A07" },
+    { "scenarioId": "SCN-067-A08" }
+  ],
+  "scenarios": [
+    { "scenarioId": "SCN-067-A01", "scopeId": "SCOPE-2", "title": "Missing principleAlignment fails loader test", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/principle_alignment_guard_test.go", "testId": "TestPrincipleAlignmentGuardReportsMissingBlockWithPolicySource", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_ScenarioYamlFailuresAreActionable", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-2"] },
+    { "scenarioId": "SCN-067-A02", "scopeId": "SCOPE-2", "title": "System prompt exceeds line cap", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/scenario_prompt_cap_guard_test.go", "testId": "TestScenarioPromptCapGuardReportsScenarioCountAndConfiguredCap", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_ScenarioYamlFailuresAreActionable", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-2"] },
+    { "scenarioId": "SCN-067-A03", "scopeId": "SCOPE-3", "title": "Forbidden keyword routing pattern in API path", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/keyword_routing_guard_test.go", "testId": "TestKeywordRoutingGuardReportsAPIRoutingRegexWithFileLine", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_KeywordRoutingFailuresNameOwnerAction", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-3"] },
+    { "scenarioId": "SCN-067-A04", "scopeId": "SCOPE-3", "title": "Forbidden keyword map in user-request path", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/keyword_map_guard_test.go", "testId": "TestKeywordMapGuardReportsTelegramAndAnnotationUserTextMaps", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_KeywordRoutingFailuresNameOwnerAction", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-3"] },
+    { "scenarioId": "SCN-067-A05", "scopeId": "SCOPE-4", "title": "Silent default in Python sidecar", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/no_defaults_python_guard_test.go", "testId": "TestNoDefaultsPythonGuardReportsRuntimeFallbackWithPolicySource", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_NoDefaultsFailuresNameSSTKey", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-4"] },
+    { "scenarioId": "SCN-067-A06", "scopeId": "SCOPE-4", "title": "Silent default in Go runtime", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/no_defaults_go_guard_test.go", "testId": "TestNoDefaultsGoGuardReportsLiteralFallbackAfterRuntimeRead", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_NoDefaultsFailuresNameSSTKey", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-4"] },
+    { "scenarioId": "SCN-067-A07", "scopeId": "SCOPE-1", "title": "policy-exception annotation visible and rate-limited", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["integration", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "tests/integration/policy/policy_exception_guard_test.go", "testId": "TestPolicyExceptionGuardRejectsUnreviewedExceptionGrowth", "category": "integration" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_PrintsAccessibleFailureRows", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-1"] },
+    { "scenarioId": "SCN-067-A08", "scopeId": "SCOPE-1", "title": "Threshold value sourced from SST", "behaviorClass": "api", "changeType": "new", "requiredTestType": ["unit", "e2e-api"], "regressionRequired": true, "linkedTests": [{ "file": "internal/config/policy_test.go", "testId": "TestPolicyConfigRequiresScenarioPromptMaxLines", "category": "unit" }, { "file": "tests/e2e/policy/intent_policy_guard_output_test.go", "testId": "TestIntentPolicyGuardE2E_PrintsAccessibleFailureRows", "category": "Regression E2E API" }], "evidenceRefs": ["report.md#scope-1"] }
+  ]
+}

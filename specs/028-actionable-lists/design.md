@@ -8,6 +8,15 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** List storage, lifecycle,
+> aggregation, REST APIs, item state, and provenance in this design remain
+> active. Slash-command examples such as `/list shopping`, `/list done`,
+> and command-shaped Telegram list flows are superseded as primary entry
+> paths by [spec 066](../066-legacy-keyword-surface-retirement/design.md).
+> New assistant list creation or mutation should enter as natural language,
+> compile through [spec 068](../068-structured-intent-compiler/design.md),
+> and use spec 061 confirmation for write-class list actions.
+
 ## Design Brief
 
 **Current State:** Smackerel captures artifacts and (with spec 026) extracts domain-specific structured data — recipe ingredients, product specs, etc. With spec 027, users can annotate and track interactions. However, there is no mechanism to **aggregate structured data across multiple artifacts** into a single, actionable output. A user with 3 recipe artifacts must manually extract and merge ingredient lists. The existing `action_items` JSONB field on artifacts captures per-artifact to-dos, not cross-artifact aggregations.

@@ -1,0 +1,81 @@
+# Spec 064 SCOPE-07 — SearxNG settings for the open-knowledge web provider.
+#
+# This file is mounted READ-ONLY into the searxng container at
+# /etc/searxng/settings.yml. The official upstream entrypoint:
+#   1. Copies this file into the in-container writable /etc/searxng tmpfs
+#   2. Substitutes `ultrasecretkey` with the SEARXNG_SECRET env var
+#   3. Substitutes base_url with SEARXNG_BASE_URL when set
+#
+# JSON output is REQUIRED — the upstream default `formats: [html]` makes the
+# Go provider (internal/assistant/openknowledge/web/searxng.go) fail with
+# "format=json not enabled". Keep `json` in the formats list.
+#
+# Engines: a minimal, anonymous, no-credentials-required subset that lets
+# integration tests get real snippets. Operators who want broader coverage
+# may overlay a richer settings.yml via a deploy adapter.
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "smackerel-searxng"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: ""
+  formats:
+  - html
+  - json
+
+server:
+  # SEARXNG_SECRET env var replaces this token at entrypoint time.
+  secret_key: "ultrasecretkey"
+  # Container listens on 0.0.0.0 inside the compose network; SEARXNG_PORT
+  # env var overrides the default 8080 when set.
+  bind_address: "0.0.0.0"
+  base_url: false
+  image_proxy: false
+  http_protocol_version: "1.0"
+  method: "POST"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-Download-Options: noopen
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer
+
+ui:
+  static_use_hash: true
+  default_locale: ""
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+  default_theme: simple
+  theme_args:
+    simple_style: auto
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+  pool_connections: 32
+  pool_maxsize: 32
+  enable_http2: true
+
+# Minimal engine set: text-only, anonymous, no credentials. The upstream
+# default settings ship a broader list; `use_default_settings: true` above
+# inherits them, and per-engine overrides below restrict the active set
+# to a safe, integration-test-friendly minimum.
+engines:
+- name: duckduckgo
+  disabled: false
+  timeout: 5.0
+- name: wikipedia
+  disabled: false
+  timeout: 5.0
+- name: bing
+  disabled: true
+- name: google
+  disabled: true

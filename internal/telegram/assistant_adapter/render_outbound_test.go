@@ -255,3 +255,234 @@ func TestBuildTelegramRendering_SilentCaptureNoBody(t *testing.T) {
 		t.Errorf("keyboard = %v; want nil", keyboard)
 	}
 }
+
+// --- SCOPE-13: open_knowledge dispatch ---
+
+// TestBuildTelegramRendering_AllArtifact_BackCompat asserts an
+// AssistantResponse whose Sources are all SourceArtifact renders
+// through the existing path (body + trailing "sources:" block),
+// NOT through the open_knowledge renderer. Guards the spec 061
+// back-compat contract.
+func TestBuildTelegramRendering_AllArtifact_BackCompat(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Body: "From your notes.",
+		Sources: []contracts.Source{
+			{
+				ID:    "11111111-2222",
+				Title: "Note A",
+				Kind:  contracts.SourceArtifact,
+				Ref: contracts.ArtifactRef{
+					ArtifactID: "11111111-2222",
+					CapturedAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+				},
+			},
+		},
+	}
+	rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(rendered, "sources:") {
+		t.Errorf("rendered = %q; want existing trailing 'sources:' block", rendered)
+	}
+	if strings.Contains(rendered, "[1]") {
+		t.Errorf("rendered = %q; must NOT contain '[1]' inline citation (open_knowledge renderer should not fire)", rendered)
+	}
+	if strings.Contains(rendered, "(saved as idea)") {
+		t.Errorf("rendered = %q; must NOT contain refusal suffix", rendered)
+	}
+}
+
+// TestBuildTelegramRendering_OpenKnowledge_AllWeb routes through
+// RenderSourcedAnswer when every Source is SourceWeb.
+func TestBuildTelegramRendering_OpenKnowledge_AllWeb(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Body: "Pad Thai uses tamarind.",
+		Sources: []contracts.Source{
+			{
+				ID:    "https://example.com/p",
+				Title: "Pad Thai 101",
+				Kind:  contracts.SourceWeb,
+				Ref: contracts.WebSourceRef{
+					URL:         "https://example.com/p",
+					Provider:    "searxng",
+					ContentHash: "h",
+				},
+			},
+		},
+	}
+	rendered, kb, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if kb != nil {
+		t.Errorf("keyboard = %v; want nil", kb)
+	}
+	if !strings.Contains(rendered, "[1] Pad Thai 101 — example.com (web)") {
+		t.Errorf("rendered = %q; want open_knowledge inline citation", rendered)
+	}
+	if strings.Contains(rendered, "sources:") {
+		t.Errorf("rendered = %q; must NOT contain legacy trailing 'sources:' block", rendered)
+	}
+}
+
+// TestBuildTelegramRendering_OpenKnowledge_AllComputation routes
+// through RenderSourcedAnswer when every Source is
+// SourceToolComputation.
+func TestBuildTelegramRendering_OpenKnowledge_AllComputation(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Body: "Result is 42.",
+		Sources: []contracts.Source{
+			{
+				ID:    "calculator",
+				Title: "calculator",
+				Kind:  contracts.SourceToolComputation,
+				Ref: contracts.ComputationSourceRef{
+					Tool:       "calculator",
+					InputHash:  "ih",
+					OutputHash: "oh",
+				},
+			},
+		},
+	}
+	rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(rendered, "[1] computed via calculator (computed)") {
+		t.Errorf("rendered = %q; want computation citation", rendered)
+	}
+	if strings.Contains(rendered, "sources:") {
+		t.Errorf("rendered = %q; must NOT contain legacy 'sources:' block", rendered)
+	}
+}
+
+// TestBuildTelegramRendering_OpenKnowledge_Hybrid routes through
+// RenderHybridAnswer when Sources mixes SourceArtifact with at least
+// one non-artifact kind.
+func TestBuildTelegramRendering_OpenKnowledge_Hybrid(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Body: "Mixed answer.",
+		Sources: []contracts.Source{
+			{
+				ID:    "aaaa",
+				Title: "My note",
+				Kind:  contracts.SourceArtifact,
+				Ref:   contracts.ArtifactRef{ArtifactID: "aaaa"},
+			},
+			{
+				ID:    "https://example.com/x",
+				Title: "Web title",
+				Kind:  contracts.SourceWeb,
+				Ref: contracts.WebSourceRef{
+					URL: "https://example.com/x", Provider: "searxng", ContentHash: "h",
+				},
+			},
+		},
+	}
+	rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(rendered, "from your graph:") {
+		t.Errorf("rendered = %q; want hybrid 'from your graph:' group marker", rendered)
+	}
+	if !strings.Contains(rendered, "from the web:") {
+		t.Errorf("rendered = %q; want hybrid 'from the web:' group marker", rendered)
+	}
+}
+
+// TestBuildTelegramRendering_OpenKnowledge_RefusalCauses exhaustively
+// covers every non-default RefusalCause and asserts the captured
+// refusal body is rendered.
+func TestBuildTelegramRendering_OpenKnowledge_RefusalCauses(t *testing.T) {
+	t.Parallel()
+	cases := []contracts.RefusalCause{
+		contracts.RefusalBudgetExhausted,
+		contracts.RefusalToolUnavailable,
+		contracts.RefusalFabricatedSourceBlocked,
+		contracts.RefusalInternalOnlyRestricted,
+		contracts.RefusalAmbiguousNotClarified,
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(string(c), func(t *testing.T) {
+			t.Parallel()
+			resp := contracts.AssistantResponse{
+				Status:     contracts.StatusUnavailable,
+				ErrorCause: contracts.ErrorCause(string(c)),
+			}
+			rendered, kb, err := buildTelegramRendering(resp, PlainText, 4096)
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if kb != nil {
+				t.Errorf("keyboard = %v; want nil", kb)
+			}
+			wantBody := contracts.CanonicalRefusalBodyFor(c)
+			if !strings.Contains(rendered, wantBody) {
+				t.Errorf("rendered = %q; want to contain canonical body %q", rendered, wantBody)
+			}
+			if !strings.HasSuffix(rendered, OpenKnowledgeCaptureSuffix) {
+				t.Errorf("rendered = %q; want suffix %q", rendered, OpenKnowledgeCaptureSuffix)
+			}
+		})
+	}
+}
+
+// TestBuildTelegramRendering_LegacyErrorCause_BackCompat asserts the
+// spec 061 error vocabulary still routes through the single-line
+// "<skill>: <cause>" renderer, NOT the captured refusal.
+func TestBuildTelegramRendering_LegacyErrorCause_BackCompat(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Status:     contracts.StatusUnavailable,
+		ErrorCause: contracts.ErrProviderUnavailable,
+		Routing:    &agent.RoutingDecision{Chosen: "weather"},
+	}
+	rendered, _, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if rendered != "weather: provider_unavailable" {
+		t.Errorf("rendered = %q; want existing single-line error rendering", rendered)
+	}
+	if strings.Contains(rendered, OpenKnowledgeCaptureSuffix) {
+		t.Errorf("rendered = %q; must NOT contain refusal suffix (legacy cause)", rendered)
+	}
+}
+
+// TestBuildTelegramRendering_G021_NoSourcesNoErrorCause is the
+// adversarial back-compat guard: when an AssistantResponse arrives
+// with neither sources nor any ErrorCause, the open_knowledge
+// dispatch MUST NOT fire — the existing default body-only rendering
+// remains. Without this assertion the dispatch could silently engage
+// on any uncategorised response and corrupt spec 061 surfaces.
+func TestBuildTelegramRendering_G021_NoSourcesNoErrorCauseFallsThroughDefault(t *testing.T) {
+	t.Parallel()
+	resp := contracts.AssistantResponse{
+		Body: "ok",
+		// Status zero-value, ErrorCause "", Sources nil — strictly
+		// the legacy "default" case.
+	}
+	rendered, kb, err := buildTelegramRendering(resp, PlainText, 4096)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if kb != nil {
+		t.Errorf("keyboard = %v; want nil", kb)
+	}
+	if rendered != "ok" {
+		t.Errorf("rendered = %q; want %q (default body-only render)", rendered, "ok")
+	}
+	if strings.Contains(rendered, OpenKnowledgeCaptureSuffix) {
+		t.Errorf("rendered must NOT contain refusal suffix when ErrorCause is unset")
+	}
+	if strings.Contains(rendered, "[1]") {
+		t.Errorf("rendered must NOT contain inline citation markers when Sources is empty")
+	}
+}

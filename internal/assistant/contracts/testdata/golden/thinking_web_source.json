@@ -1,0 +1,23 @@
+{
+  "body": "the capital of France is Paris.",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources": [
+    {
+      "id": "w-1",
+      "kind": "web",
+      "ref": {
+        "content_hash": "sha256:abc",
+        "fetched_at": "2026-05-28T10:00:00Z",
+        "kind": "web",
+        "provider": "searxng",
+        "snippet": "Paris is the capital and most populous city of France.",
+        "url": "https://en.wikipedia.org/wiki/Paris"
+      },
+      "title": "Wikipedia — Paris"
+    }
+  ],
+  "sources_overflow_count": 0,
+  "status": "thinking"
+}

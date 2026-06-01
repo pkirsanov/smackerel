@@ -6,6 +6,17 @@
 > **Date:** April 17, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> Runtime annotation classification that currently relies on
+> user-facing keyword maps (for example, phrases such as "made it" or
+> "cooked it") is targeted for replacement by
+> [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> and [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md).
+> The user's NL annotation is compiled into a schema-bound intent with
+> interaction type, rating, note, confidence, and side-effect class;
+> the existing annotation store remains the persistence target. This
+> spec stays `done`; successor specs amend the request-entry path only.
+
 ---
 
 ## Problem Statement
@@ -254,6 +265,16 @@ artifact annotation summary (materialized/cached):
 ---
 
 ## UI Wireframes
+
+### UX Successor Note — Intent-Driven Annotation (2026-05-31)
+
+The annotation confirmation and summary responses below remain active
+UX. The dedicated `/rate` command and keyword-map classification are
+superseded as primary entry paths by spec 066 and spec 068. New
+annotation turns should be phrased naturally, compiled into a typed
+state-mutation intent with confidence and side-effect class, then
+render the same confirmation, disambiguation, and summary shapes
+defined here.
 
 ### Screen: Telegram Annotation Confirmation
 **Actor:** User | **Channel:** Telegram | **Status:** New

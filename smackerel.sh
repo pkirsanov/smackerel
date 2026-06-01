@@ -911,6 +911,16 @@ case "$COMMAND" in
         timeout --kill-after=30s 300 env KEEP_STACK_UP=1 bash "$SCRIPT_DIR/tests/integration/test_runtime_health.sh"
 
         # Run Go integration tests against the live test stack
+        searxng_url=""
+        searxng_container_port="$(smackerel_env_value "$env_file" "SEARXNG_CONTAINER_PORT")"
+        enable_searxng="$(smackerel_env_value "$env_file" "ENABLE_SEARXNG")"
+        if smackerel_is_truthy "$enable_searxng" && [[ -n "$searxng_container_port" ]]; then
+          # Spec 064 SCOPE-07 — test stack auto-starts the `searxng`
+          # compose profile (environments.test.searxng_enabled=true);
+          # inject the in-network URL so TestSearxNGIntegration_Smoke
+          # runs against the real container instead of skipping.
+          searxng_url="http://searxng:${searxng_container_port}"
+        fi
         set +e
         docker run --rm \
           --network "$compose_network" \
@@ -922,6 +932,7 @@ case "$COMMAND" in
           -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
           -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
           -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
+          -e "OPEN_KNOWLEDGE_SEARXNG_URL=${searxng_url}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh "${go_integration_args[@]}"
         go_integration_status=$?
         set -e

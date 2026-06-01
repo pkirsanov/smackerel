@@ -15,6 +15,14 @@
 - **Unblocks:** [specs/058-chrome-extension-bridge/design.md §12.1](../058-chrome-extension-bridge/design.md) — extension ingestion endpoint requires `auth.RequireScope("extension:bookmarks,history")` enforcement.
 - **Closure path for:** OQ-DSN-1 (spec 058 design open question).
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> [spec 069 — Assistant HTTP Transport](../069-assistant-http-transport/spec.md)
+> reserves a new `assistant.turn` scope claim for `POST
+> /api/assistant/turn`. The HTTP assistant transport MUST be protected
+> by this middleware rather than a shared deployment token or an
+> unauthenticated test-only bypass. This spec remains the authority for
+> scope-claim syntax and enforcement; 069 only adds one consumer scope.
+
 ---
 
 ## Problem Statement

@@ -2,6 +2,13 @@
 
 Links: [spec.md](spec.md) | [state.json](state.json)
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for Ollama test-stack lifecycle, model pull, deterministic
+> real-LLM E2E infrastructure, and runner behavior. [Spec 069](../069-assistant-http-transport/design.md)
+> retargets the canonical assistant E2E entry from Telegram-only surfaces
+> to the HTTP assistant transport. The Ollama stack still supplies the
+> real-model substrate for those HTTP-driven assistant tests.
+
 ## Design Brief
 
 **Current State.** [`docker-compose.yml`](../../docker-compose.yml) lines 168–189

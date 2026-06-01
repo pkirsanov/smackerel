@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "specId": "073",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T21:32:34Z",
+  "planningNote": "Planned test locations marked TBD are handoff targets and do not claim files already exist. Concrete paths must be selected by implementation/test owners after the shared-mobile runtime is chosen.",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-073-01",
+      "scopeName": "Shared Schema, Mobile Foundation, Auth, And Fail-Loud Config",
+      "tests": [
+        {"id":"TP-073-01","scenarioId":"SCN-073-A02","type":"unit/build","category":"unit","file":"TBD: clients/mobile/assistant shared schema generation test","plannedTitle":"Planned: incompatible schema change fails shared mobile codegen for iPhone/iOS and Android","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-02","scenarioId":"SCN-073-A02","type":"unit/build","category":"unit","file":"TBD: web/pwa generated assistant schema test","plannedTitle":"Planned: web generated validator rejects incompatible schema drift","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-03","scenarioId":"SCN-073-A02","type":"unit","category":"unit","file":"TBD: shared assistant renderer fixture canary","plannedTitle":"Planned: one golden response fixture produces equivalent web, iPhone/iOS, and Android render descriptors","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-04","scenarioId":"SCN-073-A02","type":"unit/build","category":"unit","file":"TBD: clients/mobile/assistant platform declaration test","plannedTitle":"Planned: shared mobile build declares both ios and android targets from one codebase","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-05","scenarioId":"SCN-073-A08","type":"integration","category":"integration","file":"TBD: assistant HTTP transport hint integration test","plannedTitle":"Planned: web and mobile transport hints are accepted and telemetry-only for web, iPhone/iOS, and Android clients","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-06","scenarioId":"SCN-073-A11","type":"unit","category":"unit","file":"TBD: web and shared mobile sensitive storage guard tests","plannedTitle":"Planned: no web or shared mobile renderer/core path persists bearer/session material","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-07","scenarioId":"SCN-073-A11","type":"unit/build","category":"unit","file":"TBD: web and mobile client config fail-loud tests","plannedTitle":"Planned: missing backend URL/schema/platform/auth config fails without fallback defaults","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-08","scenarioId":"SCN-073-A08","type":"e2e-api","category":"e2e-api","file":"TBD: live assistant transport hint e2e test","plannedTitle":"Planned regression: live web/mobile hints do not alter server response shape","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-073-02",
+      "scopeName": "Web Chat Vertical Slice",
+      "tests": [
+        {"id":"TP-073-09","scenarioId":"SCN-073-A01","type":"e2e-ui","category":"e2e-ui","file":"TBD: web/pwa assistant chat e2e test","plannedTitle":"Planned regression: web authenticated turn posts and renders response body, sources, and controls","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-10","scenarioId":"SCN-073-A03","type":"e2e-ui","category":"e2e-ui","file":"TBD: web/pwa assistant retry e2e test","plannedTitle":"Planned regression: web timeout retry reuses the same transport_message_id","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-11","scenarioId":"SCN-073-A09","type":"e2e-ui","category":"e2e-ui","file":"TBD: web/pwa assistant accessibility e2e test","plannedTitle":"Planned: ARIA live region and keyboard navigation reach composer and controls","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-12","scenarioId":"SCN-073-A01","type":"unit","category":"unit","file":"TBD: web assistant auth storage guard test","plannedTitle":"Planned: assistant web client does not read/write bearer tokens in browser storage","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-073-03",
+      "scopeName": "Shared Mobile Chat Vertical Slice",
+      "tests": [
+        {"id":"TP-073-13","scenarioId":"SCN-073-A02","type":"unit/build","category":"unit","file":"TBD: shared mobile platform parity build test","plannedTitle":"Planned: one shared mobile codebase builds or validates ios and android targets from the same renderer/state core","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-14","scenarioId":"SCN-073-A03","type":"e2e-ui","category":"e2e-ui","file":"TBD: shared mobile retry parity e2e test","plannedTitle":"Planned regression: iPhone/iOS and Android timeout retries reuse each platform's original transport_message_id","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-15","scenarioId":"SCN-073-A10","type":"e2e-ui","category":"e2e-ui","file":"TBD: iPhone/iOS VoiceOver assistant accessibility test","plannedTitle":"Planned regression: VoiceOver announces response roles, controls, citations, capture acknowledgement, retry/offline, and session errors","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-16","scenarioId":"SCN-073-A10","type":"e2e-ui","category":"e2e-ui","file":"TBD: Android TalkBack assistant accessibility test","plannedTitle":"Planned regression: TalkBack announces response roles, controls, citations, capture acknowledgement, retry/offline, and session errors","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-17","scenarioId":"SCN-073-A11","type":"unit/build","category":"unit","file":"TBD: shared mobile fail-loud config test","plannedTitle":"Planned: missing mobile backend URL/schema/platform/auth config fails for iPhone/iOS and Android without defaults","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-18","scenarioId":"SCN-073-A10","type":"unit","category":"unit","file":"TBD: shared mobile sensitive storage guard test","plannedTitle":"Planned: shared mobile renderer/core stores no bearer/session material in durable client storage","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"}
+      ]
+    },
+    {
+      "scopeId": "SCOPE-073-04",
+      "scopeName": "Cross-Surface Response Controls, Capture, And Parity",
+      "tests": [
+        {"id":"TP-073-19","scenarioId":"SCN-073-A04","type":"e2e-ui","category":"e2e-ui","file":"TBD: web and shared mobile disambiguation parity e2e test","plannedTitle":"Planned regression: disambiguation choice round-trips by ref/index on web, iPhone/iOS, and Android","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-20","scenarioId":"SCN-073-A05","type":"e2e-ui","category":"e2e-ui","file":"TBD: web and shared mobile confirm parity e2e test","plannedTitle":"Planned regression: confirm accept executes server-side and renders equivalent result structure on all three surfaces","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-21","scenarioId":"SCN-073-A06","type":"integration","category":"integration","file":"TBD: cross-transport capture acknowledgement parity test","plannedTitle":"Planned: capture acknowledgement shape/copy matches Telegram, HTTP-test, WhatsApp, web, iPhone/iOS, and Android fixtures","command":"./smackerel.sh test integration","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-22","scenarioId":"SCN-073-A07","type":"unit","category":"unit","file":"TBD: assistant renderer no-branch guard test","plannedTitle":"Planned: renderer has no scenario/action/platform/transport-hint branching and falls back to text","command":"./smackerel.sh test unit","liveSystem":false,"status":"planned"},
+        {"id":"TP-073-23","scenarioId":"SCN-073-A08","type":"e2e-api","category":"e2e-api","file":"TBD: live client transport hint parity e2e test","plannedTitle":"Planned regression: web and mobile transport hints do not alter visible response shape on web, iPhone/iOS, or Android","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"},
+        {"id":"TP-073-24","scenarioId":"SCN-073-A04","type":"e2e-ui","category":"e2e-ui","file":"TBD: web and shared mobile source detail parity e2e test","plannedTitle":"Planned regression: source detail opens, closes, returns focus, and exposes copy-safe metadata across web, iPhone/iOS, and Android","command":"./smackerel.sh test e2e","liveSystem":true,"status":"planned"}
+      ]
+    }
+  ]
+}

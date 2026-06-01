@@ -1,0 +1,216 @@
+{
+  "version": 3,
+  "featureDir": "specs/064-open-ended-knowledge-agent",
+  "featureNumber": "064",
+  "featureName": "Open-Ended Knowledge Agent",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "specDependsOn": [
+    "specs/061-conversational-assistant",
+    "specs/044-per-user-bearer-auth",
+    "specs/054-notification-intelligence-handler"
+  ],
+  "amends": [
+    "specs/061-conversational-assistant"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [
+      "outbound-web-egress-from-runtime",
+      "third-party-saas-dependency-in-request-path-mitigated-by-searxng"
+    ],
+    "v1ToolSet": [
+      "internal_retrieval",
+      "web_search",
+      "unit_convert",
+      "calculator"
+    ],
+    "workflowMode": "full-delivery",
+    "grill": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "tdd": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "autoCommit": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "lockdown": {
+      "mode": "off",
+      "source": "repo-default"
+    },
+    "regression": {
+      "mode": "protected-scenarios",
+      "source": "repo-default"
+    },
+    "validation": {
+      "mode": "certification-required",
+      "source": "repo-default"
+    }
+  },
+  "planningOnlyJustification": "Full-delivery spec. Planning packets from bubbles.analyst, bubbles.ux, bubbles.design, and bubbles.plan have been materialised into spec.md / design.md / scopes.md as part of SCOPE-01. Implementation continues in the same spec under workflowMode=full-delivery; no separate implementation spec.",
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": "report.md",
+    "certifiedCompletedPhases": ["bootstrap", "analyze", "design", "plan"],
+    "completedScopes": [],
+    "lockdownState": "n/a-implementation-in-progress",
+    "notes": "Spec materialised from prior planning packets (analyst, ux, design, plan). SCOPE-01 bootstrap + SCOPE-02..08 implemented pending validation (registry foundation, SST config block, LLM tool-use bridge, deterministic tools, internal_retrieval, web search providers + SearxNG, cite-back verifier). 7 of 18 scopes implemented; scopes 09-18 Not Started. completedScopes intentionally empty — per the Bubbles control plane it lists scopes that have been certified Done by bubbles.validate, not scopes whose implementation code exists. Pre-existing issues resolved in-session: (1) LLM client moved to openknowledge/llm subpackage to preserve capability-foundation boundary; (2) premature scenario contract referencing not-yet-registered tools removed (deferred to SCOPE-12)."
+  },
+  "transitionRequests": [
+    {
+      "id": "PKT-061-A",
+      "requestedAt": "2026-05-31T00:00:00Z",
+      "requestedBy": "bubbles.implement",
+      "kind": "cross_spec_amendment",
+      "scope": "SCOPE-10",
+      "status": "closed",
+      "routedAt": "2026-05-31",
+      "routedTo": "specs/061-conversational-assistant",
+      "packetRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-061-A.md",
+      "closedAt": "2026-05-31T00:00:00Z",
+      "closedBy": "bubbles.workflow mode=bugfix-fastlane against specs/061-conversational-assistant",
+      "responsePacketRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-061-A-RESPONSE.md",
+      "mergedEvidence": "specs/061-conversational-assistant/report.md#amendment--pkt-061-a-2026-05-31-source-taxonomy--canonical-refusal-taxonomy-extension",
+      "summary": "Amend spec 061 provenance gate: extend Source taxonomy to {SourceArtifact, SourceWeb, SourceToolComputation} and extend CanonicalRefusalBody with 5 spec 064 refusal causes (budget-exhausted, tool-unavailable, fabricated-source-blocked, internal-only-restricted, ambiguous-not-clarified). Additive; existing SourceArtifact behaviour and existing gate tests unchanged. Blocks spec 064 SCOPE-13 (Telegram surface). SCOPE-11/12/14/15/16/17/18 may proceed in parallel. Closed 2026-05-31 — spec 061 merged additively at done ceiling."
+    },
+    {
+      "id": "PKT-049-A",
+      "requestedAt": "2026-05-31T00:00:00Z",
+      "requestedBy": "bubbles.implement",
+      "kind": "cross_spec_request",
+      "scope": "SCOPE-14",
+      "status": "pending",
+      "routedTo": "specs/049-monitoring-stack",
+      "packetRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-049-A.md",
+      "summary": "Request spec 049 to add Grafana dashboard panels (iterations p95, USD spend rate, refusal rate by cause, fabricated-source rate as a security single-stat, tool call rate by tool, per-tool latency p95, budget exhausted by scope, compaction-signal rate) and Prometheus alert rules (fabricated_source rate > 0, monthly budget hit, per-user budget hit, tool-error rate > 0.1/s, refusal-rate spike) for the new openknowledge_* metric series. No scrape-config change required (metrics ride the existing /metrics endpoint). Local Prometheus collectors + redacted INFO log line per turn shipped in SCOPE-14."
+    },
+    {
+      "id": "PKT-020-A",
+      "requestedAt": "2026-05-31T00:00:00Z",
+      "requestedBy": "bubbles.implement",
+      "kind": "cross_spec_request",
+      "scope": "SCOPE-15",
+      "status": "pending",
+      "routedTo": "specs/020-security-hardening",
+      "packetRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-020-A.md",
+      "summary": "Application-layer egress allowlist (EgressAllowlistTransport, deny-by-default, exact-host match, scheme-guarded, userinfo-stripped), SanitizeSnippet (control-char strip + UTF-8 repair + MaxSnippetRunes=2000 truncation + suspicious-pattern metric), API-key non-leakage regression guards, and ContentHash-over-sanitised contract have shipped locally for SCOPE-15. Request spec 020 to review: (a) v1 exact-match allowlist policy, (b) whether wildcards should be a follow-up, (c) whether a network-layer egress firewall / container egress policy should layer on top of the application-layer gate, (d) whether SearxNG's own outbound traffic (engines:) should be constrained at the deploy adapter layer."
+    },
+    {
+      "id": "PKT-022-A",
+      "requestedAt": "2026-05-31T00:00:00Z",
+      "requestedBy": "bubbles.implement",
+      "kind": "cross_spec_request",
+      "scope": "SCOPE-16",
+      "status": "pending",
+      "routedTo": "specs/022-operational-resilience",
+      "packetRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-022-A.md",
+      "summary": "Local web-provider CircuitBreaker shipped: three-state machine (Closed/HalfOpen/Open), SST-bound thresholds (failure_threshold=5, open_window_seconds=60, half_open_after_seconds=30) — all fail-loud, no defaults (G028). New TerminationToolUnavailable + mid-loop circuit-open detection + RefusalToolUnavailable mapping. New metrics openknowledge_circuit_state{provider} (gauge) and openknowledge_circuit_trips_total{provider} (counter) with bounded provider cardinality. Adversarial coverage: Open short-circuits without inner-provider invocation, ErrInvalidQuery does NOT count, non-counting errors leave state alone, half-open probe failure re-arms Open, concurrency-safe State() under -race. Request spec 022 to review (a) whether the v1 thresholds match the operational-resilience playbook (connector supervisor uses 5 panics; should there be a runtime.resilience.default_* SST block?), (b) whether an explicit health-check endpoint contribution is required for operator dashboards, (c) whether the budget-exhaustion refusal-with-capture handshake should be lifted into a cross-subsystem graceful-degradation pattern in spec 022."
+    },
+    {
+      "id": "PKT-WORKFLOW-A",
+      "requestedAt": "2026-05-31T00:00:00Z",
+      "requestedBy": "bubbles.implement",
+      "kind": "infrastructure_gap_set",
+      "scope": "SCOPE-17",
+      "status": "pending",
+      "routedTo": "bubbles.workflow",
+      "packetRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md",
+      "summary": "SCOPE-17 e2e scaffolding shipped: tests/e2e/agent/openknowledge_e2e_test.go with 7 test functions (UC-064-A01..A06 + adversarial G021 fabricated-source). All skip honestly with explicit messages naming the routed finding. go vet -tags e2e clean. SCOPE-17 cannot close because six upstream infrastructure gaps block end-to-end execution: (1) ml/app/routes/chat.py has no real Ollama dispatch path — returns HTTP 501 without fixture header (SCOPE-09 owner); (2) /v1/agent/invoke does not run capture-as-fallback (Telegram-facade-only today; spec 061 owner); (3) no fixture-fabricated-cite test mode in chat.py for the adversarial G021 path (SCOPE-08 owner); (4) no per-test per-query token budget override knob (SCOPE-09 wiring owner); (5) no per-test tool-allowlist override knob (SCOPE-09 wiring owner); (6) smackerel.sh test e2e does not export AGENT_INVOKE_URL to the Go test container (spec 023 owner). bubbles.workflow to dispatch each finding to its owner; the e2e file activates automatically as each finding lands with no SCOPE-17-side change."
+    }
+  ],
+  "reworkQueue": [
+    {
+      "id": "PKT-061-A-await",
+      "openedAt": "2026-05-31T00:00:00Z",
+      "scope": "SCOPE-10",
+      "status": "resolved",
+      "resolvedAt": "2026-05-31T00:00:00Z",
+      "externalPacket": "PKT-061-A",
+      "externalOwner": "specs/061-conversational-assistant",
+      "responsePacketRef": "specs/064-open-ended-knowledge-agent/route-packets/PKT-061-A-RESPONSE.md",
+      "summary": "Placeholder: SCOPE-10 remains awaiting cross-spec resolution of PKT-061-A. Close when spec 061 returns merged-evidence. RESOLVED 2026-05-31 — spec 061 accepted the amendment additively within its done ceiling; see PKT-061-A-RESPONSE.md."
+    },
+    {
+      "id": "PKT-049-A-await",
+      "openedAt": "2026-05-31T00:00:00Z",
+      "scope": "SCOPE-14",
+      "status": "pending",
+      "externalPacket": "PKT-049-A",
+      "externalOwner": "specs/049-monitoring-stack",
+      "summary": "SCOPE-14 local metrics + redacted trace logging shipped (9 Prometheus collectors, 12 unit tests incl. TestOpenKnowledgeMetrics_RejectsUnknownCause_AdversarialG021, agent emits one openknowledge.turn INFO line per turn with prompt SHA-256 and redacted tool trace). Awaiting spec 049 to land dashboard panels + alert rules per PKT-049-A. Close when spec 049 returns response packet."
+    },
+    {
+      "id": "PKT-020-A-await",
+      "openedAt": "2026-05-31T00:00:00Z",
+      "scope": "SCOPE-15",
+      "status": "pending",
+      "externalPacket": "PKT-020-A",
+      "externalOwner": "specs/020-security-hardening",
+      "summary": "SCOPE-15 local items shipped: EgressAllowlistTransport (deny-by-default, exact-host, scheme-guarded, userinfo-stripped), SanitizeSnippet + openknowledge_suspicious_snippet_total{provider} metric, ContentHash-over-sanitised, API-key non-leakage regression guard, AllowedEgressHosts SST key with format validation, wiring composes effective allowlist as (provider_endpoint host ∪ AllowedEgressHosts). Awaiting spec 020 review of (a) v1 exact-match policy, (b) wildcard follow-up question, (c) network-layer egress firewall / container egress policy as additive defence, (d) SearxNG upstream-engines constraint at the deploy adapter layer."
+    },
+    {
+      "id": "PKT-022-A-await",
+      "openedAt": "2026-05-31T00:00:00Z",
+      "scope": "SCOPE-16",
+      "status": "pending",
+      "externalPacket": "PKT-022-A",
+      "externalOwner": "specs/022-operational-resilience",
+      "summary": "SCOPE-16 local items shipped: web.CircuitBreaker (Closed/HalfOpen/Open with concurrency-safe state transitions, 12 unit tests incl. 3 adversarial G021 cases), SST sub-block assistant.open_knowledge.circuit_breaker.{failure_threshold,open_window_seconds,half_open_after_seconds} (all required > 0, validated fail-loud), agent-loop short-circuit on provider_circuit_open → TerminationToolUnavailable → RefusalToolUnavailable, new openknowledge_circuit_state{provider} + openknowledge_circuit_trips_total{provider} metrics (bounded cardinality), wiring wraps SearxNG provider in breaker. Awaiting spec 022 review of (a) v1 threshold alignment with operational-resilience playbook, (b) whether an openknowledge health-check endpoint contribution is required for operator dashboards, (c) whether the budget-exhaustion refusal-with-capture handshake should be lifted into a cross-subsystem graceful-degradation pattern."
+    },
+    {
+      "id": "PKT-WORKFLOW-A-await",
+      "openedAt": "2026-05-31T00:00:00Z",
+      "scope": "SCOPE-17",
+      "status": "pending",
+      "externalPacket": "PKT-WORKFLOW-A",
+      "externalOwner": "bubbles.workflow",
+      "summary": "SCOPE-17 status=Blocked. E2E scaffolding (tests/e2e/agent/openknowledge_e2e_test.go, 7 test funcs covering UC-064-A01..A06 + adversarial G021 fabricated-source) shipped and skips honestly with explicit per-finding messages. SCOPE-17 cannot close until the six routed findings (PKT-WORKFLOW-A) land. PARTIAL CLOSURE 2026-05-31 — Finding #1 RESOLVED: ml/app/routes/chat.py now dispatches a real LLM turn via litellm against OLLAMA_URL when no fixture header is present (G028 fail-loud; provider errors map to typed envelopes; both fixture modes preserved). Live evidence: gemma3:4b end_turn + tool_use turns succeed end-to-end against the dev stack; 475 passed / 1 opt-in skipped in ml/tests. Findings #2-#6 still pending: (2) capture-as-fallback on /v1/agent/invoke, (3) fixture-fabricated-cite test mode, (4) per-test per-query token budget override, (5) per-test tool-allowlist override, (6) smackerel.sh test e2e exports AGENT_INVOKE_URL. Close when bubbles.workflow returns resolution evidence for the remaining five findings."
+    }
+  ],
+  "execution": {
+    "activeAgent": "bubbles.docs",
+    "currentPhase": "docs",
+    "currentScope": "SCOPE-18",
+    "runStartedAt": "2026-05-31T00:00:00Z",
+    "lastUpdatedAt": "2026-05-31T00:00:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "SCOPE-17",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-05-31T00:00:00Z",
+        "outcome": "route_required",
+        "evidence": "tests/e2e/agent/openknowledge_e2e_test.go (scaffolding, 7 funcs, all skip honestly); go vet -tags e2e clean; route packet specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A.md filed with six infrastructure findings blocking close-out. SCOPE-17 status=Blocked in scopes.md."
+      },
+      {
+        "phase": "docs",
+        "scope": "SCOPE-18",
+        "agent": "bubbles.docs",
+        "claimedAt": "2026-05-31T00:00:00Z",
+        "outcome": "completed_owned",
+        "evidence": "docs/Operations.md (+~200 lines, Open-Knowledge Assistant Agent section), docs/Development.md (+~50 lines, Spec 064 subsection), docs/Testing.md (+1 para fabricated-cite fixture note), docs/Deployment.md (+~75 lines, Spec 064 Deployment Notes), deploy/contract.yaml (+~110 lines, sstKeyCatalog with 21 assistant.open_knowledge.* keys + 3 per-env keys), deploy/README.md (+10 lines). regression-baseline-guard.sh PASSED, artifact-lint.sh PASSED, compose_contract_test.go green. PII grep clean (no real hostnames/IPs/tailnet ids introduced)."
+      }
+    ],
+    "completedScopes": [
+      {
+        "scope": "SCOPE-18",
+        "completedAt": "2026-05-31T00:00:00Z",
+        "agent": "bubbles.docs",
+        "outcome": "completed_owned"
+      }
+    ],
+    "executionHistory": []
+  }
+}

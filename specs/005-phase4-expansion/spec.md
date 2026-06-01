@@ -8,6 +8,21 @@
 > **Date:** April 6, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The expansion-chapter surface area (new connectors, trip / maps /
+> people flows) inherits the intent-driven assistant architecture:
+> - [spec 067 — Intent-Driven Policy Enforcement](../067-intent-driven-policy-enforcement/spec.md)
+>   (CI guards over scenario routes and tool composition), and
+> - [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+>   (NL -> `CompiledIntent` -> scenario route for expansion features).
+>
+> Expansion-domain semantics (maps ingestion, browser history,
+> trip and people intelligence) remain owned by this spec. Only the
+> request-entry path and the CI guardrails around it are reshaped:
+> new expansion features land as scenarios and tools rather than
+> bespoke command surfaces. This spec stays `done`; successor specs
+> amend the entry path only.
+
 ---
 
 ## Problem Statement

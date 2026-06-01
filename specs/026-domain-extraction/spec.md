@@ -6,6 +6,20 @@
 > **Date:** April 17, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> Domain extraction itself (recipe / product / event / place /
+> document schemas, extraction quality, lifecycle) is unchanged. The
+> request-side regex parser in `internal/api/domain_intent.go` that
+> currently turns `"recipes with chicken under $20"` queries into
+> domain-aware search is targeted for deletion by
+> [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md);
+> the replacement runs through
+> [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> plus the `entity_resolve` micro-tool from
+> [spec 065 — Generic Micro-Tools](../065-generic-micro-tools/spec.md).
+> Domain-aware retrieval still happens; only the way the user's NL
+> turns into a typed search request changes.
+
 ---
 
 ## Problem Statement
@@ -223,6 +237,16 @@ Then downstream aggregation (spec 028) can reliably merge quantities across reci
 ---
 
 ## UI Wireframes
+
+### UX Successor Note — Intent-Driven Retrieval (2026-05-31)
+
+The domain extraction cards and search-result enrichment below remain
+active UX. Any examples that reach domain-aware retrieval through
+`/find` or request-side regex parsing are superseded as primary entry
+paths by spec 066 and spec 068. New surfaces should accept plain
+natural-language requests, compile them into typed retrieval or domain
+action intents, and then render the same domain_data evidence shown
+here.
 
 ### Screen: Telegram Recipe Card
 **Actor:** User | **Channel:** Telegram | **Status:** New

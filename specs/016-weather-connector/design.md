@@ -7,6 +7,16 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for weather connector ingestion, enrichment, providers,
+> caching, and alert artifacts. User-facing assistant weather requests
+> are amended by [spec 065](../065-generic-micro-tools/design.md), which
+> moves location normalization into `location_normalize`, and by
+> [spec 068](../068-structured-intent-compiler/design.md), which compiles
+> the user's natural-language weather request before routing. Weather
+> connector APIs should consume normalized location inputs rather than
+> expanding prompt-side or handler-local location parsing.
+
 ## Design Brief
 
 ### Current State

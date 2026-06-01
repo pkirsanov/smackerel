@@ -2,6 +2,15 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The resilience primitives defined here (circuit breakers, retry
+> budgets, dead-letter routing, shutdown ordering) are reused by
+> [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md)
+> for its web-search provider call path and per-turn budget
+> enforcement. Spec 064 amends this surface only by adding a single
+> agent-loop circuit breaker entry; the resilience semantics, defaults
+> policy, and observability contracts in this spec remain authoritative.
+
 ## Problem Statement
 
 Smackerel stores a user's entire personal knowledge base in a single PostgreSQL volume with no backup mechanism — a volume loss event means total, irrecoverable data loss. Beyond storage, the runtime has multiple resilience gaps: capture requests silently vanish during DB outages, 9 scheduler cron jobs run without concurrency guards and compete for a 10-connection DB pool, NATS messages are permanently lost after 5 delivery attempts with no dead-letter routing, the shutdown sequence races (NATS drain vs DB pool close), the HTTP shutdown timeout (10s) is too short for Telegram's 30s long-poll cycle, and search blocks indefinitely on an unresponsive ML sidecar. These gaps were identified during a stability review (findings S-015, S-011, S-012, S-013, S-024, S-025, ENG-005, ENG-008) and represent immediate operational risks for a single-user, self-hosted system where data loss is permanent.

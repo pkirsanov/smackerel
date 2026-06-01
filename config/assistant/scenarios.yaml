@@ -59,3 +59,19 @@ scenarios:
     requires_provenance: true
     confirm_required: false
     enable_sst_key: "assistant.skills.recipe_search.enabled"
+
+  # Spec 064 SCOPE-12 — open-ended knowledge agent. Listed LAST and
+  # wired as agent.routing.fallback_scenario_id in config/smackerel.yaml,
+  # so the substrate router lands on this scenario when no domain
+  # scenario clears the confidence floor. requires_provenance=true
+  # because every grounded answer the open-knowledge agent emits
+  # MUST cite an artifact, web snippet, or tool computation (P8).
+  # slash_shortcut is empty — the open-knowledge surface is intent-
+  # driven only; explicit shortcuts route to the domain scenarios.
+  open_knowledge:
+    user_facing: true
+    user_facing_label: "answer open question"
+    slash_shortcut: ""
+    requires_provenance: true
+    confirm_required: false
+    enable_sst_key: "assistant.open_knowledge.enabled"

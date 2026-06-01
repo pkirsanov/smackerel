@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "featureDir": "specs/064-open-ended-knowledge-agent",
+  "featureName": "Open-Ended Knowledge Agent",
+  "generatedBy": "bubbles.implement (SCOPE-12)",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "traceabilityGuardScenarioIds": [
+    { "scenarioId": "SCN-064-A01" },
+    { "scenarioId": "SCN-064-A02" },
+    { "scenarioId": "SCN-064-A03" },
+    { "scenarioId": "SCN-064-A04" },
+    { "scenarioId": "SCN-064-A05" },
+    { "scenarioId": "SCN-064-A06" },
+    { "scenarioId": "SCN-064-A07" },
+    { "scenarioId": "SCN-064-A08" }
+  ],
+  "scenarios": [
+    { "scenarioId": "SCN-064-A01", "scopeId": "SCOPE-17", "title": "General-knowledge web answer with citations", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A02", "scopeId": "SCOPE-17", "title": "Unit/math conversion via deterministic tool", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A03", "scopeId": "SCOPE-17", "title": "Hybrid internal-graph + web answer", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A04", "scopeId": "SCOPE-17", "title": "Refusal-with-capture on per-turn budget exhaustion", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A05", "scopeId": "SCOPE-17", "title": "Refusal-with-capture on tool failure", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A06", "scopeId": "SCOPE-17", "title": "Refusal on fabricated source", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A07", "scopeId": "SCOPE-17", "title": "Operator disables web_search", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] },
+    { "scenarioId": "SCN-064-A08", "scopeId": "SCOPE-17", "title": "Per-user monthly budget exceeded", "behaviorClass": "e2e", "changeType": "new", "requiredTestType": ["e2e-api"], "regressionRequired": true, "linkedTests": [], "evidenceRefs": ["report.md#scope-17"] }
+  ]
+}

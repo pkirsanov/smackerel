@@ -724,12 +724,15 @@ Spec is genuinely done. No drift between `spec.md`, `scopes.md`, `state.json`, a
 
 **Fix:** Floor `evictCount` to at least `1` whenever the capacity gate fires:
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- Illustrative source snippet describing the fix; not terminal evidence. -->
 ```go
 evictCount := n.maxSize / 2
 if evictCount < 1 {
     evictCount = 1
 }
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 **Adversarial Regression:** `TestVendorNormalizer_CacheEvictionMinSize` in `internal/intelligence/expenses_test.go` covers:
 - `maxSize=1`: three sequential puts must keep `len(cache) <= 1`
@@ -750,6 +753,8 @@ Reverting the floor flips the strict-inequality assertions immediately.
 
 **Fix:** Escape `\`, `%`, `_` in the user value via a new `escapeLikeValue` helper and add an explicit `ESCAPE '\'` clause to the LIKE pattern:
 
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+<!-- Illustrative source snippets describing the fix; not terminal evidence. -->
 ```go
 func escapeLikeValue(s string) string {
     return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
@@ -760,6 +765,7 @@ func escapeLikeValue(s string) string {
 conditions = append(conditions, fmt.Sprintf("LOWER(metadata->'expense'->>'vendor') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\\'", argIdx))
 args = append(args, escapeLikeValue(vendor))
 ```
+<!-- bubbles:evidence-legitimacy-skip-end -->
 
 `strings.NewReplacer` scans left-to-right without re-processing its own output, so the `\` → `\\` mapping does not over-escape `\%` or `\_` outputs.
 

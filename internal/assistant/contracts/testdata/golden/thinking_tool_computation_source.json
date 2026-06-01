@@ -1,0 +1,21 @@
+{
+  "body": "2 + 2 = 4",
+  "capture_route": false,
+  "emitted_at": "2026-05-28T10:00:00Z",
+  "error_cause": "",
+  "sources": [
+    {
+      "id": "c-1",
+      "kind": "tool_computation",
+      "ref": {
+        "input_hash": "sha256:in",
+        "kind": "tool_computation",
+        "output_hash": "sha256:out",
+        "tool": "calculator"
+      },
+      "title": "calculator"
+    }
+  ],
+  "sources_overflow_count": 0,
+  "status": "thinking"
+}

@@ -1,0 +1,104 @@
+{
+  "version": 3,
+  "featureDir": "specs/065-generic-micro-tools",
+  "featureNumber": "065",
+  "featureName": "Generic Micro-Tools (Capability Foundation)",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/037-llm-agent-tools",
+    "specs/064-open-ended-knowledge-agent"
+  ],
+  "amends": [
+    "specs/016-weather-connector",
+    "specs/037-llm-agent-tools"
+  ],
+  "unblocks": [
+    "specs/068-structured-intent-compiler",
+    "specs/066-legacy-keyword-surface-retirement"
+  ],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Product-to-planning pass creates planning maturity artifacts only; runtime implementation remains governed by the full-delivery chain after planning maturity.",
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 0,
+      "notStarted": 0,
+      "inProgress": 0,
+      "done": 0,
+      "blocked": 0
+    },
+    "completedScopes": [],
+    "lockdownState": "n/a-planning-in-progress",
+    "notes": "Planning artifacts are present. Status remains in_progress because transition guard blocked specs_hardened promotion; no implementation certification is claimed."
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T00:00:00Z",
+    "lastUpdatedAt": "2026-05-31T00:00:00Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped spec from intent-driven architecture review. Defined actors, outcome contract, 7 BDD scenarios (SCN-065-A01..A07), and acceptance criteria. Hand-off: bubbles.design for design.md, then bubbles.plan for scopes.md."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T17:40:14Z",
+        "runEndedAt": "2026-05-31T17:40:14Z",
+        "summary": "Created design.md for the generic micro-tools capability foundation, including contracts for location_normalize, unit_convert, calculator, entity_resolve, SST config, observability, security, and scenario-to-test mapping. Routed implementation planning to bubbles.plan."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "plan"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Created scopes.md, scenario-manifest.json, test-plan.json, report.md, and uservalidation.md for the micro-tool foundation and overlays. Artifact lint passed; transition guard blocked specs_hardened promotion due current worktree source edits, unchecked implementation DoD, missing execution evidence, dependency and retro gates, and guard-required plan detail gaps."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      }
+    ]
+  }
+}

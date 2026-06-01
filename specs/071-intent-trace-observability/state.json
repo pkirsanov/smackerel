@@ -1,0 +1,93 @@
+{
+  "version": 3,
+  "featureDir": "specs/071-intent-trace-observability",
+  "featureNumber": "071",
+  "featureName": "IntentTrace Observability Surface",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/030-observability",
+    "specs/049-monitoring-stack",
+    "specs/067-intent-driven-policy-enforcement",
+    "specs/068-structured-intent-compiler"
+  ],
+  "amends": [
+    "specs/030-observability",
+    "specs/049-monitoring-stack",
+    "specs/068-structured-intent-compiler"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "completedScopes": []
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T20:30:46Z",
+    "lastUpdatedAt": "2026-05-31T20:30:46Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped IntentTrace observability spec to close the gap left by specs 067 and 068, which both reference IntentTrace but neither owns the record shape, redaction policy, sampling/retention SST keys, replay tool, or operator dashboard. 10 BDD scenarios (SCN-071-A01..A10) cover one-trace-per-turn invariant, sampled-out envelopes, source-policy-driven redaction, deterministic replay, fail-loud SST, dashboard panels, refusal-counter join with spec 064, spec 067 bypass-guard read path, retention TTL enforcement, and golden schema pinning."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:10:07Z",
+        "runEndedAt": "2026-05-31T20:10:07Z",
+        "summary": "Created design.md for the IntentTrace observability surface, resolving Postgres-backed replay storage, structured log/OTel/export contracts, redaction before export, fail-loud SST keys, dashboard panels, and scenario-to-test mapping for SCN-071-A01..A10."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:30:46Z",
+        "runEndedAt": "2026-05-31T20:30:46Z",
+        "summary": "Created planning-only artifacts for SCN-071-A01..A10: four sequential scopes, scenario manifest, test plan JSON, user validation checklist, and report scaffold. Status remains in_progress with product-to-planning ceiling specs_hardened."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      }
+    ]
+  }
+}

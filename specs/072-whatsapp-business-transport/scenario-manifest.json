@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "specId": "072",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scenarios": [
+    {"scenarioId":"SCN-072-A01","title":"Inbound webhook becomes a canonical AssistantMessage","scopeId":"SCOPE-072-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-01","TP-072-03"],"liveSystemExpectation":"signed webhook integration must produce canonical AssistantMessage","status":"planned"},
+    {"scenarioId":"SCN-072-A02","title":"Unsigned or wrongly signed webhooks are rejected","scopeId":"SCOPE-072-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-02","TP-072-05"],"liveSystemExpectation":"live webhook rejection must prove facade is not invoked","status":"planned"},
+    {"scenarioId":"SCN-072-A03","title":"AssistantResponse renders to the correct WhatsApp message type","scopeId":"SCOPE-072-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-06","TP-072-10"],"liveSystemExpectation":"e2e-api row must observe WhatsApp interactive message family","status":"planned"},
+    {"scenarioId":"SCN-072-A04","title":"Mapping is exhaustive with a text fallback","scopeId":"SCOPE-072-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-07"],"liveSystemExpectation":"unit golden coverage is required before live render coverage","status":"planned"},
+    {"scenarioId":"SCN-072-A05","title":"Capture-as-fallback acknowledgement is identical to Telegram and HTTP","scopeId":"SCOPE-072-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-08"],"liveSystemExpectation":"integration row must prove capture hook executes once","status":"planned"},
+    {"scenarioId":"SCN-072-A06","title":"SST credentials are required and fail loud when enabled","scopeId":"SCOPE-072-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-04"],"liveSystemExpectation":"unit config validation proves missing enabled secret fails loud","status":"planned"},
+    {"scenarioId":"SCN-072-A07","title":"Disabling WhatsApp leaves Telegram and HTTP unaffected","scopeId":"SCOPE-072-04","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-14","TP-072-15","TP-072-16"],"liveSystemExpectation":"integration and e2e-api rows must prove other transports continue working","status":"planned"},
+    {"scenarioId":"SCN-072-A08","title":"Disambiguation / confirm / reset round-trip identically","scopeId":"SCOPE-072-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-11"],"liveSystemExpectation":"e2e-api row must drive real facade round-trip","status":"planned"},
+    {"scenarioId":"SCN-072-A09","title":"No silent template wrapping for normal replies","scopeId":"SCOPE-072-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-09"],"liveSystemExpectation":"unit policy test blocks template wrapping for normal replies","status":"planned"},
+    {"scenarioId":"SCN-072-A10","title":"Idempotency on Meta retries","scopeId":"SCOPE-072-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-072-12","TP-072-13"],"liveSystemExpectation":"integration and e2e-api rows must prove duplicate delivery invokes facade once","status":"planned"}
+  ]
+}

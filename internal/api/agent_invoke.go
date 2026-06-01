@@ -28,9 +28,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/smackerel/smackerel/internal/agent"
 	"github.com/smackerel/smackerel/internal/agent/userreply"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 )
 
 // AgentInvokeRunner is the dependency the handler asks for. The
@@ -116,6 +118,32 @@ func (h *AgentInvokeHandler) AgentInvokeHandlerFunc(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Spec 064 SCOPE-17 fast-path — when the caller explicitly targets the
+	// open_knowledge scenario, bypass the spec 037 substrate planner and
+	// invoke the open-knowledge agent loop directly. Rationale: the
+	// substrate planner makes its own LLM round-trip to pick a tool, which
+	// on CPU dev machines plus the inherent latency of the agent loop
+	// blows past the substrate scenario timeout ceiling. The substrate
+	// already routes below-floor queries here via fallback_scenario_id, so
+	// this short-circuit only helps the explicit-scenario path; implicit
+	// fallback routing still flows through the substrate for traceability.
+	if req.ScenarioID == "open_knowledge" && agenttool.CurrentAgent() != nil {
+		prompt := strings.TrimSpace(req.RawInput)
+		if prompt == "" {
+			writeAgentResponse(w, userreply.MalformedRequestResponse("raw_input"))
+			return
+		}
+		turn, runErr := agenttool.CurrentAgent().Run(r.Context(), prompt)
+		if runErr != nil {
+			slog.Warn("agent_invoke: open_knowledge fast-path failed", "error", runErr)
+			writeAgentResponse(w, userreply.InfrastructureFailureResponse("open_knowledge_agent_failed"))
+			return
+		}
+		env := agenttool.MapTurnResult(turn)
+		writeOpenKnowledgeResponse(w, env)
+		return
+	}
+
 	source := req.Source
 	if source == "" {
 		source = "api"
@@ -154,5 +182,15 @@ func writeAgentResponse(w http.ResponseWriter, resp userreply.APIResponse) {
 	w.WriteHeader(int(resp.Status))
 	if err := json.NewEncoder(w).Encode(resp.Body); err != nil && !errors.Is(err, http.ErrBodyNotAllowed) {
 		slog.Warn("agent_invoke: encode response failed", "error", err)
+	}
+}
+
+// writeOpenKnowledgeResponse encodes the open-knowledge fast-path envelope
+// (matches the substrate scenario's output_schema) as HTTP 200 JSON.
+func writeOpenKnowledgeResponse(w http.ResponseWriter, env any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(env); err != nil && !errors.Is(err, http.ErrBodyNotAllowed) {
+		slog.Warn("agent_invoke: encode open_knowledge response failed", "error", err)
 	}
 }

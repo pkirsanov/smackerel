@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "specId": "066",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "scopes": [
+    { "scopeId": "SCOPE-1", "scopeName": "Retired Command Policy Foundation", "tests": [
+      { "type": "unit", "category": "unit", "file": "internal/telegram/legacy_aliases_test.go", "scenarioId": "SCN-066-A01", "description": "BotCommands exposes only retained operational commands and shortcuts", "command": "./smackerel.sh test unit", "liveSystem": false },
+      { "type": "unit", "category": "unit", "file": "internal/telegram/help_test.go", "scenarioId": "SCN-066-A06", "description": "Help teaches natural-language examples without active retired commands", "command": "./smackerel.sh test unit", "liveSystem": false },
+      { "type": "unit", "category": "unit", "file": "internal/telegram/operational_commands_test.go", "scenarioId": "SCN-066-A09", "description": "Status command bypasses LLM and facade", "command": "./smackerel.sh test unit", "liveSystem": false },
+      { "type": "canary", "category": "integration", "file": "tests/integration/telegram/legacy_alias_test.go", "scenarioId": "SCN-066-A01,SCN-066-A09", "description": "Retained shortcuts still route through assistant facade", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A06", "description": "Help menu over assistant contract remains plain-English first", "command": "./smackerel.sh test e2e", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A01", "description": "BotCommands post-retirement inventory remains stable end-to-end", "command": "./smackerel.sh test e2e", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A09", "description": "Operational commands remain deterministic over live transport", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-2", "scopeName": "Alias Window and Rejection UX", "tests": [
+      { "type": "integration", "category": "integration", "file": "tests/integration/telegram/legacy_alias_test.go", "scenarioId": "SCN-066-A04", "description": "Inside-window retired command rewrites, records notice, and invokes facade", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "integration", "category": "integration", "file": "tests/integration/telegram/legacy_alias_test.go", "scenarioId": "SCN-066-A05", "description": "Expired retired command rejects without facade invocation", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A04", "description": "Alias window notice and routing works through live assistant", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-3", "scopeName": "Natural-Language Replacement Paths", "tests": [
+      { "type": "e2e-api", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A02", "description": "Natural-language find cites artifacts", "command": "./smackerel.sh test e2e", "liveSystem": true },
+      { "type": "e2e-api", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A03", "description": "Natural-language rate disambiguates and persists", "command": "./smackerel.sh test e2e", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A02", "description": "Retired command equivalents reach the same end-state without slash handlers", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-4", "scopeName": "Domain Intent Parser Removal", "tests": [
+      { "type": "guard", "category": "integration", "file": "tests/integration/policy/legacy_absence_test.go", "scenarioId": "SCN-066-A07", "description": "domain_intent.go and parseDomainIntent are absent", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "integration", "category": "integration", "file": "tests/integration/api/find_entity_resolve_test.go", "scenarioId": "SCN-066-A07", "description": "Find API uses compiled intent and entity_resolve without regex parser", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/legacy_retirement_http_test.go", "scenarioId": "SCN-066-A07", "description": "Find replacement works after parser removal", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] },
+    { "scopeId": "SCOPE-5", "scopeName": "Annotation Keyword Map Retirement and Consumer Sweep", "tests": [
+      { "type": "unit", "category": "unit", "file": "internal/annotation/parser_test.go", "scenarioId": "SCN-066-A08", "description": "Annotation classification requires compiled intent confidence", "command": "./smackerel.sh test unit", "liveSystem": false },
+      { "type": "guard", "category": "integration", "file": "tests/integration/policy/legacy_absence_test.go", "scenarioId": "SCN-066-A08", "description": "No user-facing annotation keyword map remains", "command": "./smackerel.sh test integration", "liveSystem": true },
+      { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/annotation_intent_test.go", "scenarioId": "SCN-066-A08", "description": "Cooked-it annotation classifies from compiled intent and borderline cases disambiguate", "command": "./smackerel.sh test e2e", "liveSystem": true }
+    ] }
+  ]
+}

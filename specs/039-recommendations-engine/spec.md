@@ -2,6 +2,16 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The `/watch` command and any recommendation-watch keyword routing are
+> targeted for retirement by
+> [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md).
+> Recommendation/watch requests should compile through
+> [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> into a typed read/write intent with explicit side-effect class and
+> confirmation where needed. Recommendation ranking and provider logic
+> remain owned by this spec.
+
 > **Mode of analysis:** greenfield. No prior `spec.md` for recommendations
 > existed. This feature introduces an entirely new capability surface that
 > sits *outside* Smackerel's existing knowledge graph: instead of recalling
@@ -1125,6 +1135,17 @@ Scenario: BS-032 Low-confidence ranking is disclosed
 ---
 
 ## UI Wireframes
+
+### UX Successor Note — Intent-Driven Recommendations (2026-05-31)
+
+The recommendation, watch, provenance, preference, and provider-health
+surfaces below remain active UX. The `/watch` command and keyword-watch
+examples are superseded as primary entry paths by spec 066 and spec
+068. New watch creation, pause/resume/delete, and recommendation
+requests should be plain-language turns compiled into typed read/write
+intents with confirmation where side effects are present, then render
+the same trust, fatigue-control, and provenance affordances defined
+here.
 
 ### UX Operating Context
 

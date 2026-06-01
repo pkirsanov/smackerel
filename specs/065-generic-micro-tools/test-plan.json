@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "specId": "065",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "scopes": [
+    {
+      "scopeId": "SCOPE-1",
+      "scopeName": "Micro-Tool Foundation and Fail-Loud Config",
+      "tests": [
+        { "type": "unit", "category": "unit", "file": "internal/config/assistant_tools_test.go", "scenarioId": "SCN-065-A07", "description": "Required micro-tool SST keys fail loud", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "integration", "category": "integration", "file": "tests/integration/assistant/microtools_registry_canary_test.go", "scenarioId": "SCN-065-A07", "description": "Existing scenario tools still validate through the registry", "command": "./smackerel.sh test integration", "liveSystem": true },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_config_e2e_test.go", "scenarioId": "SCN-065-A07", "description": "Missing location provider aborts startup with no fallback provider", "command": "./smackerel.sh test e2e", "liveSystem": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-2",
+      "scopeName": "Location Normalization and Ambiguity Handling",
+      "tests": [
+        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/location_normalize_test.go", "scenarioId": "SCN-065-A01", "description": "Palm Springs CA resolves to California", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "integration", "category": "integration", "file": "tests/integration/assistant/microtools_location_test.go", "scenarioId": "SCN-065-A02", "description": "SF resolves through provider-backed location normalization", "command": "./smackerel.sh test integration", "liveSystem": true },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A03", "description": "Springfield produces candidate clarification instead of a guessed city", "command": "./smackerel.sh test e2e", "liveSystem": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-3",
+      "scopeName": "Deterministic Conversion and Computation Tools",
+      "tests": [
+        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/unit_convert_test.go", "scenarioId": "SCN-065-A04", "description": "Flour cup-to-gram conversion returns numeric value with source", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/calculator_test.go", "scenarioId": "SCN-065-A05", "description": "Calculator evaluates bounded arithmetic and rejects unsafe expressions", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A04", "description": "Assistant answers cup-to-gram conversion through the live HTTP assistant", "command": "./smackerel.sh test e2e", "liveSystem": true },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A05", "description": "Assistant refuses unsafe calculator expression through the live HTTP assistant", "command": "./smackerel.sh test e2e", "liveSystem": true }
+      ]
+    },
+    {
+      "scopeId": "SCOPE-4",
+      "scopeName": "Entity Resolution and Scenario Adoption",
+      "tests": [
+        { "type": "unit", "category": "unit", "file": "internal/agent/tools/microtools/entity_resolve_test.go", "scenarioId": "SCN-065-A06", "description": "Resolver ranks exact recent relation then vector candidates", "command": "./smackerel.sh test unit", "liveSystem": false },
+        { "type": "integration", "category": "integration", "file": "tests/integration/assistant/entity_resolve_test.go", "scenarioId": "SCN-065-A06", "description": "Resolver returns only user-scoped graph candidates", "command": "./smackerel.sh test integration", "liveSystem": true },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A06", "description": "Assistant clarifies low-confidence entity resolution", "command": "./smackerel.sh test e2e", "liveSystem": true },
+        { "type": "Regression E2E", "category": "e2e-api", "file": "tests/e2e/assistant/microtools_http_test.go", "scenarioId": "SCN-065-A01", "description": "Weather and conversion turns compose micro-tools without scenario-local parsing", "command": "./smackerel.sh test e2e", "liveSystem": true }
+      ]
+    }
+  ]
+}

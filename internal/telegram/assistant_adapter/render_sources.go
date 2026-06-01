@@ -75,6 +75,35 @@ func renderSourceLine(num int, src contracts.Source) string {
 			title = providerName
 		}
 		return fmt.Sprintf("  %d. %s — %s (%s)", num, providerName, title, retrieved)
+	case contracts.SourceWeb:
+		webRef, _ := src.Ref.(contracts.WebSourceRef)
+		title := strings.TrimSpace(src.Title)
+		if title == "" {
+			title = strings.TrimSpace(webRef.URL)
+		}
+		if title == "" {
+			title = "(untitled)"
+		}
+		provider := strings.TrimSpace(webRef.Provider)
+		if provider == "" {
+			provider = "web"
+		}
+		fetched := webRef.FetchedAt.UTC().Format(time.RFC3339)
+		return fmt.Sprintf("  %d. %s — %s (%s, %s)", num, provider, title, webRef.URL, fetched)
+	case contracts.SourceToolComputation:
+		compRef, _ := src.Ref.(contracts.ComputationSourceRef)
+		tool := strings.TrimSpace(compRef.Tool)
+		if tool == "" {
+			tool = strings.TrimSpace(src.ID)
+		}
+		if tool == "" {
+			tool = "tool"
+		}
+		title := strings.TrimSpace(src.Title)
+		if title == "" {
+			title = tool
+		}
+		return fmt.Sprintf("  %d. %s — %s", num, tool, title)
 	default:
 		// Unknown SourceKind — degrade to "<id> — <title>" without
 		// claiming a date we cannot prove. The capability layer's

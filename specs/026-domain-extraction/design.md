@@ -9,6 +9,15 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for ingestion-time domain extraction and `domain_data` storage.
+> It does not authorize request-time regex intent parsing. The legacy
+> request-side parser in `internal/api/domain_intent.go` is superseded by
+> [spec 066](../066-legacy-keyword-surface-retirement/design.md), while
+> [spec 068](../068-structured-intent-compiler/design.md) and the
+> `entity_resolve` micro-tool from [spec 065](../065-generic-micro-tools/design.md)
+> own user-request interpretation and entity resolution.
+
 ## Overview
 
 Domain extraction adds a **second, optional LLM pass** after universal processing. When an artifact's `content_type` matches a registered domain extraction prompt contract, the system dispatches a domain-specific extraction request through NATS to the ML sidecar. The sidecar loads the domain contract, builds a targeted prompt, validates the LLM output against the contract's JSON Schema, and returns structured data. The Go core stores the validated result in a `domain_data` JSONB column on the artifacts table.

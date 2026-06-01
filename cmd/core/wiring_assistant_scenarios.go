@@ -85,6 +85,12 @@ func assistantEnableResolver(cfg *config.Config) assistant.EnableResolver {
 			return cfg.Assistant.NotificationsEnabled, true
 		case "assistant.skills.recipe_search.enabled":
 			return cfg.Assistant.RecipeSearchEnabled, true
+		case "assistant.open_knowledge.enabled":
+			// Spec 064 SCOPE-12 — substrate-bridge enable gate. The
+			// open_knowledge scenario is filtered from the router's
+			// candidate set when this returns false, matching every
+			// other capability layer enable_sst_key semantics.
+			return cfg.Assistant.OpenKnowledge.Enabled, true
 		default:
 			return false, false
 		}

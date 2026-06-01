@@ -8,6 +8,21 @@
 > **Date:** April 6, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The intelligence-chapter request path described here (alerts,
+> synthesis prompts, pre-meeting briefs surfaced through dedicated
+> handlers) is amended by:
+> - [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md)
+>   (open-ended knowledge Q&A over the graph), and
+> - [spec 065 — Generic Micro-Tools](../065-generic-micro-tools/spec.md)
+>   (composable retrieval / synthesis micro-tools the agent calls).
+>
+> Intelligence production semantics — connection discovery, alert
+> triggers, and brief content — remain owned by this spec. Only the
+> way a user reaches them is reshaped: the assistant invokes
+> generic micro-tools rather than dedicated intelligence endpoints.
+> This spec stays `done`; successor specs amend the entry path only.
+
 ---
 
 ## Problem Statement

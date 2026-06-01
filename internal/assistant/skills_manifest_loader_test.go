@@ -25,6 +25,11 @@ import (
 	_ "github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/weather"
+
+	// Spec 064 SCOPE-12 — substrate-bridge tool open_knowledge_invoke
+	// registers itself at package-init so the open_knowledge scenario
+	// passes loader allow_tools validation here.
+	_ "github.com/smackerel/smackerel/internal/assistant/openknowledge/agenttool"
 )
 
 func TestSkillsManifest_AllScenariosLoadFromPromptContractsDir(t *testing.T) {

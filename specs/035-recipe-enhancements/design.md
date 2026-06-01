@@ -1,5 +1,14 @@
 # Design: 035 Recipe Enhancements — Serving Scaler & Cook Mode
 
+> **Design Successor Note (2026-05-31).** The serving scaler, cook-mode
+> session behavior, recipe data model, and read-time recipe transforms in
+> this design remain active. Legacy recipe and cook slash commands are
+> superseded as primary entry paths by [spec 066](../066-legacy-keyword-surface-retirement/design.md).
+> Assistant-facing unit and quantity normalization should use the generic
+> `unit_convert` micro-tool from [spec 065](../065-generic-micro-tools/design.md)
+> where the request flows through the agent loop; pure internal recipe
+> functions remain valid for deterministic domain operations.
+
 ## 1. Overview
 
 Both features are read-time transforms on existing recipe `domain_data`. No new database tables, no new NATS subjects, no new containers, no new LLM calls. The serving scaler is a stateless arithmetic function. Cook mode is a lightweight stateful session in the Telegram bot's process memory.

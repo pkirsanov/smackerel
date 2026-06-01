@@ -987,3 +987,81 @@ The named volume `${PROMETHEUS_VOLUME_NAME}` (e.g.
 so historical metrics persist for the configured
 `PROMETHEUS_RETENTION_DAYS` (default 15 days).
 
+## Spec 064 Deployment Notes (Open-Knowledge Agent)
+
+The open-knowledge agent ships disabled in the committed
+[`config/smackerel.yaml`](../config/smackerel.yaml). Operator opt-in
+requires populating the SST keys below in the per-env bundle and
+redeploying. Full operator surface is in
+[`docs/Operations.md`](Operations.md#open-knowledge-assistant-agent-spec-064).
+
+### New SST Keys (Under `assistant.open_knowledge.*`)
+
+All keys are REQUIRED at the generator boundary even when
+`enabled: false` (Gate G028, smackerel-no-defaults):
+
+| Key | Type | Secret | Notes |
+|-----|------|--------|-------|
+| `enabled` | bool | no | Strict `"true"` / `"false"`; rejects `"1"` / `"0"`. |
+| `provider` | enum | no | `"searxng"` \| `"brave"` \| `"tavily"`. |
+| `provider_endpoint` | string | no | Empty string permitted when `enabled: false`. |
+| `provider_api_key` | string | **YES** | Empty permitted for `searxng`; non-empty required for `brave` / `tavily` when enabled. Operator injects via the spec 052 secret-injection path; never commit. |
+| `llm_model_id` | string | no | Model id served by the ML sidecar `/llm/chat` route. |
+| `llm_timeout_ms` | int | no | Per LLM roundtrip; > 0 when enabled. |
+| `max_iterations` | int | no | Hard cap on planner ↔ tool cycles; > 0 when enabled. |
+| `per_query_token_budget` | int | no | Per-turn token budget; > 0 when enabled. |
+| `per_query_usd_budget` | float | no | Per-turn USD budget; > 0 when enabled. |
+| `monthly_budget_usd` | float | no | Aggregate monthly cap; ≥ 0 (explicit). |
+| `per_user_monthly_budget_usd` | float | no | Per-user monthly cap; ≥ 0. |
+| `tool_allowlist` | string[] | no | Deny-by-default tool id list; non-empty when enabled. v1 set: `internal_retrieval`, `web_search`, `unit_convert`, `calculator`. |
+| `web_snippet_cache_enabled` | bool | no | Strict bool. |
+| `allowed_egress_hosts` | string[] | no | Application-layer egress allowlist. Provider host is implicit. Bare hostnames only; no wildcards in v1. |
+| `circuit_breaker.failure_threshold` | int | no | Consecutive failures that trip Open; > 0 when enabled. |
+| `circuit_breaker.open_window_seconds` | int | no | Documented Open window; > 0 when enabled. |
+| `circuit_breaker.half_open_after_seconds` | int | no | Elapsed time before HalfOpen probe; > 0 when enabled. |
+| `searxng.image` | string | no | Pinned upstream tag; never `:latest`. |
+| `searxng.container_port` | int | no | SearxNG default listen port inside the container. |
+| `searxng.secret_key` | string | **YES** | Non-empty; entrypoint substitutes into `settings.yml`. Operators MUST override the committed dev/test placeholder. |
+| `searxng.base_url` | string | no | SearxNG `base_url`; in-cluster JSON API use. |
+
+Per-env keys under `environments.<env>.*`:
+
+| Key | Type | Notes |
+|-----|------|-------|
+| `searxng_enabled` | bool | Flips the `searxng` Compose profile for that env. |
+| `searxng_host_port` | int | Host port for ad-hoc dev inspection (loopback bind only). |
+| `searxng_bind_address` | string | Host bind address; loopback for dev/test by convention. |
+
+### Egress Implication
+
+Selecting `brave` or `tavily` introduces outbound HTTPS from the core
+runtime to the provider's API host. The application-layer
+`allowed_egress_hosts` gate enforces the host allowlist inside the
+process, but operators MUST ALSO whitelist the provider host at the
+network layer (firewall, egress proxy, or VPN policy) per the
+spec 020 defense-in-depth posture. PKT-020-A asks spec 020 to add
+wildcard support plus a network-layer firewall on top of this
+application-layer gate; until then, the network-layer rule is an
+operator responsibility.
+
+### Rollback Path
+
+To cleanly disable the subsystem in production:
+
+1. Set `assistant.open_knowledge.enabled: false` in the source
+   `config/smackerel.yaml`.
+2. Re-run `./smackerel.sh config generate --env <env> --bundle
+   --source-sha <sha>` to emit a new immutable bundle.
+3. Promote the new bundle via
+   `bash scripts/deploy/promote.sh --target <target> --build-manifest <path>`
+   (the bundle hash changes; the image digests do not).
+4. The subsystem disables on next start with no impact on other
+   scenarios — the loader skips registration and the spec 048
+   manifest re-resolves with capture-as-fallback in the slot
+   open-knowledge previously occupied.
+
+No data migration is required either direction; the subsystem holds
+no persistent state of its own (per-turn `ToolResultStore` is
+in-process only).
+
+

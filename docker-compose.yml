@@ -395,6 +395,61 @@ services:
       com.smackerel.component: jaeger-sidecar
       com.smackerel.lifecycle: ephemeral
 
+  # Spec 064 SCOPE-07 — Self-hosted SearxNG container for the open-ended
+  # knowledge agent's web search provider. Lifecycle: ENABLED ONLY when the
+  # `searxng` compose profile is selected (scripts/lib/runtime.sh adds
+  # `--profile searxng` iff ENABLE_SEARXNG=true in the generated env file).
+  # The test env auto-enables it so the integration leg runs
+  # `TestSearxNGIntegration_Smoke` against a real container. Dev/home-lab
+  # are opt-in (developer adds `--profile searxng` manually; deploy adapter
+  # overlays a real instance if it wants one — deploy/compose.deploy.yml is
+  # intentionally NOT modified by this scope). Zero persistent volume per
+  # bubbles-test-environment-isolation — SearxNG is a stateless proxy.
+  searxng:
+    # Spec 064 SCOPE-07 — image pinned via SST. Bump
+    # assistant.open_knowledge.searxng.image in config/smackerel.yaml to
+    # update; never use `:latest` (Docker freshness rule).
+    image: ${SEARXNG_IMAGE:?must be set in env file (run ./smackerel.sh config generate)}
+    restart: unless-stopped
+    profiles:
+      - searxng
+    security_opt:
+      - no-new-privileges:true
+    # SearxNG entrypoint needs to chown /etc/searxng on first start, so
+    # we keep the default Linux capabilities (no cap_drop). Read-only
+    # root + tmpfs on writable paths still satisfy FR-045-003.
+    read_only: true
+    tmpfs:
+      - /etc/searxng:size=4m,mode=1777,nosuid,nodev
+      - /var/cache/searxng:size=64m,mode=1777,nosuid,noexec,nodev
+      - /var/log/searxng:size=16m,mode=1777,nosuid,noexec,nodev
+      - /tmp:size=32m,mode=1777,nosuid,noexec,nodev
+    ports:
+      - "127.0.0.1:${SEARXNG_HOST_PORT}:${SEARXNG_CONTAINER_PORT}"
+    environment:
+      # Entrypoint substitutes `ultrasecretkey` in /etc/searxng/settings.yml
+      # with this value. SST-emitted; fail-loud per smackerel-no-defaults
+      # (Gate G028).
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?must be set in env file (run ./smackerel.sh config generate)}
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:?must be set in env file (run ./smackerel.sh config generate)}
+      SEARXNG_PORT: ${SEARXNG_CONTAINER_PORT:?must be set in env file (run ./smackerel.sh config generate)}
+      SEARXNG_BIND_ADDRESS: "0.0.0.0"
+    volumes:
+      - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:${SEARXNG_CONTAINER_PORT}/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      com.smackerel.component: searxng
+      com.smackerel.lifecycle: ephemeral
+
 volumes:
   postgres-data:
     name: ${POSTGRES_VOLUME_NAME}

@@ -82,6 +82,17 @@ var allowedSkipFiles = map[string]string{
 	"replay_pass_test.go":            "scripted-driver replay e2e (spec 037 Scope 6)",
 	"replay_fail_test.go":            "scripted-driver replay e2e (spec 037 Scope 6)",
 	"bs001_zero_go_change_test.go":   "scripted-driver scenario-reload e2e (spec 037 BS-001)",
+	// Spec 064 SCOPE-17 — open-knowledge e2e scaffolding. The seven
+	// tests cover UC-064-A01..A06 + the adversarial G021 fabricated-
+	// source path against the real /v1/agent/invoke endpoint. They
+	// skip honestly with per-finding messages while the six
+	// infrastructure prerequisites routed via PKT-WORKFLOW-A are not
+	// in place (no real Ollama dispatch in chat.py, no capture-as-
+	// fallback on /v1/agent/invoke, no fixture-fabricated-cite mode,
+	// no per-test budget/allowlist override knobs, no AGENT_INVOKE_URL
+	// export). This file is NOT the spec 043 live-Ollama happy path
+	// (which is happy_path_test.go and remains forbidden from skipping).
+	"openknowledge_e2e_test.go": "spec 064 SCOPE-17 scaffolding pending PKT-WORKFLOW-A infrastructure findings",
 }
 
 // skipPattern matches any of the t.Skip family verbs as a method call

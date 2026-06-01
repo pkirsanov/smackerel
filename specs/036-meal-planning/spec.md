@@ -2,6 +2,15 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The `/meal_plan` slash command is targeted for retirement by
+> [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md);
+> after 066 ships, the user invokes meal-plan workflows via NL
+> routed through the intent-driven assistant. The underlying
+> meal-plan service / store / CalDAV bridge are unaffected. This
+> spec stays `done`; re-validation triggers when 066's scope work
+> removes the slash handler.
+
 > **Architectural alignment (added with spec 037).**
 > This feature is reframed onto the LLM-Agent + Tools pattern committed to in
 > [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)

@@ -2,6 +2,24 @@
 
 **Status:** Done (certified per state.json)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The tool-registry surface defined here is extended by:
+> - [spec 064 — Open-Ended Knowledge Agent](../064-open-ended-knowledge-agent/spec.md)
+>   — adds the terminal open-domain scenario that catches anything
+>   no deterministic scenario claims, plus the cite-back verifier.
+> - [spec 065 — Generic Micro-Tools](../065-generic-micro-tools/spec.md)
+>   — adds `location_normalize`, `unit_convert`, `entity_resolve`,
+>   `calculator` as scenario-agnostic primitives any scenario can
+>   compose.
+> - [spec 067 — Intent-Driven Policy Enforcement](../067-intent-driven-policy-enforcement/spec.md)
+>   — extends the existing forbidden-keyword-routing test beyond
+>   the agent boundary into `internal/api/`, `internal/telegram/`,
+>   `internal/annotation/`, and adds the scenario-prompt-size cap +
+>   `principleAlignment`-required guards.
+>
+> This spec stays `done`; the foundation it shipped is unchanged. The
+> successors amend its surface; they do not invalidate its evidence.
+
 > **Architectural alignment.** This spec is the foundational expression of the
 > LLM-Agent + Tools pattern committed to in:
 > - [docs/smackerel.md §3.6 LLM Agent + Tools Pattern](../../docs/smackerel.md)

@@ -2,7 +2,30 @@
 
 ## Scope 1: Replace hard `required_fields` check with setdefault/derive block
 
-**Status:** [x] Done
+**Status:** Done
+
+**Scope-Kind:** contract-only
+
+(v4.1.0 opt-out: this scope changes only the internal contract of
+`ml/app/processor.process_content` — a deterministic in-process function
+with no NATS/HTTP surface change. The broken contract is unit-testable
+at the function boundary; no live-runtime E2E surface exists for the
+regression. See `design.md` → "Non-Goals" and `bug.md` → "Environment".)
+
+### TDD Provenance — red→green Evidence
+
+This scope was executed scenario-first (TDD red→green):
+
+1. **red:** the four targeted tests were run with `ml/app/processor.py`
+   stashed (broken contract restored). All four FAILED with
+   `ValueError: Missing required field: ...` at `processor.py:178`.
+   See DoD item "Pre-fix regression test FAILS" below for verbatim
+   pytest output.
+2. **green:** `git stash pop` restored the fix; the same four tests
+   PASSED, and the full 22-test `tests/test_processor.py` module +
+   the full 464-test `ml/` suite PASSED with no regressions.
+   See DoD item "Post-fix regression test PASSES" below for verbatim
+   pytest output.
 
 ### Gherkin Scenarios (Regression Tests)
 ```gherkin
@@ -152,6 +175,61 @@ Feature: ml/app/processor.process_content tolerates partial LLM payloads
       GO_EXIT=0
       ```
 - [x] Bug marked as Fixed in bug.md
+   - Raw output evidence (inline under this item, no references/summaries):
+      ```
+      $ grep -E '^- \[x\] (Fixed|Verified)' specs/061-conversational-assistant/bugs/BUG-061-002-ml-extraction-short-text/bug.md
+      - [x] Fixed
+      - [x] Verified
+      ```
+
+### Gherkin-Scenario → DoD Behavioral Fidelity (Gate G068)
+
+Each Gherkin scenario above has a behavior-fidelity DoD item below.
+The items assert the EXACT post-fix behavioral contract for that
+scenario; they are NOT process-tracking restatements.
+
+- [x] **Scenario: Short text with partial payload no longer silently drops** —
+   `process_content(content="hi", content_type="generic", processing_tier="light")`
+   with a partial LLM payload `{summary, topics, sentiment}` returns
+   `success=True`, `result.title == "hi"`, `result.artifact_type == "note"`,
+   and preserves `result.summary` / `result.topics` verbatim.
+   - Raw output evidence (inline under this item, no references/summaries):
+      ```
+      $ python3 -m pytest tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop -v
+      tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_short_text_with_partial_llm_payload_does_not_silently_drop PASSED [100%]
+      ============================== 1 passed in 0.07s ===============================
+      ```
+- [x] **Scenario: Empty content with partial payload derives "Untitled"** —
+   `process_content(content="", ...)` with `{summary: "Empty input."}`
+   returns `success=True`, `result.title == "Untitled"`,
+   `result.artifact_type == "note"`.
+   - Raw output evidence (inline under this item, no references/summaries):
+      ```
+      $ python3 -m pytest tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_empty_content_derives_untitled -v
+      tests/test_processor.py::TestProcessContentErrors::test_bug_061_002_empty_content_derives_untitled PASSED [100%]
+      ============================== 1 passed in 0.07s ===============================
+      ```
+- [x] **Scenario: Missing artifact_type only — derive from content_type** —
+   `content_type="article"` with `{title: "Missing artifact_type"}` returns
+   `result.title == "Missing artifact_type"` (preserved verbatim) AND
+   `result.artifact_type == "article"` (derived from caller content_type).
+   - Raw output evidence (inline under this item, no references/summaries):
+      ```
+      $ python3 -m pytest tests/test_processor.py::TestProcessContentErrors::test_missing_artifact_type_degrades_to_default -v
+      tests/test_processor.py::TestProcessContentErrors::test_missing_artifact_type_degrades_to_default PASSED [100%]
+      ============================== 1 passed in 0.07s ===============================
+      ```
+- [x] **Scenario: Missing title only — derive from content** —
+   `content="A meaningful capture about supper plans."` with
+   `{artifact_type: "article"}` returns `result.artifact_type == "article"`
+   (preserved verbatim) AND `result.title == "A meaningful capture about supper plans."`
+   (derived from caller content).
+   - Raw output evidence (inline under this item, no references/summaries):
+      ```
+      $ python3 -m pytest tests/test_processor.py::TestProcessContentErrors::test_missing_title_degrades_to_default -v
+      tests/test_processor.py::TestProcessContentErrors::test_missing_title_degrades_to_default PASSED [100%]
+      ============================== 1 passed in 0.07s ===============================
+      ```
 
 ### Out-of-Scope (Deliberate)
 - No live-stack E2E run — the broken contract is a deterministic in-process unit invariant; the unit suite is the correct gate. Spec 061 BS-002 live-stack work continues under spec 061 ownership.

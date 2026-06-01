@@ -5,6 +5,18 @@
 > **Status:** Done
 > **Design Doc:** [docs/smackerel.md](../../docs/smackerel.md) — Sections 5.5 (Weather enrichment for Maps), 5.10 (Environmental Alerts, v3 priority), 9/12 (Digest/travel dossier weather)
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The per-scenario geocoding / location-string normalization currently
+> embedded in the `weather_query` scenario's system prompt is being
+> extracted into a generic, scenario-agnostic micro-tool by
+> [spec 065 — Generic Micro-Tools](../065-generic-micro-tools/spec.md)
+> (`location_normalize`). When 065 lands, the weather skill prompt
+> shrinks and the weather connector itself is unchanged; only the
+> assistant-side tool composition shifts. This spec stays `done`; the
+> amend is tracked under spec 065's `amends:` list and re-validation
+> will occur naturally when 065's scope work modifies the scenario
+> YAML.
+
 ---
 
 ## Problem Statement

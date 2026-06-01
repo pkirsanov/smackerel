@@ -1,0 +1,46 @@
+{
+  "_comment": "Spec 064 SCOPE-04 schema-parity fixture. Read by both ml/tests/test_tool_roundtrip.py and internal/assistant/openknowledge/llm/client_test.go. ANY edit MUST keep both sides decoding the same JSON.",
+  "request": {
+    "model": "test-model-1",
+    "messages": [
+      {"role": "system", "content": "You are the open-ended knowledge planner."},
+      {"role": "user", "content": "Convert 5 km to miles."},
+      {
+        "role": "tool_call",
+        "tool_calls": [
+          {"id": "call-1", "name": "unit_convert", "arguments": {"value": 5, "from": "km", "to": "mi"}}
+        ]
+      },
+      {"role": "tool_result", "tool_call_id": "call-1", "content": "3.10686"}
+    ],
+    "tools": [
+      {
+        "name": "unit_convert",
+        "description": "Convert a value between two units.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "number"},
+            "from": {"type": "string"},
+            "to": {"type": "string"}
+          },
+          "required": ["value", "from", "to"]
+        }
+      }
+    ],
+    "max_tokens": 256,
+    "temperature": 0.0
+  },
+  "response_end_turn": {
+    "stop_reason": "end_turn",
+    "text": "5 km is about 3.11 miles.",
+    "tokens_used": 12
+  },
+  "response_tool_use": {
+    "stop_reason": "tool_use",
+    "tool_calls": [
+      {"id": "call-2", "name": "unit_convert", "arguments": {"value": 5, "from": "km", "to": "mi"}}
+    ],
+    "tokens_used": 0
+  }
+}

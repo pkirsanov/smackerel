@@ -2,6 +2,68 @@
 
 > Initial. Evidence is appended by downstream agents as scopes execute.
 
+## Amendment — PKT-061-A (2026-05-31): Source taxonomy + canonical refusal taxonomy extension
+
+**Status:** Merged (additive amend-in-place within `done` ceiling)
+**Source packet:** [`specs/064-open-ended-knowledge-agent/route-packets/PKT-061-A.md`](../064-open-ended-knowledge-agent/route-packets/PKT-061-A.md)
+**Routed by:** `bubbles.implement` on spec 064 SCOPE-10 (`bugfix-fastlane` against spec 061)
+**Closure:** [`specs/064-open-ended-knowledge-agent/route-packets/PKT-061-A-RESPONSE.md`](../064-open-ended-knowledge-agent/route-packets/PKT-061-A-RESPONSE.md)
+
+### Scope of amendment (additive only)
+
+Extended `contracts.SourceKind` from the implicit artifact-only taxonomy
+to the four-value closed vocabulary required by spec 064's open-knowledge
+agent. Extended the original single `CanonicalRefusalBody` constant into
+a cause-discriminated taxonomy via `contracts.RefusalCause` +
+`contracts.CanonicalRefusalBodyFor(cause)`. The default body
+("I don't have a sourced answer for that.") is preserved verbatim for
+backward compatibility.
+
+| Surface | Change |
+|---------|--------|
+| `internal/assistant/contracts/source.go` | Added `SourceWeb`, `SourceToolComputation` to `SourceKind`; added `WebSourceRef`, `ComputationSourceRef` discriminated-union members; expanded `AllSourceKinds`. |
+| `internal/assistant/contracts/refusal.go` (new) | Added `RefusalCause` enum (5 spec 064 causes + `RefusalDefault`), `AllRefusalCauses`, `CanonicalRefusalBodyFor`. |
+| `internal/assistant/provenance/gate.go` | `Enforce` now validates every `Source.Kind` is in `AllSourceKinds`; unknown kinds trigger the canonical refusal. Added `EnforceRefusal(scenarioLabel, refusalCause, resp)` that unconditionally rewrites to the cause-specific body for open-knowledge-agent terminations. |
+| `internal/assistant/provenance/gate_test.go` | New cases: `SourceWeb` pass, `SourceToolComputation` pass, mixed-kind pass, unknown-kind rejection (adversarial), each `RefusalCause` returns exact packet §3.B body, `RefusalDefault` fallback (adversarial), pre-existing `SourceArtifact` behaviour explicit backcompat assertion. |
+| `internal/assistant/contracts/response_test.go` | Updated `TestAllSourceKinds_Exhaustive` to declare the four-value vocabulary; added golden cases `thinking_web_source` and `thinking_tool_computation_source`; extended `snapshotForGolden` and `TestSourceRef_DiscriminatedUnion_RoundTrip` for the two new ref types. |
+| `internal/assistant/contracts/testdata/golden/{thinking_web_source,thinking_tool_computation_source}.json` (new) | New golden fixtures covering the two new `SourceKind` rows. |
+| `internal/telegram/assistant_adapter/render_sources.go` | Added explicit render branches for `SourceWeb` and `SourceToolComputation` so the Telegram adapter renders the new kinds without falling through the unknown-kind degrade path. |
+
+### Backward compatibility
+
+All pre-existing `SourceArtifact` gate behaviour is unchanged. Every
+pre-amendment gate test runs green with **zero modifications**
+(acceptance criterion §3.3). The existing
+`CanonicalRefusalBody` constant retains its exact original value and is
+the body returned by `CanonicalRefusalBodyFor(RefusalDefault)`.
+
+### Test evidence
+
+```text
+$ go test ./internal/assistant/contracts/... \
+         ./internal/assistant/provenance/... \
+         ./internal/telegram/assistant_adapter/...
+ok      github.com/smackerel/smackerel/internal/assistant/contracts     0.059s
+ok      github.com/smackerel/smackerel/internal/assistant/provenance    0.017s
+ok      github.com/smackerel/smackerel/internal/telegram/assistant_adapter      0.020s
+```
+
+Adversarial cases (G021):
+- `TestEnforce_RejectsUnknownSourceKind` — would fail if the gate
+  reverted to the pre-amendment `len(Sources) > 0` check alone.
+- `TestEnforceRefusal_AdversarialDefault` — would fail if
+  `CanonicalRefusalBodyFor` ever returned `""` for an unrecognised
+  cause (contract is total).
+- `TestEnforce_PreExistingArtifactBehaviourUnchanged` — explicit
+  backward-compatibility proof.
+
+### Status
+
+Spec 061 status remains `done` (amend-in-place within the certified
+ceiling per the framework's additive-amendment rule). The amendment
+introduces no new scope work; it extends an existing closed-vocabulary
+contract additively.
+
 <!-- bubbles:g040-skip-begin -->
 <!-- Round 95 (2026-05-30) — historical-execution-narrative G040 exclusion wrap. Closed-history routing/packet/deferral mentions belong to already-resolved cross-spec packets (specs 054 + 060 accepted Rounds 84/85; SCOPE-10 DoD #6 ratified Round 88). The Round 95 promotion section below is OUTSIDE the wrap. -->
 <!-- bubbles:evidence-legitimacy-skip-begin -->

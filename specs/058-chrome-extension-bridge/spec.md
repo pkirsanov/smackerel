@@ -8,6 +8,23 @@
 
 ---
 
+## Concerns Ledger (added 2026-05-31, analyst)
+
+Spec status is `done_with_concerns` (`state.json.status`, certified 2026-05-28). The implementation across Scopes 1–5 shipped and is real; the residual concerns below were captured during the 2026-05-28 close-out as `unresolvedFindings` in [report.md → Discovered Issues (Gate G095)](report.md) and remain open. `state.json` does not classify these as blocking vs advisory; they are recorded here verbatim from the close-out catalog without invented severity.
+
+| ID | Concern (verbatim from report.md) | Origin | Owning agent for follow-up |
+|----|-----------------------------------|--------|---------------------------|
+| CONCERN-1 | DI-058-01 — "12 unchecked DoD rows are honest `Claim Source: not-run` Uncertainty Declarations covering live-stack tiers gated on infrastructure not in repo (Playwright harness F-057-V-001), live post-merge CI evidence (cosign verify-blob against a Rekor entry), router-mount follow-up shared with spec 060, and the HTMX admin page." | report.md Discovered Issues (Gate G095), state.json `execution.completedPhaseClaims[close-out].summary` | `bubbles.plan` (future scope to land Playwright harness, post-merge cosign verify-blob evidence capture, router-mount, and the HTMX admin page) |
+| CONCERN-2 | DI-058-03 — "The three Playwright e2e specs (`bookmark_roundtrip.spec.ts`, `auth_failure.spec.ts`) require the Playwright harness blocked by F-057-V-001. Test Plan rows remain so the contract is visible; file-existence will close once the harness lands." | report.md Discovered Issues (Gate G095) | `bubbles.plan` (future scope to either land the Playwright harness or downgrade the planned tier to vitest-with-fake-indexeddb and rewrite the rows) |
+| CONCERN-3 | DI-058-07 — "G088 post-cert spec edit … inherent to any close-out that edits the spec's own state.json/report.md/scopes.md to capture certification metadata." Accepted as user-acknowledged trade-off, identical to specs 057/059/060 close-outs. | report.md Discovered Issues (Gate G095) | None (closed by acceptance; no follow-up owner) |
+
+Notes:
+- `state.json.reworkQueue`, `transitionRequests`, `failures`, and `pendingTransitionRequests` are all empty; no concern below originates from those channels.
+- Mechanical findings DI-058-02, DI-058-04, DI-058-05, DI-058-06, DI-058-08 were discharged during the 2026-05-28 close-out (`addressedFindings`) and are not re-listed here.
+- None of these concerns is about the assistant/intent surface; successor specs 061/064–069 are unrelated to this ledger.
+
+---
+
 ## Related
 
 - **Augments:** [internal/connector/bookmarks](../../internal/connector/bookmarks) — currently import-dir-only (HTML/JSON exports)

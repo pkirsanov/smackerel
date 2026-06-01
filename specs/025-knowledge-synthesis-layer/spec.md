@@ -7,6 +7,22 @@
 > **Date:** April 15, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> The `/concept`, `/person`, `/lint`, `/find`, and free-text Telegram
+> entry points described in this spec are targeted for retirement /
+> compilation by:
+> - [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md)
+>   (slash command collapse), and
+> - [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+>   (NL `CompiledIntent` -> scenario route -> tool composition).
+>
+> Knowledge-synthesis production, concept/person page generation,
+> citation discipline, and the synthesis lifecycle remain owned by
+> this spec. Only the request-entry path is reshaped: concept/person
+> pages are surfaced through `retrieval_qa` and a future
+> `knowledge_browse` scenario rather than dedicated slash handlers.
+> This spec stays `done`; successor specs amend the entry path only.
+
 ---
 
 ## Problem Statement
@@ -546,6 +562,17 @@ Scenario: Entity profile enriched across source types
 ---
 
 ## UI Wireframes
+
+### UX Successor Note — Intent-Driven Entry (2026-05-31)
+
+The web knowledge screens below remain active UX. Telegram command
+screens that name `/concept`, `/person`, `/lint`, or `/find` are
+historical entry renderings for this done spec and are superseded as
+primary user entry points by spec 066 and spec 068. Downstream design
+and implementation should preserve the concept/entity/lint response
+content, source citation discipline, and navigation targets, while
+routing new user requests through compiled natural language over the
+spec 061 facade and spec 069 HTTP transport where applicable.
 
 ### Screen Inventory
 

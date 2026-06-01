@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "specId": "071",
+  "feature": "IntentTrace Observability Surface",
+  "generatedBy": "bubbles.plan",
+  "generatedAt": "2026-05-31T20:30:46Z",
+  "scenarios": [
+    {
+      "id": "SCN-071-A01",
+      "title": "Exactly one IntentTrace per compiled turn",
+      "scopeId": "SCOPE-071-01",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A02",
+      "title": "Sampled-out turns still emit a minimal envelope",
+      "scopeId": "SCOPE-071-02",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A03",
+      "title": "Sensitive slot values are redacted per source policy",
+      "scopeId": "SCOPE-071-02",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A04",
+      "title": "Replay reproduces the routing decision",
+      "scopeId": "SCOPE-071-03",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A05",
+      "title": "SST keys are required and fail loud",
+      "scopeId": "SCOPE-071-01",
+      "source": "spec.md",
+      "liveSystemExpectation": false,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A06",
+      "title": "Dashboard surfaces top action_class distribution",
+      "scopeId": "SCOPE-071-04",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A07",
+      "title": "Refusal counters join to IntentTrace by cause label",
+      "scopeId": "SCOPE-071-04",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A08",
+      "title": "Spec 067 bypass guard reads IntentTrace fields",
+      "scopeId": "SCOPE-071-03",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A09",
+      "title": "Retention TTL is enforced from SST",
+      "scopeId": "SCOPE-071-02",
+      "source": "spec.md",
+      "liveSystemExpectation": true,
+      "status": "planned"
+    },
+    {
+      "id": "SCN-071-A10",
+      "title": "Schema is pinned by a golden contract test",
+      "scopeId": "SCOPE-071-01",
+      "source": "spec.md",
+      "liveSystemExpectation": false,
+      "status": "planned"
+    }
+  ]
+}

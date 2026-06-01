@@ -121,3 +121,14 @@ See [`bubbles-deployment-target.instructions.md`](../.github/instructions/bubble
 # 4) On regression, pointer-swap rollback (no rebuild)
 ./smackerel.sh deploy-target home-lab rollback
 ```
+
+## Per-Spec SST Key Catalogs
+
+`contract.yaml` carries a `sstKeyCatalog:` section enumerating
+per-spec REQUIRED config keys (with `secret: true|false` annotation)
+that the runtime expects in the mounted env bundle. The catalog is
+informational — adapters do NOT default these values; they consume
+the bundle as-is and inject secrets at apply time via the spec 052
+secret-injection path. Currently catalogged: spec 064 (open-knowledge
+agent). See [`docs/Deployment.md`](../docs/Deployment.md#spec-064-deployment-notes-open-knowledge-agent)
+for the operator-facing rollout/rollback notes.

@@ -1306,7 +1306,7 @@ ASSISTANT_OPEN_KNOWLEDGE_ENABLED="$(required_value assistant.open_knowledge.enab
 ASSISTANT_OPEN_KNOWLEDGE_PROVIDER="$(required_value assistant.open_knowledge.provider)"
 ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT="$(yaml_get assistant.open_knowledge.provider_endpoint)"
 ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY="$(yaml_get assistant.open_knowledge.provider_api_key)"
-ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_llm_model_id" 2>/dev/null)"
+ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get "environments.$TARGET_ENV.assistant_open_knowledge_llm_model_id" 2>/dev/null || true)"
 if [[ -z "$ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID" ]]; then
   ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID="$(yaml_get assistant.open_knowledge.llm_model_id)"
 fi

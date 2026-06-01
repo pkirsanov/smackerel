@@ -1,0 +1,92 @@
+{
+  "version": 3,
+  "featureDir": "specs/075-legacy-retirement-telemetry",
+  "featureNumber": "075",
+  "featureName": "Legacy-Surface Deprecation Telemetry & User Comms",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": true,
+  "specDependsOn": [
+    "specs/030-observability",
+    "specs/049-monitoring-stack",
+    "specs/061-conversational-assistant",
+    "specs/066-legacy-keyword-surface-retirement"
+  ],
+  "amends": [
+    "specs/066-legacy-keyword-surface-retirement",
+    "specs/049-monitoring-stack"
+  ],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedAt": null,
+    "evidenceRef": null,
+    "completedScopes": []
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "planning",
+    "currentScope": null,
+    "runStartedAt": "2026-05-31T20:30:46Z",
+    "lastUpdatedAt": "2026-05-31T20:30:46Z",
+    "completedPhaseClaims": [],
+    "completedScopes": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze", "bootstrap"],
+        "statusBefore": "not_started",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T00:00:00Z",
+        "runEndedAt": "2026-05-31T00:00:00Z",
+        "summary": "Bootstrapped the rollout safety net for spec 066 legacy retirement: per-user-per-command one-time deprecation notice, residual-usage telemetry with rolling 7-day report, automatic pause on SST-defined rollback thresholds, post-window observation gate before final handler deletion. 11 BDD scenarios (SCN-075-A01..A11) cover first-invocation NL-served notice, no re-notification, per-command independence, telemetry counters, rollback-threshold auto-pause, resume-resets-counter, window-closed canonical response, post-window zero-invocation proof, cross-transport dedup persistence, fail-loud SST, and PII-free telemetry."
+      },
+      {
+        "agent": "bubbles.design",
+        "phasesExecuted": ["bootstrap", "design"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:10:07Z",
+        "runEndedAt": "2026-05-31T20:10:07Z",
+        "summary": "Created design.md for legacy retirement telemetry and user communications, resolving the notice ledger, runtime pause state, HMAC user buckets, post-window observation report, fail-loud SST keys, dashboard panels, and scenario-to-test mapping for SCN-075-A01..A11."
+      },
+      {
+        "agent": "bubbles.plan",
+        "phasesExecuted": ["bootstrap", "planning"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T20:30:46Z",
+        "runEndedAt": "2026-05-31T20:30:46Z",
+        "summary": "Created planning artifacts for SCN-075-A01..A11: five sequential scopes, scenario-manifest.json, test-plan.json, uservalidation.md, and planning-only report.md. Status remains in_progress with planMaturityOnly=true."
+      },
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["reconcile"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-05-31T22:00:00Z",
+        "runEndedAt": "2026-05-31T22:00:00Z",
+        "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      }
+    ]
+  }
+}

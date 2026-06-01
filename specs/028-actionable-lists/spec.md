@@ -6,6 +6,15 @@
 > **Date:** April 17, 2026
 > **Status:** Done
 
+> **Successor Notice (added 2026-05-31, analyst).**
+> User requests that create or mutate lists (historically exposed via
+> list-specific command handlers) are targeted for the structured
+> intent path in [spec 068 — Structured Intent Compiler](../068-structured-intent-compiler/spec.md)
+> and command retirement in [spec 066 — Legacy Keyword Surface Retirement](../066-legacy-keyword-surface-retirement/spec.md).
+> The list projection/store semantics remain unchanged; only the
+> request-entry path changes from slash/handler semantics to compiled
+> NL intent plus existing list tools.
+
 ---
 
 ## Problem Statement
@@ -288,6 +297,15 @@ aggregation_rules (config, not DB):
 ---
 
 ## UI Wireframes
+
+### UX Successor Note — Intent-Driven Lists (2026-05-31)
+
+The shopping-list, list-summary, and mobile list surfaces below remain
+active UX. Slash-command examples such as `/list shopping`, `/list
+add`, `/list share`, and `/list done` are superseded as primary entry
+paths by spec 066 and spec 068. New user turns should use plain
+language compiled into list create/update/complete intents, then render
+the same editable list and source-trace affordances defined here.
 
 ### Screen: Telegram Shopping List
 **Actor:** User | **Channel:** Telegram | **Status:** New

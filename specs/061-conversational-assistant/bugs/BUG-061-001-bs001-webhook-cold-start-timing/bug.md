@@ -15,7 +15,7 @@
 - [ ] In Progress
 - [x] Fixed
 - [x] Verified
-- [ ] Closed
+- [x] Closed
 
 ## Reproduction Steps
 1. `./smackerel.sh --env test down --volumes && ./smackerel.sh --env test build && ./smackerel.sh --env test up` (cold stack, Ollama model unloaded)

@@ -7,6 +7,14 @@
 
 ---
 
+> **Design Successor Note (2026-05-31).** This design remains the
+> authority for disposable live-stack isolation and repo CLI E2E execution.
+> [Spec 069](../069-assistant-http-transport/design.md) amends the
+> assistant-specific E2E ingress: canonical assistant live-stack tests
+> should drive `POST /api/assistant/turn` over HTTP, not require a real
+> Telegram account. Telegram-specific tests can remain for adapter parity,
+> but they are no longer the only proof of assistant behavior.
+
 ## Overview
 
 Adds integration and E2E test suites that run against the real Docker stack (PostgreSQL, NATS, ML sidecar). Tests use the existing `./smackerel.sh test integration` and `./smackerel.sh test e2e` commands with a disposable test stack isolated from dev data.
