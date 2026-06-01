@@ -176,3 +176,37 @@ secret, auditor inspection), see:
 - [`docs/Deployment.md` → Bundle Secret Injection (spec 052)](Deployment.md#bundle-secret-injection-spec-052)
 - [`docs/Operations.md` → Bundle Secret Substitution (spec 052)](Operations.md#bundle-secret-substitution-spec-052)
 - [`README.md` → Managed Secrets & Bundle Substitution (spec 052) — 3-Layer Defense](../README.md#managed-secrets--bundle-substitution-spec-052--3-layer-defense)
+
+---
+
+## Intent-Driven Assistant (Specs 061, 064–069)
+
+The conversational assistant is a transport-agnostic capability that turns
+free-text user messages into either an answered turn (retrieval, weather,
+notifications, open-knowledge) or a capture-as-fallback. It is layered on
+the spec 037 LLM Scenario Agent substrate and exposes a single
+`internal/assistant/facade.go` boundary to every transport.
+
+### Module Boundaries
+
+| Boundary | Owning spec | Rule |
+|----------|-------------|------|
+| Facade ↔ transports | [061](../specs/061-conversational-assistant/) | Facade defines `contracts.TransportAdapter`; transport adapters translate I/O and call the facade. Facade, scenarios, and executor code MUST NOT branch on `AssistantMessage.Transport` — only adapter and audit layers may inspect that field. |
+| NL ↔ router | [068](../specs/068-structured-intent-compiler/) | Every user turn is compiled into a normalized, schema-bound `CompiledIntent` BEFORE scenario routing, tool selection, external calls, or response synthesis. The compiler runs inside [`internal/assistant/facade.go`](../internal/assistant/facade.go) at Step 3.5; Step 3.55 short-circuits `clarify`/`capture_only` (SCN-068-A05) and Step 3.6 gates `write`/`external_write` side-effect classes (SCN-068-A03/A04/A09) BEFORE `Router.Route` runs. The compiler ships as `intent.LLMCompiler` with an injectable `intent.Transport` (the ML-sidecar HTTP call), and the operational-command bypass set is the closed list `/help, /status, /reset, /digest, /recent, /done` owned by [`internal/assistant/intent/bypass.go`](../internal/assistant/intent/bypass.go). |
+| Terminal scenario | [064](../specs/064-open-ended-knowledge-agent/) | An open-ended knowledge agent is the terminal scenario absorbing any NL turn that no deterministic scenario claims, BEFORE capture-as-fallback fires. It runs the spec 037 LLM ↔ tool loop with internal retrieval + bounded web search + calculator + unit-convert. |
+| Cross-scenario primitives | [065](../specs/065-generic-micro-tools/) | `location_normalize`, `unit_convert`, `entity_resolve`, `calculator` are scenario-agnostic micro-tools in the spec 037 registry. Scenarios consume these instead of forking per-API normalization logic into their system prompts or scenario-local Go. |
+| Legacy keyword surfaces | [066](../specs/066-legacy-keyword-surface-retirement/) | Keyword-driven competitors to the NL pipeline are retired: the Telegram slash-command surface is reduced to a small operational set, `internal/api/domain_intent.go` regex parser is replaced by `entity_resolve`, and the annotation keyword map is dropped. A configurable alias window keeps retired commands as NL aliases during the cutover. |
+| CI policy enforcement | [067](../specs/067-intent-driven-policy-enforcement/) | Mechanical guards enforce: per-scenario prompt-length cap, mandatory `principleAlignment` block per scenario YAML, broadened NO-DEFAULTS check, forbidden-keyword guard against retired surfaces, and compiler-bypass detection (no user-facing NL path may call `Router.Route` without a validated `CompiledIntent` trace record). |
+| HTTP transport | [069](../specs/069-assistant-http-transport/) | A second concrete `TransportAdapter` registered under `Transport="web"` exposes `POST /api/assistant/turn` under the per-user bearer policy. This is the canonical programmatic conversational surface used by E2E tests and by every future frontend (web chat, Android in-app, WhatsApp Business webhook, devtools). Telegram is one of many transports, not the privileged path. |
+
+### Authoritative References
+
+- [`specs/061-conversational-assistant/`](../specs/061-conversational-assistant/) — facade, `TransportAdapter` contract, router/post-processor, confirm/disambig lifecycle, observability substrate.
+- [`specs/064-open-ended-knowledge-agent/`](../specs/064-open-ended-knowledge-agent/) — terminal open-knowledge scenario, v1 tool set, provenance gate amendments.
+- [`specs/065-generic-micro-tools/`](../specs/065-generic-micro-tools/) — cross-scenario micro-tool registry.
+- [`specs/066-legacy-keyword-surface-retirement/`](../specs/066-legacy-keyword-surface-retirement/) — slash-command + `domain_intent.go` + annotation keyword-map retirement and alias-window plan.
+- [`specs/067-intent-driven-policy-enforcement/`](../specs/067-intent-driven-policy-enforcement/) — CI guards keeping the intent-driven architecture from silently regressing.
+- [`specs/068-structured-intent-compiler/`](../specs/068-structured-intent-compiler/) — NL → `CompiledIntent` → route runtime contract.
+- [`specs/069-assistant-http-transport/`](../specs/069-assistant-http-transport/) — `POST /api/assistant/turn` HTTP transport adapter for E2E and frontends.
+- [`docs/Operations.md` → Assistant Capability (Spec 061)](Operations.md#assistant-capability-spec-061) — operator runbook, metrics, recovery actions, HTTP-route notes.
+- [`docs/Development.md`](Development.md) — scenario authoring, forbidden patterns, agent + tool discipline.

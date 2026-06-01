@@ -3835,12 +3835,29 @@ through the connector lifecycle against the live core API
 
 The Conversational Assistant capability is a transport-agnostic layer
 that turns free-text user messages into either an answered turn
-(retrieval / weather / notifications) or a capture-as-fallback. It is
-built on the spec 037 LLM Scenario Agent substrate and presents a
-single `internal/assistant/facade.go` boundary to every transport. The
-capability layer never imports transport packages; transport adapters
-(currently Telegram, see [`docs/Connector_Development.md`](Connector_Development.md))
-own message I/O and call the facade.
+(retrieval / weather / notifications / open-knowledge) or a
+capture-as-fallback. It is built on the spec 037 LLM Scenario Agent
+substrate and presents a single `internal/assistant/facade.go` boundary
+to every transport. The capability layer never imports transport
+packages; transport adapters implement
+`internal/assistant/contracts.TransportAdapter` and own message I/O.
+Telegram (see [`docs/Connector_Development.md`](Connector_Development.md))
+is one such adapter; the HTTP transport from
+[spec 069](../specs/069-assistant-http-transport/) registered under
+`Transport="web"` exposes `POST /api/assistant/turn` and is the canonical
+programmatic surface used by E2E tests and future frontends (web chat,
+Android in-app, WhatsApp Business webhook, devtools).
+
+Related specs layered on top of 061:
+
+| Spec | Concern |
+|------|---------|
+| [064](../specs/064-open-ended-knowledge-agent/) | Open-ended knowledge agent — terminal scenario that absorbs any NL turn before capture-as-fallback. |
+| [065](../specs/065-generic-micro-tools/) | Cross-scenario micro-tools (`location_normalize`, `unit_convert`, `entity_resolve`, `calculator`). |
+| [066](../specs/066-legacy-keyword-surface-retirement/) | Retirement of slash commands, `domain_intent.go`, annotation keyword map; configurable NL alias window. |
+| [067](../specs/067-intent-driven-policy-enforcement/) | CI guards: scenario-prompt cap, mandatory `principleAlignment`, broadened NO-DEFAULTS, forbidden-keyword guard, compiler-bypass detection. |
+| [068](../specs/068-structured-intent-compiler/) | NL → `CompiledIntent` → route runtime contract; runs inside the facade so every transport exercises the same path. |
+| [069](../specs/069-assistant-http-transport/) | `POST /api/assistant/turn` HTTP transport adapter. |
 
 ### Observability And Alerts
 
@@ -3907,6 +3924,55 @@ The four validation rules are:
    startup WARN log; `"transport_user"` is the recommended primary-key
    shape.
 
+### Intent Compiler SST (Spec 068)
+
+The structured intent compiler ([spec 068](../specs/068-structured-intent-compiler/))
+lives under `assistant.intent_compiler.*` in
+[`config/smackerel.yaml`](../config/smackerel.yaml) and is validated by
+[`internal/config/assistant_intent_compiler.go`](../internal/config/assistant_intent_compiler.go)
+(`loadAssistantIntentCompilerEnv`). Every key is REQUIRED; the loader
+emits one aggregate `F068-SST-MISSING` fail-loud error at startup if any
+key is missing, empty, or unparsable — there is no fallback model,
+prompt, timeout, or confidence floor.
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `assistant.intent_compiler.enabled` | strict bool | Master switch for facade Step 3.5 compilation. `false` keeps the router on raw text + slash shortcuts. |
+| `assistant.intent_compiler.model_role` | string | ML-bridge model role the compiler binds to (e.g. `assistant_intent_compiler`). |
+| `assistant.intent_compiler.prompt_contract_version` | string | Prompt contract version the ML sidecar must honor (e.g. `intent-compiler-v1`). |
+| `assistant.intent_compiler.schema_version` | string | `CompiledIntent` schema version the Go side accepts (e.g. `v1`). |
+| `assistant.intent_compiler.timeout_ms` | int ≥ 1 | Per-compile request deadline (ms). |
+| `assistant.intent_compiler.confidence_floor` | float [0,1] | Scenario-hint confidence floor; below this the router falls back to similarity ranking. |
+| `assistant.intent_compiler.max_context_turns` | int ≥ 0 | Bounded conversation window passed to the compiler. |
+| `assistant.intent_compiler.max_output_bytes` | int ≥ 1 | Cap on sidecar response body — defense against runaway LLM output. |
+| `assistant.intent_compiler.retry_budget` | int ≥ 0 | Schema-validation retries before declaring `schema_invalid`. |
+
+Operator notes:
+
+- **Fail-loud behavior:** any of the keys above missing or empty in the
+  resolved env file aborts `smackerel-core` startup with a single
+  aggregated error naming every missing key. There is no soft-fallback;
+  do not introduce one via shell defaults (per
+  [`smackerel-no-defaults`](../.github/instructions/smackerel-no-defaults.instructions.md)).
+- **Operational-command bypass (closed set):** only `/help`, `/status`,
+  `/reset`, `/digest`, `/recent`, and `/done` skip compilation. The list
+  is owned by
+  [`internal/assistant/intent/bypass.go`](../internal/assistant/intent/bypass.go)
+  (`OperationalCommands`); every bypass turn is stamped with the trace
+  label `operational_command_bypass`.
+- **Disabling the compiler:** set
+  `assistant.intent_compiler.enabled: false` and regenerate config — the
+  facade reverts to slash-shortcut + raw-text routing. All other
+  `intent_compiler.*` keys still MUST resolve (NO-DEFAULTS); leave them
+  populated.
+- **Compiler failure handling:** a compiler error emits the canonical
+  capture-as-fallback response without invoking the router (Hard
+  Constraint 1). `clarify` and `capture_only` action classes
+  short-circuit at facade Steps 3.55 and 3.5; `write` /
+  `external_write` side-effect classes are gated at Step 3.6 by
+  `intent.RequiresConfirmation` and increment
+  `smackerel_assistant_side_effect_blocked_total`.
+
 The full key inventory is enumerated in
 [`specs/061-conversational-assistant/scopes.md`](../specs/061-conversational-assistant/scopes.md)
 SCOPE-01.
@@ -3959,6 +4025,41 @@ strand pending confirms:
 - **Recover stalled confirms**: a process restart is safe — pending
   confirms live in `assistant_confirm_pending`; the TTL filter at
   SELECT time excludes expired rows automatically.
+
+### HTTP Transport (Spec 069)
+
+[Spec 069](../specs/069-assistant-http-transport/) adds a second
+concrete `contracts.TransportAdapter` registered under
+`Transport="web"`, exposing one authenticated route:
+
+```
+POST /api/assistant/turn
+```
+
+The route lives under the per-user bearer policy (spec 044). Every
+inbound request body is translated into an `AssistantMessage`, handed
+to the same `Facade.Handle` path that backs Telegram, and the resulting
+`AssistantResponse` is rendered back as the HTTP response body. The
+facade, scenario executor, structured intent compiler (spec 068), and
+router treat the web transport identically to Telegram; only the HTTP
+adapter and the audit layer may inspect `AssistantMessage.Transport`.
+
+Operator notes:
+
+- This is the canonical programmatic entrypoint for E2E tests and for
+  every future frontend (web chat, Android in-app, WhatsApp Business
+  webhook bridge consumers, devtools). Telegram remains supported but is
+  no longer the privileged path.
+- The route requires a valid per-user PASETO bearer (per spec 044). No
+  unauthenticated access is permitted.
+- Capture-as-fallback, confirm-card lifecycle, disambiguation prompts,
+  provenance enforcement, and the assistant metric series above all
+  apply identically to `transport="web"` turns — emissions carry the
+  `transport="web"` label rather than `"telegram"`.
+- Scope-claim authorization (e.g. an `assistant.turn` scope) and the
+  exact enable/disable SST key shape are owned by spec 069 — see the
+  spec for the shipped contract before relying on either in operator
+  procedures.
 
 ### OpenTelemetry Tracing (Spec 061 SCOPE-09a)
 
@@ -4082,5 +4183,176 @@ implementation decisions including the deferred spec-037 spans),
 §8.3.1.B (canonical attribute set), §8.3.1.C (context.Context
 propagation requirement), §8.3.2 (SCOPE-09 split rationale).
 
+## Open-Knowledge Assistant Agent (Spec 064)
+
+The open-knowledge agent extends the spec 061 assistant with a bounded
+LLM planner ↔ tool ↔ observation loop that can answer open-domain
+questions (factual, computational, current-events) while preserving
+the capture-as-fallback invariant and the cite-back verifier
+contract. See
+[`specs/064-open-ended-knowledge-agent/spec.md`](../specs/064-open-ended-knowledge-agent/spec.md)
+for the full outcome contract and refusal taxonomy.
+
+### Enabling / Disabling
+
+The subsystem ships disabled. Operator opts in by flipping
+`assistant.open_knowledge.enabled: true` in
+[`config/smackerel.yaml`](../config/smackerel.yaml), populating the
+required keys below, and regenerating + redeploying the per-env
+config bundle. Setting `enabled: false` cleanly disables the
+scenario; other scenarios continue routing through spec 061 as
+before. There is no half-enabled mode — the loader rejects an
+enabled config with empty `provider_endpoint`, empty
+`llm_model_id`, zero budgets, or empty `tool_allowlist`.
+
+### Provider Choice And Tradeoffs
+
+Exactly one provider is selected via `assistant.open_knowledge.provider`:
+
+| Provider | `provider` value | Hosting | Egress posture | Notes |
+|----------|------------------|---------|----------------|-------|
+| SearxNG (self-hosted) | `searxng` | In-cluster Docker container behind the `searxng` Compose profile | Loopback-only between Smackerel and the SearxNG container; SearxNG itself reaches upstream engines | Local-first / privacy-preserving. Requires the per-env `searxng_enabled: true` flag and `assistant.open_knowledge.searxng.*` keys populated. No `provider_api_key` required (leave empty string). |
+| Brave Search API | `brave` | SaaS | Outbound HTTPS to the Brave API host | Requires non-empty `provider_api_key`. Operator MUST add the Brave API host to `allowed_egress_hosts` and to any network-layer firewall allowlist. |
+| Tavily | `tavily` | SaaS | Outbound HTTPS to the Tavily API host | Requires non-empty `provider_api_key`. Same egress allowlist rule applies. |
+
+The spec-064 v1 plan ships SearxNG as the local-first default
+recommendation. Brave / Tavily are pluggable behind the same
+`WebSearchProvider` contract once the operator accepts the SaaS egress
+tradeoff.
+
+### Budget Configuration
+
+All four budgets are REQUIRED and validated at the generator
+boundary; the agent terminates the loop and returns
+`budget_exhausted` (per-turn) or
+`open_knowledge_refusal_total{cause="budget-exhausted-monthly"}`
+(monthly) when a budget is exceeded.
+
+| SST key | Scope | Semantics |
+|---------|-------|-----------|
+| `assistant.open_knowledge.per_query_token_budget` | Per turn | Total LLM tokens (prompt + completion) across all iterations of one turn. |
+| `assistant.open_knowledge.per_query_usd_budget` | Per turn | Total estimated USD spend across all iterations of one turn. |
+| `assistant.open_knowledge.monthly_budget_usd` | Per deployment | Aggregate monthly cap across all users. `0` = unlimited (operator must set explicitly). |
+| `assistant.open_knowledge.per_user_monthly_budget_usd` | Per user | Per-user monthly cap. `0` = unlimited per user. |
+| `assistant.open_knowledge.max_iterations` | Per turn | Hard cap on planner ↔ tool ↔ observation cycles. |
+| `assistant.open_knowledge.llm_timeout_ms` | Per LLM roundtrip | Caps each `/llm/chat` call to the ML sidecar independently. |
+
+### Tool Allowlist
+
+`assistant.open_knowledge.tool_allowlist` is the deny-by-default
+operator-controlled list of tool IDs the agent may call. v1 set is
+`internal_retrieval`, `web_search`, `unit_convert`, `calculator`
+(matching the spec 064 `policySnapshot.v1ToolSet`). Removing
+`web_search` produces an internal-knowledge-only deployment; the
+agent then returns
+`open_knowledge_refusal_total{cause="internal-only-restricted"}` for
+any query whose resolution required outbound retrieval. An empty
+list disables the subsystem effectively (no tools means no plan can
+execute).
+
+### Egress Allowlist
+
+`assistant.open_knowledge.allowed_egress_hosts` is the
+application-layer egress gate applied to every outbound HTTP from
+the open-knowledge subsystem. Entries MUST be bare hostnames (no
+scheme, port, path, or userinfo); wildcards are NOT supported in
+v1. The provider's configured `provider_endpoint` host is implicitly
+allowed. Empty list = provider endpoint only (deny-by-default per
+G028).
+
+Operators using `brave` or `tavily` MUST add the provider's API host
+to this list. Operators using `searxng` typically leave this list
+empty because all egress flows through the in-cluster SearxNG
+container. PKT-020-A asks spec 020 to layer wildcard support plus a
+network-layer firewall on top of this application-layer gate; until
+then, this is the only egress control specific to the open-knowledge
+subsystem.
+
+### Circuit Breaker
+
+The web provider is wrapped in a per-process circuit breaker keyed on
+consecutive countable failures (transport unreach, quota exceeded).
+All three thresholds are REQUIRED:
+
+| SST key | Default in committed YAML | Meaning |
+|---------|---------------------------|---------|
+| `assistant.open_knowledge.circuit_breaker.failure_threshold` | `5` | Consecutive failures that trip Closed → Open. |
+| `assistant.open_knowledge.circuit_breaker.open_window_seconds` | `60` | Documented Open window for operator dashboards. |
+| `assistant.open_knowledge.circuit_breaker.half_open_after_seconds` | `30` | Elapsed time before exactly one HalfOpen probe is allowed. |
+
+When the breaker is Open, the agent short-circuits to
+`open_knowledge_refusal_total{cause="provider-unavailable"}` without
+calling the provider. PKT-022-A asks spec 022 to review these defaults
+against the operational-resilience playbook.
+
+### Refusal Taxonomy
+
+Operators MUST recognise these refusal causes in metrics and logs.
+The full closed vocabulary lives in
+[`internal/assistant/contracts/refusal.go`](../internal/assistant/contracts/refusal.go)
+(`RefusalCause` type, `AllRefusalCauses` slice). The open-knowledge
+agent emits one of the following on every non-success turn:
+
+| Cause | Triggered when | First-line check |
+|-------|----------------|------------------|
+| `budget_exhausted` | Per-turn iteration / token / USD cap hit. | Inspect `open_knowledge_refusal_total{cause="budget-exhausted-turn"}` rate. Tune `per_query_*` budgets up or investigate planner regression. |
+| `tool_unavailable` | A required tool returned a hard error or was disabled mid-turn. | Cross-reference with `web_search_provider_errors_total` and tool-side logs; check breaker state. |
+| `provider-unavailable` | Circuit breaker Open. | Inspect `web_provider_circuit_state` gauge; wait for the half-open probe or investigate provider quota. |
+| `fabricated_source_blocked` | Cite-back verifier rejected the planner's citations (none hash-match the per-turn tool trace). | Inspect `fabricated_source_total` rate. A non-zero rate is a security signal — see security posture below. |
+| `internal_only_restricted` | Operator removed `web_search` from `tool_allowlist` but the query needed outbound retrieval. | Expected if the operator chose internal-only mode; otherwise re-add `web_search`. |
+| `ambiguous_not_clarified` | Planner could not pick a search target and the disambiguation budget was exhausted. | Inspect the user prompt; consider raising `max_iterations` or improving the user-facing disambiguation hint. |
+| `budget-exhausted-monthly` | `monthly_budget_usd` or `per_user_monthly_budget_usd` exceeded. | Operator decision: raise the cap, or accept the deny for the rest of the month. |
+
+Every refusal path persists an `Idea` artifact for the original
+prompt (capture-as-fallback invariant per spec.md §3 Hard Constraint 1),
+so no user input is lost regardless of cause.
+
+### Metrics And Dashboard
+
+The open-knowledge subsystem emits the metrics named in spec.md §10
+under the `open_knowledge_*` and `web_provider_*` prefixes. The
+Prometheus dashboard wiring is **pending** under route packet
+PKT-049-A (routed to spec 049). Until that lands, operators can
+inspect the metrics directly via the core `/metrics` endpoint
+(`./smackerel.sh status` shows the endpoint).
+
+### Security Posture
+
+Three layered controls protect the deployment:
+
+1. **Egress allowlist** (`allowed_egress_hosts` + implicit
+   `provider_endpoint`) — application-layer host gate. Every
+   outbound HTTP from the open-knowledge subsystem is checked before
+   the dialler runs.
+2. **Cite-back verifier** — mechanical, non-LLM checker that every
+   final-answer citation hash-matches a per-turn tool result. The
+   LLM is NEVER trusted to attest its own grounding.
+   `fabricated_source_total > 0` is the security signal.
+3. **Prompt-injection detection metric** — emitted on tool-output
+   inspection per spec.md §6.4. A sustained non-zero rate indicates
+   either a hostile upstream snippet or a planner regression; both
+   warrant investigation.
+
+### Troubleshooting
+
+| Symptom | Likely cause | First-line check |
+|---------|--------------|------------------|
+| All open-knowledge turns refuse with `budget-exhausted-turn` | `per_query_token_budget` or `per_query_usd_budget` set too low for the configured LLM. | Inspect prior-day refusal rate; raise the budget or pick a cheaper model. |
+| Sustained `provider-unavailable` | Circuit breaker Open for longer than `half_open_after_seconds`. | Check provider status; inspect `web_search_provider_errors_total` for the dominant error kind (transport vs quota). |
+| `fabricated_source_total > 0` | LLM contract drift, prompt regression, or a hostile snippet causing the planner to confabulate. | Pull the per-turn trace (redacted log); review the prompt contract and the offending snippet. |
+| All turns refuse with `internal-only-restricted` | `web_search` removed from `tool_allowlist`. | Re-add `web_search` to the allowlist OR accept the internal-only posture. |
+| SearxNG container crash-loops | Missing or malformed `assistant.open_knowledge.searxng.secret_key`. | Verify the key is non-empty in the resolved env; inspect SearxNG container logs. Operators MUST override the committed dev/test placeholder before any real deployment. |
+| `open_knowledge_refusal_total{cause="budget-exhausted-monthly"}` spike | Monthly cap hit. | Operator decision: raise `monthly_budget_usd` / `per_user_monthly_budget_usd` or accept the deny. |
+
+### Privacy Note
+
+Enabling `web_search` introduces an outbound data-flow path: the
+user's prompt (or a planner-derived query string) is sent to the
+configured provider. The SearxNG self-hosted provider is the
+local-first mitigation — query strings reach upstream engines via
+SearxNG's anonymising proxy rather than directly identifying the
+deployment. Brave and Tavily are SaaS; operators choosing them
+accept that the provider sees query strings and source IP. Document
+this for the deployment's privacy posture.
 
 

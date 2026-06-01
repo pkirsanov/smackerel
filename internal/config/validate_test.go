@@ -958,6 +958,42 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("EXTENSION_INGEST_DEFAULT_DEDUP_WINDOW_SECONDS", "1800")
 	t.Setenv("EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES", `["bookmark","browser_history_visit"]`)
 	t.Setenv("EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE", "extension:bookmarks,history")
+
+	// Spec 064 SCOPE-03 — open-ended knowledge agent SST baselines.
+	// Defaults mirror config/smackerel.yaml (enabled=false ships) so
+	// Load() succeeds; dedicated openknowledge_test.go cases exercise
+	// the fail-loud paths against each missing/invalid field.
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_ENABLED", "false")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PROVIDER", "searxng")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_ENDPOINT", "")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PROVIDER_API_KEY", "")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_LLM_MODEL_ID", "")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_MAX_ITERATIONS", "8")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_TOKEN_BUDGET", "8000")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PER_QUERY_USD_BUDGET", "0.05")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_MONTHLY_BUDGET_USD", "0")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_PER_USER_MONTHLY_BUDGET_USD", "0")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_TOOL_ALLOWLIST", `[]`)
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_WEB_SNIPPET_CACHE_ENABLED", "false")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_LLM_TIMEOUT_MS", "30000")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_ALLOWED_EGRESS_HOSTS", `[]`)
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_OPEN_WINDOW_SECONDS", "60")
+	t.Setenv("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_HALF_OPEN_AFTER_SECONDS", "30")
+
+	// Spec 068 SCOPE-1 — Structured Intent Compiler SST baselines.
+	// Defaults mirror config/smackerel.yaml so Load() succeeds; the
+	// dedicated TestIntentCompilerConfigRequiresEverySSTKey exercises
+	// the fail-loud paths against each missing/invalid field.
+	t.Setenv("ASSISTANT_INTENT_COMPILER_ENABLED", "false")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_MODEL_ROLE", "assistant_intent_compiler")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_PROMPT_CONTRACT_VERSION", "intent-compiler-v1")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_SCHEMA_VERSION", "v1")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_TIMEOUT_MS", "5000")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_CONFIDENCE_FLOOR", "0.6")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_MAX_CONTEXT_TURNS", "8")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_MAX_OUTPUT_BYTES", "16384")
+	t.Setenv("ASSISTANT_INTENT_COMPILER_RETRY_BUDGET", "1")
 }
 
 func TestValidate_DBMaxConns_Missing(t *testing.T) {
