@@ -1428,6 +1428,20 @@ OUTPUT_FILE="$REPO_ROOT/config/generated/${TARGET_ENV}.env"
 # regression. NO-DEFAULTS / fail-loud per Gate G028.
 OUTPUT_FILE_TMP="${OUTPUT_FILE}.tmp.$$"
 
+# Spec 064 SCOPE-17 — Aggregate enabled Docker Compose profiles from
+# the SST ENABLE_<PROFILE> flags into a single COMPOSE_PROFILES value.
+# Docker Compose natively reads COMPOSE_PROFILES from --env-file, so
+# any deploy adapter that invokes `docker compose --env-file app.env up`
+# automatically includes these profiles without needing per-adapter
+# --profile wiring. This is the durable, target-agnostic contract:
+# SST owns which profiles are active; Compose honors it natively.
+# To add a new profile-gated service, set ENABLE_<PROFILE>=true via
+# SST and append it to the aggregation below.
+_compose_profiles=()
+if [[ "${OLLAMA_ENABLED:-false}" == "true" ]]; then _compose_profiles+=(ollama); fi
+if [[ "${SEARXNG_ENABLED:-false}" == "true" ]]; then _compose_profiles+=(searxng); fi
+COMPOSE_PROFILES="$(IFS=,; echo "${_compose_profiles[*]:-}")"
+
 cat > "$OUTPUT_FILE_TMP" <<EOF
 # Auto-generated from config/smackerel.yaml — DO NOT EDIT DIRECTLY
 # Regenerate: ./smackerel.sh config generate
@@ -1484,6 +1498,10 @@ ENABLE_OLLAMA=${OLLAMA_ENABLED}
 # Spec 064 SCOPE-07 — SearxNG SST emission. runtime.sh adds
 # --profile searxng to docker compose iff ENABLE_SEARXNG is truthy.
 ENABLE_SEARXNG=${SEARXNG_ENABLED}
+# Spec 064 SCOPE-17 — Docker Compose native profile activation.
+# Computed above from ENABLE_<PROFILE> flags. Compose reads this
+# automatically from --env-file, so adapters need NO --profile flag.
+COMPOSE_PROFILES=${COMPOSE_PROFILES}
 SEARXNG_HOST_PORT=${SEARXNG_HOST_PORT}
 SEARXNG_BIND_ADDRESS=${SEARXNG_BIND_ADDRESS}
 SEARXNG_IMAGE=${SEARXNG_IMAGE}
