@@ -587,6 +587,18 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	// --- Step 6: band-driven dispatch ---
 	var invocation *agent.InvocationResult
 
+	// Spec 064 SCOPE-17 — when the substrate router returned a resolved
+	// fallback scenario (decision.Reason == ReasonFallbackClarify with
+	// decision.Chosen set), promote BandLow → BandHigh so the executor
+	// runs the fallback (e.g. open_knowledge) instead of the facade
+	// jumping straight to capture-as-fallback. This is what makes
+	// AGENT_ROUTING_FALLBACK_SCENARIO_ID=open_knowledge actually engage
+	// for bare prompts. The post-execution capture-route hook still
+	// fires unconditionally for capture-as-fallback semantics.
+	if band == BandLow && decision.Reason == agent.ReasonFallbackClarify && decision.Chosen != "" {
+		band = BandHigh
+	}
+
 	switch band {
 	case BandLow:
 		resp = contracts.AssistantResponse{
