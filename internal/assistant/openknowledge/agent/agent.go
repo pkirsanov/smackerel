@@ -284,34 +284,21 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 
 		switch result.StopReason {
 		case llm.StopEndTurn:
-			finalText, citations, parseErr := parseCitations(result.FinalText)
-			if parseErr != nil {
-				// Forced-final-turn salvage: when the model wrote a
-				// text answer on the last iteration but forgot the
-				// <CITATIONS> block, treat the recorded tool-trace
-				// sources as the citation set. The text is grounded
-				// (the forced-turn prompt is "answer based ONLY on
-				// tool results above"), so refusing as
-				// fabricated_source would punish a well-formed answer
-				// for a formatting omission. Only applies on the last
-				// iteration AND only when sources exist in trace.
-				isForcedFinalTurn := iter == a.cfg.MaxIterations-1
+			isForcedFinalTurn := iter == a.cfg.MaxIterations-1
+			// Forced-final-turn empty-text salvage: when the model
+			// returned no text on the forced synthesis turn (gemma
+			// sometimes goes blank when tools are stripped),
+			// synthesize a body directly from the recorded tool
+			// snippets. The user gets a real answer composed from
+			// real evidence instead of a refusal from empty output.
+			if isForcedFinalTurn && strings.TrimSpace(result.FinalText) == "" {
 				autoSources := collectTraceSources(trace)
-				trimmedText := strings.TrimSpace(result.FinalText)
-				slog.Info("openknowledge.salvage_check",
-					"iter", iter,
-					"max_iter", a.cfg.MaxIterations,
-					"is_forced", isForcedFinalTurn,
-					"trace_len", len(trace),
-					"auto_sources", len(autoSources),
-					"text_len", len(trimmedText),
-					"final_text_preview", truncatePreview(result.FinalText, 200),
-				)
-				if isForcedFinalTurn && len(trace) > 0 {
-					if len(autoSources) > 0 && trimmedText != "" {
+				if len(autoSources) > 0 {
+					body := synthesizeFromSnippets(trace)
+					if body != "" {
 						return finalize(TurnResult{
 							Status:             StatusSuccess,
-							FinalText:          trimmedText,
+							FinalText:          body,
 							Sources:            autoSources,
 							ToolTrace:          trace,
 							TerminationReason:  TerminationFinal,
@@ -320,6 +307,31 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 							CompactionSignaled: a.compactionSignaled(budget),
 						}), nil
 					}
+				}
+			}
+			finalText, citations, parseErr := parseCitations(result.FinalText)
+			if parseErr != nil {
+				// Forced-final-turn missing-CITATIONS salvage: when
+				// the model wrote a text answer on the last iteration
+				// but forgot the <CITATIONS> block, treat the
+				// recorded tool-trace sources as the citation set.
+				// The text is grounded (the forced-turn prompt is
+				// "answer based ONLY on tool results above"), so
+				// refusing as fabricated_source would punish a
+				// well-formed answer for a formatting omission.
+				autoSources := collectTraceSources(trace)
+				trimmedText := strings.TrimSpace(result.FinalText)
+				if isForcedFinalTurn && len(trace) > 0 && len(autoSources) > 0 && trimmedText != "" {
+					return finalize(TurnResult{
+						Status:             StatusSuccess,
+						FinalText:          trimmedText,
+						Sources:            autoSources,
+						ToolTrace:          trace,
+						TerminationReason:  TerminationFinal,
+						TokensUsed:         budget.TokensUsed(),
+						USDSpent:           budget.USDSpent(),
+						CompactionSignaled: a.compactionSignaled(budget),
+					}), nil
 				}
 				return refuse(TerminationFabricatedSource, parseErr.Error()), nil
 			}
@@ -485,6 +497,42 @@ func truncatePreview(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// synthesizeFromSnippets builds a plain-text answer from the recorded
+// tool snippets when the model returned empty text on the forced
+// synthesis turn. Concatenates the first non-empty snippet text from
+// each tool invocation, capped at a reasonable length. The result is
+// "grounded by construction" — every word comes from a tool_result.
+func synthesizeFromSnippets(trace []ToolTraceEntry) string {
+	var parts []string
+	totalLen := 0
+	const maxBodyChars = 1500
+	for _, e := range trace {
+		if e.Result == nil {
+			continue
+		}
+		for _, snip := range e.Result.Snippets {
+			text := strings.TrimSpace(snip.Text)
+			if text == "" {
+				continue
+			}
+			if totalLen+len(text) > maxBodyChars {
+				remaining := maxBodyChars - totalLen
+				if remaining > 50 {
+					parts = append(parts, text[:remaining]+"...")
+				}
+				return strings.Join(parts, "\n\n")
+			}
+			parts = append(parts, text)
+			totalLen += len(text) + 2
+			break // one snippet per tool call is enough
+		}
+		if totalLen >= maxBodyChars {
+			break
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // collectTraceSources flattens all ok.Source entries recorded by tool
