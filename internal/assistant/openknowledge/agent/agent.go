@@ -255,7 +255,22 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 
 	for iter := 0; iter < a.cfg.MaxIterations; iter++ {
 		iterations = iter + 1
-		req := llm.ChatRequest{Model: a.cfg.Model, Messages: messages, Tools: tools}
+		// Final-turn forcing: on the LAST iteration, strip tools from
+		// the request and inject a synthesizer reminder so the model
+		// is forced to produce a text answer instead of another
+		// tool_call (which would hit cap_iterations). Without this,
+		// gemma-class models tend to keep searching indefinitely
+		// rather than synthesizing from prior results.
+		requestTools := tools
+		requestMessages := messages
+		if iter == a.cfg.MaxIterations-1 && len(trace) > 0 {
+			requestTools = nil
+			requestMessages = append(append([]llm.ChatMessage{}, messages...), llm.ChatMessage{
+				Role:    llm.RoleUser,
+				Content: "You have used all your tool calls. Based ONLY on the tool results above, write your final answer NOW. Include the <CITATIONS>[...]</CITATIONS> block at the end. If results are insufficient, write a short refusal explaining what you searched, followed by <CITATIONS>[]</CITATIONS>.",
+			})
+		}
+		req := llm.ChatRequest{Model: a.cfg.Model, Messages: requestMessages, Tools: requestTools}
 		result, err := a.llm.Chat(ctx, req)
 		if err != nil {
 			return TurnResult{}, fmt.Errorf("openknowledge/agent: llm chat: %w", err)
