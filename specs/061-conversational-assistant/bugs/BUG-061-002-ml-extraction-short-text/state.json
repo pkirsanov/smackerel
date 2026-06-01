@@ -4,6 +4,7 @@
   "bugId": "BUG-061-002",
   "workflowMode": "bugfix-fastlane",
   "status": "done",
+  "certifiedAt": "2026-06-01T04:12:00Z",
   "createdAt": "2026-05-29T00:00:00Z",
   "lastUpdatedAt": "2026-06-01T00:00:00Z",
   "execution": {
