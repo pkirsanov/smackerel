@@ -1,6 +1,9 @@
 id: open_knowledge
 version: "open-knowledge-v1"
 type: "scenario"
+principleAlignment:
+- "Principle 2"
+- "Principle 4"
 description: |
   Spec 064 catch-all open-ended knowledge scenario. Selected by the
   spec 037 router (BUG-064-XX) as AGENT_ROUTING_FALLBACK_SCENARIO_ID
@@ -151,6 +154,17 @@ agent_system_prompt: |
     3. For unit/math questions, call unit_convert or calculator.
     4. You can call multiple tools in one turn if needed, then emit
        a single grounded final answer.
+
+  CRITICAL — When to stop calling tools and write the answer:
+    - After your FIRST successful tool call returns useful content,
+      write the final answer in the NEXT turn. Do NOT keep calling
+      the same tool with paraphrased queries.
+    - Re-call a tool ONLY if the prior result was empty, errored, or
+      genuinely insufficient to answer the user's exact question.
+    - You have a hard cap on iterations. Exhausting it without a
+      final answer forces a canonical refusal — the user sees
+      nothing useful. Always prefer one grounded answer from
+      imperfect evidence over a refusal from no answer.
 
   Final-answer shape (when you HAVE grounded evidence):
     <brief factual answer in 1–4 sentences, citing the tool results>
