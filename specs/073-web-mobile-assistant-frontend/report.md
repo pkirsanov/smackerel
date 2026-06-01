@@ -190,3 +190,98 @@ Status remains `in_progress` with `planMaturityOnly=true`. No terminal status or
 ## Validation Summary
 
 Artifact lint is captured in the invoking agent result envelope for this planning pass.
+
+---
+
+### SCOPE-073-02 — Web Chat Vertical Slice authoring (`bubbles.implement`, 2026-06-01)
+
+**Phase:** implement
+**Agent:** bubbles.implement
+**Claim Source:** executed
+
+Authored the web client and its three live e2e Go tests, plus
+documentation stubs under `web/pwa/tests/`.
+
+#### Web client (TP-073-09 / TP-073-10 / TP-073-11 implementation surface)
+
+Files added:
+
+- [`web/pwa/assistant.html`](../../web/pwa/assistant.html) — composer, transcript, response live region, sources list, controls slot, retry button, deterministic tab order (composer=1, send=2, disambig=3, confirm=4, retry=5), `aria-live="polite"` + `role="status"` on `#assistant-response`, `role="alert"` on `#assistant-error`, module script tag.
+- [`web/pwa/assistant.js`](../../web/pwa/assistant.js) — same-origin `fetch('/api/assistant/turn', { credentials: 'same-origin' })`, stable per-attempt `transport_message_id` via `crypto.randomUUID`, retained `pendingTurn` so the retry button reuses the same id and body until the user edits the composer, render-by-shape projection of body / sources / disambiguation / confirm / capture-route / error, imports `validateTurnRequest` / `validateTurnResponse` / `SCHEMA_VERSION` from the spec 069 generated module. The module contains no `localStorage`, `sessionStorage`, `indexedDB`, `IDBFactory`, `caches.open`, `caches.match`, `CacheStorage`, or `document.cookie` references.
+
+Build/regression guards re-run on the new client:
+
+```text
+$ go vet -tags e2e ./tests/e2e/assistant/
+(no output)
+
+$ go test -count=1 -timeout 60s -run 'TestWebAssistantCodegen|TestWebAssistantStorageGuard' ./web/pwa/tests/
+ok      github.com/smackerel/smackerel/web/pwa/tests    0.011s
+```
+
+`TestWebAssistantStorageGuard_TP_073_06` and its adversarial sibling
+cover the new `assistant.js` automatically (the guard's `guardedPaths`
+discovers `web/pwa/assistant*.js` dynamically).
+
+#### Live e2e tests (TP-073-09 / TP-073-10 / TP-073-11)
+
+Files added:
+
+- [`tests/e2e/assistant/web_pwa_chat_e2e_test.go`](../../tests/e2e/assistant/web_pwa_chat_e2e_test.go) — `TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09`. GETs `/pwa/assistant.html` + `/pwa/assistant.js` from the live core, asserts every DOM hook and the same-origin fetch wiring, asserts the absence of `localStorage` / `sessionStorage` / `indexedDB` / `document.cookie` references, then POSTs an authenticated turn at `/api/assistant/turn` and asserts strict TurnResponse v1 fields (`schema_version=v1`, `transport=http`, `transport_message_id` echo, `facade_invoked=true`).
+- [`tests/e2e/assistant/web_pwa_retry_e2e_test.go`](../../tests/e2e/assistant/web_pwa_retry_e2e_test.go) — `TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10` (two POSTs with same `transport_message_id` → identical `trace.assistant_turn_id` + identical body) and `TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial` (two POSTs with distinct ids → distinct `assistant_turn_id`, which proves the parity check is not tautological).
+- [`tests/e2e/assistant/web_pwa_accessibility_e2e_test.go`](../../tests/e2e/assistant/web_pwa_accessibility_e2e_test.go) — `TestAssistantWebPWAAccessibilityE2E_LiveRegionLabelledComposerAndTabOrder_TP_073_11`. Asserts `#assistant-response` carries both `role="status"` and `aria-live="polite"`, composer label `for="assistant-composer-input"`, error region `role="alert"`, module script tag, and the tab-order regex on composer (`tabindex=1`), send (`tabindex=2`), and retry (`tabindex=5`). Disambiguation choices (3) and confirm pair (4) are emitted dynamically by `assistant.js` when the live response carries those shapes.
+
+Documentation stubs added under `web/pwa/tests/` matching the planned
+test-plan rows: `assistant_chat.spec.ts`, `assistant_retry.spec.ts`,
+`assistant_accessibility.spec.ts`. Each stub explicitly points at its
+paired Go test for the real live-stack coverage and notes that the
+Playwright runner is not yet wired into `./smackerel.sh test e2e`.
+
+#### Build / vet validation
+
+```text
+$ go vet -tags e2e ./tests/e2e/assistant/
+(no output — all three new e2e test files compile cleanly under the e2e build tag)
+```
+
+#### TP-073-09 / TP-073-10 / TP-073-11 live-run status
+
+**Not run under this implement pass.** A prior queued
+`./smackerel.sh test integration --go-run '^TestAssistantTransportHint_...'`
+attempt (TP-073-05) failed at the integration test-stack startup
+with EXIT=124 because `config-generate` rejected the test env:
+
+```text
+ERROR: [F061-SST-MISSING] missing or invalid required assistant configuration:
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_ENABLED,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_PROVIDER,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_TIMEOUT_MS,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_CACHE_TTL_SECONDS,
+  ASSISTANT_TOOLS_LOCATION_NORMALIZE_CACHE_MAX_ENTRIES,
+  ASSISTANT_TOOLS_UNIT_CONVERT_ENABLED,
+  ASSISTANT_TOOLS_UNIT_CONVERT_CATALOG_VERSION,
+  ASSISTANT_TOOLS_CALCULATOR_ENABLED,
+  ASSISTANT_TOOLS_CALCULATOR_MAX_EXPRESSION_CHARS,
+  ASSISTANT_TOOLS_ENTITY_RESOLVE_ENABLED,
+  ASSISTANT_TOOLS_ENTITY_RESOLVE_CONFIDENCE_FLOOR,
+  ASSISTANT_TOOLS_ENTITY_RESOLVE_TIMEOUT_MS
+ERROR: config-generate-time validation failed for env=test
+EXIT=124
+```
+
+That is a missing-required-key gap in `config/smackerel.yaml` /
+`config/generated/test.env` owned by the assistant microtools work
+(spec 074), not by spec 073. The integration and e2e stacks both
+boot through the same `./smackerel.sh config generate` SST pipeline
+that is currently rejecting the test env, so **TP-073-05**,
+**TP-073-08**, **TP-073-09**, **TP-073-10**, and **TP-073-11** all
+need a successful live-stack boot before they can be run for
+current-session evidence. This is routed to the spec 074 owner for
+fail-loud config remediation; once the integration test env passes
+`config-generate`, all five live rows are ready to run.
+
+**Uncertainty Declaration:** SCOPE-073-02 DoD items are not marked
+done. The web client and the three live e2e tests exist, compile,
+and pass static guards, but the live `./smackerel.sh test e2e`
+execution evidence required by TP-073-09 / TP-073-10 / TP-073-11 is
+blocked behind the spec-074 config-generate gap above.

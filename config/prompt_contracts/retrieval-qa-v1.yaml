@@ -1,5 +1,7 @@
 id: retrieval_qa
 version: "retrieval-qa-v1"
+principleAlignment:
+  - "Principle 2"
 type: "scenario"
 description: "Answer a user question over the user's knowledge graph with artifact-ID citations."
 

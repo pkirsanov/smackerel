@@ -23,6 +23,7 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 ### Validation Checkpoints
 
 - After Scope 1, unit and contract tests prove schema v1 is pinned and accepted turns invoke `Facade.Handle` exactly once. The HTTP-route e2e tests for spec 068 compiler scenarios SCN-068-A01, SCN-068-A02, SCN-068-A03, SCN-068-A04, SCN-068-A05, SCN-068-A06, SCN-068-A07, and SCN-068-A09 also land in this scope because the assistant HTTP ingress they exercise first becomes real here.
+- After Scope 1c-bis, unit tests prove every `assistant.transports.http.*` SST key (`HTTPEnabled`, `HTTPSchemaVersion`, `HTTPBodySizeMaxBytes`, `HTTPRateLimitPerUserPerMinute`, `HTTPConversationTTL`, `HTTPRequiredScope`, `HTTPCORSAllowedOrigins`, `HTTPTransportHintAllowlist`) is required, typed, and fails loud on absent/empty values with no fallback defaults. This unblocks Scope 1d's `cfg.Assistant.HTTP*` consumption and Scope 2's middleware enforcement.
 - After Scope 1d, an integration test against the live `cmd/core` wiring proves `POST /api/assistant/turn` returns HTTP 200 (not 503) for a valid bearer turn, because `wireAssistantFacade` constructs `*HTTPAdapter` via `httpadapter.NewHTTPAdapter` and calls `assistantHTTPHandler.SetAdapter` + `SetMiddleware` exactly once per process. This unblocks every live-stack e2e row in Scopes 1, 2, 3, 4, and 5 and resolves F074-04B-ASSISTANT-HTTP-LATE-BIND.
 - After Scope 2, integration tests prove 401, 403, 413, and 429 reject before the facade and missing HTTP transport config fails loud.
 - After Scope 3, HTTP E2E tests prove disambiguation and confirmation round trips preserve pending state and user identity.
@@ -34,8 +35,9 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 | Scope | Name | Depends On | Surfaces | Primary Tests | DoD Summary | Status |
 |-------|------|------------|----------|---------------|-------------|--------|
 | 1 | HTTP Adapter Contract and Wire Schema | None | adapter package, route, schema, golden tests, spec 068 compiler HTTP e2e tests (A01-A07, A09) | unit, e2e-api, Regression E2E, cross-spec e2e | route calls facade once; schema v1 pinned; SCN-068-A01/A02/A03/A04/A05/A06/A07/A09 HTTP e2e land here | Not Started |
-| 1d | HTTPAdapter Construction and LateBound Binding (rework) | 1 | `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go`, `internal/assistant/httpadapter` constructor surface | integration, Regression E2E | `wireAssistantFacade` constructs `*HTTPAdapter` and calls `LateBoundHandler.SetAdapter`+`SetMiddleware`; `POST /api/assistant/turn` returns 200 not 503 against live wiring | Not Started |
-| 2 | Auth, Scope, and Limit Rejections | 1, 1d, specs/060 | auth middleware, scope claim, rate/body/CORS config | integration, Regression E2E | 401/403/413/429 pre-facade rejection | Not Started |
+| 1c-bis | HTTP Transport SST Contract | 1 | `internal/config` AssistantConfig HTTP block, `config/smackerel.yaml` schema, generated env keys | unit | every `assistant.transports.http.*` SST key required, typed, fail-loud (NO-DEFAULTS) | Not Started |
+| 1d | HTTPAdapter Construction and LateBound Binding (rework) | 1, 1c-bis | `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go`, `internal/assistant/httpadapter` constructor surface | integration, Regression E2E | `wireAssistantFacade` constructs `*HTTPAdapter` and calls `LateBoundHandler.SetAdapter`+`SetMiddleware`; `POST /api/assistant/turn` returns 200 not 503 against live wiring | Not Started |
+| 2 | Auth, Scope, and Limit Rejections | 1, 1c-bis, 1d, specs/060 | auth middleware, scope claim, rate/body/CORS enforcement | integration, Regression E2E | 401/403/413/429 pre-facade rejection using SST values from 1c-bis | Not Started |
 | 3 | Disambiguation and Confirmation Round Trips | 1, 2 | pending state, callback request kinds, confirmation gate | e2e-api, integration, Regression E2E | disambig/confirm parity with Telegram | Not Started |
 | 4 | Reset and Capture Rendering | 1, 2, 3 | reset kind, capture path, acknowledgement shape | e2e-api, integration, Regression E2E | reset clears state; capture invoked once | Not Started |
 | 5 | Transport Parity, Hint Neutrality, and Live E2E Suite | 1a, 1b, 1c, 2, 3, 4, specs/068 | parity tests, hint validation, assistant E2E suite | unit, integration, e2e-api, stress | no transport branching; HTTP drives live assistant suite | In Progress (live integration + e2e GREEN pending foreign blocker resolution) |
@@ -119,10 +121,67 @@ Scenario: SCN-069-A07 — Schema is pinned by a golden contract test
 
 ---
 
-## Scope 1d: HTTPAdapter Construction and LateBound Binding (Rework)
+## Scope 1c-bis: HTTP Transport SST Contract
 
 **Status:** Not Started  
 **Depends On:** Scope 1  
+**Tags:** foundation:true, contract  
+**Surfaces:** `internal/config` (AssistantConfig HTTP block), `config/smackerel.yaml` schema additions, generated env keys under `assistant.transports.http.*`.
+
+### Rationale
+
+Scope 1d's wiring block reads `cfg.Assistant.HTTPEnabled` and the broader `cfg.Assistant.HTTP*` struct, and Scope 2's middleware enforces values pulled from the same struct. Those fields were originally folded into Scope 2's plan as "Validate explicit CORS origin config and conversation TTL config with fail-loud errors" plus the unit row `TestAssistantHTTPTransportConfigRequiresEverySSTKey`. Promoting the SST contract into its own foundation scope removes the SCOPE-1d → SCOPE-2 cycle: SCOPE-1d cannot construct `*HTTPAdapter` without the typed config, but SCOPE-2 cannot author its rejection middleware before SCOPE-1d binds. SCOPE-1c-bis lands the contract once so SCOPE-1d and SCOPE-2 both consume it.
+
+### Gherkin Scenarios
+
+```gherkin
+Scenario: SCN-069-A13 — HTTP transport SST keys are required and fail loud
+  Given config/smackerel.yaml declares assistant.transports.http with HTTPEnabled, HTTPSchemaVersion, HTTPBodySizeMaxBytes, HTTPRateLimitPerUserPerMinute, HTTPConversationTTL, HTTPRequiredScope, HTTPCORSAllowedOrigins, and HTTPTransportHintAllowlist
+  When config generation or assistant config load runs
+  Then every key is required, typed, and validated (no defaults, no fallbacks)
+  And omitting or empty-stringing any key fails loud with a named error citing the missing key
+  And the loaded AssistantConfig exposes the typed HTTP block consumed by Scope 1d wiring and Scope 2 middleware
+```
+
+### UI Scenario Matrix
+
+| Scenario | Preconditions | Steps | Expected | Test Type | Evidence |
+|----------|---------------|-------|----------|-----------|----------|
+| SCN-069-A13 | Test fixtures with full and partial HTTP config blocks | Load AssistantConfig; remove each key in turn | Full block parses to typed struct; each removal fails loud naming the missing key | unit | `report.md#scope-1c-bis` |
+
+### Implementation Plan
+
+- Add typed `HTTPTransportConfig` (or equivalent) on `AssistantConfig` with fields `HTTPEnabled`, `HTTPSchemaVersion`, `HTTPBodySizeMaxBytes`, `HTTPRateLimitPerUserPerMinute`, `HTTPConversationTTL`, `HTTPRequiredScope`, `HTTPCORSAllowedOrigins`, `HTTPTransportHintAllowlist`.
+- Extend `config/smackerel.yaml` schema and the config-generation pipeline so every key emits to `config/generated/{dev,test}.env` and the loader rejects missing/empty values with named errors per `smackerel-no-defaults` SST policy.
+- Validate value shapes (numeric ranges, duration parsing, non-empty allowlists, scope spelling resolvable against spec 060) at load time; no runtime fallbacks.
+- Do NOT touch route mount, adapter, middleware implementation, or wiring — those are SCOPE-1d and SCOPE-2 surfaces.
+- **Shared Infrastructure Impact Sweep:** AssistantConfig is consumed by Telegram adapter wiring and existing assistant code paths. Canary: existing `internal/config` tests and Telegram adapter config tests remain GREEN after the new HTTP block lands.
+- **Change Boundary:** allowed file families: `internal/config/*assistant*`, `config/smackerel.yaml`, config generation scripts, and the new SST contract test file. Excluded: `internal/assistant/httpadapter/`, `cmd/core/wiring*.go`, every API route mount, every middleware implementation.
+
+### Test Plan
+
+| Test Type | Category | Scenario Mapping | File/Location | Expected Test Title | Command | Live System |
+|-----------|----------|------------------|---------------|---------------------|---------|-------------|
+| Config fail-loud | unit | SCN-069-A13 | `internal/config/assistant_http_transport_test.go` | `TestAssistantHTTPTransportConfigRequiresEverySSTKey` | `./smackerel.sh test unit` | No |
+| Canary: existing AssistantConfig | unit | SCN-069-A13 | `internal/config/assistant_test.go` (existing) | existing AssistantConfig tests remain GREEN | `./smackerel.sh test unit` | No |
+
+### Definition of Done
+
+- [ ] `AssistantConfig` exposes a typed `HTTPTransportConfig` (or equivalent) with all eight required HTTP keys.
+- [ ] Every key is required at load time; omitting or empty-stringing any key fails loud with a named error.
+- [ ] `config/smackerel.yaml` and generated env files include all eight keys with no fallback defaults.
+- [ ] Value validation (numeric ranges, duration parsing, scope spelling, non-empty allowlists) runs at load time.
+- [ ] Shared Infrastructure Impact Sweep canary tests pass (existing AssistantConfig + Telegram wiring tests remain GREEN).
+- [ ] Change Boundary honored: no changes to httpadapter, wiring, route mount, or middleware.
+- [ ] Scenario-specific regression coverage exists for SCN-069-A13.
+- [ ] `./smackerel.sh test unit` and artifact lint pass for this spec.
+
+---
+
+## Scope 1d: HTTPAdapter Construction and LateBound Binding (Rework)
+
+**Status:** Not Started  
+**Depends On:** Scope 1, Scope 1c-bis  
 **Tags:** rework, finding:F-069-ADAPTER-NOT-BOUND, resolves:F074-04B-ASSISTANT-HTTP-LATE-BIND  
 **Surfaces:** `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go` (the `assistantHTTPHandler *httpadapter.LateBoundHandler` field), `internal/assistant/httpadapter` constructor surface.
 
@@ -151,7 +210,7 @@ Scenario: SCN-069-A12 — HTTP adapter is bound in production wiring
 
 ### Implementation Plan
 
-- In `cmd/core/wiring_assistant_facade.go::wireAssistantFacade`, after the Telegram adapter section, add an HTTP transport bind block guarded by `cfg.Assistant.HTTPEnabled` (closed-vocabulary SST key per Scope 2's config contract; the key MUST already exist before this scope merges).
+- In `cmd/core/wiring_assistant_facade.go::wireAssistantFacade`, after the Telegram adapter section, add an HTTP transport bind block guarded by `cfg.Assistant.HTTPEnabled` (closed-vocabulary SST key landed by Scope 1c-bis; SCOPE-1d MUST NOT proceed before SCOPE-1c-bis is Done).
 - Construct `*HTTPAdapter` via `httpadapter.NewHTTPAdapter(httpadapter.Options{...})` populating: `Facade: facade`, `Tracer: svc.assistantTracer`, `Now: time.Now`, `Config: cfg.Assistant.HTTP` (transport config struct), capture invoker, response-render hooks, and any other Options fields the Scope 1 constructor requires. Fail loud on any nil/missing dependency (G028/G029) — do NOT supply defaults.
 - Call `svc.assistantHTTPHandler.SetAdapter(adapter)` exactly once.
 - Call `svc.assistantHTTPHandler.SetMiddleware(<Scope 2 middleware chain>)` exactly once. When Scope 2 has not landed yet, set a fail-loud placeholder middleware that rejects every request with HTTP 500 + named error, so the wiring is structurally complete but cannot accidentally serve pre-auth traffic; Scope 2 replaces it.
@@ -184,8 +243,8 @@ Scenario: SCN-069-A12 — HTTP adapter is bound in production wiring
 ## Scope 2: Auth, Scope, and Limit Rejections
 
 **Status:** Not Started  
-**Depends On:** Scope 1, Scope 1d, specs/060-bearer-auth-scope-claim  
-**Surfaces:** bearer auth group, `assistant.turn`/configured scope claim, body-size cap, rate limiter, CORS config validation, error response schema.
+**Depends On:** Scope 1, Scope 1c-bis, Scope 1d, specs/060-bearer-auth-scope-claim  
+**Surfaces:** bearer auth group, `assistant.turn`/configured scope claim, body-size cap, rate limiter, CORS enforcement, error response schema. Consumes the typed HTTP transport config produced by Scope 1c-bis; does NOT own the SST contract.
 
 ### Gherkin Scenarios
 
@@ -213,9 +272,9 @@ Scenario: SCN-069-A10 — Rate limit and body-size cap from SST
 
 ### Implementation Plan
 
-- Mount the route behind existing bearer auth and spec 060 scope middleware using the implementation spelling selected in `assistant.transports.http.required_scope`.
-- Apply body-size cap and per-user rate limiter before JSON decode and facade invocation.
-- Validate explicit CORS origin config and conversation TTL config with fail-loud errors.
+- Mount the route behind existing bearer auth and spec 060 scope middleware using the implementation spelling selected in `assistant.transports.http.required_scope` (typed value supplied by Scope 1c-bis).
+- Apply body-size cap and per-user rate limiter (values supplied by Scope 1c-bis) before JSON decode and facade invocation.
+- Apply explicit CORS origin enforcement and conversation TTL using the typed values from Scope 1c-bis; this scope does NOT (re)validate the SST contract — that ownership is Scope 1c-bis.
 - Return stable error bodies that never echo tokens or secret headers.
 - **Shared Infrastructure Impact Sweep:** auth middleware, scope middleware, API router order, and rate limiter are shared surfaces. Canary rows validate existing auth endpoints and scope middleware before broad suite reruns.
 - **Change Boundary:** allowed file families are route middleware wiring, HTTP transport config, rate/body limit tests, and error schema tests. Excluded surfaces are token minting logic and unrelated API routes.
@@ -227,7 +286,6 @@ Scenario: SCN-069-A10 — Rate limit and body-size cap from SST
 | Missing bearer | integration | SCN-069-A02 | `tests/integration/api/assistant_http_auth_test.go` | `TestAssistantHTTPAuth_MissingBearerReturns401BeforeFacade` | `./smackerel.sh test integration` | Yes |
 | Missing scope | integration | SCN-069-A02 | `tests/integration/api/assistant_http_auth_test.go` | `TestAssistantHTTPAuth_MissingTurnScopeReturns403BeforeFacade` | `./smackerel.sh test integration` | Yes |
 | Limit rejection | integration | SCN-069-A10 | `tests/integration/api/assistant_http_limits_test.go` | `TestAssistantHTTPLimitsRejectBeforeFacadeInvocation` | `./smackerel.sh test integration` | Yes |
-| Config fail-loud | unit | SCN-069-A10 | `internal/config/assistant_http_transport_test.go` | `TestAssistantHTTPTransportConfigRequiresEverySSTKey` | `./smackerel.sh test unit` | No |
 | Regression E2E: pre-facade errors | e2e-api | SCN-069-A02, SCN-069-A10 | `tests/e2e/assistant/http_error_test.go` | `TestAssistantHTTPE2E_PreFacadeErrorsDoNotInvokeFacade` | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done
@@ -235,7 +293,7 @@ Scenario: SCN-069-A10 — Rate limit and body-size cap from SST
 - [ ] Missing or invalid bearer token returns 401 before facade invocation.
 - [ ] Missing required assistant-turn scope returns 403 before facade invocation.
 - [ ] Body-size and rate-limit rejections return 413/429 before facade invocation.
-- [ ] Required HTTP transport config keys fail loud at startup with named errors.
+- [ ] HTTP transport config keys are consumed from the typed SST contract landed in Scope 1c-bis (this scope does not own the fail-loud unit test).
 - [ ] Shared Infrastructure Impact Sweep canary tests pass before broad suite reruns.
 - [ ] Scenario-specific E2E regression coverage exists for SCN-069-A02 and SCN-069-A10.
 - [ ] Broader E2E regression suite passes.

@@ -1,4 +1,7 @@
 version: "digest-assembly-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "digest-assembly"
 description: "Assemble daily/weekly digest from pre-synthesized knowledge layer content"
 
