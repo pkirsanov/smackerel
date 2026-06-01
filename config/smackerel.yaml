@@ -559,6 +559,19 @@ observability:
   otel_enabled: false # Opt-in OpenTelemetry trace propagation (zero overhead when disabled)
   otel_exporter_endpoint: "" # OTLP gRPC endpoint (e.g. http://localhost:4317)
 
+# Spec 067 — Intent-Driven Policy Enforcement (CI guards). SST zero-defaults:
+# every key is REQUIRED at the generator boundary. Missing values fail loud at
+# config validate / guard bootstrap with the named missing key (G067-A08).
+# The baseline file path is repo-relative. The exception max age is an upper
+# bound on `expires_on` distance from now; expired entries are violations.
+# intent_bypass_guard_enabled is the strict on/off switch for the spec 068
+# compiler-bypass guard wired through this policy surface.
+policy:
+  scenario_prompt_max_lines: 120
+  policy_exception_baseline_path: policy-exception-baseline.json
+  policy_exception_max_age_days: 90
+  intent_bypass_guard_enabled: true
+
 # Spec 044 — Per-User Bearer Auth Foundation. SST zero-defaults: every key is
 # REQUIRED at the generator boundary. Secret-bearing fields are empty-string
 # placeholders here (dev/test fall back to runtime.auth_token shared-token
@@ -764,6 +777,40 @@ assistant:
       # start with "/" and MUST NOT collide with an existing API route.
       webhook_secret_ref: "" # REQUIRED ("" permitted when mode=long_poll); when mode=webhook MUST resolve to a non-empty secret
       webhook_path: "/v1/telegram/webhook" # REQUIRED: path starting with "/"; recommended /v1/telegram/webhook
+    # Spec 072 SCOPE-1 — WhatsApp Business Cloud API transport.
+    # Independent of Telegram (spec 072 SCN-072-A07): toggling
+    # whatsapp.enabled MUST NOT affect Telegram registration. Every key
+    # below is REQUIRED at the generator boundary (smackerel-no-defaults
+    # Gate G028). The Go validator (internal/config/assistant.go) enforces
+    # non-empty resolution of every secret-bearing field when enabled=true;
+    # when enabled=false the values are loaded but no ingress is mounted.
+    whatsapp:
+      enabled: false # REQUIRED: strict bool ("true"|"false")
+      webhook_path: "/v1/assistant/transports/whatsapp/webhook" # REQUIRED: chi route path; MUST start with "/" and not collide with reserved API routes
+      phone_number_id: "test-phone-id" # REQUIRED non-empty placeholder for dev/test; operators MUST override with real Meta WhatsApp Cloud API sender phone-number id before enabling
+      business_account_id: "test-business-id" # REQUIRED non-empty placeholder for dev/test; operators MUST override before enabling
+      webhook_verify_token_ref: "WHATSAPP_WEBHOOK_VERIFY_TOKEN" # REQUIRED non-empty env-var name holding the GET verify-token shared secret
+      app_secret_ref: "WHATSAPP_APP_SECRET" # REQUIRED non-empty env-var name holding Meta app secret used for X-Hub-Signature-256 HMAC
+      access_token_ref: "WHATSAPP_ACCESS_TOKEN" # REQUIRED non-empty env-var name holding the Cloud API bearer access token
+      identity_hash_key_ref: "WHATSAPP_IDENTITY_HASH_KEY" # REQUIRED non-empty env-var name holding the HMAC key used to hash inbound E.164 phone numbers
+      api_base_url: "https://graph.facebook.com" # REQUIRED: Cloud API base URL; MUST be HTTPS when enabled
+      api_version: "v20.0" # REQUIRED: closed-vocabulary Cloud API version token
+      rate_limit_per_user_per_minute: 30 # REQUIRED: integer >= 1
+      max_text_chars: 4096 # REQUIRED: integer >= 1; outbound text body cap
+    # Spec 069 SCOPE-1a — HTTP transport adapter SST. Every key is
+    # REQUIRED at the generator boundary (Gate G028 / smackerel-no-defaults).
+    # SCOPE-1a lands the keys; SCOPE-2 consumes body/rate/CORS/scope.
+    # When enabled=false the route stays mounted but returns 503
+    # "assistant_http_disabled" before facade invocation.
+    http:
+      enabled: true # REQUIRED: strict bool ("true"|"false")
+      schema_version: "v1" # REQUIRED: pinned wire schema version
+      body_size_max_bytes: 65536 # REQUIRED: integer >= 1
+      rate_limit_per_user_per_minute: 60 # REQUIRED: integer >= 1
+      cors_allowed_origins: [] # REQUIRED: explicit origin list (empty = same-origin only)
+      conversation_ttl_seconds: 86400 # REQUIRED: integer >= 1
+      transport_hint_allowlist: [ "web", "mobile", "bridge" ] # REQUIRED: non-empty closed-vocabulary list
+      required_scope: "assistant.turn" # REQUIRED: spec 060 scope-claim label
   # Spec 061 SCOPE-10 — acceptance-gate thresholds for the offline
   # evaluation harness (tests/eval/assistant). The harness reads these
   # via ASSISTANT_EVAL_* environment variables (resolved by
@@ -800,7 +847,7 @@ assistant:
     provider_endpoint: "http://searxng:8080" # REQUIRED ("" permitted when enabled=false)
     provider_api_key: "" # REQUIRED ("" allowed for searxng; brave/tavily must be non-empty when enabled)
     llm_model_id: "gemma3:4b" # REQUIRED ("" permitted when enabled=false). Spec 064 SCOPE-17 — quality-first dev default. ~4GB resident, sound JSON-schema following + tool-use behavior. First call cold-loads ~30-60s; subsequent calls are fast.
-    max_iterations: 3 # REQUIRED: > 0 when enabled. Spec 064 SCOPE-17 — 3 iterations × ~3min gemma3:4b CPU latency = ~10 min max wall clock; balance quality vs latency on CPU dev.
+    max_iterations: 6 # REQUIRED: > 0 when enabled. Spec 064 — needs headroom for: tool call(s) + retry-on-rate-limit + final synthesis turn. 3 was too tight; gemma kept exhausting on tool calls before answering.
     per_query_token_budget: 8000 # REQUIRED: > 0 when enabled
     per_query_usd_budget: 0.05 # REQUIRED: > 0 when enabled
     monthly_budget_usd: 0 # REQUIRED: >= 0 (must be explicit)
@@ -866,6 +913,124 @@ assistant:
     max_context_turns: 8 # REQUIRED: bounded conversation window passed to the compiler
     max_output_bytes: 16384 # REQUIRED: cap on sidecar response body (defense against runaway LLM output)
     retry_budget: 1 # REQUIRED: schema-validation retries before declaring schema_invalid
+  # Spec 071 SCOPE-01 — IntentTrace observability surface. SST
+  # zero-defaults (Gate G028 / smackerel-no-defaults). Every key
+  # REQUIRED at the generator boundary; missing values fail loud at
+  # startup. Scope 1 ships the contract + recorder seam; Scope 2 wires
+  # deterministic sampling, redaction, and the retention sweep against
+  # these values.
+  intent_trace:
+    sampling_ratio: 1.0 # REQUIRED: float in [0,1]; 1.0 = every compiled turn writes a full trace
+    retention_days: 14 # REQUIRED: TTL in days for trace rows; >= 1
+    export_targets: "structured_log,otel,prometheus" # REQUIRED: non-empty comma list; vocabulary = structured_log|otel|prometheus
+    replay_enabled: true # REQUIRED: strict bool; gates Scope 3 replay CLI
+    retention_sweep_interval: 1h # REQUIRED: Go duration > 0; Scope 2 cadence for TTL sweep
+  # Spec 074 SCOPE-1 — Capture-as-Fallback cross-cutting policy SST.
+  # NO defaults (Gate G028, smackerel-no-defaults): every key REQUIRED
+  # at the generator boundary and fail-loud at startup. There is no
+  # `disable_capture_as_fallback` key by design — capture-as-fallback
+  # is inviolable for eligible turns (spec 074 Hard Constraint #2).
+  capture_as_fallback:
+    dedup_window: 24h # REQUIRED: positive Go duration; per-user same-normalized-text dedup bucket
+    clarify_abandon_timeout: 10m # REQUIRED: positive Go duration; clarification turn abandonment TTL (Scope 4 consumes)
+    normalization_policy: "nfkc_casefold_ws_v1" # REQUIRED: closed vocabulary; v1 = NFKC + casefold + whitespace collapse
+    dedup_hash_key: "smackerel-capture-fallback-dev-hmac-not-for-prod" # REQUIRED: non-empty secret; operators MUST override before any real deployment
+    retention_audit_days: 90 # REQUIRED: integer >= 1; metadata audit retention horizon for artifact_capture_policy rows
+  # Spec 065 SCOPE-1 — Generic micro-tools (capability foundation).
+  # SST zero-defaults (Gate G028 / smackerel-no-defaults): EVERY key
+  # REQUIRED at the generator boundary; missing values fail loud at
+  # startup. The four tools (location_normalize, unit_convert,
+  # calculator, entity_resolve) share the spec 037 agent.RegisterTool
+  # registry — there is NO second registry. SCOPE-1 lands only the
+  # foundation (envelope, schema validation, config block, fail-loud
+  # loader); SCOPE-2..4 register concrete handlers and flip
+  # enabled=true. Provider selectors are REQUIRED string values even
+  # when enabled=false (every key must resolve explicitly).
+  tools:
+    location_normalize:
+      enabled: false # REQUIRED: strict bool ("true"|"false"); SCOPE-2 flips this to true
+      provider: "open-meteo" # REQUIRED: canonical-location backend selector ("open-meteo" supported in v1)
+      timeout_ms: 2000 # REQUIRED: per-call provider deadline; > 0
+      cache_ttl_seconds: 600 # REQUIRED: tool-local LRU TTL; > 0
+      cache_max_entries: 512 # REQUIRED: tool-local LRU upper bound; > 0
+    unit_convert:
+      enabled: false # REQUIRED: strict bool; SCOPE-3 flips this to true
+      catalog_version: "v1" # REQUIRED: deterministic conversion catalog version stamped into source attribution
+    calculator:
+      enabled: false # REQUIRED: strict bool; SCOPE-3 flips this to true
+      max_expression_chars: 256 # REQUIRED: parser input cap; > 0
+    entity_resolve:
+      enabled: false # REQUIRED: strict bool; SCOPE-4 flips this to true
+      confidence_floor: 0.7 # REQUIRED: ambiguity floor in [0,1]
+      timeout_ms: 1500 # REQUIRED: per-call graph/vector deadline; > 0
+
+# Spec 073 SCOPE-1b — Web assistant frontend SST. Every key REQUIRED at
+# the generator boundary (Gate G028 / smackerel-no-defaults). Missing
+# or empty values fail loud at startup with [F073-SST-MISSING].
+#   - enabled: gates the web /assistant route.
+#   - backend_base_url: explicit literal "same-origin" (the canonical
+#     same-origin marker; the web client posts to /api/assistant/turn
+#     on the same origin it was served from) OR an explicit absolute
+#     http(s) URL. There is no implicit default.
+#   - schema_version: pinned to spec 069 "v1"; any other value is
+#     rejected by WebAssistantConfig.Validate() at startup.
+web:
+  assistant:
+    enabled: true
+    backend_base_url: "same-origin"
+    schema_version: "v1"
+
+# Spec 073 SCOPE-1b — Shared mobile assistant frontend SST. Every key
+# REQUIRED. Missing/empty values fail loud at startup with
+# [F073-SST-MISSING]; cross-field violations with [F073-SST-INVALID].
+#   - enabled: gates the shared Flutter mobile build.
+#   - backend_base_url: explicit absolute https URL (no http, no
+#     same-origin — mobile clients always cross origins). Operators
+#     override with their deploy adapter's public ingress URL.
+#   - schema_version: pinned to spec 069 "v1".
+#   - platforms: comma-separated set. MUST contain both "ios" and
+#     "android"; any other vocabulary is rejected.
+#   - auth_mode: explicit auth-owner-approved mode identifier (closed
+#     string; the auth surface owns the vocabulary).
+mobile:
+  assistant:
+    enabled: true
+    backend_base_url: "https://assistant.invalid.example/"
+    schema_version: "v1"
+    platforms: "ios,android"
+    auth_mode: "bearer_token_per_user"
+
+# Spec 075 SCOPE-1 — Legacy-Surface Deprecation Telemetry & User Comms.
+# SST zero-defaults (Gate G028 / smackerel-no-defaults): every key REQUIRED
+# at the generator boundary; missing values fail loud at startup. The
+# spec 066 retired-command catalog owns the actual command list; this
+# block governs window state, dedup ledger keying, residual-usage
+# thresholds, post-window observation gate, and notice/closed-response
+# copy.
+legacy_retirement:
+  window_id: "2026-05-retirement" # REQUIRED: stable non-empty id keying the dedup ledger and runtime pause state
+  window_state: "open" # REQUIRED: "open" or "closed" ("paused" is runtime state, never SST)
+  rollback_threshold_percent_active_users: 5.0 # REQUIRED: > 0 and <= 100; recommended explicit start 5%
+  rollback_threshold_days_consecutive: 3 # REQUIRED: >= 1; recommended explicit start 3
+  post_window_observation_days: 14 # REQUIRED: >= 1; recommended explicit start 14
+  active_user_window_days: 7 # REQUIRED: >= 1; denominator window for active-user percent calculation
+  user_bucket_hmac_key: "smackerel-legacy-retirement-dev-hmac-not-for-prod" # REQUIRED: non-empty secret; operators MUST override before any real deployment
+  # Notice copy keyed by retired command token. Map MUST cover every entry
+  # in the spec 066 retired-command catalog at startup; missing entries
+  # fail-loud at validation time. Each value is the short addendum rendered
+  # alongside the primary NL response during open window. Keys are unquoted
+  # so the generator-side yaml_get_json emits them as plain JSON string
+  # keys (quoting the YAML key would round-trip into literal-quote-in-key
+  # because the simplistic yaml_get_json parser does not strip key quotes).
+  notice_copy_per_command:
+    /weather: "I now answer weather questions in plain English. For example: weather in Barcelona tomorrow."
+    /remind: "I now create reminders from plain English. For example: remind me tomorrow at 9 to call the dentist."
+  # Canonical unknown-command response after window_state=closed. Map keyed
+  # by retired command token. Each value is the full body returned with no
+  # legacy handler invocation. Keys unquoted for the same reason as above.
+  post_window_unknown_response_copy:
+    /weather: "I do not use /weather anymore. Ask in plain English instead, for example: weather in Barcelona tomorrow."
+    /remind: "I do not use /remind anymore. Ask in plain English instead, for example: remind me tomorrow at 9 to call the dentist."
 
 agent:
   # Spec 037 — LLM Scenario Agent & Tool Registry. SST zero-defaults: every key
