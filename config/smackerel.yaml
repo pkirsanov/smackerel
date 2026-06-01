@@ -684,10 +684,10 @@ models:
     accel:
       interactive:
         model: gemma3:4b
-        retrieval_qa_timeout_ms: 5000
-        retrieval_qa_per_tool_timeout_ms: 2500
-        recipe_search_timeout_ms: 5000
-        recipe_search_per_tool_timeout_ms: 2500
+        retrieval_qa_timeout_ms: 120000
+        retrieval_qa_per_tool_timeout_ms: 60000
+        recipe_search_timeout_ms: 120000
+        recipe_search_per_tool_timeout_ms: 60000
       background:
         model: deepseek-r1:7b
         retrieval_qa_timeout_ms: 300000
@@ -810,7 +810,7 @@ assistant:
       cors_allowed_origins: [] # REQUIRED: explicit origin list (empty = same-origin only)
       conversation_ttl_seconds: 86400 # REQUIRED: integer >= 1
       transport_hint_allowlist: [ "web", "mobile", "bridge" ] # REQUIRED: non-empty closed-vocabulary list
-      required_scope: "assistant.turn" # REQUIRED: spec 060 scope-claim label
+      required_scope: "assistant:turn" # REQUIRED: spec 060 scope-claim label (<surface>:<capabilities> grammar)
   # Spec 061 SCOPE-10 — acceptance-gate thresholds for the offline
   # evaluation harness (tests/eval/assistant). The harness reads these
   # via ASSISTANT_EVAL_* environment variables (resolved by
