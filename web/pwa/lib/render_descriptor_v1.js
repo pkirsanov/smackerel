@@ -90,6 +90,19 @@ function renderToDescriptorV1(response) {
     });
   }
 
+  // Spec 075 SCOPE-075-06.3 — optional legacy-retirement notice rendered
+  // as a one-line text addendum AFTER the primary body so it never
+  // blocks the assistant response. Field is additive and optional on
+  // the v1 wire contract; absent on every turn that did not match a
+  // retired command.
+  const notice = response.notice;
+  if (notice !== null && typeof notice === 'object' && !Array.isArray(notice)) {
+    const replacement = typeof notice.replacement_example === 'string' ? notice.replacement_example : '';
+    if (replacement.length > 0) {
+      nodes.push({ kind: 'text', text: replacement });
+    }
+  }
+
   return {
     schema_version: DESCRIPTOR_SCHEMA_VERSION,
     nodes: nodes,

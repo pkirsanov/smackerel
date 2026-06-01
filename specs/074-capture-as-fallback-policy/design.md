@@ -256,3 +256,81 @@ IntentTrace fields: `capture_cause`, `idea_artifact_id`, and `final_response_sta
 | Capture failure loses trust | fail-loud user error with trace id and metric, no silent success |
 | Transport renderers customize copy | golden cross-transport acknowledgement tests |
 | Dedup hash key missing | startup fails before accepting turns |
+
+## SCOPE-4 — Clarify-Abandoned Capture (Design Resolution)
+
+Resolves the SCOPE-4C design gap: where the pre-clarification ORIGINAL prompt is persisted, who owns the abandon sweep, and how `assistant_conversations` extends.
+
+### (a) Persisted Struct — `pending_clarify` JSONB column
+
+`assistant_conversations` gains a single nullable JSONB column:
+
+```sql
+ALTER TABLE assistant_conversations
+    ADD COLUMN pending_clarify JSONB;
+```
+
+Payload shape (v1):
+
+```json
+{
+  "schema_version": "v1",
+  "original_prompt": "<raw user text that triggered the clarify intent>",
+  "emit_time": "2026-06-01T12:00:00Z",
+  "clarify_intent_id": "<intent trace id of the clarify question>",
+  "original_turn_id": "<turn id of the original user prompt>",
+  "user_id": "<user id>"
+}
+```
+
+Rationale for JSONB: additive evolution (new fields for future clarify variants) without further migrations; aligns with the design's "no new artifact type at capture time" rule by keeping pre-capture state on the conversation row, not on a new table. The column is set when the assistant emits a clarify question and cleared when the user replies, the conversation advances past the clarify turn, or the sweeper captures-and-clears.
+
+### (b) Sweep Owner — `capturefallback.ClarifyAbandonSweeper`
+
+A new sweeper lives at `internal/assistant/capturefallback/clarify_abandon_sweeper.go`. It runs via the existing `assistantctx.IdleSweepTicker` mechanism (same wiring as other assistant idle sweeps), polling every 60s.
+
+Behavior per tick:
+
+1. Query `assistant_conversations` for rows where `pending_clarify IS NOT NULL` AND `(now() - (pending_clarify->>'emit_time')::timestamptz) >= capture_as_fallback.clarify_abandon_timeout`.
+2. For each row, call `Policy.CaptureForUser` with:
+   - `Cause = CauseClarifyAbandoned`
+   - `Text = pending_clarify.original_prompt`
+   - `SourceTurnID = pending_clarify.original_turn_id`
+   - `UserID = pending_clarify.user_id`
+   - `IntentTraceID = pending_clarify.clarify_intent_id` (parent trace link)
+3. On successful capture (including dedup hits), clear `pending_clarify` in the same transaction as the capture write.
+4. On capture failure, leave `pending_clarify` set; next tick retries. Emit `smackerel_capture_as_fallback_total{cause="clarify_abandoned",outcome="capture_failed"}`.
+
+Required SST key `capture_as_fallback.clarify_abandon_timeout` is read from config (already declared in §Configuration). Poll interval is a separate fixed 60s sweep cadence; the timeout governs eligibility, not the tick rate.
+
+### (c) Migration — `048_capture_as_fallback_pending_clarify.sql`
+
+```sql
+-- 048_capture_as_fallback_pending_clarify.sql
+ALTER TABLE assistant_conversations
+    ADD COLUMN pending_clarify JSONB;
+
+CREATE INDEX IF NOT EXISTS idx_assistant_conversations_pending_clarify
+    ON assistant_conversations ((pending_clarify->>'emit_time'))
+    WHERE pending_clarify IS NOT NULL;
+```
+
+Partial index keeps sweep queries cheap; only rows with an open pending clarify are scanned.
+
+### (d) Integration Test Shape — TP-074-13
+
+Add `tests/integration/assistant/clarify_abandon_capture_test.go::TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned`:
+
+1. Submit an ambiguous prompt; assert assistant responds with clarify question and `pending_clarify` is populated for the conversation row.
+2. Advance the test clock past `capture_as_fallback.clarify_abandon_timeout`.
+3. Invoke `ClarifyAbandonSweeper.RunOnce(ctx)` directly (deterministic; do not depend on the 60s ticker in tests).
+4. Assert:
+   - Exactly one Idea artifact persisted with `provenance = capture-as-fallback`, `fallback_cause = clarify_abandoned`, body equal to the original pre-clarification prompt.
+   - `source_turn_id` on the artifact equals the original turn ID (not the clarify turn ID).
+   - `pending_clarify` is NULL on the conversation row.
+   - Counter `smackerel_capture_as_fallback_total{cause="clarify_abandoned",outcome="created"}` incremented by 1.
+   - IntentTrace for the original turn links `idea_artifact_id`.
+5. Adversarial sub-case: if a user reply arrives before the timeout, `pending_clarify` is cleared and the sweep produces no Idea (proves the sweeper does not fire on still-active clarifications).
+
+This supersedes the SCN-074-A06 placeholder location; both names refer to the same test.
+

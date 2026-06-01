@@ -1,5 +1,8 @@
 id: recommendation_watch_evaluate
 version: "recommendation-watch-evaluate-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "scenario"
 description: "Evaluate a due recommendation watch and persist a delivery, queue, summarize, or drop decision"
 

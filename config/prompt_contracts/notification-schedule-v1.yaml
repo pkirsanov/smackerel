@@ -1,5 +1,8 @@
 id: notification_schedule
 version: "notification-schedule-v1"
+principleAlignment:
+  - "Principle 6"
+  - "Principle 7"
 type: "scenario"
 description: "Propose a scheduled reminder; on user confirm, register it with the spec 054 scheduler."
 
