@@ -303,7 +303,7 @@ def test_handle_invoke_passes_ollama_determinism_kwargs(monkeypatch: pytest.Monk
     env = asyncio.run(handle_invoke(_request(temperature=0.7), completion_fn=capture))
     assert "error" not in env, env
 
-    assert seen_kwargs["model"] == "ollama/qwen2.5:0.5b-instruct"
+    assert seen_kwargs["model"] == "ollama_chat/qwen2.5:0.5b-instruct"
     assert seen_kwargs["temperature"] == 0.0
     assert seen_kwargs["top_p"] == 1.0
     assert seen_kwargs["top_k"] == 1
