@@ -15,19 +15,19 @@ func TestLookupShortcut(t *testing.T) {
 		wantOK    bool
 	}{
 		// --- v1 slash commands, bare form ---
-		{name: "/ask bare", text: "/ask", wantID: "retrieval_qa", wantOK: true},
+		{name: "/ask bare", text: "/ask", wantID: "open_knowledge", wantOK: true},
 		{name: "/weather bare", text: "/weather", wantID: "weather_query", wantOK: true},
 		{name: "/remind bare", text: "/remind", wantID: "notification_schedule", wantOK: true},
 		{name: "/reset bare", text: "/reset", wantID: "", wantReset: true, wantOK: true},
 
 		// --- with natural-language tail ---
-		{name: "/ask with tail", text: "/ask what did paul say last week", wantID: "retrieval_qa", wantOK: true},
+		{name: "/ask with tail", text: "/ask what did paul say last week", wantID: "open_knowledge", wantOK: true},
 		{name: "/weather with tail", text: "/weather in barcelona tomorrow", wantID: "weather_query", wantOK: true},
 		{name: "/remind with tail", text: "/remind tomorrow 9am submit report", wantID: "notification_schedule", wantOK: true},
 		{name: "/reset with trailing whitespace", text: "/reset\n", wantID: "", wantReset: true, wantOK: true},
 
 		// --- whitespace handling (leading/trailing trimmed) ---
-		{name: "/ask leading newline", text: "\n/ask hello", wantID: "retrieval_qa", wantOK: true},
+		{name: "/ask leading newline", text: "\n/ask hello", wantID: "open_knowledge", wantOK: true},
 		{name: "/weather leading spaces", text: "   /weather barcelona", wantID: "weather_query", wantOK: true},
 		{name: "/remind tab-separated tail", text: "/remind\tin 5 minutes", wantID: "notification_schedule", wantOK: true},
 
@@ -68,7 +68,7 @@ func TestLookupShortcut(t *testing.T) {
 func TestSlashShortcutsClosedVocabulary(t *testing.T) {
 	t.Parallel()
 	want := map[string]string{
-		"/ask":     "retrieval_qa",
+		"/ask":     "open_knowledge",
 		"/weather": "weather_query",
 		"/remind":  "notification_schedule",
 		"/reset":   ResetActionID,
