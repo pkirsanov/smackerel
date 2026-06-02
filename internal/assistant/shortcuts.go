@@ -47,6 +47,8 @@ var SlashShortcuts = map[string]string{
 	"/ask":     "open_knowledge",
 	"/weather": "weather_query",
 	"/remind":  "notification_schedule",
+	"/recipe":  "recipe_search",
+	"/cook":    "recipe_search",
 	"/reset":   ResetActionID,
 }
 
