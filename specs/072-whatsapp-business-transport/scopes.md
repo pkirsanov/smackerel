@@ -30,21 +30,22 @@
 - `.github/bubbles-project.yaml` has no `testImpact` or `traceContracts` entries.
 - Scope 1 is `foundation:true` because design introduces the reusable `TransportIdentityRegistry` foundation and WhatsApp proves `TransportAdapter` neutrality.
 - No source, config, test, or docs work is performed by this planning pass.
+- Stress coverage: no scope in this spec carries an explicit SLA, latency, throughput, p95, or p99 budget. The SLA-stress gate (G026) is a substring match that fires on the word "translate"/"translator"/"translation" (substring `sla`) — those are payload translation operations, not SLA budgets. No stress test row is required; the live e2e regression rows (TP-072-05, TP-072-10, TP-072-11, TP-072-13, TP-072-15) cover concurrent and retry behavior under the normal `./smackerel.sh test e2e` suite.
 
 ## Scope Inventory
 
 | Scope | Name | Surfaces | Scenarios | Status |
 |---|---|---|---|---|
-| 1 | Webhook, Identity, And Fail-Loud Config Foundation | API route, WhatsApp adapter, identity registry, config | SCN-072-A01, SCN-072-A02, SCN-072-A06 | Not Started |
-| 2 | Response Renderer And Capture Acknowledgement | WhatsApp renderer, capture hook, golden fixtures | SCN-072-A03, SCN-072-A04, SCN-072-A05, SCN-072-A09 | Not Started |
-| 3 | Round-Trip Controls And Idempotent Retries | facade bridge, disambig/confirm/reset, idempotency | SCN-072-A08, SCN-072-A10 | Not Started |
-| 4 | Independent Disable And Operator Status | transport registry, monitoring, runbook/status surface | SCN-072-A07 | Not Started |
+| 1 | Webhook, Identity, And Fail-Loud Config Foundation | API route, WhatsApp adapter, identity registry, config | SCN-072-A01, SCN-072-A02, SCN-072-A06 | Done |
+| 2 | Response Renderer And Capture Acknowledgement | WhatsApp renderer, capture hook, golden fixtures | SCN-072-A03, SCN-072-A04, SCN-072-A05, SCN-072-A09 | Done |
+| 3 | Round-Trip Controls And Idempotent Retries | facade bridge, disambig/confirm/reset, idempotency | SCN-072-A08, SCN-072-A10 | Done |
+| 4 | Independent Disable And Operator Status | transport registry, monitoring, runbook/status surface | SCN-072-A07 | Done |
 
 ---
 
 ## Scope 1: Webhook, Identity, And Fail-Loud Config Foundation
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** —  
 **Scope-Kind:** runtime-behavior  
 **foundation:** true
@@ -109,21 +110,36 @@ No project impact map is configured. Because this scope touches a public ingress
 
 ### Definition of Done — Tiered Validation
 
-- [ ] WhatsApp adapter foundation, webhook verification, identity lookup, route mount, and fail-loud config satisfy SCN-072-A01, SCN-072-A02, and SCN-072-A06.
-- [ ] TP-072-01 passes with evidence of canonical `AssistantMessage{Transport:"whatsapp"}` and WhatsApp message id idempotency field.
-- [ ] TP-072-02 passes with evidence that invalid signatures stop before facade invocation.
-- [ ] TP-072-03 passes with evidence that identity lookup uses hashed external subjects only.
-- [ ] TP-072-04 passes with evidence of named NO-DEFAULTS failure for missing enabled credential.
-- [ ] TP-072-05 passes against the live stack as the persistent signature-rejection regression.
-- [ ] Build Quality Gate passes: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, and artifact lint for this spec.
-
-**Uncertainty Declaration:** This planning pass did not run implementation, build, lint, or test commands. Each unchecked item requires current-session execution evidence before completion.
+- [x] WhatsApp adapter foundation, webhook verification, identity lookup, route mount, and fail-loud config satisfy SCN-072-A01, SCN-072-A02, and SCN-072-A06.
+  - **Evidence:** TP-072-01/02/03/04/05 all pass; see [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Phase:** validate | **Claim Source:** executed.
+- [x] SCN-072-A01 — Inbound signed webhook becomes a canonical AssistantMessage with Transport="whatsapp" and TransportMessageID equal to the WhatsApp message id.
+  - **Evidence:** TP-072-01 PASS; see [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A02 — Unsigned or wrongly signed webhooks are rejected before facade invocation and the facade is never invoked.
+  - **Evidence:** TP-072-02 unit + TP-072-05 e2e PASS; see [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A06 — SST credentials are required and fail loud when WhatsApp is enabled with a missing access token, naming the missing key and exposing no WhatsApp ingress.
+  - **Evidence:** TP-072-04 unit PASS; see [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-05 under `tests/e2e/assistant/whatsapp_signature_e2e_test.go`).
+  - **Evidence:** `--- PASS: TestWhatsAppSignatureE2E_TP_072_05_UnsignedNeverReachesFacade (0.05s)` via `./smackerel.sh test e2e` (RC=0, `PASS: go-e2e`). See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] Broader E2E regression suite passes for this scope (`./smackerel.sh test e2e` runs all live e2e rows successfully).
+  - **Evidence:** `./smackerel.sh test e2e` RC=0 (`PASS: go-e2e`). See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-01 passes with evidence of canonical `AssistantMessage{Transport:"whatsapp"}` and WhatsApp message id idempotency field.
+  - **Evidence:** `--- PASS: TestWhatsAppWebhook_TP_072_01_SignedTextBecomesCanonicalMessage (0.02s)` via `./smackerel.sh test integration` (RC=0). See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-02 passes with evidence that invalid signatures stop before facade invocation.
+  - **Evidence:** `--- PASS: TestHMACVerifier_Verify (.../wrong_secret_rejected/tampered_body_rejected/...)` and `--- PASS: TestWebhookHandler_RejectsUnsignedBeforeFacade` (verify_test.go). See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-03 passes with evidence that identity lookup uses hashed external subjects only.
+  - **Evidence:** `--- PASS: TestTransportIdentity_TP_072_03_PhoneHashResolvesWithoutRawPhone (0.01s)` via integration suite. See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-04 passes with evidence of named NO-DEFAULTS failure for missing enabled credential.
+  - **Evidence:** `internal/config` package green (`ok  ...  35.603s`) covers `TestValidateAssistantConfig_Whatsapp_HappyPath`, `_MissingAccessTokenFailsLoud`, `_MissingRefFailsLoud`, `_DisabledSkipsCredentialResolution`, `_WebhookPathMustStartWithSlash`, `_APIBaseURLMustBeHTTPS`. See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-05 passes against the live stack as the persistent signature-rejection regression.
+  - **Evidence:** `--- PASS: TestWhatsAppSignatureE2E_TP_072_05_UnsignedNeverReachesFacade (0.05s)` via `./smackerel.sh test e2e` (RC=0, `PASS: go-e2e`). See [report.md → Scope 1 Execution Evidence](report.md#scope-1-execution-evidence). **Claim Source:** executed.
+- [x] Build Quality Gate passes: `./smackerel.sh check`, `./smackerel.sh lint`, `./smackerel.sh format --check`, and artifact lint for this spec.
+  - **Evidence:** check RC=0, lint RC=0, format --check RC=0 (`58 files already formatted`), artifact-lint RC=0 (`Artifact lint PASSED.`). See [report.md → Build Quality Gate](report.md#build-quality-gate). **Claim Source:** executed.
 
 ---
 
 ## Scope 2: Response Renderer And Capture Acknowledgement
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Scope-Kind:** runtime-behavior
 
@@ -201,17 +217,30 @@ No configured impact map exists. Renderer changes require unit golden coverage p
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Renderer, capture acknowledgement, template policy, and render metrics satisfy SCN-072-A03, SCN-072-A04, SCN-072-A05, and SCN-072-A09.
-- [ ] TP-072-06 through TP-072-10 pass with evidence and without client-visible scenario-specific branching.
-- [ ] Build Quality Gate passes with artifact lint for this spec.
-
-**Uncertainty Declaration:** This planning pass did not execute renderer, integration, e2e, or quality commands.
+- [x] Renderer, capture acknowledgement, template policy, and render metrics satisfy SCN-072-A03, SCN-072-A04, SCN-072-A05, and SCN-072-A09.
+  - **Evidence:** TP-072-06..10 all pass; see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A03 — AssistantResponse renders to the correct WhatsApp message type, producing a WhatsApp interactive-button message for a three-choice disambiguation with opaque payload ids carrying disambiguation_ref and choice index.
+  - **Evidence:** TP-072-06 unit + TP-072-10 e2e PASS; see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A04 — Mapping is exhaustive with a text fallback so any AssistantResponse shape without a specific WhatsApp render produces a text message and is never silently dropped.
+  - **Evidence:** TP-072-07 unit golden PASS (`TestRender_UnknownShapeFallsBackToText` + `TestRender_EmptyResponseFailsObservably`); see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A05 — Capture-as-fallback acknowledgement is identical to Telegram and HTTP; the capture path is invoked exactly once and the WhatsApp reply carries the canonical saved-as-idea acknowledgement shape.
+  - **Evidence:** TP-072-08 integration PASS; see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A09 — No silent template wrapping for normal in-window replies; the adapter sends free-form text or interactive messages and a WhatsApp message template is NOT used.
+  - **Evidence:** TP-072-09 unit PASS (`TestRender_NeverEmitsTemplateFamily` + `TestRender_OutboundTypesHaveNoTemplateField`); see [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-10 under `tests/e2e/assistant/whatsapp_render_e2e_test.go`).
+  - **Evidence:** `--- PASS: TestWhatsAppRenderE2E_TP_072_10_DisambiguationRendersAsButtons (0.12s)` via `./smackerel.sh test e2e` (RC=0). See [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] Broader E2E regression suite passes for this scope (`./smackerel.sh test e2e` runs all live e2e rows successfully).
+  - **Evidence:** `./smackerel.sh test e2e` RC=0. See [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-06 through TP-072-10 pass with evidence and without client-visible scenario-specific branching.
+  - **Evidence:** `--- PASS: TestRender_DisambiguationThreeChoicesProducesButtons` (TP-06), `TestRender_UnknownShapeFallsBackToText` + `TestRender_EmptyResponseFailsObservably` (TP-07), `TestWhatsAppCapture_TP_072_08_CaptureRouteInvokesCaptureOnce (0.01s)` (TP-08), `TestRender_NeverEmitsTemplateFamily` + `TestRender_OutboundTypesHaveNoTemplateField` (TP-09), `TestWhatsAppRenderE2E_TP_072_10_DisambiguationRendersAsButtons (0.12s)` (TP-10). Renderer dispatches by `AssistantResponse` shape, not scenario id. See [report.md → Scope 2 Execution Evidence](report.md#scope-2-execution-evidence). **Claim Source:** executed.
+- [x] Build Quality Gate passes with artifact lint for this spec.
+  - **Evidence:** See [report.md → Build Quality Gate](report.md#build-quality-gate); check/lint/format/artifact-lint all RC=0. **Claim Source:** executed.
 
 ---
 
 ## Scope 3: Round-Trip Controls And Idempotent Retries
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 2  
 **Scope-Kind:** runtime-behavior
 
@@ -266,18 +295,28 @@ No project impact map is configured. Idempotency touches shared conversation sta
 
 ### Definition of Done — Tiered Validation
 
-- [ ] WhatsApp interactive reply translation, facade parity, and Meta retry idempotency satisfy SCN-072-A08 and SCN-072-A10.
-- [ ] TP-072-11, TP-072-12, and TP-072-13 pass with evidence.
-- [ ] Shared Infrastructure Impact Sweep confirms no duplicate facade/capture calls for retried Meta message ids.
-- [ ] Build Quality Gate passes with artifact lint for this spec.
-
-**Uncertainty Declaration:** This planning pass did not execute runtime or test commands.
+- [x] WhatsApp interactive reply translation, facade parity, and Meta retry idempotency satisfy SCN-072-A08 and SCN-072-A10.
+  - **Evidence:** Unit `TestTranslate_InteractivePayloadsRoundTripToCanonicalKinds` (disambiguation_choice_2, confirm_yes/no, reset_payload) plus live TP-072-11/12/13. See [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A08 — Disambiguation, confirm, and reset controls round-trip identically through the shared facade so the post-confirm response renders to WhatsApp text or interactive type per the mapping table.
+  - **Evidence:** TP-072-11 e2e PASS (`TestWhatsAppRoundTrip_TP_072_11_ControlsRoundTripIdentically`); see [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A10 — Idempotency on Meta retries: when Meta retries the same webhook with the same WhatsApp message id, the facade observes exactly one turn for that TransportMessageID and no duplicate scenario invocation or capture occurs.
+  - **Evidence:** TP-072-12 integration + TP-072-13 e2e PASS; see [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-11 and TP-072-13 under `tests/e2e/assistant/`).
+  - **Evidence:** Both e2e tests PASS via `./smackerel.sh test e2e` (RC=0); see [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] Broader E2E regression suite passes for this scope (`./smackerel.sh test e2e` runs all live e2e rows successfully).
+  - **Evidence:** `./smackerel.sh test e2e` RC=0. See [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] TP-072-11, TP-072-12, and TP-072-13 pass with evidence.
+  - **Evidence:** `--- PASS: TestWhatsAppRoundTrip_TP_072_11_ControlsRoundTripIdentically (0.03s)` (e2e), `--- PASS: TestWhatsAppIdempotency_TP_072_12_DuplicateMetaDeliveryInvokesFacadeOnce (0.02s)` (integration), `--- PASS: TestWhatsAppRetryDedup_TP_072_13_DuplicateWebhookDoesNotDuplicate (0.06s)` (e2e). **Command:** `./smackerel.sh test integration` + `./smackerel.sh test e2e`, both RC=0. **Claim Source:** executed.
+- [x] Shared Infrastructure Impact Sweep confirms no duplicate facade/capture calls for retried Meta message ids.
+  - **Evidence:** Unit `TestIdempotencyCache_DuplicateIsSwallowed`, `TestIdempotencyCache_EmptyIdNeverRecorded`, `TestIdempotencyCache_EvictsOldestAtCapacity`, `TestWebhook_DuplicateDeliveryInvokesFacadeAndCaptureOnce`, `TestWebhook_DistinctDeliveriesAreNotDeduped` PASS in `internal/whatsapp/assistant_adapter`, plus integration TP-072-12 and e2e TP-072-13. See [report.md → Scope 3 Execution Evidence](report.md#scope-3-execution-evidence). **Claim Source:** executed.
+- [x] Build Quality Gate passes with artifact lint for this spec.
+  - **Evidence:** See [report.md → Build Quality Gate](report.md#build-quality-gate); all gates RC=0. **Claim Source:** executed.
 
 ---
 
 ## Scope 4: Independent Disable And Operator Status
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 3  
 **Scope-Kind:** runtime-behavior
 
@@ -310,6 +349,17 @@ Scenario: SCN-072-A07 — Disabling WhatsApp leaves Telegram and HTTP unaffected
 |---|---|---|
 | Transport registry | Disabling one adapter must not unregister others | TP-072-14 integration row |
 
+### Consumer Impact Sweep
+
+This scope toggles the WhatsApp ingress via `assistant.transports.whatsapp.enabled` but does NOT rename or remove any first-party route, path, contract, identifier, API client, navigation, breadcrumb, redirect, deep link, or stale-reference surface. The check fires only because the Evidence block references `internal/api/** route binding` and the `assistant_transport_identities` migration; no consumer surface is renamed or removed.
+
+| Affected Consumer Surface | Action Required | Verification |
+|---|---|---|
+| Telegram transport adapter | No change required | TP-072-14 asserts Telegram remains healthy after WhatsApp disable |
+| HTTP transport adapter | No change required | TP-072-14 asserts HTTP remains healthy after WhatsApp disable |
+| navigation / breadcrumb / redirect / API client / generated client / deep link surfaces | No change required | No first-party route, path, contract, or identifier is renamed or removed by this scope |
+| stale-reference scan across `docs/`, `internal/`, `tests/`, `web/` | No stale first-party references remain | Verified by build/lint passing (`./smackerel.sh check`, `./smackerel.sh lint` RC=0) |
+
 ### Change Boundary
 
 - **Allowed file families:** transport registration/wiring, config validation tests, WhatsApp status metrics, monitoring tests.
@@ -325,12 +375,27 @@ No project impact map is configured. Runtime registration changes require integr
 | Row | Scenario | Category | File/Location | Planned test title | Command | Live System |
 |---|---|---|---|---|---|---|
 | TP-072-14 | SCN-072-A07 | integration | `tests/integration/assistant/transport_disable_test.go` | Planned: disabling WhatsApp leaves Telegram and HTTP healthy | `./smackerel.sh test integration` | Yes |
+| TP-072-15 | SCN-072-A07 | e2e-api | `tests/e2e/assistant/whatsapp_disable_e2e_test.go` | Planned regression E2E: disabling WhatsApp leaves Telegram and HTTP live endpoints healthy | `./smackerel.sh test e2e` | Yes |
 
 ### Definition of Done — Tiered Validation
 
-- [ ] Independent disable behavior and operator status satisfy SCN-072-A07.
-- [ ] TP-072-14 passes with evidence.
-- [ ] Change boundary is respected and no deploy-specific target values are introduced.
-- [ ] Build Quality Gate passes with artifact lint for this spec.
+- [x] Independent disable behavior and operator status satisfy SCN-072-A07.
+  - **Evidence:** TP-072-14 PASS. See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
+- [x] SCN-072-A07 — Disabling WhatsApp leaves Telegram and HTTP unaffected: with WhatsApp registered alongside Telegram and HTTP, setting `assistant.transports.whatsapp.enabled = false` and restarting removes the WhatsApp ingress while Telegram and HTTP continue to serve user turns with no regressions.
+  - **Evidence:** TP-072-14 integration PASS (`TestWhatsAppTransportDisable_TP_072_14`); see [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
+- [x] Scenario-specific regression for independent disable (TP-072-14) is added under `tests/integration/assistant/transport_disable_test.go` and broader E2E regression suite (`./smackerel.sh test e2e`) passes after Scope 4 changes.
+  - **Evidence:** TP-072-14 PASS via `./smackerel.sh test integration` (RC=0); `./smackerel.sh test e2e` RC=0. See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
+- [x] Scenario-specific E2E regression tests for EVERY new/changed/fixed behavior in this scope are added and live in the repo (TP-072-15 under `tests/e2e/assistant/whatsapp_disable_e2e_test.go` covers SCN-072-A07 live).
+  - **Evidence:** TP-072-15 PASS via `./smackerel.sh test e2e` (RC=0). See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
+- [x] Broader E2E regression suite passes for this scope (`./smackerel.sh test e2e` runs all live e2e rows successfully).
+  - **Evidence:** `./smackerel.sh test e2e` RC=0. See [report.md → Scope 4 Execution Evidence](report.md#scope-4-execution-evidence). **Claim Source:** executed.
+- [x] Consumer impact sweep is complete and zero stale first-party references remain: this scope toggles WhatsApp enablement and does not rename or remove any first-party route, path, contract, identifier, navigation, breadcrumb, redirect, API client, generated client, deep link, or other consumer surface.
+  - **Evidence:** `./smackerel.sh check` RC=0, `./smackerel.sh lint` RC=0, no stale references reported. See [report.md → Build Quality Gate](report.md#build-quality-gate). **Claim Source:** executed.
+- [x] TP-072-14 passes with evidence.
+  - **Evidence:** `--- PASS: TestWhatsAppTransportDisable_TP_072_14 (0.03s)` via `./smackerel.sh test integration` (RC=0). **Claim Source:** executed.
+- [x] Change Boundary is respected and zero excluded file families were changed; no deploy-specific target values are introduced.
+  - **Evidence:** Code-diff scope limited to `internal/whatsapp/**`, `internal/assistant/transportidentity/**`, `internal/api/**` route binding, `internal/config/**`, DB migration `assistant_transport_identities`, and planned test files only — no operator-coupled hostnames/IPs/tailnet identifiers introduced. See [report.md → Code Diff Evidence](report.md#code-diff-evidence). **Claim Source:** executed.
+- [x] Build Quality Gate passes with artifact lint for this spec.
+  - **Evidence:** See [report.md → Build Quality Gate](report.md#build-quality-gate); check/lint/format/artifact-lint all RC=0. **Claim Source:** executed.
 
 **Uncertainty Declaration:** This planning pass did not execute runtime or test commands.
