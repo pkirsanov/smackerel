@@ -163,6 +163,34 @@ if [[ -x "$SCRIPT_DIR/trajectory-inspector-selftest.sh" ]]; then
   run_check "Trajectory inspector selftest" bash "$SCRIPT_DIR/trajectory-inspector-selftest.sh"
 fi
 
+if [[ -x "$SCRIPT_DIR/propagation-policy-guard-selftest.sh" ]]; then
+  run_check "Propagation policy guard selftest" bash "$SCRIPT_DIR/propagation-policy-guard-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/release-train-rollup-selftest.sh" ]]; then
+  run_check "Release train rollup selftest" bash "$SCRIPT_DIR/release-train-rollup-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/observability-adapter-lint-selftest.sh" ]]; then
+  run_check "Observability adapter lint selftest" bash "$SCRIPT_DIR/observability-adapter-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/observability-adapter-lint.sh" && -d "$REPO_ROOT/bubbles/adapters/observability" ]]; then
+  run_check "Observability adapter lint (live)" bash "$SCRIPT_DIR/observability-adapter-lint.sh" "$REPO_ROOT"
+fi
+
+if [[ -x "$SCRIPT_DIR/retro-framework-health-selftest.sh" ]]; then
+  run_check "Retro framework-health selftest" bash "$SCRIPT_DIR/retro-framework-health-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/intent-routes-lint-selftest.sh" ]]; then
+  run_check "Intent routes lint selftest" bash "$SCRIPT_DIR/intent-routes-lint-selftest.sh"
+fi
+
+if [[ -x "$SCRIPT_DIR/intent-routes-lint.sh" && -f "$REPO_ROOT/bubbles/intent-routes.yaml" ]]; then
+  run_check "Intent routes lint (live)" bash "$SCRIPT_DIR/intent-routes-lint.sh" "$REPO_ROOT"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
   echo "Framework validation failed with $failures failing check(s)."
   exit 1

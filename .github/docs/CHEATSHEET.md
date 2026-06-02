@@ -1,7 +1,7 @@
 # <img src="../icons/bubbles-glasses.svg" width="28"> Bubbles Cheat Sheet
 
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_START -->
-> **37 Agents · 82 Gates · 38 Workflow Modes · 26 Phases**
+> **40 Agents · 98 Gates · 55 Workflow Modes · 26 Phases**
 <!-- GENERATED:FRAMEWORK_STATS_SUMMARY_END -->
 >
 > *"It Ain't Rocket Appliances, But It Works."*
@@ -40,6 +40,8 @@
 | <img src="../icons/tommy-rack.svg" width="28"> | `bubbles.devops` | Tommy Bean | Owns CI/CD, build, deployment, monitoring, and observability execution once operational work is identified. | *"Get the rack humming and keep the park online."* |
 | <img src="../icons/sebastian-guitar.svg" width="28"> | `bubbles.cinematic-designer` | Sebastian Bach | Premium UI implementation when the surface needs flagship treatment, not default sludge. | *"I was in Skid Row!"* |
 | <img src="../icons/sonny-ledger.svg" width="28"> | `bubbles.releases` | Sonny "Iron Lung" Smith | Phase release packets, carry-forward enforcement, cross-product release coordination, Product Direction Surfaces guardian. | *"Plans within plans, boys. Phase one is just the introduction."* |
+| <img src="../icons/dvs-mic.svg" width="28"> | `bubbles.train` | Detroit Velvet Smooth | Release-train lifecycle: cut candidates, promote between slots, rollback pointer-swap, retire trains, feature-flag lifecycle. Distinct from `releases` (packets vs train mechanics). | *"Smoooth as silk, gentlemen. The train rolls on schedule."* |
+| <img src="../icons/treena-broom.svg" width="28"> | `bubbles.upkeep` | Treena Lahey | Recurring operational hygiene: backup verify, restore drills, BCDR drills, patch cycles, secret rotation, flag-cleanup audits, compliance sweeps. Calendar-driven. | *"Trailer don't clean itself, Jim. Never has."* |
 
 ## <img src="../icons/ted-badge.svg" width="32"> Diagnostic & Certification Routing
 
@@ -252,6 +254,24 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `vision restatement` | Every phase's `vision.md` MUST be self-contained — no cross-references like "see vision.md in v1.0". Restate inline. |
 | `cross-product coordination` | When two repos ship features together (e.g., a primary product ↔ a companion product), `bubbles.releases` produces matched plan files in BOTH repos with cross-references and a shared schema-versioning rule. |
 | `surfaced principle` | A product principle drafted from existing repo evidence by the `bubbles-product-principle-discovery` skill, flagged "Surfaced for owner approval — not yet ratified". Owner ratifies; agents do not. |
+| `release train` | A named, long-lived ship-line that gates trunk code behind per-train flag bundles and a manifest pointer. Operator-chosen string id (`mvp`, `v1.0`, `2026-q3`); framework is name-agnostic. |
+| `cut` | Tagging trunk at a SHA and producing a signed candidate artifact (digests + per-train config bundle) for a train. NO deployment. |
+| `promote` | Pointer-swap moving a candidate from one slot (staging) to another (prod) on a train. Requires backup-freshness + restore-drill currency. |
+| `slot` | A deployment target slot per train (`staging` / `prod` / `none` for build-only). |
+| `train phase` | `active` / `maintained` / `frozen` / `retired` — operator-controlled lifecycle. Cuts allowed in `active`/`maintained`; promotes only in `active`; flags MUST be cleaned up before `retired`. |
+| `dark code` | Code on trunk that is default-off behind a flag for trains where it isn't shipping. Lives until its train graduates + 1 cycle (then retire). |
+| `flag retirement` | Removing a feature flag (and its dead conditional branch) once its owning train has graduated. Mandatory before `release-train-retire`. |
+| `drift` | The running container digest no longer matches `manifest.yaml`. Surfaced by `verify.sh` post-apply. |
+| `upkeep cycle` | Scheduled recurring operational task (backup verify, restore drill, BCDR drill, patch, rotation, flag-cleanup, compliance sweep). Calendar-driven via `config/upkeep-calendar.yaml`. |
+| `near-line backup` | Removable-media backup on-site (USB drive that can be rotated and physically separated). Tier T3 in the backup model. |
+| `offsite backup` | Backup stored on different physical infrastructure than the source host. Tier T4 (cloud: B2/R2/Wasabi/S3/rclone). |
+| `restore drill` | Periodic exercise that proves a backup can be restored to a working state. Weekly cadence. Failed drill blocks next `promote`. |
+| `BCDR drill` | Full disaster-recovery exercise; restores entire product stack into isolated namespace. Quarterly cadence. |
+| `RTO / RPO` | Recovery Time Objective (how fast to restore) / Recovery Point Objective (max data loss tolerated). Per-product targets in `docs/BCDR_Plan.md`. |
+| `OFFSITE_BACKEND` | Single env var in `<product>/<target>/params.yaml` that selects backup backend (`local-only` / `restic_usb:*` / `restic_b2:*` / etc). Swap requires zero product changes. |
+| `upkeep ledger` | Append-only `/srv/backups/upkeep-ledger.jsonl` recording every upkeep task execution. Read by `bubbles.train` for promote-freshness gating. |
+| `pollution isolation` | Test code MUST NOT write to prod monitoring, prod backup paths, or knb manifest. Enforced by `env-pollution-scan.sh` (G115). |
+| `compliance sweep` | Quarterly evidence-collection task generating `docs/Compliance_Report.md` for G117-G120. Treena gathers, Ted certifies. |
 | `test impact map` | Optional project-owned `testImpact` config that maps changed paths to impacted components, first-pass test categories, always-run checks, and full-suite triggers. It speeds planning; it never permits skipping final gates. |
 | `narrow-first validation` | Run the impact-mapped focused checks first so feedback is fast, then still run every required closeout gate and broad suite. |
 | `full-suite trigger` | A high-blast-radius path pattern in `testImpact` that forces broad validation even when the direct change looks small. |
@@ -268,7 +288,7 @@ Some TPB characters carry different agent roles when their narrative context leg
 ---
 
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_START -->
-## <img src="../icons/lahey-badge.svg" width="32"> The 82 Gates
+## <img src="../icons/lahey-badge.svg" width="32"> The 98 Gates
 <!-- GENERATED:FRAMEWORK_STATS_CHEATSHEET_GATES_END -->
 
 **Phase flow:**
