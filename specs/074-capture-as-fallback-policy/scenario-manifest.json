@@ -1,19 +1,189 @@
 {
   "version": 1,
   "specId": "074",
+  "feature": "Capture-as-Fallback Cross-Cutting Policy",
   "generatedBy": "bubbles.plan",
   "generatedAt": "2026-05-31T20:30:46Z",
+  "updatedAt": "2026-06-02T04:30:00Z",
   "scenarios": [
-    {"scenarioId":"SCN-074-A01","title":"Unrouted turn produces exactly one fallback Idea","scopeId":"SCOPE-074-04A","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-12","TP-074-14"],"liveSystemExpectation":"facade hook integration (TP-074-12) and open-knowledge no-ground live e2e (TP-074-14) must each observe exactly one artifact write; covered by SCOPE-074-04A (facade) and SCOPE-074-04B (open-knowledge live regression)","status":"planned"},
-    {"scenarioId":"SCN-074-A02","title":"Explicit capture is provenance-distinct","scopeId":"SCOPE-074-02","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-05","TP-074-06","TP-074-07"],"liveSystemExpectation":"explicit and fallback capture runtime paths must remain distinct","status":"planned"},
-    {"scenarioId":"SCN-074-A03","title":"Same-user same-text within dedup window dedupes","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-08","TP-074-11"],"liveSystemExpectation":"live e2e-api row must return already-captured acknowledgement","status":"planned"},
-    {"scenarioId":"SCN-074-A04","title":"Same-user same-text outside dedup window does not dedup","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-09"],"liveSystemExpectation":"unit/integration rows must prove outside-window new bucket behavior","status":"planned"},
-    {"scenarioId":"SCN-074-A05","title":"Cross-user dedup is forbidden","scopeId":"SCOPE-074-03","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-10"],"liveSystemExpectation":"integration row must use two isolated users and separate artifacts","status":"planned"},
-    {"scenarioId":"SCN-074-A06","title":"Abandoned clarification captures the original prompt","scopeId":"SCOPE-074-04C","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-13"],"liveSystemExpectation":"integration row must prove original prompt is captured with abandoned flag","status":"planned"},
-    {"scenarioId":"SCN-074-A07","title":"Counter and IntentTrace carry the capture link","scopeId":"SCOPE-074-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-15","TP-074-16"],"liveSystemExpectation":"integration rows must inspect real metric/trace/artifact linkage","status":"planned"},
-    {"scenarioId":"SCN-074-A08","title":"Missing SST keys fail loud","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-01"],"liveSystemExpectation":"unit config validation proves fail-loud behavior","status":"planned"},
-    {"scenarioId":"SCN-074-A09","title":"Capture is inviolable","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-02","TP-074-04"],"liveSystemExpectation":"guard and e2e-api rows prove no suppression path exists","status":"planned"},
-    {"scenarioId":"SCN-074-A10","title":"No content interpretation at capture time","scopeId":"SCOPE-074-01","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-03"],"liveSystemExpectation":"unit payload row proves no inferred tags/topics/categories are attached","status":"planned"},
-    {"scenarioId":"SCN-074-A11","title":"Acknowledgement shape is identical across transports","scopeId":"SCOPE-074-05","source":"spec.md#functional-requirements-bdd-scenarios","plannedTestRows":["TP-074-17"],"liveSystemExpectation":"cross-transport e2e row must cover Telegram, HTTP, WhatsApp, web, and Android renderers","status":"planned"}
+    {
+      "scenarioId": "SCN-074-A01",
+      "title": "Unrouted turn produces exactly one fallback Idea (facade hook)",
+      "scopeId": "SCOPE-074-04A",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-12"],
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/assistant/capture_fallback_policy_test.go", "id": "TP-074-12"}
+      ],
+      "evidenceRefs": ["report.md#scope-074-04a-close-out-pass-bubblesimplement-2026-06-01c"],
+      "liveSystemExpectation": "facade hook integration must observe exactly one artifact write against live Postgres",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-074-A02",
+      "title": "Explicit capture is provenance-distinct",
+      "scopeId": "SCOPE-074-02",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-05", "TP-074-06", "TP-074-07"],
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/assistant/capture_fallback_policy_test.go", "id": "TP-074-05"},
+        {"file": "tests/integration/assistant/capture_provenance_query_test.go", "id": "TP-074-06"},
+        {"file": "tests/e2e/assistant/capture_provenance_e2e_test.go", "id": "TP-074-07"}
+      ],
+      "evidenceRefs": ["report.md#scope-2-execution-evidence"],
+      "liveSystemExpectation": "explicit and fallback capture runtime paths must remain distinct",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A03",
+      "title": "Same-user same-text within dedup window dedupes",
+      "scopeId": "SCOPE-074-03",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-08", "TP-074-11"],
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        {"file": "internal/assistant/capturefallback/dedup_test.go", "id": "TP-074-08"},
+        {"file": "tests/e2e/assistant/capture_fallback_dedup_e2e_test.go", "id": "TP-074-11"}
+      ],
+      "evidenceRefs": ["report.md#scope-3-execution-evidence"],
+      "liveSystemExpectation": "live e2e-api row must return already-captured acknowledgement",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A04",
+      "title": "Same-user same-text outside dedup window does not dedup",
+      "scopeId": "SCOPE-074-03",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-09"],
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/assistant/capturefallback/dedup_test.go", "id": "TP-074-09"}
+      ],
+      "evidenceRefs": ["report.md#scope-3-execution-evidence"],
+      "liveSystemExpectation": "unit/integration rows must prove outside-window new bucket behavior",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A05",
+      "title": "Cross-user dedup is forbidden",
+      "scopeId": "SCOPE-074-03",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-10"],
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/assistant/capture_fallback_policy_test.go", "id": "TP-074-10"}
+      ],
+      "evidenceRefs": ["report.md#scope-3-execution-evidence"],
+      "liveSystemExpectation": "integration row must use two isolated users and separate artifacts",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A06",
+      "title": "Abandoned clarification captures the original prompt",
+      "scopeId": "SCOPE-074-04C",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-13"],
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/assistant/clarify_abandon_capture_test.go", "id": "TP-074-13"}
+      ],
+      "evidenceRefs": ["report.md#scope-074-04c-implementation-pass-bubblesimplement-2026-06-02"],
+      "liveSystemExpectation": "integration row must prove original prompt is captured with abandoned flag",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-074-A07",
+      "title": "Counter and IntentTrace carry the capture link",
+      "scopeId": "SCOPE-074-05",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-15", "TP-074-16"],
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        {"file": "tests/integration/assistant/capture_trace_join_test.go", "id": "TP-074-15"},
+        {"file": "tests/integration/monitoring/capture_fallback_dashboard_test.go", "id": "TP-074-16"}
+      ],
+      "evidenceRefs": ["report.md#scope-5-execution-evidence"],
+      "liveSystemExpectation": "integration rows must inspect real metric/trace/artifact linkage",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A08",
+      "title": "Missing SST keys fail loud",
+      "scopeId": "SCOPE-074-01",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-01"],
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/config/capture_fallback_test.go", "id": "TP-074-01"}
+      ],
+      "evidenceRefs": ["report.md#scope-1-execution-evidence"],
+      "liveSystemExpectation": "unit config validation proves fail-loud behavior",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-074-A09",
+      "title": "Capture is inviolable",
+      "scopeId": "SCOPE-074-01",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-02", "TP-074-04"],
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        {"file": "tests/integration/policy/capture_fallback_inviolable_test.go", "id": "TP-074-02"},
+        {"file": "tests/e2e/assistant/capture_fallback_inviolable_e2e_test.go", "id": "TP-074-04"}
+      ],
+      "evidenceRefs": ["report.md#scope-1-execution-evidence"],
+      "liveSystemExpectation": "guard and e2e-api rows prove no suppression path exists",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-074-A10",
+      "title": "No content interpretation at capture time",
+      "scopeId": "SCOPE-074-01",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-03"],
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        {"file": "internal/assistant/capturefallback/payload_test.go", "id": "TP-074-03"}
+      ],
+      "evidenceRefs": ["report.md#scope-1-execution-evidence"],
+      "liveSystemExpectation": "unit payload row proves no inferred tags/topics/categories are attached",
+      "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-074-A11",
+      "title": "Acknowledgement shape is identical across transports",
+      "scopeId": "SCOPE-074-05",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-17"],
+      "requiredTestType": ["e2e-api", "e2e-ui"],
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_ack_cross_transport_test.go", "id": "TP-074-17"}
+      ],
+      "evidenceRefs": ["report.md#scope-5-execution-evidence"],
+      "liveSystemExpectation": "cross-transport e2e row must cover Telegram, HTTP, WhatsApp, web, iPhone/iOS, and Android renderers",
+      "status": "deferred",
+      "deferredTo": "follow-on spec TBD"
+    },
+    {
+      "scenarioId": "SCN-074-A12",
+      "title": "Open-knowledge no-ground turn produces exactly one fallback Idea (live)",
+      "scopeId": "SCOPE-074-04B",
+      "source": "spec.md#functional-requirements-bdd-scenarios",
+      "plannedTestRows": ["TP-074-14"],
+      "requiredTestType": ["e2e-api"],
+      "linkedTests": [
+        {"file": "tests/e2e/assistant/capture_fallback_trigger_e2e_test.go", "id": "TP-074-14"}
+      ],
+      "evidenceRefs": ["report.md#scope-074-04b-implementation-pass-bubblesimplement-2026-06-02"],
+      "liveSystemExpectation": "open-knowledge no-ground live e2e must observe exactly one artifact write and canonical saved-as-idea acknowledgement against the live test stack",
+      "status": "planned"
+    }
   ]
 }
