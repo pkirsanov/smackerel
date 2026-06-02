@@ -1,103 +1,14 @@
 {
   "version": 1,
   "featureDir": "specs/065-generic-micro-tools",
-  "featureName": "Generic Micro-Tools",
+  "featureName": "Generic Micro-Tools (Capability Foundation)",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-05-31T00:00:00Z",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "rescopeNote": "SCN-065-A01..A06 rescoped to follow-on spec 076 Generic Micro-Tool Overlays per owner directive 2026-06-02. This manifest only tracks SCN-065-A07 (fail-loud on missing SST config), the foundation slice's behavioral contract.",
   "traceabilityGuardScenarioIds": [
-    { "scenarioId": "SCN-065-A01" },
-    { "scenarioId": "SCN-065-A02" },
-    { "scenarioId": "SCN-065-A03" },
-    { "scenarioId": "SCN-065-A04" },
-    { "scenarioId": "SCN-065-A05" },
-    { "scenarioId": "SCN-065-A06" },
     { "scenarioId": "SCN-065-A07" }
   ],
   "scenarios": [
-    {
-      "scenarioId": "SCN-065-A01",
-      "scopeId": "SCOPE-2",
-      "title": "location_normalize resolves abbreviated US state",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["integration", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "tests/integration/assistant/microtools_location_test.go", "testId": "TestLocationNormalizeIntegration_OpenMeteoCanonicalLocations", "category": "integration" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_WeatherUsesLocationNormalizeBeforeLookup", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-2"]
-    },
-    {
-      "scenarioId": "SCN-065-A02",
-      "scopeId": "SCOPE-2",
-      "title": "location_normalize resolves common city nickname",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["integration", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "internal/agent/tools/microtools/location_normalize_test.go", "testId": "TestLocationNormalizeMapsSFToSanFrancisco", "category": "unit" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_WeatherUsesLocationNormalizeBeforeLookup", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-2"]
-    },
-    {
-      "scenarioId": "SCN-065-A03",
-      "scopeId": "SCOPE-2",
-      "title": "location_normalize returns ambiguous-result envelope",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["unit", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "internal/agent/tools/microtools/location_normalize_test.go", "testId": "TestLocationNormalizeReturnsAmbiguousEnvelopeForSpringfield", "category": "unit" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_SpringfieldProducesClarificationCandidates", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-2"]
-    },
-    {
-      "scenarioId": "SCN-065-A04",
-      "scopeId": "SCOPE-3",
-      "title": "unit_convert performs canonical conversion",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["unit", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "internal/agent/tools/microtools/unit_convert_test.go", "testId": "TestUnitConvert_FlourCupsToGramsWithSource", "category": "unit" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_ConvertsThreeCupsFlourToGrams", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-3"]
-    },
-    {
-      "scenarioId": "SCN-065-A05",
-      "scopeId": "SCOPE-3",
-      "title": "calculator evaluates pure math expression",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["unit", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "internal/agent/tools/microtools/calculator_test.go", "testId": "TestCalculator_EvaluatesBoundedArithmetic", "category": "unit" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_CalculatorRejectsUnsafeExpression", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-3"]
-    },
-    {
-      "scenarioId": "SCN-065-A06",
-      "scopeId": "SCOPE-4",
-      "title": "entity_resolve maps colloquial domain terms",
-      "behaviorClass": "api",
-      "changeType": "new",
-      "requiredTestType": ["integration", "e2e-api"],
-      "regressionRequired": true,
-      "linkedTests": [
-        { "file": "tests/integration/assistant/entity_resolve_test.go", "testId": "TestEntityResolveIntegration_UserScopedGraphCandidatesOnly", "category": "integration" },
-        { "file": "tests/e2e/assistant/microtools_http_test.go", "testId": "TestMicroToolsE2E_EntityResolveClarifiesLowConfidenceLease", "category": "Regression E2E API" }
-      ],
-      "evidenceRefs": ["report.md#scope-4"]
-    },
     {
       "scenarioId": "SCN-065-A07",
       "scopeId": "SCOPE-1",
@@ -108,6 +19,9 @@
       "regressionRequired": true,
       "linkedTests": [
         { "file": "internal/config/assistant_tools_test.go", "testId": "TestAssistantToolsConfigRequiresEveryMicroToolKey", "category": "unit" },
+        { "file": "internal/agent/tools/microtools/envelope_test.go", "testId": "TestMicroToolEnvelopeSchemaRejectsMissingSource", "category": "unit" },
+        { "file": "internal/agent/tools/microtools/registry_canary_test.go", "testId": "microtools_foundation_did_not_register_any_tool", "category": "unit" },
+        { "file": "tests/integration/assistant/microtools_registry_canary_test.go", "testId": "TestMicroToolRegistryCanary_ExistingScenarioToolsStillValidate", "category": "integration" },
         { "file": "tests/e2e/assistant/microtools_config_e2e_test.go", "testId": "TestMicroToolsE2E_MissingLocationProviderFailsStartup", "category": "Regression E2E API" }
       ],
       "evidenceRefs": ["report.md#scope-1"]
