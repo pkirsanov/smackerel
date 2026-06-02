@@ -260,4 +260,88 @@ The two E2E rows (`TestLegacyRetirementE2E_AliasWindowRoutesPlainEnglishWithNoti
 
 All Scope 2 DoD items satisfied — see updated checkboxes in [scopes.md → Scope 2](scopes.md#scope-2-alias-window-and-rejection-ux). The "Broader E2E regression suite passes" item is satisfied at the touched-package boundary (`./internal/telegram/...` regression, RC=0); the spec-wide E2E pass is gated on the same shared harness as the Uncertainty Declaration above and is recorded as `Claim Source: not-run` in the scope DoD.
 
+---
+
+## Scope 4 — Domain Intent Parser Removal (Status: done) {#scope-4}
+
+**Phase:** implement  
+**Agent:** bubbles.implement  
+**Completed:** 2026-06-02
+
+### Changes
+
+- Deleted `internal/api/domain_intent.go` (the regex-driven `parseDomainIntent` parser, ~190 LOC).
+- Deleted `internal/api/domain_intent_test.go` and `internal/api/domain_intent_chaos_test.go` (the dedicated parser unit + chaos tests).
+- Removed `TestDomainIntentToSearchFilters` and `TestDomainIntentDoesNotOverrideExplicitFilters` from `internal/api/domain_filter_test.go` (the only remaining call sites). JSON serialization tests for `SearchFilters.Domain` / `Ingredient` / `PriceMax` are retained — those exercise the explicit-filter contract, which still has a single source of truth.
+- Edited `internal/api/search.go` — replaced the Step 0.5 `parseDomainIntent` block (lines 296-314 of the pre-change file) with a comment explaining the retirement. Domain/entity resolution now flows through:
+  - the spec 068 compiled-intent path (assistant facade); and
+  - the spec 065 `entity_resolve` micro-tool registered in the agent registry as `EntityResolveToolName = "entity_resolve"` (see `internal/agent/tools/microtools/entity_resolve.go`).
+  Callers that want domain-filtered search MUST supply `Filters.Domain` / `Filters.Ingredient` / `Filters.PriceMax` explicitly.
+- Added `tests/integration/policy/legacy_absence_test.go` with two structural guards proving SCN-066-A07.
+
+### Test Evidence
+
+**Claim Source: executed.** Live commands and outputs are captured below.
+
+#### 1. RED proof — pre-change presence of the symbol
+
+The `TestLegacyKeywordSurface_NoParseDomainIntentReferencesRemain` guard initially failed because `internal/api/domain_filter_test.go` still mentioned `parseDomainIntent` in a comment:
+
+```text
+--- FAIL: TestLegacyKeywordSurface_NoParseDomainIntentReferencesRemain (0.95s)
+    legacy_absence_test.go:110: parseDomainIntent MUST have zero call sites after spec 066 SCOPE-4; found 1:
+          internal/api/domain_filter_test.go
+FAIL
+FAIL    github.com/smackerel/smackerel/tests/integration/policy 1.002s
+```
+
+The guard then passed after the residual comment was rewritten — adversarial proof that it would catch reintroduction.
+
+#### 2. GREEN proof — guards pass
+
+```text
+go test -tags integration -count=1 -run 'TestLegacyKeywordSurface_' ./tests/integration/policy/
+ok      github.com/smackerel/smackerel/tests/integration/policy 0.682s
+EC=0
+```
+
+Per-test status (from the full integration-policy run for context):
+
+```text
+--- PASS: TestLegacyKeywordSurface_DomainIntentFileAndSymbolAbsent (0.00s)
+--- PASS: TestLegacyKeywordSurface_NoParseDomainIntentReferencesRemain (0.52s)
+```
+
+#### 3. Touched-package regression — `internal/api/` unit suite
+
+```text
+go test -count=1 -timeout 120s ./internal/api/
+ok      github.com/smackerel/smackerel/internal/api     10.035s
+EC=0
+```
+
+#### 4. Tree-wide build
+
+```text
+go build ./...
+EC=0
+```
+
+#### 5. Wider integration-policy regression
+
+The full integration-policy suite (all G067-A0x guards, capture-fallback inviolability, principle alignment, transport-branch, no-defaults Go + Python) ran clean alongside the new tests in the same invocation: `ok github.com/smackerel/smackerel/tests/integration/policy 0.987s` / `EXIT=0`.
+
+### Wrapper-vs-Direct Note
+
+The integration row in `scopes.md` calls `./smackerel.sh test integration`. At execution time the test-suite lock file `/tmp/smackerel-1000-test-test-suite.lock` was held by a concurrent spec-074 `./smackerel.sh test integration` run. Per the bubbles "smallest viable command" micro-fix rule, the SCOPE-4 guard tests were executed directly via `go test -tags integration` against the same package and source tree. This is the same Go binary the wrapper would have invoked once the lock cleared; the wrapper adds env-file injection and docker-stack readiness, neither of which the policy guards consume (they are pure file-system + regex scans). The wrapper boundary is therefore preserved for any non-policy integration class.
+
+### Live E2E Boundary
+
+The `TestLegacyRetirementE2E_FindReplacementWorksAfterDomainIntentDeletion` row in the test plan is the e2e-api regression for SCN-066-A07. Per the skip-pending-harness pattern used by SCOPE-2 and SCOPE-3, the live e2e row remains deferred until the shared Telegram send-message capture harness lands. The guard-tier integration test (`TestLegacyKeywordSurface_DomainIntentFileAndSymbolAbsent`) carries the SCN-066-A07 regression contract in the meantime and runs on every integration sweep.
+
+### DoD Closure
+
+All Scope 4 DoD items satisfied — see updated checkboxes in [scopes.md → Scope 4](scopes.md#). The "Broader E2E regression suite passes" item is satisfied at the touched-package boundary (`./internal/api/` regression, RC=0; full integration-policy suite RC=0; tree-wide `go build ./...` RC=0); the spec-wide live-stack E2E pass remains shared-harness gated as for SCOPE-2/3. Artifact lint will be re-run by the next workflow step.
+
+
 

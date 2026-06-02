@@ -150,7 +150,7 @@ Scenario: SCN-065-A03 — location_normalize returns ambiguous-result envelope f
 
 - [ ] `location_normalize` resolves `palm springs ca` and `sf` into canonical location envelopes with source/provider attribution.
 - [ ] Ambiguous input returns a bounded ranked candidate list and routes to spec 061 clarification without guessing.
-- [ ] Weather prompt contract instructs the agent to call `location_normalize` and removes prompt-side provider quirks by the required size threshold.
+- [x] Weather prompt contract instructs the agent to call `location_normalize` and removes prompt-side provider quirks by the required size threshold. *(Evidence: report.md#scope-2 — prompt block 1764→721 bytes = 59% reduction; allowed_tools lists location_normalize; TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent PASS.)*
 - [ ] Consumer Impact Sweep proves no first-party test, prompt, or trace view still depends on prompt-side location dictionaries.
 - [ ] Scenario-specific E2E regression coverage exists for SCN-065-A01, SCN-065-A02, and SCN-065-A03.
 - [ ] Broader E2E regression suite passes.
@@ -261,9 +261,9 @@ Scenario: SCN-065-A06 — entity_resolve maps colloquial domain terms
 
 ### Definition of Done
 
-- [ ] `entity_resolve` returns user-scoped ranked artifact references with confidence and ambiguity behavior.
-- [ ] Scenario `allowed_tools` lists include the relevant micro-tools and prompt-side normalization text is removed where the tool owns the behavior.
-- [ ] Weather prompt size reduction meets the Success Signal threshold and is protected by a regression test.
+- [x] `entity_resolve` returns user-scoped ranked artifact references with confidence and ambiguity behavior. *(Evidence: report.md#scope-4 — TestEntityResolveIntegration_UserScopedGraphCandidatesOnly + TestEntityResolveIntegration_LowConfidenceReturnsAmbiguous PASS; cmd/core wiring constructs searchEngineEntityResolver and calls SetEntityResolveServices.)*
+- [x] Scenario `allowed_tools` lists include the relevant micro-tools and prompt-side normalization text is removed where the tool owns the behavior. *(Evidence: report.md#scope-4 — weather-query-v1.yaml + retrieval-qa-v1.yaml updated; prompt-contract test verifies.)*
+- [x] Weather prompt size reduction meets the Success Signal threshold and is protected by a regression test. *(Evidence: report.md#scope-4 — 59% reduction (>=40% threshold); TestWeatherPromptUsesLocationNormalizeAndShrinksByFortyPercent regression PASS.)*
 - [ ] Consumer Impact Sweep proves spec 066 can consume `entity_resolve` without relying on regex intent parsing.
 - [ ] Scenario-specific E2E regression coverage exists for SCN-065-A06 and for cross-scenario micro-tool composition.
 - [ ] Broader E2E regression suite passes.
