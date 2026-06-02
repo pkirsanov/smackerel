@@ -1,0 +1,5 @@
+# Smackerel next train flag bundle
+version: 1
+train: next
+flags: {}
+metadata: {}
