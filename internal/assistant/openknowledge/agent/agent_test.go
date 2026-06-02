@@ -702,6 +702,105 @@ func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T
 	}
 }
 
+// TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets
+// regresses the production failure pattern seen on home-lab 2026-06-02
+// where /ask returned bodies like:
+//   "I am unable to provide the humidity for Palm Springs, CA,
+//    because no search tools were executed to retrieve this information."
+// EVEN THOUGH 3 web_search calls had returned real Palm Springs weather
+// snippets (AccuWeather: 13% humidity / 100°F RealFeel, etc).
+//
+// The user sees text that lies about its own trace. Empty-citations
+// salvage attaches sources but the bad body still misinforms the user.
+// Body-quality salvage upgrades the response: when the model emits an
+// "ungrounded excuse" phrase AND the trace has real sources, replace
+// the body with synthesizeFromSnippets(trace) so the user sees the
+// actual web snippets instead of a lie.
+//
+// Adversarial: a tautological version would just assert body changes.
+// This test ALSO asserts the salvaged body contains text from the
+// tool result snippet exactly (proves real synthesis, not a stub).
+func TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets(t *testing.T) {
+	snippet := "Palm Springs current humidity is 13% with RealFeel 100°F."
+	// Production-shape excuse text.
+	excuse := "I am unable to provide the humidity for Palm Springs, CA, " +
+		"because no search tools were executed to retrieve this information.\n" +
+		"<CITATIONS>[]</CITATIONS>"
+	// Custom registry with a fake web tool that returns the exact
+	// snippet text we will assert appears in the salvaged body.
+	r := ok.NewRegistry([]string{"fake_web"})
+	if err := r.Register(fakeWebTool{
+		url:     "https://accuweather.test/palm-springs",
+		hash:    "psprings001",
+		snippet: snippet,
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	fl := &fakeLLM{t: t, responses: []llm.Result{
+		toolUse("w1", "fake_web", `{"query":"palm springs humidity"}`, 100),
+		endTurn(excuse, 80),
+	}}
+	a, err := New(fl, r, citeback.Verify, baseCfg(5, 1000, 1.0, 10.0, 10.0, 0.8, func(int) float64 { return 0 }))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := a.Run(context.Background(), "palm springs humidity")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("Status=%q want success", got.Status)
+	}
+	if len(got.Sources) != 1 {
+		t.Fatalf("Sources len=%d want 1", len(got.Sources))
+	}
+	// Body MUST NOT be the original excuse — that's the production
+	// bug we are regressing.
+	if strings.Contains(got.FinalText, "unable to provide") ||
+		strings.Contains(got.FinalText, "no search tools were executed") {
+		t.Fatalf("REGRESSION: salvaged body still contains the excuse phrase. " +
+			"User sees the model's lie even though tool snippet was available. " +
+			"Body=%s", got.FinalText)
+	}
+	// Body MUST contain the real snippet text — proves synthesis,
+	// not a hardcoded stub.
+	if !strings.Contains(got.FinalText, snippet) {
+		t.Fatalf("salvaged body must contain the tool snippet verbatim; got %q want substring %q",
+			got.FinalText, snippet)
+	}
+}
+
+// TestAgent_BodyQualitySalvage_PreservesGoodAnswer is the adversarial
+// negative: when the model writes a real grounded answer (not an
+// excuse), the salvage MUST NOT rewrite it. Otherwise good answers
+// would be silently mangled.
+func TestAgent_BodyQualitySalvage_PreservesGoodAnswer(t *testing.T) {
+	goodAnswer := "Palm Springs is currently 100°F with 13% humidity per AccuWeather.\n<CITATIONS>[]</CITATIONS>"
+	r := ok.NewRegistry([]string{"fake_web"})
+	if err := r.Register(fakeWebTool{
+		url: "https://accuweather.test/x", hash: "h", snippet: "different snippet text",
+	}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	fl := &fakeLLM{t: t, responses: []llm.Result{
+		toolUse("w1", "fake_web", `{"query":"x"}`, 100),
+		endTurn(goodAnswer, 80),
+	}}
+	a, err := New(fl, r, citeback.Verify, baseCfg(5, 1000, 1.0, 10.0, 10.0, 0.8, func(int) float64 { return 0 }))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := a.Run(context.Background(), "x")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	expected := "Palm Springs is currently 100°F with 13% humidity per AccuWeather."
+	if got.FinalText != expected {
+		t.Fatalf("good answer was mangled by salvage: got %q want %q", got.FinalText, expected)
+	}
+}
+
 // ensure textPtr / llm.Result helpers compile in import-clean way
 var _ = textPtr
 var _ json.RawMessage
