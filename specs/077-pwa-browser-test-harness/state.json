@@ -23,7 +23,7 @@
     "specs/073-web-mobile-assistant-frontend",
     "specs/075-legacy-retirement-telemetry"
   ],
-  "certifiedAt": "2026-06-02T23:30:00Z",
+  "certifiedAt": "2026-06-02T23:45:00Z",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.implement",
@@ -81,7 +81,7 @@
   },
   "certification": {
     "status": "done",
-    "lastEvaluatedAt": "2026-06-02T23:30:00Z",
+    "lastEvaluatedAt": "2026-06-02T23:45:00Z",
     "evidenceRef": "specs/077-pwa-browser-test-harness/report.md#bubbles-validate-session-2026-06-02--certified-done",
     "completedScopes": [
       "1a",
@@ -244,7 +244,7 @@
   "activeBugs": [],
   "resolvedBugs": [],
   "failures": [],
-  "lastUpdatedAt": "2026-06-02T23:30:00Z",
+  "lastUpdatedAt": "2026-06-02T23:45:00Z",
   "scopeLayout": "single-file",
   "artifacts": {
     "spec": "spec.md",
