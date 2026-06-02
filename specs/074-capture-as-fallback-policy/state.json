@@ -49,10 +49,19 @@
   "execution": {
     "activeAgent": "bubbles.implement",
     "currentPhase": "implement",
-    "currentScope": "SCOPE-074-04B",
+    "currentScope": "SCOPE-074-04C",
     "runStartedAt": "2026-05-31T20:30:46Z",
-    "lastUpdatedAt": "2026-06-01T22:07:00Z",
-    "completedPhaseClaims": [],
+    "lastUpdatedAt": "2026-06-02T00:08:00Z",
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "SCOPE-074-04C",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-02T00:08:00Z",
+        "evidenceRef": "report.md#scope-074-04c-implementation-pass-bubblesimplement-2026-06-02",
+        "summary": "Delivered SCOPE-074-04C ClarifyAbandonSweeper end-to-end: migration 052 (pending_clarify JSONB column + partial index), PendingClarify struct + PgStore Load/Persist/ListAbandonedClarifies/ClearPendingClarify round-trip, capturefallback.ClarifyAbandonSweeper, facade clarify-emit + reply-path clear hooks with hadPendingClarify-threaded captureFallbackEligibleWithClarify, and TP-074-13 integration test with adversarial sub-case. Live integration EXIT=0 — both --- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned (0.08s) and --- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned_UserRepliesInTime (0.03s) against the disposable test stack. All four SCOPE-074-04C DoD items flipped to [x] with executed evidence. SCOPE-074-04B TP-074-14 re-run remains blocked by foreign-owned F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA (spec 069 SCOPE-1d in flight). New routed finding F074-04C-PGSTORE-PERSIST-MISSING-LEGACY-LEDGER raised against foreign-owned PgStore.Persist + spec 075 migration 046."
+      }
+    ],
     "completedScopes": ["SCOPE-074-04A"],
     "executionHistory": [
       {

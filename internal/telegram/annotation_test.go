@@ -234,82 +234,12 @@ func TestHandleReplyAnnotation_KnownMessage(t *testing.T) {
 	}
 }
 
-func TestHandleRate_NoArgs(t *testing.T) {
-	var mu sync.Mutex
-	var replies []string
-	bot := &Bot{
-		baseURL:         "http://localhost",
-		captureURL:      "http://localhost/api/capture",
-		httpClient:      http.DefaultClient,
-		done:            make(chan struct{}),
-		disambiguations: newDisambiguationStore(120),
-		replyFunc: func(chatID int64, text string) {
-			mu.Lock()
-			replies = append(replies, text)
-			mu.Unlock()
-		},
-	}
+// Spec 066 SCOPE-3 — TestHandleRate_NoArgs and TestHandleRate_NoResults were
+// removed when (*Bot).handleRate was retired. The /rate slash command is now
+// intercepted by interceptLegacyAlias (SCOPE-2) and routed through the
+// assistant facade; the spec-066-owned retirement guarantee lives in
+// tests/integration/assistant/legacy_replacement_test.go.
 
-	msg := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 5555},
-	}
-
-	bot.handleRate(context.Background(), msg, "")
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(replies) != 1 {
-		t.Fatalf("expected 1 reply, got %d", len(replies))
-	}
-	if !strings.Contains(replies[0], "Usage:") {
-		t.Errorf("expected usage message, got %q", replies[0])
-	}
-}
-
-func TestHandleRate_NoResults(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/search" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"results": []interface{}{},
-			})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer ts.Close()
-
-	var mu sync.Mutex
-	var replies []string
-	bot := &Bot{
-		baseURL:         ts.URL,
-		captureURL:      ts.URL + "/api/capture",
-		searchURL:       ts.URL + "/api/search",
-		httpClient:      ts.Client(),
-		done:            make(chan struct{}),
-		disambiguations: newDisambiguationStore(120),
-		replyFunc: func(chatID int64, text string) {
-			mu.Lock()
-			replies = append(replies, text)
-			mu.Unlock()
-		},
-	}
-
-	msg := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 5555},
-	}
-
-	bot.handleRate(context.Background(), msg, "unicorn stew 5/5")
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(replies) != 1 {
-		t.Fatalf("expected 1 reply, got %d", len(replies))
-	}
-	if replies[0] != "No matching artifacts found" {
-		t.Errorf("reply = %q, want %q", replies[0], "No matching artifacts found")
-	}
-}
 
 func TestDisambiguationStore_SetGetClear(t *testing.T) {
 	ds := newDisambiguationStore(120)

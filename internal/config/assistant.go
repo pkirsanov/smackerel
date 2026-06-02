@@ -184,6 +184,30 @@ type AssistantConfig struct {
 
 	// Spec 065 SCOPE-1 — generic micro-tools SST.
 	Tools AssistantToolsConfig
+
+	// Spec 069 SCOPE-1c-bis — HTTP transport SST contract. Typed
+	// block consumed by Scope 1d wiring (httpadapter.NewHTTPAdapter)
+	// and Scope 2 middleware. Every key is REQUIRED at the generator
+	// boundary (Gate G028 / smackerel-no-defaults); missing values
+	// fail loud at startup.
+	HTTP AssistantHTTPTransportConfig
+}
+
+// AssistantHTTPTransportConfig holds the spec 069 SCOPE-1c-bis SST
+// envelope for the HTTP transport adapter. Field names follow the
+// scope's exact HTTP*-prefix vocabulary so consumer call sites
+// (`cfg.Assistant.HTTP.HTTPEnabled` etc.) read identically to the
+// scope contract. Mapped to `httpadapter.HTTPTransportConfig` at
+// wiring time (cmd/core/wiring_assistant_facade.go).
+type AssistantHTTPTransportConfig struct {
+	HTTPEnabled                   bool
+	HTTPSchemaVersion             string
+	HTTPBodySizeMaxBytes          int
+	HTTPRateLimitPerUserPerMinute int
+	HTTPConversationTTL           time.Duration
+	HTTPRequiredScope             string
+	HTTPCORSAllowedOrigins        []string
+	HTTPTransportHintAllowlist    []string
 }
 
 // AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK
@@ -407,6 +431,9 @@ func loadAssistantConfig(cfg *Config) error {
 	// aggregate error names every offender at once.
 	loadAssistantToolsConfig(cfg, &errs)
 
+	// Spec 069 SCOPE-1c-bis — HTTP transport SST (fail-loud).
+	loadAssistantHTTPTransportConfig(cfg, &errs)
+
 	if len(errs) > 0 {
 		return fmt.Errorf("[F061-SST-MISSING] missing or invalid required assistant configuration: %s", strings.Join(errs, ", "))
 	}
@@ -612,6 +639,9 @@ func (c *Config) validateAssistantConfig() error {
 			}
 			*r.dst = resolved
 		}
+	}
+	if err := validateAssistantHTTPTransportConfig(c.Assistant.HTTP); err != nil {
+		return err
 	}
 	return nil
 }

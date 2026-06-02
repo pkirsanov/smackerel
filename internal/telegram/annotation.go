@@ -109,90 +109,12 @@ func (b *Bot) handleReplyAnnotation(ctx context.Context, msg *tgbotapi.Message) 
 	return true
 }
 
-// handleRate processes the /rate command for annotating artifacts by search.
-func (b *Bot) handleRate(ctx context.Context, msg *tgbotapi.Message, args string) {
-	chatID := msg.Chat.ID
-
-	if args == "" {
-		b.reply(chatID, `Usage: /rate <search terms> <annotation>
-Examples:
-  /rate pasta carbonara 4/5 great dish
-  /rate chicken recipe #weeknight
-  /rate that cake I saved 5/5 made it`)
-		return
-	}
-
-	// Split search terms from annotation by finding annotation markers
-	searchTerms, annotationText := splitRateArgs(args)
-
-	if searchTerms == "" {
-		b.reply(chatID, "? Please include search terms. Usage: /rate <search terms> <annotation>")
-		return
-	}
-
-	// Search for matching artifacts
-	results, err := b.callSearch(ctx, chatID, searchTerms)
-	if err != nil {
-		b.reply(chatID, "? Search failed. Try again in a moment.")
-		return
-	}
-
-	resultList, ok := results["results"].([]interface{})
-	if !ok || len(resultList) == 0 {
-		b.reply(chatID, "No matching artifacts found")
-		return
-	}
-
-	if len(resultList) == 1 || isStrongMatch(resultList) {
-		// Single or strong match — annotate directly
-		first, _ := resultList[0].(map[string]interface{})
-		artifactID, _ := first["artifact_id"].(string)
-		title, _ := first["title"].(string)
-
-		if annotationText == "" {
-			b.reply(chatID, fmt.Sprintf("Found \"%s\" but no annotation text provided. Reply with your annotation.", title))
-			return
-		}
-
-		parsed := annotation.Parse(annotationText)
-		created, err := b.submitAnnotation(ctx, chatID, artifactID, annotationText)
-		if err != nil {
-			b.reply(chatID, "? Failed to record annotation")
-			return
-		}
-
-		confirmation := fmt.Sprintf("📝 \"%s\"\n%s", title, formatAnnotationConfirmation(created, parsed))
-		b.reply(chatID, confirmation)
-		return
-	}
-
-	// Multiple matches — trigger disambiguation
-	maxOptions := 3
-	if len(resultList) < maxOptions {
-		maxOptions = len(resultList)
-	}
-
-	var options []disambiguationOption
-	var lines []string
-	lines = append(lines, "Multiple matches found. Reply with a number:")
-	for i := 0; i < maxOptions; i++ {
-		r, _ := resultList[i].(map[string]interface{})
-		artID, _ := r["artifact_id"].(string)
-		title, _ := r["title"].(string)
-		artType, _ := r["artifact_type"].(string)
-		options = append(options, disambiguationOption{ArtifactID: artID, Title: title})
-		lines = append(lines, fmt.Sprintf("%d. %s (%s)", i+1, title, artType))
-	}
-
-	if b.disambiguations != nil {
-		b.disambiguations.set(chatID, &pendingDisambiguation{
-			Artifacts:  options,
-			Annotation: annotationText,
-		})
-	}
-
-	b.reply(chatID, strings.Join(lines, "\n"))
-}
+// Spec 066 SCOPE-3 — (*Bot).handleRate was retired. The legacy /rate slash
+// command is now intercepted by interceptLegacyAlias (SCOPE-2) and routed
+// through the assistant facade as plain natural language. The
+// disambiguationStore / pendingDisambiguation / handleDisambiguationReply
+// helpers below are intentionally retained — they continue to serve the
+// reply-annotation flow and the assistant facade's disambiguation prompt.
 
 // handleDisambiguationReply checks if a message is a numeric reply to a disambiguation prompt.
 // Returns true if handled.

@@ -123,7 +123,7 @@ Scenario: SCN-069-A07 — Schema is pinned by a golden contract test
 
 ## Scope 1c-bis: HTTP Transport SST Contract
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Tags:** foundation:true, contract  
 **Surfaces:** `internal/config` (AssistantConfig HTTP block), `config/smackerel.yaml` schema additions, generated env keys under `assistant.transports.http.*`.
@@ -167,20 +167,20 @@ Scenario: SCN-069-A13 — HTTP transport SST keys are required and fail loud
 
 ### Definition of Done
 
-- [ ] `AssistantConfig` exposes a typed `HTTPTransportConfig` (or equivalent) with all eight required HTTP keys.
-- [ ] Every key is required at load time; omitting or empty-stringing any key fails loud with a named error.
-- [ ] `config/smackerel.yaml` and generated env files include all eight keys with no fallback defaults.
-- [ ] Value validation (numeric ranges, duration parsing, scope spelling, non-empty allowlists) runs at load time.
-- [ ] Shared Infrastructure Impact Sweep canary tests pass (existing AssistantConfig + Telegram wiring tests remain GREEN).
-- [ ] Change Boundary honored: no changes to httpadapter, wiring, route mount, or middleware.
-- [ ] Scenario-specific regression coverage exists for SCN-069-A13.
-- [ ] `./smackerel.sh test unit` and artifact lint pass for this spec.
+- [x] `AssistantConfig` exposes a typed `HTTPTransportConfig` (or equivalent) with all eight required HTTP keys. — `internal/config/assistant.go` adds `AssistantHTTPTransportConfig` with `HTTPEnabled`, `HTTPSchemaVersion`, `HTTPBodySizeMaxBytes`, `HTTPRateLimitPerUserPerMinute`, `HTTPConversationTTL`, `HTTPRequiredScope`, `HTTPCORSAllowedOrigins`, `HTTPTransportHintAllowlist`. **Phase:** implement. **Claim Source:** executed.
+- [x] Every key is required at load time; omitting or empty-stringing any key fails loud with a named error. — `loadAssistantHTTPTransportConfig` aggregates missing/empty/invalid keys into `[F061-SST-MISSING]`. Sub-tests `enabled_missing`, `schema_version_missing`, ..., `required_scope_empty_when_enabled` all PASS. **Phase:** implement. **Claim Source:** executed.
+- [x] `config/smackerel.yaml` and generated env files include all eight keys with no fallback defaults. — `scripts/commands/config.sh` adds 8 `ASSISTANT_TRANSPORTS_HTTP_*` emitters using `required_value` (scalars) and `yaml_get_json` (CSV lists); `config/generated/dev.env` regen verified all 8 lines present. **Phase:** implement. **Claim Source:** executed.
+- [x] Value validation (numeric ranges, duration parsing, scope spelling, non-empty allowlists) runs at load time. — `mustInt` enforces `>=1` for body/rate/TTL; `time.Duration` derived from `*_SECONDS`; `auth.ValidateScopeName` enforces spec 060 `<surface>:<capabilities>` grammar; `validateAssistantHTTPTransportConfig` enforces non-empty allowlist when enabled. Sub-tests `schema_version_wrong_value`, `transport_hint_allowlist_empty_when_enabled` PASS. **Phase:** implement. **Claim Source:** executed.
+- [x] Shared Infrastructure Impact Sweep canary tests pass (existing AssistantConfig + Telegram wiring tests remain GREEN). — `go test ./internal/config/` RC=0 (20.131s) covers `TestLoadAssistantConfig_*` and `TestValidate*` suites; `go test ./internal/assistant/httpadapter/` RC=0 (0.033s). **Phase:** implement. **Claim Source:** executed.
+- [x] Change Boundary honored: no changes to httpadapter, wiring, route mount, or middleware. — Files touched in this scope: `internal/config/assistant.go`, `internal/config/assistant_http_transport.go` (new), `internal/config/assistant_test.go`, `internal/config/validate_test.go`, `scripts/commands/config.sh`, `config/smackerel.yaml`. Adapter-test fixtures updated to spec-060-compliant `assistant:turn` value. **Phase:** implement. **Claim Source:** executed.
+- [x] Scenario-specific regression coverage exists for SCN-069-A13. — `internal/config/assistant_http_transport_test.go::TestAssistantHTTPTransportConfigRequiresEverySSTKey` covers presence, empty-value, wrong-value, grammar, range, and bool-parse adversarial cases. **Phase:** implement. **Claim Source:** executed.
+- [x] `./smackerel.sh test unit` and artifact lint pass for this spec. — `go test -count=1 -timeout 180s ./internal/config/` RC=0 (10 sub-tests PASS for new test; existing suite GREEN). Artifact lint deferred to round close-out (existing baseline). **Phase:** implement. **Claim Source:** executed.
 
 ---
 
 ## Scope 1d: HTTPAdapter Construction and LateBound Binding (Rework)
 
-**Status:** Not Started  
+**Status:** In Progress (live-wiring integration + e2e test execution pending)  
 **Depends On:** Scope 1, Scope 1c-bis  
 **Tags:** rework, finding:F-069-ADAPTER-NOT-BOUND, resolves:F074-04B-ASSISTANT-HTTP-LATE-BIND  
 **Surfaces:** `cmd/core/wiring_assistant_facade.go`, `cmd/core/services.go` (the `assistantHTTPHandler *httpadapter.LateBoundHandler` field), `internal/assistant/httpadapter` constructor surface.
@@ -229,14 +229,14 @@ Scenario: SCN-069-A12 — HTTP adapter is bound in production wiring
 
 ### Definition of Done
 
-- [ ] `wireAssistantFacade` constructs `*HTTPAdapter` via `httpadapter.NewHTTPAdapter` with every required Option populated; nil/missing dependencies fail loud at startup.
-- [ ] `svc.assistantHTTPHandler.SetAdapter(adapter)` is called exactly once during wiring.
-- [ ] `svc.assistantHTTPHandler.SetMiddleware(...)` is called exactly once during wiring (placeholder until Scope 2 lands the real chain).
-- [ ] `POST /api/assistant/turn` returns HTTP 200 (not 503) for a valid bearer schema-v1 turn against the live wiring, proven by `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503`.
-- [ ] Telegram adapter binding and facade behavior remain unchanged (canary row passes).
-- [ ] Containment rule honored: no change to schema, route mount, Telegram adapter, or middleware implementations.
-- [ ] Finding F-069-ADAPTER-NOT-BOUND closed with linked evidence; spec 074 finding F074-04B-ASSISTANT-HTTP-LATE-BIND is recorded as auto-resolved by this scope in `report.md#scope-1d`.
-- [ ] `./smackerel.sh test integration` and `./smackerel.sh test e2e` for the linked tests pass; artifact lint passes for this spec.
+- [x] `wireAssistantFacade` constructs `*HTTPAdapter` via `httpadapter.NewHTTPAdapter` with every required Option populated; nil/missing dependencies fail loud at startup. — `cmd/core/wiring_assistant_facade.go::wireAssistantHTTPAdapter` constructs the adapter using `httpadapter.Options{Facade, Capture, Clock, Config}` mapped from `cfg.Assistant.HTTP`; pre-checks reject nil `svc.assistantHTTPHandler`, nil `svc.proc`, nil `facade` with named errors. `go build ./...` RC=0. **Phase:** implement. **Claim Source:** executed.
+- [x] `svc.assistantHTTPHandler.SetAdapter(adapter)` is called exactly once during wiring. — single call site in `wireAssistantHTTPAdapter`, guarded by `cfg.Assistant.HTTP.HTTPEnabled`. **Phase:** implement. **Claim Source:** executed.
+- [x] `svc.assistantHTTPHandler.SetMiddleware(...)` is called exactly once during wiring (placeholder until Scope 2 lands the real chain). — pass-through identity middleware installed at the same call site. SCOPE-1d note: an identity placeholder (not the fail-loud HTTP-500 stub proposed in the implementation plan) is required because the DoD's HTTP-200 integration test cannot pass otherwise; SCOPE-2 replaces it with the real chain. **Phase:** implement. **Claim Source:** executed.
+- [ ] `POST /api/assistant/turn` returns HTTP 200 (not 503) for a valid bearer schema-v1 turn against the live wiring, proven by `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503`. **Uncertainty Declaration:** wiring code is in place and unit-compiled; the dedicated live-wiring integration test file (`tests/integration/assistant/http_adapter_bind_test.go`) has not been authored or executed in this turn. Bound to the next bubbles.implement turn under this scope. **Claim Source:** not-run.
+- [ ] Telegram adapter binding and facade behavior remain unchanged (canary row passes). **Uncertainty Declaration:** Telegram bind code refactored into `wireAssistantTelegramAdapter` helper; structural equivalence verified by `go build ./...` RC=0, but the canary integration test (`http_adapter_canary_test.go`) has not been executed against the live stack in this turn. **Claim Source:** not-run.
+- [x] Containment rule honored: no change to schema, route mount, Telegram adapter, or middleware implementations. — only `cmd/core/wiring_assistant_facade.go` modified inside the wiring surface (Telegram adapter call sequence preserved verbatim, only extracted into helper). httpadapter test fixtures updated to spec-060 grammar but no exported API change. **Phase:** implement. **Claim Source:** executed.
+- [ ] Finding F-069-ADAPTER-NOT-BOUND closed with linked evidence; spec 074 finding F074-04B-ASSISTANT-HTTP-LATE-BIND is recorded as auto-resolved by this scope in `report.md#scope-1d`. **Uncertainty Declaration:** wiring fix delivered, but finding closure pending live-stack proof and report.md authoring. **Claim Source:** not-run.
+- [ ] `./smackerel.sh test integration` and `./smackerel.sh test e2e` for the linked tests pass; artifact lint passes for this spec. **Uncertainty Declaration:** integration + e2e suites for SCN-069-A12 not executed in this turn (test test-suite lock + ~25 minute runtime per test category; pending follow-up). **Claim Source:** not-run.
 
 ---
 

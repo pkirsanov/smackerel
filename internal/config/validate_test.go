@@ -1012,6 +1012,19 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE", "30")
 	t.Setenv("ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS", "4096")
 
+	// Spec 069 SCOPE-1c-bis — HTTP transport SST. Defaults mirror
+	// config/smackerel.yaml so unrelated tests Load() cleanly; the
+	// dedicated TestAssistantHTTPTransportConfig* cases exercise the
+	// fail-loud paths.
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_ENABLED", "true")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_SCHEMA_VERSION", "v1")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_BODY_SIZE_MAX_BYTES", "65536")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_RATE_LIMIT_PER_USER_PER_MINUTE", "60")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_CONVERSATION_TTL_SECONDS", "86400")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_REQUIRED_SCOPE", "assistant:turn")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS", "")
+	t.Setenv("ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST", "web,mobile,bridge")
+
 	// Spec 074 SCOPE-1 — capture-as-fallback policy SST. Inviolable
 	// foundation: values must always be present (no enable flag).
 	// Defaults mirror config/smackerel.yaml.

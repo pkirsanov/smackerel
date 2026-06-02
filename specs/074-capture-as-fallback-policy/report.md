@@ -382,3 +382,84 @@ Direct invocation `./smackerel.sh config generate` (2026-06-01 23:10 UTC) produc
 - `runCaptureFallback`/`openKnowledgeNoGround`/`captureFallbackEligible` wiring for the open-knowledge no-ground path remains in place from earlier passes; no regression was introduced because no code was changed.
 
 **Phase:** implement. **Claim Source:** executed.
+
+---
+
+## SCOPE-074-04C Implementation Pass (bubbles.implement, 2026-06-02)
+
+This pass delivered the SCOPE-074-04C ClarifyAbandonSweeper end-to-end per `design.md` §"SCOPE-4 — Clarify-Abandoned Capture (Design Resolution)" and also re-attempted SCOPE-074-04B's TP-074-14 e2e (still blocked by the foreign-owned spec 069 SCOPE-1d HTTPAdapter late-binding test-infra issue, evidence below).
+
+### SCOPE-074-04C — Implementation Surface
+
+| Artifact | Path | Role |
+|---|---|---|
+| Migration 052 | `internal/db/migrations/052_capture_as_fallback_pending_clarify.sql` | Adds nullable `pending_clarify JSONB` column on `assistant_conversations` + partial index `idx_assistant_conversations_pending_clarify` per design (a)+(c). Filename uses next available slot (051 was already taken); column / index / payload shape are exactly as design.md prescribes. |
+| `PendingClarify` struct + `PendingClarifySchemaV1` | `internal/assistant/context/store.go` | New persisted shadow on `Conversation`. v1 payload matches design exactly (`schema_version`, `original_prompt`, `emit_time`, `clarify_intent_id`, `original_turn_id`, `user_id`). |
+| `PgStore.Load`/`Persist` extension | `internal/assistant/context/pg_store.go` | Round-trips `pending_clarify` JSONB through `Load` SELECT and `Persist` INSERT/UPSERT. |
+| `PgStore.ListAbandonedClarifies`/`ClearPendingClarify` | same file | Sweeper-side persistence seams. `ListAbandonedClarifies` uses DB-side `(pending_clarify->>'emit_time')::timestamptz <= NOW() - make_interval(...)` so wall-clock skew between sweeper and DB is irrelevant. `ClearPendingClarify` is the SQL the facade reply path would invoke. |
+| `ClarifyAbandonSweeper` | `internal/assistant/capturefallback/clarify_abandon_sweeper.go` | New per-tick sweeper per design (b). `RunOnce(ctx)` is deterministic so tests do not depend on the wall-clock ticker. `Run(ctx,cadence)` is the production loop. No suppression branch (SCN-074-A09 inviolability holds). |
+| Facade clarify-emit hook | `internal/assistant/facade.go` clarify-gate branch at line ~676 | Sets `conv.PendingClarify` with the ORIGINAL `msg.Text` BEFORE `appendTurnAndPersist` writes the conversation row; `correlationID` becomes `clarify_intent_id`, `msg.TransportMessageID` becomes `original_turn_id`. |
+| Facade reply-path clear hook | `internal/assistant/facade.go` top-of-Handle after `emittedAt` | Captures `hadPendingClarify` before clearing `conv.PendingClarify` so the next `appendTurnAndPersist` writes a NULL `pending_clarify`. `hadPendingClarify` is threaded into the new `captureFallbackEligibleWithClarify(conv, hadPendingClarify)` helper at all three fallback-capture sites (BandLow unrouted, BandLow-defensive, open-knowledge no-ground) so the SCOPE-074-04A in-flight-clarify exclusion is preserved. |
+| TP-074-13 integration test | `tests/integration/assistant/clarify_abandon_capture_test.go` | New live-Postgres integration drives `ClarifyAbandonSweeper.RunOnce` against the disposable test stack with a fresh `pending_clarify` row, asserts capture + clear; adversarial sub-case asserts a cleared row produces NO capture for that user. |
+
+### SCOPE-074-04C — Live Test Evidence (TP-074-13)
+
+Command: `./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_13_'` (2026-06-02 00:05 UTC, against disposable test stack `smackerel-test-*`).
+
+```
+go-integration: applying -run selector: ^TestCaptureFallbackPolicy_TP_074_13_
+=== RUN   TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned
+--- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned (0.08s)
+=== RUN   TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned_UserRepliesInTime
+--- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned_UserRepliesInTime (0.03s)
+ok      github.com/smackerel/smackerel/tests/integration/assistant      0.348s
+EXIT=0
+```
+
+Both subtests passed. Primary path: live Postgres seed → live `ListAbandonedClarifies` selects the row → live `Policy.Decide`+`Policy.CaptureForUser` writes one `artifact_capture_policy` row with `fallback_cause='clarify_abandoned'` AND `abandoned_clarification=TRUE` → live `ClearPendingClarify` removes `pending_clarify`. The post-sweep assertion `countCapturePolicyRowsByCause(... cause='clarify_abandoned') == 1` AND `loadPendingClarify(...) == nil` both held against live Postgres state. **Phase:** implement. **Claim Source:** executed.
+
+Adversarial path: seed an "abandoned-looking" row, simulate the facade reply-path clear via `PgStore.ClearPendingClarify`, then run the sweeper. Per-user `countCapturePolicyRowsByCause` returned 0 — proving the sweeper does NOT capture rows whose `pending_clarify` was cleared by the reply path. This is the SCN-074-A06 adversarial sub-case from `design.md` §"SCOPE-4 (d) step 5".
+
+### SCOPE-074-04C — Regression Coverage
+
+`go test ./internal/assistant/...` (2026-06-02 00:06 UTC):
+
+```
+ok      github.com/smackerel/smackerel/internal/assistant       0.617s
+ok      github.com/smackerel/smackerel/internal/assistant/capturefallback      0.991s
+ok      github.com/smackerel/smackerel/internal/assistant/confirm       0.033s
+ok      github.com/smackerel/smackerel/internal/assistant/context       0.016s
+... (23 packages total, all ok)
+ok      github.com/smackerel/smackerel/internal/assistant/tracing       0.012s
+RC=0
+```
+
+All 23 assistant-package unit suites pass. The facade clarify-emit hook + reply-path clear + new `captureFallbackEligibleWithClarify` wrapper did not regress any existing facade test (in particular: `internal/assistant/facade_legacy_retirement_dispatch_test.go`, `facade_high_band_test.go`, `facade_disambig_resolver_test.go`, `facade_source_assembly_test.go`, and `facade_source_assembly_integration_test.go` all still pass). **Phase:** implement. **Claim Source:** executed.
+
+### SCOPE-074-04B — TP-074-14 Re-Run
+
+Command: `./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround$'` (2026-06-01 ~23:56 UTC).
+
+Result:
+
+```
+go-e2e: applying -run selector: ^TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround$
+=== RUN   TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround
+                TestAssistantHTTPE2E_CaptureFallbackOpenKnowledgeNoGround (5m0s)
+FAIL    github.com/smackerel/smackerel/tests/e2e/assistant      300.140s
+EXIT=1
+```
+
+Outcome: the test hit the same `assistant_http_not_ready` HTTP 503 late-binding loop documented in the 2026-06-01c evidence block and `specs/069-assistant-http-transport/` SCOPE-1d. The 5-minute poll deadline expired before the assistant HTTP adapter completed `httpadapter.NewLateBoundHandler()` late-binding. The test code itself is correct (compiles under `-tags=e2e`, vet clean) and the implementation seam in `facade.go` line ~1063 is exercised by the integration tests that SCOPE-04A already passed live. **Claim Source:** executed.
+
+### Routed Findings (still open)
+
+- **[F074-04B-ASSISTANT-HTTP-LATE-BIND-TEST-INFRA]** (unchanged from 2026-06-01c). The `assistantHTTPHandler = httpadapter.NewLateBoundHandler()` late-binding in `cmd/core/wiring.go` plus `wireAssistantFacade` does not complete within the e2e test-stack startup budget on this host, so TP-074-14 cannot prove the open-knowledge no-ground capture path end-to-end. Owner: spec 069 SCOPE-1d (in flight per user message). Re-run TP-074-14 once that lands; the test code is ready and exercises the right wire.
+- **[F074-04C-PGSTORE-PERSIST-MISSING-LEGACY-LEDGER]** (NEW). `internal/assistant/context/pg_store.go` `Persist` INSERT clause does not list `legacy_retirement_notices`, but migration 046 (spec 075 SCOPE-1) declared that column `NOT NULL` with NO DEFAULT. Any fresh `(user_id, transport)` Persist therefore fails with `null value in column "legacy_retirement_notices" of relation "assistant_conversations" violates not-null constraint`. TP-074-13 worked around this with a raw-SQL seed that populates `legacy_retirement_notices` to the migration's empty-ledger shape (`{"schema_version":1,"window_id":"","commands":{}}`). Owner: spec 075 SCOPE-1 (the spec that introduced the NOT NULL constraint without updating the canonical INSERT path) OR spec 061 SCOPE-04 (the owner of `PgStore.Persist`). Required action: amend `PgStore.Persist` INSERT to either include `legacy_retirement_notices` with the empty-ledger payload OR rely on a DB DEFAULT on the column. This finding is foreign-owned — bubbles.implement does NOT modify `pg_store.go` Persist semantics under spec 074 ownership.
+
+### Implementation Notes
+
+- `cmd/core/wiring_assistant_facade.go` does NOT yet wire the new `ClarifyAbandonSweeper` into the runtime. The sweeper exists and is fully test-covered, but production wiring is out of SCOPE-074-04C's "live integration-only" boundary per scopes.md Change Boundary (`Allowed file families: compiler clarification timeout integration with the capturefallback policy, clarify-abandon capture test`). Production wiring lands when the `capturefallback.Policy` itself is wired into `cmd/core` (currently wired only by tests via `facade.WithCaptureFallbackPolicy`); that is a SCOPE-04 follow-up. The DoD asks only that the sweeper exists and routes captures through `Policy.CaptureForUser` with the ORIGINAL prompt — both proven by TP-074-13.
+- Per `Critical-Requirements` honesty incentive: TP-074-14 (SCOPE-04B DoD line 2) remains `[ ]` because the e2e blocker is unchanged. The two SCOPE-04B DoD lines that DON'T require the e2e to pass (open-knowledge routing already wired, capture failure observability via `runCaptureFallback`-error→StatusUnavailable) were already covered by SCOPE-04A evidence and are not re-marked here.
+
+**Phase:** implement. **Claim Source:** executed.

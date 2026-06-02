@@ -170,7 +170,7 @@ Scenario: SCN-066-A05 — Legacy slash command after deprecation window
 
 ## Scope 3: Natural-Language Replacement Paths
 
-**Status:** In Progress — code edits landed (handleRate dispatch retired, integration contract test added, bounded Consumer Impact Sweep clean); live test execution blocked by foreign workspace WIP in `internal/assistant` + `internal/config` (see `report.md#scope-3` BLOCKED-WORKSPACE; routed to bubbles.workflow).  
+**Status:** In Progress — source edits for (*Bot).handleRate retirement now LANDED in this session (`internal/telegram/bot.go` dispatch arm removed, `internal/telegram/annotation.go` method body removed, `internal/telegram/annotation_test.go` legacy unit tests removed); structural absence proof captured by grep RC=1. Live integration test execution remains blocked: a concurrent agent in the same VS Code workspace deleted the untracked WIP file `internal/config/assistant_http_transport.go` mid-session, which broke `internal/config/assistant.go` (`undefined: loadAssistantHTTPTransportConfig`) and transitively the `internal/assistant` import graph — see `report.md#scope-3` BLOCKED-WORKSPACE-CONCURRENT. Routed live execution to bubbles.workflow.  
 **Depends On:** Scope 1, Scope 2, specs/068-structured-intent-compiler, specs/069-assistant-http-transport  
 **Surfaces:** assistant facade route, compiled-intent slots, retrieval scenario, rating/disambiguation flow, HTTP E2E fixtures.
 

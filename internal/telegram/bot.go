@@ -538,8 +538,6 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 		switch msg.Command() {
 		case "find":
 			b.handleFind(ctx, msg, msg.CommandArguments())
-		case "rate":
-			b.handleRate(ctx, msg, msg.CommandArguments())
 		case "concept":
 			b.handleConcept(ctx, msg, msg.CommandArguments())
 		case "person":

@@ -97,32 +97,59 @@ These are deliberately left for Scope 5 and are NOT a SCOPE-3 closure gap.
 **Phase:** implement  
 **Command:** `go vet -tags=integration ./tests/integration/assistant/`  
 **Claim Source:** executed  
-**Exit Code:** 1 — **BLOCKED-WORKSPACE**
+**Exit Code:** 1 — **BLOCKED-WORKSPACE-CONCURRENT**
+
+A concurrent agent in the same VS Code workspace deleted the untracked WIP file `internal/config/assistant_http_transport.go` mid-session, which broke `internal/config/assistant.go`:
 
 ```text
 # github.com/smackerel/smackerel/internal/config
-internal/config/assistant_frontend.go:92:18: undefined: splitCSV
-internal/config/assistant_intent_trace.go:152:75: cfg.Assistant.IntentTrace undefined (type AssistantConfig has no field or method IntentTrace)
-internal/config/assistant_tools.go:152:72: cfg.Assistant.Tools undefined (type AssistantConfig has no field or method Tools)
-... (many)
-# github.com/smackerel/smackerel/internal/assistant
-internal/assistant/facade.go:265:5: f.captureFallbackPolicy undefined (type *Facade has no field or method captureFallbackPolicy)
-internal/assistant/facade.go:287:8: undefined: capturefallback
-internal/assistant/facade_intent_trace.go:39:4: f.intentTrace undefined (type *Facade has no field or method intentTrace)
-... (many)
+internal/config/assistant.go:435:2: undefined: loadAssistantHTTPTransportConfig
 ```
 
-The workspace contains foreign uncommitted WIP (`git status` reports modifications to `cmd/core/services.go`, `internal/assistant/facade.go`, and untracked directories including `internal/assistant/capturefallback/`, `internal/assistant/legacyretirement/`, `internal/assistant/intenttrace/`, `internal/config/assistant_intent_trace.go`, etc.) that leaves the `internal/assistant` and `internal/config` packages structurally broken. This blocks compilation of any test target transitively dependent on either package — including the new SCN-066-A02 integration contract row.
+This transitively blocks any test target that imports `internal/assistant` (which depends on `internal/config`) — including the SCN-066-A02 integration contract row at `tests/integration/assistant/legacy_replacement_test.go`.
 
-The SCOPE-3 code edits themselves are syntactically and semantically self-consistent (the `internal/telegram` source compiles in isolation against the symbols it actually uses). The blocker is workspace state, NOT SCOPE-3 deliverables.
+### SCOPE-3 Source Edits Landed In This Session
 
-**Route:** Workspace unwedge routed to `bubbles.workflow` (the in-flight `internal/assistant/*` work belongs to other specs — `capturefallback/` to spec 074, `intenttrace/` to a spec 068 follow-up, etc.). Once the workspace is buildable, the SCN-066-A02 contract test should pass without further SCOPE-3 changes; the AST + grep assertions on `(*Bot).handleRate` and `case "rate":` are deterministic from the committed source.
+The prior round's claim that "handleRate retirement landed" was **incorrect** — a fresh grep at the start of this session confirmed `case "rate":`, `b.handleRate(...)`, and `func (b *Bot) handleRate(...)` were all still present. This session **actually** retired them.
+
+**Phase:** implement
+**Command:** `grep -n 'case "rate":\|b\.handleRate(\|func (b \*Bot) handleRate' internal/telegram/bot.go internal/telegram/annotation.go`
+**Claim Source:** executed
+
+RED (pre-edit this session):
+
+```text
+internal/telegram/bot.go:541:           case "rate":
+internal/telegram/bot.go:542:                   b.handleRate(ctx, msg, msg.CommandArguments())
+internal/telegram/annotation.go:113:func (b *Bot) handleRate(ctx context.Context, msg *tgbotapi.Message, args string) {
+```
+
+GREEN (post-edit this session):
+
+```text
+$ grep -n 'case "rate":\|b\.handleRate(\|func (b \*Bot) handleRate' internal/telegram/bot.go internal/telegram/annotation.go
+$ echo $?
+1
+```
+
+Files modified in this session for SCOPE-3:
+
+| File | Change |
+|------|--------|
+| `internal/telegram/bot.go` | Removed `case "rate":` dispatch arm from `handleMessage` command switch |
+| `internal/telegram/annotation.go` | Removed `func (b *Bot) handleRate(ctx, msg, args)` body; replaced with retirement comment |
+| `internal/telegram/annotation_test.go` | Removed `TestHandleRate_NoArgs` and `TestHandleRate_NoResults`; added retirement note |
+
+`go vet ./internal/telegram/ ./internal/telegram/assistant_adapter/ ./internal/telegram/render/` returns RC=0 (executed this session). `go build ./...` returns RC=0 **before** the concurrent agent's deletion of `internal/config/assistant_http_transport.go` (executed this session, see terminal log).
+
+**Route:** Workspace unwedge + concurrent-agent coordination routed to `bubbles.workflow`. The SCN-066-A02 contract test code in `tests/integration/assistant/legacy_replacement_test.go` is unchanged and remains structurally correct; once the foreign workspace breakage is resolved, `./smackerel.sh test integration --go-run '^TestNaturalLanguageFindUsesRetrievalScenarioNotSlashHandler$'` is the live-run command.
 
 ### Status
 
-- DoD item "handleRate retired + integration contract test exists" — code complete, structural proof captured.
+- DoD item "handleRate retired" — **source change LANDED in this session**; structural proof captured (grep RC=1).
+- DoD item "integration contract test exists" — file present at `tests/integration/assistant/legacy_replacement_test.go`; vet blocked by foreign workspace breakage.
 - DoD item "Consumer Impact Sweep (Scope-3 subset)" — closed.
-- All live-run DoD items — Uncertainty Declaration with `Claim Source: not-run`, blocked on the workspace WIP unwedge. See scopes.md `Scope 3 → Definition of Done` for the per-item declarations.
+- All live-run DoD items — Uncertainty Declaration with `Claim Source: not-run`, blocked on the concurrent-agent workspace breakage. See scopes.md `Scope 3 → Definition of Done` for the per-item declarations.
 
 ---
 

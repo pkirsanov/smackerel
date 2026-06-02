@@ -86,6 +86,15 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_ENABLED":               "true",
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_CONFIDENCE_FLOOR":      "0.7",
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_TIMEOUT_MS":            "1500",
+		// Spec 069 SCOPE-1c-bis — HTTP transport SST.
+		"ASSISTANT_TRANSPORTS_HTTP_ENABLED":                         "true",
+		"ASSISTANT_TRANSPORTS_HTTP_SCHEMA_VERSION":                  "v1",
+		"ASSISTANT_TRANSPORTS_HTTP_BODY_SIZE_MAX_BYTES":             "65536",
+		"ASSISTANT_TRANSPORTS_HTTP_RATE_LIMIT_PER_USER_PER_MINUTE":  "60",
+		"ASSISTANT_TRANSPORTS_HTTP_CONVERSATION_TTL_SECONDS":        "86400",
+		"ASSISTANT_TRANSPORTS_HTTP_REQUIRED_SCOPE":                  "assistant:turn",
+		"ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS":            "",
+		"ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST":        "web,mobile,bridge",
 	}
 }
 
@@ -161,6 +170,16 @@ func TestLoadAssistantConfig_MissingKey_BS009(t *testing.T) {
 			// enforces non-empty when otel_enabled=true (covered by
 			// TestLoadAssistantConfig_OtelRuleA_EndpointRequiredWhenEnabled
 			// in observability_test.go).
+			continue
+		}
+		if key == "ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS" ||
+			key == "ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST" {
+			// Spec 069 SCOPE-1c-bis — list-shaped HTTP transport keys.
+			// LookupEnv must succeed (presence required); an empty
+			// resolved value is permitted at load time. The non-empty
+			// hint-allowlist rule fires in validateAssistantHTTPTransportConfig
+			// when HTTPEnabled=true (covered by
+			// TestAssistantHTTPTransportConfigRequiresEverySSTKey).
 			continue
 		}
 		t.Run(key, func(t *testing.T) {

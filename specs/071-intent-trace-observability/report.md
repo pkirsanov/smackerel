@@ -236,3 +236,101 @@ Validation status is pending artifact lint execution by the current planning inv
 ### Audit Verdict
 
 No audit verdict is claimed by this planning scaffold.
+
+---
+
+## Test Evidence (Round 2: 2026-06-01 23:36Z, bubbles.test)
+
+### Scope 3 / SCN-071-A08 — Integration (live-stack) PASS
+
+**Command:** `./smackerel.sh test integration --go-run '^TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent$'`
+**Working directory:** `~/smackerel`
+**Log:** `/tmp/s071-int.log` (4524 bytes)
+**Wall:** 2026-06-01 23:36:33Z → 2026-06-01 23:41:32Z (~5 min, incl. build+stack startup)
+
+Raw terminal output (filtered to the relevant lines):
+
+```
+go-integration: applying -run selector: ^TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent$
+ok      github.com/smackerel/smackerel/tests/integration        0.157s [no tests to run]
+ok      github.com/smackerel/smackerel/tests/integration/agent  0.300s [no tests to run]
+ok      github.com/smackerel/smackerel/tests/integration/api    0.042s [no tests to run]
+ok      github.com/smackerel/smackerel/tests/integration/assistant      0.153s [no tests to run]
+ok      github.com/smackerel/smackerel/tests/integration/drive  0.251s [no tests to run]
+ok      github.com/smackerel/smackerel/tests/integration/monitoring     0.017s [no tests to run]
+=== RUN   TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent
+--- PASS: TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent (0.04s)
+ok      github.com/smackerel/smackerel/tests/integration/policy 0.071s
+```
+
+The runner wrapper recorded `EXIT=1` due to a project-scoped stack teardown step
+that ran `config generate` after a concurrent agent had momentarily broken
+`internal/config/assistant.go` (undefined symbol error during the teardown
+window). That symbol now resolves (`go build ./internal/config/ RC=0`); the
+SCN-071-A08 test itself executed against the live `smackerel-test` compose
+stack (postgres+nats+ml+core+ollama+stub-providers+jaeger+searxng all healthy
+per the runner's diagnostics block) and PASSED.
+
+**Claim Source:** executed.
+
+### Scope 3 / SCN-071-A04 + Scope 1 / SCN-071-A01 + Scope 2 / SCN-071-A02/A03/A09 + Scope 4 / SCN-071-A06/A07 — E2E BLOCKED
+
+**Command attempted:** `./smackerel.sh test e2e --go-run '^(TestIntentReplayE2E|TestIntentBypassGuardE2E|TestIntentTraceContractE2E|TestIntentTracePrivacyE2E|TestIntentRefusalJoinE2E)'`
+**Working directory:** `~/smackerel`
+**Log:** `/tmp/s071-e2e.log`
+**Wall:** 2026-06-01 23:41:52Z → 2026-06-01 23:42:11Z (failed at config-validate)
+
+The e2e stack aborts before any test executes:
+
+```
+ERROR: [F061-SST-MISSING] missing or invalid required assistant configuration: ASSISTANT_TRANSPORTS_HTTP_ENABLED, ASSISTANT_TRANSPORTS_HTTP_SCHEMA_VERSION, ASSISTANT_TRANSPORTS_HTTP_BODY_SIZE_MAX_BYTES, ASSISTANT_TRANSPORTS_HTTP_RATE_LIMIT_PER_USER_PER_MINUTE, ASSISTANT_TRANSPORTS_HTTP_CONVERSATION_TTL_SECONDS, ASSISTANT_TRANSPORTS_HTTP_REQUIRED_SCOPE, ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS, ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST
+exit status 1
+ERROR: config-generate-time validation failed for env=test (see above)
+...
+EXIT=1
+```
+
+Root cause: the spec 069 SCOPE-1a `assistant.transports.http.*` YAML block
+exists at `config/smackerel.yaml` lines 800–814 (with every key marked
+REQUIRED), and `internal/config/assistant.go` consumes those env vars via
+`loadAssistantHTTPTransportConfig` (`internal/config/assistant_http_transport.go`),
+but `scripts/commands/config.sh` (the generator) does not yet emit the
+`ASSISTANT_TRANSPORTS_HTTP_*` env vars into `config/generated/<env>.env`.
+The bash generator stops at the WhatsApp transport block (last emitted key
+is `ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS` at config.sh:1297). This
+is a spec 069 SCOPE-2 generator gap, not a spec 071 issue.
+
+All five planned spec 071 e2e test files are present on disk and well-formed:
+
+```
+tests/e2e/assistant/intent_trace_contract_e2e_test.go        (SCN-071-A01)
+tests/e2e/assistant/intent_trace_privacy_e2e_test.go         (SCN-071-A03)
+tests/e2e/assistant/intent_replay_test.go                    (SCN-071-A04, 2 funcs)
+tests/e2e/assistant/intent_bypass_guard_e2e_test.go          (SCN-071-A08)
+tests/e2e/assistant/intent_refusal_join_e2e_test.go          (SCN-071-A07)
+web/pwa/tests/assistant_intents_dashboard.spec.ts            (SCN-071-A06)
+tests/integration/policy/intent_bypass_guard_test.go         (SCN-071-A08, ran above)
+```
+
+This corrects the prior Round-1 report's claim that several of these files
+were "not present on disk" — they exist. The remaining blocker is the spec
+069 config-generator gap.
+
+**Claim Source:** executed (the command ran; e2e tests themselves did not).
+
+### Build Quality Gate — not executed in this pass
+
+`./smackerel.sh format --check`, `./smackerel.sh lint`, and
+`bash .github/bubbles/scripts/artifact-lint.sh specs/071-intent-trace-observability`
+were not executed in this session. They remain owed before certification.
+
+**Claim Source:** not-run.
+
+### Next Owner
+
+Route to `bubbles.implement` on **spec 069 SCOPE-2** to plumb the
+`ASSISTANT_TRANSPORTS_HTTP_*` env vars through `scripts/commands/config.sh`,
+mirroring the WhatsApp block. Once `./smackerel.sh test e2e` boots the
+stack, return to `bubbles.test` on spec 071 to execute the five e2e files
+listed above and the e2e-ui dashboard spec, then to `bubbles.validate` for
+certification.

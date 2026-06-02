@@ -17,7 +17,7 @@ func defaultConfig() HTTPTransportConfig {
 		CORSAllowedOrigins:        []string{"https://example.test"},
 		ConversationTTL:           24 * time.Hour,
 		TransportHintAllowlist:    []string{"web", "mobile", "bridge"},
-		RequiredScope:             "assistant.turn",
+		RequiredScope:             "assistant:turn",
 	}
 }
 
