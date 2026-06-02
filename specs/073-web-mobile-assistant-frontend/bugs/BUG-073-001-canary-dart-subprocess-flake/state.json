@@ -1,0 +1,53 @@
+{
+  "version": 3,
+  "specId": "073-web-mobile-assistant-frontend",
+  "bugId": "BUG-073-001-canary-dart-subprocess-flake",
+  "featureDir": "specs/073-web-mobile-assistant-frontend/bugs/BUG-073-001-canary-dart-subprocess-flake",
+  "featureName": "BUG-073-001: Cross-language renderer canary parallel-stability via Dart AOT pre-compile",
+  "workflowMode": "bugfix-fastlane",
+  "status": "done",
+  "execution": {
+    "activeAgent": null,
+    "currentPhase": "finalize",
+    "runStartedAt": "2026-06-02T10:00:00Z",
+    "completedPhaseClaims": ["discovery", "documentation", "analysis", "implement", "test", "regression", "validate", "docs"],
+    "executionHistory": [
+      {"phase": "discovery", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:00:00Z", "completedAt": "2026-06-02T10:02:00Z", "outcome": "completed_owned"},
+      {"phase": "documentation", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:02:00Z", "completedAt": "2026-06-02T10:08:00Z", "outcome": "completed_owned"},
+      {"phase": "analysis", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:08:00Z", "completedAt": "2026-06-02T10:12:00Z", "outcome": "completed_owned"},
+      {"phase": "implement", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:12:00Z", "completedAt": "2026-06-02T10:18:00Z", "outcome": "completed_owned"},
+      {"phase": "test", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:18:00Z", "completedAt": "2026-06-02T10:22:00Z", "outcome": "completed_owned"},
+      {"phase": "regression", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:22:00Z", "completedAt": "2026-06-02T10:26:00Z", "outcome": "completed_owned"},
+      {"phase": "validate", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:26:00Z", "completedAt": "2026-06-02T10:30:00Z", "outcome": "completed_owned"},
+      {"phase": "docs", "agent": "bubbles.bug", "startedAt": "2026-06-02T10:30:00Z", "completedAt": "2026-06-02T10:32:00Z", "outcome": "completed_owned"}
+    ]
+  },
+  "certification": {
+    "status": "done",
+    "certifiedAt": "2026-06-02T10:32:00Z",
+    "certifiedBy": "bubbles.bug",
+    "completedScopes": ["scope-1"],
+    "certifiedCompletedPhases": ["discovery", "documentation", "analysis", "implement", "test", "regression", "validate", "docs"],
+    "scopeProgress": [
+      {"scopeId": "scope-1", "title": "Pre-compile Dart CLI to AOT exe to eliminate subprocess startup race", "status": "Done", "completedDoD": 8, "totalDoD": 8, "completedAt": "2026-06-02T10:32:00Z"}
+    ],
+    "lockdownState": {
+      "active": false,
+      "round": 0,
+      "reason": "bugfix-fastlane single-scope test-infrastructure fix",
+      "lastUpdatedAt": "2026-06-02T10:32:00Z"
+    }
+  },
+  "policySnapshot": {
+    "grill": {"value": "off", "source": "repo-default"},
+    "tdd": {"value": "scenario-first", "source": "workflow-forced"},
+    "autoCommit": {"value": "off", "source": "repo-default"},
+    "lockdown": {"value": "off", "source": "repo-default"},
+    "regression": {"value": "standard", "source": "repo-default"},
+    "validation": {"value": "required", "source": "repo-default"},
+    "regressionStrictness": {"value": "standard", "source": "repo-default"},
+    "validateCertificationRequired": {"value": true, "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": []
+}
