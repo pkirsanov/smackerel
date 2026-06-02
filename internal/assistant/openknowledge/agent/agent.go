@@ -341,6 +341,34 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				refused.RejectedCitations = verdict.Rejected
 				return refused, nil
 			}
+			// Empty-citations salvage: when the model wrote a real
+			// text answer but emitted <CITATIONS>[]</CITATIONS> (or
+			// otherwise produced zero verified citations) AND we
+			// have tool-trace sources from successful web_search /
+			// internal_retrieval calls, attach those as the source
+			// set. The text is grounded by construction (the system
+			// prompt requires answers based on tool results); the
+			// downstream provenance gate refuses any zero-source
+			// response, so without this the user gets "I don't
+			// have a sourced answer" even after 3 successful tool
+			// calls. Fires on any iteration, not just the forced
+			// final one, because nothing about the empty-citations
+			// failure mode is forced-turn-specific.
+			if len(verdict.Verified) == 0 && strings.TrimSpace(finalText) != "" {
+				autoSources := collectTraceSources(trace)
+				if len(autoSources) > 0 {
+					return finalize(TurnResult{
+						Status:             StatusSuccess,
+						FinalText:          finalText,
+						Sources:            autoSources,
+						ToolTrace:          trace,
+						TerminationReason:  TerminationFinal,
+						TokensUsed:         budget.TokensUsed(),
+						USDSpent:           budget.USDSpent(),
+						CompactionSignaled: a.compactionSignaled(budget),
+					}), nil
+				}
+			}
 			return finalize(TurnResult{
 				Status:             StatusSuccess,
 				FinalText:          finalText,
