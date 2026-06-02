@@ -296,6 +296,58 @@ gates:
     description: >-
       BLOCKING gate. Every issue an agent observes during work MUST have an explicit disposition (`fixed-in-session`, `bug-filed`, `spec-filed`, `ops-filed`, or `routed`). Saying "pre-existing", "unrelated", "out of scope", or "not my session" without filing a corresponding artifact is forbidden and counts as fabrication. Enforced mechanically by `bubbles/scripts/discovered-issue-disposition-guard.sh`, which scans the active spec's `report.md` and the most recent RESULT-ENVELOPE narrative (when supplied) for forbidden deferral phrases. When a forbidden phrase is detected, the guard requires either (a) the same paragraph to cite a concrete artifact reference (`specs/.../bug.md`, `specs/.../spec.md`, `transitionRequests` entry, ops ticket URL), or (b) a `## Discovered Issues` section in `report.md` whose most recent `Observed` row is today. The guard exits 0 (clean), 1 (G095 findings), or 2 (runtime error / malformed input). State-transition-guard.sh invokes this guard as Check 35. Hermetic selftest: `bubbles/scripts/discovered-issue-disposition-guard-selftest.sh`. See `agents/bubbles_shared/operating-baseline.md` → "Discovered-Issue Disposition" for the full disposition table and report.md shape.
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # RELEASE TRAIN + UPKEEP GATES (G110-G120)
+  # Introduced with bubbles.train (DVS) and bubbles.upkeep (Treena Lahey).
+  # Enforced by bubbles/scripts/release-train-guard.sh and
+  # bubbles/scripts/env-pollution-scan.sh, plus per-mode constraints in the
+  # release-train-* and upkeep-* workflow modes.
+  # ─────────────────────────────────────────────────────────────────────────
+  G110:
+    name: release_train_discipline_gate
+    description: >-
+      BLOCKING gate. Every spec under `specs/` in `in_progress` or any train-related terminal status (`train_cut`, `train_promoted`) MUST declare `releaseTrain: <id>` in `state.json` referring to an existing train id in `config/release-trains.yaml`. GRANDFATHER CLAUSE: pre-existing `done` / `specs_hardened` / `delivered_pending_activation` specs without `releaseTrain` are WARN only (operators backfill at their pace). Every train MUST have valid `phase` (`active|maintained|frozen|retired`) and `target_slot` (`prod|staging|home-lab|none`). Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G111:
+    name: flag_default_off_on_other_trains_gate
+    description: >-
+      BLOCKING gate. For every spec with `state.json.flagsIntroduced: [<flag>...]` on `releaseTrain: <owning-train>`, each flag MUST be default-OFF in every OTHER train's `config/feature-flags.<train>.yaml` bundle (`flag: false`). Default-ON allowed only in the owning train. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G112:
+    name: backup_evidence_required_gate
+    description: >-
+      BLOCKING gate. `release-train-promote` MUST verify a recent successful `backup` ledger entry within the cadence declared in `config/upkeep-calendar.yaml`. Enforced via mode constraint + read of `/srv/backups/upkeep-ledger.jsonl` (knb-side). Owned by `bubbles.train` (read) + `bubbles.upkeep` (write).
+  G113:
+    name: restore_drill_evidence_gate
+    description: >-
+      BLOCKING gate. `release-train-promote` MUST verify a recent successful `restore-test` ledger entry within the cadence declared in `config/upkeep-calendar.yaml`. Failed restore-drill blocks next promote for that product. Owned by `bubbles.upkeep`.
+  G114:
+    name: bcdr_evidence_gate
+    description: >-
+      BLOCKING gate for `prod`-slot promotes. `release-train-promote` to `prod` MUST verify a recent successful quarterly `bcdr-drill` ledger entry. WARNING (not blocking) when `OFFSITE_BACKEND=local-only` because true BCDR requires backups not on the source host. Owned by `bubbles.upkeep`.
+  G115:
+    name: env_pollution_isolation_gate
+    description: >-
+      BLOCKING gate. Test code (integration, e2e-api, e2e-ui, stress, load, chaos) MUST NEVER write to prod monitoring (prometheus pushgateway labeled `env=prod|home-lab`, loki tenant `prod|home-lab`), prod backup paths (`/srv/backups/*`), knb manifest pointers (`<product>/<target>/manifest.yaml`), or train config (`config/release-trains.yaml`, `config/feature-flags.<train>.yaml`). Enforced by `bubbles/scripts/env-pollution-scan.sh`. Owned by `bubbles.upkeep` (policy) + every agent (no-write discipline).
+  G116:
+    name: offsite_backup_required_for_prod_trains_gate
+    description: >-
+      Conditional BLOCKING gate. When `config/release-trains.yaml` declares `offsite_required: true` for a train shipping to `prod` slot, `release-train-promote` MUST verify `OFFSITE_BACKEND` is NOT `local-only`. WARNING when `offsite_required: false` (default). Operator flips the switch when USB drives or cloud offsite become available. Owned by `bubbles.train` (gate) + `bubbles.upkeep` (offsite verification).
+  G117:
+    name: audit_trail_immutable_gate
+    description: >-
+      BLOCKING gate. `/srv/backups/upkeep-ledger.jsonl` is append-only. Rewriting, deleting, or editing past entries is forbidden. Manifest commits via `bubbles.train` follow the same discipline — promote/rollback/retire operations write atomic forward commits, never force-push or rewrite history. Owned by `bubbles.upkeep` (ledger) + `bubbles.train` (manifest).
+  G118:
+    name: backup_retention_declared_gate
+    description: >-
+      BLOCKING gate. Every train in `config/release-trains.yaml` MUST declare a `retention` field (string, e.g. `7d-daily,4w-weekly,12m-monthly`). Defaults declared under `defaults.retention` apply when per-train `retention` is omitted. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+  G119:
+    name: secret_rotation_recorded_gate
+    description: >-
+      BLOCKING gate. Every `upkeep-secret-rotation` ledger entry MUST record old/new key-id HASHES (e.g. `sha256:<first-12-chars>`), NEVER the secret values themselves. Engine refuses to write entries containing high-entropy strings that match secret-value heuristics. Owned by `bubbles.upkeep`.
+  G120:
+    name: pii_classification_declared_gate
+    description: >-
+      BLOCKING gate. Every train in `config/release-trains.yaml` MUST declare a `pii` field (`none|pseudonymized|encrypted-only`). Defaults declared under `defaults.pii` apply when per-train `pii` is omitted. Backup ledger entries inherit the train's PII classification. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
+
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
 # anchor: outcome-states
@@ -2239,3 +2291,189 @@ modes:
       requireAllScopesDoneBeforeSpecDone: true
       requirePerDodItemRawEvidence: true
       requireEvidenceByReference: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RELEASE TRAIN MODES (DVS — bubbles.train)
+  # Trunk-based release trains: cut, promote between slots, rollback,
+  # retire. Train identifiers are operator-chosen strings; phases are
+  # `active|maintained|frozen|retired`; slots are `prod|staging|none`.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  release-train-cut:
+    description: "Cut a release-train candidate. Tags trunk at SHA, triggers CI to build signed image digests + per-train config bundle. Cut produces evidence (build manifest + bundle SHA + signature receipts) but does NOT deploy. Refuses if any spec on this train has off-train flags defaulted ON (G111) or missing compliance declarations (G117-G120)."
+    statusCeiling: train_cut
+    terminalAliases: [ train_cut ]
+    phaseOrder: [ select, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G074, G081, G110, G111, G117, G118, G120 ]
+    constraints:
+      modeClass: release-train
+      requireDeclaredTrainInRegistry: true
+      requireTrainPhaseAllowsCut: [ active, maintained ]
+      requireAllOffTrainFlagsDefaultOff: true
+      requireCompliancePreflightDeclared: true
+      requireSignedBuildManifest: true
+      requirePerTrainConfigBundle: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: release-train-cut consumes existing planning truth; does not modify spec/design/scopes
+
+  release-train-promote:
+    description: "Promote a release-train candidate from one slot to another (typically staging → prod). Pure pointer-swap on knb-side <product>/<target>/manifest.yaml to the candidate's digests + bundle. Requires staging soak evidence + passing backup-freshness gate (G112). Refuses if restore-drill has not run within cadence (G113)."
+    statusCeiling: train_promoted
+    terminalAliases: [ train_promoted ]
+    phaseOrder: [ select, validate, devops, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G074, G081, G110, G112, G113, G117 ]
+    constraints:
+      modeClass: release-train
+      requireDeclaredTrainInRegistry: true
+      requireTrainPhaseAllowsPromote: [ active ]
+      requireCandidateExistsForTrain: true
+      requirePriorSlotSoakEvidence: true
+      requireBackupFreshness: true
+      requireRestoreDrillWithinCadence: true
+      requireAtomicManifestCommit: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: release-train-promote is a pointer-swap operation; no planning surface
+
+  release-train-rollback:
+    description: "Roll back a release-train slot to the previous manifest commit. Pure pointer-swap on knb-side <product>/<target>/manifest.yaml. Never rebuilds. Reads previous manifest from `git show HEAD~1:...`, calls adapter apply.sh with old digests + bundle."
+    statusCeiling: train_rolled_back
+    terminalAliases: [ train_rolled_back ]
+    phaseOrder: [ select, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G081, G110, G117 ]
+    constraints:
+      modeClass: release-train
+      requireDeclaredTrainInRegistry: true
+      requirePreviousManifestExists: true
+      forbidRebuild: true
+      requireAtomicManifestCommit: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: release-train-rollback is a pointer-swap operation; no planning surface
+
+  release-train-retire:
+    description: "Retire a release train. Pre-step requires ALL flags introduced by specs on this train to be cleaned up (removed from code + bundle) via flag-cleanup audits. Transitions train phase to `retired`. After retire, no cuts or promotes are allowed."
+    statusCeiling: train_retired
+    terminalAliases: [ train_retired ]
+    phaseOrder: [ select, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G110, G111 ]
+    constraints:
+      modeClass: release-train
+      requireDeclaredTrainInRegistry: true
+      requireTrainPhaseAllowsRetire: [ active, maintained, frozen ]
+      requireZeroLiveFlagsForTrain: true
+      requireFlagCleanupAuditClean: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # UPKEEP MODES (Treena Lahey — bubbles.upkeep)
+  # Recurring operational hygiene: backup, restore drill, BCDR drill,
+  # patch cycle, secret rotation, flag cleanup audit, compliance sweep.
+  # Calendar-driven via config/upkeep-calendar.yaml; ledger at
+  # /srv/backups/upkeep-ledger.jsonl (append-only).
+  # ─────────────────────────────────────────────────────────────────────────
+
+  upkeep-backup-verify:
+    description: "Daily backup verification. Runs T1 (ZFS snapshot) + T2 (host-local restic). Conditionally runs T3 (USB) and T4 (offsite cloud) based on OFFSITE_BACKEND env. Writes ledger entry with restic check exit code. Failure packets to bubbles.devops."
+    statusCeiling: backup_verified
+    terminalAliases: [ backup_verified ]
+    phaseOrder: [ select, devops, validate, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G011, G012, G073, G112, G115, G117, G118 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: backup
+      requireBackupLedgerWrite: true
+      requireResticCheckPasses: true
+      requireEphemeralRestoreNamespace: false
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-restore-drill:
+    description: "Weekly restore drill. Restores latest T2 snapshot into isolated `restore-test` namespace, runs product's smoke check, tears down namespace. Proves backup is restorable. Failure blocks next release-train-promote for that product (G113)."
+    statusCeiling: restore_verified
+    terminalAliases: [ restore_verified ]
+    phaseOrder: [ select, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G113, G115, G117 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: restore-test
+      requireEphemeralRestoreNamespace: true
+      requireSmokeCheckPasses: true
+      requireNamespaceTeardownOnExit: true
+      requireProdStackUntouched: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-bcdr-drill:
+    description: "Quarterly BCDR drill. Full DR exercise restoring entire product stack into isolated namespace. Warns when OFFSITE_BACKEND=local-only (true BCDR impossible against single host). Records RTO/RPO actuals in ledger."
+    statusCeiling: bcdr_verified
+    terminalAliases: [ bcdr_verified ]
+    phaseOrder: [ select, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G114, G115, G116, G117 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: bcdr-drill
+      requireEphemeralRestoreNamespace: true
+      requireFullStackRestore: true
+      requireRtoRpoMeasurement: true
+      warnOnLocalOnlyOffsite: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-patch-cycle:
+    description: "Monthly patch cycle. Base-image refresh + dependency audit. Produces a candidate via release-train-cut for the affected trains. Failure packets to bubbles.security if CVE-related, bubbles.stabilize otherwise."
+    statusCeiling: patched
+    terminalAliases: [ patched ]
+    phaseOrder: [ select, security, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G117 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: patch-cycle
+      requireBaseImageRefresh: true
+      requireDependencyAudit: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-secret-rotation:
+    description: "Quarterly secret rotation. Rotates managed secrets (DB passwords, JWT keys, API tokens, OAuth secrets). Records old/new key-id hashes (NEVER values) in ledger (G119). Coordinates with bubbles.security if any secret is suspected compromised."
+    statusCeiling: secrets_rotated
+    terminalAliases: [ secrets_rotated ]
+    phaseOrder: [ select, security, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G117, G119 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: secret-rotation
+      requireKeyIdHashesRecorded: true
+      forbidSecretValuesInLedger: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-flag-cleanup:
+    description: "Monthly flag-cleanup audit. Identifies flags whose owning train has graduated > 1 cycle ago and are still live in code. Packets cleanup work to bubbles.train (owner of flag lifecycle). Audit-only; never edits code."
+    statusCeiling: flags_audited
+    terminalAliases: [ flags_audited ]
+    phaseOrder: [ select, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G111 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: flag-cleanup-audit
+      auditOnly: true
+      planningTruthMutation: false
+      specReviewDefault: off
+
+  upkeep-compliance-sweep:
+    description: "Quarterly compliance sweep. Verifies G117 (audit-trail-immutable), G118 (backup-retention-declared), G119 (secret-rotation-recorded), G120 (pii-classification-declared). Generates docs/Compliance_Report.md with evidence; packets to bubbles.audit for sign-off. Treena gathers evidence, Ted certifies."
+    statusCeiling: compliance_swept
+    terminalAliases: [ compliance_swept ]
+    phaseOrder: [ select, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G117, G118, G119, G120 ]
+    constraints:
+      modeClass: upkeep
+      requireCalendarTaskDue: compliance-sweep
+      requireComplianceReportGeneration: true
+      requireAuditSignoffPacket: true
+      auditOnly: true
+      planningTruthMutation: false
+      specReviewDefault: off
