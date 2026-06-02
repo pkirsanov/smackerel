@@ -1,0 +1,80 @@
+{
+  "version": 3,
+  "featureDir": "specs/062-per-transport-configuration-audit",
+  "featureNumber": "062",
+  "featureName": "Per-Transport Configuration Surface Audit",
+  "status": "not_started",
+  "workflowMode": "full-delivery",
+  "statusCeiling": "done",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planMaturityOnly": false,
+  "specDependsOn": [
+    "specs/020-security-hardening",
+    "specs/060-bearer-auth-scope-claim",
+    "specs/069-assistant-http-transport",
+    "specs/072-whatsapp-business-transport"
+  ],
+  "amends": [],
+  "unblocks": [],
+  "policySnapshot": {
+    "captureAsFallback": "inviolable",
+    "noDefaults": "smackerel-no-defaults",
+    "principleAlignmentRequired": true,
+    "principleDeviations": [],
+    "workflowMode": "full-delivery",
+    "grill": { "mode": "off", "source": "repo-default" },
+    "tdd": { "mode": "off", "source": "repo-default" },
+    "autoCommit": { "mode": "off", "source": "repo-default" },
+    "lockdown": { "mode": "off", "source": "repo-default" },
+    "regression": { "mode": "protected-scenarios", "source": "repo-default" },
+    "validation": { "mode": "certification-required", "source": "repo-default" }
+  },
+  "planningOnlyJustification": "Full-delivery spec; planning artifacts created during analyst bootstrap to occupy ledger slot 062 (GAPS-2026-06-02-06).",
+  "certification": {
+    "status": "not_started",
+    "completedAt": null,
+    "evidenceRef": null,
+    "certifiedCompletedPhases": [],
+    "scopeProgress": {
+      "total": 3,
+      "notStarted": 3,
+      "inProgress": 0,
+      "done": 0,
+      "blocked": 0
+    },
+    "completedScopes": [],
+    "lockdownState": "n/a-not-applicable",
+    "notes": "Spec created 2026-06-02 to occupy previously-skipped slot 062. No implementation begun."
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "convergenceHealth": {
+    "recapCount": 0,
+    "handoffCount": 0,
+    "summarizeHistoryCount": 0,
+    "turnCount": 0,
+    "slo": "pass",
+    "snapshotCompleteness": 1.0
+  },
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "currentPhase": "analyze",
+    "currentScope": null,
+    "runStartedAt": "2026-06-02T00:00:00Z",
+    "lastUpdatedAt": "2026-06-02T00:00:00Z",
+    "completedPhaseClaims": [],
+    "executionHistory": [
+      {
+        "agent": "bubbles.analyst",
+        "phasesExecuted": ["analyze"],
+        "statusBefore": null,
+        "statusAfter": "not_started",
+        "runStartedAt": "2026-06-02T00:00:00Z",
+        "runCompletedAt": "2026-06-02T00:00:00Z",
+        "summary": "Created spec 062 to occupy previously-skipped ledger slot (GAPS-2026-06-02-06). Theme: per-transport configuration surface audit closing NO-DEFAULTS / SST gaps across HTTP (069), WhatsApp (072), and legacy Telegram transports. 3 scopes, 6 scenarios."
+      }
+    ]
+  }
+}
