@@ -5,7 +5,7 @@
   "featureName": "Capture-as-Fallback Cross-Cutting Policy",
   "status": "done",
   "executionRuntime": "manual",
-  "certifiedAt": "2026-06-02T07:30:00Z",
+  "certifiedAt": "2026-06-02T08:00:00Z",
   "workflowMode": "full-delivery",
   "statusCeiling": "done",
   "linkedImplementationSpec": null,
@@ -43,7 +43,7 @@
   "certification": {
     "status": "done",
     "completedAt": "2026-06-02T07:30:00Z",
-    "certifiedAt": "2026-06-02T07:30:00Z",
+    "certifiedAt": "2026-06-02T08:00:00Z",
     "evidenceRef": "report.md#rescope-close-out-2026-06-02",
     "completedScopes": [
       "SCOPE-074-01",
