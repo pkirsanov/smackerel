@@ -246,6 +246,29 @@ Fix cycle needed: YES
 
 ---
 
+## Severity Classification (Incident Fastlane Integration)
+
+When stabilize is invoked under the `incident-fastlane` workflow mode (or when the operator's NL intent matches phrases like "prod is broken", "rollback prod", "production incident"), the diagnostic phase MUST classify each finding's severity. Gate G124 (incident-severity-declared) enforces that at least one finding carries an explicit severity tag before the verdict is recorded.
+
+| Severity | Meaning | Required action |
+|----------|---------|-----------------|
+| `incident` | Production is broken or actively degrading user-facing behavior. Rollback authority MUST be exercised by `bubbles.train`. | Emit `route_required` packet to `bubbles.train` with `action: rollback` and the last-good train slot reference. Do NOT attempt rollback inline — that authority belongs to DVS. |
+| `high` | Stability risk, not actively failing. Fix in current cycle. | Stay in normal `UNSTABLE` verdict path; route to `bubbles.implement` / `bubbles.devops` per finding domain. |
+| `medium` | Latent risk, not user-visible. Schedule in next cycle. | Record in observations; no immediate routing. |
+| `low` | Cosmetic or speculative. | Optional remediation. |
+
+**Incident fastlane chain (workflow `incident-fastlane`):**
+
+1. `bubbles.stabilize` diagnoses + classifies severity → if any `incident`, emit route packet to `bubbles.train`.
+2. `bubbles.train` executes pointer-swap rollback (its existing authority).
+3. `bubbles.devops` executes the redeploy via repo CLI.
+4. `bubbles.validate` confirms the rollback target is live.
+5. `bubbles.docs` records post-incident notes (optional).
+
+Stabilize NEVER performs rollback inline. The chain preserves ownership boundaries even when speed matters.
+
+---
+
 ## Agent Completion Validation (Tier 2 — run BEFORE reporting verdict)
 
 Before reporting verdict, this agent MUST run Tier 1 universal checks from [validation-core.md](bubbles_shared/validation-core.md) plus the Stabilize profile in [validation-profiles.md](bubbles_shared/validation-profiles.md).

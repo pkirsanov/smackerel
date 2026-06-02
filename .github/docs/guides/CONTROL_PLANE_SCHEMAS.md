@@ -144,6 +144,46 @@ Invariants:
 - complements outcome contracts and tests; it does not replace implementation, E2E, or validation proof
 - analyst-owned Success Signals remain tech-agnostic, while design/test/validate translate them into trace spans, attributes, and invariants when trace proof is useful
 
+### Live Telemetry Endpoints (v5)
+
+Extends `traceContracts` with `liveTelemetryEndpoints` — a uniform adapter contract for fetching real production telemetry (alerts, SLO burn, error rate, deploy impact). Mirrors the knb offsite-backup adapter pattern: declarative selection, swappable backends, `none` default.
+
+Schema:
+
+```yaml
+traceContracts:
+  liveTelemetryEndpoints:
+    alerts: "none"          # adapter name (see bubbles/adapters/observability/)
+    slo-burn: "none"
+    error-rate: "none"
+    deploy-impact: "none"
+```
+
+Available adapters ship under `bubbles/adapters/observability/<name>.sh`:
+
+| Adapter | Verbs supported | Purpose |
+|---------|----------------|---------|
+| `none`       | all 4 return `{}` | Default. No telemetry source wired. |
+| `prometheus` | all 4 query `${PROMETHEUS_BASE_URL}` | Reference adapter. Operator sets the env var. |
+
+Adapter contract (every adapter MUST implement all 4 verbs):
+
+| Verb | Stdout format | Failure mode |
+|------|---------------|--------------|
+| `fetch-alerts`         | JSON array of active alerts | exit 1 on adapter failure (NOT a framework failure) |
+| `fetch-slo-burn`       | JSON map service→burn-rate  | exit 1 on adapter failure |
+| `fetch-error-rate`     | JSON map service→error-pct  | exit 1 on adapter failure |
+| `fetch-deploy-impact`  | JSON map sha→regression-delta | exit 1 on adapter failure |
+
+Validated by `bubbles/scripts/observability-adapter-lint.sh`.
+
+Consumers:
+
+- `bubbles.retro target: framework` reads alerts + deploy-impact when adapter ≠ `none`
+- `bubbles.stabilize` (incident-fastlane mode) reads alerts to enrich diagnosis context
+
+When `none` is selected, consumers gracefully skip the live-telemetry enrichment without failing.
+
 ## 1. Agent Capability Registry
 
 Runtime file: `bubbles/agent-capabilities.yaml`
