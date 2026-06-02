@@ -576,7 +576,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 			} else {
 				b.reply(msg.Chat.ID, "assistant is not enabled in this install")
 			}
-		case "ask", "weather", "remind":
+		case "ask", "weather", "remind", "recipe", "cook":
 			// Spec 061 SCOPE-06 Round 49 — v1 slash shortcuts (BS-002,
 			// BS-007, BS-010). Route to the assistant adapter so the
 			// facade's LookupShortcut pre-check stamps the explicit
@@ -619,7 +619,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg *tgbotapi.Message, updateID
 				"- activate plan / archive plan / delete plan\n\n"+
 				"You can also use /meal_plan <phrase> as a one-liner.")
 		default:
-			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal_plan, /ask, /weather, /remind, /reset, or /help")
+			b.reply(msg.Chat.ID, "? Unknown command. Try /find, /rate, /concept, /person, /lint, /list, /expense, /watch, /digest, /done, /status, /recent, /meal_plan, /ask, /weather, /recipe, /cook, /remind, /reset, or /help")
 		}
 		return
 	}
