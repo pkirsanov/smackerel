@@ -39,6 +39,7 @@ type Conversation struct {
 	WorkingContext  WorkingContext
 	PendingConfirm  *PendingConfirm
 	PendingDisambig *PendingDisambig
+	PendingClarify  *PendingClarify
 	LastActivityAt  time.Time
 	SchemaVersion   int
 }
@@ -83,6 +84,34 @@ type PendingDisambig struct {
 	Choices           []DisambigChoiceID `json:"choices"`
 	ExpiresAt         time.Time          `json:"expires_at"`
 }
+
+// PendingClarify is the persisted shadow of an outstanding spec 068
+// compiler clarification question. The facade writes it when the
+// clarification gate emits a clarify response, carrying the ORIGINAL
+// pre-clarification prompt and the emit time so the spec 074 SCOPE-
+// 074-04C ClarifyAbandonSweeper can capture-and-clear the row when
+// the user fails to reply within capture_as_fallback.clarify_abandon_timeout.
+// The next user turn against the same (UserID, Transport) clears the
+// row before any new facade work begins, so a timely reply produces NO
+// fallback Idea (SCN-074-A06 adversarial sub-case in TP-074-13).
+//
+// The persisted JSONB shape on assistant_conversations.pending_clarify
+// matches design.md §"SCOPE-4 — Clarify-Abandoned Capture (a)" v1
+// exactly so the sweeper can read either via Store.Load OR via the
+// direct SQL query in pg_store.SweepPendingClarifyOlderThan.
+type PendingClarify struct {
+	SchemaVersion   string    `json:"schema_version"`
+	OriginalPrompt  string    `json:"original_prompt"`
+	EmitTime        time.Time `json:"emit_time"`
+	ClarifyIntentID string    `json:"clarify_intent_id"`
+	OriginalTurnID  string    `json:"original_turn_id"`
+	UserID          string    `json:"user_id"`
+}
+
+// PendingClarifySchemaV1 is the schema_version value emitted by the
+// facade on every PendingClarify write. Centralised here so the
+// sweeper and the integration test cannot drift.
+const PendingClarifySchemaV1 = "v1"
 
 // DisambigChoiceID is the persisted shape of a single DisambiguationChoice.
 // Only the scenario id (or the SaveAsNoteChoiceID sentinel) + the 1-indexed
