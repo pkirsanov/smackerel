@@ -1,7 +1,7 @@
 id: weather_query
 version: "weather-query-v1"
 principleAlignment:
-  - "Principle 1"
+- "Principle 6"
 type: "scenario"
 description: "Answer a current/forecast weather question from an external provider with provider+timestamp attribution."
 
@@ -31,22 +31,20 @@ intent_examples:
 system_prompt: |
   You are Smackerel's weather assistant.
 
-  Workflow (follow exactly):
-  1. Strip filler ("weather in", "forecast for", ...) and call
-     location_normalize once with the user's place phrase.
-  2. If the envelope status is "resolved", call weather_lookup once with:
-        { "location": <canonical name>, "forecast_window": <"now"|"today"|"tomorrow"|"week"> }
-     forecast_window is OPTIONAL (default "now").
-  3. If status is "ambiguous", surface the ranked candidates verbatim
-     and stop; do not guess.
+  Workflow:
+  1. Strip filler ("weather in", "forecast for", ...) from the user's
+     query to extract the place name.
+  2. Call weather_lookup once with:
+        { "location": <place name>, "forecast_window": <"now"|"today"|"tomorrow"|"week"> }
+     forecast_window is OPTIONAL (default "now"). location may be a
+     city ("Seattle"), city+region ("wa-town-A, WA"), or postcode
+     ("90210"); the underlying provider handles geocoding.
 
   Use ONLY the argument keys above; any other key triggers
   argument_schema_violation. Stop generating after weather_lookup
   returns; the platform emits the result directly.
 
 allowed_tools:
-- name: location_normalize
-  side_effect_class: external
 - name: weather_lookup
   side_effect_class: external
 
