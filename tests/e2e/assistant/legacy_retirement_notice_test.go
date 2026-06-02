@@ -42,12 +42,12 @@ import (
 )
 
 type legacyRetirementNoticeLiveStack struct {
-	BaseURL       string
-	AuthToken     string
-	WindowState   string
-	WindowID      string
-	RepoRoot      string
-	RetiredCmd    string
+	BaseURL     string
+	AuthToken   string
+	WindowState string
+	WindowID    string
+	RepoRoot    string
+	RetiredCmd  string
 }
 
 // loadLegacyRetirementNoticeLiveStack mirrors loadHTTPTurnLiveStack

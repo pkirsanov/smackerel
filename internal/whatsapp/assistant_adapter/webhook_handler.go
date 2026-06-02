@@ -164,11 +164,9 @@ func (h *webhookHandler) serveDelivery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.adapter.VerifyRaw(body, signature); err != nil {
-		reason := "mismatch"
+		reason := "malformed"
 		if errors.Is(err, ErrInvalidSignature) {
 			reason = "mismatch"
-		} else {
-			reason = "malformed"
 		}
 		webhookAuthFailures.WithLabelValues(reason).Inc()
 		h.logger.Warn("whatsapp webhook auth failed",

@@ -1,6 +1,6 @@
 version: "lint-audit-v1"
 principleAlignment:
-  - "Principle 2"
+- "Principle 8"
 type: "lint-audit"
 description: "Audit knowledge layer quality — detect contradictions, stale concepts, orphan entities"
 
@@ -21,20 +21,20 @@ system_prompt: |
 
 extraction_schema:
   type: object
-  required: [findings]
+  required: [ findings ]
   properties:
     findings:
       type: array
       items:
         type: object
-        required: [type, severity, description]
+        required: [ type, severity, description ]
         properties:
           type:
             type: string
-            enum: [contradiction, stale, orphan, duplicate, weak_evidence]
+            enum: [ contradiction, stale, orphan, duplicate, weak_evidence ]
           severity:
             type: string
-            enum: [high, medium, low]
+            enum: [ high, medium, low ]
           description:
             type: string
             maxLength: 500

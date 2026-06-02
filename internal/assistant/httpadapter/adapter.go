@@ -341,8 +341,20 @@ func (a *HTTPAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.UserIDFromContext(r.Context())
 	if userID == "" {
-		a.writeError(w, http.StatusUnauthorized, "auth_required", req.TransportMessageID, requestID, false)
-		return
+		// Spec 069 SCOPE-2 / F-069-USERID-BINDING: shared-token and
+		// dev-bypass sessions land here with Session.UserID="". The
+		// adapter substitutes the SST-configured synthetic user id
+		// (assistant.transports.http.shared_user_id) so single-user
+		// dev/test and the production shared-token fallback resolve
+		// to a stable identifier the facade can key on. Per-user
+		// PASETO sessions never reach this branch because the bearer
+		// middleware populates UserID from the sub claim.
+		if sess, ok := auth.SessionFromContext(r.Context()); ok && sess.Source != "" && a.cfg.SharedUserID != "" {
+			userID = a.cfg.SharedUserID
+		} else {
+			a.writeError(w, http.StatusUnauthorized, "auth_required", req.TransportMessageID, requestID, false)
+			return
+		}
 	}
 
 	msg, err := a.Translate(r.Context(), &translatePayload{UserID: userID, Request: &req})
