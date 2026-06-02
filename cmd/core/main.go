@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/smackerel/smackerel/internal/api"
+	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
+	telegramassistant "github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 	whatsappadapter "github.com/smackerel/smackerel/internal/whatsapp/assistant_adapter"
 
 	"github.com/go-chi/chi/v5"
@@ -69,6 +71,26 @@ func main() {
 func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Spec 062 SCOPE-2 — per-transport fail-loud validation. Each
+	// adapter delegates its SST presence check to the transportconfig
+	// registry; the first missing REQUIRED env var aborts startup
+	// with the registry's exact FailLoudMsg before any other config
+	// is touched. Calling each adapter's ValidateTransportConfig
+	// directly (rather than transportconfig.ValidateAllFromOSEnv)
+	// makes the consumer relationship visible to grep + reviewer.
+	if err := httpadapter.ValidateTransportConfig(); err != nil {
+		return fmt.Errorf("assistant http transport configuration: %w", err)
+	}
+	if err := whatsappadapter.ValidateTransportConfig(); err != nil {
+		return fmt.Errorf("assistant whatsapp transport configuration: %w", err)
+	}
+	if err := telegramassistant.ValidateTransportConfig(); err != nil {
+		return fmt.Errorf("assistant telegram transport configuration: %w", err)
+	}
+	if err := telegram.ValidateTransportConfig(); err != nil {
+		return fmt.Errorf("legacy telegram transport configuration: %w", err)
+	}
 
 	// Load and validate configuration — fails loudly on missing required vars
 	cfg, err := config.Load()

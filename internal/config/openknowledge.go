@@ -55,7 +55,20 @@ type OpenKnowledgeConfig struct {
 	// web-search provider circuit breaker. All fields REQUIRED
 	// when Enabled=true (G028 — no defaults).
 	CircuitBreaker OpenKnowledgeCircuitBreakerConfig
+	// CitebackEnforcementMode is the spec 076 SCOPE-1 foundation
+	// seam that gates the cite-back verifier roll-out: "shadow"
+	// records mismatches without flipping the answer; "enforce"
+	// flips the answer to refusal-with-capture on any mismatch.
+	// REQUIRED non-empty regardless of Enabled state — spec 076
+	// SCN-076-F02 lists this key as a foundation fail-loud key.
+	CitebackEnforcementMode string
 }
+
+// Citeback enforcement modes — spec 076 SCOPE-1.
+const (
+	OpenKnowledgeCitebackShadow  = "shadow"
+	OpenKnowledgeCitebackEnforce = "enforce"
+)
 
 // OpenKnowledgeCircuitBreakerConfig is the SST sub-block governing
 // the web-provider circuit breaker (spec 064 SCOPE-16). The wiring
@@ -106,6 +119,7 @@ func LoadOpenKnowledge() (OpenKnowledgeConfig, error) {
 	cfg.CircuitBreaker.FailureThreshold, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_FAILURE_THRESHOLD", errs)
 	cfg.CircuitBreaker.OpenWindowSeconds, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_OPEN_WINDOW_SECONDS", errs)
 	cfg.CircuitBreaker.HalfOpenAfterSeconds, errs = lookupInt("ASSISTANT_OPEN_KNOWLEDGE_CIRCUIT_BREAKER_HALF_OPEN_AFTER_SECONDS", errs)
+	cfg.CitebackEnforcementMode, errs = lookupString("ASSISTANT_OPEN_KNOWLEDGE_CITEBACK_ENFORCEMENT_MODE", errs)
 
 	if len(errs) > 0 {
 		return OpenKnowledgeConfig{}, fmt.Errorf("[F064-SST-MISSING] missing or invalid required assistant.open_knowledge configuration: %s", strings.Join(errs, ", "))
@@ -121,10 +135,26 @@ func LoadOpenKnowledge() (OpenKnowledgeConfig, error) {
 // provider/budget/allowlist fields (adversarial coverage in
 // openknowledge_test.go::TestOpenKnowledgeConfig_DisabledSkipsValidation).
 func (c *OpenKnowledgeConfig) Validate() error {
+	// Spec 076 SCOPE-1 foundation key (SCN-076-F02) — citeback
+	// enforcement mode is always required even when the
+	// open-knowledge agent is disabled, because the verifier seam is
+	// consumed by every later spec-076 scope.
+	var foundationErrs []string
+	switch strings.TrimSpace(c.CitebackEnforcementMode) {
+	case OpenKnowledgeCitebackShadow, OpenKnowledgeCitebackEnforce:
+	case "":
+		foundationErrs = append(foundationErrs, "assistant.open_knowledge.citeback.enforcement_mode (empty)")
+	default:
+		foundationErrs = append(foundationErrs, fmt.Sprintf("assistant.open_knowledge.citeback.enforcement_mode (must be one of %q|%q, got %q)",
+			OpenKnowledgeCitebackShadow, OpenKnowledgeCitebackEnforce, c.CitebackEnforcementMode))
+	}
 	if !c.Enabled {
+		if len(foundationErrs) > 0 {
+			return fmt.Errorf("[F076-SST-INVALID] invalid foundation configuration: %s", strings.Join(foundationErrs, ", "))
+		}
 		return nil
 	}
-	var errs []string
+	errs := foundationErrs
 
 	if strings.TrimSpace(c.Provider) == "" {
 		errs = append(errs, "assistant.open_knowledge.provider (empty)")

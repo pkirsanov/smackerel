@@ -32,6 +32,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/citeback"
 	"github.com/smackerel/smackerel/internal/assistant/openknowledge/llm"
 	okmetrics "github.com/smackerel/smackerel/internal/assistant/openknowledge/metrics"
+	"github.com/smackerel/smackerel/internal/assistant/openknowledge/tracewriter"
 )
 
 // SCOPE-12 (spec 064): the hard-coded SCOPE-09 placeholder prompt has
@@ -127,16 +128,27 @@ type Config struct {
 	// back to slog.Default(). The raw prompt, raw LLM responses,
 	// tool args, web snippets, and API keys are NEVER logged.
 	Logger *slog.Logger
+	// TraceWriter persists one row per tool invocation into
+	// `assistant_tool_traces` (spec 076 SCOPE-2a). Optional — nil
+	// falls back to tracewriter.Nop{} so tests and harnesses that
+	// do not exercise persistence can leave it unset.
+	TraceWriter tracewriter.Writer
+	// EnforcementMode wires citeback verdicts to either log-only
+	// (shadow) or refuse-with-capture (enforce). Spec 076 SCOPE-2c
+	// (SCN-064-A06) — REQUIRED, no silent default (G028).
+	EnforcementMode string
 }
 
 // Agent orchestrates the LLM ↔ tools loop with bounded budgets.
 type Agent struct {
-	llm      LLMChat
-	registry *ok.Registry
-	verify   VerifyFn
-	cfg      Config
-	rec      okmetrics.Recorder
-	log      *slog.Logger
+	llm         LLMChat
+	registry    *ok.Registry
+	verify      VerifyFn
+	cfg         Config
+	rec         okmetrics.Recorder
+	log         *slog.Logger
+	traces      tracewriter.Writer
+	enforcement citeback.EnforcementMode
 }
 
 // ErrAgentInvalid is the construction error sentinel.
@@ -190,6 +202,10 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	if cfg.CostFn == nil {
 		errs = append(errs, "Config.CostFn is required")
 	}
+	enforcementMode, modeErr := citeback.ParseEnforcementMode(cfg.EnforcementMode)
+	if modeErr != nil {
+		errs = append(errs, "Config.EnforcementMode: "+modeErr.Error())
+	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrAgentInvalid, strings.Join(errs, "; "))
 	}
@@ -201,7 +217,11 @@ func New(chat LLMChat, registry *ok.Registry, verify VerifyFn, cfg Config) (*Age
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger}, nil
+	traces := cfg.TraceWriter
+	if traces == nil {
+		traces = tracewriter.Nop{}
+	}
+	return &Agent{llm: chat, registry: registry, verify: verify, cfg: cfg, rec: rec, log: logger, traces: traces, enforcement: enforcementMode}, nil
 }
 
 // Run executes the agent loop for a single user prompt. Budget caps,
@@ -242,6 +262,21 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 	}
 
 	refuse := func(reason TerminationReason, refusal string) TurnResult {
+		// Spec 076 SCOPE-2b DoD: budget-exhaustion / tool-failure /
+		// tool-unavailable refusals must emit a `call_outcome=refused`
+		// trace row through the SCOPE-2a writer. Pick the most recent
+		// tool name from the trace for attribution; fall back to the
+		// stable "agent" label for pre-flight refusals before any tool
+		// dispatched. Lookup/exec failures already wrote a 'failed'
+		// row from invokeTool; this row records the terminal refusal.
+		switch reason {
+		case TerminationCapTokens, TerminationCapUSD, TerminationToolError, TerminationToolUnavailable:
+			toolName := "agent"
+			if n := len(trace); n > 0 && trace[n-1].ToolName != "" {
+				toolName = trace[n-1].ToolName
+			}
+			a.persistTrace(ctx, turnID, llm.ToolCall{Name: toolName}, tracewriter.OutcomeRefused, string(reason))
+		}
 		return finalize(TurnResult{
 			Status:             StatusRefused,
 			ToolTrace:          trace,
@@ -251,6 +286,13 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			CompactionSignaled: a.compactionSignaled(budget),
 			RefusalReason:      refusal,
 		})
+	}
+
+	// Spec 076 SCOPE-2b — SCN-064-A08 per-user monthly budget
+	// pre-flight. When the user has zero monthly USD remaining, refuse
+	// BEFORE the first LLM round and BEFORE any tool dispatches.
+	if a.cfg.PerUserMonthlyUSDRemaining <= 0 {
+		return refuse(TerminationCapUSD, ok.ErrCapUSDPerUserMonth.Error()), nil
 	}
 
 	for iter := 0; iter < a.cfg.MaxIterations; iter++ {
@@ -336,7 +378,17 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				return refuse(TerminationFabricatedSource, parseErr.Error()), nil
 			}
 			verdict := a.verify(citations, toolTraceForVerifier(trace))
-			if !verdict.OK {
+			decision := citeback.Decide(verdict, a.enforcement)
+			if decision.Mismatch {
+				a.log.Info("openknowledge_citeback_mismatch",
+					"turn_id", turnID,
+					"prompt_sha", promptHash,
+					"mode", string(a.enforcement),
+					"rejected_count", len(verdict.Rejected),
+					"refused", decision.Refuse,
+				)
+			}
+			if decision.Refuse {
 				refused := refuse(TerminationFabricatedSource, "fabricated-source-blocked")
 				refused.RejectedCitations = verdict.Rejected
 				return refused, nil
@@ -378,6 +430,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 						TokensUsed:         budget.TokensUsed(),
 						USDSpent:           budget.USDSpent(),
 						CompactionSignaled: a.compactionSignaled(budget),
+						RejectedCitations:  verdict.Rejected,
 					}), nil
 				}
 			}
@@ -390,6 +443,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				TokensUsed:         budget.TokensUsed(),
 				USDSpent:           budget.USDSpent(),
 				CompactionSignaled: a.compactionSignaled(budget),
+				RejectedCitations:  verdict.Rejected,
 			}), nil
 
 		case llm.StopToolUse:
@@ -398,7 +452,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 				ToolCalls: result.ToolCalls,
 			})
 			for _, call := range result.ToolCalls {
-				entry, follow := a.invokeTool(ctx, call)
+				entry, follow := a.invokeTool(ctx, turnID, call)
 				trace = append(trace, entry)
 				messages = append(messages, follow)
 				// SCOPE-16 — circuit-open from a tool means the
@@ -424,13 +478,14 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 	return refuse(TerminationCapIterations, "max iterations exceeded"), nil
 }
 
-func (a *Agent) invokeTool(ctx context.Context, call llm.ToolCall) (ToolTraceEntry, llm.ChatMessage) {
+func (a *Agent) invokeTool(ctx context.Context, turnID string, call llm.ToolCall) (ToolTraceEntry, llm.ChatMessage) {
 	tool, err := a.registry.Lookup(call.Name)
 	if err != nil {
 		// Unknown tool — record an error call against the requested
 		// name (allow-set filter at the Recorder drops cardinality
 		// leaks per G021).
 		a.rec.IncToolCall(call.Name, okmetrics.OutcomeError)
+		a.persistTrace(ctx, turnID, call, tracewriter.OutcomeFailed, "tool_lookup")
 		entry := ToolTraceEntry{ToolName: call.Name, Args: call.Arguments, Err: err}
 		msg := llm.ChatMessage{
 			Role:       llm.RoleToolResult,
@@ -447,6 +502,16 @@ func (a *Agent) invokeTool(ctx context.Context, call llm.ToolCall) (ToolTraceEnt
 		outcome = okmetrics.OutcomeError
 	}
 	a.rec.IncToolCall(call.Name, outcome)
+	callOutcome := tracewriter.OutcomeSucceeded
+	errCode := ""
+	if execErr != nil {
+		callOutcome = tracewriter.OutcomeFailed
+		errCode = "exec_error"
+	} else if res != nil && res.Error != nil {
+		callOutcome = tracewriter.OutcomeFailed
+		errCode = res.Error.Code
+	}
+	a.persistTrace(ctx, turnID, call, callOutcome, errCode)
 	entry := ToolTraceEntry{ToolName: call.Name, Args: call.Arguments, Result: res, Err: execErr}
 	msg := llm.ChatMessage{
 		Role:       llm.RoleToolResult,
@@ -454,6 +519,48 @@ func (a *Agent) invokeTool(ctx context.Context, call llm.ToolCall) (ToolTraceEnt
 		Content:    renderToolResult(res, execErr),
 	}
 	return entry, msg
+}
+
+// persistTrace writes one redacted `assistant_tool_traces` row for
+// the given call. Errors are logged at WARN; persistence failure
+// must not break the turn (the in-memory ToolTrace is still the
+// authoritative trace for the citeback verifier).
+func (a *Agent) persistTrace(ctx context.Context, turnID string, call llm.ToolCall, outcome tracewriter.CallOutcome, errCode string) {
+	keys := argKeysFromJSON(call.Arguments)
+	err := a.traces.Write(ctx, tracewriter.Entry{
+		TurnID:      turnID,
+		ToolName:    call.Name,
+		ArgKeys:     keys,
+		CallOutcome: outcome,
+		ErrorCode:   errCode,
+		CreatedAt:   time.Now().UTC(),
+	})
+	if err != nil {
+		a.log.Warn("openknowledge.tool_trace_persist_failed",
+			slog.String("turn_id", turnID),
+			slog.String("tool_name", call.Name),
+			slog.String("outcome", string(outcome)),
+			slog.String("err", err.Error()),
+		)
+	}
+}
+
+// argKeysFromJSON returns the top-level keys of a JSON object as a
+// sorted slice. Values are dropped — the redacted payload records
+// shape only. Non-object inputs return an empty slice.
+func argKeysFromJSON(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func renderToolResult(res *ok.ToolResult, execErr error) string {
