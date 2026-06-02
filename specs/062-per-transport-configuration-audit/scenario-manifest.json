@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "featureDir": "specs/062-per-transport-configuration-audit",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-062-A01",
+      "scopeId": "SCOPE-01",
+      "title": "Registry covers every per-transport key present in config/smackerel.yaml",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"]
+    },
+    {
+      "scenarioId": "SCN-062-A02",
+      "scopeId": "SCOPE-01",
+      "title": "Registry has no orphaned entries missing from config/smackerel.yaml",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-1"]
+    },
+    {
+      "scenarioId": "SCN-062-A03",
+      "scopeId": "SCOPE-02",
+      "title": "Every required registry entry has a fail-loud check in the owning adapter",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-2"]
+    },
+    {
+      "scenarioId": "SCN-062-A04",
+      "scopeId": "SCOPE-02",
+      "title": "No forbidden fallback patterns survive in adapter packages or env fragments",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-2"]
+    },
+    {
+      "scenarioId": "SCN-062-A05",
+      "scopeId": "SCOPE-02",
+      "title": "smackerel-core exits non-zero with named transport + key when a required key is missing",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["e2e-api"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-2"]
+    },
+    {
+      "scenarioId": "SCN-062-A06",
+      "scopeId": "SCOPE-03",
+      "title": "docs/Transport_Configuration.md mirrors the registry row-for-row",
+      "behaviorClass": "docs",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#scope-3"]
+    }
+  ]
+}

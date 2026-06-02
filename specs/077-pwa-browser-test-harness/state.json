@@ -1,0 +1,110 @@
+{
+  "version": 3,
+  "featureDir": "specs/077-pwa-browser-test-harness",
+  "featureName": "PWA Browser Test Harness",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": "specs/_ops/F-057-V-001-e2e-ui-harness/README.md",
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/031-live-stack-testing",
+    "specs/057-browser-login-redirect",
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/075-legacy-retirement-telemetry"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.plan",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-06-02T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Playwright Runner + CLI Subcommand",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": "scopes.md#scope-1",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "Discovery Convention, CI Lane, and Docs",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-2",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "First Real Consumer: Login Flow + CSP Smoke",
+        "status": "not_started",
+        "dependsOn": [1, 2],
+        "scopeDir": "scopes.md#scope-3",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-02T00:00:00Z",
+      "runEndedAt": "2026-06-02T00:00:00Z",
+      "summary": "Planning-only bootstrap of foundation spec 077 closing ops packet F-057-V-001-e2e-ui-harness. Three-scope plan: Playwright runner foundation, discovery/CI/docs, first real consumer (spec 057 SCOPE-4 login flow + CSP smoke). Eight SCN-077-A0N scenarios authored."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-06-02T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Foundation spec; routed from ops packet F-057-V-001-e2e-ui-harness."
+}

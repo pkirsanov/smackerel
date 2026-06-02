@@ -523,65 +523,57 @@
       "scenarioId": "SCN-026-8-1",
       "name": "Search detects recipe ingredient intent (BS-006)",
       "scope": "scope-8",
-      "status": "active",
+      "status": "superseded",
+      "supersededBy": "066-natural-language-intent-routing",
+      "supersededNote": "handleFind/handleRate dispatch retired by spec 066 on 2026-06-02; internal/api/domain_intent.go and _test.go deleted. Recipe-ingredient intent now routed through the assistant retrieval QA path (see specs/066-natural-language-intent-routing).",
       "requiredTestType": ["unit"],
-      "linkedTests": [
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_RecipeWithIngredient"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_RecipeWithIngredient"},
-        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (recipe pattern)"}
+        {"type": "superseded", "location": "specs/066-natural-language-intent-routing/scenario-manifest.json (successor coverage)"}
       ],
-      "linkedDoD": ["parseDomainIntent detects recipe ingredient patterns ('recipes with X', 'dishes with X and Y')"]
+      "linkedDoD": ["Superseded by spec 066; no active DoD for this scenario in spec 026."]
     },
     {
       "scenarioId": "SCN-026-8-2",
       "name": "Search detects multi-ingredient intent",
       "scope": "scope-8",
-      "status": "active",
+      "status": "superseded",
+      "supersededBy": "066-natural-language-intent-routing",
+      "supersededNote": "handleFind/handleRate dispatch retired by spec 066 on 2026-06-02; internal/api/domain_intent.go and _test.go deleted. Multi-ingredient intent now routed through the assistant retrieval QA path (see specs/066-natural-language-intent-routing).",
       "requiredTestType": ["unit"],
-      "linkedTests": [
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_RecipeMultipleIngredients"},
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_LemonAndGarlic"},
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_DishesWithMushrooms"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_LemonAndGarlic"},
-        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_RecipeMultipleIngredients"},
-        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (multi-ingredient split on ',' and ' and ')"}
+        {"type": "superseded", "location": "specs/066-natural-language-intent-routing/scenario-manifest.json (successor coverage)"}
       ],
-      "linkedDoD": ["SCN-026-8-2 Search detects multi-ingredient intent — parseDomainIntent splits 'and'/comma-separated ingredients into the Attributes slice"]
+      "linkedDoD": ["Superseded by spec 066; no active DoD for this scenario in spec 026."]
     },
     {
       "scenarioId": "SCN-026-8-3",
       "name": "Search detects product price intent (BS-002 partial)",
       "scope": "scope-8",
-      "status": "active",
+      "status": "superseded",
+      "supersededBy": "066-natural-language-intent-routing",
+      "supersededNote": "handleFind/handleRate dispatch retired by spec 066 on 2026-06-02; internal/api/domain_intent.go and _test.go deleted. Product-price intent now routed through the assistant retrieval QA path (see specs/066-natural-language-intent-routing).",
       "requiredTestType": ["unit"],
-      "linkedTests": [
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_ProductUnderPrice"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_ProductUnderPrice"},
-        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (product price regex)"}
+        {"type": "superseded", "location": "specs/066-natural-language-intent-routing/scenario-manifest.json (successor coverage)"}
       ],
-      "linkedDoD": ["parseDomainIntent detects product price patterns ('X under $N', 'X below N')"]
+      "linkedDoD": ["Superseded by spec 066; no active DoD for this scenario in spec 026."]
     },
     {
       "scenarioId": "SCN-026-8-4",
       "name": "Search returns nil for non-domain queries",
       "scope": "scope-8",
-      "status": "active",
+      "status": "superseded",
+      "supersededBy": "066-natural-language-intent-routing",
+      "supersededNote": "handleFind/handleRate dispatch retired by spec 066 on 2026-06-02; internal/api/domain_intent.go and _test.go deleted. Non-domain-query fallthrough now handled by the assistant retrieval QA path (see specs/066-natural-language-intent-routing).",
       "requiredTestType": ["unit"],
-      "linkedTests": [
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_NoIntent"},
-        {"file": "internal/api/domain_intent_test.go", "function": "TestParseDomainIntent_EmptyQuery"}
-      ],
+      "linkedTests": [],
       "evidenceRefs": [
-        {"type": "unit-test", "location": "internal/api/domain_intent_test.go::TestParseDomainIntent_NoIntent"},
-        {"type": "source", "location": "internal/api/domain_intent.go::parseDomainIntent (fallthrough returns nil)"}
+        {"type": "superseded", "location": "specs/066-natural-language-intent-routing/scenario-manifest.json (successor coverage)"}
       ],
-      "linkedDoD": ["parseDomainIntent returns nil for non-domain queries (no false positives)"]
+      "linkedDoD": ["Superseded by spec 066; no active DoD for this scenario in spec 026."]
     },
     {
       "scenarioId": "SCN-026-8-5",

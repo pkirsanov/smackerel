@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "featureDir": "specs/077-pwa-browser-test-harness",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "scenarios": [
+    {
+      "scenarioId": "SCN-077-A01",
+      "scopeId": "SCOPE-01",
+      "title": "e2e-ui harness drives a real headless browser against the disposable test stack",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A02",
+      "scopeId": "SCOPE-02",
+      "title": "New .spec.ts under web/pwa/tests is auto-discovered without runner-config edits",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["e2e-ui", "unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A03",
+      "scopeId": "SCOPE-03",
+      "title": "Broken served / route fails the suite with full Playwright artifact set",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A04",
+      "scopeId": "SCOPE-03",
+      "title": "Broken login page fails the login spec with full artifact set (spec 057 SCOPE-4 rows 4.1-4.5)",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "inheritsFrom": {"spec": "specs/057-browser-login-redirect", "scenarioId": "SCOPE-4 rows 4.1-4.5"}
+    },
+    {
+      "scenarioId": "SCN-077-A05",
+      "scopeId": "SCOPE-03",
+      "title": "CSP violation on the login cycle fails the suite via the _support/csp.ts guard",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["e2e-ui"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A06",
+      "scopeId": "SCOPE-02",
+      "title": "CI runs ./smackerel.sh test e2e-ui on every push and PR; failure blocks merge",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A07",
+      "scopeId": "SCOPE-01",
+      "title": "Harness uses the disposable test-stack Compose project, never the persistent dev stack",
+      "behaviorClass": "api",
+      "changeType": "new",
+      "requiredTestType": ["integration"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    },
+    {
+      "scenarioId": "SCN-077-A08",
+      "scopeId": "SCOPE-03",
+      "title": "Existing documentation stub bodies in web/pwa/tests/*.spec.ts are replaced; zero expect(true).toBeTruthy() bodies remain",
+      "behaviorClass": "ui",
+      "changeType": "new",
+      "requiredTestType": ["unit"],
+      "regressionRequired": true,
+      "linkedTests": [],
+      "evidenceRefs": ["report.md#planning--2026-06-02"]
+    }
+  ]
+}

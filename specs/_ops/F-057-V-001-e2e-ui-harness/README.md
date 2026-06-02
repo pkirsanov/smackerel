@@ -1,10 +1,11 @@
 # F-057-V-001 — Follow-up: `tests/e2e/ui/` browser harness
 
-**Status:** open
+**Status:** routed
+**Routing Status:** Routed to spec 077 (`specs/077-pwa-browser-test-harness/`) on 2026-06-02. Resolution tracked under spec 077's three-scope plan; execution closes this packet when spec 077 reaches terminal status.
 **Severity:** medium
 **Source:** spec 057 (`browser-login-redirect`), validate phase, 2026-05-28
 **Owner (proposed):** infrastructure / engineering quality
-**Routing:** `bubbles.plan` to scaffold a dedicated spec if/when prioritised.
+**Routing:** `bubbles.plan` to scaffold a dedicated spec if/when prioritised. **Done 2026-06-02 — see spec 077.**
 
 ## Problem
 
