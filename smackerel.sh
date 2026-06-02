@@ -1782,6 +1782,69 @@ E2EUI_HELP
   deploy-target)
     bash "$SCRIPT_DIR/scripts/commands/deploy_target.sh" "$@"
     ;;
+  release)
+    # Thin wrapper over bubbles framework + knb adapter.
+    # Sub-actions: guard | flag-audit | status
+    # Real cut/promote/rollback flow lands when the framework workflow modes
+    # are wired into a runtime; today this is the operator entry point.
+    SUBCOMMAND="${1:-status}"
+    shift || true
+    BUBBLES_DIR="$SCRIPT_DIR/.github/bubbles"
+    case "$SUBCOMMAND" in
+      guard)
+        bash "$BUBBLES_DIR/scripts/release-train-guard.sh" "$SCRIPT_DIR" "$@"
+        ;;
+      flag-audit)
+        bash "$BUBBLES_DIR/scripts/release-train-flag-audit.sh" "$SCRIPT_DIR" "$@"
+        ;;
+      backfill-plan)
+        bash "$BUBBLES_DIR/scripts/release-train-backfill-planner.sh" "$SCRIPT_DIR" "$@"
+        ;;
+      status|"")
+        echo "Release trains declared in config/release-trains.yaml:"
+        yq -r '.trains[] | "  \(.id) — phase: \(.phase) — slot: \(.target_slot)"' "$SCRIPT_DIR/config/release-trains.yaml" 2>/dev/null
+        echo ""
+        echo "Subcommands:"
+        echo "  release guard           — validate release-trains.yaml + G110/G111"
+        echo "  release flag-audit      — list overdue feature flags"
+        echo "  release backfill-plan   — advisory backfill suggestions for legacy specs"
+        ;;
+      *)
+        echo "Unknown release subcommand: $SUBCOMMAND" >&2
+        echo "Available: guard | flag-audit | backfill-plan | status" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  upkeep)
+    # Thin wrapper for repo-side upkeep utilities.
+    # The actual run-task dispatcher lives knb-side; this wrapper covers
+    # repo-local config inspection and forward-pointers to the knb engine.
+    SUBCOMMAND="${1:-status}"
+    shift || true
+    BUBBLES_DIR="$SCRIPT_DIR/.github/bubbles"
+    case "$SUBCOMMAND" in
+      calendar)
+        bash "$BUBBLES_DIR/scripts/upkeep-calendar.sh" "$SCRIPT_DIR" "$@"
+        ;;
+      status|"")
+        echo "Upkeep calendar declared in config/upkeep-calendar.yaml:"
+        yq -r '.tasks[] | "  \(.id) — cadence: \(.cadence)"' "$SCRIPT_DIR/config/upkeep-calendar.yaml" 2>/dev/null
+        echo ""
+        echo "Subcommands:"
+        echo "  upkeep calendar         — list due tasks based on upkeep ledger on this host"
+        echo ""
+        echo "Per-product upkeep hooks (backup, restore-test, bcdr-drill, …) run on the"
+        echo "home-lab host via the knb-side dispatcher. See <knb-repo>/.github/skills/"
+        echo "knb-upkeep-dispatcher/SKILL.md for systemd timer install + manual invocation."
+        ;;
+      *)
+        echo "Unknown upkeep subcommand: $SUBCOMMAND" >&2
+        echo "Available: calendar | status" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   *)
     usage
     exit 1
