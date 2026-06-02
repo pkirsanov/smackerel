@@ -357,9 +357,21 @@ func (a *Agent) Run(ctx context.Context, userPrompt string) (TurnResult, error) 
 			if len(verdict.Verified) == 0 && strings.TrimSpace(finalText) != "" {
 				autoSources := collectTraceSources(trace)
 				if len(autoSources) > 0 {
+					// Body-quality salvage: if the model wrote a
+					// "no tool results were provided" / "I am unable
+					// to" body but tools DID run and DID return
+					// content, the body is a lie. Replace it with
+					// real snippet text so the user sees actual
+					// evidence. The trace+sources prove it.
+					salvageBody := finalText
+					if isUngroundedExcuse(finalText) {
+						if syn := synthesizeFromSnippets(trace); syn != "" {
+							salvageBody = syn
+						}
+					}
 					return finalize(TurnResult{
 						Status:             StatusSuccess,
-						FinalText:          finalText,
+						FinalText:          salvageBody,
 						Sources:            autoSources,
 						ToolTrace:          trace,
 						TerminationReason:  TerminationFinal,
@@ -780,4 +792,53 @@ func hostOnly(raw string) string {
 		return "invalid_url"
 	}
 	return u.Host
+}
+
+// isUngroundedExcuse returns true when the model's final text reads as
+// an "I cannot answer because tools failed" excuse, even though the
+// tool trace shows that tools DID return real content. llama3.1:8b
+// (and similar mid-size models) often write apologetic refusals after
+// the forced-final turn even when they have evidence in the message
+// history. When this fires AND the trace has sources, the empty-
+// citations salvage replaces the body with a snippet synthesis so the
+// user sees the real evidence instead of the model's lie.
+//
+// Returns false for genuine answers (so we never replace a good body).
+// The match set is intentionally conservative: it targets phrases the
+// model produces ONLY when it claims no evidence, not phrases that
+// might appear in a real grounded answer.
+func isUngroundedExcuse(text string) bool {
+	lower := strings.ToLower(text)
+	excusePhrases := []string{
+		"no tool results were provided",
+		"no tool results provided",
+		"no search tools were executed",
+		"no search tools executed",
+		"i was unable to find",
+		"i am unable to find",
+		"i'm unable to find",
+		"i cannot provide",
+		"i can't provide",
+		"i do not have access to",
+		"i don't have access to",
+		"i was unable to retrieve",
+		"i am unable to retrieve",
+		"i was unable to gather",
+		"unable to ground",
+		"to ground the answer",
+		"to ground this answer",
+		"sorry, i could not find",
+		"sorry, i couldn't find",
+		"no results were returned",
+		"no relevant results",
+		"the search returned no",
+		"no information was found",
+		"i was not able to find",
+	}
+	for _, p := range excusePhrases {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
 }
