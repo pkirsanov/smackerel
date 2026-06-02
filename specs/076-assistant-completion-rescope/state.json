@@ -1,0 +1,149 @@
+{
+  "version": 3,
+  "featureDir": "specs/076-assistant-completion-rescope",
+  "featureName": "Assistant Completion & Rescope Follow-Up",
+  "status": "in_progress",
+  "workflowMode": "full-delivery",
+  "linkedImplementationSpec": null,
+  "linkedPlanningPacket": null,
+  "planningOnly": false,
+  "planningOnlyJustification": null,
+  "specDependsOn": [
+    "specs/061-conversational-assistant",
+    "specs/064-open-ended-knowledge-agent",
+    "specs/065-generic-micro-tools",
+    "specs/066-legacy-keyword-surface-retirement",
+    "specs/073-web-mobile-assistant-frontend",
+    "specs/074-capture-as-fallback-policy",
+    "specs/075-legacy-retirement-telemetry"
+  ],
+  "certifiedAt": null,
+  "requiresRevalidation": false,
+  "execution": {
+    "activeAgent": "bubbles.analyst",
+    "currentPhase": "bootstrap",
+    "currentScope": null,
+    "runStartedAt": "2026-06-02T00:00:00Z",
+    "completedPhaseClaims": [],
+    "pendingTransitionRequests": []
+  },
+  "certification": {
+    "status": "in_progress",
+    "completedScopes": [],
+    "certifiedCompletedPhases": [],
+    "scopeProgress": [
+      {
+        "scope": 1,
+        "name": "Inherited-Behavior Manifest Bootstrap and Foundation Wiring",
+        "status": "not_started",
+        "dependsOn": [],
+        "scopeDir": "scopes.md#scope-1",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 2,
+        "name": "Open-Knowledge Agent Hardening",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-2",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 3,
+        "name": "Generic Micro-Tool Overlays",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-3",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 4,
+        "name": "NL Replacements and Annotation Classifier Swap",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-4",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 5,
+        "name": "Capture Provenance, Dedup, Telemetry, and Acknowledgement Parity",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-5",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 6,
+        "name": "Legacy-Retirement Window Wiring and Lifecycle",
+        "status": "not_started",
+        "dependsOn": [1],
+        "scopeDir": "scopes.md#scope-6",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": 7,
+        "name": "Shared Mobile Vertical Slice and Cross-Surface Parity",
+        "status": "not_started",
+        "dependsOn": [4, 5, 6],
+        "scopeDir": "scopes.md#scope-7",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      }
+    ],
+    "lockdownState": {
+      "active": false,
+      "lockedScenarioIds": []
+    }
+  },
+  "policySnapshot": {
+    "grill": {"mode": "off", "source": "repo-default"},
+    "tdd": {"mode": "scenario-first", "source": "repo-default"},
+    "autoCommit": {"mode": "off", "source": "repo-default"},
+    "lockdown": {"mode": "off", "source": "repo-default"},
+    "regression": {"mode": "protected-scenarios", "source": "repo-default"},
+    "validation": {"mode": "certification-required", "source": "repo-default"}
+  },
+  "transitionRequests": [],
+  "reworkQueue": [],
+  "executionHistory": [
+    {
+      "agent": "bubbles.analyst",
+      "phasesExecuted": ["bootstrap"],
+      "statusBefore": "not_started",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-02T00:00:00Z",
+      "runEndedAt": "2026-06-02T00:00:00Z",
+      "summary": "Planning-only bootstrap: consolidated rescoped scopes from specs 064, 065, 066, 073, 074, 075 into single follow-on spec 076 with 7-scope decomposition (1 foundation + 6 capability areas) and 35 inherited scenarios."
+    }
+  ],
+  "activeBugs": [],
+  "resolvedBugs": [],
+  "failures": [],
+  "lastUpdatedAt": "2026-06-02T00:00:00Z",
+  "scopeLayout": "single-file",
+  "artifacts": {
+    "spec": "spec.md",
+    "design": "design.md",
+    "scopes": "scopes.md",
+    "report": "report.md",
+    "uservalidation": "uservalidation.md",
+    "scenarioManifest": "scenario-manifest.json",
+    "lockdownApprovals": "lockdown-approvals.json",
+    "invalidationLedger": "invalidation-ledger.json",
+    "transitionRequests": "transition-requests.json",
+    "reworkQueue": "rework-queue.json"
+  },
+  "statusDiscipline": {
+    "validStatuses": ["not_started", "in_progress", "blocked", "specs_hardened", "docs_updated", "validated", "done"],
+    "scopePickupRule": "All dependsOn scopes must be Done. Pick the lowest-numbered eligible scope.",
+    "scopeDoneGates": ["G020", "G021", "G022", "G023", "G024", "G025", "G055", "G056", "G057", "G058", "G059", "G060", "G061"],
+    "specDoneRequires": "All scopes done. certification.completedScopes contains all scope IDs and bubbles.validate has certified promotion."
+  },
+  "notes": "Initialized as consolidation of 2026-06-02 convergence-session rescopes from specs 064, 065, 066, 073, 074, 075."
+}

@@ -319,10 +319,15 @@ async def handle_invoke(
 
     try:
         logger.info(
-            "agent.invoke.request trace_id=%s model=%s tools_count=%d messages_count=%d temperature=%s max_tokens=%s first_user_msg=%r",
-            trace_id, llm_model, len(tools or []), len(messages),
-            effective_temperature, token_budget,
-            next((str(m.get("content"))[:300] for m in messages if m.get("role")=="user"), None),
+            "agent.invoke.request trace_id=%s model=%s tools_count=%d "
+            "messages_count=%d temperature=%s max_tokens=%s first_user_msg=%r",
+            trace_id,
+            llm_model,
+            len(tools or []),
+            len(messages),
+            effective_temperature,
+            token_budget,
+            next((str(m.get("content"))[:300] for m in messages if m.get("role") == "user"), None),
         )
         response = await completion_fn(**completion_kwargs)
     except Exception as exc:  # noqa: BLE001 — provider errors must not crash the sidecar

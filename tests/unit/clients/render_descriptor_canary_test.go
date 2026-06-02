@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -36,6 +37,79 @@ import (
 	"strings"
 	"testing"
 )
+
+// Package-level state populated by TestMain. The Dart CLI is pre-compiled to an
+// AOT executable once per `go test` binary invocation; per-fixture subtests then
+// exec that binary directly. This eliminates the BUG-073-001 race: `dart run`
+// loads the VM, resolves pub-cache, and touches the shared
+// clients/mobile/assistant/.dart_tool/ kernel snapshot cache on every call,
+// which flakes under parallel `go test ./...` CPU/IO pressure.
+var (
+	dartExePath    string
+	dartCompileErr error
+	dartTempDir    string
+)
+
+func TestMain(m *testing.M) {
+	if _, err := exec.LookPath("dart"); err == nil {
+		if err := compileDartRendererCLI(); err != nil {
+			dartCompileErr = err
+		}
+	}
+	code := m.Run()
+	if dartTempDir != "" {
+		_ = os.RemoveAll(dartTempDir)
+	}
+	os.Exit(code)
+}
+
+func compileDartRendererCLI() error {
+	repoRoot, err := findRepoRootFromCwd()
+	if err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp("", "smackerel-render-canary-*")
+	if err != nil {
+		return fmt.Errorf("mkdir tempdir for dart AOT exe: %w", err)
+	}
+	dartTempDir = tmp
+	exePath := filepath.Join(tmp, "render_descriptor_v1_cli")
+	pkgDir := filepath.Join(repoRoot, dartPkgRelPath)
+	cmd := exec.Command("dart", "compile", "exe", dartCliRelPath, "-o", exePath)
+	cmd.Dir = pkgDir
+	var stderr, stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("dart compile exe failed: %v\nstdout:\n%s\nstderr:\n%s",
+			err, stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(exePath); err != nil {
+		return fmt.Errorf("dart compile reported success but %s is missing: %w", exePath, err)
+	}
+	dartExePath = exePath
+	return nil
+}
+
+func findRepoRootFromCwd() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("stat go.mod under %s: %w", dir, err)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("could not locate repo root (go.mod) walking up from %s", cwd)
+		}
+		dir = parent
+	}
+}
 
 const (
 	fixtureRelPath = "tests/fixtures/assistant_response_v1"
@@ -52,6 +126,12 @@ func TestRenderDescriptorV1_CrossLanguageCanary(t *testing.T) {
 	}
 	if _, err := exec.LookPath("dart"); err != nil {
 		t.Fatalf("dart not on PATH; the spec 073 cross-language renderer canary requires both node and dart: %v", err)
+	}
+	if dartCompileErr != nil {
+		t.Fatalf("dart AOT pre-compile failed in TestMain (BUG-073-001 fix requires it): %v", dartCompileErr)
+	}
+	if dartExePath == "" {
+		t.Fatalf("dartExePath is empty after TestMain; renderer canary would fall back to per-fixture `dart run` which races under parallel `go test ./...` load (BUG-073-001)")
 	}
 
 	fixtureDir := filepath.Join(repoRoot, fixtureRelPath)
@@ -112,9 +192,9 @@ func TestRenderDescriptorV1_CrossLanguageCanary(t *testing.T) {
 			jsOut := runRenderer(t, repoRoot, "node",
 				[]string{filepath.Join(repoRoot, jsCliRelPath)},
 				inputBytes, "")
-			dartOut := runRenderer(t, repoRoot, "dart",
-				[]string{"run", dartCliRelPath},
-				inputBytes, filepath.Join(repoRoot, dartPkgRelPath))
+			// Use the pre-compiled AOT executable produced by TestMain; do NOT
+			// fall back to `dart run` here (would reintroduce BUG-073-001).
+			dartOut := runRenderer(t, repoRoot, dartExePath, nil, inputBytes, "")
 
 			var golden, js, dart any
 			if err := json.Unmarshal(goldenBytes, &golden); err != nil {
@@ -273,5 +353,30 @@ func validateDescriptorAgainstSentinel(t *testing.T, label string, descriptor an
 				t.Fatalf("%s descriptor.nodes[%d] citation missing string label", label, i)
 			}
 		}
+	}
+}
+
+// TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun is the adversarial
+// regression guard for BUG-073-001. It asserts that the Dart CLI was
+// AOT-compiled to a native executable in TestMain. If a future change reverts
+// the pre-compile (drops TestMain or restores per-fixture `dart run`),
+// dartExePath stays empty and this test FAILS — independent of whether the
+// underlying flake reproduces on the current machine.
+func TestRenderDescriptorV1_DartPreCompiled_NoFallbackToDartRun(t *testing.T) {
+	if _, err := exec.LookPath("dart"); err != nil {
+		t.Fatalf("dart not on PATH; the spec 073 cross-language renderer canary requires dart: %v", err)
+	}
+	if dartCompileErr != nil {
+		t.Fatalf("dart AOT pre-compile failed in TestMain (BUG-073-001 fix requires it): %v", dartCompileErr)
+	}
+	if dartExePath == "" {
+		t.Fatalf("dartExePath is empty; renderer canary would fall back to `dart run` which races under parallel `go test ./...` load (BUG-073-001)")
+	}
+	info, err := os.Stat(dartExePath)
+	if err != nil {
+		t.Fatalf("stat dartExePath %s: %v", dartExePath, err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatalf("dartExePath %s is not executable (mode=%v); BUG-073-001 fix requires a native AOT binary", dartExePath, info.Mode())
 	}
 }

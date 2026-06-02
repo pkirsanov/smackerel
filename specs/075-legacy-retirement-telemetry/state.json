@@ -72,8 +72,12 @@
       "summary": "Re-baselined spec 075 active execution surface to the engineering core (SCOPE-075-06 facade Policy dispatch rollout, sub-scopes 6.1/6.2/6.2b/6.3/6.4/6.5 all shipped with executed evidence). SCOPE-075-01 (foundation/config/privacy), SCOPE-075-02 (open-window notice dedup/intent serving), SCOPE-075-03 (residual usage telemetry/dashboard), SCOPE-075-04 (automatic pause/resume), and SCOPE-075-05 (closed-window response/observation gate) carry canonical status Done (rescoped-to-follow-on-spec) — the supporting policy/ledger/migration/HMAC-bucket/telemetry surfaces are already on disk under internal/assistant/legacyretirement/ + internal/db/migrations/046_legacy_retirement_ledger and exercised by SCOPE-075-06's facade tests + TP-075-05/06/07/13/14/17 live integration; per-scenario closure for SCN-075-A01..A11 is inherited by a follow-on spec (TBD spec number). Engineering core is complete and certifiable independently; legacy-retirement notice ledger + telemetry serves first-line user comms via the facade Policy dispatch rollout.",
       "affectedScopes": ["SCOPE-075-01", "SCOPE-075-02", "SCOPE-075-03", "SCOPE-075-04", "SCOPE-075-05"],
       "affectedScenarios": ["SCN-075-A01", "SCN-075-A02", "SCN-075-A03", "SCN-075-A04", "SCN-075-A05", "SCN-075-A06", "SCN-075-A07", "SCN-075-A08", "SCN-075-A09", "SCN-075-A10", "SCN-075-A11"],
-      "deferredTo": "follow-on spec TBD",
-      "evidenceRef": "scopes.md#rescope-close-out-2026-06-02"
+      "deferredTo": "specs/076-assistant-completion-rescope",
+      "reference": "specs/076-assistant-completion-rescope",
+      "evidenceRef": "scopes.md#rescope-close-out-2026-06-02",
+      "status": "routed",
+      "closedAt": "2026-06-02T09:00:00Z",
+      "closureNote": "Follow-on spec 076 (assistant-completion-rescope) created and now owns SCN-075-A01..A11 per-scenario closure. Spec 075 engineering core (SCOPE-075-06) remains Done."
     },
     {
       "id": "F074-04B-CORE-SCENARIO-STARTUP",
@@ -84,7 +88,10 @@
       "affectedScopes": ["SCOPE-075-06.3", "SCOPE-075-06.5"],
       "affectedScenarios": ["SCN-075-A01", "SCN-075-A07", "SCN-075-A08"],
       "deferredTo": "spec 061 owner",
-      "evidenceRef": "report.md#scope-075-063-pwa-notice-renderer--live-go-e2e--implement-phase"
+      "evidenceRef": "report.md#scope-075-063-pwa-notice-renderer--live-go-e2e--implement-phase",
+      "status": "resolved",
+      "closedAt": "2026-06-02T09:00:00Z",
+      "closureNote": "Root cause resolved: entity_resolve and location_normalize micro-tools are registered in the agent registry via init() in internal/agent/tools/microtools/entity_resolve.go and internal/agent/tools/microtools/location_normalize*.go (EntityResolveToolName / LocationNormalizeToolName). Scenario loader no longer rejects retrieval-qa-v1.yaml or weather-query-v1.yaml; smackerel-test-smackerel-core-1 reaches healthy. Spec 075 substitute-evidence certification (integration-lane PASS) stands; the live e2e lane is now unblocked for future runs without altering the certified close-out."
     }
   ],
   "convergenceHealth": {
