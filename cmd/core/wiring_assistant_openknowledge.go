@@ -238,6 +238,7 @@ func wireOpenKnowledge(cfg *config.Config, svc *coreServices, agentScenarioDir s
 		CostFn:                     costFn,
 		Recorder:                   okMetrics,
 		Logger:                     slog.Default(),
+		EnforcementMode:            okCfg.CitebackEnforcementMode,
 	})
 	if err != nil {
 		return fmt.Errorf("wireOpenKnowledge: build agent: %w", err)

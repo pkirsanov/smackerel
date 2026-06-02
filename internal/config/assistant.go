@@ -185,6 +185,10 @@ type AssistantConfig struct {
 	// Spec 065 SCOPE-1 — generic micro-tools SST.
 	Tools AssistantToolsConfig
 
+	// Spec 076 SCOPE-1 — annotation classifier foundation SST
+	// (consumed by spec 076 SCOPE-4 cut-over).
+	AnnotationClassifier AnnotationClassifierConfig
+
 	// Spec 069 SCOPE-1c-bis — HTTP transport SST contract. Typed
 	// block consumed by Scope 1d wiring (httpadapter.NewHTTPAdapter)
 	// and Scope 2 middleware. Every key is REQUIRED at the generator
@@ -431,6 +435,13 @@ func loadAssistantConfig(cfg *Config) error {
 	// appends missing/invalid keys into the shared errs slice so the
 	// aggregate error names every offender at once.
 	loadAssistantToolsConfig(cfg, &errs)
+
+	// Spec 076 SCOPE-1 — annotation classifier foundation SST.
+	if ac, acErr := LoadAnnotationClassifier(); acErr != nil {
+		errs = append(errs, acErr.Error())
+	} else {
+		cfg.Assistant.AnnotationClassifier = ac
+	}
 
 	// Spec 069 SCOPE-1c-bis — HTTP transport SST (fail-loud).
 	loadAssistantHTTPTransportConfig(cfg, &errs)

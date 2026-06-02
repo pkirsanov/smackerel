@@ -228,11 +228,16 @@ func buildCoreServices(ctx context.Context, cfg *config.Config) (*coreServices, 
 		HealthCacheTTL: time.Duration(cfg.MLHealthCacheTTLS) * time.Second,
 	}
 
-	// ML sidecar readiness gate: wait for sidecar health at startup
-	// so first search requests don't timeout. Falls back to text mode on timeout.
+	// ML sidecar readiness gate runs in the background so the core HTTP
+	// listener can bind and /api/health can answer the Docker healthcheck
+	// within the start_period budget even on a cold fresh build (where the
+	// ml sidecar may still be warming up while core boots — core's
+	// depends_on does NOT gate on ml: service_healthy). Search requests
+	// that arrive before the gate completes fall back to text mode, which
+	// is the same documented behavior as a readiness timeout.
 	if cfg.MLReadinessTimeoutS > 0 {
 		readinessTimeout := time.Duration(cfg.MLReadinessTimeoutS) * time.Second
-		svc.searchEngine.WaitForMLReady(ctx, readinessTimeout)
+		go svc.searchEngine.WaitForMLReady(ctx, readinessTimeout)
 	}
 
 	// Create digest generator

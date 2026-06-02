@@ -20,6 +20,16 @@ var (
 	// registered but excluded by the operator allowlist. A nil or
 	// empty allowlist means deny-all.
 	ErrToolNotAllowed = errors.New("openknowledge: tool not in allowlist")
+
+	// ErrToolNotRegistered is the spec 076 SCOPE-2b name for the
+	// registry "name was never Registered" sentinel. Alias of
+	// ErrUnknownTool so callers using either name with errors.Is
+	// keep working.
+	ErrToolNotRegistered = ErrUnknownTool
+	// ErrToolDisabled is the spec 076 SCOPE-2b name for the registry
+	// "registered but operator-disabled (allowlist excludes it)"
+	// sentinel. Alias of ErrToolNotAllowed.
+	ErrToolDisabled = ErrToolNotAllowed
 )
 
 // Registry is the in-memory store of Tool implementations available

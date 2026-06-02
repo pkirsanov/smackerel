@@ -20,11 +20,47 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.analyst",
-    "currentPhase": "bootstrap",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": 2,
     "runStartedAt": "2026-06-02T00:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "2a",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T17:25:00Z",
+        "evidence": "report.md#scope-2a-test-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "2b",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T17:55:00Z",
+        "evidence": "report.md#scope-2b-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "2c",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T18:25:00Z",
+        "evidence": "report.md#scope-2c-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "2d",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T18:55:00Z",
+        "evidence": "report.md#scope-2d-implement-2026-06-02"
+      },
+      {
+        "phase": "implement",
+        "scope": "3",
+        "agent": "bubbles.implement",
+        "claimedAt": "2026-06-02T19:10:00Z",
+        "evidence": "report.md#scope-3-implement-2026-06-02"
+      }
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
@@ -35,7 +71,7 @@
       {
         "scope": 1,
         "name": "Inherited-Behavior Manifest Bootstrap and Foundation Wiring",
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": [],
         "scopeDir": "scopes.md#scope-1",
         "evidenceFile": "report.md",
@@ -44,7 +80,7 @@
       {
         "scope": 2,
         "name": "Open-Knowledge Agent Hardening",
-        "status": "not_started",
+        "status": "in_progress",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-2",
         "evidenceFile": "report.md",
@@ -53,7 +89,7 @@
       {
         "scope": 3,
         "name": "Generic Micro-Tool Overlays",
-        "status": "not_started",
+        "status": "done",
         "dependsOn": [1],
         "scopeDir": "scopes.md#scope-3",
         "evidenceFile": "report.md",

@@ -3904,6 +3904,13 @@ and two correctness budgets:
 
 ### Configuration SST
 
+For the operator-facing per-transport key inventory (HTTP, WhatsApp,
+assistant Telegram, legacy Telegram bot), see
+[`docs/Transport_Configuration.md`](Transport_Configuration.md). That
+doc is enforced to stay in lock-step with
+`internal/assistant/transportconfig` by `TestRegistry_DocSync`
+(SCN-062-A06) under `./smackerel.sh test unit`.
+
 All assistant configuration originates from
 [`config/smackerel.yaml`](../config/smackerel.yaml) under the top-level
 `assistant:` block (around lines 640–724). It is validated by

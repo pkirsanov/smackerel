@@ -1,0 +1,118 @@
+package transportconfig
+
+// whatsappEntries enumerates assistant.transports.whatsapp.* keys from
+// config/smackerel.yaml as resolved by scripts/commands/config.sh
+// (spec 072 SCOPE-1). All keys are REQUIRED at the generator boundary
+// (required_value); the Go validator (internal/config/assistant.go)
+// further enforces non-empty resolution of every secret-bearing field
+// when enabled=true.
+var whatsappEntries = []Entry{
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.enabled",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_ENABLED",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.enabled is required (strict bool \"true\"|\"false\")",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.webhook_path",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_PATH",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.webhook_path is required (chi route path starting with \"/\")",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.phone_number_id",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_PHONE_NUMBER_ID",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.phone_number_id is required (Meta Cloud API sender phone-number id)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.business_account_id",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_BUSINESS_ACCOUNT_ID",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.business_account_id is required (Meta Cloud API business account id)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.webhook_verify_token_ref",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_WEBHOOK_VERIFY_TOKEN_REF",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.webhook_verify_token_ref is required (env-var name holding the GET verify-token shared secret)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.app_secret_ref",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_APP_SECRET_REF",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.app_secret_ref is required (env-var name holding Meta app secret for X-Hub-Signature-256 HMAC)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.access_token_ref",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_ACCESS_TOKEN_REF",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.access_token_ref is required (env-var name holding the Cloud API bearer access token)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.identity_hash_key_ref",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_IDENTITY_HASH_KEY_REF",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.identity_hash_key_ref is required (env-var name holding HMAC key for inbound E.164 hashing)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.api_base_url",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_API_BASE_URL",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.api_base_url is required (Cloud API base URL; MUST be HTTPS when enabled)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.api_version",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_API_VERSION",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.api_version is required (closed-vocabulary Cloud API version token, e.g. \"v20.0\")",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.rate_limit_per_user_per_minute",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_RATE_LIMIT_PER_USER_PER_MINUTE",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.rate_limit_per_user_per_minute is required (integer >= 1)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+	{
+		Transport:     "whatsapp",
+		YAMLKey:       "assistant.transports.whatsapp.max_text_chars",
+		EnvVar:        "ASSISTANT_TRANSPORTS_WHATSAPP_MAX_TEXT_CHARS",
+		Required:      true,
+		FailLoudMsg:   "assistant.transports.whatsapp.max_text_chars is required (integer >= 1)",
+		OwningPackage: "internal/whatsapp/assistant_adapter",
+		IntroducedBy:  "specs/072-whatsapp-business-transport SCOPE-1",
+	},
+}

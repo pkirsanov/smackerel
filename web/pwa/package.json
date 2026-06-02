@@ -1,0 +1,14 @@
+{
+  "name": "smackerel-pwa-e2e-ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Spec 077 — Playwright-driven PWA browser end-to-end UI test harness. Disposable test-stack lane only; not part of any production bundle.",
+  "type": "module",
+  "scripts": {
+    "test:e2e-ui": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "typescript": "5.6.3"
+  }
+}

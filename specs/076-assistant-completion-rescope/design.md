@@ -56,9 +56,13 @@ telemetry privacy).
 - **Agent-loop budgets** (064 scope 09): enforces per-turn step budget
   and per-user monthly token budget at the agent boundary; circuit-breaker
   already integrated via SCOPE-14/16 is reused. Drives SCN-064-A04 + A08.
-- **Persistence migration with lifecycle column** (064 scope 11): new
-  table `assistant_tool_traces` with `(turn_id, tool_name, payload_redacted, lifecycle_state, created_at)`;
-  lifecycle column participates in the existing prune lifecycle.
+- **Persistence migration with lifecycle + outcome columns** (064 scope 11): new
+  table `assistant_tool_traces` with `(turn_id, tool_name, payload_redacted, lifecycle_state, call_outcome, created_at)`.
+  `lifecycle_state ∈ {active, cooling, pruned}` participates in the existing
+  artifact-prune lifecycle (migration 053). `call_outcome ∈ {running, succeeded,
+  failed, refused}` is the per-tool-call dispatcher outcome (migration 054).
+  The two columns are intentionally separate — earlier drafts conflated them
+  under one `lifecycle_state` name; the split is documented in migration 054.
 
 ### Capability Area 2 — Generic Micro-Tool Overlays (065 scopes 02–04)
 
@@ -106,14 +110,35 @@ already at `internal/agent/tools/microtools/`.
 
 ### Capability Area 5 — Capture Provenance, Dedup, Telemetry (074 scopes 02, 03, 05)
 
-- **Provenance separation** (074 scope 02 → SCN-074-A02): adds
-  `Idea.provenance ∈ {"explicit", "fallback"}` and an "explicit capture
-  amendment seam" so an explicit capture supersedes a prior fallback
-  Idea without losing the original trace.
-- **Per-user dedup** (074 scope 03 → SCN-074-A03..A05): introduces
-  `assistant_capture_dedup` table keyed on `(user_id, normalized_text_hash, time_bucket)`
-  with a fail-loud SST `assistant.capture_fallback.dedup_window`.
-  Cross-user dedup is structurally impossible by schema.
+This capability area composes the shipped `artifact_capture_policy` row
+family (migration `051_artifact_capture_policy.sql`, spec 074 SCOPE-2)
+plus the shipped `capturefallback` package — it does NOT introduce a
+new `ideas.provenance` column or a new `assistant_capture_dedup` table.
+The closed provenance vocabulary is the shipped one:
+`('capture-as-fallback', 'capture-explicit')`. Spec 076 must NOT
+re-define it as `('explicit','fallback')`; the SST keys, persistence,
+ack payloads, and inherited SCN-074-A02..A05 scenarios all bind to the
+shipped tokens.
+
+- **Provenance separation** (074 scope 02 → SCN-074-A02): wires the
+  "explicit capture amendment seam" so an explicit capture
+  (`provenance='capture-explicit'`, NULL `dedup_bucket_start`)
+  supersedes a prior fallback Idea
+  (`provenance='capture-as-fallback'`) without losing the original
+  IntentTrace. No schema change — the row family already distinguishes
+  the two via the shipped CHECK constraint on
+  `artifact_capture_policy.provenance` and the partial UNIQUE index
+  `idx_capture_fallback_dedup` that only applies to
+  `provenance='capture-as-fallback'`.
+- **Per-user dedup** (074 scope 03 → SCN-074-A03..A05): consumes the
+  shipped partial UNIQUE index
+  `(user_id, provenance, normalized_text_hash, dedup_bucket_start)
+   WHERE provenance = 'capture-as-fallback'`
+  and the shipped fail-loud SST `CAPTURE_AS_FALLBACK_DEDUP_WINDOW`
+  (loaded by `internal/config.LoadCaptureFallback`). Cross-user dedup
+  remains structurally impossible because `user_id` is part of the
+  unique key. No new dedup store is introduced; a second store with a
+  non-overlapping key shape is explicitly rejected as duplicate state.
 - **Telemetry + IntentTrace + cross-transport ack** (074 scope 05 →
   SCN-074-A07, A11): the `smackerel_capture_as_fallback_total` counter
   shipped under spec 074 SCOPE-04A/B/C is joined to the IntentTrace via
@@ -156,12 +181,19 @@ adds the user-visible + operator-visible wiring rescoped out of 075:
 | `assistant_conversations.legacy_retirement_notices` | spec 075 | None (re-used) |
 | `assistant_legacy_retirement_state` | spec 075 | None (re-used) |
 | `assistant_legacy_retirement_observations` | spec 075 | None (re-used) |
-| `assistant_tool_traces` | this spec (064 scope 11) | **New** table `(turn_id, tool_name, payload_redacted, lifecycle_state, created_at)`; participates in existing prune lifecycle |
-| `assistant_capture_dedup` | this spec (074 scope 03) | **New** table `(user_id, normalized_text_hash, time_bucket, created_at)`; UNIQUE on the full key prevents cross-user dedup by schema |
-| `ideas.provenance` | this spec (074 scope 02) | **New** column `provenance TEXT NOT NULL CHECK (provenance IN ('explicit','fallback'))` |
+| `assistant_tool_traces` | this spec (064 scope 11) | **New** table `(turn_id, tool_name, payload_redacted, lifecycle_state, call_outcome, created_at)`. `lifecycle_state ∈ {active, cooling, pruned}` (migration 053) participates in the existing prune lifecycle. `call_outcome ∈ {running, succeeded, failed, refused}` (migration 054) is the per-tool-call dispatcher outcome. The two columns are distinct concepts and MUST NOT be conflated. |
+| `artifact_capture_policy` | spec 074 SCOPE-2 (migration `051_artifact_capture_policy.sql`) | **Re-used as-is.** Provides `provenance TEXT NOT NULL CHECK (provenance IN ('capture-as-fallback','capture-explicit'))`, partial UNIQUE index `(user_id, provenance, normalized_text_hash, dedup_bucket_start) WHERE provenance = 'capture-as-fallback'`, and `intent_trace_id` link. Spec 076 introduces no new dedup table and no `ideas.provenance` column. |
 
-All new tables and columns get fail-loud `NOT NULL` constraints + named
-migrations; no defaults.
+> **Superseded Design Decisions.** Earlier drafts of this design named a
+> new `ideas.provenance` column and a new `assistant_capture_dedup`
+> table. Both are withdrawn: there is no `ideas` table in the schema
+> (only `artifacts.key_ideas JSONB`), and migration 051 already
+> persists per-user fallback dedup against `artifact_capture_policy`.
+> Adding a second dedup store with a different key shape would create
+> divergent dedup state and is rejected.
+
+The one new table this spec introduces (`assistant_tool_traces`) gets
+fail-loud `NOT NULL` constraints and a named migration; no defaults.
 
 ## API / Contracts
 

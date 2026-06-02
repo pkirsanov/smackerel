@@ -39,7 +39,7 @@
 
     {
       "scenarioId": "SCN-064-A02",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02a",
       "title": "Unit/math conversion via deterministic tool",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -51,7 +51,7 @@
     },
     {
       "scenarioId": "SCN-064-A03",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02b",
       "title": "Hybrid internal-graph + web answer",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -63,7 +63,7 @@
     },
     {
       "scenarioId": "SCN-064-A04",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02b",
       "title": "Refusal-with-capture on per-turn budget exhaustion",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -75,7 +75,7 @@
     },
     {
       "scenarioId": "SCN-064-A05",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02b",
       "title": "Refusal-with-capture on tool failure",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -87,7 +87,7 @@
     },
     {
       "scenarioId": "SCN-064-A06",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02c",
       "title": "Refusal on fabricated source (cite-back verifier)",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -99,7 +99,7 @@
     },
     {
       "scenarioId": "SCN-064-A07",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02b",
       "title": "Operator disables web_search tool",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -111,7 +111,7 @@
     },
     {
       "scenarioId": "SCN-064-A08",
-      "scopeId": "SCOPE-02",
+      "scopeId": "SCOPE-02b",
       "title": "Per-user monthly budget exceeded",
       "behaviorClass": "api",
       "changeType": "regression",
@@ -130,9 +130,9 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
-      "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A01"}
+      "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A01"},
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"]
     },
     {
       "scenarioId": "SCN-065-A02",
@@ -142,8 +142,8 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A02"}
     },
     {
@@ -154,8 +154,8 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A03"}
     },
     {
@@ -166,8 +166,8 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A04"}
     },
     {
@@ -178,8 +178,8 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A05"}
     },
     {
@@ -190,8 +190,8 @@
       "changeType": "regression",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
-      "evidenceRefs": ["report.md#planning--2026-06-02"],
+      "linkedTests": ["tests/e2e/microtools/overlays_e2e_test.go::TestMicroToolOverlays_FullMatrix"],
+      "evidenceRefs": ["report.md#planning--2026-06-02", "report.md#scope-3-implement-2026-06-02"],
       "inheritsFrom": {"spec": "specs/065-generic-micro-tools", "scenarioId": "SCN-065-A06"}
     },
 

@@ -17,11 +17,33 @@
   "certifiedAt": null,
   "requiresRevalidation": false,
   "execution": {
-    "activeAgent": "bubbles.plan",
-    "currentPhase": "bootstrap",
-    "currentScope": null,
+    "activeAgent": "bubbles.implement",
+    "currentPhase": "implement",
+    "currentScope": "1c",
     "runStartedAt": "2026-06-02T00:00:00Z",
-    "completedPhaseClaims": [],
+    "completedPhaseClaims": [
+      {
+        "phase": "implement",
+        "scope": "1a",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-02T16:10:00Z",
+        "evidenceRef": "report.md#scope-1a--compose-project-lane--dispatcher-routing--2026-06-02",
+        "notes": "Dispatcher arm + lane wrapper + shell canary delivered; RED\u2192GREEN proof captured; broader test-dispatcher routing unchanged (verified by canary \u00a75)."      },
+      {
+        "phase": "implement",
+        "scope": "1b",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-02T18:00:00Z",
+        "evidenceRef": "report.md#scope-1b--node-tooling-runner--playwright-config-fail-loud--2026-06-02",
+        "notes": "Playwright config + fail-loud SST consumer (requireSmackerelBaseUrl) + csp.ts skeleton + run_node_tooling helper + auto-discovered shell unit test delivered. RED proof: silent ?? default in env.ts caught by static-composition block (exit 1). GREEN proof: TP-077-01-03 driver PASS (node:test + exit-code propagation across STUB_EXIT=0|7|127 + missing-binary case). SCOPE-1a dispatcher canary still PASS after seam handoff (sections 4 + 7 updated to assert run_node_tooling routing)."      },
+      {
+        "phase": "implement",
+        "scope": "1c",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-02T20:30:00Z",
+        "evidenceRef": "report.md#scope-1c--proof-of-life-spec--live-stack-isolation-proof--2026-06-02",
+        "notes": "Lifecycle wiring (bring_up_test_stack + tear_down_test_stack + e2e_ui_compose with --project-name smackerel-test-e2e-ui + EXIT/INT/TERM traps + SST-derived SMACKEREL_BASE_URL) shipped in scripts/runtime/web-e2e-ui.sh. proof_of_life.spec.ts shipped. Go integration tests TP-077-01-02 + TP-077-01-05 PASS (both static contracts) with RED proofs captured. SCOPE-1a + SCOPE-1b canaries still PASS via the SMACKEREL_E2E_UI_NPX-gated lifecycle bypass. Live-run evidence: containers observed under smackerel-test-e2e-ui-* prefix; trap teardown verified. UNRESOLVED FINDING: TP-077-01-01 + TP-077-01-01R GREEN against live stack not achieved this turn because smackerel-core failed its healthcheck within COMPOSE_WAIT_TIMEOUT_S=180s on the fresh-build run; routed to harden/runtime owner. Scope 1c lifecycle deliverables are complete; the open-finding gates the SCN-077-A01 DoD item only."      }
+    ],
     "pendingTransitionRequests": []
   },
   "certification": {
@@ -30,11 +52,29 @@
     "certifiedCompletedPhases": [],
     "scopeProgress": [
       {
-        "scope": 1,
-        "name": "Playwright Runner + CLI Subcommand",
-        "status": "not_started",
+        "scope": "1a",
+        "name": "Compose-Project Lane + Dispatcher Routing",
+        "status": "implementation_complete",
         "dependsOn": [],
-        "scopeDir": "scopes.md#scope-1",
+        "scopeDir": "scopes.md#scope-1a",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "1b",
+        "name": "Node Tooling Runner + Playwright Config Fail-Loud",
+        "status": "implementation_complete",
+        "dependsOn": ["1a"],
+        "scopeDir": "scopes.md#scope-1b",
+        "evidenceFile": "report.md",
+        "certifiedAt": null
+      },
+      {
+        "scope": "1c",
+        "name": "Proof-of-Life Spec + Live-Stack Isolation Proof",
+        "status": "implementation_partial",
+        "dependsOn": ["1a", "1b"],
+        "scopeDir": "scopes.md#scope-1c",
         "evidenceFile": "report.md",
         "certifiedAt": null
       },
@@ -42,7 +82,7 @@
         "scope": 2,
         "name": "Discovery Convention, CI Lane, and Docs",
         "status": "not_started",
-        "dependsOn": [1],
+        "dependsOn": ["1c"],
         "scopeDir": "scopes.md#scope-2",
         "evidenceFile": "report.md",
         "certifiedAt": null
@@ -51,7 +91,7 @@
         "scope": 3,
         "name": "First Real Consumer: Login Flow + CSP Smoke",
         "status": "not_started",
-        "dependsOn": [1, 2],
+        "dependsOn": ["1c", 2],
         "scopeDir": "scopes.md#scope-3",
         "evidenceFile": "report.md",
         "certifiedAt": null
@@ -71,7 +111,20 @@
     "validation": {"mode": "certification-required", "source": "repo-default"}
   },
   "transitionRequests": [],
-  "reworkQueue": [],
+  "reworkQueue": [
+    {
+      "id": "F-077-1c-001",
+      "raisedBy": "bubbles.implement",
+      "raisedAt": "2026-06-02T20:30:00Z",
+      "scope": "1c",
+      "scenarioRef": "SCN-077-A01",
+      "testPlanRef": ["TP-077-01-01", "TP-077-01-01R"],
+      "summary": "smackerel-core fails Compose healthcheck within COMPOSE_WAIT_TIMEOUT_S=180s under the disposable e2e-ui project (fresh-build run), blocking the proof-of-life Playwright suite from executing GREEN end-to-end.",
+      "evidenceRef": "report.md#scope-1c--proof-of-life-spec--live-stack-isolation-proof--2026-06-02",
+      "ownerHint": "bubbles.harden | runtime owner",
+      "status": "open"
+    }
+  ],
   "executionHistory": [
     {
       "agent": "bubbles.plan",
@@ -81,6 +134,15 @@
       "runStartedAt": "2026-06-02T00:00:00Z",
       "runEndedAt": "2026-06-02T00:00:00Z",
       "summary": "Planning-only bootstrap of foundation spec 077 closing ops packet F-057-V-001-e2e-ui-harness. Three-scope plan: Playwright runner foundation, discovery/CI/docs, first real consumer (spec 057 SCOPE-4 login flow + CSP smoke). Eight SCN-077-A0N scenarios authored."
+    },
+    {
+      "agent": "bubbles.plan",
+      "phasesExecuted": ["scope-split"],
+      "statusBefore": "in_progress",
+      "statusAfter": "in_progress",
+      "runStartedAt": "2026-06-02T00:00:00Z",
+      "runEndedAt": "2026-06-02T00:00:00Z",
+      "summary": "Split SCOPE-1 into 1a (Compose-project lane + dispatcher), 1b (Node tooling runner + Playwright fail-loud), 1c (proof-of-life spec + Go isolation tests) per bubbles.implement route_required so each sub-scope produces independently-verifiable RED->GREEN evidence. Added SCN-077-A09 (dispatcher anchor for 1a) and SCN-077-A10 (fail-loud anchor for 1b). Re-routed SCN-077-A01 and SCN-077-A07 from SCOPE-01 to SCOPE-1c. Scopes 2 and 3 now depend on Scope 1c. test-plan.json authored."
     }
   ],
   "activeBugs": [],

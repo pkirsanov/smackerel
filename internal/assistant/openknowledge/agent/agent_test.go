@@ -83,6 +83,7 @@ func baseCfg(maxIter, tokens int, perQueryUSD, monthlyUSD, perUserUSD, ratio flo
 		PerUserMonthlyUSDRemaining: perUserUSD,
 		CompactionThresholdRatio:   ratio,
 		CostFn:                     cost,
+		EnforcementMode:            string(citeback.EnforcementEnforce),
 	}
 }
 
@@ -493,6 +494,8 @@ func TestAgent_New_RejectsInvalidConfig(t *testing.T) {
 		{"threshold zero", mut(func(c *Config) { c.CompactionThresholdRatio = 0 }), "CompactionThresholdRatio"},
 		{"threshold >1", mut(func(c *Config) { c.CompactionThresholdRatio = 1.5 }), "CompactionThresholdRatio"},
 		{"no costfn", mut(func(c *Config) { c.CostFn = nil }), "CostFn"},
+		{"empty enforcement mode", mut(func(c *Config) { c.EnforcementMode = "" }), "EnforcementMode"},
+		{"invalid enforcement mode", mut(func(c *Config) { c.EnforcementMode = "audit" }), "EnforcementMode"},
 	}
 	r := ok.NewRegistry(nil)
 	fl := &fakeLLM{t: t}

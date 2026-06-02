@@ -38,7 +38,13 @@ runtime:
   # port mapping in deploy/compose.deploy.yml; DevOps reaches them via
   # `tailscale ssh <host> -- docker exec ...` (Pattern P1).
   host_bind_address: "127.0.0.1"
-  compose_wait_timeout_s: 180
+  # F-077-1c-001: raised from 180s → 300s. On fresh-build runs (no image
+  # cache) under the disposable e2e-ui project, smackerel-core's start
+  # window stacks the ML readiness gate (up to assistant.readiness_timeout_s=60s)
+  # on top of DB/NATS wiring + first-request cold start. 180s was too
+  # tight; 300s gives margin without changing the steady-state wait
+  # (compose returns as soon as healthchecks pass).
+  compose_wait_timeout_s: 300
   digest_cron: "0 7 * * *"
   embedding_model: nomic-embed-text
   # Trusted reverse-proxy CIDR allowlist (BUG-020-005, F-SEC-R30-001).
@@ -885,6 +891,13 @@ assistant:
       failure_threshold: 5 # REQUIRED: consecutive failures that trip breaker; > 0 when enabled
       open_window_seconds: 60 # REQUIRED: documented Open window; > 0 when enabled
       half_open_after_seconds: 30 # REQUIRED: elapsed time before HalfOpen probe; > 0 when enabled
+    # Spec 076 SCOPE-1 — cite-back verifier enforcement gate
+    # (SCN-076-F02 foundation key). "shadow" records mismatches
+    # without flipping the answer; "enforce" flips to refusal-with-
+    # capture on any mismatch. REQUIRED regardless of enabled state
+    # (no defaults — Gate G028).
+    citeback:
+      enforcement_mode: "shadow" # REQUIRED: "shadow"|"enforce"
     # Spec 064 SCOPE-07 — self-hosted SearxNG container shape. Off by default;
     # per-env `environments.<env>.searxng_enabled` flips the `searxng` compose
     # profile. The test env auto-enables this so the integration leg runs
@@ -926,6 +939,14 @@ assistant:
     export_targets: "structured_log,otel,prometheus" # REQUIRED: non-empty comma list; vocabulary = structured_log|otel|prometheus
     replay_enabled: true # REQUIRED: strict bool; gates Scope 3 replay CLI
     retention_sweep_interval: 1h # REQUIRED: Go duration > 0; Scope 2 cadence for TTL sweep
+  # Spec 076 SCOPE-1 — assistant.annotation.classifier.* foundation
+  # SST keys (SCN-076-F02). Consumed by the spec 076 SCOPE-4
+  # annotation cut-over. NO defaults (Gate G028); every key REQUIRED
+  # at the generator boundary and fail-loud at startup.
+  annotation:
+    classifier:
+      confidence_floor: 0.6 # REQUIRED: float in [0,1]; below this routes to spec 061 disambiguation
+      warm_cache_enabled: true # REQUIRED: strict bool ("true"|"false")
   # Spec 074 SCOPE-1 — Capture-as-Fallback cross-cutting policy SST.
   # NO defaults (Gate G028, smackerel-no-defaults): every key REQUIRED
   # at the generator boundary and fail-loud at startup. There is no
