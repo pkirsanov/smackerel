@@ -143,10 +143,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      # 120s covers ML readiness gate (up to assistant.readiness_timeout_s=60s)
-      # in services.go::SetupServices before the HTTP listener binds, plus
-      # DB/NATS/connector wiring margin. Matches smackerel-ml's window.
-      start_period: 120s
+      # F-077-1c-001: raised 120s → 180s. Covers ML readiness gate (up to
+      # assistant.readiness_timeout_s=60s) in services.go::SetupServices
+      # before the HTTP listener binds, plus DB/NATS/connector wiring +
+      # fresh-build cold-start margin. Paired with COMPOSE_WAIT_TIMEOUT_S=300s
+      # in config/smackerel.yaml so `docker compose up --wait` has headroom.
+      start_period: 180s
     deploy:
       resources:
         limits:

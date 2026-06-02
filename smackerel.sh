@@ -43,6 +43,8 @@ Commands:
   test integration [--go-run <regex>] Run live-stack integration validation; optionally run only matching Go integration tests
   test e2e [--go-run <regex>] [--shell-run <path>] Run E2E tests; optionally run only matching Go or shell E2E tests
   test stress [--go-run <regex>] Run live-stack stress smoke test; optionally run only matching Go stress tests
+  test e2e-ui [--help|--print-compose-project] Run PWA browser end-to-end UI tests via Playwright against the disposable
+                              Compose project `smackerel-test-e2e-ui` (spec 077; runner wiring lands in SCOPE-1b)
   up                          Start the stack for the current environment
   down [--volumes]            Stop the stack; optionally remove named volumes
   status                      Show docker status and health endpoint output
@@ -833,6 +835,26 @@ case "$COMMAND" in
         else
           run_go_tooling /workspace/scripts/runtime/go-unit.sh
           run_python_tooling /workspace/scripts/runtime/python-unit.sh
+          # Spec 077 SCOPE-1a (TP-077-01-04) — discover and run shell-level
+          # CLI unit tests under tests/unit/cli/*.sh. These cover dispatcher
+          # routing and other smackerel.sh surface invariants. Scoped to
+          # tests/unit/cli/ so it does not change behavior for legacy shell
+          # tests living directly under tests/unit/. Skipped when --go/--python
+          # language filter is set so single-language runs stay focused.
+          shell_unit_dir="$SCRIPT_DIR/tests/unit/cli"
+          if [[ -d "$shell_unit_dir" ]]; then
+            shopt -s nullglob
+            shell_unit_tests=("$shell_unit_dir"/*.sh)
+            shopt -u nullglob
+            if [[ ${#shell_unit_tests[@]} -gt 0 ]]; then
+              echo "[test unit] running ${#shell_unit_tests[@]} shell CLI unit test(s) from tests/unit/cli/"
+              for shell_unit_test in "${shell_unit_tests[@]}"; do
+                echo "[test unit] -> bash $shell_unit_test"
+                bash "$shell_unit_test"
+              done
+              echo "[test unit] shell CLI unit tests finished OK"
+            fi
+          fi
         fi
         ;;
       integration)
@@ -1649,6 +1671,32 @@ case "$COMMAND" in
           -e "DATABASE_URL=${database_url}" \
           -e "NATS_URL=${nats_url}" \
           golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-stress.sh "${go_stress_args[@]}"
+        ;;
+      e2e-ui)
+        # Spec 077 SCOPE-1a — dispatch the PWA browser end-to-end UI lane.
+        # This scope ships only the dispatcher entry + lane wrapper skeleton;
+        # the Node tooling (Playwright runner) lands in SCOPE-1b and the
+        # proof-of-life spec + live-stack isolation proof land in SCOPE-1c.
+        # Until SCOPE-1b lands, the wrapper fails loud with a clear
+        # "runner not yet wired" message (no silent success, no hidden default).
+        if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+          cat <<'E2EUI_HELP'
+Usage: ./smackerel.sh test e2e-ui [--print-compose-project]
+
+Run the PWA browser end-to-end UI test harness (Playwright) against the
+disposable test stack whose Compose project name is `smackerel-test-e2e-ui`.
+
+Spec 077 SCOPE-1a ships the dispatcher + lane wrapper skeleton only; the
+Node tooling runner is added by SCOPE-1b and proof-of-life specs by SCOPE-1c.
+Invoking this subcommand before SCOPE-1b lands intentionally fails loud.
+
+Options:
+  --print-compose-project   Print the dedicated Compose project name and exit 0.
+  --help, -h                Show this help and exit 0.
+E2EUI_HELP
+          exit 0
+        fi
+        exec bash "$SCRIPT_DIR/scripts/runtime/web-e2e-ui.sh" "$@"
         ;;
       *)
         usage
