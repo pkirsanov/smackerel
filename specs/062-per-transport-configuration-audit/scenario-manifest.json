@@ -33,7 +33,13 @@
       "changeType": "new",
       "requiredTestType": ["unit"],
       "regressionRequired": true,
-      "linkedTests": [],
+      "linkedTests": [
+        {
+          "testPath": "internal/assistant/transportconfig/registry_failloud_test.go",
+          "testName": "TestRegistry_RequiredEntriesHaveFailLoud",
+          "testType": "unit"
+        }
+      ],
       "evidenceRefs": ["report.md#scope-2"]
     },
     {
@@ -44,7 +50,13 @@
       "changeType": "new",
       "requiredTestType": ["unit"],
       "regressionRequired": true,
-      "linkedTests": [],
+      "linkedTests": [
+        {
+          "testPath": "internal/assistant/transportconfig/registry_failloud_test.go",
+          "testName": "TestRegistry_NoForbiddenFallbacks",
+          "testType": "unit"
+        }
+      ],
       "evidenceRefs": ["report.md#scope-2"]
     },
     {
@@ -55,7 +67,14 @@
       "changeType": "new",
       "requiredTestType": ["e2e-api"],
       "regressionRequired": true,
-      "linkedTests": [],
+      "linkedTests": [
+        {
+          "testPath": "tests/e2e/spec062_http_missing_key_test.go",
+          "testName": "TestHTTPAdapter_MissingRequiredKey_FailsLoud",
+          "testType": "e2e-api",
+          "buildTag": "e2e"
+        }
+      ],
       "evidenceRefs": ["report.md#scope-2"]
     },
     {
