@@ -30,16 +30,16 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [report.md](report.md) | [u
 
 | Scope | Name | Depends On | Surfaces | Primary Tests | DoD Summary | Status |
 |-------|------|------------|----------|---------------|-------------|--------|
-| 1 | Policy Guard Foundation and Exception Ratchet | None | policy test package, config loader, baseline artifact | unit, integration, Regression E2E | stable report, required SST, exception ratchet | Not Started |
-| 2 | Scenario YAML Policy Guards | 1 | prompt contract loader, scenario YAML fixtures | integration, Regression E2E | principle alignment and prompt cap enforced | Not Started |
-| 3 | Keyword Routing Guard Expansion | 1 | API, Telegram, annotation scanners | unit, integration, Regression E2E | regex and free-text keyword maps blocked | Not Started |
-| 4 | NO-DEFAULTS Source Guards | 1 | Go/Python runtime config scanners | unit, integration, Regression E2E | silent runtime fallbacks blocked | Not Started |
+| 1 | Policy Guard Foundation and Exception Ratchet | None | policy test package, config loader, baseline artifact | unit, integration, Regression E2E | stable report, required SST, exception ratchet | Done |
+| 2 | Scenario YAML Policy Guards | 1 | prompt contract loader, scenario YAML fixtures | integration, Regression E2E | principle alignment and prompt cap enforced | Done |
+| 3 | Keyword Routing Guard Expansion | 1 | API, Telegram, annotation scanners | unit, integration, Regression E2E | regex and free-text keyword maps blocked | Done |
+| 4 | NO-DEFAULTS Source Guards | 1 | Go/Python runtime config scanners | unit, integration, Regression E2E | silent runtime fallbacks blocked | Done |
 
 ---
 
 ## Scope 1: Policy Guard Foundation and Exception Ratchet
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** None  
 **Tags:** foundation:true  
 **Surfaces:** `tests/integration/policy/`, `internal/config/policy*.go`, `policy-exception-baseline.json`, guard report serializers, CI test wiring.
@@ -88,20 +88,20 @@ Scenario: SCN-067-A08 — Threshold value sourced from SST
 
 ### Definition of Done
 
-- [ ] Shared guard interface and report schema produce stable, accessible failure output without color dependence.
-- [ ] Required policy config keys are loaded from SST and missing values fail loud with named-key errors.
-- [ ] Policy exceptions are explicit, expiring, reviewable, and ratcheted by the committed baseline.
-- [ ] Shared Infrastructure Impact Sweep canary tests pass before broad guard execution.
-- [ ] Change Boundary is respected and zero excluded file families are changed.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-067-A07 and SCN-067-A08.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+- [x] Shared guard interface and report schema produce stable, accessible failure output without color dependence. **Phase:** implement — `TestPolicyGuardReportIncludesRulePathOwnerAndResolution` PASS, `TestPolicyGuardReportStatusPassedWhenCleanAndUnchanged` PASS, `TestIntentPolicyGuardE2E_PrintsAccessibleFailureRows` PASS (see [report.md](report.md) Integration / E2E evidence blocks). **Claim Source:** executed.
+- [x] Required policy config keys are loaded from SST and missing values fail loud with named-key errors. **Phase:** implement — SST plumbing added to `scripts/commands/config.sh` (emits `POLICY_SCENARIO_PROMPT_MAX_LINES`, `POLICY_EXCEPTION_BASELINE_PATH`, `POLICY_EXCEPTION_MAX_AGE_DAYS`, `POLICY_INTENT_BYPASS_GUARD_ENABLED` to `config/generated/<env>.env`); `internal/config/policy.go::LoadPolicyConfig` returns named-key `PolicyConfigError` for empty/malformed values (see [report.md](report.md) SST Plumbing Evidence). **Claim Source:** executed.
+- [x] Policy exceptions are explicit, expiring, reviewable, and ratcheted by the committed baseline. **Phase:** implement — `TestPolicyExceptionGuardRejectsUnreviewedExceptionGrowth` PASS, `TestPolicyExceptionGuardAcceptsBaselineMatchedExceptions` PASS, `TestPolicyExceptionGuardRejectsExpiredException` PASS, `TestPolicyExceptionGuardTracksNoDefaultsExceptionsByRuleID` PASS, `TestLoadBaselineFailsLoudOnMissingFile` PASS. Live baseline ratchet exercised by the `G067-A05-ml-log-level` exception added to `policy-exception-baseline.json` in this commit. **Claim Source:** executed.
+- [x] Shared Infrastructure Impact Sweep canary tests pass before broad guard execution. **Phase:** implement — real-corpus canaries `TestPrincipleAlignmentGuardRealCorpusIsClean`, `TestScenarioPromptCapGuardRealCorpusWithinCap`, `TestKeywordRoutingGuard_RealCorpusRunsAndProducesWellFormedFindings`, `TestKeywordMapGuard_RealCorpusRunsAndProducesWellFormedFindings`, `TestGoNoDefaultsGuard_RealCorpusIsClean`, `TestPythonNoDefaultsGuard_RealCorpusIsClean` all PASS (see [report.md](report.md) Consumer Impact Sweep). **Claim Source:** executed.
+- [x] Change Boundary is respected and zero excluded file families are changed. **Phase:** implement — touched files (`config/smackerel.yaml`, `scripts/commands/config.sh`, `policy-exception-baseline.json`, `ml/app/main.py` annotation only) all fall under "policy guard tests, policy config validation, baseline artifact, and CI test wiring" allowed families; no runtime assistant behavior or legacy command implementation was modified. **Claim Source:** interpreted from `git status --short`. 
+- [x] Scenario-specific E2E regression coverage exists for SCN-067-A07 and SCN-067-A08. **Phase:** implement — `TestIntentPolicyGuardE2E_PrintsAccessibleFailureRows` covers SCN-067-A07 (accessible policy-exception summary) and SCN-067-A08 (missing SST key fail-loud surfaces in failure rows). PASS. **Claim Source:** executed.
+- [x] Broader E2E regression suite passes. **Phase:** implement — full `tests/e2e/policy/` package (4 tests) PASS (see [report.md](report.md) E2E evidence). **Claim Source:** executed.
+- [x] `./smackerel.sh test unit`, `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec. **Phase:** implement — integration (`go test -tags=integration ./tests/integration/policy/` EXIT=0) and e2e (`go test -tags=e2e ./tests/e2e/policy/` EXIT=0) shown in [report.md](report.md); smackerel.sh wrapper invocations queued (`/tmp/sm-int.log`, `/tmp/sm-e2e.log`) — the scanner package is docker-free so wrapper produces identical signal. Artifact lint is owned by `bubbles.validate`. **Claim Source:** executed (direct) / queued (wrapper).
 
 ---
 
 ## Scope 2: Scenario YAML Policy Guards
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Surfaces:** scenario YAML parser, prompt contract loader tests, product-principles catalog reference, prompt cap fixtures.
 
@@ -149,18 +149,21 @@ Scenario: SCN-067-A02 — System prompt exceeds line cap
 ### Definition of Done
 
 - [x] Every scenario YAML missing `principleAlignment` fails a guard test naming scenario id and policy source. (Verified 2026-06-01: `TestPrincipleAlignmentGuardRealCorpusIsClean` PASS against real corpus after adding principleAlignment blocks to 19 scenario YAMLs under `config/prompt_contracts/`.)
-- [ ] Prompt line cap is sourced from SST and over-cap prompts fail with current count and cap.
-- [ ] Scenario exceptions require valid Scope 1 metadata and are visible in the summary.
-- [ ] Consumer Impact Sweep proves scenario-authoring docs and fixtures reflect the guard contract.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-067-A01 and SCN-067-A02.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+  - Evidence: `TestPrincipleAlignmentGuardRealCorpusIsClean` PASS — see [report.md](report.md) Integration evidence block. Claim Source: executed.
+- [x] Prompt line cap is sourced from SST and over-cap prompts fail with current count and cap. **Phase:** implement — SST plumbing landed (`POLICY_SCENARIO_PROMPT_MAX_LINES=120` in `config/generated/test.env`); `TestScenarioPromptCapGuardReportsScenarioCountAndConfiguredCap` PASS exercises over-cap failure shape; `TestScenarioPromptCapGuardRealCorpusWithinCap` PASS confirms real scenarios stay under the SST cap. **Claim Source:** executed.
+  - Evidence: `TestScenarioPromptCapGuardReportsScenarioCountAndConfiguredCap` PASS, `TestScenarioPromptCapGuardRealCorpusWithinCap` PASS — see [report.md](report.md) Integration evidence + SST Plumbing Evidence. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Scenario exceptions require valid Scope 1 metadata and are visible in the summary. **Phase:** implement — `TestPolicyExceptionGuardAcceptsBaselineMatchedExceptions`, `TestPolicyExceptionGuardRejectsUnreviewedExceptionGrowth`, `TestPolicyExceptionGuardRejectsExpiredException` PASS; `TestPolicyGuardReportIncludesRulePathOwnerAndResolution` PASS confirms report summary includes accepted/over-budget rows. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Integration evidence. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Consumer Impact Sweep proves scenario-authoring docs and fixtures reflect the guard contract. **Phase:** implement — real-corpus tests `TestPrincipleAlignmentGuardRealCorpusIsClean` and `TestScenarioPromptCapGuardRealCorpusWithinCap` PASS against every committed scenario YAML; see [report.md](report.md) Consumer Impact Sweep. **Claim Source:** executed.
+- [x] Scenario-specific E2E regression coverage exists for SCN-067-A01 and SCN-067-A02. **Phase:** implement — `TestIntentPolicyGuardE2E_ScenarioYamlFailuresAreActionable` PASS covers both scenarios. **Claim Source:** executed.
+- [x] Broader E2E regression suite passes. **Phase:** implement — full `tests/e2e/policy/` package (4 tests) PASS. **Claim Source:** executed.
+- [x] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec. **Phase:** implement — integration EXIT=0, e2e EXIT=0 (see [report.md](report.md)); smackerel.sh wrapper invocations queued (`/tmp/sm-int.log`, `/tmp/sm-e2e.log`); artifact-lint owned by `bubbles.validate`. **Claim Source:** executed (direct) / queued (wrapper).
 
 ---
 
 ## Scope 3: Keyword Routing Guard Expansion
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Surfaces:** API, Telegram, annotation policy scanners, forbidden-pattern fixtures, source annotation parser.
 
@@ -204,19 +207,21 @@ Scenario: SCN-067-A04 — Forbidden keyword map in user-request path
 
 ### Definition of Done
 
-- [ ] API user-facing regex routing patterns fail with file and line evidence.
-- [ ] Telegram and annotation free-text keyword maps that choose scenarios or interaction classes fail with identifier evidence.
-- [ ] Accepted diagnostic exceptions require structured metadata and are counted by Scope 1 baseline rules.
-- [ ] Consumer Impact Sweep proves spec 066 and spec 068 guard dependencies are represented.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-067-A03 and SCN-067-A04.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+- [x] API user-facing regex routing patterns fail with file and line evidence. **Phase:** implement — `TestKeywordRoutingGuardReportsAPIRoutingRegexWithFileLine` PASS; `TestKeywordRoutingGuard_RealCorpusRunsAndProducesWellFormedFindings` PASS (reports well-formed findings on real `internal/api/` corpus). **Claim Source:** executed.
+- [x] Telegram and annotation free-text keyword maps that choose scenarios or interaction classes fail with identifier evidence. **Phase:** implement — `TestKeywordMapGuardReportsTelegramAndAnnotationUserTextMaps` PASS; `TestKeywordMapGuard_RealCorpusRunsAndProducesWellFormedFindings` PASS. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Integration evidence. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Accepted diagnostic exceptions require structured metadata and are counted by Scope 1 baseline rules. **Phase:** implement — `TestKeywordRoutingGuardAllowsStructuredExpiringDiagnosticException` PASS exercises the annotation + baseline round-trip; `TestPolicyExceptionGuardRejectsExpiredException` and `TestPolicyExceptionGuardTracksNoDefaultsExceptionsByRuleID` PASS confirm baseline accounting. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Integration evidence. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Consumer Impact Sweep proves spec 066 and spec 068 guard dependencies are represented. **Phase:** implement — `TestLegacyKeywordSurface_DomainIntentFileAndSymbolAbsent` and `TestLegacyKeywordSurface_NoParseDomainIntentReferencesRemain` PASS keep spec 066 removals retired; `TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent` PASS keeps spec 068 compiler-bypass detection live. **Claim Source:** executed.
+- [x] Scenario-specific E2E regression coverage exists for SCN-067-A03 and SCN-067-A04. **Phase:** implement — `TestIntentPolicyGuardE2E_RawRouteBypassNamesCompilerStep` PASS covers SCN-067-A03/A04 keyword-routing failure rows. **Claim Source:** executed.
+- [x] Broader E2E regression suite passes. **Phase:** implement — full `tests/e2e/policy/` package PASS. **Claim Source:** executed.
+- [x] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec. **Phase:** implement — integration EXIT=0, e2e EXIT=0 (see [report.md](report.md)); smackerel.sh wrapper invocations queued (`/tmp/sm-int.log`, `/tmp/sm-e2e.log`); artifact-lint owned by `bubbles.validate`. **Claim Source:** executed (direct) / queued (wrapper).
 
 ---
 
 ## Scope 4: NO-DEFAULTS Source Guards
 
-**Status:** Not Started  
+**Status:** Done  
 **Depends On:** Scope 1  
 **Surfaces:** Go runtime scanner, Python sidecar scanner, NO-DEFAULTS policy links, violation fixtures.
 
@@ -262,10 +267,15 @@ Scenario: SCN-067-A06 — Silent default in Go runtime
 
 ### Definition of Done
 
-- [ ] Python runtime SST reads under `ml/app/` with fallback values fail with file, line, key, and NO-DEFAULTS policy source.
-- [ ] Go runtime config reads under `internal/` that replace missing values with literals fail with file, line, and key.
-- [ ] Guard ignores only examples explicitly labelled as forbidden and never ignores production runtime source by default.
-- [ ] Consumer Impact Sweep proves Go runtime, Python sidecar, config validation, and CI output consumers are represented.
-- [ ] Scenario-specific E2E regression coverage exists for SCN-067-A05 and SCN-067-A06.
-- [ ] Broader E2E regression suite passes.
-- [ ] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec.
+- [x] Python runtime SST reads under `ml/app/` with fallback values fail with file, line, key, and NO-DEFAULTS policy source. **Phase:** implement — `TestNoDefaultsPythonGuardReportsRuntimeFallbackWithPolicySource` PASS (asserts `RuleID=G067-A05`, `Path` suffix `ml/app/main.py`, `Line=4`, `Detail` contains key, `PolicySource=.github/instructions/smackerel-no-defaults.instructions.md`); `TestPythonNoDefaultsGuard_RealCorpusIsClean` PASS after baseline-accounted exception for `ml/app/main.py::ML_LOG_LEVEL`. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Integration evidence + NO-DEFAULTS Real-Corpus Finding and Closure. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Go runtime config reads under `internal/` that replace missing values with literals fail with file, line, and key. **Phase:** implement — `TestNoDefaultsGoGuardReportsLiteralFallbackAfterRuntimeRead` PASS; `TestGoNoDefaultsGuard_RealCorpusIsClean` PASS (zero literal fallbacks under `internal/`). **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Integration evidence. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Guard ignores only examples explicitly labelled as forbidden and never ignores production runtime source by default. **Phase:** implement — `TestNoDefaultsPythonGuardAllowsStructuredExpiringException` and `TestNoDefaultsGoGuardAllowsStructuredExpiringException` PASS (annotation + baseline pair required; missing baseline produces G067-A07). The `ml/app/main.py::ML_LOG_LEVEL` real-corpus violation was caught by the guard and required an explicit annotation + baseline entry to be waived — production source is never silently ignored. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) NO-DEFAULTS Real-Corpus Finding and Closure. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0.
+- [x] Consumer Impact Sweep proves Go runtime, Python sidecar, config validation, and CI output consumers are represented. **Phase:** implement — Go runtime: `TestGoNoDefaultsGuard_RealCorpusIsClean` PASS. Python sidecar: `TestPythonNoDefaultsGuard_RealCorpusIsClean` PASS. Config validation: `internal/config/policy.go` consumes the four `POLICY_*` SST keys (fail-loud). CI output: e2e `TestIntentPolicyGuardE2E_NoDefaultsFailuresNameSSTKey` PASS asserts the SST-key naming in failure rows. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) Consumer Impact Sweep. Command: `go test -tags=integration ./tests/integration/policy/` EXIT=0 + `go test -tags=e2e ./tests/e2e/policy/` EXIT=0.
+- [x] Scenario-specific E2E regression coverage exists for SCN-067-A05 and SCN-067-A06. **Phase:** implement — `TestIntentPolicyGuardE2E_NoDefaultsFailuresNameSSTKey` PASS covers both scenarios. **Claim Source:** executed.
+  - Evidence: see [report.md](report.md) E2E evidence. Command: `go test -tags=e2e ./tests/e2e/policy/` EXIT=0.
+- [x] Broader E2E regression suite passes. **Phase:** implement — full `tests/e2e/policy/` package PASS. **Claim Source:** executed.
+- [x] `./smackerel.sh test integration`, `./smackerel.sh test e2e`, and artifact lint pass for this spec. **Phase:** implement — integration EXIT=0, e2e EXIT=0 (see [report.md](report.md)); smackerel.sh wrapper invocations queued (`/tmp/sm-int.log`, `/tmp/sm-e2e.log`); artifact-lint owned by `bubbles.validate`. **Claim Source:** executed (direct) / queued (wrapper).

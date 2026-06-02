@@ -248,12 +248,46 @@ ok  github.com/smackerel/smackerel/internal/assistant/httpadapter  0.033s
 ```
 
 Pending DoD items (left `[ ]` with Uncertainty Declarations in `scopes.md#scope-1d`):
-- Live-wiring integration test `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503` — not authored or executed in this turn.
-- Canary `TestAssistantHTTPAdapterBindLeavesTelegramAdapterAndFacadeUnchanged` — not executed in this turn.
-- Regression E2E `TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse` against the bound adapter — not executed in this turn.
-- Finding F-069-ADAPTER-NOT-BOUND / F074-04B closure — pending live-stack proof.
+- Live-wiring integration test `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503` — authored in this turn, but cannot reach HTTP 200 against the live stack (see foreign blocker below).
+- Canary `TestAssistantHTTPAdapterBindLeavesTelegramAdapterAndFacadeUnchanged` — not authored in this turn (existing `http_adapter_canary_test.go` covers the Telegram facade invariant in-process; live canary deferred).
+- Regression E2E `TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse` against the bound adapter — exercised in this turn; now reaches the adapter (no 503) but returns HTTP 401 (see foreign blocker below).
+- Finding F-069-ADAPTER-NOT-BOUND / F074-04B closure — partial: the literal "no backing adapter → 503" symptom is resolved (proof captured below); residual auth-userid binding is route-required.
 
-Next turn: author `tests/integration/assistant/http_adapter_bind_test.go` + run integration + e2e suites; flip remaining `[ ]` items on green; route closure of F-069-ADAPTER-NOT-BOUND and the spec 074 cross-reference.
+### Live-stack execution evidence (2026-06-02)
+
+Integration test (run inside the test compose network):
+
+```text
+$ ./smackerel.sh test integration --go-run '^TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503$'
+...
+=== RUN   TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503
+    http_adapter_bind_test.go:85: integration: core not healthy after 30s at http://127.0.0.1:45001
+--- FAIL: TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503 (30.03s)
+EXIT=1
+```
+
+Root cause of the integration probe failure: the integration runner executes `golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-integration.sh ...` inside the test compose network, where `CORE_EXTERNAL_URL=http://127.0.0.1:45001` is host-loopback and unreachable from within the container. Test fixed in-place to read the in-network `CORE_API_URL=http://smackerel-core:8080` instead (`tests/integration/assistant/http_adapter_bind_test.go`). The fix is not re-executed in this turn — the test-suite lock was held by parallel agent runs and the rerun did not reach the front of the queue before this turn ended.
+
+E2E test (run inside the test compose network with `CORE_EXTERNAL_URL` overridden to the in-network URL by the runner):
+
+```text
+$ ./smackerel.sh test e2e --go-run '^TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse$'
+...
+=== RUN   TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse
+    http_turn_test.go:122: status = 401, want 200; body={"schema_version":"v1","transport":"web","transport_message_id":"e2e-scope-1b-a01-20260602T003454.301","status":"unavailable","body":"","sources":[],"sources_overflow_count":0,"confirm_card":null,"disambiguation_prompt":null,"error_cause":"auth_required","capture_route":false,"trace":{"assistant_turn_id":"","agent_trace_id":"","request_id":"2475d7af60c9/TJcUuBDBGu-000005"},"facade_invoked":false,"emitted_at":"2026-06-02T00:34:54.30912669Z"}
+--- FAIL: TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse (0.03s)
+EXIT=1
+```
+
+**Bind proof (positive):** the live response is a schema-v1 `TurnResponse` envelope (`schema_version=v1`, `transport=web`, echoed `transport_message_id`, populated `request_id`) — not a generic 503 — which means `wireAssistantFacade` constructed the `*HTTPAdapter` and `LateBoundHandler.SetAdapter`/`SetMiddleware` were called and the route is now backed by a live adapter. The SCOPE-1d wiring objective is met.
+
+**Foreign blocker (HTTP 200 deferred):** the adapter returns `error_cause=auth_required` because `internal/api/router.go::bearerAuthMiddleware` populates `auth.Session{Source: SessionSourceSharedToken, UserID: ""}` for the test-env shared-token path, and `internal/assistant/httpadapter/adapter.go:342` requires a non-empty `auth.UserIDFromContext` and rejects with HTTP 401 otherwise. This binding gap — turning an accepted bearer token into a usable `Session.UserID` for the HTTP transport — lives in middleware/auth surfaces explicitly excluded by SCOPE-1d's Change Boundary ("schema files, route mount, Telegram adapter, middleware implementations (Scope 2)") and therefore cannot be fixed inside this scope.
+
+Findings raised this turn:
+
+- **F-069-ADAPTER-NOT-BOUND (status: bind-resolved, full-200 deferred):** the "no backing adapter → HTTP 503" symptom is gone; the live response is a schema-v1 envelope produced by the bound `*HTTPAdapter`. The DoD's HTTP-200 endpoint cannot be reached until F-069-UserID-Binding lands.
+- **F-069-USERID-BINDING (new, route to bubbles.plan / SCOPE-2):** the assistant HTTP transport accepts shared-token bearer auth without a `Session.UserID`; the adapter then rejects with HTTP 401 `auth_required`. The binding source for HTTP `UserID` (per-user PASETO claim, body field, or synthetic shared-token user) is undecided and is a SCOPE-2 deliverable. Until this lands, every live-stack HTTP assistant test that hits a shared-token bearer in test/dev env fails at the adapter UserID gate even though the adapter is bound.
+- **F074-04B-ASSISTANT-HTTP-LATE-BIND (cross-spec, status: bind-resolved):** the "LateBoundHandler has no backing adapter → HTTP 503" symptom that surfaced under spec 074 triage is resolved by this scope. Residual HTTP-200 gating is now owned by F-069-USERID-BINDING under spec 069 SCOPE-2.
 
 
 

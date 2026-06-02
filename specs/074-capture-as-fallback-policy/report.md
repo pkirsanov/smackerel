@@ -463,3 +463,28 @@ Outcome: the test hit the same `assistant_http_not_ready` HTTP 503 late-binding 
 - Per `Critical-Requirements` honesty incentive: TP-074-14 (SCOPE-04B DoD line 2) remains `[ ]` because the e2e blocker is unchanged. The two SCOPE-04B DoD lines that DON'T require the e2e to pass (open-knowledge routing already wired, capture failure observability via `runCaptureFallback`-error→StatusUnavailable) were already covered by SCOPE-04A evidence and are not re-marked here.
 
 **Phase:** implement. **Claim Source:** executed.
+
+### 2026-06-02 — F074-04C-PGSTORE-PERSIST-MISSING-LEGACY-LEDGER closed
+
+Routed finding F074-04C resolved by amending `internal/assistant/context/pg_store.go` `Persist` INSERT to seed `legacy_retirement_notices = '[]'::jsonb` (empty JSONB array) on initial insert. The UPDATE branch of the `ON CONFLICT` clause is intentionally left unchanged so the `internal/assistant/legacyretirement/sqlledger.go` writer remains the sole owner of that column's contents on subsequent writes. Choice (a) per the NO-DEFAULTS / fail-loud SST policy — explicit column seeding rather than adding a DB DEFAULT in a new migration.
+
+Verification (executed):
+
+```
+$ go build ./internal/assistant/context/ && echo OK_BUILD
+OK_BUILD
+
+$ go test -count=1 -timeout 120s ./internal/assistant/context/
+ok      github.com/smackerel/smackerel/internal/assistant/context       0.013s
+
+$ ./smackerel.sh test integration --go-run '^TestCaptureFallbackPolicy_TP_074_13_'
+=== RUN   TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned
+--- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned (0.04s)
+=== RUN   TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned_UserRepliesInTime
+--- PASS: TestCaptureFallbackPolicy_TP_074_13_ClarifyAbandoned_UserRepliesInTime (0.02s)
+EXIT=0
+```
+
+The TP-074-13 raw-SQL seed in `tests/integration/assistant/clarify_abandon_capture_test.go` still functions (it goes through a direct `INSERT ... legacy_retirement_notices = ...` path that bypasses `PgStore.Persist`); leaving it untouched preserves the regression's adversarial coverage of the migration 046 NOT-NULL contract. Future `PgStore.Persist` callers no longer need a workaround.
+
+**Phase:** implement. **Claim Source:** executed.

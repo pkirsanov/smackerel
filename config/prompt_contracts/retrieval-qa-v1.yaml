@@ -42,6 +42,8 @@ system_prompt: |
 allowed_tools:
 - name: retrieval_search
   side_effect_class: read
+- name: entity_resolve
+  side_effect_class: read
 
 input_schema:
   type: object
