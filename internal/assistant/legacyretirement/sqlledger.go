@@ -111,7 +111,13 @@ func (l *SQLNoticeLedger) MarkShown(ctx context.Context, userID, retiredCommand,
 		return fmt.Errorf("legacyretirement: MarkShown update: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("legacyretirement: MarkShown: no assistant_conversations row for user %q; ensure a conversation exists before recording a notice", userID)
+		// First turn for this user: the conversation row is created
+		// later in facade.appendTurnAndPersist. The notice has been
+		// rendered to the user this turn; failing to record it would
+		// block the whole request. Treat as best-effort — the next
+		// invocation will succeed at MarkShown (worst case, the user
+		// sees the same notice twice, which is harmless).
+		return nil
 	}
 	return nil
 }
