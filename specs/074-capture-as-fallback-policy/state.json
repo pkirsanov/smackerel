@@ -79,8 +79,12 @@
       "summary": "Re-baselined spec 074 active execution surface to the engineering core (SCOPE-074-01, 04A, 04B, 04C). SCOPE-074-02 (provenance separation), SCOPE-074-03 (per-user dedup semantics), and SCOPE-074-05 (telemetry/IntentTrace/cross-transport acknowledgement) carry canonical status Blocked pending creation of a follow-on spec (TBD spec number) that will own SCN-074-A02/A03/A04/A05/A07/A11. SCOPE-074-04B promoted to Done via substitute evidence pursuant to validate route packet (trigger-predicate unit + transitive live writer proof from SCOPE-074-04A TP-074-12). Engineering core is complete and certifiable independently; the inviolable capture contract (SCN-074-A09) holds across all triggers.",
       "affectedScopes": ["SCOPE-074-02", "SCOPE-074-03", "SCOPE-074-04B", "SCOPE-074-05"],
       "affectedScenarios": ["SCN-074-A02", "SCN-074-A03", "SCN-074-A04", "SCN-074-A05", "SCN-074-A07", "SCN-074-A11"],
-      "deferredTo": "follow-on spec TBD",
-      "evidenceRef": "scopes.md#rescope-note-2026-06-02"
+      "deferredTo": "specs/076-assistant-completion-rescope",
+      "reference": "specs/076-assistant-completion-rescope",
+      "evidenceRef": "scopes.md#rescope-note-2026-06-02",
+      "status": "routed",
+      "closedAt": "2026-06-02T09:00:00Z",
+      "closureNote": "Follow-on spec 076 (assistant-completion-rescope) created and now owns SCN-074-A02/A03/A04/A05/A07/A11 closure. Spec 074 engineering core remains Done."
     }
   ],
   "transitionRequests": [],

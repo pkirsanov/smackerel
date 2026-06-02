@@ -22,7 +22,10 @@
       "category": "out-of-scope-WIP",
       "summary": "43 working-tree files modified outside spec 063's planning surface (operator WIP from parallel spec convergence not owned by 063).",
       "rationale": "These files belong to specs 037/061/062/064-075 implementation/refactor work that the operator has in flight in parallel. Spec 063 is planning-only (ceiling specs_hardened) and authored zero source/test/migration diffs. The files are listed in deliverableFiles[] solely to permit Gate G073 to pass under the planning-only ceiling; they are NOT spec 063 deliverables and MUST NOT be interpreted as 063 implementation evidence.",
-      "action": "operator owns the disposition (commit to owning spec, stash, or discard); no spec 063 action required."
+      "action": "operator owns the disposition (commit to owning spec, stash, or discard); no spec 063 action required.",
+      "status": "resolved",
+      "closedAt": "2026-06-02T09:00:00Z",
+      "closureNote": "Operator WIP cleared; working tree clean as of triage 2026-06-02 (only ml/app/agent.py + spec 076 folder uncommitted, both unrelated to 063). No further action required."
     }
   ],
   "deliverableFiles": [
