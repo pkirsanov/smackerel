@@ -131,11 +131,15 @@ func (s *PgStore) Persist(ctx context.Context, conv Conversation) error {
 			return fmt.Errorf("assistantctx: Persist encode pending_clarify: %w", err)
 		}
 	}
+	// legacy_retirement_notices is NOT NULL with NO DEFAULT (migration 046,
+	// spec 075). On INSERT we seed an empty JSONB array; the UPDATE branch
+	// intentionally leaves the column untouched so the legacyretirement
+	// ledger writer remains the sole owner of that column's contents.
 	const q = `
 INSERT INTO assistant_conversations
-    (user_id, transport, working_context, pending_confirm, pending_disambig, pending_clarify, last_activity_at, schema_version)
+    (user_id, transport, working_context, pending_confirm, pending_disambig, pending_clarify, last_activity_at, schema_version, legacy_retirement_notices)
 VALUES
-    ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8)
+    ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, '[]'::jsonb)
 ON CONFLICT (user_id, transport) DO UPDATE
     SET working_context  = EXCLUDED.working_context,
         pending_confirm  = EXCLUDED.pending_confirm,

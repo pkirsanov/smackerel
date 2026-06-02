@@ -1465,6 +1465,7 @@ case "$COMMAND" in
             -v smackerel-gomod-cache:/go/pkg/mod \
             -v smackerel-gobuild-cache:/root/.cache/go-build \
             -w /workspace \
+            --env-file "$env_file" \
             -e "CORE_EXTERNAL_URL=http://smackerel-core:${core_container_port}" \
             -e "DATABASE_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \
             -e "POSTGRES_URL=postgres://${pg_user}:${pg_pass}@postgres:${pg_container_port}/${pg_db}?sslmode=disable" \

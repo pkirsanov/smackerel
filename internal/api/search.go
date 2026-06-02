@@ -292,26 +292,11 @@ func (s *SearchEngine) Search(ctx context.Context, req SearchRequest) ([]SearchR
 		)
 	}
 
-	// Step 0.5: Parse domain intent (e.g., "recipes with chicken", "cameras under $500")
-	if intent := parseDomainIntent(req.Query); intent != nil {
-		if req.Filters.Domain == "" {
-			req.Filters.Domain = intent.Domain
-		}
-		if len(intent.Attributes) > 0 && req.Filters.Ingredient == "" {
-			req.Filters.Ingredient = intent.Attributes[0]
-		}
-		if intent.PriceMax > 0 && req.Filters.PriceMax == 0 {
-			req.Filters.PriceMax = intent.PriceMax
-		}
-		if intent.Cleaned != "" {
-			req.Query = intent.Cleaned
-		}
-		slog.Info("domain intent parsed",
-			"domain", intent.Domain,
-			"attributes", intent.Attributes,
-			"price_max", intent.PriceMax,
-		)
-	}
+	// Step 0.5 (spec 066 SCOPE-4): regex-based domain intent parser removed.
+	// Domain/entity resolution now flows through the assistant compiled-intent
+	// path (spec 068) and the spec 065 entity_resolve micro-tool. Callers that
+	// need domain-filtered search MUST supply Filters.Domain / Filters.Ingredient
+	// / Filters.PriceMax explicitly.
 
 	// Step 0.6: Parse annotation intent (e.g., "my top rated recipes", "things I've made")
 	if intent := parseAnnotationIntent(req.Query); intent != nil {
@@ -584,7 +569,8 @@ func (s *SearchEngine) vectorSearch(ctx context.Context, embedding []float32, re
 
 	if req.Filters.Ingredient != "" {
 		// C026-CHAOS-02: Case-insensitive partial match instead of exact JSONB containment.
-		// LLM-extracted names are mixed-case ("Chicken Breast") while parseDomainIntent lowercases.
+		// LLM-extracted names are mixed-case ("Chicken Breast") while explicit filter
+		// values supplied by upstream compilers may be lowercased.
 		// SEC-021-003 (CWE-943): Escape LIKE metacharacters to prevent wildcard injection,
 		// consistent with textSearch which uses EscapeLikePattern + ESCAPE '\'.
 		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM jsonb_array_elements(a.domain_data->'ingredients') elem WHERE LOWER(elem->>'name') LIKE '%%' || LOWER($%d) || '%%' ESCAPE '\')`, argN)

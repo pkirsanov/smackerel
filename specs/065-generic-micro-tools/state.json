@@ -57,10 +57,18 @@
   "execution": {
     "activeAgent": "bubbles.plan",
     "currentPhase": "planning",
-    "currentScope": null,
+    "currentScope": "4",
     "runStartedAt": "2026-05-31T00:00:00Z",
-    "lastUpdatedAt": "2026-05-31T00:00:00Z",
-    "completedPhaseClaims": [],
+    "lastUpdatedAt": "2026-06-02T00:30:00Z",
+    "completedPhaseClaims": [
+      {
+        "agent": "bubbles.implement",
+        "phase": "implement",
+        "scope": "4",
+        "completedAt": "2026-06-02T00:30:00Z",
+        "summary": "Wired SetEntityResolveServices in cmd/core (plus location_normalize/unit_convert/calculator wiring scaffolding); added entity_resolve to retrieval-qa allowed_tools; shrunk weather scenario system_prompt by 59% and added location_normalize to its allowed_tools. Authored 4 test files (microtools_prompt_contract_test.go, entity_resolve_test.go [integration], microtools_location_test.go [integration, live open-meteo], microtools_http_test.go [e2e]). Executed prompt-contract regression and entity_resolve integration tests — all PASS. SCOPE-2 prompt-delegation DoD and SCOPE-4 entity_resolve/scenario-adoption/prompt-shrink DoD items flipped with inline evidence. live integration (open-meteo) and e2e (unit_convert/calculator) tests NOT run in this pass — left as honest [ ] with uncertainty declarations in report.md."
+      }
+    ],
     "completedScopes": [],
     "executionHistory": [
       {
@@ -98,6 +106,15 @@
         "runStartedAt": "2026-05-31T22:00:00Z",
         "runEndedAt": "2026-05-31T22:00:00Z",
         "summary": "Mode metadata reconciliation only. spec.md declares Workflow Mode: full-delivery (authoritative owner intent set 2026-05-31); prior bubbles.plan run defensively wrote workflowMode=product-to-planning, statusCeiling=specs_hardened, planningOnly=true while operating under a planning-only workflow. Reconciled state.json to workflowMode=full-delivery, statusCeiling=done, planningOnly=false; preserved planMaturityOnly=true because planning artifacts are complete and no implementation evidence exists yet. certification.status remains in_progress; no implementation, test, or certification claims made."
+      },
+      {
+        "agent": "bubbles.implement",
+        "phasesExecuted": ["implement"],
+        "statusBefore": "in_progress",
+        "statusAfter": "in_progress",
+        "runStartedAt": "2026-06-02T00:00:00Z",
+        "runEndedAt": "2026-06-02T00:30:00Z",
+        "summary": "SCOPE-2 + SCOPE-4 implementation pass. Wired all four micro-tools in cmd/core (entity_resolve via searchEngineEntityResolver adapter; location_normalize via open-meteo geocoder; unit_convert + calculator as deterministic CPU-only tools). Authored microtools_prompt_contract_test.go (PASS), entity_resolve_test.go integration (PASS, 2 functions / 7 sub-tests), microtools_location_test.go integration (authored; live open-meteo, not executed), microtools_http_test.go e2e (authored; not executed). Added entity_resolve to retrieval-qa-v1.yaml allowed_tools and location_normalize to weather-query-v1.yaml allowed_tools; shrunk weather system_prompt 1764→721 bytes (59% reduction, exceeds 40% Success Signal). Three SCOPE-4 DoD items + one SCOPE-2 DoD item flipped to [x] with inline evidence. Remaining DoD items left honestly [ ] with uncertainty declarations. Artifact lint PASSED."
       }
     ]
   }
