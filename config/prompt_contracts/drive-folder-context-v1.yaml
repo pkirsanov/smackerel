@@ -1,6 +1,6 @@
 version: "drive-folder-context-v1"
 principleAlignment:
-  - "Principle 1"
+- "Principle 4"
 type: "drive-folder-context"
 description: "Summarize drive folder context for classification refreshes"
 

@@ -1,7 +1,7 @@
 id: recipe_search
 version: "recipe-search-v1"
 principleAlignment:
-  - "Principle 1"
+- "Principle 2"
 type: "scenario"
 description: "Find recipes in the user's owned knowledge graph and return them with artifact-ID citations."
 

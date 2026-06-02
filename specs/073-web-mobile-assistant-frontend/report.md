@@ -285,3 +285,56 @@ done. The web client and the three live e2e tests exist, compile,
 and pass static guards, but the live `./smackerel.sh test e2e`
 execution evidence required by TP-073-09 / TP-073-10 / TP-073-11 is
 blocked behind the spec-074 config-generate gap above.
+
+---
+
+### Code Diff Evidence
+
+Implementation deltas captured under this delivery (file paths + responsibilities; full diffs available via `git log --stat` for the commits referenced in `state.json.execution.executionHistory`):
+
+```text
+$ git log --name-status --pretty=oneline -- \
+    web/pwa/assistant.html \
+    web/pwa/assistant.js \
+    web/pwa/lib/render_descriptor_v1.js \
+    web/pwa/lib/render_descriptor_v1_cli.js \
+    web/pwa/tests/assistant_chat.spec.ts \
+    web/pwa/tests/assistant_retry.spec.ts \
+    web/pwa/tests/assistant_accessibility.spec.ts \
+    web/pwa/tests/assistant_codegen_drift_test.go \
+    tests/unit/clients/render_descriptor_canary_test.go \
+    tests/fixtures/assistant_response_v1/ \
+    tests/e2e/assistant/web_pwa_chat_e2e_test.go \
+    tests/e2e/assistant/web_pwa_retry_e2e_test.go \
+    tests/e2e/assistant/web_pwa_accessibility_e2e_test.go \
+    tests/e2e/assistant/transport_hint_parity_test.go \
+    tests/integration/api/assistant_transport_hint_test.go \
+    clients/mobile/assistant/lib/core/render_descriptor_v1.dart \
+    clients/mobile/assistant/tool/render_descriptor_v1_cli.dart \
+    clients/mobile/assistant/test/codegen_drift_test.dart \
+    clients/mobile/assistant/test/platform_declaration_test.dart \
+    clients/mobile/assistant/test/core_storage_guard_test.dart \
+    clients/mobile/assistant/test/renderer_canary_test.dart \
+    internal/config/assistant_frontend.go \
+    internal/config/assistant_frontend_validators_test.go
+```
+
+Per-file responsibility summary:
+
+| File | Scope | Role |
+|---|---|---|
+| `web/pwa/assistant.html` | SCOPE-073-02 | added — composer + transcript + response live region + controls slot + deterministic tab order |
+| `web/pwa/assistant.js` | SCOPE-073-02 | added — same-origin fetch, stable transport_message_id, render-by-shape projection, no client storage |
+| `web/pwa/lib/render_descriptor_v1.js` (+ `_cli.js`) | SCOPE-073-01 | added — JS render-descriptor-v1 reference renderer + CLI for canary |
+| `web/pwa/tests/assistant_codegen_drift_test.go` | SCOPE-073-01 | added — web codegen drift + storage guard (TP-073-02 / TP-073-06) |
+| `tests/unit/clients/render_descriptor_canary_test.go` | SCOPE-073-01 | added — cross-language renderer canary (TP-073-03) |
+| `tests/fixtures/assistant_response_v1/` | SCOPE-073-01 | added — render-descriptor-v1 JSON schema + 7 input + golden fixture pairs |
+| `tests/e2e/assistant/web_pwa_chat_e2e_test.go` | SCOPE-073-02 | added — live PWA chat e2e (TP-073-09) |
+| `tests/e2e/assistant/web_pwa_retry_e2e_test.go` | SCOPE-073-02 | added — live retry parity + adversarial (TP-073-10) |
+| `tests/e2e/assistant/web_pwa_accessibility_e2e_test.go` | SCOPE-073-02 | added — live ARIA + tab order (TP-073-11) |
+| `tests/e2e/assistant/transport_hint_parity_test.go` | SCOPE-073-01 | added — live transport-hint parity e2e (TP-073-08) |
+| `tests/integration/api/assistant_transport_hint_test.go` | SCOPE-073-01 | added — integration transport-hint (TP-073-05) |
+| `clients/mobile/assistant/lib/core/render_descriptor_v1.dart` (+ CLI + tests) | SCOPE-073-01 | added — Dart shared-mobile renderer foundation + codegen drift + platform declaration + storage guard tests |
+| `internal/config/assistant_frontend.go` (+ validators test) | SCOPE-073-01 | added — fail-loud SST config for web + mobile assistant keys (TP-073-07) |
+
+Rollback procedure: `git revert` each listed file (no migration, no external store, no service-worker cache change). See `scopes.md` § Rescope Decision → Rollback Strategy.
