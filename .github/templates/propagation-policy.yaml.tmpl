@@ -1,0 +1,60 @@
+# propagation-policy.yaml — cross-train change propagation contract
+#
+# Owned by bubbles.propagate (J-Roc).
+# Declares which release trains propagate to which, with what validation depth,
+# and whether backport requires explicit human approval.
+#
+# Schema version: 1
+# Place at repo root OR under config/. bubbles.propagate searches both.
+
+version: 1
+
+# Train references MUST match ids in config/release-trains.yaml.
+# Role is informational (incoming / staging / production / hotfix-only).
+trains:
+  - id: experimental
+    role: incoming
+  - id: mvp
+    role: staging
+  - id: prod
+    role: production
+
+# defaultFlow is the directed graph of propagation edges.
+# Each edge declares:
+#   from / to                          — train ids (MUST exist in trains[] above)
+#   auto                               — true: forward operation processes automatically
+#                                        false: forward operation lists but requires --confirm
+#   receivingTrainValidationMode       — validate-only | full-delivery | none
+#                                        After cherry-pick, J-Roc routes the receiving
+#                                        train through this mode. `none` is allowed
+#                                        only when documented in `validationSkipReason`.
+#   validationSkipReason               — required iff receivingTrainValidationMode = none
+#   backportable                       — true: backward propagation (to → from) is allowed
+#                                        false (default): backport via this edge is refused
+defaultFlow:
+  - from: experimental
+    to: mvp
+    auto: true
+    receivingTrainValidationMode: validate-only
+    backportable: true
+  - from: mvp
+    to: prod
+    auto: false
+    receivingTrainValidationMode: full-delivery
+    backportable: false
+
+# Backport guard. When true, any backport operation emits route_required
+# with action=human-approval and refuses to proceed without
+# --approval-token=<sha> on the next invocation.
+backportRequiresApproval: true
+
+# Append-only ledger path (relative to repo root).
+# Every successful forward/backport appends one JSONL line.
+# G123 (propagation-ledger-recorded) enforces this.
+ledgerPath: propagation-ledger.yaml
+
+# Optional: per-edge cherry-pick options passed through to bubbles.devops.
+# strategy can be "cherry-pick" (default) or "merge".
+options:
+  defaultStrategy: cherry-pick
+  signOff: true
