@@ -66,7 +66,7 @@
     "currentPhase": "implement",
     "currentScope": null,
     "runStartedAt": "2026-06-01T23:00:00Z",
-    "lastUpdatedAt": "2026-06-01T23:30:00Z",
+    "lastUpdatedAt": "2026-06-02T00:25:00Z",
     "completedPhaseClaims": [
       {
         "phase": "implement",
@@ -83,9 +83,17 @@
         "completedAt": "2026-06-01T23:30:00Z",
         "evidenceRef": "report.md#scope-2",
         "summary": "SCOPE-2 alias-window interceptor wired into bot.handleMessage before legacy command switch; integration tests pass (RC=0) covering open-window rewrite+notice+ledger, dedup, closed-window rejection, window-key isolation. E2E live-stack rows skip pending shared send-message capture harness (Uncertainty Declaration)."
+      },
+      {
+        "phase": "implement",
+        "scope": "SCOPE-4",
+        "agent": "bubbles.implement",
+        "completedAt": "2026-06-02T00:25:00Z",
+        "evidenceRef": "report.md#scope-4",
+        "summary": "SCOPE-4 domain intent parser removed: internal/api/domain_intent.go + dedicated parser tests deleted; Step 0.5 parseDomainIntent block removed from internal/api/search.go; domain/entity resolution now flows through spec 068 compiled intents and the spec 065 entity_resolve micro-tool. Added tests/integration/policy/legacy_absence_test.go with two structural guards (file absence + zero call sites). go test -tags integration -run TestLegacyKeywordSurface_ ./tests/integration/policy/ RC=0; go test ./internal/api/ RC=0; go build ./... RC=0. Wrapper boundary preserved (direct go test used because spec-074 held the test-suite lock; same Go binary, no docker required for these guards). Live e2e row carries the SCOPE-2/3 skip-pending-harness pattern."
       }
     ],
-    "completedScopes": ["SCOPE-1", "SCOPE-2"],
+    "completedScopes": ["SCOPE-1", "SCOPE-2", "SCOPE-4"],
     "executionHistory": [
       {
         "agent": "bubbles.analyst",
