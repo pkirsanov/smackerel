@@ -92,9 +92,38 @@ Retired commands and prompt shapes:
 
 `internal/api/domain_intent.go` is deleted. Request paths that need domain/entity resolution call the assistant compiler and spec 065 `entity_resolve` instead of regex parsing.
 
-### Annotation Classification Replacement
+### Annotation Classification Replacement (SCOPE-5)
 
 Runtime annotation classification no longer consults phrase maps for user-authored turns. Spec 068 produces `interaction_type`, `rating`, `target`, and `note` slots; borderline cases use spec 061 disambiguation.
+
+**Decision (SCOPE-5).** Replace the `internal/annotation/parser.go` `interactionMap` with an LLM-driven compiled-intent classification routed through `agent.Bridge.Invoke`. Consumers stay synchronous: they already run on user-facing request paths (`internal/api/annotations.go` HTTP handler, `internal/telegram/annotation.go` ×2 handler call-sites) and can tolerate one network-bound classifier call per turn. No async queue, no background pipeline.
+
+**Dispatch surface.** A new compiled-intent scenario `annotation_classify` (id `annotation.classify.v1`, owned by the spec 037/068 scenario registry under `config/prompt_contracts/`) accepts:
+
+```text
+Input slots:
+  text            string  required   the raw annotation text the user typed
+  source_channel  string  required   "api" | "telegram" | <future channel>
+Output slots:
+  interaction_type  enum    required   one of the InteractionType domain values
+  confidence        float   required   [0,1] — compared against confidence floor
+  rationale         string  optional   short LLM rationale for audit
+```
+
+`internal/annotation` exposes a new `Classifier` interface (single method `Classify(ctx, text, channel) (InteractionType, confidence, error)`). The production implementation wraps `agent.Bridge.Invoke` with an explicit-id `IntentEnvelope{ScenarioID: "annotation.classify.v1"}` so the router takes the BS-002 fast path and skips embed work. The api/telegram call-sites construct `ParsedAnnotation` in two steps: deterministic `Parse(text)` for rating/tags/note/target extraction (these regex paths stay — they are not user-classification keyword maps), then `Classifier.Classify(ctx, text, channel)` to fill `InteractionType`. The interactionMap and `sortedInteractionPhrasesList` are deleted from `parser.go`; `InteractionPhrases()` is retained only if a non-classification consumer still needs the canonical phrase set, otherwise removed.
+
+**Warm-cache fallback.** A small, hard-coded fast-path table covering only the highest-frequency exact-token forms (`"made it"`, `"cooked it"`, `"bought it"`, `"read it"`, `"visited"`) lives in `internal/annotation/classifier_warmcache.go`. It is consulted ONLY when:
+
+1. The input text, after lowercasing and whitespace collapse, is exactly one of the cached tokens (no substring matching, no multi-phrase composition).
+2. The classifier interface is configured with `warm_cache_enabled = true` (SST key `assistant.annotation.classifier.warm_cache_enabled`, default `false` in test/CI, `true` in dev/prod).
+
+The warm cache is documented in code and in `docs/Architecture.md` as **"latency cache, not source of truth"**: it MUST be derivable from the compiled-intent scenario's training examples. A separate consistency test (`TestAnnotationWarmCacheAgreesWithCompiledIntent`, unit, runs against a recorded `annotation_classify` fixture) fails if any warm-cache token would classify differently than the scenario. The warm cache is NOT a fallback for classifier errors — on `Classifier.Classify` failure the handler returns an operational error to the caller; it does not silently guess.
+
+**Borderline handling.** When the LLM returns confidence below the configured floor (`assistant.annotation.classifier.confidence_floor`, fail-loud required, no default), the classifier returns `InteractionType("")` and `ErrBelowConfidenceFloor`. Handlers route the request through spec 061 disambiguation (existing facade path) instead of guessing.
+
+**Why synchronous, not async.** The two call-sites (`api/annotations.go` HTTP `POST /api/annotations`, `telegram/annotation.go` rate-flow and pending-annotation finalizer) already block the user. Introducing a NATS round-trip + callback would force a state machine on Telegram pending annotations and break the HTTP request/response contract. The classifier call shares the same latency budget as the existing assistant facade calls already made from these paths.
+
+**Why a tiny warm cache instead of pure-LLM.** Annotation traffic is dominated by `"made it"` / `"cooked it"` / `"bought it"` / `"read it"` / `"visited"` exact-token inputs from recipe and book flows. Routing those through the LLM doubles per-annotation latency without changing the answer. The cache is bounded (≤5 tokens), exact-match only, and consistency-tested against the compiled intent, so it cannot drift into a hidden grammar.
 
 ## Data Model
 
@@ -146,6 +175,8 @@ Required SST keys:
 | `assistant.transports.telegram.legacy_alias_window_until` | RFC3339 end timestamp |
 | `assistant.transports.telegram.legacy_alias_notice_retention_days` | notice row retention |
 | `assistant.transports.telegram.retired_command_rejection_code` | closed response code |
+| `assistant.annotation.classifier.confidence_floor` | minimum LLM confidence to accept an interaction classification; below this routes to disambiguation |
+| `assistant.annotation.classifier.warm_cache_enabled` | enables the bounded exact-token latency cache for the 5 hottest annotation tokens |
 
 Missing or malformed config fails startup.
 
