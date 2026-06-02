@@ -605,6 +605,103 @@ func TestParseCitations_UnknownKind(t *testing.T) {
 	}
 }
 
+// TestAgent_EmptyCitationsSalvage_AttachesTraceSources regresses the
+// production bug where /ask returned "I don't have a sourced answer
+// for that." even though the agent had run multiple successful
+// web_search calls.
+//
+// Reproduction (live home-lab evidence on 2026-06-02):
+//   - User asked "/ask palm springs ca, humidity"
+//   - openknowledge.turn log: 4 iterations, 3 web_search outcome=success,
+//     status=success, num_sources=0, termination=final
+//   - Facade response: capture_route=true, status=saved_as_idea,
+//     body="I don't have a sourced answer for that."
+//
+// Root cause: llama3.1:8b wrote a real text answer but emitted
+// <CITATIONS>[]</CITATIONS> instead of citing the tool sources.
+// parseCitations succeeded with zero citations, verify(emptyCitations)
+// returned OK (nothing to fabricate), so Sources=[] flowed downstream.
+// The provenance gate then refused the response because the
+// open_knowledge scenario is requires_provenance=true.
+//
+// Fix: when verified citations are empty AND finalText is non-empty
+// AND the tool trace has real sources, attach those tool-trace sources
+// instead of returning Sources=[]. The text is grounded by
+// construction (system prompt requires tool-result-only answers).
+//
+// Adversarial: a tautological version of this test would just assert
+// len(Sources) > 0. This test ALSO asserts (a) the salvaged sources
+// match the tool-trace web URL exactly (not synthesized) and (b)
+// FinalText is preserved verbatim from the model output.
+func TestAgent_EmptyCitationsSalvage_AttachesTraceSources(t *testing.T) {
+	// Model: do a web search, then write a text answer with empty
+	// <CITATIONS>[]</CITATIONS> (the production failure shape).
+	finalWithEmptyCites := "Palm Springs humidity averages around 30% in summer.\n<CITATIONS>[]</CITATIONS>"
+	fl := &fakeLLM{t: t, responses: []llm.Result{
+		toolUse("w1", "fake_web", `{"query":"palm springs humidity"}`, 100),
+		endTurn(finalWithEmptyCites, 50),
+	}}
+	r := newRegistry(t)
+	a, err := New(fl, r, citeback.Verify, baseCfg(5, 1000, 1.0, 10.0, 10.0, 0.8, func(int) float64 { return 0 }))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := a.Run(context.Background(), "palm springs humidity")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got.Status != StatusSuccess {
+		t.Fatalf("Status=%q reason=%q; want success with salvaged sources", got.Status, got.RefusalReason)
+	}
+	if got.TerminationReason != TerminationFinal {
+		t.Fatalf("TerminationReason=%q want final", got.TerminationReason)
+	}
+	if got.FinalText != "Palm Springs humidity averages around 30% in summer." {
+		t.Errorf("FinalText=%q must be preserved verbatim from model output", got.FinalText)
+	}
+	if len(got.Sources) == 0 {
+		t.Fatalf("REGRESSION: Sources is empty after empty-citations salvage. " +
+			"This is the production bug — facade then refuses with 'I don't have a sourced answer'. " +
+			"Salvage MUST attach trace sources when len(verified)==0 and trace has sources.")
+	}
+	// Adversarial check: salvaged source MUST match the fake_web tool
+	// result, proving the salvage attached REAL trace sources rather
+	// than fabricating a placeholder.
+	if got.Sources[0].Kind != ok.SourceWeb {
+		t.Errorf("Sources[0].Kind=%v want web (the fake_web tool's source kind)", got.Sources[0].Kind)
+	}
+	if got.Sources[0].Web == nil || got.Sources[0].Web.URL != "https://example.test/x" {
+		t.Errorf("Sources[0].Web.URL=%+v want fake_web URL https://example.test/x (proves salvaged from trace)", got.Sources[0].Web)
+	}
+}
+
+// TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources
+// proves the salvage does NOT fabricate a sources list when there are
+// no tool-trace sources to draw from. This is the adversarial
+// negative: if salvage fired unconditionally, the provenance contract
+// would be silently broken because the model could write any text
+// with empty citations and pass.
+func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T) {
+	// Model writes a final answer with empty citations and NO prior
+	// tool calls. Sources must remain empty so the downstream
+	// provenance gate refuses (correct behavior — no grounding).
+	final := "I think the sky might be green.\n<CITATIONS>[]</CITATIONS>"
+	fl := &fakeLLM{t: t, responses: []llm.Result{endTurn(final, 50)}}
+	r := newRegistry(t)
+	a, err := New(fl, r, citeback.Verify, baseCfg(5, 1000, 1.0, 10.0, 10.0, 0.8, func(int) float64 { return 0 }))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := a.Run(context.Background(), "sky color")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got.Sources) != 0 {
+		t.Fatalf("Sources=%+v; salvage MUST NOT fabricate sources when trace is empty", got.Sources)
+	}
+}
+
 // ensure textPtr / llm.Result helpers compile in import-clean way
 var _ = textPtr
 var _ json.RawMessage
