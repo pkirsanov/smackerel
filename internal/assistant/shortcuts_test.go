@@ -64,13 +64,19 @@ func TestLookupShortcut(t *testing.T) {
 }
 
 // TestSlashShortcutsClosedVocabulary asserts the v1-frozen map shape:
-// exactly four entries, each pointing to its design-§3.4 target.
+// exactly six entries (4 original + /recipe, /cook added 2026-06-02
+// to fix Telegram "Unknown command" regression), each pointing to its
+// design-§3.4 target. /recipe and /cook both alias to recipe_search
+// because the scenario itself is the same — the two shortcuts give
+// users a natural surface for "find me a recipe" vs "cook this now".
 func TestSlashShortcutsClosedVocabulary(t *testing.T) {
 	t.Parallel()
 	want := map[string]string{
 		"/ask":     "open_knowledge",
 		"/weather": "weather_query",
 		"/remind":  "notification_schedule",
+		"/recipe":  "recipe_search",
+		"/cook":    "recipe_search",
 		"/reset":   ResetActionID,
 	}
 	if len(SlashShortcuts) != len(want) {
