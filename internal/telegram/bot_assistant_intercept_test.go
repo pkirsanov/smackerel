@@ -334,3 +334,63 @@ func TestHandleMessage_PropagatesUpdateIDIntoTransportMetadata(t *testing.T) {
 			"#round-52-bs002-routing-defect-implementation for the design rationale.", got, want)
 	}
 }
+
+// TestHandleMessage_SlashShortcuts_RouteToAssistantAdapter regresses
+// the production bug where /recipe and /cook returned
+// "? Unknown command" because bot.go's slash dispatcher only routed
+// /ask, /weather, /remind to the assistant adapter. Every command
+// listed here MUST reach the assistant adapter (asst.calls grows by
+// one per case) — a future regression that drops any command from
+// the dispatch switch will fail this test.
+//
+// Adversarial: a tautological version would just assert
+// asst.calls grows; this test ALSO asserts the inbound text is
+// passed verbatim so the underlying scenario can read the argument
+// (e.g. recipe_search needs "chicken stir fry" to know what to
+// search for). And it includes a known-not-wired command (/find)
+// that MUST NOT reach the adapter — proving the test discriminates.
+func TestHandleMessage_SlashShortcuts_RouteToAssistantAdapter(t *testing.T) {
+	cases := []struct {
+		command       string
+		text          string
+		shouldRoute   bool
+		failureReason string
+	}{
+		{"ask", "/ask who is the CEO of MSFT", true, "/ask must reach assistant (open_knowledge)"},
+		{"weather", "/weather seattle", true, "/weather must reach assistant (weather_query)"},
+		{"remind", "/remind me tomorrow", true, "/remind must reach assistant"},
+		{"recipe", "/recipe chicken stir fry", true,
+			"/recipe must reach assistant (recipe_search) — regression: was 'Unknown command'"},
+		{"cook", "/cook tonight", true,
+			"/cook must reach assistant — regression: was 'Unknown command'"},
+		{"find", "/find anchovies", false,
+			"/find has its own handler and MUST NOT reach the assistant adapter"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			bot, _, asst := newAssistantInterceptBot(t, contracts.AssistantResponse{
+				Status: contracts.StatusThinking,
+				Body:   "ok",
+			})
+			msg := &tgbotapi.Message{
+				Chat:      &tgbotapi.Chat{ID: 99},
+				Text:      tc.text,
+				MessageID: 1,
+				Entities: []tgbotapi.MessageEntity{
+					{Type: "bot_command", Offset: 0, Length: len(tc.command) + 1},
+				},
+			}
+			bot.handleMessage(context.Background(), msg, 0)
+
+			routed := len(asst.calls) > 0
+			if routed != tc.shouldRoute {
+				t.Fatalf("REGRESSION: %s — assistant.calls=%d (routed=%v), want shouldRoute=%v",
+					tc.failureReason, len(asst.calls), routed, tc.shouldRoute)
+			}
+			if tc.shouldRoute && asst.calls[0].Text != tc.text {
+				t.Fatalf("dispatcher swallowed inbound text for /%s: got %q, want %q",
+					tc.command, asst.calls[0].Text, tc.text)
+			}
+		})
+	}
+}

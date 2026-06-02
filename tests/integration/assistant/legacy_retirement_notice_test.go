@@ -166,3 +166,65 @@ func TestSQLNoticeLedger_TP_075_07_PerCommandIndependence(t *testing.T) {
 		t.Fatal("/weather entry missing after MarkShown")
 	}
 }
+
+// TestSQLNoticeLedger_FirstTurn_MissingRow_IsBestEffort regresses the
+// production bug where a user's first /weather (or any retired-command)
+// turn failed with "no assistant_conversations row for user X" because
+// the row is created by facade.appendTurnAndPersist AFTER the legacy
+// retirement policy runs. Pre-fix behavior: MarkShown returned an
+// error on RowsAffected==0, the error propagated up through
+// policyimpl.Handle, and the Telegram adapter rendered
+// "assistant call failed; try again". Post-fix behavior: MarkShown
+// treats RowsAffected==0 as a best-effort no-op so the in-flight
+// turn completes; the next turn for the same user persists the
+// notice normally (worst case: user sees the notice twice).
+//
+// Adversarial: a tautological version of this test would simply
+// assert MarkShown returns nil. Instead, this test ALSO proves the
+// no-op nature — after MarkShown against a missing row, HasNotified
+// still returns false (no row was created behind the user's back).
+func TestSQLNoticeLedger_FirstTurn_MissingRow_IsBestEffort(t *testing.T) {
+	pool := openNoticeLedgerPool(t)
+	const (
+		windowID = "tp-075-firstturn-window"
+		command  = "/weather"
+	)
+	// Deliberately do NOT call seedConversation — this user has no
+	// assistant_conversations row, mirroring the production first-turn
+	// state observed on home-lab user "philip".
+	userID := fmt.Sprintf("tp-075-firstturn-user-%d", time.Now().UnixNano())
+	t.Cleanup(func() {
+		cctx, ccancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer ccancel()
+		_, _ = pool.Exec(cctx, `DELETE FROM assistant_conversations WHERE user_id = $1`, userID)
+	})
+
+	ledger, err := legacyretirement.NewSQLNoticeLedger(pool)
+	if err != nil {
+		t.Fatalf("NewSQLNoticeLedger: %v", err)
+	}
+	ctx := context.Background()
+
+	// Pre-fix: this returned an error. Post-fix: nil.
+	if err := ledger.MarkShown(ctx, userID, command, windowID, time.Now().UTC()); err != nil {
+		t.Fatalf("MarkShown against missing row must be best-effort (nil), got: %v", err)
+	}
+
+	// Prove no phantom row was created.
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM assistant_conversations WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("MarkShown silently created a row (count=%d); best-effort must NOT INSERT", count)
+	}
+
+	// Prove HasNotified still reports false — the notice was not
+	// persisted, so the next turn will re-emit it (acceptable
+	// trade-off documented in sqlledger.go).
+	if ok, err := ledger.HasNotified(ctx, userID, command, windowID); err != nil {
+		t.Fatalf("HasNotified after best-effort MarkShown: %v", err)
+	} else if ok {
+		t.Fatal("HasNotified=true after best-effort MarkShown — would silently swallow user notice")
+	}
+}
