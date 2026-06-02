@@ -1,0 +1,22 @@
+# Smackerel release trains
+# Owned by bubbles.train. Validated by bash .github/bubbles/scripts/release-train-guard.sh
+
+version: 1
+
+defaults:
+  retention: "7d-daily,4w-weekly,12m-monthly"
+  pii: "encrypted-only"           # Smackerel ingests personal knowledge; treat as PII-sensitive
+  offsite_required: false         # WARN today (RAID5). Flip when T3/T4 ready.
+
+trains:
+  - id: mvp
+    phase: active
+    target_slot: home-lab
+    flags_bundle: config/feature-flags.mvp.yaml
+    description: "Current home-lab train (ingest + digest + delivery foundation)"
+
+  - id: next
+    phase: active
+    target_slot: staging
+    flags_bundle: config/feature-flags.next.yaml
+    description: "Next promotion candidate (synthesis + multi-source coordination)"

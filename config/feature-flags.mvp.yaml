@@ -1,0 +1,5 @@
+# Smackerel mvp train flag bundle
+version: 1
+train: mvp
+flags: {}
+metadata: {}
