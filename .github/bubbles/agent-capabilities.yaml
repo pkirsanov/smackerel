@@ -37,6 +37,8 @@ stateModel:
   - bubbles.security
   - bubbles.simplify
   - bubbles.audit
+  - bubbles.train
+  - bubbles.upkeep
   certificationWriter: bubbles.validate
 
 childWorkflowPolicy:
@@ -274,6 +276,24 @@ agents:
     delegatesRequired: false
     ownsArtifacts: [ release-packets, plan-packets, investor-overview-phase-table ]
     ownsPhases: [ releases ]
+  bubbles.train:
+    class: execution-owner
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: [ release-trains-config, feature-flag-bundles, release-train-state, release-trains-doc ]
+    ownsPhases: []
+    readOnlyAccess:
+    - upkeep-ledger
+    - knb-manifest
+  bubbles.upkeep:
+    class: execution-owner
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: [ upkeep-calendar, upkeep-ledger, upkeep-runbook, compliance-report ]
+    ownsPhases: []
+    readOnlyAccess:
+    - release-trains-config
+    - knb-manifest
   bubbles.recap:
     class: utility
     canAskUserDirectly: false
