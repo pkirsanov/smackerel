@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -46,10 +47,12 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant"
 	assistantctx "github.com/smackerel/smackerel/internal/assistant/context"
 	"github.com/smackerel/smackerel/internal/assistant/contracts"
+	"github.com/smackerel/smackerel/internal/assistant/httpadapter"
 	"github.com/smackerel/smackerel/internal/assistant/legacyretirement"
 	assistantmetrics "github.com/smackerel/smackerel/internal/assistant/metrics"
 	"github.com/smackerel/smackerel/internal/assistant/skills/recipesearch"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/pipeline"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/telegram/assistant_adapter"
 )
@@ -194,9 +197,37 @@ func wireAssistantFacade(
 	)
 
 	// 6. Telegram reference adapter — only when the bot is configured
-	//    AND the assistant SST opts the telegram transport in.
+	//    AND the assistant SST opts the telegram transport in. HTTP
+	//    transport (step 7) is independent: it binds regardless of
+	//    Telegram availability so the assistant capability is reachable
+	//    on every transport its SST opts in.
+	if err := wireAssistantTelegramAdapter(ctx, cfg, svc, facade, tgBot); err != nil {
+		return err
+	}
+
+	// 7. Spec 069 SCOPE-1d — HTTP transport adapter binding. Guarded
+	//    by the closed-vocabulary SST key landed by SCOPE-1c-bis.
+	//    When HTTPEnabled=false the LateBoundHandler keeps returning
+	//    503 "assistant_http_not_ready"; the route stays mounted but
+	//    no adapter is attached.
+	if err := wireAssistantHTTPAdapter(cfg, svc, facade); err != nil {
+		return fmt.Errorf("wire assistant HTTP adapter: %w", err)
+	}
+	return nil
+}
+
+// wireAssistantTelegramAdapter encapsulates the spec 061 SCOPE-05
+// Telegram reference-adapter binding so HTTP transport wiring can
+// run unconditionally after the Telegram path returns.
+func wireAssistantTelegramAdapter(
+	ctx context.Context,
+	cfg *config.Config,
+	svc *coreServices,
+	facade *assistant.Facade,
+	tgBot *telegram.Bot,
+) error {
 	if tgBot == nil {
-		slog.Info("telegram bot not configured; assistant facade ready but no transport bound")
+		slog.Info("telegram bot not configured; assistant facade ready but no telegram transport bound")
 		return nil
 	}
 	if !cfg.Assistant.TelegramEnabled {
@@ -214,11 +245,7 @@ func wireAssistantFacade(
 		ResolveUser:     telegram.NewBotChatResolver(tgBot),
 		MarkdownMode:    mode,
 		MaxMessageChars: cfg.Assistant.TelegramMaxMessageChars,
-		// Spec 061 SCOPE-09b — thread the OTel tracer into the
-		// adapter so HandleUpdate emits the canonical root
-		// `assistant.adapter.translate` span and the sibling
-		// `assistant.adapter.render` child span per design §8.3.1.A.
-		Tracer: svc.assistantTracer,
+		Tracer:          svc.assistantTracer,
 	})
 	if err != nil {
 		return fmt.Errorf("build telegram assistant adapter: %w", err)
@@ -232,6 +259,94 @@ func wireAssistantFacade(
 		"max_message_chars", cfg.Assistant.TelegramMaxMessageChars,
 	)
 	return nil
+}
+
+// wireAssistantHTTPAdapter constructs the spec 069 HTTP transport
+// adapter and binds it to the LateBoundHandler created in
+// cmd/core/wiring.go. Fail-loud on any missing dependency — no
+// defaults are synthesized.
+func wireAssistantHTTPAdapter(cfg *config.Config, svc *coreServices, facade contracts.Assistant) error {
+	if !cfg.Assistant.HTTP.HTTPEnabled {
+		slog.Info("assistant.transports.http.enabled=false; HTTP adapter not bound (route returns 503 \"assistant_http_not_ready\")")
+		return nil
+	}
+	if svc == nil || svc.assistantHTTPHandler == nil {
+		return errors.New("wireAssistantHTTPAdapter: svc.assistantHTTPHandler is required (wiring.go must construct httpadapter.NewLateBoundHandler before facade wiring)")
+	}
+	if svc.proc == nil {
+		return errors.New("wireAssistantHTTPAdapter: svc.proc (pipeline.Processor) is required for CaptureRoute=true responses")
+	}
+	if facade == nil {
+		return errors.New("wireAssistantHTTPAdapter: facade is required")
+	}
+	captureFn := newAssistantHTTPCaptureFn(svc)
+	transportCfg := httpadapter.HTTPTransportConfig{
+		Enabled:                   cfg.Assistant.HTTP.HTTPEnabled,
+		SchemaVersion:             cfg.Assistant.HTTP.HTTPSchemaVersion,
+		BodySizeMaxBytes:          cfg.Assistant.HTTP.HTTPBodySizeMaxBytes,
+		RateLimitPerUserPerMinute: cfg.Assistant.HTTP.HTTPRateLimitPerUserPerMinute,
+		CORSAllowedOrigins:        cfg.Assistant.HTTP.HTTPCORSAllowedOrigins,
+		ConversationTTL:           cfg.Assistant.HTTP.HTTPConversationTTL,
+		TransportHintAllowlist:    cfg.Assistant.HTTP.HTTPTransportHintAllowlist,
+		RequiredScope:             cfg.Assistant.HTTP.HTTPRequiredScope,
+	}
+	adapter, err := httpadapter.NewHTTPAdapter(httpadapter.Options{
+		Facade:  facade,
+		Capture: captureFn,
+		Clock:   time.Now,
+		Config:  transportCfg,
+	})
+	if err != nil {
+		return fmt.Errorf("construct HTTP adapter: %w", err)
+	}
+	svc.assistantHTTPHandler.SetAdapter(adapter)
+	// SCOPE-2 will replace this pass-through with the real
+	// auth/scope/body/rate/CORS middleware chain. Until then we
+	// install an identity wrapper so SetMiddleware is called
+	// exactly once during wiring (DoD invariant), structural
+	// completeness holds, and the route serves valid turns end to
+	// end for the SCOPE-1d live-wiring integration test. Production
+	// deploys that enable HTTP transport before SCOPE-2 lands MUST
+	// front this with bearer-auth via the existing api.Dependencies
+	// middleware (current router mounts /api/assistant/turn inside
+	// the bearer-auth group).
+	svc.assistantHTTPHandler.SetMiddleware(func(next http.Handler) http.Handler { return next })
+	slog.Info("assistant HTTP adapter wired and bound",
+		"schema_version", transportCfg.SchemaVersion,
+		"body_size_max_bytes", transportCfg.BodySizeMaxBytes,
+		"rate_limit_per_user_per_minute", transportCfg.RateLimitPerUserPerMinute,
+		"required_scope", transportCfg.RequiredScope,
+	)
+	return nil
+}
+
+// newAssistantHTTPCaptureFn returns the capture-route hook used when
+// an AssistantResponse carries CaptureRoute=true. Mirrors the
+// Telegram adapter's BS-001 contract: the user's text is dispatched
+// into the canonical pipeline.Processor as a capture-sourced
+// artifact so HTTP turns participate in the same provenance,
+// dedup, and tier path as every other capture surface.
+func newAssistantHTTPCaptureFn(svc *coreServices) httpadapter.CaptureFn {
+	return func(ctx context.Context, userID, transportMessageID, text string) {
+		if svc == nil || svc.proc == nil {
+			slog.Error("assistant HTTP capture: nil pipeline.Processor; capture dropped",
+				"user_id", userID, "transport_message_id", transportMessageID)
+			return
+		}
+		if text == "" {
+			slog.Warn("assistant HTTP capture: empty text; capture dropped",
+				"user_id", userID, "transport_message_id", transportMessageID)
+			return
+		}
+		_, err := svc.proc.Process(ctx, &pipeline.ProcessRequest{
+			Text:     text,
+			SourceID: pipeline.SourceCapture,
+		})
+		if err != nil {
+			slog.Error("assistant HTTP capture: pipeline.Process failed",
+				"user_id", userID, "transport_message_id", transportMessageID, "error", err)
+		}
+	}
 }
 
 // parseAssistantMarkdownMode maps the SST string to the closed

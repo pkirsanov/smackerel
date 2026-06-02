@@ -39,7 +39,7 @@ func (s *PgStore) Load(ctx context.Context, userID, transport string) (Conversat
 		return Conversation{}, false, errors.New("assistantctx: Load requires non-empty userID and transport")
 	}
 	const q = `
-SELECT working_context, pending_confirm, pending_disambig, last_activity_at, schema_version
+SELECT working_context, pending_confirm, pending_disambig, pending_clarify, last_activity_at, schema_version
   FROM assistant_conversations
  WHERE user_id = $1 AND transport = $2
 `
@@ -47,11 +47,12 @@ SELECT working_context, pending_confirm, pending_disambig, last_activity_at, sch
 		workingRaw  []byte
 		confirmRaw  []byte
 		disambigRaw []byte
+		clarifyRaw  []byte
 		lastActive  time.Time
 		schemaVer   int
 	)
 	row := s.pool.QueryRow(ctx, q, userID, transport)
-	err := row.Scan(&workingRaw, &confirmRaw, &disambigRaw, &lastActive, &schemaVer)
+	err := row.Scan(&workingRaw, &confirmRaw, &disambigRaw, &clarifyRaw, &lastActive, &schemaVer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Conversation{UserID: userID, Transport: transport}, false, nil
 	}
@@ -83,6 +84,13 @@ SELECT working_context, pending_confirm, pending_disambig, last_activity_at, sch
 			return Conversation{}, false, fmt.Errorf("assistantctx: Load decode pending_disambig: %w", err)
 		}
 		conv.PendingDisambig = &pd
+	}
+	if len(clarifyRaw) > 0 {
+		var pc PendingClarify
+		if err := json.Unmarshal(clarifyRaw, &pc); err != nil {
+			return Conversation{}, false, fmt.Errorf("assistantctx: Load decode pending_clarify: %w", err)
+		}
+		conv.PendingClarify = &pc
 	}
 	return conv, true, nil
 }
@@ -116,15 +124,23 @@ func (s *PgStore) Persist(ctx context.Context, conv Conversation) error {
 			return fmt.Errorf("assistantctx: Persist encode pending_disambig: %w", err)
 		}
 	}
+	var clarifyRaw []byte
+	if conv.PendingClarify != nil {
+		clarifyRaw, err = json.Marshal(conv.PendingClarify)
+		if err != nil {
+			return fmt.Errorf("assistantctx: Persist encode pending_clarify: %w", err)
+		}
+	}
 	const q = `
 INSERT INTO assistant_conversations
-    (user_id, transport, working_context, pending_confirm, pending_disambig, last_activity_at, schema_version)
+    (user_id, transport, working_context, pending_confirm, pending_disambig, pending_clarify, last_activity_at, schema_version)
 VALUES
-    ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7)
+    ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8)
 ON CONFLICT (user_id, transport) DO UPDATE
     SET working_context  = EXCLUDED.working_context,
         pending_confirm  = EXCLUDED.pending_confirm,
         pending_disambig = EXCLUDED.pending_disambig,
+        pending_clarify  = EXCLUDED.pending_clarify,
         last_activity_at = EXCLUDED.last_activity_at,
         schema_version   = EXCLUDED.schema_version
 `
@@ -133,10 +149,86 @@ ON CONFLICT (user_id, transport) DO UPDATE
 		string(workingRaw),
 		jsonbOrNull(confirmRaw),
 		jsonbOrNull(disambigRaw),
+		jsonbOrNull(clarifyRaw),
 		conv.LastActivityAt,
 		conv.SchemaVersion,
 	); err != nil {
 		return fmt.Errorf("assistantctx: Persist upsert: %w", err)
+	}
+	return nil
+}
+
+// PendingClarifyRow is a sweeper-only projection of one
+// assistant_conversations row whose pending_clarify column is set and
+// whose emit_time is older than the configured
+// capture_as_fallback.clarify_abandon_timeout. ListAbandonedClarifies
+// returns these so the SCOPE-074-04C ClarifyAbandonSweeper can call
+// Policy.CaptureForUser directly without re-loading the full
+// Conversation row (the working context is irrelevant to the capture
+// decision; the per-row identity + payload is all the sweeper needs).
+type PendingClarifyRow struct {
+	UserID    string
+	Transport string
+	Payload   PendingClarify
+}
+
+// ListAbandonedClarifies returns every row whose pending_clarify is
+// non-NULL AND whose (pending_clarify->>'emit_time')::timestamptz is
+// strictly older than now - timeout. The query is bounded by the
+// partial index idx_assistant_conversations_pending_clarify so the
+// sweep is cheap even with a large assistant_conversations table.
+func (s *PgStore) ListAbandonedClarifies(ctx context.Context, timeout time.Duration) ([]PendingClarifyRow, error) {
+	if timeout <= 0 {
+		return nil, errors.New("assistantctx: ListAbandonedClarifies requires a positive timeout")
+	}
+	secs := int64(timeout.Seconds())
+	const q = `
+SELECT user_id, transport, pending_clarify
+  FROM assistant_conversations
+ WHERE pending_clarify IS NOT NULL
+   AND (pending_clarify->>'emit_time')::timestamptz <= NOW() - make_interval(secs => $1::double precision)
+`
+	rows, err := s.pool.Query(ctx, q, secs)
+	if err != nil {
+		return nil, fmt.Errorf("assistantctx: ListAbandonedClarifies: %w", err)
+	}
+	defer rows.Close()
+	out := []PendingClarifyRow{}
+	for rows.Next() {
+		var (
+			userID    string
+			transport string
+			payload   []byte
+		)
+		if err := rows.Scan(&userID, &transport, &payload); err != nil {
+			return nil, fmt.Errorf("assistantctx: ListAbandonedClarifies scan: %w", err)
+		}
+		var pc PendingClarify
+		if err := json.Unmarshal(payload, &pc); err != nil {
+			return nil, fmt.Errorf("assistantctx: ListAbandonedClarifies decode pending_clarify: %w", err)
+		}
+		out = append(out, PendingClarifyRow{UserID: userID, Transport: transport, Payload: pc})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("assistantctx: ListAbandonedClarifies rows: %w", err)
+	}
+	return out, nil
+}
+
+// ClearPendingClarify removes pending_clarify (sets it to NULL) for
+// the given (userID, transport) row WITHOUT touching any other column.
+// Used by the sweeper after a successful capture (per design step 3:
+// "clear pending_clarify in the same transaction as the capture write").
+//
+// Idempotent: the WHERE clause matches at most one row and clearing
+// an already-NULL column is a no-op.
+func (s *PgStore) ClearPendingClarify(ctx context.Context, userID, transport string) error {
+	if userID == "" || transport == "" {
+		return errors.New("assistantctx: ClearPendingClarify requires non-empty userID and transport")
+	}
+	const q = `UPDATE assistant_conversations SET pending_clarify = NULL WHERE user_id = $1 AND transport = $2`
+	if _, err := s.pool.Exec(ctx, q, userID, transport); err != nil {
+		return fmt.Errorf("assistantctx: ClearPendingClarify: %w", err)
 	}
 	return nil
 }

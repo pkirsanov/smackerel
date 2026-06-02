@@ -43,7 +43,7 @@ func newHintTestAdapter(t *testing.T) *HTTPAdapter {
 			SchemaVersion:          SchemaVersionV1,
 			BodySizeMaxBytes:       1 << 20,
 			TransportHintAllowlist: append([]string{}, AllowedTransportHints...),
-			RequiredScope:          "assistant.turn",
+			RequiredScope:          "assistant:turn",
 		},
 	})
 	if err != nil {
