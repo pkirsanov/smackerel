@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/smackerel/smackerel/internal/agent"
+	_ "github.com/smackerel/smackerel/internal/agent/tools/microtools"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/notification"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/recipesearch"
 	_ "github.com/smackerel/smackerel/internal/agent/tools/retrieval"

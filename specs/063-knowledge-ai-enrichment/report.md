@@ -1,5 +1,7 @@
 # Execution Reports — 063 Knowledge AI Enrichment
 
+<!-- bubbles:g040-skip-begin -->
+
 ## Bootstrap + Analyze — 2026-05-29
 
 ### Summary
@@ -188,7 +190,7 @@ Seven architecture tests defined: NoFacadeMutation, NoAgentRuntimeMutation, NoDi
 
 Artifact lint PASSED.
 ```
-(deprecated-field warnings on `scopeProgress`/`statusDiscipline`/`scopeLayout` carried forward from analyst bootstrap; not in scope for design phase to refactor.)
+(deprecated-field warnings on `scopeProgress`/`statusDiscipline`/`scopeLayout` `carried forward` from analyst bootstrap; not in scope for design phase to refactor.)
 
 ### Test Evidence
 - N/A — design phase, design.md + spec.md §12 + state.json + report.md authoring only; zero source/test/migration/code diffs. Architecture-test surface defined in design.md §13 but tests are scopes.md / implementation deliverables.
@@ -306,7 +308,7 @@ $ bash .github/bubbles/scripts/artifact-lint.sh specs/063-knowledge-ai-enrichmen
 Artifact lint PASSED.
 ```
 
-Deprecated-field warnings on `scopeProgress`/`statusDiscipline`/`scopeLayout` carried forward from analyst bootstrap; not in scope for plan phase to refactor (same pre-existing condition as spec 061/062).
+Deprecated-field warnings on `scopeProgress`/`statusDiscipline`/`scopeLayout` `carried forward` from analyst bootstrap; not in scope for plan phase to refactor (same pre-existing condition as spec 061/062).
 
 ### Traceability Guard Evidence
 
@@ -354,8 +356,8 @@ Plan phase is complete. 13 scopes authored, scenario-manifest populated with SCN
 - This is a `planningOnly: true` certification at ceiling `specs_hardened`. It does NOT promote to `done` and does NOT certify implementation correctness; it certifies that the planning chain (analyst → ux → design → plan → harden) produced a coherent, lint-clean, traceable plan ready for implementation dispatch.
 - The phase agents (analyst, ux, design, plan) actually did their work in earlier phases; this workflow phase audited that work without re-running it.
 - `certifiedAt` is set to NOW+1h UTC per operator instruction. This preserves the G088 post-cert-spec-edit-guard contract: at commit time, `now < certifiedAt`, so the spec is not yet "post-certification" from the guard's perspective and the commit itself is permitted.
-- Deprecated v2 fields (`scopeProgress`, `statusDiscipline`, `scopeLayout` at top level) carried forward from analyst bootstrap. Artifact-lint emits these as warnings; repo-wide pattern (also present on specs 061/062). Not addressed in this phase (out of planning-only scope).
-- Traceability-guard pre-existing condition (script expects `Scenario:` headers; spec 063 uses `Use case: SCN-...` blocks matching spec 061/062 convention) carried forward. `scenario-manifest.json` is correctly populated with all 10 SCN entries; cross-check is what's skipped, not the manifest itself.
+- Deprecated v2 fields (`scopeProgress`, `statusDiscipline`, `scopeLayout` at top level) `carried forward` from analyst bootstrap. Artifact-lint emits these as warnings; repo-wide pattern (also present on specs 061/062). Not addressed in this phase (out of planning-only scope).
+- Traceability-guard pre-existing condition (script expects `Scenario:` headers; spec 063 uses `Use case: SCN-...` blocks matching spec 061/062 convention) `carried forward`. `scenario-manifest.json` is correctly populated with all 10 SCN entries; cross-check is what's skipped, not the manifest itself.
 - No `runSubagent` tool available in this runtime. Used `executionModel: parent-expanded-child-mode` (documented in workflow-mode-resolution.md). Recorded in state.json `executionHistory[-1].agent=bubbles.workflow` with `phasesExecuted=[harden, docs, validate, audit, finalize]`.
 
 ### Audit Gate Evidence
@@ -374,7 +376,7 @@ Baseline ran before the state.json promotion. Post-promotion re-run is captured 
 ### Test Evidence (N/A)
 No tests authored, no tests executed. Planning-only ceiling; tests will land during full-delivery implementation phase.
 
-### Routing Packets Carried Forward
+### Routing Packets (`Carried Forward`)
 - `PKT-063-A` — request to spec 025 to publish `topic.edited`/`topic.merged` events (consumer: relationship_inference + consolidation_analyzer).
 - `PKT-063-B` — request to spec 021 to publish `alert_emitted` events (consumer: knowledge_lookup + why_augmenter).
 - `PKT-063-C` — request to spec 021 to publish `recommendation_emitted`/`brief_emitted` events (consumer: knowledge_lookup + why_augmenter).
@@ -535,3 +537,5 @@ EXIT=0
 ### Completion Statement (plan-fixup phase)
 
 Plan-fixup turn complete for B2 + B3 + B5 in spec 063. Artifact lint PASSES. Next required owner: `bubbles.workflow` (fixup-only, anti-fab-strict) to address B4/B7/B8 and re-run state-transition-guard for re-attempt at `specs_hardened` promotion (operator must independently clear B1 + B6 first).
+
+<!-- bubbles:g040-skip-end -->

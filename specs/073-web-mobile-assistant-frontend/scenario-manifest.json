@@ -2,7 +2,7 @@
   "version": 1,
   "specId": "073",
   "generatedBy": "bubbles.plan",
-  "generatedAt": "2026-05-31T21:32:34Z",
+  "generatedAt": "2026-06-02T07:00:00Z",
   "scenarios": [
     {
       "scenarioId": "SCN-073-A01",
@@ -10,8 +10,14 @@
       "scopeId": "SCOPE-073-02",
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the web client has a valid same-origin HttpOnly session cookie established by the spec 070 web login flow with the assistant.turn scope\nWhen the user types a NL message and submits it\nThen the client POSTs to /api/assistant/turn with credentials: \"same-origin\" and a fresh transport_message_id\nAnd the response body is rendered: text, citations, and any disambig/confirm/capture controls",
-      "plannedTestRows": ["TP-073-09", "TP-073-12"],
-      "liveSystemExpectation": "web Go-driven e2e-api row (TP-073-09) drives the served PWA assistant route and the live assistant HTTP endpoint, asserting schema-rendered body/sources/controls; companion .spec.ts is a documentation stub (no browser-driver runner is wired into ./smackerel.sh test e2e)",
+      "plannedTestRows": ["TP-073-09", "TP-073-12", "TP-073-9C"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "tests/e2e/assistant/web_pwa_chat_e2e_test.go::TestAssistantWebPWAChatE2E_ServedRouteHasComposerTranscriptAndResponseMarkup_TP_073_09",
+        "web/pwa/tests/assistant_codegen_drift_test.go::TestWebAssistantStorageGuard_TP_073_06"
+      ],
+      "evidenceRefs": ["report.md#scope-073-02-web-chat-vertical-slice-authoring-bubblesimplement-2026-06-01"],
+      "liveSystemExpectation": "web Go-driven e2e-api row (TP-073-09) drives the served PWA assistant route and the live assistant HTTP endpoint, asserting schema-rendered body/sources/controls",
       "status": "planned"
     },
     {
@@ -20,18 +26,35 @@
       "scopeId": "SCOPE-073-01",
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the shared mobile client is built for iPhone/iOS and Android with types generated from the spec 069 golden schema\nWhen the wire schema is changed in a way that breaks compatibility\nThen the shared mobile build fails at codegen before either mobile platform ships\nAnd no incompatible iPhone/iOS or Android client ships to users",
-      "plannedTestRows": ["TP-073-01", "TP-073-02", "TP-073-03", "TP-073-04", "TP-073-13"],
-      "liveSystemExpectation": "build/unit codegen and renderer canaries guard web plus shared mobile schema drift before runtime; TP-073-03 specifically asserts each surface emits a render-descriptor-v1 conforming descriptor deep-equal to the per-fixture golden under tests/fixtures/assistant_response_v1/ (cases: text_only, with_sources, disambiguation, confirm_accept_decline, capture_acknowledgement, error_retry, unknown_shape)",
+      "plannedTestRows": ["TP-073-01", "TP-073-02", "TP-073-03", "TP-073-04"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "tests/unit/clients/render_descriptor_canary_test.go::TestRenderDescriptorV1_CrossLanguageCanary",
+        "clients/mobile/assistant/test/codegen_drift_test.dart",
+        "clients/mobile/assistant/test/platform_declaration_test.dart",
+        "web/pwa/tests/assistant_codegen_drift_test.go::TestWebAssistantCodegen_NoDrift_TP_073_02"
+      ],
+      "evidenceRefs": [
+        "report.md#scope-073-01-gap-fill-bubblesimplement-2026-06-01",
+        "report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"
+      ],
+      "liveSystemExpectation": "build/unit codegen and renderer canaries guard web plus shared mobile schema drift before runtime; TP-073-03 asserts each surface emits a render-descriptor-v1 conforming descriptor deep-equal to the per-fixture golden under tests/fixtures/assistant_response_v1/",
       "status": "planned"
     },
     {
       "scenarioId": "SCN-073-A03",
-      "title": "Transient network failure retries with the same transport_message_id",
+      "title": "Transient network failure retries with the same transport_message_id (web)",
       "scopeId": "SCOPE-073-02",
       "source": "spec.md#functional-requirements-bdd-scenarios",
-      "gherkin": "Given the client POSTs a turn and the request times out\nWhen the client retries\nThen the retry uses the SAME transport_message_id\nAnd the server returns the same response (deduped)",
-      "plannedTestRows": ["TP-073-10", "TP-073-14"],
-      "liveSystemExpectation": "web Go-driven e2e-api retry row (TP-073-09 path) asserts the live server observes the same transport_message_id and returns the deduped response; shared-mobile retry parity rows (TP-073-14) cover iPhone/iOS and Android once the shared mobile runtime exists",
+      "gherkin": "Given the web client POSTs a turn and the request times out\nWhen the user retries\nThen the retry uses the SAME transport_message_id\nAnd the server returns the same response (deduped)",
+      "plannedTestRows": ["TP-073-10"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "tests/e2e/assistant/web_pwa_retry_e2e_test.go::TestAssistantWebPWARetryE2E_SameTransportMessageIDDedupes_TP_073_10",
+        "tests/e2e/assistant/web_pwa_retry_e2e_test.go::TestAssistantWebPWARetryE2E_DifferentTransportMessageIDsAreDistinct_TP_073_10_Adversarial"
+      ],
+      "evidenceRefs": ["report.md#scope-073-02-web-chat-vertical-slice-authoring-bubblesimplement-2026-06-01"],
+      "liveSystemExpectation": "web Go-driven e2e-api retry row asserts the live server observes the same transport_message_id and returns the deduped response; adversarial sibling proves the parity check is not tautological",
       "status": "planned"
     },
     {
@@ -41,8 +64,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given a turn returns an AssistantResponse with a disambiguation prompt\nWhen the user picks choice 2 on web, iPhone/iOS, and Android in separate sessions\nThen every client POSTs kind = \"disambiguation\" with the same disambiguation_ref shape\nAnd the eventual response on every client matches the chosen scenario's invocation result",
       "plannedTestRows": ["TP-073-19", "TP-073-24"],
-      "liveSystemExpectation": "web and shared mobile e2e-ui rows must post the same ref/index shape across web, iPhone/iOS, and Android",
-      "status": "planned"
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; web+native mobile parity e2e-ui rows require iPhone/iOS and Android adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     },
     {
       "scenarioId": "SCN-073-A05",
@@ -51,8 +78,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given a turn returns an AssistantResponse with a confirm card\nWhen the user accepts the action\nThen the side-effect-bearing path executes server-side\nAnd web, iPhone/iOS, and Android render the post-confirm result with identical structure",
       "plannedTestRows": ["TP-073-20"],
-      "liveSystemExpectation": "e2e-ui row must prove side effects are server-owned and result structure matches on all three surfaces",
-      "status": "planned"
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; cross-surface confirm parity needs native mobile adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     },
     {
       "scenarioId": "SCN-073-A06",
@@ -61,8 +92,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the server returns AssistantResponse with CaptureRoute = true\nWhen the client renders the response\nThen the \"saved-as-idea\" acknowledgement appears with the same shape and copy as Telegram, HTTP-test, and WhatsApp\nAnd no client-side capture logic exists; the server's response alone drives the UI",
       "plannedTestRows": ["TP-073-21"],
-      "liveSystemExpectation": "integration row must compare Telegram, HTTP-test, WhatsApp, web, iPhone/iOS, and Android acknowledgement fixtures",
-      "status": "planned"
+      "requiredTestType": "integration",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; canonical capture-ack shape is owned by spec 074 and consumed here once native adapters land",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     },
     {
       "scenarioId": "SCN-073-A07",
@@ -71,8 +106,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the response shape does not include a recognized control variant\nWhen the client renders it\nThen the client falls back to rendering the text body\nAnd the client does NOT branch on scenario id, action class, or transport_hint to decide affordances",
       "plannedTestRows": ["TP-073-22"],
-      "liveSystemExpectation": "unit guard must detect prohibited scenario/action/platform/transport branching in web and shared mobile renderers",
-      "status": "planned"
+      "requiredTestType": "unit",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; cross-surface no-branch guard test is deferred (web JS renderer satisfies invariant by construction)",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     },
     {
       "scenarioId": "SCN-073-A08",
@@ -80,8 +119,14 @@
       "scopeId": "SCOPE-073-01",
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the web client sends transport_hint = \"web\" and the shared mobile client sends transport_hint = \"mobile\" on iPhone/iOS and Android\nWhen the server processes all three clients\nThen the server-side closed-vocabulary check accepts both values\nAnd neither value alters scenario selection or response shape",
-      "plannedTestRows": ["TP-073-05", "TP-073-08", "TP-073-23"],
-      "liveSystemExpectation": "integration and e2e-api rows must prove transport hints do not alter behavior across web, iPhone/iOS, and Android",
+      "plannedTestRows": ["TP-073-05", "TP-073-08"],
+      "requiredTestType": "integration",
+      "linkedTests": [
+        "tests/integration/api/assistant_transport_hint_test.go",
+        "tests/e2e/assistant/transport_hint_parity_test.go"
+      ],
+      "evidenceRefs": ["report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"],
+      "liveSystemExpectation": "integration and e2e-api rows assert transport hints accepted and telemetry-only; live runs queued behind suite lock per report.md Known Drift",
       "status": "planned"
     },
     {
@@ -91,7 +136,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given a screen reader is active on the web client\nWhen the user submits a turn and the response arrives\nThen the response area announces via an ARIA live region\nAnd keyboard navigation reaches the composer, send button, disambig choices, and confirm buttons in a sensible order",
       "plannedTestRows": ["TP-073-11"],
-      "liveSystemExpectation": "web Go-driven e2e-api row (TP-073-11) asserts the served PWA markup contains the aria-live response region, labelled composer, and deterministic tab/focus order across composer/send/disambig/confirm/retry controls; driver-based screen-reader announcement validation is deferred to a future browser-driver foundation spec",
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "tests/e2e/assistant/web_pwa_accessibility_e2e_test.go::TestAssistantWebPWAAccessibilityE2E_LiveRegionLabelledComposerAndTabOrder_TP_073_11"
+      ],
+      "evidenceRefs": ["report.md#scope-073-02-web-chat-vertical-slice-authoring-bubblesimplement-2026-06-01"],
+      "liveSystemExpectation": "web Go-driven e2e-api row asserts aria-live response region, labelled composer, deterministic tab order; driver-based screen-reader announcement validation deferred to a future browser-driver foundation spec",
       "status": "planned"
     },
     {
@@ -101,8 +151,12 @@
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given VoiceOver is enabled on iPhone/iOS and TalkBack is enabled on Android\nWhen the user submits a turn and the response arrives\nThen the response renders with semantic labels readable by both mobile assistive technologies\nAnd interactive controls (disambig list, confirm buttons) are focusable and announce their purpose on both mobile platforms",
       "plannedTestRows": ["TP-073-15", "TP-073-16", "TP-073-18"],
-      "liveSystemExpectation": "shared mobile e2e-ui rows must verify VoiceOver, TalkBack, and cross-platform parity",
-      "status": "planned"
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; on-device VoiceOver/TalkBack runs require native iPhone/iOS + Android adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     },
     {
       "scenarioId": "SCN-073-A11",
@@ -110,9 +164,77 @@
       "scopeId": "SCOPE-073-01",
       "source": "spec.md#functional-requirements-bdd-scenarios",
       "gherkin": "Given the SST-derived backend base URL is unset for a client build\nWhen the client is built or initialized\nThen the build or initialization fails loud with a NO-DEFAULTS error naming the missing key",
-      "plannedTestRows": ["TP-073-06", "TP-073-07", "TP-073-17"],
+      "plannedTestRows": ["TP-073-06", "TP-073-07"],
+      "requiredTestType": "unit",
+      "linkedTests": [
+        "internal/config/assistant_frontend_validators_test.go",
+        "web/pwa/tests/assistant_codegen_drift_test.go::TestWebAssistantStorageGuard_TP_073_06",
+        "clients/mobile/assistant/test/core_storage_guard_test.dart"
+      ],
+      "evidenceRefs": [
+        "report.md#scope-073-01-gap-fill-bubblesimplement-2026-06-01",
+        "report.md#scope-073-01-scope-1-row-verification-bubblesimplement-2026-06-01"
+      ],
       "liveSystemExpectation": "unit/build rows prove web, iPhone/iOS, and Android use no backend URL fallback",
       "status": "planned"
+    },
+    {
+      "scenarioId": "SCN-073-A02",
+      "title": "Shared mobile client uses generated types from the golden schema (Scope 3 duplicate)",
+      "scopeId": "SCOPE-073-03",
+      "source": "scopes.md#scope-3-shared-mobile-chat-vertical-slice",
+      "gherkin": "Same as primary SCN-073-A02 entry; this duplicate records Scope 3 ownership for the deferred shared-mobile build target.",
+      "plannedTestRows": ["TP-073-13"],
+      "requiredTestType": "unit",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; native iPhone/iOS + Android platform-parity build canary requires the deferred adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
+    },
+    {
+      "scenarioId": "SCN-073-A03",
+      "title": "Transient network failure retries with the same transport_message_id (mobile)",
+      "scopeId": "SCOPE-073-03",
+      "source": "scopes.md#scope-3-shared-mobile-chat-vertical-slice",
+      "gherkin": "Given the shared mobile client POSTs a turn from iPhone/iOS and Android and the request times out\nWhen the user retries on each platform\nThen each retry uses the SAME transport_message_id for that platform's original turn\nAnd the server returns the same response (deduped)",
+      "plannedTestRows": ["TP-073-14"],
+      "requiredTestType": "e2e-ui",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; mobile retry parity e2e-ui requires native adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
+    },
+    {
+      "scenarioId": "SCN-073-A11",
+      "title": "Missing backend base URL fails loud at build/start time (mobile duplicate)",
+      "scopeId": "SCOPE-073-03",
+      "source": "scopes.md#scope-3-shared-mobile-chat-vertical-slice",
+      "gherkin": "Given the SST-derived mobile backend base URL is unset for a shared mobile build\nWhen the mobile client is built or initialized for iPhone/iOS or Android\nThen the build or initialization fails loud with a NO-DEFAULTS error naming the missing key",
+      "plannedTestRows": ["TP-073-17"],
+      "requiredTestType": "unit",
+      "linkedTests": [],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec; fail-loud surface on native mobile build requires the deferred adapters",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
+    },
+    {
+      "scenarioId": "SCN-073-A08",
+      "title": "Closed-vocabulary transport_hint is honored (Scope 4 duplicate)",
+      "scopeId": "SCOPE-073-04",
+      "source": "scopes.md#scope-4-cross-surface-response-controls-capture-and-parity",
+      "gherkin": "Same as primary SCN-073-A08; covered by SCOPE-073-01 TP-073-05 / TP-073-08 today.",
+      "plannedTestRows": ["TP-073-23"],
+      "requiredTestType": "e2e-api",
+      "linkedTests": [
+        "tests/e2e/assistant/transport_hint_parity_test.go"
+      ],
+      "evidenceRefs": ["scopes.md#rescope-decision"],
+      "liveSystemExpectation": "Deferred to follow-on spec for the cross-surface variant; web-only transport_hint coverage is live under SCN-073-A08 primary entry",
+      "status": "deferred",
+      "deferredTo": "follow-on-mobile-delivery"
     }
   ]
 }

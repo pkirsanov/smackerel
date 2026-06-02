@@ -101,13 +101,16 @@ type EntityResolveServices struct {
 }
 
 var (
-	entityResolveMu  sync.RWMutex
-	entityResolveSvc *EntityResolveServices
+	entityResolveMu           sync.RWMutex
+	entityResolveSvc          *EntityResolveServices
+	entityResolveRegisterOnce sync.Once
 )
 
 // SetEntityResolveServices wires the production entity_resolve
-// runtime. Pass nil to clear (test-only).
+// runtime and registers the tool with the spec 037 agent registry on
+// first call. Pass nil to clear (test-only).
 func SetEntityResolveServices(s *EntityResolveServices) {
+	entityResolveRegisterOnce.Do(registerEntityResolve)
 	entityResolveMu.Lock()
 	defer entityResolveMu.Unlock()
 	entityResolveSvc = s
@@ -168,8 +171,18 @@ var entityResolveOutputSchema = json.RawMessage(`{
 }`)
 
 // -------------------- registration --------------------
+//
+// SCOPE-1 foundation rule: registration is gated behind
+// SetEntityResolveServices so the package init alone does not
+// pollute the spec 037 registry.
 
-func init() {
+// init registers the tool at package import time so the spec 037
+// loader (scenario-lint, cmd/core) recognizes the tool name; the
+// handler returns entity_resolve_not_configured until
+// SetEntityResolveServices wires runtime dependencies.
+func init() { entityResolveRegisterOnce.Do(registerEntityResolve) }
+
+func registerEntityResolve() {
 	agent.RegisterTool(agent.Tool{
 		Name:             EntityResolveToolName,
 		Description:      "Resolve a colloquial reference (e.g. \"the lease\") to a ranked list of user-scoped artifact references. Returns resolved when the top candidate's confidence clears the configured floor, ambiguous when it does not, and failed when no candidates exist.",

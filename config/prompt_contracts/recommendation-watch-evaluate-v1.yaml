@@ -1,15 +1,15 @@
 id: recommendation_watch_evaluate
 version: "recommendation-watch-evaluate-v1"
 principleAlignment:
-  - "Principle 6"
-  - "Principle 7"
+- "Principle 3"
+- "Principle 5"
 type: "scenario"
 description: "Evaluate a due recommendation watch and persist a delivery, queue, summarize, or drop decision"
 
 intent_examples:
-  - "due location_radius watch evaluation"
-  - "price-drop watch evaluation"
-  - "trip-context watch evaluation"
+- "due location_radius watch evaluation"
+- "price-drop watch evaluation"
+- "trip-context watch evaluation"
 
 system_prompt: |
   You are Smackerel's standing-watch evaluation scenario. The scheduler invokes
@@ -22,30 +22,30 @@ system_prompt: |
   detail, or watches.
 
 allowed_tools:
-  - name: recommendation_parse_intent
-    side_effect_class: read
-  - name: recommendation_reduce_location
-    side_effect_class: read
-  - name: recommendation_fetch_candidates
-    side_effect_class: external
-  - name: recommendation_dedupe_candidates
-    side_effect_class: read
-  - name: recommendation_get_graph_snapshot
-    side_effect_class: read
-  - name: recommendation_apply_suppression
-    side_effect_class: read
-  - name: recommendation_rank_candidates
-    side_effect_class: read
-  - name: recommendation_apply_policy
-    side_effect_class: read
-  - name: recommendation_apply_quality_guard
-    side_effect_class: read
-  - name: recommendation_persist_outcome
-    side_effect_class: write
+- name: recommendation_parse_intent
+  side_effect_class: read
+- name: recommendation_reduce_location
+  side_effect_class: read
+- name: recommendation_fetch_candidates
+  side_effect_class: external
+- name: recommendation_dedupe_candidates
+  side_effect_class: read
+- name: recommendation_get_graph_snapshot
+  side_effect_class: read
+- name: recommendation_apply_suppression
+  side_effect_class: read
+- name: recommendation_rank_candidates
+  side_effect_class: read
+- name: recommendation_apply_policy
+  side_effect_class: read
+- name: recommendation_apply_quality_guard
+  side_effect_class: read
+- name: recommendation_persist_outcome
+  side_effect_class: write
 
 input_schema:
   type: object
-  required: [watch_id, actor_user_id, kind]
+  required: [ watch_id, actor_user_id, kind ]
   properties:
     watch_id:
       type: string
@@ -55,23 +55,23 @@ input_schema:
       minLength: 1
     kind:
       type: string
-      enum: [location_radius, topic_keyword, trip_context, price_drop]
+      enum: [ location_radius, topic_keyword, trip_context, price_drop ]
     trigger_kind:
       type: string
-      enum: [dwell, schedule, event, price_check, trip_window]
+      enum: [ dwell, schedule, event, price_check, trip_window ]
     trigger_context:
       type: object
       additionalProperties: true
 
 output_schema:
   type: object
-  required: [watch_run_id, status]
+  required: [ watch_run_id, status ]
   properties:
     watch_run_id:
       type: string
     status:
       type: string
-      enum: [delivered, withheld, no_match, rate_limited, quiet_hours, provider_degraded, failed]
+      enum: [ delivered, withheld, no_match, rate_limited, quiet_hours, provider_degraded, failed ]
     delivered_count:
       type: integer
       minimum: 0
@@ -80,7 +80,7 @@ output_schema:
       minimum: 0
     delivery_decision:
       type: string
-      enum: [sent, queue, summarize, drop, none]
+      enum: [ sent, queue, summarize, drop, none ]
     trace_id:
       type: string
 

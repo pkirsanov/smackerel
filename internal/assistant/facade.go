@@ -352,6 +352,15 @@ func (f *Facade) runCaptureFallback(
 	if err != nil {
 		return capturefallback.CaptureResult{}, fmt.Errorf("capture-fallback capture: %w", err)
 	}
+	// Spec 074 SCOPE-5 — emit the capture-as-fallback counter labeled
+	// with the closed cause vocabulary so dashboards can break down
+	// fallback volume by trigger (unrouted, open_knowledge_no_ground,
+	// clarify_abandoned, compiler_error). transport label uses the
+	// already-normalized closed transport vocabulary.
+	assistantmetrics.CaptureFallbackTotal.WithLabelValues(
+		string(cause),
+		normalizeTransportLabel(msg.Transport),
+	).Inc()
 	return res, nil
 }
 

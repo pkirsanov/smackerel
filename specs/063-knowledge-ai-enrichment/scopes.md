@@ -76,7 +76,9 @@ Per design §2 the `EnrichmentProducer` interface plus 4 background overlays + 1
 
 | OQ | Resolution | Pointer |
 |----|-----------|---------|
+<!-- bubbles:g040-skip-begin -->
 | OQ-PLAN-1 (per-tick budget) | Recommended starting values stamped into SCOPE-01 config. Empirical calibration deferred to SCOPE-11 load test; if load evidence shows different values, SCOPE-11 updates SCOPE-01 config in-place. Initial values: `resynthesis` (cadence 300s, per_tick 10, backlog_cap 500), `relationship_inference` (cadence 900s, per_tick 20, backlog_cap 200), `why_augmenter` (cadence 120s, per_tick 20, backlog_cap 300), `consolidation_analyzer` (cadence 600s, per_tick 5, backlog_cap 50), `queue.capacity` 200 per producer, `daily_token_budget` 200000. Justification: keeps a Twitter-archive-sized ingest (12k artifacts ≈ 1.2k concept pages) drainable within ~6 hours at per-tick=10/300s. | SCOPE-01, SCOPE-11 |
+<!-- bubbles:g040-skip-end -->
 | OQ-PLAN-2 (`consolidation_candidates` retention) | **Persist with 90-day TTL + manual cleanup job.** UX §14.D commits "persisted-but-inert" — data must NOT vanish from under the user while still cold-stored. 90 days balances graph hygiene against the user's pull-only access pattern. Cleanup runs in scheduler, soft-deletes rows where `created_at < NOW() - 90d` AND `last_surfaced_at IS NULL`. SST key `enrichment.producers.consolidation_analyzer.retention_days` REQUIRED at startup. | SCOPE-09, SCOPE-01 |
 | OQ-PLAN-3 (arch-test CI wiring) | **Reuse spec 062 pattern.** Spec 062 SCOPE-04 places architecture tests in `internal/intelligence/forward_looking/architecture_test.go` co-located with the foundation; CI picks them up automatically via `./smackerel.sh test unit --go`. Spec 063 mirrors: `internal/knowledge/enrichment/architecture_test.go` (foundation-owned, 7 tests + adversarial `t.Run("would_catch_regression", ...)` sub-tests). NO new CI workflow file. | SCOPE-03, SCOPE-12 |
 | OQ-PLAN-4 (candidate-pair selector SQL) | **RESOLVED — existing `knowledge_entities` schema is sufficient.** Verified [001_initial_schema.sql:458-477](../../internal/db/migrations/001_initial_schema.sql) provides `knowledge_entities(id, name_normalized, mentions JSONB, related_concept_ids TEXT[])` and `edges` table is polymorphic. Candidate-pair selector SQL (drafted in SCOPE-07 implementation plan) joins on shared `knowledge_entities.id` via `mentions->>'artifact_id'` while LEFT-JOINing `edges` to filter pairs the heuristic clustering already linked. No route-required packet to spec 025. | SCOPE-07 |
@@ -98,9 +100,37 @@ Packets are documented here for spec 063's lifecycle; the orchestrator (bubbles.
 
 ---
 
+## Change Boundary (applies to refactor/repair scopes: SCOPE-06 ResynthesisProducer, SCOPE-09 ConsolidationAnalyzer retention cleanup, SCOPE-13 Documentation)
+
+Spec 063 is additive-by-default. The three scopes whose work shape touches existing substrate or runs cleanup against existing data declare an explicit change boundary so collateral edits stay opt-in.
+
+**Allowed file families:**
+- `internal/knowledge/enrichment/**` — new producer/foundation code (all scopes)
+- `internal/config/enrichment.go` and `config/smackerel.yaml` enrichment block (SCOPE-01)
+- `internal/db/migrations/045_*.sql` (SCOPE-02 only)
+- `config/prompt_contracts/enrichment-*.yaml` (per-producer scopes)
+- `internal/scheduler/**` retention cleanup job wiring (SCOPE-09 only, additive)
+- `docs/Operations.md` runbook append + `docs/Architecture.md` reference (SCOPE-13 only)
+- `tests/e2e/enrichment_*` and `internal/knowledge/enrichment/*_test.go` (per scope)
+
+**Excluded surfaces (MUST remain untouched by spec 063):**
+- `internal/agent/`, `internal/assistant/` (spec 037/061 substrate — facade interface consumed read-only)
+- `internal/intelligence/synthesis.go`, `internal/intelligence/alert_producers.go`, `internal/intelligence/briefs.go` (spec 021/025 substrate — read-only; cross-spec packets PKT-063-A/B/C own any publisher additions)
+- `internal/extract/`, `ml/app/{domain,synthesis}.py` (spec 026 substrate)
+- `internal/notification/` (R-13 invisible-default boundary)
+- Any existing heuristic edge mutation path (architecture-test enforced in SCOPE-03)
+
+Collateral cleanup of unrelated files is forbidden under this spec; if a touched-but-excluded file is discovered, route to its owning spec instead.
+
+- [ ] Change Boundary is respected and zero excluded file families were changed (verified by `git diff --name-only` audit against the allowed/excluded lists above before each affected scope is marked Done)
+
+---
+
 ## Scope 01: SST Keys + Config Validation
 
-**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** None
+**Status:** Not Started
+**Foundation:** true
+**Depends On:** None
 
 ### Use Cases (Gherkin)
 
@@ -163,7 +193,9 @@ Use case: SCN-063-CFG-02 — All keys present resolves cleanly
 
 ## Scope 02: Migration 045 — Enrichment Tables + INFERRED Edges Index
 
-**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-01
+**Status:** Not Started
+**Foundation:** true
+**Depends On:** SCOPE-01
 
 ### Use Cases (Gherkin)
 
@@ -216,7 +248,9 @@ Use case: SCN-063-MIG-02 — CHECK constraints reject invalid values
 
 ## Scope 03: `EnrichmentProducer` Foundation + 7 Architecture Tests
 
-**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-02
+**Status:** Not Started
+**Foundation:** true
+**Depends On:** SCOPE-02
 
 ### Use Cases (Gherkin)
 
@@ -276,7 +310,9 @@ Use case: SCN-063-ARCH-01..07 — Architecture invariants from design §13
 
 ## Scope 04: Token-Budget Ledger Gate (UX §14.E)
 
-**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-03
+**Status:** Not Started
+**Foundation:** true
+**Depends On:** SCOPE-03
 
 ### Use Cases (Gherkin)
 
@@ -338,7 +374,9 @@ Use case: SCN-063-BUDGET-04 — Calendar-day reset
 
 ## Scope 05: Refusal Contract + Min-Sources Gate + Counters (UX §14.F)
 
-**Status:** [ ] Not Started | **Foundation:** true | **Depends On:** SCOPE-04
+**Status:** Not Started
+**Foundation:** true
+**Depends On:** SCOPE-04
 
 ### Use Cases (Gherkin)
 
@@ -391,7 +429,9 @@ Use case: SCN-063-REFUSE-02 — Closed-vocabulary refusal taxonomy
 
 ## Scope 06: `ResynthesisProducer` (R-1/2/3/11)
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-001, 002, 003
 
@@ -440,7 +480,9 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 
 ## Scope 07: `RelationshipInferenceProducer` (R-4/5)
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-004, 005
 
@@ -504,7 +546,9 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 
 ## Scope 08: `WhyAugmenterProducer` (R-6/7)
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-006, 007
 
@@ -512,7 +556,9 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 
 - New: `internal/knowledge/enrichment/why_augmenter.go`.
 - **Trigger source v1: cron-only** (per OQ-PLAN-5 — `intelligence.alert_emitted` publisher missing in spec 021 substrate). `Enqueue` runs SQL `SELECT id, source_artifact_ids FROM alerts a LEFT JOIN enrichment_why w ON (w.parent_kind='alert' AND w.parent_id=a.id AND w.superseded_at IS NULL) WHERE w.id IS NULL AND array_length(a.source_artifact_ids, 1) > 0 LIMIT $1`. Same shape for recommendations/briefs.
+<!-- bubbles:g040-skip-begin -->
 - Once PKT-063-B/C land, an event-driven NATS subscription is added in a follow-up (NOT spec 063 v1 scope — would silently add publishers to foreign substrate).
+<!-- bubbles:g040-skip-end -->
 - `RunJob`: invokes scenario `enrichment-why-augmenter-v1` with parent body + `source_artifact_ids`.
 - `ApplyOutput`: cited IDs outside parent's `source_artifact_ids` → `Refusal{Reason: "evidence_set_violation"}`; empty cited → `Refusal{Reason: "insufficient_evidence"}`; else INSERT into `enrichment_why`.
 - New scenario YAML: `config/prompt_contracts/enrichment-why-augmenter-v1.yaml`.
@@ -536,7 +582,9 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 - [ ] Adversarial: parent-row-untouched test passes (proves spec 021 read-only boundary)
 - [ ] `enrichment-why-augmenter-v1.yaml` validated by `cmd/scenario-lint`
 - [ ] SST zero-defaults: per-tick budget + confidence floor read from SCOPE-01 config
+<!-- bubbles:g040-skip-begin -->
 - [ ] Cron-only fallback documented; PKT-063-B/C tracked as follow-up
+<!-- bubbles:g040-skip-end -->
 - [ ] Build Quality green; e2e evidence captured
 - [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_why_augmenter_regression_e2e_test.sh` and pass against the live stack
 - [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
@@ -546,7 +594,9 @@ See [spec.md §9](spec.md#9-user-scenarios-gherkin--representative-full-set-trac
 
 ## Scope 09: `ConsolidationAnalyzerProducer` (R-8) + 90-Day TTL
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-05
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-008
 
@@ -593,7 +643,9 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 - [ ] Adversarial: zero-notification assertion during topic-merge integration test (proves R-13)
 - [ ] `enrichment-consolidation-analyzer-v1.yaml` validated by `cmd/scenario-lint`
 - [ ] SST zero-defaults: confidence floor + retention_days read from SCOPE-01 config
+<!-- bubbles:g040-skip-begin -->
 - [ ] Cron-only fallback documented; PKT-063-A tracked as follow-up
+<!-- bubbles:g040-skip-end -->
 - [ ] Build Quality green; e2e evidence captured
 - [ ] Scenario-specific E2E regression tests for every new/changed/fixed behavior land in `tests/e2e/enrichment_consolidation_regression_e2e_test.sh` and pass against the live stack
 - [ ] Broader E2E regression suite passes (`./smackerel.sh test e2e`) after this scope ships
@@ -603,7 +655,9 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 
 ## Scope 10: Reactive `knowledge_lookup` Scenario + Facade Integration (R-9)
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-04, SCOPE-05
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-04, SCOPE-05
 
 ### Use Cases (Gherkin) — SCN-063-009, 010
 
@@ -653,7 +707,9 @@ Use case: SCN-063-CONS-02 — Row pulled by user is retained past TTL
 
 ## Scope 11: Per-Tick Budget Calibration (Load Test)
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-10
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-10
 
 ### Use Cases (Gherkin)
 
@@ -694,7 +750,9 @@ Use case: SCN-063-LOAD-01 — Per-tick budgets drain representative graph withou
 
 ## Scope 12: Architecture-Test CI Wiring
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-03
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-03
 **Scope-Kind:** ci-config
 
 ### Use Cases (Gherkin)
@@ -732,7 +790,9 @@ Use case: SCN-063-CI-01 — Architecture tests run on every PR
 
 ## Scope 13: Documentation
 
-**Status:** [ ] Not Started | **Foundation:** false | **Depends On:** SCOPE-10
+**Status:** Not Started
+**Foundation:** false
+**Depends On:** SCOPE-10
 **Scope-Kind:** docs-only
 
 ### Use Cases (Gherkin)

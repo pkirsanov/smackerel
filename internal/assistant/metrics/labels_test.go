@@ -71,6 +71,10 @@ func TestVocabularyClosed_CaptureFallbackCause(t *testing.T) {
 		CauseConfirmTimeout:        {},
 		CauseErrorOfferedCapture:   {},
 		CauseUnresolvableReference: {},
+		CauseUnrouted:              {},
+		CauseOpenKnowledgeNoGround: {},
+		CauseClarifyAbandoned:      {},
+		CauseCompilerError:         {},
 	}
 	assertVocabClosed(t, "capture-fallback cause", expected, AllCaptureFallbackCauses)
 }

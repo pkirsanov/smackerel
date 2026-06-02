@@ -80,6 +80,11 @@ const (
 	CauseConfirmTimeout        = "confirm_timeout"
 	CauseErrorOfferedCapture   = "error_offered_capture"
 	CauseUnresolvableReference = "unresolvable_reference"
+	// Spec 074 capture-as-fallback policy causes (design §1 cause vocabulary).
+	CauseUnrouted              = "unrouted"
+	CauseOpenKnowledgeNoGround = "open_knowledge_no_ground"
+	CauseClarifyAbandoned      = "clarify_abandoned"
+	CauseCompilerError         = "compiler_error"
 )
 
 // Confirm-card outcome vocabulary (smackerel_assistant_confirm_card_outcomes_total).
@@ -234,6 +239,10 @@ var AllCaptureFallbackCauses = []string{
 	CauseConfirmTimeout,
 	CauseErrorOfferedCapture,
 	CauseUnresolvableReference,
+	CauseUnrouted,
+	CauseOpenKnowledgeNoGround,
+	CauseClarifyAbandoned,
+	CauseCompilerError,
 }
 
 // AllConfirmCardOutcomes is the complete closed vocabulary for the

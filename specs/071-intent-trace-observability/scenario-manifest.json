@@ -4,86 +4,179 @@
   "feature": "IntentTrace Observability Surface",
   "generatedBy": "bubbles.plan",
   "generatedAt": "2026-05-31T20:30:46Z",
+  "updatedAt": "2026-06-02T00:00:00Z",
   "scenarios": [
     {
-      "id": "SCN-071-A01",
+      "scenarioId": "SCN-071-A01",
       "title": "Exactly one IntentTrace per compiled turn",
       "scopeId": "SCOPE-071-01",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        "tests/integration/assistant/intent_trace_test.go::TestIntentTracePersistsExactlyOneV1RowPerRecordCall",
+        "tests/integration/assistant/intent_trace_test.go::TestIntentTraceRecordsCompileValidateRouteToolResponseSequence",
+        "tests/e2e/assistant/intent_trace_contract_e2e_test.go::TestIntentTraceContractE2E_LiveCompiledTurnExposesV1Contract"
+      ],
+      "evidenceRefs": [
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core",
+        "report.md#code-diff-evidence"
+      ]
     },
     {
-      "id": "SCN-071-A02",
+      "scenarioId": "SCN-071-A02",
       "title": "Sampled-out turns still emit a minimal envelope",
       "scopeId": "SCOPE-071-02",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["unit", "integration"],
+      "linkedTests": [
+        "internal/assistant/intenttrace/sampling_test.go::TestRatioSampler_Validation",
+        "internal/assistant/intenttrace/recorder_test.go::TestStoreRecorder_SampledOutEnvelope",
+        "tests/integration/assistant/intent_trace_test.go::TestIntentTraceSampledOutPreservesTotalTurnAccounting"
+      ],
+      "evidenceRefs": [
+        "report.md#unit--go-test-internalassistantintenttrace",
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A03",
+      "scenarioId": "SCN-071-A03",
       "title": "Sensitive slot values are redacted per source policy",
       "scopeId": "SCOPE-071-02",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["unit", "e2e-api"],
+      "linkedTests": [
+        "internal/assistant/intenttrace/redaction_test.go::TestDefaultRedactor_PersistRawTextFalseHidesRawText",
+        "internal/assistant/intenttrace/redaction_test.go::TestDefaultRedactor_PersistRawTextTrueKeepsDispositionMarker",
+        "tests/integration/assistant/intent_trace_test.go::TestIntentTraceRedactionLeavesNoRawSlotValueInPayload",
+        "tests/e2e/assistant/intent_trace_privacy_e2e_test.go::TestIntentTracePrivacyE2E_StoredTraceCarriesRedactionSummaryWithoutRawSlotValues"
+      ],
+      "evidenceRefs": [
+        "report.md#unit--go-test-internalassistantintenttrace",
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A04",
+      "scenarioId": "SCN-071-A04",
       "title": "Replay reproduces the routing decision",
       "scopeId": "SCOPE-071-03",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        "internal/assistant/intenttrace/replay_test.go::TestStoreReplay_HappyPath_PayloadDryRunner",
+        "internal/assistant/intenttrace/replay_test.go::TestStoreReplay_DryRunnerSideEffectIsBlocked",
+        "tests/integration/assistant/intent_replay_store_test.go::TestIntentReplayLoadsOneStoredRedactedTraceByTraceID",
+        "tests/e2e/assistant/intent_replay_test.go::TestIntentReplayE2E_ReproducesRouteAndToolCallsWithoutSideEffects"
+      ],
+      "evidenceRefs": [
+        "report.md#unit--go-test-internalassistantintenttrace",
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A05",
+      "scenarioId": "SCN-071-A05",
       "title": "SST keys are required and fail loud",
       "scopeId": "SCOPE-071-01",
       "source": "spec.md",
       "liveSystemExpectation": false,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        "internal/config/assistant_intent_trace_test.go::TestIntentTraceConfigRequiresEverySSTKey"
+      ],
+      "evidenceRefs": [
+        "report.md#unit--go-test-internalconfig-scn-071-a05"
+      ]
     },
     {
-      "id": "SCN-071-A06",
+      "scenarioId": "SCN-071-A06",
       "title": "Dashboard surfaces top action_class distribution",
       "scopeId": "SCOPE-071-04",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration", "e2e-ui"],
+      "linkedTests": [
+        "tests/integration/monitoring/assistant_intents_dashboard_test.go::TestAssistantIntentsDashboardHasRequiredPanels",
+        "tests/integration/monitoring/assistant_intents_dashboard_test.go::TestAssistantIntentsDashboardQueriesCanonicalMetrics",
+        "web/pwa/tests/assistant_intents_dashboard.spec.ts::operator dashboard shows action distribution and trace samples"
+      ],
+      "evidenceRefs": [
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A07",
+      "scenarioId": "SCN-071-A07",
       "title": "Refusal counters join to IntentTrace by cause label",
       "scopeId": "SCOPE-071-04",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        "tests/integration/assistant/refusal_trace_join_test.go::TestRefusalCauseVocabularyMatchesIntentTraceColumn",
+        "tests/integration/assistant/refusal_trace_join_test.go::TestRefusalCounterAndIntentTraceJoinByCauseLabel",
+        "tests/e2e/assistant/intent_refusal_join_e2e_test.go::TestIntentRefusalJoinE2E_LiveCoreExposesJoinKeyOnBothMetrics"
+      ],
+      "evidenceRefs": [
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A08",
+      "scenarioId": "SCN-071-A08",
       "title": "Spec 067 bypass guard reads IntentTrace fields",
       "scopeId": "SCOPE-071-03",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration", "e2e-api"],
+      "linkedTests": [
+        "tests/integration/policy/intent_bypass_guard_test.go::TestIntentBypassGuardReportsRouterRouteWithoutCompiledIntent",
+        "tests/e2e/assistant/intent_bypass_guard_e2e_test.go::TestIntentBypassGuardE2E_SyntheticRawRouteBypassIsRejected"
+      ],
+      "evidenceRefs": [
+        "report.md#scope-3--scn-071-a08--integration-live-stack-pass"
+      ]
     },
     {
-      "id": "SCN-071-A09",
+      "scenarioId": "SCN-071-A09",
       "title": "Retention TTL is enforced from SST",
       "scopeId": "SCOPE-071-02",
       "source": "spec.md",
       "liveSystemExpectation": true,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["integration"],
+      "linkedTests": [
+        "tests/integration/assistant/intent_trace_retention_test.go::TestIntentTraceRetentionSweepRemovesExpiredAndKeepsFresh"
+      ],
+      "evidenceRefs": [
+        "report.md#integration--live-test-stack-against-postgres--nats--ml--core"
+      ]
     },
     {
-      "id": "SCN-071-A10",
+      "scenarioId": "SCN-071-A10",
       "title": "Schema is pinned by a golden contract test",
       "scopeId": "SCOPE-071-01",
       "source": "spec.md",
       "liveSystemExpectation": false,
-      "status": "planned"
+      "status": "planned",
+      "requiredTestType": ["unit"],
+      "linkedTests": [
+        "internal/assistant/intenttrace/golden_contract_test.go::TestSchemaVersionV1IsPinned",
+        "internal/assistant/intenttrace/golden_contract_test.go::TestGoldenV1PayloadRoundTrip",
+        "internal/assistant/intenttrace/golden_contract_test.go::TestGoldenV1PayloadHashPinned",
+        "internal/assistant/intenttrace/golden_contract_test.go::TestClosedVocabulariesPinned"
+      ],
+      "evidenceRefs": [
+        "report.md#unit--go-test-internalassistantintenttrace"
+      ]
     }
   ]
 }

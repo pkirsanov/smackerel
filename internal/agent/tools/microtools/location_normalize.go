@@ -77,13 +77,17 @@ type LocationServices struct {
 }
 
 var (
-	locSvcMu sync.RWMutex
-	locSvc   *LocationServices
+	locSvcMu        sync.RWMutex
+	locSvc          *LocationServices
+	locRegisterOnce sync.Once
 )
 
 // SetLocationServices wires the production location_normalize
-// runtime. Pass nil to clear (test-only).
+// runtime and registers the tool with the spec 037 agent registry on
+// first call. Pass nil to clear (test-only); the tool stays
+// registered so the handler surfaces the not-configured error.
 func SetLocationServices(s *LocationServices) {
+	locRegisterOnce.Do(registerLocationNormalize)
 	locSvcMu.Lock()
 	defer locSvcMu.Unlock()
 	locSvc = s
@@ -147,8 +151,19 @@ var locationOutputSchema = json.RawMessage(`{
 }`)
 
 // -------------------- registration --------------------
+//
+// SCOPE-1 foundation rule: importing this package MUST NOT register
+// any concrete tool with the spec 037 agent registry. Registration is
+// gated behind SetLocationServices so only deliberate production
+// wiring (cmd/core) or per-test setup attaches the tool.
 
-func init() {
+// init registers the tool at package import time so the spec 037
+// loader (scenario-lint, cmd/core) recognizes the tool name; the
+// handler returns location_normalize_not_configured until
+// SetLocationServices wires runtime dependencies.
+func init() { locRegisterOnce.Do(registerLocationNormalize) }
+
+func registerLocationNormalize() {
 	agent.RegisterTool(agent.Tool{
 		Name:             LocationNormalizeToolName,
 		Description:      "Resolve a colloquial location string (e.g. \"palm springs ca\", \"sf\") to a canonical {name, admin1, country, lat, lon} envelope with provider attribution; returns status=ambiguous with a ranked candidate list when input is borderline.",

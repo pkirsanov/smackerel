@@ -152,6 +152,11 @@ type HTTPTransportConfig struct {
 	ConversationTTL           time.Duration
 	TransportHintAllowlist    []string
 	RequiredScope             string
+	// SharedUserID is substituted as the effective user id when the
+	// bearer middleware produced a shared-token session (Session.UserID
+	// is empty). Per-user PASETO sessions use the sub claim verbatim
+	// and ignore this value. Spec 069 SCOPE-2 / F-069-USERID-BINDING.
+	SharedUserID string
 }
 
 // allowedKinds is the closed vocabulary the wire request accepts.

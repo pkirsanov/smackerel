@@ -240,7 +240,6 @@ func TestHandleReplyAnnotation_KnownMessage(t *testing.T) {
 // assistant facade; the spec-066-owned retirement guarantee lives in
 // tests/integration/assistant/legacy_replacement_test.go.
 
-
 func TestDisambiguationStore_SetGetClear(t *testing.T) {
 	ds := newDisambiguationStore(120)
 

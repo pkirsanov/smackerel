@@ -33,6 +33,7 @@ const (
 	envHTTPRequiredScope          = "ASSISTANT_TRANSPORTS_HTTP_REQUIRED_SCOPE"
 	envHTTPCORSAllowedOrigins     = "ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS"
 	envHTTPTransportHintAllowlist = "ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST"
+	envHTTPSharedUserID           = "ASSISTANT_TRANSPORTS_HTTP_SHARED_USER_ID"
 )
 
 func loadAssistantHTTPTransportConfig(cfg *Config, errs *[]string) {
@@ -93,6 +94,7 @@ func loadAssistantHTTPTransportConfig(cfg *Config, errs *[]string) {
 	mustInt(envHTTPConversationTTLSeconds, &ttlSeconds, 1)
 	cfg.Assistant.HTTP.HTTPConversationTTL = time.Duration(ttlSeconds) * time.Second
 	mustString(envHTTPRequiredScope, &cfg.Assistant.HTTP.HTTPRequiredScope)
+	mustString(envHTTPSharedUserID, &cfg.Assistant.HTTP.HTTPSharedUserID)
 	if v, ok := mustPresent(envHTTPCORSAllowedOrigins); ok {
 		cfg.Assistant.HTTP.HTTPCORSAllowedOrigins = splitNonEmptyCSV(v)
 	}

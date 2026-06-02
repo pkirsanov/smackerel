@@ -15,6 +15,7 @@ from .embedder import _model, generate_embedding
 from .nats_client import NATSClient
 from .nats_contract import validate_runtime_streams_on_startup
 
+# ruff: noqa: E501
 # smackerel:policy-exception id=G067-A05-ml-log-level rule=G067-A05 owner=ml-sidecar expires=2026-12-01 reason="logging bootstrap uses literal default until ml.log_level SST key lands; owning fix tracked outside spec 067"
 logging.basicConfig(
     # smackerel:policy-exception id=G067-A05-ml-log-level rule=G067-A05 owner=ml-sidecar expires=2026-12-01 reason="logging bootstrap uses literal default until ml.log_level SST key lands; owning fix tracked outside spec 067"

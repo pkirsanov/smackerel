@@ -1,7 +1,7 @@
 version: "digest-assembly-v1"
 principleAlignment:
-  - "Principle 6"
-  - "Principle 7"
+- "Principle 3"
+- "Principle 5"
 type: "digest-assembly"
 description: "Assemble daily/weekly digest from pre-synthesized knowledge layer content"
 
@@ -23,17 +23,17 @@ system_prompt: |
 
 extraction_schema:
   type: object
-  required: [sections, word_count]
+  required: [ sections, word_count ]
   properties:
     sections:
       type: array
       items:
         type: object
-        required: [type, text]
+        required: [ type, text ]
         properties:
           type:
             type: string
-            enum: [cross_source_connection, contradiction, concept_growth, entity_update, lint_summary]
+            enum: [ cross_source_connection, contradiction, concept_growth, entity_update, lint_summary ]
           text:
             type: string
             maxLength: 200
@@ -47,7 +47,7 @@ extraction_schema:
               type: string
           priority:
             type: string
-            enum: [high, medium, low]
+            enum: [ high, medium, low ]
     word_count:
       type: integer
       minimum: 0

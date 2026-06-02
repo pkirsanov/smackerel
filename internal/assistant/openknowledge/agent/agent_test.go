@@ -705,8 +705,10 @@ func TestAgent_EmptyCitationsSalvage_DoesNotFireWithoutTraceSources(t *testing.T
 // TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets
 // regresses the production failure pattern seen on home-lab 2026-06-02
 // where /ask returned bodies like:
-//   "I am unable to provide the humidity for Palm Springs, CA,
-//    because no search tools were executed to retrieve this information."
+//
+//	"I am unable to provide the humidity for Palm Springs, CA,
+//	 because no search tools were executed to retrieve this information."
+//
 // EVEN THOUGH 3 web_search calls had returned real Palm Springs weather
 // snippets (AccuWeather: 13% humidity / 100°F RealFeel, etc).
 //
@@ -759,8 +761,8 @@ func TestAgent_BodyQualitySalvage_ReplacesUngroundedExcuseWithSnippets(t *testin
 	// bug we are regressing.
 	if strings.Contains(got.FinalText, "unable to provide") ||
 		strings.Contains(got.FinalText, "no search tools were executed") {
-		t.Fatalf("REGRESSION: salvaged body still contains the excuse phrase. " +
-			"User sees the model's lie even though tool snippet was available. " +
+		t.Fatalf("REGRESSION: salvaged body still contains the excuse phrase. "+
+			"User sees the model's lie even though tool snippet was available. "+
 			"Body=%s", got.FinalText)
 	}
 	// Body MUST contain the real snippet text — proves synthesis,

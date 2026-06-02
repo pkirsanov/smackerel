@@ -43,13 +43,16 @@ type UnitConvertServices struct {
 }
 
 var (
-	unitSvcMu sync.RWMutex
-	unitSvc   *UnitConvertServices
+	unitSvcMu        sync.RWMutex
+	unitSvc          *UnitConvertServices
+	unitRegisterOnce sync.Once
 )
 
-// SetUnitConvertServices wires the production unit_convert runtime.
-// Pass nil to clear (test-only).
+// SetUnitConvertServices wires the production unit_convert runtime
+// and registers the tool with the spec 037 agent registry on first
+// call. Pass nil to clear (test-only).
 func SetUnitConvertServices(s *UnitConvertServices) {
+	unitRegisterOnce.Do(registerUnitConvert)
 	unitSvcMu.Lock()
 	defer unitSvcMu.Unlock()
 	unitSvc = s
@@ -194,8 +197,12 @@ var unitConvertOutputSchema = json.RawMessage(`{
 }`)
 
 // -------------------- registration --------------------
+//
+// SCOPE-1 foundation rule: registration is gated behind
+// SetUnitConvertServices so the package init alone does not pollute
+// the spec 037 registry.
 
-func init() {
+func registerUnitConvert() {
 	agent.RegisterTool(agent.Tool{
 		Name:             UnitConvertToolName,
 		Description:      "Convert a numeric value between known volume/mass units (cup, tbsp, tsp, floz, ml, l, g, kg, mg, oz, lb). Volume↔mass conversions require a `substance` argument with a known density (e.g. flour, sugar, water); unknown substances return status=ambiguous.",

@@ -456,12 +456,7 @@ func (a *Adapter) Translate(ctx context.Context, payload contracts.TransportPayl
 	default:
 		return contracts.AssistantMessage{}, fmt.Errorf("%w: type=%q", ErrUnsupportedMessageType, msg.Type)
 	}
-	// Resolve the canonical user_id via the identity registry.
-	subjectHash, err := transportidentity.HashPhoneE164(a.identityHashKey, msg.From)
-	if err != nil {
-		return contracts.AssistantMessage{}, fmt.Errorf("whatsapp_adapter: hash phone: %w", err)
-	}
-	userID, err := a.identity.Resolve(ctx, TransportName, subjectHash)
+	userID, err := a.resolveUserID(ctx, msg.From)
 	if err != nil {
 		return contracts.AssistantMessage{}, err
 	}
@@ -476,15 +471,21 @@ func (a *Adapter) Identity(ctx context.Context, payload contracts.TransportPaylo
 	if err != nil {
 		return contracts.TransportIdentity{}, err
 	}
-	subjectHash, err := transportidentity.HashPhoneE164(a.identityHashKey, msg.From)
-	if err != nil {
-		return contracts.TransportIdentity{}, fmt.Errorf("whatsapp_adapter: hash phone: %w", err)
-	}
-	userID, err := a.identity.Resolve(ctx, TransportName, subjectHash)
+	userID, err := a.resolveUserID(ctx, msg.From)
 	if err != nil {
 		return contracts.TransportIdentity{}, err
 	}
 	return contracts.TransportIdentity{UserID: userID, Transport: TransportName}, nil
+}
+
+// resolveUserID hashes the inbound phone and resolves it to the
+// canonical user_id via the identity registry.
+func (a *Adapter) resolveUserID(ctx context.Context, fromPhone string) (string, error) {
+	subjectHash, err := transportidentity.HashPhoneE164(a.identityHashKey, fromPhone)
+	if err != nil {
+		return "", fmt.Errorf("whatsapp_adapter: hash phone: %w", err)
+	}
+	return a.identity.Resolve(ctx, TransportName, subjectHash)
 }
 
 // Render implements contracts.TransportAdapter.Render. WhatsApp

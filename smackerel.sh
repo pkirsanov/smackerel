@@ -1472,6 +1472,7 @@ case "$COMMAND" in
             -e "NATS_URL=nats://${auth_token}@nats:${nats_container_port}" \
             -e "SMACKEREL_AUTH_TOKEN=${auth_token}" \
             -e "QF_DECISIONS_BASE_URL=${qf_decisions_base_url}" \
+            -e "SMACKEREL_TEST_ENV_FILE=/workspace/${env_file#$SCRIPT_DIR/}" \
             golang:1.25.10-bookworm bash /workspace/scripts/runtime/go-e2e.sh "${go_e2e_args[@]}"
           e2e_go_status=$?
           set -e

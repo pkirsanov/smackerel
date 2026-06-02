@@ -811,6 +811,7 @@ assistant:
       conversation_ttl_seconds: 86400 # REQUIRED: integer >= 1
       transport_hint_allowlist: [ "web", "mobile", "bridge" ] # REQUIRED: non-empty closed-vocabulary list
       required_scope: "assistant:turn" # REQUIRED: spec 060 scope-claim label (<surface>:<capabilities> grammar)
+      shared_user_id: "shared" # REQUIRED: synthetic user id substituted by the HTTP adapter when the bearer middleware produced a shared-token session (empty Session.UserID); per-user PASETO sessions use the sub claim and ignore this value (spec 069 SCOPE-2 / F-069-USERID-BINDING)
   # Spec 061 SCOPE-10 — acceptance-gate thresholds for the offline
   # evaluation harness (tests/eval/assistant). The harness reads these
   # via ASSISTANT_EVAL_* environment variables (resolved by

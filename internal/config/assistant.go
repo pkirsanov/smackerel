@@ -208,6 +208,7 @@ type AssistantHTTPTransportConfig struct {
 	HTTPRequiredScope             string
 	HTTPCORSAllowedOrigins        []string
 	HTTPTransportHintAllowlist    []string
+	HTTPSharedUserID              string
 }
 
 // AssistantObservabilityConfig holds the spec 061 SCOPE-09a OTel SDK

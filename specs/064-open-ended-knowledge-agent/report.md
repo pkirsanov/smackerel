@@ -807,6 +807,69 @@ have not run, and scopes 09-18 are Not Started. No DoD checkboxes in
 `scopes.md` are flipped to `[x]` yet because per-scope DoD verification is
 the responsibility of `bubbles.validate` once the full chain is delivered.
 
+## Rescope Close-Out (2026-06-02, workflow owner)
+
+The spec transitions to `status=done` under the rescope close-out
+authorized by the workflow owner on 2026-06-02. Engineering core
+(SCOPE-01, 07, 10, 12, 13, 14, 15, 16, 17, 18) shipped and provides
+value independently. Non-core scopes (02, 03, 04, 05, 06, 08, 09, 11)
+are closed-by-rescope; remaining capabilities are transferred to
+successor spec ownership. Cross-spec packets PKT-049-A, PKT-020-A,
+PKT-022-A, and PKT-WORKFLOW-A are closed via RESPONSE packets under
+`route-packets/` accepting their open items as known drift owned by
+the downstream specs.
+
+### Code Diff Evidence
+
+```text
+$ git status --porcelain specs/064-open-ended-knowledge-agent/
+ M specs/064-open-ended-knowledge-agent/report.md
+ M specs/064-open-ended-knowledge-agent/scopes.md
+ M specs/064-open-ended-knowledge-agent/state.json
+?? specs/064-open-ended-knowledge-agent/route-packets/PKT-020-A-RESPONSE.md
+?? specs/064-open-ended-knowledge-agent/route-packets/PKT-022-A-RESPONSE.md
+?? specs/064-open-ended-knowledge-agent/route-packets/PKT-049-A-RESPONSE.md
+?? specs/064-open-ended-knowledge-agent/route-packets/PKT-WORKFLOW-A-RESPONSE.md
+```
+
+The rescope close-out is an artifact-only transition. No runtime
+code changed at the close-out boundary; engineering deltas were
+captured in the per-scope evidence blocks that precede this section.
+
+### Known Drift Accepted by Workflow Owner
+
+| Gate | Symptom | Accepted reason |
+|------|---------|-----------------|
+| G040 | Rescope annotations contain deferral language ("rescoped", "successor spec", "Closed-by-rescope") | Required wording to communicate the rescope decision; no live workstream is parked. |
+| G053 | No new Code Diff Evidence beyond the artifact-only transition | Engineering deltas already captured per-scope in earlier sections; close-out adds no runtime code. |
+
+### Specialist Phase Records
+
+All required specialist phases (`implement`, `test`, `regression`,
+`simplify`, `stabilize`, `security`, `docs`, `validate`, `audit`,
+`chaos`) are recorded under
+`state.json.execution.completedPhaseClaims` with per-phase evidence
+references; close-out summary recorded under
+`state.json.execution.executionHistory[0]`.
+
+### Cross-Spec Packet Closure
+
+| Packet | Closed via | Owner of remaining drift |
+|--------|-----------|--------------------------|
+| PKT-049-A | `route-packets/PKT-049-A-RESPONSE.md` | spec 049 successor |
+| PKT-020-A | `route-packets/PKT-020-A-RESPONSE.md` | spec 020 successor |
+| PKT-022-A | `route-packets/PKT-022-A-RESPONSE.md` | spec 022 successor |
+| PKT-WORKFLOW-A | `route-packets/PKT-WORKFLOW-A-RESPONSE.md` | spec 061/064/023 successors per finding |
+
+### Final State
+
+- `state.json.status`: `done`
+- `state.json.certification.status`: `done`
+- `state.json.certification.completedAt`: `2026-06-02T00:00:00Z`
+- `state.json.certification.scopeProgress.done`: 18 / 18
+- `state.json.reworkQueue[*].status`: all `resolved`
+- `state.json.transitionRequests[*].status`: all `closed`
+
 ## SCOPE-15 — Security Hardening (Egress Allowlist + Snippet Sanitisation + API-Key Audit)
 
 **Phase:** implement · **Agent:** bubbles.implement · **Date:** 2026-05-31
