@@ -8,6 +8,10 @@ Links: [spec.md](spec.md) | [design.md](design.md) | [scopes.md](scopes.md) | [u
 
 Spec 026 introduces domain-specific structured extraction as an additional LLM pass after universal processing. Recipe and product are the initial domain schemas. All 9 scopes completed.
 
+### Partial Supersession by Spec 066 (2026-06-02)
+
+Scope 8 sub-scenarios **SCN-026-8-1, SCN-026-8-2, SCN-026-8-3, SCN-026-8-4** (regex-based domain intent parsing via `parseDomainIntent`) are **superseded by spec 066 — Natural-Language Intent Routing**. Spec 066 retired the `handleFind`/`handleRate` dispatch surface and deleted `internal/api/domain_intent.go` and `internal/api/domain_intent_test.go` on 2026-06-02; recipe-ingredient, multi-ingredient, product-price, and non-domain-query intent flows now travel through the assistant retrieval QA path documented in `specs/066-natural-language-intent-routing/`. Manifest entries for those four scenarios are marked `status: superseded` with `supersededBy: 066-natural-language-intent-routing`. The remaining Scope 8 scenarios (SCN-026-8-5..8-8) and their JSONB-filter / search-fallback / SearchResult-domain_data coverage remain active and unaffected.
+
 ---
 
 ## Scope Evidence
