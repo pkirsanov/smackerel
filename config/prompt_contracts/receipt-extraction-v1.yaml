@@ -1,14 +1,14 @@
 version: "receipt-extraction-v1"
 principleAlignment:
-  - "Principle 1"
+- "Principle 4"
 type: "domain-extraction"
 description: "Extract structured expense/receipt data from receipt text, invoice text, or OCR output"
 
 content_types:
-  - "email"
-  - "bill"
-  - "note"
-  - "media"
+- "email"
+- "bill"
+- "note"
+- "media"
 
 min_content_length: 20
 
@@ -40,8 +40,8 @@ system_prompt: |
 extraction_schema:
   type: object
   required:
-    - domain
-    - vendor_raw
+  - domain
+  - vendor_raw
   properties:
     domain:
       type: string
@@ -87,7 +87,7 @@ extraction_schema:
       items:
         type: object
         required:
-          - description
+        - description
         properties:
           description:
             type: string

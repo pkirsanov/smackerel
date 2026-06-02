@@ -1,6 +1,6 @@
 version: "drive-classification-v1"
 principleAlignment:
-  - "Principle 1"
+- "Principle 4"
 type: "drive-classification"
 description: "Classify extracted drive files into provider-neutral Smackerel domains"
 

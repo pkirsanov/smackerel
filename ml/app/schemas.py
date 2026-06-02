@@ -41,17 +41,12 @@ class Tool(BaseModel):
 
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    parameters: dict[str, Any] = Field(
-        description="JSONSchema object describing the tool's params."
-    )
+    parameters: dict[str, Any] = Field(description="JSONSchema object describing the tool's params.")
 
     @model_validator(mode="after")
     def _validate_parameters(self) -> Tool:
         if not isinstance(self.parameters, dict) or self.parameters.get("type") != "object":
-            raise ValueError(
-                f"tool {self.name!r}: parameters must be a JSONSchema object "
-                "(type='object')"
-            )
+            raise ValueError(f"tool {self.name!r}: parameters must be a JSONSchema object (type='object')")
         return self
 
 
@@ -108,14 +103,10 @@ class ChatMessage(BaseModel):
                 if not self.content:
                     raise ValueError(f"role={self.role.value!r} requires non-empty content")
                 if self.tool_calls or self.tool_call_id:
-                    raise ValueError(
-                        f"role={self.role.value!r} must not carry tool_calls or tool_call_id"
-                    )
+                    raise ValueError(f"role={self.role.value!r} must not carry tool_calls or tool_call_id")
             case Role.ASSISTANT:
                 if not self.content and not self.tool_calls:
-                    raise ValueError(
-                        "role='assistant' requires non-empty content or non-empty tool_calls"
-                    )
+                    raise ValueError("role='assistant' requires non-empty content or non-empty tool_calls")
                 if self.tool_call_id:
                     raise ValueError("role='assistant' must not carry tool_call_id")
             case Role.TOOL_CALL:

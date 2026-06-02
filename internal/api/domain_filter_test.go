@@ -159,4 +159,3 @@ func TestSearchResult_DomainDataSerialization(t *testing.T) {
 // along with its dedicated tests. Explicit-filter serialization remains
 // covered by the JSON round-trip tests above; domain/entity resolution now
 // flows through spec 068 compiled intents and spec 065 entity_resolve.
-

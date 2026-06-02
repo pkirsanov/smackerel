@@ -289,6 +289,7 @@ func wireAssistantHTTPAdapter(cfg *config.Config, svc *coreServices, facade cont
 		ConversationTTL:           cfg.Assistant.HTTP.HTTPConversationTTL,
 		TransportHintAllowlist:    cfg.Assistant.HTTP.HTTPTransportHintAllowlist,
 		RequiredScope:             cfg.Assistant.HTTP.HTTPRequiredScope,
+		SharedUserID:              cfg.Assistant.HTTP.HTTPSharedUserID,
 	}
 	adapter, err := httpadapter.NewHTTPAdapter(httpadapter.Options{
 		Facade:  facade,

@@ -46,13 +46,16 @@ type CalculatorServices struct {
 }
 
 var (
-	calcSvcMu sync.RWMutex
-	calcSvc   *CalculatorServices
+	calcSvcMu        sync.RWMutex
+	calcSvc          *CalculatorServices
+	calcRegisterOnce sync.Once
 )
 
-// SetCalculatorServices wires the production calculator runtime.
+// SetCalculatorServices wires the production calculator runtime and
+// registers the tool with the spec 037 agent registry on first call.
 // Pass nil to clear (test-only).
 func SetCalculatorServices(s *CalculatorServices) {
+	calcRegisterOnce.Do(registerCalculator)
 	calcSvcMu.Lock()
 	defer calcSvcMu.Unlock()
 	calcSvc = s
@@ -100,8 +103,12 @@ var calculatorOutputSchema = json.RawMessage(`{
 }`)
 
 // -------------------- registration --------------------
+//
+// SCOPE-1 foundation rule: registration is gated behind
+// SetCalculatorServices so the package init alone does not pollute
+// the spec 037 registry.
 
-func init() {
+func registerCalculator() {
 	agent.RegisterTool(agent.Tool{
 		Name:             CalculatorToolName,
 		Description:      "Evaluate a pure arithmetic expression over numeric literals, parentheses, unary signs, and the operators + - * / % **. Identifiers, function calls, and non-finite results are rejected.",
