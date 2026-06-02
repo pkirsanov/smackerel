@@ -193,3 +193,67 @@ This is real net-new wiring code that should be scoped by `bubbles.plan` (with `
 - `scopes.md` DoD checkboxes — the three unchecked items remain `[ ]`. The previous run's Uncertainty Declarations are now superseded by the deeper finding documented here; updating the declaration text is a `bubbles.plan` task because it reframes the work item, not a `bubbles.implement` evidence append.
 - `state.json` — no terminal-mode transition; spec remains `in_progress`.
 
+## Round 2026-06-01 SCOPE-1c-bis + SCOPE-1d (partial)
+
+**Phase:** implement. **Claim Source:** executed.
+
+### SCOPE-1c-bis (Done)
+
+- Added `AssistantHTTPTransportConfig` to `internal/config/assistant.go` with the eight fields `HTTPEnabled`, `HTTPSchemaVersion`, `HTTPBodySizeMaxBytes`, `HTTPRateLimitPerUserPerMinute`, `HTTPConversationTTL`, `HTTPRequiredScope`, `HTTPCORSAllowedOrigins`, `HTTPTransportHintAllowlist`.
+- New file `internal/config/assistant_http_transport.go` implements `loadAssistantHTTPTransportConfig` (fail-loud per key, F061-SST-MISSING aggregation) and `validateAssistantHTTPTransportConfig` (non-empty allowlist gate when enabled). Scope-name grammar checked via `auth.ValidateScopeName` per spec 060.
+- `scripts/commands/config.sh` emits the eight env keys; `config/smackerel.yaml` already declared the block (now with `required_scope: "assistant:turn"` to satisfy the spec 060 grammar).
+- Adapter test fixtures updated to `assistant:turn` (`internal/assistant/httpadapter/adapter_test.go`, `transport_hint_test.go`).
+- Added the HTTP keys to `minimalAssistantEnv()` (test helper) and `setRequiredEnv()` so the rest of the config + validate suites continue to pass.
+- BS-009 sweep updated: the two list-shaped keys (`*_CORS_ALLOWED_ORIGINS`, `*_TRANSPORT_HINT_ALLOWLIST`) are skipped from the unconditional missing-key sweep because the loader allows empty values (cross-field rule enforces non-empty allowlist only when enabled=true).
+
+Evidence:
+
+```text
+$ go test -count=1 -timeout 180s ./internal/config/
+ok  github.com/smackerel/smackerel/internal/config  20.131s
+
+$ go test -count=1 -timeout 60s -run '^TestAssistantHTTPTransportConfigRequiresEverySSTKey$|^TestAssistantHTTPTransportConfig_DisabledSkipsCrossFieldChecks$' ./internal/config/
+ok  github.com/smackerel/smackerel/internal/config  0.030s
+# 10 sub-tests PASS: enabled_missing, schema_version_missing, body_size_max_bytes_missing,
+# rate_limit_per_user_per_minute_missing, conversation_ttl_seconds_missing,
+# required_scope_missing, required_scope_empty_when_enabled, schema_version_wrong_value,
+# transport_hint_allowlist_empty_when_enabled, DisabledSkipsCrossFieldChecks
+
+$ ./smackerel.sh config generate && grep -E '^ASSISTANT_TRANSPORTS_HTTP_' config/generated/dev.env
+ASSISTANT_TRANSPORTS_HTTP_ENABLED=true
+ASSISTANT_TRANSPORTS_HTTP_SCHEMA_VERSION=v1
+ASSISTANT_TRANSPORTS_HTTP_BODY_SIZE_MAX_BYTES=65536
+ASSISTANT_TRANSPORTS_HTTP_RATE_LIMIT_PER_USER_PER_MINUTE=60
+ASSISTANT_TRANSPORTS_HTTP_CONVERSATION_TTL_SECONDS=86400
+ASSISTANT_TRANSPORTS_HTTP_REQUIRED_SCOPE=assistant:turn
+ASSISTANT_TRANSPORTS_HTTP_CORS_ALLOWED_ORIGINS=
+ASSISTANT_TRANSPORTS_HTTP_TRANSPORT_HINT_ALLOWLIST=web,mobile,bridge
+```
+
+### SCOPE-1d (in progress — code complete, live tests pending)
+
+- `cmd/core/wiring_assistant_facade.go::wireAssistantFacade` now invokes (a) `wireAssistantTelegramAdapter` (extracted helper preserving the existing Telegram bind path verbatim) and (b) `wireAssistantHTTPAdapter` unconditionally.
+- `wireAssistantHTTPAdapter` is guarded by `cfg.Assistant.HTTP.HTTPEnabled`. When enabled it: constructs `httpadapter.HTTPTransportConfig` from the SST struct, builds the capture closure (`newAssistantHTTPCaptureFn` → `svc.proc.Process(ctx, &pipeline.ProcessRequest{Text, SourceID: SourceCapture})`), calls `httpadapter.NewHTTPAdapter(Options{Facade, Capture, Clock: time.Now, Config})`, then calls `svc.assistantHTTPHandler.SetAdapter(adapter)` and `svc.assistantHTTPHandler.SetMiddleware(identity)` exactly once each.
+- Identity middleware (not the fail-loud HTTP-500 stub suggested in the implementation plan) is required because the DoD's HTTP-200 integration target cannot be reached with a rejecting placeholder; SCOPE-2 will replace it with the real auth/scope/body/rate/CORS chain. Production deploys that turn HTTP transport on before SCOPE-2 lands MUST keep the existing bearer-auth group mount on `/api/assistant/turn`.
+- Containment: only `cmd/core/wiring_assistant_facade.go` modified in the wiring surface. `httpadapter` exported API untouched. Adapter test fixtures updated to spec-060-compliant `assistant:turn` (no exported API change).
+
+Evidence:
+
+```text
+$ go build ./...
+# RC=0
+
+$ go test -count=1 -timeout 60s ./internal/assistant/httpadapter/
+ok  github.com/smackerel/smackerel/internal/assistant/httpadapter  0.033s
+```
+
+Pending DoD items (left `[ ]` with Uncertainty Declarations in `scopes.md#scope-1d`):
+- Live-wiring integration test `TestAssistantHTTPAdapterIsBoundInProductionWiring_ReturnsHTTP200NotHTTP503` — not authored or executed in this turn.
+- Canary `TestAssistantHTTPAdapterBindLeavesTelegramAdapterAndFacadeUnchanged` — not executed in this turn.
+- Regression E2E `TestAssistantHTTPE2E_TextTurnReturnsSchemaValidResponse` against the bound adapter — not executed in this turn.
+- Finding F-069-ADAPTER-NOT-BOUND / F074-04B closure — pending live-stack proof.
+
+Next turn: author `tests/integration/assistant/http_adapter_bind_test.go` + run integration + e2e suites; flip remaining `[ ]` items on green; route closure of F-069-ADAPTER-NOT-BOUND and the spec 074 cross-reference.
+
+
+

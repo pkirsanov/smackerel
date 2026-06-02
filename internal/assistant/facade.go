@@ -297,6 +297,23 @@ func captureFallbackEligible(conv assistantctx.Conversation) bool {
 	return conv.PendingConfirm == nil && conv.PendingDisambig == nil
 }
 
+// captureFallbackEligibleWithClarify extends captureFallbackEligible
+// (SCOPE-074-04A) with the spec 074 SCOPE-074-04C "in-flight
+// clarify-state" exclusion. The facade clears conv.PendingClarify
+// at the top of Handle so subsequent steps can populate a new one,
+// so the in-flight signal is carried by the explicit
+// `hadPendingClarify` argument captured before clearing. Calling
+// the wrapper instead of the bare captureFallbackEligible at
+// fallback-eligibility decision points ensures TP-074-13's
+// adversarial sub-case (user replies while clarify is in flight
+// → no facade-fallback capture) holds.
+func captureFallbackEligibleWithClarify(conv assistantctx.Conversation, hadPendingClarify bool) bool {
+	if hadPendingClarify {
+		return false
+	}
+	return captureFallbackEligible(conv)
+}
+
 // runCaptureFallback invokes Policy.Decide + Policy.CaptureForUser
 // for the given cause. Returns the capture result and any policy
 // error. Caller is responsible for the eligibility check
@@ -467,6 +484,33 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 	}
 
 	emittedAt := f.cfg.Now()
+
+	// --- Spec 074 SCOPE-074-04C — clarify-abandon reply path ---
+	//
+	// Any inbound turn after a prior clarify-emit clears the
+	// PendingClarify marker BEFORE the rest of Handle runs. This is
+	// the adversarial sub-case in TP-074-13: a user reply within
+	// the timeout MUST stop the sweeper from capturing the original
+	// prompt (the user is actively engaged; capture would be
+	// duplicate noise). If this turn itself ends up emitting a
+	// fresh clarify question, the clarify-gate branch below
+	// re-populates PendingClarify with the new emit time and the
+	// (still-original) prompt; the appendTurnAndPersist call writes
+	// the resolved state in either case. /reset below short-circuits
+	// to DeleteByKey which removes the whole row including the
+	// (already-cleared) PendingClarify, so reset turns are a no-op
+	// for this hook.
+	//
+	// The in-flight signal is captured BEFORE clearing so the
+	// SCOPE-074-04A eligibility gate (captureFallbackEligible) can
+	// still see "a clarify was in-flight when this turn arrived" and
+	// block facade-fallback capture for the reply turn itself. The
+	// sweeper handles the timeout side; the eligibility gate handles
+	// the active-reply side.
+	hadPendingClarify := conv.PendingClarify != nil
+	if hadPendingClarify {
+		conv.PendingClarify = nil
+	}
 
 	// --- Step 1: /reset short-circuit ---
 	if msg.Kind == contracts.KindReset {
@@ -681,6 +725,20 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			Body:       body,
 			EmittedAt:  emittedAt,
 		}
+		// Spec 074 SCOPE-074-04C — persist the pending clarify so
+		// the ClarifyAbandonSweeper can capture the ORIGINAL prompt
+		// (msg.Text, not the future clarify-answer text) if the
+		// user fails to respond within
+		// capture_as_fallback.clarify_abandon_timeout. The next
+		// inbound user turn clears this at the top of Handle.
+		conv.PendingClarify = &assistantctx.PendingClarify{
+			SchemaVersion:   assistantctx.PendingClarifySchemaV1,
+			OriginalPrompt:  msg.Text,
+			EmitTime:        emittedAt,
+			ClarifyIntentID: correlationID,
+			OriginalTurnID:  msg.TransportMessageID,
+			UserID:          msg.UserID,
+		}
 		conv = f.appendTurnAndPersist(ctx, conv, msg, resp, emittedAt)
 		f.writeAudit(ctx, msg, BandLow, nil, nil, resp)
 		return resp, nil
@@ -770,7 +828,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// (no PendingConfirm / PendingDisambig), persist exactly one
 		// fallback Idea with cause=unrouted. Capture failure is
 		// surfaced as StatusUnavailable rather than silently dropped.
-		if f.captureFallbackPolicy != nil && captureFallbackEligible(conv) {
+		if f.captureFallbackPolicy != nil && captureFallbackEligibleWithClarify(conv, hadPendingClarify) {
 			if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseUnrouted, emittedAt); capErr != nil {
 				resp = contracts.AssistantResponse{
 					Routing:    &decision,
@@ -826,7 +884,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 			// Spec 074 SCOPE-04A — same facade-owned capture hook as
 			// the BandLow path (this branch is the defensive equivalent
 			// of an unrouted turn).
-			if f.captureFallbackPolicy != nil && captureFallbackEligible(conv) {
+			if f.captureFallbackPolicy != nil && captureFallbackEligibleWithClarify(conv, hadPendingClarify) {
 				if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseUnrouted, emittedAt); capErr != nil {
 					resp = contracts.AssistantResponse{
 						Routing:    &decision,
@@ -1002,7 +1060,7 @@ func (f *Facade) Handle(ctx context.Context, msg contracts.AssistantMessage) (re
 		// Idea with cause=open_knowledge_no_ground. The eligibility
 		// gate (PendingConfirm/PendingDisambig) still applies; capture
 		// failure is surfaced rather than silently dropped.
-		if f.captureFallbackPolicy != nil && scenarioID == "open_knowledge" && openKnowledgeNoGround(result) && captureFallbackEligible(conv) {
+		if f.captureFallbackPolicy != nil && scenarioID == "open_knowledge" && openKnowledgeNoGround(result) && captureFallbackEligibleWithClarify(conv, hadPendingClarify) {
 			if _, capErr := f.runCaptureFallback(ctx, msg, capturefallback.CauseOpenKnowledgeNoGround, emittedAt); capErr != nil {
 				resp = contracts.AssistantResponse{
 					Routing:    &decision,
