@@ -39,6 +39,7 @@ stateModel:
   - bubbles.audit
   - bubbles.train
   - bubbles.upkeep
+  - bubbles.propagate
   certificationWriter: bubbles.validate
 
 childWorkflowPolicy:
@@ -294,6 +295,16 @@ agents:
     readOnlyAccess:
     - release-trains-config
     - knb-manifest
+  bubbles.propagate:
+    class: execution-owner
+    canAskUserDirectly: false
+    delegatesRequired: true
+    ownsArtifacts: [ propagation-policy, propagation-ledger ]
+    ownsPhases: []
+    readOnlyAccess:
+    - release-trains-config
+    - release-train-state
+    - feature-flag-bundles
   bubbles.recap:
     class: utility
     canAskUserDirectly: false

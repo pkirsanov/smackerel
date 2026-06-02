@@ -1,0 +1,93 @@
+# intent-routes.yaml — NL-first routing table for entry-point agents.
+#
+# Read by bubbles.super, bubbles.workflow, bubbles.goal, bubbles.sprint during
+# dynamic discovery to map natural-language phrases to (agent, mode) targets.
+#
+# Schema version: 1
+# Owned cooperatively by all agents (each agent's intentHints come from its
+# own .agent.md "intentHints" frontmatter). This file is the merged, lint-able
+# routing table.
+#
+# Lint: bubbles/scripts/intent-routes-lint.sh validates:
+#   - every targetAgent exists in agent-capabilities.yaml
+#   - every targetMode exists in workflows.yaml
+#   - no duplicate phrases across entries
+#   - all phrases are lowercase
+
+version: 1
+
+routes:
+
+# ─────────────────────────────────────────────────────────────────────────
+# Propagation (J-Roc — bubbles.propagate)
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "ship to v2 and v3"
+  - "ship to mvp and prod"
+  - "merge forward"
+  - "forward merge"
+  - "propagate forward"
+  - "cross-train forward"
+  targetAgent: bubbles.propagate
+  targetMode: propagate-forward
+  summary: "Cherry-pick latest commits forward across declared train chain"
+
+- phrases:
+  - "backport"
+  - "backport to experimental"
+  - "backport to mvp"
+  - "propagate backward"
+  - "cross-train backward"
+  targetAgent: bubbles.propagate
+  targetMode: propagate-backport
+  summary: "Cherry-pick a fix backward (requires approval)"
+
+- phrases:
+  - "propagation drift"
+  - "what's missing on prod"
+  - "propagate audit"
+  - "train drift report"
+  targetAgent: bubbles.propagate
+  targetMode: propagate-audit
+  summary: "Read-only report of commits missing on downstream trains"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Multi-train rollup (DVS — bubbles.train extended in scope 2)
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "what's in prod and dev"
+  - "what's in prod"
+  - "all trains status"
+  - "release status"
+  - "multi-train status"
+  targetAgent: bubbles.train
+  targetMode: release-train-status-all
+  summary: "Rollup of all trains: phase, slot, last cut, last promote, open flags"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Incident fastlane (Shitty Bill triages, DVS rolls back — scope 3)
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "prod is broken"
+  - "prod is down"
+  - "rollback prod"
+  - "incident"
+  - "production incident"
+  - "we need to rollback"
+  targetAgent: bubbles.stabilize
+  targetMode: incident-fastlane
+  summary: "Diagnose production incident, route rollback authority to bubbles.train"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Framework self-observation (Jim Lahey — bubbles.retro extended in scope 5)
+# ─────────────────────────────────────────────────────────────────────────
+- phrases:
+  - "anything broken in bubbles"
+  - "framework health"
+  - "framework retro"
+  - "self observe"
+  - "framework self observation"
+  - "improve bubbles"
+  targetAgent: bubbles.retro
+  targetMode: framework-health
+  summary: "Analyze framework events + gate failures, emit improvement proposal"

@@ -348,6 +348,44 @@ gates:
     description: >-
       BLOCKING gate. Every train in `config/release-trains.yaml` MUST declare a `pii` field (`none|pseudonymized|encrypted-only`). Defaults declared under `defaults.pii` apply when per-train `pii` is omitted. Backup ledger entries inherit the train's PII classification. Enforced by `bubbles/scripts/release-train-guard.sh`. Owned by `bubbles.train`.
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # CROSS-TRAIN PROPAGATION GATES (G121-G123)
+  # Introduced with bubbles.propagate (J-Roc). Enforced by
+  # bubbles/scripts/propagation-policy-guard.sh.
+  # ─────────────────────────────────────────────────────────────────────────
+  G121:
+    name: propagation_policy_declared_gate
+    description: >-
+      BLOCKING gate. When a repo runs a `propagate-forward` / `propagate-backport` / `propagate-audit` workflow, `propagation-policy.yaml` (root or `config/`) MUST exist, parse, and reference only trains declared in `config/release-trains.yaml`. Enforced by `bubbles/scripts/propagation-policy-guard.sh`. Owned by `bubbles.propagate`.
+  G122:
+    name: propagation_validation_required_gate
+    description: >-
+      BLOCKING gate. Every edge in `defaultFlow[]` MUST declare `receivingTrainValidationMode` (`validate-only|full-delivery|none`). Edges using `none` MUST declare `validationSkipReason`. Forward and backport operations MUST route the receiving train through the declared validation mode before recording the ledger entry. Owned by `bubbles.propagate`.
+  G123:
+    name: propagation_ledger_recorded_gate
+    description: >-
+      BLOCKING gate. Every successful forward/backport operation MUST append one JSONL line to `propagation-ledger.yaml` (or path declared in policy). Ledger is append-only; rewriting past entries is forbidden (G117 audit-trail-immutable applies). Backport entries MUST include `approvalToken` referencing the human approval. Owned by `bubbles.propagate`.
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # INCIDENT FASTLANE GATE (G124)
+  # Introduced with the incident-fastlane workflow mode + severity tagging
+  # in bubbles.stabilize.
+  # ─────────────────────────────────────────────────────────────────────────
+  G124:
+    name: incident_severity_declared_gate
+    description: >-
+      BLOCKING gate for the `incident-fastlane` workflow mode. bubbles.stabilize MUST classify each finding with a severity tag (`incident`/`high`/`medium`/`low`) before the verdict is recorded. At least one `incident` finding REQUIRES emitting a `route_required` packet to `bubbles.train` with `action: rollback` — stabilize MUST NOT perform rollback inline. Owned by `bubbles.stabilize` (classification) + `bubbles.train` (rollback authority).
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FRAMEWORK SELF-OBSERVATION GATE (G125)
+  # Introduced with `bubbles.retro target: framework` and the
+  # `framework-health` workflow mode.
+  # ─────────────────────────────────────────────────────────────────────────
+  G125:
+    name: framework_health_evidence_gate
+    description: >-
+      BLOCKING gate for the `framework-health` workflow mode. `bubbles.retro target: framework` MUST emit an improvement proposal under `improvements/IMP-NNN-<slug>.md` referencing the input data sources analyzed (`.specify/runtime/framework-events.jsonl`, `workflow-runs.json`, `bubbles/capability-ledger.yaml`). The proposal MUST NOT auto-mutate `bubbles/*`, `agents/*`, or `bubbles/workflows.yaml` — proposal-first, human reviewed. Enforced by `bubbles/scripts/retro-framework-health.sh` writing only to `improvements/`. Owned by `bubbles.retro`.
+
 # Outcome contract (applies to all workflow modes that allow `done` as a
 # terminal status — i.e., every mode whose `statusCeiling` is `done`).
 # anchor: outcome-states
@@ -2367,6 +2405,19 @@ modes:
       planningTruthMutation: false
       specReviewDefault: off
 
+  release-train-status-all:
+    description: "Read-only rollup of every train declared in config/release-trains.yaml. Reports id, phase, target_slot, flags_bundle, retention, pii, and open-flag count per train. Invoked via `/bubbles.train status --all-trains` or NL phrases routed by intent-routes.yaml (`what's in prod and dev`, `release status`). Never mutates state."
+    statusCeiling: train_status_reported
+    terminalAliases: [ train_status_reported ]
+    phaseOrder: [ select, audit, finalize ]
+    requiredGates: [ G001, G006, G007, G011, G012, G073, G110 ]
+    constraints:
+      modeClass: release-train
+      auditOnly: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: release-train-status-all is read-only multi-train rollup
+
   # ─────────────────────────────────────────────────────────────────────────
   # UPKEEP MODES (Treena Lahey — bubbles.upkeep)
   # Recurring operational hygiene: backup, restore drill, BCDR drill,
@@ -2477,3 +2528,97 @@ modes:
       auditOnly: true
       planningTruthMutation: false
       specReviewDefault: off
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CROSS-TRAIN PROPAGATION MODES (J-Roc — bubbles.propagate)
+  # Forward-merge fixes between trains, backport under approval guard,
+  # audit drift. Reads propagation-policy.yaml; appends to
+  # propagation-ledger.yaml. Routes cherry-pick execution to bubbles.devops
+  # and receiving-train validation to bubbles.validate/bubbles.test.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  propagate-forward:
+    description: "Cherry-pick latest commits forward across declared train edges. For each `defaultFlow` edge with `auto: true`, identifies commits on the source train not yet on the target, routes cherry-pick to bubbles.devops, routes receiving-train validation per `receivingTrainValidationMode`, appends ledger entry. NEVER moves changes backward. NEVER edits flag bundles."
+    statusCeiling: propagated_forward
+    terminalAliases: [ propagated_forward ]
+    phaseOrder: [ select, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G110, G111, G117, G121, G122, G123 ]
+    constraints:
+      modeClass: propagation
+      requirePropagationPolicy: true
+      requireDeclaredTrainsInPolicy: true
+      requireReceivingTrainValidation: true
+      requireLedgerAppendOnly: true
+      forbidFlagBundleEdits: true
+      forbidBackwardMerge: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: propagate-forward moves existing trunk commits; does not modify planning surface
+
+  propagate-backport:
+    description: "Cherry-pick a fix backward (later train → earlier train) under approval guard. Refuses unless edge has `backportable: true` in policy AND operator supplies `--approval-token=<sha>` when `backportRequiresApproval: true`. Records approval token in ledger entry. Used for hotfixes shipped first to prod that need to flow back to trunk."
+    statusCeiling: propagated_backward
+    terminalAliases: [ propagated_backward ]
+    phaseOrder: [ select, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G110, G111, G117, G121, G122, G123 ]
+    constraints:
+      modeClass: propagation
+      requirePropagationPolicy: true
+      requireBackportableEdge: true
+      requireApprovalTokenWhenPolicyDemandsApproval: true
+      requireReceivingTrainValidation: true
+      requireLedgerAppendOnly: true
+      forbidFlagBundleEdits: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: propagate-backport moves existing prod commits; does not modify planning surface
+
+  propagate-audit:
+    description: "Read-only drift report. For each `defaultFlow` edge, lists commits on the source train not yet on the target. No cherry-pick, no validation, no ledger entry. Used before release windows to see what's drifted."
+    statusCeiling: propagation_audited
+    terminalAliases: [ propagation_audited ]
+    phaseOrder: [ select, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G121 ]
+    constraints:
+      modeClass: propagation
+      requirePropagationPolicy: true
+      auditOnly: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: propagate-audit is read-only
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # INCIDENT FASTLANE (Shitty Bill diagnoses, DVS rolls back, Tommy executes)
+  # Chains stabilize diagnostics → train rollback → devops redeploy → validate
+  # under a single workflow mode for production incidents.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  incident-fastlane:
+    description: "Production incident response chain. bubbles.stabilize diagnoses with severity tagging (G124); any `incident` severity routes pointer-swap rollback authority to bubbles.train (DVS); bubbles.devops executes the redeploy via repo CLI; bubbles.validate confirms the rollback target is live; bubbles.docs records post-incident notes (optional). Routed by NL phrases like 'prod is broken', 'rollback prod', 'production incident'. Preserves ownership boundaries — stabilize never rolls back inline."
+    statusCeiling: incident_mitigated
+    terminalAliases: [ incident_mitigated ]
+    phaseOrder: [ select, stabilize, devops, validate, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G008, G011, G012, G073, G110, G117, G124 ]
+    constraints:
+      modeClass: incident
+      requireSeverityClassification: true
+      forbidInlineRollbackInStabilize: true
+      requireRollbackAuthorityRoutedToTrain: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: incident-fastlane operates on existing trunk state; no planning surface change
+
+  framework-health:
+    description: "Framework self-observation mode. bubbles.retro (target: framework) analyzes Bubbles' own usage signals — framework-events.jsonl, workflow-runs.json, gate failure frequency, capability ledger staleness — and writes an improvement proposal to improvements/IMP-NNN-<slug>.md. NEVER auto-mutates bubbles/*, agents/*, or workflows.yaml — proposal-first, human reviewed. Routed by NL phrases 'framework health', 'anything broken in bubbles', 'improve bubbles'. Gate G125 enforces evidence."
+    statusCeiling: framework_proposal_written
+    terminalAliases: [ framework_proposal_written ]
+    phaseOrder: [ select, audit, docs, finalize ]
+    requiredGates: [ G001, G006, G007, G011, G012, G073, G125 ]
+    constraints:
+      modeClass: framework-self-observation
+      requireImprovementProposalOutput: true
+      forbidFrameworkAutoMutation: true
+      auditOnly: true
+      planningTruthMutation: false
+      specReviewDefault: off
+      specReviewOptOutReason: framework-health is read-only over framework's own runtime data

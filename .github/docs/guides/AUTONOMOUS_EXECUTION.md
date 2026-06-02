@@ -229,6 +229,9 @@ If the active top-level runtime does not expose the subagent tool, the correct r
 | *"Never-stop rules"* | Goal agent continues through fixable obstacles |
 | *"Dynamic reordering"* | Sprint swaps in smaller goals when time is tight |
 | *"Solution search"* | Web/docs/codebase search when implementation is stuck |
+| *"Smoooth as silk"* | bubbles.train release-train cut/promote/rollback cycle |
+| *"Trailer don't clean itself"* | bubbles.upkeep calendar-driven recurring maintenance |
+| *"Same act, every stop"* | Trunk-based release-trains shipping the same code via per-train flag bundles |
 
 ---
 

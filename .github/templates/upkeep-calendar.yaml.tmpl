@@ -1,0 +1,44 @@
+# Upkeep Calendar Schema (per-repo `config/upkeep-calendar.yaml`)
+#
+# Owned by bubbles.upkeep. Declares cadence + retention for the 7 task types.
+# upkeep-calendar.sh reads this + /srv/backups/upkeep-ledger.jsonl to compute
+# which tasks are DUE.
+#
+# Copy this template to config/upkeep-calendar.yaml in your repo, edit cadences
+# to match your operational requirements, commit.
+
+version: 1
+
+tasks:
+  - id: backup
+    cadence: daily              # daily | weekly | monthly | quarterly
+    at: "04:30"                 # optional time-of-day hint for systemd timer
+    retention: "30d"            # how long to keep ledger entries for this task
+
+  - id: restore-test
+    cadence: weekly
+    at: "sun 05:00"
+    retention: "90d"
+    blocks_on_failure: [release-train-promote]   # what this task blocks if failed
+
+  - id: bcdr-drill
+    cadence: quarterly
+    retention: "5y"             # BCDR drill records are long-term audit evidence
+    requires_offsite_backend: true  # WARN if OFFSITE_BACKEND=local-only
+
+  - id: patch-cycle
+    cadence: monthly
+    at: "first-sun 06:00"
+    retention: "1y"
+
+  - id: secret-rotation
+    cadence: quarterly
+    retention: "5y"             # long-term audit evidence
+
+  - id: flag-cleanup-audit
+    cadence: monthly
+    retention: "1y"
+
+  - id: compliance-sweep
+    cadence: quarterly
+    retention: "7y"             # regulatory retention if applicable

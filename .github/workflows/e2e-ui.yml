@@ -1,0 +1,51 @@
+# Spec 077 SCOPE-2 — PWA browser end-to-end UI lane.
+#
+# Runs `./smackerel.sh test e2e-ui` on every push to main and every PR
+# against main. The lane brings up the disposable test Compose project
+# `smackerel-test-e2e-ui` (separate from `smackerel-test` used by Go
+# e2e/integration/stress) and invokes the Playwright runner under
+# `web/pwa/`.
+#
+# SCN-077-A06: CI invokes `./smackerel.sh test e2e-ui`; a failing harness
+# blocks merge. Anchored by TP-077-02-04.
+name: E2E UI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: '22'
+
+    - name: Generate SST test env
+      run: ./smackerel.sh config generate
+
+    - name: Build images
+      run: ./smackerel.sh build
+
+    - name: Run PWA browser e2e-ui harness
+      run: ./smackerel.sh test e2e-ui
+
+    - name: Upload Playwright artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: playwright-artifacts
+        path: |
+          web/pwa/test-results
+          web/pwa/playwright-report
+        if-no-files-found: ignore
+        retention-days: 7

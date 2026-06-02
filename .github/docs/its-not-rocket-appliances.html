@@ -331,7 +331,7 @@
   <img src="../icons/bubbles-logo.svg" alt="Bubbles Logo">
   <h1>BUBBLES</h1>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_START -->
-  <div class="subtitle">Agent Orchestration System v4.1.0</div>
+  <div class="subtitle">Agent Orchestration System v5.0.0</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_HEADER_END -->
   <div class="subtitle">Sunnyvale Trailer Park Software Division</div>
   <div class="tagline">"It Ain't Rocket Appliances, But It Works."</div>
@@ -339,7 +339,7 @@
 
 <!-- ═══════════════════════════════ THE ROSTER ═══════════════════════════════ -->
 <!-- GENERATED:FRAMEWORK_STATS_ROSTER_START -->
-<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 37 Agents</div>
+<div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The Sunnyvale Roster — All 40 Agents</div>
 <!-- GENERATED:FRAMEWORK_STATS_ROSTER_END -->
 
 <h3 style="color: var(--accent); margin: 1rem 0 0.5rem;"><img src="../icons/bubbles-glasses.svg" width="20" style="vertical-align: middle;"> Start Here — Universal Entry Point</h3>
@@ -512,6 +512,24 @@
       <div class="character">Sonny "Iron Lung" Smith</div>
       <div class="role">Phase release packets. Carry-forward enforcement. Cross-product release coordination. Product Direction Surfaces guardian.</div>
       <div class="quote">"Plans within plans, boys. Phase one is just the introduction."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/dvs-mic.svg" alt="DVS Mic"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.train</div>
+      <div class="character">Detroit Velvet Smooth</div>
+      <div class="role">Release-train lifecycle: cut candidates, promote between slots, rollback pointer-swap, retire trains, feature-flag lifecycle. Same act, every stop, on time.</div>
+      <div class="quote">"Smoooth as silk, gentlemen. The train rolls on schedule."</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="icon"><img src="../icons/treena-broom.svg" alt="Treena Broom"></div>
+    <div class="info">
+      <div class="agent-name">bubbles.upkeep</div>
+      <div class="character">Treena Lahey</div>
+      <div class="role">Recurring operational hygiene: backup verify, restore drills, BCDR drills, patch cycles, secret rotation, flag-cleanup audits, compliance sweeps. Calendar-driven.</div>
+      <div class="quote">"Trailer don't clean itself, Jim. Never has."</div>
     </div>
   </div>
 </div>
@@ -1262,6 +1280,78 @@
     <div class="wf-desc">Historical <code>done</code> specs stay green under new framework policy unless their <code>state.json</code> is touched in the same commit. Enforced by <code>done-spec-audit.sh --profile advisory</code> (the default) and the pre-push hook's changed-spec profile. The v4.0 skills-first refactor preserves this contract.</div>
   </div>
   <div class="workflow-card">
+    <div class="wf-name">release train</div>
+    <div class="wf-desc">A named, long-lived ship-line that gates trunk code behind per-train flag bundles and a manifest pointer. Operator-chosen string id (<code>mvp</code>, <code>v1.0</code>, <code>2026-q3</code>); framework is name-agnostic.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">cut</div>
+    <div class="wf-desc">Tagging trunk at a SHA and producing a signed candidate artifact (digests + per-train config bundle) for a train. NO deployment.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">promote</div>
+    <div class="wf-desc">Pointer-swap moving a candidate from one slot (staging) to another (prod) on a train. Requires backup-freshness + restore-drill currency.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">slot</div>
+    <div class="wf-desc">A deployment target slot per train: <code>staging</code>, <code>prod</code>, or <code>none</code> (build-only).</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">train phase</div>
+    <div class="wf-desc"><code>active</code> / <code>maintained</code> / <code>frozen</code> / <code>retired</code> — operator-controlled lifecycle. Cuts allowed in active/maintained; promotes only in active; flags MUST be cleaned up before retired.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">dark code</div>
+    <div class="wf-desc">Code on trunk that is default-off behind a flag for trains where it isn't shipping. Lives until its train graduates + 1 cycle (then retire).</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">flag retirement</div>
+    <div class="wf-desc">Removing a feature flag (and its dead conditional branch) once its owning train has graduated. Mandatory before <code>release-train-retire</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">drift</div>
+    <div class="wf-desc">The running container digest no longer matches <code>manifest.yaml</code>. Surfaced by <code>verify.sh</code> post-apply.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep cycle</div>
+    <div class="wf-desc">Scheduled recurring operational task (backup verify, restore drill, BCDR drill, patch, rotation, flag-cleanup, compliance sweep). Calendar-driven via <code>config/upkeep-calendar.yaml</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">near-line backup</div>
+    <div class="wf-desc">Removable-media backup on-site (USB drive that can be rotated and physically separated). Tier T3 in the backup model.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">offsite backup</div>
+    <div class="wf-desc">Backup stored on different physical infrastructure than the source host. Tier T4 (cloud: B2/R2/Wasabi/S3/rclone).</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">restore drill</div>
+    <div class="wf-desc">Periodic exercise that proves a backup can be restored to a working state. Weekly cadence. Failed drill blocks next <code>promote</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">BCDR drill</div>
+    <div class="wf-desc">Full disaster-recovery exercise; restores entire product stack into isolated namespace. Quarterly cadence.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">RTO / RPO</div>
+    <div class="wf-desc">Recovery Time Objective (how fast to restore) / Recovery Point Objective (max data loss tolerated). Per-product targets in <code>docs/BCDR_Plan.md</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">OFFSITE_BACKEND</div>
+    <div class="wf-desc">Single env var in <code>&lt;product&gt;/&lt;target&gt;/params.yaml</code> that selects backup backend (<code>local-only</code> / <code>restic_usb:*</code> / <code>restic_b2:*</code> / etc). Swap requires zero product changes.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep ledger</div>
+    <div class="wf-desc">Append-only <code>/srv/backups/upkeep-ledger.jsonl</code> recording every upkeep task execution. Read by <code>bubbles.train</code> for promote-freshness gating.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">pollution isolation</div>
+    <div class="wf-desc">Test code MUST NOT write to prod monitoring, prod backup paths, or knb manifest. Enforced by <code>env-pollution-scan.sh</code> (G115).</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">compliance sweep</div>
+    <div class="wf-desc">Quarterly evidence-collection task generating <code>docs/Compliance_Report.md</code> for G117-G120. Treena gathers, Ted certifies.</div>
+  </div>
+  <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>
     <div class="wf-desc">Advisory repo hygiene check for agent adoption. Useful before deep framework use, but separate from <code>bubbles.validate</code> certification.</div>
   </div>
@@ -1896,8 +1986,8 @@
 </table>
 
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_START -->
-<!-- ═══════════════════════════════ THE 82 GATES ═══════════════════════════════ -->
-<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 82 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
+<!-- ═══════════════════════════════ THE 98 GATES ═══════════════════════════════ -->
+<div class="section-title"><img src="../icons/lahey-badge.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> The 98 Gates of Sunnyvale (Quality Never Takes a Day Off)</div>
 <!-- GENERATED:FRAMEWORK_STATS_HTML_GATES_END -->
 
 <div class="phase-flow">
@@ -1922,7 +2012,7 @@
 
 <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; font-style: italic;">
   <!-- GENERATED:FRAMEWORK_STATS_HTML_QUOTE_START -->
-  "82 gates, boys. That's more security than the trailer park has ever had.
+  "98 gates, boys. That's more security than the trailer park has ever had.
   Something's fucky? We'll find it. That's greasy? We'll clean it.
   Red first, green after. Small scopes. Tiny fix loops.
   Can't defer things either — you can't just NOT do things, Corey!
@@ -1935,10 +2025,10 @@
 <div class="footer">
   <div class="big-quote">"Have a good one, boys."</div>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_START -->
-  <p>Bubbles Agent System v4.1.0 — Sunnyvale Trailer Park Software Division</p>
+  <p>Bubbles Agent System v5.0.0 — Sunnyvale Trailer Park Software Division</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_VERSION_FOOTER_END -->
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_START -->
-  <p>82 Gates • 37 Agents • 38 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
+  <p>98 Gates • 40 Agents • 55 Workflow Modes • 26 Phases • 0 Shit Hawks</p>
   <!-- GENERATED:FRAMEWORK_STATS_HTML_FOOTER_END -->
   <p style="margin-top: 0.5rem;">© 2026 — All rights reserved by the residents of Sunnyvale Trailer Park</p>
   <p style="margin-top: 0.25rem; font-size: 0.75rem; color: #555;">"It's not rocket appliances."</p>

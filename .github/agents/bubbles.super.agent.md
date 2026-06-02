@@ -85,6 +85,7 @@ The super agent MUST NOT rely solely on hardcoded examples in this file. Before 
 | **Action risk classes** | Read `bubbles/action-risk-registry.yaml` | Safety classification for the command being recommended |
 | **Framework event stream** | Read `.specify/runtime/framework-events.jsonl` when present | Recent command starts/completions, runtime lifecycle, and failure context |
 | **Gate registry** | Search `bubbles/workflows.yaml` and `agents/bubbles_shared/agent-common.md` for `G0XX` gate definitions | What a gate enforces, where it runs, blocking vs advisory |
+| **Natural-language intent routes** | Read `bubbles/intent-routes.yaml` when present | NL phrase → (agent, mode) mapping. Match user phrases here BEFORE falling back to descriptive parsing of agent docs. |
 | **Repo posture** | Inspect repo layout or run `repo-readiness` | Whether this is the source framework repo, a downstream installed repo, or neither |
 
 **Discovery Protocol (MANDATORY for agent/mode/skill questions):**

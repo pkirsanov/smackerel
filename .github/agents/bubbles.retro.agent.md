@@ -40,6 +40,27 @@ Supported inputs:
 - `hotspots week` / `hotspots month` — time-bounded hotspot analysis
 - `coupling` — co-change coupling analysis only (files that always change together)
 - `busfactor` — author concentration analysis only (files with single-author risk)
+- `target: framework` — **framework self-observation mode**: analyzes Bubbles' own usage signals (framework-events.jsonl, workflow-runs.json, gate failure frequency, capability ledger staleness) and emits an improvement proposal to `improvements/IMP-NNN-<slug>.md`. NEVER mutates `bubbles/*`, `agents/*`, or `bubbles/workflows.yaml` directly — proposal-first, human-reviewed. Routed by the `framework-health` workflow mode and NL phrases like "framework health", "anything broken in bubbles", "improve bubbles". Gate G125 enforces evidence presence.
+
+## Framework Self-Observation (`target: framework`)
+
+When invoked with `target: framework` (or via workflow mode `framework-health`), bubbles.retro pivots from product retro to framework retro. It runs `bubbles/scripts/retro-framework-health.sh` which reads:
+
+- `.specify/runtime/framework-events.jsonl` — last N days of agent/workflow lifecycle events
+- `.specify/runtime/workflow-runs.json` — per-run mode + outcome + duration
+- artifact-lint failure trends (grepped from `framework-events.jsonl` if recorded)
+- `bubbles/capability-ledger.yaml` — entries with `lastValidated > 90d` (staleness)
+
+Output: a markdown proposal file at `improvements/IMP-NNN-<slug>.md` containing:
+
+1. **Diagnosis** — top failing gates, stalled modes, stale capabilities
+2. **Recommended change** — concrete proposal (new gate, agent extension, mode addition, removal)
+3. **Rationale** — what the data shows
+4. **Next step** — human reviews; if accepted, becomes a normal spec under `specs/`
+
+**The retro agent NEVER mutates framework files.** Even when the data strongly suggests a fix, the proposal is the deliverable. This preserves the human-in-the-loop on framework evolution.
+
+`improvements/` directory: in the bubbles source repo, this is the canonical proposal archive (committed). In downstream repos, it is gitignored by default (proposals there are for the operator's eyes only).
 
 ## Data Sources
 
