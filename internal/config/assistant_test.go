@@ -86,6 +86,9 @@ func minimalAssistantEnv() map[string]string {
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_ENABLED":               "true",
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_CONFIDENCE_FLOOR":      "0.7",
 		"ASSISTANT_TOOLS_ENTITY_RESOLVE_TIMEOUT_MS":            "1500",
+		// Spec 076 SCOPE-1 — annotation classifier foundation SST.
+		"ASSISTANT_ANNOTATION_CLASSIFIER_CONFIDENCE_FLOOR":   "0.6",
+		"ASSISTANT_ANNOTATION_CLASSIFIER_WARM_CACHE_ENABLED": "true",
 		// Spec 069 SCOPE-1c-bis — HTTP transport SST.
 		"ASSISTANT_TRANSPORTS_HTTP_ENABLED":                        "true",
 		"ASSISTANT_TRANSPORTS_HTTP_SCHEMA_VERSION":                 "v1",

@@ -13,6 +13,11 @@ var (
 	ErrCapUSDMonthly      = errors.New("openknowledge: monthly USD budget exceeded")
 	ErrCapUSDPerUserMonth = errors.New("openknowledge: per-user monthly USD budget exceeded")
 	ErrBudgetInvalid      = errors.New("openknowledge: invalid budget tracker construction")
+	// ErrBudgetExhausted is the spec 076 SCOPE-2b umbrella sentinel
+	// every per-cap error wraps. Callers that only care that "some
+	// budget tripped" can match on ErrBudgetExhausted; callers that
+	// need the specific cap continue to match on ErrCap*.
+	ErrBudgetExhausted = errors.New("openknowledge: budget exhausted")
 )
 
 // BudgetTracker enforces the four caps that bound a single agent turn
@@ -85,16 +90,16 @@ func (b *BudgetTracker) RecordToolCall(_ string, costUSD float64) error {
 
 func (b *BudgetTracker) checkCaps() error {
 	if b.tokensUsed > b.perQueryTokens {
-		return ErrCapTokens
+		return fmt.Errorf("%w: %w", ErrBudgetExhausted, ErrCapTokens)
 	}
 	if b.usdSpent > b.perQueryUSD {
-		return ErrCapUSDPerQuery
+		return fmt.Errorf("%w: %w", ErrBudgetExhausted, ErrCapUSDPerQuery)
 	}
 	if b.usdSpent > b.monthlyUSDRemaining {
-		return ErrCapUSDMonthly
+		return fmt.Errorf("%w: %w", ErrBudgetExhausted, ErrCapUSDMonthly)
 	}
 	if b.usdSpent > b.perUserUSDRemaining {
-		return ErrCapUSDPerUserMonth
+		return fmt.Errorf("%w: %w", ErrBudgetExhausted, ErrCapUSDPerUserMonth)
 	}
 	return nil
 }
