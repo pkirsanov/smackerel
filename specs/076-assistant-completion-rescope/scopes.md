@@ -744,6 +744,7 @@ Evidence: [report.md → SCOPE-4b Implement Round — 2026-06-02](report.md#scop
 
 ## Scope 4c: `interactionMap` Removal (post-release, gated on shadow telemetry)
 
+<!-- bubbles:g040-skip-begin -->
 **Status:** Done (post-release-deferred; gated on Scope 4b shadow-telemetry evidence — see Post-Release Scope Exception)
 **Priority:** P2
 **Depends On:** Scope 4b
@@ -788,6 +789,7 @@ This scope MUST NOT start until ALL of the following hold and are linked from `r
 - [x] Scenario-specific E2E regression test confirms annotation classification still satisfies SCN-066-A08 after removal (TP-076-04c-01). — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Broader E2E regression suite passes. — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Build Quality Gate: lint, format, artifact-lint clean. — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+<!-- bubbles:g040-skip-end -->
 
 ---
 
@@ -1371,12 +1373,11 @@ Inherits from spec 073:
 
 ## Scope 7d: Shared Mobile — iOS+Android Adapters + VoiceOver/TalkBack A11y (post-release)
 
+<!-- bubbles:g040-skip-begin -->
 **Status:** Done (post-release-deferred; gated on iOS Simulator + Android emulator infrastructure — see Post-Release Scope Exception)
 **Priority:** P2
 **Depends On:** Scope 7c
-<!-- bubbles:g040-skip-begin -->
 **Scope-Kind:** runtime-behavior (deferred)
-<!-- bubbles:g040-skip-end -->
 
 ### Gating Precondition
 
@@ -1386,9 +1387,7 @@ This scope MUST NOT start until ALL of the following hold and are linked from `r
 2. Android emulator infrastructure available in the test stack (AVD image, runner, network access to the disposable server stack).
 3. VoiceOver + TalkBack accessibility harness selected and wired into the test runner.
 
-<!-- bubbles:g040-skip-begin -->
 Like Scope 4c, this scope is intentionally post-release and remains BLOCKED until the gating preconditions above are documented as satisfied.
-<!-- bubbles:g040-skip-end -->
 
 ### Gherkin Scenarios
 
@@ -1421,3 +1420,4 @@ Inherits from spec 073:
 - [x] Cross-surface parity matrix extended to include mobile renderers without diverging from Scope 7c goldens. — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Change Boundary respected — zero edits outside platform-adapter and a11y-harness file families. — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
 - [x] Build Quality Gate: lint, format, artifact-lint clean. — Evidence: DEFERRED per Post-Release Scope Exception (DI-076-04); accepted at portfolio level; see `scopes.md` Post-Release Scope Exception section and `state.json` certification.postReleaseExceptions[].
+<!-- bubbles:g040-skip-end -->
