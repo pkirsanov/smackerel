@@ -10,6 +10,7 @@ import (
 
 	"github.com/smackerel/smackerel/internal/digest"
 	"github.com/smackerel/smackerel/internal/intelligence"
+	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/knowledge"
 	"github.com/smackerel/smackerel/internal/telegram"
 	"github.com/smackerel/smackerel/internal/topics"
@@ -61,6 +62,21 @@ type Scheduler struct {
 	legacyRetirementThresholdFn       LegacyRetirementJobFunc
 	legacyRetirementObservationCron   string
 	legacyRetirementObservationFn     LegacyRetirementJobFunc
+
+	// Spec 021 Scope 4 — unified surfacing controller. When non-nil,
+	// every producer routes its candidate through Controller.Propose
+	// before dispatching to Telegram / web push / ntfy / email-out.
+	// When nil (e.g., legacy tests without SST), producers fall back
+	// to the prior direct-dispatch behavior so existing test fixtures
+	// keep working.
+	surfacingController *surfacing.Controller
+}
+
+// SetSurfacingController wires the unified surfacing controller (spec
+// 021 Scope 4) so every producer routes through Propose before
+// dispatching. Call exactly once during startup.
+func (s *Scheduler) SetSurfacingController(c *surfacing.Controller) {
+	s.surfacingController = c
 }
 
 // New creates a new scheduler.

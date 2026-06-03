@@ -44,6 +44,15 @@ func TestMetricsRegistered(t *testing.T) {
 	QFCallbackAttemptsTotal.WithLabelValues("_test_reg", "_test_reg")
 	QFDeepLinkRenderTotal.WithLabelValues("_test_reg", "_test_reg")
 	QFTrustObjectRenderFailures.WithLabelValues("_test_reg")
+	// Spec 021 Scope 4 — Unified Surfacing Controller metrics.
+	SurfacingNudgesDelivered.WithLabelValues("_test_reg", "_test_reg")
+	SurfacingActedOn.WithLabelValues("_test_reg")
+	SurfacingFalsePositive.WithLabelValues("_test_reg")
+	SurfacingDedupe.WithLabelValues("_test_reg")
+	SurfacingSuppression.WithLabelValues("_test_reg")
+	SurfacingBudgetOverrides.WithLabelValues("_test_reg")
+	SurfacingBudgetRemaining.Set(0)
+	SurfacingDeferredExhausted.WithLabelValues("_test_reg")
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -51,38 +60,46 @@ func TestMetricsRegistered(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"smackerel_artifacts_ingested_total":                false,
-		"smackerel_capture_total":                           false,
-		"smackerel_search_latency_seconds":                  false,
-		"smackerel_domain_extraction_total":                 false,
-		"smackerel_connector_sync_total":                    false,
-		"smackerel_nats_deadletter_total":                   false,
-		"smackerel_db_connections_active":                   false,
-		"smackerel_digest_generation_total":                 false,
-		"smackerel_lists_generated_total":                   false,
-		"smackerel_list_generation_latency_seconds":         false,
-		"smackerel_list_item_status_changes_total":          false,
-		"smackerel_lists_completed_total":                   false,
-		"smackerel_recommendation_provider_requests_total":  false,
-		"smackerel_recommendation_provider_latency_seconds": false,
-		"smackerel_recommendation_candidates_total":         false,
-		"smackerel_recommendation_watch_runs_total":         false,
-		"smackerel_recommendation_delivery_total":           false,
-		"smackerel_recommendation_suppression_total":        false,
-		"smackerel_recommendation_ranking_confidence_total": false,
-		"smackerel_recommendation_location_precision_total": false,
-		"smackerel_qf_packet_ingest_total":                  false,
-		"smackerel_qf_packet_validation_failures_total":     false,
-		"smackerel_qf_evidence_export_attempts_total":       false,
-		"smackerel_qf_cursor_lag_seconds":                   false,
-		"smackerel_qf_action_boundary_attempts_total":       false,
-		"smackerel_qf_capability_mismatch_total":            false,
-		"smackerel_qf_unknown_decision_type_total":          false,
-		"smackerel_qf_engagement_signal_attempts_total":     false,
-		"smackerel_qf_evidence_revoked_total":               false,
-		"smackerel_qf_callback_attempts_total":              false,
-		"smackerel_qf_deep_link_render_total":               false,
-		"smackerel_qf_trust_object_render_failures_total":   false,
+		"smackerel_artifacts_ingested_total":                  false,
+		"smackerel_capture_total":                             false,
+		"smackerel_search_latency_seconds":                    false,
+		"smackerel_domain_extraction_total":                   false,
+		"smackerel_connector_sync_total":                      false,
+		"smackerel_nats_deadletter_total":                     false,
+		"smackerel_db_connections_active":                     false,
+		"smackerel_digest_generation_total":                   false,
+		"smackerel_lists_generated_total":                     false,
+		"smackerel_list_generation_latency_seconds":           false,
+		"smackerel_list_item_status_changes_total":            false,
+		"smackerel_lists_completed_total":                     false,
+		"smackerel_recommendation_provider_requests_total":    false,
+		"smackerel_recommendation_provider_latency_seconds":   false,
+		"smackerel_recommendation_candidates_total":           false,
+		"smackerel_recommendation_watch_runs_total":           false,
+		"smackerel_recommendation_delivery_total":             false,
+		"smackerel_recommendation_suppression_total":          false,
+		"smackerel_recommendation_ranking_confidence_total":   false,
+		"smackerel_recommendation_location_precision_total":   false,
+		"smackerel_qf_packet_ingest_total":                    false,
+		"smackerel_qf_packet_validation_failures_total":       false,
+		"smackerel_qf_evidence_export_attempts_total":         false,
+		"smackerel_qf_cursor_lag_seconds":                     false,
+		"smackerel_qf_action_boundary_attempts_total":         false,
+		"smackerel_qf_capability_mismatch_total":              false,
+		"smackerel_qf_unknown_decision_type_total":            false,
+		"smackerel_qf_engagement_signal_attempts_total":       false,
+		"smackerel_qf_evidence_revoked_total":                 false,
+		"smackerel_qf_callback_attempts_total":                false,
+		"smackerel_qf_deep_link_render_total":                 false,
+		"smackerel_qf_trust_object_render_failures_total":     false,
+		"smackerel_surfacing_nudges_delivered_total":          false,
+		"smackerel_surfacing_acted_on_total":                  false,
+		"smackerel_surfacing_false_positive_total":            false,
+		"smackerel_surfacing_dedupe_total":                    false,
+		"smackerel_surfacing_suppression_total":               false,
+		"smackerel_surfacing_budget_overrides_total":          false,
+		"smackerel_surfacing_budget_remaining":                false,
+		"smackerel_surfacing_deferred_budget_exhausted_total": false,
 	}
 
 	for _, fam := range families {

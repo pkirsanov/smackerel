@@ -81,6 +81,35 @@ effect.
 
 ---
 
+## Cross-Surface Surfacing Controller (spec 078)
+
+`internal/intelligence/surfacing/` is the single decision point that
+intelligence producers consult before dispatching a nudge to any user-facing
+channel. It enforces a unified pipeline across all 7 producers (alerts,
+digest, resurfacing, weekly synthesis, monthly report, pre-meeting briefs,
+frequent lookups) and all 5 channels (telegram, web push, ntfy, email out,
+digest).
+
+| Aspect | Detail |
+|--------|--------|
+| Package | `internal/intelligence/surfacing/` (controller.go, budget.go, dedupe.go, suppression.go, types.go) |
+| Entrypoint | `Controller.Propose(ctx, SurfacingCandidate) (SurfacingDecision, error)` — synchronous call site for every producer |
+| Pipeline order | `dedupe → suppress → budget → escalate` (mandated; see `controller.go::Propose`) |
+| Decision vocabulary | `permit`, `deduped`, `suppressed`, `deferred-budget-exhausted`, `escalated` |
+| SST config block | `config/smackerel.yaml::surfacing:` → `daily_nudge_budget`, `suppression_window_hours`, `dedupe_window_hours`, `urgent_escalation_enabled`. Loader `internal/config/surfacing.go`; env emit `SURFACING_*` via `scripts/commands/config.sh`. Fail-loud — missing env aborts startup (NO-DEFAULTS SST policy). |
+| Metrics sink | `internal/metrics/surfacing.go` exposes 8 `smackerel_surfacing_*` families (see [Operations.md → Surfacing Metrics](Operations.md#surfacing-metrics-spec-078)) |
+| Construction | Exactly one `Controller` per process, shared across all producers so budget/dedupe/suppression state is unified. |
+
+Adding a new producer or channel is a deliberate code change — both enums in
+`types.go` are bounded so cardinality on the metric labels stays finite.
+
+**Authoritative references:**
+
+- [`specs/078-cross-surface-surfacing-prioritizer/`](../specs/078-cross-surface-surfacing-prioritizer/) — controller adoption spec, design, scopes.
+- [`docs/Operations.md`](Operations.md#surfacing-metrics-spec-078) — operator-facing metric families and alerting guidance.
+
+---
+
 ## Secret Boundary (spec 052)
 
 Smackerel's secret pipeline crosses three trust boundaries between three

@@ -277,6 +277,11 @@ type Config struct {
 	// EXTENSION_INGEST_* env vars; fail-loud SST per smackerel-no-defaults.
 	Extension ExtensionConfig
 
+	// Spec 021 Scope 4 — Unified surfacing controller config.
+	// Sourced from `surfacing.*` in config/smackerel.yaml via
+	// SURFACING_* env vars; fail-loud SST per smackerel-no-defaults.
+	Surfacing SurfacingConfig
+
 	// BUG-020-008 — fail-loud int env parsing. Populated by Load() after
 	// the cfg literal initializes; each entry is the error string produced
 	// by mustParseIntEnv for one of the 8 SST-required int env vars
@@ -942,6 +947,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg.Extension = extensionCfg
+
+	surfacingCfg, err := loadSurfacingConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.Surfacing = surfacingCfg
 
 	recommendationsCfg, err := loadRecommendationsConfig()
 	if err != nil {

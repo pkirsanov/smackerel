@@ -1357,6 +1357,31 @@ The recommendation runtime exposes eight Prometheus metrics with bounded labels 
 
 **Operator audit view:** `GET /recommendations/watches/{id}` renders a `data-testid="watch-audit-counts"` block sourced from `recommendation_watch_runs` (data-source marker on the section). Use this surface — not Prometheus — for per-watch run counts.
 
+#### Surfacing Metrics (Spec 078)
+
+The cross-surface surfacing controller (`internal/intelligence/surfacing/`) is the single decision point all 7 intelligence producers consult before dispatching a nudge. It exposes 8 bounded-cardinality Prometheus families via `internal/metrics/surfacing.go`. Architecture and contract are documented in [`docs/Architecture.md`](Architecture.md#cross-surface-surfacing-controller-spec-078).
+
+| Metric | Type | Labels | Purpose |
+|--------|------|--------|---------|
+| `smackerel_surfacing_nudges_delivered_total` | Counter | `producer`, `channel` | Nudges that passed the full pipeline and were delivered |
+| `smackerel_surfacing_acted_on_total` | Counter | `producer`, `channel` | Delivered nudges the user acted on (recorded by ack signal) |
+| `smackerel_surfacing_false_positive_total` | Counter | `producer`, `channel` | Delivered nudges the user marked as unwanted |
+| `smackerel_surfacing_dedupe_total` | Counter | `producer` | Candidates collapsed by the dedupe window |
+| `smackerel_surfacing_suppression_total` | Counter | `reason` | Candidates suppressed because the user acked the content key recently |
+| `smackerel_surfacing_budget_overrides_total` | Counter | `reason` | Candidates that escalated past budget (p1 + time-critical + `urgent_escalation_enabled`) |
+| `smackerel_surfacing_deferred_budget_exhausted_total` | Counter | `producer` | Candidates dropped because the daily nudge budget was exhausted with no escalation |
+| `smackerel_surfacing_budget_remaining` | Gauge | — | Remaining slots in the current day's budget |
+
+**Alerting guidance.** Recommended thresholds for operators wiring Prometheus alerts:
+
+- **Budget exhaustion** — alert if `surfacing_deferred_budget_exhausted_total` increases for more than two consecutive days, or if `surfacing_budget_remaining` stays at 0 for > 6 hours. Either signals `surfacing.daily_nudge_budget` is too low for actual load.
+- **Dedupe storm** — alert if `rate(surfacing_dedupe_total[15m])` exceeds the same window's `rate(surfacing_nudges_delivered_total[15m])` by more than 5×. Producers are spamming the same `ContentKey` — investigate the offending producer label.
+- **Suppression spike** — alert if `rate(surfacing_suppression_total[1h])` jumps > 10× the trailing 24h baseline. Either the user is acknowledging a broad class of nudges (legitimate) or a producer is regressing on relevance.
+
+Cardinality is bounded by the closed `Producer` and `Channel` enums in `internal/intelligence/surfacing/types.go`; adding a new value is a deliberate code change. `ContentKey` is never exposed as a label (PII-safe).
+
+
+
 **Log/trace redaction:** All serialized recommendation logs and traces are scanned for forbidden substrings (provider API keys, raw provider payloads, sensitive graph prompt text, raw GPS coordinates) at the persistence boundary via `internal/recommendation/store.AssertRedactSafe`. The unit test `internal/recommendation/store/redact_test.go::TestRecommendationRedaction_NoSecretsOrRawLocationInLogsOrTraces` is the regression guard.
 
 #### ML Sidecar (`http://127.0.0.1:40002/metrics`)

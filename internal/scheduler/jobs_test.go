@@ -235,7 +235,7 @@ func TestDeliverAlertBatch_HappyPath(t *testing.T) {
 		return nil
 	}
 
-	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn, nil)
 
 	if delivered != 2 {
 		t.Errorf("expected 2 delivered, got %d", delivered)
@@ -282,7 +282,7 @@ func TestDeliverAlertBatch_SendFailure_AlertStaysPending(t *testing.T) {
 		return nil
 	}
 
-	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn, nil)
 
 	if delivered != 1 {
 		t.Errorf("expected 1 delivered, got %d", delivered)
@@ -311,7 +311,7 @@ func TestDeliverAlertBatch_EmptyList_NoOp(t *testing.T) {
 		return nil
 	}
 
-	delivered, failed := deliverAlertBatch(context.Background(), nil, sendFn, markFn)
+	delivered, failed := deliverAlertBatch(context.Background(), nil, sendFn, markFn, nil)
 
 	if delivered != 0 || failed != 0 {
 		t.Errorf("expected 0/0, got delivered=%d failed=%d", delivered, failed)
@@ -337,7 +337,7 @@ func TestDeliverAlertBatch_CapEnforced_EmptyFromGetPendingAlerts(t *testing.T) {
 	}, func(_ context.Context, _ string) error {
 		t.Error("markFn should not be called when cap is reached (empty list)")
 		return nil
-	})
+	}, nil)
 
 	if delivered != 0 || failed != 0 {
 		t.Errorf("expected 0/0 for cap-enforced empty list, got delivered=%d failed=%d", delivered, failed)
@@ -356,7 +356,7 @@ func TestDeliverAlertBatch_MarkFailure(t *testing.T) {
 		return fmt.Errorf("db connection lost")
 	}
 
-	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn)
+	delivered, failed := deliverAlertBatch(context.Background(), alerts, sendFn, markFn, nil)
 
 	if delivered != 0 {
 		t.Errorf("expected 0 delivered when mark fails, got %d", delivered)

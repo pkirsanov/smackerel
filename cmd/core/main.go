@@ -16,6 +16,7 @@ import (
 	"github.com/smackerel/smackerel/internal/assistant/transportidentity"
 	"github.com/smackerel/smackerel/internal/backup"
 	"github.com/smackerel/smackerel/internal/config"
+	"github.com/smackerel/smackerel/internal/intelligence/surfacing"
 	"github.com/smackerel/smackerel/internal/metrics"
 	"github.com/smackerel/smackerel/internal/scheduler"
 	"github.com/smackerel/smackerel/internal/telegram"
@@ -283,6 +284,26 @@ func run() error {
 
 	// Start digest scheduler + intelligence jobs
 	sched := scheduler.New(svc.digestGen, tgBot, svc.intEngine, svc.topicLifecycle)
+
+	// Spec 021 Scope 4 — Unified Surfacing Controller. Wires the
+	// SST-validated daily-budget / dedupe / suppression / urgent-
+	// escalation contract into every producer that dispatches to
+	// Telegram / web push / ntfy / email-out.
+	if surfacingCtrl, err := surfacing.NewController(surfacing.Config{
+		DailyNudgeBudget:        cfg.Surfacing.DailyNudgeBudget,
+		SuppressionWindowHours:  cfg.Surfacing.SuppressionWindowHours,
+		DedupeWindowHours:       cfg.Surfacing.DedupeWindowHours,
+		UrgentEscalationEnabled: cfg.Surfacing.UrgentEscalationEnabled,
+	}, surfacing.NewInMemoryAck(), metrics.SurfacingMetrics{}); err != nil {
+		slog.Error("surfacing controller wiring failed (SST validation)", "error", err)
+	} else {
+		sched.SetSurfacingController(surfacingCtrl)
+		slog.Info("surfacing controller wired",
+			"daily_budget", cfg.Surfacing.DailyNudgeBudget,
+			"dedupe_window_hours", cfg.Surfacing.DedupeWindowHours,
+			"suppression_window_hours", cfg.Surfacing.SuppressionWindowHours,
+			"urgent_escalation_enabled", cfg.Surfacing.UrgentEscalationEnabled)
+	}
 
 	// Subscribe intelligence engine to annotation events (spec 027)
 	if svc.intEngine != nil {

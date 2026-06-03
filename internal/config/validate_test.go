@@ -959,6 +959,12 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("EXTENSION_INGEST_ACCEPTED_CONTENT_TYPES", `["bookmark","browser_history_visit"]`)
 	t.Setenv("EXTENSION_INGEST_REQUIRED_TOKEN_SCOPE", "extension:bookmarks,history")
 
+	// Spec 021 Scope 4 — Unified surfacing controller SST baselines.
+	t.Setenv("SURFACING_DAILY_NUDGE_BUDGET", "5")
+	t.Setenv("SURFACING_SUPPRESSION_WINDOW_HOURS", "4")
+	t.Setenv("SURFACING_DEDUPE_WINDOW_HOURS", "6")
+	t.Setenv("SURFACING_URGENT_ESCALATION_ENABLED", "true")
+
 	// Spec 064 SCOPE-03 — open-ended knowledge agent SST baselines.
 	// Defaults mirror config/smackerel.yaml (enabled=false ships) so
 	// Load() succeeds; dedicated openknowledge_test.go cases exercise

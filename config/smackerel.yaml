@@ -202,6 +202,17 @@ annotations:
     usage_max: 0.03 # max boost capped at 10 uses
     usage_cap: 10 # number of uses for full usage boost
 
+# Spec 021 Scope 4 — Unified Surfacing Controller (Next Smackerel
+# prioritizer). Every value flows through scripts/commands/config.sh
+# into the generated env file as SURFACING_*; no in-source defaults
+# (smackerel-no-defaults policy). Startup fails loud if any field is
+# missing or non-positive.
+surfacing:
+  daily_nudge_budget: 5 # max user-visible nudges per day across all surfaces
+  suppression_window_hours: 4 # acked items suppress follow-ups for this window
+  dedupe_window_hours: 6 # same content_key collapses within this window
+  urgent_escalation_enabled: true # priority-1 + time_critical may bypass exhausted budget
+
 # Spec 058 Scope 1 — Chrome Extension Bridge ingest endpoint SST.
 # Every value flows through scripts/commands/config.sh into the
 # generated env file as EXTENSION_INGEST_*; no in-source defaults.
