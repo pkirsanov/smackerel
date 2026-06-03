@@ -9,7 +9,7 @@
 | Adapter | What it does | Required env |
 |---------|--------------|--------------|
 | `none` | Returns `{}` for every verb. Safe default. | — |
-| `prometheus` | Queries Prometheus HTTP API | `PROMETHEUS_BASE_URL` (required) |
+| `prometheus` | Queries Prometheus HTTP API | `PROMETHEUS_BASE_URL`, `PROMETHEUS_CURL_MAX_TIME`, and verb-specific `PROMETHEUS_QUERY_*` values (required; no defaults) |
 
 Live in `bubbles/adapters/observability/<name>.sh`. The shipped contract is 4 verbs: `fetch-alerts`, `fetch-slo-burn`, `fetch-error-rate`, `fetch-deploy-impact`.
 
@@ -36,6 +36,8 @@ Set the adapter's env vars in your deployment shell or knb adapter overlay (Prom
 
 ```bash
 PROMETHEUS_BASE_URL=http://localhost:9090 \
+PROMETHEUS_CURL_MAX_TIME=10 \
+PROMETHEUS_QUERY_SLO_BURN='slo:burn_rate' \
   bash bubbles/adapters/observability/prometheus.sh fetch-alerts
 ```
 
