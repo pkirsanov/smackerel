@@ -615,36 +615,81 @@ under TP-073-31.
 | TP-073-30 | SCN-073-B06 | e2e-api | `TBD: tests/e2e/wiki/annotation_entry_e2e_test.go` | Planned: when spec 027 SCOPE-9 endpoints are reachable, "Annotate" opens the inline editor and submit hits `SCN-027-71..74`; when unreachable, button renders `aria-disabled` with affordance; extended storage guard asserts no bearer/session material persists from wiki pages | `./smackerel.sh test e2e` | Yes |
 | TP-073-31 | SCN-073-B01..B04 | unit | `TBD: web/pwa/tests/wiki_initial_paint_budget_test.go` | Planned: synthetic initial-paint timing harness asserts each wiki route paints index/detail body under the 1s LAN budget against a primed in-process server | `./smackerel.sh test unit` | No |
 
+### Scope 5 — Upstream Blocker (Route Required)
+
+**Disposition:** BLOCKED on upstream backend API gap.
+
+**Verified 2026-06-03 by grep of `internal/api/router.go`:** the wiki/graph-browse PWA
+surface requires eight JSON API endpoints that do not exist in the current backend.
+Per this scope's own Uncertainty Declaration and Implementation Plan ("stop and
+route a finding to the owning spec instead of hand-rolling client types"), Scope 5
+cannot proceed in-repo. Bug packet filed at
+[`bugs/BUG-073-UPSTREAM-API-GAP/`](bugs/BUG-073-UPSTREAM-API-GAP/) for operator
+triage.
+
+**Missing endpoints → consuming scenarios → candidate owning module:**
+
+| # | Endpoint | Consuming Scenarios | Candidate Owning Spec/Module |
+|---|---|---|---|
+| 1 | `GET /api/topics` — index `{linkedArtifactCount, peopleCount, placeCount}` | SCN-073-B01 | NEW spec extending `internal/topics` (topics already has a server-rendered `/topics` HTML page via `deps.WebHandler.TopicsPage` — wrong shape; JSON contract owner TBD by operator) |
+| 2 | `GET /api/topics/{id}` — topic detail with linked artifacts, related people, related places | SCN-073-B01 | NEW spec, same owner as #1 |
+| 3 | `GET /api/people` — index of intelligence-layer-derived people with `artifactCount` | SCN-073-B02 | NEW spec under `internal/intelligence` (people is an intelligence-derived concept; not exposed today) |
+| 4 | `GET /api/people/{id}` — person page with artifact timeline, related topics, related places | SCN-073-B02 | NEW spec, same owner as #3 |
+| 5 | `GET /api/places` — index of places from maps connector + artifact-derived locations | SCN-073-B03 | NEW spec spanning `internal/knowledge` and the maps connector (spec 011) |
+| 6 | `GET /api/places/{id}` — place page with location + linked artifacts | SCN-073-B03 | NEW spec, same owner as #5 |
+| 7 | `GET /api/time?from=...&to=...` — artifacts grouped by day for calendar-style scroll | SCN-073-B04 | NEW spec under `internal/knowledge` (time-grouping is a knowledge-graph projection) |
+| 8 | `GET /api/graph/edges?source={kind:id}` — universal cross-link contract `{targetKind, targetId, targetLabel, reason}` | SCN-073-B05 (universal — also feeds B01/B02/B03/B04 detail-page "Related" sections) | NEW spec under `internal/graph` (no cross-link JSON API exists today; `internal/knowledge` exposes only concepts/entities, not graph edges with explainable `reason` strings) |
+
+**What exists today (seams for the routing decision):**
+
+- `/api/artifact/{id}` (`deps.ArtifactDetailHandler`) — single artifact, not graph-derived.
+- `/api/artifacts/{id}/domain` (`deps.DomainDataHandler`).
+- `/api/knowledge/concepts`, `/concepts/{id}`, `/entities`, `/entities/{id}`, `/lint`, `/stats`.
+- `/api/intelligence/{expertise,learning-paths,subscriptions,serendipity,content-fuel,quick-references,monthly-report,seasonal-patterns}`.
+- Server-rendered HTML at `/topics` (`deps.WebHandler.TopicsPage`) — wrong shape (HTML, not JSON; no graph edges; no people/places counts).
+
+**SCN-073-B06** (inline annotation entry point) is unaffected by this blocker — it
+already depends on spec 027 SCOPE-9 (`SCN-027-71..74`) and the scope's existing
+fallback (disabled `aria-disabled` affordance) covers the case where 027 SCOPE-9
+has not shipped.
+
+**Exit condition:** Scope 5 ships when these endpoints exist and are reachable
+from the live PWA. Until then, Scope 5 remains `Not started` and 073 stays at
+`specs_hardened`. The eleven DoD items below are individually annotated as
+BLOCKED on this gap and MUST NOT be checked until the upstream JSON contracts
+land. No autonomous follow-up — operator triage is required to assign the eight
+endpoints to specific owning spec(s).
+
 ### Definition of Done — Tiered Validation
 
 - [ ] All six SCN-073-B01..B06 scenarios implemented and validated by
-  TP-073-25..30 against the live stack.
+  TP-073-25..30 against the live stack. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Cross-link renderer projects server-supplied `reason` strings
   verbatim with no client-side ranking or re-derivation; adversarial
-  test under TP-073-29 proves the assertion is not tautological.
+  test under TP-073-29 proves the assertion is not tautological. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Annotation entry point delegates to spec 027 SCOPE-9 endpoints
   (`SCN-027-71..74`) when available; renders disabled with affordance
-  otherwise.
+  otherwise. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Performance budget: TP-073-31 asserts ≤1s initial paint for
-  every wiki route on local LAN.
+  every wiki route on local LAN. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Storage guard extended to wiki pages — no bearer/session
-  material persisted (extension of TP-073-06).
+  material persisted (extension of TP-073-06). (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Build Quality Gate passes: `./smackerel.sh check`,
   `./smackerel.sh lint`, `./smackerel.sh format --check`, artifact
-  lint clean for this spec.
+  lint clean for this spec. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Scenario-specific regression E2E rows (TP-073-25..30) added or
-  updated for every changed behavior in this scope.
-- [ ] Broader E2E regression suite passes for this scope.
+  updated for every changed behavior in this scope. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
+- [ ] Broader E2E regression suite passes for this scope. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Shared-infrastructure canary coverage: TP-073-25..29 prove
   existing PWA shell + auth/session middleware remain healthy after
   wiki routes are added; cross-link renderer unit canary asserts
-  no client-side derivation.
+  no client-side derivation. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Rollback/restore proof: all wiki files are additive; `git revert`
   of the wiki commit removes the routes without touching assistant
-  chat, capture, or backend code.
+  chat, capture, or backend code. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 - [ ] Change Boundary respected: zero changes to assistant chat
   files, capture pipeline, native mobile clients, server endpoints,
-  or service worker cache behavior.
+  or service worker cache behavior. (BLOCKED on upstream API gap — see ## Scope 5 — Upstream Blocker)
 
 **Uncertainty Declaration:** Implementation depends on the existence
 of read APIs for topics/people/places/time/artifacts with graph edge
