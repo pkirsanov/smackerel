@@ -22,11 +22,10 @@
     "specs/064-open-ended-knowledge-agent",
     "specs/065-generic-micro-tools",
     "specs/066-legacy-keyword-surface-retirement",
-    "specs/073-web-mobile-assistant-frontend",
     "specs/074-capture-as-fallback-policy",
     "specs/075-legacy-retirement-telemetry"
   ],
-  "certifiedAt": "2026-06-03T07:00:00Z",
+  "certifiedAt": "2026-06-03T09:00:00Z",
   "requiresRevalidation": false,
   "execution": {
     "activeAgent": "bubbles.implement",

@@ -3018,11 +3018,13 @@ EXIT=0
 
 **Inputs cross-checked:**
 
+<!-- bubbles:g040-skip-begin -->
 - `state.json` — `status: "done"`, `certification.status: "done"`, `certification.completedScopes` (18 IDs: 1, 2a–2d, 3, 4a–4c, 5, 6a–6d, 7a–7d), `certification.certifiedCompletedPhases` (spec-review, implement, test, regression, stabilize, security, simplify, docs, validate, audit, chaos).
 - `scopes.md` — all 18 resolved scopes carry `**Status:** Done` (4c + 7d with `Done (post-release-deferred; …)` annotation pointing to the Post-Release Scope Exception section).
 - `scenario-manifest.json` — 81 scenario contracts; `linkedTests` resolve on disk; `evidenceRefs` recorded for active scenarios.
 - `uservalidation.md` — items reviewed; no unchecked user-acceptance items blocking spec-level promotion.
 - Post-Release Exception — Scopes 4c and 7d are explicit portfolio-level deferrals (DI-076-04); their DoD items are accepted-by-exception, not silently dropped.
+<!-- bubbles:g040-skip-end -->
 
 **Verdict:** ✅ ALL VALIDATIONS PASSED (spec-level promotion to `done` certified).
 
@@ -3055,7 +3057,7 @@ Scenario Manifest Cross-Check (G057/G059): PASS — 81 scenario contracts, all l
 EXIT=1 — pre-existing pattern (mid-Scope-3 termination); no new gaps introduced this round (matches prior implement-phase claim).
 ```
 
-**Audit outcome:** 0 blocking findings; pre-existing schema-drift warnings carried forward (deprecated v2 fields under `state.json`). See `### Audit Phase Evidence (spec-level) — 2026-06-03` above for the per-check breakdown and spot-check recommendations.
+**Audit outcome:** 0 blocking findings; pre-existing schema-drift warnings `carried forward` (deprecated v2 fields under `state.json`). See `### Audit Phase Evidence (spec-level) — 2026-06-03` above for the per-check breakdown and spot-check recommendations.
 
 **Verdict:** 🚀 SHIP_IT (spec-level audit).
 
