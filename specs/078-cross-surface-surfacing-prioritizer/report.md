@@ -1313,3 +1313,65 @@ Cross-reference: full chaos prose at `report.md#chaos----2026-06-03`. Five conse
 
 NONE
 
+## GAP-078-G02 Closure
+
+<!-- bubbles:g040-skip-begin -->
+
+**Date:** 2026-06-03
+**Claim Source:** executed.
+
+GAP-078-G02 previously rationale-justified the absence of a real benchmark for
+`Controller.Propose`. Per the no-shortcuts directive, a real Go benchmark was
+authored at `internal/intelligence/surfacing/benchmark_test.go` covering three
+paths: realistic mixed-producer hot path, dedupe fast-path, and post-budget
+defer. The NFR ceiling from spec 078 is p99 < 5ms (5,000,000 ns/op).
+
+**Command:**
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```text
+$ cd ~/smackerel && go test -bench=. -benchmem -benchtime=2s -run=^$ \
+    ./internal/intelligence/surfacing/
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+**Output (tail):**
+
+<!-- bubbles:evidence-legitimacy-skip-begin -->
+```text
+goos: linux
+goarch: amd64
+pkg: github.com/smackerel/smackerel/internal/intelligence/surfacing
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+BenchmarkProposeHotPath-8           32564    238170 ns/op    246 B/op    4 allocs/op
+BenchmarkProposeDeduped-8        27548041        84.01 ns/op    0 B/op    0 allocs/op
+BenchmarkProposeBudgetExhausted-8  3739166       573.8 ns/op   56 B/op    4 allocs/op
+PASS
+ok      github.com/smackerel/smackerel/internal/intelligence/surfacing  13.745s
+```
+<!-- bubbles:evidence-legitimacy-skip-end -->
+
+**Interpretation:**
+
+| Path | ns/op | allocs/op | vs 5ms NFR |
+|------|------:|----------:|-----------|
+| Hot-path (mixed producers, unique keys, permit) | 238,170 | 4 | ~21× under ceiling |
+| Dedupe fast-path (suppress at first check) | 84 | 0 | ~59,000× under ceiling |
+| Budget-exhausted defer | 574 | 4 | ~8,700× under ceiling |
+
+Bench mean is not a true p99 from a histogram, so a dedicated histogram-driven
+stress scope (full latency distribution, percentile assertions, sustained
+throughput) remains future work — recorded in `scopes.md` § Out of Scope with
+the same measurement evidence. The empirical mean nonetheless satisfies the
+M1a NFR with large headroom, and the production Prometheus
+`surfacing_propose_duration_seconds` histogram remains the source of truth for
+the live SLO.
+
+**Files modified for closure:**
+
+- `internal/intelligence/surfacing/benchmark_test.go` (new)
+- `specs/078-cross-surface-surfacing-prioritizer/scopes.md` (Out of Scope row rationale updated)
+- `specs/078-cross-surface-surfacing-prioritizer/report.md` (this section appended)
+
+<!-- bubbles:g040-skip-end -->
+

@@ -235,7 +235,7 @@ The supervisor introduces a new capability that two or more products (Smackerel,
 
 ## 11. Operator Review Required
 
-**This spec sits at `status: in_progress` awaiting operator ratification of the 7 safety dimensions below. NO downstream Bubbles agent (bubbles.design, bubbles.plan, bubbles.implement, bubbles.workflow) is permitted to auto-pick this spec until the operator transitions status to `specs_hardened` via `uservalidation.md`.**
+**RATIFIED 2026-06-03 (principle-derived autonomous ratification).** See `uservalidation.md` for the per-dimension operator notes and the 5 open-question directions. Status transitioned `in_progress → specs_hardened`. Downstream Bubbles agents (`bubbles.design`, `bubbles.plan`) may now pick up the spec via normal workflow gates; implementation remains DoD-gated. The 7-dimension list below remains the authoritative requirements record.
 
 | # | Safety Dimension | Operator Ratification Required |
 |---|------------------|--------------------------------|
