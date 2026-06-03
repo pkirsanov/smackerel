@@ -25,6 +25,7 @@ enum RenderDescriptorKind {
   disambiguation,
   captureAcknowledgement,
   error,
+  legacyRetirementNotice,
 }
 
 class RenderDescriptor {
@@ -135,6 +136,28 @@ List<RenderDescriptor> renderTurnResponse(
       kind: RenderDescriptorKind.error,
       fields: <String, Object?>{'error_cause': errorCause},
     ));
+  }
+  // Spec 075 / 076 SCOPE-6c — legacy-retirement notice descriptor.
+  // Server-side ledger owns dedup; the platform adapter renders this
+  // descriptor as a one-line addendum AFTER the primary body. Same
+  // server-emitted NoticePayload that WhatsApp + Telegram + PWA consume.
+  final dynamic notice = response['notice'];
+  if (notice is Map<String, dynamic>) {
+    final dynamic cmdRaw = notice['command'];
+    final dynamic exRaw = notice['replacement_example'];
+    final String cmd = cmdRaw is String ? cmdRaw : '';
+    final String ex = exRaw is String ? exRaw : '';
+    if (cmd.isNotEmpty && ex.isNotEmpty) {
+      out.add(RenderDescriptor(
+        kind: RenderDescriptorKind.legacyRetirementNotice,
+        fields: <String, Object?>{
+          'command': cmd,
+          'replacement_example': ex,
+          'copy_key': notice['copy_key'],
+          'window_id': notice['window_id'],
+        },
+      ));
+    }
   }
   // target is intentionally not consulted; recorded only as a side-channel
   // assertion-friendly value via `lastRenderTarget` if callers need it.

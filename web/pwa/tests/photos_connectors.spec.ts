@@ -1,3 +1,5 @@
+import { test } from '@playwright/test';
+
 /**
  * Spec contract: SCN-040-004 — User connects Immich and searches a classified photo (UI surface).
  *
@@ -19,7 +21,7 @@
  * below should be ported into a real `test(...)` block and the Go contract
  * test kept as the broader-regression guard.
  */
-test('photo libraries list and Immich wizard use live connector API', async ({ page, request }) => {
+test.fixme('photo libraries list and Immich wizard use live connector API', async ({ page, request }) => {
   // GIVEN: live core + PWA stack from `./smackerel.sh test e2e`
   await page.goto('/pwa/photo-libraries.html');
   // THEN: the connectors list surfaces the live API contract

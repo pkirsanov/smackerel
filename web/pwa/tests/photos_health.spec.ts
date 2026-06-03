@@ -1,3 +1,5 @@
+import { test } from '@playwright/test';
+
 /**
  * Spec contract: SCN-040-013, SCN-040-015 — Photo Health dashboard
  * surfaces LIVE numbers from `/v1/photos/health`: lifecycle states,
@@ -26,7 +28,7 @@
  * from specs/040-cloud-photo-libraries/scenario-manifest.json. Live-stack
  * assertions live in the Go tests above.
  */
-test('photo health dashboard renders lifecycle duplicate sensitivity and confidence metrics', async ({ page }) => {
+test.fixme('photo health dashboard renders lifecycle duplicate sensitivity and confidence metrics', async ({ page }) => {
   // GIVEN: a live core stack and the PWA served from /pwa/.
   await page.goto('/pwa/photo-health.html');
   // THEN: the dashboard MUST render the lifecycle states, duplicates

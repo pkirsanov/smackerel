@@ -29,6 +29,9 @@ func baseLegacyRetirementEnv() map[string]string {
 		"LEGACY_RETIREMENT_USER_BUCKET_HMAC_KEY":                    "test-hmac-key-not-for-prod",
 		"LEGACY_RETIREMENT_NOTICE_COPY_PER_COMMAND":                 `{"/weather":"Try plain English: weather in Barcelona tomorrow."}`,
 		"LEGACY_RETIREMENT_POST_WINDOW_UNKNOWN_RESPONSE_COPY":       `{"/weather":"I do not use /weather anymore."}`,
+		"LEGACY_RETIREMENT_THRESHOLD_EVALUATOR_INTERVAL_SECONDS":    "300",
+		"LEGACY_RETIREMENT_OBSERVATION_CRON_EXPR":                   "0 4 * * *",
+		"LEGACY_RETIREMENT_ROLLBACK_THRESHOLD_DAILY_INVOCATIONS":    "100",
 	}
 }
 

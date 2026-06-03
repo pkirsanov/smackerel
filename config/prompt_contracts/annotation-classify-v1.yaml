@@ -1,0 +1,94 @@
+id: annotation_classify
+version: "annotation-classify-v1"
+principleAlignment:
+- "Principle 2"
+type: "scenario"
+description: |
+  Spec 076 SCOPE-4b — compiled-intent annotation classification scenario.
+
+  Maps a user-authored annotation text (e.g. "cooked it, was great") to one
+  of the smackerel domain InteractionType values. Replaces the inline
+  `interactionMap` literal in `internal/annotation/parser.go` for the
+  shadow (4b) and eventually primary (4c) read paths.
+
+  The Go production caller wraps `agent.Bridge.Invoke` with an explicit
+  `IntentEnvelope{ScenarioID: "annotation_classify"}` so the router takes
+  the BS-002 explicit-id fast path and skips embedding work.
+
+intent_examples:
+- "classify the annotation interaction"
+- "what kind of interaction is this annotation"
+- "made it"
+- "bought it"
+
+system_prompt: |
+  You are Smackerel's annotation interaction-type classifier.
+
+  The user supplies a short free-text annotation about an artifact in their
+  knowledge graph. Your sole job is to decide which of the following
+  InteractionType values, if any, best describes the action the user took.
+
+  Allowed `interaction_type` values (closed enum):
+    - "made_it"     — user cooked, prepared, built, or otherwise produced the artifact's subject
+    - "bought_it"   — user purchased or acquired the artifact's subject
+    - "read_it"     — user read the artifact's subject
+    - "visited"     — user visited the artifact's subject (place, venue)
+    - "tried_it"    — user tried the artifact's subject without a more specific verb
+    - "used_it"     — user used the artifact's subject
+    - ""            — the text does not describe a real-world interaction; do NOT guess
+
+  RULES (mandatory):
+    1. Output MUST validate against the declared output_schema.
+    2. `confidence` is your calibrated probability in [0,1] that
+       `interaction_type` is correct. When uncertain, return a value below
+       0.6 so the Go caller can route to spec 061 disambiguation rather
+       than guessing.
+    3. Do NOT invent new interaction values. Do NOT call any tool — finalise
+       on the first turn. The `noop_annotation_classify` tool is registered
+       only to satisfy the loader's `allowed_tools` schema; you MUST NOT
+       invoke it.
+    4. `rationale` is a one-sentence audit string; keep it under 200 chars.
+
+allowed_tools:
+- name: noop_annotation_classify
+  side_effect_class: read
+
+input_schema:
+  type: object
+  required: [ text, source_channel ]
+  additionalProperties: false
+  properties:
+    text:
+      type: string
+      minLength: 1
+      maxLength: 2000
+    source_channel:
+      type: string
+      minLength: 1
+
+output_schema:
+  type: object
+  required: [ interaction_type, confidence ]
+  additionalProperties: false
+  properties:
+    interaction_type:
+      type: string
+      enum: [ "", "made_it", "bought_it", "read_it", "visited", "tried_it", "used_it" ]
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    rationale:
+      type: string
+      maxLength: 200
+
+limits:
+  max_loop_iterations: 1
+  timeout_ms: 15000
+  schema_retry_budget: 1
+  per_tool_timeout_ms: 7500
+
+token_budget: 400
+temperature: 0.0
+model_preference: "fast"
+side_effect_class: read
