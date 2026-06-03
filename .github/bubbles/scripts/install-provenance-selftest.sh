@@ -133,6 +133,72 @@ grep -Fq '"sourceRef": "local-source"' "$quoted_provenance" \
   && pass "Unsafe local-source refs fall back to literal local-source provenance" \
   || fail "Unsafe local-source refs fall back to literal local-source provenance"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# v5.0.1 H5: post-install fixture assertions — would have caught the latest
+# class of bugs (adapter dir missing, .gitignore written to wrong target).
+# ─────────────────────────────────────────────────────────────────────────────
+adapters_dir="$LOCAL_FIXTURE/.github/bubbles/adapters/observability"
+[[ -d "$adapters_dir" ]] \
+  && pass "Local install creates adapters/observability/ directory" \
+  || fail "Local install creates adapters/observability/ directory"
+
+for adapter in none.sh prometheus.sh; do
+  if [[ -f "$adapters_dir/$adapter" ]]; then
+    pass "Adapter installed: $adapter"
+  else
+    fail "Adapter missing: $adapter"
+  fi
+  if [[ -x "$adapters_dir/$adapter" ]]; then
+    pass "Adapter is executable: $adapter"
+  else
+    fail "Adapter not executable: $adapter"
+  fi
+done
+
+# v5.0.1 H4 follow-up: schemas directory landed downstream so
+# yaml-schema-validate.sh can run there.
+schemas_dir="$LOCAL_FIXTURE/.github/bubbles/schemas"
+[[ -d "$schemas_dir" ]] \
+  && pass "Local install creates schemas/ directory" \
+  || fail "Local install creates schemas/ directory"
+for schema in workflows.schema.json capability-ledger.schema.json adoption-profiles.schema.json; do
+  if [[ -f "$schemas_dir/$schema" ]]; then
+    pass "Schema installed: $schema"
+  else
+    fail "Schema missing: $schema"
+  fi
+done
+
+# improvements/ MUST be appended to the repo-root .gitignore (NOT
+# .github/.gitignore). The earlier installer bug wrote to TARGET/.gitignore
+# where TARGET=.github, which silently produced a useless .github/.gitignore.
+root_gitignore="$LOCAL_FIXTURE/.gitignore"
+[[ -f "$root_gitignore" ]] \
+  && pass "Local install creates/preserves repo-root .gitignore" \
+  || fail "Local install creates/preserves repo-root .gitignore"
+
+grep -qx 'improvements/' "$root_gitignore" 2>/dev/null \
+  && pass "Repo-root .gitignore contains improvements/ entry" \
+  || fail "Repo-root .gitignore contains improvements/ entry (yesterday's installer bug)"
+
+# Negative assertion: there MUST NOT be a stray .github/.gitignore created
+# by the installer (regression check for the misdirected-write bug).
+github_gitignore="$LOCAL_FIXTURE/.github/.gitignore"
+if [[ -f "$github_gitignore" ]] && grep -q 'improvements/' "$github_gitignore" 2>/dev/null; then
+  fail "Installer wrote improvements/ to .github/.gitignore instead of repo root"
+else
+  pass "Installer did NOT create stray .github/.gitignore with improvements/"
+fi
+
+# Manifest count: ensures release-manifest.json is non-empty and well-formed.
+manifest="$LOCAL_FIXTURE/.github/bubbles/release-manifest.json"
+managed_count="$(python3 -c "import json; d=json.load(open('$manifest')); print(d.get('managedFileCount', 0))" 2>/dev/null || echo 0)"
+if [[ "${managed_count:-0}" -ge 300 ]]; then
+  pass "Installed manifest reports $managed_count managed files (>=300 sanity floor)"
+else
+  fail "Installed manifest reports only $managed_count managed files (<300 — manifest enumeration regressed)"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
   echo "install-provenance selftest failed with $failures issue(s)."
   exit 1

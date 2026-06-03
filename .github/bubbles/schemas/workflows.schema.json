@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pkirsanov/bubbles/schemas/workflows.schema.json",
+  "title": "Bubbles workflow registry",
+  "type": "object",
+  "required": ["defaultMode", "gates", "modes"],
+  "additionalProperties": true,
+  "properties": {
+    "defaultMode": { "type": "string" },
+    "gates": {
+      "type": "object",
+      "patternProperties": {
+        "^G[0-9]{3}$": {
+          "type": "object",
+          "required": ["name", "description"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*_gate$"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 10
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "modes": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z][a-z0-9-]*$": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "description": { "type": "string" },
+            "phases": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "requiredGates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^G[0-9]{3}$"
+              }
+            },
+            "statusCeiling": { "type": "string" },
+            "terminalAliases": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "inherits": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" } }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

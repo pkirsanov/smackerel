@@ -79,8 +79,21 @@ done < <(find "$REPO_ROOT/tests/regression" -maxdepth 1 -type f -name '*.sh' 2>/
 payload_git_sha=''
 payload_generated_at=''
 if bubbles_owns_git_checkout "$REPO_ROOT" && [[ "${#managed_entries[@]}" -gt 0 ]]; then
-  payload_git_sha="$({ git -C "$REPO_ROOT" log -1 --format=%H -- "${managed_entries[@]}"; } 2>/dev/null || true)"
-  payload_generated_at="$({ git -C "$REPO_ROOT" log -1 --format=%cI -- "${managed_entries[@]}"; } 2>/dev/null || true)"
+  # H10 (v5.0.1): exclude the manifest itself from the git-log lookup so that a
+  # commit which ALSO regenerates the manifest does not produce a stale-by-design
+  # gitSha (the new commit's SHA would only be knowable after the commit is made,
+  # leaving the manifest's gitSha pointing at the previous head). The manifest is
+  # a *derived* artifact of the other managed entries — its own history is not
+  # an input to the payload SHA.
+  payload_inputs=()
+  for entry in "${managed_entries[@]}"; do
+    [[ "$entry" == "bubbles/release-manifest.json" ]] && continue
+    payload_inputs+=("$entry")
+  done
+  if [[ "${#payload_inputs[@]}" -gt 0 ]]; then
+    payload_git_sha="$({ git -C "$REPO_ROOT" log -1 --format=%H -- "${payload_inputs[@]}"; } 2>/dev/null || true)"
+    payload_generated_at="$({ git -C "$REPO_ROOT" log -1 --format=%cI -- "${payload_inputs[@]}"; } 2>/dev/null || true)"
+  fi
 fi
 
 git_sha="${payload_git_sha:-$(bubbles_local_source_sha "$REPO_ROOT") }"
@@ -197,7 +210,16 @@ if [[ "$CHECK_ONLY" == 'true' ]]; then
     exit 1
   }
 
-  if cmp -s "$temp_output" "$OUTPUT_PATH"; then
+  # H10 (v5.0.1): compare manifest content EXCLUDING gitSha + generatedAt
+  # fields. Those two fields naturally update whenever the manifest itself is
+  # part of the commit being prepared, so a byte-exact `cmp` produces a
+  # chicken-and-egg "stale" verdict even when the payload is correct. The
+  # checksums + counts + file lists are still compared exactly.
+  filter_volatile() {
+    sed -E -e 's/^  "gitSha": ".*",$/  "gitSha": "<volatile>",/' \
+           -e 's/^  "generatedAt": ".*",$/  "generatedAt": "<volatile>",/'
+  }
+  if diff -q <(filter_volatile < "$temp_output") <(filter_volatile < "$OUTPUT_PATH") >/dev/null 2>&1; then
     printf 'Release manifest is current: %s (%s managed files)\n' "$version_value" "$managed_file_count"
     exit 0
   fi

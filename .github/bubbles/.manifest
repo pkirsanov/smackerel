@@ -16,6 +16,7 @@ bubbles/scripts/capability-foundation-guard-selftest.sh
 bubbles/scripts/capability-foundation-guard.sh
 bubbles/scripts/capability-freshness-selftest.sh
 bubbles/scripts/capability-ledger-selftest.sh
+bubbles/scripts/cheatsheet-drift-selftest.sh
 bubbles/scripts/cli.sh
 bubbles/scripts/compaction-discipline-guard-selftest.sh
 bubbles/scripts/compaction-discipline-guard.sh
@@ -53,6 +54,7 @@ bubbles/scripts/governance-index-lint.sh
 bubbles/scripts/handoff-cycle-check.sh
 bubbles/scripts/implementation-reality-scan-selftest.sh
 bubbles/scripts/implementation-reality-scan.sh
+bubbles/scripts/install-bubbles-hooks.sh
 bubbles/scripts/install-provenance-selftest.sh
 bubbles/scripts/instruction-budget-lint-selftest.sh
 bubbles/scripts/instruction-budget-lint.sh
@@ -88,11 +90,13 @@ bubbles/scripts/profile-transition-selftest.sh
 bubbles/scripts/project-scan-setup.sh
 bubbles/scripts/propagation-policy-guard-selftest.sh
 bubbles/scripts/propagation-policy-guard.sh
+bubbles/scripts/registry-consistency-selftest.sh
 bubbles/scripts/regression-baseline-guard-selftest.sh
 bubbles/scripts/regression-baseline-guard.sh
 bubbles/scripts/regression-quality-guard-selftest.sh
 bubbles/scripts/regression-quality-guard.sh
 bubbles/scripts/release-check.sh
+bubbles/scripts/release-manifest-purity-selftest.sh
 bubbles/scripts/release-manifest-selftest.sh
 bubbles/scripts/release-train-backfill-planner.sh
 bubbles/scripts/release-train-flag-audit-selftest.sh
@@ -144,8 +148,13 @@ bubbles/scripts/workflow-delegation-selftest.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-surface-selftest.sh
+bubbles/scripts/yaml-schema-validate.sh
 bubbles/adapters/observability/none.sh
 bubbles/adapters/observability/prometheus.sh
+bubbles/schemas/adoption-profiles.schema.json
+bubbles/schemas/capability-ledger.schema.json
+bubbles/schemas/workflows.schema.json
+bubbles/scripts/hooks/pre-push.sh
 templates/AGENTS.md.tmpl
 templates/agents.md.tmpl
 templates/constitution.md.tmpl
@@ -161,6 +170,7 @@ templates/upkeep-calendar.yaml.tmpl
 docs/CATALOG.md
 docs/CHEATSHEET.md
 docs/Framework_Convergence_Health.md
+docs/MODERNIZATION_PLAN.md
 docs/SCOPE_POLICY.md
 docs/Spec_Implementation_Alignment.md
 docs/examples/README.md
