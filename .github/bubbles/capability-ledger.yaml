@@ -86,7 +86,7 @@ capabilities:
   framework-self-observation:
     label: Framework self-observation
     state: shipped
-    summary: bubbles.retro target: framework analyzes framework events, workflow runs, gate trends, and capability freshness, then writes proposal-first improvement packets under improvements/ without mutating framework files.
+    summary: "bubbles.retro target: framework analyzes framework events, workflow runs, gate trends, and capability freshness, then writes proposal-first improvement packets under improvements/ without mutating framework files."
     ownerSurface: bubbles/scripts/retro-framework-health.sh
     releaseIntroduced: v5.0.0
     docsRefs:
