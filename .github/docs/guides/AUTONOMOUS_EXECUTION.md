@@ -232,6 +232,10 @@ If the active top-level runtime does not expose the subagent tool, the correct r
 | *"Smoooth as silk"* | bubbles.train release-train cut/promote/rollback cycle |
 | *"Trailer don't clean itself"* | bubbles.upkeep calendar-driven recurring maintenance |
 | *"Same act, every stop"* | Trunk-based release-trains shipping the same code via per-train flag bundles |
+| *"Same fix, every park"* | bubbles.propagate cross-train forward/backport propagation |
+| *"What's in prod and dev"* | bubbles.train `status --all-trains` portfolio rollup |
+| *"Prod is broken"* | incident-fastlane: stabilize diagnosis → train rollback → devops execute → validate |
+| *"Framework health"* | bubbles.retro `target: framework` proposal-first self-observation |
 
 ---
 

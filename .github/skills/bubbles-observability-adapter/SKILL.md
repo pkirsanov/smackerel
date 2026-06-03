@@ -81,7 +81,7 @@ If you add a third adapter (e.g. `sentry.sh`), the lint discovers it via the `*.
 | Adapter | Verbs | Env vars |
 |---------|-------|----------|
 | `none` | all 4 return `{}` | — |
-| `prometheus` | all 4 query Prometheus HTTP API | `PROMETHEUS_BASE_URL` (required), `PROMETHEUS_BEARER_TOKEN`, `PROMETHEUS_CURL_MAX_TIME`, `PROMETHEUS_QUERY_*` (optional overrides) |
+| `prometheus` | all 4 query Prometheus HTTP API | `PROMETHEUS_BASE_URL`, `PROMETHEUS_CURL_MAX_TIME`, `PROMETHEUS_QUERY_SLO_BURN`, `PROMETHEUS_QUERY_ERROR_RATE`, `PROMETHEUS_QUERY_DEPLOY_IMPACT` (all required; no defaults), `PROMETHEUS_BEARER_TOKEN` (optional secret) |
 
 ## Failure semantics
 

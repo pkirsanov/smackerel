@@ -4,6 +4,7 @@
 #
 # Cases:
 #   1. No policy file → exit 0 with skip message
+#   1b. No policy file with --require-policy → exit 1 (G121)
 #   2. Clean fixture → exit 0
 #   3. version != 1 → exit 1
 #   4. trains[] empty → exit 1
@@ -25,6 +26,7 @@ command -v yq >/dev/null 2>&1 || { echo "SKIP: yq not installed"; exit 0; }
 
 TMP="$(mktemp -d "${HOME}/.bubbles-selftest-prop-guard.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
+SELFTEST_TIMEOUT="${BUBBLES_PROPAGATION_GUARD_SELFTEST_TIMEOUT_SECONDS:-60}"
 
 setup_clean_fixture() {
   rm -rf "$TMP"
@@ -81,7 +83,7 @@ EOF
 
 assert_pass() {
   local desc="$1"
-  if timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
+  if timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1; then
     echo "PASS: $desc"
   else
     local rc=$?
@@ -94,7 +96,7 @@ assert_pass() {
 assert_fail() {
   local desc="$1"
   local rc=0
-  timeout 10 "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+  timeout "$SELFTEST_TIMEOUT" "$GUARD" "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 1 ]]; then
     echo "PASS: $desc"
   else
@@ -108,6 +110,18 @@ assert_fail() {
 setup_clean_fixture
 rm "$TMP/propagation-policy.yaml"
 assert_pass "no policy file → skip"
+
+# 1b. No policy file with --require-policy → blocking G121
+setup_clean_fixture
+rm "$TMP/propagation-policy.yaml"
+rc=0
+timeout "$SELFTEST_TIMEOUT" "$GUARD" --require-policy "$TMP" </dev/null >/dev/null 2>&1 || rc=$?
+if [[ $rc -eq 1 ]]; then
+  echo "PASS: no policy file with --require-policy rejected (G121)"
+else
+  echo "FAIL: no policy file with --require-policy rejected (expected exit 1, got $rc)" >&2
+  exit 1
+fi
 
 # 2. Clean fixture
 setup_clean_fixture
@@ -154,6 +168,12 @@ if command -v jq >/dev/null 2>&1; then
   setup_clean_fixture
   printf 'this is not json\n' > "$TMP/propagation-ledger.yaml"
   assert_fail "invalid JSONL ledger line rejected (G123)"
+
+  setup_clean_fixture
+  cat > "$TMP/propagation-ledger.yaml" <<'EOF'
+{"timestamp":"2026-06-03T00:00:00Z","operator":"tester","operation":"backport","fromTrain":"prod","toTrain":"mvp","commits":["abc123"],"validationMode":"validate-only","validationOutcome":"passed","approvalToken":null}
+EOF
+  assert_fail "backport ledger without approvalToken rejected (G123)"
 else
   echo "SKIP: jq not installed, ledger format check"
 fi

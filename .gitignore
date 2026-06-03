@@ -97,3 +97,6 @@ integration_output.txt
 .vscode/tasks.json
 .copilot-temp/
 
+
+# Bubbles framework-health proposals (downstream-local)
+improvements/

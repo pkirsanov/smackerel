@@ -376,6 +376,54 @@ select → bootstrap → devops → test → stabilize → security → validate
 
 **Use when:** CI/CD, build, deployment, monitoring, observability, or release automation needs direct execution work. If DevOps work exposes real product or planning changes, this mode must execute the full finding-owned planning/remediation chain before it returns.
 
+### <img src="../../icons/jroc-cap.svg" width="20"> propagate-forward
+
+```
+select → devops → validate → audit → docs → finalize
+```
+
+**Use when:** A change on one declared release train should move forward to the next train(s). Owned by `bubbles.propagate` (J-Roc), with git execution routed to `bubbles.devops` and receiving-train validation routed per `propagation-policy.yaml`.
+
+### <img src="../../icons/jroc-cap.svg" width="20"> propagate-backport
+
+```
+select → devops → validate → audit → docs → finalize
+```
+
+**Use when:** A prod/hotfix change must move backward to an earlier train. Requires a `backportable: true` edge and approval token when policy requires approval.
+
+### <img src="../../icons/jroc-cap.svg" width="20"> propagate-audit
+
+```
+select → audit → docs → finalize
+```
+
+**Use when:** You need a read-only drift report showing commits present on a source train but missing from downstream trains.
+
+### <img src="../../icons/dvs-mic.svg" width="20"> release-train-status-all
+
+```
+select → audit → finalize
+```
+
+**Use when:** You want one read-only table for every train: phase, slot, flag bundle, retention, PII, and open flag count. Also available as `/bubbles.train status --all-trains`.
+
+### <img src="../../icons/bill-wrench.svg" width="20"> incident-fastlane
+
+```
+select → stabilize → devops → validate → audit → docs → finalize
+```
+
+**Use when:** Production is actively broken. `bubbles.stabilize` classifies severity; `incident` findings route rollback authority to `bubbles.train`; `bubbles.devops` executes; `bubbles.validate` confirms.
+
+### <img src="../../icons/lahey-bottle.svg" width="20"> framework-health
+
+```
+select → audit → docs → finalize
+```
+
+**Use when:** You want `bubbles.retro target: framework` to analyze Bubbles' own framework-events, workflow-runs, gate trends, and capability freshness, then write a proposal under `improvements/` without auto-mutating framework files.
+
 ### <img src="../../icons/cyrus-sunglasses.svg" width="20"> improve-existing
 
 ```
@@ -514,6 +562,12 @@ analyze → ux
 | `audit-only` | Audit only | Compliance |
 | `spec-scope-hardening` (with analyze + socratic) | Explore → bootstrap → harden → finalize | Idea exploration, no code |
 | `devops-to-doc` | DevOps → test → stabilize → security → validate → audit → docs → finalize | Operational delivery |
+| `propagate-forward` | Select → devops → validate → audit → docs → finalize | Forward change propagation across trains |
+| `propagate-backport` | Select → devops → validate → audit → docs → finalize | Approval-guarded backport across trains |
+| `propagate-audit` | Select → audit → docs → finalize | Read-only propagation drift report |
+| `release-train-status-all` | Select → audit → finalize | Multi-train status rollup |
+| `incident-fastlane` | Stabilize → train rollback → devops → validate → docs | Production incident response |
+| `framework-health` | Retro target: framework → proposal | Framework self-observation |
 | `resume-only` | Resume state | Picking up work |
 | `autonomous-goal` | Convergence loop: plan → implement → verify → remediate → repeat | Fully autonomous single-goal execution |
 | `autonomous-sprint` | Time-bounded multi-goal: plan → execute goals → wrap-up | Multiple goals with a deadline |

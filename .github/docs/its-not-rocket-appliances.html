@@ -1190,6 +1190,126 @@
     <div class="wf-desc">Validate + audit + docs. The camera crew watches and documents.</div>
     <div class="wf-quote">"(camera crew just watches)"</div>
   </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-train-cut</div>
+    <div class="wf-alias">→ sunnyvale cut-the-train</div>
+    <div class="wf-desc">DVS cuts a candidate at a trunk SHA for a named train. Signed candidate artifact, no deployment.</div>
+    <div class="wf-quote">"Cut it, tag it, ship it."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-train-promote</div>
+    <div class="wf-alias">→ sunnyvale promote-the-pointer</div>
+    <div class="wf-desc">Pointer-swap a candidate between slots on a train. Requires backup-freshness + restore-drill currency.</div>
+    <div class="wf-quote">"Pointer swap. Don't rebuild."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-train-rollback</div>
+    <div class="wf-alias">→ sunnyvale back-it-up</div>
+    <div class="wf-desc">Revert the train pointer to the previous candidate. Pure pointer swap. No rebuild.</div>
+    <div class="wf-quote">"Back her up. We've been here before."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-train-retire</div>
+    <div class="wf-alias">→ sunnyvale park-the-train</div>
+    <div class="wf-desc">End-of-life a train: requires flag-retirement completion and clean upkeep ledger.</div>
+    <div class="wf-quote">"This train's done. Flags off the books first."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release-train-status-all</div>
+    <div class="wf-alias">→ sunnyvale every-park-at-once</div>
+    <div class="wf-desc">J-Roc's portfolio rollup across every declared train. Read-only multi-train snapshot.</div>
+    <div class="wf-quote">"Every park, one view. Knawmsayin?"</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">propagate-forward</div>
+    <div class="wf-alias">→ sunnyvale same-fix-every-park</div>
+    <div class="wf-desc">J-Roc forward-merges a fix/feature across <code>defaultFlow</code> train edges per <code>propagation-policy.yaml</code>.</div>
+    <div class="wf-quote">"Same fix, every park, knawmsayin?"</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">propagate-backport</div>
+    <div class="wf-alias">→ sunnyvale back-to-the-old-park</div>
+    <div class="wf-desc">J-Roc backports under explicit train-owner approval token. Reverse-edge, audited.</div>
+    <div class="wf-quote">"Permission slip first. Then the cherry-pick."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">propagate-audit</div>
+    <div class="wf-alias">→ sunnyvale check-every-park</div>
+    <div class="wf-desc">Read-only drift detection between declared trains. Reports unpropagated changes; never mutates.</div>
+    <div class="wf-quote">"Just lookin'. Not movin' nothin'."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">incident-fastlane</div>
+    <div class="wf-alias">→ sunnyvale call-the-trailer</div>
+    <div class="wf-desc">Production incident chain: triage → fix → validate → propagate → audit. Highest-priority operational lane.</div>
+    <div class="wf-quote">"Trailer's on fire, boys. Cory, grab the hose."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">framework-health</div>
+    <div class="wf-alias">→ sunnyvale bubbles-check-yo-self</div>
+    <div class="wf-desc"><code>bubbles.retro target: framework</code> — proposal-first self-observation of the framework. Writes only into <code>improvements/</code>.</div>
+    <div class="wf-quote">"Check yo'self before you wreck yo'self."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-backup-verify</div>
+    <div class="wf-alias">→ sunnyvale check-the-backup</div>
+    <div class="wf-desc">Scheduled backup verification (T1/T2/T3/T4). Calendar-driven via <code>config/upkeep-calendar.yaml</code>.</div>
+    <div class="wf-quote">"Backup or it didn't happen."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-restore-drill</div>
+    <div class="wf-alias">→ sunnyvale rehearse-the-rescue</div>
+    <div class="wf-desc">Weekly restore drill — proves a backup can be recovered. Failed drill blocks next promote.</div>
+    <div class="wf-quote">"Rehearse the rescue. Every week. No exceptions."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-bcdr-drill</div>
+    <div class="wf-alias">→ sunnyvale full-park-rebuild</div>
+    <div class="wf-desc">Quarterly BCDR drill — full disaster-recovery exercise into isolated namespace.</div>
+    <div class="wf-quote">"Whole park, from zero. Time it."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-patch-cycle</div>
+    <div class="wf-alias">→ sunnyvale patch-it-up</div>
+    <div class="wf-desc">Scheduled patch/dependency-rotation cycle. Recorded in upkeep ledger.</div>
+    <div class="wf-quote">"Patch the trailer. Log the patch."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-secret-rotation</div>
+    <div class="wf-alias">→ sunnyvale new-locks</div>
+    <div class="wf-desc">Scheduled secret/credential rotation. Recorded in upkeep ledger.</div>
+    <div class="wf-quote">"New locks. Old keys go in the fire."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-flag-cleanup</div>
+    <div class="wf-alias">→ sunnyvale retire-the-flags</div>
+    <div class="wf-desc">Remove feature flags and their dead branches before <code>release-train-retire</code>.</div>
+    <div class="wf-quote">"Flag's done. Branch is dead. Out it goes."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">upkeep-compliance-sweep</div>
+    <div class="wf-alias">→ sunnyvale quarterly-tedification</div>
+    <div class="wf-desc">Quarterly compliance evidence collection → <code>docs/Compliance_Report.md</code> (G117–G120). Treena gathers, Ted certifies.</div>
+    <div class="wf-quote">"Evidence, evidence, evidence. Then sign-off."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">adapter-readiness-to-packet</div>
+    <div class="wf-alias">→ sunnyvale adapter-ready-to-go</div>
+    <div class="wf-desc">Deliver an adapter to readiness state; packet certifies readiness for downstream consumption. Terminal: <code>delivered_pending_activation</code>.</div>
+    <div class="wf-quote">"Adapter's done. Operator's call when to flip it."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">dark-launch-shipped</div>
+    <div class="wf-alias">→ sunnyvale dark-and-quiet</div>
+    <div class="wf-desc">Code shipped behind a default-off flag; terminal <code>delivered_pending_activation</code> until flag flip.</div>
+    <div class="wf-quote">"Shipped. Quiet. Flag's still off."</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">migration-shipped-pending-cutover</div>
+    <div class="wf-alias">→ sunnyvale migration-shipped-not-cutover</div>
+    <div class="wf-desc">Migration code shipped but cutover not executed; terminal <code>delivered_pending_activation</code> until operator cutover.</div>
+    <div class="wf-quote">"Code's there. Operator's gotta pull the lever."</div>
+  </div>
 </div>
 
 <div class="section-title"><img src="../icons/bubbles-glasses.svg" width="24" style="vertical-align: middle; margin-right: 8px;"> TPB Vocabulary</div>
@@ -1350,6 +1470,46 @@
   <div class="workflow-card">
     <div class="wf-name">compliance sweep</div>
     <div class="wf-desc">Quarterly evidence-collection task generating <code>docs/Compliance_Report.md</code> for G117-G120. Treena gathers, Ted certifies.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">production cycle</div>
+    <div class="wf-desc">v5 production-operations doctrine: release-train portfolio (DVS) + cross-train propagation (J-Roc) + incident fastlane (Cory + Trevor) + observability adapters (Phil-Collins) + framework self-observation. All five surfaces are mandatory for "in-production" maturity.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">cross-train propagation</div>
+    <div class="wf-desc">J-Roc's role: moving the same fix/feature across declared release-train chains per <code>propagation-policy.yaml</code>. DVS owns the lifecycle of one train; J-Roc owns movement between trains.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">forward-merge</div>
+    <div class="wf-desc">Default-direction propagation along <code>defaultFlow</code> edges (e.g. experimental → mvp → prod). No approval token required when the policy edge is <code>forward</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">backport</div>
+    <div class="wf-desc">Reverse-edge propagation (e.g. prod → mvp → experimental). MUST carry an explicit <code>approvalToken</code> from the receiving train's owner. Logged in <code>propagation-ledger.yaml</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">propagation policy</div>
+    <div class="wf-desc"><code>propagation-policy.yaml</code> at repo root. Declares trains, edges, default flow direction, receiving-train validation mode, and backport approval requirement. Owned by J-Roc; enforced by Gate G121 / G122.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">propagation ledger</div>
+    <div class="wf-desc">Append-only <code>propagation-ledger.yaml</code> recording every propagation event (forward, backport, audit). One JSONL line per event with train pair, SHA, approval token (backports), and timestamp. Gate G123 enforces append-only + per-edge integrity.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">incident fastlane</div>
+    <div class="wf-desc">Cory + Trevor's production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses <code>bugfix-fastlane</code> mechanics plus mandatory cross-train propagation.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">observability adapter</div>
+    <div class="wf-desc"><code>bubbles/adapters/observability/&lt;name&gt;.sh</code> — pluggable live-telemetry contract. Reference adapters: <code>none.sh</code> (default), <code>prometheus.sh</code> (requires <code>PROMETHEUS_BASE_URL</code> + per-query env vars). Verbs: <code>health</code>, <code>query-instant</code>, <code>query-range</code>, <code>series-cardinality</code>.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">framework self-observation</div>
+    <div class="wf-desc"><code>bubbles.retro target: framework</code> (alias <code>framework-health</code>). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into <code>improvements/</code>, never auto-mutates framework files. The framework eats its own dog food.</div>
+  </div>
+  <div class="workflow-card">
+    <div class="wf-name">release train portfolio</div>
+    <div class="wf-desc">The set of all declared trains under <code>config/release-trains.yaml</code>. Surfaced by <code>release-train-status-all</code> (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness.</div>
   </div>
   <div class="workflow-card">
     <div class="wf-name">repo-readiness</div>

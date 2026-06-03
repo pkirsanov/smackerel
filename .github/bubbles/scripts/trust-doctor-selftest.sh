@@ -42,6 +42,24 @@ expect_no_pattern() {
 TMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
+clone_source_fixture() {
+  local dest="$1"
+
+  git clone -q "$ROOT_DIR" "$dest"
+
+  # Keep the fixture representative of the current worktree without copying
+  # transient repo state wholesale. This lets the selftest run before the
+  # current patch is committed while avoiding slow `cp -a` copies of .git and
+  # local build/cache directories.
+  if ! git -C "$ROOT_DIR" diff --quiet -- .; then
+    git -C "$ROOT_DIR" diff --binary -- . | git -C "$dest" apply --binary
+  fi
+
+  if ! git -C "$ROOT_DIR" diff --cached --quiet -- .; then
+    git -C "$ROOT_DIR" diff --cached --binary -- . | git -C "$dest" apply --binary
+  fi
+}
+
 REMOTE_FIXTURE="$TMP_ROOT/remote-fixture"
 LOCAL_FIXTURE="$TMP_ROOT/local-fixture"
 DIRTY_SOURCE="$TMP_ROOT/local-source-dirty"
@@ -55,25 +73,29 @@ git -C "$LOCAL_FIXTURE" init -q
 git -C "$MALFORMED_CURRENT_FIXTURE" init -q
 git -C "$FOUNDATION_GAP_FIXTURE" init -q
 printf '# Foundation Gap Fixture\n' > "$FOUNDATION_GAP_FIXTURE/README.md"
-cp -a "$ROOT_DIR" "$DIRTY_SOURCE"
-cp -a "$ROOT_DIR" "$MALFORMED_SOURCE"
+clone_source_fixture "$DIRTY_SOURCE"
+clone_source_fixture "$MALFORMED_SOURCE"
 printf '\n# trust doctor selftest dirty marker\n' >> "$DIRTY_SOURCE/CHANGELOG.md"
 
 echo "Running trust-doctor selftest..."
 echo "Scenario: doctor, framework-write-guard, and upgrade dry-run expose trust state and local-source risk explicitly."
 
+echo "[trust-doctor-selftest] installing remote fixture"
 (
   cd "$REMOTE_FIXTURE"
   BUBBLES_SOURCE_OVERRIDE_DIR="$ROOT_DIR" bash "$ROOT_DIR/install.sh" main --bootstrap >/dev/null
 )
+echo "[trust-doctor-selftest] installing local dirty fixture"
 (
   cd "$LOCAL_FIXTURE"
   bash "$ROOT_DIR/install.sh" --local-source "$DIRTY_SOURCE" --bootstrap >/dev/null
 )
+echo "[trust-doctor-selftest] installing malformed-current fixture"
 (
   cd "$MALFORMED_CURRENT_FIXTURE"
   BUBBLES_SOURCE_OVERRIDE_DIR="$ROOT_DIR" bash "$ROOT_DIR/install.sh" main --bootstrap >/dev/null
 )
+echo "[trust-doctor-selftest] installing foundation-gap fixture"
 (
   cd "$FOUNDATION_GAP_FIXTURE"
   BUBBLES_SOURCE_OVERRIDE_DIR="$ROOT_DIR" bash "$ROOT_DIR/install.sh" main --bootstrap --profile foundation >/dev/null
@@ -84,16 +106,24 @@ rm -f "$FOUNDATION_GAP_FIXTURE/.specify/memory/agents.md"
 perl -0pi -e 's/^  "version": ".*",\n//m' "$MALFORMED_CURRENT_FIXTURE/.github/bubbles/release-manifest.json"
 perl -0pi -e 's/^  "supportedProfiles": \[[^\n]*\],\n//m; s/^  "supportedInteropSources": \[[^\n]*\],\n//m' "$MALFORMED_SOURCE/bubbles/release-manifest.json"
 
+echo "[trust-doctor-selftest] collecting remote doctor output"
 remote_doctor_output="$(cd "$REMOTE_FIXTURE" && bash .github/bubbles/scripts/cli.sh doctor 2>&1)"
+echo "[trust-doctor-selftest] collecting local doctor output"
 local_doctor_output="$(cd "$LOCAL_FIXTURE" && bash .github/bubbles/scripts/cli.sh doctor 2>&1)"
+echo "[trust-doctor-selftest] collecting local framework-write-guard output"
 local_guard_output="$(cd "$LOCAL_FIXTURE" && bash .github/bubbles/scripts/cli.sh framework-write-guard 2>&1)"
+echo "[trust-doctor-selftest] collecting local upgrade dry-run output"
 local_upgrade_output="$(cd "$LOCAL_FIXTURE" && bash .github/bubbles/scripts/cli.sh upgrade --dry-run --local-source "$DIRTY_SOURCE" 2>&1)"
+echo "[trust-doctor-selftest] collecting foundation doctor output"
 foundation_doctor_output="$(cd "$FOUNDATION_GAP_FIXTURE" && bash .github/bubbles/scripts/cli.sh doctor 2>&1)"
+echo "[trust-doctor-selftest] collecting foundation readiness output"
 foundation_readiness_output="$(cd "$FOUNDATION_GAP_FIXTURE" && bash .github/bubbles/scripts/repo-readiness.sh . 2>&1)"
 
 set +e
+echo "[trust-doctor-selftest] collecting malformed guard output"
 malformed_guard_output="$(cd "$MALFORMED_CURRENT_FIXTURE" && bash .github/bubbles/scripts/cli.sh framework-write-guard 2>&1)"
 malformed_guard_status=$?
+echo "[trust-doctor-selftest] collecting malformed upgrade dry-run output"
 malformed_upgrade_output="$(cd "$REMOTE_FIXTURE" && BUBBLES_SOURCE_OVERRIDE_DIR="$MALFORMED_SOURCE" bash .github/bubbles/scripts/cli.sh upgrade --dry-run 2>&1)"
 malformed_upgrade_status=$?
 set -e

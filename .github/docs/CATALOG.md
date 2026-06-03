@@ -58,6 +58,11 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 | 46 | [Idea → Release Completion](recipes/idea-to-release.md) | `idea-to-release-completion` | Full lifecycle: idea → packet bootstrap → specs → ship → packet refresh (Sonny "Iron Lung" Smith) |
 | 47 | [Framework Dogfood](recipes/framework-dogfood.md) | `framework-validate` / G085 | Source repo no-specs dogfood evidence model |
 | 48 | [Validation Latency Budgets](recipes/validation-latency-budgets.md) | `validation-latency-report.sh` | Phase latency report and budget interpretation |
+| 49 | [Propagate Changes](recipes/propagate-changes.md) | `bubbles.propagate` / `propagate-*` | Forward-merge, backport, or audit drift across release trains |
+| 50 | [Multi-Train Status](recipes/multi-train-status.md) | `release-train-status-all` | One table for all trains: phase, slot, retention, PII, open flags |
+| 51 | [Incident Response](recipes/incident-response.md) | `incident-fastlane` | Diagnose production incidents, route rollback authority to train, execute and validate |
+| 52 | [Observe Production](recipes/observe-production.md) | `traceContracts.liveTelemetryEndpoints` | Wire live telemetry through swappable observability adapters |
+| 53 | [Framework Health](recipes/framework-health.md) | `framework-health` | Analyze Bubbles itself and emit proposal-first improvement packets |
 
 ---
 
@@ -82,13 +87,13 @@ Every recipe solves a specific problem. Find yours, follow the steps.
 17 → 18 → 19 → 25 → 26 → 27
 
 ### ⚙️ Operations & Framework
-29 → 30 → 31 → 32 → 33 → 34 → 35
+29 → 30 → 31 → 32 → 33 → 34 → 35 → 51 → 52 → 53
 
 ### 📋 Day-to-Day
 36 → 37 → 38
 
 ### 📦 Release Lifecycle
-8 → 9 → 45 → 46 → 31
+8 → 9 → 45 → 46 → 49 → 50 → 31
 
 ---
 

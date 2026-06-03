@@ -90,6 +90,9 @@ Orchestrator rule:
 | `bubbles.chaos` | run resilience and breakage probes | `test-bootstrap.md`, `quality-gates.md` |
 | `bubbles.simplify` | reduce over-engineering and simplify changed code | `implement-bootstrap.md`, `operating-baseline.md` |
 | `bubbles.devops` | execute CI/CD, build, deployment, monitoring, and observability changes | `execution-ops.md`, `artifact-ownership.md`, `quality-gates.md` |
+| `bubbles.train` | operate named release trains: cut candidates, promote/rollback/retire slots, audit feature flags, and report `status --all-trains` | `bubbles/workflows.yaml`, `skills/bubbles-release-train-model/SKILL.md`, `docs/recipes/multi-train-status.md` |
+| `bubbles.propagate` | move changes between declared release trains: forward propagation, guarded backports, and propagation drift audits | `agents/bubbles.propagate.agent.md`, `skills/bubbles-propagation-policy/SKILL.md`, `docs/recipes/propagate-changes.md` |
+| `bubbles.upkeep` | execute scheduled operational hygiene: backup verification, restore drills, BCDR drills, patch cycles, secret rotation, flag cleanup, and compliance sweep | `skills/bubbles-upkeep-cadence/SKILL.md`, `skills/bubbles-backup-bcdr-doctrine/SKILL.md` |
 
 Owner/executor rule:
 - only owners and execution specialists may modify their owned surfaces
@@ -134,7 +137,7 @@ Diagnostic/certification rule:
 | `bubbles.commands` | maintain command inventories and related framework command references | project-config and command docs |
 | `bubbles.create-skill` | scaffold or update repo-local skills | skills guidance plus shared governance index |
 | `bubbles.recap` | summarize current work, active state, and likely workflow continuation without changing artifacts | prompt-specific recap guidance |
-| `bubbles.retro` | run post-session or post-sprint retrospectives with velocity metrics, gate health trends, deep code hotspot analysis (bug magnets, co-change coupling, bus factor, churn trends), and shipping patterns. Also supports focused modes: `hotspots`, `coupling`, `busfactor` | prompt-specific retro guidance, git history, `state.json` metrics |
+| `bubbles.retro` | run post-session or post-sprint retrospectives with velocity metrics, gate health trends, deep code hotspot analysis (bug magnets, co-change coupling, bus factor, churn trends), and shipping patterns. Also supports focused modes: `hotspots`, `coupling`, `busfactor`, and `target: framework` for proposal-first framework self-observation | prompt-specific retro guidance, git history, `state.json` metrics, `docs/recipes/framework-health.md` |
 
 ## Natural Language Input
 

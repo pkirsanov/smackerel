@@ -61,7 +61,7 @@ echo "Scenario: generated docs or issue status drift must fail loudly before rel
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null
 pass "Fresh fixture generated from the capability ledger"
 
-rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" 'State summary: 13 shipped, 1 partial, 0 proposed.' 'State summary: 2 shipped, 1 partial, 4 proposed.'
+rewrite_once "$TMP_ROOT/docs/generated/competitive-capabilities.md" 'State summary: 17 shipped, 1 partial, 0 proposed.' 'State summary: 2 shipped, 1 partial, 4 proposed.'
 expect_check_failure "Generated capability guide drift is detected"
 
 BUBBLES_REPO_ROOT="$TMP_ROOT" bash "$SCRIPT_DIR/generate-capability-ledger-docs.sh" >/dev/null

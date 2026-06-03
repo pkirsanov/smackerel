@@ -144,6 +144,8 @@ bubbles/scripts/workflow-delegation-selftest.sh
 bubbles/scripts/workflow-planning-provenance-selftest.sh
 bubbles/scripts/workflow-registry-consistency.sh
 bubbles/scripts/workflow-surface-selftest.sh
+bubbles/adapters/observability/none.sh
+bubbles/adapters/observability/prometheus.sh
 templates/AGENTS.md.tmpl
 templates/agents.md.tmpl
 templates/constitution.md.tmpl

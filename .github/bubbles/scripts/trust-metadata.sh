@@ -236,6 +236,26 @@ bubbles_read_install_provenance_summary() {
   printf -v "$dirty_var" '%s' "$(bubbles_json_bool_field "$provenance_file" sourceDirty)"
 }
 
+bubbles_manifest_entry_is_tracked() {
+  local source_root="$1"
+  local relative_path="$2"
+
+  if ! bubbles_owns_git_checkout "$source_root"; then
+    return 0
+  fi
+
+  git -C "$source_root" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1
+}
+
+bubbles_print_manifest_entry() {
+  local source_root="$1"
+  local relative_path="$2"
+
+  [[ -f "$source_root/$relative_path" ]] || return 0
+  bubbles_manifest_entry_is_tracked "$source_root" "$relative_path" || return 0
+  printf '%s\n' "$relative_path"
+}
+
 bubbles_fill_unknown_if_empty() {
   local variable_name=''
 
@@ -256,13 +276,19 @@ bubbles_framework_manifest_entries() {
 
   for file_path in "$source_root"/bubbles/scripts/*.sh; do
     [[ -f "$file_path" ]] || continue
-    printf 'bubbles/scripts/%s\n' "$(basename "$file_path")"
+    bubbles_print_manifest_entry "$source_root" "bubbles/scripts/$(basename "$file_path")"
   done
 
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"
-    printf '%s\n' "$relative_path"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
+  done < <(find "$source_root/bubbles/adapters" -type f 2>/dev/null | LC_ALL=C sort)
+
+  while IFS= read -r file_path; do
+    [[ -f "$file_path" ]] || continue
+    relative_path="${file_path#$source_root/}"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
   done < <(find "$source_root/templates" -type f 2>/dev/null | LC_ALL=C sort)
 
   for relative_path in \
@@ -270,47 +296,47 @@ bubbles_framework_manifest_entries() {
     '.specify/memory/.gitignore' \
     '.specify/metrics/.gitignore' \
     '.specify/runtime/.gitignore'; do
-    [[ -f "$source_root/$relative_path" ]] && printf '%s\n' "$relative_path"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
   done
 
   while IFS= read -r file_path; do
     [[ -f "$file_path" ]] || continue
     relative_path="${file_path#$source_root/}"
-    printf '%s\n' "$relative_path"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
   done < <(find "$source_root/docs" -type f | LC_ALL=C sort)
 
-  [[ -f "$source_root/bubbles/workflows.yaml" ]] && printf '%s\n' 'bubbles/workflows.yaml'
-  [[ -f "$source_root/bubbles/agnosticity-allowlist.txt" ]] && printf '%s\n' 'bubbles/agnosticity-allowlist.txt'
+  bubbles_print_manifest_entry "$source_root" 'bubbles/workflows.yaml'
+  bubbles_print_manifest_entry "$source_root" 'bubbles/agnosticity-allowlist.txt'
 
   for file_path in "$source_root"/bubbles/*.yaml; do
     [[ -f "$file_path" ]] || continue
     relative_path="bubbles/$(basename "$file_path")"
     [[ "$relative_path" == 'bubbles/workflows.yaml' ]] && continue
-    printf '%s\n' "$relative_path"
+    bubbles_print_manifest_entry "$source_root" "$relative_path"
   done
 
   if [[ "$include_release_manifest" == 'true' && -f "$source_root/bubbles/release-manifest.json" ]]; then
-    printf '%s\n' 'bubbles/release-manifest.json'
+    bubbles_print_manifest_entry "$source_root" 'bubbles/release-manifest.json'
   fi
 
   for file_path in "$source_root"/agents/bubbles.*.agent.md; do
     [[ -f "$file_path" ]] || continue
-    printf 'agents/%s\n' "$(basename "$file_path")"
+    bubbles_print_manifest_entry "$source_root" "agents/$(basename "$file_path")"
   done
 
   for file_path in "$source_root"/agents/bubbles_shared/*.md; do
     [[ -f "$file_path" ]] || continue
-    printf 'agents/bubbles_shared/%s\n' "$(basename "$file_path")"
+    bubbles_print_manifest_entry "$source_root" "agents/bubbles_shared/$(basename "$file_path")"
   done
 
   for file_path in "$source_root"/prompts/bubbles.*.prompt.md; do
     [[ -f "$file_path" ]] || continue
-    printf 'prompts/%s\n' "$(basename "$file_path")"
+    bubbles_print_manifest_entry "$source_root" "prompts/$(basename "$file_path")"
   done
 
   for file_path in "$source_root"/instructions/bubbles-*.instructions.md; do
     [[ -f "$file_path" ]] || continue
-    printf 'instructions/%s\n' "$(basename "$file_path")"
+    bubbles_print_manifest_entry "$source_root" "instructions/$(basename "$file_path")"
   done
 
   for skill_dir in "$source_root"/skills/bubbles-*/; do
@@ -319,7 +345,7 @@ bubbles_framework_manifest_entries() {
     while IFS= read -r file_path; do
       [[ -f "$file_path" ]] || continue
       relative_path="${file_path#$skill_dir}"
-      printf 'skills/%s/%s\n' "$skill_name" "$relative_path"
+      bubbles_print_manifest_entry "$source_root" "skills/$skill_name/$relative_path"
     done < <(find "$skill_dir" -type f | LC_ALL=C sort)
   done
 }
@@ -418,6 +444,7 @@ bubbles_local_source_sha() {
 
 bubbles_local_source_dirty() {
   local source_root="$1"
+  local untracked_files=''
 
   if ! bubbles_owns_git_checkout "$source_root"; then
     if bubbles_source_bundle_clean "$source_root"; then
@@ -428,8 +455,11 @@ bubbles_local_source_dirty() {
     return 0
   fi
 
-  if git -C "$source_root" diff --no-ext-diff --quiet --exit-code && \
-     git -C "$source_root" diff --no-ext-diff --cached --quiet --exit-code; then
+    untracked_files="$({ git -C "$source_root" ls-files --others --exclude-standard; } 2>/dev/null || true)"
+
+    if git -C "$source_root" diff --no-ext-diff --quiet --exit-code && \
+      git -C "$source_root" diff --no-ext-diff --cached --quiet --exit-code && \
+      [[ -z "$untracked_files" ]]; then
     echo 'false'
   else
     echo 'true'

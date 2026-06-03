@@ -194,6 +194,26 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `retro-to-review` | liquor-then-look | Data-driven review — retro finds risks, then code-review diagnoses them |
 | `release-planning-to-doc` | plans-within-plans | Produce or refresh a phase release packet (vision/features/actions/business-plan/deployment/marketing/monetization/ops-scalability), enforce Product Direction Surfaces trio + carry-forward + cross-product coordination |
 | `idea-to-release-completion` | rocket-appliance | Full lifecycle: idea -> release packet bootstrap-or-refresh -> spec/design/scopes -> implement/test/validate/audit/chaos -> final release packet refresh that flips the capability to `delivered`. Closes the loop the standard `product-to-delivery` mode used to leave open. Owned by Sonny "Iron Lung" Smith for the release phases. |
+| `release-train-cut` | cut-the-train | DVS cuts a candidate at a trunk SHA for a named train. Tag + signed candidate artifact, no deployment. |
+| `release-train-promote` | promote-the-pointer | Pointer-swap a candidate between slots on a train (e.g. staging→prod). Requires backup-freshness + restore-drill currency. |
+| `release-train-rollback` | back-it-up | Revert the train pointer to the previous candidate. Pure pointer swap, no rebuild. |
+| `release-train-retire` | park-the-train | End-of-life a train: requires `flag-retirement` completion and clean upkeep ledger. |
+| `release-train-status-all` | every-park-at-once | J-Roc's portfolio rollup across every declared train. Read-only multi-train status snapshot. |
+| `propagate-forward` | same-fix-every-park | J-Roc forward-merges a fix/feature across `defaultFlow` train edges per `propagation-policy.yaml`. |
+| `propagate-backport` | back-to-the-old-park | J-Roc backports under explicit train-owner approval token. Reverse-edge propagation. |
+| `propagate-audit` | check-every-park | Read-only drift detection between declared trains. Reports unpropagated changes; never mutates. |
+| `incident-fastlane` | call-the-trailer | Production incident chain: triage → fix → validate → propagate → audit. Highest-priority operational lane. |
+| `framework-health` | bubbles-check-yo-self | `bubbles.retro target: framework` — proposal-first self-observation of the framework itself. Writes only into `improvements/`, never auto-mutates framework files. |
+| `upkeep-backup-verify` | check-the-backup | Run scheduled backup verification (T1/T2/T3/T4). Calendar-driven via `config/upkeep-calendar.yaml`. |
+| `upkeep-restore-drill` | rehearse-the-rescue | Weekly restore drill — proves a backup can be recovered. Failed drill blocks next promote. |
+| `upkeep-bcdr-drill` | full-park-rebuild | Quarterly BCDR drill — full disaster-recovery exercise into isolated namespace. |
+| `upkeep-patch-cycle` | patch-it-up | Scheduled patch/dependency-rotation cycle. Recorded in upkeep ledger. |
+| `upkeep-secret-rotation` | new-locks | Scheduled secret/credential rotation. Recorded in upkeep ledger. |
+| `upkeep-flag-cleanup` | retire-the-flags | Remove feature flags and their dead branches before `release-train-retire`. |
+| `upkeep-compliance-sweep` | quarterly-tedification | Quarterly compliance evidence collection → `docs/Compliance_Report.md` (G117–G120). Treena gathers, Ted certifies. |
+| `adapter-readiness-to-packet` | adapter-ready-to-go | Deliver an adapter to readiness state; packet certifies the adapter is ready for downstream consumption. Terminal status: `delivered_pending_activation`. |
+| `dark-launch-shipped` | dark-and-quiet | Code shipped behind a default-off flag; terminal status `delivered_pending_activation` until flag flip. |
+| `migration-shipped-pending-cutover` | migration-shipped-not-cutover | Migration code shipped but cutover not executed; terminal status `delivered_pending_activation` until operator cutover. |
 
 **Optional execution tags:** `grillMode`, `tdd` (inner-loop red→green only), `backlogExport` (off|tasks|issues), `specReview` (off|once-before-implement), `socratic`, `socraticQuestions`, `gitIsolation`, `autoCommit` (off|scope|dod), `maxScopeMinutes`, `maxDodMinutes`, `microFixes`, `crossModelReview` (off|codex|terminal)
 
@@ -284,6 +304,16 @@ Some TPB characters carry different agent roles when their narrative context leg
 | `skills-first discovery` | v4.0 architectural posture: agents lean on auto-loaded discovery skills (`bubbles-anti-fabrication`, `bubbles-evidence-capture`, `bubbles-dod-validation`, `bubbles-status-transition`, `bubbles-result-envelope`, `bubbles-artifact-ownership-routing`, `bubbles-quality-gates-catalog`, `bubbles-scope-workflow-runtime`) instead of eager-loading the full governance corpus. Skills are shims pointing to the authoritative `agents/bubbles_shared/*.md` modules; rules and mechanical guards do not change. |
 | `policy skill` | A `.github/skills/bubbles-*` skill whose description triggers on a recurring agent decision (marking a DoD, capturing evidence, returning a result envelope) and routes the agent to the canonical governance module. |
 | `grandfather clause` | Historical `done` specs remain green under new framework policy unless their `state.json` is touched in the same commit. Enforced by `done-spec-audit.sh --profile advisory` (default) and the pre-push hook's changed-spec profile. Skills-first refactor preserves this contract. |
+| `production cycle` | v5 production-operations doctrine: a release-train portfolio (DVS) operates under continuous cross-train propagation (J-Roc), production-incident fastlane (Cory + Trevor), live observability (Phil-Collins adapters), and framework self-observation (Bubbles retro target: framework). All five surfaces are mandatory for "in-production" maturity. |
+| `cross-train propagation` | J-Roc's role: moving the same fix/feature across declared release-train chains per `propagation-policy.yaml`. DVS owns the lifecycle of one train; J-Roc owns movement between trains. |
+| `forward-merge` | Default-direction propagation along `defaultFlow` edges (e.g. experimental → mvp → prod). No approval token required when policy edge is `forward`. |
+| `backport` | Reverse-edge propagation (e.g. prod → mvp → experimental). MUST carry an explicit `approvalToken` from the receiving train's owner. Logged in `propagation-ledger.yaml`. |
+| `propagation policy` | `propagation-policy.yaml` at repo root. Declares trains, edges, default flow direction, receiving-train validation mode, and backport approval requirement. Owned by J-Roc; enforced by Gate G121/G122. |
+| `propagation ledger` | Append-only `propagation-ledger.yaml` recording every propagation event (forward, backport, audit). One JSONL line per event with train pair, SHA, approval token (backports), and timestamp. Gate G123 enforces append-only + per-edge integrity. |
+| `incident fastlane` | Cory + Trevor's production-incident chain: triage → fix → validate → propagate → audit. Highest-priority lane; bypasses normal planning queue. Uses `bugfix-fastlane` mechanics plus mandatory cross-train propagation step. |
+| `observability adapter` | `bubbles/adapters/observability/<name>.sh` — pluggable live-telemetry contract. Reference adapters: `none.sh` (default), `prometheus.sh` (requires `PROMETHEUS_BASE_URL` + per-query env vars). Adapters expose `health`, `query-instant`, `query-range`, `series-cardinality` verbs. |
+| `framework self-observation` | `bubbles.retro target: framework` (alias `framework-health`). Proposal-first: reads gate-failure logs and stalled-mode counts, writes only into `improvements/`, never auto-mutates framework files. The framework eats its own dog food. |
+| `release train portfolio` | The set of all declared trains under `config/release-trains.yaml`. Surfaced by `release-train-status-all` (J-Roc). Each row reports phase, current candidate SHA per slot, open-flag count, and backup/restore freshness. |
 
 ---
 

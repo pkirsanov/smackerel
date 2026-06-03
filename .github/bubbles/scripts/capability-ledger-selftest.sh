@@ -39,7 +39,7 @@ check_pattern "$ROOT_DIR/bubbles/capability-ledger.yaml" '^  session-aware-runti
 check_pattern "$ROOT_DIR/bubbles/capability-ledger.yaml" '^  orchestrator-context-compaction:$' "Ledger defines orchestrator context compaction capability"
 check_pattern "$ROOT_DIR/bubbles/capability-ledger.yaml" '^  per-turn-state-snapshot:$' "Ledger defines per-turn state snapshot capability"
 check_pattern "$ROOT_DIR/bubbles/capability-ledger.yaml" '^  linter-on-edit-gate:$' "Ledger defines linter-on-edit gate capability"
-check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '^State summary: 13 shipped, 1 partial, 0 proposed\.$' "Generated capability guide exposes stable state summary"
+check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '^State summary: 17 shipped, 1 partial, 0 proposed\.$' "Generated capability guide exposes stable state summary"
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Workflow orchestration \| shipped \|' "Generated capability guide includes shipped workflow orchestration row"
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Supported interop apply \| shipped \|' "Generated capability guide includes shipped supported interop apply row"
 check_pattern "$ROOT_DIR/docs/generated/competitive-capabilities.md" '\| Session-aware runtime coordination \| shipped \|' "Generated capability guide includes shipped runtime coordination row"

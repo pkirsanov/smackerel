@@ -71,6 +71,48 @@ profiles:
     - bash bubbles/scripts/cli.sh repo-readiness .
     - bash bubbles/scripts/cli.sh policy status
     governanceInvariant: full-certification
+  production:
+    id: production
+    label: Production
+    description: Production lifecycle guidance for repos operating release trains, propagation, upkeep, incident response, and live telemetry adapters.
+    intendedAudience: Teams using Bubbles past delivery into real operational lifecycle management: parallel trains, recurring upkeep, production incidents, propagation, and framework self-observation.
+    bootstrapSummary: Delivery profile plus production-cycle surfaces (release trains, propagation policy, upkeep calendar, live telemetry adapter contract, incident fastlane).
+    doctorProjectReadiness: gating
+    repoReadinessPosture: production-lifecycle
+    docsFrontDoor: default
+    bootstrapDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      repoReadiness: standard
+    doctorSections:
+    - adoption-profile-progress
+    - project-readiness-advisory
+    - framework-integrity
+    repoReadinessSeverityMap:
+      agentFacingInstructions: warn
+      specsDirectory: fail
+      commandRegistry: fail
+    policyDefaults:
+      grillMode: off
+      tddMode: scenario-first
+      autoCommitMode: off
+      certificationRequired: true
+    requiredDocs:
+    - docs/guides/CONTROL_PLANE_ADOPTION.md
+    - docs/guides/WORKFLOW_MODES.md
+    - docs/guides/CONTROL_PLANE_SCHEMAS.md
+    - docs/recipes/propagate-changes.md
+    - docs/recipes/incident-response.md
+    - docs/recipes/observe-production.md
+    - docs/recipes/framework-health.md
+    recommendedNextCommands:
+    - bash bubbles/scripts/cli.sh profile show
+    - bash bubbles/scripts/cli.sh repo-readiness .
+    - bash bubbles/scripts/cli.sh doctor
+    - bash bubbles/scripts/propagation-policy-guard.sh --require-policy .
+    - bash bubbles/scripts/observability-adapter-lint.sh .
+    governanceInvariant: full-certification
   assured:
     id: assured
     label: Assured

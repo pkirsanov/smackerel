@@ -151,6 +151,15 @@ STATUS_COMMAND=<check service status command>
 - Commands MUST NOT require local toolchain installation (use Docker/containers)
 - If a category does not apply (e.g., no frontend), state `N/A - no frontend in this project`
 
+**Stack Lifecycle Idempotency (NON-NEGOTIABLE):** `DEV_ALL_COMMAND` and `DEV_ALL_SYNTH_COMMAND` are invoked repeatedly by Bubbles specialists across phases and retry rounds. They MUST be reentrant:
+
+- Detect an already-running healthy stack via `STATUS_COMMAND` and exit 0 without re-acquiring container/PID/port/advisory locks.
+- Never spawn duplicate services, leak orphan containers, or stack project locks across invocations. Runtime resources MUST be named/labeled so a re-invocation reuses or replaces them in place, not creates parallel sets.
+- If the stack is in a partially-broken state, the command MUST either repair in place or fail-fast with a clear `[STACK-DIRTY]` message that names the offending resource — never silently spawn alongside it.
+- `DOWN_COMMAND` MUST be tolerant of "already stopped" and MUST clean up orphans left by prior invocations.
+
+Specialists are responsible for invoking `STATUS_COMMAND` before `DEV_ALL_COMMAND` and for pairing every `up` they themselves trigger with a `down` on both success and failure paths; the contract above is what makes that discipline safe under repeated dispatch.
+
 #### Section IV: Code Patterns
 File organization table, naming conventions, required practices.
 

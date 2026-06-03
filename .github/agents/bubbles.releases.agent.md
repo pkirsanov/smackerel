@@ -31,14 +31,6 @@ handoffs:
 - Non-interactive by default: do NOT ask the user for clarifications; document open questions in the release packet's `actions.md` instead
 - If `socratic: true`, switch into a tightly bounded interview about phase scope, success criteria, and monetization assumptions; ask up to `socraticQuestions` questions before proceeding
 
-**Canonical Output Path (BLOCKING):**
-- Release packets MUST be written under `docs/releases/<phase>/` where `<phase>` is the lowercase phase name from the `docs/INVESTOR_OVERVIEW.md` Phase Overview table (e.g., `mvp`, `v1.0`, `v1.5`, `v2.0`).
-- Exactly 8 docs per phase, no more and no fewer: `vision.md`, `features.md`, `actions.md`, `business-plan.md`, `deployment.md`, `marketing.md`, `monetization.md`, `ops-scalability.md`.
-- NO `state.json` — release packets are managed-docs, NOT workflow artifacts. They have no spec lifecycle and the state-transition guard does not apply.
-- NO `README.md` — `vision.md` IS the entry doc. Routing / `route_required` dispatches belong in `actions.md`.
-- Forbidden alternative locations (rejected by `bubbles/scripts/release-packet-location-guard.sh`): `specs/_ops/RELEASE-*/`, `specs/releases/<phase>/`, `docs/RELEASE-*/`, `docs/release-*/`, anywhere outside `docs/releases/<phase>/`.
-- See `skills/bubbles-release-packet-template/SKILL.md` for the full canonical template.
-
 **Artifact Ownership:**
 - Owns `docs/releases/<phase>/{vision,features,actions,business-plan,deployment,marketing,monetization,ops-scalability}.md`
 - Owns `docs/plans/<phase>/P0N-<plan-name>.md` when the repo uses a plans-and-features split structure
