@@ -12,8 +12,22 @@ import (
 // that need annotation operations without depending on the concrete store.
 type AnnotationQuerier interface {
 	CreateFromParsed(ctx context.Context, artifactID string, parsed ParsedAnnotation, channel SourceChannel) ([]Annotation, error)
+	// CreateFromParsedAs is the spec 027 scope 9 variant that persists
+	// the bearer subject as the annotation's actor_id. Telegram and
+	// extension paths continue to call CreateFromParsed (legacy);
+	// browser/PWA writes call this so the audit trail records the
+	// authenticated principal (PLAN-9-02).
+	CreateFromParsedAs(ctx context.Context, artifactID string, parsed ParsedAnnotation, channel SourceChannel, actorID string) ([]Annotation, error)
 	GetSummary(ctx context.Context, artifactID string) (*Summary, error)
+	// GetSummaryVersion returns the monotonic per-artifact version
+	// maintained by the annotation_summary_version trigger. Absent
+	// row → 0 (clean cold-start semantic, not a fallback default).
+	GetSummaryVersion(ctx context.Context, artifactID string) (int64, error)
 	GetHistory(ctx context.Context, artifactID string, limit int) ([]Annotation, error)
+	// ListByActor returns annotations authored by the given actor_id
+	// across all artifacts, most recent first. Backed by
+	// idx_annotations_actor_created.
+	ListByActor(ctx context.Context, actorID string, limit int, since *time.Time) ([]Annotation, error)
 	DeleteTag(ctx context.Context, artifactID, tag string, channel SourceChannel) error
 	RecordMessageArtifact(ctx context.Context, messageID, chatID int64, artifactID string) error
 	ResolveArtifactFromMessage(ctx context.Context, messageID, chatID int64) (string, error)
@@ -47,9 +61,10 @@ const (
 type SourceChannel string
 
 const (
-	ChannelTelegram SourceChannel = "telegram"
-	ChannelAPI      SourceChannel = "api"
-	ChannelWeb      SourceChannel = "web"
+	ChannelTelegram  SourceChannel = "telegram"
+	ChannelAPI       SourceChannel = "api"
+	ChannelWeb       SourceChannel = "web"
+	ChannelExtension SourceChannel = "extension"
 )
 
 // Annotation is a single event in the annotation log.
@@ -62,7 +77,12 @@ type Annotation struct {
 	Tag             string          `json:"tag,omitempty"`
 	InteractionType InteractionType `json:"interaction_type,omitempty"`
 	SourceChannel   SourceChannel   `json:"source_channel"`
-	CreatedAt       time.Time       `json:"created_at"`
+	// ActorID is the authenticated bearer subject that produced this
+	// annotation. Empty for legacy/pre-spec-044 rows and for
+	// telegram/extension paths that have not been migrated yet.
+	// Spec 027 scope 9 PLAN-9-02.
+	ActorID   string    `json:"actor_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Summary is the pre-aggregated annotation state for an artifact.
@@ -77,4 +97,9 @@ type Summary struct {
 	NotesCount    int        `json:"notes_count"`
 	TotalEvents   int        `json:"total_events"`
 	LastAnnotated *time.Time `json:"last_annotated,omitempty"`
+	// Version is the monotonic per-artifact counter maintained by the
+	// annotation_summary_version trigger (spec 027 scope 9 PLAN-9-05).
+	// Used by the UI as an If-Match precondition for stale-edit
+	// conflict detection. Absent row → 0.
+	Version int64 `json:"version"`
 }
