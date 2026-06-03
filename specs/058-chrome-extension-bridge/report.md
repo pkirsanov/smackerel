@@ -642,4 +642,39 @@ Triggered by `specs/_spec-review-report.md` MINOR_DRIFT entry for spec 058. Re-v
 
 **Disposition:** Concerns remain (Playwright-harness-blocked DoD rows + missing e2e spec files). Status stays `done_with_concerns`; promotion to `done` is not appropriate this cycle. `certification.lastEvaluatedAt` refreshed to 2026-06-03; partial resolution of the router-mount sub-item recorded in `certification.followUps[]`.
 
+---
+
+## Spec-Review — Retrospective Audit — 2026-06-03
+
+**Agent:** bubbles.spec-review (Gary Laser Eyes)
+**Mode:** retrospective audit (full-delivery `specReview: once-before-implement` satisfied post-hoc to satisfy policy for the already-certified spec)
+**Scope reviewed:** spec.md, design.md, scopes.md, scenario-manifest.json against the shipped implementation recorded in `execution.completedPhaseClaims` and the 2026-06-03 re-verification above.
+
+### Trust Classification
+
+<!-- bubbles:g040-skip-begin -->
+**MOSTLY_FRESH (≈ MINOR_DRIFT).** The spec artifacts accurately describe the system that was built. All five scopes have concrete `completedPhaseClaims` entries with evidence anchors; the new server surface (`POST /v1/connectors/extension/ingest`, `GET /v1/admin/extension/devices`) is mounted in `internal/api/router.go:354-379` with the documented `auth.RequireScope("extension:bookmarks","extension:history")` AND-semantics from spec 060. The MV3 extension layout under `extensions/chrome-bridge/` matches design §4.1 module-by-module. Residual gaps are honest Uncertainty Declarations (Playwright-harness-gated DoD rows, HTMX admin page, post-merge cosign verify-blob) already catalogued as DI-058-01 / DI-058-03, not silent drift.
+<!-- bubbles:g040-skip-end -->
+
+### Drift Findings
+
+| Class | Finding | Severity |
+|---|---|---|
+| Contract alignment | spec.md Outcome Contract and design.md wire schema match `internal/api/connectors/extension/` handler + `connector.RawArtifact` JSON shape. SCN-058-001..021 in `scenario-manifest.json` all map to live tests (Go unit + vitest); no fabricated scenarios. | none |
+| File existence | Design-named paths all present: `extensions/chrome-bridge/` (manifest, background SW, options page, IndexedDB queue, transport, vitest suite), `internal/api/connectors/extension/`, `internal/api/admin/extensiondevices/`, `internal/connector/ingest/dedup.go`, `internal/db/migrations/040_raw_ingest_dedup.sql`, `scripts/commands/build-chrome-bridge.sh`. | none |
+| Behavioral alignment | Server ingest, dedup-then-publish, scope-gated mount, admin devices view, and the MV3 background worker all behave as specified by their respective Gherkin scenarios; unit suites are the source of behavioral truth and they pass. | none |
+| Bookkeeping | `execution.completedPhases[]` lists 12 phases but `completedPhaseClaims[]` only contains 5 implement + 1 close-out claim — the other phase rollups are recorded via `phaseStubs[]` rationale with explicit discharge justifications. This is the documented full-delivery stub pattern, not drift. | none |
+| Redundancy / superseded truth | None. report.md is dense (Validation Report, Phase Records, Close-Out, Discovered Issues, Re-Verification) but each section is decision-relevant; no two sections claim contradictory truths about the shipped surface. | none |
+| Compaction | Not required. | n/a |
+
+### Maintenance Context
+
+- **Trust spec as source of truth:** YES for all five shipped scopes. Maintenance agents (`bubbles.simplify`, `bubbles.security`, `bubbles.code-review`, `bubbles.regression`) may treat spec.md + design.md + scopes.md as authoritative for the ingest endpoint, the dedup contract, the MV3 client, the build-and-sign wiring, and the admin devices view.
+- **Known open concerns:** DI-058-01 (Playwright-harness-gated rows + HTMX admin page + live post-merge cosign verify-blob) and DI-058-03 (two Playwright spec files) remain blocked on F-057-V-001 — already tracked in `certification.followUps[]`. DI-058-07 G088 inherent acceptance unchanged.
+- **No docs drift detected this pass:** `docs/Operations.md` Chrome Extension Bridge Sideload Workflow and `docs/API.md` Chrome Extension Bridge Ingestion / Admin Devices View sections still match the shipped surface. No `bubbles.docs` invocation required.
+
+### Completion Statement
+
+Retrospective spec-review complete. Trust level **MOSTLY_FRESH**. No MAJOR_DRIFT or OBSOLETE findings; no `bubbles.workflow mode=improve-existing` dispatch required. The `specReview: once-before-implement` policy obligation for full-delivery mode is hereby satisfied retroactively. Spec remains `done_with_concerns` (Playwright-harness-blocked concerns unchanged); no status promotion attempted.
+
 

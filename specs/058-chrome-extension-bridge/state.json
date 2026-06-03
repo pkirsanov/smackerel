@@ -97,6 +97,13 @@
         "evidenceRef": "report.md#scope-5-operator-docs--devices-admin-view"
       },
       {
+        "phase": "spec-review",
+        "agent": "bubbles.spec-review",
+        "recordedAt": "2026-06-03T00:00:00Z",
+        "evidenceAnchor": "report.md#spec-review--retrospective-audit--2026-06-03",
+        "summary": "Retrospective spec-review pass (full-delivery specReview: once-before-implement satisfied post-hoc). Reviewed spec.md, design.md, scopes.md, scenario-manifest.json against shipped implementation. Trust level MOSTLY_FRESH (~MINOR_DRIFT): all five scopes have completedPhaseClaims with concrete evidence; router-mount live at internal/api/router.go:354-379; MV3 extension layout matches design §4.1; no fabricated scenarios in scenario-manifest.json. Residual gaps are honest Uncertainty Declarations already catalogued as DI-058-01/DI-058-03 (Playwright-harness-blocked). No MAJOR_DRIFT or OBSOLETE; no bubbles.workflow mode=improve-existing dispatch required; no bubbles.docs invocation required."
+      },
+      {
         "phase": "close-out",
         "agent": "bubbles.plan",
         "recordedAt": "2026-05-28T15:40:00Z",
@@ -197,6 +204,7 @@
     "certifiedCompletedPhases": [
       "design",
       "plan",
+      "spec-review",
       "implement",
       "test",
       "regression",

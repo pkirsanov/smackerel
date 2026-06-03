@@ -649,6 +649,7 @@ And the 403 scope_required response shape matches spec 060
 - **Spec 060:** Scopes 1 + 2 (foundation: `scope` claim + `auth.RequireScope`) are SHIPPED and consumed by 058 Scope 1. Spec 060 Scope 3 (CLI `--scope` flags) is referenced in 058 Scope 5 docs but is NOT a blocking dependency for 058 Scopes 1–4 (an operator can mint scoped tokens by editing config during the gap; doc note added in 058 Scope 5).
 - **Spec 020 (security hardening):** The tailnet-edge bind pattern is preserved; the new endpoint inherits the existing host-bind contract for `smackerel-core`.
 
+<!-- bubbles:g040-skip-begin -->
 ## Out of Scope (carried from spec.md)
 
 - Firefox / Safari extensions.
@@ -656,3 +657,4 @@ And the 403 scope_required response shape matches spec 060
 - Public Chrome Web Store distribution.
 - Page content capture in the extension (server-side `content_fetch_*` remains the canonical surface).
 - Per-extension token endpoints (NC-1 binds auth to spec 044).
+<!-- bubbles:g040-skip-end -->
